@@ -35,6 +35,7 @@ later retire phase).
 | `module list` | — | enumerate deployed modules (`--json` for the cascade) |
 | `module show <m>` | — | one deployed config in full (`--json`) |
 | `module resolve <m>` | `src/resolve.ts` | **desired state**: the config *plus* the schema defaults it does not declare (`--json`) |
+| `module fields <m>` | `src/converge.ts` | every field the module may `modify --set`, its owning service and ADR-020 change class, or why it is refused (`--json`) |
 | `module drift <m>` | `src/converge.ts` | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
 | `module validate [<m>]` | scope/source lint | all modules, or one; `--allow-fork` |
 | `module validate --blueprint [<m>\|<dir>]...` | the ADR-027 blueprint check on module **source** directories | every registered repository's modules, the named ones, or `--repo PATH` (what the release boundary runs) |
@@ -100,6 +101,12 @@ A `--set` naming an immutable field is rejected *whole* — if any field in one
 command cannot be applied, none of them are written, so config and cluster never
 move apart. A field none of the module's services use is also rejected: writing
 it would change the config and nothing else.
+
+**Preview it first.** `modify <m> --set … --dry-run [--json]` runs that pre-gate alone and
+writes nothing: each field's service and change class, or why it is refused (exit 1 when the
+modify would be refused). `fields <m> [--json]` lists, before anything is typed, every field
+the module may set with the service that owns it and its class, and the fields it may not set
+with the reason. The console's *Modify a field…* is built from these two (ADR-034 D4).
 
 ### What a module claims about itself: `version` and `status` (#248)
 

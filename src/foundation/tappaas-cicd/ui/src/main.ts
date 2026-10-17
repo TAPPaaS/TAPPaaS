@@ -17,6 +17,7 @@ import { lookup } from "dns";
 import { networkInterfaces } from "os";
 import { join } from "path";
 import { AccessConfig, addrMatches, setupState } from "./access";
+import { loadManifests } from "./manifest";
 import { Reads } from "./reads";
 import { runAsync } from "./run";
 import { ConsoleServer } from "./server";
@@ -194,6 +195,13 @@ async function serve(o: ServeOpts): Promise<number> {
   else if (s.tokenPresent && s.identityInstalled) warn(`identity is installed: the setup token is refused — delete ${access.tokenFile}`);
   info(`  front end: ${existsSync(webDir) ? webDir : "not built (API only)"}`);
   reads.start();
+  // What a job may run: every manager's `--help --json` and the declared bash verbs.
+  const bashFile = process.env.CONSOLE_MANIFEST_FILE ?? join(__dirname, "..", "..", "..", "manifest", "bash-verbs.json");
+  void loadManifests(runAsync, bashFile).then((ms) => {
+    server.manifests = ms;
+    info(`  verb manifests: ${ms.byBin.size} (${[...ms.byBin.keys()].join(", ")})`);
+    for (const e of ms.errors) warn(`  no manifest from ${e.bin}: ${e.error}`);
+  });
   return new Promise<number>(() => undefined); // serve until stopped
 }
 

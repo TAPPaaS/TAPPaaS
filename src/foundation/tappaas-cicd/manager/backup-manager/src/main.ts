@@ -93,7 +93,7 @@ export const HELP: HelpSpec = {
       options: [["--environment ENV", "resolve: override the module's recorded .environment."]],
     },
     {
-      usage: "modify <module> [--enabled true|false] [--retention SPEC] [--exclude a,b]",
+      usage: "modify <module> [--enabled true|false] [--retention SPEC] [--exclude a,b]", effect: { noPreview: "changes the module's backup policy in its config and the PBS job" },
       name: "modify",
       options: [
         ["--enabled B", "modify: set module backup.enabled (true|false)."],
@@ -101,11 +101,11 @@ export const HELP: HelpSpec = {
         ["--exclude a,b", "modify: set module backup.exclude (comma-separated)."],
       ],
     },
-    { usage: "add <module>", name: "add", note: "(wire into the shared PBS job)" },
-    { usage: "backup <module>...", name: "backup", note: "(take each module's backup now, through its job — #759)" },
-    { usage: "delete <module>", name: "delete", note: "(un-wire from the shared PBS job)" },
+    { usage: "add <module>", effect: { noPreview: "wires the module's guest into the shared PBS job" }, name: "add", note: "(wire into the shared PBS job)" },
+    { usage: "backup <module>...", effect: { noPreview: "takes each module's backup now, through its PBS job" }, name: "backup", note: "(take each module's backup now, through its job — #759)" },
+    { usage: "delete <module>", effect: { noPreview: "un-wires the module from the shared PBS job; its backups stay" }, name: "delete", note: "(un-wire from the shared PBS job)" },
     {
-      usage: "purge <module|vmid> [--yes]",
+      usage: "purge <module|vmid> [--yes]", effect: { noPreview: "deletes every backup of the module from PBS" },
       name: "purge",
       note: "(erase a removed guest's restore points + start GC — #789)",
       options: [["--yes", "purge: do not ask; without it you type the VMID to confirm."]],
@@ -117,7 +117,7 @@ export const HELP: HelpSpec = {
     },
     { usage: "restore list <module>", name: "restore list" },
     {
-      usage: "restore restore <module> [--from M|VMID] [--node N] [--storage S] [--backup-id ID] [--target-vmid ID] [--yes]",
+      usage: "restore restore <module> [--from M|VMID] [--node N] [--storage S] [--backup-id ID] [--target-vmid ID] [--yes]", effect: { noPreview: "restores the module's guest from a PBS backup" },
       name: "restore restore",
       hidden: ["-n N", "-s S", "-b ID", "-t ID"],
       options: [
@@ -130,9 +130,9 @@ export const HELP: HelpSpec = {
       ],
     },
     { usage: "restore list-all", name: "restore list-all" },
-    { usage: "placement", name: "placement", note: "(where PBS lives for this site)" },
+    { usage: "placement", effect: "read", name: "placement", note: "(where PBS lives for this site)" },
     {
-      usage: "placement reset [--peer NAME] [--yes] [--no-update]",
+      usage: "placement reset [--peer NAME] [--yes] [--no-update]", effect: { noPreview: "moves PBS back to a node of this site" }, destructive: true,
       name: "placement reset",
       note: "(leave an external PBS for a local one — ADR-012 §2.3, #607)",
       options: [
@@ -142,7 +142,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "placement use-external <url> [--datastore D] [--namespace NS] [--fingerprint FP]",
+      usage: "placement use-external <url> [--datastore D] [--namespace NS] [--fingerprint FP]", effect: { noPreview: "points the site's backups at an external PBS" },
       name: "placement use-external",
       note: "(back up to a PBS this site already runs, provisioning nothing — #456)",
       options: [
@@ -152,13 +152,13 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "placement finish-reset [--yes]",
+      usage: "placement finish-reset [--yes]", effect: { noPreview: "finishes moving PBS back to this site" }, destructive: true,
       name: "placement finish-reset",
       note: "(drop the old PBS's <name>_former storage entry, once its history is pulled and a restore worked)",
       options: [["--yes", "placement finish-reset: do not ask for confirmation."]],
     },
     {
-      usage: "key list | export|import --usb [--node N] | export|import --file DIR",
+      usage: "key list | export|import --usb [--node N] | export|import --file DIR", effect: { noPreview: "exports or imports the PBS encryption keys" }, readWhen: ["list"], destructive: ["import"],
       verb: "key",
       name: "key",
       note: "(the backup encryption keys, and the copy you keep off the machine)",
@@ -175,7 +175,7 @@ export const HELP: HelpSpec = {
         + "[--port P] [--remote-namespace NS] [--max-depth N] "
         + "[--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] "
         + "[--country CC] [--city C] [--building B] [--contact EMAIL] "
-        + "[--tunnel serve|dial] [--tunnel-net CIDR] [--listen-port P] [--endpoint H:P] [--peer-key K] [--mtu N] [--force]",
+        + "[--tunnel serve|dial] [--tunnel-net CIDR] [--listen-port P] [--endpoint H:P] [--peer-key K] [--mtu N] [--force]", effect: { noPreview: "adds an off-site PBS relationship (a buddy, a remote, a receiver)" },
       name: "peer add",
       options: [
         ["--host H", "peer add pull: the PBS we pull from."],
@@ -203,14 +203,14 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "peer modify pull|remote <name> --contact EMAIL",
+      usage: "peer modify pull|remote <name> --contact EMAIL", effect: { noPreview: "changes a buddy's contact" },
       name: "peer modify",
       options: [["--contact EMAIL", "peer modify: the other site's operator, mailed by the pulse (ADR-031); '' clears it."]],
     },
     { usage: "pulse", name: "pulse", note: "(ADR-031: what the backup node's pulse watches — buddies, uplink, firewall, mothership, PBS — and since when each is down)" },
-    { usage: "peer check pull|remote <name>", name: "peer check", note: "(the buddy tunnel's live state: instance, key, handshake, PBS reach)" },
+    { usage: "peer check pull|remote <name>", effect: "read", name: "peer check", note: "(the buddy tunnel's live state: instance, key, handshake, PBS reach)" },
     {
-      usage: "peer delete pull|remote|receive <name> [--purge] [--config-only]",
+      usage: "peer delete pull|remote|receive <name> [--purge] [--config-only]", effect: { noPreview: "removes the off-site relationship (--purge also its data)" },
       name: "peer delete",
       options: [
         ["--purge", "peer delete: also delete the data in the peer's namespace."],

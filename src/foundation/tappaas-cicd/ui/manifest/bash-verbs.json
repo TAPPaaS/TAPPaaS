@@ -1,0 +1,1230 @@
+{
+ "_comment": "The verbs of the bash controllers and scripts the console runs (ADR-034 D4, T2): declared here because they have no lib/ts HelpSpec to answer --help --json. Same shape as a manager's manifest. Keep in step with each script's usage/CLI_SPEC; ui/test checks the switch- and ap-controller options against their CLI_SPEC. A key word \"*\" stands for one positional word (ap-controller ssid <ap> add); an empty key is the script itself.",
+ "manifests": [
+  {
+   "manifest": 1,
+   "name": "switch-controller",
+   "version": "bash",
+   "tagline": "physical switches (ADR-008)",
+   "common": [],
+   "verbs": [
+    {
+     "verb": "list",
+     "keys": [
+      [
+       "list"
+      ]
+     ],
+     "usage": "list [--json]",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [
+      {
+       "flag": "--json",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Machine-readable output."
+      }
+     ],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "list-ports",
+     "keys": [
+      [
+       "list-ports"
+      ]
+     ],
+     "usage": "list-ports [<switch>] [--json]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "switch",
+       "optional": true,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--json",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Machine-readable output."
+      }
+     ],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "lag list",
+     "keys": [
+      [
+       "lag",
+       "list"
+      ]
+     ],
+     "usage": "lag list [<switch>] [--json]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "switch",
+       "optional": true,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--json",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Machine-readable output."
+      }
+     ],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "show",
+     "keys": [
+      [
+       "show"
+      ]
+     ],
+     "usage": "show <controller|switch>",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "name",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "delta",
+     "keys": [
+      [
+       "delta"
+      ]
+     ],
+     "usage": "delta",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "add-controller",
+     "keys": [
+      [
+       "add-controller"
+      ]
+     ],
+     "usage": "add-controller <name> --vendor <v> --ip <ip> [--managed auto]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "name",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--vendor",
+       "takesValue": true,
+       "arg": "<v>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The controller's vendor plugin (unifi)."
+      },
+      {
+       "flag": "--ip",
+       "takesValue": true,
+       "arg": "<ip>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Its address or URL."
+      },
+      {
+       "flag": "--managed",
+       "takesValue": true,
+       "arg": "auto",
+       "choices": [
+        "auto"
+       ],
+       "repeatable": false,
+       "description": "How its switches are managed."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "records the controller in switch-configuration-actual.json"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "add-switch",
+     "keys": [
+      [
+       "add-switch"
+      ]
+     ],
+     "usage": "add-switch <name> --vendor <v> --managed auto|manual [--controller <c>] [--ip <ip>] [--model <m>] [--location <l>] [--description <d>]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "name",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--vendor",
+       "takesValue": true,
+       "arg": "<v>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Vendor."
+      },
+      {
+       "flag": "--managed",
+       "takesValue": true,
+       "arg": "auto|manual",
+       "choices": [
+        "auto",
+        "manual"
+       ],
+       "repeatable": false,
+       "description": "Programmed by its plugin, or by hand."
+      },
+      {
+       "flag": "--controller",
+       "takesValue": true,
+       "arg": "<c>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The controller that adopted it."
+      },
+      {
+       "flag": "--ip",
+       "takesValue": true,
+       "arg": "<ip>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Management address."
+      },
+      {
+       "flag": "--model",
+       "takesValue": true,
+       "arg": "<m>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Model."
+      },
+      {
+       "flag": "--location",
+       "takesValue": true,
+       "arg": "<l>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Where it is."
+      },
+      {
+       "flag": "--description",
+       "takesValue": true,
+       "arg": "<d>",
+       "choices": null,
+       "repeatable": false,
+       "description": "A note."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "records the switch in switch-configuration-actual.json"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "remove-switch",
+     "keys": [
+      [
+       "remove-switch"
+      ]
+     ],
+     "usage": "remove-switch <name>",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "name",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "removes the switch and its ports from switch-configuration-actual.json"
+     },
+     "destructive": true,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "add-port",
+     "keys": [
+      [
+       "add-port"
+      ]
+     ],
+     "usage": "add-port <switch> <port> --type <t> [...]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "switch",
+       "optional": false,
+       "repeatable": false
+      },
+      {
+       "name": "port",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--type",
+       "takesValue": true,
+       "arg": "node|switch|ap|device|uplink",
+       "choices": [
+        "node",
+        "switch",
+        "ap",
+        "device",
+        "uplink"
+       ],
+       "repeatable": false,
+       "description": "What the port connects to."
+      },
+      {
+       "flag": "--target",
+       "takesValue": true,
+       "arg": "<t>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The node, switch or AP it connects to."
+      },
+      {
+       "flag": "--target-port",
+       "takesValue": true,
+       "arg": "<tp>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The interface or port on the other end."
+      },
+      {
+       "flag": "--mode",
+       "takesValue": true,
+       "arg": "trunk|access",
+       "choices": [
+        "trunk",
+        "access"
+       ],
+       "repeatable": false,
+       "description": "A trunk carries the active VLANs; an access port one zone."
+      },
+      {
+       "flag": "--zone",
+       "takesValue": true,
+       "arg": "<z>",
+       "choices": null,
+       "repeatable": false,
+       "description": "An access port's zone."
+      },
+      {
+       "flag": "--native",
+       "takesValue": true,
+       "arg": "<vlan>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The native (untagged) VLAN."
+      },
+      {
+       "flag": "--tagged",
+       "takesValue": true,
+       "arg": "<vlans>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Tagged VLANs, comma-separated."
+      },
+      {
+       "flag": "--description",
+       "takesValue": true,
+       "arg": "<d>",
+       "choices": null,
+       "repeatable": false,
+       "description": "A note on the port."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "records the port in switch-configuration-actual.json; switch-controller reconcile previews and applies it"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "update-port",
+     "keys": [
+      [
+       "update-port"
+      ]
+     ],
+     "usage": "update-port <switch> <port> [--type <t>] [--mode <m>] [--zone <z>] [...]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "switch",
+       "optional": false,
+       "repeatable": false
+      },
+      {
+       "name": "port",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--type",
+       "takesValue": true,
+       "arg": "node|switch|ap|device|uplink",
+       "choices": [
+        "node",
+        "switch",
+        "ap",
+        "device",
+        "uplink"
+       ],
+       "repeatable": false,
+       "description": "What the port connects to."
+      },
+      {
+       "flag": "--target",
+       "takesValue": true,
+       "arg": "<t>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The node, switch or AP it connects to."
+      },
+      {
+       "flag": "--target-port",
+       "takesValue": true,
+       "arg": "<tp>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The interface or port on the other end."
+      },
+      {
+       "flag": "--mode",
+       "takesValue": true,
+       "arg": "trunk|access",
+       "choices": [
+        "trunk",
+        "access"
+       ],
+       "repeatable": false,
+       "description": "A trunk carries the active VLANs; an access port one zone."
+      },
+      {
+       "flag": "--zone",
+       "takesValue": true,
+       "arg": "<z>",
+       "choices": null,
+       "repeatable": false,
+       "description": "An access port's zone."
+      },
+      {
+       "flag": "--native",
+       "takesValue": true,
+       "arg": "<vlan>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The native (untagged) VLAN."
+      },
+      {
+       "flag": "--tagged",
+       "takesValue": true,
+       "arg": "<vlans>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Tagged VLANs, comma-separated."
+      },
+      {
+       "flag": "--description",
+       "takesValue": true,
+       "arg": "<d>",
+       "choices": null,
+       "repeatable": false,
+       "description": "A note on the port."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "changes the port's record in switch-configuration-actual.json only; nothing reaches the switch until switch-controller reconcile --apply"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "remove-port",
+     "keys": [
+      [
+       "remove-port"
+      ]
+     ],
+     "usage": "remove-port <switch> <port>",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "switch",
+       "optional": false,
+       "repeatable": false
+      },
+      {
+       "name": "port",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "removes the port's record"
+     },
+     "destructive": true,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "lag set",
+     "keys": [
+      [
+       "lag",
+       "set"
+      ]
+     ],
+     "usage": "lag set <switch> <name> --ports <p,p,...> [--apply]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "switch",
+       "optional": false,
+       "repeatable": false
+      },
+      {
+       "name": "name",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--ports",
+       "takesValue": true,
+       "arg": "<p,p,...>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The ports of the aggregate."
+      },
+      {
+       "flag": "--apply",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Program the switch at once."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "apply-flag",
+      "flag": "--apply"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "lag remove",
+     "keys": [
+      [
+       "lag",
+       "remove"
+      ]
+     ],
+     "usage": "lag remove <switch> <name> [--apply]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "switch",
+       "optional": false,
+       "repeatable": false
+      },
+      {
+       "name": "name",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--apply",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Program the switch at once."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "apply-flag",
+      "flag": "--apply"
+     },
+     "destructive": true,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "interrogate",
+     "keys": [
+      [
+       "interrogate"
+      ]
+     ],
+     "usage": "interrogate",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "reads the controllers and auto switches into switch-configuration-actual.json"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "update-desired",
+     "keys": [
+      [
+       "update-desired"
+      ]
+     ],
+     "usage": "update-desired",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "regenerates switch-configuration-desired.json from the actual topology and zones.json"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "confirm",
+     "keys": [
+      [
+       "confirm"
+      ]
+     ],
+     "usage": "confirm [<switch>...]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "switch",
+       "optional": true,
+       "repeatable": false
+      }
+     ],
+     "options": [],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "records the applied VLAN config in switch-configuration-actual.json"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "reconcile",
+     "keys": [
+      [
+       "reconcile"
+      ]
+     ],
+     "usage": "reconcile [--apply]",
+     "note": null,
+     "details": "The five verbs in order: interrogate, update-desired, delta, then with --apply apply and confirm. Exit 2: changes pending (a preview) or a manual switch awaits hand configuration.",
+     "positionals": [],
+     "options": [
+      {
+       "flag": "--apply",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Push the delta to the switches (default: interrogate, update-desired and delta only)."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "apply-flag",
+      "flag": "--apply"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    }
+   ]
+  },
+  {
+   "manifest": 1,
+   "name": "ap-controller",
+   "version": "bash",
+   "tagline": "access points and SSIDs (ADR-008)",
+   "common": [],
+   "verbs": [
+    {
+     "verb": "list",
+     "keys": [
+      [
+       "list"
+      ]
+     ],
+     "usage": "list [--json]",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [
+      {
+       "flag": "--json",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Machine-readable output."
+      }
+     ],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "show",
+     "keys": [
+      [
+       "show"
+      ]
+     ],
+     "usage": "show <ap>",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "ap",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "ssid list",
+     "keys": [
+      [
+       "ssid",
+       "*",
+       "list"
+      ]
+     ],
+     "usage": "ssid <ap> list",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "ssid add",
+     "keys": [
+      [
+       "ssid",
+       "*",
+       "add"
+      ]
+     ],
+     "usage": "ssid <ap> add <ssid> --zone <z> [--security <s>] [--vlan <v>] [--radius <r>] [--captive] [--disabled]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "ssid",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--zone",
+       "takesValue": true,
+       "arg": "<z>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The zone the SSID lands in."
+      },
+      {
+       "flag": "--security",
+       "takesValue": true,
+       "arg": "<s>",
+       "choices": null,
+       "repeatable": false,
+       "description": "wpa2-personal, wpa3, open\u2026"
+      },
+      {
+       "flag": "--vlan",
+       "takesValue": true,
+       "arg": "<v>",
+       "choices": null,
+       "repeatable": false,
+       "description": "VLAN override."
+      },
+      {
+       "flag": "--radius",
+       "takesValue": true,
+       "arg": "<r>",
+       "choices": null,
+       "repeatable": false,
+       "description": "RADIUS profile."
+      },
+      {
+       "flag": "--captive",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "A captive portal."
+      },
+      {
+       "flag": "--disabled",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Declared but off."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "maps the SSID to the zone in switch-configuration-desired.json; ap-controller reconcile --apply programs the AP"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "ssid remove",
+     "keys": [
+      [
+       "ssid",
+       "*",
+       "remove"
+      ]
+     ],
+     "usage": "ssid <ap> remove <ssid>",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "ssid",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "removes the SSID mapping"
+     },
+     "destructive": true,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "reconcile",
+     "keys": [
+      [
+       "reconcile"
+      ]
+     ],
+     "usage": "reconcile [--apply]",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [
+      {
+       "flag": "--apply",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Program the APs."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "apply-flag",
+      "flag": "--apply"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    }
+   ]
+  },
+  {
+   "manifest": 1,
+   "name": "tappaas-train.sh",
+   "version": "bash",
+   "tagline": "the release train (ADR-028)",
+   "common": [],
+   "verbs": [
+    {
+     "verb": "status",
+     "keys": [
+      [
+       "status"
+      ]
+     ],
+     "usage": "status [--no-fetch]",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [
+      {
+       "flag": "--no-fetch",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Do not fetch the remote first."
+      }
+     ],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "preview",
+     "keys": [
+      [
+       "preview"
+      ]
+     ],
+     "usage": "preview [--to <nixos-XX.YY>] [--since <vX.Y>] [--no-pin-move]",
+     "note": null,
+     "details": "Nothing built, nothing moved; writes config/train-preview.json and train-preview-details.json (a read of the release, not a change of the site).",
+     "positionals": [],
+     "options": [
+      {
+       "flag": "--to",
+       "takesValue": true,
+       "arg": "<nixos-XX.YY>",
+       "choices": null,
+       "repeatable": false,
+       "description": "A version move."
+      },
+      {
+       "flag": "--since",
+       "takesValue": true,
+       "arg": "<vX.Y>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Compare from this release."
+      },
+      {
+       "flag": "--no-pin-move",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Keep the pin in the tree."
+      }
+     ],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "ack",
+     "keys": [
+      [
+       "ack"
+      ]
+     ],
+     "usage": "ack [--module <m>] --note <why>",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [
+      {
+       "flag": "--module",
+       "takesValue": true,
+       "arg": "<m>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Acknowledge one module's findings."
+      },
+      {
+       "flag": "--note",
+       "takesValue": true,
+       "arg": "<why>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Why they are accepted."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "records the acknowledgement of the preview's open findings in config/release-train.json"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    }
+   ]
+  },
+  {
+   "manifest": 1,
+   "name": "acme-setup.sh",
+   "version": "bash",
+   "tagline": "the site's wildcard certificate (#254)",
+   "common": [],
+   "verbs": [
+    {
+     "verb": "acme-setup",
+     "keys": [
+      []
+     ],
+     "usage": "acme-setup.sh [--staging] [--provider <p>] [--environment <e>] [--no-save-creds] [--dns-sleep <n>]",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [
+      {
+       "flag": "--staging",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Let's Encrypt's staging CA (testing)."
+      },
+      {
+       "flag": "--provider",
+       "takesValue": true,
+       "arg": "<p>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The DNS provider (default: from ~/.acme-dns-credentials.txt)."
+      },
+      {
+       "flag": "--environment",
+       "takesValue": true,
+       "arg": "<e>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The environment whose domain is certified (default: the site's default)."
+      },
+      {
+       "flag": "--no-save-creds",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Never offer to save credentials (the wizard writes them itself)."
+      },
+      {
+       "flag": "--dns-sleep",
+       "takesValue": true,
+       "arg": "<n>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Seconds to wait for DNS propagation."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "issues the wildcard certificate on the firewall (os-acme-client) and records its refid in config/cert-refids.json"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    }
+   ]
+  }
+ ]
+}

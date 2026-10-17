@@ -258,6 +258,44 @@ try {
       check(client.log.length === 0, "…and the converge never starts — the module is untouched");
     }
 
+    // --dry-run: the pre-gate alone, the console's preview of a modify (ADR-034 D4).
+    {
+      rmSync(calls, { force: true });
+      const client = new FakeModuleClient();
+      const out: string[] = [];
+      const log = console.log;
+      console.log = (m: unknown) => out.push(String(m));
+      let rc: number;
+      try {
+        rc = run(["modify", "demo", "--set", "cores=8", "--dry-run", "--json", "--config-dir", configDir], client);
+      } finally {
+        console.log = log;
+      }
+      const doc = JSON.parse(out.join("\n")) as { ok: boolean; plan: { field: string; class: string }[] };
+      check(rc === 0 && doc.ok && doc.plan[0].class === "in-place", "modify --set --dry-run --json: the plan with its change class");
+      check(wrote() === "" && client.log.length === 0, "…and nothing is written or converged");
+      const rc2 = run(["modify", "demo", "--set", "vmid=250", "--dry-run", "--config-dir", configDir], new FakeModuleClient());
+      check(rc2 === 1 && wrote() === "", "a refused field: the dry run exits 1, as the modify would");
+    }
+
+    // fields: every settable field with its class, before anything is typed.
+    {
+      const out: string[] = [];
+      const log = console.log;
+      console.log = (m: unknown) => out.push(String(m));
+      let rc: number;
+      try {
+        rc = run(["fields", "demo", "--json", "--config-dir", configDir], new FakeModuleClient());
+      } finally {
+        console.log = log;
+      }
+      const doc = JSON.parse(out.join("\n")) as { fields: { field: string; class: string; settable: boolean }[] };
+      const f = (n: string) => doc.fields.find((x) => x.field === n);
+      check(rc === 0 && f("cores")?.class === "in-place" && f("cores")?.settable === true, "fields: cores is in-place under cluster:vm");
+      check(f("vmid")?.settable === false && f("vmid")?.class === "immutable", "fields: vmid is immutable, not settable");
+      check(f("proxyPort") === undefined, "fields: a field of a service demo does not declare is left out");
+    }
+
     // A mixed set stops the whole command, including the acceptable half.
     {
       rmSync(calls, { force: true });
@@ -414,7 +452,7 @@ try {
 
   rmSync(marker, { force: true });
   check(run(["modify", "hassanova", "--set", "cores=8", "--dry-run", "--config-dir", cfg], new FakeModuleClient()) !== 0,
-    "--dry-run on any other modify is refused — a converge has no preview to give");
+    "--dry-run on another modify runs the pre-gate only (here it refuses: no module-fields.json)");
   check(run(["update", "hassanova", "--dry-run", "--config-dir", cfg], new FakeModuleClient()) !== 0,
     "--dry-run on another verb is refused, not silently ignored");
 

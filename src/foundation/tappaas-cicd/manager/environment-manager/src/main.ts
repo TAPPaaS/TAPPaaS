@@ -69,7 +69,7 @@ export const HELP: HelpSpec = {
     {
       usage: "add [<env>] [--name N] [--domain D] [--owner ORG]\n" +
         "                          [--zone Z] [--create-zone] [--display D]\n" +
-        "                          [--dns-mode M] [--force]",
+        "                          [--dns-mode M] [--force]", effect: { noPreview: "writes config/environments/<env>.json (with --create-zone also a zone); environment-manager reconcile <env> --apply makes it live" },
       name: "add",
       hidden: ["--dnsMode M"],
       options: [
@@ -91,7 +91,7 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "modify <env> [--domain D] [--owner ORG] [--zone Z]\n" +
-        "                          [--display D] [--dns-mode M]",
+        "                          [--display D] [--dns-mode M]", effect: { noPreview: "writes config/environments/<env>.json; environment-manager reconcile <env> --apply makes it live" },
       name: "modify",
       hidden: ["--dnsMode M"],
       options: [

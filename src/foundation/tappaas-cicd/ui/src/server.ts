@@ -11,6 +11,7 @@ import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { Entry, envelope } from "./cache";
 import { JumpKind, jumpsFor } from "./jumps";
+import { Manifests } from "./manifest";
 import { MODULE_NAME, Reads } from "./reads";
 
 export interface ServerConfig {
@@ -70,6 +71,8 @@ function setupPage(reason: string): string {
 export class ConsoleServer {
   private server: Server | null = null;
   readonly started = Date.now();
+  // The verb manifests (manifest.ts), loaded once the console has started.
+  manifests: Manifests | null = null;
 
   constructor(private readonly cfg: ServerConfig, private readonly reads: Reads) {}
 
@@ -143,6 +146,11 @@ export class ConsoleServer {
     const env = <T>(e: Entry<T>, data?: unknown): Record<string, unknown> => ({ ...envelope(e), ...(data !== undefined ? { data } : {}) });
 
     switch (head) {
+      case "manifests": {
+        const ms = this.manifests;
+        if (!ms) return sendJson(res, 503, { error: "the verb manifests are still loading" });
+        return sendJson(res, 200, { data: { loadedAt: ms.loadedAt, errors: ms.errors, manifests: [...ms.byBin.values()] } });
+      }
       case "me":
         return sendJson(res, 200, { data: me });
       case "status": {

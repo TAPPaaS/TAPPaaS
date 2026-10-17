@@ -51,7 +51,31 @@ export interface HelpVerb {
   anyOption?: boolean;
   // Longer text printed only by `<cli> <verb> --help`.
   details?: string;
+  // ── the verb manifest (`--help --json`, ADR-034 D4) ──
+  // What the verb does to the site and how its dry run is spelled. Defaults
+  // (defaultEffect): a reading verb (list, show, validate, …) is "read"; a verb
+  // that takes --apply previews without it; one that takes --check or
+  // --dry-run previews with it; any other has no preview.
+  effect?: VerbEffect;
+  // Destructive (typed name, Installer): true, or the words/options that make
+  // it so when present (["remove-peer"], ["--remove"]). Default: a verb named
+  // delete/purge/retire/erase/remove…/discard, and the options --remove,
+  // --decommission, --erase, --purge.
+  destructive?: boolean | string[];
+  // Options that authorize a disruption, with the consequence to show beside
+  // the checkbox. Default: --force, --allow-disruption, --yes, with their
+  // descriptions.
+  disruptive?: Array<[string, string]>;
+  // Words or options that make one call of a write verb a read (`wgvpn list`,
+  // `key list`, `snapshot-vm --list`): the console runs it without a preview.
+  readWhen?: string[];
 }
+
+// A write's preview: `apply` — the verb previews without this flag and applies
+// with it (reconcile --apply); `dryRun` — it previews with this flag and
+// applies without it (--check, --dry-run); `noPreview` — it has none, and the
+// text says what it touches.
+export type VerbEffect = "read" | { apply: string } | { dryRun: string } | { noPreview: string };
 
 export interface HelpSpec {
   name: string; // CLI name, e.g. "network-manager"
@@ -221,10 +245,16 @@ export function undocumentedOptions(s: HelpSpec): string[] {
 // CLI name, with any optional entity prefix already stripped). Returns the exit
 // code when the CLI must stop here, undefined to carry on:
 //   0  -h/--help anywhere: the verb's help was printed, nothing ran
+//      (`--help --json` with no verb: the verb manifest, renderManifest)
 //   1  an option the verb does not accept (named in the error)
 // An unknown verb is left to the manager's own dispatch.
 export function checkArgs(s: HelpSpec, args: string[]): number | undefined {
   const isHelp = (a: string): boolean => a === "-h" || a === "--help";
+  if (args.some(isHelp) && args.includes("--json") && leadingWords(args.filter((a) => !isHelp(a))).length === 0) {
+    // `<cli> --help --json`: the verb manifest, for the console (ADR-034 D4).
+    info(JSON.stringify(renderManifest(s), null, 2));
+    return 0;
+  }
   if (args.some(isHelp)) {
     info(renderVerbHelp(s, leadingWords(args.filter((a) => !isHelp(a)))));
     return 0;
@@ -254,4 +284,189 @@ export function checkArgs(s: HelpSpec, args: string[]): number | undefined {
     return 1;
   }
   return undefined;
+}
+
+// ── the verb manifest: `<cli> --help --json` (ADR-034 D4, T2) ──────────
+
+export interface ManifestOption {
+  flag: string;
+  takesValue: boolean;
+  arg: string | null; // the value's placeholder, e.g. "<file>", "field=value"
+  choices: string[] | null; // a value from a fixed list ("full|tracked")
+  repeatable: boolean;
+  description: string;
+}
+
+export interface ManifestVerb {
+  verb: string; // the display name, e.g. "node network set"
+  keys: string[][]; // the words that select it (alternatives and aliases expanded)
+  usage: string;
+  note: string | null;
+  details: string | null;
+  positionals: { name: string; optional: boolean; repeatable: boolean }[];
+  options: ManifestOption[];
+  open: boolean; // accepts any --option (forwarded to a tool that checks its own)
+  effect: "read" | "write";
+  preview: { kind: "read" } | { kind: "apply-flag"; flag: string } | { kind: "dry-run-flag"; flag: string } | { kind: "none"; touches: string };
+  destructive: boolean;
+  destructiveWhen: string[];
+  readWhen: string[];
+  disruptions: { flag: string; consequence: string }[];
+}
+
+export interface Manifest {
+  manifest: 1;
+  name: string;
+  version: string;
+  tagline: string;
+  common: ManifestOption[];
+  verbs: ManifestVerb[];
+}
+
+const READ_WORDS = new Set([
+  "list", "list-all", "show", "get", "exists", "validate", "resolve", "drift", "topology", "coverage", "peers",
+  "pulse", "status", "capacity", "report", "test", "render", "merge", "split-horizon-target", "list-ports", "delta", "fields",
+]);
+const DESTRUCTIVE_WORD = /^(delete|purge|retire|erase|discard|remove(-[a-z]+)?)$/;
+const DESTRUCTIVE_OPTIONS = ["--remove", "--decommission", "--erase", "--purge"];
+const DISRUPTIVE_OPTIONS = ["--force", "--allow-disruption", "--yes"];
+
+// Options described in a label or usage text, with their placeholders.
+function optionShapes(text: string): Map<string, { arg: string | null; repeatable: boolean }> {
+  const out = new Map<string, { arg: string | null; repeatable: boolean }>();
+  // A <placeholder> is one word whatever it holds ("<a,b>", "<field options>").
+  const KEEP = "\u0001";
+  const toks = text
+    .replace(/<[^<>]*>/g, (m) => m.replace(/[\s,]/g, (c) => (c === "," ? KEEP : "\u0002")))
+    .replace(/[[\](){},]/g, " ")
+    .split(/\s+/)
+    .filter((t) => t.length > 0)
+    .map((t) => t.replace(/\u0001/g, ",").replace(/\u0002/g, " "));
+  for (let i = 0; i < toks.length; i++) {
+    const t = toks[i].replace(/\.\.\.$/, "");
+    if (!FLAG.test(t)) continue;
+    const n = toks[i + 1];
+    const arg = n !== undefined && n !== "|" && n !== "..." && !FLAG.test(n) && !OPEN_FLAG.test(n) ? n.replace(/\.\.\.$/, "") : null;
+    const rep = toks[i].endsWith("...") || (n ?? "").endsWith("...") || toks[i + (arg ? 2 : 1)] === "...";
+    const prev = out.get(t);
+    out.set(t, { arg: prev?.arg ?? arg, repeatable: (prev?.repeatable ?? false) || rep });
+  }
+  return out;
+}
+
+function positionalsOf(v: HelpVerb, keys: string[][]): ManifestVerb["positionals"] {
+  // Per alternative of the usage line ("key list | export|import --file DIR"):
+  // after the verb's own words, every <name> and every bare sub-word ("list",
+  // "export|import") that is not an option or an option's value. The
+  // alternative with the most of them is the verb's shape.
+  const keyWords = new Set(keys.flat());
+  let best: ManifestVerb["positionals"] = [];
+  for (const alt of v.usage.split(/\s\|\s/)) {
+    const toks = alt.split(/\s+/).filter((t) => t.length > 0);
+    const out: ManifestVerb["positionals"] = [];
+    // Start after the last of the verb's own words (identity's "<kind> add <name>").
+    let start = 0;
+    toks.forEach((t, j) => {
+      if (t.split("|").every((w) => keyWords.has(w))) start = j + 1;
+    });
+    let depth = 0;
+    for (let i = 0; i < toks.length; i++) {
+      const raw = toks[i];
+      const opens = (raw.match(/\[/g) ?? []).length;
+      const outer = depth;
+      depth += opens - (raw.match(/\]/g) ?? []).length;
+      if (i < start) continue;
+      const bare = raw.replace(/^\[+/, "").replace(/[\].]+$/, "");
+      const prev = (toks[i - 1] ?? "").replace(/^\[+/, "");
+      if (FLAG.test(bare) || OPEN_FLAG.test(bare) || FLAG.test(prev) || OPEN_FLAG.test(prev)) continue;
+      const m = /^<([^<>]+)>$/.exec(bare);
+      // A bare sub-word counts at the top level or first in its [group];
+      // "[field flags]" is a description, not two arguments.
+      if (!m && (!/^[a-z][a-z0-9-]*(\|[a-z][a-z0-9-]*)*$/.test(bare) || (outer > 0 && opens === 0))) continue;
+      out.push({ name: m ? m[1] : bare, optional: outer > 0 || opens > 0, repeatable: raw.includes("...") });
+    }
+    if (out.length > best.length) best = out;
+  }
+  return best;
+}
+
+export function defaultEffect(v: HelpVerb, options: Map<string, boolean>): VerbEffect {
+  const keys = verbKeys(v);
+  if (keys.length > 0 && keys.every((k) => READ_WORDS.has(k[k.length - 1] ?? ""))) return "read";
+  if (options.has("--apply")) return { apply: "--apply" };
+  if (options.has("--check")) return { dryRun: "--check" };
+  if (options.has("--dry-run")) return { dryRun: "--dry-run" };
+  return { noPreview: "" };
+}
+
+export function manifestVerb(s: HelpSpec, v: HelpVerb): ManifestVerb {
+  const { options, open } = acceptedOptions(s, v);
+  const shapes = optionShapes(v.usage);
+  const desc = new Map<string, string>();
+  for (const [f, d] of [...(v.options ?? []), ...(s.common ?? []), HELP_OPTION]) {
+    for (const [flag, shape] of optionShapes(f)) {
+      if (!desc.has(flag)) desc.set(flag, d);
+      const prev = shapes.get(flag);
+      shapes.set(flag, { arg: prev?.arg ?? shape.arg, repeatable: (prev?.repeatable ?? false) || shape.repeatable });
+    }
+  }
+  // Hidden spellings stay accepted by the CLI but are not in the manifest: the
+  // console never sends a legacy spelling.
+  const hidden = new Map<string, boolean>();
+  for (const h of [...(v.hidden ?? []), ...(s.hidden ?? [])]) scanOptions(h, hidden);
+  const opts: ManifestOption[] = [];
+  for (const [flag, takesValue] of options) {
+    if (flag === "-h" || flag === "--help" || (hidden.has(flag) && !desc.has(flag) && !shapes.has(flag))) continue;
+    const sh = shapes.get(flag);
+    const arg = takesValue ? (sh?.arg ?? "<value>") : null;
+    const choices = arg && !arg.startsWith("<") && arg.includes("|") ? arg.split("|") : null;
+    opts.push({ flag, takesValue, arg, choices, repeatable: sh?.repeatable ?? false, description: desc.get(flag) ?? "" });
+  }
+  const effect = v.effect ?? defaultEffect(v, options);
+  const keys = verbKeys(v);
+  let destructive = false;
+  let destructiveWhen: string[] = [];
+  if (v.destructive === true) destructive = true;
+  else if (Array.isArray(v.destructive)) destructiveWhen = v.destructive;
+  else if (v.destructive === undefined) {
+    if (keys.some((k) => k.some((w) => DESTRUCTIVE_WORD.test(w)))) destructive = true;
+    else {
+      const words = v.usage.replace(/[[\]<>(){},|]/g, " ").split(/\s+/);
+      destructiveWhen = [...new Set(words.filter((w) => DESTRUCTIVE_WORD.test(w)))];
+      destructiveWhen.push(...DESTRUCTIVE_OPTIONS.filter((o) => options.has(o)));
+    }
+  }
+  const disruptions = (v.disruptive ?? DISRUPTIVE_OPTIONS.filter((o) => options.has(o)).map((o): [string, string] => [o, desc.get(o) ?? ""]))
+    .map(([flag, consequence]) => ({ flag, consequence }));
+  let preview: ManifestVerb["preview"];
+  if (effect === "read") preview = { kind: "read" };
+  else if ("apply" in effect) preview = { kind: "apply-flag", flag: effect.apply };
+  else if ("dryRun" in effect) preview = { kind: "dry-run-flag", flag: effect.dryRun };
+  else preview = { kind: "none", touches: effect.noPreview };
+  return {
+    verb: (v.name ?? deriveName(v.usage.split(/\s\|\s/)[0])).replace(/\s*\(.*$/s, "").trim(),
+    keys,
+    usage: v.usage.replace(/\s*\n\s*/g, " "),
+    note: v.note ?? null,
+    details: v.details ?? null,
+    positionals: positionalsOf(v, keys),
+    options: opts,
+    open,
+    effect: effect === "read" ? "read" : "write",
+    preview,
+    destructive,
+    destructiveWhen,
+    readWhen: v.readWhen ?? [],
+    disruptions,
+  };
+}
+
+export function renderManifest(s: HelpSpec): Manifest {
+  const common: ManifestOption[] = [];
+  for (const [f, d] of s.common ?? []) {
+    for (const [flag, sh] of optionShapes(f)) {
+      common.push({ flag, takesValue: sh.arg !== null, arg: sh.arg, choices: null, repeatable: sh.repeatable, description: d });
+    }
+  }
+  return { manifest: 1, name: s.name, version: s.version, tagline: s.tagline, common, verbs: s.verbs.map((v) => manifestVerb(s, v)) };
 }

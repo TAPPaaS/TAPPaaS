@@ -243,6 +243,24 @@ export function preGateSet(
   schema: Record<string, { usedBy?: string[] } | undefined>,
   moduleManifest: ModuleManifest | null = loadModuleManifest(configDir),
 ): PreGateResult {
+  const c = classifySet(configDir, module, requests, schema, moduleManifest);
+  // Reject the WHOLE command: no partial write across one modify, so config and
+  // cluster never move independently (Resolved Question 5).
+  if (c.rejections.length > 0) return { ok: false, rejections: c.rejections, warnings: c.warnings };
+  return { ok: true, plan: c.plan, warnings: c.warnings };
+}
+
+// The pre-gate's judgement of each field on its own: the plan entry of every
+// field that may change (its coordinate and class) and the reason for every one
+// that may not. preGateSet rejects a command with any rejection; `fields` lists
+// them all (what the console shows before anything is typed, ADR-034 D4).
+export function classifySet(
+  configDir: string,
+  module: string,
+  requests: SetRequest[],
+  schema: Record<string, { usedBy?: string[] } | undefined>,
+  moduleManifest: ModuleManifest | null = loadModuleManifest(configDir),
+): { plan: SetPlanEntry[]; rejections: SetRejection[]; warnings: string[] } {
   const rejections: SetRejection[] = [];
   const warnings: string[] = [];
   const plan: SetPlanEntry[] = [];
@@ -253,7 +271,7 @@ export function preGateSet(
   // sends the operator hunting for a typo that is not there.
   if (Object.keys(schema).length === 0) {
     return {
-      ok: false,
+      plan,
       warnings,
       rejections: [
         {
@@ -269,7 +287,7 @@ export function preGateSet(
   const desired = resolveModuleFromConfig(module, configDir);
   if (!desired) {
     return {
-      ok: false,
+      plan,
       warnings,
       rejections: requests.map((r) => ({ field: r.field, reason: `module '${module}' is not deployed` })),
     };
@@ -380,10 +398,7 @@ export function preGateSet(
     }
   }
 
-  // Reject the WHOLE command: no partial write across one modify, so config and
-  // cluster never move independently (Resolved Question 5).
-  if (rejections.length > 0) return { ok: false, rejections, warnings };
-  return { ok: true, plan, warnings };
+  return { plan, rejections, warnings };
 }
 
 // ── rendering ──────────────────────────────────────────────────────────

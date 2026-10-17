@@ -55,7 +55,7 @@ export const HELP: HelpSpec = {
     },
     { usage: "nfs share delete <name> [--check]", name: "nfs share delete", options: [["--check", "Show the result; change nothing."]], note: "(unshared; data kept)" },
     {
-      usage: "nfs share purge <name> --server <instance> --yes",
+      usage: "nfs share purge <name> --server <instance> --yes", effect: { noPreview: "deletes the share's data on its server" },
       name: "nfs share purge",
       options: [["--server I", "The server holding the orphan."], ["--yes", "Confirm: the data is destroyed."]],
       note: "(destroys an orphan's dataset)",
@@ -63,7 +63,7 @@ export const HELP: HelpSpec = {
     { usage: "nfs grant <share> <consumer> ro|rw [--check]", name: "nfs grant", options: [["--check", "Show the result; change nothing."]] },
     { usage: "nfs revoke <share> <consumer> [--check]", name: "nfs revoke", options: [["--check", "Show the result; change nothing."]] },
     {
-      usage: "nfs converge [<share> [--notify]] [--server <instance>]",
+      usage: "nfs converge [<share> [--notify]] [--server <instance>]", effect: { noPreview: "makes the NFS servers and their clients match config/shares.json" },
       name: "nfs converge",
       options: [["--server I", "nfs converge: one server's shares."], ["--notify", "nfs converge <share>: also run its consumers' storage:nfs update (a migration, with their consent)."]],
       note: "(re-apply the declarations)",
@@ -161,7 +161,8 @@ function show(store: Store, args: string[]): number {
 
 export function run(argv: string[]): number {
   const args = argv;
-  if (args.length === 0 || args[0] === "help" || args[0] === "--help" || args[0] === "-h") {
+  // `--help --json` is the verb manifest: checkArgs prints it (ADR-034 D4).
+  if (args.length === 0 || args[0] === "help" || ((args[0] === "--help" || args[0] === "-h") && !args.includes("--json"))) {
     info(renderHelp(HELP));
     return 0;
   }

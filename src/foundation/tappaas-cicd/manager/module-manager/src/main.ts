@@ -59,7 +59,8 @@ import {
 } from "./types";
 import { loadModuleFields } from "../../../lib/ts/src/desired";
 import { stream } from "../../../lib/ts/src/exec";
-import { cmdDrift, parseSetArg, preGateSet } from "./converge";
+import { classifySet, cmdDrift, parseSetArg, preGateSet } from "./converge";
+import { resolveModuleFromConfig } from "./resolve";
 
 import { cmdResolve } from "./resolve";
 import { realServiceFs } from "./services";
@@ -91,6 +92,16 @@ export const HELP: HelpSpec = {
         ["--service P:S", "One coordinate (e.g. cluster:vm). Default: every dependency that ships a field manifest."],
         ["--json", "The drift RECORD — with --service, exactly what 'update-service.sh --apply-drift' consumes."],
       ],
+    },
+    {
+      usage: "fields <module> [--json]",
+      name: "fields",
+      note: "(ADR-020: every field the module may set, the service that owns it and its change class)",
+      details:
+        "What `modify --set` would make of each field before anything is typed: the coordinate whose\n" +
+        "manifest classifies it and its change class (in-place, grow-only, in-place-reboot, migrate,\n" +
+        "config-only, …), or why it cannot be set (immutable, recreate, a tooling field). Fields of\n" +
+        "services the module does not declare are left out. Reads only.",
     },
     {
       usage: "resolve <module> [--json]",
@@ -131,7 +142,7 @@ export const HELP: HelpSpec = {
         "resume. foundation, template and test are not installable stacks.",
     },
     {
-      usage: "add <module> [--environment ENV] [--instance NAME] [--allow-fork] [--reinstall] [--<field> <value>]...",
+      usage: "add <module> [--environment ENV] [--instance NAME] [--allow-fork] [--reinstall] [--<field> <value>]...", effect: { noPreview: "installs the module: writes config/<module>.json, builds and starts its guest, wires the services it depends on" },
       name: "add",
       options: [
         ["--environment ENV", "Target environment to install into (default: foundation→mgmt, else the org env)."],
@@ -142,7 +153,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "adopt <address> [--instance NAME] [--zone ZONE] [--wait SECONDS] [--set field=value]...",
+      usage: "adopt <address> [--instance NAME] [--zone ZONE] [--wait SECONDS] [--set field=value]...", effect: { noPreview: "makes a running machine a module: writes its config, turns its SSH key-only" },
       name: "adopt",
       note: "(ADR-026 D8.1: a machine that already runs becomes a module; its SSH becomes key-only unless --set sshKeyOnly=false — nothing else on it is changed)",
       options: [
@@ -153,7 +164,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "update <module> [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]",
+      usage: "update <module> [--environment ENV] [--force] [--allow-disruption] [--no-snapshot] [--debug] [--silent]", effect: { noPreview: "takes the module to its release: a snapshot, then the converge of its guest and services; a disruptive change waits for --allow-disruption" },
       name: "update",
       note: "(#655: take the release forward; local modifications survive the 3-way merge)",
       options: [
@@ -188,7 +199,7 @@ export const HELP: HelpSpec = {
           "--unset field",
           "Remove a stale undeclared field the merge keeps forever (repeatable). Refused for a declared field and for one the release source still defines.",
         ],
-        ["--dry-run", "With `--set instance=<new>`: say what the rename would move and repoint, and change nothing."],
+        ["--dry-run", "Run the pre-gate only: print each --set's service and change class (or why it is refused), and change nothing. With `--set instance=<new>`: say what the rename would move and repoint. With --json: the plan as JSON."],
         ["--lockdown", "Run the module's lockdown.sh, alone: for a satellite, make it the unmanaged off-site vault — it pulls the Site's PBS, patches itself, and the mothership's key is removed (ADR-010 §8.4.4). One-way."],
         ["--environment ENV", "Target environment to modify."],
         ["--force", "As for `update`: proceed past a fatally failed pre-update test or an archived/external status."],
@@ -199,7 +210,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "delete <module> [--archive|--remove] [--vmid ID] [--decommission] [--environment ENV] [--yes] [--force]",
+      usage: "delete <module> [--archive|--remove] [--vmid ID] [--decommission] [--environment ENV] [--yes] [--force]", effect: { noPreview: "stops and destroys the guest and its disks; archives config/<module>.json (--remove deletes it); removes its routes, pinholes and identity application; PBS backups stay until purged" },
       name: "delete",
       hidden: ["-y"],
       options: [
@@ -213,7 +224,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "suspend <module>",
+      usage: "suspend <module>", effect: { noPreview: "stops the guest and keeps it stopped; config, backups, DNS and route stay; the nightly update skips it" },
       name: "suspend",
       note: "(#428: stop the guest and keep everything else; out of the nightly update until resumed)",
       details:
@@ -222,9 +233,9 @@ export const HELP: HelpSpec = {
         "route stay. The config is marked suspended: the nightly update skips it and the health check\n" +
         "reports it as suspended, not down. A machine cannot be suspended.",
     },
-    { usage: "resume <module>", name: "resume", note: "(start a suspended module and clear the mark)" },
+    { usage: "resume <module>", effect: { noPreview: "starts a suspended module and clears its mark" }, name: "resume", note: "(start a suspended module and clear the mark)" },
     {
-      usage: "migrate <module> [--force]",
+      usage: "migrate <module> [--force]", effect: { noPreview: "moves the guest to the node its config declares" },
       name: "migrate",
       note: "(ADR-019: realizes the DECLARED placement; takes no node argument)",
       options: [
@@ -255,7 +266,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "snapshot-vm <module> [--list|--cleanup N|--restore N]",
+      usage: "snapshot-vm <module> [--list|--cleanup N|--restore N]", effect: { noPreview: "takes a snapshot of the VM (--restore rolls it back, --cleanup prunes old ones)" }, readWhen: ["--list"], destructive: ["--restore", "--cleanup"],
       name: "snapshot-vm",
       options: [
         ["--list", "List existing VM snapshots (default action is to create one)."],
@@ -1086,7 +1097,10 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
   const rename = opts.sets.filter((s) => /^instance=/.test(s));
   if (rename.length > 0) return cmdRenameInstance(module, rename, opts, verb);
   if (opts.dryRun) {
-    die("--dry-run is only for `modify <instance> --set instance=<new>` — every other change converges the module, which has no preview");
+    if (verb !== "modify" || (opts.sets.length === 0 && opts.unsets.length === 0)) {
+      die("--dry-run previews a change: module-manager module modify <module> --set field=value --dry-run");
+    }
+    return previewFieldChanges(module, opts);
   }
   if (verb === "modify" && opts.sets.length === 0 && opts.unsets.length === 0) {
     warn("`modify` with no --set is the release update — say `module-manager module update` instead (#655)");
@@ -1143,6 +1157,58 @@ function cmdRenameInstance(module: string, rename: string[], opts: Opts, verb: "
   const args = [module, to];
   if (opts.dryRun) args.push("--dry-run");
   return stream(process.env.MM_RENAME_BIN ?? "rename-instance.sh", args);
+}
+
+// `modify --set … --dry-run`: the pre-gate alone — each field's service and
+// change class, or why it is refused — and nothing written (ADR-034 D4: the
+// console's preview of a modify). Exit 1 when the change would be refused, as
+// the modify itself would be.
+function previewFieldChanges(module: string, opts: Opts): number {
+  const requests = [];
+  for (const raw of opts.sets) {
+    const parsed = parseSetArg(raw);
+    if (!parsed) die(`--set '${raw}' is not field=value`);
+    requests.push(parsed);
+  }
+  const gate = classifySet(opts.configDir, module, requests, loadModuleFields(opts.configDir));
+  const ok = gate.rejections.length === 0;
+  if (opts.json) {
+    info(JSON.stringify({ module, ok, plan: gate.plan, rejections: gate.rejections, unsets: opts.unsets, warnings: gate.warnings }, null, 2));
+    return ok ? 0 : 1;
+  }
+  for (const w of gate.warnings) warn(w);
+  for (const p of gate.plan) info(`  ${p.field}=${p.value}  (${p.coordinate ? `${p.coordinate}, ${p.class}` : "config-only"})`);
+  for (const u of opts.unsets) info(`  unset ${u}  (checked by the writer when applied)`);
+  for (const r of gate.rejections) console.error(`${RD}[Error]${CL} --set ${r.field}: ${r.reason}`);
+  info(ok ? "--dry-run: the pre-gate passes; nothing changed" : "--dry-run: the pre-gate refuses this change; nothing changed");
+  return ok ? 0 : 1;
+}
+
+// `fields <module>`: every field the module may set through `modify --set`, with
+// the service that owns it and its change class, or why it may not be set.
+function cmdFields(opts: Opts): number {
+  const module = opts.rest[0];
+  if (!module) die("fields: expected <module>");
+  const desired = resolveModuleFromConfig(module, opts.configDir);
+  if (!desired) die(`fields: '${module}' is not deployed (no config/${module}.json)`);
+  const schema = loadModuleFields(opts.configDir);
+  const requests = Object.keys(schema).sort().map((field) => ({ field, value: "" }));
+  const c = classifySet(opts.configDir, module, requests, schema);
+  // A field no service of this module uses is not one it can set at all.
+  const unused = (r: { reason: string }): boolean => /declares none of the services/.test(r.reason);
+  const value = (f: string): unknown => desired.fields[f]?.value ?? null;
+  const rows = [
+    ...c.plan.map((p) => ({ field: p.field, coordinate: p.coordinate, class: p.class, settable: true, reason: null as string | null, value: value(p.field) })),
+    ...c.rejections.filter((r) => !unused(r)).map((r) => ({ field: r.field, coordinate: "", class: /^(\S+) /.exec(r.reason)?.[1] ?? "refused", settable: false, reason: r.reason, value: value(r.field) })),
+  ].sort((a, b) => a.field.localeCompare(b.field));
+  if (opts.json) {
+    info(JSON.stringify({ module, fields: rows, warnings: c.warnings }, null, 2));
+    return 0;
+  }
+  for (const r of rows) {
+    info(`  ${r.field.padEnd(24)} ${(r.coordinate || "(config)").padEnd(22)} ${r.settable ? r.class : `refused: ${r.reason}`}`);
+  }
+  return 0;
 }
 
 // Pre-gate every --set, then write the whole change — sets and unsets — in one
@@ -1317,6 +1383,8 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
       return cmdShow(opts);
     case "resolve":
       return cmdResolveVerb(opts);
+    case "fields":
+      return cmdFields(opts);
     case "drift":
       return cmdDriftVerb(opts);
     case "validate":
@@ -1355,7 +1423,8 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
 }
 
 export function run(argv: string[], client: ModuleClient): number {
-  if (argv.length === 0 || argv[0] === "-h" || argv[0] === "--help") {
+  // `--help --json` is the verb manifest: checkArgs prints it (ADR-034 D4).
+  if (argv.length === 0 || ((argv[0] === "-h" || argv[0] === "--help") && !argv.includes("--json"))) {
     usage();
     return 0;
   }

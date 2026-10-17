@@ -47,7 +47,7 @@ export const HELP: HelpSpec = {
   verbs: [
     {
       usage: "bootstrap --org O --user U --email E [--minimal-org DIR]\n" +
-        "                        [--force] [--skip-validate]",
+        "                        [--force] [--skip-validate]", effect: { noPreview: "seeds config/identities from the minimal org; nothing reaches Authentik until reconcile --apply" },
       name: "bootstrap",
       options: [
         ["--org O", "organization slug (= the TAPPaaS installation name)"],
@@ -87,7 +87,7 @@ export const HELP: HelpSpec = {
       options: [["--json", "structured output (default is human-readable)"]],
     },
     {
-      usage: "<kind> add <name> [field flags] [--force] [--no-reconcile]",
+      usage: "<kind> add <name> [field flags] [--force] [--no-reconcile]", effect: { noPreview: "writes the entity into config/identities and pushes it to Authentik (with --no-reconcile: config only, then reconcile)" },
       verb: `${KINDS} add`,
       name: "<kind> add",
       // Field flags differ per kind; the entity layer refuses one the kind lacks.
@@ -96,13 +96,14 @@ export const HELP: HelpSpec = {
       details: FIELD_FLAGS,
     },
     {
-      usage: "<kind> modify <name> [field flags] [--no-reconcile]",
+      usage: "<kind> modify <name> [field flags] [--no-reconcile]", effect: { noPreview: "changes the entity in config/identities and pushes it to Authentik (with --no-reconcile: config only, then reconcile)" },
       verb: `${KINDS} modify`,
+      name: "<kind> modify",
       anyOption: true,
       details: FIELD_FLAGS,
     },
     {
-      usage: "<kind> delete <name> [--force] [--no-reconcile]",
+      usage: "<kind> delete <name> [--force] [--no-reconcile]", effect: { noPreview: "removes the entity from config/identities and from Authentik (with --no-reconcile: config only)" },
       verb: `${KINDS} delete`,
       name: "<kind> delete",
       options: [["--force", "delete despite the reference guard"]],

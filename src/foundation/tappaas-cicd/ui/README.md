@@ -57,6 +57,18 @@ now (it changes nothing on the site).
 lag, ap, zone, peer, site). Each answers `{data, at, ageSeconds, refreshing, error}`. Any
 other method is 405: P1 has no write endpoint.
 
+## The verb manifest
+
+At start the console reads every manager's `--help --json` (lib/ts `renderManifest`) and the
+declared bash verbs in [`manifest/bash-verbs.json`](manifest/bash-verbs.json)
+(switch-controller, ap-controller, `tappaas-train.sh`, `acme-setup.sh`); `GET
+/api/v1/manifests` serves them. A job's argv must be a verb one of them declares, with options
+that verb declares (`src/manifest.ts`, ADR-034 T2): an undeclared verb or option, a value
+outside an option's choices, a missing or surplus positional, `--config-dir` or `--help` is
+refused before any job exists. The manifest also says how the verb previews (`--apply` absent,
+`--check` / `--dry-run` present, or no dry run and what it touches) and whether a call is
+destructive.
+
 ## Who may reach it
 
 | From | Accepted | Identity |

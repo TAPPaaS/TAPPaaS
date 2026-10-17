@@ -79,11 +79,11 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "update-os <name> <vmid> <node>",
+      usage: "update-os <name> <vmid> <node>", effect: { noPreview: "patches the guest's OS packages and reboots it if they need it" },
       details: "Patches the VM's OS (NixOS rebuild / apt) through update-os.sh; may reboot it.",
     },
     {
-      usage: "scan security [--if-new-sweep] [--notify]",
+      usage: "scan security [--if-new-sweep] [--notify]", effect: { noPreview: "runs the security scan and writes config/sbom" },
       options: [
         ["--if-new-sweep", "Scan only when a sweep has written a result since the last scan (the unit's mode)."],
         ["--notify", "Mail the site owner when a fixable CVE or a failed scan is new since the last scan."],
@@ -96,7 +96,7 @@ export const HELP: HelpSpec = {
         "status is kept as cve-status.previous.json. Runs after every sweep (tappaas-security-scan).",
     },
     {
-      usage: "scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]",
+      usage: "scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]", effect: { noPreview: "scans a component list" },
       options: [
         ["--components <file>", "JSON array of {name, version} — the packages to match (required)."],
         ["--nixpkgs <path>", "The nixpkgs whose CPE vendors to use: the pin being previewed (default: the installed one)."],
@@ -111,7 +111,7 @@ export const HELP: HelpSpec = {
         "`suppressed` holds what a VEX statement decided.",
     },
     {
-      usage: "scan images --refs <file> [--no-db-update] [--no-vex]",
+      usage: "scan images --refs <file> [--no-db-update] [--no-vex]", effect: { noPreview: "scans container images" },
       options: [
         ["--refs <file>", "JSON array of image references (`<image>:<tag>` or `<image>@sha256:…`) (required)."],
         ["--no-db-update", "Match against the trivy database as it is, without refreshing it first."],
@@ -124,7 +124,7 @@ export const HELP: HelpSpec = {
         "{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
     },
     {
-      usage: "report security [--all] [--json]",
+      usage: "report security [--all] [--json]", effect: "read",
       options: [
         ["--all", "List every finding to act on, not the first ten per target."],
         ["--json", "Print cve-status.json as it is."],
@@ -132,7 +132,7 @@ export const HELP: HelpSpec = {
       details: "Prints the last scan: per target its coverage, counts and verdict — ACT, SCAN FAILED,\ntriage (Nix), watch — then what to act on.",
     },
     {
-      usage: "reboot <module>",
+      usage: "reboot <module>", effect: { noPreview: "reboots the module's guest" },
       details:
         "Reboots the module's VM and waits until the module can serve — the reboot update-os takes\n" +
         "after a rebuild, on demand, without updating. For a guest validate reports as pending-reboot.",

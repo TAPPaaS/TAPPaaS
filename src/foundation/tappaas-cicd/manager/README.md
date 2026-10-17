@@ -18,6 +18,15 @@ does anything, and refuses an option the verb does not declare** (#644 — a
 `distribute --help` once pushed zones.json for real). What a verb accepts is its
 help entry, so an accepted option is a documented one.
 
+**`<manager> --help --json` is the verb manifest** (ADR-034 D4): every verb with its words,
+positionals and options (whether each takes a value, its choices), whether it reads or writes,
+how its dry run is spelled (`--apply` to apply, or `--check` / `--dry-run` to preview, or no
+preview and what it touches), and whether it is destructive (typed name, Installer). It is
+rendered from the same `HelpSpec` (`lib/ts/src/help.ts` `renderManifest`); a verb's `effect`,
+`destructive`, `readWhen` and `disruptive` marks are data in that spec, defaulting from its
+name and options. The console runs nothing a manifest does not declare; the bash
+controllers' verbs it runs are declared in `ui/manifest/bash-verbs.json`.
+
 A **controller**, by contrast, owns *runtime / device state*: it talks to a live
 service or device (OPNsense, Authentik, a switch, Proxmox) and reconciles the
 real world toward the desired config a manager hands it. Controllers live under

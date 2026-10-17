@@ -38,6 +38,8 @@ let
     postInstall = (old.postInstall or "") + ''
       mkdir -p "$out/web"
       cp -r ${web} "$out/web/dist"
+      # The declared verbs of the bash controllers (manifest.ts), beside lib/.
+      cp -r ui/manifest "$out/manifest"
     '';
   });
 in

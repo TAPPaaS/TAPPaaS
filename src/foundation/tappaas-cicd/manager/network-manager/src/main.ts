@@ -153,7 +153,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "modify <name> [--set field=value]... [--unset field]...",
+      usage: "modify <name> [--set field=value]... [--unset field]...", effect: { noPreview: "writes the zone's fields into zones.json; network-manager reconcile --apply makes them live" },
       name: "modify",
       options: [
         [
@@ -176,7 +176,7 @@ export const HELP: HelpSpec = {
         "only by hand-editing zones.json or delete-and-re-add.",
     },
     {
-      usage: "bind <zone> --environment <env> | --unbind",
+      usage: "bind <zone> --environment <env> | --unbind", effect: { noPreview: "links the zone to an environment in zones.json" },
       name: "bind (link a Client/IoT/Guest zone to an environment — ADR-014 D2)",
       hidden: ["--env <env>"],
       options: [
@@ -194,7 +194,7 @@ export const HELP: HelpSpec = {
         "zones.json itself stays purely authored.",
     },
     {
-      usage: "enable|disable|manual <name> [--force]",
+      usage: "enable|disable|manual <name> [--force]", effect: { noPreview: "changes the zone's state in zones.json only; network-manager reconcile --apply makes it live" },
       name:
         "enable|disable|manual (atomic zone state change; was zone-state.sh —\n" +
         "enable→Active, disable→Inactive, manual→Manual; mutates zones.json only,\n" +
@@ -204,7 +204,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "snat list | snat verify <module> | snat mode  [--json]",
+      usage: "snat list | snat verify <module> | snat mode  [--json]", effect: "read",
       verb: "snat",
       name: "snat (source NAT — read-only, ADR-016)",
       options: [
@@ -234,7 +234,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "init [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]",
+      usage: "init [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]", effect: { noPreview: "writes a zones file from an install-time profile" },
       note: "(alias: zones-init)",
       aliases: ["zones-init"],
       name: "init (install-time profile bundles; offline, additive, idempotent)",
@@ -266,7 +266,7 @@ export const HELP: HelpSpec = {
         "never retired.",
     },
     {
-      usage: "merge [--diff] [--config-dir <dir>] [--template <tpl>]",
+      usage: "merge [--diff] [--config-dir <dir>] [--template <tpl>]", effect: { dryRun: "--diff" },
       note: "(alias: zones-merge)",
       aliases: ["zones-merge"],
       name:
@@ -307,7 +307,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "wgvpn <setup|add-peer|remove-peer|list|config> [options]",
+      usage: "wgvpn <setup|add-peer|remove-peer|list|config> [options]", effect: { noPreview: "the admin VPN on OPNsense: setup creates the server and its rules, add-peer a peer (prints its wg-quick config), remove-peer removes one" }, readWhen: ["list", "config", "status"],
       name: "wgvpn (the admin VPN: WireGuard into mgmt, terminating on OPNsense — ADR-010 §8.4.6)",
       anyOption: true,
       details:
