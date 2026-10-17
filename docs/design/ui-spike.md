@@ -77,6 +77,7 @@ the mockups can point at them.
 | **U9** | Fed from TAPPaaS's own records, never a hand-drawn diagram. | #839, #844 |
 | **U10** | Machine callers (an AI operations agent) use the same API with their own identity. | #142 |
 | **U11** | The SIEM's findings are visible where the operator already looks; the SIEM's own dashboard is a jump. | #843 |
+| **U12** | Once the mothership exists, the rest of the installation is done from the UI: a setup wizard over the same verbs, resumable, and the same wizard pattern for adding a node, a satellite, an environment, a stack or a device later. | operator, 2026-10-17 |
 
 What is explicitly **not** in scope: a service desk or ITSM (#63), replacing Grafana, Proxmox or
 OPNsense screens, multi-site operation (ADR-024), end-user self-service.
@@ -458,6 +459,55 @@ Physical, Modules). It uses the module's `displayName` and icon as the Authentik
 and words a gate's result for a reader who does not know the gate ("short of memory", "backed up
 tonight"). It is the first step toward ADR-007e's end-user badges without building them.
 
+### 5.12 Installation and wizards
+
+The install has a hard boundary. Before the mothership exists (the first node, the firewall, the
+cut-over, the template, cloning VM 130 and `bootstrap.sh`) no TAPPaaS process can serve a page.
+After it, everything is a manager verb: `install.sh`'s site and zone setup, `acme-setup.sh`,
+`rest-of-foundation.sh` (backup, identity, logging, the identity bootstrap), more nodes with
+`node add --pxe`, environments, the satellite, the admin VPN peer, the switch registration and
+`add-stack`. Every one of those is a job in §5.4. So the console ships inside `tappaas-cicd.nix`
+and is up the moment `bootstrap.sh` has rebuilt the VM, and a **Setup wizard** drives the second
+half.
+
+**The wizard is a thin layer over the job model**, not a second installer:
+
+- an ordered checklist whose state is **derived from the records**, never stored: identity is done
+  when its config exists, TLS when the certificate is there, a node when it has joined the
+  cluster, the switch when it is registered and interrogated. That makes it resumable for free,
+  which is what `install.sh` and `rest-of-foundation.sh` already promise;
+- each step is a form over one verb with Preview → Apply → Result, and progress for the slow ones
+  (a PXE node joining, a guest built on the mothership, a stack of five modules). The wizard runs
+  the verbs step by step so the operator sees where it is; the scripts stay for headless installs;
+- the last step is the "your foundation is installed" summary, which becomes the Overview page.
+
+**What it adds beyond the pages above:**
+
+1. **Bootstrap authentication.** The Authentik gate does not exist until identity is installed,
+   which is itself a wizard step. `bootstrap.sh` writes a one-time **setup token** and the install
+   summary prints it; the console serves the wizard on the mothership's `mgmt` address against
+   that token until the identity step has put the console behind the gate, then deletes it. A
+   necessity of install order, not an SSO-optional mode; it closes itself.
+2. **Secrets entry.** The DNS provider token for ACME, the UniFi controller credentials, the WLAN
+   secrets, a VPS address and key for the satellite, a buddy's tunnel details: forms that write
+   where the scripts already read and never show the value again.
+3. **A day-zero physical view.** Before the switch is registered the view shows nodes and the
+   firewall only; the empty space is the prompt for the *register your switch* step, and after
+   `interrogate` the ports fill in.
+4. **Catalog picking with a dependency plan**: `add-stack --dry-run` shown as a list before Apply.
+5. **Admin VPN enrolment** with a downloadable config or QR code, so the laptop reaches `mgmt`
+   without a shell.
+
+The same pattern serves day 2: add a node, add a satellite, add an environment, add a stack,
+enrol a device. Each is a wizard of two to four steps over the verbs already on the pages.
+
+**The first half, later.** Getting the pre-mothership chain out of the shell is other work. The
+quick win is a **preparation wizard**: a page, possibly static on tappaas.org, that collects what
+`preparation.md` asks for (site code, organisation, domain, email, channel, DNS provider) and emits
+the answers the install chain reads, so the chain runs with no questions. The slow win is an
+installer image with its own small web page on the first node, as Proxmox's installer has. Neither
+is needed to make stages 3b to 6 UI-only.
+
 ---
 
 ## 6. What the managers must grow
@@ -474,6 +524,8 @@ Found while mapping the pages to verbs. None is large; each belongs to the manag
 | `tappaas-train preview --json` | the train | the release card |
 | A dry run for every write verb, or a declared "no preview" | the managers | the operate pattern (§5.4) refuses to apply without one; `identity-manager <kind> add` and `storage-manager share add` already preview through `reconcile`; a few bash verbs do not |
 | The job log format and location | tappaas-cicd | Activity; proposal `/var/lib/tappaas/console/jobs.jsonl`, one line per job, rotated with the journal |
+| A setup token written by `bootstrap.sh`, printed by the install summary, deleted by the identity step | tappaas-cicd | the wizard before the gate exists (§5.12) |
+| A "done" predicate per install step, from the records | the managers' reads | the wizard's checklist state is derived, never stored |
 
 ---
 
@@ -500,8 +552,8 @@ train or less.
 
 | Phase | Delivers | Exit on hrossen |
 |---|---|---|
-| **P1 — see** | the backend with typed reads and the cache; Overview (strip, Attention read-only), Physical (view and side panel, no actions), Modules (list and page, read tabs), Activity (the sweep's log); the jumps; `console.<domain>` behind the gate; `network-manager topology`, `health-manager validate --json` | hrossen drawn correctly, including the WAN path and the LAG; every gate of `validate` visible; an operator finds the cause of a FAIL without a shell |
-| **P2 — operate** | the job model with preview and apply; the verb manifest; every manager's verbs on their pages; typed confirmations; the `status` route for the owner | the three day-2 changes of #844 done from the UI (a port's zone, a module's memory, a node's uplink mode) with their previews in Activity; the sweep and a UI job never overlap |
+| **P1 — see** | the backend with typed reads and the cache; Overview (strip, Attention read-only), Physical (view and side panel, no actions), Modules (list and page, read tabs), Activity (the sweep's log); the jumps; `console.<domain>` behind the gate; the unit in `tappaas-cicd.nix` and the setup token, so a fresh install ends with the console up; `network-manager topology`, `health-manager validate --json` | hrossen drawn correctly, including the WAN path and the LAG; every gate of `validate` visible; an operator finds the cause of a FAIL without a shell; a fresh install on the test system ends with the console reachable |
+| **P2 — operate** | the job model with preview and apply; the verb manifest; **the Setup wizard first** (TLS, backup, identity, logging, the identity bootstrap, nodes, the switch, the admin VPN peer, stacks), then every manager's verbs on their pages; typed confirmations; the `status` route for the owner | a fresh install finished from the wizard with no shell after `bootstrap.sh`; the three day-2 changes of #844 done from the UI (a port's zone, a module's memory, a node's uplink mode) with their previews in Activity; the sweep and a UI job never overlap |
 | **P3 — ask** | the assistant drawer, the tools, proposed-job cards; `tappaas ask` | the memory question of the mockup answered and its proposal applied by a click; no change ever applied by the assistant (a test) |
 | **P4 — secure** | agents through the gate with scopes (#142); the SIEM summary and jumps (after #843); the end-user badges if wanted | an agent lists modules and proposes a job with its own identity in Activity; a Wazuh alert appears in Attention |
 
@@ -522,6 +574,7 @@ The ADR (#844) should decide these; the spike's proposal is in the second column
 | The assistant | In the backend, via LiteLLM, proposes and never applies; absent without the AI stack |
 | Agents | The same API through the gate with Authentik credentials and scopes (#142) |
 | Technology | TypeScript backend (reuses `lib/ts`), React front end, React Flow with automatic layout; homelable as inspiration, not a dependency |
+| Installation | After `bootstrap.sh`, the rest of the install is the Setup wizard over the same jobs, resumable from the records; a setup token bridges the window before identity exists; the pre-mothership chain stays a script, fed later by a preparation wizard |
 | The name | `console` as module and hostname is a proposal; `tappaas.<domain>` is the alternative |
 
 ---

@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-10-17 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#844** (the UI design spike and this ADR). Related: #839 (the UI, physical view first), #183 (service catalog), #91 (Backstage), #142 (agent access to `tappaas-cicd`), #843 (SIEM). Builds on ADR-007 (taxonomy, 007e Health, 007f managers and controllers), ADR-020 (declared-field changes), ADR-021 / ADR-023 / ADR-032 (reachability, routes, exposure), ADR-031 (pulse). |
-| **Changelog** | v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
+| **Changelog** | v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
 
 One web UI for a TAPPaaS site: it shows the site and its health, draws the site as it is cabled,
 operates it through the managers and nothing else, and carries an assistant one can talk to.
@@ -65,6 +65,7 @@ its own zones and policy (ADR-023, ADR-032). The UI is a client of all this, not
 | **U9** | Fed from TAPPaaS's own records, never a hand-drawn diagram. | #839, #844 |
 | **U10** | Machine callers use the same API with their own identity. | #142 |
 | **U11** | The SIEM's findings are visible where the operator already looks; its dashboard is a jump. | #843 |
+| **U12** | Once the mothership exists, the rest of the installation is done from the UI, resumable; the same wizard pattern adds a node, a satellite, an environment, a stack or a device later. | operator, 2026-10-17 |
 
 Out of scope: a service desk or ITSM (#63), replacing Grafana, Proxmox or OPNsense screens,
 multi-site operation (ADR-024), end-user self-service.
@@ -246,6 +247,36 @@ firewall rule is the route's zone list; an agent outside `mgmt` and `admin` reac
   its visual grammar (a status dot on every node, links coloured by what they carry, a side panel
   on click, ports drawn on the switch) and its OIDC and MCP patterns are what is borrowed.
 
+### D10. After the mothership exists, the installation continues in a Setup wizard over the same jobs
+
+The install has a hard boundary: before `bootstrap.sh` has rebuilt VM 130 no TAPPaaS process can
+serve a page. After it, every remaining step is a manager verb — the site and zone setup,
+`acme-setup.sh`, backup, identity, logging and the identity bootstrap (`rest-of-foundation.sh`),
+more nodes (`node add --pxe`), environments, the satellite, the admin VPN peer, the switch
+registration, `add-stack`. Therefore:
+
+- **The console is part of the mothership's own build.** Its unit is in `tappaas-cicd.nix` (D1),
+  so it is up when `bootstrap.sh` finishes, and a fresh install ends with the console reachable.
+- **A Setup wizard drives the rest.** It is a thin layer over D4's job model: an ordered checklist
+  whose state is **derived from the records** (identity is done when its config exists, TLS when
+  the certificate is there, a node when it has joined, the switch when it is registered and
+  interrogated), never stored, so it resumes for free. Each step is a form over one verb with the
+  preview and apply of D4 and progress for the slow steps. The wizard runs the verbs step by step;
+  the scripts stay for headless installs.
+- **A setup token bridges the window before identity.** The gate of D3 does not exist until the
+  identity step has run. `bootstrap.sh` writes a one-time token, the install summary prints it,
+  and the console serves the wizard on the mothership's `mgmt` address against that token until
+  the identity step has put the console behind the gate; then the token is deleted. This is a
+  necessity of install order, not an SSO-optional mode; it closes itself.
+- **Secrets are entered in the wizard** (the DNS provider token, controller credentials, WLAN
+  secrets, a satellite's address and key, a buddy's tunnel) into the places the scripts already
+  read, and never shown again.
+- **The same pattern serves day 2:** add a node, a satellite, an environment, a stack; enrol a
+  device in the admin VPN. Each is a wizard of a few steps over verbs already on the pages.
+- **The pre-mothership chain stays a script.** Later, a preparation wizard (a page that collects
+  what `preparation.md` asks for and emits the answers the chain reads) removes its questions; an
+  installer image with its own page on the first node is further out and not required.
+
 ## Alternatives considered
 
 | | Alternative | Why not |
@@ -262,6 +293,8 @@ firewall rule is the route's zone list; an agent outside `mgmt` and `admin` reac
 | A10 | **OIDC in the app** (`identity:identity`) instead of the gate | Login code of our own and a second token scheme for agents. The gate gives groups in headers and machine credentials for free (ADR-032 D3). |
 | A11 | **The agent loop in Open WebUI** or as an MCP server only | Tools, audit and role would differ from a click. An MCP façade over the same API can come later (D7). |
 | A12 | **An agentic assistant** that applies within a scope | Decided against: the record must show that a person decided. |
+| A13 | **A separate installer UI** (a web page on the first node's installer image, or on the laptop) for the whole of stage 3 | Different work from this ADR: it needs an image and runs before any manager exists. D10 takes the half the managers already cover and leaves the chain a script, fed later by a preparation wizard. |
+| A14 | **Keep the install on the command line** and start the UI at operate | Leaves the longest, most error-prone stretch of a new site's life without the preview, the record and the resumable checklist that the UI gives every other change; the wizard is a thin layer once D4 exists. |
 
 ## Consequences
 
@@ -282,6 +315,8 @@ firewall rule is the route's zone list; an agent outside `mgmt` and `admin` reac
   | `tappaas-train preview --json` | the train | the release card |
   | A dry run for every write verb, or a declared *no preview* | the managers | D4 refuses to apply without one; `identity-manager <kind> add` and `storage-manager share add` already preview through `reconcile`; a few bash verbs do not |
   | The job log format and location | tappaas-cicd | Activity; `/var/lib/tappaas/console/jobs.jsonl`, one line per job, rotated with the journal |
+  | A setup token written by `bootstrap.sh`, printed by the install summary, deleted by the identity step | tappaas-cicd | D10, the wizard before the gate exists |
+  | A "done" predicate per install step, from the records | the managers' reads | D10, the checklist's state is derived, never stored |
 
 - `tappaas-cicd.nix` gains a unit and a new place in the mothership's attack surface: a web
   service as `tappaas`. It is reachable only through the gate and only from the firewall's
@@ -303,8 +338,8 @@ or less.
 
 | Phase | Delivers | Exit on hrossen |
 |---|---|---|
-| **P1 — see** | the backend with typed reads and the cache; Overview (strip, Attention read-only), Physical (view and side panel, no actions), Modules (list and page, read tabs), Activity (the sweep's journal); the jumps; `console.<domain>` behind the gate; `network-manager topology`, `health-manager validate --json` | hrossen drawn correctly, including the WAN path and the LAG; every gate of `validate` visible; an operator finds the cause of a FAIL without a shell |
-| **P2 — operate** | the job model with preview and apply; the verb manifest; every manager's verbs on their pages; typed confirmations; the `status` route for the owner | the three day-2 changes of #844 done from the UI (a port's zone, a module's memory, a node's uplink mode) with their previews in Activity; the sweep and a UI job never overlap |
+| **P1 — see** | the backend with typed reads and the cache; Overview (strip, Attention read-only), Physical (view and side panel, no actions), Modules (list and page, read tabs), Activity (the sweep's journal); the jumps; `console.<domain>` behind the gate; the unit in `tappaas-cicd.nix` and the setup token (D10), so a fresh install ends with the console up; `network-manager topology`, `health-manager validate --json` | hrossen drawn correctly, including the WAN path and the LAG; every gate of `validate` visible; an operator finds the cause of a FAIL without a shell; a fresh install on the test system ends with the console reachable |
+| **P2 — operate** | the job model with preview and apply; the verb manifest; **the Setup wizard first** (TLS, backup, identity, logging, the identity bootstrap, nodes, the switch, the admin VPN peer, stacks; D10), then every manager's verbs on their pages; typed confirmations; the `status` route for the owner | a fresh install finished from the wizard with no shell after `bootstrap.sh`; the three day-2 changes of #844 done from the UI (a port's zone, a module's memory, a node's uplink mode) with their previews in Activity; the sweep and a UI job never overlap |
 | **P3 — ask** | the assistant drawer, the tools, proposed-job cards; `tappaas ask` | the memory question of the spike's mockup answered and its proposal applied by a click; no change ever applied by the assistant (a test) |
 | **P4 — secure** | agents through the gate with scopes (#142); the SIEM summary and jumps (after #843); the end-user badges if wanted | an agent lists modules and proposes a job with its own identity in Activity; a Wazuh alert appears in Attention |
 
@@ -320,6 +355,8 @@ or less.
 - **T4 — the topology.** `network-manager topology --json` on hrossen names every node port,
   switch port, LAG, AP and buddy that the five source verbs name; a finding of `validate` is
   attached to the object it mentions.
+- **T6 — the setup token.** It is accepted only before identity's config exists and only on the
+  `mgmt` address; after the identity step it is gone from disk and a request with it gets 401.
 - **T5 — the assistant.** Asked to run a change, it proposes a card and applies nothing; the card's
   job carries the conversation turn.
 - Unit: the role table, the route cap, the manifest parser, the topology join.
@@ -344,5 +381,6 @@ or less.
 | `src/foundation/tappaas-cicd/manager/network-manager/README.md` | `topology` |
 | `src/foundation/tappaas-cicd/manager/health-manager/README.md` | `validate --json` |
 | `src/foundation/identity/README.md` | the two providers, groups to roles, app passwords for agents |
+| `INSTALL.md`, `src/foundation/INSTALL.md`, `src/foundation/tappaas-cicd/INSTALL.md` | stage 3b onward is the Setup wizard; the scripts remain the headless path |
 | `docs/design/ui-spike.md` | stays as the mockups and the verb map (Appendix A); points here for the decisions |
 | `docs/ADR/README.md` | this row |
