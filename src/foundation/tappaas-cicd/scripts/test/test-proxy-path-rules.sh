@@ -41,10 +41,14 @@ ck "the whole route is refused"  "$(chk '[{"paths":["/*"],"zones":["mgmt"]}]')" 
 ck "no zones"                    "$(chk '[{"paths":["/a"],"zones":[]}]')" "a rule has no zones — delete it instead"
 ck "none inside a rule"          "$(chk '[{"paths":["/a"],"zones":["none"]}]')" "none inside a rule admits no one — delete the rule instead"
 ck "one path in two rules"       "$(chk '[{"paths":["/a"],"zones":["mgmt"]},{"paths":["/a"],"zones":["home"]}]')" "path /a is in two rules"
+ck "identityGate false without a reason" "$(chk '[{"paths":["/hook"],"zones":["internet"],"identityGate":false}]')" "a rule with identityGate false needs a description: who calls these paths and why they cannot sign in (ADR-032 D1)"
+ck "…a blank reason is no reason"   "$(chk '[{"paths":["/hook"],"zones":["internet"],"identityGate":false,"description":"  "}]')" "a rule with identityGate false needs a description: who calls these paths and why they cannot sign in (ADR-032 D1)"
+ck "…with one, it passes"           "$(chk '[{"paths":["/hook"],"zones":["internet"],"identityGate":false,"description":"Home Assistant Cloud webhooks: signed by a secret ID in the URL"}]')" ""
+ck "a gated rule needs no reason"   "$(chk '[{"paths":["/admin/*"],"zones":["mgmt"]}]')" ""
 
 # ── the primary route's rules ──
 reset
-RULES='[{"paths":["/api/webhook/*"],"zones":["internet"],"identityGate":false},
+RULES='[{"paths":["/api/webhook/*"],"zones":["internet"],"identityGate":false,"description":"webhooks signed in their payload"},
         {"paths":["/ui/*","/admin"],"zones":["mgmt"]}]'
 ( proxy_add_path_rules hass "TAPPaaS: hass" hass.example.org hass.srv.internal 8123 tappaas-hass "${RULES}" '["mgmt","home"]' -- --upstream-http1 )
 h() { grep -F -- "--description TAPPaaS: hass $1 --path $1 " "${W}/calls"; }

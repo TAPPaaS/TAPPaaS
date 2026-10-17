@@ -359,6 +359,35 @@ def delete_access_list_cmd(
     return False
 
 
+def set_gate_cmd(
+    manager: CaddyManager,
+    on: bool,
+    descriptions: list[str],
+    description_prefix: str = "",
+    check_mode: bool = False,
+) -> bool:
+    """Turn Authentik forward-auth on or off on handles (identity:accessControl,
+    ADR-032 D1), keeping each handle's strip-Authorization header in step:
+    --description names handles exactly (repeatable — the catch-all and the
+    gated path handles, never a path served without the gate), and
+    --description-prefix takes the handle and every '<prefix> <path>' handle.
+    Reconfigures Caddy when anything changed."""
+    if not descriptions and not description_prefix.strip():
+        print("ERROR: set-gate needs --description or --description-prefix", file=sys.stderr)
+        return False
+    state = "on" if on else "off"
+    if check_mode:
+        print(f"Would turn forward-auth {state} on {descriptions or [description_prefix + ' …']} (dry-run)")
+        return True
+    try:
+        n = manager.set_gate(on, descriptions, description_prefix)
+    except RuntimeError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return False
+    print(f"  forward-auth {state} on {n} handle(s)")
+    return reconfigure_cmd(manager) if n else True
+
+
 def prune_handlers_cmd(
     manager: CaddyManager,
     description_prefix: str,
@@ -827,6 +856,18 @@ Examples:
     gate.add_argument("--no-forward-auth", action="store_true",
                       help="Forward-auth off on this handle, also if it was on (a path for machine callers)")
 
+    # set-gate (ADR-032 D1): forward-auth on/off, with its strip-Authorization header
+    set_gate_parser = subparsers.add_parser(
+        "set-gate", parents=[global_parser],
+        help="Turn Authentik forward-auth on or off on handles; a gated handle drops the caller's Authorization header")
+    sg_state = set_gate_parser.add_mutually_exclusive_group(required=True)
+    sg_state.add_argument("--on", action="store_true", help="Gate the handles")
+    sg_state.add_argument("--off", action="store_true", help="Serve the handles without the gate")
+    set_gate_parser.add_argument("--description", action="append", default=[],
+                                 help="A handle's exact description (repeatable)")
+    set_gate_parser.add_argument("--description-prefix", default="",
+                                 help="The handle 'TAPPaaS: <module>' and its '<prefix> <path>' handles")
+
     # prune-handlers (ADR-023 D4): path handles no longer declared
     prune_h_parser = subparsers.add_parser(
         "prune-handlers", parents=[global_parser],
@@ -956,6 +997,8 @@ Examples:
                 )
             elif args.command == "delete-accesslist":
                 success = delete_access_list_cmd(manager, args.name, args.check_mode)
+            elif args.command == "set-gate":
+                success = set_gate_cmd(manager, args.on, args.description, args.description_prefix, args.check_mode)
             elif args.command == "prune-handlers":
                 success = prune_handlers_cmd(manager, args.description_prefix, args.keep, args.check_mode)
             elif args.command == "prune-accesslists":

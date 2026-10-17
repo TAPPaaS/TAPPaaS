@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (operator, 2026-10-17) — P0 and P1 done; P3 (Jellyfin) in progress. |
-| **Version** | 0.3 |
+| **Status** | **Accepted** (operator, 2026-10-17) — P0, P1, P2 and P3 built; P4 open. |
+| **Version** | 0.4 |
 | **Date** | 2026-10-17 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007, @AndreasJe |
 | **Closes / addresses** | **#845**. Amends ADR-021 R1 and extends ADR-023. Related: #129, #154, #597, #642, #643, #656, #806, #850. |
-| **Changelog** | v0.3 (2026-10-17) — **Accepted** by the operator. O1 answered by the plugin: os-caddy takes extra Caddyfile config only globally, never inside one site, so a per-site `rate_limit` is not possible through it; P3 relies on the machine-generated passwords and Jellyfin's login lockout, and rate limiting moves to a CrowdSec issue. O3 deferred to P4. v0.2 (2026-10-17) — **smaller, after the operator's review and the P0 tests.** No new `proxyAuth` field: ADR-023 stays the model and gains three things — the gate authenticates machine callers (D1), a module without `network:proxy` is unpublished by design and an amended R1 says so (D2), and Jellyfin is published without the gate for friends and family, hardened (D3). Several ports per hostname are verified possible but not built (D4). LDAP for Jellyfin is dropped: the SSO plugin and Quick Connect cover its clients. NetBird is not the answer for friends and family (operator). NOMAD moves to the DMZ. P0 results recorded (T1–T3, on Jellyfin 10.11 and 12.2). v0.1 (2026-10-16) — first draft: a `proxyAuth` field with four values on every route. |
+| **Changelog** | v0.4 (2026-10-17) — **P2 and P3 built.** P2: `caddy-manager set-gate` turns the gate on and off, and a gated handle always carries `header_up -Authorization` (added by caddy-manager from the handle's forward-auth, so network:proxy's re-renders keep it); accessControl asserts header auth on its providers; `authentik-manager service-account-ensure`; an `identityGate: false` rule needs a `description`. D1's *narrowed* clarified: a path rule never covers the whole route — its zones or networks narrow it further where its callers allow. T5 green. P3: Jellyfin published without the gate, T4 green from the internet. v0.3 (2026-10-17) — **Accepted** by the operator. O1 answered by the plugin: os-caddy takes extra Caddyfile config only globally, never inside one site, so a per-site `rate_limit` is not possible through it; P3 relies on the machine-generated passwords and Jellyfin's login lockout, and rate limiting moves to a CrowdSec issue. O3 deferred to P4. v0.2 (2026-10-17) — **smaller, after the operator's review and the P0 tests.** No new `proxyAuth` field: ADR-023 stays the model and gains three things — the gate authenticates machine callers (D1), a module without `network:proxy` is unpublished by design and an amended R1 says so (D2), and Jellyfin is published without the gate for friends and family, hardened (D3). Several ports per hostname are verified possible but not built (D4). LDAP for Jellyfin is dropped: the SSO plugin and Quick Connect cover its clients. NetBird is not the answer for friends and family (operator). NOMAD moves to the DMZ. P0 results recorded (T1–T3, on Jellyfin 10.11 and 12.2). v0.1 (2026-10-16) — first draft: a `proxyAuth` field with four values on every route. |
 
 ## Context
 
@@ -64,8 +64,10 @@ A route behind `identity:accessControl` already accepts a machine credential in 
   revoked one stops working within a minute.
 
 **`identityGate: false` stays**, for a caller that cannot hold a credential at all — a webhook that
-signs its payload (Home Assistant, n8n). Such a rule must carry a `description` that says why, and
-must be narrowed by its zones, networks or a `none` route. Validation refuses one without.
+signs its payload (Home Assistant, n8n). Such a rule must carry a `description` that says why;
+validation refuses one without. It is narrowed by being a path rule, which never covers the whole
+route, and further by its zones or networks where its callers allow (a cloud webhook comes from
+anywhere; a provider with published ranges is a network list, #656).
 
 ### D2. A module without `network:proxy` is unpublished — by design
 
@@ -154,9 +156,9 @@ module needs it; NOMAD stays unpublished (D2).
 | Phase | What |
 |---|---|
 | **P0** | Tests T1–T3 — **done** (above). |
-| **P1** | NOMAD in the `dmz` zone (repo default and hrossen); ADR-021 R1 amended. |
-| **P2** | D1: header auth asserted on accessControl providers; `Authorization` removed on gated routes; `identityGate: false` requires a description; a service-account helper (O2); docs. |
-| **P3** | D3: Jellyfin leaves `identity:accessControl`; known proxy, login limits, admin paths closed, admin without remote access; rate limiting (O1). With @AndreasJe. |
+| **P1** | NOMAD in the `dmz` zone (repo default and hrossen); ADR-021 R1 amended. **Done.** |
+| **P2** | D1: header auth asserted on accessControl providers; `Authorization` removed on gated routes; `identityGate: false` requires a description; a service-account helper (O2); docs. **Done** (T5). |
+| **P3** | D3: Jellyfin leaves `identity:accessControl`; known proxy, login limits, admin paths closed, admin without remote access; rate limiting (O1, now #851). **Done** (T4). |
 | **P4** | Session revocation on user removal, Jellyfin first (O3). |
 
 ## Testing
@@ -166,8 +168,15 @@ module needs it; NOMAD stays unpublished (D2).
   Connect; the web signs in with Authentik; `/metrics`, `/Startup/*` and the dashboard get 403; the
   login is rate-limited; `admin` is refused from outside and works from home; Jellyfin's log shows
   the client's address, not the firewall's.
-- **T5 (P2)** — a gated route: a service account's JWT passes and the app sees no `Authorization`
-  header; an `identityGate: false` rule without a description is refused.
+- **T5 (P2)** — **done, 12/12** (hrossen, a test route on `:9443`): a gated handle gets forward-auth
+  and `header_up -Authorization` from caddy-manager; the provider intercepts header auth;
+  `service-account-ensure` writes its credentials 0600 and is idempotent; the client-credentials
+  JWT passes the gate as the service account and the app sees no `Authorization`; no credential
+  gets a 302; `set-gate --off` removes the gate and the strip header (the app gets its own header
+  again), `--on` restores both. The description rule: `test-proxy-path-rules.sh`.
+- **T4 (P3)** — **done, 17/17** from the internet: Sign in with Authentik and a Quick Connect
+  sign-in from outside; eleven admin paths 403 in any letter case; Jellyfin logs the client's own
+  address.
 - **T6 (P4)** — a user removed from Jellyfin's group loses an open Jellyfin session.
 
 ## Open questions

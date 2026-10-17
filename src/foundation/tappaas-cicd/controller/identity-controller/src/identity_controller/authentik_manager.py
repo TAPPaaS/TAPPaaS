@@ -377,6 +377,11 @@ class AuthentikManager:
             "invalidation_flow": invalidation_flow_pk,
             "external_host": app.external_host,
             "mode": "forward_single",
+            # A machine caller sends an Authentik credential in Authorization
+            # (an app password as Basic, a client-credentials JWT as Bearer),
+            # and the gate checks it instead of redirecting (ADR-032 D1). On by
+            # default in Authentik; stated so a changed default cannot drop it.
+            "intercept_header_auth": True,
         }
         if existing_provider:
             provider_pk = existing_provider["pk"]
@@ -1019,6 +1024,49 @@ class AuthentikManager:
             next_order += 1
             created += 1
         return created
+
+    def service_account_ensure(self, name: str, app_slug: str) -> dict:
+        """A service account for a machine caller of one gated application
+        (identity:accessControl, ADR-032 D1): an Authentik service-account user,
+        bound to the app so the gate's policy admits it, and its app password.
+        The caller exchanges that for a JWT at the token endpoint with the
+        client-credentials grant (client_id = the gate's provider) and sends it
+        as ``Authorization: Bearer``; the JWT opens only this app. Idempotent:
+        an existing account keeps its password. Returns username, password,
+        client_id, token_url — the password is the caller's, never print it."""
+        app = self._find_by_field(self._applications(), "slug", app_slug)
+        if not app:
+            raise RuntimeError(f"application {app_slug!r} not found")
+        r = self.client.get(f"/providers/proxy/{app.get('provider')}/")
+        if r.status_code == 404 or not app.get("provider"):
+            raise RuntimeError(f"application {app_slug!r} is not a forward-auth gate (its provider is not a Proxy provider)")
+        r.raise_for_status()
+        proxy = r.json()
+        users = self._get_json("/core/users/", username=name).get("results", [])
+        user = self._find_by_field(users, "username", name)
+        if user is None:
+            made = self._post_json("/core/users/service_account/", {"name": name, "create_group": False, "expiring": False})
+            password = made["token"]
+            user_pk = made["user_pk"]
+        else:
+            if user.get("type") != "service_account":
+                raise RuntimeError(f"user {name!r} exists and is not a service account — pick another name")
+            user_pk = user["pk"]
+            toks = [t for t in self._get_json("/core/tokens/", page_size=1000).get("results", [])
+                    if t.get("user") == user_pk and t.get("intent") == "app_password"]
+            if not toks:
+                raise RuntimeError(f"service account {name!r} has no app password — delete it (user-delete) and run again")
+            password = self._get_json(f"/core/tokens/{toks[0]['identifier']}/view_key/")["key"]
+        bindings = self._get_json("/policies/bindings/", page_size=1000).get("results", [])
+        if not any(b.get("target") == app["pk"] and b.get("user") == user_pk for b in bindings):
+            orders = [b.get("order", 0) for b in bindings if b.get("target") == app["pk"]]
+            self._post_json("/policies/bindings/", {"target": app["pk"], "user": user_pk,
+                                                    "order": (max(orders) + 1) if orders else 0,
+                                                    "enabled": True, "negate": False, "timeout": 30})
+        host = str((self._embedded_outpost().get("config") or {}).get("authentik_host", "")).rstrip("/")
+        return {"username": name, "password": password, "client_id": proxy["client_id"],
+                "token_url": f"{host or self.config.base_url.rstrip('/')}/application/o/token/",
+                "app": app_slug, "external_host": proxy.get("external_host", "")}
 
     # ── OIDC (ADR-006 — Nextcloud & other native-OIDC apps) ─────────────
 
