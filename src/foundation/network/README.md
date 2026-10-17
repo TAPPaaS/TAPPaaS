@@ -15,6 +15,7 @@ firewall rules and the Caddy reverse proxy for every published service.
 | Reverse proxy (`network:proxy`) | consumer modules | `dependsOn: ["network:proxy"]` → Caddy entry `<service>.<domain>` |
 | Per-module firewall rules (`network:rules`) | consumer modules | `dependsOn: ["network:rules"]` → `rules-manager` compiles `ports`/`ingress`/`egress` |
 | Public HTTPS entry (Caddy :80/:443) | internet | for services with `proxyAllowedZones: ["internet"]` |
+| Bans for abusive clients (CrowdSec) | internet | automatic: a client guessing sign-ins or probing for known exploits is blocked at the firewall — see [CrowdSec](#crowdsec--bans-at-the-firewall) |
 | Switch / WiFi-AP / Proxmox VLAN reconciliation (ADR-008) | TAPPaaS admin | `network-manager reconcile`, `switch-controller`, `ap-controller` — see [scripts/README.md](scripts/README.md) |
 | Isolated test network on a spare NIC | TAPPaaS admin | `test-network.sh` — see [docs/test-network-setup.md](docs/test-network-setup.md) |
 
@@ -106,6 +107,44 @@ What → Principles). Depth: see [DESIGN.md](./DESIGN.md).
 | `cluster:vm` | Creates the OPNsense VM from the prebuilt image |
 | `cluster:ha` | High-availability placement of the firewall VM |
 | `network:proxy` | Registers the firewall's own GUI (`:8443`) behind Caddy |
+
+## CrowdSec — bans at the firewall
+
+CrowdSec runs on the firewall (the `os-crowdsec` plugin) and reads Caddy's access
+logs, one per published name. A client that keeps failing to sign in, or probes
+for known exploits, is banned: its address goes into a pf table and the firewall
+drops it before Caddy — for every published name, not only the one it tried.
+A ban lasts four hours.
+
+| What it acts on | Rule |
+|---|---|
+| Failed sign-ins | `tappaas/http-login-bf`: six failed attempts (`400`/`401`) within about three minutes at Jellyfin's login or Quick Connect, or Authentik's token endpoint |
+| Known exploits | CrowdSec's `http-cve` collection: requests that match published vulnerabilities |
+| Scanners | `http-bad-user-agent`: the user agents of known scanners and exploit tools |
+
+Generic "probing" rules are left out on purpose: a Jellyfin app asks for many images
+that do not exist, and those 404s would look like a scan.
+
+**Never banned:** the site's own clients — private IPv4 (`crowdsecurity/whitelists`)
+and every IPv6 network on the firewall's internal interfaces (`tappaas/site-whitelist`,
+recomputed at every network update, so a changed prefix follows).
+
+**Local only.** The instance is not registered with CrowdSec's central API: no
+addresses or scenario names leave the site, and no community blocklist comes in.
+Parsers and scenarios are downloaded from the CrowdSec hub.
+
+**Operating it** (on the firewall, as root):
+
+```bash
+cscli decisions list                       # who is banned, why, for how long
+cscli decisions delete --ip 203.0.113.7    # lift a ban (the bouncer drops it within ~10 s)
+cscli metrics show acquisition             # which logs it reads
+```
+
+It takes about 140 MiB of memory (engine and bouncer) and little CPU. The network
+update installs and converges it (`scripts/crowdsec-converge.sh`, also `--check`);
+`test.sh` checks it is running, local only, reading Caddy's logs and whitelisting
+the site.
 
 ## Split-horizon DNS — `network:proxy` (ADR-021)
 

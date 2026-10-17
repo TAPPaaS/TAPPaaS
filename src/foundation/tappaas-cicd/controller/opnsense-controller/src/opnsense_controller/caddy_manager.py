@@ -401,6 +401,9 @@ class CaddyManager:
                 "description": domain.description,
                 "DnsChallenge": "1" if domain.dns_challenge else "0",
                 "CustomCertificate": domain.custom_certificate,
+                # One access log per published name: CrowdSec on the firewall
+                # reads them (#851).
+                "AccessLog": "1",
             }
         }
         return self._api_post("ReverseProxy", "addReverseProxy", data)
@@ -422,6 +425,7 @@ class CaddyManager:
                 "description": domain.description,
                 "DnsChallenge": "1" if domain.dns_challenge else "0",
                 "CustomCertificate": domain.custom_certificate,
+                "AccessLog": "1",
             }
         }
         return self._api_post("ReverseProxy", "setReverseProxy", data, url_params=[uuid])

@@ -1,0 +1,17 @@
+type: leaky
+name: tappaas/http-login-bf
+description: "Repeated failed sign-ins at a TAPPaaS published name: Jellyfin's login and Quick Connect, Authentik's token endpoint"
+filter: "evt.Meta.service == 'http' && evt.Meta.log_type == 'http_access-log' && evt.Meta.http_status in ['400', '401'] && evt.Meta.http_path matches '(?i)^/(users/authenticatebyname|users/authenticatewithquickconnect|quickconnect/|application/o/token/)'"
+groupby: evt.Meta.source_ip
+capacity: 5
+leakspeed: 30s
+blackhole: 5m
+labels:
+  service: http
+  confidence: 3
+  spoofable: 0
+  classification:
+    - attack.T1110
+  label: "TAPPaaS sign-in brute force"
+  behavior: "http:bruteforce"
+  remediation: true
