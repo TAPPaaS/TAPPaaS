@@ -66,6 +66,8 @@ debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 _REPO_SYNC_LIB="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../../lib/repo-sync.sh"
 # shellcheck source=/dev/null
 [ -r "${_REPO_SYNC_LIB}" ] && . "${_REPO_SYNC_LIB}"
+# ADR-033 D9: whether a repository that signs nothing may move (site.json requireSigned).
+REPO_SYNC_REQUIRE_SIGNED="$(jq -r '.requireSigned // false' "${CONFIG_DIR:-/home/tappaas/config}/site.json" 2>/dev/null || echo false)"
 # The pull hold (#653) — `sync` honours it as the sweep does.
 # shellcheck source=/dev/null
 [ -r "${_REPO_SYNC_LIB%/*}/repo-hold.sh" ] && . "${_REPO_SYNC_LIB%/*}/repo-hold.sh"
@@ -939,8 +941,10 @@ cmd_modify() {
         # `|| rc=$?` (not a bare call) — set -e would abort before we can tell
         # "blocked, needs --force" apart from a hard failure.
         local rc=0
-        reconcile_repo_checkout "${current_path}" "${new_url}" "${target_branch}" "${allow_discard}" || rc=$?
-        if [[ ${rc} -eq 2 ]]; then
+        reconcile_repo_checkout "${current_path}" "${new_url}" "${target_branch}" "${allow_discard}" "${name}" || rc=$?
+        if [[ ${rc} -eq 3 ]]; then
+            die "Refused: the tip of '${target_branch}' is not a verified release (ADR-033, listed above). The checkout is unchanged."
+        elif [[ ${rc} -eq 2 ]]; then
             die "Refused: '${target_branch}' carries commits that exist only in ${current_path} (listed above). Push them, or re-run with --force to snapshot and discard them."
         elif [[ ${rc} -ne 0 ]]; then
             die "Failed to re-point ${current_path} at https://${new_url} (${target_branch})"
@@ -1251,7 +1255,7 @@ cmd_sync() {
     # Its own lines (and the stash pointers it prints) are the operator's; raw
     # git output goes to debug, as in refresh-control-plane.sh.
     local rc=0 out line
-    out="$(reconcile_repo_checkout "${path}" "${url}" "${branch}" 2>&1)" || rc=$?
+    out="$(reconcile_repo_checkout "${path}" "${url}" "${branch}" 0 "${name}" 2>&1)" || rc=$?
     while IFS= read -r line; do
         case "${line}" in
             *repo-sync:*|*'[WARN]'*|*'[ERROR]'*|*'site-manager repository'*) printf '%s\n' "${line}" ;;
@@ -1261,6 +1265,7 @@ cmd_sync() {
     case "${rc}" in
         0) ;;
         2) die "sync: refused — commits exist only in ${path} (listed above)" ;;
+        3) die "sync: refused — the tip of ${branch} is not a verified release (ADR-033, above); ${name} is unchanged" ;;
         *) die "sync: ${name} did not sync (rc ${rc}) — see above" ;;
     esac
     info "  ${GN}✓${CL} ${name} at origin/${branch} (${tip:0:8})"

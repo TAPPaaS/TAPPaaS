@@ -86,6 +86,9 @@ _chan_lib="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)/../lib
 # What runs here against what the checkout declares (ADR-028 D12, #746).
 # shellcheck source=../lib/deployed-drift.sh
 [[ -r "${_chan_lib%/*}/deployed-drift.sh" ]] && . "${_chan_lib%/*}/deployed-drift.sh"
+# Signed release tags (ADR-033 D1–D3).
+# shellcheck source=../lib/verify-repo.sh
+[[ -r "${_chan_lib%/*}/verify-repo.sh" ]] && . "${_chan_lib%/*}/verify-repo.sh"
 SITE_FILE="${CONFIG_DIR}/site.json"
 STATE_FILE="${CONFIG_DIR}/release-train.json"
 # The boundary interval (ADR-028 D2). Policy, so it is named once.
@@ -243,17 +246,50 @@ is_rehearsal() { [[ "${STAGING_BRANCH}" != "staging" || "${PROD_BRANCH}" != "sta
 # Put an annotated release tag on <commit> and publish it. The same tag on the
 # same commit is success (a resumed boundary); on another commit it is a
 # refusal — a version names one revision, and is never moved.
+#
+# ADR-033: every tag carries the tree's SHA-256 (D3). Once <commit> lists keys in
+# .tappaas/allowed_signers the tag MUST be signed (D1): with no signing key
+# configured the tag is refused, not cut unsigned — a staging or production site
+# would refuse to move to it anyway. The signature is checked against the
+# signers at <commit> before anything is published.
 make_release_tag() {
-    local version="$1" commit="$2" msg="$3" t="v$1" at
+    local version="$1" commit="$2" msg="$3" t="v$1" at lines signers sig
     at="$(g rev-parse -q --verify "refs/tags/${t}^{commit}")"
     if [[ -n "${at}" ]]; then
         [[ "${at}" == "$(g rev-parse "${commit}^{commit}")" ]] \
             || { error "${t} already names $(g rev-parse --short "${at}") — a version is never moved"; return 1; }
     else
-        g tag -a "${t}" -m "${msg}" "${commit}" || { error "could not tag ${t}"; return 1; }
+        lines="$(verify_tag_lines "${REPO_DIR}" "${commit}")" || { error "could not hash the tree of ${commit}"; return 1; }
+        if verify_repo_signs "${REPO_DIR}" "${commit}"; then
+            signing_ready "${commit}" "${t}" || return 1
+            info "  signing ${t} — touch your key if it asks"
+            # Not through g(): the token's prompt is on stderr.
+            git -C "${REPO_DIR}" -c gpg.format=ssh tag -s "${t}" -m "${msg}" -m "${lines}" "${commit}" \
+                || { error "could not sign ${t}"; return 1; }
+            signers="$(mktemp)"; verify_signers_at "${REPO_DIR}" "${commit}" "${signers}"
+            sig="$(verify_tag_signature "${REPO_DIR}" "${t}" "${signers}")" || {
+                rm -f "${signers}"; g tag -d "${t}" >/dev/null
+                error "${t} was signed by a key ${commit:0:8} does not list (${sig}) — not published"; return 1; }
+            rm -f "${signers}"
+            info "  ${t} signed by ${sig%% *}"
+        else
+            g tag -a "${t}" -m "${msg}" -m "${lines}" "${commit}" || { error "could not tag ${t}"; return 1; }
+        fi
     fi
     g push -q origin "refs/tags/${t}" || { error "could not publish ${t}"; return 1; }
     info "  ${GN}✓${CL} ${t} → $(g rev-parse --short "${commit}")"
+}
+
+# signing_ready <commit> [<what>] — 0 when a release tag on <commit> can be made:
+# the repository signs nothing at <commit>, or a signing key is configured.
+# Asked BEFORE a channel moves, so a missing key stops the run while nothing has
+# changed, not after the branch is already published (ADR-033 D1).
+signing_ready() {
+    verify_repo_signs "${REPO_DIR}" "$1" || return 0
+    [[ -n "$(g config user.signingkey)" ]] && return 0
+    error "${2:-the release tag} must be signed (ADR-033): this repository lists signers in ${VERIFY_SIGNERS_PATH}, and no signing key is configured"
+    error "  git -C ${REPO_DIR} config user.signingkey 'key::<your sk-ssh-ed25519 public key>'   (the token on your laptop, via ssh -A)"
+    return 1
 }
 
 # What a release's notes column says, in one place for the page and the CLI.
@@ -1294,6 +1330,7 @@ cmd_boundary() {
         fi
         warn "  --force-boundary given: proceeding despite the above, and recording that."
     fi
+    is_rehearsal || signing_ready "origin/main" "this boundary's tag" || return 1
 
     echo
     info "${BOLD}Plan${CL}"
@@ -1514,6 +1551,7 @@ cmd_patch() {
         error "  Patch staging first (a branch off its tip that merges the fix, landed on main), then production."
         return 1
     fi
+    is_rehearsal || signing_ready "${full}" "the ${channel} fix's tag" || return 1
 
     local now version count
     now="$(now_epoch)"

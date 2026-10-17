@@ -465,6 +465,20 @@ else
     skip "lib/test-repo-sync.sh not found"
 fi
 
+# Test 9c2: signed releases (ADR-033) — a staging/production checkout moves only to
+# a release tag signed by a key the last verified release lists. Temp repos and
+# throwaway keys only.
+info "${BOLD}Test 9c2: release verification (ADR-033)${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-verify-repo.sh" ]]; then
+    if "${SCRIPT_DIR}/lib/test-verify-repo.sh" >/dev/null 2>&1; then
+        pass "verify-repo: signed tags, signer rule, tree hash, rollback, the reconcile gate"
+    else
+        fail "verify-repo test failed (run lib/test-verify-repo.sh)"
+    fi
+else
+    skip "lib/test-verify-repo.sh not found"
+fi
+
 # Test 9d: HA-aware stop/start (#434) — a stop against a slow CRM must be waited
 # out and confirmed, and a transition that never happens must fail rather than
 # report success. Stubbed cluster only; no ssh, no node, no VM.
