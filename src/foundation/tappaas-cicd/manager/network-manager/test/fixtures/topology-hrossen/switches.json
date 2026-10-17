@@ -1,0 +1,22 @@
+{
+  "controllers": [
+    {
+      "name": "unifi-controller",
+      "vendor": "unifi",
+      "managementIp": "https://unifi-os.mgmt.internal:11443",
+      "managed": "auto"
+    }
+  ],
+  "switches": [
+    {
+      "name": "USW Pro XG 10 PoE",
+      "vendor": "unifi",
+      "model": "USWED77",
+      "managementIp": "10.0.0.201",
+      "controller": "unifi-controller",
+      "managed": "auto",
+      "ports": 12
+    }
+  ],
+  "accessPoints": 1
+}

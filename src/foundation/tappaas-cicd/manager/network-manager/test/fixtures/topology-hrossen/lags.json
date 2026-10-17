@@ -1,0 +1,15 @@
+[
+  {
+    "switch": "USW Pro XG 10 PoE",
+    "name": "tappaas1-lan",
+    "ports": [
+      "11",
+      "12"
+    ],
+    "live": [
+      11,
+      12
+    ],
+    "formed": true
+  }
+]

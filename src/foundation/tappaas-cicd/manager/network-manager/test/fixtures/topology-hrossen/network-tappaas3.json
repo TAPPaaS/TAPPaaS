@@ -1,0 +1,109 @@
+{
+  "node": "tappaas3",
+  "live": {
+    "node": "tappaas3",
+    "ports": [
+      {
+        "name": "eno1",
+        "mac": "c8:ff:bf:05:0d:30",
+        "state": "up",
+        "speed": 2500,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 3"
+        }
+      },
+      {
+        "name": "enp3s0",
+        "mac": "c8:ff:bf:05:0d:31",
+        "state": "up",
+        "speed": 2500,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 7"
+        }
+      }
+    ],
+    "lan": {
+      "mtu": 1500,
+      "bond": "",
+      "mode": "single",
+      "active": "",
+      "primary": "",
+      "primaryMac": "",
+      "aggregator": "",
+      "partnerMac": "",
+      "bondMtu": null,
+      "members": [
+        {
+          "name": "eno1",
+          "mac": "c8:ff:bf:05:0d:30",
+          "state": "up",
+          "speed": 2500,
+          "mtu": 1500,
+          "mii": "",
+          "aggregator": "",
+          "actorState": -1,
+          "partnerState": -1,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 3"
+          }
+        }
+      ]
+    },
+    "wan": {
+      "members": [
+        {
+          "name": "enp3s0",
+          "mac": "c8:ff:bf:05:0d:31",
+          "state": "up",
+          "speed": 2500,
+          "mtu": 1500,
+          "mii": "",
+          "aggregator": "",
+          "actorState": -1,
+          "partnerState": -1,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 7"
+          }
+        }
+      ]
+    },
+    "lrmActive": false,
+    "corosync": {
+      "links": 1,
+      "disconnected": 0
+    },
+    "lldpd": "active"
+  },
+  "declared": {
+    "lan": {
+      "mode": "single",
+      "ports": [
+        "c8:ff:bf:05:0d:30"
+      ]
+    },
+    "wan": {
+      "ports": [
+        "c8:ff:bf:05:0d:31"
+      ]
+    }
+  },
+  "findings": []
+}

@@ -1,0 +1,13 @@
+[
+  {
+    "name": "rasmus",
+    "role": "remote",
+    "remoteHost": null,
+    "namespace": null,
+    "physicalLocation": {
+      "country": "DK",
+      "city": "Hareskov"
+    },
+    "tunnel": "serve 10.255.2.0/30 :51830"
+  }
+]

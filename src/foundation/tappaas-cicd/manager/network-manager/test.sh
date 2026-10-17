@@ -71,6 +71,12 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         else
             bad "TypeScript unit tests FAILED"
         fi
+        # ADR-034 D5: the topology join over hrossen's captured outputs.
+        if run_ts "NM_FIXTURE_DIR='${FIXTURE_DIR}' node '${DIST_TEST}/manager/network-manager/test/unit/topology.test.js'"; then
+            ok "TypeScript topology unit tests pass"
+        else
+            bad "TypeScript topology unit tests FAILED"
+        fi
 
         # ── init CLI smoke (offline; temp --out, never live config) ──
         # The unit tsconfig compiles src/ into dist-test/manager/network-manager/src

@@ -1,0 +1,404 @@
+[
+  {
+    "switch": "USW Pro XG 10 PoE",
+    "ports": [
+      {
+        "port": "1",
+        "type": null,
+        "target": null,
+        "targetPort": null,
+        "zone": null,
+        "description": null,
+        "mode": "trunk",
+        "nativeVlan": 0,
+        "taggedVlans": [
+          100,
+          200,
+          298,
+          299,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": null,
+        "drift": "unmanaged",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "2",
+        "type": "node",
+        "target": "tappaas2",
+        "targetPort": "enp97s0",
+        "zone": null,
+        "description": null,
+        "mode": "trunk",
+        "nativeVlan": 0,
+        "taggedVlans": [
+          200,
+          299,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ]
+        },
+        "drift": "in-sync",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "3",
+        "type": "node",
+        "target": "tappaas3",
+        "targetPort": "eno1",
+        "zone": null,
+        "description": null,
+        "mode": "trunk",
+        "nativeVlan": 0,
+        "taggedVlans": [
+          200,
+          299,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ]
+        },
+        "drift": "in-sync",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "4",
+        "type": null,
+        "target": null,
+        "targetPort": null,
+        "zone": null,
+        "description": null,
+        "mode": "trunk",
+        "nativeVlan": 0,
+        "taggedVlans": [
+          100,
+          200,
+          298,
+          299,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": null,
+        "drift": "unmanaged",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "5",
+        "type": "device",
+        "target": null,
+        "targetPort": null,
+        "zone": "wan",
+        "description": "WAN modem (ISP hand-off)",
+        "mode": "access",
+        "nativeVlan": 100,
+        "taggedVlans": [
+          200,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": {
+          "mode": "access",
+          "nativeVlan": 100,
+          "taggedVlans": []
+        },
+        "drift": "in-sync",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "6",
+        "type": "device",
+        "target": "tappaas1",
+        "targetPort": "nic4",
+        "zone": "wan",
+        "description": "tappaas1 WAN NIC",
+        "mode": "access",
+        "nativeVlan": 100,
+        "taggedVlans": [
+          200,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": {
+          "mode": "access",
+          "nativeVlan": 100,
+          "taggedVlans": []
+        },
+        "drift": "in-sync",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "7",
+        "type": "device",
+        "target": "tappaas3",
+        "targetPort": "enp3s0",
+        "zone": "wan",
+        "description": "tappaas3 WAN NIC",
+        "mode": "access",
+        "nativeVlan": 100,
+        "taggedVlans": [
+          200,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": {
+          "mode": "access",
+          "nativeVlan": 100,
+          "taggedVlans": []
+        },
+        "drift": "in-sync",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "8",
+        "type": null,
+        "target": null,
+        "targetPort": null,
+        "zone": null,
+        "description": null,
+        "mode": "trunk",
+        "nativeVlan": 0,
+        "taggedVlans": [
+          100,
+          200,
+          298,
+          299,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": null,
+        "drift": "unmanaged",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "9",
+        "type": "ap",
+        "target": "Nano HD",
+        "targetPort": null,
+        "zone": null,
+        "description": null,
+        "mode": "trunk",
+        "nativeVlan": 0,
+        "taggedVlans": [
+          200,
+          299,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ]
+        },
+        "drift": "in-sync",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "10",
+        "type": null,
+        "target": null,
+        "targetPort": null,
+        "zone": null,
+        "description": null,
+        "mode": "trunk",
+        "nativeVlan": 0,
+        "taggedVlans": [
+          100,
+          200,
+          298,
+          299,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": null,
+        "drift": "unmanaged",
+        "add": [],
+        "remove": [],
+        "lag": null,
+        "lagMembers": []
+      },
+      {
+        "port": "11",
+        "type": "node",
+        "target": "tappaas1",
+        "targetPort": "nic3",
+        "zone": null,
+        "description": null,
+        "mode": "trunk",
+        "nativeVlan": 0,
+        "taggedVlans": [
+          200,
+          299,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ]
+        },
+        "drift": "in-sync",
+        "add": [],
+        "remove": [],
+        "lag": "tappaas1-lan",
+        "lagMembers": [
+          11,
+          12
+        ]
+      },
+      {
+        "port": "12",
+        "type": "node",
+        "target": "tappaas1",
+        "targetPort": "nic2",
+        "zone": null,
+        "description": null,
+        "mode": "trunk",
+        "nativeVlan": 0,
+        "taggedVlans": [
+          200,
+          299,
+          310,
+          410,
+          420,
+          430,
+          510,
+          610
+        ],
+        "desired": {
+          "mode": "trunk",
+          "nativeVlan": 0,
+          "taggedVlans": [
+            200,
+            299,
+            310,
+            410,
+            420,
+            430,
+            510,
+            610
+          ]
+        },
+        "drift": "in-sync",
+        "add": [],
+        "remove": [],
+        "lag": "tappaas1-lan",
+        "lagMembers": []
+      }
+    ]
+  }
+]

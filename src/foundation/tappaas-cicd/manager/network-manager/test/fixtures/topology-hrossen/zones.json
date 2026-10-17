@@ -1,0 +1,134 @@
+{
+  "mgmt": {
+    "type": "Management",
+    "vlantag": 0,
+    "state": "Manual",
+    "tier": 0,
+    "bridge": "lan",
+    "ip": "10.0.0.0/24"
+  },
+  "netbird": {
+    "type": "Overlay",
+    "vlantag": 0,
+    "state": "Manual",
+    "bridge": "lan",
+    "ip": "100.64.0.0/10"
+  },
+  "edge": {
+    "type": "Overlay",
+    "vlantag": 0,
+    "state": "Manual",
+    "bridge": "lan",
+    "ip": "10.255.0.0/31"
+  },
+  "admin": {
+    "type": "Overlay",
+    "vlantag": 0,
+    "state": "Manual",
+    "bridge": "wireguard",
+    "ip": "10.255.1.0/24"
+  },
+  "rossen": {
+    "type": "Service",
+    "vlantag": 200,
+    "state": "Active",
+    "tier": 1,
+    "bridge": "lan",
+    "ip": "10.2.0.0/24"
+  },
+  "work": {
+    "type": "Client",
+    "vlantag": 320,
+    "state": "Inactive",
+    "bridge": "lan",
+    "ip": "10.3.20.0/24",
+    "SSID": "<WORK_SSID>"
+  },
+  "iotLocal": {
+    "type": "IoT",
+    "vlantag": 410,
+    "state": "Active",
+    "tier": 6,
+    "bridge": "lan",
+    "ip": "10.4.10.0/24",
+    "serves": "rossen",
+    "SSID": "<IOT_LOCAL_SSID>"
+  },
+  "iotCloud": {
+    "type": "IoT",
+    "vlantag": 420,
+    "state": "Active",
+    "tier": 3,
+    "bridge": "lan",
+    "ip": "10.4.20.0/24",
+    "serves": "rossen",
+    "SSID": "<IOT_CLOUD_SSID>"
+  },
+  "iotCams": {
+    "type": "IoT",
+    "vlantag": 430,
+    "state": "Active",
+    "tier": 6,
+    "bridge": "lan",
+    "ip": "10.4.30.0/24",
+    "serves": "rossen"
+  },
+  "iotUntrust": {
+    "type": "IoT",
+    "vlantag": 440,
+    "state": "Disabled",
+    "tier": 3,
+    "bridge": "lan",
+    "ip": "10.4.40.0/24",
+    "SSID": "<IOT_UNTRUST_SSID>"
+  },
+  "dmz": {
+    "type": "DMZ",
+    "vlantag": 610,
+    "state": "Mandatory",
+    "tier": 4,
+    "bridge": "lan",
+    "ip": "10.6.0.0/24"
+  },
+  "home": {
+    "type": "Client",
+    "vlantag": 310,
+    "state": "Active",
+    "tier": 2,
+    "bridge": "lan",
+    "ip": "10.3.10.0/24",
+    "serves": "rossen",
+    "SSID": "<HOME_SSID>"
+  },
+  "guest": {
+    "type": "Guest",
+    "vlantag": 510,
+    "state": "Active",
+    "tier": 3,
+    "bridge": "lan",
+    "ip": "10.5.10.0/24",
+    "SSID": "<GUEST_SSID>"
+  },
+  "wan": {
+    "type": "WAN",
+    "vlantag": 100,
+    "state": "Manual",
+    "bridge": "lan",
+    "ip": "10.1.0.0/24"
+  },
+  "buddy": {
+    "type": "Overlay",
+    "vlantag": 0,
+    "state": "Manual",
+    "bridge": "wireguard",
+    "ip": "10.255.2.0/24"
+  },
+  "test": {
+    "type": "Service",
+    "vlantag": 299,
+    "state": "Active",
+    "tier": 1,
+    "bridge": "lan",
+    "ip": "10.2.99.0/24"
+  }
+}

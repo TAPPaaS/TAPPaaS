@@ -1,0 +1,22 @@
+[
+  {
+    "name": "tappaas1",
+    "storagePools": [
+      "tanka1",
+      "tankb1"
+    ]
+  },
+  {
+    "name": "tappaas3",
+    "storagePools": [
+      "tanka1",
+      "tankc1"
+    ]
+  },
+  {
+    "name": "tappaas2",
+    "storagePools": [
+      "tanka1"
+    ]
+  }
+]

@@ -1,0 +1,521 @@
+{
+ "version": 1,
+ "generated": "2026-10-17T18:35:36.476Z",
+ "status": "fail",
+ "failed": 1,
+ "warned": 4,
+ "gates": [
+  {
+   "name": "service-liveness",
+   "status": "pass",
+   "detail": "18 managed module(s) running",
+   "findings": []
+  },
+  {
+   "name": "disk-threshold",
+   "status": "pass",
+   "detail": "16 guest(s) under 80%",
+   "findings": []
+  },
+  {
+   "name": "memory-commitment",
+   "status": "pass",
+   "detail": "tappaas1 55.5/61.8G 90%; tappaas2 74.0/123.5G 60%; tappaas3 5.0/30.8G 16%",
+   "findings": [
+    {
+     "status": "pass",
+     "text": "55.5/61.8G committed, 90%",
+     "subject": {
+      "kind": "node",
+      "name": "tappaas1"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "74.0/123.5G committed, 60%",
+     "subject": {
+      "kind": "node",
+      "name": "tappaas2"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "5.0/30.8G committed, 16%",
+     "subject": {
+      "kind": "node",
+      "name": "tappaas3"
+     }
+    }
+   ]
+  },
+  {
+   "name": "storage-pools",
+   "status": "pass",
+   "detail": "11 pool(s) under 80%",
+   "findings": [
+    {
+     "status": "pass",
+     "text": "tappaas1/local: 16% used (14.9/93.9G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas1/local"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas1/local-lvm: 0% used (0.0/794.3G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas1/local-lvm"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas1/tanka1: 16% used (575.5/3596.5G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas1/tanka1"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas1/tankb1: 0% used (0.0/11040.0G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas1/tankb1"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas2/local: 8% used (7.9/93.9G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas2/local"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas2/local-lvm: 0% used (0.0/337.9G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas2/local-lvm"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas2/tanka1: 15% used (274.9/1845.0G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas2/tanka1"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas3/local: 16% used (10.9/67.7G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas3/local"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas3/local-lvm: 0% used (0.0/141.2G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas3/local-lvm"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas3/tanka1: 31% used (287.5/922.5G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas3/tanka1"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas3/tankc1: 8% used (355.8/4528.0G)",
+     "subject": {
+      "kind": "pool",
+      "name": "tappaas3/tankc1"
+     }
+    }
+   ]
+  },
+  {
+   "name": "cpu-impact",
+   "status": "pass",
+   "detail": "5 HA guest(s): no measurable loss",
+   "findings": [
+    {
+     "status": "pass",
+     "text": "identity: its CPU offers no AVX-512 now — x86-64-v3 takes nothing it uses",
+     "subject": {
+      "kind": "module",
+      "name": "identity"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "immich: haCpu host — keeps its node's full CPU",
+     "subject": {
+      "kind": "module",
+      "name": "immich"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "network: not measured (no answer from network.mgmt.internal) — x86-64-v3 drops AVX-512",
+     "subject": {
+      "kind": "module",
+      "name": "network"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "tappaas-cicd: its CPU offers no AVX-512 now — x86-64-v3 takes nothing it uses",
+     "subject": {
+      "kind": "module",
+      "name": "tappaas-cicd"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "vaultwarden: its CPU offers no AVX-512 now — x86-64-v3 takes nothing it uses",
+     "subject": {
+      "kind": "module",
+      "name": "vaultwarden"
+     }
+    }
+   ]
+  },
+  {
+   "name": "guest-memory",
+   "status": "fail",
+   "detail": "declared / allocated / used, largest gap first",
+   "findings": [
+    {
+     "status": "pass",
+     "text": "jellyfin        2.0G    1.9G    1.0G      52% of declared, gap 0.9G",
+     "subject": {
+      "kind": "module",
+      "name": "jellyfin"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "tappaas-cicd    16.0G   13.7G   12.9G     80% of declared, gap 0.8G",
+     "subject": {
+      "kind": "module",
+      "name": "tappaas-cicd"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "euro-office     8.0G    4.6G    4.2G      52% of declared, gap 0.4G",
+     "subject": {
+      "kind": "module",
+      "name": "euro-office"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "litellm         6.0G    5.3G    4.9G      82% of declared, gap 0.4G",
+     "subject": {
+      "kind": "module",
+      "name": "litellm"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "nomad           4.0G    2.6G    2.3G      57% of declared, gap 0.3G",
+     "subject": {
+      "kind": "module",
+      "name": "nomad"
+     }
+    },
+    {
+     "status": "fail",
+     "text": "openwebui       4.0G    3.9G    3.7G      92% of declared, gap 0.3G",
+     "subject": {
+      "kind": "module",
+      "name": "openwebui"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "deconz-test     4.0G    2.1G    1.9G      47% of declared, gap 0.2G",
+     "subject": {
+      "kind": "module",
+      "name": "deconz-test"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "nextcloud-hpb   4.0G    2.0G    1.8G      44% of declared, gap 0.2G",
+     "subject": {
+      "kind": "module",
+      "name": "nextcloud-hpb"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "forgejo         2.0G    1.8G    1.6G      82% of declared, gap 0.2G",
+     "subject": {
+      "kind": "module",
+      "name": "forgejo"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "identity        4.0G    3.5G    3.4G      85% of declared, gap 0.1G",
+     "subject": {
+      "kind": "module",
+      "name": "identity"
+     }
+    },
+    {
+     "status": "fail",
+     "text": "logging         2.0G    1.9G    1.8G      90% of declared, gap 0.1G",
+     "subject": {
+      "kind": "module",
+      "name": "logging"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "nextcloud       8.0G    2.5G    2.5G      31% of declared, gap 0.1G",
+     "subject": {
+      "kind": "module",
+      "name": "nextcloud"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "vllm-amd        46.0G   0.0G    2.8G      6% of its LXC limit",
+     "subject": {
+      "kind": "module",
+      "name": "vllm-amd"
+     }
+    },
+    {
+     "status": "skip",
+     "text": "network         8.0G    7.8G    unmeasured  usage figure is the host's, not the guest's",
+     "subject": {
+      "kind": "module",
+      "name": "network"
+     }
+    },
+    {
+     "status": "fail",
+     "text": "immich          8.0G    7.6G    7.6G      95% of declared, gap 0.0G",
+     "subject": {
+      "kind": "module",
+      "name": "immich"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "unifi-os        5.0G    3.0G    3.6G      71% of declared, gap 0.0G",
+     "subject": {
+      "kind": "module",
+      "name": "unifi-os"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "coturn          2.0G    1.4G    1.6G      80% of declared, gap 0.0G",
+     "subject": {
+      "kind": "module",
+      "name": "coturn"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "vaultwarden     1.5G    1.2G    1.3G      90% of declared, gap 0.0G",
+     "subject": {
+      "kind": "module",
+      "name": "vaultwarden"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "── VM totals    88.5G   66.7G   56.1G     reclaimable 4.0G",
+     "subject": null
+    },
+    {
+     "status": "pass",
+     "text": "── LXC totals   46.0G   0.0G    2.8G      declared is a limit, not an allocation",
+     "subject": null
+    }
+   ]
+  },
+  {
+   "name": "backup-status",
+   "status": "pass",
+   "detail": "24 module(s) covered",
+   "findings": []
+  },
+  {
+   "name": "pending-reboot",
+   "status": "warn",
+   "detail": "2 of 16 guest(s) waiting for a reboot — health-manager reboot <module>",
+   "findings": [
+    {
+     "status": "warn",
+     "text": "tappaas-cicd    booted 26.05.20261008.7c8764b, next boot 26.05.20261008.7c8764b",
+     "subject": {
+      "kind": "module",
+      "name": "tappaas-cicd"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "unifi-os        the OS asks for a reboot",
+     "subject": {
+      "kind": "module",
+      "name": "unifi-os"
+     }
+    }
+   ]
+  },
+  {
+   "name": "site-timezone",
+   "status": "pass",
+   "detail": "19 node(s)/guest(s) on Europe/Copenhagen",
+   "findings": []
+  },
+  {
+   "name": "quorum",
+   "status": "pass",
+   "detail": "3 vote(s)",
+   "findings": []
+  },
+  {
+   "name": "lan-uplink",
+   "status": "warn",
+   "detail": "2 finding(s) on 3 node(s) — site-manager node network show <node>",
+   "findings": [
+    {
+     "status": "warn",
+     "text": "tappaas1        the switch asks for the slow LACP rate: a leg that fails with its link still up is noticed only after ~90s (link loss is noticed at once)",
+     "subject": {
+      "kind": "node",
+      "name": "tappaas1"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "tappaas1        every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches",
+     "subject": {
+      "kind": "node",
+      "name": "tappaas1"
+     }
+    }
+   ]
+  },
+  {
+   "name": "pulse",
+   "status": "warn",
+   "detail": "down: pulled-by-rasmus — backup-manager pulse",
+   "findings": [
+    {
+     "status": "pass",
+     "text": "uplink up",
+     "subject": {
+      "kind": "site",
+      "name": "uplink"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "firewall up",
+     "subject": {
+      "kind": "module",
+      "name": "network"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "mothership up",
+     "subject": {
+      "kind": "module",
+      "name": "tappaas-cicd"
+     }
+    },
+    {
+     "status": "pass",
+     "text": "pbs up",
+     "subject": {
+      "kind": "module",
+      "name": "backup"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "pulled-by-rasmus DOWN",
+     "subject": {
+      "kind": "peer",
+      "name": "rasmus"
+     }
+    }
+   ]
+  },
+  {
+   "name": "cve-status",
+   "status": "warn",
+   "detail": "31 target(s): 6 act, 0 failed, 15 triage, 10 watch — scanned 0 day(s) ago; health-manager report security",
+   "findings": [
+    {
+     "status": "warn",
+     "text": "diyhue (deconz-test)          ACT: 7 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "deconz-test"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "authentik-server, authentik-… ACT: 1 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "identity"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "nomad_admin (nomad)           ACT: 98 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "nomad"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "nomad_mysql (nomad)           ACT: 89 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "nomad"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "nomad_redis (nomad)           ACT: 1 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "nomad"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "openwebui (openwebui)         ACT: 11 critical/high fixable",
+     "subject": {
+      "kind": "module",
+      "name": "openwebui"
+     }
+    }
+   ]
+  }
+ ]
+}

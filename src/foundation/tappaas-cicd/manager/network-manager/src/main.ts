@@ -72,6 +72,7 @@ import {
   preGateZoneUnset,
 } from "./zonemodify";
 import { cmdSnat } from "./snat";
+import { HealthDoc, buildTopology, collectSources, renderTopology } from "./topology";
 import { stream } from "../../../lib/ts/src/exec";
 
 // The admin VPN's bash tool, linked onto PATH by install.sh (overridable for tests).
@@ -99,6 +100,23 @@ export const HELP: HelpSpec = {
         "the candidates.",
     },
     { usage: "exists <name>", details: "Exit 0 when the zone exists, non-zero when it does not." },
+    {
+      usage: "topology [--json] [--health <file> | --no-health]",
+      name: "topology",
+      options: [
+        ["--json", "print the topology document (ADR-034 D5) as JSON"],
+        ["--health <file>", "take the health findings from this `health-manager validate --json` output instead of running it"],
+        ["--no-health", "leave the health findings out (no validate run)"],
+      ],
+      details:
+        "The physical site as one derived document: nodes with their uplinks, legs, LLDP peers and\n" +
+        "guests; switches with their ports, LAGs and drift; access points; zones; the buddies and the\n" +
+        "satellite; and the health findings placed on the object each names. Joined from site.json,\n" +
+        "site-manager node list / node network show, switch-controller list / list-ports / lag list,\n" +
+        "ap-controller list, zones.json, module-manager module list, backup-manager peers and\n" +
+        "health-manager validate. Read-only: it stores nothing. A source that does not answer is\n" +
+        "named under `sources` and its part is left empty.",
+    },
     {
       usage: "show <name> [--json]",
       note: "(alias: get)",
@@ -363,6 +381,9 @@ interface Opts {
   tier?: number;
   // validate --effective
   effective: boolean;
+  // topology --health <file> / --no-health
+  healthFile?: string;
+  noHealth?: boolean;
   // bind
   environment?: string;
   unbind: boolean;
@@ -422,6 +443,12 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--effective":
         o.effective = true;
+        break;
+      case "--health":
+        o.healthFile = next();
+        break;
+      case "--no-health":
+        o.noHealth = true;
         break;
       case "--apply":
         o.apply = true;
@@ -1262,6 +1289,24 @@ function cmdZonesMerge(opts: Opts): number {
   return rc;
 }
 
+// ── topology (ADR-034 D5) ─────────────────────────────────────────────
+function cmdTopology(opts: Opts): number {
+  if (opts.rest.length > 0) die(`topology: unexpected argument ${opts.rest[0]}`);
+  let health: HealthDoc | null | undefined;
+  if (opts.noHealth) health = null;
+  else if (opts.healthFile) {
+    try {
+      health = JSON.parse(readFileSync(opts.healthFile, "utf8")) as HealthDoc;
+    } catch (e) {
+      die(`topology: --health ${opts.healthFile}: ${(e as Error).message}`);
+    }
+  }
+  const t = buildTopology(collectSources({ configDir: opts.configDir, zonesFile: opts.zonesFile, health }));
+  if (opts.json) process.stdout.write(JSON.stringify(t, null, 1) + "\n");
+  else for (const l of renderTopology(t)) info(l);
+  return 0;
+}
+
 export function run(argv: string[], client?: PlaneClient): number {
   // `zone` is an OPTIONAL, legacy prefix — the whole manager is about zones, so
   // `zone add x` and `add x` are equivalent. Strip a leading bare `zone`.
@@ -1326,6 +1371,8 @@ export function run(argv: string[], client?: PlaneClient): number {
       case "distribute": // primary verb; zones-distribute kept as fall-through alias
       case "zones-distribute":
         return cmdZonesDistribute(opts);
+      case "topology": // ADR-034 D5: the physical site, joined from the other verbs
+        return cmdTopology(opts);
       case "snat": // ADR-016 D3: read-only here — no add/delete, no mode --set
         return cmdSnat(opts.rest, opts.json === true);
       case "split-horizon-target": // ADR-021 D5: the ONE resolver, for all writers

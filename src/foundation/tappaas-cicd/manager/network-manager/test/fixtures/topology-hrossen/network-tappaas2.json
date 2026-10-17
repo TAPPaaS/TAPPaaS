@@ -1,0 +1,98 @@
+{
+  "node": "tappaas2",
+  "live": {
+    "node": "tappaas2",
+    "ports": [
+      {
+        "name": "enp97s0",
+        "mac": "38:05:25:33:b5:f7",
+        "state": "up",
+        "speed": 10000,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 2"
+        }
+      },
+      {
+        "name": "enp98s0",
+        "mac": "38:05:25:33:b5:f8",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "wlp99s0",
+        "mac": "0c:cd:b4:09:57:2d",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      }
+    ],
+    "lan": {
+      "mtu": 1500,
+      "bond": "",
+      "mode": "single",
+      "active": "",
+      "primary": "",
+      "primaryMac": "",
+      "aggregator": "",
+      "partnerMac": "",
+      "bondMtu": null,
+      "members": [
+        {
+          "name": "enp97s0",
+          "mac": "38:05:25:33:b5:f7",
+          "state": "up",
+          "speed": 10000,
+          "mtu": 1500,
+          "mii": "",
+          "aggregator": "",
+          "actorState": -1,
+          "partnerState": -1,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 2"
+          }
+        }
+      ]
+    },
+    "wan": {
+      "members": []
+    },
+    "lrmActive": false,
+    "corosync": {
+      "links": 1,
+      "disconnected": 0
+    },
+    "lldpd": "active"
+  },
+  "declared": {
+    "lan": {
+      "mode": "single",
+      "ports": [
+        "38:05:25:33:b5:f7"
+      ]
+    },
+    "wan": {
+      "ports": []
+    }
+  },
+  "findings": []
+}

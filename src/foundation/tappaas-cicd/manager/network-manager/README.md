@@ -55,6 +55,7 @@ network-manager delete <name>       [--check]
 network-manager enable|disable|manual <name> [--force]
 network-manager bind <zone>         --environment <env> | --unbind
 network-manager reconcile           [--apply] [--only <plane>]
+network-manager topology            [--json] [--health <file> | --no-health]
 network-manager init  [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
 network-manager retire      [--apply]
 network-manager validate    [--zones <file>] [--config-dir <dir>] [--strict]
@@ -295,6 +296,29 @@ network-manager distribute --dry-run  # list target nodes, no copy
 
 - `--zones <file>` — zones.json to distribute (default `$TAPPAAS_CONFIG/zones.json`).
 - `--dry-run` — list the nodes that would receive it; copy nothing.
+
+### `topology` — the physical site, derived (ADR-034 D5)
+
+```bash
+network-manager topology                      # the WAN path, nodes, switch ports, LAGs, findings
+network-manager topology --json               # the document the console's Physical view draws
+network-manager topology --json --health v.json   # reuse a `health-manager validate --json`
+```
+
+One read-only document joined from what the other verbs already report: `site.json`,
+`site-manager node list` and `node network show` (bonds, legs, LLDP peers, the `wan` port),
+`switch-controller list / list-ports / lag list` (ports, VLANs, LAGs, drift), `ap-controller
+list`, `zones.json`, `module-manager module list` (guests and their run state),
+`backup-manager peers` and `health-manager validate` (findings). It stores nothing.
+
+The join reconciles the sources' spellings: a switch compares by name without case or
+punctuation (`USW Pro XG 10 PoE` is LLDP's `USW-Pro-XG-10-PoE`), an LLDP `Port 11` is port
+`11`, a NIC is matched by name or MAC with LLDP first, a `device` port whose target is a node
+is that node's `wan` uplink, and a `device` port in the `wan` zone with no target is the ISP
+hand-off. What does not reconcile — a node LLDP sees on a port the inventory does not give it, a
+switch nobody registered — is a `topology` finding. Health findings are placed on the object
+they name; a `lan-uplink` finding is also put on the node's LAG and switch ports. A source that
+does not answer is listed under `sources` and its part is left empty.
 
 ### `wgvpn` — the admin VPN (ADR-010 §6, §8.4.6)
 

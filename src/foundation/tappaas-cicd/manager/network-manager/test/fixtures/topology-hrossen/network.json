@@ -1,0 +1,6 @@
+{
+ "vmid": 110,
+ "vmname": "network",
+ "node": "tappaas1",
+ "HANode": null
+}

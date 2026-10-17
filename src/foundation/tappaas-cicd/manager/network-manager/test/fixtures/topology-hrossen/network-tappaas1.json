@@ -1,0 +1,170 @@
+{
+  "node": "tappaas1",
+  "live": {
+    "node": "tappaas1",
+    "ports": [
+      {
+        "name": "enx4a1760044203",
+        "mac": "4a:17:60:04:42:03",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "nic0",
+        "mac": "30:c5:99:56:2b:6f",
+        "state": "down",
+        "speed": -1,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": null
+      },
+      {
+        "name": "nic2",
+        "mac": "00:07:43:38:aa:f0",
+        "state": "up",
+        "speed": 10000,
+        "mtu": 1500,
+        "mii": "up",
+        "aggregator": "1",
+        "actorState": 63,
+        "partnerState": 61,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 12"
+        }
+      },
+      {
+        "name": "nic3",
+        "mac": "00:07:43:38:aa:f8",
+        "state": "up",
+        "speed": 10000,
+        "mtu": 1500,
+        "mii": "up",
+        "aggregator": "1",
+        "actorState": 63,
+        "partnerState": 61,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 11"
+        }
+      },
+      {
+        "name": "nic4",
+        "mac": "30:c5:99:56:2b:70",
+        "state": "up",
+        "speed": 10000,
+        "mtu": 1500,
+        "mii": "",
+        "aggregator": "",
+        "actorState": -1,
+        "partnerState": -1,
+        "lldp": {
+          "chassis": "a8:9c:6c:b0:8d:76",
+          "name": "USW-Pro-XG-10-PoE",
+          "port": "Port 6"
+        }
+      }
+    ],
+    "lan": {
+      "mtu": 1500,
+      "bond": "lanbond",
+      "mode": "lacp",
+      "active": "",
+      "primary": "",
+      "primaryMac": "",
+      "aggregator": "1",
+      "partnerMac": "a8:9c:6c:b0:8d:76",
+      "bondMtu": 1500,
+      "members": [
+        {
+          "name": "nic2",
+          "mac": "00:07:43:38:aa:f0",
+          "state": "up",
+          "speed": 10000,
+          "mtu": 1500,
+          "mii": "up",
+          "aggregator": "1",
+          "actorState": 63,
+          "partnerState": 61,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 12"
+          }
+        },
+        {
+          "name": "nic3",
+          "mac": "00:07:43:38:aa:f8",
+          "state": "up",
+          "speed": 10000,
+          "mtu": 1500,
+          "mii": "up",
+          "aggregator": "1",
+          "actorState": 63,
+          "partnerState": 61,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 11"
+          }
+        }
+      ]
+    },
+    "wan": {
+      "members": [
+        {
+          "name": "nic4",
+          "mac": "30:c5:99:56:2b:70",
+          "state": "up",
+          "speed": 10000,
+          "mtu": 1500,
+          "mii": "",
+          "aggregator": "",
+          "actorState": -1,
+          "partnerState": -1,
+          "lldp": {
+            "chassis": "a8:9c:6c:b0:8d:76",
+            "name": "USW-Pro-XG-10-PoE",
+            "port": "Port 6"
+          }
+        }
+      ]
+    },
+    "lrmActive": true,
+    "corosync": {
+      "links": 1,
+      "disconnected": 0
+    },
+    "lldpd": "active"
+  },
+  "declared": {
+    "lan": {
+      "mode": "lacp",
+      "ports": [
+        "00:07:43:38:aa:f0",
+        "00:07:43:38:aa:f8"
+      ]
+    }
+  },
+  "findings": [
+    {
+      "level": "warn",
+      "text": "the switch asks for the slow LACP rate: a leg that fails with its link still up is noticed only after ~90s (link loss is noticed at once)"
+    },
+    {
+      "level": "warn",
+      "text": "every leg reaches the same switch (USW-Pro-XG-10-PoE) — redundant ports, not redundant switches"
+    }
+  ]
+}
