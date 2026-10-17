@@ -337,6 +337,33 @@
             "description": "Update channel (stable | main | etc.).",
             "type": "string",
             "default": "stable"
+          },
+          "trust": {
+            "description": "The repository's first trusted release (ADR-033 D5): a fresh clone has no running revision to take its signers from, so its first release is checked against this. The introduction tag must point at introductionCommit and be signed by the key with this fingerprint; the checkout must descend from it. After that the site verifies each update against the signers of the release it last verified (config/.trust/<name>.json). Written by the installer for the TAPPaaS repository and by `repository add --introduction --signer` for others. Absent: the repository has no anchor — a staging/production clone was added with --unsigned, or predates ADR-033 and verifies from the revision it runs.",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "introduction",
+              "introductionCommit",
+              "signer"
+            ],
+            "properties": {
+              "introduction": {
+                "description": "The release tag trust starts from (e.g. v2.4).",
+                "type": "string",
+                "pattern": "^v[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
+              },
+              "introductionCommit": {
+                "description": "The full commit id the introduction tag points at.",
+                "type": "string",
+                "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
+              },
+              "signer": {
+                "description": "SHA-256 fingerprint of the key that signed the introduction tag, as ssh-keygen -l prints it (SHA256:...). Obtained from the repository's owner out of band; for TAPPaaS it is published in INSTALL.md.",
+                "type": "string",
+                "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+              }
+            }
           }
         }
       }

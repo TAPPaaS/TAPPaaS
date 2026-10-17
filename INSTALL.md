@@ -48,6 +48,28 @@ follow its steps top to bottom.
 **Done when:** the install prints its "🎉 your TAPPaaS foundation is installed" summary, and you can
 reach the Proxmox UI, the firewall UI and the CICD mothership.
 
+### Compare the release signer
+
+TAPPaaS releases on the `stable` and `staging` branches are tags signed by the TAPPaaS owners. The
+install checks that the release it clones is signed by one of the keys below, and records that
+release as the first one the site trusts; every later update must be signed by a key that release
+lists. The fingerprints below are the one thing you take on trust, so compare them with what the
+install prints:
+
+```
+TAPPaaS v2.4: signed by SHA256:… — compare it with the fingerprint in INSTALL.md
+```
+
+| Owner | Release key fingerprint |
+|-------|-------------------------|
+| Lars Rossen | *not published yet — the release keys are being enrolled* |
+| Erik Daniel | *not published yet — the release keys are being enrolled* |
+
+Check the same fingerprints on [tappaas.org](https://tappaas.org) and in the release notes; if they
+differ anywhere, stop and ask before installing. Until the keys are published TAPPaaS releases are
+unsigned and the install says so (`TAPPaaS signs no releases yet`). The `main` branch is never
+signed.
+
 ## Stage 4 — Configure Environments *(optional)*
 
 Run more than one world on the same platform: production next to family, tenants next to
@@ -69,6 +91,9 @@ VPS now via [the satellite install](src/foundation/satellite/INSTALL.md).
 Install the workloads you chose in stage 1. First-party modules install with
 `module-manager module add <module>`; community module stores register once with
 `site-manager repository add <repo> --branch <branch>`, after which their modules install the same way.
+On a `stable` or `staging` branch, a repository that signs its releases is added with the release
+to trust first and its owner's key fingerprint — `--introduction <tag> --signer SHA256:<fingerprint>`,
+both from the repository's owner — and one that signs nothing with `--unsigned`.
 
 | Stack | What you get |
 |-------|--------------|

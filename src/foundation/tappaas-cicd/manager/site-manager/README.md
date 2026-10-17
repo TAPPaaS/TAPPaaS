@@ -45,6 +45,8 @@ node               node list [--json]
                    node network test <node> [--apply] [--yes]
 repository         repository list [--json]
                    repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]
+                            [--introduction <tag> --signer SHA256:<fp> | --unsigned]
+                   repository introduce <name> [--introduction <tag> --signer SHA256:<fp>]
                    repository delete <name> [--force]
                    repository reconcile [--apply]
                    repository sync <name> [--dry-run]                (#814)
@@ -128,6 +130,23 @@ the tree left unlisted. With no argument it checks every `managed: full` reposit
 reports and exits 0 — every catalogue predates the check, and a stale one is no reason to
 refuse a repository; `--strict` exits non-zero and is what CI and a contributor run before
 opening a pull request. `repository add` runs it too, as a report.
+
+**First trust for a clone (ADR-033 D5).** A release tag is verified against the signers of
+the release the site last verified — but a fresh clone has verified nothing yet. On a
+staging or production branch `repository add` therefore takes the repository's
+*introduction*: `--introduction <tag>` (the release to trust first) and `--signer
+SHA256:<fp>` (the fingerprint of the key that signed it, as `ssh-keygen -l` prints it),
+both from the repository's owner, out of band. It shows both, refuses a clone that does
+not verify against them (the tag must be signed by that key, its tree hash must match, and
+the checked-out release must follow from it) and writes them as the entry's `trust`;
+what it verified goes to `config/.trust/<name>.json`, where every later update starts.
+Without them the add is refused, unless `--unsigned` is given: for a repository that
+signs nothing, or one taken on trust from the revision cloned now. An unstable branch
+needs neither. `repository introduce <name>` runs the same check on an existing
+checkout against its `trust` — `repository reconcile --apply` does so after cloning a
+missing repository, and removes the clone again if it fails — and with `--introduction`
+and `--signer` gives an existing repository its anchor. The TAPPaaS repository's anchor
+is written by the installer, from the fingerprints published in the root `INSTALL.md`.
 
 `site modify` editable fields (scalar, site-wide): `--channel`, `--displayName`, `--owner`,
 `--email`, `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,

@@ -243,6 +243,16 @@ A repository cannot vouch for its own first key (R3). Each repository entry in `
   already executing on the site, so trusting its `allowed_signers` is no weaker than today, and
   it lets every existing site start verifying at its next update without an introduction. The
   introduction is what a **fresh clone** needs, where there is nothing running to start from.
+- **As built** — `verify_introduction` (lib/verify-repo.sh) checks a fresh clone: the tag
+  points exactly at `introductionCommit`, is signed by a key with the `signer` fingerprint
+  that its own commit's `allowed_signers` lists, its `tree-sha256` matches, and the
+  checked-out release descends from it and is authorized by the signers there. What it
+  verified is recorded in `config/.trust/`, so the next update takes the normal base rule.
+  `bootstrap.sh` checks the TAPPaaS tip against the fingerprints published in `INSTALL.md`
+  (git and ssh-keygen only, before `nixos-rebuild` runs anything from the clone; the full
+  check after it) and leaves the anchor for `create-site.sh`, which writes and re-checks it.
+  `repository add --introduction --signer | --unsigned`, `repository introduce` and the
+  clone in `repository reconcile` share `repo_sync_introduce` (lib/repo-sync.sh).
 
 ### D6 — Update verifies before git moves
 

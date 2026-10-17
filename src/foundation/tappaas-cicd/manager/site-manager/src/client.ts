@@ -9,7 +9,7 @@
 // `site add` and `repository add`/`delete` stays in the still-live .sh tools
 // (create-site.sh / repository.sh), invoked here as thin delegations.
 
-import { existsSync, readdirSync } from "fs";
+import { existsSync, readdirSync, rmSync } from "fs";
 import { basename, join } from "path";
 import {
   defaultNodeCandidates,
@@ -19,7 +19,7 @@ import {
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { capture as run, captureResult, stream as runStreaming } from "../../../lib/ts/src/exec";
 import { loadRaw, writeSite } from "./config";
-import { SiteClient } from "./types";
+import { RepositoryTrust, SiteClient } from "./types";
 import { UNIT } from "./unitrun";
 import { spawn, spawnSync } from "child_process";
 
@@ -52,9 +52,18 @@ export class CliSiteClient implements SiteClient {
     return existsSync(path);
   }
 
-  cloneRepo(url: string, path: string, branch: string): void {
+  cloneRepo(url: string, path: string, branch: string, name?: string, trust?: RepositoryTrust): void {
     run(GIT(), ["clone", `https://${url}`, path]);
     run(GIT(), ["-C", path, "checkout", branch]);
+    // ADR-033 D5: a fresh clone with an anchor must verify against it before
+    // anything uses it; repository.sh owns the verifier (lib/repo-sync.sh).
+    if (trust && name) {
+      const rc = runStreaming(REPOSITORY_SH(), ["introduce", name]);
+      if (rc !== 0) {
+        rmSync(path, { recursive: true, force: true });
+        throw new Error(`repository ${name}: the clone does not verify against its introduction ${trust.introduction} — removed again`);
+      }
+    }
   }
 
   currentBranch(path: string): string | null {
@@ -179,6 +188,11 @@ export class CliSiteClient implements SiteClient {
 
   repositoryAdd(args: string[]): number {
     return runStreaming(REPOSITORY_SH(), ["add", ...args]);
+  }
+
+  repositoryIntroduce(args: string[]): number {
+    // ADR-033 D5: repository.sh introduce <name> [--introduction <t> --signer <fp>].
+    return runStreaming(REPOSITORY_SH(), ["introduce", ...args]);
   }
 
   repositoryStash(args: string[]): number {

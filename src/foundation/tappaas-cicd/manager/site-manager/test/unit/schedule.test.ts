@@ -10,6 +10,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { HELP, run, readSchedule, writeSchedule } from "../../src/main";
+import { loadSite } from "../../src/config";
 import { FakeSiteClient } from "./fake-client";
 
 let passed = 0;
@@ -95,6 +96,23 @@ check(opts.includes("--updateFrequency") && opts.includes("--updateWeekday") && 
     "site modify --requireSigned true writes a boolean true");
   run(["site", "modify", "--requireSigned", "false", "--config-dir", dir], c);
   check(req() === false, "…and --requireSigned false writes false");
+}
+
+// ── repository trust (ADR-033 D5): add forwards the introduction; introduce exists ──
+{
+  const fp = "SHA256:" + "A".repeat(43);
+  c.log.length = 0;
+  run(["repository", "add", "codeberg.org/x/y", "--branch", "stable", "--introduction", "v1.2", "--signer", fp, "--config-dir", dir], c);
+  check(c.log.includes(`repository.sh add codeberg.org/x/y --branch stable --introduction v1.2 --signer ${fp}`),
+    "repository add forwards --introduction and --signer");
+  c.log.length = 0;
+  run(["repository", "add", "codeberg.org/x/y", "--unsigned", "--config-dir", dir], c);
+  check(c.log.includes("repository.sh add codeberg.org/x/y --unsigned"), "…and --unsigned, as a flag");
+  c.log.length = 0;
+  run(["repository", "introduce", "y", "--config-dir", dir], c);
+  check(c.log.includes("repository.sh introduce y"), "repository introduce delegates to repository.sh");
+  writeFileSync(siteFile, JSON.stringify({ name: "s", repositories: [{ name: "y", url: "u", trust: { introduction: "v1.2", introductionCommit: "b".repeat(40), signer: fp } }] }));
+  check(loadSite(siteFile).repositories[0].trust?.introduction === "v1.2", "loadSite reads repositories[].trust");
 }
 
 console.log(`schedule: ${passed} passed, ${failed} failed`);

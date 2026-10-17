@@ -53,7 +53,12 @@ export function loadSite(siteFile: string): Site {
   const rawRepos = Array.isArray(raw.repositories) ? raw.repositories : [];
   const repositories: Repository[] = rawRepos.map((r) => {
     const o = r as Record<string, unknown>;
-    return { ...o, name: asString(o.name), url: asString(o.url) };
+    const t = o.trust as Record<string, unknown> | undefined;
+    const trust =
+      t && typeof t === "object"
+        ? { introduction: asString(t.introduction), introductionCommit: asString(t.introductionCommit), signer: asString(t.signer) }
+        : undefined;
+    return { ...o, name: asString(o.name), url: asString(o.url), ...(trust ? { trust } : {}) };
   });
 
   const site: Site = {

@@ -159,6 +159,84 @@ repo_sync_verify_gate() {
     esac
 }
 
+# repo_sync_introduce <path> <branch> <name> <tag> <commit> <fingerprints> <unsigned>
+# ADR-033 D5: first trust for a FRESH clone, checked out on <branch>. With an
+# introduction (<tag> + <fingerprints>; <commit> may be empty, it is then read
+# from the tag) the clone must verify against it, and what it verified is
+# recorded in REPO_SYNC_TRUST_DIR so later updates take the normal base rule.
+#
+#   staging/production   the checked-out tip must be a release the introduction
+#                        leads to. Without an introduction: refused, unless
+#                        <unsigned> is 1 (D9) — trust then starts from the clone.
+#   unstable             nothing is signed there (D1); a given introduction is
+#                        still checked (the tag, its signer, that the tip
+#                        descends from it), so it holds once the branch changes.
+#
+# Sets REPO_SYNC_INTRO_TAG / _COMMIT / _SIGNER (the fingerprint that signed the
+# introduction) when there is one, for the caller to write to site.json.
+# Returns 0 trusted (or not needed), 3 refused, 1 bad arguments.
+repo_sync_introduce() {
+    local path="$1" branch="$2" name="$3" tag="$4" commit="$5" fps="$6" unsigned="${7:-0}"
+    local channel target head
+    REPO_SYNC_INTRO_TAG="" REPO_SYNC_INTRO_COMMIT="" REPO_SYNC_INTRO_SIGNER=""
+    channel="$(branch_channel "${path}" "${branch}")"
+    head="$(git -C "${path}" rev-parse -q --verify HEAD 2>/dev/null || true)"
+    [ -n "${head}" ] || { error "  repo-sync: ${name}: ${path} has no checked-out commit"; return 1; }
+
+    if [[ -n "${tag}" && -z "${fps}" ]] || [[ -z "${tag}" && -n "${fps}" ]]; then
+        error "  repo-sync: ${name}: an introduction needs both the tag and the signer's fingerprint"
+        return 1
+    fi
+    if [[ -z "${tag}" ]]; then
+        case "${channel}" in
+            staging|production) ;;
+            *) return 0 ;;
+        esac
+        if [[ "${unsigned}" == "1" ]]; then
+            if verify_repo_signs "${path}" "${head}"; then
+                warn "  repo-sync: ${name}: added without an introduction (--unsigned) — later releases are checked against the signers of the revision cloned now"
+            fi
+            return 0
+        fi
+        if verify_repo_signs "${path}" "${head}"; then
+            error "  repo-sync: ${name}: REFUSED — '${branch}' is a ${channel} branch and ${name} signs its releases, but no introduction was given"
+            error "    ask its owner for the release tag to start from and the signing key's fingerprint (--introduction <tag> --signer SHA256:...)"
+        else
+            error "  repo-sync: ${name}: REFUSED — '${branch}' is a ${channel} branch, and ${name} signs no releases (no keys in ${VERIFY_SIGNERS_PATH})"
+            error "    to track it unverified, add it with --unsigned (ADR-033 D9)"
+        fi
+        return 3
+    fi
+
+    local fp
+    for fp in ${fps}; do
+        verify_fingerprint_ok "${fp}" || { error "  repo-sync: ${name}: '${fp}' is not a key fingerprint (SHA256:<43 characters>)"; return 1; }
+    done
+    if [[ -z "${commit}" ]]; then
+        commit="$(git -C "${path}" rev-parse -q --verify "refs/tags/${tag}^{commit}" 2>/dev/null || true)"
+        [ -n "${commit}" ] || { error "  repo-sync: ${name}: REFUSED — no tag ${tag} in ${path}"; return 3; }
+    fi
+    case "${channel}" in
+        staging|production) target="${head}" ;;
+        *) target="${commit}" ;;
+    esac
+    if ! verify_introduce "${path}" "${REPO_SYNC_TRUST_DIR}" "${name}" "${tag}" "${commit}" "${fps}" "${target}"; then
+        error "  repo-sync: ${name}: REFUSED — the clone does not verify against its introduction"
+        error "    ${VERIFY_REASON}"
+        return 3
+    fi
+    if [[ "${target}" != "${head}" ]] && ! verify_moves_forward "${path}" "${commit}" "${head}"; then
+        error "  repo-sync: ${name}: REFUSED — '${branch}' does not descend from the introduction ${tag}"
+        return 3
+    fi
+    # shellcheck disable=SC2034  # REPO_SYNC_INTRO_* are this function's results
+    REPO_SYNC_INTRO_TAG="${tag}" REPO_SYNC_INTRO_COMMIT="$(git -C "${path}" rev-parse "${commit}^{commit}")"
+    # shellcheck disable=SC2034
+    REPO_SYNC_INTRO_SIGNER="${VERIFY_INTRO_SIGNER##* }"
+    info "  repo-sync: ${name}: introduced at ${tag} (signed by ${VERIFY_INTRO_SIGNER}); ${VERIFY_TAG:-${tag}} verified"
+    return 0
+}
+
 # reconcile_repo_checkout <path> <url> <branch> [allow_discard] [name]
 # Ensure the checkout at <path> has origin == <url> and is on <branch> at the
 # remote's tip. Re-points origin if <url> differs (provider/repo switch),
