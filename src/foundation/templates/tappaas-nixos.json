@@ -22,6 +22,7 @@
       "imageType": "img",
       "image": "tappaas-nixos.qcow2.zst",
       "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/nixos-template-v1.4/",
+      "imageSha256": "4e522d9011118f0bbeaea0df58ff517a45c71e6138a22af32a2151749ea87083",
       "autoInstall": false,
       "bridge0": "lan"
     }

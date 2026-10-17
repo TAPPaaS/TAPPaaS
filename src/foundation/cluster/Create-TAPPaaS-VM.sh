@@ -61,6 +61,49 @@ function debug() { [[ "${TAPPAAS_DEBUG:-0}" -eq 1 ]] || return 0; echo -e "${BL}
 # under error_handler's generic output (no VM/disk exists yet at call sites).
 function die() { trap - ERR; error "$*"; exit 1; }
 
+# >>> image-sha256 (ADR-033 D7)
+# A downloaded image is checked by hash, never trusted by URL: the module JSON
+# carries `imageSha256` next to `imageLocation` (release/bump-version.sh writes
+# it), and the signed release tag covers the JSON. A pointer without one is
+# warned about and used as before, so sites on older pointers keep working.
+# Kept self-contained: this script runs on a node with no TAPPaaS libraries.
+# scripts/test/test-image-hashes.sh exercises this block.
+
+# image_sha256_want <value> — the expected hash as bare lowercase hex ('' if none).
+function image_sha256_want() {
+  local v
+  v="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')"
+  printf '%s' "${v#sha256:}"
+}
+
+# image_sha256_of <file> — the file's SHA-256 as hex.
+function image_sha256_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+# image_sha256_check <file> <expected> — 0 when it matches or none is recorded;
+# on a mismatch the file is removed and the run stops before anything imports it.
+function image_sha256_check() {
+  local file="$1" want have
+  want="$(image_sha256_want "$2")"
+  if [[ -z "$want" ]]; then
+    warn "No imageSha256 recorded for ${file##*/} — the download is not checked (ADR-033 D7)."
+    return 0
+  fi
+  [[ "$want" =~ ^[0-9a-f]{64}$ ]] || die "imageSha256 '$2' is not a SHA-256 hash; refusing ${file##*/}."
+  have="$(image_sha256_of "$file")"
+  if [[ "$have" != "$want" ]]; then
+    rm -f "$file"
+    die "SHA-256 mismatch for ${file##*/}: expected ${want}, got ${have:-nothing}. The download was removed and not imported."
+  fi
+  info "SHA-256 verified: ${file##*/}"
+}
+# <<< image-sha256
+
 # The VM's Proxmox summary note (#764): the TAPPaaS turtle, the module's
 # description, and three links — docs (tappaas.org; module pages under Stacks),
 # code (the module's own directory when it comes from the TAPPaaS repo, else the
@@ -480,6 +523,8 @@ IMAGETYPE="$(get_config_value 'imageType')"
 IMAGE="$(get_config_value 'image' '8080')"
 if [ "${IMAGETYPE:-}" != "clone" ]; then
   IMAGELOCATION="$(get_config_value 'imageLocation' '')"
+  # Optional (ADR-033 D7), so read directly: get_config_value treats '' as no default.
+  IMAGESHA256="$(echo "$JSON" | jq -r '[.imageSha256?, (.config // {} | .[]? | .imageSha256?)] | map(select(type == "string" and . != "")) | .[0] // empty' 2>/dev/null)"
 fi
 BRIDGE0="$(get_config_value 'bridge0' 'lan')"
 GEN_MAC0=02:$(openssl rand -hex 5 | awk '{print toupper($0)}' | sed 's/\(..\)/\1:/g; s/.$//')
@@ -538,18 +583,21 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
       if [[ "$IMAGE" == *.bz2 ]]; then
         ISO_NAME="$(basename "${IMAGE%.bz2}")"
         curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+        image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
         bzip2 -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
         rm -f "/tmp/${IMAGE##*/}"
       elif [[ "$IMAGE" == *.xz ]]; then
         ISO_NAME="$(basename "${IMAGE%.xz}")"
         curl -fSLo "/tmp/${IMAGE##*/}" "$URL"
+        image_sha256_check "/tmp/${IMAGE##*/}" "${IMAGESHA256:-}"
         info "Decompressing ISO, have patience"
         xz -dc "/tmp/${IMAGE##*/}" > "/var/lib/vz/template/iso/${ISO_NAME}"
         rm -f "/tmp/${IMAGE##*/}"
       else
         ISO_NAME="$(basename "$IMAGE")"
         curl -fSLo "/var/lib/vz/template/iso/${ISO_NAME}" "$URL"
+        image_sha256_check "/var/lib/vz/template/iso/${ISO_NAME}" "${IMAGESHA256:-}"
       fi
       info "Downloaded ISO file to /var/lib/vz/template/iso/${ISO_NAME}"
     else
@@ -558,8 +606,19 @@ if [ "${IMAGETYPE:-}" != "clone" ]; then
     fi
   elif [ "$IMAGETYPE" = "img" ]; then
     URL="${IMAGELOCATION%/}/${IMAGE#/}"
-    info "Retrieving the Disk Image: $URL"
-    curl -fSLo "$IMAGE" "$URL"
+    # templates/update.sh downloads and checks the image into /root/tappaas before
+    # it replaces a template; a file there that matches the recorded hash is
+    # moved into place instead of being fetched again.
+    PREFETCHED="${IMAGE_PREFETCH_DIR:-/root/tappaas}/${IMAGE##*/}"
+    if [[ -n "${IMAGESHA256:-}" && -f "$PREFETCHED" ]] \
+       && [[ "$(image_sha256_of "$PREFETCHED")" == "$(image_sha256_want "$IMAGESHA256")" ]]; then
+      mv "$PREFETCHED" "$IMAGE"
+      info "Using the downloaded, hash-verified Disk Image: ${PREFETCHED}"
+    else
+      info "Retrieving the Disk Image: $URL"
+      curl -fSLo "$IMAGE" "$URL"
+      image_sha256_check "$IMAGE" "${IMAGESHA256:-}"
+    fi
     if [[ "$IMAGE" == *.bz2 ]]; then
       TARGET_IMAGE="${IMAGE%.bz2}"
       info "Decompressing $TARGET_IMAGE after download, have patience"
