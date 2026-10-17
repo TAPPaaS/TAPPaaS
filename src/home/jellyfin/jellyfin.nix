@@ -42,6 +42,26 @@ let
   };
   unstable = import unstableSrc { inherit (pkgs.stdenv.hostPlatform) system; };
 
+  # jellyfin-ffmpeg 8.1.3-1 (#807): FFmpeg 8.1.3 fixes the decoder and demuxer
+  # flaws open in 8.1.2-5 (VobSub, ADX, TDSC, TY, MACE, DVB subtitles, CFHD,
+  # RTP/ASF, the HLS playlist loop). nixpkgs has it (#573402, via staging-next),
+  # the nixos-unstable channel not yet: until it does, the pinned package with
+  # the new source. jellyfin's own patch series comes from that source
+  # (postPatch). Drop this when unstableSrc carries 8.1.3 or later.
+  jellyfinFfmpeg = unstable.jellyfin-ffmpeg.overrideAttrs (old: rec {
+    version = "8.1.3-1";
+    src = unstable.fetchFromGitHub {
+      owner = "jellyfin";
+      repo  = "jellyfin-ffmpeg";
+      tag   = "v${version}";
+      hash  = "sha256-sxJyUaB0rqpVzd6OVRC6kPVWyBdgFUzvyqwLCkMKRgM=";
+    };
+    # The pinned ffmpeg adds an 8.1.2 fix that 8.1.3 already contains (the
+    # swscale loongarch underflow); applied again it fails.
+    patches = builtins.filter (p: !(unstable.lib.hasInfix "swscale-loongarch-fix-buffer-underflow" (toString p)))
+      (old.patches or [ ]);
+  });
+
   # -- SSO-Auth plugin (OIDC "Sign in with Authentik", #806) ------------------
   # K0lin/jellyfin-plugin-sso, the maintained continuation of the archived
   # 9p4 plugin (same plugin id, same configuration). 5.1.x targets Jellyfin
@@ -306,7 +326,7 @@ in
   # -- Jellyfin media server -------------------------------------------------
   services.jellyfin = {
     enable    = true;
-    package   = unstable.jellyfin;
+    package   = unstable.jellyfin.override { jellyfin-ffmpeg = jellyfinFfmpeg; };
     openFirewall = true;
     dataDir   = "/var/lib/jellyfin";
     cacheDir  = "/var/cache/jellyfin";
