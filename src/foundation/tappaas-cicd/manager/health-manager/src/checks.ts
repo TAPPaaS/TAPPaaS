@@ -13,6 +13,7 @@
 //   - service-liveness (guest-agent ping / running-state — see TODO)
 //   - pending-reboot   (#730: guests whose update is waiting for a reboot)
 //   - cve-status       (ADR-011: the last security scan — WARN, never FAIL)
+//   - signature-status (ADR-033 D10: is what each repository runs a signed release)
 
 import { spawnSync } from "child_process";
 import { join } from "path";
@@ -20,6 +21,7 @@ import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from 
 import { CheckResult, CheckRow, CheckStatus, ClusterClient, HealthReport, NodeCapacity, StoragePool } from "./types";
 import { existsSync, readFileSync } from "fs";
 import { checkCveStatus } from "./security";
+import { checkSignatureStatus } from "./signatures";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
 // does (defaulting zone0 to "mgmt"), for the gates that probe a guest over SSH.
@@ -744,6 +746,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkLanUplink(client),
     checkPulse(client, opts.configDir),
     checkCveStatus(opts.configDir, Date.now()),
+    checkSignatureStatus(opts.configDir, Date.now()),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;
   return { checks, failed };

@@ -233,6 +233,15 @@ if [ -f scripts/compose-fields.sh ] && [ -d "${HOLD_DIR_CONFIG}" ]; then
   fi
 fi
 
+# ── 5. Record what each repository runs, signed or not (ADR-033 D10) ──
+# After the sync, so the evidence describes the code that now runs. Read-only;
+# mails the owner only when a repository's status changed. Never fatal here:
+# the gate that refuses an unverified move is in the sync, above.
+if [ -f manager/health-manager/check-repo-signatures.sh ] && [ -d "${HOLD_DIR_CONFIG}" ]; then
+  TAPPAAS_CONFIG_DIR="${HOLD_DIR_CONFIG}" bash manager/health-manager/check-repo-signatures.sh 2>&1 \
+    | while IFS= read -r _l; do debug "  ${_l}"; done || true
+fi
+
 # Report what actually happened. A failed component build stays non-fatal (see
 # the dispatch rationale above), but claiming success afterwards is what let
 # #467 run unnoticed: every nightly logged two warnings and then a ✓ line, so
