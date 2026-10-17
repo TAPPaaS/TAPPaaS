@@ -118,11 +118,19 @@ header "Test 6: Sign in with Authentik"
 if [[ "$(remote "test -f /etc/secrets/jellyfin.env && echo yes || echo no")" != "yes" ]]; then
     skip "no OIDC config on the VM (/etc/secrets/jellyfin.env) — Jellyfin is not published, or identity:identity has not run"
 else
-    PLUGIN_STATUS=$(remote "sudo sh -c 'jq -r .status /var/lib/jellyfin/plugins/SSO-Auth_*/meta.json' 2>/dev/null | head -1")
-    if [[ "${PLUGIN_STATUS}" == "Active" ]]; then
-        pass "SSO-Auth plugin is loaded (status Active)"
+    # Jellyfin 12 no longer records a loaded plugin's status in its meta.json;
+    # one it refused (Disabled, NotSupported, Malfunctioned, ...) still does.
+    # That the plugin serves requests is the redirect check below.
+    PLUGIN_META=$(remote "sudo sh -c 'cat /var/lib/jellyfin/plugins/SSO-Auth_*/meta.json' 2>/dev/null | jq -r '\"\(.version) \(.status // \"none\")\"' | head -1")
+    PLUGIN_WANT=$(remote "sudo sh -c 'cat /var/lib/jellyfin/plugins/SSO-Auth_*/.tappaas-src' 2>/dev/null" | grep -oE 'jellyfin-plugin-sso-[0-9.]+' | head -1 | sed 's/jellyfin-plugin-sso-//')
+    if [[ -z "${PLUGIN_META}" ]]; then
+        fail "SSO-Auth plugin is not installed (no plugins/SSO-Auth_*/meta.json)"
+    elif [[ "${PLUGIN_META#* }" != "Active" && "${PLUGIN_META#* }" != "none" ]]; then
+        fail "SSO-Auth plugin ${PLUGIN_META% *} was not loaded (status ${PLUGIN_META#* }) — see journalctl -u jellyfin"
+    elif [[ -n "${PLUGIN_WANT}" && "${PLUGIN_META% *}" != "${PLUGIN_WANT}" ]]; then
+        fail "SSO-Auth plugin ${PLUGIN_META% *} is installed, the configuration pins ${PLUGIN_WANT}"
     else
-        fail "SSO-Auth plugin is not active (status '${PLUGIN_STATUS:-missing}') — see journalctl -u jellyfin"
+        pass "SSO-Auth plugin ${PLUGIN_META% *} is installed and not refused"
     fi
     CONF_STATE=$(remote "systemctl is-active jellyfin-configure-oidc 2>/dev/null || true")
     if [[ "${CONF_STATE}" == "active" ]]; then
