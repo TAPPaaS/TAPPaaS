@@ -430,9 +430,19 @@ run_graded_test() {
     return "${rc}"
 }
 
-# failed_checks <log> — the text of every ✗ line, colour and prefix removed, sorted.
+# failed_checks <log> — one line per failed check, colour and prefix removed,
+# sorted. A check is a ✗ line, or a line of a module's own test.sh that starts
+# with [FAIL] or FAIL: — test-module.sh reports a failing test.sh as ONE ✗ line
+# and passes its output through, so without these a check that newly fails
+# inside a test.sh that already failed would be graded old. Digit runs become
+# '#', so the same check with another timing, count or version compares equal;
+# what is left of a bare count ("FAIL: 3" in a summary) is no check at all.
 failed_checks() {
-    sed 's/\x1b\[[0-9;]*m//g' "$1" 2>/dev/null | sed -n 's/.*✗[[:space:]]*//p' | sort -u
+    sed 's/\x1b\[[0-9;]*m//g' "$1" 2>/dev/null \
+        | sed -n -e 's/.*✗[[:space:]]*//p' \
+                 -e 's/^[[:space:]]*\[FAIL\][[:space:]]*//p' \
+                 -e 's/^[[:space:]]*FAIL:[[:space:]]*//p' \
+        | sed -E 's/[0-9]+/#/g; s/[[:space:]]+$//' | grep -vxE '#?' | sort -u
 }
 
 # ── Main ─────────────────────────────────────────────────────────────

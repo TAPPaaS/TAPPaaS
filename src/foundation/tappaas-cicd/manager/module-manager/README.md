@@ -424,6 +424,12 @@ on checks that were **not** already failing, and otherwise prints one machine-re
 `last-update-result.json` (`test_warnings`). A module whose update did not break
 anything is no longer failed by five unrelated DNS assertions it inherited.
 
+A check is graded on its own: each `✗` line, and each line of the module's own
+`test.sh` that starts with `[FAIL]` or `FAIL:`. A check that starts failing inside a
+`test.sh` that was already failing for another reason therefore counts as new. Numbers
+in a check's text are ignored when comparing, so the same check with another timing,
+count or version is the same check. In the `TEST-WARN:` line they show as `#`.
+
 ### `delete-module.sh` — delete a module
 
 ```
