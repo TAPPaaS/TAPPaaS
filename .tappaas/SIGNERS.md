@@ -7,10 +7,11 @@ The keys themselves are in [`allowed_signers`](allowed_signers); this page says 
 |---|---|---|---|---|---|
 | Lars Rossen | TAPPaaS owner, release manager | *not enrolled yet* | his own vault (Bitwarden SSH agent) | — | @LarsRossen |
 | Erik Daniel | TAPPaaS owner, release manager | *not enrolled yet* | his own vault (Bitwarden SSH agent) | — | @ErikDaniel007 |
-| `recovery@tappaas.org` | recovery only — may sign a release that changes nothing outside `.tappaas/` | *not made yet* | offline: encrypted USB in a safe, and paper | no expiry | the two owners |
+| Lars Rossen — emergency (`recovery@tappaas.org`) | recovery only — may sign a release that changes nothing outside `.tappaas/` | *not made yet* | offline: his offsite Keys-to-the-Mothership stick, `kingdom/`, passphrase-protected | no expiry | @LarsRossen |
+| Erik Daniel — emergency (`recovery@tappaas.org`) | recovery only — may sign a release that changes nothing outside `.tappaas/` | *not made yet* | offline: his offsite Keys-to-the-Mothership stick, `kingdom/`, passphrase-protected | no expiry | @ErikDaniel007 |
 
-Two signers, so one lost key or one absence does not stop a release; the recovery key, so losing
-both does not stop it for good. Signer keys are replaced every year.
+Two signers, so one lost key or one absence does not stop a release; an emergency key each, so
+losing both release keys does not stop it for good. Release keys are replaced every year.
 
 ## Changing this list
 

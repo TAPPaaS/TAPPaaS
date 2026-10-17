@@ -33,7 +33,8 @@ repository root — **public keys only**, in git's format — and whose they are
 ```
 lars@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... lars-2026
 erik@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... erik-2026
-recovery@tappaas.org namespaces="git" ssh-ed25519 AAAA... recovery-offline
+recovery@tappaas.org namespaces="git" ssh-ed25519 AAAA... lars-emergency
+recovery@tappaas.org namespaces="git" ssh-ed25519 AAAA... erik-emergency
 ```
 
 **The rule that keeps the repository from vouching for itself:** a release counts only if its
@@ -59,6 +60,31 @@ approval on every signature. The private key is never written to disk outside th
   against the date written in the tag (which the signer chooses). A release already running stays
   verified after its key expires.
 - A hardware key (FIDO2, `sk-ssh-ed25519`) works the same way, for a signer who prefers one.
+
+### Four keys: two each
+
+Each owner holds two keys — their *Keys to the Kingdom*:
+
+| Key | Where | Signs | Life |
+|---|---|---|---|
+| **Release key** | their own Bitwarden/Vaultwarden vault, used through its SSH agent | releases and images (`<name>@tappaas.org`) | one year |
+| **Emergency key** | offline, on their offsite *Keys to the Mothership* USB stick, in `kingdom/`, passphrase-protected | only releases that change nothing outside `.tappaas/` (`recovery@tappaas.org`) | no expiry |
+
+The *Keys to the Mothership* sticks are the ones `backup-manager key export --usb` writes with a
+site's backup keys — one kept onsite, one offsite. The emergency key goes on the offsite one.
+Rewriting that stick later replaces only the backup keys; `kingdom/` stays (`--format` would erase
+it).
+
+**Making the emergency key** (once per owner, on a laptop, Wi-Fi off if you can):
+
+```bash
+ssh-keygen -t ed25519 -C <you>-emergency -f tappaas-emergency-<you>     # a strong passphrase
+```
+
+Write the passphrase on paper and keep it apart from the stick — and not only in your vault: this
+key is for the day the vault is gone. Copy `tappaas-emergency-<you>` and its `.pub` into `kingdom/`
+on the offsite stick, check they are there, and delete the private key from the laptop. Its
+public key goes into `allowed_signers` as `recovery@tappaas.org namespaces="git" … <you>-emergency`.
 
 ### Enrolling a key (once a year)
 
@@ -126,30 +152,27 @@ revoking release out fast: a site that has moved to it refuses the thief, one st
 release does not. Releases the thief signed before still verify, so also announce which versions
 not to trust.
 
-**Both keys lost: the recovery key.** `allowed_signers` lists a third key, `recovery@tappaas.org`,
-that may sign **only a release that changes nothing outside `.tappaas/`** — enough to enrol new
-signers, never enough to ship code. Sites refuse a recovery signature on anything else. It is made
-once, on a machine with no network, with a passphrase:
+**Both keys lost: the emergency keys.** Each owner has a second key, their **emergency key**,
+kept offline on their offsite *Keys to the Mothership* stick (below). Both are listed under the
+principal `recovery@tappaas.org`, which may sign **only a release that changes nothing outside
+`.tappaas/`** — enough to enrol new keys or revoke lost ones, never enough to ship code. Sites
+refuse an emergency signature on anything else. Either owner's emergency key alone is enough.
+
+To use one: a branch off the channel's tip that only edits `.tappaas/` (new keys in, lost ones
+retired or revoked), merged to `main`; then, with the offsite stick in your laptop:
 
 ```bash
-ssh-keygen -t ed25519 -C recovery-offline -f tappaas-recovery
-```
-
-Its public key goes into `allowed_signers` with `namespaces="git"` and no expiry. The private key
-is kept offline in two places both owners control — an encrypted USB stick in a safe and a paper
-copy — and not in either everyday vault. To use it: a branch off the channel's tip that only edits
-`allowed_signers` (new keys in, lost ones retired), merged to `main`, then
-
-```bash
-git -C ~/TAPPaaS config user.signingkey /path/to/tappaas-recovery
+git -C ~/TAPPaaS config user.signingkey /path/to/stick/kingdom/tappaas-emergency-<you>
 tappaas-train.sh patch staging <commit> --why "security: signer recovery"
 tappaas-train.sh patch production <commit> --why "security: signer recovery"
-git -C ~/TAPPaaS config --unset user.signingkey      # and take the key offline again
+git -C ~/TAPPaaS config --unset user.signingkey      # and put the stick back offsite
 ```
 
-The next boundary is signed with the new keys; sites follow on their own.
+(The train runs on the mothership: copy the key there for the two commands and delete it after,
+or run them from a TAPPaaS checkout on your laptop.) The next boundary is signed with the new
+keys; sites follow on their own.
 
-**Every key lost, the recovery key too.** No release can be verified again. Publish the new
+**Every key lost, both emergency keys too.** No release can be verified again. Publish the new
 signers' fingerprints on tappaas.org and tell operators; each re-anchors their site by hand
 (see [VERIFIED-UPDATES.md](VERIFIED-UPDATES.md#re-anchoring-a-repository)).
 
