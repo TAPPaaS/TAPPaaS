@@ -157,6 +157,41 @@ else
     fi
 fi
 
+# ── Test 8: Published without the gate, hardened (ADR-032 D3) ─────────────────
+header "Test 8: Published for Jellyfin's apps, hardened"
+PUB="$(remote "jq -r 'select(.proxyPublished != false) | .proxyDomain // empty' /etc/nixos/jellyfin.json" || true)"
+FW4="$(getent ahostsv4 firewall.mgmt.internal | awk '{print $1; exit}')"
+if [[ -z "${PUB}" || -z "${FW4}" ]]; then
+    skip "not published (no proxyDomain in /etc/nixos/jellyfin.json), or the firewall's address is unknown"
+else
+    via() { curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 10 --resolve "${PUB}:443:${FW4}" "https://${PUB}$1"; }
+    INFO="$(via /System/Info/Public)"
+    if [[ "${INFO}" == "200 " ]]; then
+        pass "https://${PUB}/System/Info/Public answers without a sign-in — native apps can reach Jellyfin's login"
+    else
+        fail "https://${PUB}/System/Info/Public answered '${INFO}' (a 302 to Authentik means the gate is still on)"
+    fi
+    # The admin and diagnostic paths are open to home and netbird only; the
+    # mothership is in mgmt, so it is refused like the internet is.
+    for _p in /metrics /System/Logs /Startup/Configuration; do
+        _c="$(via "${_p}")"
+        [[ "${_c%% *}" == "403" ]] && pass "${_p} is closed outside the site's zones (403)" \
+            || fail "${_p} answered '${_c}' outside the site's zones — expected 403"
+    done
+    GW4="$(remote "ip -4 route show default | awk '{print \$3; exit}'")"
+    if [[ -n "${GW4}" ]] && remote "sudo grep -q '<string>${GW4}</string>' /var/lib/jellyfin/config/network.xml"; then
+        pass "the firewall (${GW4}) is a known proxy: Jellyfin sees each client's own address"
+    else
+        fail "the firewall (${GW4:-unknown}) is not in network.xml KnownProxies"
+    fi
+    ADMIN_REMOTE="$(remote "k=\$(sudo cat /var/lib/jellyfin-tappaas/api-key 2>/dev/null); curl -s -H \"Authorization: MediaBrowser Token=\\\"\$k\\\"\" http://localhost:8096/Users | jq -r '.[] | select(.Name == \"admin\") | .Policy.EnableRemoteAccess'")"
+    if [[ "${ADMIN_REMOTE}" == "false" ]]; then
+        pass "admin signs in from the site only (no remote access)"
+    else
+        fail "admin's remote access is '${ADMIN_REMOTE:-unknown}' — jellyfin-tappaas-policy should have turned it off"
+    fi
+fi
+
 # ── Test 7: Disk usage ────────────────────────────────────────────────────────
 header "Test 7: Resource Usage"
 MEM=$(remote "free -h | grep Mem" || true)

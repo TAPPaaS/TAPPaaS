@@ -86,11 +86,10 @@ graph LR
     backup["backup:vm"]
     nfs["storage:nfs"]
     netproxy["network:proxy / network:rules"]
-    idac["identity:accessControl"]
     idoidc["identity:identity (OIDC, SSO-Auth plugin)"]
     node["share media — nfs-media.mgmt.internal (tankb pool on a node)"]
     caddy["Caddy reverse proxy (on the OPNsense firewall, :443)"]
-    authentik["Authentik (identity) — forward-auth"]
+    authentik["Authentik (identity) — Sign in with Authentik"]
     homeclients["home-zone clients (LAN)"]
     vpnpeers["netbird VPN peers (remote devices)"]
     internet["internet (public)"]
@@ -100,43 +99,48 @@ graph LR
     jellyfin -->|dependsOn| backup
     jellyfin -->|dependsOn| nfs
     jellyfin -->|dependsOn| netproxy
-    jellyfin -->|dependsOn| idac
     jellyfin -->|dependsOn| idoidc
 
     jellyfin -.->|"NFSv4 tcp/2049 — /media = media/jellyfin"| node
     homeclients -.->|"https://jellyfin.&lt;domain&gt;"| caddy
     vpnpeers -.->|"same vhost, via WireGuard overlay"| caddy
     internet -.->|"proxyAllowedZones includes internet"| caddy
-    caddy -.->|"forward-auth: logged in?"| authentik
-    caddy -.->|"upstream :8096, after Authentik"| jellyfin
+    caddy -.->|"upstream :8096"| jellyfin
+    jellyfin -.->|"OIDC: Sign in with Authentik"| authentik
 ```
 
 Solid arrows are declared `dependsOn` edges (install-order dependencies). Dashed
 arrows are traffic: `network:proxy` creates the `jellyfin.<domain>` vhost on the
 Caddy reverse proxy, and `proxyAllowedZones` (`home`, `netbird`, `internet`)
-controls which source zones that vhost accepts. `identity:accessControl` puts
-Authentik forward-auth on that vhost, so the zone list only filters; the gate is
-Authentik. The NFS path to the share is the one rule `network:rules` derives
+controls which source zones that vhost accepts. There is no Authentik gate in
+front: Jellyfin's apps log in to its own API, and they must work for friends and
+family away from the site. Who gets in is decided at Jellyfin's login (below).
+The NFS path to the share is the one rule `network:rules` derives
 from the mount (none while it is pending).
 
-## Access: browser only, behind Authentik
+## Access: Jellyfin's own login, for the web and the apps
 
-Every request to `https://jellyfin.<domain>` goes through Authentik first, from
-home, from netbird and from the internet alike (home clients resolve the same
-name to Caddy, ADR-021). Only members of the Authentik group `users` get through
-(#805).
+`https://jellyfin.<domain>` answers Jellyfin itself, from home, from netbird and
+from the internet alike (home clients resolve the same name to Caddy, ADR-021).
+Jellyfin's apps on TVs, phones and computers can therefore reach it from
+anywhere — the point: friends and family use them from their own homes.
 
-Jellyfin's login page then offers **Sign in with Authentik** (the SSO-Auth plugin,
-#806). With the Authentik session already open it is one click. The Jellyfin tile
-in Authentik's app list goes straight through
-(`/sso/OID/start/authentik`).
-
+- **Web:** **Sign in with Authentik** on Jellyfin's login page (the SSO-Auth plugin).
+  Only members of the Authentik groups `users` and `jellyfin-admins` get in; give a
+  friend an Authentik account in `users`. The Jellyfin tile in Authentik's app list
+  goes straight there (`/sso/OID/start/authentik`).
+- **Apps and TVs:** **Quick Connect.** The app shows a code; the person enters it
+  under their profile → Quick Connect in a browser where they are signed in. An
+  account made by Sign in with Authentik has a random password, so this is how it
+  reaches an app. Apps without Quick Connect (Kodi, Infuse) cannot sign in with
+  such an account.
 - **Accounts:** the first Authentik sign-in creates the Jellyfin account, named
   after the Authentik username, with access to every library.
 - **Admins:** members of the Authentik group `jellyfin-admins` become Jellyfin
   administrators, and that is re-checked at every sign-in.
-- **Local accounts:** `admin`, `stream` and `local` (from the install) keep working
-  with their passwords on the same page. `admin` is the break-glass account.
+- **Local accounts:** `admin`, `stream` and `local` (from the install) keep their
+  passwords. `admin`, the break-glass account, signs in **from the site only**;
+  `local` too; `stream` from anywhere.
 - **Name collisions:** the plugin links an Authentik user to an EXISTING Jellyfin
   account of the same name. Don't give an Authentik user the name `admin`,
   `stream` or `local`, or it gets that local account.
@@ -146,11 +150,21 @@ in Authentik's app list goes straight through
   can't be signed into with an empty one. It's a store path of its own
   (`jellyfin-plugin-sso-5.1.1`), so the security scan lists it.
 
-**Native TV and mobile apps do not work.** They log in to Jellyfin's API with a
-username and password, and cannot pass forward-auth. There is no direct route
-either: Jellyfin sits in a Service zone that accepts connections from the
-proxy (`dmz`) only. Apps come back with an ADR-023 path bypass
-(`proxyAccess` / `identityGate: false`), which is not built yet.
+### What protects it on the internet
+
+- **Jellyfin sees each client's own address.** The firewall is a known proxy
+  (`network.xml` KnownProxies), so the per-account "from the site only" rule and
+  the login lockout act on the client, not on the firewall.
+- **Admin and diagnostic paths are closed from outside:** `/metrics`, `/Startup/*`,
+  `/System/Restart`, `/System/Shutdown`, `/System/Logs`, `/Packages`,
+  `/Repositories`, `/ScheduledTasks` and `/Auth/Keys` answer only the `home` and
+  `netbird` zones (a `proxyAccess` rule in `jellyfin.json`).
+- **It is kept current:** Jellyfin follows its releases (12.x, from a pinned
+  nixos-unstable), so a security fix is an update, not a wait for the next NixOS
+  release.
+- **The TAPPaaS API key:** the VM adds one Jellyfin API key, named `TAPPaaS`, kept
+  root-only in `/var/lib/jellyfin-tappaas/api-key`; `jellyfin-tappaas-policy`
+  uses it to keep `admin` to the site.
 
 ## Quick Start
 

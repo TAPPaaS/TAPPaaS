@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** |
-| **Version** | 0.2 |
+| **Status** | **Accepted** (operator, 2026-10-17) — P0 and P1 done; P3 (Jellyfin) in progress. |
+| **Version** | 0.3 |
 | **Date** | 2026-10-17 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007, @AndreasJe |
 | **Closes / addresses** | **#845**. Amends ADR-021 R1 and extends ADR-023. Related: #129, #154, #597, #642, #643, #656, #806, #850. |
-| **Changelog** | v0.2 (2026-10-17) — **smaller, after the operator's review and the P0 tests.** No new `proxyAuth` field: ADR-023 stays the model and gains three things — the gate authenticates machine callers (D1), a module without `network:proxy` is unpublished by design and an amended R1 says so (D2), and Jellyfin is published without the gate for friends and family, hardened (D3). Several ports per hostname are verified possible but not built (D4). LDAP for Jellyfin is dropped: the SSO plugin and Quick Connect cover its clients. NetBird is not the answer for friends and family (operator). NOMAD moves to the DMZ. P0 results recorded (T1–T3, on Jellyfin 10.11 and 12.2). v0.1 (2026-10-16) — first draft: a `proxyAuth` field with four values on every route. |
+| **Changelog** | v0.3 (2026-10-17) — **Accepted** by the operator. O1 answered by the plugin: os-caddy takes extra Caddyfile config only globally, never inside one site, so a per-site `rate_limit` is not possible through it; P3 relies on the machine-generated passwords and Jellyfin's login lockout, and rate limiting moves to a CrowdSec issue. O3 deferred to P4. v0.2 (2026-10-17) — **smaller, after the operator's review and the P0 tests.** No new `proxyAuth` field: ADR-023 stays the model and gains three things — the gate authenticates machine callers (D1), a module without `network:proxy` is unpublished by design and an amended R1 says so (D2), and Jellyfin is published without the gate for friends and family, hardened (D3). Several ports per hostname are verified possible but not built (D4). LDAP for Jellyfin is dropped: the SSO plugin and Quick Connect cover its clients. NetBird is not the answer for friends and family (operator). NOMAD moves to the DMZ. P0 results recorded (T1–T3, on Jellyfin 10.11 and 12.2). v0.1 (2026-10-16) — first draft: a `proxyAuth` field with four values on every route. |
 
 ## Context
 
@@ -103,7 +103,7 @@ hardening is part of the decision, not an option:
 | Measure | Where |
 |---|---|
 | Jellyfin sees the client's real address: the firewall is a **known proxy**, so the per-user remote-access policy and the login lockout act per client, not per Caddy | Jellyfin `network.xml` |
-| **Login attempts limited** per account (Jellyfin's `MaxLoginAttempts`) and **rate-limited** per client at Caddy on `/Users/AuthenticateByName` and `/QuickConnect/*` | Jellyfin; Caddy (O1) |
+| **Login attempts limited** per account (Jellyfin's lockout); per-client rate limiting with CrowdSec, later (O1) | Jellyfin |
 | **Admin and diagnostic paths closed from outside**: `/metrics`, `/Startup/*`, `/System/Restart`, `/System/Shutdown`, `/System/Logs`, the dashboard — an ADR-023 `proxyAccess` rule to the site's zones | `network:proxy` |
 | **Kept current**: Jellyfin follows its releases (12.x from a pinned nixos-unstable, #850); a security advisory is an update, not a wait for the next NixOS release | the module |
 | **Removing someone ends their sessions**: deleting or disabling a user, or removing them from Jellyfin's group, also revokes their Jellyfin sessions and devices (T3 showed they survive) | `identity` (O3) |
@@ -172,8 +172,11 @@ module needs it; NOMAD stays unpublished (D2).
 
 ## Open questions
 
-1. **O1 — Rate limiting.** The firewall's Caddy has the `rate_limit` module built in. Does os-caddy
-   expose it, or is it a Caddyfile snippet (`caddy.d`), or CrowdSec reading Caddy's log?
+1. **O1 — Rate limiting.** *Answered (v0.3):* the firewall's Caddy has `rate_limit` built in, but
+   os-caddy imports extra config only globally (`caddy.d/*.global`, `*.conf`), never inside a site,
+   so it cannot be scoped to Jellyfin through the plugin. Every Jellyfin password TAPPaaS sets is
+   machine-generated (the SSO plugin's 64 random bytes, the install's 20 characters), and Jellyfin
+   locks an account after repeated failures; per-client limiting comes with CrowdSec, its own issue.
 2. **O2 — Service accounts.** Should `identity-manager` create a service account per calling system
    (with its credential in the vault), or do operators make them by hand?
 3. **O3 — Revoking Jellyfin sessions.** From `identity` on user removal (it needs a Jellyfin admin

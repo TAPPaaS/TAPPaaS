@@ -71,6 +71,10 @@ implementations satisfy only the first.
 
 ### R1. Caddy is always in the path — the identity gate is not optional
 
+> **Amended by ADR-032 D2 (2026-10-17):** Caddy is in the path of every *published* name. A module
+> that is not published (it does not depend on `network:proxy`) is reached only from the zones its
+> ingress allows. ADR-032 D3 also publishes one module, Jellyfin, without the identity gate.
+
 The internal answer MUST resolve to a **Caddy listener**, never to the service VM's own address.
 Caddy is where TLS terminates *and* where the per-service identity gate lives — the
 `forward_auth` handler to Authentik's embedded outpost, plus the `proxyAllowedZones` access

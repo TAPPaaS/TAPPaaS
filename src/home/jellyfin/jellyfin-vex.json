@@ -6,7 +6,7 @@
     "component": {
       "type": "application",
       "name": "jellyfin",
-      "description": "TAPPaaS module jellyfin: triage of its own critical/high CVEs (#788). Jellyfin 12.2 (from a pinned nixos-unstable, #850) runs on its NixOS VM (port 8096, plain HTTP), published through the firewall's Caddy to home, netbird and internet zones behind Authentik forward-auth (group users, #805), so no request reaches it before an Authentik login; the library is an NFS share mounted at /media. Live check: the server launches jellyfin-ffmpeg 8.1.2-5 (--ffmpeg flag), which links libssh 0.12.2, openssl 3.5.8 and, through chromaprint, only libavutil.so.61 of ffmpeg-headless 9.0.1; the Jellyfin process itself runs on the glibc 2.44 and openssl 3.5.8 its .NET runtime brings from nixos-unstable, beside the system's glibc 2.42. jellyfin-ffmpeg 8.1.2-5 carries no security backports for the triaged CVEs (its debian/patches are feature and hardware fixes), so each is triaged against Jellyfin's own use: library files are attacker-relevant input, so decoder/demuxer CVEs it contains are kept exploitable. Hardware acceleration is none and the VM has no render node. No Live TV tuner and no .strm file are configured. Filter names floodfill/swaprect/hqdn3d/quirc and the spdif format do not occur in Jellyfin 12.2's assemblies."
+      "description": "TAPPaaS module jellyfin: triage of its own critical/high CVEs (#788). Jellyfin 12.2 (from a pinned nixos-unstable, #850) runs on its NixOS VM (port 8096, plain HTTP), published through the firewall's Caddy to home, netbird and internet zones without the Authentik gate (ADR-032 D3): Jellyfin's own login decides who gets in, and its admin and diagnostic paths answer only inside the site; the library is an NFS share mounted at /media. Live check: the server launches jellyfin-ffmpeg 8.1.2-5 (--ffmpeg flag), which links libssh 0.12.2, openssl 3.5.8 and, through chromaprint, only libavutil.so.61 of ffmpeg-headless 9.0.1; the Jellyfin process itself runs on the glibc 2.44 and openssl 3.5.8 its .NET runtime brings from nixos-unstable, beside the system's glibc 2.42. jellyfin-ffmpeg 8.1.2-5 carries no security backports for the triaged CVEs (its debian/patches are feature and hardware fixes), so each is triaged against Jellyfin's own use: library files are attacker-relevant input, so decoder/demuxer CVEs it contains are kept exploitable. Hardware acceleration is none and the VM has no render node. No Live TV tuner and no .strm file are configured. Filter names floodfill/swaprect/hqdn3d/quirc and the spdif format do not occur in Jellyfin 12.2's assemblies."
     }
   },
   "vulnerabilities": [
@@ -111,7 +111,7 @@
       "id": "CVE-2026-64830",
       "analysis": {
         "state": "exploitable",
-        "detail": "VobSub .idx/.sub heap overflow (libavformat/mpeg.c), present in jellyfin-ffmpeg 8.1.2-5; Jellyfin picks up external .idx/.sub next to videos and hands them to its ffmpeg. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is reachable only after an Authentik login (forward-auth, #805), and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in dbd495f; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "VobSub .idx/.sub heap overflow (libavformat/mpeg.c), present in jellyfin-ffmpeg 8.1.2-5; Jellyfin picks up external .idx/.sub next to videos and hands them to its ffmpeg. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in dbd495f; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
@@ -133,7 +133,7 @@
       "id": "CVE-2026-64835",
       "analysis": {
         "state": "exploitable",
-        "detail": "ADX decoder out-of-bounds read/write, present in jellyfin-ffmpeg 8.1.2-5; ffprobe/ffmpeg probe every library file, so a crafted .adx (or ADX stream in a container) reaches it. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is reachable only after an Authentik login (forward-auth, #805), and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 1836ef9; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "ADX decoder out-of-bounds read/write, present in jellyfin-ffmpeg 8.1.2-5; ffprobe/ffmpeg probe every library file, so a crafted .adx (or ADX stream in a container) reaches it. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 1836ef9; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
@@ -155,7 +155,7 @@
       "id": "CVE-2026-65703",
       "analysis": {
         "state": "exploitable",
-        "detail": "TDSC decoder heap write via crafted AVI, present in jellyfin-ffmpeg 8.1.2-5; any AVI in the library is decoded for thumbnails, trickplay or transcode. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is reachable only after an Authentik login (forward-auth, #805), and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in fd3ee52; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "TDSC decoder heap write via crafted AVI, present in jellyfin-ffmpeg 8.1.2-5; any AVI in the library is decoded for thumbnails, trickplay or transcode. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in fd3ee52; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
@@ -177,7 +177,7 @@
       "id": "CVE-2026-65704",
       "analysis": {
         "state": "exploitable",
-        "detail": "TY demuxer/Shorten heap write, present in jellyfin-ffmpeg 8.1.2-5; Jellyfin 12.2 itself runs ffmpeg with -f concat -safe 0 (DVD/BD folders) and also probes .ty files directly. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is reachable only after an Authentik login (forward-auth, #805), and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in de771bd; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "TY demuxer/Shorten heap write, present in jellyfin-ffmpeg 8.1.2-5; Jellyfin 12.2 itself runs ffmpeg with -f concat -safe 0 (DVD/BD folders) and also probes .ty files directly. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in de771bd; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
@@ -199,7 +199,7 @@
       "id": "CVE-2026-66039",
       "analysis": {
         "state": "exploitable",
-        "detail": "MACE6 decoder heap corruption via crafted CAF, present in jellyfin-ffmpeg 8.1.2-5; a .caf in the music library is probed and decoded. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is reachable only after an Authentik login (forward-auth, #805), and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in aafb5c6; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "MACE6 decoder heap corruption via crafted CAF, present in jellyfin-ffmpeg 8.1.2-5; a .caf in the music library is probed and decoded. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in aafb5c6; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
@@ -221,7 +221,7 @@
       "id": "CVE-2026-70628",
       "analysis": {
         "state": "exploitable",
-        "detail": "DVB subtitle parser heap overflow, present in jellyfin-ffmpeg 8.1.2-5; DVB subs are common in TS recordings and are parsed during probe, extraction and burn-in. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is reachable only after an Authentik login (forward-auth, #805), and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 02fc47e/93f2a52; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "DVB subtitle parser heap overflow, present in jellyfin-ffmpeg 8.1.2-5; DVB subs are common in TS recordings and are parsed during probe, extraction and burn-in. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 02fc47e/93f2a52; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
@@ -243,7 +243,7 @@
       "id": "CVE-2026-70632",
       "analysis": {
         "state": "exploitable",
-        "detail": "CineForm HD decoder heap write, present in jellyfin-ffmpeg 8.1.2-5; a crafted CFHD .mov/.avi in the library is decoded. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is reachable only after an Authentik login (forward-auth, #805), and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 16b2049/db05df9; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "CineForm HD decoder heap write, present in jellyfin-ffmpeg 8.1.2-5; a crafted CFHD .mov/.avi in the library is decoded. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 16b2049/db05df9; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
@@ -265,7 +265,7 @@
       "id": "CVE-2026-96611",
       "analysis": {
         "state": "exploitable",
-        "detail": "Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box (libavformat/mov.c, mov_read_ispe/read_image_grid), present in jellyfin-ffmpeg 8.1.2-5 (FFmpeg before 9.0); the box is parsed in any MP4/MOV/HEIF that ffprobe opens, and the overflow can slip past later size checks. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is reachable only after an Authentik login (forward-auth, #805), and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in FFmpeg 9.0; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box (libavformat/mov.c, mov_read_ispe/read_image_grid), present in jellyfin-ffmpeg 8.1.2-5 (FFmpeg before 9.0); the box is parsed in any MP4/MOV/HEIF that ffprobe opens, and the overflow can slip past later size checks. Risk here: medium: needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in FFmpeg 9.0; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {
@@ -287,7 +287,7 @@
       "id": "CVE-2026-52297",
       "analysis": {
         "state": "exploitable",
-        "detail": "Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (libavformat/mov.c, mov_read_iacb), present in jellyfin-ffmpeg 8.1.2-5 (FFmpeg before 9.0); any MP4/MOV in the library is probed. Risk here: low: a read past a buffer, not a write; needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); Jellyfin is reachable only after an Authentik login (forward-auth, #805), and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 8439e02; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
+        "detail": "Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (libavformat/mov.c, mov_read_iacb), present in jellyfin-ffmpeg 8.1.2-5 (FFmpeg before 9.0); any MP4/MOV in the library is probed. Risk here: low: a read past a buffer, not a write; needs a crafted file in the library (NFS share writers, media fetched from untrusted sources); playing or probing it needs a Jellyfin login (Sign in with Authentik, Quick Connect or a local account) or a library scan, and the parse runs in a transient ffmpeg as the hardened jellyfin user. Action: fixed upstream in 8439e02; needs a jellyfin-ffmpeg release carrying it, so check the nixpkgs jellyfin-ffmpeg bump."
       },
       "affects": [
         {

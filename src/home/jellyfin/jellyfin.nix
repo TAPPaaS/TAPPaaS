@@ -194,25 +194,80 @@ let
     print("changed" if changed else "unchanged")
   '';
 
-  # Jellyfin listens on IPv6 only with EnableIPv6 in its network.xml (default
-  # off), and Caddy reaches it over IPv6 where the zone has it (ADR-030 D9). Sets
-  # that one element and keeps the rest; a missing file is created with it alone,
-  # which Jellyfin reads as its defaults plus this.
-  ipv6Enable = pkgs.writeText "jellyfin-ipv6.py" ''
+  # The module's deployed config, shipped beside this file by update-os.sh as
+  # /etc/nixos/jellyfin.json: proxySourceV6 is the firewall's IPv6 address in
+  # this zone, where Caddy's requests come from over IPv6 (ADR-030 D9).
+  moduleCfg = if builtins.pathExists ./jellyfin.json
+              then builtins.fromJSON (builtins.readFile ./jellyfin.json)
+              else {};
+  proxySourceV6 = moduleCfg.proxySourceV6 or "";
+
+  # network.xml: EnableIPv6 (Jellyfin listens on IPv6 only with it, and Caddy
+  # reaches it over IPv6 where the zone has it, ADR-030 D9), and KnownProxies --
+  # the firewall's addresses in this zone, where every published request comes
+  # from. Jellyfin then takes the client's address from X-Forwarded-For (which
+  # Caddy sets from the real connection), so a user's remote-access policy and
+  # the login lockout see the client, not the firewall (ADR-032 D3). Sets those
+  # two and keeps the rest; a missing file is created with them alone, which
+  # Jellyfin reads as its defaults plus these.
+  networkSettings = pkgs.writeText "jellyfin-network.py" ''
     import os, sys
     import xml.etree.ElementTree as ET
-    path = sys.argv[1]
-    if os.path.exists(path):
-        tree = ET.parse(path)
-    else:
-        tree = ET.ElementTree(ET.Element("NetworkConfiguration"))
-    el = tree.getroot().find("EnableIPv6")
+    path, proxies = sys.argv[1], [a for a in sys.argv[2:] if a]
+    tree = ET.parse(path) if os.path.exists(path) else ET.ElementTree(ET.Element("NetworkConfiguration"))
+    root = tree.getroot()
+    before = ET.tostring(root)
+    el = root.find("EnableIPv6")
     if el is None:
-        el = ET.SubElement(tree.getroot(), "EnableIPv6")
-    if el.text != "true":
-        el.text = "true"
+        el = ET.SubElement(root, "EnableIPv6")
+    el.text = "true"
+    kp = root.find("KnownProxies")
+    if kp is None:
+        kp = ET.SubElement(root, "KnownProxies")
+    if [s.text for s in kp.findall("string")] != proxies:
+        for c in list(kp):
+            kp.remove(c)
+        for a in proxies:
+            ET.SubElement(kp, "string").text = a
+    if ET.tostring(root) != before:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tree.write(path, encoding="utf-8", xml_declaration=True)
+  '';
+
+  # The TAPPaaS API key and the policy it keeps (ADR-032 D3). Jellyfin's API
+  # keys are rows in its database; one named TAPPaaS is added once (while
+  # Jellyfin runs: it looks keys up per request) and kept root-only on the VM.
+  # With it, the break-glass account `admin` is kept from signing in from
+  # outside the site -- Jellyfin is published without the Authentik gate, and
+  # admin's password would otherwise face the internet.
+  apiKeyFile = "/var/lib/jellyfin-tappaas/api-key";
+  jellyfinPolicy = pkgs.writeShellScript "jellyfin-tappaas-policy" ''
+    set -euo pipefail
+    db=${config.services.jellyfin.dataDir}/data/jellyfin.db
+    # As the jellyfin user: a write as root could leave the database's -wal and
+    # -shm files root's, and Jellyfin unable to write its own database.
+    sql() { runuser -u jellyfin -- sqlite3 -cmd ".timeout 10000" "$db" "$@"; }
+    install -d -m 0700 "$(dirname ${apiKeyFile})"
+    key="$(cat ${apiKeyFile} 2>/dev/null || true)"
+    if [ -z "$key" ] || [ "$(sql "SELECT count(*) FROM ApiKeys WHERE AccessToken = '$key';")" != 1 ]; then
+      key="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
+      sql "INSERT INTO ApiKeys (DateCreated, DateLastActivity, Name, AccessToken) VALUES (strftime('%Y-%m-%d %H:%M:%f','now'), strftime('%Y-%m-%d %H:%M:%f','now'), 'TAPPaaS', '$key');"
+      ( umask 077; printf '%s' "$key" > ${apiKeyFile} )
+      echo "jellyfin-tappaas-policy: API key TAPPaaS created"
+    fi
+    api="http://localhost:8096"
+    auth="Authorization: MediaBrowser Token=\"$key\""
+    for _ in $(seq 1 60); do curl -sf "$api/health" >/dev/null && break; sleep 2; done
+    admin="$(curl -sf -H "$auth" "$api/Users" | jq -c '.[] | select(.Name == "admin")')"
+    if [ -z "$admin" ]; then echo "jellyfin-tappaas-policy: no user admin"; exit 0; fi
+    if [ "$(jq -r '.Policy.EnableRemoteAccess' <<<"$admin")" = true ]; then
+      jq -c '.Policy | .EnableRemoteAccess = false' <<<"$admin" \
+        | curl -sf -X POST -H "$auth" -H 'Content-Type: application/json' -d @- \
+            "$api/Users/$(jq -r .Id <<<"$admin")/Policy" >/dev/null
+      echo "jellyfin-tappaas-policy: admin may no longer sign in from outside the site"
+    else
+      echo "jellyfin-tappaas-policy: admin signs in from the site only (unchanged)"
+    fi
   '';
 in
 {
@@ -258,8 +313,10 @@ in
   };
 
   # -- SSO-Auth plugin + "Sign in with Authentik" (identity:identity, #806) ----
-  # The published name is gated by Authentik forward-auth (#805); this plugin
-  # turns the second login into one click with the same Authentik session.
+  # The published name has no Authentik gate in front (ADR-032 D3: Jellyfin's
+  # apps must work for friends and family), so this is how a person signs in on
+  # the web; an app or a TV signs in with a Quick Connect code approved from
+  # such a session. Who may use Jellyfin is the Authentik group bound to its app.
   # Jellyfin rewrites a plugin's meta.json, so the plugin is COPIED from the
   # store into its directory (a symlink would be read-only), and only when the
   # store path changed. Older copies are removed so one version loads.
@@ -288,7 +345,8 @@ in
       chmod -R u+w "$target"
       echo "${ssoPlugin}" > "$target/.tappaas-src"
     fi
-    ${pkgs.python3}/bin/python3 ${ipv6Enable} ${config.services.jellyfin.configDir}/network.xml
+    gw4="$(${pkgs.iproute2}/bin/ip -4 route show default | ${pkgs.gawk}/bin/awk '{print $3; exit}')"
+    ${pkgs.python3}/bin/python3 ${networkSettings} ${config.services.jellyfin.configDir}/network.xml "$gw4" "${proxySourceV6}"
   '';
 
   # identity:identity writes OIDC_CLIENT_ID / _SECRET / _DISCOVERY_URI into
@@ -331,6 +389,16 @@ in
       echo "jellyfin-configure-oidc: provider 'authentik' and login button written"
       [ "$was_active" -eq 1 ] && systemctl start jellyfin.service || true
     '';
+  };
+
+  systemd.services.jellyfin-tappaas-policy = {
+    description = "Jellyfin: the TAPPaaS API key, and admin kept to the site";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "jellyfin.service" ];
+    requires    = [ "jellyfin.service" ];
+    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; };
+    path = [ pkgs.sqlite pkgs.curl pkgs.jq pkgs.coreutils pkgs.util-linux ];
+    script = "${jellyfinPolicy}";
   };
 
   # -- VAAPI hardware transcoding --------------------------------------------
