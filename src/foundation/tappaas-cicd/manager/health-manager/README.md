@@ -391,8 +391,17 @@ companion JSON, one
 generated file lands in `/etc/nixos` on every NixOS update (#472):
 
 - **`tappaas-site.nix`** — from `config/site.json` via `lib/site-locale.sh`: time
-  zone, locale, console keymap, and the zone gateway as the time source (#87).
-  The module's `.nix` imports it.
+  zone, locale, console keymap, and the zone gateway as the time source (#87),
+  and the mothership's Nix signing key (`lib/nix-site-key.sh`). The module's
+  `.nix` imports it.
+
+The system built on the mothership is signed with that key and copied with
+signatures checked: the guest takes it only signed by the site key or
+cache.nixos.org, and the baseline asserts `require-sigs`. A guest that does not
+trust the key yet — one updated before signing existed — takes one unchecked
+copy, said in the log; the system it activates trusts the key. When the guest
+has to build itself, it fetches the pinned nixpkgs by the lock's `narHash`
+(ADR-033 D8).
 
 The shared baseline `tappaas-common.nix` is deliberately **not** shipped: modules
 still inline their own copies of it, so importing it fails the build on

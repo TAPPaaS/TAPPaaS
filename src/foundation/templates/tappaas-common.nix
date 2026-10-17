@@ -245,6 +245,22 @@
 
   nix.settings.trusted-users = [ "root" "@wheel" ]; # Allow remote updates
   nix.settings.experimental-features = [ "nix-command" "flakes" ]; # Enable flakes
+
+  # Every store path this VM takes in must carry a signature by a key it trusts
+  # (ADR-033 D8): cache.nixos.org's here, the mothership's site key from
+  # tappaas-site.nix (the lists merge). The signed release covers the nixpkgs pin
+  # (flake.lock narHash); these keys cover the binaries. Asserted, so no module
+  # can switch the check off.
+  nix.settings.require-sigs = true;
+  nix.settings.trusted-public-keys = [ "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY=" ];
+  assertions = [
+    { assertion = config.nix.settings.require-sigs == true
+        && !(lib.hasInfix "require-sigs" config.nix.extraOptions);
+      message = "TAPPaaS baseline (ADR-033 D8): nix require-sigs must stay true."; }
+    { assertion = builtins.elem "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
+        config.nix.settings.trusted-public-keys;
+      message = "TAPPaaS baseline (ADR-033 D8): cache.nixos.org's key must stay trusted."; }
+  ];
   nixpkgs.config.allowUnfree = true; # Allow unfree packages
 
 
