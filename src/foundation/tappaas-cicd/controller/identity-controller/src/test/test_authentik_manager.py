@@ -730,7 +730,7 @@ class TestCheckSelfConfig(unittest.TestCase):
     def _routes(self, app_url, proxy_host, oauth_uri, outpost_host):
         return {
             ("GET", "/core/applications/"): {
-                "results": [{"name": "identity", "slug": "identity", "meta_launch_url": app_url}]},
+                "results": [{"name": "Identity", "slug": "identity", "meta_launch_url": app_url}]},
             ("GET", "/providers/proxy/"): {
                 "results": [{"name": "identity", "external_host": proxy_host}]},
             ("GET", "/providers/oauth2/"): {

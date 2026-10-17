@@ -512,7 +512,9 @@ class AuthentikManager:
         """
         findings: list[dict] = []
 
-        app = self._find_by_name(self._applications(), name)
+        # By slug: the application's name is its display name, which the
+        # operator may change; the slug is the immutable key.
+        app = self._find_by_field(self._applications(), "slug", name)
         findings.append(self._drift_finding(
             "application.meta_launch_url", external_host,
             (app or {}).get("meta_launch_url"),
