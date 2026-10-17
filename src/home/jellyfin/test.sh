@@ -169,14 +169,17 @@ else
     if [[ "${INFO}" == "200 " ]]; then
         pass "https://${PUB}/System/Info/Public answers without a sign-in — native apps can reach Jellyfin's login"
     else
-        fail "https://${PUB}/System/Info/Public answered '${INFO}' (a 302 to Authentik means the gate is still on)"
+        # The status and the redirect's host only: the full URL carries a one-time
+        # state, and a check whose text changes every run grades as new.
+        _to="${INFO#* }"; _to="${_to#https://}"; _to="${_to%%/*}"
+        fail "https://${PUB}/System/Info/Public answered ${INFO%% *}${_to:+ → ${_to}} (a 302 to Authentik means the gate is still on)"
     fi
     # The admin and diagnostic paths are open to home and netbird only; the
     # mothership is in mgmt, so it is refused like the internet is.
     for _p in /metrics /System/Logs /Startup/Configuration; do
         _c="$(via "${_p}")"
         [[ "${_c%% *}" == "403" ]] && pass "${_p} is closed outside the site's zones (403)" \
-            || fail "${_p} answered '${_c}' outside the site's zones — expected 403"
+            || fail "${_p} answered ${_c%% *} outside the site's zones — expected 403"
     done
     GW4="$(remote "ip -4 route show default | awk '{print \$3; exit}'")"
     if [[ -n "${GW4}" ]] && remote "sudo grep -q '<string>${GW4}</string>' /var/lib/jellyfin/config/network.xml"; then
