@@ -193,6 +193,21 @@ try {
     const none = preGateSet(configDir, "demo", [parseSetArg("description=x")!], sch, null);
     check(none.ok && none.warnings.some((w) => w.includes("schemas/fields.json not found")),
       "no module manifest reachable: accepted with a warning, as before");
+
+    // zone0 as the real schema declares it: 'general' (a machine records it)
+    // AND cluster:vm / cluster:lxc (a guest applies it). Measured on hrossen
+    // 2026-10-17: `modify nomad --set zone0=dmz` was refused because the gate
+    // took any field naming 'general' as module-level and asked
+    // schemas/fields.json, which does not classify zone0. A module that
+    // declares the owning service is classified by that service.
+    const real = { ...sch, zone0: { usedBy: ["general", "cluster:vm", "cluster:lxc"] } };
+    const z = preGateSet(configDir, "demo", [parseSetArg("zone0=dmz")!], real, MM);
+    check(z.ok && z.plan[0].coordinate === "cluster:vm" && z.plan[0].class === "in-place-reboot",
+      "zone0 (general + cluster:vm) on a VM is classified by cluster:vm as in-place-reboot, not refused");
+    writeFileSync(join(configDir, "rack.json"), JSON.stringify({ vmname: "rack", kind: "machine", dependsOn: [] }));
+    const zm = preGateSet(configDir, "rack", [parseSetArg("zone0=dmz")!], real, { ...MM, zone0: { class: "in-place" } });
+    check(zm.ok && zm.plan[0].coordinate === "" && zm.plan[0].class === "config-only",
+      "zone0 on a machine (no cluster:vm) takes the module-level path: recorded, config-only");
   }
 
   // ── reject the WHOLE command (Resolved Question 5) ───────────────────
