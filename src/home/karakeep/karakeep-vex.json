@@ -1,0 +1,939 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "karakeep",
+      "description": "TAPPaaS module karakeep: triage of the critical/high CVEs in its images (#842). Karakeep 0.34.0 runs as three containers on the karakeep VM: the web app with its background workers (port 3000, the only one published, behind the firewall's Caddy and Authentik sign-in), a headless Chromium and Meilisearch, both reachable only on the compose network. Verified live on hrossen: the web container runs only node server.js and node dist/index.js under s6. Debian base-image findings (ffmpeg, util-linux, perl, curl, ...) are left open for upstream image rebuilds."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2023-39325",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-45283",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2023-45288",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2024-24790",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2024-34156",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-61726",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-61729",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2025-68121",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-102276",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/brace-expansion@5.0.6"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-102278",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/brace-expansion@5.0.6"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-12151",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/undici@6.26.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-13149",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/brace-expansion@5.0.6"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-14257",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/brace-expansion@5.0.6"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-19534",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/undici@6.26.0"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-25679",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-27145",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-32280",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-32281",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-32283",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-33811",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-33814",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-33818",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-34601",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-39820",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-39821",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-39822",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-39836",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41672",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41673",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41674",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-41675",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-42499",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-42504",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-56853",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-56858",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-56859",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-56860",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-56862",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59873",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/tar@7.5.15"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-59874",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/tar@7.5.15"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-69152",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/brace-expansion@5.0.6"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-73566",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Part of the npm command-line tool the Node base image ships in /usr/local/lib/node_modules/npm. Karakeep never runs npm: its services start with node directly, and the app carries its own dependencies.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/tar@7.5.15"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78667",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-78669",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83605",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83606",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83607",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83608",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83609",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83612",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83613",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83614",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83615",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-83616",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "@xmldom/xmldom 0.9.6 inside pdf2json, which the workers use to read the text of a saved PDF. Reachable only by a signed-in user saving a crafted PDF; the worst case is a stalled or crashed worker, which restarts. Waits for upstream to bump pdf2json."
+      },
+      "affects": [
+        {
+          "ref": "pkg:npm/%40xmldom/xmldom@0.9.6"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-97031",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Go standard library inside the two esbuild binaries under apps/workers/node_modules, a build tool left in the image. The container runs only `node server.js` (web), `node dist/index.js` (workers, prebuilt) and the migration's `node index.js`; nothing executes esbuild.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:golang/stdlib@v1.20.7"
+        },
+        {
+          "ref": "pkg:golang/stdlib@v1.23.10"
+        }
+      ]
+    }
+  ]
+}
