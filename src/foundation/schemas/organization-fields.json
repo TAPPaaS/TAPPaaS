@@ -35,11 +35,13 @@
     "owner": {
       "description": "Reference to User.name that owns this organization.",
       "type": "string",
+      "references": "users",
       "pattern": "^[A-Za-z0-9_-]+$"
     },
     "parentOrg": {
       "description": "Optional reference to a parent Organization.name (e.g. a hosting relationship).",
       "type": "string",
+      "references": "organizations",
       "pattern": "^[A-Za-z0-9_-]+$",
       "default": null
     }

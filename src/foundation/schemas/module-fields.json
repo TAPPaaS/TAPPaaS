@@ -194,6 +194,7 @@
     "environment": {
       "description": "Target environment this module was installed into (ADR-007 P5). Persisted by copy-update-json.sh when --environment <name> is used so `module-manager module modify`/`delete` can resolve the source module file and the environment. Not present for legacy/no-environment installs.",
       "type": "string",
+      "references": "environments",
       "requiredBy": [],
       "usedBy": [
         "general"
@@ -423,6 +424,7 @@
     "zone0": {
       "description": "The security zone the FIRST network interface connects to; it must exist in zones.json. For a VM or LXC: which Proxmox bridge VLAN its virtual NIC is attached to. For a machine (kind: machine, ADR-026): which network its first physical NIC is cabled to — recorded, not yet enforced (connecting a machine's port on the switch is its own issue).",
       "type": "string",
+      "references": "zones",
       "requiredBy": [],
       "usedBy": [
         "general",
@@ -437,6 +439,7 @@
     "zone1": {
       "description": "The security zone the SECOND network interface connects to, if there is one; it must exist in zones.json. For a VM: which Proxmox bridge VLAN its second virtual NIC is attached to. For a machine: which network its second physical NIC is cabled to — recorded, not yet enforced.",
       "type": "string",
+      "references": "zones",
       "requiredBy": [],
       "usedBy": [
         "general",

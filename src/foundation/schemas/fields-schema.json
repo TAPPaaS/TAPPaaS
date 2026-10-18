@@ -89,6 +89,10 @@
           "type": "string",
           "description": "Regex the value must match."
         },
+        "references": {
+          "enum": ["zones", "environments", "nodes", "storage", "organizations", "users", "groups", "roles"],
+          "description": "The value names a defined object of this kind (for an array: each item does): a zone in zones.json, an environment, a cluster node, a storage pool of the module's node, an organization, a user, a group or a role. The console offers the defined ones to choose from; validation can check the name against the same list."
+        },
         "deprecated": {
           "type": "boolean",
           "description": "Retained so a pre-migration config carrying it is classified rather than reported unknown; never written."
@@ -241,6 +245,10 @@
         "pattern": {
           "type": "string",
           "description": "Regex the value must match."
+        },
+        "references": {
+          "enum": ["zones", "environments", "nodes", "storage", "organizations", "users", "groups", "roles"],
+          "description": "The value names a defined object of this kind (for an array: each item does): a zone in zones.json, an environment, a cluster node, a storage pool of the module's node, an organization, a user, a group or a role. The console offers the defined ones to choose from; validation can check the name against the same list."
         },
         "deprecated": {
           "type": "boolean",

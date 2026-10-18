@@ -40,6 +40,7 @@
     "memberOf": {
       "description": "Group.name references. Membership is modeled here on the User. May span multiple organizations. Mirrors the Group.name pattern, which allows internal spaces so an Authentik-created group can be referenced (e.g. \"authentik Admins\", issue #476).",
       "type": "array",
+      "references": "groups",
       "items": {
         "type": "string",
         "pattern": "^[A-Za-z0-9]([A-Za-z0-9 _-]*[A-Za-z0-9_-])?$"
@@ -50,6 +51,7 @@
     "roles": {
       "description": "Direct Role.name assignments (independent of group membership). Use sparingly; prefer inheriting roles via groups.",
       "type": "array",
+      "references": "roles",
       "items": {
         "type": "string",
         "pattern": "^[A-Za-z0-9_-]+$"

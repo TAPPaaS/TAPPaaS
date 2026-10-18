@@ -24,6 +24,7 @@
     },
     "ownerOrg": {
       "description": "Reference to the owning Organization.name (config/identities/organizations/<ownerOrg>.json), validated.",
+      "references": "organizations",
       "type": "string",
       "pattern": "^[A-Za-z0-9_-]+$"
     },
@@ -79,6 +80,7 @@
       "properties": {
         "zone": {
           "description": "Reference to a zone key in zones.json (validated).",
+          "references": "zones",
           "type": "string",
           "pattern": "^[A-Za-z0-9_-]+$"
         }

@@ -52,6 +52,7 @@
     "node": {
       "description": "Name of the Proxmox/TAPPaaS node where the module should be installed. If null, defaults to the first node in configuration.json.",
       "type": "string",
+      "references": "nodes",
       "requiredBy": [],
       "usedBy": [
         "cluster:vm",
@@ -102,6 +103,7 @@
     "storage": {
       "description": "Name of the storage pool for the module. Left undeclared, the pool is resolved against the target node at create time: 'tanka1' when that node has it, otherwise the node's first ZFS pool that can hold VM disks (#692).",
       "type": "string",
+      "references": "storage",
       "requiredBy": [],
       "usedBy": [
         "cluster:vm",

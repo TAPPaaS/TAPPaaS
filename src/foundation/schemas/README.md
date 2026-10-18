@@ -82,6 +82,15 @@ honoured in the scheduled sweep and in `site-manager update --allow-disruption`)
   the verb front door; *controllers* (opnsense / proxmox / switch / ap / backup /
   identity) execute against live infrastructure and are driven by their manager.
 
+- **`references`** on a field definition (`zones`, `environments`, `nodes`,
+  `storage`, `organizations`, `users`, `groups`, `roles`) — the value names a
+  defined object of that kind; for an array, each item does. `zone0`,
+  `proxyAllowedZones` and a zone's `access-to` reference zones, `node` and
+  `HANode` nodes, `storage` a pool of the module's node, an environment's
+  `ownerOrg` an organization, a user's `memberOf` groups. It is declared in the
+  module field definitions and in the JSON-Schema documents alike, so the
+  console offers the defined objects to choose from and a validator can check
+  the name against the same list.
 See `docs/design/ADR-007-verb-alignment.md` for the full verb/CRUD model and the
 reconcile cascade.
 
