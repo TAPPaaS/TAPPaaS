@@ -19,6 +19,9 @@ const SPEC: HelpSpec = {
   verbs: [
     { usage: "list [--json]" },
     { usage: "show <module> [--json]" },
+    { usage: "test <module> [--deep] [--vmid ID]", options: [["--deep", "The deep suite."], ["--vmid ID", "A VM."]] },
+    { usage: "validate [--force]", options: [["--force", "Rewrite the cache."]] },
+    { usage: "scan [--deep]", effect: "read", options: [["--deep", "Every image."]], writeWhen: [["--deep", "pulls every image again"]] },
     { usage: "reconcile [<module>] [--apply] [--allow-disruption]", options: [["--apply", "Apply."], ["--allow-disruption", "Reboot it if needed."]] },
     { usage: "add <name> [--check] [--mode a|b]", options: [["--check", "Show; change nothing."], ["--mode a|b", "How."]] },
     { usage: "modify <module> --set field=value...", options: [["--set field=value", "Change a field (repeatable)."], ["--dry-run", "The pre-gate only."]] },
@@ -55,6 +58,10 @@ check(v("snapshot").destructiveWhen.includes("--restore"), "an option can be the
 check(!v("list").options.some((o) => o.flag === "--variant"), "a hidden legacy spelling is not in the manifest");
 check(JSON.stringify(v("forget-disk").object) === '{"positional":"disk","within":["module"]}', "a verb names the positional its object is, and what it is within (#855)");
 check(!("object" in v("delete")) && m.verbs.filter((x) => "object" in x).length === 1, "…a verb that does not declare one has no object field: --help --json as before");
+check(v("test").effect === "read" && v("test").preview.kind === "read" && JSON.stringify(v("test").writeWhen) === '[{"flag":"--deep","touches":"runs the deep suite: creates and removes zztest guests"}]', "test is a read; --deep makes a call a write with no dry run, and says what it touches");
+check(v("validate").writeWhen.length === 1 && v("validate").writeWhen[0].flag === "--force" && v("validate").writeWhen[0].touches === "Rewrite the cache.", "a disruption option on a read verb is a write mark too, with its description");
+check(v("scan").writeWhen[0].touches === "pulls every image again", "a declared writeWhen says what it touches");
+check(v("reconcile").writeWhen.length === 0 && v("list").writeWhen.length === 0, "a write verb, and a read verb with no such option, carry none");
 
 // ── the loader and the argv check (T2) ────────────────────────────────
 async function main(): Promise<void> {
@@ -94,6 +101,13 @@ async function main(): Promise<void> {
   check(wr.ok && wr.destructive && wr.object === "laptop", "wgvpn remove-peer: destructive, the object is the peer's --name");
   const ki = ok(["demo-manager", "key", "import", "--file", "/k"]);
   check(ki.ok && ki.destructive, "key import is destructive");
+  const tf = ok(["demo-manager", "test", "immich"]);
+  check(tf.ok && tf.read && tf.preview.kind === "read", "test <module> is a read");
+  const td = ok(["demo-manager", "test", "immich", "--deep", "--vmid", "9"]);
+  check(td.ok && !td.read && !td.destructive && td.preview.kind === "none" && /zztest/.test((td.preview as { touches: string }).touches), "test --deep is a write with no dry run: creates and removes guests");
+  check(td.ok && previewArgv(td) === null && applyArgv(td).join(" ") === "demo-manager test immich --deep --vmid 9" && baseArgv(td).join(" ") === applyArgv(td).join(" "), "…its preview runs nothing; apply runs the argv as given");
+  const vf = ok(["demo-manager", "validate", "--force"]);
+  check(vf.ok && !vf.read && vf.preview.kind === "none", "validate --force is a write too");
 
   // ── preview and apply argv (T3) ──
   const r = ok(["demo-manager", "reconcile", "immich", "--apply"]);

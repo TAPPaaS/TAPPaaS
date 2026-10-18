@@ -42,7 +42,7 @@ export async function loadManifests(run: Runner, bashFile: string | null, bins: 
       try {
         const m = await runJson<Manifest>(run, bin, ["--help", "--json"], { timeoutMs: 60_000 });
         if (m.manifest !== 1 || !Array.isArray(m.verbs)) throw new Error("not a version-1 manifest");
-        byBin.set(bin, m);
+        byBin.set(bin, normalize(m));
       } catch (e) {
         errors.push({ bin, error: (e as Error).message });
       }
@@ -52,12 +52,24 @@ export async function loadManifests(run: Runner, bashFile: string | null, bins: 
     try {
       if (!existsSync(bashFile)) throw new Error("not found");
       const doc = JSON.parse(readFileSync(bashFile, "utf8")) as { manifests?: Manifest[] };
-      for (const m of doc.manifests ?? []) byBin.set(m.name, m);
+      for (const m of doc.manifests ?? []) byBin.set(m.name, normalize(m));
     } catch (e) {
       errors.push({ bin: bashFile, error: (e as Error).message });
     }
   }
   return { byBin, errors, loadedAt: new Date().toISOString() };
+}
+
+// A manifest from a manager built before a mark existed, or the declared bash
+// verbs, which carry none: every list is present, so a reader never guards.
+export function normalize(m: Manifest): Manifest {
+  for (const v of m.verbs) {
+    v.readWhen ??= [];
+    v.writeWhen ??= [];
+    v.destructiveWhen ??= [];
+    v.disruptions ??= [];
+  }
+  return m;
 }
 
 // ── validating a job's argv ───────────────────────────────────────────
@@ -70,7 +82,8 @@ export interface Validated {
   args: string[]; // argv without the bin
   keyLength: number; // how many leading words select the verb
   positionals: string[]; // the positional values (after the verb's words)
-  read: boolean; // this call changes nothing (a read verb, or a readWhen word)
+  read: boolean; // this call changes nothing (a read verb without a writeWhen option, or a readWhen word)
+  preview: ManifestVerb["preview"]; // how THIS call previews: the verb's form, or none for a read verb's writeWhen call
   destructive: boolean; // this call needs the typed name and the Installer role
   object: string; // what a typed confirmation must name
   objectLabel: string; // the object as shown: within its container ("<switch>:<port>"); also accepted typed
@@ -151,7 +164,11 @@ export function validateArgv(ms: Manifests, argv: unknown): Validation {
     return { ok: false, reason: `${name}: unexpected argument '${positionals[verb.positionals.length]}'` };
   }
   const tokens = new Set(args);
-  const read = verb.effect === "read" || verb.readWhen.some((w) => tokens.has(w));
+  // `test --deep` creates and removes guests: a read verb's writeWhen option
+  // makes the call a write with no dry run, previewed and queued like any change.
+  const writeMark = verb.effect === "read" ? (verb.writeWhen ?? []).find((w) => tokens.has(w.flag)) : undefined;
+  const read = !writeMark && (verb.effect === "read" || verb.readWhen.some((w) => tokens.has(w)));
+  const preview: ManifestVerb["preview"] = writeMark ? { kind: "none", touches: writeMark.touches } : verb.preview;
   const destructive = !read && (verb.destructive || verb.destructiveWhen.some((w) => tokens.has(w)));
   const marks = new Set([...verb.readWhen, ...verb.destructiveWhen]);
   const nameOpt = args.indexOf("--name");
@@ -173,7 +190,7 @@ export function validateArgv(ms: Manifests, argv: unknown): Validation {
       objectLabel = [...verb.object.within.map(at).filter((x): x is string => x !== undefined), own].join(":");
     }
   }
-  return { ok: true, bin, manifest: m, verb, args, keyLength: used, positionals, read, destructive, object, objectLabel };
+  return { ok: true, bin, manifest: m, verb, args, keyLength: used, positionals, read, preview, destructive, object, objectLabel };
 }
 
 // ── preview and apply argv (T3) ───────────────────────────────────────
@@ -181,7 +198,7 @@ export function validateArgv(ms: Manifests, argv: unknown): Validation {
 // The base of a change: the argv with its preview or applying flag taken out.
 // A preview and its apply share it, which is how an apply finds its preview.
 export function baseArgv(v: Validated): string[] {
-  const p = v.verb.preview;
+  const p = v.preview;
   const flag = p.kind === "apply-flag" || p.kind === "dry-run-flag" ? p.flag : null;
   return [v.bin, ...(flag ? v.args.filter((x) => x !== flag) : v.args)];
 }
@@ -190,7 +207,7 @@ export function baseArgv(v: Validated): string[] {
 // the preview is the command and what the manifest says it touches).
 export function previewArgv(v: Validated): string[] | null {
   const base = baseArgv(v);
-  const p = v.verb.preview;
+  const p = v.preview;
   if (p.kind === "apply-flag") return base;
   if (p.kind === "dry-run-flag") return [...base, p.flag];
   return null;
@@ -199,7 +216,7 @@ export function previewArgv(v: Validated): string[] | null {
 // What an apply runs: the base plus the applying flag (or minus the dry run).
 export function applyArgv(v: Validated): string[] {
   const base = baseArgv(v);
-  const p = v.verb.preview;
+  const p = v.preview;
   return p.kind === "apply-flag" ? [...base, p.flag] : base;
 }
 

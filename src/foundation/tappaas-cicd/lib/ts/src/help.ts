@@ -69,6 +69,11 @@ export interface HelpVerb {
   // Words or options that make one call of a write verb a read (`wgvpn list`,
   // `key list`, `snapshot-vm --list`): the console runs it without a preview.
   readWhen?: string[];
+  // Options that make one call of a READ verb a write with no dry run, with
+  // what it then touches: `test --deep` creates and removes guests, so it is
+  // previewed, queued and kept clear of the sweep like any change. Default: a
+  // read verb's --deep (the deep suite), and the disruption options it accepts.
+  writeWhen?: Array<[string, string]>;
   // The object a destructive call acts on, which its typed confirmation names:
   // the positional that identifies it, and those it is within, shown first
   // ("<switch>:<port>"). Default: the first positional (or --name).
@@ -315,6 +320,9 @@ export interface ManifestVerb {
   destructive: boolean;
   destructiveWhen: string[];
   readWhen: string[];
+  // On a read verb: the options that make a call a write with no dry run
+  // (`test --deep`), and what such a call touches. Empty on a write verb.
+  writeWhen: { flag: string; touches: string }[];
   disruptions: { flag: string; consequence: string }[];
   // Only on a verb that declares it (HelpVerb.object); absent, the object is
   // the first positional — so a manifest without it reads as before.
@@ -337,6 +345,8 @@ const READ_WORDS = new Set([
 const DESTRUCTIVE_WORD = /^(delete|purge|retire|erase|discard|remove(-[a-z]+)?)$/;
 const DESTRUCTIVE_OPTIONS = ["--remove", "--decommission", "--erase", "--purge"];
 const DISRUPTIVE_OPTIONS = ["--force", "--allow-disruption", "--yes"];
+// What a read verb's --deep does to the site (module test --deep, site test --deep).
+const DEEP_TOUCHES = "runs the deep suite: creates and removes zztest guests";
 
 // Options described in a label or usage text, with their placeholders.
 function optionShapes(text: string): Map<string, { arg: string | null; repeatable: boolean }> {
@@ -445,6 +455,15 @@ export function manifestVerb(s: HelpSpec, v: HelpVerb): ManifestVerb {
   }
   const disruptions = (v.disruptive ?? DISRUPTIVE_OPTIONS.filter((o) => options.has(o)).map((o): [string, string] => [o, desc.get(o) ?? ""]))
     .map(([flag, consequence]) => ({ flag, consequence }));
+  // A read verb's --deep, or a disruption option it accepts, makes that call a
+  // write: `test` is a read, `test --deep` is not (console review, finding 3).
+  const writeWhen =
+    effect !== "read"
+      ? []
+      : (v.writeWhen ?? [
+          ...(options.has("--deep") ? [["--deep", DEEP_TOUCHES] as [string, string]] : []),
+          ...DISRUPTIVE_OPTIONS.filter((o) => options.has(o)).map((o): [string, string] => [o, desc.get(o) ?? ""]),
+        ]).map(([flag, touches]) => ({ flag, touches }));
   let preview: ManifestVerb["preview"];
   if (effect === "read") preview = { kind: "read" };
   else if ("apply" in effect) preview = { kind: "apply-flag", flag: effect.apply };
@@ -464,6 +483,7 @@ export function manifestVerb(s: HelpSpec, v: HelpVerb): ManifestVerb {
     destructive,
     destructiveWhen,
     readWhen: v.readWhen ?? [],
+    writeWhen,
     disruptions,
     ...(v.object ? { object: { positional: v.object.positional, within: v.object.within ?? [] } } : {}),
   };

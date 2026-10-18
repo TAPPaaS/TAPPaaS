@@ -145,8 +145,17 @@ async function main(): Promise<void> {
   check(r.status === 401, "…and applies nothing once identity is installed (T6)");
 
   // ── reads run at once, beside the queue ─────────────────────────────
+  r = await jobs.create(me(), closed, { argv: ["module-manager", "test", "immich"] });
+  check(r.status === 201 && r.job?.kind === "read" && r.job.ran?.join(" ") === "module-manager test immich", "a reading verb runs as a read job, no preview");
+  await settle();
+  // …but test --deep creates and removes guests: a write with no dry run (finding 3)
   r = await jobs.create(me(), closed, { argv: ["module-manager", "test", "immich", "--deep"] });
-  check(r.status === 201 && r.job?.kind === "read" && r.job.ran?.join(" ") === "module-manager test immich --deep", "a reading verb runs as a read job, no preview");
+  check(r.status === 409 && !r.job, "test --deep is not a read: it needs a preview (T3)");
+  r = await jobs.create(me(), closed, { argv: ["module-manager", "test", "immich", "--deep"], preview: true });
+  const deep = r.job!;
+  check(r.status === 201 && deep.kind === "preview" && deep.ran === null && deep.preview.kind === "none" && /runs the deep suite: creates and removes zztest guests/.test(deep.output), "…its preview runs nothing and says it creates and removes guests");
+  r = await jobs.applyPreview(me(), closed, deep.id, {});
+  check(r.status === 201 && r.job?.kind === "apply" && r.job.ran?.join(" ") === "module-manager test immich --deep", "…and its apply queues the deep suite as a change");
   await settle();
 
   // ── the sweep (D4) ──────────────────────────────────────────────────

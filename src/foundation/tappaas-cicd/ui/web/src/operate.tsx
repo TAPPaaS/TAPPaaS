@@ -66,8 +66,17 @@ export function buildArgv(step: Step, verb: ManifestVerb | null, values: Values)
 }
 
 // What Apply will run: the argv with the applying flag (or without the dry run).
+// A read verb's writeWhen option (test --deep) in argv: the call is a write with no dry run.
+export function writeMarkOf(verb: ManifestVerb, argv: string[]): { flag: string; touches: string } | undefined {
+  return verb.effect === "read" ? (verb.writeWhen ?? []).find((w) => argv.includes(w.flag)) : undefined;
+}
+
+export function previewKindOf(verb: ManifestVerb, argv: string[]): ManifestVerb["preview"]["kind"] {
+  return writeMarkOf(verb, argv) ? "none" : verb.preview.kind;
+}
+
 export function applyForm(verb: ManifestVerb | null, argv: string[]): string[] {
-  if (verb?.preview.kind === "apply-flag" && !argv.includes(verb.preview.flag)) return [...argv, verb.preview.flag];
+  if (verb?.preview.kind === "apply-flag" && !writeMarkOf(verb, argv) && !argv.includes(verb.preview.flag)) return [...argv, verb.preview.flag];
   return argv;
 }
 
@@ -174,11 +183,13 @@ function StepView({ step, me, onDone }: { step: Step; me: Me | null; onDone: (ok
   }, [appliedJob?.state, appliedJob?.exit]);
 
   if (!verb) return <p className="muted">reading the {step.bin} manifest…</p>;
-  const isRead = verb.effect === "read" || verb.readWhen.some((w) => argv.includes(w));
+  const writeMark = writeMarkOf(verb, argv);
+  const isRead = !writeMark && (verb.effect === "read" || verb.readWhen.some((w) => argv.includes(w)));
+  const previewKind = previewKindOf(verb, argv);
   const destructive = !isRead && (verb.destructive || verb.destructiveWhen.some((w) => argv.includes(w)));
   const pj: Job | null = previewJob_;
   const previewDone = pj !== null && pj.state === "done" && !stale;
-  const refusedByDryRun = previewDone && verb.preview.kind === "dry-run-flag" && pj!.exit !== 0;
+  const refusedByDryRun = previewDone && previewKind === "dry-run-flag" && pj!.exit !== 0;
   const object = pj?.object ?? "";
   const label = pj?.objectLabel ?? object;
   const confirmed = confirm !== "" && (confirm === object || confirm === label);
@@ -218,7 +229,7 @@ function StepView({ step, me, onDone }: { step: Step; me: Me | null; onDone: (ok
       {destructive ? <p className="readstate readstate-fail">Destructive: this cannot be undone from the console. It needs the Installer role{me ? ` (you are ${me.role})` : ""} and the object's name typed after the preview.</p> : null}
       <div className="actions">
         <button className="btn" disabled={applied !== null} onClick={() => void doPreview()}>
-          {isRead ? "Run" : preview && !stale ? "Preview again" : verb.preview.kind === "none" ? "Preview (no dry run)" : "Preview"}
+          {isRead ? "Run" : preview && !stale ? "Preview again" : previewKind === "none" ? "Preview (no dry run)" : "Preview"}
         </button>
         {!isRead ? (
           <button className={`btn ${destructive ? "btn-danger" : "btn-primary"}`} disabled={!canApply} onClick={() => void doApply()}>
@@ -228,7 +239,8 @@ function StepView({ step, me, onDone }: { step: Step; me: Me | null; onDone: (ok
         {stale ? <span className="muted small">the change differs from the preview: preview again</span> : null}
       </div>
       {error ? <p className="readstate readstate-fail">{error}</p> : null}
-      {preview ? <JobView id={preview.id} label={isRead ? "result" : verb.preview.kind === "none" ? "preview (no dry run)" : "preview"} /> : null}
+      {writeMark ? <p className="readstate readstate-warn">{writeMark.flag} makes this a change: it {writeMark.touches}. It is previewed and queued like any change, never beside the sweep.</p> : null}
+      {preview ? <JobView id={preview.id} label={isRead ? "result" : previewKind === "none" ? "preview (no dry run)" : "preview"} /> : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to apply.</p> : null}
       {destructive && previewDone && !applied ? (
         <label className="form-row confirm">

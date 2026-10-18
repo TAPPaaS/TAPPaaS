@@ -101,7 +101,7 @@ Each answers `{data, at, ageSeconds, refreshing, error}`.
 | | |
 |---|---|
 | `POST /jobs {argv, preview: true}` | a **preview**: the verb's own dry run (`reconcile` without `--apply`, `--check`, `--dry-run`, `modify`'s pre-gate). A verb with no dry run gets a preview that runs nothing and says what the verb touches and the exact command apply will run. |
-| `POST /jobs {argv}` | a **read** verb (`module test`, `node network show`, `wgvpn list`): runs at once. A write without a preview is refused (T3). |
+| `POST /jobs {argv}` | a **read** verb (`module test`, `node network show`, `wgvpn list`): runs at once. A write without a preview is refused (T3). A read verb's `writeWhen` option (`test --deep`, which creates and removes guests; a disruption flag) makes that call a write with no dry run: previewed and queued like any change, never beside the sweep. |
 | `POST /jobs/<id>/apply {confirm?}` | the **apply** of a finished preview, less than an hour old: its own argv plus the applying flag (or without the dry run). A destructive call (`delete`, `purge`, `retire`, `erase`, `--remove`, `--decommission`, `key import`, …) needs `confirm` = the object's name, and the Installer role. |
 | `GET /jobs` | every job (newest first), the queue, and the sweep's state |
 | `GET /jobs/<id>` | the job with its output; with `Accept: text/event-stream` its output as it comes (`job`, `output`, `state`, `end` events) |
@@ -157,8 +157,9 @@ declared bash verbs in [`manifest/bash-verbs.json`](manifest/bash-verbs.json)
 that verb declares (`src/manifest.ts`, ADR-034 T2): an undeclared verb or option, a value
 outside an option's choices, a missing or surplus positional, `--config-dir` or `--help` is
 refused before any job exists. The manifest also says how the verb previews (`--apply` absent,
-`--check` / `--dry-run` present, or no dry run and what it touches) and whether a call is
-destructive.
+`--check` / `--dry-run` present, or no dry run and what it touches), whether a call is
+destructive, and which options make a read verb's call a write (`writeWhen`: `--deep` on a
+`test` verb, a disruption flag).
 
 ## Who may reach it
 

@@ -202,6 +202,7 @@ function manifestView(ms: Manifests, bin: string): unknown {
       usage: v.usage,
       note: v.note ?? undefined,
       changes: v.effect === "write",
+      changesWith: v.writeWhen.length ? v.writeWhen.map((w) => `${w.flag}: ${w.touches}`) : undefined,
       preview: v.preview.kind === "none" ? `no dry run: ${v.preview.touches}` : v.preview.kind,
       destructive: v.destructive || v.destructiveWhen.length > 0 ? (v.destructive ? true : v.destructiveWhen) : undefined,
       options: v.options.map((o) => `${o.flag}${o.arg ? ` ${o.arg}` : ""}${o.description ? ` — ${o.description}` : ""}`),
@@ -407,7 +408,7 @@ function propose(ctx: ToolContext, args: Record<string, unknown>): ToolOutcome {
   }
   const v = validateArgv(ms, words);
   if (!v.ok) return { ok: false, summary: `propose refused: ${v.reason.slice(0, 100)}`, content: `Not a valid job: ${v.reason}. Check the verb with help(manager) and propose again.` };
-  const preview = v.read ? "read" : v.verb.preview.kind;
+  const preview = v.read ? "read" : v.preview.kind;
   const proposal: ProposedJob = {
     argv: words, rationale, verb: `${v.bin} ${v.verb.verb}`, read: v.read, destructive: v.destructive, preview,
     previewArgv: v.read ? null : previewArgv(v), applyArgv: v.read ? [v.bin, ...v.args] : applyArgv(v),
@@ -418,7 +419,7 @@ function propose(ctx: ToolContext, args: Record<string, unknown>): ToolOutcome {
     proposal,
     content:
       `Proposed as a card: ${shellQuote(words)}. ` +
-      (v.read ? "It is a read: the operator's Run shows its result. " : v.verb.preview.kind === "none" ? `It has no dry run (${v.verb.preview.touches}); its preview shows the command. ` : "Its Preview runs the manager's own dry run. ") +
+      (v.read ? "It is a read: the operator's Run shows its result. " : v.preview.kind === "none" ? `It has no dry run (${v.preview.touches}); its preview shows the command. ` : "Its Preview runs the manager's own dry run. ") +
       (v.destructive ? "It is destructive: Installer only, with the object's name typed. " : "") +
       "You have not run it and cannot: tell the operator the card is there and that its Run button runs it.",
   };

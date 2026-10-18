@@ -320,6 +320,7 @@ export interface ManifestVerb {
   destructive: boolean;
   destructiveWhen: string[];
   readWhen: string[];
+  writeWhen: { flag: string; touches: string }[]; // a read verb's options that make a call a write with no dry run (test --deep)
   disruptions: { flag: string; consequence: string }[];
 }
 export interface Manifest {

@@ -217,7 +217,7 @@ export class Jobs {
       verb: v.verb.verb,
       argv: baseArgv(v),
       ran,
-      preview: v.verb.preview,
+      preview: v.preview,
       previewOf,
       destructive: v.destructive,
       object: v.object,
@@ -276,7 +276,7 @@ export class Jobs {
     if (job.ran === null) {
       // No dry run: the preview is the command and what the verb touches.
       const t = new Date(this.now()).toISOString();
-      const touches = v.verb.preview.kind === "none" ? v.verb.preview.touches : "";
+      const touches = v.preview.kind === "none" ? v.preview.touches : "";
       job.output =
         `${v.bin} ${v.verb.verb} has no dry run.\n` +
         (touches ? `It ${touches}.\n` : "") +
