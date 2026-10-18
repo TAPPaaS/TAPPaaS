@@ -27,6 +27,7 @@ const SPEC: HelpSpec = {
     { usage: "wgvpn <setup|add-peer|remove-peer|list> [options]", anyOption: true, readWhen: ["list"] },
     { usage: "key list | export|import --file DIR", verb: "key", name: "key", destructive: ["import"], readWhen: ["list"], options: [["--file DIR", "Where."]] },
     { usage: "snapshot <module> [--restore N]", options: [["--restore N", "Roll back N."]], destructive: ["--restore"] },
+    { usage: "forget-disk <module> <disk>", object: { positional: "disk", within: ["module"] } },
   ],
   common: [["--config-dir DIR", "Config root."], ["--json", "JSON."]],
   hidden: ["--variant <env>"],
@@ -52,6 +53,8 @@ check(v("wgvpn").destructiveWhen.includes("remove-peer") && v("wgvpn").readWhen.
 check(v("key").destructiveWhen.join() === "import" && !v("key").destructive, "key import is destructive by its mark");
 check(v("snapshot").destructiveWhen.includes("--restore"), "an option can be the destructive mark");
 check(!v("list").options.some((o) => o.flag === "--variant"), "a hidden legacy spelling is not in the manifest");
+check(JSON.stringify(v("forget-disk").object) === '{"positional":"disk","within":["module"]}', "a verb names the positional its object is, and what it is within (#855)");
+check(!("object" in v("delete")) && m.verbs.filter((x) => "object" in x).length === 1, "…a verb that does not declare one has no object field: --help --json as before");
 
 // ── the loader and the argv check (T2) ────────────────────────────────
 async function main(): Promise<void> {
@@ -118,6 +121,17 @@ async function main(): Promise<void> {
   check(ssid.ok && ssid.verb.verb === "ssid add" && ssid.object === "home", "ap-controller ssid <ap> add <ssid>: a '*' key word takes the AP");
   check(ok(["acme-setup.sh", "--no-save-creds"]).ok, "acme-setup.sh is its own verb (an empty key)");
   check(bad(["switch-controller", "remove-switch", "a", "--force"], "unknown option"), "remove-switch takes no option");
+  // #855: the typed name is the object, not the first positional.
+  const rp = ok(["switch-controller", "remove-port", "USW Pro XG 10 PoE", "1"]);
+  check(rp.ok && rp.destructive && rp.object === "1" && rp.objectLabel === "USW Pro XG 10 PoE:1", "remove-port: the object is the port, shown as <switch>:<port>");
+  const lr = ok(["switch-controller", "lag", "remove", "USW Pro XG 10 PoE", "tappaas1-lan", "--apply"]);
+  check(lr.ok && lr.destructive && lr.object === "tappaas1-lan" && lr.objectLabel === "USW Pro XG 10 PoE:tappaas1-lan", "lag remove: the object is the aggregate");
+  const rs = ok(["switch-controller", "remove-switch", "USW Pro XG 10 PoE"]);
+  check(rs.ok && rs.object === "USW Pro XG 10 PoE" && rs.objectLabel === rs.object, "remove-switch: the default, its first positional");
+  const fd = ok(["demo-manager", "forget-disk", "immich", "scsi1"]);
+  check(fd.ok && fd.object === "scsi1" && fd.objectLabel === "immich:scsi1", "a TypeScript manager's declared object works the same");
+  check(del.ok && del.objectLabel === del.object, "an undeclared verb: the label is the typed name");
+  check(ok(["switch-controller", "update-port", "s", "2", "--park"]).ok && ok(["switch-controller", "remove-port", "s", "2", "--park-zone", "guest"]).ok, "update-port --park and remove-port --park-zone are declared (#853)");
 
   const tree = join(FIX, "..", "..", "..", "controller");
   for (const [bin, file] of [["switch-controller", "switch-controller/switch-controller"], ["ap-controller", "ap-controller/ap-controller"]]) {

@@ -69,6 +69,10 @@ export interface HelpVerb {
   // Words or options that make one call of a write verb a read (`wgvpn list`,
   // `key list`, `snapshot-vm --list`): the console runs it without a preview.
   readWhen?: string[];
+  // The object a destructive call acts on, which its typed confirmation names:
+  // the positional that identifies it, and those it is within, shown first
+  // ("<switch>:<port>"). Default: the first positional (or --name).
+  object?: { positional: string; within?: string[] };
 }
 
 // A write's preview: `apply` — the verb previews without this flag and applies
@@ -312,6 +316,9 @@ export interface ManifestVerb {
   destructiveWhen: string[];
   readWhen: string[];
   disruptions: { flag: string; consequence: string }[];
+  // Only on a verb that declares it (HelpVerb.object); absent, the object is
+  // the first positional — so a manifest without it reads as before.
+  object?: { positional: string; within: string[] };
 }
 
 export interface Manifest {
@@ -458,6 +465,7 @@ export function manifestVerb(s: HelpSpec, v: HelpVerb): ManifestVerb {
     destructiveWhen,
     readWhen: v.readWhen ?? [],
     disruptions,
+    ...(v.object ? { object: { positional: v.object.positional, within: v.object.within ?? [] } } : {}),
   };
 }
 

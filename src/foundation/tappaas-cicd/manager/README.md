@@ -24,7 +24,10 @@ how its dry run is spelled (`--apply` to apply, or `--check` / `--dry-run` to pr
 preview and what it touches), and whether it is destructive (typed name, Installer). It is
 rendered from the same `HelpSpec` (`lib/ts/src/help.ts` `renderManifest`); a verb's `effect`,
 `destructive`, `readWhen` and `disruptive` marks are data in that spec, defaulting from its
-name and options. The console runs nothing a manifest does not declare; the bash
+name and options. The typed name is the verb's first positional unless the verb
+declares its `object` — the positional that identifies what it acts on and those it is within
+(`remove-port`: the port, shown as `<switch>:<port>`); a verb that does not declare one has no
+`object` field. The console runs nothing a manifest does not declare; the bash
 controllers' verbs it runs are declared in `ui/manifest/bash-verbs.json`.
 
 A **controller**, by contrast, owns *runtime / device state*: it talks to a live

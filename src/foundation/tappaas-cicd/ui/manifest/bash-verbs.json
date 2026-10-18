@@ -1,5 +1,5 @@
 {
- "_comment": "The verbs of the bash controllers and scripts the console runs (ADR-034 D4, T2): declared here because they have no lib/ts HelpSpec to answer --help --json. Same shape as a manager's manifest. Keep in step with each script's usage/CLI_SPEC; ui/test checks the switch- and ap-controller options against their CLI_SPEC. A key word \"*\" stands for one positional word (ap-controller ssid <ap> add); an empty key is the script itself.",
+ "_comment": "The verbs of the bash controllers and scripts the console runs (ADR-034 D4, T2): declared here because they have no lib/ts HelpSpec to answer --help --json. Same shape as a manager's manifest. Keep in step with each script's usage/CLI_SPEC; ui/test checks the switch- and ap-controller options against their CLI_SPEC. A key word \"*\" stands for one positional word (ap-controller ssid <ap> add); an empty key is the script itself. A destructive verb whose object is not its first positional names it: \"object\": {\"positional\", \"within\"} (remove-port: the port, within its switch).",
  "manifests": [
   {
    "manifest": 1,
@@ -611,7 +611,13 @@
      "destructive": true,
      "destructiveWhen": [],
      "readWhen": [],
-     "disruptions": []
+     "disruptions": [],
+     "object": {
+      "positional": "port",
+      "within": [
+       "switch"
+      ]
+     }
     },
     {
      "verb": "lag set",
@@ -707,7 +713,13 @@
      "destructive": true,
      "destructiveWhen": [],
      "readWhen": [],
-     "disruptions": []
+     "disruptions": [],
+     "object": {
+      "positional": "name",
+      "within": [
+       "switch"
+      ]
+     }
     },
     {
      "verb": "interrogate",

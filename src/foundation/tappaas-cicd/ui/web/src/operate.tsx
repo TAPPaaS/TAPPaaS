@@ -180,7 +180,9 @@ function StepView({ step, me, onDone }: { step: Step; me: Me | null; onDone: (ok
   const previewDone = pj !== null && pj.state === "done" && !stale;
   const refusedByDryRun = previewDone && verb.preview.kind === "dry-run-flag" && pj!.exit !== 0;
   const object = pj?.object ?? "";
-  const canApply = previewDone && !refusedByDryRun && !applied && (!destructive || (confirm === object && me?.role === "installer"));
+  const label = pj?.objectLabel ?? object;
+  const confirmed = confirm !== "" && (confirm === object || confirm === label);
+  const canApply = previewDone && !refusedByDryRun && !applied && (!destructive || (confirmed && me?.role === "installer"));
   const phase = applied ? 4 : previewDone ? 3 : preview ? 2 : 1;
 
   const doPreview = async () => {
@@ -220,7 +222,7 @@ function StepView({ step, me, onDone }: { step: Step; me: Me | null; onDone: (ok
         </button>
         {!isRead ? (
           <button className={`btn ${destructive ? "btn-danger" : "btn-primary"}`} disabled={!canApply} onClick={() => void doApply()}>
-            {destructive ? `${verb.verb} ${object || "…"}` : "Apply"}
+            {destructive ? `${verb.verb} ${label || "…"}` : "Apply"}
           </button>
         ) : null}
         {stale ? <span className="muted small">the change differs from the preview: preview again</span> : null}
@@ -230,7 +232,7 @@ function StepView({ step, me, onDone }: { step: Step; me: Me | null; onDone: (ok
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to apply.</p> : null}
       {destructive && previewDone && !applied ? (
         <label className="form-row confirm">
-          <span>Type <b className="mono">{object}</b> to confirm</span>
+          <span>Type <b className="mono">{object}</b> to confirm{label !== object ? <> — <span className="mono">{label}</span></> : null}</span>
           <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
       ) : null}

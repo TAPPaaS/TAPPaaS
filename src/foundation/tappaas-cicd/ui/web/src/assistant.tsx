@@ -140,7 +140,8 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
   const previewDone = pj !== null && pj.state === "done";
   const refusedByDryRun = previewDone && p.preview === "dry-run-flag" && pj!.exit !== 0;
   const object = pj?.object ?? "";
-  const canRun = may && !applied && (p.read ? !preview : previewDone && !refusedByDryRun && (!p.destructive || confirm === object));
+  const label = pj?.objectLabel ?? object;
+  const canRun = may && !applied && (p.read ? !preview : previewDone && !refusedByDryRun && (!p.destructive || (confirm !== "" && (confirm === object || confirm === label))));
 
   if (dismissed) return <div className="card-proposal card-dismissed muted small">Proposal dismissed: <code className="mono">{p.argv.join(" ")}</code></div>;
 
@@ -206,7 +207,7 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to run.</p> : null}
       {p.destructive && previewDone && !applied && may ? (
         <label className="form-row confirm">
-          <span>Type <b className="mono">{object}</b> to confirm</span>
+          <span>Type <b className="mono">{object}</b> to confirm{label !== object ? <> — <span className="mono">{label}</span></> : null}</span>
           <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
       ) : null}

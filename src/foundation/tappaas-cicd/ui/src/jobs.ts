@@ -50,7 +50,8 @@ export interface Job {
   preview: ManifestVerb["preview"];
   previewOf: string | null; // an apply: the preview it follows
   destructive: boolean;
-  object: string;
+  object: string; // what the typed confirmation names
+  objectLabel?: string; // the object as shown, "<switch>:<port>" (#855); absent on older records
   created: string;
   started: string | null;
   ended: string | null;
@@ -220,6 +221,7 @@ export class Jobs {
       previewOf,
       destructive: v.destructive,
       object: v.object,
+      objectLabel: v.objectLabel,
       created: new Date(t).toISOString(),
       started: null,
       ended: null,
@@ -300,7 +302,8 @@ export class Jobs {
   }
 
   // POST /jobs/<id>/apply: the preview's own argv with the applying flag (T3).
-  // A destructive call needs `confirm` to be the object's name and Installer.
+  // A destructive call needs `confirm` to be the object's name (or the object
+  // as shown, within its container) and Installer.
   async applyPreview(me: Me, setup: SetupState, previewId: string, body: { confirm?: unknown }): Promise<CreateResult> {
     const ms = this.cfg.manifests();
     if (!ms) return { status: 503, error: "the verb manifests are still loading" };
@@ -315,8 +318,8 @@ export class Jobs {
     if (!sameArgv(baseArgv(v), p.argv)) return { status: 409, error: "the preview's argv no longer validates as the same change" };
     const w = mayWrite(me, setup, v.destructive);
     if (!w.ok) return { status: w.status, error: w.reason };
-    if (v.destructive && body.confirm !== v.object) {
-      return { status: 400, error: `a destructive verb: type '${v.object}' to confirm` };
+    if (v.destructive && body.confirm !== v.object && body.confirm !== v.objectLabel) {
+      return { status: 400, error: `a destructive verb: type '${v.object}' to confirm${v.objectLabel !== v.object ? ` (${v.objectLabel})` : ""}` };
     }
     const job = this.newJob(me, v, "apply", applyArgv(v), p.id, p.assistant ?? null);
     this.add(job);

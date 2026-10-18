@@ -73,6 +73,7 @@ export interface Validated {
   read: boolean; // this call changes nothing (a read verb, or a readWhen word)
   destructive: boolean; // this call needs the typed name and the Installer role
   object: string; // what a typed confirmation must name
+  objectLabel: string; // the object as shown: within its container ("<switch>:<port>"); also accepted typed
 }
 export type Validation = Validated | { ok: false; reason: string };
 
@@ -154,11 +155,25 @@ export function validateArgv(ms: Manifests, argv: unknown): Validation {
   const destructive = !read && (verb.destructive || verb.destructiveWhen.some((w) => tokens.has(w)));
   const marks = new Set([...verb.readWhen, ...verb.destructiveWhen]);
   const nameOpt = args.indexOf("--name");
-  const object =
+  let object =
     positionals.find((p) => !marks.has(p)) ??
     (nameOpt >= 0 ? args[nameOpt + 1] : undefined) ??
     verb.verb;
-  return { ok: true, bin, manifest: m, verb, args, keyLength: used, positionals, read, destructive, object };
+  let objectLabel = object;
+  // A verb that names its object's positional (remove-port: the port, within
+  // its switch) is confirmed by that, not by the first positional (#855).
+  if (verb.object) {
+    const at = (name: string): string | undefined => {
+      const i = verb.positionals.findIndex((p) => p.name === name);
+      return i >= 0 ? positionals[i] : undefined;
+    };
+    const own = at(verb.object.positional);
+    if (own !== undefined) {
+      object = own;
+      objectLabel = [...verb.object.within.map(at).filter((x): x is string => x !== undefined), own].join(":");
+    }
+  }
+  return { ok: true, bin, manifest: m, verb, args, keyLength: used, positionals, read, destructive, object, objectLabel };
 }
 
 // ── preview and apply argv (T3) ───────────────────────────────────────

@@ -277,7 +277,8 @@ export interface JobSummary {
   preview: JobPreview;
   previewOf: string | null;
   destructive: boolean;
-  object: string;
+  object: string; // what the typed confirmation names
+  objectLabel?: string; // the object as shown, "<switch>:<port>" (#855)
   created: string;
   started: string | null;
   ended: string | null;

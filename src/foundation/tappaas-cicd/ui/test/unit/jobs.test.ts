@@ -29,6 +29,7 @@ const SPEC: HelpSpec = {
     { usage: "reconcile <module> [--apply]", options: [["--apply", "Apply."]] },
     { usage: "suspend <module>", effect: { noPreview: "stops the guest and keeps it stopped" } },
     { usage: "delete <module> [--remove]", effect: { noPreview: "destroys the guest" }, options: [["--remove", "Remove the config."]] },
+    { usage: "remove-port <switch> <port>", effect: { noPreview: "parks the port" }, object: { positional: "port", within: ["switch"] } },
   ],
 };
 
@@ -123,6 +124,17 @@ async function main(): Promise<void> {
   r = await jobs.applyPreview(me({ role: "installer" }), closed, del.id, { confirm: "deconz-test" });
   check(r.status === 201 && r.job?.ran?.join(" ") === "module-manager delete deconz-test --remove", "Installer with the typed name: applied");
   await settle();
+  // #855: a verb that names its object is confirmed by it, not by its first positional.
+  for (const typed of ["1", "USW Pro XG 10 PoE:1"]) {
+    r = await jobs.create(me(), closed, { argv: ["module-manager", "remove-port", "USW Pro XG 10 PoE", "1"], preview: true });
+    const rp = r.job!;
+    check(rp.object === "1" && rp.objectLabel === "USW Pro XG 10 PoE:1", "the job names the port, shown within its switch");
+    r = await jobs.applyPreview(me({ role: "installer" }), closed, rp.id, { confirm: "USW Pro XG 10 PoE" });
+    check(r.status === 400 && /type '1' to confirm \(USW Pro XG 10 PoE:1\)/.test(r.error ?? ""), "the switch's name does not confirm a port's removal");
+    r = await jobs.applyPreview(me({ role: "installer" }), closed, rp.id, { confirm: typed });
+    check(r.status === 201, `typed '${typed}': applied`);
+    await settle();
+  }
 
   // ── the setup token (T6) ────────────────────────────────────────────
   const tok = me({ user: "setup", via: "setup-token", role: "installer", groups: [] });
