@@ -8,6 +8,7 @@
     "./**/*.ts",
     "../../../lib/ts/src/**/*.ts",
     "../../web/src/forms.ts",
-    "../../web/src/relations.ts"
+    "../../web/src/relations.ts",
+    "../../web/src/instances.ts"
   ]
 }

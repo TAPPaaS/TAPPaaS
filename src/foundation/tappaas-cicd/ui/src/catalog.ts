@@ -18,6 +18,7 @@ export interface CatalogModule {
   description: string | null;
   maturity: string | null;
   category: string | null;
+  vmid: number | null; // the guest's VM id the module gives an instance (a second one needs another)
   instances: string[];
 }
 
@@ -89,6 +90,7 @@ export function repositoryCatalog(repo: Obj, instances: { name: string; source: 
       description: str(own.description) ?? str(e.description),
       maturity: str(own.status) ?? str(e.status),
       category: str(e.category),
+      vmid: typeof own.vmid === "number" ? own.vmid : null,
       instances: instances.filter((i) => owner.get(i.name) === name).map((i) => i.name).sort(),
     };
   });
