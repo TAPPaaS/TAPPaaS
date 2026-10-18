@@ -48,12 +48,13 @@ else
     [[ "$(remote "sudo grep -c '^DISABLE_PASSWORD_AUTH=true' /run/karakeep/env")" == "1" ]] \
         && pass "Karakeep signs in with Authentik only (no local passwords)" || fail "the Authentik sign-in is not in Karakeep's environment"
     if [[ -n "${PUB}" && -n "${FW4}" ]]; then
-        # NextAuth always lists its Credentials provider; with DISABLE_PASSWORD_AUTH
-        # (checked above) Karakeep refuses a password sign-in and a sign-up on the
-        # server, so what matters here is that Authentik is offered.
-        _prov="$(curl -s --max-time 10 --resolve "${PUB}:443:${FW4}" "https://${PUB}/api/auth/providers" | jq -r '[.[].name] | join(",")' 2>/dev/null)"
-        [[ ",${_prov}," == *",Authentik,"* ]] && pass "https://${PUB} offers Sign in with Authentik" \
-            || fail "https://${PUB}/api/auth/providers lists '${_prov:-nothing}', expected Authentik"
+        # Starting a sign-in with the configured OAuth provider answers with the
+        # provider's authorize URL: Authentik's, on its published name. (Password
+        # sign-in is refused on the server with DISABLE_PASSWORD_AUTH, above.)
+        _to="$(curl -s --max-time 10 --resolve "${PUB}:443:${FW4}" -H "Origin: https://${PUB}" -H 'Content-Type: application/json' \
+              -d '{"provider":"custom","callbackURL":"/"}' "https://${PUB}/api/auth/sign-in/social" | jq -r '.url // empty' 2>/dev/null)"
+        [[ "${_to}" == https://*/application/o/authorize/* ]] && pass "https://${PUB} signs in through Authentik (${_to%%/application/*})" \
+            || fail "https://${PUB}/api/auth/sign-in/social did not hand over to Authentik (${_to:-no URL})"
     else
         skipt "not published — sign-in checked on the VM only"
     fi
