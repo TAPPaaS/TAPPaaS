@@ -38,5 +38,6 @@ DOMAIN="$(vm "jq -r 'select(.proxyPublished != false) | .proxyDomain // empty' /
 REPO="$(vm "sudo sed -n 's/^REPO_WEB_URL=//p' /etc/secrets/forgejo-repo.env" 2>/dev/null || true)"
 echo ""
 info "${BOLD}Update complete${CL}"
-info "  Site      : ${DOMAIN:+https://${DOMAIN}}${DOMAIN:-http://${HOST}:8080 (not published)}"
+if [[ -n "${DOMAIN}" ]]; then SITE="https://${DOMAIN}"; else SITE="http://${HOST}:8080 (not published)"; fi
+info "  Site      : ${SITE}"
 info "  Pages in  : ${REPO:-the Forgejo repository websites/${VMNAME}} — commit, and the site follows within a minute"
