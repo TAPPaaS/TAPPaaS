@@ -155,6 +155,11 @@
       "apply": "none",
       "changeNote": "Takes a module in or out of TAPPaaS's lifecycle; nothing is applied to the module itself."
     },
+    "assistantModel": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Read by the console's backend when it chooses the assistant's LiteLLM model; a change is picked up at its next status check (within five minutes). Nothing on any guest changes."
+    },
     "publicDomain": {
       "class": "in-place",
       "apply": "none",
