@@ -323,3 +323,14 @@ export interface Manifest {
   tagline: string;
   verbs: ManifestVerb[];
 }
+
+// backup-manager list --json
+export interface BackupRowView {
+  module: string;
+  enabled: boolean;
+  optedIn?: boolean;
+  archived?: boolean;
+  inPbsJob?: boolean;
+  schedule?: string;
+  retention?: string;
+}

@@ -16,17 +16,31 @@ ui/
 └── default.nix, install.sh, update.sh, test.sh
 ```
 
-## Pages (P1)
+## Pages
 
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
 jumps. **Physical** — the topology laid out under the spike's rules (ISP top-left, the firewall
 as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
 nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
-left); a click opens the object's records, findings and jumps. **Modules** — the list with its
-badges; a module's page has Overview, Config, Drift (on demand), Services, Backup and Activity.
-**Activity** — the sweep's runs, the failures ledger and the last result. The other navigation
-entries are later phases.
+left); a click opens the object's records, findings, jumps and its day-2 change: a switch
+port's record (`switch-controller update-port`) then `switch-controller reconcile`, a node's
+`node network show / set`. **Modules** — the list with its badges; a module's page has
+Overview (with the operate column: update, modify a field with its ADR-020 class from
+`module-manager fields`, reconcile, test, snapshot, suspend/resume, delete with the typed name),
+Config, Drift (on demand), Services, Backup and Activity. **Environments** — environments and
+zones with environment-manager's and network-manager's verbs. **Identity** — organizations,
+groups, users and roles; a change is staged with `--no-reconcile` and pushed by `identity-manager
+reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
+modify, purge (typed). **Site** — `site.json`, the update schedule, Update now (`site update`,
+its plan first), the release train, nodes and their uplinks, repositories (sync, hold, release,
+stashes). **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
+result. Security is a later phase.
+
+Every change is the operate dialog (`web/src/operate.tsx`, spike §5.4): a form built from the
+verb's manifest, the exact command (copyable), Preview (the verb's own dry run, streamed), Apply
+(enabled by the preview; disruptions are labelled checkboxes; a destructive verb needs the
+object's name typed and Installer), Result; a flow of several steps runs them in order.
 
 ## How it reads the site
 

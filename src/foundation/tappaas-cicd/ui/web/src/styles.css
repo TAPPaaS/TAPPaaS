@@ -204,3 +204,43 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .kind-apply { background: var(--info-bg); color: #2d4f9a; }
 .kind-preview { background: #f3f4f6; color: #4b5563; }
 .job-detail { padding: 4px 0; }
+
+/* ── the operate dialog (P2, spike §5.4) ───────────────────────────── */
+.modal-back { position: fixed; inset: 0; background: rgba(15, 23, 42, .35); display: flex; align-items: flex-start; justify-content: center; z-index: 50; overflow-y: auto; padding: 4vh 16px; }
+.modal { background: var(--panel); border-radius: 10px; width: min(860px, 100%); padding: 16px 20px 20px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.modal-head { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 8px; }
+.modal-head h2 { font-size: 17px; margin: 0; flex: 1; }
+.step { border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 10px; }
+.step:first-of-type { border-top: 0; margin-top: 0; }
+.step h3 { margin: 4px 0 8px; font-size: 14.5px; }
+.stepper { display: flex; gap: 6px; list-style: none; padding: 0; margin: 0 0 10px; font-size: 12px; }
+.stepper li { padding: 3px 10px; border-radius: 12px; background: #eef1f4; color: var(--muted); }
+.stepper li.on { background: #1f2933; color: #fff; }
+.stepper li.past { background: var(--pass-bg); color: #1e6b30; }
+.form { display: grid; gap: 8px; margin: 8px 0; }
+.form-row { display: grid; grid-template-columns: 170px 1fr; gap: 4px 10px; align-items: center; }
+.form-row > small { grid-column: 2; }
+.form-row input, .form-row select, .form-row textarea { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; width: 100%; box-sizing: border-box; }
+.form-check { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.disruptions { border: 1px solid #f3d19c; background: #fffaf0; border-radius: 6px; padding: 6px 10px; }
+.disruptions legend { font-size: 12px; color: #92400e; padding: 0 4px; }
+.actions { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
+.btn-primary { background: #1f2933; color: #fff; border-color: #1f2933; }
+.btn-primary:hover:not(:disabled) { background: #323f4b; }
+.btn-danger { background: #b42318; color: #fff; border-color: #b42318; }
+.btn-danger:hover:not(:disabled) { background: #912018; }
+.note { background: var(--info-bg); border-radius: 6px; padding: 8px 10px; font-size: 13px; margin: 6px 0; }
+.confirm input { border-color: #b42318; }
+.operate { display: grid; gap: 6px; }
+.operate .op { display: grid; grid-template-columns: 170px 1fr; gap: 10px; align-items: center; }
+.operate .op small { color: var(--muted); }
+.fieldpick { display: grid; gap: 6px; }
+.class-tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #eef1f4; }
+.class-in-place, .class-config-only { background: var(--pass-bg); color: #1e6b30; }
+.class-grow-only, .class-in-place-reboot, .class-migrate { background: var(--warn-bg); color: #92400e; }
+.class-immutable, .class-recreate, .class-manual { background: var(--fail-bg); color: #a12a2a; }
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
+@media (max-width: 640px) { .form-row, .operate .op { grid-template-columns: 1fr; } .form-row > small { grid-column: 1; } }
+td.toolbar { display: table-cell; white-space: normal; }
+td.toolbar > * { margin: 2px 6px 2px 0; }

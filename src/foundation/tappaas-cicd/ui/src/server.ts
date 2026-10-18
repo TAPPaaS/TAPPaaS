@@ -189,6 +189,10 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.zones.get()));
       case "environments":
         return sendJson(res, 200, envelope(await r.environments.get()));
+      case "identity":
+        return sendJson(res, 200, envelope(await r.identity.get()));
+      case "backup":
+        return sendJson(res, 200, envelope(await r.backup.get()));
       case "topology":
         return sendJson(res, 200, envelope(await r.topology.get()));
       case "security":
@@ -237,6 +241,7 @@ export class ConsoleServer {
       if (url.searchParams.get("refresh") === "1") await c.refresh();
       return sendJson(res, 200, envelope(await c.get()));
     }
+    if (sub === "fields") return sendJson(res, 200, envelope(await r.moduleFields.of(name).get()));
     if (sub !== undefined) return sendJson(res, 404, { error: `modules/${name}/${sub}` });
     const [show, resolve, backup, act] = await Promise.all([
       r.moduleShow.of(name).get(),

@@ -61,6 +61,7 @@ import { loadModuleFields } from "../../../lib/ts/src/desired";
 import { stream } from "../../../lib/ts/src/exec";
 import { classifySet, cmdDrift, parseSetArg, preGateSet } from "./converge";
 import { resolveModuleFromConfig } from "./resolve";
+import { CHANGE_CLASS_NAMES } from "../../../lib/ts/src/service-fields";
 
 import { cmdResolve } from "./resolve";
 import { realServiceFs } from "./services";
@@ -1184,6 +1185,13 @@ function previewFieldChanges(module: string, opts: Opts): number {
   return ok ? 0 : 1;
 }
 
+// The class a refusal names (immutable, recreate, manual, a tooling field's own
+// class), or "refused" when the reason names none (no class declared at all).
+function refusedClass(reason: string): string {
+  const w = /^(\S+?)[ ,—]/.exec(reason)?.[1] ?? "";
+  return CHANGE_CLASS_NAMES.includes(w) ? w : "refused";
+}
+
 // `fields <module>`: every field the module may set through `modify --set`, with
 // the service that owns it and its change class, or why it may not be set.
 function cmdFields(opts: Opts): number {
@@ -1199,7 +1207,7 @@ function cmdFields(opts: Opts): number {
   const value = (f: string): unknown => desired.fields[f]?.value ?? null;
   const rows = [
     ...c.plan.map((p) => ({ field: p.field, coordinate: p.coordinate, class: p.class, settable: true, reason: null as string | null, value: value(p.field) })),
-    ...c.rejections.filter((r) => !unused(r)).map((r) => ({ field: r.field, coordinate: "", class: /^(\S+) /.exec(r.reason)?.[1] ?? "refused", settable: false, reason: r.reason, value: value(r.field) })),
+    ...c.rejections.filter((r) => !unused(r)).map((r) => ({ field: r.field, coordinate: "", class: refusedClass(r.reason), settable: false, reason: r.reason, value: value(r.field) })),
   ].sort((a, b) => a.field.localeCompare(b.field));
   if (opts.json) {
     info(JSON.stringify({ module, fields: rows, warnings: c.warnings }, null, 2));

@@ -26,6 +26,7 @@ export const TTL = {
   peers: 10 * MIN,
   activity: 5 * MIN,
   moduleDetail: 5 * MIN,
+  identity: 5 * MIN,
   drift: 0, // on demand
 };
 
@@ -47,6 +48,8 @@ export interface Activity {
 // A module name as the managers spell one; anything else never reaches an argv.
 export const MODULE_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
+export const IDENTITY_KINDS = ["org", "group", "user", "role"];
+
 export class Reads {
   readonly health: Cached<HealthDoc>;
   readonly modules: Cached<ModuleList>;
@@ -62,6 +65,8 @@ export class Reads {
   readonly moduleResolve: CachedMap<Record<string, unknown>>;
   readonly moduleBackup: CachedMap<Record<string, unknown>>;
   readonly moduleDrift: CachedMap<Record<string, unknown>>;
+  readonly moduleFields: CachedMap<Record<string, unknown>>;
+  readonly identity: Cached<Record<string, string[]>>;
 
   constructor(private readonly cfg: ReadsConfig) {
     const run = cfg.run;
@@ -94,6 +99,13 @@ export class Reads {
       ]);
       return { policy, coverage };
     }, now);
+    // What `modify --set` may change, with each field's ADR-020 change class.
+    this.moduleFields = new CachedMap("fields", TTL.moduleDetail, (m) => j<Record<string, unknown>>("module-manager", ["fields", m, "--json"]), now);
+    this.identity = new Cached("identity", TTL.identity, async () => {
+      const out: Record<string, string[]> = {};
+      await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
+      return out;
+    }, now);
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
   }
 
@@ -125,6 +137,7 @@ export class Reads {
       this.moduleResolve.clear();
       this.moduleBackup.clear();
       this.moduleDrift.clear();
+      this.moduleFields.clear();
       // health first: the topology places its findings
       await this.health.refresh();
       await Promise.all(Object.entries(all).filter(([k]) => k !== "health").map(([, c]) => c.refresh()));
@@ -144,7 +157,8 @@ export class Reads {
     this.moduleResolve.clear();
     this.moduleBackup.clear();
     this.moduleDrift.clear();
-    return Promise.all([this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())).then(() => undefined);
+    this.moduleFields.clear();
+    return Promise.all([this.identity, this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())).then(() => undefined);
   }
 
   private async loadTopology(): Promise<TopologyDoc & Record<string, unknown>> {

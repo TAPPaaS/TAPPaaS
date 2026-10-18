@@ -1,10 +1,14 @@
 // App.tsx — the shell of the mockups: the left navigation, a header with the
-// site, the reader and a refresh, and the page. P1 has four pages; the rest of
-// the navigation is shown, and marked as later.
+// site, the reader and a refresh, and the page. Security is a later phase; it
+// is shown in the navigation and marked as later.
 
 import { useState } from "react";
 import { refreshAll, useRead } from "./api";
 import { Activity } from "./pages/Activity";
+import { Backup } from "./pages/Backup";
+import { Environments } from "./pages/Environments";
+import { Identity } from "./pages/Identity";
+import { Site } from "./pages/Site";
 import { ModulePage } from "./pages/ModulePage";
 import { Modules } from "./pages/Modules";
 import { Overview } from "./pages/Overview";
@@ -16,10 +20,10 @@ const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/", label: "Overview", live: true },
   { to: "/physical", label: "Physical", live: true },
   { to: "/modules", label: "Modules", live: true },
-  { to: "/environments", label: "Environments", live: false },
-  { to: "/identity", label: "Identity", live: false },
-  { to: "/backup", label: "Backup", live: false },
-  { to: "/site", label: "Site", live: false },
+  { to: "/environments", label: "Environments", live: true },
+  { to: "/identity", label: "Identity", live: true },
+  { to: "/backup", label: "Backup", live: true },
+  { to: "/site", label: "Site", live: true },
   { to: "/security", label: "Security", live: false },
   { to: "/activity", label: "Activity", live: true },
 ];
@@ -42,12 +46,16 @@ export function App() {
   else if (path === "/modules") page = <Modules />;
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;
   else if (path === "/activity") page = <Activity />;
+  else if (path === "/environments") page = <Environments />;
+  else if (path === "/identity") page = <Identity />;
+  else if (path === "/backup") page = <Backup />;
+  else if (path === "/site") page = <Site />;
   else {
     const n = NAV.find((x) => active(path, x.to));
     page = (
       <div className="page">
         <h1>{n?.label ?? "Not found"}</h1>
-        <p className="muted">{n ? "This page comes with a later phase of the console (ADR-034 P2)." : "No such page."}</p>
+        <p className="muted">{n ? "This page comes with a later phase of the console (ADR-034 P4)." : "No such page."}</p>
       </div>
     );
   }
@@ -81,7 +89,7 @@ export function App() {
         </ul>
         <div className="nav-foot">
           <div>{s?.channel ? `channel ${s.channel}` : ""}</div>
-          <div>tappaas-cicd · console P1</div>
+          <div>tappaas-cicd · console P2</div>
         </div>
       </nav>
       <div className="main">

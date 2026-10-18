@@ -1,10 +1,14 @@
 // SidePanel.tsx — what the console knows about the object clicked in the
 // Physical view: its records as the managers report them, the findings on it,
-// and where to open it. Read-only in P1; the actions arrive with P2.
+// the day-2 changes it offers (a switch port's zone, spike mockup 3: the port's
+// record with switch-controller update-port, then reconcile previewed and
+// applied; a node's uplinks: site-manager node network show / set), and where
+// to open it.
 
 import { ReactNode } from "react";
 import { zoneColor } from "../colors";
 import { TopoFinding, TopoRef, Topology } from "../types";
+import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag } from "../ui";
 import { Sel, portLabel } from "./layout";
 
@@ -45,6 +49,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
   let title: ReactNode = sel.id;
   let body: ReactNode = null;
   let open: ReactNode = null;
+  let actions: ReactNode = null;
 
   switch (sel.kind) {
     case "port": {
@@ -77,6 +82,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </>
       );
       open = <OpenIn kind="port" id={p.port} sw={s.name} />;
+      actions = <PortChange t={t} sw={s.name} port={p.port} type={p.type} mode={p.mode} zone={p.zones[0] ?? ""} description={p.description} />;
       break;
     }
     case "switch": {
@@ -166,6 +172,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </>
       );
       open = <OpenIn kind="node" id={n.name} />;
+      actions = <NodeNetwork node={n.name} />;
       break;
     }
     case "guest": {
@@ -293,9 +300,79 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </button>
       </header>
       {body ?? <p className="muted">Not in the current topology.</p>}
+      {actions ? (
+        <>
+          <h3>Change</h3>
+          <div className="toolbar">{actions}</div>
+        </>
+      ) : null}
       <h3>Open in</h3>
       {open}
       <p className="muted small">For debugging: these open the component UIs in a new tab; nothing is changed there from here.</p>
     </aside>
+  );
+}
+
+// A switch port's change (mockup 3): its record first, then the switch.
+function PortChange({ t, sw, port, type, mode, zone, description }: { t: Topology; sw: string; port: string; type: string | null; mode: string; zone: string; description: string | null }) {
+  const zones = t.zones.filter((z) => z.vlan !== null && z.state !== "Disabled").map((z) => z.name);
+  const steps: Step[] = [
+    {
+      title: `1 · The port's record: switch-controller update-port '${sw}' ${port}`,
+      bin: "switch-controller",
+      verb: "update-port",
+      fixed: [sw, port],
+      // The port as it is; a zone only for an access port (a trunk's first VLAN is not "its" zone).
+      initial: { "--type": type ?? "device", "--mode": mode === "access" ? "access" : mode || "access", "--zone": mode === "access" ? zone : "", "--description": description ?? "" },
+      choices: { "--zone": zones },
+      note: "This writes the port's record (switch-configuration-actual.json) and nothing else: the switch is programmed in the next step. An access port carries one zone; a trunk the zones in --tagged.",
+    },
+    {
+      title: "2 · Program the switch: switch-controller reconcile",
+      bin: "switch-controller",
+      verb: "reconcile",
+      note: "The preview is the delta per port (interrogate, update-desired, delta — nothing applied). Apply programs every pending change on every switch, not only this port's: read the preview's list before you apply.",
+    },
+  ];
+  // A managed port can be given back: its record goes (remove-port), and the
+  // next interrogate finds it again as an unmanaged port, its VLANs as the switch
+  // has them. The switch itself is not touched.
+  const forget: Step[] = [
+    {
+      title: `Make port ${port} unmanaged: switch-controller remove-port '${sw}' ${port}`,
+      bin: "switch-controller",
+      verb: "remove-port",
+      fixed: [sw, port],
+      note: "Removes the port's record from switch-configuration-actual.json; the switch keeps its present VLANs, and the next interrogate records the port again as unmanaged (TAPPaaS no longer sets it). There is no verb that returns the port to the controller's default profile.",
+    },
+    { title: "Read the switch again: switch-controller reconcile (preview)", bin: "switch-controller", verb: "reconcile", note: "Its preview interrogates the switch: the port reappears unmanaged. Nothing needs applying." },
+  ];
+  return (
+    <>
+      <OperateButton label={`Change port ${port}…`} title={`Port ${port} · ${sw}`} steps={steps} />
+      {type ? <OperateButton label="Make unmanaged…" kind="danger" title={`Port ${port} · ${sw}: unmanaged`} steps={forget} /> : null}
+    </>
+  );
+}
+
+// A node's uplinks: read them, or set them (preview without --apply).
+function NodeNetwork({ node }: { node: string }) {
+  return (
+    <>
+      <OperateButton label="Network: show" title={`${node} — uplinks`} steps={[{ title: `site-manager node network show ${node}`, bin: "site-manager", verb: "node network show", fixed: [node] }]} />
+      <OperateButton
+        label="Network: set…"
+        title={`${node} — set the uplinks`}
+        steps={[
+          {
+            title: `site-manager node network set ${node}`,
+            bin: "site-manager",
+            verb: "node network set",
+            fixed: [node],
+            note: "The preview (without --apply) declares the uplink in config/<node>.json and previews the change on the node: the declaration is written, the node is not touched. Apply drains the node (HA maintenance), moves lan onto the declared ports under a 45 s rollback, confirms and brings the node back. --yes answers the manager's own prompt for the node's name.",
+          },
+        ]}
+      />
+    </>
   );
 }

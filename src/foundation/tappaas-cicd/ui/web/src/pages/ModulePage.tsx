@@ -1,8 +1,9 @@
-// A module's page (mockup ui-04): the badges, then the read tabs — Overview
-// (the gates that mention it), Config (module resolve), Drift (module drift, on
-// demand), Services (the fields each service it depends on carries), Backup
-// (its policy and PBS coverage), Activity (the sweep's lines that name it) —
-// and the Open-in links. Read-only: the operate column arrives with P2.
+// A module's page (mockup ui-04): the badges, then the tabs — Overview (the
+// gates that mention it and the operate column, every module-manager verb as a
+// job), Config (module resolve), Drift (module drift, on demand), Services (the
+// fields each service it depends on carries), Backup (its policy and PBS
+// coverage), Activity (the console's jobs and the sweep's lines that name it) —
+// and the Open-in links.
 
 import { useState } from "react";
 import { get, useRead } from "../api";
@@ -10,6 +11,7 @@ import { Envelope, ModuleDetail } from "../types";
 import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, levelOf, since, when } from "../ui";
 import { ModuleBadges } from "./Modules";
 import { JobList } from "../jobs";
+import { ModuleOperate } from "./ModuleOperate";
 
 const TABS = ["Overview", "Config", "Drift", "Services", "Backup", "Activity"] as const;
 type TabName = (typeof TABS)[number];
@@ -240,6 +242,7 @@ export function ModulePage({ name }: { name: string }) {
               ))}
             </ul>
           </Section>
+          <ModuleOperate m={d.summary} />
           <Section title="About">
             <KV
               rows={[
