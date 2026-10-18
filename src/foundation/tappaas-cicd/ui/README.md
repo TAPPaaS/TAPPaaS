@@ -50,7 +50,10 @@ to one `module-manager modify <m> --set a=b --set c=d` job (`GET /api/v1/modules
 `module-manager fields` + `resolve` + `config/module-fields.json`). **Environments** — environments and
 zones with environment-manager's and network-manager's verbs; adding an environment says for each
 input whether it must be given or what the manager uses when it is left empty (owner: the first
-organization; zone and display name: from the name; DNS mode: the schema's default). **Identity** — organizations,
+organization; zone and display name: from the name; DNS mode: the schema's default). The zones
+are drawn as cards coloured by type, with an arrow for each `access-to` and a dashed one for each
+`pinhole-allowed-from`; a click opens the zone's fields and verbs, and Modify lists every field of
+`zones-fields.json` with its value, default and class (one `network-manager modify <zone> --set …`). **Identity** — organizations,
 groups, users and roles; a change is staged with `--no-reconcile` and pushed by `identity-manager
 reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
 modify, purge (typed). **Site** — `site.json`, the update schedule, Update now (`site update`,

@@ -2,7 +2,7 @@
 // schema type gets, the text it starts from, and the --set list the edits
 // become (only what changed, typed, refused fields never).
 
-import { FieldRow, capitalised, envAddRows, initialText, inputKind, plainText, setArgs, shortValue } from "../../web/src/forms";
+import { FieldRow, capitalised, envAddRows, initialText, inputKind, plainText, setArgs, shortValue, zoneFieldRows } from "../../web/src/forms";
 import { check, done } from "./check";
 
 const base: FieldRow = { field: "x", service: "", class: "in-place", settable: true, reason: null, type: "string", enum: null, description: "", example: null, value: null, configured: false, default: null };
@@ -66,5 +66,26 @@ const none = envAddRows(envSchema, { name: "", orgs: [], zones: [], help: {} });
 check(/no organization/.test(none.find((x) => x.key === "--owner")!.whenEmpty ?? "") && none.find((x) => x.key === "--zone")!.whenEmpty === "a zone named like the environment", "before a name or an organization exists: said in words, no placeholder");
 check(rows.every((x) => !/<env>|\bN\b|\bD\b|\bZ\b/.test(`${x.whenEmpty ?? ""}`)), "no placeholder in a default");
 check(capitalised("rossen") === "Rossen" && capitalised("") === "", "capitalised");
+
+// ── a zone's fields ────────────────────────────────────────────────────
+const zschema = {
+  vlantag: { type: "integer", changeClass: "immutable" },
+  state: { type: "string", default: "Inactive", changeClass: "manual", changeNote: "use network-manager enable|disable|manual" },
+  "access-to": { type: "array", default: [], changeClass: "in-place" },
+  "pinhole-allowed-from": { type: "array", default: [], changeClass: "in-place" },
+  mdns: { type: "boolean", default: false, changeClass: "in-place" },
+  serves: { type: ["string", "array"], changeClass: "manual" },
+  odd: { type: "string" },
+};
+const zrows = zoneFieldRows({ name: "home", vlantag: 310, state: "Active", "access-to": ["internet"] }, zschema);
+const z = (f: string) => zrows.find((x) => x.field === f)!;
+check(zrows.length === 7, "every field of zones-fields.json, set or not");
+check(!z("vlantag").settable && z("vlantag").class === "immutable" && z("vlantag").value === "310", "an immutable field is shown with its value, not offered");
+check(!z("state").settable && z("state").reason === "use network-manager enable|disable|manual", "a manual field names its verb");
+check(z("access-to").settable && z("access-to").configured && initialText(z("access-to")) === "internet", "a configured list");
+check(!z("mdns").configured && z("mdns").value === "false" && z("mdns").default === false, "an unset field shows its default as the value in effect");
+check(z("serves").type === "array" && !z("odd").settable, "string-or-list is a list; no change class: not settable");
+const zset = setArgs(zrows, { "access-to": "internet\nmgmt", "pinhole-allowed-from": "dmz", mdns: "true", vlantag: "999" });
+check(zset.sets.join(" ") === 'access-to=["internet","mgmt"] pinhole-allowed-from=["dmz"] mdns=true', "several zone fields in one modify; the immutable one is not sent");
 
 done("forms");

@@ -317,3 +317,12 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .req { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--fail-bg); color: #a12a2a; }
 .envform .form-check input[type=checkbox] { width: auto; }
 .envform .form-check { justify-content: flex-start; }
+
+/* ── zones (Zones.tsx) ──────────────────────────────────────────────── */
+.zones-view { display: flex; gap: 12px; align-items: stretch; }
+.zones-canvas { flex: 1; min-width: 0; }
+.zones-view .sidepanel { max-height: 560px; margin: 6px 0; }
+.zcard-off { opacity: .5; }
+.zcard-on { box-shadow: 0 0 0 2px var(--accent); }
+.zcard-pseudo { background: #f1f5f9; border-style: dashed; text-align: center; }
+.zfields td { font-size: 12px; }

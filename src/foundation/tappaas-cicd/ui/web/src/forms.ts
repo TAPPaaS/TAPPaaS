@@ -178,3 +178,52 @@ export function envAddRows(schema: Record<string, unknown>, ctx: { name: string;
     { key: "--dns-mode", field: "domains.dnsMode", required: false, whenEmpty: typeof dns.default === "string" ? dns.default : "per-service", description: d("domains.dnsMode", "--dns-mode"), choices: dnsModes, kind: "enum" },
   ];
 }
+
+// ── zones ───────────────────────────────────────────────────────────────
+
+export interface ZoneFieldSpec {
+  type?: unknown;
+  enum?: unknown;
+  default?: unknown;
+  description?: string;
+  changeClass?: string;
+  changeNote?: string;
+  example?: unknown;
+}
+
+// The classes a --set refuses before anything is written; `manual` has a verb of its own.
+const ZONE_REFUSED: Record<string, string> = {
+  immutable: "cannot change in place: delete the zone and add it again",
+  recreate: "only by deleting the zone and adding it again",
+  manual: "has a verb of its own",
+};
+
+function zoneType(t: unknown): string {
+  const words = (Array.isArray(t) ? t : typeof t === "string" ? t.split("|") : []).filter((x): x is string => typeof x === "string" && x !== "null");
+  if (words.length === 1) return words[0];
+  return words.includes("array") ? "array" : "string";
+}
+
+// Every field of zones-fields.json with the zone's value, its default and its class.
+export function zoneFieldRows(zone: Record<string, unknown>, schema: Record<string, ZoneFieldSpec>): FieldRow[] {
+  return Object.entries(schema).map(([field, spec]) => {
+    const cls = spec.changeClass ?? "";
+    const has = Object.prototype.hasOwnProperty.call(zone, field);
+    const v = has ? zone[field] : spec.default;
+    const refused = cls === "" ? "has no change class: it cannot be set through a verb" : ZONE_REFUSED[cls] ?? null;
+    return {
+      field,
+      service: "",
+      class: cls || "unclassified",
+      settable: refused === null,
+      reason: refused === null ? null : cls === "manual" && spec.changeNote ? spec.changeNote : refused,
+      type: zoneType(spec.type),
+      enum: Array.isArray(spec.enum) ? spec.enum.map(String) : null,
+      description: spec.description ?? "",
+      example: spec.example ?? null,
+      value: v === undefined || v === null ? null : typeof v === "string" ? v : JSON.stringify(v),
+      configured: has,
+      default: spec.default ?? null,
+    };
+  });
+}

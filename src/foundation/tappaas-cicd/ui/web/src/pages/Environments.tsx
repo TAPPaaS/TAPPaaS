@@ -3,23 +3,13 @@
 // add / modify / enable|disable|manual / bind / reconcile / delete, each as a
 // job with its preview. A delete needs the name typed.
 
+import { useState } from "react";
 import { useRead, useVerb } from "../api";
 import { EnvAddRow, envAddRows } from "../forms";
 import { OperateButton, Step, Values } from "../operate";
 import { EnvironmentRow } from "../types";
 import { Dot, ReadState, Section, since } from "../ui";
-
-interface ZoneRead {
-  name: string;
-  type?: string;
-  state?: string;
-  vlantag?: number;
-  ip?: string;
-  tier?: number;
-  serves?: string;
-  description?: string;
-  error?: string;
-}
+import { ZoneRead, ZonesGraph } from "./Zones";
 
 const env = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "environment-manager", verb, ...extra });
 const net = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "network-manager", verb, ...extra });
@@ -109,6 +99,7 @@ export function Environments() {
   const envs = useRead<EnvironmentRow[]>("environments");
   const zones = useRead<ZoneRead[]>("zones");
   const orgs = useRead<Record<string, string[]>>("identity").env?.data?.org ?? [];
+  const [zone, setZone] = useState<string | null>(null);
   const zoneNames = (zones.env?.data ?? []).map((z) => z.name);
   const envNames = (envs.env?.data ?? []).map((e) => e.name);
   return (
@@ -153,6 +144,7 @@ export function Environments() {
         }
       >
         <ReadState env={zones.env} failure={zones.failure} what="zones" />
+        {zones.env?.data ? <ZonesGraph zones={zones.env.data} envNames={envNames} sel={zone} setSel={setZone} /> : null}
         <table className="table compact">
           <thead>
             <tr><th>zone</th><th>vlan</th><th>state</th><th>type</th><th>tier</th><th>network</th><th /></tr>
@@ -167,7 +159,7 @@ export function Environments() {
                 <td>{z.tier ?? ""}</td>
                 <td className="mono">{z.ip ?? ""}</td>
                 <td className="toolbar">
-                  <OperateButton label="Modify…" title={`Modify zone ${z.name}`} steps={[net(`network-manager modify ${z.name}`, "modify", { fixed: [z.name] }), net("network-manager reconcile", "reconcile")]} />
+                  <button className="btn" onClick={() => { setZone(z.name); document.querySelector(".zones-view")?.scrollIntoView({ behavior: "smooth" }); }}>Details · Modify…</button>
                   {(z.state === "Active" ? ["disable", "manual"] : ["enable"]).map((w) => (
                     <OperateButton
                       key={w}
