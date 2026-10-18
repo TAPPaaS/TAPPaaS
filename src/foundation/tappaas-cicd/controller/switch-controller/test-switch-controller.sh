@@ -198,8 +198,25 @@ ck "confirm records the live members" "11,12" "$(jq -r '.switches.core.ports["11
 ck "…and the aggregate is in sync"   "no"     "$(has "$("${SM}" delta 2>&1)" 'aggregate')"
 ck "lag list --json: formed, live members" "true 11,12" "$("${SM}" lag list --json | jq -r '.[0] | "\(.formed) \(.live | join(","))"')"
 ck "a port in another LAG is refused (rc)" "1" "$(rc_of "${SM}" lag set core other --ports 11,12)"
+# #854: the member follows its lead — UniFi takes an aggregate's VLANs from the
+# lead, so the member's own (stale) VLANs are neither drift nor pushed.
+ck "lag set records the member's lead"   "11"     "$(jq -r '.switches.core.ports["12"].lagLead' "${ACT}")"
+ck "…and the lead follows nothing"       "null"   "$(jq -r '.switches.core.ports["11"].lagLead // "null"' "${ACT}")"
+jq '.switches.core.ports["12"].taggedVlans = [100,200,298,310,610]' "${ACT}" > "${ACT}.t" && mv "${ACT}.t" "${ACT}"
+"${SM}" update-desired >/dev/null 2>&1
+ck "desired: the member has no VLAN set of its own" "null null" "$(jq -r '.switches.core.ports["12"] | "\(.taggedVlans // "null") \(.mode // "null")"' "${DES}")"
+ck "delta: nothing for the member"       "no"     "$(has "$("${SM}" delta 2>&1)" 'port 12')"
+lj="$("${SM}" list-ports core --json 2>/dev/null)"
+ck "list-ports --json: the member is in sync" "in-sync" "$(jq -r '.[0].ports[] | select(.port=="12") | .drift' <<<"${lj}")"
+ck "…shows the lead's VLANs"             "200,310,610" "$(jq -r '.[0].ports[] | select(.port=="12") | .taggedVlans | join(",")' <<<"${lj}")"
+ck "…and names its lead"                 "11"     "$(jq -r '.[0].ports[] | select(.port=="12") | .lagLead' <<<"${lj}")"
+ck "list-ports: the member follows port 11" "yes" "$(grep -qE 'port 12: node .*\| follows port 11' <<<"$("${SM}" list-ports core 2>&1)" && echo yes || echo no)"
+"${SM}" confirm core >/dev/null 2>&1
+ck "confirm keeps the member's live VLANs as read" "100,200,298,310,610" "$(jq -r '.switches.core.ports["12"].taggedVlans | join(",")' "${ACT}")"
+ck "…and core is in sync"               "yes"    "$(has "$("${SM}" delta 2>&1)" 'core: in sync')"
 "${SM}" lag remove core t1-lan >/dev/null 2>&1
 ck "lag remove clears the ports"     "0"      "$(jq -r '[.switches.core.ports[] | select(.lag)] | length' "${ACT}")"
+ck "…and the member's lead"         "0"      "$(jq -r '[.switches.core.ports[] | select(.lagLead)] | length' "${ACT}")"
 "${SM}" update-desired >/dev/null 2>&1
 ck "delta: the aggregate to take apart" "yes" "$(has "$("${SM}" delta 2>&1)" 'take apart the aggregate of ports 11+12')"
 ck "manual switch: lag --apply prints the step, rc 2" "2" "$(rc_of "${SM}" lag remove core t1-lan --apply)"

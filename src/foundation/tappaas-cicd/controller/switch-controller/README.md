@@ -43,6 +43,14 @@ switch-controller <command> [args]
 | `list-ports [<switch>] [--json]` | One line per port: actual config and drift vs `zones.json`; `--json` adds what `zones.json` wants on it (`desired`) and `drift` (`in-sync`, `drift`, `unmanaged`). |
 | `show <controller\|switch>` | Show one inventory entry. |
 
+**A member follows its lead.** The switch takes an aggregate's VLANs from its
+lead port, the lowest-numbered member, and ignores the other members' own port
+config while the aggregate stands. Every other member is recorded with
+`lagLead: <lead>` (by `lag set`/`lag remove` and at each `interrogate`):
+`list-ports` shows it as "follows port <lead>" with the lead's VLANs and no
+drift of its own, `delta` has nothing for it, and nothing is pushed to it. The
+VLANs the switch reports on the member itself stay in `actual.json` as read.
+
 An aggregate spans ports of **one** switch. Across two switches it needs MC-LAG
 (both switches of one vendor that supports it), which is not modelled. A
 node's bonded LAN uplink in `lacp` mode drives this itself: `site-manager node

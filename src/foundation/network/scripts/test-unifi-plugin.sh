@@ -290,13 +290,18 @@ cat > "${LTMP}/switch-configuration-desired.json" <<'JSON'
 {"switches":{"sw1":{"managementIp":"1.2.3.4","ports":{
   "5":{"mode":"access","nativeVlan":200,"type":"device","lagMembers":[]},
   "11":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200],"type":"node","lag":"t1-lan","lagMembers":[11,12]},
-  "12":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200],"type":"node","lag":"t1-lan","lagMembers":[]}}}}}
+  "12":{"type":"node","lag":"t1-lan","lagLead":"11","lagMembers":[]}}}}}
 JSON
 ck "interrogate: no aggregate, no members" "[]" "$(plugin_interrogate sw1 1.2.3.4 | jq -c '.ports["11"].lagMembers')"
 UNIFI_LAG_WAIT=0 CONFIG_DIR="${LTMP}" plugin_apply sw1 >/dev/null 2>&1; rc=$?
 ck "form: the lead port aggregates both" "aggregate:11,12" \
    "$(jq -r '.port_overrides[] | select(.port_idx==11) | "\(.op_mode):\(.aggregate_members | join(","))"' "${LTMP}/put.json")"
 ck "form: the follower loses its own override" "0" "$(jq '[.port_overrides[] | select(.port_idx==12)] | length' "${LTMP}/put.json")"
+jq '.switches.sw1.ports["11"].lagMembers = [11]' "${LTMP}/switch-configuration-desired.json" > "${LTMP}/d1"
+mkdir -p "${LTMP}/f"; mv "${LTMP}/d1" "${LTMP}/f/switch-configuration-desired.json"
+UNIFI_LAG_WAIT=0 CONFIG_DIR="${LTMP}/f" plugin_apply sw1 >/dev/null 2>&1
+ck "form: a member following by lagLead alone gets nothing pushed (#854)" "0" "$(jq '[.port_overrides[] | select(.port_idx==12)] | length' "${LTMP}/put.json")"
+UNIFI_LAG_WAIT=0 CONFIG_DIR="${LTMP}" plugin_apply sw1 >/dev/null 2>&1
 ck "form: a port outside the LAG gets no op_mode" "null" "$(jq -r '.port_overrides[] | select(.port_idx==5) | .op_mode // "null"' "${LTMP}/put.json")"
 ck "form: the switch never shows it — apply fails" "1" "${rc}"
 LIVE_PT='[{"port_idx":5,"op_mode":"switch"},{"port_idx":11,"op_mode":"aggregate","aggregate_members":[12,11]},{"port_idx":12,"op_mode":"switch","aggregated_by":11}]'
@@ -306,7 +311,7 @@ ck "interrogate: the lead lists its members" "[11,12]" "$(plugin_interrogate sw1
 ck "interrogate: a follower lists none" "[]" "$(plugin_interrogate sw1 1.2.3.4 | jq -c '.ports["12"].lagMembers')"
 ck "controller interrogate: same" "[11,12]" "$(plugin_controller_interrogate c 1.2.3.4 | jq -c '.switches.sw1.ports["11"].lagMembers')"
 CUR_PO='[{"port_idx":11,"op_mode":"aggregate","aggregate_members":[11,12]}]'
-jq '.switches.sw1.ports |= map_values(.lagMembers = [] | del(.lag))' "${LTMP}/switch-configuration-desired.json" > "${LTMP}/d" && mv "${LTMP}/d" "${LTMP}/switch-configuration-desired.json"
+jq '.switches.sw1.ports |= map_values(.lagMembers = [] | del(.lag, .lagLead) | .mode //= "trunk" | .nativeVlan //= 0 | .taggedVlans //= [200])' "${LTMP}/switch-configuration-desired.json" > "${LTMP}/d" && mv "${LTMP}/d" "${LTMP}/switch-configuration-desired.json"
 LIVE_PT='[{"port_idx":5,"op_mode":"switch"},{"port_idx":11,"op_mode":"switch"},{"port_idx":12,"op_mode":"switch"}]'
 UNIFI_LAG_WAIT=0 CONFIG_DIR="${LTMP}" plugin_apply sw1 >/dev/null 2>&1; rc=$?
 ck "take apart: the lead goes back to switch" "switch:null" \

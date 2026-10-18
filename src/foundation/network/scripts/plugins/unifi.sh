@@ -297,8 +297,9 @@ plugin_apply() {
         | ([ $nets.data[] | select(.vlan != null and .vlan > 0) | ._id ]) as $allvlannets
         | (reduce ($cur[]?) as $o ({}; .[($o.port_idx|tostring)] = $o)) as $curmap
         # A LAG (#40): its lead carries op_mode aggregate + the members; the other
-        # members follow the lead, so they lose their own override.
-        | ([ $desired[] | (.lagMembers // []) | select(length > 1) | .[1:][] ]) as $followers
+        # members follow the lead (lagLead, #854), so they lose their own override.
+        | ([ $desired[] | (.lagMembers // []) | select(length > 1) | .[1:][] ]
+           + [ $desired | to_entries[] | select((.value.lagLead // null) != null) | .key | tonumber ]) as $followers
         | ($desired | to_entries
             | map(select((.key | tonumber) as $i | $followers | index($i) | not))
             | map(

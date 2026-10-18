@@ -168,6 +168,25 @@ check(renderTopology(t).some((l) => /ISP → USW Pro XG 10 PoE port 5, vlan 100/
   check(x.findings.some((f) => f.gate === "switch-drift" && f.on.name === "2" && /add 430/.test(f.text)), "a drifting port is a switch-drift finding on that port");
 }
 {
+  // #854: port 12 follows its lead, port 11 — the VLANs the switch reports on the
+  // member itself (UniFi ignores them while the aggregate stands) are no drift.
+  // An older switch-controller: no lagLead, the member drifting by its own VLANs.
+  const s = hrossen();
+  check(s.ports![0].ports.every((p) => p.lagLead === undefined), "the fixture is an older controller's: no lagLead");
+  s.ports![0].ports = s.ports![0].ports.map((p) =>
+    p.port === "12" ? { ...p, taggedVlans: [100, 200, 298, 299, 310, 410, 420, 430, 510, 610], drift: "drift" as const, add: [], remove: [100, 298] } : p);
+  const x = buildTopology(s);
+  const p12 = x.switches[0].ports.find((p) => p.port === "12")!;
+  const p11 = x.switches[0].ports.find((p) => p.port === "11")!;
+  check(p12.lagLead === "11" && p11.lagLead === null, "a LAG's member follows its lowest port when the controller does not say (#854)");
+  check(p12.tagged.join(",") === p11.tagged.join(",") && p12.drift === "in-sync", "…carries the lead's VLANs and no drift");
+  check(!x.findings.some((f) => f.gate === "switch-drift" && f.on.name === "12"), "…and is no switch-drift finding");
+  // The controller names the lead: that one wins.
+  const s2 = hrossen();
+  s2.ports![0].ports = s2.ports![0].ports.map((p) => (p.port === "12" ? { ...p, lagLead: "11", taggedVlans: [100] } : p.port === "11" ? { ...p, lagLead: null } : p));
+  check(buildTopology(s2).switches[0].ports.find((p) => p.port === "12")!.tagged.includes(200), "a member named by lagLead shows its lead's VLANs");
+}
+{
   // A source that does not answer leaves its part empty and is named.
   const runs: string[] = [];
   const src = collectSources({

@@ -62,7 +62,10 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
       body = (
         <>
           <p>
-            <Tag level={p.drift === "drift" ? "warn" : "pass"} /> {p.drift === "unmanaged" ? "unmanaged — TAPPaaS does not set its VLANs" : p.drift === "drift" ? "drifts from zones.json" : "in sync with zones.json"}
+            <Tag level={p.drift === "drift" ? "warn" : "pass"} />{" "}
+            {p.lagLead
+              ? `follows port ${p.lagLead}, the lead of LAG ${p.lag}: the switch takes the aggregate's VLANs from the lead, and they are shown here`
+              : p.drift === "unmanaged" ? "unmanaged — TAPPaaS does not set its VLANs" : p.drift === "drift" ? "drifts from zones.json" : "in sync with zones.json"}
           </p>
           <KV
             rows={[

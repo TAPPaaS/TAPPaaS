@@ -185,6 +185,7 @@ export interface TopoPort {
   target: { kind: string; name: string | null; port: string | null } | null;
   description: string | null;
   lag: string | null;
+  lagLead?: string | null; // a LAG member: the lead whose VLANs it carries (#854)
   drift: string;
   add: number[];
   remove: number[];

@@ -92,7 +92,7 @@ export function SwitchCard({ data }: NodeProps<Node<SwitchData, "switch">>) {
                 )}
               </span>
               <span className="port-target">{portLabel(p)}</span>
-              {p.lag ? <span className="port-lag">LAG</span> : null}
+              {p.lag ? <span className="port-lag" title={p.lagLead ? `follows port ${p.lagLead}: its VLANs are the lead's` : `leads LAG ${p.lag}`}>LAG</span> : null}
               {p.drift === "drift" ? <span className="port-drift" title={`drift: +${p.add.join(",")} -${p.remove.join(",")}`}>drift</span> : null}
               <Warn n={n} />
               <span className="port-mode">{p.role === "unmanaged" ? "—" : p.mode === "access" ? `access ${p.native}` : "trunk"}</span>

@@ -19,7 +19,9 @@
 #   port        {type,target,targetPort,...}; type ∈ node|switch|ap|device|uplink.
 #               `lag: <name>` puts it in a link aggregate (802.3ad LAG) with the
 #               switch's other ports of that name; the lowest-numbered one leads
-#               it, and carries `lagMembers` in desired and actual.
+#               it, and carries `lagMembers` in desired and actual. Every other
+#               member carries `lagLead: <lead>` (#854): it follows the lead's
+#               VLANs, has no VLAN set of its own, and nothing is pushed to it.
 #
 # Five-verb provider contract (ADR-008 order):
 #   interrogate     live/controller/manual state → actual.json (via vendor plugin)
@@ -141,6 +143,33 @@ jq_actual() {
     if jq "$@" "${filter}" "${ACTUAL}" > "${tmp}"; then mv "${tmp}" "${ACTUAL}"
     else rm -f "${tmp}"; die "Failed to update ${ACTUAL}"; fi
 }
+
+# Which port each LAG member follows (#854), as a jq def over one switch.
+# UniFi takes an aggregate's VLANs from its lead port; a member's own port
+# config is ignored while the aggregate stands, so it has no drift of its own.
+# A port declared in a LAG follows the lowest-numbered port of that LAG (as
+# `lag set` documents); an unrecorded port the switch reports inside an
+# aggregate follows the port that lists it in its live members. A recorded
+# port outside any declared LAG follows nothing: if the switch still has it in
+# an aggregate, the next apply takes that aggregate apart.
+readonly LAG_LEADS_JQ='
+    def lag_leads:
+        if .ports == null then . else
+        .ports as $ps
+        | ([ $ps | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, k: .key} ]
+           | group_by(.lag) | map(map(.k) | sort_by(tonumber)) | map(select(length > 1))) as $decl
+        | ([ $ps | to_entries[] | select(((.value.lagMembers // []) | length) > 1)
+             | .key as $l | .value.lagMembers[] | tostring | select(. != $l) | {k: ., lead: $l} ]) as $live
+        | .ports = ($ps | with_entries(
+            .key as $k
+            | (if (.value.lag // "") != "" then ([ $decl[] | select(index($k) != null) | .[0] ][0] // null)
+               elif (.value.type // null) == null then ([ $live[] | select(.k == $k) | .lead ][0] // null)
+               else null end) as $lead
+            | if $lead != null and $lead != $k then .value.lagLead = $lead else .value |= del(.lagLead) end))
+        end;'
+
+# Record each member's lead in actual (interrogate, lag set/remove, confirm).
+mark_lag_leads() { jq_actual "${LAG_LEADS_JQ}"' .switches |= map_values(lag_leads)'; }
 
 # Active VLAN tags as a JSON array of ints (the trunk set for node uplinks).
 active_vlans_json() {
@@ -329,11 +358,13 @@ cmd_lag() {
                 if (.key as $k | $pj | index($k)) != null then .value.lag = $l
                 elif (.value.lag // "") == $l then .value |= del(.lag) else . end)' \
             --arg n "${sw}" --arg l "${name}" --argjson pj "${pj}"
-        info "${GN}✓${CL} ${sw}: LAG ${name} on ports $(jq -r 'join("+")' <<<"${pj}")"
+        mark_lag_leads
+        info "${GN}✓${CL} ${sw}: LAG ${name} on ports $(jq -r 'join("+")' <<<"${pj}") (led by port $(jq -r 'sort_by(tonumber) | .[0]' <<<"${pj}"))"
     else
         jq -e --arg n "${sw}" --arg l "${name}" '[.switches[$n].ports[] | select(.lag == $l)] | length > 0' "${ACTUAL}" >/dev/null \
             || { info "${sw}: no LAG ${name} — nothing to remove"; [[ "${apply}" == 1 ]] || return 0; }
         jq_actual '.switches[$n].ports |= map_values(if (.lag // "") == $l then del(.lag) else . end)' --arg n "${sw}" --arg l "${name}"
+        mark_lag_leads
         info "${GN}✓${CL} ${sw}: LAG ${name} removed from the declaration"
     fi
     [[ "${apply}" == 1 ]] || { info "  programs the switch at the next: switch-controller reconcile --apply  (or lag ${sub} … --apply)"; return 0; }
@@ -406,28 +437,35 @@ cmd_list_ports() {
     active=$(active_vlans_json)
     # One view per port — what it is, what it carries, what zones.json wants on it
     # and the drift between the two — rendered as text or (--json) as is.
-    local view='
-        def port_view($active; $zones):
+    # A LAG member that follows its lead (#854) shows the lead's VLANs and what
+    # zones.json wants on the lead, and no drift of its own: the lead's drift is
+    # reported once, on the lead.
+    local view="${LAG_LEADS_JQ}"'
+        def port_view($ports; $active; $zones):
             .key as $k | .value as $p
-            | ($p.type // "") as $t
-            | ($p.taggedVlans // []) as $atag
-            | ($p.nativeVlan // 0) as $anat
+            | ($p.lagLead // null) as $lead
+            | (if $lead != null then ($ports[$lead] // $p) else $p end) as $src
+            | ($src.type // "") as $t
+            | ($src.taggedVlans // []) as $atag
+            | ($src.nativeVlan // 0) as $anat
             | (if ($t=="node" or $t=="switch" or $t=="uplink" or $t=="ap") then {mode:"trunk", tagged:$active, nat:0}
                elif $t=="device" then {mode:"access", tagged:[],
-                     nat:(($p.zone // "") as $zn | if ($zn!="" and ($zones[$zn].vlantag!=null)) then $zones[$zn].vlantag else $anat end)}
+                     nat:(($src.zone // "") as $zn | if ($zn!="" and ($zones[$zn].vlantag!=null)) then $zones[$zn].vlantag else $anat end)}
                else null end) as $d
-            | (if $d==null or $d.mode!="trunk" then [] else $d.tagged - $atag end) as $add
-            | (if $d==null or $d.mode!="trunk" then [] else $atag - $d.tagged end) as $rem
-            | {port: $k, type: (if $t=="" then null else $t end), target: ($p.target // null),
+            | (if $d==null or $d.mode!="trunk" or $lead != null then [] else $d.tagged - $atag end) as $add
+            | (if $d==null or $d.mode!="trunk" or $lead != null then [] else $atag - $d.tagged end) as $rem
+            | {port: $k, type: (($p.type // "") | if .=="" then null else . end), target: ($p.target // null),
                targetPort: ($p.targetPort // null), zone: ($p.zone // null), description: ($p.description // null),
-               mode: ($p.mode // "?"), nativeVlan: $anat, taggedVlans: $atag,
+               mode: ($src.mode // "?"), nativeVlan: $anat, taggedVlans: $atag,
                desired: (if $d==null then null else {mode: $d.mode, nativeVlan: $d.nat, taggedVlans: $d.tagged} end),
                drift: (if $d==null then "unmanaged"
+                       elif $lead != null then "in-sync"
                        elif (($add|length)>0 or ($rem|length)>0 or ($d.mode=="access" and $d.nat != $anat)) then "drift"
                        else "in-sync" end),
-               add: $add, remove: $rem, lag: ($p.lag // null), lagMembers: ($p.lagMembers // [])};
+               add: $add, remove: $rem, lag: ($p.lag // null), lagMembers: ($p.lagMembers // []), lagLead: $lead};
         def ports_of($sw; $active; $zones):
-            (.switches[$sw].ports // {}) | to_entries | sort_by(.key|tonumber) | .[] | port_view($active; $zones);'
+            (.switches[$sw] | lag_leads | .ports // {}) as $ports
+            | $ports | to_entries | sort_by(.key|tonumber) | .[] | port_view($ports; $active; $zones);'
     if [[ "${JSON}" == 1 ]]; then
         jq --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --arg sw "${target}" "${view}"'
             [.switches // {} | keys[] | select($sw == "" or . == $sw)] as $names
@@ -439,7 +477,8 @@ cmd_list_ports() {
         info "${BOLD}${sw}${CL} — actual port config (drift vs zones.json):"
         jq -r --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --arg sw "${sw}" "${view}"'
             ports_of($sw; $active; $z[0])
-            | (if .drift=="unmanaged" then "untouched (unmanaged)"
+            | (if .lagLead != null then "follows port \(.lagLead)"
+               elif .drift=="unmanaged" then "untouched (unmanaged)"
                elif .drift=="in-sync" then "in sync"
                elif .desired.mode=="trunk" then "DRIFT +\(.add|join(",")) -\(.remove|join(","))"
                else "DRIFT native \(.nativeVlan) -> \(.desired.nativeVlan)" end) as $status
@@ -553,6 +592,7 @@ cmd_interrogate() {
             "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
         info "  switch ${name}: uploaded $(echo "${state}" | jq -r '.ports // {} | length') port(s)"
     done < <(jq -r '.switches // {} | to_entries[] | select(.value.controller == null) | .key' "${ACTUAL}")
+    mark_lag_leads
     if [[ "${failed}" -gt 0 ]]; then
         error "interrogate: ${failed} controller(s)/switch(es) could not be read"
         return 1
@@ -571,13 +611,14 @@ cmd_update_desired() {
     # — those we regenerate from actual's topology (.) + the active VLAN set. All
     # trunk ports (node/switch/uplink/ap) carry the full active set; UniFi auto-
     # manages AP-uplink ports as "all VLANs" anyway, so AP ports match that.
-    jq --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --slurpfile cur "${DESIRED}" '
+    jq --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --slurpfile cur "${DESIRED}" "${LAG_LEADS_JQ}"'
         ($z[0]) as $zones
         | ($cur[0] // {}) as $des
         | $des
           + { controllers: (.controllers // {}),
               switches: ((.switches // {}) | map_values(
-                . as $sw
+                lag_leads
+                | . as $sw
                 | $sw + { ports: (($sw.ports // {}) | map_values(
                     . as $p
                     | (.type // "") as $t
@@ -590,14 +631,16 @@ cmd_update_desired() {
                       else $p end
                 )) }
                 # A LAG (#40): its lowest port leads and lists the members;
-                # every other managed port lists none.
+                # every other managed port lists none. A member that follows
+                # its lead (#854) has no VLAN set of its own to want.
                 | ([ .ports | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, idx: (.key | tonumber)} ]
                    | group_by(.lag) | map(map(.idx) | sort)) as $groups
                 | .ports |= with_entries(
                     (.key | tonumber) as $i
                     | if (.value.type // null) == null then .
                       else .value.lagMembers = ([ $groups[] | select(.[0] == $i and length > 1) ][0] // [])
-                      end)
+                      end
+                    | if (.value.lagLead // null) != null then .value |= del(.mode, .nativeVlan, .taggedVlans) else . end)
               )) }' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${DESIRED}"
     info "  active VLAN set: $(echo "${active}" | jq -rc 'join(",")')"
     info "  desired regenerated for $(jq -r '.switches // {} | length' "${DESIRED}") switch(es)"
@@ -612,7 +655,8 @@ compute_delta() {
       | reduce ($des | keys[]) as $sw ({};
           . + {($sw): {
               changes: [
-                ($des[$sw].ports // {} | to_entries[]) as $p
+                # A member following its lead (#854) is set through the lead.
+                ($des[$sw].ports // {} | to_entries[] | select((.value.lagLead // null) == null)) as $p
                 | ($act[$sw].ports[$p.key]) as $ap
                 | if $p.value.mode=="trunk" then
                     ((($p.value.taggedVlans // []) - (($ap.taggedVlans) // [])) as $addv

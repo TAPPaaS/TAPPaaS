@@ -39,6 +39,19 @@ controller selects a plugin by sourcing each plugin and asking
 `plugin_interrogate` (read live config) and `plugin_apply` (push VLAN changes);
 `manual.sh` instead prints the steps for the operator.
 
+### LAG members follow their lead (#854)
+
+`LAG_LEADS_JQ` (`lag_leads`) is the one rule for which port leads an
+aggregate: a port declared in a LAG follows the lowest-numbered port of that
+LAG; an unrecorded port the switch reports inside an aggregate follows the port
+that lists it in its live members; a recorded port outside any declared LAG
+follows nothing (an aggregate the switch still has there is taken apart by the
+next apply). `interrogate`, `lag set`/`remove` write it to `actual` as
+`lagLead`; `update-desired` and `list-ports` re-derive it, so a stale record
+cannot mislead them. A follower's desired record has no mode or VLANs,
+`delta` skips it, `confirm` leaves its live VLANs as read, and the UniFi plugin
+never gives it an override.
+
 ### Five-verb reconcile
 
 `reconcile` runs `interrogate → update-desired → delta → apply → confirm`. With

@@ -79,6 +79,7 @@ export interface SwitchPortRow {
   remove: number[];
   lag: string | null;
   lagMembers: number[];
+  lagLead?: string | null; // the LAG's lead port this member follows (#854); absent from an older controller
 }
 export interface SwitchPorts {
   switch: string;
@@ -221,6 +222,7 @@ export interface TopoPort {
   target: { kind: "node" | "ap" | "switch" | "device" | "isp"; name: string | null; port: string | null } | null;
   description: string | null;
   lag: string | null;
+  lagLead: string | null; // a LAG member: the lead port whose VLANs it carries (#854)
   drift: "in-sync" | "drift" | "unmanaged";
   add: number[];
   remove: number[];
@@ -501,7 +503,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   const apByCanon = new Map<string, string>();
   for (const a of src.accessPoints ?? []) apByCanon.set(canon(a.name), a.name);
   const switches: TopoSwitch[] = invSwitches.map((s) => {
-    const rows = portsBySwitch.get(s.name) ?? [];
+    const rows = followLeads(portsBySwitch.get(s.name) ?? []);
     const ports: TopoPort[] = rows.map((r) => portOf(s.name, r));
     const lags: TopoLag[] = (src.lags ?? [])
       .filter((l) => l.switch === s.name)
@@ -525,6 +527,28 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       lags,
     };
   });
+
+  // A LAG member follows its lead (#854): UniFi takes an aggregate's VLANs from
+  // the lead port, so the member carries the lead's VLANs and no drift of its
+  // own. switch-controller names the lead (lagLead); for one that predates it,
+  // the lead is the LAG's lowest-numbered port, as \`lag set\` declares it.
+  function followLeads(rows: SwitchPortRow[]): SwitchPortRow[] {
+    const byPort = new Map(rows.map((r) => [r.port, r]));
+    const leadOf = (r: SwitchPortRow): string | null => {
+      if (r.lagLead !== undefined) return r.lagLead;
+      if (!r.lag) return null;
+      const first = rows.filter((x) => x.lag === r.lag).map((x) => x.port).sort((a, b) => Number(a) - Number(b))[0];
+      return first !== r.port ? first : null;
+    };
+    return rows.map((r) => {
+      const lead = leadOf(r);
+      const l = lead !== null ? byPort.get(lead) : undefined;
+      if (lead === null) return { ...r, lagLead: null };
+      if (!l) return { ...r, lagLead: lead };
+      return { ...r, lagLead: lead, mode: l.mode, nativeVlan: l.nativeVlan, taggedVlans: l.taggedVlans, desired: l.desired,
+        drift: r.drift === "unmanaged" ? r.drift : "in-sync", add: [], remove: [] };
+    });
+  }
 
   function portOf(sw: string, r: SwitchPortRow): TopoPort {
     const seen = seenAt.get(key(sw, r.port)) ?? null;
@@ -591,6 +615,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       target,
       description: r.description,
       lag: r.lag,
+      lagLead: r.lagLead ?? null,
       drift: r.drift,
       add: r.add,
       remove: r.remove,
