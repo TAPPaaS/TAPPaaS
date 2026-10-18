@@ -80,7 +80,8 @@ export function App() {
   else if ((path === "/" || path === "") && incomplete) page = <Setup />;
   else if (path === "/" || path === "") page = <Overview />;
   else if (path === "/setup") page = <Setup />;
-  else if (path === "/physical" || path === "/site/physical") page = <Physical />;
+  else if (owner && (path === "/physical" || path === "/site/physical")) page = <Physical />;
+  else if (path === "/physical" || path === "/site/physical") page = <Site tab="Physical" />;
   else if (path === "/modules") page = <Modules />;
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;
   else if (path === "/activity") page = <Activity />;

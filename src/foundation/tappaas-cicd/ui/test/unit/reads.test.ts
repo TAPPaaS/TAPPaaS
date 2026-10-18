@@ -3,7 +3,7 @@
 // topology is handed the cached health instead of running validate again; a
 // failed refresh keeps the last good answer; drift runs only when asked.
 
-import { mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { Cached } from "../../src/cache";
@@ -109,6 +109,26 @@ async function main(): Promise<void> {
     threw = true;
   }
   check(threw, "refreshing an unknown read is refused");
+
+  // ── a node being added (the Site page's Add node) ──────────────────────
+  {
+    const site = fakeSite();
+    const cfg = mkdtempSync(join(tmpdir(), "nodeprog-"));
+    mkdirSync(join(cfg, "provision"));
+    writeFileSync(join(cfg, "provision", "tappaas4.json"), "{}");
+    writeFileSync(join(cfg, "provision", "tappaas3.json.consumed"), "{}");
+    const r = new Reads({ configDir: cfg, stateDir: join(cfg, "s"), run: site.run, journalDays: 7, clusterNodes: (ns) => (ns.length ? ["tappaas1", "tappaas2", "tappaas3"] : null) });
+    const p4 = (await r.nodeProgress.of("tappaas4").get()).value!;
+    check(p4.registration === "pending" && p4.inCluster === false && !p4.inSite, "a registered node not yet booted: pending, not in the cluster or site.json");
+    check(p4.pxe.enabled === false && /PXE: disabled/.test(p4.pxe.text), "the PXE window's state from node-provisioner status");
+    const p3 = (await r.nodeProgress.of("tappaas3").get()).value!;
+    check(p3.registration === "answered" && p3.inCluster === true && !p3.inSite, "installed and joined, not yet in site.json");
+    const p1 = (await r.nodeProgress.of("tappaas1").get()).value!;
+    check(p1.registration === "none" && p1.inSite && p1.inCluster === true, "a node already in place");
+    const before = site.calls.length;
+    await r.nodeProgress.of("tappaas1").get();
+    check(site.calls.length === before, "read again within ten seconds: served from the cache");
+  }
 
   // ── the identity records (the Identity page's graph) ──────────────────
   {

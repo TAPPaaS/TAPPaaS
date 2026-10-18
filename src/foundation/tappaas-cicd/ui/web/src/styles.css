@@ -337,3 +337,12 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .row-on td { background: var(--info-bg); }
 @media (max-width: 1100px) { .identity-view { grid-template-columns: 1fr; } }
 .identity-side .toolbar { flex-wrap: nowrap; }
+
+/* ── Add node (AddNode.tsx) ─────────────────────────────────────────── */
+.modal-wide { width: min(980px, 100%); }
+.explain { font-size: 13px; background: var(--info-bg); border-radius: 6px; padding: 6px 12px; margin: 6px 0 8px; }
+.explain p { margin: 4px 0; }
+.explain ul, .explain ol { margin: 4px 0 6px; padding-left: 20px; }
+.explain li { margin: 2px 0; }
+.checks li { padding: 2px 0; font-size: 13px; }
+.setup-body .step { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 8px; }

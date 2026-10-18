@@ -17,7 +17,7 @@ import { Assistant, AssistantEvent } from "./assistant";
 import { LiteLLM } from "./litellm";
 import { Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
-import { MODULE_NAME, Reads } from "./reads";
+import { MODULE_NAME, NODE_NAME, Reads } from "./reads";
 import { ownerSummary, readConfigs } from "./owner";
 import { SECRETS, isSecretName, secretStatus, writeSecret } from "./secrets";
 import { closeSetupToken, setupComplete, setupSteps } from "./setup";
@@ -204,6 +204,11 @@ export class ConsoleServer {
         if (a === "records") return sendJson(res, 200, envelope(await r.identityRecords.get()));
         if (a !== undefined) return sendJson(res, 404, { error: `identity/${a}` });
         return sendJson(res, 200, envelope(await r.identity.get()));
+      case "nodes": {
+        // A node being added: GET nodes/<name>/progress, every ten seconds at most.
+        if (!a || !NODE_NAME.test(a) || b !== "progress") return sendJson(res, 404, { error: "nodes/<name>/progress" });
+        return sendJson(res, 200, envelope(await r.nodeProgress.of(a).get()));
+      }
       case "schemas": {
         if (!a || !(a in SCHEMAS)) return sendJson(res, 404, { error: `schemas/<${Object.keys(SCHEMAS).join("|")}>` });
         return sendJson(res, 200, envelope(await r.schemas.of(a).get()));

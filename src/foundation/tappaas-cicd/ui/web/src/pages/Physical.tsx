@@ -20,7 +20,9 @@ function selFromUrl(): Sel | null {
   return null;
 }
 
-export function Physical() {
+// Standalone (the owner's route) or as the Site page's Physical tab (embedded:
+// the Site page has the heading).
+export function Physical({ embedded }: { embedded?: boolean }) {
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
   const [sel, setSel] = useState<Sel | null>(selFromUrl);
@@ -46,9 +48,9 @@ export function Physical() {
   const bad = (t?.sources ?? []).filter((s) => !s.ok);
 
   return (
-    <div className="page page-wide">
+    <div className={embedded ? "" : "page page-wide"}>
       <div className="page-head">
-        <h1>Physical</h1>
+        {embedded ? null : <h1>Physical</h1>}
         <span className="muted">{t ? `${t.site.name ?? "site"} as cabled · topology ${since(t.generated)} · layout automatic` : ""}</span>
         <span className="spacer" />
         <label className="toggle">

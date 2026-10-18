@@ -58,9 +58,13 @@ groups, users and roles as a graph of their relations (a group's owning organiza
 groups, the roles of users and groups, an organization's owner and parent; `GET /api/v1/identity/records`:
 `identity-manager <kind> show` for each), the list beside it, a click for the record and its verbs; a change is staged with `--no-reconcile` and pushed by `identity-manager
 reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
-modify, purge (typed). **Site** — `site.json`, the update schedule, Update now (`site update`,
+modify, purge (typed). **Site** — two tabs. Overview: `site.json`, the update schedule, Update now (`site update`,
 its plan first), the release train, nodes and their uplinks, repositories (sync, hold, release,
-stashes). **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
+stashes). Physical: the view above. Add node is a guided sequence in Setup's step rows: declare
+the node (`site-manager node add tappaasN --pxe` with its PXE port's MAC, boot disk, WAN and lan
+ports, pools), boot it from the network by hand, the install and join watched live (`GET
+/api/v1/nodes/<name>/progress`: the provisioning registration, `node-provisioner status`, cluster
+membership, site.json; every 10 s), then `node network set` and `node network test`, previewed. **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
 result. Security is a later phase.
 
 Every change is the operate dialog (`web/src/operate.tsx`, spike §5.4): a form built from the

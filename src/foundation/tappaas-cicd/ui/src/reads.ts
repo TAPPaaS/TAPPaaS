@@ -34,6 +34,7 @@ export const TTL = {
   identity: 5 * MIN,
   setup: 10 * MIN,
   schema: 10 * MIN,
+  nodeProgress: 10_000, // while a node is being added
   drift: 0, // on demand
 };
 
@@ -48,6 +49,21 @@ export interface ReadsConfig {
   journalDays: number;
   now?: () => number;
 }
+
+// A node being added (site-manager node add --pxe), as the records show it:
+// its provisioning registration, the PXE window, cluster membership, site.json.
+export interface NodeProgress {
+  name: string;
+  registration: "pending" | "answered" | "none";
+  pxe: { enabled: boolean | null; text: string };
+  inCluster: boolean | null; // null: no node answered
+  cluster: string[] | null;
+  inSite: boolean;
+  siteNodes: string[];
+}
+
+// A node name as site-manager accepts one.
+export const NODE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$/;
 
 export interface Activity {
   runs: SweepRun[];
@@ -80,6 +96,7 @@ export class Reads {
   readonly identity: Cached<Record<string, string[]>>;
   readonly identityRecords: Cached<Record<string, Record<string, unknown>[]>>;
   readonly schemas: CachedMap<Record<string, unknown>>;
+  readonly nodeProgress: CachedMap<NodeProgress>;
   readonly setup: Cached<SetupInputs>;
 
   constructor(private readonly cfg: ReadsConfig) {
@@ -122,6 +139,7 @@ export class Reads {
       await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
       return out;
     }, now);
+    this.nodeProgress = new CachedMap("node-progress", TTL.nodeProgress, (n) => this.loadNodeProgress(n), now);
     // Every identity object's record, for the graph of their relations: each
     // kind's list, then `show` per object (a name from the manager's own list).
     this.identityRecords = new Cached("identity-records", TTL.identity, async () => {
@@ -246,6 +264,27 @@ export class Reads {
       const { name: _n, ...rest } = z;
       return { name, ...rest };
     });
+  }
+
+  private async loadNodeProgress(name: string): Promise<NodeProgress> {
+    const dir = join(this.cfg.configDir, "provision");
+    const registration = existsSync(join(dir, `${name}.json`)) ? "pending" : existsSync(join(dir, `${name}.json.consumed`)) ? "answered" : "none";
+    const [list, pxe] = await Promise.all([
+      runJson<{ name?: string }[]>(this.cfg.run, "site-manager", ["node", "list", "--json"]).catch(() => []),
+      this.cfg.run("node-provisioner", ["status"], 30_000),
+    ]);
+    const siteNodes = list.map((n) => n.name).filter((n): n is string => typeof n === "string");
+    const cluster = (this.cfg.clusterNodes ?? (() => null))(siteNodes);
+    return {
+      name,
+      registration,
+      // status exits 0 only when the window is fully open.
+      pxe: { enabled: pxe.ran ? pxe.rc === 0 : null, text: (pxe.stdout + pxe.stderr).trim() },
+      inCluster: cluster ? cluster.includes(name) : null,
+      cluster,
+      inSite: siteNodes.includes(name),
+      siteNodes,
+    };
   }
 
   private async loadSite(): Promise<Record<string, unknown>> {
