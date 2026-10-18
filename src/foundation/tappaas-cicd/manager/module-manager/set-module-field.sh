@@ -35,7 +35,15 @@
 #   - a field the release still defines (present in .json.orig): the next merge
 #     re-adopts it by rule 3, so the removal belongs in the source.
 #
-# Usage: set-module-field.sh <module> [--set <field>=<value>]... [--unset <field>]...
+# Before the first write, the config as it would be after every --set and
+# --unset is handed to the module's own check-config.sh, when it has one (the
+# console refuses 'internet' in its zone list): what a module may not be
+# configured to, beyond what module-fields.json can say. install-module.sh runs
+# the same check before an install provisions anything.
+#
+# `--check` runs every gate and writes nothing: the --dry-run of `module modify`.
+#
+# Usage: set-module-field.sh <module> [--check] [--set <field>=<value>]... [--unset <field>]...
 #
 # Exit: 0 written · 1 a write failed partway · 2 usage · 3 REFUSED before any
 #       write (the config is untouched — the caller must not tell the operator
@@ -57,18 +65,20 @@ readonly CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 readonly SCHEMA_FILE="$(tappaas_schema_file)"
 
 usage() {
-    echo "Usage: ${SCRIPT_NAME} <module> [--set <field>=<value>]... [--unset <field>]..." >&2
+    echo "Usage: ${SCRIPT_NAME} <module> [--check] [--set <field>=<value>]... [--unset <field>]..." >&2
     exit 2
 }
 
 MODULE=""
 declare -a PAIRS=()
 declare -a UNSETS=()
+CHECK=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --set)     [[ -n "${2:-}" ]] || usage; PAIRS+=("$2"); shift ;;
         --unset)   [[ -n "${2:-}" ]] || usage; UNSETS+=("$2"); shift ;;
-        -h|--help) sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+        --check)   CHECK=1 ;;
+        -h|--help) sed -n '2,48p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
         -*)        echo "${SCRIPT_NAME}: unknown option '$1'" >&2; usage ;;
         *)         MODULE="$1" ;;
     esac
@@ -116,6 +126,47 @@ if [[ ${#UNSETS[@]} -gt 0 ]]; then
     done
 fi
 
+# The module's own check of the config this change would leave (see the header).
+# A value that is not of its declared type goes in as a string here; the write
+# below refuses it either way.
+module_check() {
+    local dir hook cand pair field value rc=0
+    dir="$(get_module_dir "${MODULE}" 2>/dev/null)" || return 0
+    hook="${dir}/check-config.sh"
+    [[ -x "${hook}" ]] || return 0
+    cand="$(mktemp)"
+    normalize_module_config < "${TARGET}" > "${cand}" || { rm -f "${cand}"; error "cannot read ${TARGET}"; return 1; }
+    for pair in "${PAIRS[@]}"; do
+        field="${pair%%=*}"; value="${pair#*=}"
+        case "$(field_type "${field}")" in
+            integer|number|boolean|array|object)
+                if jq . >/dev/null 2>&1 <<< "${value}"; then
+                    jq --arg f "${field}" --argjson v "${value}" '.[$f] = $v' "${cand}" > "${cand}.n"
+                else
+                    jq --arg f "${field}" --arg v "${value}" '.[$f] = $v' "${cand}" > "${cand}.n"
+                fi ;;
+            *) jq --arg f "${field}" --arg v "${value}" '.[$f] = $v' "${cand}" > "${cand}.n" ;;
+        esac
+        mv "${cand}.n" "${cand}"
+    done
+    for field in "${UNSETS[@]}"; do
+        jq --arg f "${field}" 'del(.[$f])' "${cand}" > "${cand}.n" && mv "${cand}.n" "${cand}"
+    done
+    "${hook}" "${cand}" || rc=$?
+    rm -f "${cand}" "${cand}.n"
+    if [[ "${rc}" -ne 0 ]]; then
+        error "${MODULE}'s check-config.sh refuses this change — nothing was written"
+        return 1
+    fi
+}
+module_check || exit 3
+
+# --check: the gates above, and each value's type below, with no write.
+write_field() {
+    [[ "${CHECK}" -eq 1 ]] && return 0
+    jq_module_write "$@"
+}
+
 # 0 until the first successful write: it is what separates "refused, nothing
 # happened" from "stopped partway, go and look".
 WROTE=0
@@ -130,7 +181,7 @@ for pair in "${PAIRS[@]}"; do
         integer|number)
             [[ "${value}" =~ ^-?[0-9]+$ ]] \
                 || { error "${field} is declared numeric in module-fields.json, but '${value}' is not a number"; refuse_or_fail; }
-            jq_module_write "${MODULE}" '.[$f] = $v' --argjson v "${value}" --arg f "${field}" \
+            write_field "${MODULE}" '.[$f] = $v' --argjson v "${value}" --arg f "${field}" \
                 || { error "failed to set ${field}"; exit 1; }
             ;;
         boolean)
@@ -138,7 +189,7 @@ for pair in "${PAIRS[@]}"; do
                 true|false) ;;
                 *) error "${field} is declared boolean in module-fields.json, but '${value}' is neither true nor false"; refuse_or_fail ;;
             esac
-            jq_module_write "${MODULE}" '.[$f] = $v' --argjson v "${value}" --arg f "${field}" \
+            write_field "${MODULE}" '.[$f] = $v' --argjson v "${value}" --arg f "${field}" \
                 || { error "failed to set ${field}"; exit 1; }
             ;;
         array|object)
@@ -146,17 +197,23 @@ for pair in "${PAIRS[@]}"; do
             # as a string and silently fail to behave like a list.
             jq -e . >/dev/null 2>&1 <<< "${value}" \
                 || { error "${field} is a container field — give its value as JSON (got '${value}')"; refuse_or_fail; }
-            jq_module_write "${MODULE}" '.[$f] = $v' --argjson v "${value}" --arg f "${field}" \
+            write_field "${MODULE}" '.[$f] = $v' --argjson v "${value}" --arg f "${field}" \
                 || { error "failed to set ${field}"; exit 1; }
             ;;
         *)
-            jq_module_write "${MODULE}" '.[$f] = $v' --arg v "${value}" --arg f "${field}" \
+            write_field "${MODULE}" '.[$f] = $v' --arg v "${value}" --arg f "${field}" \
                 || { error "failed to set ${field}"; exit 1; }
             ;;
     esac
+    [[ "${CHECK}" -eq 1 ]] && continue
     WROTE=1
     info "  set ${field}=${value} in ${TARGET}"
 done
+
+if [[ "${CHECK}" -eq 1 ]]; then
+    info "  --check: ${MODULE} accepts this change; nothing was written"
+    exit 0
+fi
 
 if [[ ${#UNSETS[@]} -gt 0 ]]; then
     for field in "${UNSETS[@]}"; do

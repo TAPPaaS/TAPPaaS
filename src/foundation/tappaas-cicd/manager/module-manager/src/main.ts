@@ -58,7 +58,7 @@ import {
   TestOptions,
 } from "./types";
 import { loadModuleFields } from "../../../lib/ts/src/desired";
-import { stream } from "../../../lib/ts/src/exec";
+import { captureResult, stream } from "../../../lib/ts/src/exec";
 import { classifySet, cmdDrift, parseSetArg, preGateSet } from "./converge";
 import { resolveModuleFromConfig } from "./resolve";
 import { CHANGE_CLASS_NAMES } from "../../../lib/ts/src/service-fields";
@@ -1172,6 +1172,17 @@ function previewFieldChanges(module: string, opts: Opts): number {
     requests.push(parsed);
   }
   const gate = classifySet(opts.configDir, module, requests, loadModuleFields(opts.configDir));
+  // What the pre-gate passes, the writer checks too: each value's type and the
+  // module's own check-config.sh, with nothing written (set-module-field.sh --check).
+  if (gate.rejections.length === 0) {
+    const args = [module, "--check"];
+    for (const r of requests) args.push("--set", `${r.field}=${r.value}`);
+    for (const f of opts.unsets) args.push("--unset", f);
+    const w = captureResult(process.env.TAPPAAS_SET_FIELD_BIN ?? "set-module-field.sh", args);
+    const said = (w.stderr + w.stdout).replace(/\x1b\[[0-9;]*m/g, "").split("\n").map((l) => l.replace(/^\[\w+\]\s*/, "").trim()).filter(Boolean);
+    if (w.rc === 3) gate.rejections.push({ field: requests.map((r) => r.field).join(", ") || opts.unsets.join(", "), reason: said.join(" — ") });
+    else if (w.rc !== 0) gate.warnings.push(`the writer's check did not run (set-module-field.sh --check: ${w.ran ? `exit ${w.rc}` : "not found"})`);
+  }
   const ok = gate.rejections.length === 0;
   if (opts.json) {
     info(JSON.stringify({ module, ok, plan: gate.plan, rejections: gate.rejections, unsets: opts.unsets, warnings: gate.warnings }, null, 2));
