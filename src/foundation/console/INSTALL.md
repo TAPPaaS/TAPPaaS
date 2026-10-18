@@ -38,6 +38,28 @@ groups by their TAPPaaS names (ADR-034 D3): `installer` (Installer: every verb),
 `installer` with the installer in it, and an existing site gets it from `module-manager update
 identity`; the installer has the `admin` role already (`identity/USERS.md`).
 
+## The assistant (ADR-034 D7)
+
+The console integrates `litellm:models` (optional). With the AI stack installed, registering or
+updating the module provisions the console's virtual key the way Open WebUI gets one: LiteLLM
+keeps it as `litellm-svc-tappaas-cicd`, and `/etc/secrets/litellm-svckey.env` on the mothership
+holds it with LiteLLM's address. Installed in the other order, `module-manager update console`
+(or LiteLLM's own install, which wires pre-existing integrators) provisions it. The console
+reads it within half a minute; no restart.
+
+```bash
+curl -s http://127.0.0.1:9097/api/v1/assistant/status   # available, the model, or why not
+tappaas ask "what needs a person today?"
+```
+
+What it needs: the key above; TCP 4000 from the mothership to LiteLLM (mgmt reaches every zone,
+so no pinhole is written; `rules-manager expected-pinholes console --for litellm:models` shows
+why); a model LiteLLM offers the key (`console.json` `assistantModel` pins one, else LiteLLM's
+`default`, else the first listed). The logs tool uses Loki's admin credential the mothership
+already holds (`~/.loki-admin-password`). It sees what the console sees (the reads, Activity,
+a host's logs, the managers' help and READMEs) and changes nothing: a proposal is a card the
+operator previews and runs. Conversations stay in `/var/lib/tappaas/console/assistant/`.
+
 ## The owner's route — `status.<domain>` (not yet declared)
 
 ADR-034 D2 gives the console a second route, `status.<domain>`, from the trusted client zones

@@ -4,8 +4,8 @@ The site's web UI: its health at a glance, the site drawn as it is cabled, the m
 what the sweep did, and every change to the site as a job that runs a manager verb with its own
 preview. A service of the mothership (`tappaas-console.service`, run as `tappaas`), published
 through Caddy and the Authentik gate by the thin `console` module
-([`../../console/`](../../console/)). Phases **P1 — see** and **P2 — operate**; the
-assistant (P3) and agents (P4) come later
+([`../../console/`](../../console/)). Phases **P1 — see**, **P2 — operate** and **P3 —
+ask** (the assistant, below); agents (P4) come later
 ([ADR-034](../../../../docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md), Implementation plan).
 
 ```
@@ -118,6 +118,36 @@ as run, its preview, its output (1 MiB), exit code and duration — is a line in
 `<state dir>/jobs.jsonl`; the last 500 are read back at start. After an apply the module list,
 topology, zones, environments, site and backup reads are refreshed.
 
+## The assistant (ADR-034 D7, P3)
+
+An assistant one can ask about the site, through the site's LiteLLM; present only when the AI
+stack is installed. It **reads freely and proposes; it never applies.**
+
+| | |
+|---|---|
+| **Where** | the backend (`src/assistant.ts`), so its tools, its trail and the caller's role are a click's; the Assistant drawer on every page; `tappaas ask` in a shell |
+| **Transport** | LiteLLM's OpenAI-compatible chat completions, streamed, with tool calling (`src/litellm.ts`) |
+| **Key** | `/etc/secrets/litellm-svckey.env` on the mothership, written by `litellm:models` (the console module integrates it): read directly, else with the unit's `sudo -n cat`; re-read while missing, so no restart when it arrives |
+| **Reach** | mgmt → `litellm.<zone>.internal:4000`: mgmt's `access-to` covers every zone, so `rules-manager` writes no pinhole (`expected-pinholes console --for litellm:models` says so) |
+| **Model** | `console.json` `assistantModel` when set; else LiteLLM's model named `default`; else the first model LiteLLM lists for the key |
+| **Tools** | `modules_list`, `module_show` (with the fields `modify --set` may change and their class), `module_drift`, `zones`, `environments`, `topology`, `health`, `backup`, `pulse`, `activity` — the console's own cached reads; `logs` (Loki's `query_range` for a host, with the admin credential `~/.loki-admin-password`, only when logging is installed); `help(manager)` (the manifest and the README from `$CONSOLE_REPO`); `propose_job(argv, rationale)` (`src/assistant-tools.ts`) |
+| **Never** | an apply tool: none exists, a tool name outside the list is refused and recorded, `propose_job` creates no job (it validates the argv against the manifests, without `--apply`/`--dry-run`) |
+| **Context** | the system prompt: the site, the caller's name and role, the page and object in view (sent by the front end), the rule, the managers' verbs in short form |
+| **Trail** | a card's Preview/Run are the P2 job flow with `{conversation, proposal}`: the job checks the proposal is in the caller's own conversation with the same argv, and carries `origin: assistant` and the turn; Activity shows "lars · via assistant" |
+| **Store** | `<state dir>/assistant/<user>/<id>.json`, 0600: the newest 50 per user, 40 turns and 256 KiB each; never in `config/` |
+
+API: `GET /assistant/status` (available, and why not; the status route has none) · `POST
+/assistant/chat {conversation?, message, focus?}` (one turn as server-sent events:
+`conversation`, `step`, `delta`, `proposal`, `done`, `error`) · `GET
+/assistant/conversations[/<id>]` (the caller's own). A turn reads; it changes nothing but the
+caller's conversation file. Asked to run something, the assistant says that the card's Run
+does it, so the record shows a person decided.
+
+`tappaas ask "<question>"` (bin `tappaas`, packaged with the console): a client of the backend
+on loopback, so the read role; a proposal is printed as its preview and apply command lines,
+never run. `tappaas ask` with no question is a short conversation; `--conversation <id>` goes
+on with one. Without the AI stack, or with the console down, it says why and exits 1.
+
 ## The verb manifest
 
 At start the console reads every manager's `--help --json` (lib/ts `renderManifest`) and the
@@ -170,7 +200,10 @@ from the laptop.
 
 ## Tests
 
-`test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — the connection
+`test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — the assistant
+against a fake LiteLLM streaming the recorded exchanges of `test/fixtures/litellm-exchange.json`
+(the loop, the allow-list, ADR-034 T5: asked to run a change it proposes a card and applies
+nothing, and the card's job carries the turn; the context in the prompt, the store's caps), the connection
 filter, the gate's headers, the role table and route cap, the setup-token rule (ADR-034 T6),
 the reads and their cache, every route, Activity and the jumps; the verb manifest and the argv
 check (T2); the job model: preview before apply (T3), the roles on every write (T1), the typed

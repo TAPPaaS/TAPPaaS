@@ -1,0 +1,608 @@
+{
+ "_note": "LiteLLM's streamed chat completions with tool calling, in the chunk format hrossen's LiteLLM 1.103.3 sends for its vllm model (recorded 2026-10-18: role chunk, content deltas, tool_calls split into id/name then argument fragments, finish_reason). The exchanges are the mockup's (docs/design/ui-spike/ui-05-assistant.svg): the memory question, then 'ok, run it'.",
+ "models": {
+  "data": [
+   {
+    "id": "vllm",
+    "object": "model",
+    "created": 1677610602,
+    "owned_by": "openai"
+   }
+  ],
+  "object": "list"
+ },
+ "memory": [
+  [
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "role": "assistant",
+       "content": ""
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 0,
+         "type": "function",
+         "function": {
+          "name": "health",
+          "arguments": ""
+         },
+         "id": "chatcmpl-tool-9b0e6f6d639a4c31"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 0,
+         "type": "function",
+         "function": {
+          "arguments": "{\""
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 0,
+         "type": "function",
+         "function": {
+          "arguments": "subject\": \""
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 0,
+         "type": "function",
+         "function": {
+          "arguments": "immich\"}"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 1,
+         "type": "function",
+         "function": {
+          "name": "module_show",
+          "arguments": ""
+         },
+         "id": "chatcmpl-tool-1c2d3e4f5a6b7c8d"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 1,
+         "type": "function",
+         "function": {
+          "arguments": "{\"module\": "
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 1,
+         "type": "function",
+         "function": {
+          "arguments": "\"immich\"}"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {},
+      "finish_reason": "tool_calls"
+     }
+    ]
+   }
+  ],
+  [
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "role": "assistant",
+       "content": ""
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "content": "immich uses "
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "content": "7.6 of its 8.0 GiB (95%)"
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "content": ". "
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 0,
+         "type": "function",
+         "function": {
+          "name": "propose_job",
+          "arguments": ""
+         },
+         "id": "chatcmpl-tool-0f1e2d3c4b5a6978"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 0,
+         "type": "function",
+         "function": {
+          "arguments": "{\"argv\": [\"module-manager\", \"modify\", \"immich\", "
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 0,
+         "type": "function",
+         "function": {
+          "arguments": "\"--set\", \"memory=10240\"], \"rationale\": \"in-place, no downtime; tappaas1 goes to 88% committed\"}"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {},
+      "finish_reason": "tool_calls"
+     }
+    ]
+   }
+  ],
+  [
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "role": "assistant",
+       "content": ""
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "content": "The guest-memory gate fails from 90%. "
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "content": "I put a card up: raise memory to 10 GiB, in-place."
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {},
+      "finish_reason": "stop"
+     }
+    ]
+   }
+  ]
+ ],
+ "runit": [
+  [
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "role": "assistant",
+       "content": ""
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 0,
+         "type": "function",
+         "function": {
+          "name": "apply_job",
+          "arguments": ""
+         },
+         "id": "chatcmpl-tool-aa11bb22cc33dd44"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 0,
+         "type": "function",
+         "function": {
+          "arguments": "{\"proposal\": \"p1-1\"}"
+         }
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "tool_calls": [
+        {
+         "index": 1,
+         "type": "function",
+         "function": {
+          "name": "module_manager_modify",
+          "arguments": "{\"module\": \"immich\", \"set\": \"memory=10240\"}"
+         },
+         "id": "chatcmpl-tool-ee55ff6677889900"
+        }
+       ]
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {},
+      "finish_reason": "tool_calls"
+     }
+    ]
+   }
+  ],
+  [
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "role": "assistant",
+       "content": ""
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "content": "I don't run changes myself — "
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "content": "the Run button on the card does, so the record shows you decided."
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {},
+      "finish_reason": "stop"
+     }
+    ]
+   }
+  ]
+ ],
+ "plain": [
+  [
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "role": "assistant",
+       "content": ""
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {
+       "content": "Every gate passes but guest-memory."
+      }
+     }
+    ]
+   },
+   {
+    "id": "chatcmpl-a7f7aceff0968001",
+    "object": "chat.completion.chunk",
+    "created": 1792313244,
+    "model": "vllm",
+    "choices": [
+     {
+      "index": 0,
+      "delta": {},
+      "finish_reason": "stop"
+     }
+    ]
+   }
+  ]
+ ]
+}
