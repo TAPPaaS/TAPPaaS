@@ -1,9 +1,10 @@
 // Modules — tabs. Installed: every deployed module with its badges (run
 // state, health, backup, CVE and maturity), filterable, grouped by stack with
-// foundation first. Then one tab per registered repository: every module its
-// catalogue lists, with its stack, description and maturity, installed (with
-// the instances) or not, and Install for one that is not (module-manager add,
-// previewed, then applied as a job).
+// foundation first (the group heads name the stack, so no column does). Then
+// one tab per registered repository: every module its catalogue lists, by
+// stack where it spans several (else flat, with a stack column), with its
+// description and maturity, installed (with the instances) or not, and Install
+// for one that is not (module-manager add, previewed, then applied as a job).
 
 import { Fragment, ReactNode, useMemo, useState } from "react";
 import { useRead } from "../api";
@@ -124,13 +125,12 @@ export function Modules() {
             <th>runs on</th>
             <th>zone</th>
             <th>environment</th>
-            <th>stack</th>
             <th>badges</th>
           </tr>
         </thead>
         <tbody>
           {byStack(list, (m) => m.stack).map(([stack, rows]) => (
-            <StackRows key={stack} stack={stack} cols={7} n={rows.length}>
+            <StackRows key={stack} stack={stack} cols={6} n={rows.length}>
           {rows.map((m) => (
             <tr key={m.name}>
               <td>
@@ -144,7 +144,6 @@ export function Modules() {
               <td>{m.actualNode ?? m.node ?? <span className="muted">—</span>}</td>
               <td>{m.zone0 ?? <span className="muted">—</span>}</td>
               <td>{m.environment ?? <span className="muted">—</span>}</td>
-              <td>{m.stack ?? <span className="muted">—</span>}</td>
               <td>
                 <ModuleBadges m={m} />
               </td>
@@ -167,6 +166,50 @@ function RepositoryTab({ r, deployed, at }: { r: RepositoryCatalog; deployed: Se
     .filter((m) => !q || `${m.name} ${m.stack ?? ""} ${m.description ?? ""} ${m.category ?? ""}`.toLowerCase().includes(q.toLowerCase()))
     .filter((m) => !only || m.instances.length === 0);
   const installed = r.modules.filter((m) => m.instances.length > 0).length;
+  // Grouped by stack when the repository spans several; a one-stack repository
+  // is a flat list that says its stack in a column instead.
+  const grouped = new Set(r.modules.map((m) => m.stack ?? "")).size > 1;
+  const cols = grouped ? 5 : 6;
+  const row = (m: CatalogModule) => (
+    <tr key={m.name}>
+      <td className="mono">{deployed.has(m.name) ? <Link to={`/modules/${encodeURIComponent(m.name)}`}>{m.name}</Link> : m.name}</td>
+      {grouped ? null : <td>{m.stack ?? <span className="muted">—</span>}</td>}
+      <td className="small">{m.description ? plainText(m.description) : <span className="muted">—</span>}</td>
+      <td>{m.maturity ? <Badge level="info">{m.maturity}</Badge> : null}</td>
+      <td>
+        {m.instances.length ? (
+          <>
+            <Badge level="pass">installed</Badge>{" "}
+            {m.instances.map((i, n) => (
+              <Fragment key={i}>
+                {n ? ", " : ""}
+                <Link to={`/modules/${encodeURIComponent(i)}`}>{i}</Link>
+              </Fragment>
+            ))}
+          </>
+        ) : (
+          <span className="muted">not installed</span>
+        )}
+      </td>
+      <td>
+        {m.instances.length === 0 ? (
+          <OperateButton
+            label="Install…"
+            title={`Install ${m.name}`}
+            steps={[
+              {
+                title: `module-manager add ${m.name}`,
+                bin: "module-manager",
+                verb: "add",
+                fixed: [m.name],
+                note: `Installs ${m.name} from ${r.name}: writes its config, builds and starts its guest, wires the services it depends on. There is no dry run: the preview shows the exact command. Fields of the module go under "more options" as --<field> <value>, one per line.`,
+              },
+            ]}
+          />
+        ) : null}
+      </td>
+    </tr>
+  );
   return (
     <>
       <p className="muted small">
@@ -181,53 +224,16 @@ function RepositoryTab({ r, deployed, at }: { r: RepositoryCatalog; deployed: Se
       </div>
       <table className="table">
         <thead>
-          <tr><th>module</th><th>stack</th><th>description</th><th>maturity</th><th>installed</th><th /></tr>
+          <tr><th>module</th>{grouped ? null : <th>stack</th>}<th>description</th><th>maturity</th><th>installed</th><th /></tr>
         </thead>
         <tbody>
-          {byStack(rows, (m) => m.stack).map(([stack, ms]) => (
-            <StackRows key={stack} stack={stack} cols={6} n={ms.length}>
-              {ms.map((m) => (
-                <tr key={m.name}>
-                  <td className="mono">{deployed.has(m.name) ? <Link to={`/modules/${encodeURIComponent(m.name)}`}>{m.name}</Link> : m.name}</td>
-                  <td>{m.stack ?? <span className="muted">—</span>}</td>
-                  <td className="small">{m.description ? plainText(m.description) : <span className="muted">—</span>}</td>
-                  <td>{m.maturity ? <Badge level="info">{m.maturity}</Badge> : null}</td>
-                  <td>
-                    {m.instances.length ? (
-                      <>
-                        <Badge level="pass">installed</Badge>{" "}
-                        {m.instances.map((i, n) => (
-                          <Fragment key={i}>
-                            {n ? ", " : ""}
-                            <Link to={`/modules/${encodeURIComponent(i)}`}>{i}</Link>
-                          </Fragment>
-                        ))}
-                      </>
-                    ) : (
-                      <span className="muted">not installed</span>
-                    )}
-                  </td>
-                  <td>
-                    {m.instances.length === 0 ? (
-                      <OperateButton
-                        label="Install…"
-                        title={`Install ${m.name}`}
-                        steps={[
-                          {
-                            title: `module-manager add ${m.name}`,
-                            bin: "module-manager",
-                            verb: "add",
-                            fixed: [m.name],
-                            note: `Installs ${m.name} from ${r.name}: writes its config, builds and starts its guest, wires the services it depends on. There is no dry run: the preview shows the exact command. Fields of the module go under "more options" as --<field> <value>, one per line.`,
-                          },
-                        ]}
-                      />
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </StackRows>
-          ))}
+          {grouped
+            ? byStack(rows, (m) => m.stack).map(([stack, ms]) => (
+                <StackRows key={stack} stack={stack} cols={cols} n={ms.length}>
+                  {ms.map(row)}
+                </StackRows>
+              ))
+            : rows.map(row)}
         </tbody>
       </table>
     </>
