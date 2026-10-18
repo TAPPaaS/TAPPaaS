@@ -1,0 +1,61 @@
+{
+  "description": "Karakeep — bookmarks and read-later: links, notes and images, each page archived and full-text searchable, tagged automatically by the site's AI stack when it has one.",
+  "displayName": "Karakeep",
+  "kind": "vm",
+  "version": "0.1.0",
+  "stack": "home",
+  "releaseDate": "2026-10-18",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "vmname": "karakeep",
+  "vmid": 371,
+  "vmtag": "TAPPaaS,App,Bookmarks",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "identity:identity"
+  ],
+  "integratesWith": [
+    "logging:logs",
+    "litellm:models"
+  ],
+  "provides": [],
+  "identity": {
+    "launchPath": "/",
+    "oidcRedirectPaths": [
+      "/api/auth/callback/custom"
+    ],
+    "configureService": "karakeep.service"
+  },
+  "appVersion": "0.33.2",
+  "config": {
+    "cluster:vm": {
+      "cores": 2,
+      "memory": 3072,
+      "diskSize": "64G",
+      "thinDisk": true,
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:proxy": {
+      "proxyPort": 3000,
+      "proxyAllowedZones": [
+        "home",
+        "netbird",
+        "internet"
+      ]
+    }
+  },
+  "ports": [
+    {
+      "port": 3000,
+      "protocol": "TCP",
+      "description": "Karakeep: the web app, its API (mobile apps, the browser extension) and the OAuth callback"
+    }
+  ]
+}

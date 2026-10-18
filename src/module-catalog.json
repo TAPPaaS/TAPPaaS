@@ -227,6 +227,12 @@
       "stack": "home"
     },
     {
+      "moduleName": "karakeep",
+      "moduleJson": "src/home/karakeep/karakeep.json",
+      "vmid": 371,
+      "stack": "home"
+    },
+    {
       "moduleName": "forgejo",
       "moduleJson": "src/devops/forgejo/forgejo.json",
       "vmid": 350,
