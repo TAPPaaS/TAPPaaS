@@ -139,6 +139,16 @@ export function routeOf(host: string | undefined): "console" | "status" {
   return /^status\./i.test(host ?? "") ? "status" : "console";
 }
 
+// The host the client asked for. Caddy rewrites Host to the upstream's own name
+// (tappaas-cicd.mgmt.internal:9097) unless the route sets proxyPreserveHost,
+// and carries the client's Host in X-Forwarded-Host — which any other peer
+// could send too, so it is read only from a peer whose headers are believed
+// (the firewall; loopback under --trust-local-headers). Host is the fallback.
+export function routeHost(headers: Record<string, string | string[] | undefined>, believeForwarded: boolean): string | undefined {
+  const fwd = believeForwarded ? header(headers, "x-forwarded-host") : undefined;
+  return fwd && fwd.trim() ? fwd.split(",")[0].trim() : header(headers, "host");
+}
+
 function header(h: Record<string, string | string[] | undefined>, name: string): string | undefined {
   const v = h[name];
   return Array.isArray(v) ? v[0] : v;
@@ -164,10 +174,10 @@ export function decide(
   cfg: AccessConfig,
   setup: SetupState,
 ): Decision {
-  const route = routeOf(header(headers, "host"));
-  const cap = (r: Role): Role => (route === "status" ? "read" : r);
   const fromFirewall = anyMatch(peer, cfg.firewall);
   const local = anyMatch(peer, cfg.allow);
+  const route = routeOf(routeHost(headers, fromFirewall || (local && cfg.trustLocalHeaders)));
+  const cap = (r: Role): Role => (route === "status" ? "read" : r);
 
   if (fromFirewall || (local && cfg.trustLocalHeaders && header(headers, "x-authentik-username"))) {
     const user = header(headers, "x-authentik-username");

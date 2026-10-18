@@ -6,7 +6,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { AccessConfig, Me, addrMatches, decide, mayWrite, peerAllowed, presentedToken, roleOf, setupState, splitGroups } from "../../src/access";
+import { AccessConfig, Me, addrMatches, decide, mayWrite, peerAllowed, presentedToken, roleOf, routeHost, setupState, splitGroups } from "../../src/access";
 import { zoneGateway } from "../../src/main";
 import { check, done } from "./check";
 
@@ -47,11 +47,33 @@ check(!d.ok && d.status === 403, "a user in none of the groups is refused");
 d = decide("10.0.0.1", H({}), null, cfg, s);
 check(!d.ok && d.status === 401, "from the firewall without the gate's headers: refused (an ungated route)");
 d = decide("10.0.0.1", gate("Installer", "status.hrossen.dk"), null, cfg, s);
-check(d.ok && d.me.role === "read" && d.me.route === "status", "the status route caps Installer at read");
+check(d.ok && d.me.role === "read" && d.me.route === "status", "the status route caps Installer at read (Host, as with proxyPreserveHost)");
+// Caddy's real headers: Host is the upstream's name, the client's Host travels in X-Forwarded-Host.
+const caddy = (fwdHost: string, groups = "Installer") => ({
+  host: "tappaas-cicd.mgmt.internal:9097",
+  "x-forwarded-host": fwdHost,
+  "x-forwarded-proto": "https",
+  "x-forwarded-for": "10.2.0.20",
+  "x-authentik-username": "lars",
+  "x-authentik-groups": groups,
+});
+d = decide("10.0.0.1", caddy("status.hrossen.dk"), null, cfg, s);
+check(d.ok && d.me.route === "status" && d.me.role === "read", "through Caddy, X-Forwarded-Host names the route: status caps at read");
+d = decide("10.0.0.1", caddy("console.hrossen.dk"), null, cfg, s);
+check(d.ok && d.me.route === "console" && d.me.role === "installer", "…and console.<domain> operates");
+d = decide("10.0.0.1", caddy("status.hrossen.dk, other.example"), null, cfg, s);
+check(d.ok && d.me.route === "status", "a forwarded list: the first host is the client's");
+d = decide("10.0.0.1", { ...caddy("console.hrossen.dk"), "x-forwarded-host": "" }, null, cfg, s);
+check(d.ok && d.me.route === "console" && routeHost({ host: "status.x", "x-forwarded-host": " " }, true) === "status.x", "an empty X-Forwarded-Host falls back to Host");
+check(routeHost({ host: "console.hrossen.dk", "x-forwarded-host": "status.hrossen.dk" }, false) === "console.hrossen.dk", "from a peer whose headers are not believed, X-Forwarded-Host is ignored");
 d = decide("127.0.0.1", gate("Installer"), null, cfg, s);
 check(d.ok && d.me.via === "local" && d.me.user === null && d.me.role === "read", "headers from loopback are not believed");
 d = decide("127.0.0.1", gate("Installer"), null, { ...cfg, trustLocalHeaders: true }, s);
 check(d.ok && d.me.via === "gate" && d.me.role === "installer", "…unless the developer asks for it");
+d = decide("127.0.0.1", caddy("status.hrossen.dk"), null, cfg, s);
+check(d.ok && d.me.via === "local" && d.me.route === "console", "loopback's X-Forwarded-Host is not believed either (the dev port-forward)");
+d = decide("127.0.0.1", caddy("status.hrossen.dk"), null, { ...cfg, trustLocalHeaders: true }, s);
+check(d.ok && d.me.via === "gate" && d.me.route === "status", "…unless the developer asks for it (the gate proxy of a dev run)");
 check(splitGroups("a| b |") .join(",") === "a,b" && roleOf(["ADMIN"]) === "admin", "groups are pipe-separated, compared without case");
 
 // ── the setup token before identity (D10, T6) ─────────────────────────
