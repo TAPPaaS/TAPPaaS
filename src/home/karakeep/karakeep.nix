@@ -164,7 +164,7 @@ let
     # A first boot can reach this before the VM resolves names: wait for DNS,
     # and retry the pull rather than fail the activation on a transient.
     for i in $(seq 1 30); do
-      ${pkgs.glibc.bin}/bin/getent hosts ghcr.io >/dev/null && break
+      ${pkgs.getent}/bin/getent hosts ghcr.io >/dev/null && break
       sleep 10
     done
     for i in 1 2 3 4 5; do
