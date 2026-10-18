@@ -104,8 +104,8 @@ hardening is part of the decision, not an option:
 
 | Measure | Where |
 |---|---|
-| Jellyfin sees the client's real address: the firewall is a **known proxy**, so the per-user remote-access policy and the login lockout act per client, not per Caddy | Jellyfin `network.xml` |
-| **Login attempts limited** per account (Jellyfin's lockout); per-client rate limiting with CrowdSec, later (O1) | Jellyfin |
+| Jellyfin sees the client's real address: the firewall is a **known proxy**, so the per-user remote-access policy acts per client, not per Caddy | Jellyfin `network.xml` |
+| **Password guessing banned** per client by CrowdSec on the firewall (#851). Jellyfin's accounts have no lockout (`LoginAttemptsBeforeLockout` -1, measured), so wrong passwords cannot lock a person out | the firewall |
 | **Admin and diagnostic paths closed from outside**: `/metrics`, `/Startup/*`, `/System/Restart`, `/System/Shutdown`, `/System/Logs`, the dashboard — an ADR-023 `proxyAccess` rule to the site's zones | `network:proxy` |
 | **Kept current**: Jellyfin follows its releases (12.x from a pinned nixos-unstable, #850); a security advisory is an update, not a wait for the next NixOS release | the module |
 | **Removing someone ends their sessions**: deleting or disabling a user, or removing them from Jellyfin's group, also revokes their Jellyfin sessions and devices (T3 showed they survive) | `identity` (O3) |
@@ -188,8 +188,10 @@ module needs it; NOMAD stays unpublished (D2).
 1. **O1 — Rate limiting.** *Answered (v0.3):* the firewall's Caddy has `rate_limit` built in, but
    os-caddy imports extra config only globally (`caddy.d/*.global`, `*.conf`), never inside a site,
    so it cannot be scoped to Jellyfin through the plugin. Every Jellyfin password TAPPaaS sets is
-   machine-generated (the SSO plugin's 64 random bytes, the install's 20 characters), and Jellyfin
-   locks an account after repeated failures; per-client limiting comes with CrowdSec, its own issue.
+   machine-generated (the SSO plugin's 64 random bytes, the install's 20 characters). Per-client
+   limiting is CrowdSec on the firewall (#851, built 2026-10-17): six failed sign-ins in about three
+   minutes ban the client for four hours. Jellyfin's accounts have no lockout (measured: -1), so
+   CrowdSec is the only limit, and a stranger cannot lock a person out.
 2. **O2 — Service accounts.** Should `identity-manager` create a service account per calling system
    (with its credential in the vault), or do operators make them by hand?
 3. **O3 — Revoking Jellyfin sessions.** *Answered (v1.0):* from `identity-manager`, after a reconcile

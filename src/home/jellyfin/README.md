@@ -153,8 +153,12 @@ anywhere — the point: friends and family use them from their own homes.
 ### What protects it on the internet
 
 - **Jellyfin sees each client's own address.** The firewall is a known proxy
-  (`network.xml` KnownProxies), so the per-account "from the site only" rule and
-  the login lockout act on the client, not on the firewall.
+  (`network.xml` KnownProxies), so the per-account "from the site only" rule acts
+  on the client, not on the firewall.
+- **Password guessing is banned at the firewall.** Jellyfin's accounts have no
+  lockout (so wrong passwords cannot lock a friend out); CrowdSec on the firewall
+  bans a client after six failed sign-ins in about three minutes, for four hours,
+  from every published name (see the network module's README).
 - **Admin and diagnostic paths are closed from outside:** `/metrics`, `/Startup/*`,
   `/System/Restart`, `/System/Shutdown`, `/System/Logs`, `/Packages`,
   `/Repositories`, `/ScheduledTasks` and `/Auth/Keys` answer only the `home` and
