@@ -262,6 +262,26 @@ writes nothing but its state directory, `/var/lib/tappaas/console/`. It accepts 
 address (Caddy and the Authentik gate) and loopback; before identity exists, `mgmt` and the
 admin VPN with the setup token `bootstrap.sh` writes. See [ui/README.md](./ui/README.md).
 
+## The console and the sweep take turns (ADR-034 D4)
+
+Both change the site through the same managers, so they never overlap — in either direction:
+
+- **The console waits for the sweep.** While `update-tappaas.service` is active (starting,
+  running or stopping) the console starts no job; a queued job whose turn comes during a
+  sweep is refused, naming the stage from `config/.update-stage`.
+- **The sweep waits for the console.** While the console's runner has a write job running it
+  holds `/var/lib/tappaas/console/console-job.lock` (the job's id and argv, the console's
+  pid). `tappaas-self-prepare.sh`, the unit's prepare step, waits for that lock to go before
+  it pulls, relinks or builds anything — bounded at two hours, after which it proceeds with a
+  warning in the journal; a lock whose console is gone (it stopped mid-job, which its
+  Activity shows as *cut off*) is ignored. The wait cannot deadlock: the unit is `activating`
+  meanwhile, so the console admits no new job, and the running one ends.
+
+The same reasoning keeps the console's own restart off a running job: `ui/install.sh`, having
+linked a new build, leaves `restart-pending` in the console's state directory when a job runs
+(it is reached from `module update tappaas-cicd`, itself a job) and the console exits into
+the new build when its runner is idle.
+
 ## Preferred language
 
 In order: **TypeScript → Python → Bash.** Pick the highest applicable tier for a new

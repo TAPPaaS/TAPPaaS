@@ -115,7 +115,9 @@ open; loopback without the gate's headers and the `status` route start no job (T
 queues; `GET /jobs` shows the queue); reads run beside it. **The sweep**: while
 `update-tappaas.service` is active (or starting or stopping) no job starts; the refusal says
 since when and in which stage (`config/.update-stage`), and a queued job whose turn comes
-during a sweep is refused too. **Activity**: every job — who, via, route, the argv as asked and
+during a sweep is refused too. The other way round, the runner holds
+`<state dir>/console-job.lock` while a write job runs and the sweep's prepare step waits for
+it (`tappaas-self-prepare.sh`, bounded at two hours; `DESIGN.md`). **Activity**: every job — who, via, route, the argv as asked and
 as run, its preview, exit code and duration — is a summary line in `<state dir>/jobs.jsonl`;
 its output (1 MiB at most) is `<state dir>/jobs/<id>.log`, read when the job is asked for.
 The console holds the last 500 summaries in memory and reads them back at start; past 10 MiB

@@ -25,6 +25,9 @@ declare const process: {
   // Set instead of exit() where output may be large: exit() cuts a pipe at 64 KiB.
   exitCode?: number;
   pid: number;
+  ppid: number;
+  // kill(pid, 0) probes whether a process exists (the console's job lock).
+  kill(pid: number, signal?: string | number): boolean;
   stdout: { write(s: string): void };
   stderr: { write(s: string): void };
   // getuid: POSIX-only (undefined on non-POSIX platforms). Used by the #533

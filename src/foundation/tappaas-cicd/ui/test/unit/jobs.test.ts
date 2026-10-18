@@ -67,7 +67,7 @@ async function main(): Promise<void> {
       : { rc: 1, stdout: "", stderr: "", ran: false };
   const ms: Manifests = { byBin: new Map([["module-manager", renderManifest(SPEC)]]), errors: [], loadedAt: "" };
   let now = Date.parse("2026-10-17T12:00:00Z");
-  const done_: Job[] = [];
+  const done_: JobSummary[] = [];
   let idle = 0;
   const jobs = new Jobs({ stateDir: dir, configDir: dir, manifests: () => ms, stream, run, now: () => now, onWriteDone: (j) => done_.push(j), onIdle: () => idle++ });
 
@@ -176,11 +176,14 @@ async function main(): Promise<void> {
   await settle();
   check(a.state === "running" && b.state === "queued" && jobs.queued().join() === `${a.id},${b.id}`, "a second write queues behind the first, and the queue is visible");
   check(jobs.busy(), "…and the runner says it is busy");
+  const lock = JSON.parse(readFileSync(jobs.lockFile, "utf8")) as { id: string; pid: number; argv: string[] };
+  check(lock.id === a.id && lock.pid === process.pid && lock.argv.join(" ") === "module-manager reconcile hold", "the runner holds the job lock while a write runs: the job, its argv, the console's pid (for the sweep to wait on)");
   // the running record (finding 1): a job is in jobs.jsonl from the moment it starts…
   const running = readFileSync(jobs.file, "utf8").trim().split("\n").map((l) => JSON.parse(l) as JobSummary);
   check(running.some((l) => l.id === a.id && l.state === "running" && l.started !== null), "a job is recorded as running when it starts");
-  // …so a console that stops on it reads it back as cut off
-  const restarted = new Jobs({ stateDir: dir, configDir: dir, manifests: () => ms, stream, run });
+  // …so a console that stops on it reads it back as cut off (its own lock file: this
+  // one's lock is held by the same pid, which a real restart never sees)
+  const restarted = new Jobs({ stateDir: dir, configDir: dir, lockFile: join(dir, "restarted.lock"), manifests: () => ms, stream, run });
   const cut = restarted.get(a.id)!;
   check(cut.state === "done" && cut.interrupted === true && cut.exit === null && /cut off/.test(cut.output), "…and a console started while it ran shows it as cut off, with a note in its output");
   check(!restarted.busy(), "a fresh runner is idle");
@@ -190,7 +193,17 @@ async function main(): Promise<void> {
   await settle();
   check(a.state === "done" && b.state === "refused" && /sweep/.test(b.refused ?? ""), "a queued job is refused if the sweep has started when its turn comes");
   check(!jobs.busy() && idle === idleBefore + 1, "when the last job ends the runner says so once (onIdle)");
+  check(!existsSync(jobs.lockFile), "…and the lock is released");
   unit = "inactive";
+  // a lock a dead console left (it stopped mid-job) is removed at start; a live console's is not
+  const ldir = mkdtempSync(join(tmpdir(), "console-jobs-lock-"));
+  writeFileSync(join(ldir, "console-job.lock"), JSON.stringify({ id: "x", pid: 4194305 }));
+  new Jobs({ stateDir: ldir, configDir: ldir, manifests: () => ms, stream, run });
+  check(!existsSync(join(ldir, "console-job.lock")), "a stale lock (its console gone) is removed at start");
+  writeFileSync(join(ldir, "console-job.lock"), JSON.stringify({ id: "y", pid: process.ppid }));
+  new Jobs({ stateDir: ldir, configDir: ldir, manifests: () => ms, stream, run });
+  check(existsSync(join(ldir, "console-job.lock")), "a lock whose console runs is left alone");
+  rmSync(ldir, { recursive: true, force: true });
 
   // ── a deferred restart: install.sh leaves the marker, the console takes it when idle ──
   check(!takeRestartMarker(dir), "no marker: nothing to take");

@@ -95,5 +95,26 @@ echo '{"noGitPull": true, "requestedBy": "lars"}' > "${d}/config/.update-request
 ck "an ambient TRIGGER_UNIT does not leak into a manual run" \
    lars "$(TRIGGER_UNIT=update-tappaas.timer bash -c 'unset TRIGGER_UNIT; rm -rf "$1/run"; RUNTIME_DIRECTORY="$1/run" bash "$2" >/dev/null 2>&1; jq -r .requestedBy "$1/run/request.json" 2>/dev/null' _ "${d}" "${P}")"
 
+# ── the console's job lock (ADR-034 D4, the other direction) ──────────
+# While the console's runner holds its lock the step waits, bounded; a lock
+# whose console is gone is ignored; one released mid-wait ends the wait.
+export TAPPAAS_CONSOLE_JOB_LOCK="${d}/console-job.lock" TAPPAAS_CONSOLE_JOB_POLL=1
+rm -f "${d}/config/.update-request.json"
+printf '{"id":"j1","argv":["module-manager","reconcile","immich","--apply"],"started":"2026-10-18T10:00:00Z","pid":%s}\n' "$$" > "${d}/console-job.lock"
+SECONDS=0
+ck "a held lock: the step waits up to the bound, then proceeds" 0 "$(TAPPAAS_CONSOLE_JOB_WAIT=2 STUB_RC=0 run)"
+ck "…having waited for it"            yes "$([[ ${SECONDS} -ge 2 ]] && echo yes || echo no)"
+( sleep 2; rm -f "${d}/console-job.lock" ) &
+_rm=$!
+SECONDS=0
+ck "a lock released during the wait: the step proceeds then" 0 "$(TAPPAAS_CONSOLE_JOB_WAIT=60 STUB_RC=0 run)"
+wait "${_rm}" 2>/dev/null
+ck "…well before the bound"           yes "$([[ ${SECONDS} -lt 20 ]] && echo yes || echo no)"
+printf '{"id":"j2","pid":4194305}\n' > "${d}/console-job.lock"
+SECONDS=0
+ck "a lock whose console is gone is ignored" 0 "$(TAPPAAS_CONSOLE_JOB_WAIT=60 STUB_RC=0 run)"
+ck "…at once"                         yes "$([[ ${SECONDS} -lt 5 ]] && echo yes || echo no)"
+rm -f "${d}/console-job.lock"
+
 echo "── summary: ${pass} pass, ${fail} fail ──"
 [[ "${fail}" -eq 0 ]]

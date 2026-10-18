@@ -98,6 +98,7 @@ export function sweepMessage(s: SweepState): string {
 export interface JobsConfig {
   stateDir: string;
   configDir: string;
+  lockFile?: string; // held while a write job runs (default <stateDir>/console-job.lock)
   manifests: () => Manifests | null;
   stream: Streamer;
   run: Runner; // for the unit's state
@@ -134,6 +135,12 @@ const ROTATE_AT = 10 * 1024 * 1024;
 // the unit's Restart=always brings up the new build.
 export const RESTART_MARKER = "restart-pending";
 
+// The lock the runner holds while a write job runs: the sweep's prepare step
+// (tappaas-self-prepare.sh) waits for it, the way the console waits for the
+// sweep (D4, both directions). JSON: the job's id, argv and start, and the
+// console's pid — a lock whose console is gone is stale and ignored.
+export const JOB_LOCK = "console-job.lock";
+
 export function takeRestartMarker(stateDir: string): boolean {
   const f = join(stateDir, RESTART_MARKER);
   if (!existsSync(f)) return false;
@@ -157,13 +164,54 @@ export class Jobs {
   private readonly rotateAt: number;
   readonly file: string;
   readonly logDir: string; // jobs/<id>.log: each job's output
+  readonly lockFile: string;
 
   constructor(private readonly cfg: JobsConfig) {
     this.file = join(cfg.stateDir, "jobs.jsonl");
     this.logDir = join(cfg.stateDir, "jobs");
+    this.lockFile = cfg.lockFile ?? join(cfg.stateDir, JOB_LOCK);
     this.keep = cfg.keep ?? KEEP;
     this.rotateAt = cfg.rotateAtBytes ?? ROTATE_AT;
     this.load();
+    this.clearStaleLock();
+  }
+
+  // ── the job lock the sweep waits for ────────────────────────────────
+
+  private hold(job: JobSummary): void {
+    try {
+      mkdirSync(this.cfg.stateDir, { recursive: true });
+      writeFileSync(this.lockFile, JSON.stringify({ id: job.id, kind: job.kind, argv: job.ran, started: job.started, pid: process.pid }) + "\n");
+    } catch (e) {
+      this.cfg.log?.(`could not write the job lock ${this.lockFile}: ${(e as Error).message}`);
+    }
+  }
+
+  private release(): void {
+    try {
+      unlinkSync(this.lockFile);
+    } catch {
+      /* not held */
+    }
+  }
+
+  // A lock left by a console that is gone (it stopped mid-job: that job is
+  // recorded as cut off by load) is removed; one whose console still runs
+  // (another console over this state directory) is left and said so.
+  private clearStaleLock(): void {
+    if (!existsSync(this.lockFile)) return;
+    let pid = 0;
+    try {
+      pid = Number((JSON.parse(readFileSync(this.lockFile, "utf8")) as { pid?: unknown }).pid ?? 0);
+    } catch {
+      pid = 0;
+    }
+    if (pid > 0 && pid !== process.pid && alive(pid)) {
+      this.cfg.log?.(`${this.lockFile} is held by pid ${pid}, which runs: left alone`);
+      return;
+    }
+    this.release();
+    this.cfg.log?.(`removed the stale job lock ${this.lockFile} (pid ${pid || "?"} is gone)`);
   }
 
   private now(): number {
@@ -503,7 +551,12 @@ export class Jobs {
         this.record(job);
         this.emit(job, { type: "end", job: summary(job) });
       } else {
-        await this.execute(job);
+        this.hold(job);
+        try {
+          await this.execute(job);
+        } finally {
+          this.release();
+        }
       }
     } finally {
       this.running = null;
@@ -538,6 +591,15 @@ export class Jobs {
     this.record(job);
     this.emit(job, { type: "end", job: summary(job) });
     if (job.kind === "apply") this.cfg.onWriteDone?.(job);
+  }
+}
+
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return (e as { code?: string }).code === "EPERM"; // exists, not ours
   }
 }
 

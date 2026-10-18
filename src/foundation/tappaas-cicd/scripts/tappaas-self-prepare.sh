@@ -3,6 +3,10 @@
 #
 # Second ExecStartPre line of update-tappaas.service, run as tappaas inside the
 # unit's sandbox. It:
+#   0. waits for a running console job (ADR-034 D4, the other direction): the
+#      console starts no job while this unit is active, and this unit touches
+#      nothing while the console's runner holds its lock. Bounded (2 h), then
+#      it proceeds with a notice; a lock whose console is gone is ignored;
 #   1. claims the one-shot request site-manager update wrote (D4):
 #      config/.update-request.json → $RUNTIME_DIRECTORY/request.json, so the
 #      request is consumed by exactly this run; one older than 10 min is dropped;
@@ -15,7 +19,11 @@
 # then mails the site owner (#651), naming the stage from config/.update-stage.
 #
 # Environment: RUNTIME_DIRECTORY (systemd), TAPPAAS_CONFIG_DIR,
-#              TAPPAAS_REFRESH_CMD / TAPPAAS_MIGRATE_CMD (tests)
+#              TAPPAAS_REFRESH_CMD / TAPPAAS_MIGRATE_CMD (tests),
+#              TAPPAAS_CONSOLE_JOB_LOCK (the console's lock file; default
+#              /var/lib/tappaas/console/console-job.lock),
+#              TAPPAAS_CONSOLE_JOB_WAIT (seconds, default 7200) and
+#              TAPPAAS_CONSOLE_JOB_POLL (seconds, default 15)
 
 set -euo pipefail
 
@@ -26,11 +34,40 @@ REFRESH="${TAPPAAS_REFRESH_CMD:-${_here}/refresh-control-plane.sh}"
 MIGRATE="${TAPPAAS_MIGRATE_CMD:-${_here}/run-migrations.sh}"
 REQUEST="${CONFIG_DIR}/.update-request.json"
 MAX_REQUEST_AGE=600
+CONSOLE_LOCK="${TAPPAAS_CONSOLE_JOB_LOCK:-/var/lib/tappaas/console/console-job.lock}"
+CONSOLE_WAIT="${TAPPAAS_CONSOLE_JOB_WAIT:-7200}"
+CONSOLE_POLL="${TAPPAAS_CONSOLE_JOB_POLL:-15}"
 
 # shellcheck source=../lib/common-install-routines.sh
 . "$(dirname "${_here}")/lib/common-install-routines.sh"
 echo prepare > "${CONFIG_DIR}/.update-stage"
 mkdir -p "${RUN_DIR}"
+
+# ── 0. a console job in flight ───────────────────────────────────────
+# The console's runner writes ${CONSOLE_LOCK} while a write job runs (ui
+# jobs.ts: the job's id and argv, the console's pid) and removes it after. The
+# console refuses new jobs while this unit is active, so the wait ends.
+wait_for_console_job() {
+    local waited=0 pid what
+    while [[ -f "${CONSOLE_LOCK}" ]]; do
+        pid="$(jq -r '.pid // empty' "${CONSOLE_LOCK}" 2>/dev/null || true)"
+        if [[ -n "${pid}" ]] && ! kill -0 "${pid}" 2>/dev/null; then
+            warn "console job lock ${CONSOLE_LOCK} is held by pid ${pid}, which is gone: ignoring it"
+            return 0
+        fi
+        if (( waited >= CONSOLE_WAIT )); then
+            warn "a console job has run for ${waited}s (${CONSOLE_LOCK}): not waiting any longer, the sweep proceeds"
+            return 0
+        fi
+        if (( waited % 300 == 0 )); then
+            what="$(jq -r '((.argv // []) | join(" ")) + " (since " + (.started // "?") + ")"' "${CONSOLE_LOCK}" 2>/dev/null || echo "?")"
+            info "waiting for the console job to finish: ${what}"
+        fi
+        sleep "${CONSOLE_POLL}"
+        waited=$(( waited + CONSOLE_POLL ))
+    done
+}
+wait_for_console_job
 
 # ── 1. the request ───────────────────────────────────────────────────
 if [[ -f "${REQUEST}" ]]; then
