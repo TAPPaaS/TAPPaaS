@@ -19,10 +19,12 @@ ui/
 ## Pages
 
 **Setup** (ADR-034 D10) — shown first while the site is incomplete: the checklist `GET
-/api/v1/setup` derives from the records each time (`src/setup.ts`; nothing stored, so it
-resumes): TLS (wildcard: `config/cert-refids.json` names the default environment;
-per-service: nothing to issue), backup, identity and logging (`config/<m>.json` and `module
-test` passing), the identity bootstrap (`config/identities` has an organization and a user),
+/api/v1/setup` derives from the records each time (`src/setup.ts`, so it resumes): TLS
+(wildcard: `config/cert-refids.json` names the default environment; per-service: nothing to
+issue), backup, identity and logging (`config/<m>.json`, and `module test` passed the last
+time it ran — the three tests run only on `GET /setup?refresh=1`, the page's Check button,
+never on a read; each result and its time is kept in `<state dir>/setup-tests.json`), the
+identity bootstrap (`config/identities` has an organization and a user),
 the nodes (every `site.json` node a cluster member, lib/ts `queryClusterNodes`), the switch
 (registered, ports discovered), the admin VPN (a peer in `wgvpn list`), stacks (optional).
 Each step is a form over its verbs as jobs. Secrets go through `POST /api/v1/secrets/<name>`

@@ -10,22 +10,31 @@
 //              per-service mode: nothing to issue — Caddy gets each route's
 //              certificate itself (HTTP-01)
 //   backup, identity, logging   config/<module>.json exists and its module
-//              test passes (rest-of-foundation.sh's three)
+//              test passed the last time it ran. The tests run only on an
+//              explicit refresh (GET /setup?refresh=1, the page's Check
+//              button): three tests per read was the cost of every Setup
+//              view. Their last result is kept in the state directory
+//              (setup-tests.json) and read back like any record.
 //   bootstrap  config/identities holds an organization and a user
 //   nodes      every node site.json declares is a cluster member
 //   switch     a switch is registered and interrogated (ports discovered)
 //   vpn        the admin VPN has at least one peer (network-manager wgvpn list)
 //   stacks     optional: which stacks have modules installed
 
-import { existsSync, readdirSync, readFileSync, unlinkSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from "fs";
 import { join } from "path";
+import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { AccessConfig, setupState } from "./access";
 import { Runner } from "./run";
 
 export interface TestResult {
   rc: number;
   tail: string;
+  at: string; // when the test ran (ISO)
 }
+
+export const SETUP_MODULES = ["backup", "identity", "logging"] as const;
+export const TESTS_FILE = "setup-tests.json"; // in the state directory
 
 export interface SetupInputs {
   defaultEnv: string | null;
@@ -62,10 +71,11 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
     steps.push({ id: "tls", title: "TLS — certificates", required: true, done: i.defaultEnv !== null, detail: i.defaultEnv ? `${i.defaultEnv} is dnsMode per-service: Caddy gets each route's certificate itself (HTTP-01); there is no wildcard to issue` : "no default environment yet (site.json)" });
   }
 
-  for (const m of ["backup", "identity", "logging"] as const) {
+  for (const m of SETUP_MODULES) {
     const s = i.modules[m];
     const done = !s.config ? false : s.test === null ? null : s.test.rc === 0;
-    const detail = !s.config ? `config/${m}.json does not exist: not installed` : s.test === null ? `installed (config/${m}.json); its test has not run yet` : s.test.rc === 0 ? `installed; module-manager test ${m} passes` : `installed; module-manager test ${m} fails (exit ${s.test.rc}): ${s.test.tail}`;
+    const when = s.test ? ` (${s.test.at.replace("T", " ").replace(/\.\d+Z$/, "Z")})` : "";
+    const detail = !s.config ? `config/${m}.json does not exist: not installed` : s.test === null ? `installed (config/${m}.json); its test has not run yet: Check runs it` : s.test.rc === 0 ? `installed; module-manager test ${m} passed${when}` : `installed; module-manager test ${m} failed${when} (exit ${s.test.rc}): ${s.test.tail}`;
     steps.push({ id: m, title: MODULE_TITLES[m], required: true, done, detail });
   }
 
@@ -140,9 +150,43 @@ function countJson(dir: string): number {
 
 export interface GatherDeps {
   configDir: string;
+  stateDir: string; // where the last module test results are kept (TESTS_FILE)
   run: Runner;
   clusterNodes: (siteNodes: string[]) => string[] | null;
   stacks: () => Promise<string[]>;
+}
+
+// The last result of each foundation module's test, as the explicit refresh
+// left them; a module never tested (or a file never written) has none.
+export function readSetupTests(stateDir: string): Partial<Record<(typeof SETUP_MODULES)[number], TestResult>> {
+  const doc = readJson(join(stateDir, TESTS_FILE)) ?? {};
+  const out: Partial<Record<(typeof SETUP_MODULES)[number], TestResult>> = {};
+  for (const m of SETUP_MODULES) {
+    const t = doc[m] as Partial<TestResult> | undefined;
+    if (t && typeof t.rc === "number" && typeof t.at === "string") out[m] = { rc: t.rc, tail: typeof t.tail === "string" ? t.tail : "", at: t.at };
+  }
+  return out;
+}
+
+// The explicit refresh: run `module-manager test <m>` for every installed
+// foundation module (fast mode; the deep suite is a job) and keep the results
+// where readSetupTests finds them. A module not installed keeps no result.
+export async function runSetupTests(d: Pick<GatherDeps, "configDir" | "stateDir" | "run">, now: () => number = Date.now): Promise<void> {
+  const results = readSetupTests(d.stateDir);
+  await Promise.all(
+    SETUP_MODULES.map(async (m) => {
+      if (!existsSync(join(d.configDir, `${m}.json`))) {
+        delete results[m];
+        return;
+      }
+      const r = await d.run("module-manager", ["test", m], 15 * 60_000);
+      if (!r.ran) return; // the manager could not run: keep what the last run said
+      const tail = (r.stdout + r.stderr).replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").slice(-1)[0] ?? "";
+      results[m] = { rc: r.rc, tail, at: new Date(now()).toISOString() };
+    }),
+  );
+  mkdirSync(d.stateDir, { recursive: true });
+  writeJsonAtomic(join(d.stateDir, TESTS_FILE), results);
 }
 
 export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
@@ -151,19 +195,14 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
   const envDoc = defaultEnv ? readJson(join(d.configDir, "environments", `${defaultEnv}.json`)) : null;
   const dnsMode = ((envDoc?.domains as { dnsMode?: string } | undefined)?.dnsMode === "wildcard" ? "wildcard" : envDoc ? "per-service" : null) as SetupInputs["dnsMode"];
   const siteNodes = (((site.hardware as { nodes?: { name?: string }[] } | undefined)?.nodes ?? []).map((n) => n.name).filter((n): n is string => typeof n === "string"));
+  // The module tests are not run here (every Setup read gathers): their last
+  // result is a record in the state directory, written by runSetupTests.
+  const tests = readSetupTests(d.stateDir);
   const modules = {} as SetupInputs["modules"];
-  await Promise.all(
-    (["backup", "identity", "logging"] as const).map(async (m) => {
-      const config = existsSync(join(d.configDir, `${m}.json`));
-      let test: TestResult | null = null;
-      if (config) {
-        const r = await d.run("module-manager", ["test", m], 15 * 60_000);
-        const tail = (r.stdout + r.stderr).replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").slice(-1)[0] ?? "";
-        test = r.ran ? { rc: r.rc, tail } : null;
-      }
-      modules[m] = { config, test };
-    }),
-  );
+  for (const m of SETUP_MODULES) {
+    const config = existsSync(join(d.configDir, `${m}.json`));
+    modules[m] = { config, test: config ? (tests[m] ?? null) : null };
+  }
   const idDir = join(d.configDir, existsSync(join(d.configDir, "identities")) ? "identities" : "people");
   const vpn = await d.run("network-manager", ["wgvpn", "list"], 60_000);
   return {

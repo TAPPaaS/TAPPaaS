@@ -229,9 +229,10 @@ export class ConsoleServer {
       }
       case "setup": {
         // The checklist, derived from the records each time it is read (D10).
+        // ?refresh=1 is the one place the foundation modules' tests run.
         if (me.route === "status") return sendJson(res, 403, { error: "the status route has no setup" });
         closeSetupToken(this.cfg.access, this.cfg.log);
-        if (url.searchParams.get("refresh") === "1") await r.setup.refresh();
+        if (url.searchParams.get("refresh") === "1") await r.refreshSetup();
         const e = await r.setup.get();
         const steps = e.value ? setupSteps(e.value) : null;
         const st = setupState(this.cfg.access);

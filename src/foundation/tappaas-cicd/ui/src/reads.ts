@@ -13,7 +13,7 @@ import { readZonesFile } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap } from "./cache";
 import { Runner, runJson } from "./run";
-import { SetupInputs, gatherSetup } from "./setup";
+import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, TopologyDoc } from "./model";
 
 const MIN = 60_000;
@@ -114,10 +114,12 @@ export class Reads {
       await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
       return out;
     }, now);
-    // The Setup checklist's records: read on demand (it runs three module tests).
+    // The Setup checklist's records: read on demand. The module tests behind
+    // three of its steps run only through refreshSetup (the explicit refresh).
     this.setup = new Cached("setup", TTL.setup, () =>
       gatherSetup({
         configDir: cfg.configDir,
+        stateDir: cfg.stateDir,
         run,
         clusterNodes: cfg.clusterNodes ?? (() => null),
         stacks: async () => {
@@ -173,6 +175,13 @@ export class Reads {
     return [what];
   }
 
+  // GET /setup?refresh=1: run the foundation modules' tests (minutes), keep the
+  // results, then gather the checklist again. Nothing else runs them.
+  async refreshSetup(): Promise<void> {
+    await runSetupTests({ configDir: this.cfg.configDir, stateDir: this.cfg.stateDir, run: this.cfg.run }, this.cfg.now ?? Date.now);
+    await this.setup.refresh();
+  }
+
   // After a job changed the site: what it may have changed is read again now
   // (health keeps its own ten-minute timer; validate takes half a minute).
   refreshAfterJob(): Promise<void> {
@@ -181,7 +190,8 @@ export class Reads {
     this.moduleBackup.clear();
     this.moduleDrift.clear();
     this.moduleFields.clear();
-    // The Setup checklist runs module tests: only re-read if someone has looked.
+    // The Setup checklist is records only (no module test runs here, ever):
+    // re-read if someone has looked, so the step a job just completed shows.
     const setup = this.setup.peek().at !== null ? [this.setup] : [];
     return Promise.all([...setup, this.identity, this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())).then(() => undefined);
   }

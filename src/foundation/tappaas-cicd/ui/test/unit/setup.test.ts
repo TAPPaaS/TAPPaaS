@@ -10,7 +10,7 @@ import { join } from "path";
 import { AccessConfig, decide, setupState } from "../../src/access";
 import { Runner } from "../../src/run";
 import { parseKv, secretStatus, writeSecret } from "../../src/secrets";
-import { SetupInputs, closeSetupToken, gatherSetup, parseSwitches, parseWgvpnPeers, setupComplete, setupSteps } from "../../src/setup";
+import { SetupInputs, TESTS_FILE, closeSetupToken, gatherSetup, parseSwitches, parseWgvpnPeers, readSetupTests, runSetupTests, setupComplete, setupSteps } from "../../src/setup";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -29,7 +29,7 @@ async function main(): Promise<void> {
     defaultEnv: "rossen",
     dnsMode: "per-service",
     certRefids: null,
-    modules: { backup: { config: true, test: { rc: 0, tail: "" } }, identity: { config: true, test: { rc: 0, tail: "" } }, logging: { config: true, test: { rc: 0, tail: "" } } },
+    modules: { backup: { config: true, test: { rc: 0, tail: "", at: "2026-10-18T09:00:00.000Z" } }, identity: { config: true, test: { rc: 0, tail: "", at: "2026-10-18T09:00:00.000Z" } }, logging: { config: true, test: { rc: 0, tail: "", at: "2026-10-18T09:00:00.000Z" } } },
     identities: { organizations: 1, users: 2 },
     siteNodes: ["tappaas1", "tappaas2", "tappaas3"],
     clusterNodes: ["tappaas1", "tappaas2", "tappaas3"],
@@ -46,7 +46,8 @@ async function main(): Promise<void> {
   check(one({ dnsMode: "wildcard" }, "tls").done === false, "wildcard mode without config/cert-refids.json: TLS not done");
   check(one({ dnsMode: "wildcard", certRefids: { rossen: "5f1c" } }, "tls").done === true, "…with the default environment's refid: done");
   check(one({ modules: { ...hrossen.modules, logging: { config: false, test: null } } }, "logging").done === false, "no config/logging.json: logging not done");
-  check(one({ modules: { ...hrossen.modules, backup: { config: true, test: { rc: 1, tail: "FAIL pbs" } } } }, "backup").done === false, "installed but its test fails: not done");
+  check(one({ modules: { ...hrossen.modules, backup: { config: true, test: { rc: 1, tail: "FAIL pbs", at: "2026-10-18T09:00:00.000Z" } } } }, "backup").done === false, "installed but its test fails: not done");
+  check(/passed \(2026-10-18 09:00:00Z\)/.test(steps.find((s) => s.id === "backup")!.detail), "…and a step says when its test last ran");
   check(one({ modules: { ...hrossen.modules, identity: { config: true, test: null } } }, "identity").done === null, "installed, test not run: unknown");
   check(one({ identities: { organizations: 0, users: 0 } }, "bootstrap").done === false, "an empty config/identities: bootstrap not done");
   const nd = one({ clusterNodes: ["tappaas1", "tappaas2"] }, "nodes");
@@ -59,6 +60,7 @@ async function main(): Promise<void> {
   // ── gathered from a config tree: a fresh install ────────────────────
   const dir = mkdtempSync(join(tmpdir(), "console-setup-"));
   const cfg = join(dir, "config");
+  const state = join(dir, "state");
   mkdirSync(join(cfg, "environments"), { recursive: true });
   writeFileSync(join(cfg, "site.json"), JSON.stringify({ name: "acme", defaultEnvironment: "acme", hardware: { nodes: [{ name: "tappaas1" }, { name: "tappaas2" }] } }));
   writeFileSync(join(cfg, "environments", "acme.json"), JSON.stringify({ domains: { primary: "acme.example", dnsMode: "wildcard" } }));
@@ -68,10 +70,12 @@ async function main(): Promise<void> {
     if (bin === "network-manager") return { rc: 0, stdout: "server : tappaas-admin\npeers  :\n", stderr: "", ran: true };
     return { rc: 0, stdout: "ok", stderr: "", ran: true };
   };
-  let inputs = await gatherSetup({ configDir: cfg, run, clusterNodes: (n) => (n.length ? ["tappaas1"] : null), stacks: async () => [] });
+  let inputs = await gatherSetup({ configDir: cfg, stateDir: state, run, clusterNodes: (n) => (n.length ? ["tappaas1"] : null), stacks: async () => [] });
   steps = setupSteps(inputs);
   check(!setupComplete(steps) && steps.filter((s) => s.required && s.done === true).length === 0, "a fresh install: no required step is done");
-  check(!ran.some((r) => r.startsWith("module-manager test")), "…and no module test runs for a module that is not installed");
+  check(!ran.some((r) => r.startsWith("module-manager test")), "…and no module test runs on a read");
+  await runSetupTests({ configDir: cfg, stateDir: state, run });
+  check(!ran.some((r) => r.startsWith("module-manager test")) && Object.keys(readSetupTests(state)).length === 0, "…nor on a refresh, for a module that is not installed");
   check(inputs.siteNodes.join() === "tappaas1,tappaas2" && steps.find((s) => s.id === "nodes")!.detail.includes("tappaas2"), "site.json's nodes are what membership is checked against");
 
   // the install proceeds: records appear, the checklist follows (resumable for free)
@@ -82,10 +86,24 @@ async function main(): Promise<void> {
   writeFileSync(join(cfg, "identities", "organizations", "acme.json"), "{}");
   writeFileSync(join(cfg, "identities", "users", "ann.json"), "{}");
   writeFileSync(join(cfg, "switch-configuration-actual.json"), fx("switch-actual.json"));
-  inputs = await gatherSetup({ configDir: cfg, run, clusterNodes: () => ["tappaas1", "tappaas2"], stacks: async () => [] });
+  const gather = () => gatherSetup({ configDir: cfg, stateDir: state, run, clusterNodes: () => ["tappaas1", "tappaas2"], stacks: async () => [] });
+  inputs = await gather();
   steps = setupSteps(inputs);
-  check(ran.filter((r) => r.startsWith("module-manager test")).length === 3, "installed modules are tested");
+  check(ran.filter((r) => r.startsWith("module-manager test")).length === 0, "a read with the modules installed still runs no test (finding 7)");
+  check(steps.filter((s) => s.done === null).map((s) => s.id).join() === "backup,identity,logging" && /Check runs it/.test(steps.find((s) => s.id === "backup")!.detail), "…their steps are unknown until the explicit refresh runs the tests");
+  // the explicit refresh (GET /setup?refresh=1): the tests run once, their results are kept
+  await runSetupTests({ configDir: cfg, stateDir: state, run }, () => Date.parse("2026-10-18T10:00:00Z"));
+  check(ran.filter((r) => r.startsWith("module-manager test")).length === 3, "the explicit refresh tests every installed module once");
+  const kept = JSON.parse(readFileSync(join(state, TESTS_FILE), "utf8")) as Record<string, { rc: number; at: string }>;
+  check(kept.backup?.rc === 0 && kept.logging?.at === "2026-10-18T10:00:00.000Z", "…and keeps each result, with its time, in the state directory");
+  inputs = await gather();
+  steps = setupSteps(inputs);
+  check(ran.filter((r) => r.startsWith("module-manager test")).length === 3, "the next read is from the kept results: no test ran");
   check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "vpn,stacks", "with the records in place every step is done but the VPN peer (and the optional stacks)");
+  // a module removed: its kept result goes with it on the next refresh
+  rmSync(join(cfg, "logging.json"));
+  await runSetupTests({ configDir: cfg, stateDir: state, run });
+  check(readSetupTests(state).logging === undefined && readSetupTests(state).backup !== undefined, "a module no longer installed keeps no result");
 
   // ── the setup token closes itself (T6) ──────────────────────────────
   const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: ["10.0.0.0/24"], tokenFile: join(cfg, "console-setup-token"), identityFile: join(dir, "no-identity.json"), trustLocalHeaders: false };

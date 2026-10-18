@@ -251,7 +251,7 @@ export function Setup() {
         <h1>Setup</h1>
         <span className="muted">derived from the records · {since(r.env?.at)}</span>
         <span className="spacer" />
-        <button className="btn" disabled={checking} onClick={check}>{checking ? "Checking… (the module tests run)" : "Check again"}</button>
+        <button className="btn" disabled={checking} onClick={check} title="Runs module-manager test for backup, identity and logging, then reads the records again">{checking ? "Checking… (the module tests run)" : "Check: run the module tests"}</button>
       </div>
       <ReadState env={r.env} failure={r.failure} what="the setup checklist" />
       {d ? (
@@ -264,7 +264,8 @@ export function Setup() {
           {d.token.active ? " The setup token is active until identity is installed." : ""}
         </p>
       ) : null}
-      {r.env && !d && r.env.refreshing ? <p className="muted">Reading the records and running the foundation modules' tests — this takes a few minutes the first time.</p> : null}
+      {r.env && !d && r.env.refreshing ? <p className="muted">Reading the records…</p> : null}
+      {checking ? <p className="muted">Running the foundation modules' tests (backup, identity, logging) — a few minutes; the checklist is read again after.</p> : null}
       <ol className="setup">
         {(d?.steps ?? []).map((s) => (
           <StepRow key={s.id} s={s}>{body[s.id]}</StepRow>
