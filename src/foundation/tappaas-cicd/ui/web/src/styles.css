@@ -314,3 +314,6 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .origin-none { background: #f8fafc; color: #94a3b8; }
 .ff-shut td:nth-child(2) { white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
 .ff-shut td:nth-child(3) { white-space: nowrap; }
+.req { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--fail-bg); color: #a12a2a; }
+.envform .form-check input[type=checkbox] { width: auto; }
+.envform .form-check { justify-content: flex-start; }

@@ -48,7 +48,9 @@ on top, one per service in dependsOn below. Each card's Modify lists every field
 from the field schema, its value configured or default, its change class; the fields changed go
 to one `module-manager modify <m> --set a=b --set c=d` job (`GET /api/v1/modules/<m>/fields`:
 `module-manager fields` + `resolve` + `config/module-fields.json`). **Environments** — environments and
-zones with environment-manager's and network-manager's verbs. **Identity** — organizations,
+zones with environment-manager's and network-manager's verbs; adding an environment says for each
+input whether it must be given or what the manager uses when it is left empty (owner: the first
+organization; zone and display name: from the name; DNS mode: the schema's default). **Identity** — organizations,
 groups, users and roles; a change is staged with `--no-reconcile` and pushed by `identity-manager
 reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
 modify, purge (typed). **Site** — `site.json`, the update schedule, Update now (`site update`,

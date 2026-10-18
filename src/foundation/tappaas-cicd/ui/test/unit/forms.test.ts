@@ -2,7 +2,7 @@
 // schema type gets, the text it starts from, and the --set list the edits
 // become (only what changed, typed, refused fields never).
 
-import { FieldRow, initialText, inputKind, plainText, setArgs, shortValue } from "../../web/src/forms";
+import { FieldRow, capitalised, envAddRows, initialText, inputKind, plainText, setArgs, shortValue } from "../../web/src/forms";
 import { check, done } from "./check";
 
 const base: FieldRow = { field: "x", service: "", class: "in-place", settable: true, reason: null, type: "string", enum: null, description: "", example: null, value: null, configured: false, default: null };
@@ -41,5 +41,30 @@ check(setArgs([flag], { isolated: "true" }).sets.join() === "isolated=true", "a 
 check(shortValue('["a","b"]') === "a, b" && shortValue(null) === "—" && shortValue("x".repeat(60), 10).length === 10, "a card's one-line value");
 
 check(plainText("the node's first ZFS pool (#692). Thin disks (#773, #774): opt-in (ADR-020 D3).") === "the node's first ZFS pool. Thin disks: opt-in.", "a description loses its issue and ADR numbers");
+
+// ── the add-environment form ─────────────────────────────────────────────
+const envSchema = {
+  required: ["name", "displayName", "ownerOrg", "network"],
+  properties: {
+    name: { type: "string", description: "Slug identifier for the environment." },
+    displayName: { type: "string", description: "Human-readable environment name." },
+    ownerOrg: { type: "string", description: "Reference to the owning Organization.name." },
+    domains: { type: "object", properties: { primary: { type: "string", description: "Primary public domain." }, dnsMode: { type: "string", enum: ["per-service", "wildcard"], default: "per-service" } } },
+    network: { type: "object", description: "Network placement. NO vlan here (CR-09).", properties: { zone: { type: "string", description: "Reference to a zone key in zones.json (validated)." } } },
+  },
+};
+const help = { "--owner": "The organization that owns the environment (default: the first organization, by name)." };
+const rows = envAddRows(envSchema, { name: "acme", orgs: ["zeta", "rossen"], zones: ["rossen", "home"], help });
+const by = (k: string) => rows.find((x) => x.key === k)!;
+check(rows.filter((x) => x.required).map((x) => x.key).join() === "@env", "only the name must be given");
+check(by("--owner").whenEmpty === "rossen" && by("--owner").choices?.join() === "rossen,zeta", "left empty, the owner is the first organization by name");
+check(by("--zone").whenEmpty === "acme" && by("--display").whenEmpty === "Acme", "the zone is named like the environment, the display name is it capitalised");
+check(by("--dns-mode").whenEmpty === "per-service" && by("--dns-mode").choices?.join() === "per-service,wildcard", "the DNS mode's default and choices come from the schema");
+check(/inside only/.test(by("--domain").whenEmpty ?? ""), "no domain: says what that means");
+check(by("--owner").description === help["--owner"] && by("--domain").description === "Primary public domain.", "the verb's help first, else the schema's description");
+const none = envAddRows(envSchema, { name: "", orgs: [], zones: [], help: {} });
+check(/no organization/.test(none.find((x) => x.key === "--owner")!.whenEmpty ?? "") && none.find((x) => x.key === "--zone")!.whenEmpty === "a zone named like the environment", "before a name or an organization exists: said in words, no placeholder");
+check(rows.every((x) => !/<env>|\bN\b|\bD\b|\bZ\b/.test(`${x.whenEmpty ?? ""}`)), "no placeholder in a default");
+check(capitalised("rossen") === "Rossen" && capitalised("") === "", "capitalised");
 
 done("forms");

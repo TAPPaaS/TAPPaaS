@@ -83,11 +83,11 @@ const VERSION = "0.1.0";
 export const HELP: HelpSpec = {
   name: "network-manager",
   version: VERSION,
-  tagline: "TAPPaaS network owner + orchestrator (ADR-007 P4 / ADR-008)",
+  tagline: "TAPPaaS network owner + orchestrator: zones, firewall, switches, access points",
   verbs: [
     {
       usage: "list [--state S] [--type T] [--tier N] [--json]",
-      name: "list (filtered zone view — ADR-014 D4)",
+      name: "list (the zones, filtered by state, type or tier)",
       options: [
         ["--state <S>", "Active | Inactive | Manual | Mandatory | Disabled"],
         ["--type <T>", "Management | Service | Client | IoT | Guest | DMZ | Overlay | WAN"],
@@ -104,7 +104,7 @@ export const HELP: HelpSpec = {
       usage: "topology [--json] [--health <file> | --no-health]",
       name: "topology",
       options: [
-        ["--json", "print the topology document (ADR-034 D5) as JSON"],
+        ["--json", "print the topology document as JSON"],
         ["--health <file>", "take the health findings from this `health-manager validate --json` output instead of running it"],
         ["--no-health", "leave the health findings out (no validate run)"],
       ],
@@ -127,7 +127,7 @@ export const HELP: HelpSpec = {
       usage: "add <name> [options]",
       name: "add",
       options: [
-        ["--archetype <A>", "tier-correct preset (ADR-014 D5) — one of:\n" +
+        ["--archetype <A>", "a preset with the right tier for the zone's role — one of:\n" +
           "                control, service, trusted-client, guest, dmz,\n" +
           "                iot-local, iot-cloud, iot-cams, iot-untrust.\n" +
           "                Stamps type/typeId/tier/isolated + the access-to seed."],
@@ -167,17 +167,16 @@ export const HELP: HelpSpec = {
         [
           "--unset field",
           "Remove a field the schema lets you remove. Today: ipv6Subnet, which\n" +
-            "                keeps the zone IPv4-only (ADR-030). Repeatable.",
+            "                keeps the zone IPv4-only. Repeatable.",
         ],
       ],
       note:
-        "Authors zones.json only, like enable/disable and bind — it prints the\n" +
-        "reconcile to run. Closes #538: a zone's policy was previously changeable\n" +
-        "only by hand-editing zones.json or delete-and-re-add.",
+        "Writes zones.json only, like enable/disable and bind, and prints the\n" +
+        "reconcile that makes the change live on the firewall and the switches.",
     },
     {
       usage: "bind <zone> --environment <env> | --unbind", effect: { noPreview: "links the zone to an environment in zones.json" },
-      name: "bind (link a Client/IoT/Guest zone to an environment — ADR-014 D2)",
+      name: "bind (link a Client/IoT/Guest zone to an environment)",
       hidden: ["--env <env>"],
       options: [
         ["--environment <env>", "the environment whose service zone this zone consumes;\n" +
@@ -190,7 +189,7 @@ export const HELP: HelpSpec = {
         "Sets the zone's `serves` field — one environment, or several with --add.\n" +
         "The access-to / pinhole-allowed-from edges\n" +
         "are DERIVED from it on every reconcile (into zones.effective.json), so they\n" +
-        "survive the install-time srv→<environment> rename — this is what closes #424.\n" +
+        "survive the install-time srv→<environment> rename.\n" +
         "zones.json itself stays purely authored.",
     },
     {
@@ -206,7 +205,7 @@ export const HELP: HelpSpec = {
     {
       usage: "snat list | snat verify <module> | snat mode  [--json]", effect: "read",
       verb: "snat",
-      name: "snat (source NAT — read-only, ADR-016)",
+      name: "snat (source NAT — read-only)",
       options: [
         ["list", "live source-NAT rules, their owning module, and the mode"],
         ["verify <module>", "declared == live AND enforced (exit 1 on drift)"],
@@ -245,14 +244,14 @@ export const HELP: HelpSpec = {
         ["--name <N>", "TAPPaaS system name; renames srv→<N> (home/guest are kept\n                as site-local role zones) and parameterises the distributed template"],
         ["--from <tpl>", "source template (default: zones.json shipped with the bin)"],
         ["--out <f>", "output file (default: $TAPPAAS_CONFIG/zones.json)"],
-        ["--force", "re-stamp this profile's zones from the template (default:\n                existing zones always win — a re-run is non-destructive, #427)"],
+        ["--force", "re-stamp this profile's zones from the template (default:\n                existing zones always win — a re-run is non-destructive)"],
         ["--config-dir <dir>", "installed module configs, so an occupied zone stays Active\n                (default $TAPPAAS_CONFIG)"],
         ["--no-distribute", "skip the push of zones.json to the Proxmox nodes"],
       ],
     },
     {
       usage: "retire [--apply]",
-      name: "retire (remove zones a release stopped shipping — ADR-014 D7)",
+      name: "retire (remove zones a release stopped shipping)",
       options: [
         ["--apply", "commit (default is a dry-run listing)"],
         ["--config-dir <dir>", "installed module configs to check occupancy against\n                (default $TAPPAAS_CONFIG)"],
@@ -270,7 +269,7 @@ export const HELP: HelpSpec = {
       note: "(alias: zones-merge)",
       aliases: ["zones-merge"],
       name:
-        "merge (rename-aware 3-way reconciliation; ADR-007 Design A;\n" +
+        "merge (rename-aware 3-way reconciliation;\n" +
         "replaces apply-zones-merge.sh — re-bases the repo template into THIS install's\n" +
         "renamed namespace, then 3-way-merges zones.json vs zones.json.orig vs\n" +
         "zones.rename.json; does NOT distribute by itself)",
@@ -308,7 +307,7 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "wgvpn <setup|add-peer|remove-peer|list|config> [options]", effect: { noPreview: "the admin VPN on OPNsense: setup creates the server and its rules, add-peer a peer (prints its wg-quick config), remove-peer removes one" }, readWhen: ["list", "config", "status"],
-      name: "wgvpn (the admin VPN: WireGuard into mgmt, terminating on OPNsense — ADR-010 §8.4.6)",
+      name: "wgvpn (the admin VPN: WireGuard into mgmt, terminating on OPNsense)",
       anyOption: true,
       details:
         "setup                                  ensure the OPNsense admin-WG server + admin->mgmt and WAN rules\n" +
@@ -321,7 +320,7 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "split-horizon-target <domain> [--json] [--assume-published]",
-      name: "split-horizon-target (the address a published name resolves to inside — ADR-021 D5)",
+      name: "split-horizon-target (the address a published name resolves to inside)",
       options: [
         ["--json", "print the whole result as JSON"],
         ["--assume-published", "skip the public-DNS probe (offline installs and tests)"],

@@ -65,7 +65,7 @@ export function initialText(r: FieldRow): string {
 // A schema description as the form shows it: without the issue numbers
 // ("(#692)") that tell a developer where it came from.
 export function plainText(s: string): string {
-  return s.replace(/\s*\((?:#\d+(?:[,;] ?)?)+\)/g, "").replace(/\s*\(ADR-\d+[^)]*\)/g, "");
+  return s.replace(/\s*\((?:(?:#\d+|CR-\d+)(?:[,;] ?)?)+\)/g, "").replace(/\s*\(ADR-\d+[^)]*\)/g, "");
 }
 
 // A value as one short line, for a card.
@@ -129,4 +129,52 @@ export function setArgs(rows: FieldRow[], edits: Record<string, string>): { sets
     else errors[r.field] = `${r.field} must be ${v.why}`;
   }
   return { sets, errors };
+}
+
+// ── adding an environment ───────────────────────────────────────────────
+
+// One input of the add form: the value the operator must give, or what
+// environment-manager uses when it is left empty.
+export interface EnvAddRow {
+  key: string; // "@env" or the option's flag
+  field: string; // where it lands in the environment's record
+  required: boolean;
+  whenEmpty: string | null;
+  description: string;
+  choices: string[] | null;
+  kind: "string" | "enum" | "boolean";
+}
+
+type Props = Record<string, { description?: string; default?: unknown; enum?: unknown; properties?: Props }>;
+
+function prop(schema: Record<string, unknown>, path: string): { description?: string; default?: unknown; enum?: unknown } {
+  let p: Props = (schema.properties ?? {}) as Props;
+  const parts = path.split(".");
+  for (let i = 0; i < parts.length - 1; i++) p = p[parts[i]]?.properties ?? {};
+  return p[parts[parts.length - 1]] ?? {};
+}
+
+export function capitalised(name: string): string {
+  return name ? name.charAt(0).toUpperCase() + name.slice(1) : "";
+}
+
+// The add form from environment-fields.json and the manager's own defaults
+// (cmdAdd): the owner is the first organization by name, the zone is named
+// like the environment, the display name is the name capitalised, the DNS mode
+// is the schema's default. `help` is the verb's option text by flag.
+export function envAddRows(schema: Record<string, unknown>, ctx: { name: string; orgs: string[]; zones: string[]; help: Record<string, string> }): EnvAddRow[] {
+  const d = (path: string, flag: string): string => ctx.help[flag] || plainText(prop(schema, path).description ?? "");
+  const firstOrg = [...ctx.orgs].sort()[0] ?? null;
+  const dns = prop(schema, "domains.dnsMode");
+  const dnsModes = Array.isArray(dns.enum) ? dns.enum.map(String) : ["per-service", "wildcard"];
+  const named = (v: string | null, why: string) => (v ? v : why);
+  return [
+    { key: "@env", field: "name", required: true, whenEmpty: null, description: plainText(prop(schema, "name").description ?? ""), choices: null, kind: "string" },
+    { key: "--display", field: "displayName", required: false, whenEmpty: named(capitalised(ctx.name), "the name, capitalised"), description: d("displayName", "--display"), choices: null, kind: "string" },
+    { key: "--owner", field: "ownerOrg", required: false, whenEmpty: firstOrg ?? "none: there is no organization yet, so the record is refused", description: d("ownerOrg", "--owner"), choices: [...ctx.orgs].sort(), kind: "enum" },
+    { key: "--zone", field: "network.zone", required: false, whenEmpty: named(ctx.name, "a zone named like the environment"), description: d("network.zone", "--zone"), choices: [...ctx.zones].sort(), kind: "string" },
+    { key: "--create-zone", field: "zones.json", required: false, whenEmpty: "off: the zone must exist already", description: ctx.help["--create-zone"] ?? "", choices: null, kind: "boolean" },
+    { key: "--domain", field: "domains.primary", required: false, whenEmpty: "no public domain: the environment is reached inside only", description: d("domains.primary", "--domain"), choices: null, kind: "string" },
+    { key: "--dns-mode", field: "domains.dnsMode", required: false, whenEmpty: typeof dns.default === "string" ? dns.default : "per-service", description: d("domains.dnsMode", "--dns-mode"), choices: dnsModes, kind: "enum" },
+  ];
 }

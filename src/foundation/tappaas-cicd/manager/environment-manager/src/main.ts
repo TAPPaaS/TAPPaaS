@@ -73,20 +73,20 @@ export const HELP: HelpSpec = {
       name: "add",
       hidden: ["--dnsMode M"],
       options: [
-        ["--name N", "Name of the default environment when seeding the minimal set (default: site.json .defaultEnvironment)."],
-        ["--domain D", "Public primary domain (add/modify)."],
-        ["--owner ORG", "Owning organization (add/modify; default = first org)."],
-        ["--zone Z", "network.zone reference (add/modify; default = <env>)."],
-        ["--create-zone", "add: author the Service zone first if it does not exist\n" +
-          "                   (ADR-014 D1) — one command yields env + zone.\n" +
-          "                   Opt-in so a typo'd --zone cannot mint a stray zone."],
-        ["--display D", "displayName (add/modify)."],
+        ["--name N", "Without <env>: the name of the site's default environment to seed (default: site.json .defaultEnvironment)."],
+        ["--domain D", "The environment's public primary domain. Left out: no public domain (reached inside only)."],
+        ["--owner ORG", "The organization that owns the environment (default: the first organization, by name)."],
+        ["--zone Z", "The network zone its modules run in (default: a zone named like the environment)."],
+        ["--create-zone", "Create that zone as a Service zone first if it does not exist, so one\n" +
+          "                   command yields the environment and its zone. Off unless asked, so a\n" +
+          "                   mistyped --zone cannot create a stray zone."],
+        ["--display D", "The name people see (default: the environment's name, capitalised)."],
         [
           "--dns-mode M",
-          "domains.dnsMode: per-service (default, Caddy HTTP-01 per host)\n" +
-            "                   or wildcard (one *.<primary> ACME cert) (add/modify).",
+          "How its certificates are issued: per-service (default: Caddy gets one per host)\n" +
+            "                   or wildcard (one *.<domain> certificate on the firewall).",
         ],
-        ["--force", "add: overwrite existing; delete: override guard rails."],
+        ["--force", "Overwrite an environment that already exists."],
       ],
     },
     {
@@ -95,14 +95,14 @@ export const HELP: HelpSpec = {
       name: "modify",
       hidden: ["--dnsMode M"],
       options: [
-        ["--domain D", "Public primary domain (add/modify)."],
-        ["--owner ORG", "Owning organization (add/modify; default = first org)."],
-        ["--zone Z", "network.zone reference (add/modify; default = <env>)."],
-        ["--display D", "displayName (add/modify)."],
+        ["--domain D", "The environment's public primary domain."],
+        ["--owner ORG", "The organization that owns the environment."],
+        ["--zone Z", "The network zone its modules run in."],
+        ["--display D", "The name people see."],
         [
           "--dns-mode M",
-          "domains.dnsMode: per-service (default, Caddy HTTP-01 per host)\n" +
-            "                   or wildcard (one *.<primary> ACME cert) (add/modify).",
+          "How its certificates are issued: per-service (Caddy gets one per host)\n" +
+            "                   or wildcard (one *.<domain> certificate on the firewall).",
         ],
       ],
     },
@@ -110,19 +110,19 @@ export const HELP: HelpSpec = {
       usage: "delete <env> [--force] [--check]",
       name: "delete",
       options: [
-        ["--force", "add: overwrite existing; delete: override guard rails."],
-        ["--check", "delete: show what would be removed, change nothing."],
+        ["--force", "Delete even mgmt, the default environment, or one modules still use."],
+        ["--check", "Show what would be removed; change nothing."],
       ],
     },
     {
       usage: "reconcile <env> [--deep] [--apply] [--skip-network]",
       name: "reconcile",
       options: [
-        ["--deep", "reconcile: also reconcile every module consuming this env."],
-        ["--apply", "reconcile: commit (default = preview / dry-run)."],
+        ["--deep", "Also reconcile every module in this environment."],
+        ["--apply", "Make the changes (without it: a preview of what would change)."],
         [
           "--skip-network",
-          "reconcile: omit the system-wide network pass (the caller already ran it).",
+          "Leave out the site-wide network pass (the caller already ran it).",
         ],
       ],
     },
