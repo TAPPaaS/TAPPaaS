@@ -35,7 +35,7 @@ day 2: add a node, an environment, a stack; enrol a device (the wg-quick file to
 
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
-jumps. **Physical** — the topology laid out under the spike's rules (ISP top-left, the firewall
+jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects there) — the topology laid out under the spike's rules (ISP top-left, the firewall
 as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
 nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
 left); a click opens the object's records, findings, jumps and its day-2 change: a switch

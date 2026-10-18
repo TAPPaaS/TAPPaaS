@@ -29,6 +29,12 @@ export function navigate(to: string): void {
   window.scrollTo(0, 0);
 }
 
+// Replace the current address (a redirect: no history entry of its own).
+export function replacePath(to: string): void {
+  window.history.replaceState(null, "", to);
+  window.dispatchEvent(new PopStateEvent("popstate"));
+}
+
 export function Link({ to, children, className }: { to: string; children: ReactNode; className?: string }) {
   const click = (e: MouseEvent<HTMLAnchorElement>) => {
     if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
