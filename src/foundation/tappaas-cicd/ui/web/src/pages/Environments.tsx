@@ -4,72 +4,15 @@
 // job with its preview. A delete needs the name typed.
 
 import { useState } from "react";
-import { useRead, useVerb } from "../api";
-import { EnvAddRow, envAddRows } from "../forms";
-import { OperateButton, Step, Values } from "../operate";
+import { useRead } from "../api";
+import { fieldsStep } from "../fields";
+import { OperateButton, Step } from "../operate";
 import { EnvironmentRow } from "../types";
 import { Dot, ReadState, Section, since } from "../ui";
 import { ZoneRead, ZonesGraph } from "./Zones";
 
 const env = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "environment-manager", verb, ...extra });
 const net = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "network-manager", verb, ...extra });
-
-// The add form: each input says whether it must be given or what the
-// manager uses when it is left empty (environment-fields.json and
-// environment-manager's own defaults), never a placeholder.
-function EnvAddForm({ values, set, onName }: { values: Values; set: (v: Values) => void; onName: (n: string) => void }) {
-  const schema = useRead<Record<string, unknown>>("schemas/environment", 600_000).env?.data ?? null;
-  const ids = useRead<Record<string, string[]>>("identity").env?.data ?? null;
-  const zones = useRead<ZoneRead[]>("zones").env?.data ?? [];
-  const verb = useVerb("environment-manager", "add");
-  const name = typeof values["@env"] === "string" ? values["@env"].trim() : "";
-  const help = Object.fromEntries((verb?.options ?? []).map((o) => [o.flag, o.description.replace(/\s+/g, " ")]));
-  if (!schema || !ids) return <p className="muted">reading environment-fields.json and the organizations…</p>;
-  const rows = envAddRows(schema, { name, orgs: ids.org ?? [], zones: zones.map((z) => z.name), help });
-  const val = (r: EnvAddRow) => values[r.key];
-  const put = (r: EnvAddRow, v: string | boolean) => {
-    if (r.key === "@env") onName(String(v).trim());
-    set({ ...values, [r.key]: v });
-  };
-  return (
-    <div className="form envform">
-      {rows.map((r) => (
-        <div key={r.key} className="form-row">
-          <span>
-            <span className="mono">{r.field}</span> {r.required ? <span className="req">required</span> : null}
-          </span>
-          {r.kind === "boolean" ? (
-            <label className="form-check">
-              <input type="checkbox" checked={val(r) === true} onChange={(e) => put(r, e.target.checked)} /> <span className="mono">{r.key}</span>
-            </label>
-          ) : r.kind === "enum" && r.choices ? (
-            <select value={typeof val(r) === "string" ? (val(r) as string) : ""} onChange={(e) => put(r, e.target.value)}>
-              <option value="">{r.whenEmpty ? `— left empty: ${r.whenEmpty}` : "—"}</option>
-              {r.choices.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          ) : (
-            <>
-              <input type="text" list={r.choices ? `dl-${r.key}` : undefined} placeholder={r.required ? "" : r.whenEmpty ? `left empty: ${r.whenEmpty}` : ""} value={typeof val(r) === "string" ? (val(r) as string) : ""} onChange={(e) => put(r, e.target.value)} />
-              {r.choices ? (
-                <datalist id={`dl-${r.key}`}>
-                  {r.choices.map((c) => (
-                    <option key={c} value={c} />
-                  ))}
-                </datalist>
-              ) : null}
-            </>
-          )}
-          <small className="muted">
-            {r.required ? "Must be given. " : r.kind === "boolean" ? `Left off: ${r.whenEmpty}. ` : <>If left empty: <b>{r.whenEmpty}</b>. </>}
-            {r.description}
-          </small>
-        </div>
-      ))}
-    </div>
-  );
-}
 
 // Add an environment: its record, then the reconcile that makes it live (the
 // wizard pattern of D10, also offered from Setup). The reconcile takes the
@@ -78,12 +21,20 @@ function EnvAddForm({ values, set, onName }: { values: Values; set: (v: Values) 
 const chosen = { name: "" };
 export function addEnvironmentSteps(): Step[] {
   return [
-    env("1 · The environment's record", "add", {
-      hide: ["@env"],
-      only: [],
-      render: (values, set) => <EnvAddForm values={values} set={set} onName={(n) => (chosen.name = n)} />,
-      note: "Writes the environment's record (config/environments/<name>.json; with --create-zone also its zone). Nothing is live until the reconcile below.",
-    }),
+    (() => {
+      const s = fieldsStep({
+        title: "1 · The environment's record",
+        bin: "environment-manager",
+        verb: "add",
+        kind: "environment",
+        name: null,
+        mode: "add",
+        keep: ["--create-zone"],
+        note: "Writes the environment's record (config/environments/<name>.json; with --create-zone also its zone). Nothing is live until the reconcile below.",
+      });
+      // The reconcile takes the name typed here.
+      return { ...s, render: (values, set) => ((chosen.name = typeof values["@env"] === "string" ? values["@env"].trim() : ""), s.render!(values, set)) } as Step;
+    })(),
     {
       ...env("2 · Make it live: environment-manager reconcile", "reconcile", {
         note: "The preview lists what the reconcile would do (DNS, the certificate, the zone); apply does it.",
@@ -98,7 +49,6 @@ export function addEnvironmentSteps(): Step[] {
 export function Environments() {
   const envs = useRead<EnvironmentRow[]>("environments");
   const zones = useRead<ZoneRead[]>("zones");
-  const orgs = useRead<Record<string, string[]>>("identity").env?.data?.org ?? [];
   const [zone, setZone] = useState<string | null>(null);
   const zoneNames = (zones.env?.data ?? []).map((z) => z.name);
   const envNames = (envs.env?.data ?? []).map((e) => e.name);
@@ -125,7 +75,7 @@ export function Environments() {
                 <td className="mono">{e.network?.zone ?? ""}</td>
                 <td className="mono">{e.domains?.primary ?? ""}</td>
                 <td className="toolbar">
-                  <OperateButton label="Modify…" title={`Modify ${e.name}`} steps={[env(`environment-manager modify ${e.name}`, "modify", { fixed: [e.name], choices: { "--zone": zoneNames, "--owner": orgs, "--dns-mode": ["per-service", "wildcard"] }, note: `Only what you fill in changes; the rest of ${e.name}'s record stays as it is.` }), env(`environment-manager reconcile ${e.name}`, "reconcile", { fixed: [e.name] })]} />
+                  <OperateButton label="Modify…" title={`Modify ${e.name}`} steps={() => [fieldsStep({ title: `The fields of ${e.name}`, bin: "environment-manager", verb: "modify", fixed: [e.name], kind: "environment", name: e.name, mode: "modify", note: "Writes the record only; the reconcile below makes it live." }), env(`environment-manager reconcile ${e.name}`, "reconcile", { fixed: [e.name] })]} />
                   <OperateButton label="Reconcile" title={`Reconcile ${e.name}`} steps={[env(`environment-manager reconcile ${e.name}`, "reconcile", { fixed: [e.name] })]} />
                   <OperateButton label="Delete…" kind="danger" title={`Delete ${e.name}`} steps={[env(`environment-manager delete ${e.name}`, "delete", { fixed: [e.name] })]} />
                 </td>
@@ -138,7 +88,7 @@ export function Environments() {
         title="Zones"
         aside={
           <span className="toolbar">
-            <OperateButton label="Add a zone…" title="Add a zone" steps={[net("network-manager add <name>", "add")]} />
+            <OperateButton label="Add a zone…" title="Add a zone" steps={() => [fieldsStep({ title: "network-manager add <name>", bin: "network-manager", verb: "add", kind: "zone", name: null, mode: "add", keep: ["--archetype", "--serves", "--from-zone", "--no-activate"], hide: ["@options"], choices: { "--serves": envNames, "--from-zone": zoneNames } })]} />
             <OperateButton label="Reconcile the network…" title="Reconcile the network" steps={[net("network-manager reconcile", "reconcile", { note: "The preview runs every plane dry (OPNsense, Proxmox, the switches, the APs); apply converges them all." })]} />
           </span>
         }

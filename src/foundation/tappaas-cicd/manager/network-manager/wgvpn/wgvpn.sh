@@ -41,7 +41,8 @@ usage() {
     cat <<EOF
 Usage: ${CLI} <sub>
   setup                                            ensure the OPNsense admin-WG server, the admin->mgmt rule
-                                                   and the WAN :${SAT_ADMIN_WGPORT} rule (idempotent)
+                                                   and the WAN rule for its port (${SAT_ADMIN_WGPORT} when new;
+                                                   idempotent)
   add-peer --name N --pubkey K [--ip A] [--endpoint H:P]
                                                    register an admin device (auto-assigns an admin IP) and
                                                    print its client config. Endpoint: --endpoint wins, else a
@@ -80,7 +81,7 @@ main() {
             # The config goes to stdout (info goes to stderr), so it redirects
             # cleanly to a .conf. Endpoint: explicit --endpoint wins; else a
             # registered admin-vpn satellite's address; else a placeholder.
-            [[ -n "${endpoint}" ]] || endpoint="$(av_discover_endpoint "${CONFIG_DIR}")"
+            [[ -n "${endpoint}" ]] || endpoint="$(av_discover_endpoint "${CONFIG_DIR}" "$(av_server_port)")"
             info ""
             if [[ "${endpoint}" == *"<"* ]]; then
                 info "client config for '${name}' — save as tappaas-admin.conf; fill in Endpoint + paste your private key:"

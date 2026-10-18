@@ -1,15 +1,20 @@
 // Modules — tabs. Installed: every deployed module with its badges (run
 // state, health, backup, CVE and maturity), filterable, grouped by stack with
-// foundation first. Then one tab per registered repository: every module its
-// catalogue lists, with its stack, description and maturity, installed (with
-// the instances) or not, and Install for one that is not (module-manager add,
+// foundation first (the group heads name the stack, so no column does), one
+// row per module with every environment it is installed in. Then one tab per
+// registered repository: every module its catalogue lists, by stack where it
+// spans several (else flat, with a stack column), with its description and
+// maturity, installed (with the instances) or not, and Install for every one,
+// into an environment it is chosen for (module-manager add --environment,
 // previewed, then applied as a job).
 
 import { Fragment, ReactNode, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { plainText } from "../forms";
+import { fieldsStep } from "../fields";
+import { ModuleGroup, defaultInstanceName, environmentsOf, groupInstances, installEnvironments, instanceOwners } from "../instances";
 import { OperateButton } from "../operate";
-import { ModuleSummary } from "../types";
+import { EnvironmentRow, ModuleSummary, SiteRead } from "../types";
 import { Badge, Dot, Link, ReadState, levelOf, since } from "../ui";
 
 interface CatalogModule {
@@ -18,6 +23,7 @@ interface CatalogModule {
   description: string | null;
   maturity: string | null;
   category: string | null;
+  vmid: number | null;
   instances: string[];
 }
 interface RepositoryCatalog {
@@ -72,10 +78,69 @@ export function ModuleBadges({ m }: { m: ModuleSummary }) {
 }
 
 const rank: Record<string, number> = { fail: 0, warn: 1, pass: 2, unknown: 3 };
+const worst = (g: ModuleGroup<ModuleSummary>) => Math.min(...g.instances.map((i) => rank[i.badges.health] ?? 3));
+const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))];
+
+// The Installed row of a module: its instances' places side by side.
+function InstalledRow({ g }: { g: ModuleGroup<ModuleSummary> }) {
+  const first = g.instances[0];
+  const runs = g.instances.map((i) => i.badges.run);
+  const run = runs.includes("stopped") ? "fail" : runs.includes("running") ? "pass" : "skip";
+  const dash = <span className="muted">—</span>;
+  const nodes = uniq(g.instances.map((i) => i.actualNode ?? i.node));
+  const zones = uniq(g.instances.map((i) => i.zone0));
+  const vmids = g.instances.map((i) => i.vmid).filter((v): v is number => v !== null);
+  return (
+    <tr>
+      <td>
+        <Dot level={run} title={runs.join(", ")} /> <Link to={`/modules/${encodeURIComponent(first.name)}`}>{g.module}</Link>
+      </td>
+      <td>
+        {first.kind}
+        {vmids.length ? <span className="muted"> {vmids.join(", ")}</span> : null}
+      </td>
+      <td>{nodes.length ? nodes.join(", ") : dash}</td>
+      <td>{zones.length ? zones.join(", ") : dash}</td>
+      <td>
+        {environmentsOf(g).map((e, n) => (
+          <Fragment key={e.environment}>
+            {n ? ", " : ""}
+            {e.environment}
+            {e.instances.length ? (
+              <span className="muted">
+                {" "}(
+                {e.instances.map((i, k) => (
+                  <Fragment key={i}>
+                    {k ? ", " : ""}
+                    <Link to={`/modules/${encodeURIComponent(i)}`}>{i}</Link>
+                  </Fragment>
+                ))}
+                )
+              </span>
+            ) : null}
+          </Fragment>
+        ))}
+      </td>
+      <td>
+        {g.instances.length === 1 ? (
+          <ModuleBadges m={first} />
+        ) : (
+          g.instances.map((i) => (
+            <div key={i.name}>
+              <span className="muted small">{i.name}</span> <ModuleBadges m={i} />
+            </div>
+          ))
+        )}
+      </td>
+    </tr>
+  );
+}
 
 export function Modules() {
   const mods = useRead<ModuleSummary[]>("modules");
   const cats = useRead<RepositoryCatalog[]>("catalogs", 600_000);
+  const envs = useRead<EnvironmentRow[]>("environments", 600_000);
+  const site = useRead<SiteRead>("site", 600_000).env?.data?.site;
   const [tab, setTab] = useState("Installed");
   const repos = cats.env?.data ?? [];
   const repo = repos.find((r) => r.name === tab) ?? null;
@@ -88,7 +153,11 @@ export function Modules() {
       .filter((m) => only === "all" || m.badges.health === "fail" || m.badges.health === "warn" || m.badges.cve === "act")
       .sort((a, b) => (rank[a.badges.health] ?? 3) - (rank[b.badges.health] ?? 3) || a.name.localeCompare(b.name));
   }, [mods.env, q, only]);
+  // One row per module: the catalogues say which module an instance is.
+  const groups = useMemo(() => groupInstances(list, instanceOwners(cats.env?.data ?? [])).sort((a, b) => worst(a) - worst(b) || a.module.localeCompare(b.module)), [list, cats.env]);
   const total = mods.env?.data?.length ?? 0;
+  const envOf = new Map((mods.env?.data ?? []).map((m) => [m.name, m.environment]));
+  const defaultEnv = (site?.defaultEnvironment as string | undefined) ?? site?.name ?? null;
 
   return (
     <div className="page">
@@ -105,7 +174,7 @@ export function Modules() {
         ))}
       </div>
       {tab !== "Installed" ? (
-        repo ? <RepositoryTab r={repo} deployed={new Set((mods.env?.data ?? []).map((m) => m.name))} at={cats.env?.at ?? null} /> : <ReadState env={cats.env} failure={cats.failure} what="the repositories' catalogues" />
+        repo ? <RepositoryTab r={repo} deployed={new Set((mods.env?.data ?? []).map((m) => m.name))} ready={!!mods.env?.data && !!envs.env?.data} envOf={envOf} environments={(envs.env?.data ?? []).map((e) => e.name)} defaultEnv={defaultEnv} at={cats.env?.at ?? null} /> : <ReadState env={cats.env} failure={cats.failure} what="the repositories' catalogues" />
       ) : (
       <>
       <ReadState env={mods.env} failure={mods.failure} what="modules (module-manager list)" />
@@ -124,32 +193,15 @@ export function Modules() {
             <th>runs on</th>
             <th>zone</th>
             <th>environment</th>
-            <th>stack</th>
             <th>badges</th>
           </tr>
         </thead>
         <tbody>
-          {byStack(list, (m) => m.stack).map(([stack, rows]) => (
-            <StackRows key={stack} stack={stack} cols={7} n={rows.length}>
-          {rows.map((m) => (
-            <tr key={m.name}>
-              <td>
-                <Dot level={m.badges.run === "running" ? "pass" : m.badges.run === "stopped" ? "fail" : "skip"} title={m.badges.run} />{" "}
-                <Link to={`/modules/${encodeURIComponent(m.name)}`}>{m.name}</Link>
-              </td>
-              <td>
-                {m.kind}
-                {m.vmid !== null ? <span className="muted"> {m.vmid}</span> : null}
-              </td>
-              <td>{m.actualNode ?? m.node ?? <span className="muted">—</span>}</td>
-              <td>{m.zone0 ?? <span className="muted">—</span>}</td>
-              <td>{m.environment ?? <span className="muted">—</span>}</td>
-              <td>{m.stack ?? <span className="muted">—</span>}</td>
-              <td>
-                <ModuleBadges m={m} />
-              </td>
-            </tr>
-          ))}
+          {byStack(groups, (g) => g.stack).map(([stack, rows]) => (
+            <StackRows key={stack} stack={stack} cols={6} n={rows.length}>
+              {rows.map((g) => (
+                <InstalledRow key={g.module} g={g} />
+              ))}
             </StackRows>
           ))}
         </tbody>
@@ -160,13 +212,79 @@ export function Modules() {
   );
 }
 
-function RepositoryTab({ r, deployed, at }: { r: RepositoryCatalog; deployed: Set<string>; at: string | null }) {
+function RepositoryTab({ r, deployed, ready, envOf, environments, defaultEnv, at }: { r: RepositoryCatalog; deployed: Set<string>; ready: boolean; envOf: Map<string, string | null>; environments: string[]; defaultEnv: string | null; at: string | null }) {
   const [q, setQ] = useState("");
   const [only, setOnly] = useState(false);
   const rows = r.modules
     .filter((m) => !q || `${m.name} ${m.stack ?? ""} ${m.description ?? ""} ${m.category ?? ""}`.toLowerCase().includes(q.toLowerCase()))
     .filter((m) => !only || m.instances.length === 0);
   const installed = r.modules.filter((m) => m.instances.length > 0).length;
+  // Grouped by stack when the repository spans several; a one-stack repository
+  // is a flat list that says its stack in a column instead.
+  const grouped = new Set(r.modules.map((m) => m.stack ?? "")).size > 1;
+  const cols = grouped ? 5 : 6;
+  const row = (m: CatalogModule) => {
+    const placed = m.instances.map((i) => ({ instance: i, environment: envOf.get(i) ?? null }));
+    const { choices, initial } = installEnvironments(m.stack, environments, uniq(placed.map((p) => p.environment)), defaultEnv);
+    const next = initial && m.stack !== "foundation" ? defaultInstanceName(m.name, initial, defaultEnv) : null;
+    const where = placed.map((p) => `${p.environment ?? "?"} (${p.instance})`).join(", ");
+    return (
+    <tr key={m.name}>
+      <td className="mono">{deployed.has(m.name) ? <Link to={`/modules/${encodeURIComponent(m.name)}`}>{m.name}</Link> : m.name}</td>
+      {grouped ? null : <td>{m.stack ?? <span className="muted">—</span>}</td>}
+      <td className="small">{m.description ? plainText(m.description) : <span className="muted">—</span>}</td>
+      <td>{m.maturity ? <Badge level="info">{m.maturity}</Badge> : null}</td>
+      <td>
+        {m.instances.length ? (
+          <>
+            <Badge level="pass">installed</Badge>{" "}
+            {m.instances.map((i, n) => (
+              <Fragment key={i}>
+                {n ? ", " : ""}
+                <Link to={`/modules/${encodeURIComponent(i)}`}>{i}</Link>
+              </Fragment>
+            ))}
+          </>
+        ) : (
+          <span className="muted">not installed</span>
+        )}
+      </td>
+      <td>
+        {/* Its environment is chosen from what is installed: not before that is read. */}
+        <OperateButton
+          disabled={!ready}
+          hint={ready ? undefined : "reading the installed modules and the environments…"}
+          label={m.instances.length ? "Install again…" : "Install…"}
+          title={`Install ${m.name}`}
+          steps={() => [
+            fieldsStep({
+              title: `module-manager add ${m.name} --environment <environment>`,
+              bin: "module-manager",
+              verb: "add",
+              fixed: [m.name],
+              kind: "module",
+              name: m.name,
+              mode: "add",
+              keep: ["--environment", "--instance", "--allow-fork", "--reinstall"],
+              initial: initial ? { "--environment": initial } : undefined,
+              choices: choices.length ? { "--environment": choices } : undefined,
+              note: (
+                <>
+                  Installs {m.name} from {r.name} into the environment chosen
+                  {m.stack === "foundation" ? " (a foundation module goes in mgmt only)" : ""}: writes its config, builds and starts its guest, wires the services it depends on. There is no dry run: the preview shows the exact command. A field left empty takes the module's own value.
+                  {m.instances.length ? ` Installed now in: ${where}. ` : " "}
+                  {m.stack === "foundation"
+                    ? m.instances.length ? "Another instance needs its own name: --instance." : ""
+                    : `The instance is named ${m.name} in ${defaultEnv ?? "the default environment"}, else ${m.name}-<environment>${next ? ` (here: ${next})` : ""}; in an environment it is already in, name it with --instance. A guest whose VM id is taken gets the next free one.`}
+                </>
+              ),
+            }),
+          ]}
+        />
+      </td>
+    </tr>
+    );
+  };
   return (
     <>
       <p className="muted small">
@@ -181,53 +299,16 @@ function RepositoryTab({ r, deployed, at }: { r: RepositoryCatalog; deployed: Se
       </div>
       <table className="table">
         <thead>
-          <tr><th>module</th><th>stack</th><th>description</th><th>maturity</th><th>installed</th><th /></tr>
+          <tr><th>module</th>{grouped ? null : <th>stack</th>}<th>description</th><th>maturity</th><th>installed</th><th /></tr>
         </thead>
         <tbody>
-          {byStack(rows, (m) => m.stack).map(([stack, ms]) => (
-            <StackRows key={stack} stack={stack} cols={6} n={ms.length}>
-              {ms.map((m) => (
-                <tr key={m.name}>
-                  <td className="mono">{deployed.has(m.name) ? <Link to={`/modules/${encodeURIComponent(m.name)}`}>{m.name}</Link> : m.name}</td>
-                  <td>{m.stack ?? <span className="muted">—</span>}</td>
-                  <td className="small">{m.description ? plainText(m.description) : <span className="muted">—</span>}</td>
-                  <td>{m.maturity ? <Badge level="info">{m.maturity}</Badge> : null}</td>
-                  <td>
-                    {m.instances.length ? (
-                      <>
-                        <Badge level="pass">installed</Badge>{" "}
-                        {m.instances.map((i, n) => (
-                          <Fragment key={i}>
-                            {n ? ", " : ""}
-                            <Link to={`/modules/${encodeURIComponent(i)}`}>{i}</Link>
-                          </Fragment>
-                        ))}
-                      </>
-                    ) : (
-                      <span className="muted">not installed</span>
-                    )}
-                  </td>
-                  <td>
-                    {m.instances.length === 0 ? (
-                      <OperateButton
-                        label="Install…"
-                        title={`Install ${m.name}`}
-                        steps={[
-                          {
-                            title: `module-manager add ${m.name}`,
-                            bin: "module-manager",
-                            verb: "add",
-                            fixed: [m.name],
-                            note: `Installs ${m.name} from ${r.name}: writes its config, builds and starts its guest, wires the services it depends on. There is no dry run: the preview shows the exact command. Fields of the module go under "more options" as --<field> <value>, one per line.`,
-                          },
-                        ]}
-                      />
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </StackRows>
-          ))}
+          {grouped
+            ? byStack(rows, (m) => m.stack).map(([stack, ms]) => (
+                <StackRows key={stack} stack={stack} cols={cols} n={ms.length}>
+                  {ms.map(row)}
+                </StackRows>
+              ))
+            : rows.map(row)}
         </tbody>
       </table>
     </>

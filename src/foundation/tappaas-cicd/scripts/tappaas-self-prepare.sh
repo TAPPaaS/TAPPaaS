@@ -12,7 +12,8 @@
 #      request is consumed by exactly this run; one older than 10 min is dropped;
 #   2. runs refresh-control-plane.sh (pull, hold-aware #653; relink ~/bin; builds)
 #      and maps its exit code: 0 refreshed, 10 stale (non-fatal, #595),
-#      12 a repository did not sync → fatal, 1 → fatal;
+#      12 a repository did not sync → fatal, 1 → fatal; when its own pull
+#      changed the script, runs the new copy once more, without the pull;
 #   3. runs the config migrations the refresh just pulled (ADR-025 D2, #652);
 #   4. leaves $RUNTIME_DIRECTORY/prepared and control-plane for update-tappaas.
 # A non-zero exit stops the unit before the rebuild and the sweep; OnFailure
@@ -91,8 +92,21 @@ if [[ -f "${RUN_DIR}/request.json" ]] && [[ "$(jq -r '.noGitPull == true' "${RUN
 fi
 
 # ── 2. refresh ───────────────────────────────────────────────────────
+# The copy of the refresh that runs is the one on disk before its own pull. A
+# release that changes it (adds a component to its build loop, as the console's
+# ui/ did) would otherwise build by the old list: the rebuilt generation lacks
+# the new component and the self-check rolls it back. So when the pull changed
+# the script, the new copy runs once more for the relink and the builds, without
+# pulling. Once: a second change is the next run's business.
+refresh_sum() { sha256sum "${REFRESH}" 2>/dev/null | cut -d' ' -f1; }
+refresh_before="$(refresh_sum)"
 rc=0
 "${REFRESH}" || rc=$?
+if [[ "${rc}" == 0 || "${rc}" == 10 ]] && [[ "$(refresh_sum)" != "${refresh_before}" ]]; then
+    info "the pull changed refresh-control-plane.sh: running the new copy for the relink and the builds"
+    rc=0
+    TAPPAAS_NO_GIT_PULL=1 "${REFRESH}" || rc=$?
+fi
 case "${rc}" in
     0)  state=refreshed ;;
     10) state=stale; warn "some components failed to build — their bins are STALE; the sweep continues" ;;

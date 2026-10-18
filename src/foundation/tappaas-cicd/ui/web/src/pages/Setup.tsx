@@ -9,6 +9,7 @@ import { ReactNode, useState } from "react";
 import { get, post, useRead } from "../api";
 import { Output, stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
+import { fieldsStep } from "../fields";
 import { Job, SiteRead } from "../types";
 import { Dot, Link, ReadState, Section, since } from "../ui";
 import { AddNodeButton } from "./AddNode";
@@ -174,11 +175,13 @@ export function Setup() {
   const secrets = useRead<SecretStatus[]>("secrets", 600_000);
   const site = useRead<SiteRead>("site").env?.data?.site;
   const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
   const d = r.env?.data;
   const sec = (n: string) => (secrets.env?.data ?? []).find((x) => x.name === n);
   const check = () => {
     setChecking(true);
-    void get("setup?refresh=1").finally(() => {
+    setCheckError(null);
+    void get("setup?refresh=1").catch((e: Error) => setCheckError(e.message)).finally(() => {
       setChecking(false);
       r.reload();
     });
@@ -228,7 +231,7 @@ export function Setup() {
   for (const m of ["backup", "identity", "logging"]) {
     body[m] = (
       <span className="toolbar">
-        <OperateButton label={`Install ${m}…`} title={`module-manager add ${m}`} steps={[mm(`module-manager add ${m} --environment mgmt`, "add", { fixed: [m], initial: { "--environment": "mgmt" }, note: m === "identity" ? "Once identity is installed the console deletes the setup token: from then on it is reached through console.<domain> behind the gate (publish it below)." : undefined })]} />
+        <OperateButton label={`Install ${m}…`} title={`module-manager add ${m}`} steps={() => [fieldsStep({ title: `module-manager add ${m} --environment mgmt`, bin: "module-manager", verb: "add", fixed: [m], kind: "module", name: m, mode: "add", keep: ["--environment"], initial: { "--environment": "mgmt" }, choices: { "--environment": ["mgmt"] }, note: m === "identity" ? "Once identity is installed the console deletes the setup token: from then on it is reached through console.<domain> behind the gate (publish it below)." : undefined })]} />
         <OperateButton label="Test" title={`module-manager test ${m}`} steps={[mm(`module-manager test ${m}`, "test", { fixed: [m], hide: ["--vmid", "--zone0"] })]} />
         {m === "identity" ? (
           <OperateButton label="Publish the console…" title="module-manager add console" steps={[mm("module-manager add console --proxyDomain console.<domain>", "add", { fixed: ["console"], initial: { "@extra": [`--proxyDomain console.${domain}`] }, note: "The console's route through Caddy and the Authentik gate (the console module): mgmt and the admin VPN only." })]} />
@@ -257,6 +260,7 @@ export function Setup() {
         </p>
       ) : null}
       {r.env && !d && r.env.refreshing ? <p className="muted">Reading the records…</p> : null}
+      {checkError ? <p className="readstate readstate-fail">Check did not finish: {checkError}. The steps show the last results kept.</p> : null}
       {checking ? <p className="muted">Running the foundation modules' tests (backup, identity, logging) — a few minutes; the checklist is read again after.</p> : null}
       <ol className="setup">
         {(d?.steps ?? []).map((s) => (

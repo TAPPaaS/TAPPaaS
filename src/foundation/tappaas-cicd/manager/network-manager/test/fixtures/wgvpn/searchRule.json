@@ -1,1 +1,5 @@
-{"rows": [{"uuid": "r1", "description": "tappaas-admin admin->mgmt"}]}
+{"rows": [
+  {"uuid": "r1", "description": "tappaas-admin admin->mgmt", "interface": "wireguard", "protocol": "any", "destination_net": "10.0.0.0/24", "destination_port": "", "enabled": "1", "action": "pass"},
+  {"uuid": "2e9e17b4-324e-4f43-907b-c3fc3734d266", "description": "tappaas-admin WAN :51820", "interface": "wan", "protocol": "UDP", "destination_net": "wanip", "destination_port": "51820", "enabled": "1", "action": "pass"},
+  {"uuid": "e115626c-db86-46f4-bdab-3e6049f17774", "description": "buddy-rasmus serve wg", "interface": "wan", "protocol": "UDP", "destination_net": "wanip", "destination_port": "51830", "enabled": "1", "action": "pass"}
+]}

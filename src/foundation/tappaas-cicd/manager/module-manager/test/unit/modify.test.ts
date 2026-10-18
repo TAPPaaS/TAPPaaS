@@ -190,6 +190,9 @@ try {
     const undeclared = g2("color=red");
     check(!undeclared.ok && rejected(undeclared, "no change class"), "a module field with no declared class is REJECTED");
     check(!g2("description=x", "kind=widget").ok, "one refused field rejects the whole --set");
+    // status, version, stack …: the release writes them, schemas/fields.json says immutable
+    const owned = preGateSet(configDir, "demo", [parseSetArg("status=Production")!], { ...sch, status: { usedBy: ["general"] } }, { ...MM, status: { class: "immutable" } });
+    check(!owned.ok && rejected(owned, "the tooling writes it"), "status=Production (immutable: the release writes it) is REJECTED");
     const none = preGateSet(configDir, "demo", [parseSetArg("description=x")!], sch, null);
     check(none.ok && none.warnings.some((w) => w.includes("schemas/fields.json not found")),
       "no module manifest reachable: accepted with a warning, as before");
@@ -336,11 +339,13 @@ try {
       } finally {
         console.log = log;
       }
-      const doc = JSON.parse(out.join("\n")) as { fields: { field: string; class: string; settable: boolean }[] };
+      const doc = JSON.parse(out.join("\n")) as { fields: { field: string; coordinate: string; class: string; apply: string | null; settable: boolean }[] };
       const f = (n: string) => doc.fields.find((x) => x.field === n);
       check(rc === 0 && f("cores")?.class === "in-place" && f("cores")?.settable === true, "fields: cores is in-place under cluster:vm");
       check(f("vmid")?.settable === false && f("vmid")?.class === "immutable", "fields: vmid is immutable, not settable");
       check(f("proxyPort") === undefined, "fields: a field of a service demo does not declare is left out");
+      check(f("cores")?.apply === "set" && f("vmid")?.apply === null, "fields: the apply mode of a settable field (cores: set), none for a refused one");
+      check(!doc.fields.some((x) => x.class === "config-only" && x.coordinate !== ""), "fields: a service field never carries the config-only label");
     }
 
     // A mixed set stops the whole command, including the acceptable half.

@@ -89,7 +89,8 @@ needs nothing by hand.
 
 From the admin VPN the console is reached by name only with a tunnel config that carries the
 site's DNS and the routes to the DMZ gateway (config v2, `network-manager/ADMIN-VPN.md` §6).
-An older tunnel resolves the name publicly, arrives from the internet and gets 403.
+An older tunnel resolves the name publicly and arrives from the internet: it is sent to the
+Authentik login, and once signed in it gets 403.
 
 ```bash
 network-manager wgvpn list                  # each peer's config version
@@ -136,8 +137,10 @@ dig +short console.<domain>                 # from mgmt or the tunnel: the DMZ g
 curl -sI https://console.<domain>/          # from mgmt or the tunnel: 302 to the Authentik login
 ```
 
-From any other zone (`home`, a guest network) or from the internet, the same request gets
-403 from the access list. Log in from a browser on mgmt or the tunnel: the header shows the
+From any other zone (`home`, a guest network) or from the internet, the same anonymous request
+is redirected to the Authentik login as well, and a signed-in one gets 403 from the access list:
+Caddy runs the gate before the access list, so from there the console itself is never reached.
+The login page is public anyway. Log in from a browser on mgmt or the tunnel: the header shows the
 user and role (`installer` for a member of `installer`), and the *Open in* jumps (Proxmox,
 OPNsense, Grafana, PBS, Authentik, UniFi) open the object in view in a new tab.
 

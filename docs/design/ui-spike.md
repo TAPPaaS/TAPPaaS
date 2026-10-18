@@ -446,7 +446,9 @@ SIEM; it does not become one — the SIEM dashboard stays the place for an inves
 | `status.<domain>` | the trusted client zones of the default environment | group `users` | read the owner view |
 | `/api/v1` on either | as the route | an Authentik app password or JWT at the gate (ADR-032 D3) | by scope: `read`, `operate`, never destructive |
 
-`proxyAuth: gate` on both routes; the backend binds to the mothership's `mgmt` address and accepts
+`proxyAuth: gate` on both routes. Caddy runs the gate before the route's access list, so from a zone
+outside the list, the internet included, an anonymous request is redirected to the Authentik login
+(public anyway) and a signed-in one gets 403; the console itself is never reached. The backend binds to the mothership's `mgmt` address and accepts
 the firewall's address only, so `X-Authentik-*` headers cannot be presented by anything else on
 `mgmt`. #142's questions are answered by this: the API is the layer, agents have an identity in
 Authentik, scopes are the provider's policy plus the backend's role table, and the firewall rule is

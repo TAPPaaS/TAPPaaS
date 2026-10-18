@@ -1217,8 +1217,10 @@ function cmdFields(opts: Opts): number {
   const unused = (r: { reason: string }): boolean => /declares none of the services/.test(r.reason);
   const value = (f: string): unknown => desired.fields[f]?.value ?? null;
   const rows = [
-    ...c.plan.map((p) => ({ field: p.field, coordinate: p.coordinate, class: p.class, settable: true, reason: null as string | null, value: value(p.field) })),
-    ...c.rejections.filter((r) => !unused(r)).map((r) => ({ field: r.field, coordinate: "", class: refusedClass(r.reason), settable: false, reason: r.reason, value: value(r.field) })),
+    // The declared class, never the "config-only" label, and the apply mode:
+    // what a change to the field does (the console words it).
+    ...c.plan.map((p) => ({ field: p.field, coordinate: p.coordinate, class: p.coordinate ? p.class : p.declared ?? p.class, apply: p.apply ?? null, settable: true, reason: null as string | null, value: value(p.field) })),
+    ...c.rejections.filter((r) => !unused(r)).map((r) => ({ field: r.field, coordinate: "", class: refusedClass(r.reason), apply: null as string | null, settable: false, reason: r.reason, value: value(r.field) })),
   ].sort((a, b) => a.field.localeCompare(b.field));
   if (opts.json) {
     info(JSON.stringify({ module, fields: rows, warnings: c.warnings }, null, 2));

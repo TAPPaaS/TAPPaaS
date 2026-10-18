@@ -23,6 +23,7 @@
     "defaultEnvironment": {
       "description": "Name of the default (tenant) environment — also its network zone and owner organization. Decoupled from the site code so site.name can be renamed with a single edit without touching any environment/org/zone (ADR-007d #426). Must be a valid zone/environment slug.",
       "type": "string",
+      "references": "environments",
       "pattern": "^[a-z][a-z0-9-]*$"
     },
     "displayName": {
@@ -32,6 +33,7 @@
     },
     "owner": {
       "description": "Reference to the site-owner Organization.name (config/identities/organizations/<owner>.json).",
+      "references": "organizations",
       "type": "string"
     },
     "email": {
@@ -235,6 +237,27 @@
     "updateSchedule": {
       "description": "Site-wide update schedule (ADR-017 D7). {frequency: none|daily|weekly|monthly, weekday: day name, hour: 0-23}. weekday is read only under weekly and monthly; hour defaults to 2. The legacy [period, day, hour] triple is still read, and migration 0003 rewrites it.",
       "type": "object",
+      "properties": {
+        "frequency": {
+          "description": "How often the sweep runs.",
+          "type": "string",
+          "enum": ["none", "daily", "weekly", "monthly"],
+          "default": "weekly"
+        },
+        "weekday": {
+          "description": "The day it runs on, under weekly and monthly.",
+          "type": ["string", "null"],
+          "enum": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", null],
+          "default": "Thursday"
+        },
+        "hour": {
+          "description": "The hour it starts, 0 to 23.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 23,
+          "default": 2
+        }
+      },
       "default": {
         "frequency": "weekly",
         "weekday": "Thursday",

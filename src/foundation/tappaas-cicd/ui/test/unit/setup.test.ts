@@ -7,10 +7,12 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { AccessConfig, decide, setupState } from "../../src/access";
-import { Runner } from "../../src/run";
+import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
+import { AccessConfig, Me, decide, setupState } from "../../src/access";
+import { Jobs } from "../../src/jobs";
+import { Runner, Streamer } from "../../src/run";
 import { parseKv, secretStatus, writeSecret } from "../../src/secrets";
-import { SetupInputs, TESTS_FILE, closeSetupToken, gatherSetup, parseSwitches, parseWgvpnPeers, readSetupTests, runSetupTests, setupComplete, setupSteps } from "../../src/setup";
+import { SetupInputs, TESTS_FILE, closeSetupToken, gatherSetup, parseSwitches, parseWgvpnPeers, readSetupTests, recordSetupTest, runSetupTests, setupComplete, setupSteps } from "../../src/setup";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -104,6 +106,39 @@ async function main(): Promise<void> {
   rmSync(join(cfg, "logging.json"));
   await runSetupTests({ configDir: cfg, stateDir: state, run });
   check(readSetupTests(state).logging === undefined && readSetupTests(state).backup !== undefined, "a module no longer installed keeps no result");
+
+  // ── a test run as a job counts too (the step's Test button) ─────────
+  // On hrossen 2026-10-18 `module-manager test identity` ran as a job and
+  // passed, and the step still said its test had not run: only the Check's
+  // results were kept.
+  writeFileSync(join(cfg, "logging.json"), "{}");
+  rmSync(join(state, TESTS_FILE));
+  check(setupSteps(await gather()).find((s) => s.id === "identity")!.done === null, "no result kept: the identity step is unknown");
+  const job = (argv: string[], exit: number | null, state_ = "done") => ({ argv, state: state_, exit, ended: "2026-10-18T16:22:09.765Z" });
+  check(recordSetupTest(state, job(["module-manager", "test", "identity"], 0), "[Info] Test Step 4\n[Info] All tests passed for module 'identity'") === "identity", "a finished test job of a foundation module is recorded");
+  steps = setupSteps(await gather());
+  const idStep = steps.find((s) => s.id === "identity")!;
+  check(idStep.done === true && idStep.detail.includes("passed (2026-10-18 16:22:09Z)"), "…and its step is done, with the job's time");
+  check(readSetupTests(state).identity?.tail === "[Info] All tests passed for module 'identity'", "…keeping the last line of its output");
+  check(steps.find((s) => s.id === "backup")!.done === null, "…the other steps keep what they had");
+  recordSetupTest(state, job(["module-manager", "test", "backup"], 1), "FAIL pbs");
+  check(setupSteps(await gather()).find((s) => s.id === "backup")!.done === false, "a failed test job marks its step failed");
+  check(recordSetupTest(state, job(["module-manager", "test", "immich"], 0), "") === null && recordSetupTest(state, job(["module-manager", "show", "logging"], 0), "") === null, "a test of another module, or another verb, is not a setup result");
+  check(recordSetupTest(state, job(["module-manager", "test", "logging"], -1), "could not run") === null && recordSetupTest(state, job(["module-manager", "test", "logging"], null, "running"), "") === null, "a job that could not run, or has not finished, says nothing");
+  check(readSetupTests(state).logging === undefined, "…and nothing is kept for it");
+
+  // …through the runner as the console wires it (main.ts onDone)
+  const SPEC: HelpSpec = { name: "module-manager", version: "1", tagline: "t", verbs: [{ usage: "test <module> [--deep]", options: [["--deep", "The deep suite."]] }] };
+  const stream: Streamer = async (_bin, args, onOutput) => {
+    onOutput(`[Info] Test Step 1\n[Info] All tests passed for module '${args[1]}'\n`);
+    return { rc: 0, ran: true, error: null };
+  };
+  const noSweep: Runner = async () => ({ rc: 0, stdout: "ActiveState=inactive\n", stderr: "", ran: true });
+  const jobs = new Jobs({ stateDir: join(dir, "jobs"), configDir: cfg, manifests: () => ({ byBin: new Map([["module-manager", renderManifest(SPEC)]]), errors: [], loadedAt: "" }), stream, run: noSweep, onDone: (j, tail) => void recordSetupTest(state, j, tail) });
+  const lars: Me = { user: "lars", name: "Lars", email: null, groups: ["installer"], role: "installer", via: "gate", route: "console" };
+  const created = await jobs.create(lars, { active: false, identityInstalled: true, tokenPresent: false }, { argv: ["module-manager", "test", "logging"] });
+  for (let i = 0; i < 50 && readSetupTests(state).logging === undefined; i++) await new Promise<void>((r) => setTimeout(r, 2));
+  check(created.job?.kind === "read" && setupSteps(await gather()).find((s) => s.id === "logging")!.done === true, "a Test job run through the job runner marks the logging step done");
 
   // ── the setup token closes itself (T6) ──────────────────────────────
   const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: ["10.0.0.0/24"], tokenFile: join(cfg, "console-setup-token"), identityFile: join(dir, "no-identity.json"), trustLocalHeaders: false };

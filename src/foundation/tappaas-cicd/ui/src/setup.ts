@@ -12,9 +12,10 @@
 //   backup, identity, logging   config/<module>.json exists and its module
 //              test passed the last time it ran. The tests run only on an
 //              explicit refresh (GET /setup?refresh=1, the page's Check
-//              button): three tests per read was the cost of every Setup
-//              view. Their last result is kept in the state directory
-//              (setup-tests.json) and read back like any record.
+//              button) or as a job (the step's Test button): three tests per
+//              read was the cost of every Setup view. Their last result is
+//              kept in the state directory (setup-tests.json) and read back
+//              like any record.
 //   bootstrap  config/identities holds an organization and a user
 //   nodes      every node site.json declares is a cluster member
 //   switch     a switch is registered and interrogated (ports discovered)
@@ -187,6 +188,21 @@ export async function runSetupTests(d: Pick<GatherDeps, "configDir" | "stateDir"
   );
   mkdirSync(d.stateDir, { recursive: true });
   writeJsonAtomic(join(d.stateDir, TESTS_FILE), results);
+}
+
+// A finished job that ran a foundation module's test (the step's Test button,
+// or the verb typed in a form) is as good a result as the Check's: it is kept
+// where readSetupTests finds it. A job that could not run, or was cut off,
+// says nothing. Returns the module it recorded, or null.
+export function recordSetupTest(stateDir: string, job: { argv: string[]; state: string; exit: number | null; ended: string | null }, tail: string): string | null {
+  const [bin, verb, m] = job.argv;
+  if (bin !== "module-manager" || verb !== "test" || !(SETUP_MODULES as readonly string[]).includes(m)) return null;
+  if (job.state !== "done" || job.exit === null || job.exit < 0 || !job.ended) return null;
+  const results = readSetupTests(stateDir);
+  results[m as (typeof SETUP_MODULES)[number]] = { rc: job.exit, tail: tail.replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").slice(-1)[0] ?? "", at: job.ended };
+  mkdirSync(stateDir, { recursive: true });
+  writeJsonAtomic(join(stateDir, TESTS_FILE), results);
+  return m;
 }
 
 export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {

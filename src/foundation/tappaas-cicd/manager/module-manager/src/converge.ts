@@ -198,6 +198,11 @@ export interface SetPlanEntry extends SetRequest {
   // provider service owns (a policy-only change — the #557 case).
   coordinate: string;
   class: string;
+  // A module-level field (coordinate ""): the class schemas/fields.json
+  // declares — `class` is the label "config-only" there — and either way the
+  // apply mode, so `fields` can say what a change does.
+  declared?: string;
+  apply?: string;
 }
 
 export interface SetRejection {
@@ -220,7 +225,7 @@ export function parseSetArg(arg: string): SetRequest | null {
 // The module-level manifest, schemas/fields.json (ADR-020 D10): the change
 // class of every field no service owns. Read from the site's repositories (the
 // TAPPaaS one carries it); null when none has it.
-export type ModuleManifest = Record<string, { class?: string } | undefined>;
+export type ModuleManifest = Record<string, { class?: string; apply?: string } | undefined>;
 export function loadModuleManifest(configDir: string): ModuleManifest | null {
   for (const r of siteRepositories(configDir)) {
     if (!r.path) continue;
@@ -354,7 +359,7 @@ export function classifySet(
             `Change it in the module's own JSON and update the module, which wires it`,
         });
       } else {
-        plan.push({ ...req, coordinate: "", class: "config-only" });
+        plan.push({ ...req, coordinate: "", class: "config-only", declared: cls, apply: moduleManifest[req.field]?.apply });
       }
       continue;
     }
@@ -399,7 +404,7 @@ export function classifySet(
         rejected = true;
         break;
       }
-      if (!rejected) plan.push({ ...req, coordinate, class: entry.class });
+      if (!rejected) plan.push({ ...req, coordinate, class: entry.class, apply: entry.apply });
     }
   }
 

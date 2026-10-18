@@ -6,6 +6,7 @@
 
 import { useRead } from "../api";
 import { OperateButton, Step } from "../operate";
+import { fieldsStep } from "../fields";
 import { BackupRowView } from "../types";
 import { ReadState, Section, Tag, since } from "../ui";
 
@@ -47,7 +48,7 @@ export function Backup() {
                   <OperateButton label="Show" title={`backup-manager show ${b.module}`} steps={[bm(`backup-manager show ${b.module}`, "show", { fixed: [b.module] })]} />
                   <OperateButton label="Coverage" title={`backup-manager coverage ${b.module}`} steps={[bm(`backup-manager coverage ${b.module}`, "coverage", { fixed: [b.module] })]} />
                   <OperateButton label="Restore points" title={`backup-manager restore list ${b.module}`} steps={[bm(`backup-manager restore list ${b.module}`, "restore list", { fixed: [b.module] })]} />
-                  <OperateButton label="Modify…" title={`Modify ${b.module}'s backup`} steps={[bm(`backup-manager modify ${b.module}`, "modify", { fixed: [b.module] })]} />
+                  <OperateButton label="Modify…" title={`Modify ${b.module}'s backup`} steps={() => [fieldsStep({ title: `backup-manager modify ${b.module}`, bin: "backup-manager", verb: "modify", fixed: [b.module], kind: "backup", name: b.module, mode: "modify", note: "An empty field takes what the environment or the site sets." })]} />
                   <OperateButton
                     label="Purge…"
                     kind="danger"

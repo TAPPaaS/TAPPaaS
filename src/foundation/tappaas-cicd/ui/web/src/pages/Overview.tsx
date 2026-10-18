@@ -46,7 +46,7 @@ function Where({ kind, name }: { kind: string; name: string }) {
   return null;
 }
 
-export function Overview() {
+export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolean }) {
   const health = useRead<Health>("health");
   const site = useRead<SiteRead>("site");
   const mods = useRead<ModuleSummary[]>("modules");
@@ -72,6 +72,11 @@ export function Overview() {
           site {s?.name ?? "…"} · {t?.nodes.length ?? "…"} nodes · {modules.length || "…"} modules · health read {since(health.env?.at)}
         </span>
       </div>
+      {setupIncomplete ? (
+        <p className="readstate readstate-warn">
+          The site's setup is not finished. <Link to="/setup">Continue in Setup</Link>
+        </p>
+      ) : null}
       <ReadState env={health.env} failure={health.failure} what="health (health-manager validate)" />
 
       <div className="strip">

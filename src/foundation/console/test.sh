@@ -45,10 +45,13 @@ fi
 
 domain="$(jq -r '.config["network:proxy"].proxyDomain // .proxyDomain // empty' "${CONFIG_DIR}/console.json" 2>/dev/null)"
 if [[ -n "${domain}" ]]; then
+    # Caddy runs forward_auth before the access list, so an anonymous request gets
+    # the gate's 302 (401 for an API client) from every zone, inside the list or
+    # not: the 403 comes only after a login from outside it.
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://${domain}/api/v1/me")"
     case "${code}" in
         302|401) pass "https://${domain} is behind the gate (anonymous: ${code})" ;;
-        403) warn "  https://${domain}: 403 from the zone filter — the gate is not visible from here" ;;
+        403) warn "  https://${domain}: 403 to an anonymous request — the access list runs before the gate here" ;;
         200) fail "https://${domain} answered an anonymous request: the gate is not in front" ;;
         *) fail "https://${domain} did not answer as a gated route (HTTP ${code})" ;;
     esac

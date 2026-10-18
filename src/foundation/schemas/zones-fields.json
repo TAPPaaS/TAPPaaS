@@ -158,6 +158,7 @@
     "access-to": {
       "description": "List of zones this zone can connect to. zone-manager creates pass rules from it (unless --no-firewall-rules).",
       "type": "array",
+      "references": "zones",
       "required": false,
       "default": [],
       "items": "string",
@@ -172,6 +173,7 @@
     "pinhole-allowed-from": {
       "description": "List of zones that can have pinhole connections to specific ports in this zone. Used to validate module-specific firewall rules against zone policies.",
       "type": "array",
+      "references": "zones",
       "required": false,
       "default": [],
       "items": "string",
@@ -180,6 +182,7 @@
     },
     "snat-allowed-from": {
       "description": "List of zones whose traffic into this zone may be source-NAT'd (masqueraded) to this zone's gateway address. The gate for network:snat: a module's snatFrom request is intersected with this list, and naming a zone outside it is refused, not trimmed. Absent or empty refuses every request, so masquerade is strictly opt-in per zone.",
+      "references": "zones",
       "type": "array",
       "required": false,
       "default": [],
@@ -214,6 +217,7 @@
         "string",
         "array"
       ],
+      "references": "environments",
       "items": {
         "type": "string"
       },

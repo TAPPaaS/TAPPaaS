@@ -40,6 +40,13 @@ export class Cached<T> {
     return this.inflight;
   }
 
+  // A refresh that reads after the caller's change: one already running read
+  // its inputs before it, so that one is awaited and then the read runs again.
+  async refreshAfterChange(): Promise<void> {
+    if (this.inflight) await this.inflight;
+    return this.refresh();
+  }
+
   // The current answer. The first call waits for the first load; afterwards a
   // stale value is served while the refresh runs behind it.
   async get(): Promise<Entry<T>> {

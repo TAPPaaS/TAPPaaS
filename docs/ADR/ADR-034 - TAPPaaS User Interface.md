@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-10-18 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#844** (the UI design spike and this ADR). Related: #839 (the UI, physical view first), #183 (service catalog), #91 (Backstage), #142 (agent access to `tappaas-cicd`), #843 (SIEM); caused #853, #854, #855 (switch-controller and console gaps) and #856 (the admin tunnel). Builds on ADR-007 (taxonomy, 007e Health, 007f managers and controllers), ADR-020 (declared-field changes), ADR-021 / ADR-023 / ADR-032 (reachability, routes, exposure), ADR-031 (pulse). |
-| **Changelog** | v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
+| **Changelog** | v0.4 (2026-10-18) — **D2** says what a source outside the route's zones gets as installed on hrossen: Caddy runs the gate before the access list, so an anonymous request is redirected to the login and a signed-in one gets 403; the console is never reached; was "403 to the internet". · v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
 
 One web UI for a TAPPaaS site: it shows the site and its health, draws the site as it is cabled,
 operates it through the managers and nothing else, and carries an assistant one can talk to.
@@ -115,8 +115,10 @@ Caddy and the Authentik gate. The `console` module has two routes (ADR-023, ADR-
 
 - **The name is public, the service is not.** `console.<domain>` has a public DNS record and its
   certificate comes by HTTP-01 (Caddy answers the challenge on :80), or from the wildcard where
-  the site has one. Every source outside the route's zones, the internet included, gets 403 from
-  Caddy before the gate.
+  the site has one. From every source outside the route's zones, the internet included, the
+  console is never reached: Caddy runs the gate before the access list, so an anonymous request
+  is redirected to the Authentik login (a public page anyway) and a signed-in one gets 403 from
+  the access list.
 - **`internet` is refused** in the console module's `proxyAllowedZones`: its install stops on
   a zone list that contains it.
 - **The name is passed at install.** The module's `vmname` is `tappaas-cicd`, so its route would
@@ -124,7 +126,7 @@ Caddy and the Authentik gate. The `console` module has two routes (ADR-023, ADR-
 - **Over the admin VPN** the tunnel's peer config must carry the site's DNS and host routes to the
   DMZ gateway (#856): the site's resolver answers the published name with the DMZ gateway, the
   host routes carry it through the tunnel, and it arrives from the admin overlay. Without them a
-  laptop resolves the public address, crosses the internet and gets the 403. ADR-021 D3a covers
+  laptop resolves the public address, crosses the internet and gets the login, then the 403. ADR-021 D3a covers
   the firewall side. #856 is a prerequisite of the install.
 - **`status.<domain>` waits for gated `proxyRoutes`.** `proxyRoutes` (ADR-023) publishes a further
   name with its own zones but never behind forward-auth; declared today, the route would reach the
@@ -368,7 +370,7 @@ registration, `add-stack`. Therefore:
 | A12 | **An agentic assistant** that applies within a scope | Decided against: the record must show that a person decided. |
 | A13 | **A separate installer UI** (a web page on the first node's installer image, or on the laptop) for the whole of stage 3 | Different work from this ADR: it needs an image and runs before any manager exists. D10 takes the half the managers already cover and leaves the chain a script, fed later by a preparation wizard. |
 | A14 | **Keep the install on the command line** and start the UI at operate | Leaves the longest, most error-prone stretch of a new site's life without the preview, the record and the resumable checklist that the UI gives every other change; the wizard is a thin layer once D4 exists. |
-| A15 | **An `.internal` name** (`console.mgmt.internal`) **with a site CA**, so that no public DNS record names the console | Breaks the TAPPaaS rule: `name.<zone>.internal` is direct, around Caddy and the gate, so the console would need login code of its own (A10) or a second kind of gated route; and every operator's browser would have to trust a CA of the site's. A public name that answers 403 outside `mgmt` and `admin` (D2) discloses only that the console exists. |
+| A15 | **An `.internal` name** (`console.mgmt.internal`) **with a site CA**, so that no public DNS record names the console | Breaks the TAPPaaS rule: `name.<zone>.internal` is direct, around Caddy and the gate, so the console would need login code of its own (A10) or a second kind of gated route; and every operator's browser would have to trust a CA of the site's. A public name that answers outside `mgmt` and `admin` only with the login page and a 403 (D2) discloses only that the console exists. |
 
 ## Consequences
 

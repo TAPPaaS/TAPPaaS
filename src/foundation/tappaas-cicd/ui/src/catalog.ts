@@ -18,6 +18,8 @@ export interface CatalogModule {
   description: string | null;
   maturity: string | null;
   category: string | null;
+  vmid: number | null; // the guest's VM id the module gives an instance (a second one needs another)
+  json: string; // the module's own JSON, absolute (its fields and defaults for an add form)
   instances: string[];
 }
 
@@ -77,9 +79,10 @@ export function repositoryCatalog(repo: Obj, instances: { name: string; source: 
     if (pick) owner.set(i.name, pick.name);
   }
   const modules = entries.map(({ e, name, json }): CatalogModule => {
+    const own_ = join(root, json);
     let own: Obj = {};
     try {
-      own = readJson(join(root, json));
+      own = readJson(own_);
     } catch {
       /* the catalogue's own fields stand */
     }
@@ -89,6 +92,8 @@ export function repositoryCatalog(repo: Obj, instances: { name: string; source: 
       description: str(own.description) ?? str(e.description),
       maturity: str(own.status) ?? str(e.status),
       category: str(e.category),
+      vmid: typeof own.vmid === "number" ? own.vmid : null,
+      json: own_,
       instances: instances.filter((i) => owner.get(i.name) === name).map((i) => i.name).sort(),
     };
   });

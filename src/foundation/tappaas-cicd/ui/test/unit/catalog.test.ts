@@ -25,7 +25,7 @@ put(join(tap, "src/module-catalog.json"), { description: "x", modules: [
   { moduleName: "templates", moduleJson: "src/foundation/templates/templates.json", stack: "foundation" },
   { moduleName: "tappaas-nixos", moduleJson: "src/foundation/templates/tappaas-nixos.json", stack: "template" },
 ] });
-put(join(tap, "src/home/deconz/deconz.json"), { description: "Zigbee gateway", status: "Testing", stack: "home" });
+put(join(tap, "src/home/deconz/deconz.json"), { description: "Zigbee gateway", status: "Testing", stack: "home", vmid: 213 });
 put(join(tap, "src/home/immich/immich.json"), { description: "Photos", status: "Production" });
 // The Community shape: lists by kind, the maturity in the entry.
 const com = mkdtempSync(join(tmpdir(), "cat-com-"));
@@ -44,6 +44,7 @@ check(t.error === null && t.modules.length === 6, "every module of a flat catalo
 check(by("templates").instances.join() === "templates" && by("tappaas-nixos").instances.length === 0, "entries sharing a directory: the instance is the one whose JSON is named like it");
 check(by("deconz").instances.join() === "deconz-test" && by("deconz").description === "Zigbee gateway" && by("deconz").maturity === "Testing", "installed under another name: matched by its directory; described from its own JSON");
 check(by("immich").instances.join() === "immich" && by("immich").stack === "home", "a trailing slash in moduleSource still matches; the catalogue's stack stands in");
+check(by("deconz").vmid === 213 && by("immich").vmid === null, "the VM id a module gives its guest, from its own JSON (none: null)");
 check(by("network").instances.join() === "firewall", "an instance with no moduleSource matches by name or legacy name");
 check(by("ghost").instances.length === 0 && by("ghost").description === null, "not installed; a module JSON that is missing leaves the catalogue's fields");
 const c = repositoryCatalog({ name: "Community", path: com, catalog: "src/module-catalog.json" }, instances);

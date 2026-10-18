@@ -15,29 +15,29 @@
       "changeNote": "Read by the identity services when they ensure the module's tile on the start page; a change shows at the module's next update. Nothing on the guest changes."
     },
     "version": {
-      "class": "in-place",
+      "class": "immutable",
       "apply": "none",
-      "changeNote": "The module's own semver. Read to decide whether an upgrade exists; nothing on the cluster reflects it."
+      "changeNote": "Written by the release: the module's own semver, carried in at install and update and read to decide whether an upgrade exists. Not changed by hand."
     },
     "appVersion": {
-      "class": "in-place",
+      "class": "immutable",
       "apply": "none",
-      "changeNote": "Upstream application version, informational. No format enforced, so nothing can validate it beyond being a string."
+      "changeNote": "Written by the release: the upstream version the module deploys, carried in at install and update. Not changed by hand."
     },
     "releaseDate": {
-      "class": "in-place",
+      "class": "immutable",
       "apply": "none",
-      "changeNote": "Informational."
+      "changeNote": "Written by the release: when this version of the module was released. Not changed by hand."
     },
     "maintainer": {
-      "class": "in-place",
+      "class": "immutable",
       "apply": "none",
-      "changeNote": "Informational."
+      "changeNote": "Written by the release: who maintains the module. Not changed by hand."
     },
     "status": {
-      "class": "in-place",
+      "class": "immutable",
       "apply": "none",
-      "changeNote": "Cheap to change, consequential in effect: `archived` and `external` take the module OUT of the update lifecycle entirely — `module-manager module modify` skips it unless --force. Set automatically by `module-manager module delete --archive`."
+      "changeNote": "Written by the release: a maturity the module's author claims in its own JSON, carried in at install and update. Not changed by hand; archiving a deployment is `management`."
     },
     "suspended": {
       "class": "immutable",
@@ -45,14 +45,14 @@
       "changeNote": "Written by 'module-manager suspend' and 'resume', which stop and start the guest with it; set by hand it would say a running guest is paused, or hide a stopped one from the update and the health check."
     },
     "tier": {
-      "class": "in-place",
+      "class": "immutable",
       "apply": "none",
-      "changeNote": "RETIRED (ADR-022e, #676): scope follows `stack` now. Read only when a config has no stack; the next update removes it from deployed configs."
+      "changeNote": "RETIRED (ADR-022e): scope follows `stack`. Written by the release when a config still carries it; not changed by hand."
     },
     "source": {
-      "class": "in-place",
+      "class": "immutable",
       "apply": "none",
-      "changeNote": "Trust marker, normally inferred at deploy from the catalogue repository and pinned only when the module file must. A foundation module from a non-official source fails the tier/source lint."
+      "changeNote": "Written by the install: the trust marker inferred from the catalogue repository. Not changed by hand."
     },
     "rebootOk": {
       "class": "in-place",
@@ -136,9 +136,9 @@
       "changeNote": "A node's lan/wan ports (#40). Writing it changes nothing on the node; converging it re-carries the lan bridge, which drains the node first — `site-manager node network set <node> --apply` does both, one node at a time, under a rollback. Until then health-manager reports the drift."
     },
     "stack": {
-      "class": "in-place",
+      "class": "immutable",
       "apply": "none",
-      "changeNote": "Where a module is grouped (#463). Nothing on a deployed module reads it; moving a module between stacks is a repository change (and, after #421, a directory move — scripts/move-module.sh)."
+      "changeNote": "Written by the release: the stack the catalogue lists the module under. Not changed by hand; moving a module is a release change."
     },
     "roles": {
       "class": "manual",

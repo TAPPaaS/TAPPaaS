@@ -1,1 +1,1 @@
-{"server": {"name": "tappaas-admin", "pubkey": "Ov1AdZIdxOnGZa3FyZ4HpUAqfb6lP+A1qBd2nzWcMQ0="}}
+{"server": {"name": "tappaas-admin", "port": "51820", "pubkey": "Ov1AdZIdxOnGZa3FyZ4HpUAqfb6lP+A1qBd2nzWcMQ0=", "privkey": "PRIV", "tunneladdress": {"10.255.1.1/24": {"value": "10.255.1.1/24", "selected": 1}}}}

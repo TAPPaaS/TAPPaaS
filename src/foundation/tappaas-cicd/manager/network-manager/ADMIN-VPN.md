@@ -60,7 +60,10 @@ network-manager wgvpn list       # server pubkey, rule + WAN-rule status, peers
 `setup` ensures the `tappaas-admin` WireGuard **server** on OPNsense (port `51821`,
 tunnel `10.255.1.1/24`), the least-privilege pass rule
 `admin 10.255.1.0/24 → mgmt 10.0.0.0/24` on the `wireguard` interface, **and** a WAN pass for
-**UDP `51821` → This Firewall**, then applies. It prints the **server public key** — you'll
+**UDP `51821` → This Firewall**, then applies. A server that already exists keeps its port
+(one made earlier may listen on `51820`): the WAN rule, `list` and the Endpoint of `add-peer`
+and `config` all follow the port the server really has, and `list` finds the WAN rule by that
+port, whatever its description. It prints the **server public key** — you'll
 need it in the client config:
 
 ```

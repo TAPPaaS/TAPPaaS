@@ -50,7 +50,8 @@ export function App() {
   const user = me.env?.data ?? null;
   // status.<domain>: the owner's view, read-only, three pages (D2, spike §5.11).
   const owner = user?.route === "status";
-  // While the site is incomplete the Setup wizard is shown first (D10).
+  // While the site is incomplete the Overview says so in one line and links
+  // to the Setup wizard (D10); only /setup shows the wizard itself.
   const setup = useRead<{ complete: boolean }>(user && !owner && user.role !== "read" ? "setup" : null, 600_000);
   const incomplete = setup.env?.data?.complete === false;
   const nav = owner ? OWNER_NAV : NAV;
@@ -77,8 +78,7 @@ export function App() {
   let page;
   if ((path === "/" || path === "") && owner) page = <OwnerOverview />;
   else if (owner && !["/physical", "/site/physical", "/modules"].some((p) => path === p || path.startsWith(`${p}/`))) page = <OwnerOverview />;
-  else if ((path === "/" || path === "") && incomplete) page = <Setup />;
-  else if (path === "/" || path === "") page = <Overview />;
+  else if (path === "/" || path === "") page = <Overview setupIncomplete={incomplete} />;
   else if (path === "/setup") page = <Setup />;
   else if (owner && (path === "/physical" || path === "/site/physical")) page = <Physical />;
   else if (path === "/physical" || path === "/site/physical") page = <Site tab="Physical" />;

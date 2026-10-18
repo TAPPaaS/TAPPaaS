@@ -18,7 +18,7 @@
 _here_av="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${_here_av}/../../../lib/opnsense-wg.sh"
 
-: "${SAT_ADMIN_WGPORT:=51821}"          # OPNsense admin-WG listen port
+: "${SAT_ADMIN_WGPORT:=51821}"          # admin-WG listen port of a NEW instance (av_server_port)
 : "${AV_SERVER_NAME:=tappaas-admin}"    # WG server instance name
 : "${AV_TUNNEL_ADDR:=10.255.1.1/24}"    # admin overlay gateway (OPNsense end)
 : "${AV_PEER_SUBNET:=10.255.1.0/24}"    # admin overlay zone (source)
@@ -26,13 +26,23 @@ _here_av="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${AV_WG_IFACE:=wireguard}"           # OPNsense WireGuard group interface token
 : "${AV_WAN_IFACE:=wan}"                # OPNsense WAN interface token
 : "${AV_RULE_DESC:=tappaas-admin admin->mgmt}"
-: "${AV_WAN_RULE_DESC:=tappaas-admin WAN :${SAT_ADMIN_WGPORT}}"
 : "${AV_KEEPALIVE:=25}"
 
 # ── WG server instance ───────────────────────────────────────────────────────
 av_server_uuid() {
     _ow_api /api/wireguard/server/searchServer \
         | jq -r --arg n "${AV_SERVER_NAME}" '.rows[]? | select(.name==$n) | .uuid' | head -1
+}
+
+# The port the admin server listens on, read from the instance. An instance an
+# earlier bootstrap or the operator made can listen on another port than the one
+# setup gives a new one (hrossen: 51820), and the WAN rule and the peers' Endpoint
+# must follow the instance. SAT_ADMIN_WGPORT while there is no instance.
+av_server_port() {
+    local p
+    p="$(_ow_api /api/wireguard/server/searchServer 2>/dev/null \
+        | jq -r --arg n "${AV_SERVER_NAME}" '.rows[]? | select(.name==$n) | .port // empty' 2>/dev/null | head -1)"
+    if [[ "${p}" =~ ^[0-9]+$ ]]; then printf '%s\n' "${p}"; else printf '%s\n' "${SAT_ADMIN_WGPORT}"; fi
 }
 
 # Ensure the admin WG server exists (create with a fresh keypair if missing).
@@ -55,17 +65,20 @@ av_server_pubkey() {
 
 # Re-link the server's peer list to every admin-overlay client (idempotent).
 # getServer returns select-objects; setServer wants a comma-separated UUID list.
+# The instance keeps its own port: setServer writes every field it is given.
 av_relink_peers() {
-    local uuid="${1:-$(av_server_uuid)}" body name priv pub taddr peers
+    local uuid="${1:-$(av_server_uuid)}" body name priv pub taddr peers port
     body="$(_ow_api "/api/wireguard/server/getServer/${uuid}")"
     name="$(jq -r '.server.name' <<<"${body}")"
+    port="$(jq -r '.server.port // empty' <<<"${body}")"
+    [[ "${port}" =~ ^[0-9]+$ ]] || port="${SAT_ADMIN_WGPORT}"
     priv="$(jq -r '.server.privkey' <<<"${body}")"
     pub="$(jq -r '.server.pubkey' <<<"${body}")"
     taddr="$(jq -r '.server.tunneladdress | if type=="object" then (to_entries|map(select(.value.selected==1))|.[0].key) else . end' <<<"${body}")"
     peers="$(_ow_api /api/wireguard/client/searchClient \
         | jq -r --arg net "${AV_PEER_SUBNET%.*/*}." '[.rows[]? | select((.tunneladdress//"")|startswith($net)) | .uuid] | join(",")')"
     _ow_api -X POST -H 'Content-Type: application/json' \
-        -d "{\"server\":{\"enabled\":\"1\",\"name\":\"${name}\",\"pubkey\":\"${pub}\",\"privkey\":\"${priv}\",\"port\":\"${SAT_ADMIN_WGPORT}\",\"tunneladdress\":\"${taddr}\",\"peers\":\"${peers}\"}}" \
+        -d "{\"server\":{\"enabled\":\"1\",\"name\":\"${name}\",\"pubkey\":\"${pub}\",\"privkey\":\"${priv}\",\"port\":\"${port}\",\"tunneladdress\":\"${taddr}\",\"peers\":\"${peers}\"}}" \
         "/api/wireguard/server/setServer/${uuid}" | jq -r '.result // empty'
 }
 
@@ -157,12 +170,23 @@ av_ensure_mgmt_rule() {
         /api/firewall/filter/addRule | jq -r '.result // empty'
 }
 
-av_wan_rule_uuid() {
-    _ow_api /api/firewall/filter/searchRule \
-        | jq -r --arg d "${AV_WAN_RULE_DESC}" '.rows[]? | select(.description==$d) | .uuid' | head -1
+# The description a WAN rule for <port> is created with.
+av_wan_rule_desc() { printf '%s' "${AV_WAN_RULE_DESC:-tappaas-admin WAN :$1}"; }
+
+# The WAN pass rule for the admin listener on <port>, found by what it does (an
+# enabled pass for UDP to that port on the WAN), not by its description, which
+# names the port it was made for. Echoes "uuid<TAB>description", or nothing.
+av_wan_rule() {
+    _ow_api /api/firewall/filter/searchRule | jq -r --arg p "$1" --arg i "${AV_WAN_IFACE}" '
+        .rows[]? | select(((.interface // "") | split(",") | index($i)) != null
+            and ((.protocol // "") | ascii_upcase) == "UDP" and (.destination_port // "") == $p
+            and .action == "pass" and (.enabled // "1") == "1")
+        | "\(.uuid)\t\(.description // "")"' 2>/dev/null | head -1
 }
 
-# Ensure a WAN pass rule for the admin-WG listener: UDP :51821 -> This Firewall.
+av_wan_rule_uuid() { av_wan_rule "${1:-$(av_server_port)}" | cut -f1; }
+
+# Ensure a WAN pass rule for the admin-WG listener: UDP :<port> -> This Firewall.
 # Safe to open unconditionally — WireGuard silently drops any packet not
 # authenticated by a registered peer key (no handshake, no response, no banner),
 # so an exposed port is inert until a device is enrolled. Consequences by site:
@@ -170,22 +194,24 @@ av_wan_rule_uuid() {
 #   • public IP (Topology B): gives direct reach with no manual WAN rule step.
 # That is why bootstrap opens it (ADR-010 §6). The satellite is never required for
 # the termination to exist; it only relays UDP for CGNAT sites.
+# Arg: the instance's port (default SAT_ADMIN_WGPORT, the port of a new one).
 av_ensure_wan_rule() {
-    local cli err; cli="$(av_fw_cli)"
+    local port="${1:-${SAT_ADMIN_WGPORT}}" desc cli err; cli="$(av_fw_cli)"
+    desc="$(av_wan_rule_desc "${port}")"
     if [[ -n "${cli}" ]]; then
         # See av_ensure_mgmt_rule: pin --port (== OPNSENSE_PORT) so the CLI does not
         # auto-detect onto Caddy's :443, and surface stderr on failure (#418).
         if err="$("${cli}" create-rule --firewall "${OPNSENSE_HOST}" --port "${OPNSENSE_PORT}" --no-ssl-verify \
-            --description "${AV_WAN_RULE_DESC}" --interface "${AV_WAN_IFACE}" \
+            --description "${desc}" --interface "${AV_WAN_IFACE}" \
             --action pass --protocol udp --log \
-            --source any --destination wanip --destination-port "${SAT_ADMIN_WGPORT}" \
+            --source any --destination wanip --destination-port "${port}" \
             --no-apply 2>&1)"; then echo "ok"; return 0; fi
-        echo "opnsense-firewall create-rule (WAN :${SAT_ADMIN_WGPORT}) failed; falling back to raw REST: ${err}" >&2
+        echo "opnsense-firewall create-rule (WAN :${port}) failed; falling back to raw REST: ${err}" >&2
     fi
-    local uuid; uuid="$(av_wan_rule_uuid)"
+    local uuid; uuid="$(av_wan_rule_uuid "${port}")"
     if [[ -n "${uuid}" ]]; then echo "exists"; return 0; fi
     _ow_api -X POST -H 'Content-Type: application/json' \
-        -d "{\"rule\":{\"enabled\":\"1\",\"action\":\"pass\",\"interface\":\"${AV_WAN_IFACE}\",\"direction\":\"in\",\"ipprotocol\":\"inet\",\"protocol\":\"UDP\",\"source_net\":\"any\",\"destination_net\":\"wanip\",\"destination_port\":\"${SAT_ADMIN_WGPORT}\",\"description\":\"${AV_WAN_RULE_DESC}\"}}" \
+        -d "{\"rule\":{\"enabled\":\"1\",\"action\":\"pass\",\"interface\":\"${AV_WAN_IFACE}\",\"direction\":\"in\",\"ipprotocol\":\"inet\",\"protocol\":\"UDP\",\"source_net\":\"any\",\"destination_net\":\"wanip\",\"destination_port\":\"${port}\",\"description\":\"${desc}\"}}" \
         /api/firewall/filter/addRule | jq -r '.result // empty'
 }
 
@@ -208,8 +234,9 @@ av_apply() {
 
 # Full idempotent bring-up of the OPNsense termination (no peers yet).
 av_setup() {
-    local srv; srv="$(av_ensure_server)"
+    local srv port; srv="$(av_ensure_server)"
     [[ -n "${srv}" ]] || { echo "ERROR: could not ensure admin WG server" >&2; return 1; }
+    port="$(av_server_port)"
 
     # Enable + reconfigure WireGuard FIRST. OPNsense only registers the
     # `wireguard` group interface once the service is up, and a filter rule bound
@@ -223,7 +250,7 @@ av_setup() {
     # REST fallback ends in `| jq -r`, whose status is jq's. So do not trust their
     # exit codes -- verify observed state below instead.
     av_ensure_mgmt_rule >/dev/null || true
-    av_ensure_wan_rule >/dev/null || true
+    av_ensure_wan_rule "${port}" >/dev/null || true
     av_apply >/dev/null
 
     # Verify against the LIVE rule set rather than asserting what we intended.
@@ -231,7 +258,7 @@ av_setup() {
     # `|| warn "admin-vpn setup encountered issues"` guard reachable at all.
     local missing=()
     [[ -n "$(av_rule_uuid)" ]]     || missing+=("admin->mgmt (${AV_PEER_SUBNET} -> ${AV_MGMT_SUBNET}, interface ${AV_WG_IFACE})")
-    [[ -n "$(av_wan_rule_uuid)" ]] || missing+=("WAN UDP ${SAT_ADMIN_WGPORT} -> This Firewall (interface ${AV_WAN_IFACE})")
+    [[ -n "$(av_wan_rule_uuid "${port}")" ]] || missing+=("WAN UDP ${port} -> This Firewall (interface ${AV_WAN_IFACE})")
 
     if (( ${#missing[@]} > 0 )); then
         echo "ERROR: admin-vpn setup incomplete -- server is up but these rules are absent:" >&2
@@ -241,9 +268,9 @@ av_setup() {
         return 1
     fi
 
-    echo "admin-vpn ready: server=${AV_SERVER_NAME} port=${SAT_ADMIN_WGPORT} pubkey=$(av_server_pubkey "${srv}")"
+    echo "admin-vpn ready: server=${AV_SERVER_NAME} port=${port} pubkey=$(av_server_pubkey "${srv}")"
     echo "  rule: ${AV_PEER_SUBNET} -> ${AV_MGMT_SUBNET} (interface ${AV_WG_IFACE})"
-    echo "  wan : UDP ${SAT_ADMIN_WGPORT} -> This Firewall (interface ${AV_WAN_IFACE}) — direct/Topology-B reach"
+    echo "  wan : UDP ${port} -> This Firewall (interface ${AV_WAN_IFACE}) — direct/Topology-B reach"
 }
 
 # ── the client config (#856) ────────────────────────────────────────────────
@@ -381,7 +408,7 @@ av_config_cmd() {
         [[ "${who}" == */* ]] || { echo "[Error] no admin peer named '${who}' (network-manager wgvpn list)" >&2; return 1; }
         ip="${who}"
     fi
-    [[ -n "${endpoint}" ]] || endpoint="$(av_discover_endpoint "$(av_config_dir)")"
+    [[ -n "${endpoint}" ]] || endpoint="$(av_discover_endpoint "$(av_config_dir)" "$(av_server_port)")"
     av_client_config "${ip}" "${endpoint}" "${priv}"
     [[ -z "${name}" ]] || av_record_issued "${name}" "${ip}"
 }
@@ -390,12 +417,12 @@ av_config_cmd() {
 # one to `add-peer`. If a satellite carrying the admin-vpn role is registered, use
 # its public address — that satellite is what relays :51821 for a CGNAT site.
 # Otherwise emit a template placeholder for the operator to fill in (direct /
-# Topology-B reach, or before any satellite exists). The port is always the admin
-# listener port. A satellite is an instance of the `satellite` module
+# Topology-B reach, or before any satellite exists). The port is the admin
+# listener's (av_server_port, passed by the callers). A satellite is an instance of the `satellite` module
 # (config/<instance>.json, ADR-010 §8.4.1) or, before its conversion, a
-# config/satellite-<name>.json. Arg: <config-dir>. Echoes host:port.
+# config/satellite-<name>.json. Args: <config-dir> [port]. Echoes host:port.
 av_discover_endpoint() {
-    local cfgdir="${1:-/home/tappaas/config}" port="${SAT_ADMIN_WGPORT}" cfg ip
+    local cfgdir="${1:-/home/tappaas/config}" port="${2:-${SAT_ADMIN_WGPORT}}" cfg ip
     for cfg in "${cfgdir}"/*.json; do
         [[ -e "${cfg}" ]] || continue
         if [[ "$(basename "${cfg}")" != satellite-*.json ]]; then
@@ -413,11 +440,16 @@ av_discover_endpoint() {
 }
 
 av_list() {
-    local srv issued; srv="$(av_server_uuid)"
-    echo "server : ${AV_SERVER_NAME} (uuid=${srv:-<none>}) port=${SAT_ADMIN_WGPORT}"
+    local srv issued port wan; srv="$(av_server_uuid)" port="$(av_server_port)"
+    echo "server : ${AV_SERVER_NAME} (uuid=${srv:-<none>}) port=${port}"
     [[ -n "${srv}" ]] && echo "pubkey : $(av_server_pubkey "${srv}")"
     echo "rule   : $([[ -n "$(av_rule_uuid)" ]] && echo present || echo MISSING) (${AV_PEER_SUBNET} -> ${AV_MGMT_SUBNET})"
-    echo "wan    : $([[ -n "$(av_wan_rule_uuid)" ]] && echo present || echo MISSING) (UDP ${SAT_ADMIN_WGPORT} -> This Firewall)"
+    wan="$(av_wan_rule "${port}")"
+    if [[ -n "${wan}" ]]; then
+        echo "wan    : present (UDP ${port} -> This Firewall, rule '$(cut -f2- <<<"${wan}")')"
+    else
+        echo "wan    : MISSING (UDP ${port} -> This Firewall)"
+    fi
     echo "peers  :"
     issued="$(jq -c . "$(av_issued_file)" 2>/dev/null)" || issued='{}'
     [[ -n "${issued}" ]] || issued='{}'

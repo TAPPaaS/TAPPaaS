@@ -57,5 +57,8 @@ the sweep did, and every change to the site as a job that runs a manager verb wi
 
 The module installs nothing: the service belongs to the mothership's NixOS configuration, and
 the backend accepts the firewall's address (where Caddy and the gate run) and loopback only.
+From a zone outside the route's list, the internet included, an anonymous request is redirected
+to the Authentik login (public anyway) and a signed-in one gets 403 from the access list; the
+console itself is never reached from there.
 
 For installation steps see [INSTALL.md](./INSTALL.md).

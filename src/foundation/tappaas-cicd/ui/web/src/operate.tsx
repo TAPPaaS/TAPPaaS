@@ -8,7 +8,7 @@
 // (update-port, then reconcile) runs them in order.
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
-import { applyJob, previewJob, readJob, useJob, useRead, useVerb } from "./api";
+import { applyJob, previewJob, readJob, reloadAll, useJob, useRead, useVerb } from "./api";
 import { Command, Output, jobResult } from "./jobs";
 import { Job, ManifestVerb, Me } from "./types";
 import { Link, Tag, canOperate, useMe } from "./ui";
@@ -30,6 +30,9 @@ export interface Step {
   placeholders?: Record<string, string>; // an example in place of the help's <arg>, by "@name" or flag
   render?: (values: Values, set: (v: Values) => void) => ReactNode; // a change form of its own
   note?: ReactNode;
+  // The head of the Preview: what the change does (fields.tsx: the change
+  // classes of the fields being changed, in the operator's words).
+  previewNote?: (values: Values) => ReactNode;
   after?: (job: Job) => ReactNode; // shown once the step's job has finished (a config to download)
 }
 
@@ -53,6 +56,10 @@ export function buildArgv(step: Step, verb: ManifestVerb | null, values: Values)
     else if (Array.isArray(v)) for (const x of v.filter((y) => y.trim())) out.push(o.flag, x.trim());
     else out.push(o.flag, v.trim());
   }
+  // A field form's tokens (fields.tsx): `--set f=v`, `--unset f`, or the verb's
+  // own flag and its value, already in argv order.
+  const fieldTokens = values["@fields"];
+  if (Array.isArray(fieldTokens)) out.push(...fieldTokens);
   // An open verb's further options (identity's field flags, module add's
   // --<field> <value>): one per line, the flag then its value.
   const extra = values["@extra"];
@@ -81,7 +88,9 @@ export function applyForm(verb: ManifestVerb | null, argv: string[]): string[] {
   return argv;
 }
 
-function VerbForm({ step, verb, values, set }: { step: Step; verb: ManifestVerb; values: Values; set: (v: Values) => void }) {
+// part: "top" is the positionals and options, "bottom" the disruptions; a step
+// with a form of its own (fields.tsx) shows that form between the two.
+function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb: ManifestVerb; values: Values; set: (v: Values) => void; part?: "all" | "top" | "bottom" }) {
   const hidden = new Set([...ALWAYS_HIDDEN, ...(step.hide ?? [])]);
   const disruptive = new Set(verb.disruptions.map((d) => d.flag));
   const label = (k: string, fallback: string) => step.labels?.[k] ?? fallback;
@@ -108,15 +117,17 @@ function VerbForm({ step, verb, values, set }: { step: Step; verb: ManifestVerb;
     }
     return <input type="text" placeholder={arg ?? ""} value={typeof v === "string" ? v : ""} onChange={(e) => set({ ...values, [key]: e.target.value })} />;
   };
+  const top = part !== "bottom";
+  const bottom = part !== "top";
   return (
     <div className="form">
-      {pos.map((p) => (
+      {top && pos.map((p) => (
         <label key={p.name} className="form-row">
           <span>{label(`@${p.name}`, p.name)}{p.optional ? "" : " *"}</span>
           {field(`@${p.name}`, `<${p.name}>`, null, false)}
         </label>
       ))}
-      {opts.map((o) =>
+      {top && opts.map((o) =>
         o.takesValue ? (
           <label key={o.flag} className="form-row">
             <span className="mono">{label(o.flag, o.flag)}</span>
@@ -130,14 +141,15 @@ function VerbForm({ step, verb, values, set }: { step: Step; verb: ManifestVerb;
           </label>
         ),
       )}
-      {verb.open ? (
+      {/* A field form (fields.tsx) lists the fields themselves. */}
+      {top && verb.open && !step.render ? (
         <label className="form-row">
           <span>more options</span>
           <textarea rows={3} placeholder={"one per line: --flag value\n(see the verb's --help)"} value={Array.isArray(values["@extra"]) ? values["@extra"].join("\n") : ""} onChange={(e) => set({ ...values, "@extra": e.target.value.split("\n") })} />
           {verb.details ? <small className="muted mono wrap">{verb.details}</small> : null}
         </label>
       ) : null}
-      {verb.disruptions.length ? (
+      {bottom && verb.disruptions.length ? (
         <fieldset className="disruptions">
           <legend>Disruption — only if you mean it</legend>
           {verb.disruptions.map((d) => (
@@ -228,8 +240,15 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
         </ol>
       ) : null}
       {step.note ? <div className="note">{step.note}</div> : null}
-      {step.render ? step.render(values, setValues) : null}
-      <VerbForm step={step} verb={verb} values={values} set={setValues} />
+      {step.render ? (
+        <>
+          <VerbForm step={step} verb={verb} values={values} set={setValues} part="top" />
+          {step.render(values, setValues)}
+          <VerbForm step={step} verb={verb} values={values} set={setValues} part="bottom" />
+        </>
+      ) : (
+        <VerbForm step={step} verb={verb} values={values} set={setValues} />
+      )}
       <Command argv={isRead ? argv : applyForm(verb, argv)} label={isRead ? "runs" : "apply runs"} />
       {destructive ? <p className="readstate readstate-fail">Destructive: this cannot be undone from the console. It needs the Installer role{me ? ` (you are ${me.role})` : ""} and the object's name typed after the preview.</p> : null}
       <div className="actions">
@@ -245,6 +264,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       </div>
       {error ? <p className="readstate readstate-fail">{error}</p> : null}
       {writeMark ? <p className="readstate readstate-warn">{writeMark.flag} makes this a change: it {writeMark.touches}. It is previewed and queued like any change, never beside the sweep.</p> : null}
+      {preview && step.previewNote ? <div className="note preview-head">{step.previewNote(values)}</div> : null}
       {preview ? <JobView id={preview.id} label={isRead ? "result" : previewKind === "none" ? "preview (no dry run)" : "preview"} /> : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to apply.</p> : null}
       {destructive && previewDone && !applied ? (
@@ -294,7 +314,8 @@ export function OperateButton({ label, title, steps, kind, disabled, hint }: { l
       <button className={`btn${kind ? ` btn-${kind}` : ""}`} disabled={disabled} title={hint} onClick={() => setOpen(true)}>
         {label}
       </button>
-      {open ? <Operate title={title ?? label} steps={typeof steps === "function" ? steps() : steps} onClose={() => setOpen(false)} /> : null}
+      {/* Closing it re-reads the page: a job may have changed what it shows (a Test job, a Setup step). */}
+      {open ? <Operate title={title ?? label} steps={typeof steps === "function" ? steps() : steps} onClose={() => { setOpen(false); reloadAll(); }} /> : null}
     </>
   );
 }

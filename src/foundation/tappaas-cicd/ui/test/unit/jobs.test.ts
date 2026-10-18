@@ -69,7 +69,8 @@ async function main(): Promise<void> {
   let now = Date.parse("2026-10-17T12:00:00Z");
   const done_: JobSummary[] = [];
   let idle = 0;
-  const jobs = new Jobs({ stateDir: dir, configDir: dir, manifests: () => ms, stream, run, now: () => now, onWriteDone: (j) => done_.push(j), onIdle: () => idle++ });
+  const finished: { argv: string; kind: string; tail: string }[] = [];
+  const jobs = new Jobs({ stateDir: dir, configDir: dir, manifests: () => ms, stream, run, now: () => now, onWriteDone: (j) => done_.push(j), onIdle: () => idle++, onDone: (j, tail) => finished.push({ argv: j.argv.join(" "), kind: j.kind, tail }) });
 
   // ── T2 at the door, then T1 on every write ──────────────────────────
   let r = await jobs.create(me(), closed, { argv: ["module-manager", "frob"], preview: true });
@@ -150,6 +151,8 @@ async function main(): Promise<void> {
   r = await jobs.create(me(), closed, { argv: ["module-manager", "test", "immich"] });
   check(r.status === 201 && r.job?.kind === "read" && r.job.ran?.join(" ") === "module-manager test immich", "a reading verb runs as a read job, no preview");
   await settle();
+  const f = finished.find((x) => x.argv === "module-manager test immich");
+  check(f !== undefined && f.kind === "read" && f.tail === "ran test", "a finished read job is handed on with the end of its output (onDone)");
   // …but test --deep creates and removes guests: a write with no dry run (finding 3)
   r = await jobs.create(me(), closed, { argv: ["module-manager", "test", "immich", "--deep"] });
   check(r.status === 409 && !r.job, "test --deep is not a read: it needs a preview (T3)");

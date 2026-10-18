@@ -24,6 +24,11 @@ mkdir -p "${d}/config"
 cat > "${d}/refresh" <<'STUB'
 #!/usr/bin/env bash
 echo "${TAPPAAS_NO_GIT_PULL:-0}" > "${STUB_SEEN}"
+echo "${TAPPAAS_NO_GIT_PULL:-0}" >> "${STUB_SEEN}.runs"
+# STUB_CHANGE=1: the run replaces this file, as the pull replaces the real one
+if [[ -n "${STUB_CHANGE:-}" ]]; then
+  cp "$0" "$0.new" && echo "# changed $$" >> "$0.new" && mv -f "$0.new" "$0"
+fi
 exit "${STUB_RC:-0}"
 STUB
 chmod +x "${d}/refresh"
@@ -94,6 +99,21 @@ ck "…and removed"                  gone "$([[ -e "${d}/config/.update-request.
 echo '{"noGitPull": true, "requestedBy": "lars"}' > "${d}/config/.update-request.json"
 ck "an ambient TRIGGER_UNIT does not leak into a manual run" \
    lars "$(TRIGGER_UNIT=update-tappaas.timer bash -c 'unset TRIGGER_UNIT; rm -rf "$1/run"; RUNTIME_DIRECTORY="$1/run" bash "$2" >/dev/null 2>&1; jq -r .requestedBy "$1/run/request.json" 2>/dev/null' _ "${d}" "${P}")"
+
+# ── a pull that changes the refresh itself ────────────────────────────
+# The new copy runs once more for the relink and the builds, without the pull;
+# a copy that changes on every run still runs only twice.
+runs() { tr '\n' ' ' < "${STUB_SEEN}.runs" 2>/dev/null; }
+rm -f "${d}/config/.update-request.json" "${STUB_SEEN}.runs"
+ck "an unchanged refresh runs once"        "0 " "$(STUB_RC=0 run >/dev/null; runs)"
+rm -f "${STUB_SEEN}.runs"
+ck "a changed refresh runs again, no pull" "0 1 " "$(STUB_CHANGE=1 STUB_RC=0 run >/dev/null; runs)"
+ck "…and the step succeeds"                refreshed "$(cat "${d}/run/control-plane" 2>/dev/null)"
+rm -f "${STUB_SEEN}.runs"
+ck "a stale build that changed it: again"  "0 1 " "$(STUB_CHANGE=1 STUB_RC=10 run >/dev/null; runs)"
+rm -f "${STUB_SEEN}.runs"
+ck "a failed sync is not run again"        "1|0 " "$(STUB_CHANGE=1 STUB_RC=12 run)|$(runs)"
+rm -f "${STUB_SEEN}.runs"
 
 # ── the console's job lock (ADR-034 D4, the other direction) ──────────
 # While the console's runner holds its lock the step waits, bounded; a lock

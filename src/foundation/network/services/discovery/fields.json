@@ -7,6 +7,7 @@
     "discoveryMdns": {
       "description": "Consumer zones to bridge with zone0 in the mDNS repeater (os-mdns-repeater). zone0 is always included as the provider zone.",
       "type": "array",
+      "references": "zones",
       "items": "string",
       "requiredBy": [],
       "usedBy": [

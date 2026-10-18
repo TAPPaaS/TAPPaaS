@@ -41,6 +41,27 @@ async function main(): Promise<void> {
     const e = c.peek();
     check(e.value === 3 && e.error === "down", "a failed refresh keeps the last good value and says why");
   }
+  // a refresh after a change does not join a load that read before it (the
+  // Setup checklist after Check: the page's own gather was still running)
+  {
+    let source = "before";
+    const holds: (() => void)[] = [];
+    const c = new Cached<string>("y", 0, async () => {
+      const v = source;
+      await new Promise<void>((r) => holds.push(r));
+      return v;
+    });
+    const first = c.refresh();
+    source = "after"; // the tests wrote their results
+    const again = c.refreshAfterChange();
+    const joined = c.refresh(); // the plain refresh joins the running load
+    holds.shift()!();
+    await Promise.all([first, joined]);
+    for (let i = 0; i < 20 && holds.length === 0; i++) await new Promise<void>((r) => setTimeout(r, 1));
+    holds.shift()?.();
+    await again;
+    check(c.peek().value === "after", "refreshAfterChange reads again after a load already running");
+  }
 
   const cfgDir = mkdtempSync(join(tmpdir(), "console-reads-"));
   const stateDir = join(cfgDir, "state");

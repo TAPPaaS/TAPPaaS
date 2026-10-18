@@ -7,6 +7,7 @@
     "snatFrom": {
       "description": "Zones whose traffic to this module's zone0 is masqueraded to the zone0 gateway address, so the module's device sees a source inside its own subnet. Required by appliances whose firmware rejects sessions originating outside their /24 — the Alfen NG5 charger is the reference case. Each entry becomes one OPNsense source-NAT rule on the zone0 interface. The request is intersected with the target zone's snat-allowed-from gate in zones.json; naming a zone outside that gate is refused, not trimmed, because a module must never widen its own permission.",
       "type": "array",
+      "references": "zones",
       "items": {
         "type": "string"
       },

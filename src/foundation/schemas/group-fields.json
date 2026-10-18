@@ -36,11 +36,13 @@
     "ownerOrg": {
       "description": "Reference to the owning Organization.name.",
       "type": "string",
+      "references": "organizations",
       "pattern": "^[A-Za-z0-9_-]+$"
     },
     "roles": {
       "description": "Roles inherited by all members of this group. Each entry references a Role.name.",
       "type": "array",
+      "references": "roles",
       "items": {
         "type": "string",
         "pattern": "^[A-Za-z0-9_-]+$"

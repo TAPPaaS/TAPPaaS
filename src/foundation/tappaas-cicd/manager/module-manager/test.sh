@@ -286,6 +286,46 @@ def_bc="$(run_p5 "$BCW" resolve_default_environment)"
 [[ -z "$def_bc" ]] && ok "no site/environments → empty default env (legacy/no-env install path)" \
                    || bad "expected empty default env in back-compat, got '${def_bc}'"
 
+# --- a guest's VM id when the module's own is in use ------------------------
+# A second instance (vaultwarden-test beside vaultwarden) takes the module's
+# VM id from its JSON; the install now gives it the next free one. The cluster
+# read is stubbed: the ids in use are the cluster's guests and every deployed
+# config but the one being installed.
+VMFN="${WORK}/vmid.fn.sh"
+for _f in module_config_vmid used_vmids next_free_vmid; do
+    awk '/^'"${_f}"'\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INSTALL"; echo
+done > "$VMFN"
+[[ "$(grep -c '() {' "$VMFN")" -eq 3 ]] && ok "extracted the VM id functions from install-module.sh" \
+                                       || bad "could not extract the VM id functions"
+VCFG="${WORK}/vmid-config"; mkdir -p "${VCFG}"
+echo '{"vmid": 610, "config": {}}' > "${VCFG}/vaultwarden.json"
+echo '{"config": {"vmid": 700}}'     > "${VCFG}/oldshape.json"
+echo '{"name": "rossen"}'             > "${VCFG}/site.json"
+echo '{"vmid": 610}'                  > "${VCFG}/vaultwarden-test.json"
+run_vmid() {  # $1 = the cluster stub's ids ("" = unreadable), then the code to run
+    CONFIG_DIR="${VCFG}" CLUSTER_IDS="$1" bash -c '
+        set -uo pipefail
+        . "'"$VMFN"'"
+        cluster_vmids() { [[ -n "${CLUSTER_IDS}" ]] || return 1; tr " " "\n" <<<"${CLUSTER_IDS}"; }
+        '"$2"
+}
+[[ "$(run_vmid "" 'next_free_vmid 610 <<<"$(printf "610\n611\n811\n")"')" == 612 ]] \
+    && ok "vmid: the module's id in use → the next free one up (610, 611 taken → 612)" || bad "vmid: next free id"
+[[ "$(run_vmid "" 'next_free_vmid 213 <<<"610"')" == 213 ]] \
+    && ok "vmid: the module's own id when nothing uses it" || bad "vmid: a free id kept"
+used="$(run_vmid "110 611" 'used_vmids "'"${VCFG}"'/vaultwarden-test.json" | tr "\n" " "')"
+[[ "${used}" == "110 610 611 700 " ]] \
+    && ok "vmid: in use = the cluster's guests + every other deployed config (either shape), not the one being installed" \
+    || bad "vmid: used ids '${used}'"
+[[ "$(run_vmid "110 611" 'next_free_vmid 610 <<<"$(used_vmids "'"${VCFG}"'/vaultwarden-test.json")"')" == 612 ]] \
+    && ok "vmid: vaultwarden-test beside vaultwarden (610) and a guest on 611 gets 612" || bad "vmid: second instance"
+run_vmid "" 'used_vmids "'"${VCFG}"'/vaultwarden-test.json" >/dev/null' \
+    && bad "vmid: an unreadable cluster passed as 'nothing in use'" \
+    || ok "vmid: an unreadable cluster is an error, so the module's id is kept"
+grep -q 'module_is_not_a_guest && \[\[ " ${passthru\[\*\]-} " != \*" --vmid "\* \]\]' "$INSTALL" \
+    && ok "vmid: only a guest is given another id, and never over an explicit --vmid" \
+    || bad "vmid: the caller no longer skips machines or an explicit --vmid"
+
 # --- full install-module.sh foundation rejection (offline; fails at Step 0) -
 # A tier:foundation module targeted at a non-mgmt env must error BEFORE any
 # provisioning. Run install-module.sh in a temp module dir with a stub

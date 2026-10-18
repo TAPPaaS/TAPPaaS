@@ -39,7 +39,9 @@ import { identityDir } from "../../../lib/ts/src/config-io";
 // Keywords the interpreter understands. Annotation keywords are accepted and
 // ignored; everything else is validated. An unknown keyword throws (see the
 // header comment — that is the no-silent-under-validation guarantee).
-const ANNOTATION_KEYWORDS = new Set(["$schema", "$id", "title", "description", "default"]);
+// `references` names the kind of object a value must name (schemas/README.md):
+// the console's choice list; the reference checks below do the validating.
+const ANNOTATION_KEYWORDS = new Set(["$schema", "$id", "title", "description", "default", "references"]);
 const VALIDATION_KEYWORDS = new Set([
   "type",
   "required",
