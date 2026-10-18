@@ -412,10 +412,15 @@ in
         # ~/.wlan-secrets.txt, created on a fresh install, so no per-file entry
         # can name them in advance), ~/.ssh/known_hosts (a re-provisioned node's
         # host key), ~/logs, and nix's ~/.cache and ~/.tappaas-gcroots for the
-        # builds `module add/update` run; ~/bin, which `repository sync` of the
-        # release repository relinks (refresh-control-plane.sh). Read-only
-        # below: what would let a compromised console log in, or plant code in
-        # the next login shell or git run.
+        # builds `module add/update` run. Read-only below: what would let a
+        # compromised console log in elsewhere (the SSH keys and the
+        # controllers' credentials), or plant code in the next login shell or
+        # git run. ~/bin stays writable, with this reason: `site-manager
+        # repository sync` and `module update tappaas-cicd` relink it from
+        # inside a console job (refresh-control-plane.sh), and running those
+        # two verbs outside the sandbox (tappaas-unit-run) would put the
+        # heaviest verbs the console runs outside it altogether — a bigger
+        # change than this list, kept as a follow-up.
         "/home/tappaas"
         # /tmp itself, not a private one: `site-manager node add --pxe` stages
         # the netboot files in /tmp/tappaas-serve and serves them from a
@@ -435,6 +440,22 @@ in
         "-/home/tappaas/.bash_profile"
         "-/home/tappaas/.gitconfig"
         "-/home/tappaas/.config/git"
+        # The verbs READ these (ssh to the nodes and the firewall, OPNsense's
+        # API credentials); only install-platform.sh and cicd-key.sh write
+        # them, neither from a job. Not listed, because a job writes them:
+        # ~/.authentik-credentials.txt (ensure-authentik-creds.sh re-fetches
+        # the token inside `identity` and every accessControl install) and
+        # ~/.loki-admin-password (lib/log-shipping.sh creates it on first use,
+        # from `logging update` and update-os.sh). "-": absent until the
+        # install step that creates it.
+        "-/home/tappaas/.ssh/config"
+        "-/home/tappaas/.ssh/id_ed25519"
+        "-/home/tappaas/.ssh/id_ed25519.pub"
+        "-/home/tappaas/.ssh/id_rsa"
+        "-/home/tappaas/.ssh/id_rsa.pub"
+        "-/home/tappaas/.ssh/tappaas-fw"
+        "-/home/tappaas/.ssh/tappaas-fw.pub"
+        "-/home/tappaas/.opnsense-credentials.txt"
       ];
     };
   };
