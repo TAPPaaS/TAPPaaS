@@ -30,6 +30,8 @@ own infrastructure with no external dependencies.
 
 **`forgejo:repo`** — a repository a module's content lives in (`websites/<vmname>`), a read-only deploy key for the module's VM and write access for the people it names. Used by lazysite for its pages. See [services/repo/README.md](services/repo/README.md).
 
+**`forgejo:oauth`** — sign in to a module with Forgejo (and so with Authentik): an OAuth2 application for the module and its client on the module's VM. Used by Woodpecker. See [services/oauth/README.md](services/oauth/README.md).
+
 What Forgejo serves directly, without a service contract:
 
 | What | Port | Used for |

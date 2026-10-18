@@ -1,0 +1,55 @@
+{
+  "description": "Woodpecker CI — runs the pipelines of the site's Forgejo repositories, sign-in with Forgejo.",
+  "displayName": "Woodpecker CI",
+  "kind": "vm",
+  "version": "0.1.0",
+  "stack": "devops",
+  "releaseDate": "2026-10-18",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "vmname": "woodpecker",
+  "vmid": 351,
+  "vmtag": "TAPPaaS,App,CI",
+  "zone0": null,
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "backup:vm",
+    "network:proxy",
+    "network:rules",
+    "forgejo:oauth"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "3.18.0",
+  "woodpeckerAdmins": [],
+  "config": {
+    "cluster:vm": {
+      "cores": 4,
+      "memory": 4096,
+      "diskSize": "64G",
+      "thinDisk": true,
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:proxy": {
+      "proxyPort": 8000
+    },
+    "forgejo:oauth": {
+      "oauthRedirectPaths": [
+        "/authorize"
+      ]
+    }
+  },
+  "ports": [
+    {
+      "port": 8000,
+      "protocol": "TCP",
+      "description": "Woodpecker: the web UI, its API and Forgejo's webhooks"
+    }
+  ]
+}

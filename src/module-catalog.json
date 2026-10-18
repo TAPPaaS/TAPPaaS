@@ -248,6 +248,12 @@
       "moduleJson": "src/devops/forgejo/forgejo.json",
       "vmid": 350,
       "stack": "devops"
+    },
+    {
+      "moduleName": "woodpecker",
+      "moduleJson": "src/devops/woodpecker/woodpecker.json",
+      "vmid": 351,
+      "stack": "devops"
     }
   ]
 }

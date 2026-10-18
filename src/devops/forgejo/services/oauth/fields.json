@@ -1,0 +1,23 @@
+{
+  "$schema": "../../../../foundation/schemas/service-fields.json",
+  "service": "forgejo:oauth",
+  "description": "Signing in to a module with Forgejo: where Forgejo may send a signed-in user back to.",
+  "fields": {
+    "oauthRedirectPaths": {
+      "description": "The paths on the consumer's address Forgejo may redirect to after a sign-in (the OAuth2 redirect URIs, without the address). The address is the consumer's published name (https) when the proxy serves it, else <vmname>.<zone>.internal:<proxyPort>.",
+      "type": "array",
+      "requiredBy": [
+        "forgejo:oauth"
+      ],
+      "usedBy": [
+        "forgejo:oauth"
+      ],
+      "default": [],
+      "example": ["/authorize"],
+      "note": "Set by the consumer's module JSON (Woodpecker's is /authorize); an operator rarely changes it.",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Moves the application's redirect URIs; Forgejo gives the application a new secret, written to the consumer's VM."
+    }
+  }
+}

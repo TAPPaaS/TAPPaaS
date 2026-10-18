@@ -1,0 +1,18 @@
+{
+  "$schema": "../../foundation/schemas/fields-schema.json",
+  "scope": "module",
+  "description": "Fields of the woodpecker module.",
+  "_note": "MODULE TIER (#567). Woodpecker provides no service; woodpecker.nix reads this field from the module's companion JSON.",
+  "fields": {
+    "woodpeckerAdmins": {
+      "description": "Forgejo usernames that are Woodpecker administrators: they see every repository, manage agents and the site-wide secrets. Anyone else with a Forgejo account may sign in and run the pipelines of the repositories they can write to.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "example": ["lars"]
+    }
+  }
+}
