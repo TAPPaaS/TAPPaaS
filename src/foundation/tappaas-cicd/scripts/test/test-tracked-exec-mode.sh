@@ -15,10 +15,12 @@
 # how config/module-fields.json is built; on a virgin install it simply would
 # not run, and nothing would say so.
 #
-# Two sweeps, no curated list (a list is what let the gap persist — see the
+# Three sweeps, no curated list (a list is what let the gap persist — see the
 # Test 9z rationale in test.sh):
 #   1. every swept tabletop suite (scripts/test/test-*.sh) is tracked 100755
 #   2. every repo file a shell script gates on `[ -x … ]` is tracked 100755
+#   3. every control-plane script (a *.sh with a #! line under tappaas-cicd,
+#      sourced libraries aside) is tracked 100755
 #
 # Self-contained: git plumbing only, no cluster, no network.
 # Exits 1 if any assertion fails.
@@ -101,6 +103,35 @@ if [ "${_checked}" -eq 0 ]; then
     fail "resolved no [ -x ] guards to tracked files — the sweep matched nothing, so it proves nothing"
 elif [ "${_bad}" -eq 0 ]; then
     pass "all ${_checked} resolvable [ -x ] guard target(s) are tracked 100755"
+fi
+
+# ── 3. control-plane scripts must be executable (#857) ──────────────────────
+# The managers are Nix builds of the checkout, and Nix hashes the executable
+# bit. A script committed 100644 that a component's install.sh then chmods +x
+# (module-manager's links every *.sh beside it) is built at one store path by
+# the prepare step and evaluated at another by the self-check, after the chmod:
+# the rebuild rolls back on every run. suspend-module.sh did that to every site
+# whose checkout has core.fileMode=true. A sourced library (lib/, *-lib.sh) is
+# never run and stays 100644 (#565).
+echo "[3] control-plane scripts are tracked 100755"
+_checked=0
+_bad=0
+while IFS= read -r f; do
+    [ -n "${f}" ] || continue
+    case "${f}" in */lib/*|*-lib.sh) continue ;; esac
+    [ "$(git show ":${f}" 2>/dev/null | head -c2)" = "#!" ] || continue
+    _checked=$((_checked + 1))
+    if [ "$(tracked_mode "${f}")" != "100755" ]; then
+        fail "${f} is tracked $(tracked_mode "${f}") — commit it 100755 (git update-index --chmod=+x); a chmod at install time moves the component's store path (#857)"
+        _bad=$((_bad + 1))
+    fi
+done <<EOF
+$(git ls-files 'src/foundation/tappaas-cicd/*.sh')
+EOF
+if [ "${_checked}" -eq 0 ]; then
+    fail "found no control-plane scripts — the sweep matched nothing, so it proves nothing"
+elif [ "${_bad}" -eq 0 ]; then
+    pass "all ${_checked} control-plane scripts are tracked 100755"
 fi
 
 echo
