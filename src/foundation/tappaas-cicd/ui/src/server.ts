@@ -15,6 +15,7 @@ import { JumpKind, jumpsFor } from "./jumps";
 import { Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
 import { MODULE_NAME, Reads } from "./reads";
+import { ownerSummary, readConfigs } from "./owner";
 import { SECRETS, isSecretName, secretStatus, writeSecret } from "./secrets";
 import { closeSetupToken, setupComplete, setupSteps } from "./setup";
 
@@ -195,6 +196,32 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.environments.get()));
       case "identity":
         return sendJson(res, 200, envelope(await r.identity.get()));
+      case "owner": {
+        // The owner's view (spike §5.11): the same reads, plainly worded.
+        const [h, m, bk, t, st, envs] = await Promise.all([r.health.get(), r.modules.get(), r.backup.get(), r.topology.get(), r.site.get(), r.environments.get()]);
+        const mods = m.value?.modules ?? [];
+        const site = st.value as { site?: Record<string, unknown>; lastSweep?: Record<string, unknown> | null } | null;
+        return sendJson(res, 200, {
+          ...envelope(m),
+          data: ownerSummary({
+            site: site?.site ?? null,
+            health: h.value,
+            modules: mods,
+            backup: bk.value,
+            topology: t.value as never,
+            configs: await readConfigs(r.configDir, mods.map((x) => x.name), async (n) => {
+              // An explicit proxyDomain, else the proxy's default: <vmname>.<environment's primary domain>.
+              const v = (await r.moduleResolve.of(n).get()).value as { fields?: Record<string, { value?: string }> } | null;
+              const d = v?.fields?.proxyDomain?.value;
+              if (d && d !== "null") return d;
+              const row = mods.find((x) => x.name === n);
+              const dom = (envs.value ?? []).find((e) => e.name === row?.environment)?.domains?.primary;
+              return row?.vmname && dom ? `${row.vmname}.${dom}` : null;
+            }),
+            lastSweep: (site?.lastSweep ?? null) as never,
+          }),
+        });
+      }
       case "setup": {
         // The checklist, derived from the records each time it is read (D10).
         if (me.route === "status") return sendJson(res, 403, { error: "the status route has no setup" });

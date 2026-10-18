@@ -125,6 +125,10 @@ export class Reads {
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
   }
 
+  get configDir(): string {
+    return this.cfg.configDir;
+  }
+
   // The reads with timers, refreshed in the background from the start.
   timed(): Cached<unknown>[] {
     return [this.health, this.modules, this.backup, this.topology, this.zones, this.environments, this.site, this.security, this.peers, this.activity] as Cached<unknown>[];

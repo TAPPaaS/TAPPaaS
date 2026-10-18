@@ -9,7 +9,7 @@ import { ReactNode } from "react";
 import { zoneColor } from "../colors";
 import { TopoFinding, TopoRef, Topology } from "../types";
 import { OperateButton, Step } from "../operate";
-import { KV, Link, OpenIn, Tag } from "../ui";
+import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
 
 function Findings({ list }: { list: TopoFinding[] }) {
@@ -45,6 +45,7 @@ function Zones({ t, vlans }: { t: Topology; vlans: number[] }) {
 const refIs = (r: TopoRef, kind: string, name: string, sw?: string) => r.kind === kind && r.name === name && (sw === undefined || r.switch === undefined || r.switch === sw);
 
 export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () => void }) {
+  const operator = canOperate(useMe());
   const about = (kind: string, name: string, sw?: string) => t.findings.filter((f) => refIs(f.on, kind, name, sw) || f.refs.some((r) => refIs(r, kind, name, sw)));
   let title: ReactNode = sel.id;
   let body: ReactNode = null;
@@ -300,7 +301,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </button>
       </header>
       {body ?? <p className="muted">Not in the current topology.</p>}
-      {actions ? (
+      {actions && operator ? (
         <>
           <h3>Change</h3>
           <div className="toolbar">{actions}</div>

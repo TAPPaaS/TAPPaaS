@@ -11,7 +11,7 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { applyJob, previewJob, readJob, useJob, useRead, useVerb } from "./api";
 import { Command, Output, jobResult } from "./jobs";
 import { Job, ManifestVerb, Me } from "./types";
-import { Link, Tag } from "./ui";
+import { Link, Tag, canOperate, useMe } from "./ui";
 
 // Form values: an option by its flag, a positional by "@<name>".
 export type Values = Record<string, string | boolean | string[]>;
@@ -268,6 +268,8 @@ export function Operate({ title, steps, onClose }: { title: string; steps: Step[
 // A button that opens a flow.
 export function OperateButton({ label, title, steps, kind, disabled, hint }: { label: string; title?: string; steps: Step[] | (() => Step[]); kind?: "danger" | "primary"; disabled?: boolean; hint?: string }) {
   const [open, setOpen] = useState(false);
+  // Only an operator sees a control that runs a job.
+  if (!canOperate(useMe())) return null;
   return (
     <>
       <button className={`btn${kind ? ` btn-${kind}` : ""}`} disabled={disabled} title={hint} onClick={() => setOpen(true)}>

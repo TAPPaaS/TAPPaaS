@@ -55,6 +55,17 @@ verb's manifest, the exact command (copyable), Preview (the verb's own dry run, 
 (enabled by the preview; disruptions are labelled checkboxes; a destructive verb needs the
 object's name typed and Installer), Result; a flow of several steps runs them in order.
 
+## The owner's view — `status.<domain>`
+
+A request whose host is `status.…` is read-only whatever its groups (access.ts: the route caps
+the role): no job, no setup, no secret, no jump. The front end then shows three pages: the
+owner's Overview (`GET /api/v1/owner`, `src/owner.ts` — one sentence about the site, every
+service with its displayName, published address and state in plain words: running, backed
+up, short of memory, inside the site only; the site in numbers, the off-site copy, the channel,
+the operator's address), Physical and Modules (without Config and Drift), and no operate
+control anywhere. The route itself is not declared yet: `proxyRoutes` publishes no gated route
+(see `../../console/INSTALL.md`, *The owner's route*).
+
 ## How it reads the site
 
 Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of its own:

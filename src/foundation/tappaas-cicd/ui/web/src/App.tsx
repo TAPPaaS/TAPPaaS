@@ -13,9 +13,10 @@ import { Site } from "./pages/Site";
 import { ModulePage } from "./pages/ModulePage";
 import { Modules } from "./pages/Modules";
 import { Overview } from "./pages/Overview";
+import { OwnerOverview } from "./pages/OwnerOverview";
 import { Physical } from "./pages/Physical";
 import { Me, SiteRead } from "./types";
-import { Link, usePath } from "./ui";
+import { Link, MeContext, usePath } from "./ui";
 
 const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/setup", label: "Setup", live: true },
@@ -38,15 +39,20 @@ export function App() {
   const path = usePath();
   const me = useRead<Me>("me", 300_000);
   const site = useRead<SiteRead>("site");
+  const user = me.env?.data ?? null;
+  // status.<domain>: the owner's view, read-only, three pages (D2, spike §5.11).
+  const owner = user?.route === "status";
   // While the site is incomplete the Setup wizard is shown first (D10).
-  const setup = useRead<{ complete: boolean }>("setup", 600_000);
+  const setup = useRead<{ complete: boolean }>(user && !owner && user.role !== "read" ? "setup" : null, 600_000);
   const incomplete = setup.env?.data?.complete === false;
+  const nav = owner ? NAV.filter((n) => ["/", "/physical", "/modules"].includes(n.to)) : NAV;
   const [busy, setBusy] = useState(false);
   const s = site.env?.data?.site;
-  const user = me.env?.data;
 
   let page;
-  if ((path === "/" || path === "") && incomplete) page = <Setup />;
+  if ((path === "/" || path === "") && owner) page = <OwnerOverview />;
+  else if (owner && !["/physical", "/modules"].some((p) => path === p || path.startsWith(`${p}/`))) page = <OwnerOverview />;
+  else if ((path === "/" || path === "") && incomplete) page = <Setup />;
   else if (path === "/" || path === "") page = <Overview />;
   else if (path === "/setup") page = <Setup />;
   else if (path === "/physical") page = <Physical />;
@@ -73,6 +79,7 @@ export function App() {
   };
 
   return (
+    <MeContext.Provider value={user}>
     <div className="shell">
       <nav className="nav">
         <div className="brand">
@@ -80,7 +87,7 @@ export function App() {
           <div className="brand-site">{s?.displayName ?? s?.name ?? "…"}</div>
         </div>
         <ul>
-          {NAV.map((n) => (
+          {nav.map((n) => (
             <li key={n.to}>
               {n.live ? (
                 <Link to={n.to} className={active(path, n.to) ? "nav-item nav-active" : "nav-item"}>
@@ -105,7 +112,7 @@ export function App() {
             site <b>{s?.name ?? "…"}</b>
           </span>
           <span className="spacer" />
-          <button className="btn" onClick={refresh} disabled={busy} title="Ask the console to re-run its reads now (changes nothing on the site)">
+          <button className="btn" onClick={refresh} disabled={busy || owner} title="Ask the console to re-run its reads now (changes nothing on the site)">
             {busy ? "Refreshing…" : "Refresh"}
           </button>
           <span className="user" title={user ? `via ${user.via}${user.groups.length ? ` · ${user.groups.join(", ")}` : ""}` : ""}>
@@ -115,5 +122,6 @@ export function App() {
         {page}
       </div>
     </div>
+    </MeContext.Provider>
   );
 }

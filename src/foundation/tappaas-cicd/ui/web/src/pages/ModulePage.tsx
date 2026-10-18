@@ -8,7 +8,7 @@
 import { useState } from "react";
 import { get, useRead } from "../api";
 import { Envelope, ModuleDetail } from "../types";
-import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, levelOf, since, when } from "../ui";
+import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, levelOf, since, useMe, when } from "../ui";
 import { ModuleBadges } from "./Modules";
 import { JobList } from "../jobs";
 import { ModuleOperate } from "./ModuleOperate";
@@ -197,6 +197,9 @@ function ActivityTab({ d }: { d: ModuleDetail }) {
 export function ModulePage({ name }: { name: string }) {
   const r = useRead<ModuleDetail>(`modules/${encodeURIComponent(name)}`);
   const [tab, setTab] = useState<TabName>("Overview");
+  // The owner's route reads what the module is, not how it is configured.
+  const owner = useMe()?.route === "status";
+  const tabs = TABS.filter((t) => !owner || ["Overview", "Services", "Backup"].includes(t));
   const d = r.env?.data;
   const m = d?.summary;
   const show_ = d?.show.data ?? {};
@@ -222,7 +225,7 @@ export function ModulePage({ name }: { name: string }) {
         </div>
       ) : null}
       <div className="tabs" role="tablist">
-        {TABS.map((t) => (
+        {tabs.map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "tab tab-on" : "tab"} onClick={() => setTab(t)}>
             {t}
           </button>

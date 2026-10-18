@@ -7,7 +7,7 @@
 import { useRead } from "../api";
 import { OperateButton, Step, Values } from "../operate";
 import { ModuleSummary } from "../types";
-import { Section } from "../ui";
+import { Section, canOperate, useMe } from "../ui";
 
 interface FieldRow {
   field: string;
@@ -78,12 +78,14 @@ function FieldPicker({ module, values, set }: { module: string; values: Values; 
 }
 
 export function ModuleOperate({ m }: { m: ModuleSummary }) {
+  const operator = canOperate(useMe());
   const name = m.name;
   const fixed = [name];
   const guest = m.vmid !== null;
   const machine = m.kind === "machine";
   const step = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "module-manager", verb, fixed, hide: ["--environment", "--vmid"], ...extra });
   const suspended = m.status === "suspended" || m.running === "stopped";
+  if (!operator) return null;
   return (
     <Section title="Operate — every verb runs through module-manager" aside="Change → Preview → Apply → Result">
       <div className="operate">

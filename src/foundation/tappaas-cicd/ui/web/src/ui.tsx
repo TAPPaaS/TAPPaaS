@@ -1,9 +1,15 @@
 // ui.tsx — the small pieces every page uses: the router, links, badges, the
 // status dot, the "Open in" list and the read-state line.
 
-import { MouseEvent, ReactNode, useEffect, useState } from "react";
+import { MouseEvent, ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useJumps } from "./api";
-import { Envelope, Jump } from "./types";
+import { Envelope, Jump, Me } from "./types";
+
+// Who is looking (GET /me), for what a page offers: the read role and the
+// status route see no operate control (ADR-034 D2, D3).
+export const MeContext = createContext<Me | null>(null);
+export const useMe = (): Me | null => useContext(MeContext);
+export const canOperate = (me: Me | null): boolean => me !== null && me.role !== "read" && me.route !== "status";
 
 // ── a router of four pages ────────────────────────────────────────────
 export function usePath(): string {

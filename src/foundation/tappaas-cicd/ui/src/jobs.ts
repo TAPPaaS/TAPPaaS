@@ -237,12 +237,13 @@ export class Jobs {
   // POST /jobs: a preview of a change, or a read. A write without a preview
   // is refused (T3): its apply goes through applyPreview.
   async create(me: Me, setup: SetupState, req: CreateRequest): Promise<CreateResult> {
+    // Who first: a caller who may not write is refused whatever it sent (T1).
+    const w = mayWrite(me, setup, false);
+    if (!w.ok) return { status: w.status, error: w.reason };
     const ms = this.cfg.manifests();
     if (!ms) return { status: 503, error: "the verb manifests are still loading" };
     const v = validateArgv(ms, req.argv);
     if (!v.ok) return { status: 400, error: v.reason };
-    const w = mayWrite(me, setup, false);
-    if (!w.ok) return { status: w.status, error: w.reason };
     if (v.read) {
       const job = this.newJob(me, v, "read", [v.bin, ...v.args], null);
       this.add(job);
