@@ -28,7 +28,7 @@
 
 let
   # Pinned images (src/image-pins.json tracks them, #750). Immutable tags.
-  karakeepImage = "ghcr.io/karakeep-app/karakeep:0.33.2";
+  karakeepImage = "ghcr.io/karakeep-app/karakeep:0.34.0";
   chromeImage = "ghcr.io/karakeep-app/karakeep-chrome:154.0.8037.57-r1";
   meiliImage = "getmeili/meilisearch:v1.41.0";
 
@@ -113,6 +113,9 @@ let
     {
       cat "$secrets"
       echo "NEXTAUTH_URL=${publicUrl}"
+      # Sign-ins and their redirects only from Karakeep's own address (the
+      # default is any origin).
+      echo "AUTH_TRUSTED_ORIGINS=${publicUrl}"
       echo "DISABLE_NEW_RELEASE_CHECK=true"
       echo "CRAWLER_STORE_SCREENSHOT=true"
 
