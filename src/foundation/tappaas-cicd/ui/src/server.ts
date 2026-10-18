@@ -11,12 +11,13 @@ import { AccessConfig, Decision, Me, SETUP_COOKIE, decide, mayWrite, normalizeAd
 import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { Entry, envelope } from "./cache";
+import { SCHEMAS } from "./fields";
 import { JumpKind, jumpsFor } from "./jumps";
 import { Assistant, AssistantEvent } from "./assistant";
 import { LiteLLM } from "./litellm";
 import { Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
-import { MODULE_NAME, Reads } from "./reads";
+import { MODULE_NAME, NODE_NAME, Reads } from "./reads";
 import { ownerSummary, readConfigs } from "./owner";
 import { SECRETS, isSecretName, secretStatus, writeSecret } from "./secrets";
 import { closeSetupToken, setupComplete, setupSteps } from "./setup";
@@ -200,7 +201,20 @@ export class ConsoleServer {
       case "environments":
         return sendJson(res, 200, envelope(await r.environments.get()));
       case "identity":
+        if (a === "records") return sendJson(res, 200, envelope(await r.identityRecords.get()));
+        if (a !== undefined) return sendJson(res, 404, { error: `identity/${a}` });
         return sendJson(res, 200, envelope(await r.identity.get()));
+      case "nodes": {
+        // A node being added: GET nodes/<name>/progress, every ten seconds at most.
+        if (!a || !NODE_NAME.test(a) || b !== "progress") return sendJson(res, 404, { error: "nodes/<name>/progress" });
+        return sendJson(res, 200, envelope(await r.nodeProgress.of(a).get()));
+      }
+      case "catalogs":
+        return sendJson(res, 200, envelope(await r.catalogs.get()));
+      case "schemas": {
+        if (!a || !(a in SCHEMAS)) return sendJson(res, 404, { error: `schemas/<${Object.keys(SCHEMAS).join("|")}>` });
+        return sendJson(res, 200, envelope(await r.schemas.of(a).get()));
+      }
       case "owner": {
         // The owner's view (spike §5.11): the same reads, plainly worded.
         const [h, m, bk, t, st, envs] = await Promise.all([r.health.get(), r.modules.get(), r.backup.get(), r.topology.get(), r.site.get(), r.environments.get()]);
@@ -291,7 +305,7 @@ export class ConsoleServer {
       if (url.searchParams.get("refresh") === "1") await c.refresh();
       return sendJson(res, 200, envelope(await c.get()));
     }
-    if (sub === "fields") return sendJson(res, 200, envelope(await r.moduleFields.of(name).get()));
+    if (sub === "fields") return sendJson(res, 200, envelope(await r.moduleFieldsOf(name)));
     if (sub !== undefined) return sendJson(res, 404, { error: `modules/${name}/${sub}` });
     const [show, resolve, backup, act] = await Promise.all([
       r.moduleShow.of(name).get(),

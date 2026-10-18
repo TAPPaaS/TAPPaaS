@@ -3,7 +3,7 @@
 // is shown in the navigation and marked as later. The Assistant drawer (P3)
 // opens on every page when the backend says the assistant is available.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { refreshAll, useRead } from "./api";
 import { AssistantApi, AssistantContext, AssistantDrawer, Focus, focusOf } from "./assistant";
 import { Activity } from "./pages/Activity";
@@ -18,19 +18,25 @@ import { Overview } from "./pages/Overview";
 import { OwnerOverview } from "./pages/OwnerOverview";
 import { Physical } from "./pages/Physical";
 import { AssistantStatus, Me, SiteRead } from "./types";
-import { Link, MeContext, usePath } from "./ui";
+import { Link, MeContext, replacePath, usePath } from "./ui";
 
+// The physical view is a tab of the Site page (/site/physical); the owner's
+// route, which has no Site page, reaches it under its own name.
 const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/setup", label: "Setup", live: true },
   { to: "/", label: "Overview", live: true },
-  { to: "/physical", label: "Physical", live: true },
-  { to: "/modules", label: "Modules", live: true },
+  { to: "/site", label: "Site", live: true },
   { to: "/environments", label: "Environments", live: true },
+  { to: "/modules", label: "Modules", live: true },
   { to: "/identity", label: "Identity", live: true },
   { to: "/backup", label: "Backup", live: true },
-  { to: "/site", label: "Site", live: true },
   { to: "/security", label: "Security", live: false },
   { to: "/activity", label: "Activity", live: true },
+];
+const OWNER_NAV: { to: string; label: string; live: boolean }[] = [
+  { to: "/", label: "Overview", live: true },
+  { to: "/site/physical", label: "Physical", live: true },
+  { to: "/modules", label: "Modules", live: true },
 ];
 
 function active(path: string, to: string): boolean {
@@ -47,7 +53,11 @@ export function App() {
   // While the site is incomplete the Setup wizard is shown first (D10).
   const setup = useRead<{ complete: boolean }>(user && !owner && user.role !== "read" ? "setup" : null, 600_000);
   const incomplete = setup.env?.data?.complete === false;
-  const nav = owner ? NAV.filter((n) => ["/", "/physical", "/modules"].includes(n.to)) : NAV;
+  const nav = owner ? OWNER_NAV : NAV;
+  // The physical view's old address keeps working (bookmarks, ?select=).
+  useEffect(() => {
+    if (path === "/physical") replacePath(`/site/physical${window.location.search}`);
+  }, [path]);
   const [busy, setBusy] = useState(false);
   const s = site.env?.data?.site;
   // The assistant (D7): only when LiteLLM answers with the console's key.
@@ -66,11 +76,12 @@ export function App() {
 
   let page;
   if ((path === "/" || path === "") && owner) page = <OwnerOverview />;
-  else if (owner && !["/physical", "/modules"].some((p) => path === p || path.startsWith(`${p}/`))) page = <OwnerOverview />;
+  else if (owner && !["/physical", "/site/physical", "/modules"].some((p) => path === p || path.startsWith(`${p}/`))) page = <OwnerOverview />;
   else if ((path === "/" || path === "") && incomplete) page = <Setup />;
   else if (path === "/" || path === "") page = <Overview />;
   else if (path === "/setup") page = <Setup />;
-  else if (path === "/physical") page = <Physical />;
+  else if (owner && (path === "/physical" || path === "/site/physical")) page = <Physical />;
+  else if (path === "/physical" || path === "/site/physical") page = <Site tab="Physical" />;
   else if (path === "/modules") page = <Modules />;
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;
   else if (path === "/activity") page = <Activity />;
@@ -83,7 +94,7 @@ export function App() {
     page = (
       <div className="page">
         <h1>{n?.label ?? "Not found"}</h1>
-        <p className="muted">{n ? "This page comes with a later phase of the console (ADR-034 P4)." : "No such page."}</p>
+        <p className="muted">{n ? "This page comes with a later version of the console." : "No such page."}</p>
       </div>
     );
   }

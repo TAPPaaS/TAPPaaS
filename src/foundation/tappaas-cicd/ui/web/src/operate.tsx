@@ -27,6 +27,7 @@ export interface Step {
   only?: string[]; // offer only these options (and the disruptions)
   choices?: Record<string, string[]>; // offered values, by "@name" or flag
   labels?: Record<string, string>;
+  placeholders?: Record<string, string>; // an example in place of the help's <arg>, by "@name" or flag
   render?: (values: Values, set: (v: Values) => void) => ReactNode; // a change form of its own
   note?: ReactNode;
   after?: (job: Job) => ReactNode; // shown once the step's job has finished (a config to download)
@@ -86,8 +87,9 @@ function VerbForm({ step, verb, values, set }: { step: Step; verb: ManifestVerb;
   const label = (k: string, fallback: string) => step.labels?.[k] ?? fallback;
   const pos = verb.positionals.slice(step.fixed?.length ?? 0).filter((p) => !hidden.has(`@${p.name}`));
   const opts = verb.options.filter((o) => !hidden.has(o.flag) && !disruptive.has(o.flag) && (!step.only || step.only.includes(o.flag)));
-  const field = (key: string, arg: string | null, choices: string[] | null, repeatable: boolean) => {
+  const field = (key: string, arg0: string | null, choices: string[] | null, repeatable: boolean) => {
     const offered = step.choices?.[key] ?? choices;
+    const arg = step.placeholders?.[key] ?? arg0;
     const v = values[key];
     if (offered) {
       return (
@@ -166,7 +168,9 @@ function JobView({ id, label }: { id: string; label: string }) {
   );
 }
 
-function StepView({ step, me, onDone }: { step: Step; me: Me | null; onDone: (ok: boolean) => void }) {
+// One step of a flow; also embedded in a wizard of its own (Add node), which
+// learns when the apply starts (onApplied) as well as when it ends (onDone).
+export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me | null; onDone: (ok: boolean) => void; onApplied?: (jobId: string) => void }) {
   const verb = useVerb(step.bin, step.verb);
   const [values, setValues] = useState<Values>(step.initial ?? {});
   const argv = useMemo(() => buildArgv(step, verb, values), [step, verb, values]);
@@ -210,6 +214,7 @@ function StepView({ step, me, onDone }: { step: Step; me: Me | null; onDone: (ok
     const r = await applyJob(preview.id, destructive ? confirm : undefined);
     if (!r.data || r.status >= 400) return setError(r.error ?? `HTTP ${r.status}`);
     setApplied(r.data.id);
+    onApplied?.(r.data.id);
   };
 
   return (

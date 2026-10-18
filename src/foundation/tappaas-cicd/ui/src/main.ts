@@ -191,6 +191,7 @@ async function serve(o: ServeOpts): Promise<number> {
   const webDir = o.webDir ?? join(__dirname, "..", "..", "..", "web", "dist");
   const reads = new Reads({
     configDir: o.configDir,
+    repoRoot: process.env.CONSOLE_REPO ?? "/home/tappaas/TAPPaaS",
     stateDir: o.stateDir,
     run: runAsync,
     journalDays: Number(process.env.CONSOLE_JOURNAL_DAYS ?? 7) || 7,

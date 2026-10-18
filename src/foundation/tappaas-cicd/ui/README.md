@@ -35,21 +35,40 @@ day 2: add a node, an environment, a stack; enrol a device (the wg-quick file to
 
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
-jumps. **Physical** — the topology laid out under the spike's rules (ISP top-left, the firewall
+jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects there) — the topology laid out under the spike's rules (ISP top-left, the firewall
 as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
 nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
 left); a click opens the object's records, findings, jumps and its day-2 change: a switch
 port's record (`switch-controller update-port`) then `switch-controller reconcile`, a node's
-`node network show / set`. **Modules** — the list with its badges; a module's page has
-Overview (with the operate column: update, modify a field with its ADR-020 class from
-`module-manager fields`, reconcile, test, snapshot, suspend/resume, delete with the typed name),
-Config, Drift (on demand), Services, Backup and Activity. **Environments** — environments and
-zones with environment-manager's and network-manager's verbs. **Identity** — organizations,
-groups, users and roles; a change is staged with `--no-reconcile` and pushed by `identity-manager
+`node network show / set`. **Modules** — tabs: Installed (the list with its badges, grouped by stack, foundation
+first) and one per registered repository (`GET /api/v1/catalogs`: `site-manager repository list`, each
+repository's module-catalog.json and each module's own JSON; installed = a deployed instance whose
+`moduleSource` is the module's directory, with the instances named and linked; Install = `module-manager
+add <m>`, previewed then applied; a catalogue that cannot be read says why); a module's page has
+Overview (with the operate column: update, reconcile, test, snapshot, suspend/resume, delete
+with the typed name), Config, Drift (on demand), Backup and Activity. Config draws the module as
+a tree of cards: the module's own (kind, node, environment, zone and the fields no service owns)
+on top, one per service in dependsOn below. Each card's Modify lists every field it owns, typed
+from the field schema, its value configured or default, its change class; the fields changed go
+to one `module-manager modify <m> --set a=b --set c=d` job (`GET /api/v1/modules/<m>/fields`:
+`module-manager fields` + `resolve` + `config/module-fields.json`). **Environments** — environments and
+zones with environment-manager's and network-manager's verbs; adding an environment says for each
+input whether it must be given or what the manager uses when it is left empty (owner: the first
+organization; zone and display name: from the name; DNS mode: the schema's default). The zones
+are drawn as cards coloured by type, with an arrow for each `access-to` and a dashed one for each
+`pinhole-allowed-from`; a click opens the zone's fields and verbs, and Modify lists every field of
+`zones-fields.json` with its value, default and class (one `network-manager modify <zone> --set …`). **Identity** — organizations,
+groups, users and roles as a graph of their relations (a group's owning organization, a user's
+groups, the roles of users and groups, an organization's owner and parent; `GET /api/v1/identity/records`:
+`identity-manager <kind> show` for each), the list beside it, a click for the record and its verbs; a change is staged with `--no-reconcile` and pushed by `identity-manager
 reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
-modify, purge (typed). **Site** — `site.json`, the update schedule, Update now (`site update`,
+modify, purge (typed). **Site** — two tabs. Overview: `site.json`, the update schedule, Update now (`site update`,
 its plan first), the release train, nodes and their uplinks, repositories (sync, hold, release,
-stashes). **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
+stashes). Physical: the view above. Add node is a guided sequence in Setup's step rows: declare
+the node (`site-manager node add tappaasN --pxe` with its PXE port's MAC, boot disk, WAN and lan
+ports, pools), boot it from the network by hand, the install and join watched live (`GET
+/api/v1/nodes/<name>/progress`: the provisioning registration, `node-provisioner status`, cluster
+membership, site.json; every 10 s), then `node network set` and `node network test`, previewed. **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
 result. Security is a later phase.
 
 Every change is the operate dialog (`web/src/operate.tsx`, spike §5.4): a form built from the
@@ -78,6 +97,9 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | modules | `module-manager list --json`, with `backup-manager list --json` for the backup badge | every 5 min (backup 10) |
 | a module | `module-manager show / resolve <m> --json`, `backup-manager show / coverage <m> --json` | 5 min, on first view |
 | a module's drift | `module-manager drift <m> --json` | on demand only |
+| a module's fields (its Modify forms) | `module-manager fields <m> --json` with `resolve` and `config/module-fields.json` | 5 min, on first view |
+| the repositories' catalogues (`catalogs`) | `site-manager repository list --json`, `<path>/<catalog>`, each module's JSON, `config/<m>.json` moduleSource | 10 min, and after a job |
+| a form's schema (`schemas/zones`, `schemas/environment`) | `src/foundation/schemas/<name>-fields.json` of `$CONSOLE_REPO` | 10 min |
 | topology (the Physical page) | `network-manager topology --json --health <the cached validate>` | every 5 min |
 | zones | `network-manager list --json`, `show <zone> --json` | every 5 min |
 | environments | `environment-manager list --json` | every 5 min |

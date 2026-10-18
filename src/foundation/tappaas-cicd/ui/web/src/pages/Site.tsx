@@ -1,14 +1,16 @@
-// Site — site.json, the nodes, the repositories, the update schedule and the
-// release (spike §5.2, Appendix A): site-manager site show / modify, node list
-// and node network show / set, repository hold / release / sync, `site update`
-// (Update now: the sweep's plan first, then the sweep), and the release train's
-// preview (tappaas-train.sh preview, text: it has no --json).
+// Site — two tabs. Overview: site.json, the nodes, the repositories, the update
+// schedule and the release (spike §5.2, Appendix A): site-manager site show /
+// modify, node list and node network show / set, Add node (a guided sequence),
+// repository hold / release / sync, `site update` (Update now: the sweep's plan
+// first, then the sweep), and the release train's preview (tappaas-train.sh
+// preview, text: it has no --json). Physical: the site as cabled (/site/physical).
 
 import { useRead } from "../api";
 import { OperateButton, Step } from "../operate";
 import { SiteRead } from "../types";
-import { KV, ReadState, Section, since } from "../ui";
-import { addNodeSteps } from "./Setup";
+import { KV, ReadState, Section, navigate, since } from "../ui";
+import { AddNodeButton } from "./AddNode";
+import { Physical } from "./Physical";
 
 const sm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "site-manager", verb, ...extra });
 
@@ -23,13 +25,39 @@ interface Repo {
 
 const SCHEDULE = ["--updateFrequency", "--updateWeekday", "--updateHour"];
 
-export function Site() {
+export const SITE_TABS = [
+  { name: "Overview", path: "/site" },
+  { name: "Physical", path: "/site/physical" },
+] as const;
+
+export function Site({ tab = "Overview" }: { tab?: "Overview" | "Physical" }) {
   const r = useRead<SiteRead>("site");
   const d = r.env?.data;
   const s = (d?.site ?? {}) as Record<string, unknown> & { updateSchedule?: { frequency?: string; weekday?: string; hour?: number } };
   const sched = s.updateSchedule;
   const repos = (d?.repositories ?? []) as Repo[];
   const last = d?.lastSweep;
+  const tabs = (
+    <div className="tabs" role="tablist">
+      {SITE_TABS.map((t) => (
+        <button key={t.name} role="tab" aria-selected={tab === t.name} className={tab === t.name ? "tab tab-on" : "tab"} onClick={() => navigate(t.path)}>
+          {t.name}
+        </button>
+      ))}
+    </div>
+  );
+  if (tab === "Physical") {
+    return (
+      <div className="page page-wide">
+        <div className="page-head">
+          <h1>Site</h1>
+          <span className="muted">{s.displayName ? String(s.displayName) : String(s.name ?? "")} as cabled</span>
+        </div>
+        {tabs}
+        <Physical embedded />
+      </div>
+    );
+  }
   return (
     <div className="page">
       <div className="page-head">
@@ -48,6 +76,7 @@ export function Site() {
           ]}
         />
       </div>
+      {tabs}
       <ReadState env={r.env} failure={r.failure} what="site" />
       <div className="grid2">
         <Section title="site.json" aside={<OperateButton label="Modify…" title="site-manager site modify" steps={[sm("site-manager site modify", "site modify", { hide: SCHEDULE })]} />}>
@@ -86,7 +115,7 @@ export function Site() {
         title="Nodes"
         aside={
           <span className="toolbar">
-            <OperateButton label="Add a node…" title="Add a node" steps={addNodeSteps()} />
+            <AddNodeButton />
             <OperateButton label="Register joined nodes…" title="site-manager node reconcile" steps={[sm("site-manager node reconcile", "node reconcile")]} />
           </span>
         }

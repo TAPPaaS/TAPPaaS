@@ -11,15 +11,9 @@ import { Output, stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
 import { Job, SiteRead } from "../types";
 import { Dot, Link, ReadState, Section, since } from "../ui";
+import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
 
-interface SetupStep {
-  id: string;
-  title: string;
-  required: boolean;
-  done: boolean | null;
-  detail: string;
-}
 interface SetupDoc {
   steps: SetupStep[];
   complete: boolean;
@@ -36,19 +30,6 @@ interface SecretStatus {
 }
 
 // ── the day-2 wizards, shared with the pages ──────────────────────────
-
-export function addNodeSteps(): Step[] {
-  return [
-    {
-      title: "1 · Join the node: site-manager node add <N> --pxe",
-      bin: "site-manager",
-      verb: "node add",
-      initial: { "--pxe": true, "--yes": true },
-      note: "Boot the new machine from the network (PXE) once this runs. Give the boot disk, the WAN port (or --no-wan) and the LAN ports here: the console cannot answer the manager's questions on a terminal. There is no dry run; --config-only only declares it in site.json.",
-    },
-    { title: "2 · Register it: site-manager node reconcile", bin: "site-manager", verb: "node reconcile", note: "The preview lists the nodes that joined the cluster and are not in site.json; apply registers them." },
-  ];
-}
 
 export function addStackSteps(stack?: string): Step[] {
   return [
@@ -158,8 +139,19 @@ function SecretForm({ name, fields, status, onSaved }: { name: string; fields: {
 
 // ── the checklist ─────────────────────────────────────────────────────
 
-function StepRow({ s, children }: { s: SetupStep; children?: ReactNode }) {
-  const [open, setOpen] = useState(s.done !== true);
+export interface SetupStep {
+  id: string;
+  title: string;
+  required: boolean;
+  done: boolean | null;
+  detail: string;
+}
+
+// One step of a checklist (Setup's, Add node's): its state, its title and
+// detail, and its body while open.
+export function StepRow({ s, children, open: forced }: { s: SetupStep; children?: ReactNode; open?: boolean }) {
+  const [userOpen, setOpen] = useState<boolean | null>(null);
+  const open = userOpen ?? forced ?? s.done !== true;
   return (
     <li className={`setup-step setup-${s.done === true ? "done" : s.done === false ? "todo" : "unknown"}`}>
       <button className="setup-head" onClick={() => setOpen(!open)} aria-expanded={open}>
@@ -215,7 +207,7 @@ export function Setup() {
         ]}
       />
     ),
-    nodes: <OperateButton label="Add a node…" title="Add a node" steps={addNodeSteps()} />,
+    nodes: <AddNodeButton />,
     switch: (
       <>
         <SecretForm name="unifi" status={sec("unifi")} onSaved={secrets.reload} fields={[{ key: "url", label: "controller URL", placeholder: "https://10.0.0.5:11443" }, { key: "username", label: "local admin" }, { key: "password", label: "password", secret: true }]} />
@@ -273,7 +265,7 @@ export function Setup() {
       </ol>
       <Section title="Day 2 — the same wizards">
         <div className="toolbar">
-          <OperateButton label="Add a node…" title="Add a node" steps={addNodeSteps()} />
+          <AddNodeButton />
           <OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} />
           <OperateButton label="Add a stack…" title="Add a stack" steps={addStackSteps()} />
           <OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />

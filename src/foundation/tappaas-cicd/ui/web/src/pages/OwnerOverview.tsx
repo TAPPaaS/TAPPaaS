@@ -63,7 +63,7 @@ export function OwnerOverview() {
                 ))}
                 <p>{o.release}</p>
                 {o.operator ? <p>Operator: <a href={`mailto:${o.operator}`}>{o.operator}</a></p> : null}
-                <p><Link to="/physical">Open the physical view (read-only) →</Link></p>
+                <p><Link to="/site/physical">Open the physical view (read-only) →</Link></p>
               </Section>
               <Section title="What you can do here">
                 <p className="small">See which services run and whether they are backed up, and the site as it is cabled.</p>

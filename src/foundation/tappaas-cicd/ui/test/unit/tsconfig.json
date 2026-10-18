@@ -3,5 +3,11 @@
   "compilerOptions": {
     "outDir": "../../dist-test"
   },
-  "include": ["../../src/**/*.ts", "./**/*.ts", "../../../lib/ts/src/**/*.ts"]
+  "include": [
+    "../../src/**/*.ts",
+    "./**/*.ts",
+    "../../../lib/ts/src/**/*.ts",
+    "../../web/src/forms.ts",
+    "../../web/src/relations.ts"
+  ]
 }

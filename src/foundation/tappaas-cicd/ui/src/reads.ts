@@ -11,7 +11,9 @@ import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { readZonesFile } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
-import { Cached, CachedMap } from "./cache";
+import { Cached, CachedMap, Entry } from "./cache";
+import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
+import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, TopologyDoc } from "./model";
@@ -32,6 +34,9 @@ export const TTL = {
   moduleDetail: 5 * MIN,
   identity: 5 * MIN,
   setup: 10 * MIN,
+  schema: 10 * MIN,
+  catalogs: 10 * MIN,
+  nodeProgress: 10_000, // while a node is being added
   drift: 0, // on demand
 };
 
@@ -39,11 +44,28 @@ export interface ReadsConfig {
   // Cluster membership for the Setup checklist (lib/ts cluster.ts by default).
   clusterNodes?: (siteNodes: string[]) => string[] | null;
   configDir: string;
+  // The repository the managers run from (its schemas/), /home/tappaas/TAPPaaS.
+  repoRoot?: string;
   stateDir: string; // where the health document is handed to `topology --health`
   run: Runner;
   journalDays: number;
   now?: () => number;
 }
+
+// A node being added (site-manager node add --pxe), as the records show it:
+// its provisioning registration, the PXE window, cluster membership, site.json.
+export interface NodeProgress {
+  name: string;
+  registration: "pending" | "answered" | "none";
+  pxe: { enabled: boolean | null; text: string };
+  inCluster: boolean | null; // null: no node answered
+  cluster: string[] | null;
+  inSite: boolean;
+  siteNodes: string[];
+}
+
+// A node name as site-manager accepts one.
+export const NODE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$/;
 
 export interface Activity {
   runs: SweepRun[];
@@ -74,6 +96,10 @@ export class Reads {
   readonly moduleDrift: CachedMap<Record<string, unknown>>;
   readonly moduleFields: CachedMap<Record<string, unknown>>;
   readonly identity: Cached<Record<string, string[]>>;
+  readonly identityRecords: Cached<Record<string, Record<string, unknown>[]>>;
+  readonly schemas: CachedMap<Record<string, unknown>>;
+  readonly nodeProgress: CachedMap<NodeProgress>;
+  readonly catalogs: Cached<RepositoryCatalog[]>;
   readonly setup: Cached<SetupInputs>;
 
   constructor(private readonly cfg: ReadsConfig) {
@@ -109,9 +135,29 @@ export class Reads {
     }, now);
     // What `modify --set` may change, with each field's ADR-020 change class.
     this.moduleFields = new CachedMap("fields", TTL.moduleDetail, (m) => j<Record<string, unknown>>("module-manager", ["fields", m, "--json"]), now);
+    // The field schemas a form reads (zones-fields.json, environment-fields.json).
+    this.schemas = new CachedMap("schema", TTL.schema, async (n) => schemaDoc(cfg.repoRoot ?? "/home/tappaas/TAPPaaS", n), now);
     this.identity = new Cached("identity", TTL.identity, async () => {
       const out: Record<string, string[]> = {};
       await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
+      return out;
+    }, now);
+    // What each registered repository offers, and which of it is installed.
+    this.catalogs = new Cached("catalogs", TTL.catalogs, async () => {
+      const [repos, mods] = await Promise.all([j<Record<string, unknown>[]>("site-manager", ["repository", "list", "--json"]), this.modules.get()]);
+      const instances = (mods.value?.modules ?? []).map((m) => ({ name: m.name, source: moduleSourceOf(cfg.configDir, m.name) }));
+      return (Array.isArray(repos) ? repos : []).map((r) => repositoryCatalog(r, instances));
+    }, now);
+    this.nodeProgress = new CachedMap("node-progress", TTL.nodeProgress, (n) => this.loadNodeProgress(n), now);
+    // Every identity object's record, for the graph of their relations: each
+    // kind's list, then `show` per object (a name from the manager's own list).
+    this.identityRecords = new Cached("identity-records", TTL.identity, async () => {
+      const lists = (await this.identity.get()).value ?? {};
+      const out: Record<string, Record<string, unknown>[]> = {};
+      await Promise.all(IDENTITY_KINDS.map(async (k) => {
+        const names = (lists[k] ?? []).filter((n) => typeof n === "string" && n !== "" && !n.startsWith("-"));
+        out[k] = await Promise.all(names.map((n) => j<Record<string, unknown>>("identity-manager", [k, "show", n, "--json"]).catch((e: Error) => ({ name: n, error: e.message }))));
+      }));
       return out;
     }, now);
     // The Setup checklist's records: read on demand. The module tests behind
@@ -128,6 +174,13 @@ export class Reads {
         },
       }), now);
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
+  }
+
+  // A module's fields for its Modify form: class, owner, type, value, default.
+  async moduleFieldsOf(m: string): Promise<Entry<ModuleFields>> {
+    const [f, r] = await Promise.all([this.moduleFields.of(m).get(), this.moduleResolve.of(m).get()]);
+    const value = f.value && r.value ? moduleFieldRows(f.value, r.value, moduleSchema(this.cfg.configDir)) : null;
+    return { at: f.at, value, error: f.error ?? r.error, loading: f.loading || r.loading };
   }
 
   get configDir(): string {
@@ -166,6 +219,7 @@ export class Reads {
       // health first: the topology places its findings
       await this.health.refresh();
       await Promise.all(Object.entries(all).filter(([k]) => k !== "health").map(([, c]) => c.refresh()));
+      if (this.catalogs.peek().at !== null) await this.catalogs.refresh();
       return Object.keys(all);
     }
     const c = all[what];
@@ -193,7 +247,11 @@ export class Reads {
     // The Setup checklist is records only (no module test runs here, ever):
     // re-read if someone has looked, so the step a job just completed shows.
     const setup = this.setup.peek().at !== null ? [this.setup] : [];
-    return Promise.all([...setup, this.identity, this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())).then(() => undefined);
+    // The identity records follow the lists they are read from.
+    const identity = this.identity.refresh().then(() => (this.identityRecords.peek().at !== null ? this.identityRecords.refresh() : undefined));
+    // The catalogues mark what is installed: after the module list.
+    const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
+    return Promise.all([identity, modules, ...[...setup, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
   }
 
   private async loadTopology(): Promise<TopologyDoc & Record<string, unknown>> {
@@ -218,6 +276,27 @@ export class Reads {
       const { name: _n, ...rest } = z;
       return { name, ...rest };
     });
+  }
+
+  private async loadNodeProgress(name: string): Promise<NodeProgress> {
+    const dir = join(this.cfg.configDir, "provision");
+    const registration = existsSync(join(dir, `${name}.json`)) ? "pending" : existsSync(join(dir, `${name}.json.consumed`)) ? "answered" : "none";
+    const [list, pxe] = await Promise.all([
+      runJson<{ name?: string }[]>(this.cfg.run, "site-manager", ["node", "list", "--json"]).catch(() => []),
+      this.cfg.run("node-provisioner", ["status"], 30_000),
+    ]);
+    const siteNodes = list.map((n) => n.name).filter((n): n is string => typeof n === "string");
+    const cluster = (this.cfg.clusterNodes ?? (() => null))(siteNodes);
+    return {
+      name,
+      registration,
+      // status exits 0 only when the window is fully open.
+      pxe: { enabled: pxe.ran ? pxe.rc === 0 : null, text: (pxe.stdout + pxe.stderr).trim() },
+      inCluster: cluster ? cluster.includes(name) : null,
+      cluster,
+      inSite: siteNodes.includes(name),
+      siteNodes,
+    };
   }
 
   private async loadSite(): Promise<Record<string, unknown>> {
