@@ -604,6 +604,11 @@ const BASE = {
   const entries = doc.fields as Record<string, Record<string, unknown>>;
 
   check(doc.scope === "module", "schemas/fields.json is scoped 'module' (it has no service coordinate)");
+  // The fields the release or the install writes are immutable (ADR-020 D10:
+  // "the tooling writes it"), so the pre-gate refuses a --set on any of them.
+  const written = ["status", "version", "appVersion", "releaseDate", "maintainer", "source", "stack", "tier", "kind", "location", "moduleSource", "installTime", "updateTime"];
+  const notImmutable = written.filter((f) => entries[f]?.class !== "immutable");
+  check(notImmutable.length === 0, `the fields the release or the install writes are immutable${notImmutable.length ? ` (not: ${notImmutable.join(", ")})` : ""}`);
   check(doc.service === undefined, "schemas/fields.json declares no 'service' — scope and service are exclusive");
 
   // COVERAGE, both ways. The set it must cover is derivable from
