@@ -257,6 +257,38 @@ module_config_vmid() {
     jq -r '.vmid // .config.vmid // empty' "$1" 2>/dev/null || true
 }
 
+# A module's JSON names its guest's VM id, so a second instance of it
+# (vaultwarden-test beside vaultwarden) asked for an id already in use, and
+# Create-TAPPaaS-VM refused it. The ids in use: every guest on the cluster and
+# every deployed config but <this one>. One per line; rc 1 when the cluster
+# cannot be read (the caller then keeps the module's own id).
+cluster_vmids() {
+    ssh -n -o ConnectTimeout=5 -o BatchMode=yes root@"$(get_node_fqdn 0)" \
+        "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
+        | jq -r '.[].vmid' 2>/dev/null | grep -E '^[0-9]+$'
+}
+
+used_vmids() {
+    local this="$1" ids f
+    ids="$(cluster_vmids)" || return 1
+    {
+        printf '%s\n' "${ids}"
+        for f in "${CONFIG_DIR}"/*.json; do
+            [[ -e "${f}" && "${f}" != "${this}" ]] || continue
+            module_config_vmid "${f}"
+        done
+    } | grep -E '^[0-9]+$' | sort -un
+}
+
+# <base> when no guest or config uses it, else the next id up that is free.
+# The ids in use come on stdin.
+next_free_vmid() {
+    local n="$1" used
+    used="$(cat)"
+    while grep -qx "${n}" <<<"${used}"; do n=$((n + 1)); done
+    printf '%s\n' "${n}"
+}
+
 rollback_failed_install() {
     local rc=$?
     [[ "${rc}" -ne 0 ]] || return 0
@@ -576,6 +608,28 @@ main() {
     trap rollback_failed_install EXIT
 
     local module_json="${CONFIG_DIR}/${effective_module}.json"
+
+    # The guest's VM id: the module's own unless another guest or deployed
+    # config has it (a second instance, or the first one installed after it),
+    # then the next free one. An explicit --vmid is the operator's choice.
+    if ! module_is_not_a_guest && [[ " ${passthru[*]-} " != *" --vmid "* ]]; then
+        local _want _used _free _tmp
+        _want="$(module_config_vmid "${module_json}")"
+        if [[ "${_want}" =~ ^[0-9]+$ ]]; then
+            if _used="$(used_vmids "${module_json}")"; then
+                _free="$(next_free_vmid "${_want}" <<<"${_used}")"
+                if [[ "${_free}" != "${_want}" ]]; then
+                    _tmp="$(mktemp "${module_json}.XXXXXX")"
+                    jq --argjson v "${_free}" '.vmid = $v | if (.config | type) == "object" and (.config | has("vmid")) then .config.vmid = $v else . end' \
+                        "${module_json}" > "${_tmp}" && mv "${_tmp}" "${module_json}" \
+                        || { rm -f "${_tmp}"; die "could not record VM id ${_free} in ${module_json}"; }
+                    info "  VM id ${_want} (the module's own) is in use: '${effective_module}' gets ${BL}${_free}${CL} (choose one with --vmid)"
+                fi
+            else
+                warn "  the cluster's VM ids could not be read: keeping ${_want} (choose one with --vmid)"
+            fi
+        fi
+    fi
 
     # No object-type tag any more (#611). `kind` is the workload type the module
     # AUTHORS (ADR-022f: vm, lxc, machine, application, device) and arrives with
