@@ -235,10 +235,9 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .operate .op { display: grid; grid-template-columns: 170px 1fr; gap: 10px; align-items: center; }
 .operate .op small { color: var(--muted); }
 .fieldpick { display: grid; gap: 6px; }
-.class-tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #eef1f4; }
-.class-in-place, .class-config-only { background: var(--pass-bg); color: #1e6b30; }
-.class-grow-only, .class-in-place-reboot, .class-migrate { background: var(--warn-bg); color: #92400e; }
-.class-immutable, .class-recreate, .class-manual { background: var(--fail-bg); color: #a12a2a; }
+/* A change class's meaning: one muted colour whatever the class; the name is the tooltip. */
+.class-tag { display: inline-block; font-size: 11px; padding: 1px 7px; border-radius: 10px; background: var(--info-bg); color: var(--muted, #52606d); white-space: nowrap; }
+.ff-note { font-size: 11px; color: var(--muted, #52606d); font-style: italic; margin-right: 6px; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin: 8px 0; }
 .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 14px; }
 @media (max-width: 640px) { .form-row, .operate .op { grid-template-columns: 1fr; } .form-row > small { grid-column: 1; } }
@@ -307,6 +306,11 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .ff-row input, .ff-row select, .ff-row textarea { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; width: 100%; box-sizing: border-box; }
 .ff-row textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .ff-error { color: #a12a2a; }
+/* A list of defined objects: one box each, in a row, then a line for any other value. */
+.ff-checks { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
+.ff-check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
+.ff-row .ff-check input { width: auto; margin: 0; }
+.ff-row .ff-others { flex-basis: 100%; }
 .ff-shut summary { cursor: pointer; font-size: 13px; color: var(--muted); }
 .origin { font-size: 11px; padding: 1px 7px; border-radius: 10px; }
 .origin-set { background: #dbeafe; color: #1e40af; }

@@ -14,6 +14,8 @@ import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
+import { composeFields } from "../../lib/ts/src/compose-fields";
+import { FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, flattenSchema, moduleDefs, zoneDefs } from "./fieldmanifest";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, TopologyDoc } from "./model";
@@ -66,6 +68,9 @@ export interface NodeProgress {
 
 // A node name as site-manager accepts one.
 export const NODE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$/;
+// Any object a form names: a module, zone, environment, identity object (a
+// group may carry a space: "authentik Admins").
+export const OBJECT_NAME = /^[A-Za-z0-9_][A-Za-z0-9 _.-]{0,62}$/;
 
 export interface Activity {
   runs: SweepRun[];
@@ -78,6 +83,16 @@ export interface Activity {
 export const MODULE_NAME = /^[a-z0-9][a-z0-9-]{0,62}$/;
 
 export const IDENTITY_KINDS = ["org", "group", "user", "role"];
+
+// A resolve value is a string; a list or an object is its JSON.
+function parseMaybe(v: string): unknown {
+  if (!/^[[{]/.test(v) && v !== "true" && v !== "false" && v !== "null" && !/^-?\d+$/.test(v)) return v;
+  try {
+    return JSON.parse(v);
+  } catch {
+    return v;
+  }
+}
 
 export class Reads {
   readonly health: Cached<HealthDoc>;
@@ -176,10 +191,184 @@ export class Reads {
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
   }
 
+  // ── the field manifest of an add or modify form (fieldmanifest.ts) ──
+
+  private schemaFile(file: string): Record<string, unknown> {
+    const p = join(this.cfg.repoRoot ?? "/home/tappaas/TAPPaaS", "src", "foundation", "schemas", file);
+    return existsSync(p) ? (JSON.parse(readFileSync(p, "utf8")) as Record<string, unknown>) : {};
+  }
+
+  // The module field schema: the site's registered repositories composed, and
+  // the repository the console runs from winning for the fields it defines (on
+  // a site they are the same checkout), so references read as that release
+  // has them.
+  private moduleSchemaDoc(): Record<string, unknown> {
+    const foundation = join(this.cfg.repoRoot ?? "/home/tappaas/TAPPaaS", "src", "foundation");
+    const site = composeFields(foundation, this.cfg.configDir).schema;
+    const own = composeFields(foundation, join(foundation, ".no-site")).schema;
+    return { ...site, fields: { ...(site.fields as Record<string, unknown>), ...(own.fields as Record<string, unknown>) } };
+  }
+
+  private configJson(name: string): Record<string, unknown> | null {
+    return this.readJson(`${name}.json`);
+  }
+
+  // The defined objects a `references` field may name.
+  private async refContext(): Promise<RefContext> {
+    const [envs, site, ids] = await Promise.all([this.environments.get(), this.site.get(), this.identity.get()]);
+    let zones: string[] = [];
+    try {
+      zones = readZonesFile(join(this.cfg.configDir, "zones.json")).entries
+        .filter(([, z]) => !["Disabled", "Inactive"].includes(String(z.state ?? "")))
+        .map(([n]) => n)
+        .sort();
+    } catch {
+      zones = [];
+    }
+    const nodes = (Array.isArray(site.value?.nodes) ? (site.value!.nodes as { name?: unknown; storagePools?: unknown }[]) : [])
+      .filter((n) => typeof n.name === "string")
+      .map((n) => ({ name: n.name as string, pools: Array.isArray(n.storagePools) ? n.storagePools.filter((p): p is string => typeof p === "string") : [] }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const list = (k: string) => (ids.value?.[k] ?? []).filter((n) => typeof n === "string" && n !== "" && !n.startsWith("-")).sort();
+    return {
+      zones,
+      environments: (envs.value ?? []).map((e) => e.name).sort(),
+      nodes,
+      organizations: list("org"),
+      users: list("user"),
+      groups: list("group"),
+      roles: list("role"),
+    };
+  }
+
+  // The primary domain of an environment, for a template's <domain>.
+  private async domainOf(env: string | null): Promise<string | null> {
+    const envs = (await this.environments.get()).value ?? [];
+    const site = (await this.site.get()).value?.site as { defaultEnvironment?: string } | undefined;
+    const e = envs.find((x) => x.name === (env ?? site?.defaultEnvironment));
+    return (e as { domains?: { primary?: string } } | undefined)?.domains?.primary ?? null;
+  }
+
+  async fieldManifest(kind: FieldKind, name: string | null, mode: FormMode): Promise<FieldManifest> {
+    const refs = await this.refContext();
+    const vars: Record<string, string | null> = { name };
+    let defs: FieldDef[] = [];
+    let record: Record<string, unknown> | null = null;
+    let defaults: Record<string, unknown> | undefined;
+    let classes: Record<string, { class: string; apply?: string | null; coordinate?: string; settable: boolean; reason: string | null; offRelease?: boolean }> | undefined;
+    let services: string[] | undefined;
+    let moduleClasses: Record<string, { class?: string; apply?: string; changeNote?: string }> | undefined;
+    switch (kind) {
+      case "module": {
+        const schema = this.moduleSchemaDoc();
+        defs = moduleDefs(schema);
+        moduleClasses = (this.schemaFile("fields.json").fields ?? {}) as Record<string, { class?: string; apply?: string; changeNote?: string }>;
+        if (mode === "modify" && name) {
+          const [f, r] = await Promise.all([this.moduleFields.of(name).get(), this.moduleResolve.of(name).get()]);
+          if (f.error && !f.value) throw new Error(f.error);
+          classes = {};
+          for (const x of Array.isArray(f.value?.fields) ? (f.value!.fields as Record<string, unknown>[]) : []) {
+            if (typeof x.field === "string") classes[x.field] = { class: typeof x.class === "string" ? x.class : "", apply: typeof x.apply === "string" ? x.apply : null, coordinate: typeof x.coordinate === "string" ? x.coordinate : undefined, settable: x.settable === true, reason: typeof x.reason === "string" ? x.reason : null };
+          }
+          // The value in effect: configured, or the default resolve applied.
+          record = {};
+          defaults = {};
+          for (const [k, v] of Object.entries((r.value?.fields ?? {}) as Record<string, { value?: unknown; defaulted?: boolean; notTracking?: boolean }>)) {
+            const val = typeof v.value === "string" ? parseMaybe(v.value) : v.value;
+            // resolve's .orig note: the field is kept off its release on purpose
+            if (v.notTracking === true && classes[k]) classes[k].offRelease = true;
+            if (v.defaulted === false) record[k] = val;
+            else if (val !== null && val !== undefined) defaults[k] = val;
+          }
+          const own = this.configJson(name) ?? {};
+          vars.vmname = typeof own.vmname === "string" ? own.vmname : name;
+          vars.zone0 = typeof own.zone0 === "string" ? own.zone0 : null;
+          vars.domain = await this.domainOf(typeof own.environment === "string" ? own.environment : null);
+        } else if (name) {
+          // An add: the catalogue module's own JSON is what an empty field gets.
+          const cat = ((await this.catalogs.get()).value ?? []).flatMap((c) => c.modules).find((m) => m.name === name);
+          if (!cat) throw new Error(`no module '${name}' in the repositories' catalogues`);
+          const own = existsSync(cat.json) ? (JSON.parse(readFileSync(cat.json, "utf8")) as Record<string, unknown>) : {};
+          defaults = Object.fromEntries(Object.entries(own).filter(([k]) => k !== "config"));
+          services = [...(Array.isArray(own.dependsOn) ? own.dependsOn : []), ...(Array.isArray(own.integratesWith) ? own.integratesWith : [])].filter((x): x is string => typeof x === "string");
+          vars.vmname = typeof own.vmname === "string" ? own.vmname : name;
+          vars.zone0 = typeof own.zone0 === "string" ? own.zone0 : null;
+          vars.domain = await this.domainOf(null);
+        }
+        break;
+      }
+      case "backup": {
+        defs = backupDefs(this.moduleSchemaDoc());
+        if (!name) throw new Error("fields/backup/<module>");
+        record = ((this.configJson(name) ?? {}).backup as Record<string, unknown> | undefined) ?? {};
+        // The cascade's answer (site → environment → module) is what an unset field gets.
+        const show = await this.moduleBackup.of(name).get();
+        const policy = (show.value?.policy ?? {}) as Record<string, unknown>;
+        defaults = Object.fromEntries(["enabled", "retention", "exclude", "schedule"].filter((k) => policy[k] !== undefined && policy[k] !== null).map((k) => [k, policy[k]]));
+        break;
+      }
+      case "zone": {
+        defs = zoneDefs(this.schemaFile("zones-fields.json"));
+        if (name) {
+          const z = readZonesFile(join(this.cfg.configDir, "zones.json")).entries.find(([n]) => n === name);
+          record = z ? z[1] : null;
+          if (!record && mode === "modify") throw new Error(`no zone '${name}'`);
+        }
+        // network-manager add's own rules for what is left empty.
+        if (mode === "add") defaults = { type: "Service", typeId: 2, vlantag: "<allocated 60-99 in its band>" };
+        break;
+      }
+      case "environment": {
+        defs = flattenSchema(this.schemaFile("environment-fields.json"));
+        if (name && mode === "modify") {
+          // The record as environment-manager shows it, every field pre-filled.
+          record = await runJson<Record<string, unknown>>(this.cfg.run, "environment-manager", ["show", name, "--json"]);
+        } else {
+          // environment-manager add's own rules for what is left empty.
+          defaults = { displayName: "<Name>", ownerOrg: refs.organizations[0] ?? null, "network.zone": "<name>" };
+        }
+        break;
+      }
+      case "org":
+      case "group":
+      case "user":
+      case "role": {
+        const file = { org: "organization", group: "group", user: "user", role: "role" }[kind];
+        defs = flattenSchema(this.schemaFile(`${file}-fields.json`));
+        if (name && mode === "modify") {
+          const all = (await this.identityRecords.get()).value ?? {};
+          record = (all[kind] ?? []).find((x) => x.name === name) ?? null;
+          if (!record) throw new Error(`no ${kind} '${name}'`);
+        }
+        break;
+      }
+      case "site": {
+        defs = flattenSchema(this.schemaFile("site-fields.json"));
+        record = ((await this.site.get()).value?.site ?? null) as Record<string, unknown> | null;
+        break;
+      }
+    }
+    return buildManifest({ kind, name, mode, defs, record, defaults, classes, moduleClasses, services, refs, vars });
+  }
+
   // A module's fields for its Modify form: class, owner, type, value, default.
   async moduleFieldsOf(m: string): Promise<Entry<ModuleFields>> {
     const [f, r] = await Promise.all([this.moduleFields.of(m).get(), this.moduleResolve.of(m).get()]);
-    const value = f.value && r.value ? moduleFieldRows(f.value, r.value, moduleSchema(this.cfg.configDir)) : null;
+    // The released schema (references), else the site's composed one; the
+    // module-level classes as the console's release declares them.
+    let schema: Record<string, unknown>;
+    try {
+      schema = (this.moduleSchemaDoc().fields ?? {}) as Record<string, unknown>;
+    } catch {
+      schema = moduleSchema(this.cfg.configDir);
+    }
+    let classes: Record<string, { class?: string; apply?: string; changeNote?: string }> = {};
+    try {
+      classes = (this.schemaFile("fields.json").fields ?? {}) as Record<string, { class?: string; apply?: string; changeNote?: string }>;
+    } catch {
+      classes = {};
+    }
+    const value = f.value && r.value ? moduleFieldRows(f.value, r.value, schema, classes) : null;
     return { at: f.at, value, error: f.error ?? r.error, loading: f.loading || r.loading };
   }
 

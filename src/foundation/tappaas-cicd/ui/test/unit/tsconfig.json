@@ -9,6 +9,7 @@
     "../../../lib/ts/src/**/*.ts",
     "../../web/src/forms.ts",
     "../../web/src/relations.ts",
-    "../../web/src/instances.ts"
+    "../../web/src/instances.ts",
+    "../../web/src/fieldlogic.ts"
   ]
 }

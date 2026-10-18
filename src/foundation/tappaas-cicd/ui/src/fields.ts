@@ -7,6 +7,7 @@
 // repository the managers run from.
 
 import { existsSync, readFileSync } from "fs";
+import { oneLine } from "./fieldmanifest";
 import { join } from "path";
 
 export interface FieldRow {
@@ -49,7 +50,9 @@ export function typeWord(t: unknown): string {
   return "string";
 }
 
-export function moduleFieldRows(fieldsDoc: unknown, resolveDoc: unknown, schema: Obj): ModuleFields {
+// moduleClasses: schemas/fields.json — the declared class of a field no service
+// owns, shown instead of module-manager's "config-only" label.
+export function moduleFieldRows(fieldsDoc: unknown, resolveDoc: unknown, schema: Obj, moduleClasses: Record<string, { class?: string; changeNote?: string }> = {}): ModuleFields {
   const f = obj(fieldsDoc);
   const r = obj(resolveDoc);
   const resolved = obj(r.fields);
@@ -67,12 +70,15 @@ export function moduleFieldRows(fieldsDoc: unknown, resolveDoc: unknown, schema:
     const coordinate = typeof x.coordinate === "string" ? x.coordinate : "";
     const service = coordinate || strs(spec.usedBy).find((u) => dependsOn.includes(u)) || "";
     const value = typeof res.value === "string" ? res.value : x.value === null || x.value === undefined ? null : String(x.value);
+    const own = moduleClasses[field]?.class;
+    const declared = !coordinate && own ? own : undefined;
+    const notByHand = declared === "immutable" || declared === "recreate" || declared === "manual";
     rows.push({
       field,
       service,
-      class: typeof x.class === "string" ? x.class : "",
-      settable: x.settable === true,
-      reason: typeof x.reason === "string" ? x.reason : null,
+      class: declared ?? (typeof x.class === "string" ? x.class : ""),
+      settable: x.settable === true && !notByHand,
+      reason: notByHand ? oneLine(moduleClasses[field]?.changeNote) || (declared === "manual" ? "changed in the module's own JSON, then an update" : "the release or the install writes it") : typeof x.reason === "string" ? x.reason : null,
       type: typeWord(spec.type),
       enum: Array.isArray(spec.enum) ? spec.enum.map(String) : null,
       description: typeof spec.description === "string" ? spec.description : "",

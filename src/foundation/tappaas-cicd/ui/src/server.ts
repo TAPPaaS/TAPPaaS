@@ -17,10 +17,11 @@ import { Assistant, AssistantEvent } from "./assistant";
 import { LiteLLM } from "./litellm";
 import { Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
-import { MODULE_NAME, NODE_NAME, Reads } from "./reads";
+import { MODULE_NAME, NODE_NAME, OBJECT_NAME, Reads } from "./reads";
 import { ownerSummary, readConfigs } from "./owner";
 import { SECRETS, isSecretName, secretStatus, writeSecret } from "./secrets";
 import { closeSetupToken, setupComplete, setupSteps } from "./setup";
+import { FIELD_KINDS, FieldKind } from "./fieldmanifest";
 
 export interface ServerConfig {
   access: AccessConfig;
@@ -211,6 +212,18 @@ export class ConsoleServer {
       }
       case "catalogs":
         return sendJson(res, 200, envelope(await r.catalogs.get()));
+      case "fields": {
+        // The field manifest of an add or modify form: fields/<kind>[/<name>][?mode=add|modify].
+        if (!a || !(FIELD_KINDS as readonly string[]).includes(a)) return sendJson(res, 404, { error: `fields/<${FIELD_KINDS.join("|")}>[/<name>]` });
+        if (b !== undefined && !OBJECT_NAME.test(b)) return sendJson(res, 400, { error: "not an object name" });
+        const mode = url.searchParams.get("mode") === "add" || (b === undefined && a !== "site") ? "add" : "modify";
+        try {
+          const data = await r.fieldManifest(a as FieldKind, b ?? null, mode);
+          return sendJson(res, 200, { data, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null });
+        } catch (e) {
+          return sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: (e as Error).message });
+        }
+      }
       case "schemas": {
         if (!a || !(a in SCHEMAS)) return sendJson(res, 404, { error: `schemas/<${Object.keys(SCHEMAS).join("|")}>` });
         return sendJson(res, 200, envelope(await r.schemas.of(a).get()));

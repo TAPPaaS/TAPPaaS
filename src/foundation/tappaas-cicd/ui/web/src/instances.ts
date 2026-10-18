@@ -61,15 +61,6 @@ export function installEnvironments(stack: string | null, environments: string[]
   return { choices, initial };
 }
 
-// A guest takes the VM id its module names, so a second instance of a module
-// whose id is in use needs another: the next one up that no guest uses.
-export function freeVmid(base: number | null, used: Set<number>): number | null {
-  if (base === null || !used.has(base)) return null;
-  let n = base + 1;
-  while (used.has(n)) n++;
-  return n;
-}
-
 // The instance `module-manager add <m> --environment <env>` makes: the module's
 // own name in mgmt and in the default environment, else <module>-<env>.
 export function defaultInstanceName(module: string, env: string, defaultEnv: string | null): string {

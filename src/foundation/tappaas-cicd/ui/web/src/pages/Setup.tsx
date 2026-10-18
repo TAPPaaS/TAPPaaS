@@ -9,6 +9,7 @@ import { ReactNode, useState } from "react";
 import { get, post, useRead } from "../api";
 import { Output, stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
+import { fieldsStep } from "../fields";
 import { Job, SiteRead } from "../types";
 import { Dot, Link, ReadState, Section, since } from "../ui";
 import { AddNodeButton } from "./AddNode";
@@ -230,7 +231,7 @@ export function Setup() {
   for (const m of ["backup", "identity", "logging"]) {
     body[m] = (
       <span className="toolbar">
-        <OperateButton label={`Install ${m}…`} title={`module-manager add ${m}`} steps={[mm(`module-manager add ${m} --environment mgmt`, "add", { fixed: [m], initial: { "--environment": "mgmt" }, note: m === "identity" ? "Once identity is installed the console deletes the setup token: from then on it is reached through console.<domain> behind the gate (publish it below)." : undefined })]} />
+        <OperateButton label={`Install ${m}…`} title={`module-manager add ${m}`} steps={() => [fieldsStep({ title: `module-manager add ${m} --environment mgmt`, bin: "module-manager", verb: "add", fixed: [m], kind: "module", name: m, mode: "add", keep: ["--environment"], initial: { "--environment": "mgmt" }, choices: { "--environment": ["mgmt"] }, note: m === "identity" ? "Once identity is installed the console deletes the setup token: from then on it is reached through console.<domain> behind the gate (publish it below)." : undefined })]} />
         <OperateButton label="Test" title={`module-manager test ${m}`} steps={[mm(`module-manager test ${m}`, "test", { fixed: [m], hide: ["--vmid", "--zone0"] })]} />
         {m === "identity" ? (
           <OperateButton label="Publish the console…" title="module-manager add console" steps={[mm("module-manager add console --proxyDomain console.<domain>", "add", { fixed: ["console"], initial: { "@extra": [`--proxyDomain console.${domain}`] }, note: "The console's route through Caddy and the Authentik gate (the console module): mgmt and the admin VPN only." })]} />

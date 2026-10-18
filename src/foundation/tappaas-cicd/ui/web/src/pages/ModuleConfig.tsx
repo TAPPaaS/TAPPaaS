@@ -6,7 +6,7 @@
 
 import { useMemo, useState } from "react";
 import { useRead } from "../api";
-import { modifyStep } from "../fieldsform";
+import { fieldsStep } from "../fields";
 import { FieldRow, plainText, shortValue } from "../forms";
 import { GEdge, GNode, Graph } from "../graph";
 import { Operate } from "../operate";
@@ -89,6 +89,7 @@ export function ModuleConfig({ d }: { d: ModuleDetail }) {
                     <td className={`mono${x.configured ? "" : " muted"}`}>
                       {PLACEMENT.includes(x.field) && x.value === null ? placement(d, x.field) : shortValue(x.value, 26)}
                       {!x.configured && x.value !== null ? <span className="dflt"> default</span> : null}
+                      {!x.settable ? <span className="dflt" title={x.reason ?? ""}> fixed</span> : null}
                     </td>
                   </tr>
                 ))}
@@ -131,12 +132,16 @@ export function ModuleConfig({ d }: { d: ModuleDetail }) {
         <Operate
           title={`Modify ${name}${open.id ? ` · ${open.id}` : ""}`}
           steps={[
-            modifyStep({
+            fieldsStep({
               title: open.id ? `The fields ${open.id} owns` : `${name}'s own fields`,
               bin: "module-manager",
+              verb: "modify",
               fixed: [name],
-              rows: [...open.rows].sort((a, b) => a.field.localeCompare(b.field)),
-              note: "Change any number of fields: they go to module-manager as one modify, one --set per changed field. The preview checks every one before anything is written; a modify applies all of them or none.",
+              kind: "module",
+              name,
+              mode: "modify",
+              fields: open.rows.map((x) => x.field),
+              note: "One modify for every field changed: the preview checks them all before anything is written, and applies all of them or none.",
             }),
           ]}
           onClose={() => setOpen(null)}

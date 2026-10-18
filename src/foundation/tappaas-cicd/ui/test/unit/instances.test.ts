@@ -2,7 +2,7 @@
 // Installed row per module with every environment it is in, and where Install
 // may put it again.
 
-import { defaultInstanceName, environmentsOf, freeVmid, groupInstances, installEnvironments, instanceOwners } from "../../web/src/instances";
+import { defaultInstanceName, environmentsOf, groupInstances, installEnvironments, instanceOwners } from "../../web/src/instances";
 import { check, done } from "./check";
 
 const owner = instanceOwners([
@@ -40,8 +40,5 @@ check(e4.choices.join() === "rossen,test" && e4.initial === "rossen", "installed
 
 check(defaultInstanceName("vaultwarden", "test", "rossen") === "vaultwarden-test", "add --environment test names the instance <module>-test");
 check(defaultInstanceName("vaultwarden", "rossen", "rossen") === "vaultwarden" && defaultInstanceName("backup", "mgmt", "rossen") === "backup", "…and the module's own name in the default environment and in mgmt");
-
-check(freeVmid(610, new Set([610, 611, 811])) === 612, "a second guest of a module whose VM id is taken: the next free id up");
-check(freeVmid(213, new Set([610])) === null && freeVmid(null, new Set([1])) === null, "…none needed while the module's own id is free, or for a module with no guest");
 
 done("instances");

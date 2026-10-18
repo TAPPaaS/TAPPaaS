@@ -2,7 +2,7 @@
 // schema type gets, the text it starts from, and the --set list the edits
 // become (only what changed, typed, refused fields never).
 
-import { FieldRow, capitalised, envAddRows, initialText, inputKind, plainText, setArgs, shortValue, zoneFieldRows } from "../../web/src/forms";
+import { CLASS_WORDS, FieldRow, capitalised, classMeaning, classTitle, classWords, initialText, inputKind, plainText, setArgs, shortValue, zoneFieldRows } from "../../web/src/forms";
 import { check, done } from "./check";
 
 const base: FieldRow = { field: "x", service: "", class: "in-place", settable: true, reason: null, type: "string", enum: null, description: "", example: null, value: null, configured: false, default: null };
@@ -42,29 +42,6 @@ check(shortValue('["a","b"]') === "a, b" && shortValue(null) === "—" && shortV
 
 check(plainText("the node's first ZFS pool (#692). Thin disks (#773, #774): opt-in (ADR-020 D3).") === "the node's first ZFS pool. Thin disks: opt-in.", "a description loses its issue and ADR numbers");
 
-// ── the add-environment form ─────────────────────────────────────────────
-const envSchema = {
-  required: ["name", "displayName", "ownerOrg", "network"],
-  properties: {
-    name: { type: "string", description: "Slug identifier for the environment." },
-    displayName: { type: "string", description: "Human-readable environment name." },
-    ownerOrg: { type: "string", description: "Reference to the owning Organization.name." },
-    domains: { type: "object", properties: { primary: { type: "string", description: "Primary public domain." }, dnsMode: { type: "string", enum: ["per-service", "wildcard"], default: "per-service" } } },
-    network: { type: "object", description: "Network placement. NO vlan here (CR-09).", properties: { zone: { type: "string", description: "Reference to a zone key in zones.json (validated)." } } },
-  },
-};
-const help = { "--owner": "The organization that owns the environment (default: the first organization, by name)." };
-const rows = envAddRows(envSchema, { name: "acme", orgs: ["zeta", "rossen"], zones: ["rossen", "home"], help });
-const by = (k: string) => rows.find((x) => x.key === k)!;
-check(rows.filter((x) => x.required).map((x) => x.key).join() === "@env", "only the name must be given");
-check(by("--owner").whenEmpty === "rossen" && by("--owner").choices?.join() === "rossen,zeta", "left empty, the owner is the first organization by name");
-check(by("--zone").whenEmpty === "acme" && by("--display").whenEmpty === "Acme", "the zone is named like the environment, the display name is it capitalised");
-check(by("--dns-mode").whenEmpty === "per-service" && by("--dns-mode").choices?.join() === "per-service,wildcard", "the DNS mode's default and choices come from the schema");
-check(/inside only/.test(by("--domain").whenEmpty ?? ""), "no domain: says what that means");
-check(by("--owner").description === help["--owner"] && by("--domain").description === "Primary public domain.", "the verb's help first, else the schema's description");
-const none = envAddRows(envSchema, { name: "", orgs: [], zones: [], help: {} });
-check(/no organization/.test(none.find((x) => x.key === "--owner")!.whenEmpty ?? "") && none.find((x) => x.key === "--zone")!.whenEmpty === "a zone named like the environment", "before a name or an organization exists: said in words, no placeholder");
-check(rows.every((x) => !/<env>|\bN\b|\bD\b|\bZ\b/.test(`${x.whenEmpty ?? ""}`)), "no placeholder in a default");
 check(capitalised("rossen") === "Rossen" && capitalised("") === "", "capitalised");
 
 // ── a zone's fields ────────────────────────────────────────────────────
@@ -87,5 +64,12 @@ check(!z("mdns").configured && z("mdns").value === "false" && z("mdns").default 
 check(z("serves").type === "array" && !z("odd").settable, "string-or-list is a list; no change class: not settable");
 const zset = setArgs(zrows, { "access-to": "internet\nmgmt", "pinhole-allowed-from": "dmz", mdns: "true", vlantag: "999" });
 check(zset.sets.join(" ") === 'access-to=["internet","mgmt"] pinhole-allowed-from=["dmz"] mdns=true', "several zone fields in one modify; the immutable one is not sent");
+
+// the change classes as their meaning (ADR-020 D3's seven; never "config-only")
+check(classWords("in-place") === "applied live" && classMeaning("in-place", "none") === "recorded; shows at the next update", "in-place: applied live; with apply none, recorded and shown at the next update");
+check(classWords("in-place-reboot") === "restarts the module" && classWords("grow-only") === "can grow, never shrink" && classWords("migrate") === "moves the module to another node", "restarts the module, can grow never shrink, moves the module");
+check(classWords("manual") === "done by hand after the change is recorded" && classWords("immutable") === "not changed by hand" && classWords("recreate") === "not changed by hand", "manual; immutable and recreate: not changed by hand");
+check(classWords("config-only") === "" && Object.keys(CLASS_WORDS).length === 7, "config-only has no words: it is a label, not a class; seven classes");
+check(classTitle("immutable", "set", null).startsWith("immutable") && /delete \+ reinstall/.test(classTitle("immutable", "set", null)) && classTitle("in-place", "none", null) === "in-place (apply: none)", "the tooltip carries the technical name (and delete + reinstall where that is the way)");
 
 done("forms");

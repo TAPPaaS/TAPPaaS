@@ -7,6 +7,7 @@
 
 import { useRead } from "../api";
 import { OperateButton, Step } from "../operate";
+import { fieldsStep } from "../fields";
 import { SiteRead } from "../types";
 import { KV, ReadState, Section, navigate, since } from "../ui";
 import { AddNodeButton } from "./AddNode";
@@ -23,7 +24,7 @@ interface Repo {
   hold?: { reason?: string; until?: string } | null;
 }
 
-const SCHEDULE = ["--updateFrequency", "--updateWeekday", "--updateHour"];
+const SCHEDULE_FIELDS = ["updateSchedule.frequency", "updateSchedule.weekday", "updateSchedule.hour"];
 
 export const SITE_TABS = [
   { name: "Overview", path: "/site" },
@@ -79,7 +80,7 @@ export function Site({ tab = "Overview" }: { tab?: "Overview" | "Physical" }) {
       {tabs}
       <ReadState env={r.env} failure={r.failure} what="site" />
       <div className="grid2">
-        <Section title="site.json" aside={<OperateButton label="Modify…" title="site-manager site modify" steps={[sm("site-manager site modify", "site modify", { hide: SCHEDULE })]} />}>
+        <Section title="site.json" aside={<OperateButton label="Modify…" title="site-manager site modify" steps={() => [fieldsStep({ title: "site-manager site modify", bin: "site-manager", verb: "site modify", kind: "site", name: null, mode: "modify", note: "Writes site.json: one modify for every field changed." })]} />}>
           <KV
             rows={[
               ["name", String(s.name ?? "")],
@@ -95,7 +96,7 @@ export function Site({ tab = "Overview" }: { tab?: "Overview" | "Physical" }) {
         </Section>
         <Section
           title="Update schedule"
-          aside={<OperateButton label="Change…" title="The update schedule" steps={[sm("site-manager site modify (the schedule)", "site modify", { only: SCHEDULE, initial: { "--updateFrequency": sched?.frequency ?? "", "--updateHour": sched?.hour !== undefined ? String(sched.hour) : "" } })]} />}
+          aside={<OperateButton label="Change…" title="The update schedule" steps={() => [fieldsStep({ title: "site-manager site modify (the schedule)", bin: "site-manager", verb: "site modify", kind: "site", name: null, mode: "modify", fields: SCHEDULE_FIELDS })]} />}
         >
           <KV
             rows={[

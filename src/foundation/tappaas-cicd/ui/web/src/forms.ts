@@ -19,6 +19,37 @@ export interface FieldRow {
   default: unknown;
 }
 
+// A change class (ADR-020 D3) as what it means to the operator; the technical
+// name is only ever the tooltip. module-manager's "config-only" is a label for
+// where a change lands, not a class: it has no words and is never shown.
+export const CLASS_WORDS: Record<string, string> = {
+  "in-place": "applied live",
+  "in-place-reboot": "restarts the module",
+  "grow-only": "can grow, never shrink",
+  migrate: "moves the module to another node",
+  manual: "done by hand after the change is recorded",
+  immutable: "not changed by hand",
+  recreate: "not changed by hand",
+};
+
+// The meaning of a class; an in-place field nothing applies (apply: none) is
+// recorded and shows at the module's next update.
+export function classMeaning(c: string | null | undefined, apply?: string | null): string {
+  if (!c) return "";
+  if (c === "in-place" && apply === "none") return "recorded; shows at the next update";
+  return CLASS_WORDS[c] ?? "";
+}
+
+export function classWords(c: string | null | undefined): string {
+  return classMeaning(c);
+}
+
+// The tooltip: the class's technical name, and why where the form knows it.
+export function classTitle(c: string | null | undefined, apply?: string | null, why?: string | null): string {
+  if (!c) return "";
+  return `${c}${apply ? ` (apply: ${apply})` : ""}${why ? ` — ${why}` : (c === "immutable" || c === "recreate") && apply !== "none" ? " — delete + reinstall to change it" : ""}`;
+}
+
 export type InputKind = "string" | "integer" | "boolean" | "enum" | "list" | "object";
 
 export function inputKind(r: Pick<FieldRow, "type" | "enum">): InputKind {
@@ -131,52 +162,8 @@ export function setArgs(rows: FieldRow[], edits: Record<string, string>): { sets
   return { sets, errors };
 }
 
-// ── adding an environment ───────────────────────────────────────────────
-
-// One input of the add form: the value the operator must give, or what
-// environment-manager uses when it is left empty.
-export interface EnvAddRow {
-  key: string; // "@env" or the option's flag
-  field: string; // where it lands in the environment's record
-  required: boolean;
-  whenEmpty: string | null;
-  description: string;
-  choices: string[] | null;
-  kind: "string" | "enum" | "boolean";
-}
-
-type Props = Record<string, { description?: string; default?: unknown; enum?: unknown; properties?: Props }>;
-
-function prop(schema: Record<string, unknown>, path: string): { description?: string; default?: unknown; enum?: unknown } {
-  let p: Props = (schema.properties ?? {}) as Props;
-  const parts = path.split(".");
-  for (let i = 0; i < parts.length - 1; i++) p = p[parts[i]]?.properties ?? {};
-  return p[parts[parts.length - 1]] ?? {};
-}
-
 export function capitalised(name: string): string {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : "";
-}
-
-// The add form from environment-fields.json and the manager's own defaults
-// (cmdAdd): the owner is the first organization by name, the zone is named
-// like the environment, the display name is the name capitalised, the DNS mode
-// is the schema's default. `help` is the verb's option text by flag.
-export function envAddRows(schema: Record<string, unknown>, ctx: { name: string; orgs: string[]; zones: string[]; help: Record<string, string> }): EnvAddRow[] {
-  const d = (path: string, flag: string): string => ctx.help[flag] || plainText(prop(schema, path).description ?? "");
-  const firstOrg = [...ctx.orgs].sort()[0] ?? null;
-  const dns = prop(schema, "domains.dnsMode");
-  const dnsModes = Array.isArray(dns.enum) ? dns.enum.map(String) : ["per-service", "wildcard"];
-  const named = (v: string | null, why: string) => (v ? v : why);
-  return [
-    { key: "@env", field: "name", required: true, whenEmpty: null, description: plainText(prop(schema, "name").description ?? ""), choices: null, kind: "string" },
-    { key: "--display", field: "displayName", required: false, whenEmpty: named(capitalised(ctx.name), "the name, capitalised"), description: d("displayName", "--display"), choices: null, kind: "string" },
-    { key: "--owner", field: "ownerOrg", required: false, whenEmpty: firstOrg ?? "none: there is no organization yet, so the record is refused", description: d("ownerOrg", "--owner"), choices: [...ctx.orgs].sort(), kind: "enum" },
-    { key: "--zone", field: "network.zone", required: false, whenEmpty: named(ctx.name, "a zone named like the environment"), description: d("network.zone", "--zone"), choices: [...ctx.zones].sort(), kind: "string" },
-    { key: "--create-zone", field: "zones.json", required: false, whenEmpty: "off: the zone must exist already", description: ctx.help["--create-zone"] ?? "", choices: null, kind: "boolean" },
-    { key: "--domain", field: "domains.primary", required: false, whenEmpty: "no public domain: the environment is reached inside only", description: d("domains.primary", "--domain"), choices: null, kind: "string" },
-    { key: "--dns-mode", field: "domains.dnsMode", required: false, whenEmpty: typeof dns.default === "string" ? dns.default : "per-service", description: d("domains.dnsMode", "--dns-mode"), choices: dnsModes, kind: "enum" },
-  ];
 }
 
 // ── zones ───────────────────────────────────────────────────────────────

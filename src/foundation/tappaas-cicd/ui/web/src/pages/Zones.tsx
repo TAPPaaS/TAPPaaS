@@ -7,7 +7,8 @@
 
 import { useMemo } from "react";
 import { useRead } from "../api";
-import { ClassTag, modifyStep } from "../fieldsform";
+import { ClassTag } from "../fieldsform";
+import { fieldsStep } from "../fields";
 import { FieldRow, ZoneFieldSpec, shortValue, zoneFieldRows } from "../forms";
 import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
@@ -103,14 +104,16 @@ function ZoneDetail({ z, schema, envNames, close }: { z: ZoneRead; schema: Recor
           label="Modify…"
           kind="primary"
           title={`Modify zone ${z.name}`}
-          disabled={!schema}
           steps={() => [
-            modifyStep({
+            fieldsStep({
               title: `The fields of ${z.name}`,
               bin: "network-manager",
+              verb: "modify",
               fixed: [z.name],
-              rows,
-              note: "Change any number of fields: one network-manager modify, one --set per changed field, all or none. It writes zones.json only; the reconcile after makes it live.",
+              kind: "zone",
+              name: z.name,
+              mode: "modify",
+              note: "One modify for every field changed, all or none. It writes zones.json only; the reconcile after makes it live.",
             }),
             reconcile,
           ]}

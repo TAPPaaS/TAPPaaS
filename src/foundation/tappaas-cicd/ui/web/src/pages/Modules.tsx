@@ -11,7 +11,8 @@
 import { Fragment, ReactNode, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { plainText } from "../forms";
-import { ModuleGroup, defaultInstanceName, environmentsOf, freeVmid, groupInstances, installEnvironments, instanceOwners } from "../instances";
+import { fieldsStep } from "../fields";
+import { ModuleGroup, defaultInstanceName, environmentsOf, groupInstances, installEnvironments, instanceOwners } from "../instances";
 import { OperateButton } from "../operate";
 import { EnvironmentRow, ModuleSummary, SiteRead } from "../types";
 import { Badge, Dot, Link, ReadState, levelOf, since } from "../ui";
@@ -173,7 +174,7 @@ export function Modules() {
         ))}
       </div>
       {tab !== "Installed" ? (
-        repo ? <RepositoryTab r={repo} deployed={new Set((mods.env?.data ?? []).map((m) => m.name))} ready={!!mods.env?.data && !!envs.env?.data} envOf={envOf} usedVmids={new Set((mods.env?.data ?? []).map((m) => m.vmid).filter((v): v is number => v !== null))} environments={(envs.env?.data ?? []).map((e) => e.name)} defaultEnv={defaultEnv} at={cats.env?.at ?? null} /> : <ReadState env={cats.env} failure={cats.failure} what="the repositories' catalogues" />
+        repo ? <RepositoryTab r={repo} deployed={new Set((mods.env?.data ?? []).map((m) => m.name))} ready={!!mods.env?.data && !!envs.env?.data} envOf={envOf} environments={(envs.env?.data ?? []).map((e) => e.name)} defaultEnv={defaultEnv} at={cats.env?.at ?? null} /> : <ReadState env={cats.env} failure={cats.failure} what="the repositories' catalogues" />
       ) : (
       <>
       <ReadState env={mods.env} failure={mods.failure} what="modules (module-manager list)" />
@@ -211,7 +212,7 @@ export function Modules() {
   );
 }
 
-function RepositoryTab({ r, deployed, ready, envOf, usedVmids, environments, defaultEnv, at }: { r: RepositoryCatalog; deployed: Set<string>; ready: boolean; envOf: Map<string, string | null>; usedVmids: Set<number>; environments: string[]; defaultEnv: string | null; at: string | null }) {
+function RepositoryTab({ r, deployed, ready, envOf, environments, defaultEnv, at }: { r: RepositoryCatalog; deployed: Set<string>; ready: boolean; envOf: Map<string, string | null>; environments: string[]; defaultEnv: string | null; at: string | null }) {
   const [q, setQ] = useState("");
   const [only, setOnly] = useState(false);
   const rows = r.modules
@@ -227,7 +228,6 @@ function RepositoryTab({ r, deployed, ready, envOf, usedVmids, environments, def
     const { choices, initial } = installEnvironments(m.stack, environments, uniq(placed.map((p) => p.environment)), defaultEnv);
     const next = initial && m.stack !== "foundation" ? defaultInstanceName(m.name, initial, defaultEnv) : null;
     const where = placed.map((p) => `${p.environment ?? "?"} (${p.instance})`).join(", ");
-    const vmid = freeVmid(m.vmid, usedVmids);
     return (
     <tr key={m.name}>
       <td className="mono">{deployed.has(m.name) ? <Link to={`/modules/${encodeURIComponent(m.name)}`}>{m.name}</Link> : m.name}</td>
@@ -250,32 +250,35 @@ function RepositoryTab({ r, deployed, ready, envOf, usedVmids, environments, def
         )}
       </td>
       <td>
-        {/* Its environment and VM id are chosen from what is installed: not before that is read. */}
+        {/* Its environment is chosen from what is installed: not before that is read. */}
         <OperateButton
           disabled={!ready}
           hint={ready ? undefined : "reading the installed modules and the environments…"}
           label={m.instances.length ? "Install again…" : "Install…"}
           title={`Install ${m.name}`}
-          steps={[
-            {
+          steps={() => [
+            fieldsStep({
               title: `module-manager add ${m.name} --environment <environment>`,
               bin: "module-manager",
               verb: "add",
               fixed: [m.name],
-              initial: { ...(initial ? { "--environment": initial } : {}), ...(vmid !== null ? { "@extra": [`--vmid ${vmid}`] } : {}) },
+              kind: "module",
+              name: m.name,
+              mode: "add",
+              keep: ["--environment", "--instance", "--allow-fork", "--reinstall"],
+              initial: initial ? { "--environment": initial } : undefined,
               choices: choices.length ? { "--environment": choices } : undefined,
               note: (
                 <>
                   Installs {m.name} from {r.name} into the environment chosen
-                  {m.stack === "foundation" ? " (a foundation module goes in mgmt only)" : ""}: writes its config, builds and starts its guest, wires the services it depends on. There is no dry run: the preview shows the exact command. Fields of the module go under "more options" as --&lt;field&gt; &lt;value&gt;, one per line.
+                  {m.stack === "foundation" ? " (a foundation module goes in mgmt only)" : ""}: writes its config, builds and starts its guest, wires the services it depends on. There is no dry run: the preview shows the exact command. A field left empty takes the module's own value.
                   {m.instances.length ? ` Installed now in: ${where}. ` : " "}
                   {m.stack === "foundation"
                     ? m.instances.length ? "Another instance needs its own name: --instance." : ""
-                    : `The instance is named ${m.name} in ${defaultEnv ?? "the default environment"}, else ${m.name}-<environment>${next ? ` (here: ${next})` : ""}; in an environment it is already in, name it with --instance.`}
-                  {vmid !== null ? ` Its guest's VM id ${m.vmid} is taken: --vmid ${vmid} under more options is the next free one TAPPaaS knows of (the install refuses an id in use).` : ""}
+                    : `The instance is named ${m.name} in ${defaultEnv ?? "the default environment"}, else ${m.name}-<environment>${next ? ` (here: ${next})` : ""}; in an environment it is already in, name it with --instance. A guest whose VM id is taken gets the next free one.`}
                 </>
               ),
-            },
+            }),
           ]}
         />
       </td>
