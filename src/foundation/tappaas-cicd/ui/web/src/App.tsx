@@ -1,9 +1,11 @@
 // App.tsx — the shell of the mockups: the left navigation, a header with the
 // site, the reader and a refresh, and the page. Security is a later phase; it
-// is shown in the navigation and marked as later.
+// is shown in the navigation and marked as later. The Assistant drawer (P3)
+// opens on every page when the backend says the assistant is available.
 
 import { useState } from "react";
 import { refreshAll, useRead } from "./api";
+import { AssistantApi, AssistantContext, AssistantDrawer, focusOf } from "./assistant";
 import { Activity } from "./pages/Activity";
 import { Backup } from "./pages/Backup";
 import { Environments } from "./pages/Environments";
@@ -15,7 +17,7 @@ import { Modules } from "./pages/Modules";
 import { Overview } from "./pages/Overview";
 import { OwnerOverview } from "./pages/OwnerOverview";
 import { Physical } from "./pages/Physical";
-import { Me, SiteRead } from "./types";
+import { AssistantStatus, Me, SiteRead } from "./types";
 import { Link, MeContext, usePath } from "./ui";
 
 const NAV: { to: string; label: string; live: boolean }[] = [
@@ -48,6 +50,15 @@ export function App() {
   const nav = owner ? NAV.filter((n) => ["/", "/physical", "/modules"].includes(n.to)) : NAV;
   const [busy, setBusy] = useState(false);
   const s = site.env?.data?.site;
+  // The assistant (D7): only when LiteLLM answers with the console's key.
+  const astatus = useRead<AssistantStatus>(user && !owner ? "assistant/status" : null, 120_000).env?.data ?? null;
+  const [drawer, setDrawer] = useState(false);
+  const assistant: AssistantApi = {
+    available: astatus?.available === true,
+    open: drawer && astatus?.available === true,
+    setOpen: setDrawer,
+    ask: () => setDrawer(true),
+  };
 
   let page;
   if ((path === "/" || path === "") && owner) page = <OwnerOverview />;
@@ -80,7 +91,8 @@ export function App() {
 
   return (
     <MeContext.Provider value={user}>
-    <div className="shell">
+    <AssistantContext.Provider value={assistant}>
+    <div className={`shell${assistant.open ? " with-drawer" : ""}`}>
       <nav className="nav">
         <div className="brand">
           <div className="brand-name">TAPPaaS</div>
@@ -101,9 +113,14 @@ export function App() {
             </li>
           ))}
         </ul>
+        {assistant.available ? (
+          <button className={`nav-item nav-assistant${assistant.open ? " nav-active" : ""}`} onClick={() => setDrawer(!drawer)} title={astatus?.reason}>
+            ✦ Assistant <span className="nav-sub">via LiteLLM</span>
+          </button>
+        ) : null}
         <div className="nav-foot">
           <div>{s?.channel ? `channel ${s.channel}` : ""}</div>
-          <div>tappaas-cicd · console P2</div>
+          <div>tappaas-cicd · console P3</div>
         </div>
       </nav>
       <div className="main">
@@ -121,7 +138,9 @@ export function App() {
         </header>
         {page}
       </div>
+      {assistant.open && astatus ? <AssistantDrawer status={astatus} focus={focusOf(path)} site={s?.name ?? "…"} onClose={() => setDrawer(false)} /> : null}
     </div>
+    </AssistantContext.Provider>
     </MeContext.Provider>
   );
 }

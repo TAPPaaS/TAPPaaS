@@ -1,0 +1,17 @@
+{
+  "$schema": "../schemas/fields-schema.json",
+  "scope": "module",
+  "description": "Fields of the console module (ADR-034).",
+  "_note": "MODULE TIER (#567). The console provides no service, and no service owns its one field of its own: the console's backend reads it (tappaas-cicd/ui/src/litellm.ts), so it is a general field of this module.",
+  "fields": {
+    "assistantModel": {
+      "description": "The LiteLLM model the console's assistant asks for (ADR-034 D7, O3). Absent: LiteLLM's model named `default` when the console's key may use one, else the first model LiteLLM lists for the key.",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "vllm"
+    }
+  }
+}

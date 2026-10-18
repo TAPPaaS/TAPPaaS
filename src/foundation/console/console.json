@@ -1,5 +1,5 @@
 {
-  "description": "The TAPPaaS console (ADR-034): the site's web UI. The service runs on the mothership (tappaas-console.service, built from tappaas-cicd/ui); this module is its published face — the route through Caddy and the Authentik gate. It installs nothing of its own.",
+  "description": "The TAPPaaS console (ADR-034): the site's web UI. The service runs on the mothership (tappaas-console.service, built from tappaas-cicd/ui); this module is its published face — the route through Caddy and the Authentik gate — and, when the AI stack is installed, the assistant's LiteLLM key. It installs nothing of its own.",
   "displayName": "TAPPaaS console",
   "kind": "application",
   "version": "0.1.0",
@@ -13,7 +13,11 @@
   "zone0": "mgmt",
   "dependsOn": [
     "network:proxy",
+    "network:rules",
     "identity:accessControl"
+  ],
+  "integratesWith": [
+    "litellm:models"
   ],
   "provides": [],
   "config": {

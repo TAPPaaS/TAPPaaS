@@ -334,3 +334,14 @@ export interface BackupRowView {
   schedule?: string;
   retention?: string;
 }
+
+// ── the assistant (GET /api/v1/assistant/status, ADR-034 D7) ─────────
+export interface AssistantStatus {
+  available: boolean;
+  reason: string;
+  model: string | null;
+  modelFrom: "console.json" | "default" | "first listed" | null;
+  endpoint: string | null;
+  keyFile: string | null;
+  checkedAt: string;
+}

@@ -15,6 +15,28 @@ declare const Buffer: {
   byteLength(s: string): number;
 };
 
+// Node 22's fetch: LiteLLM's API (litellm.ts) and Loki's (assistant-tools.ts).
+interface FetchResponse {
+  ok: boolean;
+  status: number;
+  text(): Promise<string>;
+  json(): Promise<unknown>;
+  body: AsyncIterable<Uint8Array> | null;
+}
+interface AbortSignal {
+  readonly aborted: boolean;
+  addEventListener(type: "abort", cb: () => void): void;
+}
+declare const AbortSignal: { timeout(ms: number): AbortSignal; any(signals: AbortSignal[]): AbortSignal };
+declare class AbortController {
+  readonly signal: AbortSignal;
+  abort(): void;
+}
+declare function fetch(url: string, init?: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal }): Promise<FetchResponse>;
+declare class TextDecoder {
+  decode(input?: Uint8Array, opts?: { stream?: boolean }): string;
+}
+
 declare class URLSearchParams {
   get(name: string): string | null;
 }

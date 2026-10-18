@@ -20,6 +20,7 @@ import { networkInterfaces } from "os";
 import { join } from "path";
 import { AccessConfig, addrMatches, setupState } from "./access";
 import { Jobs } from "./jobs";
+import { KEY_FILE, LiteLLM } from "./litellm";
 import { loadManifests } from "./manifest";
 import { Reads } from "./reads";
 import { runAsync, streamAsync } from "./run";
@@ -60,7 +61,8 @@ export const HELP: HelpSpec = {
       "CONSOLE_FIREWALL (the firewall's address; default the gateway of mgmt's network in zones.json),\n" +
       "CONSOLE_SETUP_ALLOW, CONSOLE_SETUP_TOKEN_FILE, CONSOLE_SECRETS_DIR (where the wizard's\n" +
       "credential files go; default $HOME), CONSOLE_MANIFEST_FILE\n" +
-      "(default <config>/console-setup-token), CONSOLE_JOURNAL_DAYS (default 7).",
+      "(default <config>/console-setup-token), CONSOLE_JOURNAL_DAYS (default 7),\n" +
+      "CONSOLE_LITELLM_KEY_FILE (the assistant's LiteLLM key; default /etc/secrets/litellm-svckey.env).",
   ],
 };
 
@@ -211,7 +213,9 @@ async function serve(o: ServeOpts): Promise<number> {
       void reads.refreshAfterJob();
     },
   });
-  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? process.env.HOME ?? "/home/tappaas" }, reads, jobs);
+  // The assistant (D7): LiteLLM with the key litellm:models provisioned.
+  const litellm = new LiteLLM({ keyFile: process.env.CONSOLE_LITELLM_KEY_FILE ?? KEY_FILE, configDir: o.configDir, run: runAsync, log });
+  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? process.env.HOME ?? "/home/tappaas", litellm }, reads, jobs);
   for (const l of listen) {
     await server.listen(l.host, l.port).catch((e: Error) => die(`listen ${l.host}:${l.port}: ${e.message}`));
     info(`console ${VERSION} listening on ${l.host}:${l.port}`);
@@ -222,6 +226,7 @@ async function serve(o: ServeOpts): Promise<number> {
   if (s.active) info(`  setup token active (${access.tokenFile}): also accepting ${access.setupAllow.join(", ")} with the token`);
   info(`  front end: ${existsSync(webDir) ? webDir : "not built (API only)"}`);
   reads.start();
+  void litellm.status();
   // What a job may run: every manager's `--help --json` and the declared bash verbs.
   const bashFile = process.env.CONSOLE_MANIFEST_FILE ?? join(__dirname, "..", "..", "..", "manifest", "bash-verbs.json");
   const srv = server;

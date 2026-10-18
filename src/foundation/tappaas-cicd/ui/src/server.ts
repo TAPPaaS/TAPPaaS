@@ -12,6 +12,7 @@ import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { Entry, envelope } from "./cache";
 import { JumpKind, jumpsFor } from "./jumps";
+import { LiteLLM } from "./litellm";
 import { Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
 import { MODULE_NAME, Reads } from "./reads";
@@ -26,6 +27,7 @@ export interface ServerConfig {
   version: string;
   log: (line: string) => void;
   home?: string; // where the Setup wizard's credential files go (secrets.ts)
+  litellm?: LiteLLM | null; // the assistant's LiteLLM (ADR-034 D7); absent: no assistant
 }
 
 const JSON_TYPE = "application/json; charset=utf-8";
@@ -149,6 +151,7 @@ export class ConsoleServer {
     }
     if (head === "jobs") return this.jobsApi(method, a, b, me, res, req);
     if (head === "secrets") return this.secretsApi(method, a, me, res, req);
+    if (head === "assistant") return this.assistantApi(method, a, me, res);
     if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/${head ?? ""}: reads are GET; a change is a job (POST /api/v1/jobs)` });
 
     const env = <T>(e: Entry<T>, data?: unknown): Record<string, unknown> => ({ ...envelope(e), ...(data !== undefined ? { data } : {}) });
@@ -344,6 +347,20 @@ export class ConsoleServer {
     if (r.job) this.cfg.log(`job ${r.job.id} ${r.job.kind} ${r.job.state}${r.job.refused ? ` (${r.job.refused})` : ""}: ${r.job.argv.join(" ")}`);
     if (r.status >= 400) return sendJson(res, r.status, { error: r.error, ...(r.job ? { data: summary(r.job) } : {}), ...(r.sweep ? { sweep: r.sweep } : {}) });
     return sendJson(res, r.status, { data: r.job });
+  }
+
+  // ── the assistant (ADR-034 D7) ────────────────────────────────────
+  //   GET  /assistant/status     whether it is available, and why not
+  private async assistantApi(method: string, sub: string | undefined, me: Me, res: ServerResponse): Promise<void> {
+    if (method === "GET" && sub === "status") {
+      const at = new Date().toISOString();
+      const none = (reason: string) => ({ available: false, reason, model: null, modelFrom: null, endpoint: null, keyFile: null, checkedAt: at });
+      // The owner's view has no assistant: it is the operators' tool (D2, D7).
+      if (me.route === "status") return sendJson(res, 200, { data: none("the owner's view has no assistant") });
+      if (!this.cfg.litellm) return sendJson(res, 200, { data: none("this console has no assistant") });
+      return sendJson(res, 200, { data: await this.cfg.litellm.status() });
+    }
+    return sendJson(res, 404, { error: `assistant/${sub ?? ""}` });
   }
 
   // ── the wizard's secrets (secrets.ts) ─────────────────────────────

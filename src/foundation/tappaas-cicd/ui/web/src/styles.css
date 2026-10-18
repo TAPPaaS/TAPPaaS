@@ -260,3 +260,16 @@ ol.setup { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px
 .owner-sentence { font-size: 17px; margin: 6px 0; }
 ul.owner-services { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
 ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+
+/* the Assistant drawer (ADR-034 D7, mockup 5) */
+.nav-assistant { width: 100%; text-align: left; font: inherit; border: 1px solid #3b4757; background: none; cursor: pointer; margin-top: 12px; }
+.nav-sub { display: block; font-size: 11px; color: #9aa4b2; font-weight: 400; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; width: 440px; max-width: 100vw; background: var(--panel); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(15, 23, 42, .08); display: flex; flex-direction: column; z-index: 40; }
+.drawer-head { display: flex; align-items: flex-start; gap: 8px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.drawer-head > div { flex: 1; min-width: 0; }
+.drawer-title { font-weight: 600; font-size: 15px; }
+.drawer-body { flex: 1; overflow-y: auto; padding: 12px 16px; }
+.drawer-foot { padding: 8px 16px 12px; border-top: 1px solid var(--line); }
+.shell.with-drawer .main { margin-right: 440px; }
+@media (max-width: 1100px) { .shell.with-drawer .main { margin-right: 0; } }
+.btn-ask { margin-left: 6px; }
