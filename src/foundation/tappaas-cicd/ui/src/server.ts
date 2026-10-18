@@ -349,7 +349,7 @@ export class ConsoleServer {
     else return sendJson(res, 404, { error: `jobs/${id}/${sub ?? ""}` });
     if (r.job) this.cfg.log(`job ${r.job.id} ${r.job.kind} ${r.job.state}${r.job.refused ? ` (${r.job.refused})` : ""}: ${r.job.argv.join(" ")}`);
     if (r.status >= 400) return sendJson(res, r.status, { error: r.error, ...(r.job ? { data: summary(r.job) } : {}), ...(r.sweep ? { sweep: r.sweep } : {}) });
-    return sendJson(res, r.status, { data: r.job });
+    return sendJson(res, r.status, { data: r.job ? (jobs.get(r.job.id) ?? r.job) : null }); // with its output so far
   }
 
   // ── the assistant (ADR-034 D7) ────────────────────────────────────

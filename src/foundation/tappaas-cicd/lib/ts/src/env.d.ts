@@ -78,6 +78,7 @@ declare module "fs" {
     // Modification time — health-manager's security scan compares its last
     // run against the sweep's result file (ADR-011 §9).
     mtimeMs: number;
+    size: number; // bytes — the console rotates jobs.jsonl past a size
   }
   export function statSync(path: string): StatLike;
   // Free space on the filesystem holding `path` (the scan checks its scanner

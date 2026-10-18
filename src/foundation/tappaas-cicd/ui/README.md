@@ -116,9 +116,11 @@ queues; `GET /jobs` shows the queue); reads run beside it. **The sweep**: while
 `update-tappaas.service` is active (or starting or stopping) no job starts; the refusal says
 since when and in which stage (`config/.update-stage`), and a queued job whose turn comes
 during a sweep is refused too. **Activity**: every job — who, via, route, the argv as asked and
-as run, its preview, its output (1 MiB), exit code and duration — is a line in
-`<state dir>/jobs.jsonl`; the last 500 are read back at start. After an apply the module list,
-topology, zones, environments, site and backup reads are refreshed.
+as run, its preview, exit code and duration — is a summary line in `<state dir>/jobs.jsonl`;
+its output (1 MiB at most) is `<state dir>/jobs/<id>.log`, read when the job is asked for.
+The console holds the last 500 summaries in memory and reads them back at start; past 10 MiB
+`jobs.jsonl` is rewritten with those 500 and the other jobs' logs are removed. After an apply
+the module list, topology, zones, environments, site and backup reads are refreshed.
 
 ## The assistant (ADR-034 D7, P3)
 

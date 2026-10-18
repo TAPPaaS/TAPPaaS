@@ -10,7 +10,7 @@ import { join } from "path";
 import { IncomingMessage, ServerResponse } from "http";
 import { AccessConfig, Me, SetupState } from "../../src/access";
 import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
-import { Job, Jobs, parseUnitShow, shellQuote, sweepBlocks } from "../../src/jobs";
+import { Job, JobSummary, Jobs, parseUnitShow, shellQuote, sweepBlocks } from "../../src/jobs";
 import { Manifests } from "../../src/manifest";
 import { Reads } from "../../src/reads";
 import { Runner, Streamer } from "../../src/run";
@@ -89,7 +89,7 @@ async function main(): Promise<void> {
   r = await jobs.applyPreview(me(), closed, p1.id, {});
   check(r.status === 409 && /not finished/.test(r.error ?? ""), "apply waits for its preview to finish");
   await settle();
-  check(p1.state === "done" && p1.exit === 0 && p1.output.includes("ran reconcile"), "the preview ran and its output is kept");
+  check(p1.state === "done" && p1.exit === 0 && jobs.get(p1.id)!.output.includes("ran reconcile"), "the preview ran and its output is kept");
   r = await jobs.applyPreview(me(), closed, p1.id, {});
   check(r.status === 201 && r.job?.ran?.join(" ") === "module-manager reconcile immich --apply" && r.job.previewOf === p1.id, "apply runs the previewed argv plus --apply (T3)");
   await settle();
@@ -104,7 +104,8 @@ async function main(): Promise<void> {
 
   r = await jobs.create(me(), closed, { argv: ["module-manager", "suspend", "deconz-test"], preview: true });
   const ns = r.job!;
-  check(ns.state === "done" && ns.ran === null && /no dry run/.test(ns.output) && /stops the guest/.test(ns.output), "no dry run: the preview runs nothing, says what the verb touches and shows the command");
+  const nsOut = jobs.get(ns.id)!.output;
+  check(ns.state === "done" && ns.ran === null && /no dry run/.test(nsOut) && /stops the guest/.test(nsOut), "no dry run: the preview runs nothing, says what the verb touches and shows the command");
   check(!ran.some((x) => x.includes("suspend")), "…and nothing ran");
 
   now += 2 * 3600_000;
@@ -153,7 +154,7 @@ async function main(): Promise<void> {
   check(r.status === 409 && !r.job, "test --deep is not a read: it needs a preview (T3)");
   r = await jobs.create(me(), closed, { argv: ["module-manager", "test", "immich", "--deep"], preview: true });
   const deep = r.job!;
-  check(r.status === 201 && deep.kind === "preview" && deep.ran === null && deep.preview.kind === "none" && /runs the deep suite: creates and removes zztest guests/.test(deep.output), "…its preview runs nothing and says it creates and removes guests");
+  check(r.status === 201 && deep.kind === "preview" && deep.ran === null && deep.preview.kind === "none" && /runs the deep suite: creates and removes zztest guests/.test(jobs.get(deep.id)!.output), "…its preview runs nothing and says it creates and removes guests");
   r = await jobs.applyPreview(me(), closed, deep.id, {});
   check(r.status === 201 && r.job?.kind === "apply" && r.job.ran?.join(" ") === "module-manager test immich --deep", "…and its apply queues the deep suite as a change");
   await settle();
@@ -179,13 +180,28 @@ async function main(): Promise<void> {
   check(a.state === "done" && b.state === "refused" && /sweep/.test(b.refused ?? ""), "a queued job is refused if the sweep has started when its turn comes");
   unit = "inactive";
 
-  // ── Activity: jobs.jsonl ────────────────────────────────────────────
-  const lines = readFileSync(jobs.file, "utf8").trim().split("\n").map((l) => JSON.parse(l) as Job);
+  // ── Activity: jobs.jsonl and jobs/<id>.log ──────────────────────────
+  const lines = readFileSync(jobs.file, "utf8").trim().split("\n").map((l) => JSON.parse(l) as JobSummary & { output?: string });
   const first = lines.find((l) => l.id === p1.id)!;
-  check(!!first && first.who.user === "lars" && first.who.via === "gate" && first.route === "console" && first.exit === 0 && typeof first.durationMs === "number" && first.output.includes("ran"), "every job is in jobs.jsonl: who, via, route, argv, output, exit, duration");
+  check(!!first && first.who.user === "lars" && first.who.via === "gate" && first.route === "console" && first.exit === 0 && typeof first.durationMs === "number" && !("output" in first), "every job is a summary line in jobs.jsonl: who, via, route, argv, exit, duration — not its output");
+  check(readFileSync(join(dir, "jobs", `${p1.id}.log`), "utf8").includes("ran reconcile"), "…the output is in jobs/<id>.log, read on demand");
   check(lines.some((l) => l.state === "refused"), "refused jobs are recorded too");
   const again = new Jobs({ stateDir: dir, configDir: dir, manifests: () => ms, stream, run });
-  check(again.list().length === lines.length && again.get(p1.id)?.exit === 0, "a restarted console reads its jobs back");
+  check(again.list().length === new Set(lines.map((l) => l.id)).size && again.get(p1.id)?.exit === 0 && again.get(p1.id)?.output.includes("ran reconcile") === true, "a restarted console reads its jobs back, each output from its log");
+
+  // ── rotation: past the size limit, the last N summaries are kept ────
+  const rdir = mkdtempSync(join(tmpdir(), "console-jobs-rot-"));
+  const small = new Jobs({ stateDir: rdir, configDir: rdir, manifests: () => ms, stream, run, now: () => now, keep: 3, rotateAtBytes: 2000 });
+  const ids: string[] = [];
+  for (let i = 0; i < 8; i++) {
+    const x = await small.create(me(), closed, { argv: ["module-manager", "suspend", `m${i}`], preview: true });
+    ids.push(x.job!.id);
+  }
+  const left = readFileSync(small.file, "utf8").trim().split("\n").map((l) => (JSON.parse(l) as JobSummary).id);
+  check(left.length <= 4 && left.includes(ids[7]) && !left.includes(ids[0]), `past the size limit jobs.jsonl is rewritten with the kept summaries (${left.length} lines)`);
+  check(!existsSync(join(rdir, "jobs", `${ids[0]}.log`)) && existsSync(join(rdir, "jobs", `${ids[7]}.log`)), "…and the logs of the jobs no longer kept are removed");
+  check(small.list().length === 3 && small.get(ids[7])!.output.includes("no dry run") && small.get(ids[0]) === null, "the console holds the kept summaries, each output from disk");
+  rmSync(rdir, { recursive: true, force: true });
 
   // ── the HTTP routes ─────────────────────────────────────────────────
   const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: [], tokenFile: join(dir, "tok"), identityFile: join(dir, "identity.json"), trustLocalHeaders: false };

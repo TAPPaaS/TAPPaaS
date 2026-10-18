@@ -3,7 +3,8 @@
 // previewed with the verb's own dry run before it may be applied (T3), run by
 // one runner that serializes them and never overlaps the sweep, and recorded in
 // Activity (jobs.jsonl in the state directory: who, from where, the argv, the
-// preview, the output, the exit code, how long).
+// preview, the exit code, how long; each job's output in jobs/<id>.log beside
+// it, read on demand — the summaries are what the console holds in memory).
 //
 //   preview  the dry-run form (--check, --dry-run, reconcile without --apply,
 //            the modify pre-gate); a verb with no dry run gets a preview that
@@ -23,7 +24,7 @@
 // "assistant" and the turn that proposed it, and so does its apply. The
 // assistant itself never reaches this file: only the operator's click does.
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from "fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { randomBytes } from "crypto";
 import { join } from "path";
 import { Me, SetupState, mayWrite } from "./access";
@@ -98,11 +99,13 @@ export interface JobsConfig {
   stream: Streamer;
   run: Runner; // for the unit's state
   now?: () => number;
-  onWriteDone?: (job: Job) => void; // refresh the read caches
+  onWriteDone?: (job: JobSummary) => void; // refresh the read caches
   // A card's proposal in the caller's own conversation (assistant.ts).
   proposal?: (me: Me, conversation: string, proposal: string) => Proposal | null;
   log?: (line: string) => void;
   previewTtlMs?: number;
+  keep?: number; // summaries held in memory and kept at a rotation (default 500)
+  rotateAtBytes?: number; // jobs.jsonl is rewritten with the kept summaries past this size (default 10 MiB)
 }
 
 export interface CreateRequest {
@@ -111,22 +114,30 @@ export interface CreateRequest {
   assistant?: unknown; // {conversation, proposal}: the card this came from
 }
 
-export type CreateResult = { status: number; job?: Job; error?: string; sweep?: SweepState };
+// The job as the runner holds it (its summary; the output is on disk, get()).
+export type CreateResult = { status: number; job?: JobSummary; error?: string; sweep?: SweepState };
 
-const MAX_OUTPUT = 1024 * 1024;
-const KEEP = 500; // jobs held in memory (and read back from jobs.jsonl at start)
+const MAX_OUTPUT = 1024 * 1024; // per job, on disk; the rest is dropped and the job marked truncated
+const KEEP = 500; // summaries held in memory (and kept when jobs.jsonl is rotated)
+const ROTATE_AT = 10 * 1024 * 1024;
 
 type Listener = (ev: { type: "output"; chunk: string } | { type: "state"; job: JobSummary } | { type: "end"; job: JobSummary }) => void;
 
 export class Jobs {
-  private readonly jobs: Job[] = [];
-  private readonly queue: Job[] = [];
-  private running: Job | null = null;
+  private readonly jobs: JobSummary[] = [];
+  private readonly queue: JobSummary[] = [];
+  private running: JobSummary | null = null;
   private readonly listeners = new Map<string, Set<Listener>>();
+  private readonly keep: number;
+  private readonly rotateAt: number;
   readonly file: string;
+  readonly logDir: string; // jobs/<id>.log: each job's output
 
   constructor(private readonly cfg: JobsConfig) {
     this.file = join(cfg.stateDir, "jobs.jsonl");
+    this.logDir = join(cfg.stateDir, "jobs");
+    this.keep = cfg.keep ?? KEEP;
+    this.rotateAt = cfg.rotateAtBytes ?? ROTATE_AT;
     this.load();
   }
 
@@ -134,39 +145,97 @@ export class Jobs {
     return (this.cfg.now ?? Date.now)();
   }
 
+  // jobs.jsonl is append-only: a job may have more than one line (older
+  // consoles wrote one, with the output inline; a job is recorded when it
+  // starts and again when it ends). The last line of an id is its record.
   private load(): void {
     if (!existsSync(this.file)) return;
     try {
-      const lines = readFileSync(this.file, "utf8").split("\n").filter((l) => l.trim().length > 0);
-      for (const l of lines.slice(-KEEP)) {
+      const byId = new Map<string, JobSummary>();
+      for (const l of readFileSync(this.file, "utf8").split("\n")) {
+        if (!l.trim()) continue;
         try {
-          this.jobs.push(JSON.parse(l) as Job);
+          const { output: _o, ...rest } = JSON.parse(l) as Job;
+          byId.delete(rest.id);
+          byId.set(rest.id, rest);
         } catch {
           /* a torn line: skip it */
         }
       }
+      this.jobs.push(...[...byId.values()].slice(-this.keep));
     } catch (e) {
       this.cfg.log?.(`jobs.jsonl unreadable: ${(e as Error).message}`);
     }
   }
 
-  private record(job: Job): void {
+  private record(job: JobSummary): void {
     try {
       mkdirSync(this.cfg.stateDir, { recursive: true });
-      appendFileSync(this.file, JSON.stringify(job) + "\n");
+      appendFileSync(this.file, JSON.stringify(summary(job)) + "\n");
+      this.rotate();
     } catch (e) {
       this.cfg.log?.(`could not record job ${job.id}: ${(e as Error).message}`);
+    }
+  }
+
+  // Past rotateAt, jobs.jsonl is rewritten with the kept summaries (atomically:
+  // a temp file renamed over it), and the logs of the jobs no longer kept go.
+  private rotate(): void {
+    let size = 0;
+    try {
+      size = statSync(this.file).size;
+    } catch {
+      return;
+    }
+    if (size <= this.rotateAt) return;
+    const kept = this.jobs.slice(-this.keep);
+    const tmp = `${this.file}.tmp`;
+    writeFileSync(tmp, kept.map((j) => JSON.stringify(j) + "\n").join(""));
+    renameSync(tmp, this.file);
+    const ids = new Set(kept.map((j) => j.id));
+    try {
+      for (const f of readdirSync(this.logDir)) {
+        if (f.endsWith(".log") && !ids.has(f.slice(0, -4))) unlinkSync(join(this.logDir, f));
+      }
+    } catch {
+      /* no log directory yet */
+    }
+    this.cfg.log?.(`jobs.jsonl rotated at ${size} bytes: the last ${kept.length} jobs kept`);
+  }
+
+  // ── a job's output: jobs/<id>.log, appended as it comes, read on demand ──
+
+  private logFile(id: string): string {
+    return join(this.logDir, `${id}.log`);
+  }
+
+  private appendOutput(id: string, chunk: string): void {
+    try {
+      mkdirSync(this.logDir, { recursive: true });
+      appendFileSync(this.logFile(id), chunk);
+    } catch (e) {
+      this.cfg.log?.(`could not write the output of job ${id}: ${(e as Error).message}`);
+    }
+  }
+
+  output(id: string): string {
+    try {
+      return readFileSync(this.logFile(id), "utf8");
+    } catch {
+      return "";
     }
   }
 
   // ── reads ───────────────────────────────────────────────────────────
 
   list(): JobSummary[] {
-    return [...this.jobs].reverse().map(summary);
+    return [...this.jobs].reverse();
   }
 
+  // The job with its output (read from disk now, so a stale copy is never served).
   get(id: string): Job | null {
-    return this.jobs.find((j) => j.id === id) ?? null;
+    const j = this.jobs.find((x) => x.id === id);
+    return j ? { ...j, output: this.output(id) } : null;
   }
 
   queued(): string[] {
@@ -183,7 +252,7 @@ export class Jobs {
     return () => set?.delete(l);
   }
 
-  private emit(job: Job, ev: Parameters<Listener>[0]): void {
+  private emit(job: JobSummary, ev: Parameters<Listener>[0]): void {
     for (const l of this.listeners.get(job.id) ?? []) l(ev);
     if (ev.type === "end") this.listeners.delete(job.id);
   }
@@ -203,7 +272,7 @@ export class Jobs {
 
   // ── creating ────────────────────────────────────────────────────────
 
-  private newJob(me: Me, v: Validated, kind: JobKind, ran: string[] | null, previewOf: string | null, from: Job["assistant"] = null): Job {
+  private newJob(me: Me, v: Validated, kind: JobKind, ran: string[] | null, previewOf: string | null, from: Job["assistant"] = null): JobSummary {
     const t = this.now();
     return {
       id: `${new Date(t).toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`,
@@ -227,18 +296,17 @@ export class Jobs {
       ended: null,
       durationMs: null,
       exit: null,
-      output: "",
       truncated: false,
       refused: null,
     };
   }
 
-  private add(job: Job): void {
+  private add(job: JobSummary): void {
     this.jobs.push(job);
-    if (this.jobs.length > KEEP) this.jobs.splice(0, this.jobs.length - KEEP);
+    if (this.jobs.length > this.keep) this.jobs.splice(0, this.jobs.length - this.keep);
   }
 
-  private async refuseForSweep(job: Job): Promise<SweepState | null> {
+  private async refuseForSweep(job: JobSummary): Promise<SweepState | null> {
     const s = await this.sweep();
     if (!s.active) return null;
     job.state = "refused";
@@ -277,10 +345,12 @@ export class Jobs {
       // No dry run: the preview is the command and what the verb touches.
       const t = new Date(this.now()).toISOString();
       const touches = v.preview.kind === "none" ? v.preview.touches : "";
-      job.output =
+      this.appendOutput(
+        job.id,
         `${v.bin} ${v.verb.verb} has no dry run.\n` +
-        (touches ? `It ${touches}.\n` : "") +
-        `Apply runs exactly:\n  ${shellQuote(applyArgv(v))}\n`;
+          (touches ? `It ${touches}.\n` : "") +
+          `Apply runs exactly:\n  ${shellQuote(applyArgv(v))}\n`,
+      );
       Object.assign(job, { state: "done", started: t, ended: t, durationMs: 0, exit: 0 });
       this.record(job);
       return { status: 201, job };
@@ -333,7 +403,7 @@ export class Jobs {
   // with the keys it set and never their values.
   recordSecret(me: Me, name: string, file: string, keys: string[]): Job {
     const t = new Date(this.now()).toISOString();
-    const job: Job = {
+    const job: JobSummary = {
       id: `${t.replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`,
       kind: "apply",
       state: "done",
@@ -354,18 +424,18 @@ export class Jobs {
       ended: t,
       durationMs: 0,
       exit: 0,
-      output: `wrote ${file}: ${keys.join(", ")} (values are never recorded or shown)\n`,
       truncated: false,
       refused: null,
     };
     this.add(job);
+    this.appendOutput(job.id, `wrote ${file}: ${keys.join(", ")} (values are never recorded or shown)\n`);
     this.record(job);
-    return job;
+    return this.get(job.id)!;
   }
 
   // ── running ─────────────────────────────────────────────────────────
 
-  private enqueue(job: Job): void {
+  private enqueue(job: JobSummary): void {
     this.queue.push(job);
     void this.pump();
   }
@@ -393,20 +463,23 @@ export class Jobs {
     }
   }
 
-  private async execute(job: Job): Promise<void> {
+  private async execute(job: JobSummary): Promise<void> {
     const argv = job.ran ?? [];
     const t0 = this.now();
     job.state = "running";
     job.started = new Date(t0).toISOString();
     this.emit(job, { type: "state", job: summary(job) });
     this.cfg.log?.(`job ${job.id} ${job.kind} by ${job.who.user ?? "?"} (${job.who.via}): ${argv.join(" ")}`);
+    let written = 0;
     const r = await this.cfg.stream(argv[0], argv.slice(1), (chunk) => {
-      if (job.output.length < MAX_OUTPUT) {
-        job.output += chunk.slice(0, MAX_OUTPUT - job.output.length);
-        this.emit(job, { type: "output", chunk });
+      if (written < MAX_OUTPUT) {
+        const part = chunk.slice(0, MAX_OUTPUT - written);
+        written += part.length;
+        this.appendOutput(job.id, part);
+        this.emit(job, { type: "output", chunk: part });
       } else job.truncated = true;
     });
-    if (!r.ran) job.output += `\n[console] could not run ${argv[0]}: ${r.error ?? "not found"}\n`;
+    if (!r.ran) this.appendOutput(job.id, `\n[console] could not run ${argv[0]}: ${r.error ?? "not found"}\n`);
     const t1 = this.now();
     job.state = "done";
     job.exit = r.rc;
@@ -418,8 +491,8 @@ export class Jobs {
   }
 }
 
-export function summary(j: Job): JobSummary {
-  const { output: _o, ...rest } = j;
+export function summary(j: Job | JobSummary): JobSummary {
+  const { output: _o, ...rest } = j as Job;
   return rest;
 }
 
