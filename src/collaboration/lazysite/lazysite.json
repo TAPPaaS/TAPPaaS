@@ -1,0 +1,54 @@
+{
+  "description": "lazysite — the site owner's public website: Markdown pages in a Forgejo repository, served as HTML, with no build step or database.",
+  "displayName": "lazysite",
+  "kind": "vm",
+  "version": "0.1.0",
+  "stack": "collaboration",
+  "releaseDate": "2026-10-18",
+  "maintainer": "@larsrossen",
+  "status": "Development",
+  "vmname": "lazysite",
+  "vmid": 380,
+  "vmtag": "TAPPaaS,App,Website",
+  "zone0": "dmz",
+  "dependsOn": [
+    "cluster:vm",
+    "templates:nixos",
+    "network:proxy",
+    "network:rules",
+    "forgejo:repo"
+  ],
+  "integratesWith": [
+    "logging:logs"
+  ],
+  "provides": [],
+  "appVersion": "0.15.9",
+  "config": {
+    "cluster:vm": {
+      "cores": 1,
+      "memory": 1024,
+      "diskSize": "8G",
+      "thinDisk": true,
+      "storage": "tanka1",
+      "imageType": "clone",
+      "image": "8080",
+      "bridge0": "lan"
+    },
+    "network:proxy": {
+      "proxyPort": 8080,
+      "proxyAllowedZones": [
+        "internet"
+      ]
+    },
+    "forgejo:repo": {
+      "repoEditors": []
+    }
+  },
+  "ports": [
+    {
+      "port": 8080,
+      "protocol": "TCP",
+      "description": "lazysite: the website (nginx), reached through the firewall's Caddy"
+    }
+  ]
+}

@@ -10,9 +10,10 @@ Install order: a module is listed after every module of this stack it needs or i
 
 | # | Module | Needs, in this stack | Integrates with, if installed | Needs, installed first |
 |---|---|---|---|---|
-| 1 | [nextcloud](nextcloud/INSTALL.md) | — | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
-| 2 | [coturn](coturn/INSTALL.md) | `nextcloud:fileservice` | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `network:nat` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
-| 3 | [euro-office](euro-office/INSTALL.md) | `nextcloud:fileservice` | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
-| 4 | [nextcloud-hpb](nextcloud-hpb/INSTALL.md) | `coturn:turn`, `nextcloud:fileservice` | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
+| 1 | [lazysite](lazysite/INSTALL.md) | — | `logging:logs` (foundation) | `cluster:vm` (foundation), `forgejo:repo` (devops), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
+| 2 | [nextcloud](nextcloud/INSTALL.md) | — | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
+| 3 | [coturn](coturn/INSTALL.md) | `nextcloud:fileservice` | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `network:nat` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
+| 4 | [euro-office](euro-office/INSTALL.md) | `nextcloud:fileservice` | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
+| 5 | [nextcloud-hpb](nextcloud-hpb/INSTALL.md) | `coturn:turn`, `nextcloud:fileservice` | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
 
 <!-- END GENERATED MODULES -->

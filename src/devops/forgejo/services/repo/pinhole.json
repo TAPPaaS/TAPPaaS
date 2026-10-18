@@ -1,0 +1,6 @@
+{
+  "_comment": "Auto-pinhole for forgejo:repo. A consumer in another zone pulls its repository over SSH: rules-manager opens TCP 22 from the consumer to Forgejo when the zone policy permits a pinhole.",
+  "ports": [
+    { "port": 22, "protocol": "TCP", "description": "git over SSH (read-only deploy key) from the consumer to Forgejo" }
+  ]
+}

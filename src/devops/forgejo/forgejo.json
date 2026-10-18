@@ -2,10 +2,10 @@
   "description": "Forgejo — self-hosted Git service and DevOps platform (Gitea fork)",
   "displayName": "Forgejo",
   "kind": "vm",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "stack": "devops",
   "appVersion": "16.0.5",
-  "releaseDate": "2026-06-01",
+  "releaseDate": "2026-10-18",
   "maintainer": "@ErikDaniel007",
   "status": "Testing",
   "vmname": "forgejo",
@@ -74,5 +74,7 @@
     ],
     "configureService": "forgejo-configure-oidc.service"
   },
-  "provides": []
+  "provides": [
+    "repo"
+  ]
 }

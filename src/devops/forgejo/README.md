@@ -28,7 +28,11 @@ own infrastructure with no external dependencies.
 
 ## Services offered (`provides`)
 
-| Service | Port | Used for |
+**`forgejo:repo`** — a repository a module's content lives in (`websites/<vmname>`), a read-only deploy key for the module's VM and write access for the people it names. Used by lazysite for its pages. See [services/repo/README.md](services/repo/README.md).
+
+What Forgejo serves directly, without a service contract:
+
+| What | Port | Used for |
 |---|---|---|
 | `git:hosting` | TCP 3000 | Repository storage, web browse |
 | `ui:web` | TCP 3000 | Browser-based interface |

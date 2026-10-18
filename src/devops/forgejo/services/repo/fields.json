@@ -1,0 +1,21 @@
+{
+  "$schema": "../../../../foundation/schemas/service-fields.json",
+  "service": "forgejo:repo",
+  "description": "A Forgejo repository a consumer's content lives in: who may edit it.",
+  "fields": {
+    "repoEditors": {
+      "description": "Forgejo usernames given write access to the consumer's repository. A person signs in to Forgejo once (with Authentik) before they can be added; until then the service warns and adds them on a later update.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "forgejo:repo"
+      ],
+      "default": [],
+      "example": ["lars"],
+      "note": "Forgejo admins (Authentik group forgejo-admins) reach every repository already. Removing a name from the list does not take access away; do that in Forgejo.",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Adds collaborators to the repository; the consumer's VM is not touched."
+    }
+  }
+}

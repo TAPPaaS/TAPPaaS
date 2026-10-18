@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="lazysite">
+  <rect x="6" y="8" width="52" height="48" rx="6" fill="#2f6f9f"/>
+  <rect x="6" y="8" width="52" height="11" rx="6" fill="#1f4f73"/>
+  <circle cx="14" cy="13.5" r="2" fill="#ffffff"/>
+  <circle cx="21" cy="13.5" r="2" fill="#ffffff"/>
+  <path d="M15 46V28h4l5 7 5-7h4v18h-4V35l-5 7-5-7v11z" fill="#ffffff"/>
+  <path d="M43 28h4v10h4l-6 8-6-8h4z" fill="#ffffff"/>
+</svg>
