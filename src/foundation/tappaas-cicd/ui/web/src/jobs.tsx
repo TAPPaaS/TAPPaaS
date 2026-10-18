@@ -85,8 +85,8 @@ export function JobList({ jobs, empty }: { jobs: JobSummary[]; empty?: string })
           <Fragment key={j.id}>
             <tr className="job-row" onClick={() => setOpen(open === j.id ? null : j.id)}>
               <td className="nowrap">{when(j.created)}</td>
-              <td className="nowrap">
-                {j.who.user ?? "?"} <span className="muted">· {j.who.via === "gate" ? "UI" : j.who.via}</span>
+              <td className="nowrap" title={j.assistant ? `assistant conversation ${j.assistant.conversation}, turn ${j.assistant.turn} (${j.assistant.proposal})` : undefined}>
+                {j.who.user ?? "?"} <span className="muted">· {j.origin === "assistant" ? "via assistant" : j.who.via === "gate" ? "UI" : j.who.via}</span>
               </td>
               <td><span className={`kind kind-${j.kind}`}>{j.kind}</span></td>
               <td className="mono wrap">{quote(j.ran ?? j.argv)}</td>

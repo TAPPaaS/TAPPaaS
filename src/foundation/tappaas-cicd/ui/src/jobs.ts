@@ -16,11 +16,18 @@
 // Who may: access.ts mayWrite — the gate's Admin or Installer, or the setup
 // token while setup is open; never loopback without the gate, never the status
 // route.
+//
+// From the assistant (ADR-034 D7): a proposed-job card posts its preview (or
+// read) with {conversation, proposal}; the proposal must be in the caller's
+// own conversation with the same argv. The job then carries origin
+// "assistant" and the turn that proposed it, and so does its apply. The
+// assistant itself never reaches this file: only the operator's click does.
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync } from "fs";
 import { randomBytes } from "crypto";
 import { join } from "path";
 import { Me, SetupState, mayWrite } from "./access";
+import { Proposal } from "./conversations";
 import { Manifests, Validated, applyArgv, baseArgv, previewArgv, sameArgv, validateArgv } from "./manifest";
 import { ManifestVerb } from "../../lib/ts/src/help";
 import { Runner, Streamer } from "./run";
@@ -34,7 +41,8 @@ export interface Job {
   state: JobState;
   who: { user: string | null; name: string | null; role: string; via: string };
   route: string;
-  origin: "ui";
+  origin: "ui" | "assistant";
+  assistant: { conversation: string; turn: number; proposal: string } | null; // the card's turn
   bin: string;
   verb: string;
   argv: string[]; // the change as asked (its base, without preview or apply flag)
@@ -90,6 +98,8 @@ export interface JobsConfig {
   run: Runner; // for the unit's state
   now?: () => number;
   onWriteDone?: (job: Job) => void; // refresh the read caches
+  // A card's proposal in the caller's own conversation (assistant.ts).
+  proposal?: (me: Me, conversation: string, proposal: string) => Proposal | null;
   log?: (line: string) => void;
   previewTtlMs?: number;
 }
@@ -97,6 +107,7 @@ export interface JobsConfig {
 export interface CreateRequest {
   argv: unknown;
   preview?: unknown;
+  assistant?: unknown; // {conversation, proposal}: the card this came from
 }
 
 export type CreateResult = { status: number; job?: Job; error?: string; sweep?: SweepState };
@@ -191,7 +202,7 @@ export class Jobs {
 
   // ── creating ────────────────────────────────────────────────────────
 
-  private newJob(me: Me, v: Validated, kind: JobKind, ran: string[] | null, previewOf: string | null): Job {
+  private newJob(me: Me, v: Validated, kind: JobKind, ran: string[] | null, previewOf: string | null, from: Job["assistant"] = null): Job {
     const t = this.now();
     return {
       id: `${new Date(t).toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`,
@@ -199,7 +210,8 @@ export class Jobs {
       state: "queued",
       who: { user: me.user, name: me.name, role: me.role, via: me.via },
       route: me.route,
-      origin: "ui",
+      origin: from ? "assistant" : "ui",
+      assistant: from,
       bin: v.bin,
       verb: v.verb.verb,
       argv: baseArgv(v),
@@ -244,8 +256,10 @@ export class Jobs {
     if (!ms) return { status: 503, error: "the verb manifests are still loading" };
     const v = validateArgv(ms, req.argv);
     if (!v.ok) return { status: 400, error: v.reason };
+    const card = this.card(me, req.assistant, baseArgv(v));
+    if (typeof card === "string") return { status: 400, error: card };
     if (v.read) {
-      const job = this.newJob(me, v, "read", [v.bin, ...v.args], null);
+      const job = this.newJob(me, v, "read", [v.bin, ...v.args], null, card);
       this.add(job);
       void this.execute(job);
       return { status: 201, job };
@@ -253,7 +267,7 @@ export class Jobs {
     if (req.preview !== true) {
       return { status: 409, error: "a change is previewed first (ADR-034 T3): POST /jobs {argv, preview: true}, then POST /jobs/<id>/apply" };
     }
-    const job = this.newJob(me, v, "preview", previewArgv(v), null);
+    const job = this.newJob(me, v, "preview", previewArgv(v), null, card);
     this.add(job);
     const s = await this.refuseForSweep(job);
     if (s) return { status: 409, job, error: job.refused ?? "", sweep: s };
@@ -271,6 +285,18 @@ export class Jobs {
     }
     this.enqueue(job);
     return { status: 201, job };
+  }
+
+  // The card a job came from, checked: the proposal is in the caller's own
+  // conversation and proposed exactly this argv. A string is the refusal.
+  private card(me: Me, ref: unknown, argv: string[]): Job["assistant"] | string {
+    if (ref === undefined || ref === null) return null;
+    const r = ref as { conversation?: unknown; proposal?: unknown };
+    if (typeof r !== "object" || typeof r.conversation !== "string" || typeof r.proposal !== "string") return "assistant: {conversation, proposal}";
+    const p = this.cfg.proposal?.(me, r.conversation, r.proposal) ?? null;
+    if (!p) return `no proposal ${r.proposal} in your conversation ${r.conversation}`;
+    if (!sameArgv(p.argv, argv)) return `the job's argv is not the one proposal ${p.id} proposed`;
+    return { conversation: r.conversation, turn: p.turn, proposal: p.id };
   }
 
   // POST /jobs/<id>/apply: the preview's own argv with the applying flag (T3).
@@ -292,7 +318,7 @@ export class Jobs {
     if (v.destructive && body.confirm !== v.object) {
       return { status: 400, error: `a destructive verb: type '${v.object}' to confirm` };
     }
-    const job = this.newJob(me, v, "apply", applyArgv(v), p.id);
+    const job = this.newJob(me, v, "apply", applyArgv(v), p.id, p.assistant ?? null);
     this.add(job);
     const s = await this.refuseForSweep(job);
     if (s) return { status: 409, job, error: job.refused ?? "", sweep: s };
@@ -311,6 +337,7 @@ export class Jobs {
       who: { user: me.user, name: me.name, role: me.role, via: me.via },
       route: me.route,
       origin: "ui",
+      assistant: null,
       bin: "console",
       verb: `secret ${name}`,
       argv: ["console", "secret", name],

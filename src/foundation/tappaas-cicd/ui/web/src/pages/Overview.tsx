@@ -3,6 +3,7 @@
 // read-only in P1, each with where to look), the nodes and the zones.
 
 import { useRead } from "../api";
+import { AskAbout } from "../assistant";
 import { zoneColor } from "../colors";
 import { Gate, Health, ModuleSummary, SiteRead, Topology } from "../types";
 import { Badge, Link, OpenIn, ReadState, Section, Tag, levelOf, since, when } from "../ui";
@@ -123,7 +124,15 @@ export function Overview() {
                 {a.subject && a.subject.kind !== "site" ? <b>{a.subject.name}</b> : null}{" "}
                 {a.subject && a.text.startsWith(a.subject.name) ? a.text.slice(a.subject.name.length).trim() : a.text}
               </span>
-              <span className="att-where">{a.subject ? <Where kind={a.subject.kind} name={a.subject.name} /> : null}</span>
+              <span className="att-where">
+                {a.subject ? <Where kind={a.subject.kind} name={a.subject.name} /> : null}
+                <AskAbout
+                  question={`Why does ${a.subject && a.subject.kind !== "site" ? `${a.subject.name}` : "the site"} ${a.level === "fail" ? "fail" : "warn on"} the ${a.gate} gate, and what should I do about it?`}
+                  focus={{ page: "overview", kind: "finding", name: a.subject?.name ?? a.gate, detail: `${a.gate} ${a.level}: ${a.text}` }}
+                >
+                  ✦ Ask
+                </AskAbout>
+              </span>
             </li>
           ))}
         </ul>

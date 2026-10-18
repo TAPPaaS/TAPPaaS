@@ -125,9 +125,14 @@ export async function post<T>(path: string, body: unknown): Promise<Posted<T>> {
   return { ok: r.ok, status: r.status, data: j.data ?? null, error: j.error ?? (r.ok ? null : `HTTP ${r.status}`), sweep: j.sweep };
 }
 
-// A preview (or a read) of argv; then the apply of that preview.
-export const previewJob = (argv: string[]) => post<Job>("jobs", { argv, preview: true });
-export const readJob = (argv: string[]) => post<Job>("jobs", { argv });
+// A preview (or a read) of argv; then the apply of that preview. From an
+// assistant's card, `from` names its conversation and proposal (ADR-034 D7).
+export interface CardRef {
+  conversation: string;
+  proposal: string;
+}
+export const previewJob = (argv: string[], from?: CardRef) => post<Job>("jobs", { argv, preview: true, ...(from ? { assistant: from } : {}) });
+export const readJob = (argv: string[], from?: CardRef) => post<Job>("jobs", { argv, ...(from ? { assistant: from } : {}) });
 export const applyJob = (previewId: string, confirm?: string) => post<Job>(`jobs/${encodeURIComponent(previewId)}/apply`, confirm ? { confirm } : {});
 
 // A job as it runs: its output streamed (server-sent events), then its end.

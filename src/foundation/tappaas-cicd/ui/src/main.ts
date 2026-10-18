@@ -205,6 +205,7 @@ async function serve(o: ServeOpts): Promise<number> {
   });
   const log = (l: string): void => console.log(`[console] ${l}`);
   let server: ConsoleServer | null = null;
+  let assistant: Assistant | null = null;
   const jobs = new Jobs({
     stateDir: o.stateDir,
     configDir: o.configDir,
@@ -212,6 +213,7 @@ async function serve(o: ServeOpts): Promise<number> {
     stream: streamAsync,
     run: runAsync,
     log,
+    proposal: (me, c, p) => assistant?.proposal(me, c, p) ?? null,
     onWriteDone: () => {
       // The identity step puts the console behind the gate: the token goes (D10).
       closeSetupToken(access, log);
@@ -221,7 +223,7 @@ async function serve(o: ServeOpts): Promise<number> {
   // The assistant (D7): LiteLLM with the key litellm:models provisioned.
   const litellm = new LiteLLM({ keyFile: process.env.CONSOLE_LITELLM_KEY_FILE ?? KEY_FILE, configDir: o.configDir, run: runAsync, log });
   const home = process.env.HOME ?? "/home/tappaas";
-  const assistant = new Assistant({
+  assistant = new Assistant({
     status: () => litellm.status(),
     chat: litellm.chat,
     // Reads only: the jobs as Activity lists them, never the runner.

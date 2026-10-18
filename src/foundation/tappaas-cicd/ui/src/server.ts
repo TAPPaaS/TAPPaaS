@@ -343,7 +343,7 @@ export class ConsoleServer {
     }
     const setup = setupState(this.cfg.access);
     let r;
-    if (!id) r = await jobs.create(me, setup, { argv: body.argv, preview: body.preview });
+    if (!id) r = await jobs.create(me, setup, { argv: body.argv, preview: body.preview, assistant: body.assistant });
     else if (sub === "apply") r = await jobs.applyPreview(me, setup, id, { confirm: body.confirm });
     else return sendJson(res, 404, { error: `jobs/${id}/${sub ?? ""}` });
     if (r.job) this.cfg.log(`job ${r.job.id} ${r.job.kind} ${r.job.state}${r.job.refused ? ` (${r.job.refused})` : ""}: ${r.job.argv.join(" ")}`);

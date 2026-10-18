@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import { refreshAll, useRead } from "./api";
-import { AssistantApi, AssistantContext, AssistantDrawer, focusOf } from "./assistant";
+import { AssistantApi, AssistantContext, AssistantDrawer, Focus, focusOf } from "./assistant";
 import { Activity } from "./pages/Activity";
 import { Backup } from "./pages/Backup";
 import { Environments } from "./pages/Environments";
@@ -53,11 +53,15 @@ export function App() {
   // The assistant (D7): only when LiteLLM answers with the console's key.
   const astatus = useRead<AssistantStatus>(user && !owner ? "assistant/status" : null, 120_000).env?.data ?? null;
   const [drawer, setDrawer] = useState(false);
+  const [asked, setAsked] = useState<{ question: string; focus: Focus; n: number } | null>(null);
   const assistant: AssistantApi = {
     available: astatus?.available === true,
     open: drawer && astatus?.available === true,
     setOpen: setDrawer,
-    ask: () => setDrawer(true),
+    ask: (question, focus) => {
+      setDrawer(true);
+      setAsked((a) => ({ question, focus: focus ?? focusOf(path), n: (a?.n ?? 0) + 1 }));
+    },
   };
 
   let page;
@@ -138,7 +142,8 @@ export function App() {
         </header>
         {page}
       </div>
-      {assistant.open && astatus ? <AssistantDrawer status={astatus} focus={focusOf(path)} site={s?.name ?? "…"} onClose={() => setDrawer(false)} /> : null}
+      {/* Mounted while available, so a conversation survives closing the drawer. */}
+      {assistant.available && astatus ? <AssistantDrawer status={astatus} focus={focusOf(path)} site={s?.name ?? "…"} asked={asked} open={assistant.open} onClose={() => setDrawer(false)} /> : null}
     </div>
     </AssistantContext.Provider>
     </MeContext.Provider>

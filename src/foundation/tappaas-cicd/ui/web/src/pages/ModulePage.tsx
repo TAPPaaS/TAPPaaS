@@ -6,6 +6,7 @@
 // and the Open-in links.
 
 import { useState } from "react";
+import { AskAbout } from "../assistant";
 import { get, useRead } from "../api";
 import { Envelope, ModuleDetail } from "../types";
 import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, levelOf, since, useMe, when } from "../ui";
@@ -211,6 +212,7 @@ export function ModulePage({ name }: { name: string }) {
           <Link to="/modules">Modules</Link> › {m?.environment ?? "…"} › {m?.stack ?? "…"} stack
         </span>
         <span className="spacer" />
+        <AskAbout question={`How is ${name} doing? Is anything wrong with it, and what would you change?`} focus={{ page: "module", kind: "module", name }} />
         <OpenIn kind="module" id={name} />
       </div>
       <ReadState env={r.env} failure={r.failure} what={`module ${name}`} />

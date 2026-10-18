@@ -265,7 +265,8 @@ export interface JobSummary {
   state: "queued" | "running" | "done" | "refused";
   who: { user: string | null; name: string | null; role: string; via: string };
   route: string;
-  origin: string;
+  origin: "ui" | "assistant";
+  assistant?: { conversation: string; turn: number; proposal: string } | null; // the card it came from
   bin: string;
   verb: string;
   argv: string[];
