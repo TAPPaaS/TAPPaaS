@@ -185,6 +185,17 @@ destructive, and which options make a read verb's call a write (`writeWhen`: `--
 | mgmt and the admin VPN | only while setup is open (below), with the token | `setup`, role `installer` |
 | anything else | refused on connect | — |
 
+A client cannot smuggle its own `X-Authentik-*` past the gate: the handler
+`identity:accessControl` installs is os-caddy's `forward_auth` block with `copy_headers`
+for the twelve Authentik headers (the firewall's template
+`/usr/local/opnsense/service/templates/OPNsense/Caddy/includeAuthProvider`), and Caddy's
+`forward_auth` deletes every `copy_headers` header from the client's request before it sets
+the one the outpost answered with (`modules/caddyhttp/reverseproxy/forwardauth/caddyfile.go`,
+"Always delete the client-supplied header"; in Caddy since 2.11 — hrossen's firewall runs
+2.11.4). On an older Caddy the outpost's answer still overwrites the four headers the console
+reads (username, groups, name, email), which Authentik always sends; only a header the
+outpost omits would pass through. Nothing is added in the handler for it.
+
 The headers are believed only from the firewall's address, which is why nothing else on
 mgmt may connect. The firewall's address is the gateway of mgmt's network in `zones.json`
 (its `ip`, first address: `10.0.0.0/24` → `10.0.0.1`); only when that is unreadable does the
