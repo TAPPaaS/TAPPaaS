@@ -35,6 +35,9 @@ the sweep did, and every change to the site as a job that runs a manager verb wi
 - The mothership (`tappaas-cicd`), which runs the service: `tappaas-console.service`, built
   from [`tappaas-cicd/ui`](../tappaas-cicd/ui/README.md).
 - `network:proxy` and `identity:accessControl` for the route and the gate.
+- A public A and AAAA record for `console.<domain>` to the WAN (the certificate is HTTP-01).
+- From the admin VPN, a tunnel config that carries the site's DNS and the routes to the DMZ
+  gateway (config v2, `network-manager wgvpn list`; [ADMIN-VPN.md](../tappaas-cicd/manager/network-manager/ADMIN-VPN.md) §6).
 
 ## Alternatives considered
 
@@ -44,7 +47,7 @@ the sweep did, and every change to the site as a job that runs a manager verb wi
 
 | Depends on | Purpose |
 |------------|---------|
-| `network:proxy` | `console.<domain>` through Caddy, from `mgmt` and `admin` only, upstream `tappaas-cicd.mgmt.internal:9097` |
+| `network:proxy` | `console.<domain>` through Caddy, from `mgmt` and `admin` only, upstream `tappaas-cicd.mgmt.internal:9097`; `check-config.sh` refuses `internet` and `all` in the zone list |
 | `identity:accessControl` | The Authentik gate: no login code in the console; the groups arrive in `X-Authentik-Groups` |
 | `network:rules` | The reach to what the console integrates with (none needed today: mgmt reaches every zone) |
 
