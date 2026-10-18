@@ -20,9 +20,10 @@ vm() { ssh "${SSH_OPTS[@]}" "tappaas@${HOST}" "$@"; }
 
 echo ""
 info "${BOLD}karakeep: waiting for the web app on ${HOST}${CL}"
-for _i in $(seq 1 60); do
+# A first start pulls the three images (1-2 GB): give it ten minutes.
+for _i in $(seq 1 120); do
     vm "curl -sf --max-time 5 http://localhost:3000/api/health >/dev/null" 2>/dev/null && break
-    [[ ${_i} -eq 60 ]] && { warn "  Karakeep did not answer within 5 minutes — see journalctl -u karakeep on the VM"; exit 0; }
+    [[ ${_i} -eq 120 ]] && { warn "  Karakeep did not answer within 10 minutes — see journalctl -u karakeep on the VM"; exit 0; }
     sleep 5
 done
 info "  ${GN}✓${CL} Karakeep answers"

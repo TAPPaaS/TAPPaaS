@@ -48,8 +48,11 @@ else
     [[ "$(remote "sudo grep -c '^DISABLE_PASSWORD_AUTH=true' /run/karakeep/env")" == "1" ]] \
         && pass "Karakeep signs in with Authentik only (no local passwords)" || fail "the Authentik sign-in is not in Karakeep's environment"
     if [[ -n "${PUB}" && -n "${FW4}" ]]; then
+        # NextAuth always lists its Credentials provider; with DISABLE_PASSWORD_AUTH
+        # (checked above) Karakeep refuses a password sign-in and a sign-up on the
+        # server, so what matters here is that Authentik is offered.
         _prov="$(curl -s --max-time 10 --resolve "${PUB}:443:${FW4}" "https://${PUB}/api/auth/providers" | jq -r '[.[].name] | join(",")' 2>/dev/null)"
-        [[ "${_prov}" == "Authentik" ]] && pass "https://${PUB} offers Sign in with Authentik, and only that" \
+        [[ ",${_prov}," == *",Authentik,"* ]] && pass "https://${PUB} offers Sign in with Authentik" \
             || fail "https://${PUB}/api/auth/providers lists '${_prov:-nothing}', expected Authentik"
     else
         skipt "not published — sign-in checked on the VM only"
