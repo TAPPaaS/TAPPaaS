@@ -22,7 +22,7 @@
 //   vpn        the admin VPN has at least one peer (network-manager wgvpn list)
 //   stacks     optional: which stacks have modules installed
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync } from "fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "fs";
 import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { AccessConfig, setupState } from "./access";
@@ -32,6 +32,7 @@ export interface TestResult {
   rc: number;
   tail: string;
   at: string; // when the test ran (ISO)
+  sweep?: boolean; // the sweep updated and tested the module (config/last-update-result.json), not an explicit test
 }
 
 export const SETUP_MODULES = ["backup", "identity", "logging"] as const;
@@ -76,7 +77,7 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
     const s = i.modules[m];
     const done = !s.config ? false : s.test === null ? null : s.test.rc === 0;
     const when = s.test ? ` (${s.test.at.replace("T", " ").replace(/\.\d+Z$/, "Z")})` : "";
-    const detail = !s.config ? `config/${m}.json does not exist: not installed` : s.test === null ? `installed (config/${m}.json); its test has not run yet: Check runs it` : s.test.rc === 0 ? `installed; module-manager test ${m} passed${when}` : `installed; module-manager test ${m} failed${when} (exit ${s.test.rc}): ${s.test.tail}`;
+    const detail = !s.config ? `config/${m}.json does not exist: not installed` : s.test === null ? `installed (config/${m}.json); its test has not run yet: Check runs it, and so does the next sweep` : s.test.rc === 0 ? (s.test.sweep ? `installed; updated and tested by the sweep${when}` : `installed; module-manager test ${m} passed${when}`) : `installed; module-manager test ${m} failed${when} (exit ${s.test.rc}): ${s.test.tail}`;
     steps.push({ id: m, title: MODULE_TITLES[m], required: true, done, detail });
   }
 
@@ -169,6 +170,26 @@ export function readSetupTests(stateDir: string): Partial<Record<(typeof SETUP_M
   return out;
 }
 
+// The sweep counts as a test: `module update` tests each module it updates
+// (Test Step 4), and config/last-update-result.json records a run that
+// succeeded for every module. A module whose config was written before that
+// run ended, and that is not among its failed modules, has therefore passed
+// its test at the run's end; an explicit test or a Test job that is newer wins.
+export function sweepTestResult(configDir: string, m: string): TestResult | null {
+  const r = readJson(join(configDir, "last-update-result.json"));
+  if (!r || r.ok !== true || typeof r.end_time !== "string") return null;
+  const failed = Array.isArray(r.failed_modules) ? (r.failed_modules as unknown[]).map(String) : [];
+  if (failed.includes(m)) return null;
+  const end = Date.parse(r.end_time.replace(" ", "T")); // the sweep's local time, no zone
+  if (Number.isNaN(end)) return null;
+  try {
+    if (statSync(join(configDir, `${m}.json`)).mtimeMs > end) return null; // installed after that run
+  } catch {
+    return null;
+  }
+  return { rc: 0, tail: "updated and tested by the sweep", at: new Date(end).toISOString(), sweep: true };
+}
+
 // The explicit refresh: run `module-manager test <m>` for every installed
 // foundation module (fast mode; the deep suite is a job) and keep the results
 // where readSetupTests finds them. A module not installed keeps no result.
@@ -217,7 +238,10 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
   const modules = {} as SetupInputs["modules"];
   for (const m of SETUP_MODULES) {
     const config = existsSync(join(d.configDir, `${m}.json`));
-    modules[m] = { config, test: config ? (tests[m] ?? null) : null };
+    const explicit = config ? (tests[m] ?? null) : null;
+    const swept = config ? sweepTestResult(d.configDir, m) : null;
+    // The newer of an explicit test and the last successful sweep.
+    modules[m] = { config, test: explicit && swept ? (Date.parse(explicit.at) >= Date.parse(swept.at) ? explicit : swept) : (explicit ?? swept) };
   }
   const idDir = join(d.configDir, existsSync(join(d.configDir, "identities")) ? "identities" : "people");
   const vpn = await d.run("network-manager", ["wgvpn", "list"], 60_000);

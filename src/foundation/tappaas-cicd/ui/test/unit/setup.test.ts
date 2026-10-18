@@ -4,7 +4,7 @@
 // the setup token deleting itself once identity is installed (T6); and the
 // secrets written where the scripts read them, never echoed back.
 
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
@@ -93,6 +93,17 @@ async function main(): Promise<void> {
   steps = setupSteps(inputs);
   check(ran.filter((r) => r.startsWith("module-manager test")).length === 0, "a read with the modules installed still runs no test (finding 7)");
   check(steps.filter((s) => s.done === null).map((s) => s.id).join() === "backup,identity,logging" && /Check runs it/.test(steps.find((s) => s.id === "backup")!.detail), "…their steps are unknown until the explicit refresh runs the tests");
+  // a successful sweep counts as the tests: last-update-result.json says every module was updated (and so tested)
+  writeFileSync(join(cfg, "last-update-result.json"), JSON.stringify({ ok: true, end_time: "2099-01-01 03:00:00", failed_modules: [] }));
+  steps = setupSteps(await gather());
+  check(steps.filter((s) => ["backup", "identity", "logging"].includes(s.id)).every((s) => s.done === true) && /tested by the sweep/.test(steps.find((s) => s.id === "backup")!.detail), "a successful sweep that ended after the configs were written counts as their tests");
+  writeFileSync(join(cfg, "last-update-result.json"), JSON.stringify({ ok: true, end_time: "2099-01-01 03:00:00", failed_modules: ["identity"] }));
+  steps = setupSteps(await gather());
+  check(steps.find((s) => s.id === "identity")!.done === null && steps.find((s) => s.id === "backup")!.done === true, "…but not for a module that run failed on");
+  writeFileSync(join(cfg, "last-update-result.json"), JSON.stringify({ ok: true, end_time: "2000-01-01 03:00:00", failed_modules: [] }));
+  steps = setupSteps(await gather());
+  check(steps.find((s) => s.id === "backup")!.done === null, "…nor from a run that ended before the module was installed");
+  unlinkSync(join(cfg, "last-update-result.json"));
   // the explicit refresh (GET /setup?refresh=1): the tests run once, their results are kept
   await runSetupTests({ configDir: cfg, stateDir: state, run }, () => Date.parse("2026-10-18T10:00:00Z"));
   check(ran.filter((r) => r.startsWith("module-manager test")).length === 3, "the explicit refresh tests every installed module once");
