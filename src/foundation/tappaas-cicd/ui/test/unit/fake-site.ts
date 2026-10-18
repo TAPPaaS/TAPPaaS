@@ -34,6 +34,8 @@ export function fakeSite(): FakeSite {
         return ok(JSON.stringify({ moduleSource: `/src/${args[1]}`, status: "Testing" }));
       case "module-manager resolve":
         return ok(JSON.stringify({ module: args[1], fields: {} }));
+      case "module-manager fields":
+        return ok(JSON.stringify({ module: args[1], fields: [{ field: "memory", coordinate: "cluster:vm", class: "in-place", settable: true, reason: null, value: "8192" }], warnings: [] }));
       case "module-manager drift":
         return ok(JSON.stringify({ module: args[1], services: {} }));
       case "backup-manager list":

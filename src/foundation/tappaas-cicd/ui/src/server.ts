@@ -11,6 +11,7 @@ import { AccessConfig, Decision, Me, SETUP_COOKIE, decide, mayWrite, normalizeAd
 import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { Entry, envelope } from "./cache";
+import { SCHEMAS } from "./fields";
 import { JumpKind, jumpsFor } from "./jumps";
 import { Assistant, AssistantEvent } from "./assistant";
 import { LiteLLM } from "./litellm";
@@ -201,6 +202,10 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.environments.get()));
       case "identity":
         return sendJson(res, 200, envelope(await r.identity.get()));
+      case "schemas": {
+        if (!a || !(a in SCHEMAS)) return sendJson(res, 404, { error: `schemas/<${Object.keys(SCHEMAS).join("|")}>` });
+        return sendJson(res, 200, envelope(await r.schemas.of(a).get()));
+      }
       case "owner": {
         // The owner's view (spike §5.11): the same reads, plainly worded.
         const [h, m, bk, t, st, envs] = await Promise.all([r.health.get(), r.modules.get(), r.backup.get(), r.topology.get(), r.site.get(), r.environments.get()]);
@@ -291,7 +296,7 @@ export class ConsoleServer {
       if (url.searchParams.get("refresh") === "1") await c.refresh();
       return sendJson(res, 200, envelope(await c.get()));
     }
-    if (sub === "fields") return sendJson(res, 200, envelope(await r.moduleFields.of(name).get()));
+    if (sub === "fields") return sendJson(res, 200, envelope(await r.moduleFieldsOf(name)));
     if (sub !== undefined) return sendJson(res, 404, { error: `modules/${name}/${sub}` });
     const [show, resolve, backup, act] = await Promise.all([
       r.moduleShow.of(name).get(),

@@ -11,7 +11,8 @@ import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { readZonesFile } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
-import { Cached, CachedMap } from "./cache";
+import { Cached, CachedMap, Entry } from "./cache";
+import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, TopologyDoc } from "./model";
@@ -32,6 +33,7 @@ export const TTL = {
   moduleDetail: 5 * MIN,
   identity: 5 * MIN,
   setup: 10 * MIN,
+  schema: 10 * MIN,
   drift: 0, // on demand
 };
 
@@ -39,6 +41,8 @@ export interface ReadsConfig {
   // Cluster membership for the Setup checklist (lib/ts cluster.ts by default).
   clusterNodes?: (siteNodes: string[]) => string[] | null;
   configDir: string;
+  // The repository the managers run from (its schemas/), /home/tappaas/TAPPaaS.
+  repoRoot?: string;
   stateDir: string; // where the health document is handed to `topology --health`
   run: Runner;
   journalDays: number;
@@ -74,6 +78,7 @@ export class Reads {
   readonly moduleDrift: CachedMap<Record<string, unknown>>;
   readonly moduleFields: CachedMap<Record<string, unknown>>;
   readonly identity: Cached<Record<string, string[]>>;
+  readonly schemas: CachedMap<Record<string, unknown>>;
   readonly setup: Cached<SetupInputs>;
 
   constructor(private readonly cfg: ReadsConfig) {
@@ -109,6 +114,8 @@ export class Reads {
     }, now);
     // What `modify --set` may change, with each field's ADR-020 change class.
     this.moduleFields = new CachedMap("fields", TTL.moduleDetail, (m) => j<Record<string, unknown>>("module-manager", ["fields", m, "--json"]), now);
+    // The field schemas a form reads (zones-fields.json, environment-fields.json).
+    this.schemas = new CachedMap("schema", TTL.schema, async (n) => schemaDoc(cfg.repoRoot ?? "/home/tappaas/TAPPaaS", n), now);
     this.identity = new Cached("identity", TTL.identity, async () => {
       const out: Record<string, string[]> = {};
       await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
@@ -128,6 +135,13 @@ export class Reads {
         },
       }), now);
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
+  }
+
+  // A module's fields for its Modify form: class, owner, type, value, default.
+  async moduleFieldsOf(m: string): Promise<Entry<ModuleFields>> {
+    const [f, r] = await Promise.all([this.moduleFields.of(m).get(), this.moduleResolve.of(m).get()]);
+    const value = f.value && r.value ? moduleFieldRows(f.value, r.value, moduleSchema(this.cfg.configDir)) : null;
+    return { at: f.at, value, error: f.error ?? r.error, loading: f.loading || r.loading };
   }
 
   get configDir(): string {

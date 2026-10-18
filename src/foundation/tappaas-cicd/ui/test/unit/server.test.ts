@@ -87,6 +87,11 @@ async function main(): Promise<void> {
   check(r.status === 200 && det.summary.name === "immich" && det.show.data !== null && det.backup.data !== null, "/api/v1/modules/immich: summary, show, resolve, backup");
   r = await call("GET", "/api/v1/modules/immich/drift");
   check(r.status === 200 && (r.json().data as { module: string }).module === "immich", "/api/v1/modules/immich/drift on demand");
+  r = await call("GET", "/api/v1/modules/immich/fields");
+  const mf = r.json().data as { fields: { field: string; service: string; settable: boolean }[] };
+  check(r.status === 200 && mf.fields[0].field === "memory" && mf.fields[0].service === "cluster:vm" && mf.fields[0].settable, "/api/v1/modules/immich/fields: the Modify form's rows");
+  r = await call("GET", "/api/v1/schemas/passwd");
+  check(r.status === 404, "/api/v1/schemas/<name>: only the listed schemas");
   r = await call("GET", "/api/v1/modules/nosuch");
   check(r.status === 404, "an unknown module: 404");
   r = await call("GET", "/api/v1/modules/--json");

@@ -286,3 +286,31 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .card-proposal-head { display: flex; gap: 8px; align-items: baseline; }
 .card-proposal .actions { display: flex; gap: 8px; margin: 6px 0; }
 .earlier { padding-left: 18px; margin: 4px 0; }
+
+/* ── graphs of cards (graph.tsx): config tree, zones, identity ───────── */
+.graph { border: 1px solid var(--line); border-radius: 8px; background: #fbfcfd; margin: 6px 0; }
+.gcard { overflow: hidden; box-sizing: border-box; }
+.gcard-static { cursor: default; }
+.mcard { display: flex; flex-direction: column; height: 100%; }
+.mcard-rows { border-collapse: collapse; margin-top: 4px; width: 100%; table-layout: fixed; }
+.mcard-rows td { padding: 1px 0; height: 19px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mcard-rows td:first-child { width: 42%; color: var(--muted); }
+.mcard-foot { margin-top: auto; display: flex; justify-content: flex-end; }
+.dflt { font-size: 10.5px; color: #94a3b8; margin-left: 4px; }
+
+/* ── the Modify form (fieldsform.tsx) ───────────────────────────────── */
+.fieldsform { display: grid; gap: 10px; margin: 8px 0; }
+.ff-row { display: grid; gap: 3px; padding: 6px 8px; border-radius: 6px; border: 1px solid transparent; }
+.ff-changed { border-color: #93c5fd; background: #eff6ff; }
+.ff-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ff-name { font-weight: 600; }
+.ff-row input, .ff-row select, .ff-row textarea { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; width: 100%; box-sizing: border-box; }
+.ff-row textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.ff-error { color: #a12a2a; }
+.ff-shut summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+.origin { font-size: 11px; padding: 1px 7px; border-radius: 10px; }
+.origin-set { background: #dbeafe; color: #1e40af; }
+.origin-default { background: #f1f5f9; color: #64748b; font-style: italic; }
+.origin-none { background: #f8fafc; color: #94a3b8; }
+.ff-shut td:nth-child(2) { white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+.ff-shut td:nth-child(3) { white-space: nowrap; }

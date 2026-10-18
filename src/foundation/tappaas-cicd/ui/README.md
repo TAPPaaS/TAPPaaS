@@ -41,9 +41,13 @@ nodes to the right with their uplinks and guests, APs below, buddies and the sat
 left); a click opens the object's records, findings, jumps and its day-2 change: a switch
 port's record (`switch-controller update-port`) then `switch-controller reconcile`, a node's
 `node network show / set`. **Modules** — the list with its badges; a module's page has
-Overview (with the operate column: update, modify a field with its ADR-020 class from
-`module-manager fields`, reconcile, test, snapshot, suspend/resume, delete with the typed name),
-Config, Drift (on demand), Services, Backup and Activity. **Environments** — environments and
+Overview (with the operate column: update, reconcile, test, snapshot, suspend/resume, delete
+with the typed name), Config, Drift (on demand), Backup and Activity. Config draws the module as
+a tree of cards: the module's own (kind, node, environment, zone and the fields no service owns)
+on top, one per service in dependsOn below. Each card's Modify lists every field it owns, typed
+from the field schema, its value configured or default, its change class; the fields changed go
+to one `module-manager modify <m> --set a=b --set c=d` job (`GET /api/v1/modules/<m>/fields`:
+`module-manager fields` + `resolve` + `config/module-fields.json`). **Environments** — environments and
 zones with environment-manager's and network-manager's verbs. **Identity** — organizations,
 groups, users and roles; a change is staged with `--no-reconcile` and pushed by `identity-manager
 reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
@@ -78,6 +82,8 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | modules | `module-manager list --json`, with `backup-manager list --json` for the backup badge | every 5 min (backup 10) |
 | a module | `module-manager show / resolve <m> --json`, `backup-manager show / coverage <m> --json` | 5 min, on first view |
 | a module's drift | `module-manager drift <m> --json` | on demand only |
+| a module's fields (its Modify forms) | `module-manager fields <m> --json` with `resolve` and `config/module-fields.json` | 5 min, on first view |
+| a form's schema (`schemas/zones`, `schemas/environment`) | `src/foundation/schemas/<name>-fields.json` of `$CONSOLE_REPO` | 10 min |
 | topology (the Physical page) | `network-manager topology --json --health <the cached validate>` | every 5 min |
 | zones | `network-manager list --json`, `show <zone> --json` | every 5 min |
 | environments | `environment-manager list --json` | every 5 min |

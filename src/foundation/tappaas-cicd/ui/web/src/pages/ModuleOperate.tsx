@@ -1,83 +1,12 @@
 // ModuleOperate.tsx — a module's operate column (spike mockup 4, Appendix A):
 // every module-manager verb on one module, each through the operate dialog.
-// "Modify a field…" lists the fields the module may set with their ADR-020
-// change class (module-manager fields) before anything is typed; an immutable
-// field is offered as refused, with the reason.
+// Changing a field is on the Config tab, card by card.
 
-import { useRead } from "../api";
-import { OperateButton, Step, Values } from "../operate";
+import { OperateButton, Step } from "../operate";
 import { ModuleSummary } from "../types";
 import { Section, canOperate, useMe } from "../ui";
 
-interface FieldRow {
-  field: string;
-  coordinate: string;
-  class: string;
-  settable: boolean;
-  reason: string | null;
-  value: string | null;
-}
-
-export function ClassTag({ c }: { c: string }) {
-  return <span className={`class-tag class-${c}`}>{c}</span>;
-}
-
-const CLASS_TEXT: Record<string, string> = {
-  "in-place": "applied live, no downtime",
-  "grow-only": "a grow applies; a shrink is refused when applied",
-  "in-place-reboot": "needs a guest reboot: deferred unless you authorize the disruption",
-  migrate: "moves the guest: deferred unless you authorize the disruption",
-  "config-only": "the config is the change",
-  manual: "reported; an operator action",
-  immutable: "cannot change: refused before anything is written",
-  recreate: "only by deleting and adding the module again",
-};
-
-function FieldPicker({ module, values, set }: { module: string; values: Values; set: (v: Values) => void }) {
-  const r = useRead<{ fields: FieldRow[] }>(`modules/${encodeURIComponent(module)}/fields`, 600_000);
-  const rows = r.env?.data?.fields ?? [];
-  const cur = (Array.isArray(values["--set"]) ? values["--set"][0] : "") ?? "";
-  const eq = cur.indexOf("=");
-  const field = eq > 0 ? cur.slice(0, eq) : cur;
-  const value = eq > 0 ? cur.slice(eq + 1) : "";
-  const row = rows.find((x) => x.field === field);
-  const setField = (f: string, v: string) => set({ ...values, "--set": f ? [`${f}=${v}`] : [] });
-  if (!r.env) return <p className="muted">reading the module's fields (module-manager fields {module})…</p>;
-  if (r.env.error && !r.env.data) return <p className="readstate readstate-fail">module-manager fields {module}: {r.env.error}</p>;
-  return (
-    <div className="fieldpick form">
-      <label className="form-row">
-        <span>field</span>
-        <select value={field} onChange={(e) => setField(e.target.value, rows.find((x) => x.field === e.target.value)?.value ?? "")}>
-          <option value="">— choose a field —</option>
-          <optgroup label="may change">
-            {rows.filter((x) => x.settable).map((x) => (
-              <option key={x.field} value={x.field}>{x.field} — {x.class}{x.coordinate ? ` (${x.coordinate})` : ""}</option>
-            ))}
-          </optgroup>
-          <optgroup label="refused">
-            {rows.filter((x) => !x.settable).map((x) => (
-              <option key={x.field} value={x.field} disabled>{x.field} — {x.class}</option>
-            ))}
-          </optgroup>
-        </select>
-      </label>
-      {row ? (
-        <>
-          <p className="small">
-            <ClassTag c={row.class} /> {row.coordinate || "the module itself"} · {CLASS_TEXT[row.class] ?? row.reason ?? ""} · now <span className="mono">{row.value ?? "—"}</span>
-          </p>
-          <label className="form-row">
-            <span>new value</span>
-            <input type="text" value={value} onChange={(e) => setField(field, e.target.value)} />
-          </label>
-        </>
-      ) : null}
-    </div>
-  );
-}
-
-export function ModuleOperate({ m }: { m: ModuleSummary }) {
+export function ModuleOperate({ m, onConfig }: { m: ModuleSummary; onConfig: () => void }) {
   const operator = canOperate(useMe());
   const name = m.name;
   const fixed = [name];
@@ -94,18 +23,8 @@ export function ModuleOperate({ m }: { m: ModuleSummary }) {
           <small>module update {name} — snapshot, 3-way merge, converge</small>
         </div>
         <div className="op">
-          <OperateButton
-            label="Modify a field…"
-            title={`Modify a field of ${name}`}
-            steps={[
-              step(`Change a declared field of ${name}`, "modify", {
-                hide: ["--environment", "--vmid", "--set", "--unset", "--lockdown"],
-                render: (v, set) => <FieldPicker module={name} values={v} set={set} />,
-                note: "The preview is the ADR-020 pre-gate (modify --dry-run): the field's service and change class, or why it is refused. Apply writes the field, then converges the module.",
-              }),
-            ]}
-          />
-          <small>module modify {name} --set …</small>
+          <button className="btn" onClick={onConfig}>Modify fields…</button>
+          <small>on the Config tab: the module and each service as a card, every field typed</small>
         </div>
         <div className="op">
           <OperateButton label="Reconcile" title={`Reconcile ${name}`} steps={[step(`Reconcile ${name}: the drift, then the converge`, "reconcile", { hide: ["--environment", "--vmid", "--fail-fast"] })]} />
