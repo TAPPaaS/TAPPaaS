@@ -1,0 +1,5 @@
+{"rows": [
+  {"uuid": "c1", "name": "lars-mac", "tunneladdress": "10.255.1.2/32"},
+  {"uuid": "c2", "name": "lars-phone", "tunneladdress": "10.255.1.3/32"},
+  {"uuid": "c3", "name": "satellite1", "tunneladdress": "10.255.2.2/32"}
+]}

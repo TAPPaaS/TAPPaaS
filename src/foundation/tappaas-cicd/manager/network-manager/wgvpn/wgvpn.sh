@@ -47,8 +47,10 @@ Usage: ${CLI} <sub>
                                                    print its client config. Endpoint: --endpoint wins, else a
                                                    registered admin-vpn satellite's address, else a placeholder
   remove-peer <name>                               remove an admin device
-  list                                             show server pubkey, rule status, peers
-  config <ip/32> <host:port> [privkey]             re-print a client config for an existing peer
+  list                                             show server pubkey, rule status, peers and the
+                                                   config version each peer was last given
+  config <name|ip/32> [host:port] [privkey]        re-print a client config for an existing peer (the
+                                                   Endpoint as add-peer finds it when not given)
 
 The tunnel terminates on OPNsense, so it works with no satellite (a Site with a
 public IP) or through one (a CGNAT Site). Runbook: network-manager/ADMIN-VPN.md.
@@ -86,16 +88,18 @@ main() {
                 info "client config for '${name}' — save as tappaas-admin.conf; paste your private key (Endpoint = ${endpoint}):"
             fi
             av_client_config "${got}" "${endpoint}"
+            av_record_issued "${name}" "${got}"
             ;;
         remove-peer)
             local name="${1:-}"; [[ -n "${name}" ]] || die "remove-peer <name>"
             av_remove_peer "${name}"; av_apply >/dev/null
+            av_forget_issued "${name}"
             info "peer '${name}' removed"
             ;;
         config)
-            # config <peer-ip/32> <endpoint-host:port> [private-key]
-            [[ $# -ge 2 ]] || die "config <peer-ip/32> <endpoint-host:port> [private-key]"
-            av_client_config "$1" "$2" "${3:-}"
+            # config <name|peer-ip/32> [endpoint-host:port] [private-key]
+            [[ $# -ge 1 ]] || die "config <name|peer-ip/32> [endpoint-host:port] [private-key]"
+            av_config_cmd "$1" "${2:-}" "${3:-}"
             ;;
         ""|-h|--help|help) usage ;;
         *) usage; die "unknown sub-verb '${sub}' (setup|add-peer|remove-peer|list|config)" ;;

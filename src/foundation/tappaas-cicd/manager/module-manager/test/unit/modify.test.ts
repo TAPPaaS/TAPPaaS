@@ -273,9 +273,41 @@ try {
       }
       const doc = JSON.parse(out.join("\n")) as { ok: boolean; plan: { field: string; class: string }[] };
       check(rc === 0 && doc.ok && doc.plan[0].class === "in-place", "modify --set --dry-run --json: the plan with its change class");
-      check(wrote() === "" && client.log.length === 0, "…and nothing is written or converged");
+      check(wrote().trim() === "demo --check --set cores=8" && client.log.length === 0,
+        "…the writer is asked only to --check, and nothing is converged");
+      rmSync(calls, { force: true });
       const rc2 = run(["modify", "demo", "--set", "vmid=250", "--dry-run", "--config-dir", configDir], new FakeModuleClient());
       check(rc2 === 1 && wrote() === "", "a refused field: the dry run exits 1, as the modify would");
+    }
+
+    // The module's own check-config.sh, run by the writer: a refusal there is a
+    // refusal of the dry run too, with the module's reason (the console and 'internet').
+    {
+      const refuser = join(root, "fake-set-field-refuses.sh");
+      writeFileSync(refuser,
+        `#!/usr/bin/env bash\necho "$*" >> "${calls}"\n` +
+        `echo "console: proxyAllowedZones may not include internet" >&2\n` +
+        `echo "[Error] demo's check-config.sh refuses this change — nothing was written" >&2\nexit 3\n`);
+      chmodSync(refuser, 0o755);
+      process.env.TAPPAAS_SET_FIELD_BIN = refuser;
+      rmSync(calls, { force: true });
+      const out: string[] = [];
+      const log = console.log;
+      console.log = (m: unknown) => out.push(String(m));
+      let rc: number;
+      try {
+        rc = run(["modify", "demo", "--set", "cores=8", "--dry-run", "--json", "--config-dir", configDir], new FakeModuleClient());
+      } finally {
+        console.log = log;
+      }
+      const doc = JSON.parse(out.join("\n")) as { ok: boolean; rejections: { field: string; reason: string }[] };
+      check(rc === 1 && !doc.ok && /may not include internet/.test(doc.rejections[0]?.reason ?? ""),
+        "dry run: the module's check-config refusal is a rejection, with its reason");
+      const client = new FakeModuleClient();
+      rmSync(calls, { force: true });
+      const rc2 = run(["modify", "demo", "--set", "cores=8", "--config-dir", configDir], client);
+      check(rc2 === 3 && client.log.length === 0, "modify: the writer's refusal (exit 3) stops the converge");
+      process.env.TAPPAAS_SET_FIELD_BIN = setter;
     }
 
     // fields: every settable field with its class, before anything is typed.

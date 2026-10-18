@@ -2006,6 +2006,54 @@ grep -q -- '--unset <field>' <<< "$(TAPPAAS_CONFIG="${UDIR}/config" bash "$SETF"
 
 rm -rf -- "$UDIR"
 
+# ---------------------------------------------------------------------------
+# Unit: a module's own check-config.sh, run by set-module-field.sh on the config
+# the change would leave, before the first write — the console refuses
+# 'internet' and 'all' in its zone list (ADR-034 D2). The real console hook,
+# against a temp config dir and a fixture schema.
+# ---------------------------------------------------------------------------
+CHOOK="${HERE}/../../../console/check-config.sh"
+CDIR="$(mktemp -d "${TMPDIR:-/tmp}/modmgr-check.XXXXXX")"
+mkdir -p "${CDIR}/config" "${CDIR}/module"
+cp "${CHOOK}" "${CDIR}/module/check-config.sh"
+cat > "${CDIR}/schema.json" <<'JSON'
+{ "fields": { "proxyAllowedZones": { "type": "array" }, "vmname": { "type": "string" } } }
+JSON
+write_ccfg() {
+    jq -n --arg src "${CDIR}/module" '{vmname: "tappaas-cicd", moduleSource: $src,
+        config: {"network:proxy": {proxyPort: 9097, proxyAllowedZones: ["mgmt", "admin"]}}}' \
+        > "${CDIR}/config/console.json"
+    cp "${CDIR}/config/console.json" "${CDIR}/before.json"
+}
+run_cset() {
+    write_ccfg
+    TAPPAAS_CONFIG="${CDIR}/config" TAPPAAS_SCHEMA_FILE="${CDIR}/schema.json" \
+        bash "$SETF" console "$@" > "${CDIR}/out" 2>&1
+}
+unchanged() { cmp -s "${CDIR}/before.json" "${CDIR}/config/console.json"; }
+
+[[ -x "${CHOOK}" ]] && ok "console/check-config.sh is executable" || bad "console/check-config.sh missing or not executable"
+"${CHOOK}" "${HERE}/../../../console/console.json" \
+    && ok "the shipped console.json passes its own check (mgmt, admin)" || bad "the shipped console.json fails its own check"
+for zl in '["mgmt","internet"]' '["all"]' '["mgmt","0.0.0.0/0"]'; do
+    run_cset --set "proxyAllowedZones=${zl}"; _rc=$?
+    if [[ "${_rc}" -eq 3 ]] && unchanged && grep -q "may not include" "${CDIR}/out"; then
+        ok "modify --set proxyAllowedZones=${zl} on the console: refused (exit 3), nothing written"
+    else
+        bad "console proxyAllowedZones=${zl}: rc=${_rc}, unchanged=$(unchanged && echo yes || echo no): $(tail -2 "${CDIR}/out")"
+    fi
+done
+run_cset --set 'proxyAllowedZones=["mgmt","admin","home"]'; _rc=$?
+[[ "${_rc}" -eq 0 ]] && jq -e '[.. | objects | (.proxyAllowedZones // empty)[]] | index("home")' "${CDIR}/config/console.json" >/dev/null \
+    && ok "a zone list without internet or all is written" || bad "an acceptable zone list was not written (rc=${_rc}): $(tail -2 "${CDIR}/out")"
+run_cset --check --set 'proxyAllowedZones=["mgmt"]'; _rc=$?
+[[ "${_rc}" -eq 0 ]] && unchanged && ok "--check accepts it and writes nothing" || bad "--check rc=${_rc} or wrote"
+run_cset --check --set 'proxyAllowedZones=["internet"]'; _rc=$?
+[[ "${_rc}" -eq 3 ]] && unchanged && ok "--check refuses internet (exit 3)" || bad "--check internet rc=${_rc}"
+run_cset --check --set 'proxyAllowedZones=notjson'; _rc=$?
+[[ "${_rc}" -eq 3 ]] && unchanged && ok "--check still checks the value's type" || bad "--check type rc=${_rc}"
+rm -rf -- "${CDIR}"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "$FAIL" -eq 0 ]] || exit 1

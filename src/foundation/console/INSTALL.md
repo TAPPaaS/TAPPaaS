@@ -26,20 +26,132 @@ the records, step by step. Once identity is installed it refuses the token and d
 
 ## The published face
 
-Register the module once identity is installed. The route's name is the module's
-`proxyDomain`; give it the console's name for the site's domain:
+Register the module once identity is installed. It publishes `console.<domain>` through
+Caddy to `mgmt` and the admin VPN only, behind the Authentik gate, with its own certificate
+(HTTP-01). The steps in order, with the values of the test site hrossen as the example:
+
+| | hrossen |
+|---|---|
+| domain | `hrossen.dk` (environment `mgmt`, `dnsMode` `per-service`) |
+| WAN addresses | `80.248.138.190`, `2a13:e740:292:978c::aba` |
+| mgmt, its gateway (the site's resolver) | `10.0.0.0/24`, `10.0.0.1` |
+| DMZ gateway (Caddy, split-horizon answer) | `10.6.0.1`, `2a13:e747:a210:8261:98:34ff:fe69:901a` |
+| admin overlay | `10.255.1.0/24` |
+
+### 1. The service on the mothership
+
+The console's code arrives with the release the mothership follows. The next run of
+`update-tappaas.service` — the nightly timer, or now with `site-manager update` — pulls it,
+builds `~/bin/console` in the control-plane refresh (`ui/install.sh`), and its self-rebuild
+(`tappaas-self-rebuild.sh`) activates the NixOS generation that declares
+`tappaas-console.path` and `tappaas-console.service`; the path unit starts the service as soon
+as the bin exists. On a site where identity is installed the setup token is refused and its
+file deleted at the first start. Check:
+
+```bash
+systemctl is-active tappaas-console.service
+curl -s http://127.0.0.1:9097/api/v1/status | jq -r .data.version
+```
+
+The same run updates `identity`, whose `update.sh` creates the `installer` group and puts the
+site owner in it.
+
+### 2. Who may log in, and as what
+
+The gate (`identity:accessControl`) lets in members of `users`. Behind it the console's role
+table reads the groups Authentik sends (ADR-034 D3): `installer` (every verb, destructive ones
+included), `admin` (every read and every non-destructive change), `users` (read). Check that
+the operator is in `installer` before the first login:
+
+```bash
+identity-manager group list --deep          # installer, with the site owner in it
+```
+
+If it is not there, `module-manager update identity` creates it.
+
+### 3. The public DNS record
+
+Caddy obtains the certificate by HTTP-01, so `console.<domain>` must resolve publicly to the
+WAN: an A record for its IPv4 address and an AAAA for its IPv6 address, or a wildcard
+`*.<domain>` doing the same. It is made at the domain's DNS host, by hand. Check against the
+authoritative server, and that the WAN passes TCP 80 for the challenge (bootstrap's
+`setup-caddy` rules `TAPPaaS: Allow HTTP/HTTPS to Caddy`, IPv4 and IPv6):
+
+```bash
+dig +short @"$(dig +short NS <domain> | head -1)" console.<domain> A    # the WAN IPv4
+dig +short @"$(dig +short NS <domain> | head -1)" console.<domain> AAAA # the WAN IPv6
+```
+
+Inside the site the name answers with the DMZ gateway once the module is added (step 5); it
+needs nothing by hand.
+
+### 4. The admin tunnel (#856)
+
+From the admin VPN the console is reached by name only with a tunnel config that carries the
+site's DNS and the routes to the DMZ gateway (config v2, `network-manager/ADMIN-VPN.md` §6).
+An older tunnel resolves the name publicly, arrives from the internet and gets 403.
+
+```bash
+network-manager wgvpn list                  # each peer's config version
+network-manager wgvpn config <peer> [<endpoint:51821>] > tappaas-admin.conf
+```
+
+Re-import the re-issued config on the device once. Until then, a hosts-file line on the
+device takes the name over the mgmt route the old tunnel has (Caddy answers on the
+firewall's mgmt address too); remove it after the re-import:
+
+```
+10.0.0.1  console.<domain>
+```
+
+### 5. Add the module
 
 ```bash
 module-manager add console --proxyDomain console.<domain>
 ```
 
-`network:proxy` publishes `console.<domain>` to `mgmt` and `admin` only, upstream
-`tappaas-cicd.mgmt.internal:9097`; `identity:accessControl` puts the Authentik gate in front.
-Who may log in is Authentik's: members of `users` by default. The console's role table reads the
-groups by their TAPPaaS names (ADR-034 D3): `installer` (Installer: every verb), `admin` (the
-`admin` role: Admin, no destructive verb) and `users` (read). The identity bootstrap creates
-`installer` with the installer in it, and an existing site gets it from `module-manager update
-identity`; the installer has the `admin` role already (`identity/USERS.md`).
+Before anything is created, the zone references (`mgmt`, `admin`) and the module's own
+`check-config.sh` are checked: a zone list with `internet` or `all` is refused, now and on any
+later `module-manager modify console --set proxyAllowedZones=…`. Then, nothing on any guest:
+
+- `network:proxy`: a Caddy handler for `console.<domain>` to `tappaas-cicd.mgmt.internal:9097`;
+  the access list `tappaas-console`, mgmt's and the admin overlay's networks (and their IPv6
+  networks where a zone has one); the split-horizon A record (and AAAA) for the name, pointing
+  at the DMZ gateway; the certificate, issued by HTTP-01 on the first request.
+- `identity:accessControl`: an Authentik proxy application `console`, bound to `users`, and
+  forward-auth on the handler.
+- `litellm:models`, when the AI stack is installed (it is on hrossen): the assistant's key,
+  below.
+
+`add` has no dry run. What can be checked first without changing the site: the steps above,
+`module-manager validate --blueprint ~/TAPPaaS/src/foundation/console`, and
+`./check-config.sh console.json` from the module's directory.
+
+### 6. Verify
+
+```bash
+module-manager test console                 # the zone list, the service, its reads, the gated route
+systemctl show tappaas-console -p User -p ProtectSystem -p ActiveState   # tappaas, strict, active
+dig +short console.<domain>                 # from mgmt or the tunnel: the DMZ gateway
+curl -sI https://console.<domain>/          # from mgmt or the tunnel: 302 to the Authentik login
+```
+
+From any other zone (`home`, a guest network) or from the internet, the same request gets
+403 from the access list. Log in from a browser on mgmt or the tunnel: the header shows the
+user and role (`installer` for a member of `installer`), and the *Open in* jumps (Proxmox,
+OPNsense, Grafana, PBS, Authentik, UniFi) open the object in view in a new tab.
+
+### Removing it
+
+```bash
+module-manager delete console --force
+```
+
+`--force` because the console is a foundation module; the module has no VM, so nothing is
+destroyed. Its services are taken down in reverse: the Authentik application, the access
+list, the Caddy handler and the split-horizon records, and the assistant's LiteLLM key. The
+service stays on the mothership, where it accepts only the firewall and loopback, so with no
+route it is reached from nowhere else. The public DNS record is yours to remove.
 
 ## The assistant (ADR-034 D7)
 
@@ -93,6 +205,6 @@ development only).
 ## Verify
 
 ```bash
-./test.sh                                   # the service answers; the route is gated
+./test.sh                                   # the zone list; the service answers; the route is gated
 curl -s http://127.0.0.1:9097/api/v1/status # on the mothership
 ```

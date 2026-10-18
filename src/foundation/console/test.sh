@@ -2,7 +2,8 @@
 #
 # console test (ADR-034 Testing).
 #
-#   always  the service answers /api/v1/status on the mothership's loopback, and
+#   always  the deployed config passes check-config.sh (no internet, no all);
+#           the service answers /api/v1/status on the mothership's loopback, and
 #           every read it caches answered at its last refresh
 #   live    the published name exists: an anonymous request is sent to the
 #           Authentik login (the gate), or stopped by the zone filter (a warning:
@@ -19,6 +20,15 @@ pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 
 info "${BOLD}Testing console${CL}"
+# The deployed config passes the module's own check: no 'internet' or 'all' in a
+# zone list (check-config.sh; module-manager runs it on add and modify --set).
+if [[ -f "${CONFIG_DIR}/${1:-console}.json" ]]; then
+    if why="$("$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/check-config.sh" "${CONFIG_DIR}/${1:-console}.json" 2>&1)"; then
+        pass "the console's zone list is mgmt and admin only (no internet, no all)"
+    else
+        fail "${why}"
+    fi
+fi
 if systemctl is-active --quiet tappaas-console.service 2>/dev/null; then
     pass "tappaas-console.service is active"
     status="$(curl -fsS --max-time 15 http://127.0.0.1:9097/api/v1/status 2>/dev/null)"

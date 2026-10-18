@@ -246,23 +246,144 @@ av_setup() {
     echo "  wan : UDP ${SAT_ADMIN_WGPORT} -> This Firewall (interface ${AV_WAN_IFACE}) — direct/Topology-B reach"
 }
 
+# ── the client config (#856) ────────────────────────────────────────────────
+#
+# Besides mgmt, the peer is given the site's resolver and host routes to the
+# DMZ gateway. Inside the site every published name (console.<domain>,
+# logging.<domain>, …) answers with the DMZ gateway, where Caddy listens
+# (ADR-021 D2), and the admin overlay may reach the firewall there on 80 and 443
+# (ADR-021 D3a). Without the two, a laptop on the tunnel resolved a published
+# name publicly, went to the WAN over the internet, and Caddy answered 403.
+# The addresses come from zones.json: a zone's gateway is the first address of
+# its `ip`. The IPv6 one is the firewall's own address on the dmz interface —
+# what the published names' AAAA records point at (ADR-030 D9) — read from the
+# firewall, since with a dynamic WAN it is formed from the interface's MAC.
+#
+# A config is versioned: 1 is mgmt only (before #856), 2 adds DNS and the DMZ
+# routes. Every config add-peer or config prints is recorded under the peer's
+# name, so `list` can say which peers still hold a version-1 tunnel.
+readonly AV_CONFIG_VERSION=2
+
+av_config_dir() { printf '%s' "${TAPPAAS_CONFIG_DIR:-${CONFIG_DIR:-/home/tappaas/config}}"; }
+av_zones_file() { printf '%s' "${AV_ZONES_FILE:-$(av_config_dir)/zones.json}"; }
+av_issued_file() { printf '%s' "${AV_ISSUED_FILE:-$(av_config_dir)/wgvpn/peers.json}"; }
+
+# A zone's IPv4 network, as zones.json has it (empty when the zone is absent).
+av_zone_net() {
+    jq -r --arg z "$1" '.[$z].ip // empty' "$(av_zones_file)" 2>/dev/null
+}
+
+# The first host address of an IPv4 network: a zone's gateway. Arg: a.b.c.d/n
+av_first_host() {
+    [[ "$1" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})/([0-9]{1,2})$ ]] || return 1
+    local n=$(( (10#${BASH_REMATCH[1]} << 24) | (10#${BASH_REMATCH[2]} << 16) | (10#${BASH_REMATCH[3]} << 8) | 10#${BASH_REMATCH[4]} ))
+    local len=$(( 10#${BASH_REMATCH[5]} ))
+    (( len >= 1 && len <= 30 )) || return 1
+    n=$(( (n & ((0xFFFFFFFF << (32 - len)) & 0xFFFFFFFF)) + 1 ))
+    printf '%d.%d.%d.%d\n' $(( n >> 24 & 255 )) $(( n >> 16 & 255 )) $(( n >> 8 & 255 )) $(( n & 255 ))
+}
+
+# The firewall's global IPv6 address on the interface whose IPv4 is <ip>, or
+# nothing (link-local and ULA addresses are not what a published name gets).
+av_iface_v6() {
+    _ow_api /api/interfaces/overview/interfacesInfo 2>/dev/null | jq -r --arg ip "$1" '
+        .rows[]? | select(any(.ipv4[]?; (.ipaddr // "" | split("/")[0]) == $ip))
+        | .ipv6[]? | .ipaddr // "" | split("/")[0]
+        | select(. != "" and (test("^(fe[89ab]|f[cd])"; "i") | not))' 2>/dev/null | head -1
+}
+
+# What the config carries besides the peer's own lines, as shell assignments:
+#   av_dns  the site's resolver (mgmt's gateway)
+#   av_allowed  mgmt, the DMZ gateway /32 and its IPv6 /128
+#   av_note  why the IPv6 route is missing, when it is
+av_routes() {
+    local mgmt dmz gw6
+    av_note=""
+    mgmt="$(av_zone_net mgmt)"
+    [[ -n "${mgmt}" ]] || { echo "[Warning] no mgmt zone in $(av_zones_file); using ${AV_MGMT_SUBNET}" >&2; mgmt="${AV_MGMT_SUBNET}"; }
+    av_dns="$(av_first_host "${mgmt}")" || av_dns=""
+    av_allowed="${mgmt}"
+    dmz="$(av_zone_net dmz)"
+    if [[ -z "${dmz}" ]] || ! av_dmz="$(av_first_host "${dmz}")"; then
+        echo "[Warning] no dmz zone in $(av_zones_file): the config has no route to the published names" >&2
+        return 0
+    fi
+    av_allowed+=", ${av_dmz}/32"
+    if ! jq -e '.dmz.ipv6Subnet | type == "number"' "$(av_zones_file)" >/dev/null 2>&1; then
+        av_note="no IPv6 route: the dmz zone has no ipv6Subnet, so the published names have no AAAA"
+    elif gw6="$(av_iface_v6 "${av_dmz}")" && [[ -n "${gw6}" ]]; then
+        av_allowed+=", ${gw6}/128"
+    else
+        av_note="no IPv6 route: the firewall's dmz interface (${av_dmz}) has no global IPv6 address"
+    fi
+}
+
 # Emit a ready-to-use client config for an admin device.
 # Args: <peer-tunnel-ip/32> <endpoint-host:port> [private-key-or-PLACEHOLDER]
 av_client_config() {
-    local ip="$1" endpoint="$2" priv="${3:-<PASTE-YOUR-PRIVATE-KEY>}" srvpub
+    local ip="$1" endpoint="$2" priv="${3:-<PASTE-YOUR-PRIVATE-KEY>}" srvpub av_dns="" av_allowed="" av_dmz="" av_note=""
     srvpub="$(av_server_pubkey)"
-    cat <<EOF
-[Interface]
-PrivateKey = ${priv}
-Address    = ${ip}
-MTU        = 1340
+    av_routes
+    echo "# tappaas-admin client config v${AV_CONFIG_VERSION}: mgmt, the site's DNS, the published names"
+    echo "[Interface]"
+    echo "PrivateKey = ${priv}"
+    echo "Address    = ${ip}"
+    [[ -n "${av_dns}" ]] && echo "DNS        = ${av_dns}"
+    echo "MTU        = 1340"
+    echo ""
+    echo "[Peer]"
+    echo "PublicKey           = ${srvpub}"
+    echo "Endpoint            = ${endpoint}"
+    [[ -n "${av_note}" ]] && echo "# ${av_note}"
+    echo "AllowedIPs          = ${av_allowed}"
+    echo "PersistentKeepalive = ${AV_KEEPALIVE}"
+}
 
-[Peer]
-PublicKey           = ${srvpub}
-Endpoint            = ${endpoint}
-AllowedIPs          = ${AV_MGMT_SUBNET}
-PersistentKeepalive = ${AV_KEEPALIVE}
-EOF
+# The admin peers as JSON lines {name, tunneladdress}.
+av_peers() {
+    _ow_api /api/wireguard/client/searchClient \
+        | jq -c --arg net "${AV_PEER_SUBNET%.*/*}." '.rows[]? | select((.tunneladdress//"")|startswith($net)) | {name, tunneladdress}'
+}
+
+# Record that <name> was given a config of this version. Args: <name> <ip/32>
+av_record_issued() {
+    local f tmp; f="$(av_issued_file)"
+    mkdir -p "$(dirname "${f}")" 2>/dev/null || return 0
+    tmp="$(mktemp "${f}.XXXXXX")" || return 0
+    if { [[ -s "${f}" ]] && cat "${f}" || echo '{}'; } \
+        | jq --arg n "$1" --arg ip "$2" --argjson v "${AV_CONFIG_VERSION}" --arg d "$(date -u +%Y-%m-%d)" \
+            '.[$n] = {ip: $ip, config: $v, issued: $d}' > "${tmp}" 2>/dev/null; then
+        mv "${tmp}" "${f}"
+    else
+        rm -f "${tmp}"; echo "[Warning] could not record the config issued to ${1} in ${f}" >&2
+    fi
+}
+
+av_forget_issued() {
+    local f tmp; f="$(av_issued_file)"
+    [[ -s "${f}" ]] || return 0
+    tmp="$(mktemp "${f}.XXXXXX")" || return 0
+    jq --arg n "$1" 'del(.[$n])' "${f}" > "${tmp}" 2>/dev/null && mv "${tmp}" "${f}" || rm -f "${tmp}"
+}
+
+# `config <name|ip/32> [host:port] [privkey]`: re-print an existing peer's
+# config and record it as issued. A name is looked up among the peers; an
+# address is taken as given (and recorded when a peer has it).
+av_config_cmd() {
+    local who="$1" endpoint="${2:-}" priv="${3:-}" ip="" name="" row
+    while IFS= read -r row; do
+        [[ -n "${row}" ]] || continue
+        if [[ "$(jq -r .name <<<"${row}")" == "${who}" || "$(jq -r .tunneladdress <<<"${row}")" == "${who}" ]]; then
+            name="$(jq -r .name <<<"${row}")"; ip="$(jq -r .tunneladdress <<<"${row}")"; break
+        fi
+    done < <(av_peers)
+    if [[ -z "${ip}" ]]; then
+        [[ "${who}" == */* ]] || { echo "[Error] no admin peer named '${who}' (network-manager wgvpn list)" >&2; return 1; }
+        ip="${who}"
+    fi
+    [[ -n "${endpoint}" ]] || endpoint="$(av_discover_endpoint "$(av_config_dir)")"
+    av_client_config "${ip}" "${endpoint}" "${priv}"
+    [[ -z "${name}" ]] || av_record_issued "${name}" "${ip}"
 }
 
 # Discover the client-config Endpoint (host:port) when the operator did not pass
@@ -292,12 +413,19 @@ av_discover_endpoint() {
 }
 
 av_list() {
-    local srv; srv="$(av_server_uuid)"
+    local srv issued; srv="$(av_server_uuid)"
     echo "server : ${AV_SERVER_NAME} (uuid=${srv:-<none>}) port=${SAT_ADMIN_WGPORT}"
     [[ -n "${srv}" ]] && echo "pubkey : $(av_server_pubkey "${srv}")"
     echo "rule   : $([[ -n "$(av_rule_uuid)" ]] && echo present || echo MISSING) (${AV_PEER_SUBNET} -> ${AV_MGMT_SUBNET})"
     echo "wan    : $([[ -n "$(av_wan_rule_uuid)" ]] && echo present || echo MISSING) (UDP ${SAT_ADMIN_WGPORT} -> This Firewall)"
     echo "peers  :"
-    _ow_api /api/wireguard/client/searchClient \
-        | jq -r --arg net "${AV_PEER_SUBNET%.*/*}." '.rows[]? | select((.tunneladdress//"")|startswith($net)) | "  - \(.name)  \(.tunneladdress)"'
+    issued="$(jq -c . "$(av_issued_file)" 2>/dev/null)" || issued='{}'
+    [[ -n "${issued}" ]] || issued='{}'
+    # A peer with no record was enrolled before #856: its tunnel has no DNS line
+    # and no route to the published names until it is re-issued and re-imported.
+    av_peers | jq -r --argjson i "${issued}" --argjson v "${AV_CONFIG_VERSION}" '
+        ($i[.name] // {}) as $r
+        | "  - \(.name)  \(.tunneladdress)  "
+          + (if ($r.config // 1) >= $v then "config v\($r.config) issued \($r.issued)"
+             else "config v\($r.config // 1): no DNS, mgmt only — re-issue (network-manager wgvpn config \(.name)) and re-import" end)'
 }

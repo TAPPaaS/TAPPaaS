@@ -1,0 +1,7 @@
+{"rows": [
+  {"identifier": "lan", "description": "LAN", "ipv4": [{"ipaddr": "10.0.0.1/24"}], "ipv6": []},
+  {"identifier": "wan", "description": "WAN", "ipv4": [{"ipaddr": "80.248.138.190/24"}], "ipv6": [{"ipaddr": "2a13:e740:292:978c::aba/128"}, {"ipaddr": "fe80::fd:8fff:fee2:58cb/64"}]},
+  {"identifier": "opt1", "description": "rossen", "ipv4": [{"ipaddr": "10.2.0.1/24"}], "ipv6": [{"ipaddr": "2a13:e747:a210:8220:98:34ff:fe69:901a/64"}, {"ipaddr": "fe80::98:34ff:fe69:901a/64"}]},
+  {"identifier": "opt7", "description": "dmz", "ipv4": [{"ipaddr": "10.6.0.1/24"}], "ipv6": [{"ipaddr": "fe80::98:34ff:fe69:901a/64"}, {"ipaddr": "2a13:e747:a210:8261:98:34ff:fe69:901a/64"}]},
+  {"identifier": "opt2", "description": "wireguard", "ipv4": [{"ipaddr": "10.255.1.1/24"}], "ipv6": []}
+]}

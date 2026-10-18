@@ -244,6 +244,19 @@ admits the mothership). For a satellite it makes the unmanaged off-site vault: a
 login on the Site's PBS, the pull, self-patching, and the mothership's key removed last. A
 module without a `lockdown.sh` has nothing to lock down and is refused.
 
+### What a module refuses to be configured to: `check-config.sh`
+
+A module may carry a `check-config.sh <config.json>`: given the config it is about to be
+installed with, or the config a `modify --set`/`--unset` would leave, it exits non-zero to
+refuse it, and what it prints is the reason. It holds what `module-fields.json` cannot say,
+because the rule is the module's own: the console refuses `internet` and `all` in its zone
+lists, since it runs the site and is reached from mgmt and the admin VPN only.
+
+`install-module.sh` runs it after the zone references are checked, before any resource
+exists; `set-module-field.sh` runs it before the first write, and a refusal is exit 3,
+nothing written. `modify --set … --dry-run` asks the writer the same with `--check`, which
+runs every gate and writes nothing.
+
 ### Removing a stale field: `modify --unset` (#648)
 
 ```

@@ -647,6 +647,13 @@ main() {
     # (proxy) or producing no rule at all (egress).
     validate_module_zone_refs "${module_json}" "${effective_module}" \
         || die "Zone reference validation failed — install aborted before any resources were created"
+    # The module's own word on its config: check-config.sh <config> refuses what
+    # module-fields.json cannot express (the console: 'internet' in its zone
+    # list). set-module-field.sh runs it before a `modify --set` writes.
+    if [[ -x "./check-config.sh" ]]; then
+        ./check-config.sh "${module_json}" \
+            || die "${module}/check-config.sh refuses this config — install aborted before any resources were created"
+    fi
 
     # Resolve + persist the effective backup policy (ADR-007 P9). The
     # Site -> Environment -> Module cascade is computed by the TS backup-manager
