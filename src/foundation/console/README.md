@@ -18,7 +18,7 @@ the sweep did, and every change to the site as a job that runs a manager verb wi
 | The owner's view: the services in plain words, the site in numbers, the physical view; nothing to change | the trusted client zones | `https://status.<domain>` — not yet published, see below |
 | The assistant: ask about the site, a module, a finding; it reads the console's records and logs and proposes a change as a card you preview and run (it never runs one) | `mgmt`, the admin VPN; `tappaas ask` on the mothership | the Assistant drawer, when the AI stack is installed |
 | "Open in" Proxmox, OPNsense, Grafana, PBS, Authentik, UniFi at the object in view | `mgmt`, the admin VPN | links that open a new tab |
-| The console before identity exists | `mgmt`, the admin VPN | `http://<tappaas-cicd>:9097/?token=…` — the setup token printed by the install summary |
+| The console before identity exists | `mgmt`, the admin VPN | `http://<tappaas-cicd>:9097/` — asks for the setup token, which is in `~/config/console-setup-token` on the mothership (the install summary names the file, never the token) |
 
 ## What is not included
 

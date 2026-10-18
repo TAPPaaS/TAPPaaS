@@ -10,10 +10,13 @@ therefore ends with the console up on the mothership's `mgmt` address, port 9097
 ## Before identity exists (ADR-034 D10)
 
 `bootstrap.sh` writes a one-time token to `~/config/console-setup-token`, and the summary of
-`tappaas-cicd/install.sh` prints the address with it:
+`tappaas-cicd/install.sh` prints the address and names that file — never the token, so it
+reaches no log. Read it on the mothership and paste it into the console's token form (or
+open the address with `?token=<token>` once):
 
 ```
-http://<tappaas-cicd mgmt address>:9097/?token=<token>
+http://<tappaas-cicd mgmt address>:9097/
+cat ~/config/console-setup-token
 ```
 
 While `config/identity.json` does not exist, the console accepts `mgmt` and the admin VPN with

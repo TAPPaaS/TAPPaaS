@@ -203,7 +203,7 @@ export function decide(
     return { ok: true, me: { user: null, name: null, email: null, groups: [], role: "read", via: "local", route } };
   }
   if (setup.active && anyMatch(peer, cfg.setupAllow)) {
-    return { ok: false, status: 401, reason: "setup token required (printed by the install summary)" };
+    return { ok: false, status: 401, reason: "setup token required (~/config/console-setup-token on tappaas-cicd)" };
   }
   return { ok: false, status: 403, reason: `connections from ${normalizeAddr(peer)} are not accepted` };
 }

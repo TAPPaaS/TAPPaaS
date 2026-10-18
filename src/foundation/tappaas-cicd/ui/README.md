@@ -180,8 +180,9 @@ carries as a group) → **Admin**, `users` → read; `status.<domain>` caps ever
 A write — any job — needs the gate (Admin, or Installer for a destructive verb) or the setup
 token while it is active; loopback without the gate's headers reads only.
 
-**The setup token (ADR-034 D10).** `bootstrap.sh` writes `~/config/console-setup-token` and
-the install summary prints it. While `config/identity.json` does not exist, the console
+**The setup token (ADR-034 D10).** `bootstrap.sh` writes `~/config/console-setup-token`; the
+install summary names the file and the operator reads it with `cat` — the token is never
+printed, so it reaches no log. While `config/identity.json` does not exist, the console
 accepts the mgmt and admin networks with that token (`?token=` once, then an HttpOnly
 cookie; or `Authorization: Bearer`). Once identity is installed the token is refused, even if
 its file is still there — delete it.

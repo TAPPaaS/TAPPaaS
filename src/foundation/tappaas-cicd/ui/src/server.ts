@@ -75,7 +75,7 @@ function setupPage(reason: string): string {
 <h1 style="font-size:1.3rem">TAPPaaS console</h1><p>${esc}</p>
 <form method="get"><label>Setup token<br><input name="token" autocomplete="off" style="width:100%;font:inherit;padding:.4rem"></label>
 <p><button style="font:inherit;padding:.4rem 1rem">Continue</button></p></form>
-<p style="color:#52606d">bootstrap.sh printed the token in the install summary; it is in ~/config/console-setup-token on tappaas-cicd.</p></body>`;
+<p style="color:#52606d">The token is in ~/config/console-setup-token on tappaas-cicd (read it with cat); it is never printed.</p></body>`;
 }
 
 export class ConsoleServer {
