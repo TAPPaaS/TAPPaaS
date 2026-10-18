@@ -94,6 +94,8 @@ async function main(): Promise<void> {
   check(r.status === 200 && (r.json().data as { inSite: boolean }).inSite === true, "/api/v1/nodes/<name>/progress");
   r = await call("GET", "/api/v1/nodes/--x/progress");
   check(r.status === 404, "a node name site-manager would refuse reads nothing");
+  r = await call("GET", "/api/v1/catalogs");
+  check(r.status === 200 && Array.isArray(r.json().data), "/api/v1/catalogs: one entry per registered repository");
   r = await call("GET", "/api/v1/schemas/passwd");
   check(r.status === 404, "/api/v1/schemas/<name>: only the listed schemas");
   r = await call("GET", "/api/v1/modules/nosuch");

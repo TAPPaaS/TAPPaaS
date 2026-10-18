@@ -346,3 +346,4 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .explain li { margin: 2px 0; }
 .checks li { padding: 2px 0; font-size: 13px; }
 .setup-body .step { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 8px; }
+.stack-head td { background: #f8fafc; border-top: 2px solid var(--line); padding-top: 10px; }

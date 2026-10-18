@@ -209,6 +209,8 @@ export class ConsoleServer {
         if (!a || !NODE_NAME.test(a) || b !== "progress") return sendJson(res, 404, { error: "nodes/<name>/progress" });
         return sendJson(res, 200, envelope(await r.nodeProgress.of(a).get()));
       }
+      case "catalogs":
+        return sendJson(res, 200, envelope(await r.catalogs.get()));
       case "schemas": {
         if (!a || !(a in SCHEMAS)) return sendJson(res, 404, { error: `schemas/<${Object.keys(SCHEMAS).join("|")}>` });
         return sendJson(res, 200, envelope(await r.schemas.of(a).get()));

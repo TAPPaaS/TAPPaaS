@@ -12,6 +12,7 @@ import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { readZonesFile } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
+import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
@@ -34,6 +35,7 @@ export const TTL = {
   identity: 5 * MIN,
   setup: 10 * MIN,
   schema: 10 * MIN,
+  catalogs: 10 * MIN,
   nodeProgress: 10_000, // while a node is being added
   drift: 0, // on demand
 };
@@ -97,6 +99,7 @@ export class Reads {
   readonly identityRecords: Cached<Record<string, Record<string, unknown>[]>>;
   readonly schemas: CachedMap<Record<string, unknown>>;
   readonly nodeProgress: CachedMap<NodeProgress>;
+  readonly catalogs: Cached<RepositoryCatalog[]>;
   readonly setup: Cached<SetupInputs>;
 
   constructor(private readonly cfg: ReadsConfig) {
@@ -138,6 +141,12 @@ export class Reads {
       const out: Record<string, string[]> = {};
       await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
       return out;
+    }, now);
+    // What each registered repository offers, and which of it is installed.
+    this.catalogs = new Cached("catalogs", TTL.catalogs, async () => {
+      const [repos, mods] = await Promise.all([j<Record<string, unknown>[]>("site-manager", ["repository", "list", "--json"]), this.modules.get()]);
+      const instances = (mods.value?.modules ?? []).map((m) => ({ name: m.name, source: moduleSourceOf(cfg.configDir, m.name) }));
+      return (Array.isArray(repos) ? repos : []).map((r) => repositoryCatalog(r, instances));
     }, now);
     this.nodeProgress = new CachedMap("node-progress", TTL.nodeProgress, (n) => this.loadNodeProgress(n), now);
     // Every identity object's record, for the graph of their relations: each
@@ -210,6 +219,7 @@ export class Reads {
       // health first: the topology places its findings
       await this.health.refresh();
       await Promise.all(Object.entries(all).filter(([k]) => k !== "health").map(([, c]) => c.refresh()));
+      if (this.catalogs.peek().at !== null) await this.catalogs.refresh();
       return Object.keys(all);
     }
     const c = all[what];
@@ -239,7 +249,9 @@ export class Reads {
     const setup = this.setup.peek().at !== null ? [this.setup] : [];
     // The identity records follow the lists they are read from.
     const identity = this.identity.refresh().then(() => (this.identityRecords.peek().at !== null ? this.identityRecords.refresh() : undefined));
-    return Promise.all([identity, ...[...setup, this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    // The catalogues mark what is installed: after the module list.
+    const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
+    return Promise.all([identity, modules, ...[...setup, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
   }
 
   private async loadTopology(): Promise<TopologyDoc & Record<string, unknown>> {

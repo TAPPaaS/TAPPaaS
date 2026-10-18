@@ -40,7 +40,11 @@ as a callout on the WAN path, the switch in the centre with its ports coloured b
 nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
 left); a click opens the object's records, findings, jumps and its day-2 change: a switch
 port's record (`switch-controller update-port`) then `switch-controller reconcile`, a node's
-`node network show / set`. **Modules** — the list with its badges; a module's page has
+`node network show / set`. **Modules** — tabs: Installed (the list with its badges, grouped by stack, foundation
+first) and one per registered repository (`GET /api/v1/catalogs`: `site-manager repository list`, each
+repository's module-catalog.json and each module's own JSON; installed = a deployed instance whose
+`moduleSource` is the module's directory, with the instances named and linked; Install = `module-manager
+add <m>`, previewed then applied; a catalogue that cannot be read says why); a module's page has
 Overview (with the operate column: update, reconcile, test, snapshot, suspend/resume, delete
 with the typed name), Config, Drift (on demand), Backup and Activity. Config draws the module as
 a tree of cards: the module's own (kind, node, environment, zone and the fields no service owns)
@@ -94,6 +98,7 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | a module | `module-manager show / resolve <m> --json`, `backup-manager show / coverage <m> --json` | 5 min, on first view |
 | a module's drift | `module-manager drift <m> --json` | on demand only |
 | a module's fields (its Modify forms) | `module-manager fields <m> --json` with `resolve` and `config/module-fields.json` | 5 min, on first view |
+| the repositories' catalogues (`catalogs`) | `site-manager repository list --json`, `<path>/<catalog>`, each module's JSON, `config/<m>.json` moduleSource | 10 min, and after a job |
 | a form's schema (`schemas/zones`, `schemas/environment`) | `src/foundation/schemas/<name>-fields.json` of `$CONSOLE_REPO` | 10 min |
 | topology (the Physical page) | `network-manager topology --json --health <the cached validate>` | every 5 min |
 | zones | `network-manager list --json`, `show <zone> --json` | every 5 min |
