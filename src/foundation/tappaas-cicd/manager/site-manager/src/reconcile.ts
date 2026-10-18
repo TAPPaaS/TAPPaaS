@@ -144,7 +144,7 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
         kind: "clone-repo",
         target: `repository ${repo.name} → clone ${repo.url} @ ${branch}`,
         apply: (c) => {
-          c.cloneRepo(repo.url, path, branch);
+          c.cloneRepo(repo.url, path, branch, repo.name, repo.trust);
           return 0;
         },
       });

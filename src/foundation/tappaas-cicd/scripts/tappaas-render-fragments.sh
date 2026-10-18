@@ -11,6 +11,7 @@
 # (2026-10-06) because its fragment had never been written there.
 #
 #   /etc/nixos/tappaas-site.nix      the site's time and locale (#408, #472)
+#                                    and its Nix signing key (ADR-033 D8)
 #   /etc/nixos/tappaas-logging.nix   the journal client (#770), only while
 #                                    logging is deployed and tappaas-cicd
 #                                    declares logging:logs
@@ -29,6 +30,19 @@ _here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 CICD_DIR="$(dirname "${_here}")"
 VMNAME="$(jq -r '.vmname // .config.vmname // "tappaas-cicd"' /home/tappaas/config/tappaas-cicd.json 2>/dev/null || echo tappaas-cicd)"
 [[ "${VMNAME}" =~ ^[A-Za-z0-9-]+$ ]] || { warn "bad vmname '${VMNAME}'"; exit 1; }
+
+# The site's Nix signing key (ADR-033 D8), created here the first time: every
+# guest system update-os.sh copies is signed with it, and tappaas-site.nix
+# below carries its public half.
+_nsk="${CICD_DIR}/lib/nix-site-key.sh"
+if [[ -f "${_nsk}" ]]; then
+    # shellcheck source=../lib/nix-site-key.sh
+    if . "${_nsk}" && nix_site_key_ensure; then
+        debug "site Nix signing key: $(nix_site_key_public)"
+    else
+        warn "could not create the site's Nix signing key — guest systems are copied unchecked until it exists"
+    fi
+fi
 
 # The site's own time and locale (#408, #472).
 _sl="${CICD_DIR}/lib/site-locale.sh"

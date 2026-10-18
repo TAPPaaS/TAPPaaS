@@ -2,7 +2,7 @@
   "description": "Jellyfin open-source media server for personal movie, TV and music libraries.",
   "displayName": "Jellyfin",
   "kind": "vm",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "stack": "home",
   "releaseDate": "2026-06-27",
   "maintainer": "@AndreasJe",
@@ -16,7 +16,6 @@
     "cluster:vm",
     "backup:vm",
     "network:proxy",
-    "identity:accessControl",
     "network:rules",
     "storage:nfs",
     "templates:nixos",
@@ -69,6 +68,25 @@
         "home",
         "netbird",
         "internet"
+      ],
+      "proxyAccess": [
+        {
+          "paths": [
+            "/metrics*",
+            "/Startup/*",
+            "/System/Restart",
+            "/System/Shutdown",
+            "/System/Logs*",
+            "/Packages*",
+            "/Repositories*",
+            "/ScheduledTasks*",
+            "/Auth/Keys*"
+          ],
+          "zones": [
+            "home",
+            "netbird"
+          ]
+        }
       ]
     }
   }

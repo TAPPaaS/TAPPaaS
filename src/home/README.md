@@ -18,6 +18,7 @@ Home Assistant reaches them across those boundaries through controlled pinholes 
 | [hass](hass/README.md) | Home Assistant OS (HAOS) - home automation platform | Testing |
 | [immich](immich/README.md) | Immich self-hosted photo and video backup with ML-powered search, face recognition and mobile auto-upload. | Testing |
 | [jellyfin](jellyfin/README.md) | Jellyfin open-source media server for personal movie, TV and music libraries. | Testing |
+| [karakeep](karakeep/README.md) | Karakeep — bookmarks and read-later: links, notes and images, each page archived and full-text searchable, tagged automatically by the site's AI stack when it has one. | Development |
 | [nomad](nomad/README.md) | Project N.O.M.A.D. — an offline knowledge and education server: Wikipedia and other libraries, courses, books and tools, on hardware you own. | Development |
 
 Install them as [INSTALL.md](INSTALL.md) says.

@@ -411,12 +411,13 @@ trap cleanup_update_files EXIT
 # run_graded_test <log> <test-module.sh args...> — run it, show its output as
 # before, keep a copy in <log>; returns test-module.sh's exit code.
 # The module's guest as <vmname>.<zone0>.internal; empty for a module without
-# one (cluster, templates — nothing to wait for).
+# one (cluster, templates — nothing to wait for). An optional second argument
+# names the zone to use instead of the config's.
 module_guest_host() {
     local cfg vm zone
     cfg="$(read_module_config "$1")" || return 0
     vm="$(jq -r '.vmname // empty' <<<"${cfg}")"
-    zone="$(jq -r '.zone0 // empty' <<<"${cfg}")"
+    zone="${2:-$(jq -r '.zone0 // empty' <<<"${cfg}")}"
     [[ -n "${vm}" && -n "${zone}" ]] && printf '%s.%s.internal\n' "${vm}" "${zone}"
     return 0
 }
@@ -690,15 +691,22 @@ main() {
         # reboots and OS updates leave them so — is "not healthy YET", and
         # failing the gate on it skipped a healthy module's update for the
         # night. A timeout does not stop the gate; it says which it was.
-        local pre_test_exit=0 gate_host gate_note=""
-        gate_host="$(module_guest_host "${module}")"
+        # A `modify --set zone0=…` has already written the NEW zone; the guest is
+        # still in the old one until the converge moves it. modify hands the old
+        # zone over (TAPPAAS_PRE_GATE_ZONE0), so the baseline tests the guest
+        # where it is — measured on hrossen 2026-10-17, the gate otherwise waited
+        # 300 s for a name that did not exist yet and failed fatally.
+        local pre_test_exit=0 gate_host gate_note="" pre_zone="${TAPPAAS_PRE_GATE_ZONE0:-}"
+        local -a pre_zone_arg=()
+        [[ -n "${pre_zone}" ]] && pre_zone_arg=(--zone0 "${pre_zone}")
+        gate_host="$(module_guest_host "${module}" "${pre_zone}")"
         if [[ -n "${gate_host}" ]]; then
             if ! wait_for_guest_settled "${gate_host}" "${TAPPAAS_READY_WAIT:-300}" \
                || ! wait_for_module_ready "${module}" "${gate_host}" "${TAPPAAS_READY_WAIT:-300}" hook-only; then
                 gate_note=" — the guest had NOT become ready within ${TAPPAAS_READY_WAIT:-300}s, so this may be a module still starting"
             fi
         fi
-        run_graded_test "${PRE_TEST_LOG}" --runtime-only "${module}" || pre_test_exit=$?
+        run_graded_test "${PRE_TEST_LOG}" --runtime-only "${pre_zone_arg[@]}" "${module}" || pre_test_exit=$?
 
         if [[ "${pre_test_exit}" -eq 0 ]]; then
             debug "  ${GN}✓${CL} Pre-update tests passed"

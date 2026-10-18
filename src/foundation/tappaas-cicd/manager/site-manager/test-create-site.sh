@@ -18,6 +18,8 @@
 #   - --force re-run is idempotent (succeeds, still valid)
 #   - --name is required (no --name -> error)
 #   - --force keeps an operator-set channel (ADR-028 D9) and ipv6 (#149)
+#   - the TAPPaaS trust anchor bootstrap.sh left is written and verified (ADR-033
+#     D5); one that does not hold refuses and leaves site.json unchanged
 #
 # Prints "Results: N passed, M failed, K skipped"; exits 1 on any failure.
 #
@@ -160,6 +162,44 @@ fi
 [[ "$(jqv "$SITE" '.channel')" == "unstable" ]] && ok ".channel preserved across --force" || bad ".channel dropped by --force (got '$(jqv "$SITE" '.channel')')"
 [[ "$(jqv "$SITE" '.ipv6')" == "true" ]]       && ok ".ipv6 preserved across --force"    || bad ".ipv6 dropped by --force (got '$(jqv "$SITE" '.ipv6')')"
 run_validate "$SITE" && ok "site.json with channel validates" || bad "site.json with channel failed schema validation"
+
+# --- Case 7: the TAPPaaS trust anchor (ADR-033 D5) ---
+# A throwaway signed repository stands in for /home/tappaas/TAPPaaS: the
+# TAPPaaS entry's path is pointed at it, and bootstrap.sh's anchor file is
+# written beside the trust record, as bootstrap does.
+(
+    export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+    export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+    . "${HERE}/../../lib/verify-repo.sh"
+    R="${WORK}/tappaas-repo"; git init -q -b stable "$R"
+    ssh-keygen -q -t ed25519 -N '' -C k -f "${WORK}/k" </dev/null
+    mkdir -p "$R/.tappaas"
+    printf 'lars@x namespaces="git" %s\n' "$(cut -d' ' -f1-2 "${WORK}/k.pub")" > "$R/.tappaas/allowed_signers"
+    git -C "$R" add -A; git -C "$R" commit -qm r1
+    git -C "$R" -c gpg.format=ssh -c user.signingkey="${WORK}/k" tag -s v1.0 -m "TAPPaaS 1.0" -m "$(verify_tag_lines "$R" HEAD)"
+    printf '%s %s\n' "$(git -C "$R" rev-parse HEAD)" "$(ssh-keygen -lf "${WORK}/k.pub" | awk '{print $2}')"
+) > "${WORK}/anchor.out" 2>/dev/null
+read -r ACOMMIT AFP < "${WORK}/anchor.out"
+jq --arg p "${WORK}/tappaas-repo" '.repositories[0].path = $p | del(.repositories[0].trust)' "$SITE" > "$SITE.tmp" && mv "$SITE.tmp" "$SITE"
+mkdir -p "$C1/.trust"
+jq -n --arg c "$ACOMMIT" --arg s "$AFP" '{introduction: "v1.0", introductionCommit: $c, signer: $s}' > "$C1/.trust/TAPPaaS.introduction.json"
+if "$CREATE" --name testsite --config-dir "$C1" --force >/dev/null 2>&1; then
+    ok "--force with a TAPPaaS anchor exits 0"
+else
+    bad "--force with a good TAPPaaS anchor failed"
+fi
+[[ "$(jqv "$SITE" '.repositories[0].trust.introduction + " " + .repositories[0].trust.signer')" == "v1.0 ${AFP}" ]] \
+    && ok "TAPPaaS entry carries the anchor" || bad "anchor not written (got '$(jqv "$SITE" '.repositories[0].trust')')"
+run_validate "$SITE" && ok "site.json with a trust anchor validates" || bad "site.json with a trust anchor failed schema validation"
+cp "$SITE" "$SITE.before"
+jq '.repositories[0].trust.signer = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"' "$SITE" > "$SITE.tmp" && mv "$SITE.tmp" "$SITE"
+cp "$SITE" "$SITE.bad"
+if "$CREATE" --name testsite --config-dir "$C1" --force >/dev/null 2>&1; then
+    bad "an anchor with the wrong signer was accepted"
+else
+    ok "an anchor with the wrong signer refuses"
+fi
+cmp -s "$SITE" "$SITE.bad" && ok "…and site.json is left as it was" || bad "site.json changed on a refused anchor"
 
 echo ""
 echo "Results:${PASS} passed, ${FAIL} failed, ${SKIP} skipped"

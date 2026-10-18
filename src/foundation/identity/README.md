@@ -10,7 +10,7 @@ single sign-on across all modules.
 | Capability | Access from | How |
 |------------|-------------|-----|
 | Authentik SSO web UI (login + admin) | internet (via reverse proxy) | `https://identity.<domain>` |
-| Forward-auth gating for apps without native SSO (e.g. Jellyfin) | consumer modules | module declares `dependsOn: ["identity:accessControl"]` — wired automatically at its install |
+| Forward-auth gating for apps without native SSO | consumer modules | module declares `dependsOn: ["identity:accessControl"]` — wired automatically at its install; machine callers get through with a service account (below) |
 | OIDC provider for native-OIDC apps (e.g. Nextcloud) | consumer modules | module declares `dependsOn: ["identity:identity"]` — OAuth2/OpenID provider, app, group bindings and VM secrets wired automatically |
 | Role-based access (people reconciled by `identity-manager`) | admin (tappaas-cicd) | `identity-manager reconcile --apply`; also manageable in the Authentik admin UI |
 | The console's roles (ADR-034 D3): groups `installer` (Installer), `admin` (the `admin` role: Admin), `users` (read) | the console (`console.<domain>`) | created by the bootstrap; an existing site gets `installer` on update — see [USERS.md](./USERS.md#what-a-fresh-install-has) |
@@ -101,6 +101,65 @@ The Authentication and Access Control capabilities are realized by Authentik, wh
 provides the `identity` (OIDC) and `accessControl` (forward-auth) services (the
 `provides` in `identity.json`) consumed by other modules; the VM itself is
 provisioned, backed up and published by the foundation services it depends on.
+
+## Machine callers of a gated app
+
+A script, a monitoring check or another system cannot sign in through a browser.
+In front of an app gated by `identity:accessControl` it authenticates with a
+**service account**:
+
+```bash
+authentik-manager service-account-ensure <caller> --app <app-slug>
+```
+
+This creates the Authentik service account `<caller>` (or reuses it), binds it to
+the app — so the gate admits it, and no other app — and writes its credentials to
+`~/.tappaas-service-accounts/<caller>.json` (0600) on the mothership: `username`,
+`password` (an app password), `client_id` (the gate's), `token_url`. Hand that
+file's values to the caller, not to a log. `<app-slug>` is the gated application:
+`<module>`, or `<module>-gate` when the module also has an OIDC application.
+
+The caller fetches a token with the client-credentials grant and sends it with
+every request:
+
+```bash
+TOKEN=$(curl -s -d grant_type=client_credentials -d client_id=<client_id> \
+             -d username=<username> -d password=<password> \
+             -d scope="openid profile email ak_proxy" <token_url> | jq -r .access_token)
+curl -H "Authorization: Bearer ${TOKEN}" https://<app>.<domain>/api/...
+```
+
+- The token opens **only the app it was issued for**. The app password itself, sent
+  as `Authorization: Basic`, also passes — but it opens every gate its account is
+  bound to, so keep a service account to one app.
+- Caddy **removes the `Authorization` header** before the app: the app never sees
+  the caller's Authentik credential. An app that needs its own `Authorization`
+  header (its own API key) cannot sit behind the gate.
+- A wrong or expired credential gets a **302** to the login page, not a 401; fetch a
+  new token when it expires. A deleted account stops working within a minute.
+- Remove a caller with `authentik-manager user-delete <caller>`.
+
+A path whose callers cannot hold a credential at all — a webhook that signs its
+payload — is served without the gate by a `proxyAccess` rule with
+`identityGate: false`, which must say why in its `description` (network:proxy).
+
+## Ending app sessions when someone loses access
+
+Removing a person in Authentik — deleting them, disabling them, or taking them out
+of a group — stops their next sign-in. An app that issued its own session tokens
+(Jellyfin's apps and TVs) would keep honouring those. So after a reconcile that
+takes access from someone, `identity-manager` runs `revoke-sessions.sh <username>`
+in every deployed module that ships one, and says so:
+
+```
+Ended app sessions: jellyfin: jane
+```
+
+It ends the person's sessions in those apps whichever group they lost; if they
+still may use an app, they sign in again. A hook that fails is a warning, not a
+failed reconcile — Authentik has already changed — so run that module's script by
+hand. A change made directly in the Authentik admin UI, or with
+`authentik-manager user-delete`, does not run the hooks.
 
 ## What is not included
 

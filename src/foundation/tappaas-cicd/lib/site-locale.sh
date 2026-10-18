@@ -26,13 +26,20 @@
 #   site_locale_value <key> [default]   one field of .location
 #   site_locale_ntp <zone>              the NTP server for that zone, or ""
 #   site_locale_ntp_servers <zone>      all of the zone's NTP servers, in order
-#   render_site_nix <zone>              the NixOS fragment, on stdout
+#   render_site_nix <zone>              the NixOS fragment, on stdout — with the
+#                                       site's Nix signing key (ADR-033 D8)
 #   apply_site_locale_nixos <ip> <zone> install the fragment (the caller rebuilds)
 #   apply_site_locale_debian <ip> <zone> converge a running Debian guest or host
 #
 # No `set` here: a sourced library must not change its caller's shell options.
 
 _SL_CONFIG_DIR="${TAPPAAS_CONFIG:-${CONFIG_DIR:-/home/tappaas/config}}"
+# The site's Nix signing key travels in the same fragment (render_site_nix).
+if ! declare -F nix_site_key_public >/dev/null 2>&1 \
+    && [[ -f "$(dirname "${BASH_SOURCE[0]}")/nix-site-key.sh" ]]; then
+    # shellcheck source=nix-site-key.sh
+    . "$(dirname "${BASH_SOURCE[0]}")/nix-site-key.sh"
+fi
 _SL_SITE="${_SL_CONFIG_DIR}/site.json"
 
 # One field of .location, or the default when the site has never recorded it.
@@ -146,6 +153,20 @@ EOF
   services.timesyncd.extraConfig = "PollIntervalMaxSec=${SITE_NTP_GATEWAY_ONLY_MAX_POLL}";
 EOF
         fi
+    fi
+    # The mothership signs each system it builds for this guest with the site
+    # key and copies it signature-checked (ADR-033 D8). The baseline adds
+    # cache.nixos.org's key; the two lists merge. No key yet: nothing here,
+    # and update-os.sh copies unchecked until the guest has learnt one.
+    local sitekey=""
+    declare -F nix_site_key_public >/dev/null 2>&1 && sitekey="$(nix_site_key_public)"
+    if [[ -n "${sitekey}" ]]; then
+        cat <<EOF
+
+  # The mothership's Nix signing key (ADR-033 D8): systems it builds for this
+  # VM are copied here only with its signature.
+  nix.settings.trusted-public-keys = [ "${sitekey}" ];
+EOF
     fi
     printf '}\n'
 }

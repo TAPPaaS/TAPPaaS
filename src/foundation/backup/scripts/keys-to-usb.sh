@@ -9,9 +9,14 @@
 #
 #   1. you insert the stick; the node's USB disks are listed — never one that is
 #      mounted, swap, or part of a ZFS pool, LVM or RAID
-#   2. you pick it and confirm by typing its device name: it is ERASED
+#   2. you pick it and confirm by typing its device name. A stick this script
+#      wrote before (a FAT partition labelled TAPPAASKEYS holding
+#      tappaas-keys.tar.enc) is NOT erased: only the four files below are
+#      replaced, and anything else on it — an emergency signing key in
+#      kingdom/, say — stays. Any other stick is ERASED (--format: erase a key
+#      stick too)
 #   3. you choose a password (twice, 12 characters or more) — keep it apart from
-#      the stick
+#      the stick; on a reused stick the new password replaces the old one
 #   4. the stick gets one FAT32 partition labelled TAPPAASKEYS holding
 #        tappaas-keys.tar.enc        the keys, AES-256-CBC, key from the password
 #                                    by PBKDF2 (600 000 iterations, SHA-256)
@@ -19,13 +24,16 @@
 #        keys-from-usb.sh            the restore, in plain text — it must work
 #                                    when the mothership is the thing that is gone
 #        README.txt                  what this is, and the bare openssl command
-#   5. it is decrypted back from the stick and compared key by key, then ejected
+#   5. it is decrypted back from the stick and compared key by key, then ejected.
+#      The new keys are written beside the old ones and only replace them once
+#      they have read back correctly, so a failed rewrite leaves the old keys
+#      on the stick.
 #
 # The keys never touch a disk in the clear on the node: they travel over ssh in a
 # pipe into openssl (the mothership has none), and the password is passed as the
 # first line of that pipe — never on a command line, never in a file.
 #
-# Usage: keys-to-usb.sh [--node <node>]
+# Usage: keys-to-usb.sh [--node <node>] [--format]
 # Exit:  0 written and verified · 1 failed · 2 usage
 
 set -euo pipefail
@@ -34,9 +42,11 @@ HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source=keys-from-usb.sh disable=SC1091
 . "${HERE}/keys-from-usb.sh"
 
+FORMAT=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --node) USBK_NODE="${2:?--node needs a node name}"; shift 2 ;;
+        --format) FORMAT=1; shift ;;
         -h|--help) awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) usbk_say "unknown option: $1"; exit 2 ;;
     esac
@@ -94,9 +104,33 @@ if [[ ${#cands[@]} -eq 1 ]]; then pick=1
 else printf 'Which one? [1-%s] ' "${#cands[@]}" >&2; IFS= read -r pick || pick=""; fi
 [[ "${pick}" =~ ^[0-9]+$ && "${pick}" -ge 1 && "${pick}" -le ${#cands[@]} ]] || usbk_die "no stick chosen"
 IFS=$'\t' read -r DISK size desc <<<"${cands[$((pick - 1))]}"
+q="$(printf %q "${DISK}")"
 usbk_say ""
 usbk_say "${DISK}  $(usbk_human "${size}")  ${desc}"
-printf 'EVERYTHING on it will be ERASED. Type %s to continue: ' "$(basename "${DISK}")" >&2
+
+# A key stick written before: rewrite its keys, keep everything else on it.
+REUSE=0 KPART=""
+if [[ "${FORMAT}" -eq 0 ]]; then
+    KPART="$(usbk_key_partition "$(usbk_on "lsblk -J -l -o PATH,LABEL,TYPE,FSTYPE ${q}")")"
+fi
+if [[ -n "${KPART}" ]]; then
+    probe="$(usbk_on "$(usbk_probe_cmd "${KPART}")")" || probe=""
+    if grep -q '^USBK_KEYSTICK' <<<"${probe}"; then
+        REUSE=1
+        written="$(sed -n 's/^USBK_WRITTEN //p' <<<"${probe}")"
+        mapfile -t keep < <(sed -n 's/^USBK_KEEP //p' <<<"${probe}")
+        usbk_say "This is a TAPPaaS key stick${written:+ (${written})}."
+        usbk_say "Its backup keys will be REPLACED. Nothing else on it is touched; it holds:"
+        if [[ ${#keep[@]} -gt 0 ]]; then for f in "${keep[@]}"; do usbk_say "    ${f}"; done
+        else usbk_say "    (nothing else)"; fi
+        usbk_say "(To erase it instead: backup-manager key export --usb --format)"
+    fi
+fi
+if [[ "${REUSE}" -eq 1 ]]; then
+    printf 'Replace the keys on it? Type %s to continue: ' "$(basename "${DISK}")" >&2
+else
+    printf 'EVERYTHING on it will be ERASED. Type %s to continue: ' "$(basename "${DISK}")" >&2
+fi
 IFS= read -r confirm || confirm=""
 [[ "${confirm}" == "$(basename "${DISK}")" ]] || usbk_die "not confirmed — the stick was not touched"
 
@@ -113,9 +147,15 @@ for try in 1 2 3; do
 done
 PW="${pw1}"; unset pw1 pw2
 
-# ── format ──────────────────────────────────────────────────────────
+# ── format, or mount the key stick as it is ─────────────────────────
+if [[ "${REUSE}" -eq 1 ]]; then
+    usbk_say "Opening the key stick ${KPART} on ${USBK_NODE}..."
+    fmt="$(usbk_on "set -e
+        m=\$(mktemp -d /run/tappaas-keys.XXXXXX)
+        mount $(printf %q "${KPART}") \"\$m\" >&2
+        echo \"USBK_MOUNTED $(printf %q "${KPART}") \$m\"")" || usbk_die "mounting ${KPART} failed — the stick was not touched"
+else
 usbk_say "Formatting ${DISK} on ${USBK_NODE}..."
-q="$(printf %q "${DISK}")"
 # Every tool's chatter goes to stderr: only the marked last line is the answer.
 # (sfdisk on a real stick — an old hybrid-ISO one — printed "calling ioctl to
 # re-read partition table: Success" on stdout, which was read as the partition
@@ -130,16 +170,33 @@ fmt="$(usbk_on "set -e
     m=\$(mktemp -d /run/tappaas-keys.XXXXXX)
     mount \"\$p\" \"\$m\" >&2
     echo \"USBK_FORMATTED \$p \$m\"")" || usbk_die "formatting ${DISK} failed"
-read -r _ PART MNT < <(grep '^USBK_FORMATTED ' <<<"${fmt}" | tail -1)
+fi
+read -r _ PART MNT < <(grep -E '^USBK_(FORMATTED|MOUNTED) ' <<<"${fmt}" | tail -1)
 [[ "${PART}" == /dev/* && "${MNT}" == /run/tappaas-keys.* ]] \
-    || usbk_die "formatting ${DISK} did not report its partition and mount point (got: ${fmt})"
+    || usbk_die "preparing ${DISK} did not report its partition and mount point (got: ${fmt})"
 
 # ── write ───────────────────────────────────────────────────────────
 qm="$(printf %q "${MNT}")"
+# Beside the old keys first: they are replaced only once the new copy has read
+# back correctly (below), so a failure leaves a reused stick as it was.
 usbk_say "Encrypting ${NKEYS} key(s) onto the stick..."
 { printf '%s\n' "${PW}"; tar -C "${PLAIN}" -cf - "${USBK_KEYDIR}"; } \
-    | usbk_on_stdin "IFS= read -r pw; openssl enc -e ${USBK_CIPHER} -salt -pass fd:3 -out ${qm}/${USBK_BLOB} 3< <(printf %s \"\$pw\") && (cd ${qm} && sha256sum ${USBK_BLOB} > ${USBK_BLOB}.sha256)" \
-    || usbk_die "writing the encrypted keys failed"
+    | usbk_on_stdin "IFS= read -r pw; openssl enc -e ${USBK_CIPHER} -salt -pass fd:3 -out ${qm}/${USBK_BLOB}.new 3< <(printf %s \"\$pw\")" \
+    || { usbk_on "rm -f ${qm}/${USBK_BLOB}.new" || true; usbk_die "writing the encrypted keys failed$([[ "${REUSE}" -eq 1 ]] && echo " — the old keys on the stick are unchanged")"; }
+
+# ── verify: read the new copy back and compare every key ────────────
+usbk_say "Reading it back..."
+VERIFY="$(mktemp -d "${TMPDIR:-/tmp}/tappaas-keys-verify.XXXXXX")"
+printf '%s\n' "${PW}" | usbk_on_stdin "$(usbk_decrypt_cmd "${MNT}/${USBK_BLOB}.new")" | tar -C "${VERIFY}" -xf - \
+    || { usbk_on "rm -f ${qm}/${USBK_BLOB}.new" || true; usbk_die "the stick could not be read back — do not rely on it"; }
+unset PW
+for k in "${PLAIN}/${USBK_KEYDIR}"/*.key; do
+    cmp -s "${k}" "${VERIFY}/${USBK_KEYDIR}/$(basename "${k}")" \
+        || { usbk_on "rm -f ${qm}/${USBK_BLOB}.new" || true; usbk_die "$(basename "${k}") on the stick differs from the escrow — do not rely on it"; }
+done
+usbk_on "mv -f ${qm}/${USBK_BLOB}.new ${qm}/${USBK_BLOB} && (cd ${qm} && sha256sum ${USBK_BLOB} > ${USBK_BLOB}.sha256)" \
+    || usbk_die "could not put the new keys in place of the old ones"
+usbk_say "  ✓ all ${NKEYS} key(s) read back from the stick, identical to the escrow"
 usbk_on_stdin "cat > ${qm}/keys-from-usb.sh" < "${HERE}/keys-from-usb.sh"
 usbk_on_stdin "cat > ${qm}/README.txt" <<README
 TAPPaaS backup encryption keys — written $(date '+%Y-%m-%d %H:%M') from $(hostname -s)
@@ -161,20 +218,13 @@ By hand (any machine with openssl and tar):
 
 Keep this stick OFF-SITE, and a second one like it somewhere else: one stick
 is one point of failure. Rewrite both whenever a key changes.
+
+Rewriting it (backup-manager key export --usb, this stick in a node) replaces
+only these four files: tappaas-keys.tar.enc, its .sha256, keys-from-usb.sh and
+README.txt. Anything else you keep on it — an emergency signing key in
+kingdom/, say — is left as it is.
 README
 usbk_on "sync"
-
-# ── verify: read it back and compare every key ──────────────────────
-usbk_say "Reading it back..."
-VERIFY="$(mktemp -d "${TMPDIR:-/tmp}/tappaas-keys-verify.XXXXXX")"
-printf '%s\n' "${PW}" | usbk_on_stdin "$(usbk_decrypt_cmd "${MNT}/${USBK_BLOB}")" | tar -C "${VERIFY}" -xf - \
-    || usbk_die "the stick could not be read back — do not rely on it"
-unset PW
-for k in "${PLAIN}/${USBK_KEYDIR}"/*.key; do
-    cmp -s "${k}" "${VERIFY}/${USBK_KEYDIR}/$(basename "${k}")" \
-        || usbk_die "$(basename "${k}") on the stick differs from the escrow — do not rely on it"
-done
-usbk_say "  ✓ all ${NKEYS} key(s) read back from the stick, identical to the escrow"
 
 # ── eject ───────────────────────────────────────────────────────────
 usbk_on "umount ${qm} && rmdir ${qm}" || usbk_die "could not unmount the stick"

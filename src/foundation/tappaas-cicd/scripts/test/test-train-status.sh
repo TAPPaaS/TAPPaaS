@@ -833,6 +833,11 @@ git -C "${TMP}/w" ls-remote --tags "${TMP}/origin" | grep -c 'refs/tags/v2.2$' >
 _msg="$(git -C "${TMP}/w" tag -l --format='%(contents)' v2.2)"
 [[ "${_msg}" == *"TAPPaaS 2.2"* && "${_msg}" == *"Cut into staging 2026-10-11"* && "${_msg}" == *"Previous:   v2.1"* ]] \
     && ok "the tag says when it was cut and what came before" || bad "tag message: ${_msg}"
+( . "${HERE}/../../lib/verify-repo.sh"
+  [[ "$(verify_tag_field "${TMP}/w" v2.2 tree-sha256)" == "$(verify_tree_sha256 "${TMP}/w" 'v2.2^{commit}')" ]] ) \
+    && ok "…and carries the tree's SHA-256 (ADR-033 D3)" || bad "no or wrong tree-sha256: ${_msg}"
+[[ "$(git -C "${TMP}/w" cat-file tag v2.2)" != *"SIGNATURE"* ]] \
+    && ok "…unsigned, as the repository lists no signers" || bad "v2.2 signed without signers"
 [[ "$(git -C "${TMP}/w" rev-parse origin/stable)" == "$(git -C "${TMP}/w" rev-parse 'v2.1^{commit}')" ]] \
     && ok "production now runs 2.1" || bad "production is not 2.1"
 _r="$(releases_on_main)"
@@ -1071,6 +1076,37 @@ if [[ -r "${_CJ}" ]]; then
 else
     bad "channels.json missing from the repository root (${_CJ})"
 fi
+
+echo "── signed release tags (ADR-033 D1) ──"
+make_train 3 2
+git -C "${TMP}/w" tag -a v2.0 -m "TAPPaaS 2.0" origin/stable
+git -C "${TMP}/w" tag -a v2.1 -m "TAPPaaS 2.1" origin/staging; git -C "${TMP}/w" push -q origin v2.0 v2.1
+FAKE_NOW=1790000000 run init
+ssh-keygen -q -t ed25519 -N '' -C rm -f "${TMP}/rm" </dev/null
+git -C "${TMP}/w" checkout -q -b fix2 origin/staging
+mkdir -p "${TMP}/w/.tappaas"
+printf 'rm@x namespaces="git" %s\n' "$(cut -d' ' -f1-2 "${TMP}/rm.pub")" > "${TMP}/w/.tappaas/allowed_signers"
+echo fixed > "${TMP}/w/fix"; git -C "${TMP}/w" add -A; git -C "${TMP}/w" commit -qm "fix: x, and the signers"
+_fix="$(git -C "${TMP}/w" rev-parse HEAD)"
+git -C "${TMP}/w" checkout -q main; git -C "${TMP}/w" merge -q --no-edit "${_fix}"
+git -C "${TMP}/w" push -q origin main; git -C "${TMP}/w" fetch -q origin
+FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service down: x"
+[[ "${RC}" -ne 0 && "${OUT}" == *"must be signed"* ]] && ok "a repository with signers refuses an unsigned tag" || bad "no refusal without a key: ${OUT}"
+[[ -z "$(git -C "${TMP}/w" tag -l v2.1.1)" ]] && ok "…and cuts nothing" || bad "an unsigned v2.1.1 was cut"
+[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" != "${_fix}" ]] && ok "…before staging moves" || bad "staging moved without a tag"
+ssh-keygen -q -t ed25519 -N '' -C other -f "${TMP}/other" </dev/null
+git -C "${TMP}/w" config user.signingkey "${TMP}/other"
+FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service down: x"
+[[ "${RC}" -ne 0 && "${OUT}" == *"does not list it as valid today"* ]] && ok "a key the repository does not list (or lists as expired or revoked) is refused" || bad "unlisted key accepted: ${OUT}"
+[[ "$(git -C "${TMP}/w" rev-parse origin/staging)" != "${_fix}" ]] && ok "…before staging moves" || bad "staging moved with an unusable key"
+git -C "${TMP}/w" config user.signingkey "${TMP}/rm"
+FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service down: x"
+[[ "${RC}" -eq 0 ]] && ok "with a key configured the patch runs" || bad "signed patch failed: ${OUT}"
+( . "${HERE}/../../lib/verify-repo.sh"
+  verify_target "${TMP}/w" "${_fix}" "${_fix}" >/dev/null && [[ "${VERIFY_TAG}" == v2.1.1 ]] ) \
+    && ok "v2.1.1 verifies: signed by a listed key, tree hash matches" || bad "v2.1.1 does not verify"
+git -C "${TMP}/w" ls-remote --tags "${TMP}/origin" | grep -q 'refs/tags/v2.1.1$' && ok "…and is published" || bad "v2.1.1 not pushed"
+git -C "${TMP}/w" config --unset user.signingkey
 
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"
 [[ "${FAIL}" -eq 0 ]]

@@ -401,6 +401,9 @@ class CaddyManager:
                 "description": domain.description,
                 "DnsChallenge": "1" if domain.dns_challenge else "0",
                 "CustomCertificate": domain.custom_certificate,
+                # One access log per published name: CrowdSec on the firewall
+                # reads them (#851).
+                "AccessLog": "1",
             }
         }
         return self._api_post("ReverseProxy", "addReverseProxy", data)
@@ -422,6 +425,7 @@ class CaddyManager:
                 "description": domain.description,
                 "DnsChallenge": "1" if domain.dns_challenge else "0",
                 "CustomCertificate": domain.custom_certificate,
+                "AccessLog": "1",
             }
         }
         return self._api_post("ReverseProxy", "setReverseProxy", data, url_params=[uuid])
@@ -491,14 +495,63 @@ class CaddyManager:
                            "HeaderValue": hvalue, "HeaderReplace": "", "description": description}}
         return self._api_post("ReverseProxy", "addHeader", data).get("uuid", "")
 
+    # The header a gated handle carries (ADR-032 D1): Caddy removes the caller's
+    # Authorization header before the app, so an app behind the Authentik gate
+    # never sees the Authentik credential a machine caller sent to pass it. Only
+    # the proxied request loses it — forward_auth still reads it.
+    STRIP_AUTHORIZATION = "tappaas-strip-authorization"
+
+    def _strip_authorization_header(self) -> str:
+        return self._get_or_create_header("header_up", "-Authorization", "", self.STRIP_AUTHORIZATION)
+
     def _handle_header_field(self, handler: "CaddyHandler") -> str:
-        """Comma-separated header-uuid list for the handle's `header` field.
-        Currently only the optional host_header (`header_up Host <value>`)."""
-        if not handler.host_header:
-            return ""
-        return self._get_or_create_header(
-            "header_up", "Host", handler.host_header,
-            f"tappaas-host-header:{handler.host_header}")
+        """Comma-separated header-uuid list for the handle's `header` field: the
+        optional host_header (`header_up Host <value>`), and on a gated handle
+        (forward_auth) `header_up -Authorization`."""
+        parts = []
+        if handler.host_header:
+            parts.append(self._get_or_create_header(
+                "header_up", "Host", handler.host_header,
+                f"tappaas-host-header:{handler.host_header}"))
+        if handler.forward_auth:
+            parts.append(self._strip_authorization_header())
+        return ",".join(p for p in parts if p)
+
+    def _handle_header_uuids(self, uuid: str) -> list[str]:
+        """The header uuids a handle carries now (getHandle returns the field as
+        an option dict, {uuid: {value, selected}})."""
+        result = self.client.run_module("raw", params={
+            "module": "caddy", "controller": "ReverseProxy", "command": "getHandle",
+            "action": "get", "params": [uuid]})
+        field = result.get("result", {}).get("response", {}).get("handle", {}).get("header", {})
+        if isinstance(field, dict):
+            return [k for k, v in field.items() if isinstance(v, dict) and v.get("selected") in (1, "1", True)]
+        return [x for x in str(field or "").split(",") if x]
+
+    def set_gate(self, on: bool, descriptions: list[str], prefix: str = "") -> int:
+        """Turn Authentik forward-auth on or off on the handles named exactly in
+        `descriptions`, or (with `prefix`) on the handle `prefix` and every
+        `prefix <path>` handle. The handle's strip-Authorization header follows
+        the gate; its other headers are kept. Returns how many handles changed.
+        The caller reconfigures."""
+        targets = [h for h in self.list_handlers()
+                   if h.description in descriptions
+                   or (prefix and (h.description == prefix or h.description.startswith(prefix + " ")))]
+        if not targets:
+            return 0
+        strip = self._strip_authorization_header()
+        changed = 0
+        for h in targets:
+            headers = [u for u in self._handle_header_uuids(h.uuid) if u != strip]
+            if on:
+                headers.append(strip)
+            resp = self._api_post("ReverseProxy", "setHandle",
+                                  {"handle": {"ForwardAuth": "1" if on else "0", "header": ",".join(headers)}},
+                                  url_params=[h.uuid])
+            if resp.get("result") not in ("saved", "ok"):
+                raise RuntimeError(f"setHandle {h.description}: {resp}")
+            changed += 1
+        return changed
 
     def add_handler(self, handler: CaddyHandler) -> dict:
         """Add a new reverse proxy handler.

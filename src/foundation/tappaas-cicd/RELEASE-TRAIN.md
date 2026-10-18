@@ -215,6 +215,19 @@ A site on `main` between boundaries shows as `2.2+14`: fourteen commits past 2.2
   It changes several times within one run, so it is not committed. It is written to be read:
   dates, and each channel with its version and the day it last moved.
 
+## Signing releases (ADR-033)
+
+Every release tag carries `tree-sha256:` and `signers-at:`. Once
+[`.tappaas/allowed_signers`](../../../.tappaas/allowed_signers) lists a key, every tag the train
+cuts **must be signed**: `boundary` and `patch` check for a signing key before any channel moves,
+refuse without one, and check the signature against the listed keys before publishing the tag.
+Staging and production sites then move only to a tag that verifies. Image releases are signed
+separately (`release/sign-image-release.sh`).
+
+Keys, enrolment, signing a boundary from your vault, image signing, and what to do when a key is
+lost or stolen: [SIGNING.md](SIGNING.md). What a site checks and reports:
+[VERIFIED-UPDATES.md](VERIFIED-UPDATES.md).
+
 ## One pin for the estate
 
 Every TAPPaaS-managed NixOS system — the mothership and all its guests — is built from the single

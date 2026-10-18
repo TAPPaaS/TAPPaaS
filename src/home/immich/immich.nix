@@ -65,6 +65,26 @@ let
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
+
+  # jellyfin-ffmpeg 8.1.3-1 (#807): FFmpeg 8.1.3 fixes the decoder and demuxer
+  # flaws open in 8.1.2-5 (VobSub, ADX, TDSC, TY, MACE, DVB subtitles, CFHD,
+  # RTP/ASF, the HLS playlist loop). nixpkgs has it (#573402, via staging-next),
+  # the nixos-unstable channel not yet: until it does, the pinned package with
+  # the new source. jellyfin's own patch series comes from that source
+  # (postPatch). Drop this when unstableSrc carries 8.1.3 or later.
+  jellyfinFfmpeg = unstable.jellyfin-ffmpeg.overrideAttrs (old: rec {
+    version = "8.1.3-1";
+    src = unstable.fetchFromGitHub {
+      owner = "jellyfin";
+      repo  = "jellyfin-ffmpeg";
+      tag   = "v${version}";
+      hash  = "sha256-sxJyUaB0rqpVzd6OVRC6kPVWyBdgFUzvyqwLCkMKRgM=";
+    };
+    # The pinned ffmpeg adds an 8.1.2 fix that 8.1.3 already contains (the
+    # swscale loongarch underflow); applied again it fails.
+    patches = builtins.filter (p: !(unstable.lib.hasInfix "swscale-loongarch-fix-buffer-underflow" (toString p)))
+      (old.patches or [ ]);
+  });
 in
 {
   disabledModules = [ "services/web-apps/immich.nix" ];
@@ -110,7 +130,7 @@ in
   # -- Immich photo/video server ----------------------------------------------
   services.immich = {
     enable = true;
-    package = unstable.immich;   # Immich 3 -- see unstableSrc above
+    package = unstable.immich.override { jellyfin-ffmpeg = jellyfinFfmpeg; };   # Immich 3 -- see unstableSrc above
     host = "::";             # every address, both families; "localhost" is unreachable by Caddy
     port = 2283;
     mediaLocation = "/var/lib/immich";  # on the root filesystem (one disk)

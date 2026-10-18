@@ -459,4 +459,17 @@ else
     warn "  ${_ntp_php} missing — firewall ntpd not converged"
 fi
 
+# ── CrowdSec (#851) ─────────────────────────────────────────────────
+#
+# Bans a client at the firewall when the published names' access logs show it
+# guessing sign-ins or probing for known exploits — local only, nothing about
+# the site's traffic leaves it. Converged on every update (idempotent); a
+# failure warns and leaves the rest of the firewall update standing.
+debug "Converging CrowdSec on the firewall..."
+if bash "${SCRIPT_DIR}/scripts/crowdsec-converge.sh" 2>&1 | relog_steps; then
+    debug "  ${GN}✓${CL} CrowdSec converged"
+else
+    warn "  CrowdSec did not converge — see the lines above; the firewall update itself is complete"
+fi
+
 info "${GN}✓${CL} Firewall update completed"

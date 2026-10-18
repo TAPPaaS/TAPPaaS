@@ -156,13 +156,13 @@ Zones (and the literal 'internet') permitted to reach this service through the r
 
 ### `proxyAccess`
 
-Path exceptions to the route's proxyAllowedZones: a list of rules {paths, zones, identityGate}. A request whose path matches a rule gets that rule's zones; every other path keeps the route's. paths are Caddy path matchers starting with / (a trailing * is a prefix match); zones takes the same values as proxyAllowedZones. identityGate false serves the rule's paths without the Authentik gate, for machine callers that cannot log in (default: as the route). Allowed on the module (primary route) and on each proxyRoutes entry. With proxyAllowedZones ['none'] a route serves only its rules' paths.
+Path exceptions to the route's proxyAllowedZones: a list of rules {paths, zones, identityGate}. A request whose path matches a rule gets that rule's zones; every other path keeps the route's. paths are Caddy path matchers starting with / (a trailing * is a prefix match); zones takes the same values as proxyAllowedZones. identityGate false serves the rule's paths without the Authentik gate, for callers that cannot hold a credential at all — a webhook signed in its payload — and then needs a description saying who calls and why (a machine caller that can send a credential uses a service account through the gate instead, ADR-032 D1). Default: as the route. On a gated route Caddy removes the caller's Authorization header before the app. Allowed on the module (primary route) and on each proxyRoutes entry. With proxyAllowedZones ['none'] a route serves only its rules' paths.
 
 | Attribute | Value |
 |---|---|
 | Type | `array` |
 | Default | *(none)* |
-| Example | `[{"paths": ["/api/webhook/*"], "zones": ["internet"], "identityGate": false}]` |
+| Example | `[{"paths": ["/api/webhook/*"], "zones": ["internet"], "identityGate": false, "description": "Home Assistant Cloud webhooks: authenticated by the secret ID in the URL"}]` |
 | Required by | *(none)* |
 | Used by | `network:proxy` |
 | Change class | `in-place` |

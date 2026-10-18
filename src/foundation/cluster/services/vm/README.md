@@ -28,7 +28,7 @@ entirely, which is why it normalizes as `optional`.
 
 ## Fields
 
-`cluster:vm` owns **29** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+`cluster:vm` owns **30** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
 
 ### `vmname`
 
@@ -555,6 +555,20 @@ URL or local path where the image file is located. For images already on the Pro
 | Apply mode | `none` |
 
 **About the field.** For apt, if present, names an additional package repository to add
+
+### `imageSha256`
+
+SHA-256 of the file downloaded from imageLocation. A download that does not match is removed and not imported. Written by release/bump-version.sh for TAPPaaS-built images; for any other image, the hash its publisher states. Without it the download is used unchecked, with a warning.
+
+| Attribute | Value |
+|---|---|
+| Type | `string` |
+| Format | `^(sha256:)?[0-9a-fA-F]{64}$` |
+| Example | `4e522d9011118f0bbeaea0df58ff517a45c71e6138a22af32a2151749ea87083` |
+| Required by | *(none)* |
+| Used by | `cluster:vm` |
+| Change class | `immutable` |
+| Apply mode | `none` |
 
 ### `cloudInit`
 

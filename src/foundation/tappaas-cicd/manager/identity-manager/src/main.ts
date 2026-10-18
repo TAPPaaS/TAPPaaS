@@ -24,6 +24,7 @@ import {
 import { CliPrimitiveClient, AuthentikUnreachable } from "./primitives";
 import { childOrgs, deepGroup, deepOrg, groupsOfOrg, orgRoots, usersOfGroup } from "./queries";
 import { applyPlan, computePlan, pushEntityDeletion, snapshot } from "./reconcile";
+import { revokeSessions, sessionRevokers, usersLosingAccess } from "./sessions";
 import { PeopleModel, PrimitiveClient } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, DieError, GN, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
@@ -340,11 +341,26 @@ function cmdSync(opts: Opts, client: PrimitiveClient): void {
     return;
   }
   const res = applyPlan(client, plan);
+  endSessions(usersLosingAccess(plan.actions));
   if (res.failures.length > 0) {
     for (const f of res.failures) warn(`failed ${f.target} — ${f.message}`);
     die(`applied ${res.applied} of ${res.total} action(s); ${res.failures.length} failed`);
   }
   info(`${GN}Applied ${res.applied} action(s).${CL}`);
+}
+
+// End the sessions of people who just lost access, in every app that keeps its
+// own (ADR-032 P4). Authentik is already changed, so a hook that fails is a
+// warning to act on, not a failed reconcile.
+function endSessions(users: string[]): void {
+  if (users.length === 0) return;
+  const revokers = sessionRevokers();
+  if (revokers.length === 0) return;
+  const r = revokeSessions(users, revokers);
+  if (r.done.length > 0) info(`Ended app sessions: ${r.done.join(", ")}`);
+  for (const f of r.failed) {
+    warn(`could not end the app sessions of ${f} — run that module's revoke-sessions.sh by hand`);
+  }
 }
 
 // ── read-only CRUD: list / get over the JSON config ───────────────────
@@ -405,6 +421,7 @@ function pushAfterWrite(
     if (push) {
       const res = pushEntityDeletion(client, push.kind, push.name);
       if (res.pushed) info(`Removed ${push.kind} '${push.name}' from the identity service.`);
+      if (res.pushed && push.kind === "user") endSessions([push.name]);
       else info(`Not removed from the identity service: ${res.reason}.`);
     }
     cmdSync({ ...opts, apply: true, dryRun: false }, client);

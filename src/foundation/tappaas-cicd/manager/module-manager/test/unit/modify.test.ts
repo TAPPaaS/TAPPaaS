@@ -193,6 +193,21 @@ try {
     const none = preGateSet(configDir, "demo", [parseSetArg("description=x")!], sch, null);
     check(none.ok && none.warnings.some((w) => w.includes("schemas/fields.json not found")),
       "no module manifest reachable: accepted with a warning, as before");
+
+    // zone0 as the real schema declares it: 'general' (a machine records it)
+    // AND cluster:vm / cluster:lxc (a guest applies it). Measured on hrossen
+    // 2026-10-17: `modify nomad --set zone0=dmz` was refused because the gate
+    // took any field naming 'general' as module-level and asked
+    // schemas/fields.json, which does not classify zone0. A module that
+    // declares the owning service is classified by that service.
+    const real = { ...sch, zone0: { usedBy: ["general", "cluster:vm", "cluster:lxc"] } };
+    const z = preGateSet(configDir, "demo", [parseSetArg("zone0=dmz")!], real, MM);
+    check(z.ok && z.plan[0].coordinate === "cluster:vm" && z.plan[0].class === "in-place-reboot",
+      "zone0 (general + cluster:vm) on a VM is classified by cluster:vm as in-place-reboot, not refused");
+    writeFileSync(join(configDir, "rack.json"), JSON.stringify({ vmname: "rack", kind: "machine", dependsOn: [] }));
+    const zm = preGateSet(configDir, "rack", [parseSetArg("zone0=dmz")!], real, { ...MM, zone0: { class: "in-place" } });
+    check(zm.ok && zm.plan[0].coordinate === "" && zm.plan[0].class === "config-only",
+      "zone0 on a machine (no cluster:vm) takes the module-level path: recorded, config-only");
   }
 
   // ── reject the WHOLE command (Resolved Question 5) ───────────────────
@@ -335,6 +350,22 @@ try {
       run(["modify", "demo", "--set", "cores=8", "--set", "vmid=250", "--config-dir", configDir], client);
       check(wrote() === "", "a mixed --set writes NOTHING, not even the acceptable field");
       check(client.log.length === 0, "…and does not converge");
+    }
+
+    // A zone0 change hands the OLD zone to the update's pre-update gate: the
+    // write replaces it, but the guest stays there until the converge moves it
+    // (hrossen 2026-10-17: the gate waited 300 s for the new name and failed).
+    {
+      writeFileSync(join(configDir, "mover.json"),
+        JSON.stringify({ vmname: "mover", vmid: 301, kind: "module", zone0: "rossen", dependsOn: ["cluster:vm"] }));
+      delete process.env.TAPPAAS_PRE_GATE_ZONE0;
+      const client = new FakeModuleClient();
+      const rc = run(["modify", "mover", "--set", "zone0=dmz", "--config-dir", configDir], client);
+      check(rc === 0 && process.env.TAPPAAS_PRE_GATE_ZONE0 === "rossen",
+        "modify --set zone0=dmz hands the old zone (rossen) to the pre-update gate");
+      delete process.env.TAPPAAS_PRE_GATE_ZONE0;
+      run(["modify", "mover", "--set", "cores=4", "--config-dir", configDir], client);
+      check(process.env.TAPPAAS_PRE_GATE_ZONE0 === undefined, "…and a change that moves nothing hands over no zone");
     }
 
     // --force is forwarded to the converge as disruption authorization (D8).

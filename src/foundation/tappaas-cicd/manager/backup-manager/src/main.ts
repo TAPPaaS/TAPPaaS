@@ -165,6 +165,7 @@ export const HELP: HelpSpec = {
       options: [
         ["--usb", "key export|import: a USB stick in a node — encrypted with a password, verified, ejected."],
         ["--node N", "key export|import --usb: the node holding the stick (default tappaas1)."],
+        ["--format", "key export --usb: erase the stick even if it is a key stick written before (default: rewrite only its keys, keep everything else on it)."],
         ["--file DIR", "key export|import: a directory — the keys UNENCRYPTED; guard what holds them."],
       ],
     },
@@ -1217,7 +1218,7 @@ export function run(argv: string[], client: Client): number {
         const target = keyTarget(sub as "export" | "import", opts.rest.slice(1));
         if ("error" in target) die(target.error);
         const t = target as KeyTarget;
-        if (t.kind === "usb") return keysUsb(sub as "export" | "import", t.node, opts.configDir);
+        if (t.kind === "usb") return keysUsb(sub as "export" | "import", t.node, opts.configDir, undefined, t.format);
         if (sub === "export") client.keyExport(t.dir);
         else client.keyImport(t.dir);
         return 0;

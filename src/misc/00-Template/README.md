@@ -158,6 +158,18 @@ module that is still starting and calls it broken (#468, #700).
 - No stub here on purpose: a `ready.sh` that always exits 0 would replace the
   default wait with nothing
 
+### revoke-sessions.sh (optional)
+
+- For an app that keeps **its own sessions** — tokens it issued to its apps or
+  browsers, which outlive a sign-in at Authentik (Jellyfin's apps and TVs)
+- `identity-manager` runs it after a reconcile takes access from a person
+  (deleted, disabled, removed from a group), from the module directory on the
+  mothership: `revoke-sessions.sh <username>`; it ends that person's sessions
+  in the app. Exit 0 also when the person has no account there
+- An app whose sessions are Authentik's own (forward-auth) or short-lived OIDC
+  tokens needs none
+- Example: `src/home/jellyfin/revoke-sessions.sh`
+
 ### myModule.nix
 
 NixOS configuration file for NixOS-based modules.

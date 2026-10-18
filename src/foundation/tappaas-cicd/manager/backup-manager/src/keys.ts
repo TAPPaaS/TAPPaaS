@@ -5,6 +5,8 @@
 //   --usb          a USB stick in a node: encrypted with a password, verified by reading
 //                  it back, ejected (export); or decrypted and imported (import). The
 //                  mothership is a VM with no USB port, so the stick goes into a node.
+//                  A stick written before keeps everything but its keys; --format
+//                  erases it instead (export only).
 //
 // The USB path is the backup module's own scripts (scripts/keys-to-usb.sh,
 // scripts/keys-from-usb.sh) — an implementation detail: the operator's command is
@@ -18,7 +20,7 @@ import { moduleScriptDir } from "./restore";
 
 export type KeyTarget =
   | { kind: "file"; dir: string }
-  | { kind: "usb"; node: string | null };
+  | { kind: "usb"; node: string | null; format: boolean };
 
 // keyTarget — what `key export|import <args>` asks for. Pure.
 // A bare directory (`key export <dir>`, the original form) is --file.
@@ -26,10 +28,12 @@ export function keyTarget(verb: "export" | "import", args: string[]): KeyTarget 
   let file: string | null = null;
   let usb = false;
   let node: string | null = null;
+  let format = false;
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--usb") usb = true;
+    else if (a === "--format") format = true;
     else if (a === "--file") {
       const v = args[++i];
       if (!v || v.startsWith("--")) return { error: `key ${verb} --file: a directory is required` };
@@ -50,18 +54,20 @@ export function keyTarget(verb: "export" | "import", args: string[]): KeyTarget 
     return { error: `key ${verb}: say where — --usb (a stick in a node, encrypted) or --file <dir>` };
   }
   if (node !== null && !usb) return { error: `key ${verb}: --node goes with --usb (the node holding the stick)` };
-  return usb ? { kind: "usb", node } : { kind: "file", dir: file as string };
+  if (format && (!usb || verb !== "export")) return { error: `key ${verb}: --format goes with export --usb (erase the stick instead of rewriting its keys)` };
+  return usb ? { kind: "usb", node, format } : { kind: "file", dir: file as string };
 }
 
 // keysUsb — run the module's USB script, on this terminal. Returns its exit code.
 export function keysUsb(
   verb: "export" | "import", node: string | null, configDir?: string,
   run: (bin: string, args: string[]) => number = stream,
+  format = false,
 ): number {
   const script = join(moduleScriptDir(configDir), "scripts", verb === "export" ? "keys-to-usb.sh" : "keys-from-usb.sh");
   if (!existsSync(script)) {
     console.error(`key ${verb} --usb: ${script} not found — check config/backup.json .moduleSource`);
     return 1;
   }
-  return run(script, node ? ["--node", node] : []);
+  return run(script, [...(node ? ["--node", node] : []), ...(format ? ["--format"] : [])]);
 }

@@ -21,8 +21,9 @@
 #       hard failure: a broken component must not block the fleet update (the
 #       Test-11 smoke slice is what surfaces it). Deliberately not silent
 #       either — #467 ran for weeks on exactly that silence.
-#   12  a repository did not sync (failed, or unpushed commits block it,
-#       #433) and holds no pull hold. Relink and builds still ran. The unit's
+#   12  a repository did not sync (failed, unpushed commits block it (#433),
+#       or its new tip is not a verified release (ADR-033 D6)) and holds no
+#       pull hold. Relink and builds still ran. The unit's
 #       prepare step (ADR-017 D3) treats it as fatal; older callers read it as
 #       a failure and continue, as they did before.
 #   1   hard failure — the checkout itself is not usable.
@@ -83,6 +84,9 @@ else
 _sync_failed="$(mktemp)"
 trap 'rm -f "${_sync_failed}"' EXIT
 REPOS_JSON="$(get_repositories)"
+# ADR-033 D9: a site may refuse repositories that sign nothing (default: not required).
+REPO_SYNC_REQUIRE_SIGNED="$(jq -r '.requireSigned // false' "${CONFIG_DIR:-/home/tappaas/config}/site.json" 2>/dev/null || echo false)"
+export REPO_SYNC_REQUIRE_SIGNED
 REPO_COUNT=$(echo "$REPOS_JSON" | jq 'length' 2>/dev/null || echo "0")
 if [ "$REPO_COUNT" -gt 0 ]; then
   info "Pulling latest changes from ${REPO_COUNT} repository/repositories..."
@@ -114,9 +118,11 @@ if [ "$REPO_COUNT" -gt 0 ]; then
         # `|| _rc=$?` (not a bare call) — set -e would abort the subshell on rc 2
         # before we could tell "blocked" apart from "failed".
         _rc=0
-        reconcile_repo_checkout "$REPO_PATH" "$REPO_URL" "$REPO_BRANCH" || _rc=$?
+        reconcile_repo_checkout "$REPO_PATH" "$REPO_URL" "$REPO_BRANCH" 0 "$REPO_NAME" || _rc=$?
         case "${_rc}" in
           0) ;;
+          3) error "${REPO_NAME}: NOT synced — the new tip of ${REPO_BRANCH} is not a verified release (see above); running on the last verified one"
+             echo "${REPO_NAME}" >> "${_sync_failed}" ;;
           2) error "${REPO_NAME}: NOT synced — unpushed commits block the origin change (see above). Push them, or run: site-manager repository modify ${REPO_NAME} --url ${REPO_URL} --force"
              echo "${REPO_NAME}" >> "${_sync_failed}" ;;
           *) warn "Failed to sync ${REPO_NAME}"
@@ -226,6 +232,15 @@ if [ -f scripts/compose-fields.sh ] && [ -d "${HOLD_DIR_CONFIG}" ]; then
     rm -f "${_cf_tmp}"
     warn "  could not compose module-fields.json — leaving the existing one"
   fi
+fi
+
+# ── 5. Record what each repository runs, signed or not (ADR-033 D10) ──
+# After the sync, so the evidence describes the code that now runs. Read-only;
+# mails the owner only when a repository's status changed. Never fatal here:
+# the gate that refuses an unverified move is in the sync, above.
+if [ -f manager/health-manager/check-repo-signatures.sh ] && [ -d "${HOLD_DIR_CONFIG}" ]; then
+  TAPPAAS_CONFIG_DIR="${HOLD_DIR_CONFIG}" bash manager/health-manager/check-repo-signatures.sh 2>&1 \
+    | while IFS= read -r _l; do debug "  ${_l}"; done || true
 fi
 
 # Report what actually happened. A failed component build stays non-fatal (see

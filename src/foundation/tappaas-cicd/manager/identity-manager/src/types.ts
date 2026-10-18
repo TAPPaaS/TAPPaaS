@@ -97,6 +97,10 @@ export interface Action {
   kind: ActionKind;
   // Human-readable target description for the plan summary.
   target: string;
+  // The user this action takes access FROM (delete-user, disable-user,
+  // remove-member): their sessions in apps that keep their own are ended after
+  // the plan is applied (ADR-032 P4, sessions.ts).
+  losesAccess?: string;
   // Primitive invocation, applied via the client.
   apply(client: PrimitiveClient): void;
 }

@@ -38,6 +38,25 @@ ck "the partition labelled TAPPAASKEYS" "/dev/sdb1" \
    "$(usbk_labelled '{"blockdevices":[{"path":"/dev/sdb","label":null,"type":"disk"},{"path":"/dev/sdb1","label":"TAPPAASKEYS","type":"part"},{"path":"/dev/sdc1","label":"PHOTOS","type":"part"}]}')"
 ck "the label fits FAT (11 characters)" yes "$([[ ${#USBK_LABEL} -le 11 ]] && echo yes || echo no)"
 
+echo "── a key stick written before is rewritten, not erased ──"
+KS='{"blockdevices":[{"path":"/dev/sdb","label":null,"type":"disk","fstype":null},{"path":"/dev/sdb1","label":"TAPPAASKEYS","type":"part","fstype":"vfat"}]}'
+ck "a FAT partition labelled TAPPAASKEYS is a key stick" "/dev/sdb1" "$(usbk_key_partition "${KS}")"
+ck "the same label on another file system is not" "" \
+   "$(usbk_key_partition '{"blockdevices":[{"path":"/dev/sdb1","label":"TAPPAASKEYS","type":"part","fstype":"ext4"}]}')"
+ck "an unlabelled stick is not" "" \
+   "$(usbk_key_partition '{"blockdevices":[{"path":"/dev/sdb1","label":"PHOTOS","type":"part","fstype":"vfat"}]}')"
+P="$(usbk_probe_cmd /dev/sdb1)"
+ck "the probe mounts it read-only" yes "$([[ "${P}" == *"mount -o ro /dev/sdb1"* ]] && echo yes || echo no)"
+ck "…lists everything but the four files the rewrite replaces" yes \
+   "$([[ "${P}" == *"tappaas-keys.tar.enc|tappaas-keys.tar.enc.sha256|tappaas-keys.tar.enc.new|keys-from-usb.sh|README.txt) continue"* ]] && echo yes || echo no)"
+ck "…and unmounts it again" yes "$([[ "${P}" == *'umount "$m"; rmdir "$m"' ]] && echo yes || echo no)"
+ck "a key stick is only reused when the blob is on it, and never with --format" yes \
+   "$(grep -q "grep -q '^USBK_KEYSTICK'" "${TO}" && grep -q 'if \[\[ "${FORMAT}" -eq 0 \]\]; then' "${TO}" && echo yes || echo no)"
+ck "reusing it asks for the device name too, and says what is kept" yes \
+   "$(grep -q 'Replace the keys on it? Type %s to continue' "${TO}" && grep -q 'Nothing else on it is touched' "${TO}" && echo yes || echo no)"
+ck "the new keys are written beside the old, read back, and only then moved into place" yes \
+   "$(awk '/-out \$\{qm\}\/\$\{USBK_BLOB\}.new/ {w=NR} /usbk_decrypt_cmd "\$\{MNT\}\/\$\{USBK_BLOB\}.new"/ {v=NR} /mv -f \$\{qm\}\/\$\{USBK_BLOB\}.new/ {m=NR} END {print (w && v && m && w < v && v < m) ? "yes" : "no"}' "${TO}")"
+
 echo "── the password ──"
 usbk_password_ok "short-pw";            ck "under 12 characters refused" 1 "$?"
 usbk_password_ok "twelve chars";        ck "12 characters accepted" 0 "$?"
@@ -54,8 +73,8 @@ ck "a disk in use is never offered (mounted, swap, pool, LVM, RAID)" yes \
    "$(grep -q 'zfs_member|LVM2_member|swap|linux_raid_member' "${FROM}" && grep -q 'usbk_in_use "${d}"' "${TO}" && echo yes || echo no)"
 ck "the stick is read back and compared before it is trusted" yes \
    "$(grep -q 'differs from the escrow — do not rely on it' "${TO}" && echo yes || echo no)"
-ck "the format step's answer is a marked line, never a tool's stdout" yes \
-   "$(grep -q 'echo \\"USBK_FORMATTED' "${TO}" && grep -q "grep '^USBK_FORMATTED '" "${TO}" && grep -q '"${MNT}" == /run/tappaas-keys.\*' "${TO}" && echo yes || echo no)"
+ck "the format (or mount) step's answer is a marked line, never a tool's stdout" yes \
+   "$(grep -q 'echo \\"USBK_FORMATTED' "${TO}" && grep -qF "grep -E '^USBK_(FORMATTED|MOUNTED) '" "${TO}" && grep -q 'echo \\"USBK_MOUNTED' "${TO}" && grep -q '"${MNT}" == /run/tappaas-keys.\*' "${TO}" && echo yes || echo no)"
 ck "cleanup finds the stick's mounts from the disk, not from MNT" yes \
    "$(grep -q 'lsblk -nrpo MOUNTPOINT' "${TO}" && echo yes || echo no)"
 ck "key export runs quietly (its PLAIN-copy advice is not for this script)" yes \

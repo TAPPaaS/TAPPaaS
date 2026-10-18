@@ -593,7 +593,8 @@ backup-manager key export --usb
 It writes every backup key to the stick, encrypted with a password you choose, checks it
 by reading it back, and ejects it. Make **two** — run it once per stick — and keep them
 at two different places, both off-site, with the password elsewhere
-([RESTORE.md §0](backup/RESTORE.md#0-before-anything-the-key)).
+([RESTORE.md §0](backup/RESTORE.md#0-before-anything-the-key)). Rewriting a stick later replaces only its
+keys and keeps anything else you store on it, such as a release signer's emergency key.
 
 Backups are encrypted client-side, and the keys are escrowed on the mothership —
 which is inside the system a full rebuild would be recreating. Without a copy

@@ -96,10 +96,12 @@ backup-manager backup <module>... [--config-dir DIR]
         taken — an unreachable cluster included. Calls backup-controller backup.
 
 backup-manager key list
-backup-manager key export --usb [--node N] | --file DIR
+backup-manager key export --usb [--node N] [--format] | --file DIR
 backup-manager key import --usb [--node N] | --file DIR
         The backup encryption keys (ADR-012 §2.5.1). --usb: a USB stick in a
-        node (default tappaas1) — export erases the stick you confirm, writes the
+        node (default tappaas1) — export erases the stick you confirm (a key stick
+        written before is not erased: only its keys, restore script and README are
+        replaced, everything else on it stays; --format erases it anyway), writes the
         keys encrypted with a password you choose, reads them back, ejects; import
         decrypts and imports, then offers the backup update that puts the storage
         key back on the cluster. Runs the backup module's scripts/keys-to-usb.sh /

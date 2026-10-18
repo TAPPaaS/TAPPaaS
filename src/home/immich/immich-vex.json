@@ -229,268 +229,6 @@
       ]
     },
     {
-      "id": "CVE-2026-64831",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "Vulkan HEVC hardware decoder; immich's hardware acceleration is off (default config) and the VM has no GPU.",
-        "justification": "requires_environment"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64832",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "NVIDIA NVDEC decoder; immich's hardware acceleration is off (default config) and the VM has no NVIDIA device.",
-        "justification": "requires_environment"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-65705",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The vf_floodfill filter; immich's ffmpeg filtergraphs use only fps, thumbnail, select, trim, reverse, scale, format and tonemapx (immich 3.2.4 dist/utils/media.js).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-65706",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The vf_swaprect filter; immich's ffmpeg filtergraphs use only fps, thumbnail, select, trim, reverse, scale, format and tonemapx (immich 3.2.4 dist/utils/media.js).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66036",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The vf_hqdn3d filter; immich's ffmpeg filtergraphs use only fps, thumbnail, select, trim, reverse, scale, format and tonemapx (immich 3.2.4 dist/utils/media.js).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66041",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The vf_quirc filter; immich's ffmpeg filtergraphs use only fps, thumbnail, select, trim, reverse, scale, format and tonemapx (immich 3.2.4 dist/utils/media.js).",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64833",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The S/PDIF muxer; immich writes only HLS (fmp4) and MP4 video and WebP/JPEG thumbnails.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66040",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The PNG/APNG encoder; immich writes video thumbnails as WebP or JPEG, never PNG.",
-        "justification": "code_not_reachable"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-65704",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "The TY demuxer through an ffconcat input with -safe 0; immich gives ffmpeg a single file input and never uses the concat demuxer.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64834",
-      "analysis": {
-        "state": "not_affected",
-        "detail": "RTP/ASF depacketizing needs an RTP network stream; immich's inputs are uploaded files, and ffmpeg's default protocol whitelist for a file input does not open rtp/udp.",
-        "justification": "requires_configuration"
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64830",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Heap corruption in the VobSub demuxer: immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. No fix yet: nixos-unstable still ships jellyfin-ffmpeg 8.1.2-5 (plain ffmpeg 9.0.1 is fixed, but immich's HDR path needs jellyfin's tonemapx). Bump unstableSrc when jellyfin-ffmpeg moves."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-64835",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Heap corruption in the ADX decoder: immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. No fix yet: nixos-unstable still ships jellyfin-ffmpeg 8.1.2-5 (plain ffmpeg 9.0.1 is fixed, but immich's HDR path needs jellyfin's tonemapx). Bump unstableSrc when jellyfin-ffmpeg moves."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-65703",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Heap corruption in the TDSC decoder (AVI): immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. No fix yet: nixos-unstable still ships jellyfin-ffmpeg 8.1.2-5 (plain ffmpeg 9.0.1 is fixed, but immich's HDR path needs jellyfin's tonemapx). Bump unstableSrc when jellyfin-ffmpeg moves."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-66039",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Heap corruption in the MACE6 decoder (CAF): immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. No fix yet: nixos-unstable still ships jellyfin-ffmpeg 8.1.2-5 (plain ffmpeg 9.0.1 is fixed, but immich's HDR path needs jellyfin's tonemapx). Bump unstableSrc when jellyfin-ffmpeg moves."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-70628",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Heap corruption in the DVB subtitle parser: immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. No fix yet: nixos-unstable still ships jellyfin-ffmpeg 8.1.2-5 (plain ffmpeg 9.0.1 is fixed, but immich's HDR path needs jellyfin's tonemapx). Bump unstableSrc when jellyfin-ffmpeg moves."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
-      "id": "CVE-2026-70632",
-      "analysis": {
-        "state": "exploitable",
-        "detail": "Heap corruption in the CFHD decoder (AVI): immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet \u2014 reachable by any user with a login, as the immich user. No fix yet: nixos-unstable still ships jellyfin-ffmpeg 8.1.2-5 (plain ffmpeg 9.0.1 is fixed, but immich's HDR path needs jellyfin's tonemapx). Bump unstableSrc when jellyfin-ffmpeg moves."
-      },
-      "affects": [
-        {
-          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.2-5"
-        }
-      ],
-      "ratings": [
-        {
-          "source": {
-            "name": "TAPPaaS"
-          },
-          "severity": "medium",
-          "method": "other",
-          "justification": "risk in this deployment, from the triage"
-        }
-      ]
-    },
-    {
       "id": "CVE-2026-0861",
       "analysis": {
         "state": "not_affected",
@@ -510,7 +248,7 @@
       "id": "CVE-2026-19499",
       "analysis": {
         "state": "exploitable",
-        "detail": "strfmon width padding overflow, real in glibc 2.44; only reachable if a program calls strfmon with right-justified padding \u2014 immich's Node and Python services do not. Kept counted as glibc is."
+        "detail": "strfmon width padding overflow, real in glibc 2.44; only reachable if a program calls strfmon with right-justified padding — immich's Node and Python services do not. Kept counted as glibc is."
       },
       "affects": [
         {
@@ -834,6 +572,193 @@
         },
         {
           "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-96611",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Signed integer overflow in the MOV/MP4 demuxer's HEIF ispe box: immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet — reachable by any user with a login, as the immich user. Not in FFmpeg 8.1.3 (fixed upstream in 059eb2e, FFmpeg 9.0); jellyfin-ffmpeg 8.1.3-1 runs here (#807)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52297",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Out-of-bounds read from unpadded IAMF extradata in the MOV demuxer (mov_read_iacb): immich probes (ffprobe) and transcodes every uploaded video, and immich is published to the internet — reachable by any user with a login, as the immich user. A read past a buffer, not a write. Not in FFmpeg 8.1.3 (fixed upstream in 8439e02, FFmpeg 9.0)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52296",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The WMA encoder (libavcodec/wmaenc.c); immich encodes audio only as AAC or Opus, never WMA.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107696",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "The RTSP client; immich gives ffmpeg uploaded local files only, and ffmpeg's protocol whitelist for a file input does not open rtsp.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70628",
+      "analysis": {
+        "state": "resolved",
+        "detail": "DVB subtitle parser signed overflow (libavcodec/dvbsub_parser.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-1 is built on — 46ef25c9c, cherry-picked from 93f2a525e. NVD's range (before 9.0) misses the 8.1 backport."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-70632",
+      "analysis": {
+        "state": "resolved",
+        "detail": "CineForm HD transform-2 out-of-bounds write (libavcodec/cfhd.c): fixed in FFmpeg 8.1.3, which jellyfin-ffmpeg 8.1.3-1 is built on — ea7210860, cherry-picked from db05df9d1. NVD's range (before 9.0) misses the 8.1 backport."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/jellyfin-ffmpeg@8.1.3-1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107695",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107696",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52296",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52297",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-96611",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg-headless is only opencv's dependency on the immich VM; no immich process loads it (immich-server runs jellyfin-ffmpeg).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg-headless@8.1.2"
+        },
+        {
+          "ref": "pkg:nix/ffmpeg-headless@9.0.1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-108693",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "NTGhostscriptEXE() launching gswin64c.exe by bare name is Windows-only code; the immich VM runs Linux, where ImageMagick calls the gs binary from its own store path.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
         }
       ]
     }

@@ -1262,6 +1262,21 @@ function applyFieldChanges(module: string, opts: Opts): number {
     info(`  ${p.field}=${p.value}  (${where})`);
   }
 
+  // A zone0 change moves the guest only in the converge; until then it is in
+  // its old zone. The update's pre-update gate tests it there (update-module.sh
+  // Step 2), so it needs the old value before this write replaces it.
+  const zoneMove = gate.plan.find((p) => p.field === "zone0" && p.coordinate !== "");
+  if (zoneMove) {
+    try {
+      const cur = JSON.parse(readFileSync(join(opts.configDir, `${module}.json`), "utf8")) as { zone0?: unknown };
+      if (typeof cur.zone0 === "string" && cur.zone0 !== "" && cur.zone0 !== zoneMove.value) {
+        process.env.TAPPAAS_PRE_GATE_ZONE0 = cur.zone0;
+      }
+    } catch {
+      // No readable config: the gate falls back to the config's (new) zone, as before.
+    }
+  }
+
   // The write itself is bash: it must be Pattern-A aware and must run as the
   // operator, never root (#525). See set-module-field.sh.
   const args = [module];

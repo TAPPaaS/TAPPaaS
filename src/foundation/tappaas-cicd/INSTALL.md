@@ -24,9 +24,14 @@ Normally: nothing to run by hand — `foundation/install.sh` step [5/5] runs
 `cluster/install-platform.sh`, which (Phase B) clones VM 130 from the template and
 drives the in-VM install end-to-end over SSH:
 
-1. `bootstrap.sh <repo> <branch>` — clones the TAPPaaS repo, generates
-   `hardware-configuration.nix`, `nixos-rebuild switch --flake .#tappaas-cicd`,
-   creates the tappaas SSH keypair. Then the VM is rebooted.
+1. `bootstrap.sh <repo> <branch> [<signer fingerprints>]` — clones the TAPPaaS repo and,
+   on `stable`/`staging`, refuses a tip that is not a release signed by one of the release
+   keys published in the root [INSTALL.md](../../../INSTALL.md#compare-the-release-signer)
+   (the third argument replaces them); generates `hardware-configuration.nix`,
+   `nixos-rebuild switch --flake .#tappaas-cicd`, then checks the release in full and
+   writes the trust anchor (`~/config/.trust/TAPPaaS.introduction.json`, which
+   `create-site.sh` puts in `site.json`); creates the tappaas SSH keypair. Then the VM
+   is rebooted.
 2. `install.sh [--name SITE-CODE] [--organization ORG] [--branch NAME] [--domain DOMAIN]`
    — installs the cicd's SSH key on every node, links the toolbox into `~/bin`, writes
    `site.json` (`create-site.sh`; `--name` = neutral site code, `--organization` = default
@@ -83,6 +88,12 @@ If the firewall was unreachable at install time the platform was configured with
 Full test inventory: [TEST.md](./TEST.md).
 
 ## Troubleshooting
+
+**bootstrap refuses: "is not a release signed by …"**
+The branch tip is not a signed TAPPaaS release, or it is signed by a key whose fingerprint
+is not the published one. Nothing from the clone has run. Compare the fingerprints with
+tappaas.org and the release notes before anything else; do not work around it by passing
+another fingerprint unless its owner confirms it.
 
 **`nixos-rebuild` fails during bootstrap**
 The full build log is in `/tmp/tappaas-bootstrap.log` (its tail is printed on failure).

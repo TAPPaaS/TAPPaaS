@@ -95,6 +95,7 @@ fails**:
 | `switch-ports` | `switch-controller list-ports --json` | never — **WARN** when a switch port has no record and is not parked (an access port in iotLocal), or the switch sets a port otherwise than its record — parked or in use (read from the switch as last interrogated; `switch-controller reconcile` reads it again and previews the change) |
 | `lan-uplink` | the cluster module's `lan-uplink.sh show --json`, one SSH probe per node | never — **WARN** when a node with HA's watchdog armed has its `lan` on one port, a bonded leg is down, active-backup runs on its backup, LACP has no partner or a leg outside the aggregator, both legs reach the same switch (LLDP), MTUs differ, or the live layout differs from the declaration (see the cluster README, *Redundant LAN uplink*) |
 | `cve-status` | `config/sbom/cve-status.json` (the last `scan security`) | never — **WARN** on a failed scan, a fixable Critical/High CVE, or a scan older than 8 days (see below) |
+| `signature-status` | `config/sbom/signatures.json` (written by `check-repo-signatures.sh` after every repository sync, ADR-033) | **FAIL** when a staging/production checkout runs something that is not a verified release, or a repository signs nothing and `site.json` sets `requireSigned`; **WARN** when it signs nothing, runs past its last verified release or has uncommitted changes, a signing key expires within 60 days, or the check is older than 3 days |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)
 reports **SKIP**, not FAIL. `--threshold` applies cluster-wide. The disk gate is
@@ -393,8 +394,17 @@ companion JSON, one
 generated file lands in `/etc/nixos` on every NixOS update (#472):
 
 - **`tappaas-site.nix`** — from `config/site.json` via `lib/site-locale.sh`: time
-  zone, locale, console keymap, and the zone gateway as the time source (#87).
-  The module's `.nix` imports it.
+  zone, locale, console keymap, and the zone gateway as the time source (#87),
+  and the mothership's Nix signing key (`lib/nix-site-key.sh`). The module's
+  `.nix` imports it.
+
+The system built on the mothership is signed with that key and copied with
+signatures checked: the guest takes it only signed by the site key or
+cache.nixos.org, and the baseline asserts `require-sigs`. A guest that does not
+trust the key yet — one updated before signing existed — takes one unchecked
+copy, said in the log; the system it activates trusts the key. When the guest
+has to build itself, it fetches the pinned nixpkgs by the lock's `narHash`
+(ADR-033 D8).
 
 The shared baseline `tappaas-common.nix` is deliberately **not** shipped: modules
 still inline their own copies of it, so importing it fails the build on

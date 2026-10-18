@@ -83,13 +83,13 @@ run() {
                     return "${rcs[$((n-1))]:-0}" ;;
                 *"/run/current-system/nixos-version"*) printf "%s\n" "${CUR}" > "${T}/cur-version"
                     bash -c "${cmd//\/run\/current-system\/nixos-version/${T}/cur-version}" ;;
-                *"nix-build"*) echo guest-build >> "${T}/calls"
+                *"nix-build"*) echo "guest-build ${cmd}" >> "${T}/calls"
                                echo "these 3 derivations will be built:" >&2
                                [[ "${NEW}" == FAIL ]] && return 1
                                echo "/nix/store/abc-nixos-system-guest-${NEW}.20260924" ;;
                 *"/nix/store/abc-nixos-system-guest-"*"/nixos-version"*) printf "%s\n" "${NEW}" > "${T}/new-version"
                     bash -c "$(sed -E "s#/nix/store/abc-nixos-system-guest-[^ ]*/nixos-version#${T}/new-version#" <<< "${cmd}")" ;;
-                *"nixos-rebuild boot"*)   echo boot >> "${T}/calls"; return "${BOOT_RC}" ;;
+                *"nixos-rebuild boot"*)   echo "boot ${cmd}" >> "${T}/calls"; return "${BOOT_RC}" ;;
                 *"nixos-rebuild switch"*) echo switch >> "${T}/calls"
                     local n; n=$(grep -c switch "${T}/calls"); local rcs=(${SWITCH})
                     return "${rcs[$((n-1))]:-0}" ;;
@@ -103,7 +103,10 @@ run() {
         # not stub — TAPPAAS_GUEST_BUILD=guest is the switch #774 provides.
         flake_lock=/x/flake.lock nix_basename=guest.nix
         [[ "${BUILD}" == guest ]] && TAPPAAS_GUEST_BUILD=guest
-        OPT_DEBUG=0 vm_ip=10.2.0.9 vmname=guest nixpkgs_arg="-I nixpkgs=x" remote_nix_path=/etc/nixos/guest.nix
+        OPT_DEBUG=0 vm_ip=10.2.0.9 vmname=guest nixpkgs_arg="" remote_nix_path=/etc/nixos/guest.nix
+        # The guest fetches the pin itself by the lock'"'"'s narHash (ADR-033 D8).
+        pinned_rev=c508844df6c28fa6dabc1b6af70f3ccbd65c5201
+        guest_pinned_nixpkgs(){ echo guest-pin >> "${T}/calls"; [[ "${PIN:-}" == fail ]] && return 1; echo /nix/store/fake-guest-nixpkgs; }
         f() { '"$(cat "${TMP}/block.sh")"'
             echo "STAGED=${staged}"
         }
@@ -151,6 +154,11 @@ ck "  …built on the guest only" "cicd=0 guest=1 promote=" "$(built)"
 ckin "  …and names why" "the pinned nixpkgs could not be resolved" "$(cat "${TMP}/out")"
 ck "TAPPAAS_GUEST_BUILD=guest: the guest builds, as asked" "0|staged=1|boots=1|switches=0" "$(BUILD=guest run 25.11 26.05 0)"
 ck "  …no mothership build" "cicd=0 guest=1 promote=" "$(built)"
+ckin "  …against the pin the guest fetched by narHash (ADR-033 D8)" "boot sudo nixos-rebuild boot -I nixpkgs=/nix/store/fake-guest-nixpkgs " "$(cat "${TMP}/calls")"
+ck "a guest that cannot fetch the pin by its narHash builds nothing" "1|staged=|boots=0|switches=0" "$(BUILD=guest PIN=fail run 25.11 26.05 0)"
+ckin "  …and says why" "not building against an unchecked one" "$(cat "${TMP}/out")"
+run 25.11 25.11 0 0 >/dev/null
+ck "built on the mothership: the guest fetches no nixpkgs" "0" "$(grep -c '^guest-pin' "${TMP}/calls")"
 
 echo "── the reboot messages tell a staged move from an active one ──"
 ckin "automaticReboot=false: 'STAGED, not active'" 'The release move (${_move% *} -> ${_move#* }) is STAGED, not active' "$(cat "${SRC}")"

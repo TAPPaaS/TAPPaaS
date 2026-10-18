@@ -4,7 +4,7 @@
 // second reconcile against the resulting state proves idempotency. Mirrors
 // identity-manager/test/unit/fake-client.ts.
 
-import { SiteClient } from "../../src/types";
+import { RepositoryTrust, SiteClient } from "../../src/types";
 
 export class FakeSiteClient implements SiteClient {
   // Live state.
@@ -29,8 +29,8 @@ export class FakeSiteClient implements SiteClient {
   repoCloneExists(path: string): boolean {
     return this.clones.has(path);
   }
-  cloneRepo(url: string, path: string, branch: string): void {
-    this.log.push(`clone ${url} ${path} ${branch}`);
+  cloneRepo(url: string, path: string, branch: string, name?: string, trust?: RepositoryTrust): void {
+    this.log.push(`clone ${url} ${path} ${branch}${trust ? ` trust=${name}@${trust.introduction}` : ""}`);
     this.clones.add(path);
     this.branches.set(path, branch);
   }
@@ -107,6 +107,10 @@ export class FakeSiteClient implements SiteClient {
   }
   repositoryValidateCatalog(args: string[]): number {
     this.log.push(`repository.sh validate-catalog ${args.join(" ")}`);
+    return this.delegateRc;
+  }
+  repositoryIntroduce(args: string[]): number {
+    this.log.push(`repository.sh introduce ${args.join(" ")}`);
     return this.delegateRc;
   }
   repositoryStash(args: string[]): number {

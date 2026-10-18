@@ -105,19 +105,19 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | – | – | 3 |
-| 7 | G7.2 New and reworked app modules | H | M | – | 1 | 3 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 1 | 12 |
+| 7 | G7.2 New and reworked app modules | H | M | – | 2 | 2 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 1 | 13 |
 | 6 | G6.2 User interface & physical view | H | L | – | – | 4 |
 | 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
-| 4 | G4.2 Proxy & ingress | M | L | 3 | 3 | 1 |
+| 4 | ✅ G4.2 Proxy & ingress | M | L | 3 | 5 | – |
 | 4 | ✅ G4.3 Manager verb gaps | M | L | 9 | 7 | – |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 9 | 3 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 10 | 3 | 1 |
-| 3 | G3.3 App module fixes | L | L | 10 | 2 | 8 |
+| 3 | G3.3 App module fixes | L | L | 10 | 4 | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | 3 | 5 |
 | 3 | G3.5 Installer UX | L | L | 1 | 1 | 2 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 7 | 18 | 2 |
@@ -138,7 +138,6 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
 | #675 | What a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that fails to build. Today a site's own host-level modules are dropped by every scheduled rebuild while the unit reports success (`tappaas-cicd.nix` has no extension point — confirmed) | An ADR first; Ease H · Risk M |
 | #488 | `apply-json-merge`: should a field that `.orig` never recorded be adopted from the release, or kept? #736 made each refused value visible; the rule itself is open | Operator |
-| #154 | Is `firewall:internal-proxy` needed at all? | Operator (questioned 2026-05-31) |
 | #385 / #222 | NetBird: keep its server-side integration (zone, OPT1 and floating rules), or make it a pure client-side tool and reserve management access to the WireGuard admin VPN | Operator (considering, 2026-10-12) |
 
 ### Gates
@@ -164,6 +163,7 @@ met gates are recorded in the releases that carried their waves.
 | VMID convention | #294 — only if it is adopted | Future Work |
 | Legal/processor | #359 | Wave 4 |
 | IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Accepted v1.0 2026-10-13**: built and on `main`; inbound verified from a phone over IPv6 via the public AAAA. Remaining outside it: public DNS that follows a dynamic WAN (#383) | #26 closable |
+| Service exposure | #845 — [ADR-032](docs/ADR/ADR-032%20-%20Service%20Exposure.md) **Accepted v1.0, built** (2026-10-17): the gate authenticates machine callers (service accounts, client-credentials JWT); a module without `network:proxy` is unpublished by design, in the DMZ when it runs third-party code without user data (ADR-021 R1 amended); Jellyfin published without the gate for friends and family, hardened. all phases built (P0–P4); rate limiting is #851 | #845 closed |
 
 ### Housekeeping
 
@@ -221,15 +221,15 @@ Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can al
 | #415 | Self-hosted KVM Woodpecker runners | H | L | |
 | #284 | forgejo: SQLite → PostgreSQL | M | M | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
 
-### G7.2 New and reworked app modules — Ease H · Risk M · done for 2.3: 1 · open: 3
+### G7.2 New and reworked app modules — Ease H · Risk M · done for 2.3: 2 · open: 2
 
 New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129), Karakeep for bookmarks (#842) — and a rework of LiteLLM's control plane (#170, decided with #430).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #841 | A lazysite module: a Markdown website for the site owner | M | L | **Opened 2026-10-15.** Markdown in the docroot served as HTML, no build step or database; how content gets there to decide |
-| ✅ #129 | Project N.O.M.A.D. in the home stack | M | L | **Closed 2026-10-16** (`34fe2f3b`…`c41b1885`): `src/home/nomad`, inside the site only (no proxy, no identity), pinned images, secrets on the VM; installed and tested on hrossen (11/11). Kiwix has Wikipedia in Danish |
-| #842 | A Karakeep module: bookmarks and read-later, AI tagging via the AI stack | M | L | **Opened 2026-10-15.** OIDC sign-in; its AI tagging through LiteLLM when the AI stack is installed |
+| ✅ #129 | Project N.O.M.A.D. in the home stack | M | L | **Closed 2026-10-16** (`34fe2f3b`…`c41b1885`): `src/home/nomad`, inside the site only (no proxy, no identity), pinned images, secrets on the VM; installed and tested on hrossen (11/11). Kiwix has Wikipedia in Danish. **2026-10-17:** in the `dmz` zone (ADR-032 D2): it runs containers it installs itself and keeps no user data, so a compromised NOMAD reaches only the internet |
+| ✅ #842 | A Karakeep module: bookmarks and read-later, AI tagging via the AI stack | M | L | **Closed 2026-10-18** (`267f85ce`…`bdfc6b23`): `src/home/karakeep`, Karakeep 0.34.0 with Chromium and Meilisearch, pinned images; Authentik sign-in only (password sign-up and sign-in refused, sign-ins only from its own address); AI tagging through LiteLLM via `integratesWith` (its key provisioned by the `litellm:models` contract). Live on hrossen at karakeep.hrossen.dk: module test 11/11, end-to-end 7/7, security from outside 11/11 and inside 8/8. VEX: esbuild's Go stdlib and npm's own packages never run; xmldom in pdf2json counted, low risk |
 | #170 | LiteLLM declarative control plane | H | M | Decide with #430 (G1.7) |
 
 ## Wave 6 — site fabric and user experience
@@ -237,7 +237,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 1 · open: 12
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 1 · open: 13
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -256,6 +256,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #236 | RADIUS MAC Auth Bypass: a device's VLAN from its MAC, on Wi-Fi and wired ports | H | M | Future idea; depends on how switch ports and APs are managed (this group) |
 | #63 | Service desk tooling spike | M | L | |
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
+| #851 | CrowdSec on the firewall: rate limiting and bans for published names | M | M | **Opened 2026-10-17** from ADR-032 O1: os-caddy takes extra config only globally, so Caddy's built-in `rate_limit` cannot be scoped to one site. CrowdSec (`os-crowdsec`) reads Caddy's log and bans by pf on the WAN; scenarios for Jellyfin's and Authentik's logins and probing; then Jellyfin's per-account lockout can be relaxed (today a known username can be locked out). Complements #843. **Built 2026-10-17** (`5bb4b7be`, `ab38382f`), live on hrossen: local only (no central API — operator), bans by pf on the sign-in scenario `tappaas/http-login-bf` (6 × 400/401 in ~3 min at Jellyfin's login/Quick Connect or Authentik's token endpoint), `http-cve` and bad user agents; generic probing left out (Jellyfin's missing-image 404s); the site's IPv6 /64s whitelisted; Caddy writes one access log per name; ~140 MiB. Tested: replay into the scenario, whitelist, a real ban into pf. Jellyfin's accounts turned out to have no lockout (-1), so nothing to relax. Open: the next sweep runs the converge from the network update |
 
 ### G6.2 User interface & physical view — Ease H · Risk L · open: 4
 
@@ -313,16 +314,17 @@ Be told when something breaks, and survive more of it. Built: alerts from Loki b
 | ✅ #836 | HA placement only on nodes that have every bridge the VM uses (firewall WAN) | M | M | **Closed 2026-10-15** (`2b0360da`): a declared HANode without one of the guest's bridges is refused; the default picks the first node that has them all; the HA test checks it. With strict rules (`b9d40e98`) and the KVM check in `node add` |
 | ✅ #837 | Health check: `site.json` location and timezone vs the nodes and guests | L | L | **Closed 2026-10-15** (`290d2790`): `site-timezone` gate per node and guest; the cluster update sets the nodes' timezone (hrossen's tappaas3 was on Europe/Amsterdam) |
 
-### G4.2 Proxy & ingress — Ease M · Risk L · released: 3 · done for 2.3: 3 · open: 1
+### ✅ G4.2 Proxy & ingress — Ease M · Risk L · released: 3 · done for 2.3: 5
 
-Publish less of each app: limit a route to some paths (#642), some zones (#643) or a provider's source addresses (#656), as ADR-023 describes. Decide whether an internal proxy is needed at all (#154).
+Publish less of each app: limit a route to some paths (#642), some zones (#643) or a provider's source addresses (#656), as ADR-023 describes. One model for how a module's routes are authenticated — several ports, native app clients, machine callers (#845, ADR-032). Decide whether an internal proxy is needed at all (#154).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | ✅ #642 | Limit a route to paths | M | L | **Closed 2026-10-15** (`537631a8`): ADR-023 P2/P3 — `proxyAccess` path rules on any route (one handle per path with its own access list), `none` (shared deny-all), `identityGate: false`; undeclared path handles and rule lists pruned. Live on hrossen (nextcloud-hpb): an internet path proxied, a mgmt path only from mgmt, everything else 403, teardown pruned clean |
 | ✅ #643 | Per-route allowed zones | M | L | **Closed 2026-10-15** (`447f4efa`): ADR-023 P1 — a `proxyRoutes` entry may set its own `proxyAllowedZones` and gets its own access list; undeclared lists pruned; the same-port trap warns |
 | ✅ #656 | Limit a route to a provider's source ranges | M | L | **Closed 2026-10-15** (`e85c7da6`): `proxyAllowedZones` takes a network (CIDR) beside zone names, for a provider's caller range; a malformed one is refused at install. A feed that refreshes the ranges stays a follow-up |
-| #154 | `firewall:internal-proxy` | — | — | Close? Lars questioned the need (2026-05-31) |
+| ✅ #845 | ADR: how a module's services are exposed — several ports, native app clients, API access | M | M | **Opened 2026-10-16.** ADR-032 Proposed (`e75b04df`). P0 on hrossen 2026-10-17, torn down clean: **T1** a gate on another port of the same hostname (`:9443`, own Authentik provider) — sign-in, callback and session work, separate from the 443 gate; **T2** an app password (Basic) and a client-credentials JWT pass the gate, Caddy can strip `Authorization`; a bad credential gets a 302, not 401; an app password opens every gate its user may use, a JWT only its own provider; revocation takes up to 60 s; **T3** Jellyfin native login against Authentik over LDAP (outpost + LDAP-Auth plugin 23/24), Quick Connect, group removal refused at the next login — but an existing Jellyfin session survives it. **v0.2 2026-10-17** (`9e41dd79`), operator decisions: NetBird is not the answer for friends and family, so Jellyfin goes without the gate (SSO for the web, Quick Connect for apps, hardening at Caddy and in Jellyfin — D3); the smaller ADR (no `proxyAuth` field, no LDAP); NOMAD in the DMZ. **P1 done:** NOMAD moved to `dmz` on hrossen (`e566222e`; module test 11/11, home reaches it, it reaches only the internet), which needed two module-manager fixes — `modify --set zone0` was refused (`0de41b1b`) and its pre-update gate tested the guest at the new zone (`6600d010`).. **Accepted 2026-10-17. P3 done** (`e70c5a65`, `eb24de47`): Jellyfin published without the gate — `identity:accessControl` dropped (its delete hook now turns the gate off when the route stays), the firewall a known proxy, admin and diagnostic paths closed outside the site, `admin` site-only via a TAPPaaS API key. Live on hrossen: module test 17/17; **T4 from the internet 17/17** — Sign in with Authentik and a Quick Connect sign-in from outside, eleven admin paths 403 in any letter case, Jellyfin logs the client's real address. Rate limiting is #851.. **P2 done** (`df3818bc`, T5 12/12): `caddy-manager set-gate`, gated handles drop `Authorization`, header auth asserted, `authentik-manager service-account-ensure`, `identityGate: false` needs a description. **P4 done, closed 2026-10-17**: identity-manager runs a module's `revoke-sessions.sh` after a reconcile takes access (Jellyfin's ends the person's devices); T6 — a removed person's web and TV sessions get 401 at once. ADR-032 v1.0, built |
+| ✅ #154 | `firewall:internal-proxy` | — | — | **Closed 2026-10-17**: answered by ADR-032 D2 — a module that is not published is reached at `.internal` from the zones its ingress allows; no second, internal proxy |
 
 ### ✅ G4.3 Manager verb gaps — Ease M · Risk L · released: 9 · done for 2.3: 7
 
@@ -391,7 +393,7 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | ✅ #479 | Site-specific login page | L | L | **Closed 2026-10-14** (`1a065ddb`, `17ecfb92`): the sign-in page shows the site name and its own logo from `site.json` `branding` (light/dark); live on hrossen. Extended 2026-10-14 (`44724af2`): start-page tiles show each module's icon (dashboard-icons) and `displayName`, generated tile otherwise; providers keyed by slug so a rename keeps the OIDC client |
 | ✅ #701 | logging depends on identity though its own code makes SSO optional | L | L | **Closed 2026-10-14** (`344bc8b8`): logging lists identity in `integratesWith`; Grafana's OIDC switch follows identity. Other consumers keep `dependsOn` — identity is always installed |
 
-### G3.3 App module fixes — Ease L · Risk L · released: 10 · done for 2.3: 2 · open: 8
+### G3.3 App module fixes — Ease L · Risk L · released: 10 · done for 2.3: 4 · open: 7
 
 The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #751; its test 12, #658, is in G5.2), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
@@ -404,7 +406,8 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | #715 | Nextcloud-hub revisited: Talk never worked end to end; races, retries and tests hid real failures | H | M | Talk stack and Nextcloud 35 on `main` (`c998ca5f`). Open: how @AndreasJe's branch lands, one `/etc/secrets` mode, rotating early OIDC secrets — until an off-network Talk call works |
 | #411 | windows-server: `deploy-instances.sh` missing | L | L | **Verified open 2026-09-26** (low-risk sweep): the script does not exist; writing it is the work |
 | ✅ #332 | euro-office / Nextcloud install findings | M | L | **Closed 2026-10-15** (`aa92f901`): memory and cores are integers in every module (21 wrote strings; compared numerically, so no drift); nextcloud and euro-office no longer declare the default `proxyPort` 80; euro-office's README says why it needs no `identity:identity`. The other findings were already resolved: the connector is re-applied on update and declared in the schema, `nextcloud:fileservice` is the name, zones follow the default zone, coturn finds its WAN address and NAT itself, tappaas2 trunks the service VLANs |
-| #807 | Immich: bump `unstableSrc` once `jellyfin-ffmpeg` fixes six upload-reachable CVEs | M | L | **Opened 2026-10-09** from the #788 triage (`cc6790a2`): immich-server's jellyfin-ffmpeg 8.1.2-5 has six heap-corruption flaws any logged-in uploader reaches (RISK medium in `immich-vex.json`); nixos-unstable has no fixed jellyfin-ffmpeg yet, and plain ffmpeg 9.0.1 lacks the `tonemapx` filter immich needs |
+| ✅ #807 | Immich: bump `unstableSrc` once `jellyfin-ffmpeg` fixes six upload-reachable CVEs | M | L | **Opened 2026-10-09** from the #788 triage (`cc6790a2`): immich-server's jellyfin-ffmpeg 8.1.2-5 has six heap-corruption flaws any logged-in uploader reaches (RISK medium in `immich-vex.json`); nixos-unstable has no fixed jellyfin-ffmpeg yet, and plain ffmpeg 9.0.1 lacks the `tonemapx` filter immich needs. **2026-10-17:** Jellyfin 12.2 (#850) runs the same jellyfin-ffmpeg 8.1.2-5, so the bump covers both modules. **Closed 2026-10-18** (`a8aea117`, `291e28ad`): jellyfin-ffmpeg 8.1.3-1 for Jellyfin and Immich ahead of the channel (pinned package, new source, the 8.1.2 patch it contains dropped); FFmpeg 8.1.3 fixes VobSub, ADX, TDSC, TY, MACE, DVB subtitles, CFHD, RTP/ASF and the HLS loop. Live on hrossen, both module tests green; Jellyfin 46 → 23 high (18 shared), Immich 27 → 21; the rest decided in VEX (96611/52297/52296 need FFmpeg 9.0, 107696 unfixed upstream). Drop the override when nixos-unstable carries 8.1.3 |
+| ✅ #850 | Upgrade Jellyfin to 12.x and the SSO plugin to the maintained fork | M | M | **Closed 2026-10-17** (`ce3021a0`, `9fe72ca3`, `3a6e54cb`): Jellyfin 12.2 from a pinned nixos-unstable (10.11 gets no more releases; GHSA-hw73 unauthenticated file read open there), SSO plugin K0lin 5.1.1 (an SSO account had no password, so an empty-password login worked — the `lars` account on hrossen; sealed now), the modern `Authorization` header, a start-up guard on case-clashing user names, test checks for the version and for passwordless accounts. Live on hrossen: in-place migration, module test 11/11, Authentik sign-in through the gate verified. VEX re-triaged: 13 jellyfin-ffmpeg findings exploitable (crafted library file or network source), the rest not reachable |
 | ✅ #751 | nextcloud:fileservice has no teardown | M | L | **Closed 2026-10-15** (`2b6c7672`): `delete-service.sh` removes the consumer's env file on the Nextcloud VM and the settings `occ` applied — euro-office's document-server settings, coturn's TURN/STUN, the HPB's signaling server — only when the file names that consumer; never fails the delete. Live on hrossen: each connector removed, re-wired by its update, service tests pass |
 | #754 | In-guest backup timers: drop for PBS or say why they stay | L | L | **2026-10-14:** identity, coturn, euro-office, vaultwarden dropped (three had produced empty archives every night). **litellm and openwebui assigned to @ErikDaniel007** — openwebui's `restore.sh` reads `/var/backup` |
 

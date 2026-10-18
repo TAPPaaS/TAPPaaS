@@ -58,6 +58,7 @@
       "imageType": "img",
       "image": "tappaas-firewall.qcow2.zst",
       "imageLocation": "https://github.com/TAPPaaS/TAPPaaS/releases/download/opnsense-firewall-v1.1/",
+      "imageSha256": "a5e7c09aae5aab9e5b49f71defd61b642c4d3497fb716ea11ec9610b5d658c97",
       "cloudInit": "false",
       "bridge0": "lan",
       "trunks0": "ALL",

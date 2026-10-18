@@ -407,6 +407,37 @@ else
     skip "caddy-manager missing"
 fi
 
+section "Standard 6b: CrowdSec on the firewall (#851)"
+
+# Local only, running, reading Caddy's access logs, and never banning the
+# site's own networks. Read-only: `cscli` and `service status` on the firewall.
+_cs="$(ssh -o BatchMode=yes -o ConnectTimeout=10 root@"${FIREWALL_FQDN:-firewall.mgmt.internal}" "/bin/sh -s" 2>/dev/null <<'CS'
+pkg info -q os-crowdsec && echo "installed=yes" || echo "installed=no"
+service crowdsec status >/dev/null 2>&1 && echo "engine=running" || echo "engine=stopped"
+service crowdsec_firewall status >/dev/null 2>&1 && echo "bouncer=running" || echo "bouncer=stopped"
+grep -q online_client /usr/local/etc/crowdsec/config.yaml 2>/dev/null && echo "capi=configured" || echo "capi=off"
+[ -s /usr/local/etc/crowdsec/online_api_credentials.yaml ] && echo "capicreds=yes" || echo "capicreds=no"
+[ -f /usr/local/etc/crowdsec/acquis.d/tappaas-caddy.yaml ] && echo "acquis=yes" || echo "acquis=no"
+cscli scenarios list -o raw --error 2>/dev/null | grep -q '^tappaas/http-login-bf,' && echo "scenario=yes" || echo "scenario=no"
+echo "whitelist=$(grep -c -- '- "' /usr/local/etc/crowdsec/parsers/s02-enrich/tappaas-site-whitelist.yaml 2>/dev/null || echo 0)"
+CS
+)"
+_csv() { sed -n "s/^$1=//p" <<<"${_cs}"; }
+if [[ -z "${_cs}" ]]; then
+    skip "CrowdSec: the firewall could not be asked over ssh"
+elif [[ "$(_csv installed)" != yes ]]; then
+    fail "CrowdSec is not installed — the network update converges it (scripts/crowdsec-converge.sh)"
+else
+    [[ "$(_csv engine)" == running ]] && pass "CrowdSec engine running" || fail "CrowdSec engine is not running"
+    [[ "$(_csv bouncer)" == running ]] && pass "CrowdSec firewall bouncer running (bans are pf blocks)" || fail "CrowdSec firewall bouncer is not running — bans would not be enforced"
+    [[ "$(_csv capi)" == off && "$(_csv capicreds)" == no ]] && pass "CrowdSec is local only: no central API configured, no credentials" \
+        || fail "CrowdSec is set up for the central API (capi=$(_csv capi), credentials=$(_csv capicreds)) — this site's signals would leave it"
+    [[ "$(_csv acquis)" == yes && "$(_csv scenario)" == yes ]] && pass "CrowdSec reads Caddy's access logs and has the TAPPaaS sign-in scenario" \
+        || fail "CrowdSec is missing the Caddy acquisition ($(_csv acquis)) or the sign-in scenario ($(_csv scenario))"
+    [[ "$(_csv whitelist)" -gt 0 ]] && pass "CrowdSec never bans the site's own IPv6 networks ($(_csv whitelist) whitelisted)" \
+        || fail "CrowdSec has no site whitelist — a client on the site's IPv6 could be banned"
+fi
+
 section "Standard 7: rules-manager dry-run against an installed module"
 
 if ! command -v rules-manager >/dev/null 2>&1; then

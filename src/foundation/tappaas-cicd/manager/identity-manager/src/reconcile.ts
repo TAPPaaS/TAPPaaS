@@ -121,6 +121,7 @@ export function computePlan(m: PeopleModel, snap: AkSnapshot): Plan {
       if (ak) {
         actions.push({
           kind: "delete-user",
+          losesAccess: u.name,
           target: `user ${u.name} (terminated)`,
           apply: (c) => c.deleteUser(u.name),
         });
@@ -158,6 +159,7 @@ export function computePlan(m: PeopleModel, snap: AkSnapshot): Plan {
       if (!ak || ak.active) {
         actions.push({
           kind: "disable-user",
+          losesAccess: u.name,
           target: `user ${u.name} (suspend)`,
           apply: (c) => c.disableUser(u.name),
         });
@@ -168,6 +170,7 @@ export function computePlan(m: PeopleModel, snap: AkSnapshot): Plan {
         if (managedGroups.has(g)) {
           actions.push({
             kind: "remove-member",
+          losesAccess: u.name,
             target: `${u.name} ∉ ${g} (suspend-strip)`,
             apply: (c) => c.removeMember(u.name, g),
           });
@@ -206,6 +209,7 @@ export function computePlan(m: PeopleModel, snap: AkSnapshot): Plan {
       if (managedGroups.has(g) && !desiredGroups.has(g)) {
         actions.push({
           kind: "remove-member",
+          losesAccess: u.name,
           target: `${u.name} ∉ ${g}`,
           apply: (c) => c.removeMember(u.name, g),
         });

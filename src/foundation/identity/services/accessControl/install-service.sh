@@ -153,10 +153,7 @@ debug "  ${_bind_out}"
 
 # ── Step 2: Flip ForwardAuth on the existing Caddy handler ──────────────────
 
-# Flip ForwardAuth on the existing handler directly via the OPNsense API.
-# (caddy-manager hits the oxl-client port-probe SSL quirk now that Caddy
-# serves *.test.tapaas.org wildcards on :443 — same issue noted under #254
-# Phase G. Direct curl bypasses the probe.)
+# The route's catch-all must exist: network:proxy creates it, before this.
 OPNSENSE_CREDS="${HOME}/.opnsense-credentials.txt"
 [[ -f "$OPNSENSE_CREDS" ]] || die "OPNsense credentials file missing: $OPNSENSE_CREDS"
 OPNSENSE_KEY="$(grep '^key=' "$OPNSENSE_CREDS" | cut -d= -f2-)"
@@ -170,31 +167,19 @@ HANDLE_UUID="$(curl -ksS -u "$OPNSENSE_AUTH" "${CADDY_API}/ReverseProxy/searchHa
 [[ -n "$HANDLE_UUID" ]] \
     || die "no Caddy handler with description '${DESCRIPTION}' (network:proxy install-service.sh runs first?)"
 
-debug "  Caddy: enabling ForwardAuth=1 on handler ${HANDLE_UUID:0:8}..."
-curl -ksS -u "$OPNSENSE_AUTH" -X POST "${CADDY_API}/ReverseProxy/setHandle/${HANDLE_UUID}" \
-    -H 'Content-Type: application/json' \
-    -d '{"handle":{"ForwardAuth":"1"}}' | jq -r .result >/dev/null \
-    || die "Failed to set ForwardAuth on handler for ${MODULE}"
-
-# The route's path handles (ADR-023) are gated like the route, except the paths
-# of a rule with identityGate false — those serve machine callers that cannot
-# log in. network:proxy copies the gate onto them too, but on a first install it
-# runs before this, while the catch-all is not gated yet.
+# The catch-all and the route's gated path handles (ADR-023) — never the paths
+# of a rule with identityGate false: those serve machine callers that cannot
+# log in. network:proxy copies the gate onto path handles too, but on a first
+# install it runs before this, while the catch-all is not gated yet. A gated
+# handle also drops the caller's Authorization header before the app
+# (caddy-manager set-gate, ADR-032 D1).
 mapfile -t GATED_PATHS < <(normalize_module_config < "${MODULE_JSON}" \
     | jq -r '(.proxyAccess // [])[] | select(.identityGate != false) | .paths[]?')
-for _p in "${GATED_PATHS[@]+"${GATED_PATHS[@]}"}"; do
-    _u="$(curl -ksS -u "$OPNSENSE_AUTH" "${CADDY_API}/ReverseProxy/searchHandle" \
-        | jq -r --arg d "${DESCRIPTION} ${_p}" '.rows[] | select(.description==$d) | .uuid' | head -1)"
-    [[ -n "${_u}" ]] || { warn "  no path handle for ${_p} — network:proxy has not created it yet"; continue; }
-    curl -ksS -u "$OPNSENSE_AUTH" -X POST "${CADDY_API}/ReverseProxy/setHandle/${_u}" \
-        -H 'Content-Type: application/json' -d '{"handle":{"ForwardAuth":"1"}}' | jq -r .result >/dev/null \
-        || die "Failed to set ForwardAuth on the path handle ${_p} of ${MODULE}"
-done
-
-debug "  Caddy: reconfiguring + reloading"
-curl -ksS -u "$OPNSENSE_AUTH" -X POST "${CADDY_API}/service/reconfigure" | jq -r .status >/dev/null
-ssh -o StrictHostKeyChecking=accept-new "root@firewall.mgmt.internal" \
-    "/bin/sh -c 'configctl caddy reload'" >/dev/null 2>&1 || true
+GATE_ARGS=(--description "${DESCRIPTION}")
+for _p in "${GATED_PATHS[@]+"${GATED_PATHS[@]}"}"; do GATE_ARGS+=(--description "${DESCRIPTION} ${_p}"); done
+debug "  Caddy: forward-auth on for ${DESCRIPTION} (+${#GATED_PATHS[@]} path handle(s))"
+caddy-manager set-gate --on "${GATE_ARGS[@]}" --no-ssl-verify >/dev/null \
+    || die "Failed to set forward-auth on the handles of ${MODULE}"
 
 debug "  ${GN}✓${CL} identity:accessControl wired for ${MODULE}"
 debug "      log in at https://${PROXY_DOMAIN}/ — Authentik gates the request,"

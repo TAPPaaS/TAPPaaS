@@ -47,9 +47,13 @@ done
 command -v nix-instantiate >/dev/null 2>&1 || { echo "nixos-baseline-eval: needs nix (run it on the mothership)" >&2; exit 2; }
 
 if [[ -z "${NIXPKGS}" ]]; then
-    rev="$(jq -r '.nodes.nixpkgs.locked.rev // empty' "${SRC}/foundation/templates/flake.lock" 2>/dev/null)"
-    [[ -n "${rev}" ]] || { echo "nixos-baseline-eval: no pinned nixpkgs in templates/flake.lock; pass --nixpkgs" >&2; exit 2; }
-    NIXPKGS="https://github.com/NixOS/nixpkgs/archive/${rev}.tar.gz"
+    # The pin by its narHash (ADR-033 D8), as update-os.sh fetches it.
+    pin="$(jq -r '.nodes.nixpkgs.locked | select(.type == "github" and .narHash != null)
+        | "builtins.fetchTarball { url = \"https://github.com/\(.owner)/\(.repo)/archive/\(.rev).tar.gz\"; sha256 = \"\(.narHash)\"; }"' \
+        "${SRC}/foundation/templates/flake.lock" 2>/dev/null)"
+    [[ -n "${pin}" ]] || { echo "nixos-baseline-eval: no pinned nixpkgs in templates/flake.lock; pass --nixpkgs" >&2; exit 2; }
+    NIXPKGS="$(nix eval --impure --raw --expr "${pin}")" \
+        || { echo "nixos-baseline-eval: could not fetch the pinned nixpkgs by its narHash" >&2; exit 2; }
 fi
 if [[ ${#FILES[@]} -eq 0 ]]; then
     while IFS= read -r f; do FILES+=("$f"); done < <(

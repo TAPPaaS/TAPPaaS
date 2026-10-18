@@ -38,6 +38,16 @@ ejects. The stick also carries its restore script (`keys-from-usb.sh`) and a REA
 plain text, for when the mothership is the thing that is gone. Write a
 new stick whenever a key changes; the update tells you when.
 
+**Rewriting a stick keeps everything else on it.** A stick written before (its FAT
+partition is labelled `TAPPAASKEYS` and holds `tappaas-keys.tar.enc`) is not erased: the
+command lists what else is on it, asks for the device name as usual, and replaces only
+its four files — `tappaas-keys.tar.enc`, its `.sha256`, `keys-from-usb.sh` and
+`README.txt`. Anything else you keep there, such as an emergency release-signing key in
+`kingdom/`, stays. The new keys are written beside the old ones and replace them only once
+they have read back correctly, so a failed rewrite leaves the old keys on the stick. The
+password you type becomes the stick's password. To erase a key stick instead:
+`backup-manager key export --usb --format`.
+
 **Keep two sticks, in two places.** One stick is one point of failure: flash memory
 fails silently, sticks get lost, and the day you need it is the day you find out. Run
 `key export --usb` twice (same password, or two you keep track of), keep the sticks at two

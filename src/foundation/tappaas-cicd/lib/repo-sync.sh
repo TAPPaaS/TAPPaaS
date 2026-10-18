@@ -23,6 +23,20 @@ command -v warn  >/dev/null 2>&1 || warn()  { echo "WARN: $*" >&2; }
 command -v error >/dev/null 2>&1 || error() { echo "ERROR: $*" >&2; }
 declare -F debug >/dev/null 2>&1 || debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
+# Release verification (ADR-033): which branch is which channel, and whether a
+# revision is a signed release. Both live beside this file.
+_repo_sync_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=channels-lib.sh
+declare -F branch_channel >/dev/null 2>&1 || . "${_repo_sync_dir}/channels-lib.sh"
+# shellcheck source=verify-repo.sh
+declare -F verify_target >/dev/null 2>&1 || . "${_repo_sync_dir}/verify-repo.sh"
+
+# Where the last verified release of each repository is recorded (run state),
+# and whether a repository that signs nothing may still move (site.json
+# requireSigned, read by the caller). Both overridable for tests.
+REPO_SYNC_TRUST_DIR="${REPO_SYNC_TRUST_DIR:-${TAPPAAS_CONFIG_DIR:-${CONFIG_DIR:-/home/tappaas/config}}/.trust}"
+REPO_SYNC_REQUIRE_SIGNED="${REPO_SYNC_REQUIRE_SIGNED:-0}"
+
 # Build the canonical https clone URL from a site.json `url` (which is stored
 # bare, e.g. "codeberg.org/TAPPaaS/TAPPaaS"). An explicit scheme is preserved.
 repo_sync_clone_url() {
@@ -88,7 +102,142 @@ repo_sync_at_risk_commits() {
     git -C "${path}" rev-list "refs/heads/${branch}" "${excl[@]}" 2>/dev/null || true
 }
 
-# reconcile_repo_checkout <path> <url> <branch> [allow_discard]
+# repo_sync_verify_gate <path> <branch> <target> <name> <allow_discard>
+# ADR-033 D6: may the checkout move to <target>? Decided after the fetch and
+# before anything moves. Sets REPO_SYNC_VERIFIED=1 when <target> is a verified
+# release, so the caller records it once the checkout is there.
+#
+#   unstable branch (or no channels.json)    moves; nothing is signed there (D1)
+#   no keys in allowed_signers at the base   moves, warned — unless requireSigned (D9)
+#   staging/production with keys             only to a release tag signed by a key
+#                                            the BASE lists, whose tree hash matches,
+#                                            and that does not go backwards
+#
+# Returns 0 to go ahead, 3 when refused. Not moving at all is never refused:
+# what a checkout already runs is the health check's to report, not a reason
+# to fail the sweep.
+repo_sync_verify_gate() {
+    local path="$1" branch="$2" target="$3" name="$4" allow_discard="${5:-0}"
+    local channel base head rc=0
+    REPO_SYNC_VERIFIED=0
+    channel="$(branch_channel "${path}" "${branch}")"
+    case "${channel}" in
+        staging|production) ;;
+        *) debug "  repo-sync: ${name} is on '${branch}' (${channel:-undeclared}) — not verified (unstable)"; return 0 ;;
+    esac
+    head="$(git -C "${path}" rev-parse -q --verify HEAD 2>/dev/null || true)"
+    base="$(verify_base "${path}" "${REPO_SYNC_TRUST_DIR}" "${name}")"
+    verify_target "${path}" "${target}" "${base:-${target}}" || rc=$?
+    case "${rc}" in
+        0)
+            if [[ -n "${base}" ]] && ! verify_moves_forward "${path}" "${base}" "${target}"; then
+                if [[ "${allow_discard}" == "1" ]]; then
+                    warn "  repo-sync: ${name}: ${VERIFY_TAG} does not descend from the last verified release — moving anyway (--force)"
+                else
+                    error "  repo-sync: ${name}: REFUSED — ${VERIFY_TAG} does not descend from the last verified release $(git -C "${path}" rev-parse --short "${base}")"
+                    error "    a signed OLD release is still signed; going back is an operator's decision, not a fetch result"
+                    return 3
+                fi
+            fi
+            info "  repo-sync: ${name}: ${VERIFY_TAG} verified — signed by ${VERIFY_SIGNER%% *}"
+            REPO_SYNC_VERIFIED=1
+            return 0 ;;
+        4)
+            if [[ "${REPO_SYNC_REQUIRE_SIGNED}" == "1" || "${REPO_SYNC_REQUIRE_SIGNED}" == "true" ]]; then
+                [[ "${target}" == "${head}" ]] && return 0
+                error "  repo-sync: ${name}: REFUSED — the site requires signed releases (requireSigned) and ${name} signs none (${VERIFY_REASON})"
+                return 3
+            fi
+            debug "  repo-sync: ${name}: unsigned by declaration (${VERIFY_REASON})"
+            return 0 ;;
+        *)
+            [[ "${target}" == "${head}" ]] && return 0
+            error "  repo-sync: ${name}: REFUSED — $(git -C "${path}" rev-parse --short "${target}") on '${branch}' (${channel}) is not a verified release"
+            error "    ${VERIFY_REASON}"
+            error "    the checkout stays on the last verified release; see ADR-033 D6"
+            return 3 ;;
+    esac
+}
+
+# repo_sync_introduce <path> <branch> <name> <tag> <commit> <fingerprints> <unsigned>
+# ADR-033 D5: first trust for a FRESH clone, checked out on <branch>. With an
+# introduction (<tag> + <fingerprints>; <commit> may be empty, it is then read
+# from the tag) the clone must verify against it, and what it verified is
+# recorded in REPO_SYNC_TRUST_DIR so later updates take the normal base rule.
+#
+#   staging/production   the checked-out tip must be a release the introduction
+#                        leads to. Without an introduction: refused, unless
+#                        <unsigned> is 1 (D9) — trust then starts from the clone.
+#   unstable             nothing is signed there (D1); a given introduction is
+#                        still checked (the tag, its signer, that the tip
+#                        descends from it), so it holds once the branch changes.
+#
+# Sets REPO_SYNC_INTRO_TAG / _COMMIT / _SIGNER (the fingerprint that signed the
+# introduction) when there is one, for the caller to write to site.json.
+# Returns 0 trusted (or not needed), 3 refused, 1 bad arguments.
+repo_sync_introduce() {
+    local path="$1" branch="$2" name="$3" tag="$4" commit="$5" fps="$6" unsigned="${7:-0}"
+    local channel target head
+    REPO_SYNC_INTRO_TAG="" REPO_SYNC_INTRO_COMMIT="" REPO_SYNC_INTRO_SIGNER=""
+    channel="$(branch_channel "${path}" "${branch}")"
+    head="$(git -C "${path}" rev-parse -q --verify HEAD 2>/dev/null || true)"
+    [ -n "${head}" ] || { error "  repo-sync: ${name}: ${path} has no checked-out commit"; return 1; }
+
+    if [[ -n "${tag}" && -z "${fps}" ]] || [[ -z "${tag}" && -n "${fps}" ]]; then
+        error "  repo-sync: ${name}: an introduction needs both the tag and the signer's fingerprint"
+        return 1
+    fi
+    if [[ -z "${tag}" ]]; then
+        case "${channel}" in
+            staging|production) ;;
+            *) return 0 ;;
+        esac
+        if [[ "${unsigned}" == "1" ]]; then
+            if verify_repo_signs "${path}" "${head}"; then
+                warn "  repo-sync: ${name}: added without an introduction (--unsigned) — later releases are checked against the signers of the revision cloned now"
+            fi
+            return 0
+        fi
+        if verify_repo_signs "${path}" "${head}"; then
+            error "  repo-sync: ${name}: REFUSED — '${branch}' is a ${channel} branch and ${name} signs its releases, but no introduction was given"
+            error "    ask its owner for the release tag to start from and the signing key's fingerprint (--introduction <tag> --signer SHA256:...)"
+        else
+            error "  repo-sync: ${name}: REFUSED — '${branch}' is a ${channel} branch, and ${name} signs no releases (no keys in ${VERIFY_SIGNERS_PATH})"
+            error "    to track it unverified, add it with --unsigned (ADR-033 D9)"
+        fi
+        return 3
+    fi
+
+    local fp
+    for fp in ${fps}; do
+        verify_fingerprint_ok "${fp}" || { error "  repo-sync: ${name}: '${fp}' is not a key fingerprint (SHA256:<43 characters>)"; return 1; }
+    done
+    if [[ -z "${commit}" ]]; then
+        commit="$(git -C "${path}" rev-parse -q --verify "refs/tags/${tag}^{commit}" 2>/dev/null || true)"
+        [ -n "${commit}" ] || { error "  repo-sync: ${name}: REFUSED — no tag ${tag} in ${path}"; return 3; }
+    fi
+    case "${channel}" in
+        staging|production) target="${head}" ;;
+        *) target="${commit}" ;;
+    esac
+    if ! verify_introduce "${path}" "${REPO_SYNC_TRUST_DIR}" "${name}" "${tag}" "${commit}" "${fps}" "${target}"; then
+        error "  repo-sync: ${name}: REFUSED — the clone does not verify against its introduction"
+        error "    ${VERIFY_REASON}"
+        return 3
+    fi
+    if [[ "${target}" != "${head}" ]] && ! verify_moves_forward "${path}" "${commit}" "${head}"; then
+        error "  repo-sync: ${name}: REFUSED — '${branch}' does not descend from the introduction ${tag}"
+        return 3
+    fi
+    # shellcheck disable=SC2034  # REPO_SYNC_INTRO_* are this function's results
+    REPO_SYNC_INTRO_TAG="${tag}" REPO_SYNC_INTRO_COMMIT="$(git -C "${path}" rev-parse "${commit}^{commit}")"
+    # shellcheck disable=SC2034
+    REPO_SYNC_INTRO_SIGNER="${VERIFY_INTRO_SIGNER##* }"
+    info "  repo-sync: ${name}: introduced at ${tag} (signed by ${VERIFY_INTRO_SIGNER}); ${VERIFY_TAG:-${tag}} verified"
+    return 0
+}
+
+# reconcile_repo_checkout <path> <url> <branch> [allow_discard] [name]
 # Ensure the checkout at <path> has origin == <url> and is on <branch> at the
 # remote's tip. Re-points origin if <url> differs (provider/repo switch),
 # stashes local changes for the move and restores them afterwards (#572), creates
@@ -102,9 +251,13 @@ repo_sync_at_risk_commits() {
 # unpushed work unreachable on its own; only `site-manager repository modify
 # --force`, run by a person who has seen the warning, may.
 #
-# Returns 0 on success, 2 when BLOCKED on that decision, non-zero on a hard failure.
+# On a staging or production branch the move is verified first (ADR-033 D6,
+# repo_sync_verify_gate); <name> keys the trust record (default: the directory).
+#
+# Returns 0 on success, 2 when BLOCKED on that decision, 3 when the target is
+# not a verified release, non-zero on a hard failure.
 reconcile_repo_checkout() {
-    local path="$1" url="$2" branch="$3" allow_discard="${4:-0}"
+    local path="$1" url="$2" branch="$3" allow_discard="${4:-0}" name="${5:-}"
     [ -d "${path}/.git" ] || { warn "  repo-sync: not a git checkout: ${path}"; return 1; }
 
     local desired cur remote_changed=0 on_branch
@@ -164,6 +317,22 @@ reconcile_repo_checkout() {
     fi
 
     git -C "${path}" fetch origin --prune || { warn "  repo-sync: fetch failed (${desired})"; return 1; }
+    # Release tags, without --prune: that would also delete tags made here. A tag
+    # that moved upstream is refused by git ("would clobber"); the local one
+    # stands and verification decides on it.
+    git -C "${path}" fetch origin --tags --quiet 2>/dev/null \
+        || warn "  repo-sync: could not fetch all tags from ${desired} (a tag moved upstream?) — verifying with the local ones"
+
+    # What the checkout will move to, fixed now: everything below converges on
+    # this commit, so what was verified is what lands (a second fetch could
+    # bring a newer, unverified tip).
+    local target
+    target="$(git -C "${path}" rev-parse -q --verify "refs/remotes/origin/${branch}^{commit}" 2>/dev/null || true)"
+    [ -n "${target}" ] || { warn "  repo-sync: origin has no branch '${branch}'"; return 1; }
+    [ -n "${name}" ] || name="$(basename "${path}")"
+    local vrc=0
+    repo_sync_verify_gate "${path}" "${branch}" "${target}" "${name}" "${allow_discard}" || vrc=$?
+    [ "${vrc}" = "0" ] || return "${vrc}"
 
     # Auto-stash local changes so checkout/reset cannot be blocked. The entry is
     # transient: repo_sync_restore_stash puts it back below, whatever the sync
@@ -184,16 +353,16 @@ reconcile_repo_checkout() {
     if git -C "${path}" show-ref --verify --quiet "refs/heads/${branch}"; then
         git -C "${path}" checkout "${branch}" || { warn "  repo-sync: checkout ${branch} failed"; rc=1; }
     else
-        git -C "${path}" checkout -B "${branch}" --track "origin/${branch}" \
+        git -C "${path}" checkout -B "${branch}" "${target}" \
             || { warn "  repo-sync: checkout --track ${branch} failed"; rc=1; }
     fi
 
     # Converge to the remote branch.
     if [ "${rc}" = "0" ]; then
         if [ "${remote_changed}" = "1" ]; then
-            git -C "${path}" reset --hard "origin/${branch}" || { warn "  repo-sync: reset to origin/${branch} failed"; rc=1; }
+            git -C "${path}" reset --hard "${target}" || { warn "  repo-sync: reset to origin/${branch} failed"; rc=1; }
         else
-            git -C "${path}" pull --ff-only origin "${branch}" || { warn "  repo-sync: pull (ff-only) failed for ${branch}"; rc=1; }
+            git -C "${path}" merge --ff-only -q "${target}" || { warn "  repo-sync: fast-forward to origin/${branch} failed"; rc=1; }
         fi
     fi
 
@@ -204,6 +373,10 @@ reconcile_repo_checkout() {
     [ "${rc}" = "0" ] || return "${rc}"
 
     git -C "${path}" branch --set-upstream-to="origin/${branch}" "${branch}" >/dev/null 2>&1 || true
+    if [ "${REPO_SYNC_VERIFIED:-0}" = "1" ]; then
+        verify_state_record "${REPO_SYNC_TRUST_DIR}" "${name}" "${target}" \
+            || warn "  repo-sync: ${name}: verified, but could not record it in ${REPO_SYNC_TRUST_DIR}"
+    fi
     return 0
 }
 

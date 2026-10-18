@@ -2,13 +2,14 @@
   "description": "Project N.O.M.A.D. — an offline knowledge and education server: Wikipedia and other libraries, courses, books and tools, on hardware you own.",
   "displayName": "Project N.O.M.A.D.",
   "kind": "vm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "stack": "home",
   "releaseDate": "2026-10-15",
   "maintainer": "@larsrossen",
   "status": "Development",
   "vmname": "nomad",
   "vmid": 370,
+  "zone0": "dmz",
   "vmtag": "TAPPaaS,App,Knowledge",
   "dependsOn": [
     "cluster:vm",
@@ -58,7 +59,7 @@
         "8200:8500"
       ],
       "protocol": "TCP",
-      "description": "Client networks reach the Command Center and the apps it links to, at nomad.<zone>.internal; nothing is published outside the site"
+      "description": "Client networks reach the Command Center and the apps it links to, at nomad.dmz.internal; nothing is published outside the site"
     }
   ]
 }

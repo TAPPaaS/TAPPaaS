@@ -136,7 +136,10 @@ For installation steps see [INSTALL.md](./INSTALL.md).
 How a release reaches a site — the three channels, the two-week boundary, the version each
 boundary cuts and the `tappaas-train.sh` command that runs one:
 [RELEASE-TRAIN.md](./RELEASE-TRAIN.md). What the
-mothership updates on its own, and when: [UPDATE-POLICY.md](./UPDATE-POLICY.md).
+mothership updates on its own, and when: [UPDATE-POLICY.md](./UPDATE-POLICY.md). What a site checks
+before it runs new code, and how to read the result: [VERIFIED-UPDATES.md](./VERIFIED-UPDATES.md).
+How releases are signed, by whom, and how to sign a module repository of your own:
+[SIGNING.md](./SIGNING.md).
 
 Design and implementation detail (component contract, manager/controller dispatch):
 [DESIGN.md](./DESIGN.md). Test coverage: [TEST.md](./TEST.md). Remote admin access:

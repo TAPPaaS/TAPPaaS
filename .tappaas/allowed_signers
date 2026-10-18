@@ -1,0 +1,24 @@
+# Keys allowed to sign TAPPaaS release tags (ADR-033 D4). git's allowed_signers
+# format: <principal> [options] <key type> <key> [comment]. Who owns each key is
+# in SIGNERS.md beside this file.
+#
+# The rule: a release tag counts only if its signer is listed here AS OF THE
+# PREVIOUSLY VERIFIED RELEASE. A key added in a release signs the release after
+# it. Retire a key with valid-before="YYYYMMDD" — never delete its line, or the
+# releases it signed stop verifying. A STOLEN key is not retired but revoked:
+# add it to revoked_signers beside this file. Sites read a key's validity
+# against today's date, not the tag's, whenever they move to a release.
+#
+# Each owner has two keys. The release key lives in their vault and is valid
+# for one year. The emergency key (principal recovery@...) is kept offline on
+# their offsite Keys-to-the-Mothership stick, has no expiry, and may sign only a
+# release that changes nothing outside .tappaas/ (ADR-033 D4a).
+#
+# While this file lists no key, the repository signs nothing and every site
+# reports it as unsigned (declared). The release that adds the first keys is
+# the last unsigned one.
+#
+# lars@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... lars-2026
+# erik@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... erik-2026
+# recovery@tappaas.org namespaces="git" ssh-ed25519 AAAA... lars-emergency
+# recovery@tappaas.org namespaces="git" ssh-ed25519 AAAA... erik-emergency

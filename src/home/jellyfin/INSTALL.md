@@ -4,8 +4,8 @@
 
 1. TAPPaaS foundation deployed: `cluster:vm`, `templates:nixos`, `backup:vm`,
    `storage:nfs`, `network:proxy`, `network:rules`, and the `identity` module
-   (Authentik): `identity:accessControl` gates the published name and
-   `identity:identity` gives Jellyfin's login a Sign in with Authentik button
+   (Authentik): `identity:identity` gives Jellyfin's login a Sign in with
+   Authentik button
 2. For the media share (now or later): a cluster node with a `tankb` pool to
    serve it from
 
@@ -102,11 +102,7 @@ A share that already holds data is never merged into.
 The order of `dependsOn` in `jellyfin.json` is deliberate — install and update
 apply dependencies in that order:
 
-- `identity:accessControl` right after `network:proxy`: it turns on forward-auth
-  for the route that `network:proxy` has just created. An update that recreates
-  the route therefore gets the gate back in the same run;
-- `identity:identity` last: it registers Jellyfin's OIDC app (after
-  accessControl has moved the gate to `jellyfin-gate`), writes the client
+- `identity:identity` last: it registers Jellyfin's OIDC app, writes the client
   config to `/etc/secrets/jellyfin.env` and restarts `jellyfin-configure-oidc`,
   which `templates:nixos` has built by then;
 - `network:rules` before `storage:nfs`, so the firewall path to the share exists
@@ -128,7 +124,8 @@ config, mount and firewall rule stay as they are.
 | `diskSize` / `storage` | 32G / `tanka1` | The VM only: OS and Jellyfin's own data. The media is on the share — or on this disk while the share is pending |
 | `storage:nfs` `mounts` | `/media` ← share `media`, subdir `jellyfin`, `rw` | See Media share |
 | `rebootOk` | `true` | Lets an unattended update restart Jellyfin — to move `/media` into a newly declared share, or for a change that needs a reboot. `false`: such changes wait for `--allow-disruption` |
-| `proxyAllowedZones` | `home, netbird, internet` | Which zones Caddy accepts at all; Authentik forward-auth gates every one of them. Drop `internet` for a private-only deployment |
+| `proxyAllowedZones` | `home, netbird, internet` | Which zones Caddy accepts. With `internet`, Jellyfin's apps work from anywhere and its own login (Sign in with Authentik, Quick Connect) decides who gets in. Drop `internet` for a private-only deployment |
+| `proxyAccess` | admin and diagnostic paths → `home, netbird` | `/metrics`, `/Startup/*`, `/System/Restart`, `/System/Shutdown`, `/System/Logs`, `/Packages`, `/Repositories`, `/ScheduledTasks`, `/Auth/Keys` answer only inside the site |
 
 ## Install
 
@@ -154,12 +151,12 @@ Duration: ~5–10 minutes (NixOS clone + rebuild).
 
 ## First-Time Setup
 
-1. Open `https://jellyfin.<your-domain>`, or the Jellyfin tile in Authentik. Log in
-   to Authentik (any member of the `users` group gets through), then click
-   **Sign in with Authentik**. For administration, be in `jellyfin-admins`, or use
-   the printed `admin` account on the same page. Browser only: TV and mobile apps
-   cannot pass forward-auth — see
-   [README.md](README.md#access-browser-only-behind-authentik)
+1. Open `https://jellyfin.<your-domain>`, or the Jellyfin tile in Authentik, and
+   click **Sign in with Authentik** (members of `users` and `jellyfin-admins`).
+   For administration, be in `jellyfin-admins`, or use the printed `admin`
+   account from inside the site. An app or a TV signs in with **Quick Connect**:
+   enter its code under your profile in the browser — see
+   [README.md](README.md#access-jellyfins-own-login-for-the-web-and-the-apps)
 2. Add libraries under **Dashboard → Libraries**:
 
    | Path | Library type |

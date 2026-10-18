@@ -79,6 +79,33 @@
       "match": "diskCollectorImage = \"ghcr\\.io/crosstalk-solutions/project-nomad-disk-collector:([^\"]+)\";",
       "tagPattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
       "maintainer": "@larsrossen"
+    },
+    {
+      "module": "karakeep",
+      "image": "ghcr.io/karakeep-app/karakeep",
+      "kind": "tag",
+      "file": "src/home/karakeep/karakeep.nix",
+      "match": "karakeepImage = \"ghcr\\.io/karakeep-app/karakeep:([^\"]+)\";",
+      "tagPattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "maintainer": "@larsrossen"
+    },
+    {
+      "module": "karakeep",
+      "image": "ghcr.io/karakeep-app/karakeep-chrome",
+      "kind": "tag",
+      "file": "src/home/karakeep/karakeep.nix",
+      "match": "chromeImage = \"ghcr\\.io/karakeep-app/karakeep-chrome:([^\"]+)\";",
+      "tagPattern": "^[0-9]+\\.[0-9]+\\.[0-9]+\\.[0-9]+-r[0-9]+$",
+      "maintainer": "@larsrossen"
+    },
+    {
+      "module": "karakeep",
+      "image": "getmeili/meilisearch",
+      "kind": "tag",
+      "file": "src/home/karakeep/karakeep.nix",
+      "match": "meiliImage = \"getmeili/meilisearch:([^\"]+)\";",
+      "tagPattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "maintainer": "@larsrossen"
     }
   ]
 }

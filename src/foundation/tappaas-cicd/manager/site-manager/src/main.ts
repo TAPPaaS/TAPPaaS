@@ -55,6 +55,7 @@ export const HELP: HelpSpec = {
         ["--email <addr>", "admin email"],
         ["--automaticReboot true|false", "allow update reboots"],
         ["--ipv6 true|false", "the site supports IPv6 (#149): OPNsense's 'Allow IPv6', applied by the next network update (default false)"],
+        ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (ADR-033 D9; default false). A repository that lists signing keys is verified either way."],
         ["--snapshotRetention <n>", "VM snapshots kept per module"],
         ["--backupTarget <s>", "backup.target"],
         ["--backupOffsite <s>", "backup.offsite"],
@@ -142,11 +143,20 @@ export const HELP: HelpSpec = {
     { usage: "node reconcile [--apply]",
       options: [["--apply", "Register nodes that joined the cluster (default is preview)."]] },
     { usage: "repository list [--json]", note: "(alias: repo)" },
-    { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>]", effect: { noPreview: "clones the repository into ~/<name> and registers it in site.json" },
+    { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>] [--introduction <tag> --signer <fp> | --unsigned]", effect: { noPreview: "clones the repository into ~/<name> and registers it in site.json" },
       options: [
         ["--branch <b>", "Branch to check out (default stable)."],
         ["--managed full|tracked", "full: carries modules, its catalog is validated; tracked: registered without catalog requirements. The sweep pulls both."],
         ["--catalog <p>", "Path of the module catalog inside the repository."],
+        ["--introduction <tag>", "ADR-033 D5: the release tag trust starts from, from the repository's owner. With --signer, required on a staging/production branch; the clone must verify against it, and it is recorded as the entry's trust."],
+        ["--signer SHA256:<fp>", "Fingerprint of the key that signed the introduction (ssh-keygen -l), obtained from the owner out of band."],
+        ["--unsigned", "Add a staging/production branch without an introduction: a repository that signs nothing, or one trusted from the revision cloned now (D9)."],
+      ] },
+    { usage: "repository introduce <name> [--introduction <tag> --signer <fp>]",
+      note: "(ADR-033 D5: check the checkout against its trust anchor and record it)",
+      options: [
+        ["--introduction <tag>", "Give an existing repository an anchor: the release tag to trust first. Written to site.json once the checkout verifies against it."],
+        ["--signer SHA256:<fp>", "Fingerprint of the key that signed that tag, from the repository's owner."],
       ] },
     { usage: "repository modify <name> [--url <u>] [--branch <b>]", effect: { noPreview: "changes the repository's URL or branch in site.json (a new URL re-clones it)" },
       options: [["--url <u>", "Re-point the repo at a new forge/URL in place (e.g. github.com→codeberg.org)."],
@@ -241,7 +251,7 @@ interface Opts {
 // Flags that take NO value (everything else with a value is captured generically).
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
   "--pxe", "--provision", "--config-only", "--yes", "--no-wan",
-  "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase"]);
+  "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -363,7 +373,17 @@ function cmdSite(o: Opts): void {
     info(`${lbl("Network")}publicIp=${net.publicIp ?? "(unset)"}  isp=${net.isp ?? "(none)"}  ipv6=${site.ipv6 ? "yes" : "no"}`);
     info(`${lbl("Update")}${schedStr}  (auto-reboot: ${site.automaticReboot ? "yes" : "no"}, keep ${site.snapshotRetention ?? "?"})`);
     info(`${lbl("Nodes")}${nodes.length ? nodes.map((n) => `${n.name} [${n.storagePools.join(", ")}]`).join("  ") : "(none)"}`);
-    info(`${lbl("Repositories")}${repos.length ? repos.map((r) => `${r.name}${r.branch ? "@" + r.branch : ""}`).join("  ") : "(none)"}`);
+    // ADR-033 D10: what each repository runs, from the last signature check.
+    const sigFile = `${o.configDir.replace(/\/$/, "")}/sbom/signatures.json`;
+    let sigs: Record<string, string> = {};
+    try {
+      const doc = JSON.parse(readFileSync(sigFile, "utf8")) as { repositories?: { name: string; status: string; tag?: string }[] };
+      for (const r of doc.repositories ?? []) sigs[r.name] = r.status === "verified" ? `verified ${r.tag ?? ""}`.trim() : r.status;
+    } catch {
+      sigs = {};
+    }
+    info(`${lbl("Repositories")}${repos.length ? repos.map((r) => `${r.name}${r.branch ? "@" + r.branch : ""}${sigs[r.name] ? ` [${sigs[r.name]}]` : ""}`).join("  ") : "(none)"}` +
+      (site.requireSigned ? "  — signed releases required" : ""));
     info(`${lbl("Orgs")}${orgs.length ? orgs.join(", ") : "(none)"}`);
     info(`${lbl("Backup")}${site.backup ? JSON.stringify(site.backup) : "(none)"}`);
     return;
@@ -509,6 +529,7 @@ function cmdSite(o: Opts): void {
     setStr("--email", ["email"]);
     setBool("--automaticReboot", ["automaticReboot"]);
     setBool("--ipv6", ["ipv6"]);
+    setBool("--requireSigned", ["requireSigned"]);
     setInt("--snapshotRetention", ["snapshotRetention"]);
     setStr("--backupTarget", ["backup", "target"]);
     setStr("--backupOffsite", ["backup", "offsite"]);
@@ -866,7 +887,7 @@ function collectPools(o: Opts, name: string): string[] {
 // ── `repository` CRUD + reconcile ──────────────────────────────────────
 function cmdRepository(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("repository: expected 'list' | 'add' | 'modify' | 'delete' | 'reconcile' | 'sync' | 'hold' | 'release' | 'stash'");
+  if (!sub) die("repository: expected 'list' | 'add' | 'introduce' | 'modify' | 'delete' | 'reconcile' | 'sync' | 'hold' | 'release' | 'stash'");
   const siteFile = siteFileOf(o);
 
   if (sub === "list") {
@@ -933,8 +954,18 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     // the site.json .repositories entry. Forward <url> + its valued flags.
     const url = o.rest[1];
     if (!url) die("repository add: expected <url>");
-    const rc = client.repositoryAdd([url, ...fwdFlags(["--branch", "--managed", "--catalog"])]);
+    const args = [url, ...fwdFlags(["--branch", "--managed", "--catalog", "--introduction", "--signer"])];
+    if (o.boolFlags.has("--unsigned")) args.push("--unsigned");
+    const rc = client.repositoryAdd(args);
     if (rc !== 0) throw new DieError(`repository.sh add exited ${rc}`);
+    return;
+  }
+
+  if (sub === "introduce") {
+    const name = o.rest[1];
+    if (!name) die("repository introduce: expected <name> [--introduction <tag> --signer SHA256:<fp>]");
+    const rc = client.repositoryIntroduce([name, ...fwdFlags(["--introduction", "--signer"])]);
+    if (rc !== 0) throw new DieError(`repository introduce ${name}: not verified (repository.sh exited ${rc})`);
     return;
   }
 

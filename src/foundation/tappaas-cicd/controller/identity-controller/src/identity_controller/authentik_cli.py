@@ -297,6 +297,20 @@ def cmd_app_bind_groups(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_service_account_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
+    import json, os
+    sa = mgr.service_account_ensure(args.name, args.app)
+    out = os.path.expanduser(args.out or f"~/.tappaas-service-accounts/{args.name}.json")
+    os.makedirs(os.path.dirname(out), mode=0o700, exist_ok=True)
+    fd = os.open(out, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        json.dump(sa, f, indent=2)
+    print(f"==> service account '{sa['username']}' for '{args.app}' ({sa['external_host']})")
+    print(f"    client_id {sa['client_id']}, token endpoint {sa['token_url']}")
+    print(f"    credentials (username, password) in {out} (0600) — hand them to the caller, not to a log")
+    return 0
+
+
 def cmd_oidc_email_verified_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     n = mgr.oidc_email_verified_ensure()
     print(f"==> OIDC providers: email_verified=true mapping in place ({n} changed)")
@@ -547,6 +561,13 @@ def main(argv: list[str] | None = None) -> int:
     bg.add_argument("slug")
     bg.add_argument("--group", action="append", required=True, default=[], help="group name; repeatable")
     bg.set_defaults(handler=cmd_app_bind_groups)
+
+    sa = sub.add_parser("service-account-ensure",
+                        help="a service account for a machine caller of one gated app (client credentials, ADR-032 D1)")
+    sa.add_argument("name", help="the account's username, e.g. the calling system's name")
+    sa.add_argument("--app", required=True, help="the gated application's slug (identity:accessControl, e.g. <module> or <module>-gate)")
+    sa.add_argument("--out", default="", help="where to write the credentials (default ~/.tappaas-service-accounts/<name>.json, 0600)")
+    sa.set_defaults(handler=cmd_service_account_ensure)
 
     ev = sub.add_parser("oidc-email-verified-ensure",
                         help="put the TAPPaaS email mapping (email_verified=true) on every OIDC provider (#748)")
