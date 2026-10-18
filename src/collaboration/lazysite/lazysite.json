@@ -27,7 +27,7 @@
     "cluster:vm": {
       "cores": 1,
       "memory": 1024,
-      "diskSize": "8G",
+      "diskSize": "16G",
       "thinDisk": true,
       "storage": "tanka1",
       "imageType": "clone",

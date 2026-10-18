@@ -38,7 +38,7 @@ brings the first commit.
 |---|---|
 | `lazysite.socket`, `lazysite.service`, nginx, `lazysite-pull.timer` | active; the renderer runs as `lazysite` |
 | the deployed commit | the repository's latest |
-| `/` | 200, rendered HTML; `/index.md` is not handed out |
+| `/` | 200, rendered HTML; `/index.md` answered by lazysite (its Markdown alternate), not as a file |
 | manager, sign-in, WebDAV, CGI, engine files, `/.git` | 404 |
 | an `X-Remote-User` header | signs no one in |
 | `https://lazysite.<domain>/` | 200 through Caddy |

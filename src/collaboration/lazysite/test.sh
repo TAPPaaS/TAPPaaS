@@ -33,7 +33,7 @@ if [[ "$(remote "sudo test -s /etc/secrets/forgejo-repo.env && echo yes")" != "y
     fail "no repository (/etc/secrets/forgejo-repo.env) — forgejo:repo has not run"
 else
     _head="$(remote 'sudo bash -c '"'"'. /etc/secrets/forgejo-repo.env; GIT_SSH_COMMAND="ssh -i /etc/secrets/forgejo-repo.key -o IdentitiesOnly=yes -o UserKnownHostsFile=/etc/secrets/forgejo-repo.known_hosts -o StrictHostKeyChecking=yes -o BatchMode=yes" git ls-remote "$REPO_SSH_URL" "refs/heads/${REPO_BRANCH:-main}" | cut -f1'"'"'')"
-    _deployed="$(remote "cat /var/lib/lazysite/deployed")"
+    _deployed="$(remote "sudo cat /var/lib/lazysite/deployed")"
     [[ -n "${_head}" && "${_head}" == "${_deployed}" ]] && pass "the site is at the repository's latest commit (${_head:0:8})" \
         || fail "the site is at ${_deployed:-nothing}, the repository at ${_head:-unreadable}"
 fi
@@ -43,8 +43,11 @@ get() { remote "curl -s -o /dev/null -w '%{http_code}' --max-time 10 $* http://l
 _p=/; [[ "$(get)" == "200" ]] && pass "the home page answers 200" || fail "the home page does not answer 200"
 _home="$(remote "curl -s --max-time 10 http://localhost:8080/")"
 [[ "${_home}" == *"<html"* ]] && pass "the home page is rendered HTML" || fail "the home page is not HTML"
-_src="$(remote "curl -s --max-time 10 http://localhost:8080/index.md")"
-[[ "${_src}" != "---"* ]] && pass "/index.md is not handed out as Markdown" || fail "/index.md hands out the page source"
+# /index.md is lazysite's source alternate (the page's Markdown, refused on the
+# page's own terms and never indexed) — from the renderer, not a file nginx hands out.
+_hdr="$(remote "curl -s -o /dev/null -D - --max-time 10 http://localhost:8080/index.md")"
+[[ "${_hdr,,}" == *"x-robots-tag: noindex"* ]] && pass "/index.md is answered by lazysite (its source alternate, noindex)" \
+    || fail "/index.md is served as a plain file, not by lazysite"
 
 # 4. Only the renderer is reachable: no manager, sign-in, WebDAV, CGI or engine files.
 for _p in /cgi-bin/lazysite-auth.pl /cgi-bin/lazysite-manager-api.pl /manager/ /dav/ /lazysite/lazysite.conf /.git/config /.env; do

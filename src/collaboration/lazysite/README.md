@@ -26,7 +26,9 @@ there, and the site follows within a minute.
 - **Only the renderer is reachable.** lazysite also has a browser manager, its own sign-in,
   WebDAV publishing, forms with mail, and payments; none of them is wired here. Their URLs answer
   404, and the identity headers lazysite would trust from a front end are always stripped, so no
-  visitor can claim to be signed in. Page sources (`/about.md`) are never handed out.
+  visitor can claim to be signed in. `/about.md` answers the page's Markdown — lazysite's source
+  alternate, for readers that want the text without markup — on the page's own terms, and it is
+  never indexed.
 - **The pages come from Forgejo** (`forgejo:repo`). On the first install Forgejo gets a private
   repository `websites/<vmname>` with a starter `index.md`, and the VM a read-only deploy key.
   Every minute the VM asks Forgejo for the latest commit; when there is a new one, it puts the
@@ -80,7 +82,7 @@ A person signs in to Forgejo once (with Authentik) before they can be added. For
 
 ## Requirements
 
-- 1 core, 1 GB RAM, 8G thin disk.
+- 1 core, 1 GB RAM, 16G thin disk (the size of the NixOS template).
 - Forgejo (the devops stack) installed, and an environment with a published domain.
 
 ## Dependencies
