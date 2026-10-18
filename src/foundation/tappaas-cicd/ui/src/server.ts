@@ -7,7 +7,7 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from "http";
 import { existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
-import { AccessConfig, Decision, Me, SETUP_COOKIE, decide, normalizeAddr, peerAllowed, setupState } from "./access";
+import { AccessConfig, Decision, Me, SETUP_COOKIE, decide, mayWrite, normalizeAddr, peerAllowed, setupState } from "./access";
 import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { Entry, envelope } from "./cache";
@@ -15,6 +15,8 @@ import { JumpKind, jumpsFor } from "./jumps";
 import { Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
 import { MODULE_NAME, Reads } from "./reads";
+import { SECRETS, isSecretName, secretStatus, writeSecret } from "./secrets";
+import { closeSetupToken, setupComplete, setupSteps } from "./setup";
 
 export interface ServerConfig {
   access: AccessConfig;
@@ -22,6 +24,7 @@ export interface ServerConfig {
   mgmtDomain: string;
   version: string;
   log: (line: string) => void;
+  home?: string; // where the Setup wizard's credential files go (secrets.ts)
 }
 
 const JSON_TYPE = "application/json; charset=utf-8";
@@ -144,6 +147,7 @@ export class ConsoleServer {
       return sendJson(res, 202, { refreshing: what });
     }
     if (head === "jobs") return this.jobsApi(method, a, b, me, res, req);
+    if (head === "secrets") return this.secretsApi(method, a, me, res, req);
     if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/${head ?? ""}: reads are GET; a change is a job (POST /api/v1/jobs)` });
 
     const env = <T>(e: Entry<T>, data?: unknown): Record<string, unknown> => ({ ...envelope(e), ...(data !== undefined ? { data } : {}) });
@@ -191,6 +195,19 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.environments.get()));
       case "identity":
         return sendJson(res, 200, envelope(await r.identity.get()));
+      case "setup": {
+        // The checklist, derived from the records each time it is read (D10).
+        if (me.route === "status") return sendJson(res, 403, { error: "the status route has no setup" });
+        closeSetupToken(this.cfg.access, this.cfg.log);
+        if (url.searchParams.get("refresh") === "1") await r.setup.refresh();
+        const e = await r.setup.get();
+        const steps = e.value ? setupSteps(e.value) : null;
+        const st = setupState(this.cfg.access);
+        return sendJson(res, 200, {
+          ...envelope(e),
+          data: steps ? { steps, complete: setupComplete(steps), inputs: e.value, token: { active: st.active, present: st.tokenPresent, identityInstalled: st.identityInstalled } } : null,
+        });
+      }
       case "backup":
         return sendJson(res, 200, envelope(await r.backup.get()));
       case "topology":
@@ -300,6 +317,36 @@ export class ConsoleServer {
     if (r.job) this.cfg.log(`job ${r.job.id} ${r.job.kind} ${r.job.state}${r.job.refused ? ` (${r.job.refused})` : ""}: ${r.job.argv.join(" ")}`);
     if (r.status >= 400) return sendJson(res, r.status, { error: r.error, ...(r.job ? { data: summary(r.job) } : {}), ...(r.sweep ? { sweep: r.sweep } : {}) });
     return sendJson(res, r.status, { data: r.job });
+  }
+
+  // ── the wizard's secrets (secrets.ts) ─────────────────────────────
+  //   GET  /secrets          which are set, and which keys (never a value)
+  //   POST /secrets/<name>   write it where its script reads it (Installer)
+  private async secretsApi(method: string, name: string | undefined, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
+    const home = this.cfg.home;
+    if (!home) return sendJson(res, 503, { error: "this console writes no secrets" });
+    if (me.route === "status") return sendJson(res, 403, { error: "the status route is read-only" });
+    if (method === "GET" && !name) {
+      return sendJson(res, 200, { data: Object.keys(SECRETS).map((n) => secretStatus(home, n as keyof typeof SECRETS)) });
+    }
+    if (method !== "POST" || !name) return sendJson(res, 405, { error: "secrets: GET, or POST /secrets/<name>" });
+    if (!isSecretName(name)) return sendJson(res, 404, { error: `no secret '${name}' (one of ${Object.keys(SECRETS).join(", ")})` });
+    // A credential is the Installer's to set (or the setup token's).
+    const w = mayWrite(me, setupState(this.cfg.access), true);
+    if (!w.ok) return sendJson(res, w.status, { error: w.reason });
+    const ctype = req ? String(req.headers["content-type"] ?? "") : "";
+    if (!/^application\/json\b/i.test(ctype)) return sendJson(res, 415, { error: "a secret is posted as application/json" });
+    let body: Record<string, unknown>;
+    try {
+      body = req ? await readJsonBody(req) : {};
+    } catch (e) {
+      return sendJson(res, 400, { error: (e as Error).message });
+    }
+    const r = writeSecret(home, name, body);
+    if (!r.ok) return sendJson(res, 400, { error: r.error });
+    if (this.jobs) this.jobs.recordSecret(me, name, r.file, r.keys);
+    this.cfg.log(`secret ${name} written by ${me.user ?? "?"} (${me.via}): keys ${r.keys.join(", ")}`);
+    return sendJson(res, 200, { data: secretStatus(home, name) });
   }
 
   private streamJob(id: string, req: IncomingMessage, res: ServerResponse): void {

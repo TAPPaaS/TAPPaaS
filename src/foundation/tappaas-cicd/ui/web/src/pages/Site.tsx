@@ -8,6 +8,7 @@ import { useRead } from "../api";
 import { OperateButton, Step } from "../operate";
 import { SiteRead } from "../types";
 import { KV, ReadState, Section, since } from "../ui";
+import { addNodeSteps } from "./Setup";
 
 const sm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "site-manager", verb, ...extra });
 
@@ -81,7 +82,15 @@ export function Site() {
           </div>
         </Section>
       </div>
-      <Section title="Nodes" aside={<OperateButton label="Register joined nodes…" title="site-manager node reconcile" steps={[sm("site-manager node reconcile", "node reconcile")]} />}>
+      <Section
+        title="Nodes"
+        aside={
+          <span className="toolbar">
+            <OperateButton label="Add a node…" title="Add a node" steps={addNodeSteps()} />
+            <OperateButton label="Register joined nodes…" title="site-manager node reconcile" steps={[sm("site-manager node reconcile", "node reconcile")]} />
+          </span>
+        }
+      >
         <table className="table compact">
           <thead>
             <tr><th>node</th><th>storage pools</th><th /></tr>

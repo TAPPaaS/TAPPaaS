@@ -299,6 +299,39 @@ export class Jobs {
     return { status: 201, job };
   }
 
+  // A secret the Setup wizard wrote (secrets.ts): in Activity like any change,
+  // with the keys it set and never their values.
+  recordSecret(me: Me, name: string, file: string, keys: string[]): Job {
+    const t = new Date(this.now()).toISOString();
+    const job: Job = {
+      id: `${t.replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`,
+      kind: "apply",
+      state: "done",
+      who: { user: me.user, name: me.name, role: me.role, via: me.via },
+      route: me.route,
+      origin: "ui",
+      bin: "console",
+      verb: `secret ${name}`,
+      argv: ["console", "secret", name],
+      ran: null,
+      preview: { kind: "none", touches: `writes ${file} (mode 0600)` },
+      previewOf: null,
+      destructive: false,
+      object: name,
+      created: t,
+      started: t,
+      ended: t,
+      durationMs: 0,
+      exit: 0,
+      output: `wrote ${file}: ${keys.join(", ")} (values are never recorded or shown)\n`,
+      truncated: false,
+      refused: null,
+    };
+    this.add(job);
+    this.record(job);
+    return job;
+  }
+
   // ── running ─────────────────────────────────────────────────────────
 
   private enqueue(job: Job): void {

@@ -1,0 +1,70 @@
+{
+  "switches": {
+    "USW Pro XG 10 PoE": {
+      "controller": "unifi-controller",
+      "managed": "auto",
+      "ports": {
+        "1": {
+          "type": null,
+          "source": "discovered",
+          "mode": "trunk"
+        },
+        "2": {
+          "type": "node",
+          "source": "discovered",
+          "mode": "trunk"
+        },
+        "3": {
+          "type": "node",
+          "source": "discovered",
+          "mode": "trunk"
+        },
+        "4": {
+          "type": null,
+          "source": "discovered",
+          "mode": "trunk"
+        },
+        "5": {
+          "type": "device",
+          "source": "discovered",
+          "mode": "access"
+        },
+        "6": {
+          "type": "device",
+          "source": "discovered",
+          "mode": "access"
+        },
+        "7": {
+          "type": "device",
+          "source": "discovered",
+          "mode": "access"
+        },
+        "8": {
+          "type": null,
+          "source": "discovered",
+          "mode": "trunk"
+        },
+        "9": {
+          "type": "ap",
+          "source": "discovered",
+          "mode": "trunk"
+        },
+        "10": {
+          "type": null,
+          "source": "discovered",
+          "mode": "trunk"
+        },
+        "11": {
+          "type": "node",
+          "source": "discovered",
+          "mode": "trunk"
+        },
+        "12": {
+          "type": "node",
+          "source": "discovered",
+          "mode": "trunk"
+        }
+      }
+    }
+  }
+}

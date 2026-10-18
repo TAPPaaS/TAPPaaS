@@ -10,6 +10,7 @@ import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap } from "./cache";
 import { Runner, runJson } from "./run";
+import { SetupInputs, gatherSetup } from "./setup";
 import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, TopologyDoc } from "./model";
 
 const MIN = 60_000;
@@ -27,10 +28,13 @@ export const TTL = {
   activity: 5 * MIN,
   moduleDetail: 5 * MIN,
   identity: 5 * MIN,
+  setup: 10 * MIN,
   drift: 0, // on demand
 };
 
 export interface ReadsConfig {
+  // Cluster membership for the Setup checklist (lib/ts cluster.ts by default).
+  clusterNodes?: (siteNodes: string[]) => string[] | null;
   configDir: string;
   stateDir: string; // where the health document is handed to `topology --health`
   run: Runner;
@@ -67,6 +71,7 @@ export class Reads {
   readonly moduleDrift: CachedMap<Record<string, unknown>>;
   readonly moduleFields: CachedMap<Record<string, unknown>>;
   readonly identity: Cached<Record<string, string[]>>;
+  readonly setup: Cached<SetupInputs>;
 
   constructor(private readonly cfg: ReadsConfig) {
     const run = cfg.run;
@@ -106,6 +111,17 @@ export class Reads {
       await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
       return out;
     }, now);
+    // The Setup checklist's records: read on demand (it runs three module tests).
+    this.setup = new Cached("setup", TTL.setup, () =>
+      gatherSetup({
+        configDir: cfg.configDir,
+        run,
+        clusterNodes: cfg.clusterNodes ?? (() => null),
+        stacks: async () => {
+          const m = await this.modules.get();
+          return [...new Set((m.value?.modules ?? []).map((x) => x.stack).filter((x): x is string => !!x && x !== "foundation"))].sort();
+        },
+      }), now);
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
   }
 
@@ -158,7 +174,9 @@ export class Reads {
     this.moduleBackup.clear();
     this.moduleDrift.clear();
     this.moduleFields.clear();
-    return Promise.all([this.identity, this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())).then(() => undefined);
+    // The Setup checklist runs module tests: only re-read if someone has looked.
+    const setup = this.setup.peek().at !== null ? [this.setup] : [];
+    return Promise.all([...setup, this.identity, this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())).then(() => undefined);
   }
 
   private async loadTopology(): Promise<TopologyDoc & Record<string, unknown>> {

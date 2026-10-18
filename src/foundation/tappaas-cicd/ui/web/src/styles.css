@@ -244,3 +244,14 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 @media (max-width: 640px) { .form-row, .operate .op { grid-template-columns: 1fr; } .form-row > small { grid-column: 1; } }
 td.toolbar { display: table-cell; white-space: normal; }
 td.toolbar > * { margin: 2px 6px 2px 0; }
+
+/* ── Setup (D10) ─────────────────────────────────────────────────────── */
+ol.setup { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+.setup-step { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
+.setup-done { border-left: 4px solid var(--pass); }
+.setup-todo { border-left: 4px solid var(--fail); }
+.setup-unknown { border-left: 4px solid var(--warn); }
+.setup-head { display: flex; gap: 10px; align-items: center; width: 100%; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-align: left; }
+.setup-detail { margin: 4px 0 0 18px; color: var(--muted); }
+.setup-body { margin: 8px 0 0 18px; display: grid; gap: 8px; }
+.secret { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; }

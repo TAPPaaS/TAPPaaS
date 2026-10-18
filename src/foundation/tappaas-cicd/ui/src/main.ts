@@ -27,7 +27,8 @@ import { ConsoleServer } from "./server";
 import { HelpSpec, checkArgs, renderHelp } from "../../lib/ts/src/help";
 import { DieError, die, guarded, info, requireOperator, warn } from "../../lib/ts/src/cli";
 import { defaultConfigDir } from "../../lib/ts/src/config-io";
-import { mgmtDomain } from "../../lib/ts/src/cluster";
+import { mgmtDomain, queryClusterNodes } from "../../lib/ts/src/cluster";
+import { closeSetupToken } from "./setup";
 
 export const VERSION = "0.1.0";
 export const DEFAULT_PORT = 9097;
@@ -57,7 +58,8 @@ export const HELP: HelpSpec = {
   notes: [
     "Environment: CONSOLE_LISTEN, CONSOLE_ALLOW, CONSOLE_WEB_DIR, CONSOLE_STATE_DIR,\n" +
       "CONSOLE_FIREWALL (the firewall's address; default the gateway of mgmt's network in zones.json),\n" +
-      "CONSOLE_SETUP_ALLOW, CONSOLE_SETUP_TOKEN_FILE\n" +
+      "CONSOLE_SETUP_ALLOW, CONSOLE_SETUP_TOKEN_FILE, CONSOLE_SECRETS_DIR (where the wizard's\n" +
+      "credential files go; default $HOME), CONSOLE_MANIFEST_FILE\n" +
       "(default <config>/console-setup-token), CONSOLE_JOURNAL_DAYS (default 7).",
   ],
 };
@@ -185,6 +187,14 @@ async function serve(o: ServeOpts): Promise<number> {
     stateDir: o.stateDir,
     run: runAsync,
     journalDays: Number(process.env.CONSOLE_JOURNAL_DAYS ?? 7) || 7,
+    // Membership through lib/ts (F12): the first declared node that answers.
+    clusterNodes: (nodes) => {
+      for (const n of nodes) {
+        const r = queryClusterNodes(n);
+        if (r) return r;
+      }
+      return null;
+    },
   });
   const log = (l: string): void => console.log(`[console] ${l}`);
   let server: ConsoleServer | null = null;
@@ -195,17 +205,21 @@ async function serve(o: ServeOpts): Promise<number> {
     stream: streamAsync,
     run: runAsync,
     log,
-    onWriteDone: () => void reads.refreshAfterJob(),
+    onWriteDone: () => {
+      // The identity step puts the console behind the gate: the token goes (D10).
+      closeSetupToken(access, log);
+      void reads.refreshAfterJob();
+    },
   });
-  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log }, reads, jobs);
+  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? process.env.HOME ?? "/home/tappaas" }, reads, jobs);
   for (const l of listen) {
     await server.listen(l.host, l.port).catch((e: Error) => die(`listen ${l.host}:${l.port}: ${e.message}`));
     info(`console ${VERSION} listening on ${l.host}:${l.port}`);
   }
+  closeSetupToken(access, (l) => info(`  ${l}`));
   const s = setupState(access);
   info(`  firewall ${access.firewall.join(", ") || "(unknown)"}; also accepted: ${access.allow.join(", ") || "-"}`);
   if (s.active) info(`  setup token active (${access.tokenFile}): also accepting ${access.setupAllow.join(", ")} with the token`);
-  else if (s.tokenPresent && s.identityInstalled) warn(`identity is installed: the setup token is refused — delete ${access.tokenFile}`);
   info(`  front end: ${existsSync(webDir) ? webDir : "not built (API only)"}`);
   reads.start();
   // What a job may run: every manager's `--help --json` and the declared bash verbs.

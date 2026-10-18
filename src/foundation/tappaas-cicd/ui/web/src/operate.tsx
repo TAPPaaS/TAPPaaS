@@ -29,6 +29,7 @@ export interface Step {
   labels?: Record<string, string>;
   render?: (values: Values, set: (v: Values) => void) => ReactNode; // a change form of its own
   note?: ReactNode;
+  after?: (job: Job) => ReactNode; // shown once the step's job has finished (a config to download)
 }
 
 // Never offered in a form: the job model sets the preview and apply flags; the
@@ -235,8 +236,12 @@ function StepView({ step, me, onDone }: { step: Step; me: Me | null; onDone: (ok
       ) : null}
       {applied ? <JobView id={applied} label="apply" /> : null}
       {applied && appliedJob?.state === "done" ? (
-        <p className="muted small">Recorded in <Link to="/activity">Activity</Link> with the preview and this output.</p>
+        <>
+          {step.after ? step.after(appliedJob) : null}
+          <p className="muted small">Recorded in <Link to="/activity">Activity</Link> with the preview and this output.</p>
+        </>
       ) : null}
+      {isRead && pj?.state === "done" && step.after ? step.after(pj) : null}
     </div>
   );
 }

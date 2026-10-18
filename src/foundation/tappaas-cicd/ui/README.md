@@ -18,6 +18,19 @@ ui/
 
 ## Pages
 
+**Setup** (ADR-034 D10) — shown first while the site is incomplete: the checklist `GET
+/api/v1/setup` derives from the records each time (`src/setup.ts`; nothing stored, so it
+resumes): TLS (wildcard: `config/cert-refids.json` names the default environment;
+per-service: nothing to issue), backup, identity and logging (`config/<m>.json` and `module
+test` passing), the identity bootstrap (`config/identities` has an organization and a user),
+the nodes (every `site.json` node a cluster member, lib/ts `queryClusterNodes`), the switch
+(registered, ports discovered), the admin VPN (a peer in `wgvpn list`), stacks (optional).
+Each step is a form over its verbs as jobs. Secrets go through `POST /api/v1/secrets/<name>`
+(Installer or the setup token): `acme-dns` → `~/.acme-dns-credentials.txt`, `unifi` →
+`~/.unifi-os-credentials.txt`, `wlan` → `~/.wlan-secrets.txt`, mode 0600, in Activity with their
+keys and never their values; `GET /api/v1/secrets` names the keys set. The same flows serve
+day 2: add a node, an environment, a stack; enrol a device (the wg-quick file to download).
+
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
 jumps. **Physical** — the topology laid out under the spike's rules (ISP top-left, the firewall

@@ -1,0 +1,6 @@
+server : tappaas-admin (uuid=52205096-3de4-4f54-bae8-a9bc74998380) port=51821
+pubkey : Ov1AdZIdxOnGZa3FyZ4HpUAqfb6lP+A1qBd2nzWcMQ0=
+rule   : present (10.255.1.0/24 -> 10.0.0.0/24)
+wan    : MISSING (UDP 51821 -> This Firewall)
+peers  :
+  - lars-mac  10.255.1.2/32

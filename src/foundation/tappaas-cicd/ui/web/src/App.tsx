@@ -8,6 +8,7 @@ import { Activity } from "./pages/Activity";
 import { Backup } from "./pages/Backup";
 import { Environments } from "./pages/Environments";
 import { Identity } from "./pages/Identity";
+import { Setup } from "./pages/Setup";
 import { Site } from "./pages/Site";
 import { ModulePage } from "./pages/ModulePage";
 import { Modules } from "./pages/Modules";
@@ -17,6 +18,7 @@ import { Me, SiteRead } from "./types";
 import { Link, usePath } from "./ui";
 
 const NAV: { to: string; label: string; live: boolean }[] = [
+  { to: "/setup", label: "Setup", live: true },
   { to: "/", label: "Overview", live: true },
   { to: "/physical", label: "Physical", live: true },
   { to: "/modules", label: "Modules", live: true },
@@ -36,12 +38,17 @@ export function App() {
   const path = usePath();
   const me = useRead<Me>("me", 300_000);
   const site = useRead<SiteRead>("site");
+  // While the site is incomplete the Setup wizard is shown first (D10).
+  const setup = useRead<{ complete: boolean }>("setup", 600_000);
+  const incomplete = setup.env?.data?.complete === false;
   const [busy, setBusy] = useState(false);
   const s = site.env?.data?.site;
   const user = me.env?.data;
 
   let page;
-  if (path === "/" || path === "") page = <Overview />;
+  if ((path === "/" || path === "") && incomplete) page = <Setup />;
+  else if (path === "/" || path === "") page = <Overview />;
+  else if (path === "/setup") page = <Setup />;
   else if (path === "/physical") page = <Physical />;
   else if (path === "/modules") page = <Modules />;
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;

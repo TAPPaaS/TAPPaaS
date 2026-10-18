@@ -17,8 +17,9 @@ http://<tappaas-cicd mgmt address>:9097/?token=<token>
 ```
 
 While `config/identity.json` does not exist, the console accepts `mgmt` and the admin VPN with
-that token (and nothing else). Once identity is installed it refuses the token — delete the file:
-`rm ~/config/console-setup-token`.
+that token (and nothing else), and serves the **Setup** wizard: the rest of the install from
+the records, step by step. Once identity is installed it refuses the token and deletes its file
+(after the identity step, and at start).
 
 ## The published face
 

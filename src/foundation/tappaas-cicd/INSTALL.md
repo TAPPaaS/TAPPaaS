@@ -42,6 +42,18 @@ customised `zones.json`. Completion is marked by `~/config/.tappaas-cicd-install
 
 ## Post-install
 
+**From the console (ADR-034 D10).** The install summary prints the console's address with
+the setup token (`http://<tappaas-cicd mgmt address>:9097/?token=…`). Its **Setup** page is
+the rest of the install as a checklist derived from the records — TLS, backup, identity,
+logging, the identity bootstrap, the nodes, the switch, the admin VPN peer, stacks — each
+step a form over the verbs below with its preview, and the secrets (the DNS provider's
+token, the UniFi controller's local admin, WLAN passphrases) entered there, written where the
+scripts read them and never shown again. It resumes wherever the install stands. Once the
+identity step has run the console deletes the token; publish it behind the gate from the same
+step (`module-manager add console --proxyDomain console.<domain>`).
+
+**Headless, the same steps from a shell:**
+
 1. Set up TLS certificates: `ssh tappaas@tappaas-cicd` then `acme-setup.sh` (interactive
    DNS-01 wildcard; repo-root [INSTALL.md](../INSTALL.md) §2.3). Optional for
    internal-only use.
