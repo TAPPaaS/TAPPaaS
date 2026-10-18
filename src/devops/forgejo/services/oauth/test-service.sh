@@ -4,8 +4,9 @@
 #
 #   1. the application tappaas-<consumer> exists, confidential
 #   2. the consumer has /etc/secrets/forgejo-oauth.env
-#   3. Forgejo accepts the consumer's client id and secret (a token request
-#      with a made-up code is refused as invalid_grant, not as a bad client)
+#   3. Forgejo accepts the consumer's client id and secret: a token request
+#      with a made-up code is refused for the code, not for the secret
+#      (Forgejo answers unauthorized_client for both; the description differs)
 #
 # Usage: test-service.sh <consuming-module-name>
 
@@ -40,8 +41,12 @@ SECRET="$(sed -n 's/^FORGEJO_CLIENT_SECRET=//p' <<<"${ENVF}")"
 _err="$(curl -s --max-time 15 -X POST "http://${FORGEJO_HOST}:3000/login/oauth/access_token" \
         --data-urlencode grant_type=authorization_code --data-urlencode code=tappaas-test \
         --data-urlencode "client_id=${ID}" --data-urlencode "client_secret=${SECRET}" \
-        --data-urlencode "redirect_uri=$(jq -r '.redirect_uris[0] // empty' <<<"${CUR}")" | jq -r '.error // empty' 2>/dev/null)"
-[[ "${_err}" == "invalid_grant" ]] && ok "Forgejo accepts the client's secret (a made-up code is refused as invalid_grant)" \
-    || bad "Forgejo refuses the client itself (${_err:-no answer}) — the secret on ${CONSUMING_HOST} is stale"
+        --data-urlencode "redirect_uri=$(jq -r '.redirect_uris[0] // empty' <<<"${CUR}")" \
+        | jq -r '"\(.error // "") \(.error_description // "")"' 2>/dev/null)"
+if [[ -n "${_err// /}" && "${_err}" != *"invalid client secret"* && "${_err}" != *"client does not exist"* ]]; then
+    ok "Forgejo accepts the client's secret (a made-up code is refused: ${_err})"
+else
+    bad "Forgejo refuses the client itself (${_err:-no answer}) — the secret on ${CONSUMING_HOST} is stale"
+fi
 
 [[ ${FAILED} -eq 0 ]]

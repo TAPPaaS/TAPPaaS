@@ -32,10 +32,10 @@ for u in docker woodpecker-server woodpecker-agent-docker woodpecker-egress; do
 done
 
 # 2. Both answer; the agents' port is the VM's own.
-[[ "$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:8000/healthz")" == "200" ]] \
-    && pass "the server's /healthz answers 200" || fail "the server's /healthz does not answer 200"
-[[ "$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:3000/healthz")" == "200" ]] \
-    && pass "the agent is healthy (connected to the server)" || fail "the agent's /healthz does not answer 200"
+_c="$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:8000/healthz")"
+[[ "${_c}" == 2* ]] && pass "the server's /healthz answers ${_c}" || fail "the server's /healthz answers ${_c:-nothing}"
+_c="$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://127.0.0.1:3000/healthz")"
+[[ "${_c}" == 2* ]] && pass "the agent is healthy (connected to the server)" || fail "the agent's /healthz answers ${_c:-nothing}"
 _grpc="$(remote "ss -Hltn 'sport = :9000'" | awk '{print $4}' | sort -u | paste -sd' ' -)"
 [[ "${_grpc}" == "127.0.0.1:9000" ]] && pass "the agents' gRPC port listens on 127.0.0.1 only" \
     || fail "the agents' gRPC port listens on ${_grpc:-nothing}"
@@ -84,7 +84,7 @@ PUB="$(remote "jq -r 'select(.proxyPublished != false) | .proxyDomain // empty' 
 FW4="$(getent ahostsv4 firewall.mgmt.internal | awk '{print $1; exit}')"
 if [[ -n "${PUB}" && -n "${FW4}" ]]; then
     _c="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --resolve "${PUB}:443:${FW4}" "https://${PUB}/healthz")"
-    [[ "${_c}" == "200" ]] && pass "https://${PUB}/healthz answers 200" || fail "https://${PUB}/healthz answers ${_c}"
+    [[ "${_c}" == 2* ]] && pass "https://${PUB}/healthz answers ${_c} through Caddy" || fail "https://${PUB}/healthz answers ${_c}"
 else
     skipt "not published — checked on the VM only"
 fi

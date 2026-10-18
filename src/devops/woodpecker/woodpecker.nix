@@ -65,7 +65,7 @@ let
   # Docker keeps the DOCKER-USER chain for rules of the host's own.
   egressScript = pkgs.writeShellScript "woodpecker-egress" ''
     set -euo pipefail
-    export PATH=${lib.makeBinPath [ pkgs.iptables pkgs.iproute2 pkgs.gawk pkgs.gnused pkgs.glibc.bin pkgs.coreutils ]}
+    export PATH=${lib.makeBinPath [ pkgs.iptables pkgs.iproute2 pkgs.gawk pkgs.gnused pkgs.getent pkgs.coreutils ]}
     up="$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
     [ -n "$up" ] || { echo "woodpecker-egress: no default route yet"; exit 1; }
     # Before forgejo:oauth has run there is no Forgejo address yet: fence
@@ -86,7 +86,11 @@ let
       iptables -A DOCKER-USER -o "$up" -d "$ns" -p tcp --dport 53 -j RETURN
     done
     if [ -n "$fhost" ]; then
-      for ip in $(getent ahostsv4 "$fhost" | awk '{print $1}' | sort -u || true); do
+      ips="$(getent ahostsv4 "$fhost" | awk '{print $1}' | sort -u)" || true
+      # Without Forgejo's address a pipeline cannot clone: fail, and systemd
+      # tries again (Restart=on-failure), rather than fence it out quietly.
+      [ -n "$ips" ] || { echo "woodpecker-egress: $fhost does not resolve — retrying"; exit 1; }
+      for ip in $ips; do
         iptables -A DOCKER-USER -o "$up" -d "$ip" -p tcp --dport "$fport" -j RETURN
       done
     fi

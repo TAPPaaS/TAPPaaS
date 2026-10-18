@@ -24,9 +24,9 @@ if [[ "$(vm "sudo test -s /etc/secrets/forgejo-oauth.env && echo yes" 2>/dev/nul
     exit 0
 fi
 # The client may have been written moments ago: bring both units to it.
-vm "sudo systemctl start woodpecker-env.service woodpecker-egress.service; sudo systemctl is-active -q woodpecker-server || sudo systemctl restart woodpecker-server woodpecker-agent-docker" >/dev/null 2>&1 || true
+vm "sudo systemctl restart woodpecker-env.service woodpecker-egress.service; sudo systemctl is-active -q woodpecker-server || sudo systemctl restart woodpecker-server woodpecker-agent-docker" >/dev/null 2>&1 || true
 for _i in $(seq 1 36); do
-    vm "curl -sf --max-time 5 http://localhost:8000/healthz >/dev/null && curl -sf --max-time 5 http://127.0.0.1:3000/healthz >/dev/null" 2>/dev/null && break
+    vm "curl -sf --max-time 5 -o /dev/null http://localhost:8000/healthz && curl -sf --max-time 5 -o /dev/null http://127.0.0.1:3000/healthz" 2>/dev/null && break
     [[ ${_i} -eq 36 ]] && { warn "  Woodpecker or its agent did not answer within 3 minutes — journalctl -u woodpecker-server -u woodpecker-agent-docker on the VM"; exit 0; }
     sleep 5
 done
