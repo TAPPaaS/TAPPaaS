@@ -105,7 +105,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | – | – | 3 |
-| 7 | G7.2 New and reworked app modules | H | M | – | 1 | 3 |
+| 7 | G7.2 New and reworked app modules | H | M | – | 2 | 2 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 1 | 13 |
 | 6 | G6.2 User interface & physical view | H | L | – | – | 4 |
 | 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
@@ -221,7 +221,7 @@ Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can al
 | #415 | Self-hosted KVM Woodpecker runners | H | L | |
 | #284 | forgejo: SQLite → PostgreSQL | M | M | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
 
-### G7.2 New and reworked app modules — Ease H · Risk M · done for 2.3: 1 · open: 3
+### G7.2 New and reworked app modules — Ease H · Risk M · done for 2.3: 2 · open: 2
 
 New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129), Karakeep for bookmarks (#842) — and a rework of LiteLLM's control plane (#170, decided with #430).
 
@@ -229,7 +229,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 |---|-------|:-:|:-:|------|
 | #841 | A lazysite module: a Markdown website for the site owner | M | L | **Opened 2026-10-15.** Markdown in the docroot served as HTML, no build step or database; how content gets there to decide |
 | ✅ #129 | Project N.O.M.A.D. in the home stack | M | L | **Closed 2026-10-16** (`34fe2f3b`…`c41b1885`): `src/home/nomad`, inside the site only (no proxy, no identity), pinned images, secrets on the VM; installed and tested on hrossen (11/11). Kiwix has Wikipedia in Danish. **2026-10-17:** in the `dmz` zone (ADR-032 D2): it runs containers it installs itself and keeps no user data, so a compromised NOMAD reaches only the internet |
-| #842 | A Karakeep module: bookmarks and read-later, AI tagging via the AI stack | M | L | **Opened 2026-10-15.** OIDC sign-in; its AI tagging through LiteLLM when the AI stack is installed |
+| ✅ #842 | A Karakeep module: bookmarks and read-later, AI tagging via the AI stack | M | L | **Closed 2026-10-18** (`267f85ce`…`bdfc6b23`): `src/home/karakeep`, Karakeep 0.34.0 with Chromium and Meilisearch, pinned images; Authentik sign-in only (password sign-up and sign-in refused, sign-ins only from its own address); AI tagging through LiteLLM via `integratesWith` (its key provisioned by the `litellm:models` contract). Live on hrossen at karakeep.hrossen.dk: module test 11/11, end-to-end 7/7, security from outside 11/11 and inside 8/8. VEX: esbuild's Go stdlib and npm's own packages never run; xmldom in pdf2json counted, low risk |
 | #170 | LiteLLM declarative control plane | H | M | Decide with #430 (G1.7) |
 
 ## Wave 6 — site fabric and user experience
