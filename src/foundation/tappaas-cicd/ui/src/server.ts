@@ -201,6 +201,8 @@ export class ConsoleServer {
       case "environments":
         return sendJson(res, 200, envelope(await r.environments.get()));
       case "identity":
+        if (a === "records") return sendJson(res, 200, envelope(await r.identityRecords.get()));
+        if (a !== undefined) return sendJson(res, 404, { error: `identity/${a}` });
         return sendJson(res, 200, envelope(await r.identity.get()));
       case "schemas": {
         if (!a || !(a in SCHEMAS)) return sendJson(res, 404, { error: `schemas/<${Object.keys(SCHEMAS).join("|")}>` });

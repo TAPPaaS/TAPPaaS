@@ -110,6 +110,18 @@ async function main(): Promise<void> {
   }
   check(threw, "refreshing an unknown read is refused");
 
+  // ── the identity records (the Identity page's graph) ──────────────────
+  {
+    const site = fakeSite();
+    const r = new Reads({ configDir: mkdtempSync(join(tmpdir(), "idrec-")), stateDir: mkdtempSync(join(tmpdir(), "idrec-s-")), run: site.run, journalDays: 7 });
+    const e = await r.identityRecords.get();
+    const v = e.value!;
+    check(v.org.length === 1 && v.group.length === 2 && v.role.length === 2, "every object of every kind is read with show");
+    check((v.user.find((u) => u.name === "lars")?.memberOf as string[]).join() === "users,authentik Admins", "a record as identity-manager shows it");
+    check(!site.calls.some((c) => c.includes("show -x")), "a listed name that looks like an option never reaches an argv");
+    check(site.calls.includes("identity-manager group show authentik Admins --json"), "a name with a space is one argument");
+  }
+
   done("reads");
 }
 

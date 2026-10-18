@@ -78,6 +78,7 @@ export class Reads {
   readonly moduleDrift: CachedMap<Record<string, unknown>>;
   readonly moduleFields: CachedMap<Record<string, unknown>>;
   readonly identity: Cached<Record<string, string[]>>;
+  readonly identityRecords: Cached<Record<string, Record<string, unknown>[]>>;
   readonly schemas: CachedMap<Record<string, unknown>>;
   readonly setup: Cached<SetupInputs>;
 
@@ -119,6 +120,17 @@ export class Reads {
     this.identity = new Cached("identity", TTL.identity, async () => {
       const out: Record<string, string[]> = {};
       await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
+      return out;
+    }, now);
+    // Every identity object's record, for the graph of their relations: each
+    // kind's list, then `show` per object (a name from the manager's own list).
+    this.identityRecords = new Cached("identity-records", TTL.identity, async () => {
+      const lists = (await this.identity.get()).value ?? {};
+      const out: Record<string, Record<string, unknown>[]> = {};
+      await Promise.all(IDENTITY_KINDS.map(async (k) => {
+        const names = (lists[k] ?? []).filter((n) => typeof n === "string" && n !== "" && !n.startsWith("-"));
+        out[k] = await Promise.all(names.map((n) => j<Record<string, unknown>>("identity-manager", [k, "show", n, "--json"]).catch((e: Error) => ({ name: n, error: e.message }))));
+      }));
       return out;
     }, now);
     // The Setup checklist's records: read on demand. The module tests behind
@@ -207,7 +219,9 @@ export class Reads {
     // The Setup checklist is records only (no module test runs here, ever):
     // re-read if someone has looked, so the step a job just completed shows.
     const setup = this.setup.peek().at !== null ? [this.setup] : [];
-    return Promise.all([...setup, this.identity, this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())).then(() => undefined);
+    // The identity records follow the lists they are read from.
+    const identity = this.identity.refresh().then(() => (this.identityRecords.peek().at !== null ? this.identityRecords.refresh() : undefined));
+    return Promise.all([identity, ...[...setup, this.modules, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
   }
 
   private async loadTopology(): Promise<TopologyDoc & Record<string, unknown>> {

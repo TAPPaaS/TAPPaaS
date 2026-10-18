@@ -55,6 +55,21 @@ export function fakeSite(): FakeSite {
       case "site-manager node":
       case "site-manager repository":
         return ok("[]");
+      case "identity-manager org":
+      case "identity-manager group":
+      case "identity-manager user":
+      case "identity-manager role": {
+        const ids: Record<string, Record<string, Record<string, unknown>>> = {
+          org: { rossen: { name: "rossen", owner: "lars", parentOrg: null } },
+          group: { users: { name: "users", ownerOrg: "rossen", roles: ["user"] }, "authentik Admins": { name: "authentik Admins", ownerOrg: "rossen", roles: [] } },
+          user: { lars: { name: "lars", memberOf: ["users", "authentik Admins"], roles: ["admin", "user"] }, "-x": { name: "-x" } },
+          role: { admin: { name: "admin" }, user: { name: "user" } },
+        };
+        const kind = ids[args[0]];
+        if (args[1] === "list") return ok(JSON.stringify(Object.keys(kind)));
+        if (args[1] === "show" && kind[args[2]]) return ok(JSON.stringify(kind[args[2]]));
+        return { rc: 1, stdout: "", stderr: `[Error] no ${args[0]} '${args[2]}'`, ran: true };
+      }
       case "journalctl -u":
         return ok(file("sweep-journal.txt"));
       case "systemctl is-active":

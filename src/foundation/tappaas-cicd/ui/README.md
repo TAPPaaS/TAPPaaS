@@ -54,7 +54,9 @@ organization; zone and display name: from the name; DNS mode: the schema's defau
 are drawn as cards coloured by type, with an arrow for each `access-to` and a dashed one for each
 `pinhole-allowed-from`; a click opens the zone's fields and verbs, and Modify lists every field of
 `zones-fields.json` with its value, default and class (one `network-manager modify <zone> --set …`). **Identity** — organizations,
-groups, users and roles; a change is staged with `--no-reconcile` and pushed by `identity-manager
+groups, users and roles as a graph of their relations (a group's owning organization, a user's
+groups, the roles of users and groups, an organization's owner and parent; `GET /api/v1/identity/records`:
+`identity-manager <kind> show` for each), the list beside it, a click for the record and its verbs; a change is staged with `--no-reconcile` and pushed by `identity-manager
 reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
 modify, purge (typed). **Site** — `site.json`, the update schedule, Update now (`site update`,
 its plan first), the release train, nodes and their uplinks, repositories (sync, hold, release,

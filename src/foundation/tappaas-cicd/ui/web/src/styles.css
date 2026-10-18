@@ -326,3 +326,14 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .zcard-on { box-shadow: 0 0 0 2px var(--accent); }
 .zcard-pseudo { background: #f1f5f9; border-style: dashed; text-align: center; }
 .zfields td { font-size: 12px; }
+
+/* ── identity (Identity.tsx) ────────────────────────────────────────── */
+.identity-view { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 14px; align-items: start; }
+.identity-side { display: grid; gap: 10px; }
+.identity-side .section { margin: 0; }
+.id-detail { width: auto; }
+.idcard-missing { border-style: dashed; background: var(--fail-bg); }
+.linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); cursor: pointer; }
+.row-on td { background: var(--info-bg); }
+@media (max-width: 1100px) { .identity-view { grid-template-columns: 1fr; } }
+.identity-side .toolbar { flex-wrap: nowrap; }
