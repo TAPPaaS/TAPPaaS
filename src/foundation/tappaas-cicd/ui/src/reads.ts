@@ -233,7 +233,15 @@ export class Reads {
   // results, then gather the checklist again. Nothing else runs them.
   async refreshSetup(): Promise<void> {
     await runSetupTests({ configDir: this.cfg.configDir, stateDir: this.cfg.stateDir, run: this.cfg.run }, this.cfg.now ?? Date.now);
-    await this.setup.refresh();
+    // Not refresh(): a gather already running (the page's own read) read the
+    // results before the tests wrote them, and would be what this returns.
+    await this.setup.refreshAfterChange();
+  }
+
+  // A test job wrote a result (recordSetupTest): the checklist follows, if
+  // anyone has looked at it.
+  setupTestRecorded(): Promise<void> {
+    return this.setup.peek().at !== null || this.setup.peek().loading ? this.setup.refreshAfterChange() : Promise.resolve();
   }
 
   // After a job changed the site: what it may have changed is read again now

@@ -8,7 +8,7 @@
 // (update-port, then reconcile) runs them in order.
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
-import { applyJob, previewJob, readJob, useJob, useRead, useVerb } from "./api";
+import { applyJob, previewJob, readJob, reloadAll, useJob, useRead, useVerb } from "./api";
 import { Command, Output, jobResult } from "./jobs";
 import { Job, ManifestVerb, Me } from "./types";
 import { Link, Tag, canOperate, useMe } from "./ui";
@@ -294,7 +294,8 @@ export function OperateButton({ label, title, steps, kind, disabled, hint }: { l
       <button className={`btn${kind ? ` btn-${kind}` : ""}`} disabled={disabled} title={hint} onClick={() => setOpen(true)}>
         {label}
       </button>
-      {open ? <Operate title={title ?? label} steps={typeof steps === "function" ? steps() : steps} onClose={() => setOpen(false)} /> : null}
+      {/* Closing it re-reads the page: a job may have changed what it shows (a Test job, a Setup step). */}
+      {open ? <Operate title={title ?? label} steps={typeof steps === "function" ? steps() : steps} onClose={() => { setOpen(false); reloadAll(); }} /> : null}
     </>
   );
 }

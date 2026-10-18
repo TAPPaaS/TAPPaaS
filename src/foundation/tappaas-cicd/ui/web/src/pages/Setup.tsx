@@ -174,11 +174,13 @@ export function Setup() {
   const secrets = useRead<SecretStatus[]>("secrets", 600_000);
   const site = useRead<SiteRead>("site").env?.data?.site;
   const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
   const d = r.env?.data;
   const sec = (n: string) => (secrets.env?.data ?? []).find((x) => x.name === n);
   const check = () => {
     setChecking(true);
-    void get("setup?refresh=1").finally(() => {
+    setCheckError(null);
+    void get("setup?refresh=1").catch((e: Error) => setCheckError(e.message)).finally(() => {
       setChecking(false);
       r.reload();
     });
@@ -257,6 +259,7 @@ export function Setup() {
         </p>
       ) : null}
       {r.env && !d && r.env.refreshing ? <p className="muted">Reading the records…</p> : null}
+      {checkError ? <p className="readstate readstate-fail">Check did not finish: {checkError}. The steps show the last results kept.</p> : null}
       {checking ? <p className="muted">Running the foundation modules' tests (backup, identity, logging) — a few minutes; the checklist is read again after.</p> : null}
       <ol className="setup">
         {(d?.steps ?? []).map((s) => (

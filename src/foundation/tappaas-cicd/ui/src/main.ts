@@ -32,7 +32,7 @@ import { HelpSpec, checkArgs, renderHelp } from "../../lib/ts/src/help";
 import { DieError, die, guarded, info, requireOperator, warn } from "../../lib/ts/src/cli";
 import { defaultConfigDir } from "../../lib/ts/src/config-io";
 import { mgmtDomain, queryClusterNodes } from "../../lib/ts/src/cluster";
-import { closeSetupToken } from "./setup";
+import { closeSetupToken, recordSetupTest } from "./setup";
 
 export const VERSION = "0.1.0";
 export const DEFAULT_PORT = 9097;
@@ -219,6 +219,10 @@ async function serve(o: ServeOpts): Promise<number> {
       // The identity step puts the console behind the gate: the token goes (D10).
       closeSetupToken(access, log);
       void reads.refreshAfterJob();
+    },
+    // A foundation module's test run as a job counts for its Setup step.
+    onDone: (job, tail) => {
+      if (recordSetupTest(o.stateDir, job, tail)) void reads.setupTestRecorded();
     },
     // A new build linked while a job ran (ui/install.sh left restart-pending):
     // now that nothing runs, exit; the unit's Restart=always starts the new one.

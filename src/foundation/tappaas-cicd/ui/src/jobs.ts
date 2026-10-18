@@ -104,6 +104,7 @@ export interface JobsConfig {
   run: Runner; // for the unit's state
   now?: () => number;
   onWriteDone?: (job: JobSummary) => void; // refresh the read caches
+  onDone?: (job: JobSummary, tail: string) => void; // every finished job, with its last output
   // A card's proposal in the caller's own conversation (assistant.ts).
   proposal?: (me: Me, conversation: string, proposal: string) => Proposal | null;
   log?: (line: string) => void;
@@ -574,7 +575,9 @@ export class Jobs {
     this.emit(job, { type: "state", job: summary(job) });
     this.cfg.log?.(`job ${job.id} ${job.kind} by ${job.who.user ?? "?"} (${job.who.via}): ${argv.join(" ")}`);
     let written = 0;
+    let tail = ""; // the end of the output, for onDone
     const r = await this.cfg.stream(argv[0], argv.slice(1), (chunk) => {
+      tail = (tail + chunk).slice(-4096);
       if (written < MAX_OUTPUT) {
         const part = chunk.slice(0, MAX_OUTPUT - written);
         written += part.length;
@@ -591,6 +594,7 @@ export class Jobs {
     this.record(job);
     this.emit(job, { type: "end", job: summary(job) });
     if (job.kind === "apply") this.cfg.onWriteDone?.(job);
+    this.cfg.onDone?.(job, r.ran ? tail.replace(/\s+$/, "") : "");
   }
 }
 
