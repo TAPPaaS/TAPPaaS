@@ -68,7 +68,12 @@ let
     export PATH=${lib.makeBinPath [ pkgs.iptables pkgs.iproute2 pkgs.gawk pkgs.gnused pkgs.glibc.bin pkgs.coreutils ]}
     up="$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
     [ -n "$up" ] || { echo "woodpecker-egress: no default route yet"; exit 1; }
-    url="$(sed -n 's/^FORGEJO_URL=//p' /etc/secrets/forgejo-oauth.env 2>/dev/null | tail -1)"
+    # Before forgejo:oauth has run there is no Forgejo address yet: fence
+    # everything private, and woodpecker-reconfigure re-runs this once there is.
+    url=""
+    if [ -r /etc/secrets/forgejo-oauth.env ]; then
+      url="$(sed -n 's/^FORGEJO_URL=//p' /etc/secrets/forgejo-oauth.env | tail -1)"
+    fi
     hostport="''${url#*://}"; hostport="''${hostport%%/*}"
     fhost="''${hostport%%:*}"
     case "$url" in https://*) fport=443 ;; *) fport=80 ;; esac
@@ -76,12 +81,12 @@ let
     iptables -N DOCKER-USER 2>/dev/null || true
     iptables -F DOCKER-USER
     iptables -A DOCKER-USER -o "$up" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
-    for ns in $(awk '/^nameserver/ {print $2}' /etc/resolv.conf | grep -v ':'); do
+    for ns in $(awk '/^nameserver/ && $2 !~ /:/ {print $2}' /etc/resolv.conf); do
       iptables -A DOCKER-USER -o "$up" -d "$ns" -p udp --dport 53 -j RETURN
       iptables -A DOCKER-USER -o "$up" -d "$ns" -p tcp --dport 53 -j RETURN
     done
     if [ -n "$fhost" ]; then
-      for ip in $(getent ahostsv4 "$fhost" | awk '{print $1}' | sort -u); do
+      for ip in $(getent ahostsv4 "$fhost" | awk '{print $1}' | sort -u || true); do
         iptables -A DOCKER-USER -o "$up" -d "$ip" -p tcp --dport "$fport" -j RETURN
       done
     fi
