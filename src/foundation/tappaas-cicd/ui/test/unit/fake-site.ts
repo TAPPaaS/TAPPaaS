@@ -46,10 +46,6 @@ export function fakeSite(): FakeSite {
         return ok(JSON.stringify([{ name: "rasmus", role: "remote" }]));
       case "network-manager topology":
         return ok(file("topology.json"));
-      case "network-manager list":
-        return ok(JSON.stringify(["mgmt", "rossen"]));
-      case "network-manager show":
-        return ok(JSON.stringify({ vlantag: args[1] === "rossen" ? 200 : 0 }));
       case "environment-manager list":
         return ok(file("environments.json"));
       case "site-manager site":

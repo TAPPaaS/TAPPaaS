@@ -9,6 +9,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { defaultConfigDir, writeJsonAtomic } from "../../../lib/ts/src/config-io";
+import { isDocKey, readZonesFile } from "../../../lib/ts/src/zones";
 import { Zone, ZonesDoc } from "./types";
 import { archetypeByName, archetypeNames } from "./archetypes";
 
@@ -85,38 +86,18 @@ export function defaultTemplateFile(): string {
   return process.env.NM_TEMPLATE ?? join(__dirname, "zones.json");
 }
 
-// Doc-block / comment keys ("_comment" etc.): never treated as zones.
-// Shared by zonesinit.ts and zonesmerge.ts.
-export function isDocKey(k: string): boolean {
-  return k.startsWith("_");
-}
+// Doc-block / comment keys ("_comment" etc.): never treated as zones. The rule
+// lives in lib/ts zones.ts (the console reads zones.json through it too);
+// re-exported for zonesinit.ts, zonesmerge.ts and serves.ts.
+export { isDocKey };
 
 // Load + index zones.json. Throws if the file is missing or not valid JSON.
+// The parse and the selection rule (a key not beginning "_", an object with a
+// state or a vlantag) are lib/ts readZonesFile; this indexes the result.
 export function loadZones(file: string): ZonesDoc {
-  if (!existsSync(file)) {
-    throw new Error(`zones.json not found: ${file}`);
-  }
-  const txt = readFileSync(file, "utf8");
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(txt);
-  } catch (e) {
-    throw new Error(`zones.json is not valid JSON: ${file} (${(e as Error).message})`);
-  }
-  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error(`zones.json must be a JSON object: ${file}`);
-  }
-  const raw = parsed as Record<string, unknown>;
+  const { raw, entries } = readZonesFile(file);
   const zones = new Map<string, Zone>();
-  for (const [k, v] of Object.entries(raw)) {
-    if (isDocKey(k)) continue;
-    if (v === null || typeof v !== "object" || Array.isArray(v)) continue;
-    const o = v as Record<string, unknown>;
-    // Only treat entries that look like real zones (have a state or vlantag),
-    // matching the jq-based bash tooling's selection rule.
-    if (!("state" in o) && !("vlantag" in o)) continue;
-    zones.set(k, { ...(o as Zone), name: k });
-  }
+  for (const [k, o] of entries) zones.set(k, { ...(o as Zone), name: k });
   return { raw, zones };
 }
 

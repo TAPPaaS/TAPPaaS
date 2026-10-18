@@ -45,6 +45,7 @@ async function main(): Promise<void> {
   const cfgDir = mkdtempSync(join(tmpdir(), "console-reads-"));
   const stateDir = join(cfgDir, "state");
   writeFileSync(join(cfgDir, "last-update-result.json"), JSON.stringify({ ok: true, total: 25 }));
+  writeFileSync(join(cfgDir, "zones.json"), JSON.stringify({ _README: "doc block, not a zone", mgmt: { state: "Mandatory", vlantag: 0, ip: "10.0.0.0/24" }, rossen: { state: "Active", vlantag: 200 }, notes: { description: "no state, no vlantag: not a zone" } }));
   writeFileSync(join(cfgDir, "update-tappaas.failures"), readFileSync(join(process.env.CONSOLE_FIXTURES ?? "test/fixtures", "update-tappaas.failures"), "utf8"));
   const site = fakeSite();
   const reads = new Reads({ configDir: cfgDir, stateDir, run: site.run, journalDays: 7 });
@@ -87,7 +88,8 @@ async function main(): Promise<void> {
 
   // ── the rest ─────────────────────────────────────────────────────────
   const z = await reads.zones.get();
-  check(z.value?.length === 2 && (z.value[1] as { vlantag?: number }).vlantag === 200, "zones: list, then show each");
+  check(z.value?.length === 2 && (z.value[1] as { name?: string; vlantag?: number }).name === "rossen" && (z.value[1] as { vlantag?: number }).vlantag === 200, "zones: zones.json read once, each zone with its name, doc blocks skipped");
+  check(!site.calls.some((c) => c.startsWith("network-manager list") || c.startsWith("network-manager show")), "…without a network-manager process per zone");
   const sec = await reads.security.get();
   check(sec.value === null && sec.error === null, "no security scan yet is an answer, not an error");
   const a = await reads.activity.get();

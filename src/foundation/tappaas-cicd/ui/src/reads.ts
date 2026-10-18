@@ -2,11 +2,14 @@
 // (ADR-034 D1, D4 "P1 is read-only"). One cache per read with its own timer:
 // health 10 minutes, the module list and the topology 5, drift on demand. The
 // only files read directly are the sweep's own record (last-update-result.json
-// and the failures ledger) and its journal, which no manager prints.
+// and the failures ledger), its journal, which no manager prints, and
+// zones.json through lib/ts zones.ts — the same parse network-manager's own
+// `list` and `show` run, read once instead of one process per zone.
 
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
+import { readZonesFile } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap } from "./cache";
 import { Runner, runJson } from "./run";
@@ -197,17 +200,14 @@ export class Reads {
     return runJson<TopologyDoc & Record<string, unknown>>(this.cfg.run, "network-manager", args, { timeoutMs: 3 * MIN });
   }
 
+  // Each zone as `network-manager show <name> --json` prints it, plus its name:
+  // zones.json read once (lib/ts zones.ts, the manager's own parse and rule).
   private async loadZones(): Promise<Record<string, unknown>[]> {
-    const names = await runJson<string[]>(this.cfg.run, "network-manager", ["list", "--json"]);
-    return Promise.all(
-      names.map(async (n) => {
-        try {
-          return { name: n, ...(await runJson<Record<string, unknown>>(this.cfg.run, "network-manager", ["show", n, "--json"])) };
-        } catch (e) {
-          return { name: n, error: (e as Error).message };
-        }
-      }),
-    );
+    const { entries } = readZonesFile(join(this.cfg.configDir, "zones.json"));
+    return entries.map(([name, z]) => {
+      const { name: _n, ...rest } = z;
+      return { name, ...rest };
+    });
   }
 
   private async loadSite(): Promise<Record<string, unknown>> {
