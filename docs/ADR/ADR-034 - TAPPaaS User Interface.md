@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** |
-| **Version** | 0.2 |
-| **Date** | 2026-10-17 |
+| **Version** | 0.3 |
+| **Date** | 2026-10-18 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
-| **Closes / addresses** | **#844** (the UI design spike and this ADR). Related: #839 (the UI, physical view first), #183 (service catalog), #91 (Backstage), #142 (agent access to `tappaas-cicd`), #843 (SIEM). Builds on ADR-007 (taxonomy, 007e Health, 007f managers and controllers), ADR-020 (declared-field changes), ADR-021 / ADR-023 / ADR-032 (reachability, routes, exposure), ADR-031 (pulse). |
-| **Changelog** | v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
+| **Closes / addresses** | **#844** (the UI design spike and this ADR). Related: #839 (the UI, physical view first), #183 (service catalog), #91 (Backstage), #142 (agent access to `tappaas-cicd`), #843 (SIEM); caused #853, #854, #855 (switch-controller and console gaps) and #856 (the admin tunnel). Builds on ADR-007 (taxonomy, 007e Health, 007f managers and controllers), ADR-020 (declared-field changes), ADR-021 / ADR-023 / ADR-032 (reachability, routes, exposure), ADR-031 (pulse). |
+| **Changelog** | v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
 
 One web UI for a TAPPaaS site: it shows the site and its health, draws the site as it is cabled,
 operates it through the managers and nothing else, and carries an assistant one can talk to.
@@ -81,35 +81,64 @@ It is built in two halves:
 
 - **The service** lives with the mothership: code under `tappaas-cicd/ui/`, a systemd unit in
   `tappaas-cicd.nix`, as the alert receiver does. The mothership's NixOS config owns what runs on
-  it (#675).
-- **The published face** is a thin **`console` module** (`kind: application`, host `tappaas-cicd`):
-  `console.json` whose `dependsOn` gives it `network:proxy` and `identity:accessControl`, and
-  whose `integratesWith` gives it `litellm:models` for the assistant's virtual key (D7). The
-  module is how the routes, the gate and the key are declared; it installs no VM.
+  it (#675). `~/bin/console` is built by the control-plane refresh after the system is built, so
+  a path unit starts the service when the bin appears.
+- **The published face** is a thin **`console` module** (`kind: application`, `vmname`
+  `tappaas-cicd`, under `src/foundation/console/`): `console.json` whose `dependsOn` gives it
+  `network:proxy`, `network:rules` and `identity:accessControl`, and whose `integratesWith` gives
+  it `litellm:models` for the assistant's virtual key (D7); its `fields.json` holds
+  `assistantModel`, and its `test.sh` checks the service and the gated route. The module is how
+  the route, the gate and the key are declared; it installs no VM.
 
 The backend is a manager-shaped reader and a verb runner. It reads runtime state through
 `lib/ts/src/cluster.ts` like a manager and writes only by running manager verbs: never a
 controller, never `pvesh` or `ssh`. It caches its reads on a timer (health every 10 minutes, the
 module list and the topology every 5, drift on demand) and streams job output over server-sent
-events. It owns no state the managers do not: **Activity**, an append-only job log under
-`/var/lib/tappaas/console/`, is the only thing it writes.
+events. It owns no state the managers do not. Under `/var/lib/tappaas/console/` it writes
+**Activity**, an append-only job log (`jobs.jsonl`), and the assistant's conversations (D7); the
+only other files it writes itself are the Setup wizard's three declared secrets (D10).
 
-`console` as module and hostname is the working name; `tappaas.<domain>` is the alternative (O1).
+The module and the hostname are `console`: the route is `console.<domain>` (O1, closed).
 
-### D2. Two gate routes on one backend; the backend accepts the firewall only
+### D2. `console.<domain>` through Caddy and the gate, from `mgmt` and `admin` only; the backend accepts the firewall only
 
-The `console` module publishes two routes (ADR-023, ADR-032 E4), both `proxyAuth: gate`:
+The console follows the TAPPaaS rule: **`name.<domain>` goes through Caddy, `name.<zone>.internal`
+is direct** (ADR-021). It is a gated service, so it is published as `console.<domain>` through
+Caddy and the Authentik gate. The `console` module has two routes (ADR-023, ADR-032 E4), both
+`proxyAuth: gate`:
 
 | Route | `proxyAllowedZones` | Who | May |
 |---|---|---|---|
-| `console.<domain>` | `mgmt`, `admin` (the admin VPN, ADR-010) | Authentik groups Installer, Admin | read and operate; destructive verbs Installer only |
+| `console.<domain>` | `mgmt`, `admin` (the admin VPN, ADR-010) | Authentik groups `installer`, `admin` | read and operate; destructive verbs `installer` only |
 | `status.<domain>` | the trusted client zones of the default environment | group `users` | read the owner view: Overview, Physical, Modules; no actions, no jumps, no assistant |
 | `/api/v1` on either | as the route | an Authentik app password or JWT at the gate (ADR-032 D3) | by scope: `read`, `operate`; never destructive |
 
-The backend binds to the mothership's `mgmt` address and **accepts connections only from the
-firewall's address**, so the `X-Authentik-*` headers cannot be presented by anything else on
-`mgmt`. The backend treats the `status` route as read-only whatever the caller's group: the route
-caps the role, defence in depth over the group mapping (D3).
+- **The name is public, the service is not.** `console.<domain>` has a public DNS record and its
+  certificate comes by HTTP-01 (Caddy answers the challenge on :80), or from the wildcard where
+  the site has one. Every source outside the route's zones, the internet included, gets 403 from
+  Caddy before the gate.
+- **`internet` is refused** in the console module's `proxyAllowedZones`: its install stops on
+  a zone list that contains it.
+- **The name is passed at install.** The module's `vmname` is `tappaas-cicd`, so its route would
+  default to `tappaas-cicd.<domain>`; the install passes `--proxyDomain console.<domain>`.
+- **Over the admin VPN** the tunnel's peer config must carry the site's DNS and host routes to the
+  DMZ gateway (#856): the site's resolver answers the published name with the DMZ gateway, the
+  host routes carry it through the tunnel, and it arrives from the admin overlay. Without them a
+  laptop resolves the public address, crosses the internet and gets the 403. ADR-021 D3a covers
+  the firewall side. #856 is a prerequisite of the install.
+- **`status.<domain>` waits for gated `proxyRoutes`.** `proxyRoutes` (ADR-023) publishes a further
+  name with its own zones but never behind forward-auth; declared today, the route would reach the
+  backend without the gate's headers and be refused (401). The backend side is built; the route is
+  declared once a further route can be gated (ADR-032 D1, `proxyAuth` per route).
+
+The backend listens on the mothership's `mgmt` address and loopback and **accepts connections
+only from the firewall's address** (the gateway of `mgmt` in `zones.json`) and loopback, so the
+`X-Authentik-*` headers cannot be presented by anything else on `mgmt`. A request from the
+firewall without them came through an ungated route and is refused. Loopback without the headers
+reads only (`tappaas ask`, a development forward). Before identity exists, `mgmt` and the admin VPN
+are accepted with the setup token (D10). The backend treats the `status` route as read-only
+whatever the caller's group: the route caps the role, defence in depth over the group mapping
+(D3).
 
 Jumps into the component UIs (U5) open a new tab at the object in view: Proxmox at the node or
 guest, OPNsense at the interface or its rules, Grafana Explore with the host pre-filled, PBS at the
@@ -122,13 +151,18 @@ never embeds these in an iframe and never re-implements them.
 Authentication is `identity:accessControl`: Authentik forward-auth at Caddy, one provider per
 hostname, the groups in `X-Authentik-Groups`. The UI has no login code of its own.
 
-Authorization is a role table in the backend, keyed by group:
+Authorization is a role table in the backend, keyed by group by its TAPPaaS name
+(`identity/USERS.md`), compared without case:
 
 | Group | Role | May |
 |---|---|---|
-| Installer | operate + destructive | every verb, including `delete`, `purge`, `retire`, `erase`, `--remove`, `--decommission`, `key import` |
-| Admin | operate | every read and every write verb that is not destructive |
+| `installer` | Installer: operate + destructive | every verb, including `delete`, `purge`, `retire`, `erase`, `--remove`, `--decommission`, `key import` |
+| `admin` | Admin: operate | every read and every write verb that is not destructive |
 | `users` | read | the reads the owner view shows |
+
+`admin` is the TAPPaaS `admin` role, which Authentik already carries as a group; a config group
+of that name would collide with it. `installer` is a new group, created by the identity bootstrap
+with the installer in it and by `module-manager update identity` on an existing site.
 
 A destructive verb needs the object's name typed and the Installer role; the purge of backups is
 a second, separate confirmation, never a side effect of a delete. The route caps the role (D2):
@@ -149,8 +183,10 @@ From P2, every change, whatever the page, is one pattern: **Change → Preview �
    `--apply`, `delta`, the `modify` pre-gate, `tappaas-train preview`. A preview is never skipped;
    it enables Apply. A verb with no dry run declares *no preview*, and the preview is the command
    and what the manifest says it touches.
-3. **Apply** — the same argv with the applying flag. A disruption (`--force`, `rebootOk`, `--yes`)
-   is a checkbox that names its consequence; a destructive verb needs the typed name (D3).
+3. **Apply** — the same argv with the applying flag, only from a finished preview of that argv
+   less than an hour old. A disruption (`--force`, `rebootOk`, `--yes`) is a checkbox that names
+   its consequence; a destructive verb needs the typed name (D3), the name the manifest gives as
+   the call's object.
 4. **Result** — streamed output, exit code, duration; the read caches refresh. The job is in
    Activity with who, from where (UI, assistant, agent), the argv, the preview and the output.
 
@@ -163,9 +199,27 @@ runs a controller directly: a switch port is changed through `switch-controller`
 
 Long-running verbs (`module update`, `add-stack`, `site update`, `update-os`, `test --deep`) run
 as jobs the browser may leave. Writes are serialized through one job runner; it refuses to start
-while `update-tappaas.service` is active and says so, and takes the managers' own locks where
-they exist. A second operator's job queues behind the first and both see the queue. Reads never
-need confirmation.
+while `update-tappaas.service` is active and says so, with the sweep's stage. A second operator's
+job queues behind the first and both see the queue; a queued job whose turn comes during a sweep
+is refused too. Reads never need confirmation.
+
+As built (P2), where it differs from the above:
+
+- **The manifest has two sources.** The TypeScript managers answer `<manager> --help --json`
+  (`lib/ts` `renderManifest`); the bash verbs (`switch-controller`, `ap-controller`,
+  `tappaas-train.sh`, `acme-setup.sh`) are declared in `ui/manifest/bash-verbs.json`, with how
+  each previews and what it touches.
+- **Read verbs are jobs without a preview.** A verb that changes nothing (`module test`, `node
+  network show`, `wgvpn list`) runs at once, beside the queue, and is in Activity.
+- **No manager lock is taken.** The one runner and the sweep refusal are the serialization.
+- **`module-manager` grew `fields <m>` and `modify --set … --dry-run [--json]`**, the pre-gate as
+  a preview and the change class of each field for the form.
+- **A destructive call's object is the verb's first positional.** For `switch-controller
+  remove-port <switch> <port>` that is the switch, not the port; #855 makes the manifest name the
+  object.
+- **A preview is not always free of side effects.** `site-manager node network set` without
+  `--apply` writes the declaration into `config/<node>.json`; the console trusts the manager's
+  dry run, so the manager must make it one.
 
 ### D5. The physical view is derived from one topology document, owned by `network-manager`
 
@@ -209,19 +263,30 @@ view.
 The agent loop runs **in the UI backend**, so its tools, its audit and its role are the same as
 for a click.
 
-- **Transport:** LiteLLM's OpenAI-compatible chat completions with tool calling; the virtual key
-  from `litellm:models` as for Open WebUI; LiteLLM's default route. Nothing leaves the site that
-  LiteLLM does not send.
-- **Tools:** the read API (`modules.list/show/drift`, `zones`, `topology`, `health`, `backup`,
-  `activity`, `logs.query` over Loki), the managers' help texts and READMEs as retrievable
-  context, and **`propose_job(argv, rationale)`**. **No apply tool exists.** A proposed job is a
-  card with Preview and Run; only the operator's click runs it, under the operator's role (D3).
+- **Transport:** LiteLLM's OpenAI-compatible chat completions, streamed, with tool calling; the
+  virtual key from `litellm:models` as for Open WebUI (`/etc/secrets/litellm-svckey.env`, re-read
+  while missing, so no restart when it arrives). The model is `assistantModel` in the console's
+  fields when set, else LiteLLM's model named `default`, else the first the key may use (O3).
+  Nothing leaves the site that LiteLLM does not send.
+- **Tools:** the console's own cached reads (`modules_list`, `module_show` with the fields
+  `modify --set` may change and their class, `module_drift`, `zones`, `environments`, `topology`,
+  `health`, `backup`, `pulse`, `activity`), `logs` (Loki's `query_range` for a host, when logging
+  is installed), `help(manager)` (the manifest and the README), and **`propose_job(argv,
+  rationale)`**, which validates the argv against the manifest and creates no job. **No apply
+  tool exists**; a tool name outside the list is refused and recorded. A proposed job is a card
+  with Preview and Run; only the operator's click runs it, under the operator's role (D3).
 - **Context:** the page and object in view, the site's name, the operator's name and role.
-- **Trail:** a proposed job records the conversation turn that proposed it; Activity shows
-  "`<operator>` · assistant" on jobs that came from a card.
-- **Elsewhere:** `tappaas ask "…"` on `tappaas-cicd`, a small CLI over the same backend. An MCP
+- **Trail:** a card's Preview and Run are D4's jobs; the job checks the proposal is in the caller's
+  own conversation with the same argv and records the turn that proposed it. Activity shows
+  "`<operator>` · via assistant" on jobs that came from a card.
+- **Conversations** are kept per user in the state directory
+  (`assistant/<user>/<id>.json`, mode 0600, the newest 50, 40 turns and 256 KiB each), never in
+  `config/`; a caller sees only their own.
+- **Elsewhere:** `tappaas ask "…"` on `tappaas-cicd`, a client of the backend on loopback, so with
+  the read role: a proposal is printed as its preview and apply command lines, never run. An MCP
   façade over the read API may follow for Claude Code and Open WebUI; it is not part of this ADR.
-- **Without the AI stack** the drawer is absent and the CLI says so.
+- **Without the AI stack** the drawer and its buttons are absent and `tappaas ask` says why and
+  exits 1. The `status` route has no assistant.
 
 ### D8. Agents use the same API through the same gate, with an Authentik identity and scopes
 
@@ -256,21 +321,29 @@ more nodes (`node add --pxe`), environments, the satellite, the admin VPN peer, 
 registration, `add-stack`. Therefore:
 
 - **The console is part of the mothership's own build.** Its unit is in `tappaas-cicd.nix` (D1),
-  so it is up when `bootstrap.sh` finishes, and a fresh install ends with the console reachable.
+  started by a path unit once the control-plane refresh has built `~/bin/console`, so it is up
+  when `bootstrap.sh` finishes, and a fresh install ends with the console reachable.
 - **A Setup wizard drives the rest.** It is a thin layer over D4's job model: an ordered checklist
-  whose state is **derived from the records** (identity is done when its config exists, TLS when
-  the certificate is there, a node when it has joined, the switch when it is registered and
-  interrogated), never stored, so it resumes for free. Each step is a form over one verb with the
-  preview and apply of D4 and progress for the slow steps. The wizard runs the verbs step by step;
-  the scripts stay for headless installs.
+  whose state is **derived from the records**, never stored, so it resumes for free. As built
+  (`ui/src/setup.ts`): TLS (wildcard: `cert-refids.json` names the default environment;
+  per-service: nothing to issue, Caddy gets each route's certificate), backup, identity and
+  logging (their config exists and their module test passes), the identity bootstrap (an
+  organization and a user), the nodes (every `site.json` node a cluster member), the switch
+  (registered, ports discovered), the admin VPN (a peer in `wgvpn list`), stacks (optional). Each
+  step is a form over its verbs with the preview and apply of D4 and progress for the slow steps.
+  The wizard runs the verbs step by step; the scripts stay for headless installs.
 - **A setup token bridges the window before identity.** The gate of D3 does not exist until the
-  identity step has run. `bootstrap.sh` writes a one-time token, the install summary prints it,
-  and the console serves the wizard on the mothership's `mgmt` address against that token until
-  the identity step has put the console behind the gate; then the token is deleted. This is a
-  necessity of install order, not an SSO-optional mode; it closes itself.
-- **Secrets are entered in the wizard** (the DNS provider token, controller credentials, WLAN
-  secrets, a satellite's address and key, a buddy's tunnel) into the places the scripts already
-  read, and never shown again.
+  identity step has run. `bootstrap.sh` writes a one-time token (`~/config/console-setup-token`),
+  the install summary prints the address with it, and while `config/identity.json` does not exist
+  the console accepts `mgmt` and the admin VPN with that token (`?token=` once, then an HttpOnly
+  cookie, or a bearer header) and nothing else; the token acts as Installer. Once identity exists
+  the token is refused even if its file remains, and the file is deleted after the identity step
+  and at start. This is a necessity of install order, not an SSO-optional mode; it closes itself.
+- **Secrets are entered in the wizard** into the places the scripts already read, mode 0600, and
+  never shown again; Activity records their keys, never their values. As built, three declared
+  files only: the DNS provider credential (`~/.acme-dns-credentials.txt`), the UniFi controller's
+  (`~/.unifi-os-credentials.txt`) and the WLAN passphrases (`~/.wlan-secrets.txt`). A satellite's
+  address and key and a buddy's tunnel are not yet among them.
 - **The same pattern serves day 2:** add a node, a satellite, an environment, a stack; enrol a
   device in the admin VPN. Each is a wizard of a few steps over verbs already on the pages.
 - **The pre-mothership chain stays a script.** Later, a preparation wizard (a page that collects
@@ -290,11 +363,12 @@ registration, `add-stack`. Therefore:
 | A7 | **A generic verb pass-through** (`POST /run {argv}`) | The UI invents nothing but knows nothing: no forms, no typed results, an API that is a shell. |
 | A8 | **A typed resource API** (`POST /modules/immich/modify`) | A second copy of every verb's semantics that drifts from the managers. D4's hybrid keeps the reads typed and the writes as the CLI's own argv. |
 | A9 | **One hostname with roles** instead of two routes | A read-only owner from the client zones would share a route with operators on `mgmt`; two routes let the zone list and the gate's policy differ, and the route caps the role (D2). |
-| A10 | **OIDC in the app** (`identity:identity`) instead of the gate | Login code of our own and a second token scheme for agents. The gate gives groups in headers and machine credentials for free (ADR-032 D3). |
+| A10 | **OIDC in the app** (`identity:identity`) instead of the gate | Login code of our own and a second token scheme for agents. The gate gives groups in headers and machine credentials for free (ADR-032 D3). It is also what A15 would force, since a direct name has no gate. |
 | A11 | **The agent loop in Open WebUI** or as an MCP server only | Tools, audit and role would differ from a click. An MCP façade over the same API can come later (D7). |
 | A12 | **An agentic assistant** that applies within a scope | Decided against: the record must show that a person decided. |
 | A13 | **A separate installer UI** (a web page on the first node's installer image, or on the laptop) for the whole of stage 3 | Different work from this ADR: it needs an image and runs before any manager exists. D10 takes the half the managers already cover and leaves the chain a script, fed later by a preparation wizard. |
 | A14 | **Keep the install on the command line** and start the UI at operate | Leaves the longest, most error-prone stretch of a new site's life without the preview, the record and the resumable checklist that the UI gives every other change; the wizard is a thin layer once D4 exists. |
+| A15 | **An `.internal` name** (`console.mgmt.internal`) **with a site CA**, so that no public DNS record names the console | Breaks the TAPPaaS rule: `name.<zone>.internal` is direct, around Caddy and the gate, so the console would need login code of its own (A10) or a second kind of gated route; and every operator's browser would have to trust a CA of the site's. A public name that answers 403 outside `mgmt` and `admin` (D2) discloses only that the console exists. |
 
 ## Consequences
 
@@ -318,11 +392,28 @@ registration, `add-stack`. Therefore:
   | A setup token written by `bootstrap.sh`, printed by the install summary, deleted by the identity step | tappaas-cicd | D10, the wizard before the gate exists |
   | A "done" predicate per install step, from the records | the managers' reads | D10, the checklist's state is derived, never stored |
 
+  P1 to P3 filled the first, second, third, fourth, eighth, ninth and tenth rows, and added
+  `module-manager fields` and `modify --dry-run` (D4). Open: the sweep's progress (the runner
+  reads the stage `update-tappaas` already writes, `config/.update-stage`), `tappaas-train preview
+  --json`, a dry run for every write verb, and a `node network set` preview that writes nothing.
+- **Work this ADR caused**, found by the live tests on hrossen, each in its own issue:
+
+  | Issue | Where | What |
+  |---|---|---|
+  | #853 | `switch-controller`, `health-manager` | unallocated ports parked as `iotLocal` access ports; a verb that parks a port (no verb today returns a port from an override to the controller's default); `validate` warns on an unparked or drifted port |
+  | #854 | `switch-controller` | a LAG member follows its lead port: no VLANs, no drift and no push of its own (port 12's drift on hrossen recurs on every reconcile) |
+  | #855 | the console's manifest | a destructive verb's typed confirmation names its object: the port for `remove-port`, the aggregate for `lag remove` |
+  | #856 | `network-manager wgvpn config`, `ADMIN-VPN.md` | the admin peer's config carries the site's DNS and host routes to the DMZ gateway, so `mgmt`/`admin`-only published services work over the tunnel; a prerequisite of the console's install (D2) |
+
 - `tappaas-cicd.nix` gains a unit and a new place in the mothership's attack surface: a web
   service as `tappaas`. It is reachable only through the gate and only from the firewall's
-  address, and it holds no credentials the managers do not already hold.
-- `identity:accessControl` gets two more providers and a group-to-role mapping to document;
-  `network:proxy` gets two more routes. `litellm:models` gets one more consumer.
+  address (and loopback, for reads), and it holds no credentials the managers do not already
+  hold. Its sandbox is wide: the verbs it runs write across `/home/tappaas` and `/tmp` as they do
+  from a shell, and the unit's comment justifies each path; login keys, shell rc files and the
+  git config stay read-only.
+- `identity:accessControl` gets one more provider now and one with `status.<domain>`, a new
+  `installer` group and a group-to-role mapping to document; `network:proxy` gets one route now
+  and a gated `proxyRoutes` entry later (D2). `litellm:models` gets one more consumer.
 - The site-owner view is the first step toward ADR-007e's end-user badges without building them;
   the same cache can feed badges on the Authentik start page later.
 - #183 and #91 close with this ADR; #142 is answered by it; #63 is deliberately not addressed.
@@ -343,6 +434,21 @@ or less.
 | **P3 — ask** | the assistant drawer, the tools, proposed-job cards; `tappaas ask` | the memory question of the spike's mockup answered and its proposal applied by a click; no change ever applied by the assistant (a test) |
 | **P4 — secure** | agents through the gate with scopes (#142); the SIEM summary and jumps (after #843); the end-user badges if wanted | an agent lists modules and proposes a job with its own identity in Activity; a Wazuh alert appears in Attention |
 
+### As built (v0.3)
+
+P1 to P3 are built (#839) and were reviewed on hrossen on 2026-10-17 and 2026-10-18 from a
+scratch tree: the console ran on loopback behind a proxy that plays the gate's headers (`console
+serve --trust-local-headers`, development only), reached from the laptop by `ssh -L`. Nothing was
+installed or switched on the mothership.
+
+| Phase | State | Verified on hrossen | Not yet verified |
+|---|---|---|---|
+| **P1 — see** | done | the fast suites (health-manager, network-manager, both controllers, `ui`) green; the controllers' text output byte-identical to the installed ones; `network-manager topology` live in 4.8 s; `nix build .#console` and a system eval of `tappaas-cicd.nix` with the unit; the four pages drew hrossen correctly | the unit under its sandbox; the gated route `console.<domain>`; the setup token on a fresh install; the jump URLs |
+| **P2 — operate** | done; `status.<domain>` built in the backend, not declared (D2) | a module's memory changed and reverted from the Modules page (`deconz-test`, 4096 → 4608 → 4096, no pending change); a switch port set to an access zone and reverted, both applies clicked by the operator, which exposed #853, #854 and #855; a node's uplink mode, network and environment reconciles previewed only; the owner's view through the header proxy as a member of `users` | a fresh install finished from the wizard; the owner's route; a sweep and a job contending live |
+| **P3 — ask** | done | the spike's memory conversation against the site's LiteLLM with a temporary key, deleted after: the assistant read that `immich` passes `guest-memory`, proposed `module-manager modify immich --set memory=10240` as a card, refused "ok, run it" and pointed at Run; the card's Preview ran, its Run was not clicked; `tappaas ask` refused a tool that does not exist and then proposed; without a key the drawer is absent and `tappaas ask` exits 1; T5 as a unit test | the key provisioned by `litellm:models` at registration; a card's Run end to end |
+| **Install** | open | — | the module registered with `--proxyDomain console.<domain>` and `internet` refused in its zone list, after #856 |
+| **P4 — secure** | open | — | — |
+
 ## Testing
 
 - **T1 — the gate and the route cap.** A member of `users` on `status.<domain>` sees the owner
@@ -355,22 +461,24 @@ or less.
 - **T4 — the topology.** `network-manager topology --json` on hrossen names every node port,
   switch port, LAG, AP and buddy that the five source verbs name; a finding of `validate` is
   attached to the object it mentions.
-- **T6 — the setup token.** It is accepted only before identity's config exists and only on the
-  `mgmt` address; after the identity step it is gone from disk and a request with it gets 401.
+- **T6 — the setup token.** It is accepted only before identity's config exists and only from
+  the `mgmt` and admin-VPN networks; after the identity step it is gone from disk and a request
+  with it gets 401.
 - **T5 — the assistant.** Asked to run a change, it proposes a card and applies nothing; the card's
   job carries the conversation turn.
 - Unit: the role table, the route cap, the manifest parser, the topology join.
-- Module test for `console`: the two routes resolve to Caddy from their zones (ADR-021), the gate
-  redirects, the backend answers `/api/v1/health`.
+- Module test for `console` (`console/test.sh`): the service answers `/api/v1/status` and every
+  cached read answered at its last refresh; an anonymous request to `console.<domain>` is sent to
+  the gate (302 or 401), or stopped by the zone filter (403, a warning), and never answered.
 
 ## Open questions
 
-1. **O1 — The name.** `console` as module and hostname, or `tappaas.<domain>`?
-2. **O2 — Module or fields.** Is the published face a `console` module (D1) or fields on
-   `tappaas-cicd.json`? D1 proposes the module, because it gives the routes and the key their
-   normal declaration.
-3. **O3 — Where the agent loop's model is pinned.** LiteLLM's default route (D7), or a named
-   model in `console.json`?
+1. **O1 — The name.** *Closed (v0.3):* `console.<domain>`, passed as `--proxyDomain` at install
+   because the module's `vmname` is `tappaas-cicd` (D2).
+2. **O2 — Module or fields.** *Closed (v0.3):* a `console` module, `src/foundation/console/`,
+   which declares the route, the gate and the key and installs nothing (D1).
+3. **O3 — Where the agent loop's model is pinned.** *Closed (v0.3):* `assistantModel` in the
+   console's fields when set, else LiteLLM's `default`, else the first model the key may use (D7).
 
 ## Documentation impact (ADR-013)
 
@@ -378,6 +486,7 @@ or less.
 |---|---|
 | `src/foundation/tappaas-cicd/README.md`, `DESIGN.md` | the `console` service, its unit, Activity under `/var/lib/tappaas/console/` |
 | `src/foundation/tappaas-cicd/ui/README.md` (new) | the API, the job model, the role table, the manifest |
+| `src/foundation/console/README.md`, `INSTALL.md` (new) | the module, `--proxyDomain console.<domain>`, the setup token, the owner's route that waits, the assistant's key |
 | `src/foundation/tappaas-cicd/manager/network-manager/README.md` | `topology` |
 | `src/foundation/tappaas-cicd/manager/health-manager/README.md` | `validate --json` |
 | `src/foundation/identity/README.md` | the two providers, groups to roles, app passwords for agents |
