@@ -107,8 +107,10 @@ _unifi_send() { local m="$1" path="$2" body="$3"; curl -sk -m 25 -b "${_UNIFI_JA
 
 # A port's live aggregate (#40): the lead port of a LAG lists its members in
 # port_table.aggregate_members (op_mode "aggregate"); every other port lists none.
+# Its link (#853): port_table.up — switch-controller parks only a port with none.
 _UNIFI_LAG_JQ='def _lag: if (.op_mode // "") == "aggregate" and ((.aggregate_members // []) | length) > 1
-                           then (.aggregate_members | sort) else [] end;'
+                           then (.aggregate_members | sort) else [] end;
+               def _link: if .up == true then "up" elif .up == false then "down" else null end;'
 
 # ── Contract: supports + management metadata ────────────────────────
 plugin_supports() { [[ "${1:-}" == "unifi" ]]; }
@@ -169,7 +171,7 @@ plugin_interrogate() {
                         { mode:"trunk", nativeVlan:$natvlan, taggedVlans:($allvlans - $exclv), source:"discovered" }
                       else   # "all"
                         { mode:"trunk", nativeVlan:$natvlan, taggedVlans:$allvlans, source:"discovered" }
-                      end) + { lagMembers: ($p | _lag) }) }
+                      end) + { lagMembers: ($p | _lag), link: ($p | _link) }) }
               ))
           }
         end'
@@ -217,7 +219,7 @@ plugin_controller_interrogate() {
                         elif $fwd == "disabled" then { mode:"access", nativeVlan:0, disabled:true, source:"discovered" }
                         elif $fwd == "customize" then { mode:"trunk", nativeVlan:$natvlan, taggedVlans:($allvlans - $exclv), source:"discovered" }
                         else { mode:"trunk", nativeVlan:$natvlan, taggedVlans:$allvlans, source:"discovered" } end)
-                        + { lagMembers: ($p | _lag) }) }
+                        + { lagMembers: ($p | _lag), link: ($p | _link) }) }
                   ))
               } )),
             # APs (type "uap") with their wired uplink resolved to a switch + port,
@@ -251,7 +253,9 @@ plugin_controller_interrogate() {
 plugin_apply() {
     local name="$1"  # $2 = delta json (unused; we converge to desired)
     _unifi_login || return 1
-    local dfile="${CONFIG_DIR:-/home/tappaas/config}/switch-configuration-desired.json"
+    # SWITCH_DESIRED: a desired holding only the ports to set now (switch-controller
+    # parks one port that way, #853); ports it does not name keep their override.
+    local dfile="${SWITCH_DESIRED:-${CONFIG_DIR:-/home/tappaas/config}/switch-configuration-desired.json}"
     [[ -f "${dfile}" ]] || { _unifi_warn "desired config not found: ${dfile}"; return 1; }
 
     local desired mip
@@ -266,9 +270,9 @@ plugin_apply() {
     [[ -n "${devid}" ]] || { _unifi_warn "${name}: no matching UniFi device (ip=${mip})"; return 1; }
 
     # TAPPaaS only manages ports it has ANNOTATED (a `type` set by add-port /
-    # update-port, or the auto-detected AP port). Discovered ports with no type
-    # are left exactly as the switch has them (don't convert forward:all → custom).
-    desired=$(echo "${desired}" | jq -c 'with_entries(select(.value.type != null))')
+    # update-port, or the auto-detected AP port) or PARKED (#853). Discovered
+    # ports with neither are left exactly as the switch has them.
+    desired=$(echo "${desired}" | jq -c 'with_entries(select(.value.type != null or .value.parked == true))')
     [[ "${desired}" != "{}" ]] || { _unifi_warn "${name}: no TAPPaaS-managed ports — nothing to apply"; return 0; }
 
     # Ensure a VLAN-only network for each VLAN id used by the managed ports.

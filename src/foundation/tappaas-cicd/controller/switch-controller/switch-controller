@@ -16,7 +16,9 @@
 #               one interrogates it → uploads its switches + ports.
 #   switch      managed:auto (ports uploaded by interrogate, via a controller or
 #               its own API) or managed:manual (ports added by hand).
-#   port        {type,target,targetPort,...}; type ∈ node|switch|ap|device|uplink.
+#   port        {type,target,targetPort,...}; type ∈ node|switch|ap|device|uplink,
+#               or {parked:true, zone} (#853): a port TAPPaaS does not use, an
+#               access port in the park zone (iotLocal unless --park-zone).
 #               `lag: <name>` puts it in a link aggregate (802.3ad LAG) with the
 #               switch's other ports of that name; the lowest-numbered one leads
 #               it, and carries `lagMembers` in desired and actual. Every other
@@ -57,6 +59,9 @@ readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
 
 readonly PORT_TYPES="node switch ap device uplink"
 JSON=0
+# The zone a port TAPPaaS does not use is parked in (#853); --park-zone overrides.
+PARK_ZONE="iotLocal"
+PARK_REFUSED=0
 # Port types that are VLAN trunks (carry the full active VLAN set).
 _is_trunk_type() { case " ${1} " in *" node "*|*" switch "*|*" ap "*|*" uplink "*) return 0;; *) return 1;; esac; }
 
@@ -76,7 +81,11 @@ Inventory (recorded in switch-configuration-actual.json):
         [--target <t>] [--target-port <tp>] [--mode trunk|access]
         [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>]
   update-port <switch> <port> [ ...same flags... ]
-  remove-port <switch> <port>
+  update-port <switch> <port> --park [--park-zone <zone>]
+                          park the port on the switch now (an access port in
+                          iotLocal), then record it as parked
+  remove-port <switch> <port> [--park-zone <zone>]
+                          the same: the port goes back to parked
   lag set <switch> <name> --ports <p,p,...> [--apply]
                           ports become one LACP aggregate (a LAG named <name>);
                           --apply programs that switch at once
@@ -90,16 +99,23 @@ Inventory (recorded in switch-configuration-actual.json):
 --json on list, list-ports and lag list prints the same facts as JSON.
 
 Reconciliation (five-verb provider contract, run in this order):
-  interrogate             controller/auto switches -> actual.json (via plugin)
+  interrogate [--park-zone <zone>]
+                          controller/auto switches -> actual.json (via plugin);
+                          a port with no record and no link is recorded parked
   update-desired          actual topology + zones.json -> desired.json
   delta                   desired-vs-actual VLAN differences per port
   apply                   push delta via plugin (manual plugin prints steps)
   confirm [<switch>...]   record applied VLAN config in actual.json (all, or just
                           the named switches — use after hand-tagging a manual one)
-  reconcile [--apply]     run all five in order (apply only with --apply)
+  reconcile [--apply] [--park-zone <zone>]
+                          run all five in order (apply only with --apply)
 
 managed:manual switches are configured by hand (manual.sh prints what to tag);
 managed:auto switches are programmed by their vendor plugin.
+
+A parked port is an access port in the iotLocal zone (tier 6, no internet,
+nothing else reachable): a device plugged into it gets an address and can do no
+harm. The controller's own default profile is never restored (see README).
 EOF
 }
 
@@ -111,18 +127,18 @@ remove-controller:
 add-switch: --vendor= --ip= --managed= --controller= --model= --location= --description=
 remove-switch:
 add-port: ${PORT_OPTS}
-update-port: ${PORT_OPTS}
-remove-port:
+update-port: ${PORT_OPTS} --park --park-zone=
+remove-port: --park-zone=
 lag: --ports= --apply --json
 list: --json
 list-ports: --json
 show:
-interrogate:
+interrogate: --park-zone=
 update-desired:
 delta:
 apply:
 confirm:
-reconcile: --apply
+reconcile: --apply --park-zone=
 "
 
 # ── State files ──────────────────────────────────────────────────────
@@ -163,12 +179,12 @@ readonly LAG_LEADS_JQ='
         | .ports = ($ps | with_entries(
             .key as $k
             | (if (.value.lag // "") != "" then ([ $decl[] | select(index($k) != null) | .[0] ][0] // null)
-               elif (.value.type // null) == null then ([ $live[] | select(.k == $k) | .lead ][0] // null)
+               elif (.value.type // null) == null and (.value.parked // false) != true then ([ $live[] | select(.k == $k) | .lead ][0] // null)
                else null end) as $lead
             | if $lead != null and $lead != $k then .value.lagLead = $lead else .value |= del(.lagLead) end))
         end;'
 
-# Record each member's lead in actual (interrogate, lag set/remove, confirm).
+# Record each member's lead in actual (interrogate, lag set/remove).
 mark_lag_leads() { jq_actual "${LAG_LEADS_JQ}"' .switches |= map_values(lag_leads)'; }
 
 # Active VLAN tags as a JSON array of ints (the trunk set for node uplinks).
@@ -256,12 +272,16 @@ _port_set() { # _port_set <add|update> <switch> <port> [flags...]
     local op="$1" sw="$2" port="$3"; shift 3 2>/dev/null || die "${op}-port requires <switch> <port>"
     [[ -n "${sw}" && -n "${port}" ]] || die "${op}-port requires <switch> <port>"
     jq -e --arg n "${sw}" '.switches | has($n)' "${ACTUAL}" >/dev/null || die "Switch '${sw}' not found"
-    local exists; exists=$(jq -r --arg n "${sw}" --arg p "${port}" '.switches[$n].ports | has($p)' "${ACTUAL}")
-    if [[ "${op}" == "add" && "${exists}" == "true" ]]; then die "Port '${port}' already on '${sw}' (use update-port)"; fi
-    if [[ "${op}" == "update" && "${exists}" != "true" ]]; then die "Port '${port}' not on '${sw}' (use add-port)"; fi
+    local exists registered
+    exists=$(jq -r --arg n "${sw}" --arg p "${port}" '.switches[$n].ports | has($p)' "${ACTUAL}")
+    # A port interrogate found but nobody registered, or a parked one (#853),
+    # may be given a type by add-port as well as by update-port.
+    registered=$(jq -r --arg n "${sw}" --arg p "${port}" '.switches[$n].ports[$p].type // null | . != null' "${ACTUAL}")
+    if [[ "${op}" == "add" && "${registered}" == "true" ]]; then die "Port '${port}' already on '${sw}' (use update-port)"; fi
 
-    local type="" target="" target_port="" mode="" zone="" native="" tagged="" description=""
+    local type="" target="" target_port="" mode="" zone="" native="" tagged="" description="" park=0
     while [[ $# -gt 0 ]]; do case "$1" in
+        --park) park=1; shift ;;
         --type) type="$2"; shift 2 ;;
         --target) target="$2"; shift 2 ;;
         --target-port) target_port="$2"; shift 2 ;;
@@ -272,6 +292,14 @@ _port_set() { # _port_set <add|update> <switch> <port> [flags...]
         --description) description="$2"; shift 2 ;;
         *) die "${op}-port: unknown option '$1'" ;;
     esac; done
+    if [[ "${park}" == 1 ]]; then
+        [[ "${op}" == "update" ]] || die "--park is for update-port"
+        [[ -z "${type}${target}${target_port}${mode}${zone}${native}${tagged}${description}" ]] \
+            || die "update-port --park takes no other port flag (--park-zone names the zone)"
+        park_port "${sw}" "${port}"
+        return
+    fi
+    if [[ "${op}" == "update" && "${exists}" != "true" ]]; then die "Port '${port}' not on '${sw}' (use add-port)"; fi
     if [[ -n "${type}" ]]; then printf '%s' "${PORT_TYPES}" | tr ' ' '\n' | grep -qxF "${type}" \
         || die "${op}-port: --type must be one of: ${PORT_TYPES}"; fi
     [[ "${op}" == "add" && -z "${type}" ]] && die "add-port requires --type (${PORT_TYPES})"
@@ -281,6 +309,9 @@ _port_set() { # _port_set <add|update> <switch> <port> [flags...]
     local cur upd
     cur=$(jq -c --arg n "${sw}" --arg p "${port}" '.switches[$n].ports[$p] // {}' "${ACTUAL}")
     upd="${cur}"
+    # A parked port given a type is in use: it is no longer parked, and the park
+    # zone is not its zone.
+    [[ -n "${type}" ]] && upd=$(jq -c 'if .parked == true then del(.parked, .zone) else . end' <<<"${upd}")
     [[ -n "${type}" ]]        && upd=$(jq -c --arg v "${type}" '.type=$v' <<<"${upd}")
     [[ -n "${target}" ]]      && upd=$(jq -c --arg v "${target}" '.target=$v' <<<"${upd}")
     [[ -n "${target_port}" ]] && upd=$(jq -c --arg v "${target_port}" '.targetPort=$v' <<<"${upd}")
@@ -305,13 +336,115 @@ _port_set() { # _port_set <add|update> <switch> <port> [flags...]
 cmd_add_port()    { _port_set add "$@"; }
 cmd_update_port() { _port_set update "$@"; }
 
+# remove-port: the port goes back to parked (#853) — on the switch first, then
+# in its record. Dropping the record alone left the switch as TAPPaaS last set
+# it (a native VLAN included), and no verb took that back.
 cmd_remove_port() {
     local sw="$1" port="$2"
     [[ -n "${sw}" && -n "${port}" ]] || die "remove-port requires <switch> <port>"
     jq -e --arg n "${sw}" --arg p "${port}" '.switches[$n].ports | has($p)' "${ACTUAL}" >/dev/null \
         || die "Port '${port}' not found on '${sw}'"
-    jq_actual 'del(.switches[$n].ports[$p])' --arg n "${sw}" --arg p "${port}"
-    info "${GN}✓${CL} removed port '${port}' from '${sw}'"
+    park_port "${sw}" "${port}"
+}
+
+# ── Parking (#853): a port TAPPaaS does not use ──────────────────────
+# A parked port is an access port in the park zone (iotLocal: tier 6, no
+# internet, nothing else reachable). A device plugged into it gets an address,
+# so the port is seen to work, and can do no harm. The controller's own default
+# profile is never restored: on UniFi that is "All", a trunk of every network
+# with the default network untagged — exactly the exposure parking removes —
+# and what "default" means differs per vendor and is not a zones.json state.
+
+# The park zone's VLAN on stdout; non-zero, saying why, when it cannot park.
+park_vlan() {
+    local z="${1:-${PARK_ZONE}}" v st
+    if ! jq -e --arg z "${z}" 'has($z) and ($z | startswith("_") | not)' "${ZONES_FILE}" >/dev/null 2>&1; then
+        error "zones.json has no zone '${z}' to park ports in — add it (network-manager) or name another: --park-zone <zone>" >&2
+        return 1
+    fi
+    v=$(jq -r --arg z "${z}" '.[$z].vlantag // 0' "${ZONES_FILE}")
+    if [[ ! "${v}" =~ ^[0-9]+$ || "${v}" -le 0 ]]; then
+        error "zone '${z}' has no VLAN tag — a port cannot be parked in it; name another: --park-zone <zone>" >&2
+        return 1
+    fi
+    st=$(jq -r --arg z "${z}" '.[$z].state // ""' "${ZONES_FILE}")
+    [[ "${st}" == "Active" || "${st}" == "Mandatory" ]] \
+        || warn "zone '${z}' is ${st:-without a state}: a device on a parked port gets no address until it is active" >&2
+    echo "${v}"
+}
+
+# Program ONE port as parked, now: the plugin converges a desired that holds
+# only this port, so no other pending change on the switch goes with it.
+# rc 0 programmed, 2 printed for a manual switch, other: not programmed.
+park_on_switch() {
+    local sw="$1" port="$2" vlan="$3" plugin tmpd changes rc=0
+    plugin=$(plugin_for_switch "${sw}")
+    tmpd=$(mktemp)
+    jq -n --slurpfile a "${ACTUAL}" --arg n "${sw}" --arg p "${port}" --arg z "${PARK_ZONE}" --argjson v "${vlan}" '
+        {switches: {($n): (($a[0].switches[$n] | del(.ports))
+            + {ports: {($p): {parked: true, zone: $z, mode: "access", nativeVlan: $v}}})}}' > "${tmpd}"
+    changes=$(jq -nc --arg p "${port}" --arg z "${PARK_ZONE}" --argjson v "${vlan}" \
+        '{changes: [{action: "park", port: $p, description: "port \($p): park in \($z) — an access port on VLAN \($v), nothing tagged"}]}')
+    # shellcheck disable=SC1090
+    ( . "${plugin}"; SWITCH_DESIRED="${tmpd}" plugin_apply "${sw}" "${changes}" ) || rc=$?
+    rm -f "${tmpd}"
+    if [[ "${rc}" -ne 0 && "$(basename "${plugin}")" == "manual.sh" ]]; then return 2; fi
+    return "${rc}"
+}
+
+# park_port <switch> <port>: park it on the switch, then record it as parked.
+# The record changes only once the switch has it (or, on a manual switch, once
+# the steps are printed — the drift then shows until `confirm <switch>`).
+park_port() {
+    local sw="$1" port="$2" cur lag lead vlan rc=0
+    jq -e --arg n "${sw}" '.switches | has($n)' "${ACTUAL}" >/dev/null || die "Switch '${sw}' not found"
+    cur=$(jq -c --arg n "${sw}" --arg p "${port}" "${LAG_LEADS_JQ}"' .switches[$n] | lag_leads | .ports[$p] // {}' "${ACTUAL}")
+    lag=$(jq -r '.lag // ""' <<<"${cur}")
+    [[ -z "${lag}" ]] || die "${sw} port ${port} is in LAG ${lag}: take the aggregate apart first (switch-controller lag remove '${sw}' ${lag} --apply)"
+    lead=$(jq -r '.lagLead // ""' <<<"${cur}")
+    [[ -z "${lead}" ]] || die "${sw} port ${port} follows port ${lead} in an aggregate the switch has: take it apart on the controller first"
+    vlan=$(park_vlan) || exit 1
+    park_on_switch "${sw}" "${port}" "${vlan}" || rc=$?
+    case "${rc}" in
+        0) jq_actual '.switches[$n].ports[$p] = (($c | {link, source} | with_entries(select(.value != null)))
+                + {parked: true, zone: $z, mode: "access", nativeVlan: $v, lagMembers: []})' \
+               --arg n "${sw}" --arg p "${port}" --arg z "${PARK_ZONE}" --argjson v "${vlan}" --argjson c "${cur}"
+           cmd_update_desired >/dev/null
+           info "${GN}✓${CL} ${sw} port ${port}: parked in ${PARK_ZONE} (access, VLAN ${vlan}) — on the switch and in its record" ;;
+        2) jq_actual '.switches[$n].ports[$p] = (($c | {mode, nativeVlan, taggedVlans, link, source} | with_entries(select(.value != null)))
+                + {parked: true, zone: $z})' \
+               --arg n "${sw}" --arg p "${port}" --arg z "${PARK_ZONE}" --argjson c "${cur}"
+           cmd_update_desired >/dev/null
+           info "${sw} port ${port}: recorded as parked in ${PARK_ZONE}; set it by hand as printed, then: switch-controller confirm '${sw}'" ;;
+        *) die "${sw} port ${port}: not parked on the switch ($(basename "$(plugin_for_switch "${sw}")" .sh)) — its record is unchanged" ;;
+    esac
+}
+
+# Interrogate's parking: on the switches just read, every port with no record
+# and NO LINK is recorded parked; the next apply sets it on the switch. A port
+# with a link but no record is left as the switch has it and named: on a fresh
+# registration the node uplinks are such ports, and parking them would cut the
+# nodes off. Also left: a disabled port, and one inside an aggregate.
+park_unrecorded() {
+    local names="$1" found cand vlan
+    found=$(jq -c --argjson names "${names}" "${LAG_LEADS_JQ}"'
+        [ .switches // {} | to_entries[] | select(.key as $k | $names | index($k)) | .key as $s
+          | .value | lag_leads | .ports // {} | to_entries[]
+          | select((.value.type // null) == null and (.value.parked // false) != true and (.value.disabled // false) != true
+                   and (.value.lagLead // null) == null and ((.value.lagMembers // []) | length) <= 1)
+          | {switch: $s, port: .key, link: (.value.link // "unknown")} ] | sort_by(.switch, (.port | tonumber))' "${ACTUAL}")
+    jq -r 'group_by(.switch)[] | map(select(.link != "down")) | select(length > 0)
+        | "  \(.[0].switch): port(s) \(map(.port) | join(", ")) have no record and a link (or none reported) — left as the switch has them; register (add-port) or park (update-port --park)"' <<<"${found}" \
+        | while IFS= read -r l; do warn "${l}"; done
+    cand=$(jq -c 'map(select(.link == "down"))' <<<"${found}")
+    [[ "$(jq length <<<"${cand}")" -gt 0 ]] || return 0
+    vlan=$(park_vlan) || { error "  ports with no record and no link are not parked: $(jq -r 'map("\(.switch) \(.port)") | join(", ")' <<<"${cand}")"; return 1; }
+    jq_actual 'reduce $cand[] as $c (.; .switches[$c.switch].ports[$c.port] += {parked: true, zone: $z})' \
+        --argjson cand "${cand}" --arg z "${PARK_ZONE}"
+    jq -r --arg z "${PARK_ZONE}" --argjson v "${vlan}" 'group_by(.switch)[]
+        | "  \(.[0].switch): parked port(s) \(map(.port) | join(", ")) in \($z) (VLAN \($v); no record, no link) — the next apply sets them"' <<<"${cand}" \
+        | while IFS= read -r l; do info "${l}"; done
+    return 0
 }
 
 # ── lag: a link aggregate (LACP) across ports of one switch (#40) ────
@@ -449,7 +582,7 @@ cmd_list_ports() {
             | ($src.taggedVlans // []) as $atag
             | ($src.nativeVlan // 0) as $anat
             | (if ($t=="node" or $t=="switch" or $t=="uplink" or $t=="ap") then {mode:"trunk", tagged:$active, nat:0}
-               elif $t=="device" then {mode:"access", tagged:[],
+               elif $t=="device" or ($src.parked // false) == true then {mode:"access", tagged:[],
                      nat:(($src.zone // "") as $zn | if ($zn!="" and ($zones[$zn].vlantag!=null)) then $zones[$zn].vlantag else $anat end)}
                else null end) as $d
             | (if $d==null or $d.mode!="trunk" or $lead != null then [] else $d.tagged - $atag end) as $add
@@ -460,9 +593,10 @@ cmd_list_ports() {
                desired: (if $d==null then null else {mode: $d.mode, nativeVlan: $d.nat, taggedVlans: $d.tagged} end),
                drift: (if $d==null then "unmanaged"
                        elif $lead != null then "in-sync"
-                       elif (($add|length)>0 or ($rem|length)>0 or ($d.mode=="access" and $d.nat != $anat)) then "drift"
+                       elif (($add|length)>0 or ($rem|length)>0 or ($d.mode=="access" and ($d.nat != $anat or ($src.mode // "access") != "access"))) then "drift"
                        else "in-sync" end),
-               add: $add, remove: $rem, lag: ($p.lag // null), lagMembers: ($p.lagMembers // []), lagLead: $lead};
+               add: $add, remove: $rem, lag: ($p.lag // null), lagMembers: ($p.lagMembers // []), lagLead: $lead,
+               parked: (($p.parked // false) == true), link: ($p.link // null), disabled: (($p.disabled // false) == true)};
         def ports_of($sw; $active; $zones):
             (.switches[$sw] | lag_leads | .ports // {}) as $ports
             | $ports | to_entries | sort_by(.key|tonumber) | .[] | port_view($ports; $active; $zones);'
@@ -478,12 +612,13 @@ cmd_list_ports() {
         jq -r --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --arg sw "${sw}" "${view}"'
             ports_of($sw; $active; $z[0])
             | (if .lagLead != null then "follows port \(.lagLead)"
-               elif .drift=="unmanaged" then "untouched (unmanaged)"
+               elif .drift=="unmanaged" then "untouched (unmanaged\(if .disabled then ", disabled" elif .link then ", link \(.link)" else "" end))"
                elif .drift=="in-sync" then "in sync"
                elif .desired.mode=="trunk" then "DRIFT +\(.add|join(",")) -\(.remove|join(","))"
+               elif .mode!="access" then "DRIFT \(.mode) native \(.nativeVlan) -> access vlan \(.desired.nativeVlan)"
                else "DRIFT native \(.nativeVlan) -> \(.desired.nativeVlan)" end) as $status
             | "  port \(.port): "
-              + (if .type==null then "—" else "\(.type) → \(.target // "?")\(if .targetPort then "/"+.targetPort else "" end)" end)
+              + (if .parked then "parked (\(.zone // "?"))" elif .type==null then "—" else "\(.type) → \(.target // "?")\(if .targetPort then "/"+.targetPort else "" end)" end)
               + "  | actual: \(.mode) "
               + (if .mode=="access" then "vlan \(.nativeVlan)" else (if (.taggedVlans|length)>0 then (.taggedVlans|map(tostring)|join(",")) else "-" end) end)
               + "  | \($status)"
@@ -522,7 +657,7 @@ plugin_for_switch() {
 cmd_interrogate() {
     info "${BOLD}interrogate${CL} (controllers + auto switches → actual.json)"
     ensure_files
-    local name vendor ip plugin state tmp prc failed=0
+    local name vendor ip plugin state tmp prc failed=0 seen='[]'
 
     # Controllers: upload their switches + ports. The plugin's stderr is left
     # alone — it says WHY a device could not be read (#733); stdout is its answer.
@@ -555,6 +690,7 @@ cmd_interrogate() {
                   then .switches[$usw].ports[$up] = ((.switches[$usw].ports[$up] // {}) + {type:"ap", target:$a.key, mode:"trunk"})
                   else . end )' \
             "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
+        seen=$(jq -c --argjson st "${state}" '. + ($st.switches // {} | keys)' <<<"${seen}")
         # DESIRED: auto-register discovered APs into ap-manager's inventory
         # (it keeps .accessPoints in desired), preserving any operator-set SSIDs.
         if [[ "$(echo "${state}" | jq -r '.aps // {} | length')" -gt 0 ]]; then
@@ -590,9 +726,13 @@ cmd_interrogate() {
         jq --arg n "${name}" --argjson s "${state}" '
             .switches[$n] = ((.switches[$n] // {}) * $s)' \
             "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
+        seen=$(jq -c --arg n "${name}" '. + [$n]' <<<"${seen}")
         info "  switch ${name}: uploaded $(echo "${state}" | jq -r '.ports // {} | length') port(s)"
     done < <(jq -r '.switches // {} | to_entries[] | select(.value.controller == null) | .key' "${ACTUAL}")
     mark_lag_leads
+    # Ports that cannot be parked (no park zone) stay as they are: that refuses
+    # the parking, not the read — reconcile still converges everything else.
+    park_unrecorded "${seen}" || PARK_REFUSED=1
     if [[ "${failed}" -gt 0 ]]; then
         error "interrogate: ${failed} controller(s)/switch(es) could not be read"
         return 1
@@ -624,7 +764,8 @@ cmd_update_desired() {
                     | (.type // "") as $t
                     | if ($t=="node" or $t=="switch" or $t=="uplink" or $t=="ap") then
                         $p + {mode:"trunk", taggedVlans:$active}
-                      elif ($t=="device") then
+                      elif ($t=="device" or (.parked // false) == true) then
+                        # A parked port (#853) is an access port in its park zone.
                         ((.zone // "") as $zn
                          | $p + {mode:"access",
                                  nativeVlan: (if ($zn!="" and ($zones[$zn].vlantag != null)) then $zones[$zn].vlantag else (.nativeVlan // 0) end)})
@@ -637,7 +778,7 @@ cmd_update_desired() {
                    | group_by(.lag) | map(map(.idx) | sort)) as $groups
                 | .ports |= with_entries(
                     (.key | tonumber) as $i
-                    | if (.value.type // null) == null then .
+                    | if (.value.type // null) == null and (.value.parked // false) != true then .
                       else .value.lagMembers = ([ $groups[] | select(.[0] == $i and length > 1) ][0] // [])
                       end
                     | if (.value.lagLead // null) != null then .value |= del(.mode, .nativeVlan, .taggedVlans) else . end)
@@ -666,9 +807,13 @@ compute_delta() {
                           description:"port \($p.key) (\($p.value.type // "trunk") \($p.value.target // "")) trunk: +\($addv|join(",")) -\($delv|join(","))"}
                        else empty end)
                   elif $p.value.mode=="access" then
-                    (if (($p.value.nativeVlan // 0) != (($ap.nativeVlan) // 0)) then
-                       {action:"access-vlan", port:$p.key,
-                        description:"port \($p.key) access VLAN \(($ap.nativeVlan)//0) -> \($p.value.nativeVlan // 0)"}
+                    # A trunk that should be an access port is a change even when
+                    # its native VLAN is already the one wanted.
+                    (if (($p.value.nativeVlan // 0) != (($ap.nativeVlan) // 0)) or ((($ap.mode) // "access") != "access") then
+                       {action:(if $p.value.parked == true then "park" else "access-vlan" end), port:$p.key,
+                        description:(if $p.value.parked == true
+                          then "port \($p.key) parked in \($p.value.zone // "?"): \(($ap.mode) // "?") native \(($ap.nativeVlan)//0) -> access VLAN \($p.value.nativeVlan // 0)"
+                          else "port \($p.key) access VLAN \(($ap.nativeVlan)//0) -> \($p.value.nativeVlan // 0)" end)}
                      else empty end)
                   else empty end,
                   # A LAG to form or take apart (#40). Only where desired says
@@ -784,6 +929,7 @@ cmd_reconcile() {
     cmd_interrogate || stale=1; echo ""
     cmd_update_desired; echo ""
     cmd_delta; echo ""
+    [[ "${PARK_REFUSED}" == 0 ]] || warn "switch-controller: ports with no record and no link were not parked — see interrogate above"
     # A delta against an actual that could not be refreshed is a report, not a
     # plan: applying it would program switches from stale state (#733).
     if [[ "${stale}" -eq 1 ]]; then
@@ -829,10 +975,18 @@ main() {
     [[ -z "${cmd}" ]] && { usage; exit 0; }
     cli_gate usage "${CLI_SPEC}" "$@"
     shift || true
-    # --json (list, list-ports, lag list; the gate refuses it elsewhere) may sit anywhere.
+    # --json (list, list-ports, lag list) and --park-zone <zone> (the verbs that
+    # park, #853) may sit anywhere; the gate refuses them elsewhere.
     local -a rest=()
-    local a
-    for a in "$@"; do if [[ "${a}" == --json ]]; then JSON=1; else rest+=("${a}"); fi; done
+    local a pz=0
+    for a in "$@"; do
+        if [[ "${pz}" == 1 ]]; then PARK_ZONE="${a}"; pz=0
+        elif [[ "${a}" == --json ]]; then JSON=1
+        elif [[ "${a}" == --park-zone ]]; then pz=1
+        elif [[ "${a}" == --park-zone=* ]]; then PARK_ZONE="${a#--park-zone=}"
+        else rest+=("${a}"); fi
+    done
+    [[ -n "${PARK_ZONE}" ]] || die "--park-zone needs a zone"
     set -- ${rest[@]+"${rest[@]}"}
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
     ensure_files
@@ -853,7 +1007,7 @@ main() {
         list)              cmd_list ;;
         list-ports|--list-ports) cmd_list_ports "${1:-}" ;;
         show)              cmd_show "${1:-}" ;;
-        interrogate)       cmd_interrogate ;;
+        interrogate)       cmd_interrogate; [[ "${PARK_REFUSED}" == 0 ]] || exit 1 ;;
         update-desired)    cmd_update_desired ;;
         delta)             cmd_delta ;;
         apply)             cmd_apply ;;

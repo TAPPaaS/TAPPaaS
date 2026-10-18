@@ -65,7 +65,9 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
             <Tag level={p.drift === "drift" ? "warn" : "pass"} />{" "}
             {p.lagLead
               ? `follows port ${p.lagLead}, the lead of LAG ${p.lag}: the switch takes the aggregate's VLANs from the lead, and they are shown here`
-              : p.drift === "unmanaged" ? "unmanaged — TAPPaaS does not set its VLANs" : p.drift === "drift" ? "drifts from zones.json" : "in sync with zones.json"}
+              : p.parked
+                ? p.drift === "drift" ? `parked in ${p.zones[0] ?? "iotLocal"} by its record, the switch has it otherwise: reconcile sets it` : `parked in ${p.zones[0] ?? "iotLocal"}: a device plugged in gets an address and reaches nothing`
+                : p.drift === "unmanaged" ? `no record and not parked — on the controller's default profile${p.link === "up" ? "; a link is up" : ""}` : p.drift === "drift" ? "drifts from zones.json" : "in sync with zones.json"}
           </p>
           <KV
             rows={[
@@ -76,6 +78,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
               ["native / access", p.mode === "access" ? <Zones t={t} vlans={[p.native]} /> : p.native || null],
               ["tagged", p.mode === "trunk" && p.tagged.length ? <Zones t={t} vlans={p.tagged} /> : null],
               ["aggregate", lag ? `${lag.name} · ports ${lag.ports.join("+")} · ${lag.formed ? `live ${lag.live.join("+")}` : "not formed"}` : null],
+              ["link", p.link ?? null],
               ["LLDP partner", p.seen ? `${p.seen.node} / ${p.seen.nic}` : null],
               ["description", p.description],
               ["drift", p.drift === "drift" ? `add ${p.add.join(",") || "-"} · remove ${p.remove.join(",") || "-"}` : null],
@@ -86,7 +89,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </>
       );
       open = <OpenIn kind="port" id={p.port} sw={s.name} />;
-      actions = <PortChange t={t} sw={s.name} port={p.port} type={p.type} mode={p.mode} zone={p.zones[0] ?? ""} description={p.description} />;
+      actions = <PortChange t={t} sw={s.name} port={p.port} type={p.type} parked={p.parked === true} lag={p.lag} mode={p.mode} zone={p.zones[0] ?? ""} description={p.description} />;
       break;
     }
     case "switch": {
@@ -102,7 +105,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
               ["managed", s.managed],
               ["controller", s.controller ? `${s.controller}${s.controllerAddress ? ` (${s.controllerAddress})` : ""}` : null],
               ["LLDP name", s.lldpName],
-              ["ports", `${s.ports.length} · ${s.ports.filter((p) => p.role === "unmanaged").length} unmanaged · ${s.ports.filter((p) => p.drift === "drift").length} drifting`],
+              ["ports", `${s.ports.length} · ${s.ports.filter((p) => p.parked).length} parked · ${s.ports.filter((p) => p.role === "unmanaged").length} unmanaged · ${s.ports.filter((p) => p.drift === "drift").length} drifting`],
               ["LAGs", s.lags.map((l) => `${l.name} (${l.ports.join("+")})`).join(", ")],
             ]}
           />
@@ -318,7 +321,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
 }
 
 // A switch port's change (mockup 3): its record first, then the switch.
-function PortChange({ t, sw, port, type, mode, zone, description }: { t: Topology; sw: string; port: string; type: string | null; mode: string; zone: string; description: string | null }) {
+function PortChange({ t, sw, port, type, parked, lag, mode, zone, description }: { t: Topology; sw: string; port: string; type: string | null; parked: boolean; lag: string | null; mode: string; zone: string; description: string | null }) {
   const zones = t.zones.filter((z) => z.vlan !== null && z.state !== "Disabled").map((z) => z.name);
   const steps: Step[] = [
     {
@@ -338,23 +341,24 @@ function PortChange({ t, sw, port, type, mode, zone, description }: { t: Topolog
       note: "The preview is the delta per port (interrogate, update-desired, delta — nothing applied). Apply programs every pending change on every switch, not only this port's: read the preview's list before you apply.",
     },
   ];
-  // A managed port can be given back: its record goes (remove-port), and the
-  // next interrogate finds it again as an unmanaged port, its VLANs as the switch
-  // has them. The switch itself is not touched.
-  const forget: Step[] = [
+  // A port is given back by parking it (#853): remove-port sets it on the switch
+  // as an access port in iotLocal, at once, then records it parked. The
+  // controller's own default profile is never restored: it is a trunk of every
+  // network, the exposure parking removes.
+  const park: Step[] = [
     {
-      title: `Make port ${port} unmanaged: switch-controller remove-port '${sw}' ${port}`,
+      title: `Park port ${port}: switch-controller remove-port '${sw}' ${port}`,
       bin: "switch-controller",
       verb: "remove-port",
       fixed: [sw, port],
-      note: "Removes the port's record from switch-configuration-actual.json; the switch keeps its present VLANs, and the next interrogate records the port again as unmanaged (TAPPaaS no longer sets it). There is no verb that returns the port to the controller's default profile.",
+      note: "Sets the port on the switch now, alone, as an access port in iotLocal (tier 6, no internet, nothing else reachable), then replaces its record with a parked one. Whatever is plugged in loses what the port carried. Only this port is pushed, nothing else pending on the switch.",
     },
-    { title: "Read the switch again: switch-controller reconcile (preview)", bin: "switch-controller", verb: "reconcile", note: "Its preview interrogates the switch: the port reappears unmanaged. Nothing needs applying." },
+    { title: "Read the switch again: switch-controller reconcile (preview)", bin: "switch-controller", verb: "reconcile", note: "Its preview interrogates the switch: the port shows parked and in sync. Nothing needs applying for it." },
   ];
   return (
     <>
       <OperateButton label={`Change port ${port}…`} title={`Port ${port} · ${sw}`} steps={steps} />
-      {type ? <OperateButton label="Make unmanaged…" kind="danger" title={`Port ${port} · ${sw}: unmanaged`} steps={forget} /> : null}
+      {!parked && !lag ? <OperateButton label="Park…" kind="danger" title={`Port ${port} · ${sw}: park`} steps={park} /> : null}
     </>
   );
 }

@@ -187,6 +187,19 @@ check(renderTopology(t).some((l) => /ISP → USW Pro XG 10 PoE port 5, vlan 100/
   check(buildTopology(s2).switches[0].ports.find((p) => p.port === "12")!.tagged.includes(200), "a member named by lagLead shows its lead's VLANs");
 }
 {
+  // #853: a parked port, and validate's switch-ports finding placed on its port.
+  const s = hrossen();
+  s.ports![0].ports = s.ports![0].ports.map((p) =>
+    p.port === "4" ? { ...p, parked: true, zone: "iotLocal", link: "down", desired: { mode: "access", nativeVlan: 410, taggedVlans: [] }, drift: "drift" as const } : p);
+  s.health = { status: "warn", gates: [{ name: "switch-ports", status: "warn", detail: "", findings: [
+    { status: "warn", text: "USW Pro XG 10 PoE port 4: set otherwise than its record", subject: { kind: "port", name: "USW Pro XG 10 PoE:4" } },
+  ] }] };
+  const x = buildTopology(s);
+  const p4 = x.switches[0].ports.find((p) => p.port === "4")!;
+  check(p4.role === "parked" && p4.parked && p4.link === "down", "a parked port has the parked role, and its link");
+  check(x.findings.some((f) => f.gate === "switch-ports" && f.on.kind === "port" && f.on.name === "4" && f.on.switch === SW), "validate's switch-ports finding is on that port");
+}
+{
   // A source that does not answer leaves its part empty and is named.
   const runs: string[] = [];
   const src = collectSources({

@@ -17,6 +17,8 @@ function check(cond: boolean, name: string): void {
   else { failed++; console.log(`  ✗ ${name}`); }
 }
 const G = 1024 ** 3;
+// The switch-ports gate asks switch-controller; this suite asks no real one.
+process.env.SWITCH_CONTROLLER_BIN = "/nonexistent/switch-controller";
 const same = (a: CheckSubject | undefined | null, kind: string, name: string): boolean =>
   !!a && a.kind === kind && a.name === name;
 

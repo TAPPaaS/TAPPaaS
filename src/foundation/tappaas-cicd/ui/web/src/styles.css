@@ -173,7 +173,7 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .vl-access { width: 22px; background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.55) 0 3px, transparent 3px 6px); }
 .vl-grey { width: 40px; background: #d1d5db; }
 .port-target { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.port-unmanaged .port-target { color: var(--muted); }
+.port-unmanaged .port-target, .port-parked .port-target { color: var(--muted); }
 .port-mode { color: var(--muted); font-size: 11px; width: 64px; text-align: right; }
 .port-lag { font-size: 10px; font-weight: 700; color: #1d4ed8; background: #e0e9ff; border-radius: 3px; padding: 0 4px; }
 .port-drift { font-size: 10px; font-weight: 700; color: #92400e; background: var(--warn-bg); border-radius: 3px; padding: 0 4px; }

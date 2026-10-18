@@ -453,7 +453,7 @@
        "update-port"
       ]
      ],
-     "usage": "update-port <switch> <port> [--type <t>] [--mode <m>] [--zone <z>] [...]",
+     "usage": "update-port <switch> <port> [--type <t>] [--mode <m>] [--zone <z>] [...] | --park [--park-zone <zone>]",
      "note": null,
      "details": null,
      "positionals": [
@@ -541,13 +541,29 @@
        "choices": null,
        "repeatable": false,
        "description": "A note on the port."
+      },
+      {
+       "flag": "--park",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Park the port: set it on the switch now as an access port in iotLocal, then record it parked."
+      },
+      {
+       "flag": "--park-zone",
+       "takesValue": true,
+       "arg": "<zone>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The zone a port is parked in (default iotLocal)."
       }
      ],
      "open": false,
      "effect": "write",
      "preview": {
       "kind": "none",
-      "touches": "changes the port's record in switch-configuration-actual.json only; nothing reaches the switch until switch-controller reconcile --apply"
+      "touches": "changes the port's record in switch-configuration-actual.json only; nothing reaches the switch until switch-controller reconcile --apply. With --park: sets this one port on the switch at once (an access port in iotLocal), then records it parked"
      },
      "destructive": false,
      "destructiveWhen": [],
@@ -561,9 +577,9 @@
        "remove-port"
       ]
      ],
-     "usage": "remove-port <switch> <port>",
+     "usage": "remove-port <switch> <port> [--park-zone <zone>]",
      "note": null,
-     "details": null,
+     "details": "Parks the port: sets it on the switch at once, alone, as an access port in iotLocal (tier 6, no internet), then records it parked. The controller's own default profile is never restored.",
      "positionals": [
       {
        "name": "switch",
@@ -576,12 +592,21 @@
        "repeatable": false
       }
      ],
-     "options": [],
+     "options": [
+      {
+       "flag": "--park-zone",
+       "takesValue": true,
+       "arg": "<zone>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The zone a port is parked in (default iotLocal)."
+      }
+     ],
      "open": false,
      "effect": "write",
      "preview": {
       "kind": "none",
-      "touches": "removes the port's record"
+      "touches": "sets this one port on the switch at once (an access port in iotLocal), then replaces its record with a parked one"
      },
      "destructive": true,
      "destructiveWhen": [],
@@ -691,16 +716,25 @@
        "interrogate"
       ]
      ],
-     "usage": "interrogate",
+     "usage": "interrogate [--park-zone <zone>]",
      "note": null,
      "details": null,
      "positionals": [],
-     "options": [],
+     "options": [
+      {
+       "flag": "--park-zone",
+       "takesValue": true,
+       "arg": "<zone>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The zone a port is parked in (default iotLocal)."
+      }
+     ],
      "open": false,
      "effect": "write",
      "preview": {
       "kind": "none",
-      "touches": "reads the controllers and auto switches into switch-configuration-actual.json"
+      "touches": "reads the controllers and auto switches into switch-configuration-actual.json; records a port with no record and no link as parked (nothing reaches the switch)"
      },
      "destructive": false,
      "destructiveWhen": [],
@@ -766,9 +800,9 @@
        "reconcile"
       ]
      ],
-     "usage": "reconcile [--apply]",
+     "usage": "reconcile [--apply] [--park-zone <zone>]",
      "note": null,
-     "details": "The five verbs in order: interrogate, update-desired, delta, then with --apply apply and confirm. Exit 2: changes pending (a preview) or a manual switch awaits hand configuration.",
+     "details": "The five verbs in order: interrogate, update-desired, delta, then with --apply apply and confirm. Interrogate records a port with no record and no link as parked (an access port in iotLocal); apply sets it. Exit 2: changes pending (a preview) or a manual switch awaits hand configuration.",
      "positionals": [],
      "options": [
       {
@@ -778,6 +812,14 @@
        "choices": null,
        "repeatable": false,
        "description": "Push the delta to the switches (default: interrogate, update-desired and delta only)."
+      },
+      {
+       "flag": "--park-zone",
+       "takesValue": true,
+       "arg": "<zone>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The zone a port is parked in (default iotLocal)."
       }
      ],
      "open": false,

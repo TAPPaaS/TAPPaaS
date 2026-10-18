@@ -50,6 +50,7 @@ the running cluster and **exits non-zero if any FAIL**.
 | `site-timezone` | `site.json` `.location.timezone` + one `timedatectl` per node and per guest | never — **WARN** per node or guest on another zone, or when site.json has none (#837) | nothing answered |
 | `pulse` | the backup node's `tappaas-pulse --status` | never — **WARN** when its timer is not running or a target is down (ADR-031) | no backup node, or it does not answer |
 | `quorum` | `pvecm status` on the first answering node | never — **WARN** on two votes without a QDevice (#835) | no node answers |
+| `switch-ports` | `switch-controller list-ports --json` (read-only: the switch as last read, by the delta's rules) | never — **WARN** per port with no record that is not parked, and per port set otherwise than its record (#853) | no switch-controller, or no switch |
 | `cve-status` | `config/sbom/cve-status.json` | never — **WARN** on a failed scan, an ACT, or a scan older than 8 days (ADR-011) | no scan yet |
 
 `--threshold` (default 80) and `--memory-threshold` (default 100) apply
@@ -57,7 +58,8 @@ cluster-wide. The disk gate is **read-only**: the 50%-auto-grow that
 `check-disk-threshold.sh` performs is a *mutation* and stays in the script — it
 is not part of the health assertion. The gate order is service-liveness →
 disk-threshold → memory-commitment → guest-memory → backup-status →
-pending-reboot → site-timezone → quorum → pulse → cve-status; `validate`
+pending-reboot → site-timezone → quorum → lan-uplink → switch-ports → pulse →
+cve-status; `validate`
 returns 0 only when zero gates FAIL (SKIP does not fail the assertion).
 
 `guest-memory` renders one row per module beneath its own line (`CheckResult.rows`),

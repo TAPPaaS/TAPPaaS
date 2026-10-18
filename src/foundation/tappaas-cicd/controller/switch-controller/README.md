@@ -34,13 +34,14 @@ switch-controller <command> [args]
 | `add-switch <name> --vendor <v> --managed auto\|manual [--controller <c>] [--ip <ip>] [--model <m>] [--location <l>] [--description <d>]` | Register a switch. |
 | `remove-switch <name>` | Remove a switch. |
 | `add-port <switch> <port> --type node\|switch\|ap\|device\|uplink [--target <t>] [--target-port <tp>] [--mode trunk\|access] [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>]` | Register a port and what it connects to. |
-| `update-port <switch> <port> [ ...same flags... ]` | Change a port's settings. |
-| `remove-port <switch> <port>` | Remove a port. |
+| `update-port <switch> <port> [ ...same flags... ]` | Change a port's settings. Giving a parked port a `--type` takes it into use (`add-port` may too). |
+| `update-port <switch> <port> --park [--park-zone <zone>]` | Park the port: set it **on the switch, at once and alone**, as an access port in iotLocal, then record it parked. |
+| `remove-port <switch> <port> [--park-zone <zone>]` | Give the port back: the same as `--park` — the switch first, then the record becomes a parked one. |
 | `lag set <switch> <name> --ports <p,p> [--apply]` | Make registered ports one LACP aggregate (LAG). The lowest-numbered port leads it. `--apply` programs that switch at once; otherwise the next `reconcile --apply` does. |
 | `lag remove <switch> <name> [--apply]` | Take the aggregate apart again. |
 | `lag list [<switch>] [--json]` | The declared aggregates, and whether the switch has formed them. |
 | `list [--json]` | List controllers and switches. |
-| `list-ports [<switch>] [--json]` | One line per port: actual config and drift vs `zones.json`; `--json` adds what `zones.json` wants on it (`desired`) and `drift` (`in-sync`, `drift`, `unmanaged`). |
+| `list-ports [<switch>] [--json]` | One line per port: actual config and drift vs `zones.json`; `--json` adds what `zones.json` wants on it (`desired`), `drift` (`in-sync`, `drift`, `unmanaged`), `parked`, `link`, `disabled` and `lagLead`. |
 | `show <controller\|switch>` | Show one inventory entry. |
 
 **A member follows its lead.** The switch takes an aggregate's VLANs from its
@@ -61,11 +62,40 @@ leaves `lacp`. On a manually managed switch the step is printed instead.
 Port types `node`, `switch`, `ap` and `uplink` are treated as **VLAN trunks**
 and carry the full active VLAN set; `device` ports are access ports.
 
+### Parked ports (#853)
+
+A port TAPPaaS does not use is **parked**: an access port in the `iotLocal`
+zone (tier 6, no internet, nothing else reachable). A device plugged into it
+gets an address, so the port is seen to work, and can do no harm. Its record is
+`{parked: true, zone: "iotLocal"}` — not a device record — and `update-desired`,
+`delta` and `apply` keep it set like any other port.
+
+- `interrogate` records as parked every port of a switch it read that has **no
+  record and no link** (the UniFi plugin reports the link). A port with no
+  record but a link is left as the switch has it and named: on a fresh
+  registration the node uplinks are such ports, and parking them would cut the
+  nodes off. A disabled port and a port inside an aggregate are left too.
+  `health-manager validate` (`switch-ports`) warns about every port left so.
+- `update-port <switch> <port> --park` and `remove-port` park a port on the
+  switch first — only that port is pushed, nothing else pending — and change
+  its record only once the switch has it. On a manually managed switch the
+  step is printed, the record becomes parked and the drift shows until
+  `confirm <switch>`.
+- The park zone is resolved by name from `zones.json`: `iotLocal`, or
+  `--park-zone <zone>` (on `interrogate`, `reconcile`, `update-port --park`,
+  `remove-port`). A site without it gets a clear refusal: nothing is parked,
+  `interrogate` exits 1, and `reconcile` still converges everything else.
+- **The controller's own default profile is never restored.** On UniFi that is
+  "All": a trunk of every network with the default network untagged, so
+  anything plugged in reaches every VLAN — the exposure parking removes. What
+  "default" means also differs per vendor and is no state `zones.json` can
+  name. A port given back is parked, a known and harmless state.
+
 ### Reconciliation commands (five-verb provider flow, run in this order)
 
 | Command | Purpose |
 |---------|---------|
-| `interrogate` | Pull live config from controller/auto switches into `actual.json` (via the vendor plugin). A controller or switch that cannot be read is left unchanged, the plugin's reason is shown, and the command exits 1. |
+| `interrogate [--park-zone <zone>]` | Pull live config from controller/auto switches into `actual.json` (via the vendor plugin), and record a port with no record and no link as parked. A controller or switch that cannot be read is left unchanged, the plugin's reason is shown, and the command exits 1. |
 | `update-desired` | Compute `desired.json` from the actual topology + `zones.json`. |
 | `delta` | Show the desired-vs-actual VLAN differences per port. |
 | `apply` | Push the delta via the vendor plugin; the manual plugin prints the steps to apply by hand. |

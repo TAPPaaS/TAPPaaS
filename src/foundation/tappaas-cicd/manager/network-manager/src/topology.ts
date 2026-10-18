@@ -80,6 +80,9 @@ export interface SwitchPortRow {
   lag: string | null;
   lagMembers: number[];
   lagLead?: string | null; // the LAG's lead port this member follows (#854); absent from an older controller
+  parked?: boolean; // a port TAPPaaS does not use: an access port in iotLocal (#853)
+  link?: string | null; // "up" | "down", when the switch says
+  disabled?: boolean;
 }
 export interface SwitchPorts {
   switch: string;
@@ -210,7 +213,7 @@ export interface TopoNode {
   uplinks: TopoUplink[];
   guests: TopoGuest[];
 }
-export type PortRole = "node-lan" | "node-wan" | "isp" | "ap" | "switch" | "uplink" | "device" | "unmanaged";
+export type PortRole = "node-lan" | "node-wan" | "isp" | "ap" | "switch" | "uplink" | "device" | "parked" | "unmanaged";
 export interface TopoPort {
   port: string;
   role: PortRole;
@@ -223,6 +226,8 @@ export interface TopoPort {
   description: string | null;
   lag: string | null;
   lagLead: string | null; // a LAG member: the lead port whose VLANs it carries (#854)
+  parked: boolean; // an access port in the park zone, TAPPaaS uses it for nothing (#853)
+  link: string | null;
   drift: "in-sync" | "drift" | "unmanaged";
   add: number[];
   remove: number[];
@@ -587,6 +592,8 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       topoFinding(`port ${r.port} names node ${r.target}, which is not a site node`, ref);
       target = { kind: "node", name: r.target, port: r.targetPort };
       role = "node-lan";
+    } else if (r.parked) {
+      role = "parked";
     }
     if (seen && target?.kind !== "node") {
       topoFinding(`LLDP from ${seen.node}/${seen.nic} reaches port ${r.port}, which the switch inventory does not give to ${seen.node}`, ref, [{ kind: "node", name: seen.node }]);
@@ -616,6 +623,8 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       description: r.description,
       lag: r.lag,
       lagLead: r.lagLead ?? null,
+      parked: r.parked === true,
+      link: r.link ?? null,
       drift: r.drift,
       add: r.add,
       remove: r.remove,
@@ -755,6 +764,11 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
         return { kind: "pool", name: s.name };
       case "site":
         return { kind: "site", name: s.name };
+      case "port": {
+        // "<switch>:<port>" (validate's switch-ports gate); a switch name may hold ":".
+        const i = s.name.lastIndexOf(":");
+        return i > 0 ? { kind: "port", name: s.name.slice(i + 1), switch: switchByCanon.get(canon(s.name.slice(0, i))) ?? s.name.slice(0, i) } : null;
+      }
       default:
         return null;
     }

@@ -39,6 +39,20 @@ controller selects a plugin by sourcing each plugin and asking
 `plugin_interrogate` (read live config) and `plugin_apply` (push VLAN changes);
 `manual.sh` instead prints the steps for the operator.
 
+### Parking (#853)
+
+A parked port is a record `{parked: true, zone}` with no `type`: desired makes
+it an access port on the zone's VLAN, so delta, apply and confirm treat it as
+any access port (delta also counts a trunk that should be an access port as a
+change). `interrogate` parks (`park_unrecorded`) only ports with no record, a
+reported link of `down`, not disabled and outside any aggregate — a port with
+a link may be a node uplink not yet registered. `update-port --park` and
+`remove-port` go through `park_port`: the plugin's `plugin_apply` is handed a
+desired holding only that port (`SWITCH_DESIRED`, which the UniFi plugin reads
+instead of the site's desired; ports it does not name keep their override), and
+the record changes after the switch has it. The default profile is never
+restored (README, *Parked ports*).
+
 ### LAG members follow their lead (#854)
 
 `LAG_LEADS_JQ` (`lag_leads`) is the one rule for which port leads an

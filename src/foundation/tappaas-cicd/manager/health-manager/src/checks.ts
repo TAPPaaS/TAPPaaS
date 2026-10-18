@@ -13,6 +13,8 @@
 //   - service-liveness (guest-agent ping / running-state — see TODO)
 //   - pending-reboot   (#730: guests whose update is waiting for a reboot)
 //   - cve-status       (ADR-011: the last security scan — WARN, never FAIL)
+//   - switch-ports     (#853: a switch port unrecorded and not parked, or set
+//                       otherwise than its record — WARN)
 
 import { spawnSync } from "child_process";
 import { join } from "path";
@@ -776,6 +778,87 @@ export function checkSiteTimezone(client: ClusterClient, configDir: string, defa
   };
 }
 
+// ── switch-ports gate (#853) ───────────────────────────────────────────
+// A switch port TAPPaaS does not use is parked: an access port in iotLocal,
+// where a device gets an address and reaches nothing. Two findings, from
+// switch-controller's own list-ports (the delta's rules, read-only, over the
+// switch as it was last read — reconcile reads it again):
+//   - a port with no record that is not parked — on the controller's default
+//     profile anything plugged in reaches every network;
+//   - a port the switch sets otherwise than its record (parked or in use).
+// WARN, never FAIL: nothing is down, a port is open or not as recorded.
+export interface SwitchPortRow {
+  port: string;
+  type: string | null;
+  zone: string | null;
+  mode: string;
+  nativeVlan: number;
+  taggedVlans: number[];
+  desired: { mode: string; nativeVlan: number; taggedVlans: number[] } | null;
+  drift: string; // in-sync | drift | unmanaged
+  add: number[];
+  remove: number[];
+  lagLead?: string | null;
+  parked?: boolean;
+  link?: string | null;
+  disabled?: boolean;
+}
+
+export function switchPortsResult(doc: unknown): CheckResult {
+  if (!Array.isArray(doc)) return { name: "switch-ports", status: "skip", detail: "switch-controller list-ports gave no switch list" };
+  const switches = doc as { switch: string; ports: SwitchPortRow[] }[];
+  if (switches.length === 0) return { name: "switch-ports", status: "skip", detail: "no switch in the inventory" };
+  const rows: CheckRow[] = [];
+  let total = 0;
+  let parked = 0;
+  let unrecorded = 0;
+  let differ = 0;
+  for (const s of switches) {
+    for (const p of s.ports ?? []) {
+      total++;
+      if (p.parked) parked++;
+      const at = `${s.switch} port ${p.port}`;
+      const subject: CheckSubject = { kind: "port", name: `${s.switch}:${p.port}` };
+      if (p.drift === "unmanaged" && !p.disabled && !p.lagLead) {
+        unrecorded++;
+        rows.push({ status: "warn", subject, text: `${at}: no record and not parked${p.link === "up" ? " (a link is up)" : ""} — park it: switch-controller update-port '${s.switch}' ${p.port} --park, or register it: add-port` });
+      } else if (p.drift === "drift" && p.desired) {
+        differ++;
+        const has = p.mode === "access" ? `access vlan ${p.nativeVlan}` : `${p.mode} native ${p.nativeVlan}`;
+        const want = p.desired.mode === "trunk"
+          ? `its trunk wants +${p.add.join(",") || "-"} -${p.remove.join(",") || "-"}`
+          : p.parked ? `parked in ${p.zone ?? "?"} (access vlan ${p.desired.nativeVlan}), the switch has ${has}` : `access vlan ${p.desired.nativeVlan}, the switch has ${has}`;
+        rows.push({ status: "warn", subject, text: `${at}: set otherwise than its record — ${want}; switch-controller reconcile previews the change` });
+      }
+    }
+  }
+  if (rows.length === 0) {
+    return { name: "switch-ports", status: "pass", detail: `${total} port(s) on ${switches.length} switch(es) as recorded, ${parked} parked` };
+  }
+  return {
+    name: "switch-ports",
+    status: "warn",
+    detail: `${unrecorded} port(s) unrecorded and not parked, ${differ} set otherwise than recorded (as last read) — switch-controller list-ports`,
+    rows,
+  };
+}
+
+export function checkSwitchPorts(configDir: string): CheckResult {
+  const bin = process.env.SWITCH_CONTROLLER_BIN ?? "switch-controller";
+  const r = spawnSync(bin, ["list-ports", "--json"], {
+    encoding: "utf8",
+    maxBuffer: 16 * 1024 * 1024,
+    timeout: 60_000,
+    env: { ...process.env, CONFIG_DIR: configDir },
+  });
+  if (r.error || r.status !== 0) return { name: "switch-ports", status: "skip", detail: "switch-controller list-ports did not answer" };
+  try {
+    return switchPortsResult(JSON.parse(r.stdout ?? ""));
+  } catch {
+    return { name: "switch-ports", status: "skip", detail: "switch-controller list-ports --json not parseable" };
+  }
+}
+
 export function runHealthGates(client: ClusterClient, opts: ValidateOpts): HealthReport {
   const checks: CheckResult[] = [
     checkServiceLiveness(client, opts.configDir, opts.defaultNode),
@@ -789,6 +872,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkSiteTimezone(client, opts.configDir, opts.defaultNode),
     checkQuorum(client),
     checkLanUplink(client),
+    checkSwitchPorts(opts.configDir),
     checkPulse(client, opts.configDir),
     checkCveStatus(opts.configDir, Date.now()),
   ];

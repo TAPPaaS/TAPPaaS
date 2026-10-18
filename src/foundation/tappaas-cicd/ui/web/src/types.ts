@@ -186,6 +186,8 @@ export interface TopoPort {
   description: string | null;
   lag: string | null;
   lagLead?: string | null; // a LAG member: the lead whose VLANs it carries (#854)
+  parked?: boolean; // an access port in the park zone, used for nothing (#853)
+  link?: string | null;
   drift: string;
   add: number[];
   remove: number[];

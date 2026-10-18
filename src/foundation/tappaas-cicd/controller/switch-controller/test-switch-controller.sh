@@ -20,6 +20,7 @@ cat > "${TMP}/zones.json" <<'JSON'
   "mgmt": { "state": "Manual",    "vlantag": 0   },
   "srv":  { "state": "Active",    "vlantag": 200 },
   "home": { "state": "Active",    "vlantag": 310, "SSID": "Home" },
+  "iotLocal": { "state": "Active", "vlantag": 410 },
   "dmz":  { "state": "Mandatory", "vlantag": 610 },
   "old":  { "state": "Inactive",  "vlantag": 999 }
 }
@@ -56,7 +57,7 @@ ck "update-port missing (rc)"        "1"        "$(rc_of "${SM}" update-port cor
 # ── update-desired regenerates desired (trunk + active VLANs) ────────
 "${SM}" update-desired >/dev/null 2>&1
 ck "desired port is trunk"           "trunk"     "$(jq -r '.switches.core.ports["4"].mode' "${DES}")"
-ck "desired tags active set"         "200,310,610" "$(jq -rc '.switches.core.ports["4"].taggedVlans | join(",")' "${DES}")"
+ck "desired tags active set"         "200,310,410,610" "$(jq -rc '.switches.core.ports["4"].taggedVlans | join(",")' "${DES}")"
 
 # ── delta wants the VLANs tagged; apply prints manual; the OPERATOR confirms ─
 ck "delta detects drift (rc)"        "2"      "$(rc_of "${SM}" reconcile)"
@@ -77,7 +78,7 @@ ck "still drifting until a human confirms (rc)" "2" "$(rc_of "${SM}" reconcile)"
 
 # The operator tags the VLANs by hand, then records it.
 "${SM}" confirm core >/dev/null 2>&1
-ck "operator confirm records the applied config" "200,310,610" \
+ck "operator confirm records the applied config" "200,310,410,610" \
    "$(jq -rc '.switches.core.ports["4"].taggedVlans // [] | join(",")' "${ACT}")"
 ck "after operator confirm, in sync (rc)" "0" "$(rc_of "${SM}" reconcile)"
 # standalone confirm still works (re-records desired→actual; idempotent).
@@ -87,9 +88,12 @@ ck "standalone confirm rc 0"         "0"      "$(rc_of "${SM}" confirm)"
 "${SM}" add-port core 6 --type node --target tappaas3 >/dev/null 2>&1
 "${SM}" update-desired >/dev/null 2>&1
 ck "added port shows in delta (rc)"  "2"      "$(rc_of "${SM}" reconcile)"
-"${SM}" remove-port core 6 >/dev/null 2>&1
-"${SM}" update-desired >/dev/null 2>&1
-ck "removed port → back in sync (rc)" "0"     "$(rc_of "${SM}" reconcile)"
+out="$("${SM}" remove-port core 6 2>&1)"
+ck "remove-port on a manual switch prints the park step" "yes" "$(has "${out}" 'park in iotLocal')"
+ck "…and records the port parked (#853)" "true iotLocal null" "$(jq -r '.switches.core.ports["6"] | "\(.parked) \(.zone) \(.type // null)"' "${ACT}")"
+ck "…drifting until a human confirms (rc)" "2" "$(rc_of "${SM}" reconcile)"
+"${SM}" confirm core >/dev/null 2>&1
+ck "removed port, confirmed parked → back in sync (rc)" "0" "$(rc_of "${SM}" reconcile)"
 
 # ── access port: device + zone → nativeVlan derived from zones ───────
 "${SM}" add-port core 10 --type device --target printer --zone home >/dev/null 2>&1
@@ -102,7 +106,7 @@ ck "device desired nativeVlan=zone"  "310"    "$(jq -r '.switches.core.ports["10
 "${SM}" add-port core 11 --type ap --target nano-ap >/dev/null 2>&1
 "${SM}" update-desired >/dev/null 2>&1
 ck "ap port desired trunk"           "trunk"  "$(jq -r '.switches.core.ports["11"].mode' "${DES}")"
-ck "ap port carries active VLANs"    "200,310,610" "$(jq -rc '.switches.core.ports["11"].taggedVlans|join(",")' "${DES}")"
+ck "ap port carries active VLANs"    "200,310,410,610" "$(jq -rc '.switches.core.ports["11"].taggedVlans|join(",")' "${DES}")"
 
 # list-ports: one line per port, actual + drift (read-only, computed on the fly)
 lp="$("${SM}" list-ports core 2>&1)"
@@ -111,7 +115,7 @@ ck "list-ports: ap port 11 drift"     "yes" "$(grep -qE 'port 11: ap .*DRIFT' <<
 ck "list-ports: unknown switch (rc)"  "1"   "$(rc_of "${SM}" list-ports nope)"
 lj="$("${SM}" list-ports core --json 2>/dev/null)"
 ck "list-ports --json: node port 4 in sync" "in-sync" "$(jq -r '.[0].ports[] | select(.port=="4") | .drift' <<<"${lj}")"
-ck "list-ports --json: ap port 11 drift adds" "200,310,610" "$(jq -r '.[0].ports[] | select(.port=="11") | .add | join(",")' <<<"${lj}")"
+ck "list-ports --json: ap port 11 drift adds" "200,310,410,610" "$(jq -r '.[0].ports[] | select(.port=="11") | .add | join(",")' <<<"${lj}")"
 ck "list-ports --json: device port wants its zone" "310" "$(jq -r '.[0].ports[] | select(.port=="10") | .desired.nativeVlan' <<<"${lj}")"
 ck "list-ports --json: one line per port as the text" "$(grep -c '^  port ' <<<"${lp}")" "$(jq '.[0].ports | length' <<<"${lj}")"
 ck "list-ports --json before the switch (rc)" "0" "$(rc_of "${SM}" list-ports --json core)"
@@ -144,7 +148,7 @@ PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate >/dev/null 2>&1   # re-interrogate
 ck "re-interrogate keeps port type"  "node"   "$(jq -r '.switches.StubSw.ports["3"].type' "${ACT}")"
 ck "re-interrogate keeps target"     "tappaas3" "$(jq -r '.switches.StubSw.ports["3"].target' "${ACT}")"
 "${SM}" update-desired >/dev/null 2>&1
-ck "annotated port → active VLANs"   "200,310,610" "$(jq -rc '.switches.StubSw.ports["3"].taggedVlans|join(",")' "${DES}")"
+ck "annotated port → active VLANs"   "200,310,410,610" "$(jq -rc '.switches.StubSw.ports["3"].taggedVlans|join(",")' "${DES}")"
 ck "un-annotated port stays bare"    ""       "$(jq -rc '.switches.StubSw.ports["1"].type // ""' "${DES}")"
 # A non-JSON controller response (e.g. HTTP 429): leave actual as-is, and SAY so
 # with rc 1 — a read that failed used to exit 0 (#733).
@@ -208,7 +212,7 @@ ck "desired: the member has no VLAN set of its own" "null null" "$(jq -r '.switc
 ck "delta: nothing for the member"       "no"     "$(has "$("${SM}" delta 2>&1)" 'port 12')"
 lj="$("${SM}" list-ports core --json 2>/dev/null)"
 ck "list-ports --json: the member is in sync" "in-sync" "$(jq -r '.[0].ports[] | select(.port=="12") | .drift' <<<"${lj}")"
-ck "…shows the lead's VLANs"             "200,310,610" "$(jq -r '.[0].ports[] | select(.port=="12") | .taggedVlans | join(",")' <<<"${lj}")"
+ck "…shows the lead's VLANs"             "200,310,410,610" "$(jq -r '.[0].ports[] | select(.port=="12") | .taggedVlans | join(",")' <<<"${lj}")"
 ck "…and names its lead"                 "11"     "$(jq -r '.[0].ports[] | select(.port=="12") | .lagLead' <<<"${lj}")"
 ck "list-ports: the member follows port 11" "yes" "$(grep -qE 'port 12: node .*\| follows port 11' <<<"$("${SM}" list-ports core 2>&1)" && echo yes || echo no)"
 "${SM}" confirm core >/dev/null 2>&1
@@ -222,6 +226,85 @@ ck "delta: the aggregate to take apart" "yes" "$(has "$("${SM}" delta 2>&1)" 'ta
 ck "manual switch: lag --apply prints the step, rc 2" "2" "$(rc_of "${SM}" lag remove core t1-lan --apply)"
 "${SM}" confirm core >/dev/null 2>&1
 "${SM}" remove-port core 11 >/dev/null 2>&1; "${SM}" remove-port core 12 >/dev/null 2>&1
+
+# ── parking (#853): a port TAPPaaS does not use is an iotLocal access port ──
+# The stub controller reports PSw: 1 and 4 free (no link), 2 and 7 with a link,
+# 3 disabled, 5+6 an aggregate nobody declared. Its apply records what it was
+# given (the desired file it read and the changes) and answers STUB_APPLY_RC.
+cat > "${STUBDIR}/stub.sh" <<'EOF'
+plugin_supports() { [[ "$1" == "stub" ]]; }
+plugin_arch() { echo controller; }
+plugin_controller_interrogate() { cat <<'J'
+{"switches":{"PSw":{"vendor":"stub","model":"S2","managementIp":"1.2.3.5","ports":{
+ "1":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200,310],"link":"down","lagMembers":[]},
+ "2":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200,310],"link":"up","lagMembers":[]},
+ "3":{"mode":"access","nativeVlan":0,"disabled":true,"link":"down","lagMembers":[]},
+ "4":{"mode":"trunk","nativeVlan":430,"taggedVlans":[200],"link":"down","lagMembers":[]},
+ "5":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200],"link":"down","lagMembers":[5,6]},
+ "6":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200],"link":"down","lagMembers":[]},
+ "7":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200],"link":"up","lagMembers":[]}}}},"aps":{}}
+J
+}
+plugin_apply() { cp "${SWITCH_DESIRED:-${CONFIG_DIR}/switch-configuration-desired.json}" "${CONFIG_DIR}/applied.json"; printf '%s' "$2" > "${CONFIG_DIR}/changes.json"; return "${STUB_APPLY_RC:-0}"; }
+EOF
+PLUGIN_DIR="${STUBDIR}" "${SM}" add-controller cpark --vendor stub --ip 1.2.3.5 >/dev/null 2>&1
+out="$(PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate 2>&1)"
+ck "interrogate parks the free ports"     "1,4"    "$(jq -r '[.switches.PSw.ports | to_entries[] | select(.value.parked) | .key] | join(",")' "${ACT}")"
+ck "…in iotLocal"                         "iotLocal" "$(jq -r '.switches.PSw.ports["1"].zone' "${ACT}")"
+ck "…and says so"                         "yes"    "$(has "${out}" 'parked port(s) 1, 4 in iotLocal')"
+ck "a port with a link is left, and named" "yes"   "$(has "${out}" 'port(s) 2, 7 have no record and a link')"
+ck "a disabled port is left"              "null"   "$(jq -r '.switches.PSw.ports["3"].parked // null' "${ACT}")"
+ck "an aggregate nobody declared is left"  "null null" "$(jq -r '.switches.PSw.ports | "\(.["5"].parked // null) \(.["6"].parked // null)"' "${ACT}")"
+ck "a parked record is not a device record" "null" "$(jq -r '.switches.PSw.ports["1"].type // null' "${ACT}")"
+"${SM}" update-desired >/dev/null 2>&1
+ck "desired: a parked port is an iotLocal access port" "access 410" "$(jq -r '.switches.PSw.ports["1"] | "\(.mode) \(.nativeVlan)"' "${DES}")"
+ck "delta: the park to push"              "yes"    "$(has "$("${SM}" delta 2>&1)" 'park: port 1 parked in iotLocal: trunk native 0 -> access VLAN 410')"
+ck "delta: a trunk already native 430 is parked too" "yes" "$(has "$("${SM}" delta 2>&1)" 'port 4 parked in iotLocal: trunk native 430')"
+ck "delta: nothing for a port left alone"  "no"    "$(has "$("${SM}" delta 2>&1)" 'port 2 ')"
+lp="$("${SM}" list-ports PSw 2>&1)"
+ck "list-ports: parked"                   "yes"    "$(grep -qE 'port 1: parked \(iotLocal\) .*DRIFT trunk native 0 -> access vlan 410' <<<"${lp}" && echo yes || echo no)"
+ck "list-ports: an unrecorded port with a link" "yes" "$(grep -qE 'port 2: — .*untouched \(unmanaged, link up\)' <<<"${lp}" && echo yes || echo no)"
+lj="$("${SM}" list-ports PSw --json 2>/dev/null)"
+ck "list-ports --json: parked, drifting"  "true drift 410" "$(jq -r '.[0].ports[] | select(.port=="1") | "\(.parked) \(.drift) \(.desired.nativeVlan)"' <<<"${lj}")"
+ck "list-ports --json: link and disabled"  "up false true" "$(jq -r '.[0].ports | "\(map(select(.port=="2"))[0].link) \(map(select(.port=="2"))[0].disabled) \(map(select(.port=="3"))[0].disabled)"' <<<"${lj}")"
+PLUGIN_DIR="${STUBDIR}" "${SM}" apply >/dev/null 2>&1
+ck "apply pushes the parked ports"        "access 410" "$(jq -r '.switches.PSw.ports["4"] | "\(.mode) \(.nativeVlan)"' "${TMP}/applied.json")"
+"${SM}" confirm PSw >/dev/null 2>&1
+ck "confirm records them parked and in sync" "in-sync in-sync" "$("${SM}" list-ports PSw --json | jq -r '.[0].ports | "\(map(select(.port=="1"))[0].drift) \(map(select(.port=="4"))[0].drift)"')"
+ck "a re-interrogate keeps the parked record" "true" "$(PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate >/dev/null 2>&1; jq -r '.switches.PSw.ports["1"].parked' "${ACT}")"
+# update-port --park: the switch first, only this port, then the record.
+rm -f "${TMP}/applied.json"
+out="$(PLUGIN_DIR="${STUBDIR}" "${SM}" update-port PSw 2 --park 2>&1)"; rc=$?
+ck "update-port --park (rc)"              "0"      "${rc}"
+ck "…pushes only that port"               "2"      "$(jq -r '.switches.PSw.ports | keys | join(",")' "${TMP}/applied.json")"
+ck "…as an iotLocal access port"          "true access 410" "$(jq -r '.switches.PSw.ports["2"] | "\(.parked) \(.mode) \(.nativeVlan)"' "${TMP}/applied.json")"
+ck "…then records it parked, as set"      "true iotLocal access 410 up" "$(jq -r '.switches.PSw.ports["2"] | "\(.parked) \(.zone) \(.mode) \(.nativeVlan) \(.link)"' "${ACT}")"
+ck "…named in the change"                 "park"   "$(jq -r '.changes[0].action' "${TMP}/changes.json")"
+ck "update-port --park with other flags refused (rc)" "1" "$(rc_of "${SM}" update-port PSw 7 --park --type node)"
+ck "add-port --park refused (rc)"         "1"      "$(rc_of "${SM}" add-port PSw 7 --park)"
+before="$(md5sum < "${ACT}")"
+ck "a switch that refuses the park (rc)"  "1"      "$(STUB_APPLY_RC=1 PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" update-port PSw 7 --park)"
+ck "…leaves the record unchanged"         "${before}" "$(md5sum < "${ACT}")"
+ck "no such park zone (rc)"               "1"      "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" update-port PSw 7 --park --park-zone nope)"
+ck "…says what to do"                     "yes"    "$(has "$(PLUGIN_DIR="${STUBDIR}" "${SM}" update-port PSw 7 --park --park-zone nope 2>&1)" "no zone 'nope' to park ports in")"
+PLUGIN_DIR="${STUBDIR}" "${SM}" update-port PSw 7 --park --park-zone home >/dev/null 2>&1
+ck "--park-zone parks elsewhere"          "home 310" "$(jq -r '.switches.PSw.ports["7"] | "\(.zone) \(.nativeVlan)"' "${ACT}")"
+ck "a member of a live aggregate is not parked (rc)" "1" "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" update-port PSw 6 --park)"
+# A parked port taken into use, and given back.
+"${SM}" add-port PSw 4 --type device --target printer --zone home >/dev/null 2>&1
+ck "add-port takes a parked port into use" "device home null" "$(jq -r '.switches.PSw.ports["4"] | "\(.type) \(.zone) \(.parked // null)"' "${ACT}")"
+"${SM}" update-port PSw 1 --type node --target tappaas9 >/dev/null 2>&1
+ck "update-port --type unparks, drops the park zone" "node null null" "$(jq -r '.switches.PSw.ports["1"] | "\(.type) \(.zone // null) \(.parked // null)"' "${ACT}")"
+PLUGIN_DIR="${STUBDIR}" "${SM}" remove-port PSw 4 >/dev/null 2>&1
+ck "remove-port parks it on the switch"   "4 access 410" "$(jq -r '.switches.PSw.ports | "\(keys | join(",")) \(.["4"].mode) \(.["4"].nativeVlan)"' "${TMP}/applied.json")"
+ck "…and its record is parked, not removed" "true null null" "$(jq -r '.switches.PSw.ports["4"] | "\(.parked) \(.type // null) \(.target // null)"' "${ACT}")"
+# No park zone: interrogate refuses the parking (rc 1), reconcile still runs.
+jq 'del(.switches.PSw.ports["1"])' "${ACT}" > "${ACT}.t" && mv "${ACT}.t" "${ACT}"
+out="$(PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate --park-zone nope 2>&1)"; rc=$?
+ck "interrogate without a park zone (rc)" "1"      "${rc}"
+ck "…says so, and parks nothing"          "yes null" "$(has "${out}" "no zone 'nope'") $(jq -r '.switches.PSw.ports["1"].parked // null' "${ACT}")"
+ck "…reconcile is not refused for it"     "2"      "$(PLUGIN_DIR="${STUBDIR}" rc_of "${SM}" reconcile --park-zone nope)"
+"${SM}" remove-switch PSw >/dev/null 2>&1; "${SM}" remove-controller cpark >/dev/null 2>&1
 
 # ── list / show / remove / guards ───────────────────────────────────
 ck "show switch"                     "tplink" "$("${SM}" show core | jq -r '.vendor')"

@@ -135,7 +135,7 @@ update.sh,tappaas-cicd/manager/network-manager/,
 #
 # === tappaas-cicd/manager/health-manager (TS manager: health-manager) ===
 src/main.ts,tappaas-cicd/manager/health-manager/,update-os.sh; backup-manager; site.json
-src/checks.ts,tappaas-cicd/manager/health-manager/,check-disk-threshold.sh; backup-manager
+src/checks.ts,tappaas-cicd/manager/health-manager/,check-disk-threshold.sh; backup-manager; switch-controller
 src/inspect.ts,tappaas-cicd/manager/health-manager/,(native)
 src/client.ts,tappaas-cicd/manager/health-manager/,(native ssh/pvesh via lib/ts cluster.ts)
 src/config.ts,tappaas-cicd/manager/health-manager/,site.json

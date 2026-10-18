@@ -292,6 +292,16 @@ cat > "${LTMP}/switch-configuration-desired.json" <<'JSON'
   "11":{"mode":"trunk","nativeVlan":0,"taggedVlans":[200],"type":"node","lag":"t1-lan","lagMembers":[11,12]},
   "12":{"type":"node","lag":"t1-lan","lagLead":"11","lagMembers":[]}}}}}
 JSON
+# #853: a port's link, and parking one port through SWITCH_DESIRED.
+SAVED_PT="${LIVE_PT}"
+LIVE_PT='[{"port_idx":5,"op_mode":"switch","up":true},{"port_idx":11,"op_mode":"switch","up":false},{"port_idx":12,"op_mode":"switch"}]'
+ck "interrogate: a port's link (#853)" "up down null" "$(plugin_interrogate sw1 1.2.3.4 | jq -r '.ports | "\(.["5"].link) \(.["11"].link) \(.["12"].link)"')"
+ck "controller interrogate: same" "up" "$(plugin_controller_interrogate c 1.2.3.4 | jq -r '.switches.sw1.ports["5"].link')"
+echo '{"switches":{"sw1":{"managementIp":"1.2.3.4","ports":{"7":{"parked":true,"zone":"iotLocal","mode":"access","nativeVlan":200}}}}}' > "${LTMP}/one.json"
+SWITCH_DESIRED="${LTMP}/one.json" UNIFI_LAG_WAIT=0 CONFIG_DIR="${LTMP}" plugin_apply sw1 >/dev/null 2>&1
+ck "park one port: an access port, nothing tagged" "native:n200:block_all" "$(jq -r '.port_overrides[] | select(.port_idx==7) | "\(.forward):\(.native_networkconf_id):\(.tagged_vlan_mgmt)"' "${LTMP}/put.json")"
+ck "…the other overrides kept as they are" "customize" "$(jq -r '.port_overrides[] | select(.port_idx==12) | .forward' "${LTMP}/put.json")"
+LIVE_PT="${SAVED_PT}"
 ck "interrogate: no aggregate, no members" "[]" "$(plugin_interrogate sw1 1.2.3.4 | jq -c '.ports["11"].lagMembers')"
 UNIFI_LAG_WAIT=0 CONFIG_DIR="${LTMP}" plugin_apply sw1 >/dev/null 2>&1; rc=$?
 ck "form: the lead port aggregates both" "aggregate:11,12" \

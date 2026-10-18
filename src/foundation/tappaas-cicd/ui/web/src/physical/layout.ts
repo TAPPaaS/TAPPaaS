@@ -255,6 +255,7 @@ export function layoutTopology(t: Topology, o: LayoutOpts): { nodes: Node[]; edg
 }
 
 export function portLabel(p: TopoPort): string {
+  if (p.parked) return `parked · ${p.zones[0] ?? "?"}`;
   if (!p.target) return p.description ?? "—";
   if (p.target.kind === "isp") return p.description ?? "ISP hand-off";
   const nm = p.target.name ?? "?";
