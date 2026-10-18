@@ -5,7 +5,8 @@
 # wrapper. The front end (web/: Vite, React, React Flow) is an npm build with
 # its dependencies pinned by web/package-lock.json; after changing them, refresh
 # npmDepsHash: nix-shell -p prefetch-npm-deps --run "prefetch-npm-deps web/package-lock.json".
-# The built front end lands in $out/web/dist, where the backend looks for it.
+# The built front end lands in $out/web/dist, where the backend looks for it;
+# bin/tappaas is `tappaas ask`, the assistant in a shell (src/ask.ts).
 # Build + link: install.sh (nix build ..#console, flake-pinned).
 {
   pkgs ? import <nixpkgs> { },
@@ -40,6 +41,9 @@ let
       cp -r ${web} "$out/web/dist"
       # The declared verbs of the bash controllers (manifest.ts), beside lib/.
       cp -r ui/manifest "$out/manifest"
+      # `tappaas ask` (ADR-034 D7): the assistant in a shell, a client of this backend.
+      makeWrapper ${pkgs.nodejs_22}/bin/node "$out/bin/tappaas" \
+        --add-flags "$out/lib/ui/src/ask.js"
     '';
   });
 in

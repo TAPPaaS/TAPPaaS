@@ -31,6 +31,8 @@ export interface Proposal {
   read: boolean; // runs at once (a read verb), no preview
   destructive: boolean;
   preview: string; // how it previews: apply-flag, dry-run-flag, none, read
+  previewArgv: string[] | null; // what its preview runs (null: no dry run, or a read)
+  applyArgv: string[]; // what its Run runs
   at: string;
 }
 

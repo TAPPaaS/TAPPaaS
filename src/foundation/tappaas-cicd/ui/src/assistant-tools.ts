@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { JobSummary, shellQuote } from "./jobs";
-import { Manifests, validateArgv } from "./manifest";
+import { Manifests, applyArgv, previewArgv, validateArgv } from "./manifest";
 import { MODULE_NAME, Reads } from "./reads";
 import { HealthDoc } from "./model";
 import { ToolDef } from "./litellm";
@@ -46,6 +46,8 @@ export interface ProposedJob {
   read: boolean;
   destructive: boolean;
   preview: string;
+  previewArgv: string[] | null; // what its preview runs (null: no dry run, or a read)
+  applyArgv: string[]; // what its Run runs
 }
 
 export interface ToolOutcome {
@@ -406,7 +408,10 @@ function propose(ctx: ToolContext, args: Record<string, unknown>): ToolOutcome {
   const v = validateArgv(ms, words);
   if (!v.ok) return { ok: false, summary: `propose refused: ${v.reason.slice(0, 100)}`, content: `Not a valid job: ${v.reason}. Check the verb with help(manager) and propose again.` };
   const preview = v.read ? "read" : v.verb.preview.kind;
-  const proposal: ProposedJob = { argv: words, rationale, verb: `${v.bin} ${v.verb.verb}`, read: v.read, destructive: v.destructive, preview };
+  const proposal: ProposedJob = {
+    argv: words, rationale, verb: `${v.bin} ${v.verb.verb}`, read: v.read, destructive: v.destructive, preview,
+    previewArgv: v.read ? null : previewArgv(v), applyArgv: v.read ? [v.bin, ...v.args] : applyArgv(v),
+  };
   return {
     ok: true,
     summary: `proposed: ${shellQuote(words)}`,
