@@ -1,1 +1,2 @@
-{"rows": [{"uuid": "52205096-3de4-4f54-bae8-a9bc74998380", "name": "tappaas-admin"}]}
+{"rows": [{"uuid": "52205096-3de4-4f54-bae8-a9bc74998380", "name": "tappaas-admin", "port": "51820", "tunneladdress": "10.255.1.1/24", "enabled": "1"},
+          {"uuid": "9f82918d-a35e-49a2-bc4a-94a18e95cf96", "name": "buddy-rasmus-serve", "port": "51830", "tunneladdress": "10.255.2.1/30", "enabled": "1"}]}

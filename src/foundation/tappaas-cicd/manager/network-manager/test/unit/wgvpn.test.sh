@@ -6,7 +6,9 @@
 # (test/fixtures/wgvpn/, captured from hrossen) and zones.json by the test
 # fixture, and checks what `wgvpn config` and `wgvpn list` print: the site's
 # DNS, mgmt, the DMZ gateway /32 and its IPv6 /128 — or a note when the site
-# has no IPv6 — and which peers still hold a config from before #856.
+# has no IPv6 — and which peers still hold a config from before #856; and that
+# the port is the admin instance's own (hrossen's listens on 51820, not the
+# 51821 a new instance gets): the WAN rule check, the Endpoint, the relink.
 #
 # Prints "Results: N passed, M failed"; exits 1 on any failure.
 set -uo pipefail
@@ -26,14 +28,17 @@ trap 'rm -rf -- "${TMP}"' EXIT
 . "${NM}/wgvpn/wgvpn-lib.sh"
 
 IFACES="${FX}/interfacesInfo.json"
+SERVERS="${FX}/searchServer.json"
+RULES="${FX}/searchRule.json"
 _ow_api() {
     local path="${!#}"
     case "${path}" in
         */interfaces/overview/interfacesInfo) cat "${IFACES}" ;;
-        */wireguard/server/searchServer)      cat "${FX}/searchServer.json" ;;
+        */wireguard/server/searchServer)      cat "${SERVERS}" ;;
         */wireguard/server/getServer/*)       cat "${FX}/getServer.json" ;;
+        */wireguard/server/setServer/*)       printf '%s\n' "$@" > "${TMP}/setServer.args"; echo '{"result":"saved"}' ;;
         */wireguard/client/searchClient)      cat "${FX}/searchClient.json" ;;
-        */firewall/filter/searchRule)         cat "${FX}/searchRule.json" ;;
+        */firewall/filter/searchRule)         cat "${RULES}" ;;
         *) echo '{}' ;;
     esac
 }
@@ -101,7 +106,7 @@ grep -q satellite1 <<<"${out}" && bad "list shows a peer outside the admin overl
 
 cfg="$(av_config_cmd lars-mac "" "" 2>/dev/null)"
 [[ "$(line Address "${cfg}")" == 10.255.1.2/32 ]] && ok "config <name>: the peer's address is looked up" || bad "config <name>: Address '$(line Address "${cfg}")'"
-[[ "$(line Endpoint "${cfg}")" == "<satellite-or-cluster-public-ip>:51821" ]] && ok "config <name>: Endpoint found as add-peer finds it" \
+[[ "$(line Endpoint "${cfg}")" == "<satellite-or-cluster-public-ip>:51820" ]] && ok "config <name>: Endpoint found as add-peer finds it, on the instance's port" \
     || bad "config <name>: Endpoint '$(line Endpoint "${cfg}")'"
 [[ "$(jq -r '."lars-mac".config' "$(av_issued_file)" 2>/dev/null)" == 2 ]] && ok "config <name> records v2 as issued to the peer" || bad "nothing recorded in $(av_issued_file)"
 out="$(av_list 2>/dev/null)"
@@ -119,6 +124,37 @@ av_forget_issued lars-phone
 # the version after the address must not change what it reads.
 [[ "$(sed -n 's/^  - \([^ ]*\) .*/\1/p' <<<"${out}" | tr '\n' ,)" == "lars-mac,lars-phone," ]] \
     && ok "list: the peer name is still the first word of its row" || bad "list row format"
+
+# ── the instance's own port ──
+[[ "$(av_server_port)" == 51820 ]] && ok "the admin instance's port is read from it (51820)" || bad "av_server_port: '$(av_server_port)'"
+out="$(av_list 2>/dev/null)"
+grep -qx 'server : tappaas-admin (uuid=52205096-3de4-4f54-bae8-a9bc74998380) port=51820' <<<"${out}" \
+    && ok "list: the server line has the real port" || bad "list server line: $(grep '^server' <<<"${out}")"
+grep -qx "wan    : present (UDP 51820 -> This Firewall, rule 'tappaas-admin WAN :51820')" <<<"${out}" \
+    && ok "list: the WAN rule for that port is found, and named" || bad "list wan line: $(grep '^wan' <<<"${out}")"
+# found by what it does: another description, the same rule
+jq '.rows |= map(if .destination_port == "51820" then .description = "admin wg by hand" else . end)' "${FX}/searchRule.json" > "${TMP}/rules.json"
+RULES="${TMP}/rules.json"
+grep -qx "wan    : present (UDP 51820 -> This Firewall, rule 'admin wg by hand')" <<<"$(av_list 2>/dev/null)" \
+    && ok "list: a WAN rule is recognised by port and protocol, whatever its description" || bad "rule by description only"
+# a rule named for the port but passing another, or disabled, is not it
+jq '.rows |= map(if .destination_port == "51820" then .destination_port = "51821" else . end)' "${FX}/searchRule.json" > "${TMP}/rules.json"
+grep -qx 'wan    : MISSING (UDP 51820 -> This Firewall)' <<<"$(av_list 2>/dev/null)" \
+    && ok "list: a WAN rule for another port leaves the instance's MISSING" || bad "another port taken: $(av_list 2>/dev/null | grep '^wan')"
+jq '.rows |= map(if .destination_port == "51820" then .enabled = "0" else . end)' "${FX}/searchRule.json" > "${TMP}/rules.json"
+[[ -z "$(av_wan_rule_uuid 51820)" ]] && ok "a disabled WAN rule does not count" || bad "a disabled rule counted"
+RULES="${FX}/searchRule.json"
+[[ "$(av_wan_rule_uuid 51830)" == e115626c-db86-46f4-bdab-3e6049f17774 && -z "$(av_wan_rule_uuid 51821)" ]] \
+    && ok "av_wan_rule_uuid <port> finds the rule for exactly that port" || bad "av_wan_rule_uuid by port"
+# no instance yet: the port a new one gets
+echo '{"rows": []}' > "${TMP}/servers.json"; SERVERS="${TMP}/servers.json"
+[[ "$(av_server_port)" == "${SAT_ADMIN_WGPORT}" ]] && ok "no instance: the port a new one gets (${SAT_ADMIN_WGPORT})" || bad "no instance: '$(av_server_port)'"
+SERVERS="${FX}/searchServer.json"
+# re-linking the peers keeps the instance's port
+rm -f "${TMP}/setServer.args"
+av_relink_peers 52205096-3de4-4f54-bae8-a9bc74998380 >/dev/null
+[[ "$(grep -o '"port":"[0-9]*"' "${TMP}/setServer.args" 2>/dev/null)" == '"port":"51820"' ]] \
+    && ok "relinking the peers keeps the instance's port" || bad "relink wrote: $(grep -o '"port":"[0-9]*"' "${TMP}/setServer.args" 2>/dev/null)"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
