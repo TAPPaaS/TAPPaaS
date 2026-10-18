@@ -3,4 +3,4 @@ pubkey : Ov1AdZIdxOnGZa3FyZ4HpUAqfb6lP+A1qBd2nzWcMQ0=
 rule   : present (10.255.1.0/24 -> 10.0.0.0/24)
 wan    : MISSING (UDP 51821 -> This Firewall)
 peers  :
-  - lars-mac  10.255.1.2/32
+  - lars-mac  10.255.1.2/32  config v1: no DNS, mgmt only — re-issue (network-manager wgvpn config lars-mac) and re-import

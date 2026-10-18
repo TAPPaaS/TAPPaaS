@@ -333,7 +333,7 @@ network-manager wgvpn setup                                   # idempotent; the 
 network-manager wgvpn add-peer --name laptop --pubkey <key>   # prints the device's client config
 network-manager wgvpn list
 network-manager wgvpn remove-peer laptop
-network-manager wgvpn config 10.255.1.2/32 <host:51821>       # print a config again
+network-manager wgvpn config laptop [<host:51821>]            # print a config again (v2: DNS + published names)
 ```
 
 `add-peer`'s endpoint is `--endpoint` if given, else the address of a registered

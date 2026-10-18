@@ -250,8 +250,8 @@ else
     bad "wgvpn --help rc=${rc}"
 fi
 
-# the client stanza (server pubkey + API mocked → offline)
-out="$( . "${WGLIB}" >/dev/null 2>&1
+# the client stanza (server pubkey + API mocked → offline; no zones.json)
+out="$( export TAPPAAS_CONFIG_DIR="${wgtmp}"; . "${WGLIB}" >/dev/null 2>&1
         av_server_pubkey() { echo "FAKEKEY="; }
         _ow_api() { :; }
         av_client_config "10.255.1.7/32" "203.0.113.5:51821" "PRIVKEY" )"
@@ -262,6 +262,14 @@ if grep -q 'Endpoint            = 203.0.113.5:51821' <<< "${out}" \
     ok "av_client_config renders a valid client stanza"
 else
     bad "av_client_config format"
+fi
+
+# #856: the site's DNS and the routes to the published names, over hrossen's
+# zones and interfaces (test/unit/wgvpn.test.sh).
+if wgout="$(bash "${HERE}/test/unit/wgvpn.test.sh" 2>&1)"; then
+    ok "wgvpn client config: DNS, mgmt and the DMZ gateway routes; peers' config versions ($(grep -o '[0-9]* passed' <<< "${wgout}"))"
+else
+    bad "wgvpn client config unit tests FAILED:"; grep 'FAIL' <<< "${wgout}" | sed 's/^/    /'
 fi
 
 # endpoint discovery: a satellite relaying admin-vpn — an instance of the
