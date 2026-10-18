@@ -16,13 +16,14 @@ export function stripAnsi(s: string): string {
 }
 
 export function jobLevel(j: JobSummary): string {
-  if (j.state === "refused") return "fail";
+  if (j.state === "refused" || j.interrupted) return "fail";
   if (j.state !== "done") return "skip";
   return j.exit === 0 ? "pass" : "fail";
 }
 
 export function jobResult(j: JobSummary): string {
   if (j.state === "refused") return "refused";
+  if (j.interrupted) return "cut off";
   if (j.state === "queued") return "queued";
   if (j.state === "running") return "running…";
   return j.exit === 0 ? "ok" : `exit ${j.exit}`;
@@ -66,6 +67,7 @@ function JobDetail({ id }: { id: string }) {
     <div className="job-detail">
       {job.ran ? <Command argv={job.ran} label="ran" /> : <p className="muted small">No dry run: nothing ran for this preview.</p>}
       {job.refused ? <p className="readstate readstate-fail">{job.refused}</p> : null}
+      {job.interrupted ? <p className="readstate readstate-fail">The console stopped while this job {job.started ? "ran" : "waited"}: cut off, no exit code. Check what it left and run it again.</p> : null}
       <Output text={job.output} live={job.state === "running"} />
       {job.truncated ? <p className="muted small">output cut at 1 MiB</p> : null}
     </div>

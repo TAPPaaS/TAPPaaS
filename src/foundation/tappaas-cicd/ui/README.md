@@ -119,8 +119,17 @@ during a sweep is refused too. **Activity**: every job — who, via, route, the 
 as run, its preview, exit code and duration — is a summary line in `<state dir>/jobs.jsonl`;
 its output (1 MiB at most) is `<state dir>/jobs/<id>.log`, read when the job is asked for.
 The console holds the last 500 summaries in memory and reads them back at start; past 10 MiB
-`jobs.jsonl` is rewritten with those 500 and the other jobs' logs are removed. After an apply
-the module list, topology, zones, environments, site and backup reads are refreshed.
+`jobs.jsonl` is rewritten with those 500 and the other jobs' logs are removed. A job is
+recorded when it starts and again when it ends, so one the console stopped on (a restart)
+is read back as **cut off** — no exit code, a note in its output. After an apply the module
+list, topology, zones, environments, site and backup reads are refreshed.
+
+**A new build while a job runs.** `ui/install.sh` restarts the service when it has linked a
+new build — but `module update tappaas-cicd` reaches that script from inside a console job
+(`pre-update.sh` → `refresh-control-plane.sh`), and a restart then would kill the job. So it
+asks the console first (`GET /jobs` → `busy`): if a job runs or waits it leaves
+`<state dir>/restart-pending` instead, and the console exits into the new build the moment
+its runner is idle (the unit's `Restart=always`).
 
 ## The assistant (ADR-034 D7, P3)
 

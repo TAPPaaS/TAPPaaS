@@ -386,7 +386,13 @@ in
     serviceConfig = {
       User = "tappaas";
       ExecStart = "/home/tappaas/bin/console serve";
-      Restart = "on-failure";
+      # "always", not "on-failure": the console exits 0 on purpose to take up a
+      # new build. ui/install.sh does not restart it while a job runs (the
+      # relink is reached from `module update tappaas-cicd`, itself a job — a
+      # restart would kill it); it leaves restart-pending in the state
+      # directory and the console exits the moment its runner is idle. A
+      # `systemctl stop` is not an exit and is not restarted.
+      Restart = "always";
       RestartSec = 10;
       Environment = [
         ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"

@@ -61,6 +61,9 @@ export interface Job {
   output: string;
   truncated: boolean;
   refused: string | null;
+  // The console stopped (a restart) while this job ran or waited: cut off, no
+  // exit code. Set when the records are read back; absent otherwise.
+  interrupted?: boolean;
 }
 
 export type JobSummary = Omit<Job, "output">;
@@ -104,6 +107,9 @@ export interface JobsConfig {
   proposal?: (me: Me, conversation: string, proposal: string) => Proposal | null;
   log?: (line: string) => void;
   previewTtlMs?: number;
+  // The runner has nothing left (no write running or queued, no read running):
+  // the moment a deferred restart may happen (takeRestartMarker, main.ts).
+  onIdle?: () => void;
   keep?: number; // summaries held in memory and kept at a rotation (default 500)
   rotateAtBytes?: number; // jobs.jsonl is rewritten with the kept summaries past this size (default 10 MiB)
 }
@@ -121,12 +127,31 @@ const MAX_OUTPUT = 1024 * 1024; // per job, on disk; the rest is dropped and the
 const KEEP = 500; // summaries held in memory (and kept when jobs.jsonl is rotated)
 const ROTATE_AT = 10 * 1024 * 1024;
 
+// ui/install.sh, having linked a new build while a job runs, leaves this file
+// in the state directory instead of restarting the service (which would kill
+// the job — refresh-control-plane.sh runs from `module update tappaas-cicd`,
+// a console job). The console takes it when the runner is idle and exits;
+// the unit's Restart=always brings up the new build.
+export const RESTART_MARKER = "restart-pending";
+
+export function takeRestartMarker(stateDir: string): boolean {
+  const f = join(stateDir, RESTART_MARKER);
+  if (!existsSync(f)) return false;
+  try {
+    unlinkSync(f);
+  } catch {
+    return false;
+  }
+  return true;
+}
+
 type Listener = (ev: { type: "output"; chunk: string } | { type: "state"; job: JobSummary } | { type: "end"; job: JobSummary }) => void;
 
 export class Jobs {
   private readonly jobs: JobSummary[] = [];
   private readonly queue: JobSummary[] = [];
   private running: JobSummary | null = null;
+  private readonly reads = new Set<string>(); // read jobs running beside the queue
   private readonly listeners = new Map<string, Set<Listener>>();
   private readonly keep: number;
   private readonly rotateAt: number;
@@ -145,9 +170,11 @@ export class Jobs {
     return (this.cfg.now ?? Date.now)();
   }
 
-  // jobs.jsonl is append-only: a job may have more than one line (older
-  // consoles wrote one, with the output inline; a job is recorded when it
-  // starts and again when it ends). The last line of an id is its record.
+  // jobs.jsonl is append-only: a job is recorded when it starts and again
+  // when it ends (older consoles wrote one line, with the output inline). The
+  // last line of an id is its record. One still running or queued was cut off
+  // by the console stopping: it is marked interrupted, said so in its log, and
+  // recorded once more so the mark survives the next start too.
   private load(): void {
     if (!existsSync(this.file)) return;
     try {
@@ -163,6 +190,14 @@ export class Jobs {
         }
       }
       this.jobs.push(...[...byId.values()].slice(-this.keep));
+      for (const j of this.jobs) {
+        if (j.state !== "running" && j.state !== "queued") continue;
+        const was = j.state;
+        Object.assign(j, { state: "done", interrupted: true });
+        this.appendOutput(j.id, `\n[console] the console stopped while this job ${was === "running" ? "ran" : "waited"}: cut off, no exit code\n`);
+        this.record(j);
+        this.cfg.log?.(`job ${j.id} was ${was} when the console stopped: recorded as cut off`);
+      }
     } catch (e) {
       this.cfg.log?.(`jobs.jsonl unreadable: ${(e as Error).message}`);
     }
@@ -240,6 +275,15 @@ export class Jobs {
 
   queued(): string[] {
     return [...(this.running ? [this.running.id] : []), ...this.queue.map((j) => j.id)];
+  }
+
+  // Whether anything runs or waits: a restart now would cut a job off.
+  busy(): boolean {
+    return this.running !== null || this.queue.length > 0 || this.reads.size > 0;
+  }
+
+  private settle(): void {
+    if (!this.busy()) this.cfg.onIdle?.();
   }
 
   subscribe(id: string, l: Listener): () => void {
@@ -331,7 +375,11 @@ export class Jobs {
     if (v.read) {
       const job = this.newJob(me, v, "read", [v.bin, ...v.args], null, card);
       this.add(job);
-      void this.execute(job);
+      this.reads.add(job.id);
+      void this.execute(job).finally(() => {
+        this.reads.delete(job.id);
+        this.settle();
+      });
       return { status: 201, job };
     }
     if (req.preview !== true) {
@@ -459,7 +507,8 @@ export class Jobs {
       }
     } finally {
       this.running = null;
-      void this.pump();
+      void this.pump(); // takes the next job synchronously, if there is one
+      this.settle();
     }
   }
 
@@ -468,6 +517,7 @@ export class Jobs {
     const t0 = this.now();
     job.state = "running";
     job.started = new Date(t0).toISOString();
+    this.record(job); // the running record: a job the console stops on is visible as cut off
     this.emit(job, { type: "state", job: summary(job) });
     this.cfg.log?.(`job ${job.id} ${job.kind} by ${job.who.user ?? "?"} (${job.who.via}): ${argv.join(" ")}`);
     let written = 0;

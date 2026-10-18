@@ -10,7 +10,7 @@ import { join } from "path";
 import { IncomingMessage, ServerResponse } from "http";
 import { AccessConfig, Me, SetupState } from "../../src/access";
 import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
-import { Job, JobSummary, Jobs, parseUnitShow, shellQuote, sweepBlocks } from "../../src/jobs";
+import { Job, JobSummary, Jobs, RESTART_MARKER, parseUnitShow, shellQuote, sweepBlocks, takeRestartMarker } from "../../src/jobs";
 import { Manifests } from "../../src/manifest";
 import { Reads } from "../../src/reads";
 import { Runner, Streamer } from "../../src/run";
@@ -68,7 +68,8 @@ async function main(): Promise<void> {
   const ms: Manifests = { byBin: new Map([["module-manager", renderManifest(SPEC)]]), errors: [], loadedAt: "" };
   let now = Date.parse("2026-10-17T12:00:00Z");
   const done_: Job[] = [];
-  const jobs = new Jobs({ stateDir: dir, configDir: dir, manifests: () => ms, stream, run, now: () => now, onWriteDone: (j) => done_.push(j) });
+  let idle = 0;
+  const jobs = new Jobs({ stateDir: dir, configDir: dir, manifests: () => ms, stream, run, now: () => now, onWriteDone: (j) => done_.push(j), onIdle: () => idle++ });
 
   // ── T2 at the door, then T1 on every write ──────────────────────────
   let r = await jobs.create(me(), closed, { argv: ["module-manager", "frob"], preview: true });
@@ -174,16 +175,33 @@ async function main(): Promise<void> {
   const b = r.job!;
   await settle();
   check(a.state === "running" && b.state === "queued" && jobs.queued().join() === `${a.id},${b.id}`, "a second write queues behind the first, and the queue is visible");
+  check(jobs.busy(), "…and the runner says it is busy");
+  // the running record (finding 1): a job is in jobs.jsonl from the moment it starts…
+  const running = readFileSync(jobs.file, "utf8").trim().split("\n").map((l) => JSON.parse(l) as JobSummary);
+  check(running.some((l) => l.id === a.id && l.state === "running" && l.started !== null), "a job is recorded as running when it starts");
+  // …so a console that stops on it reads it back as cut off
+  const restarted = new Jobs({ stateDir: dir, configDir: dir, manifests: () => ms, stream, run });
+  const cut = restarted.get(a.id)!;
+  check(cut.state === "done" && cut.interrupted === true && cut.exit === null && /cut off/.test(cut.output), "…and a console started while it ran shows it as cut off, with a note in its output");
+  check(!restarted.busy(), "a fresh runner is idle");
+  const idleBefore = idle;
   unit = "active"; // the sweep starts while b waits
   (release as unknown as () => void)();
   await settle();
   check(a.state === "done" && b.state === "refused" && /sweep/.test(b.refused ?? ""), "a queued job is refused if the sweep has started when its turn comes");
+  check(!jobs.busy() && idle === idleBefore + 1, "when the last job ends the runner says so once (onIdle)");
   unit = "inactive";
+
+  // ── a deferred restart: install.sh leaves the marker, the console takes it when idle ──
+  check(!takeRestartMarker(dir), "no marker: nothing to take");
+  writeFileSync(join(dir, RESTART_MARKER), "");
+  check(takeRestartMarker(dir) && !existsSync(join(dir, RESTART_MARKER)) && !takeRestartMarker(dir), "the marker is taken once and removed");
 
   // ── Activity: jobs.jsonl and jobs/<id>.log ──────────────────────────
   const lines = readFileSync(jobs.file, "utf8").trim().split("\n").map((l) => JSON.parse(l) as JobSummary & { output?: string });
-  const first = lines.find((l) => l.id === p1.id)!;
-  check(!!first && first.who.user === "lars" && first.who.via === "gate" && first.route === "console" && first.exit === 0 && typeof first.durationMs === "number" && !("output" in first), "every job is a summary line in jobs.jsonl: who, via, route, argv, exit, duration — not its output");
+  const p1Lines = lines.filter((l) => l.id === p1.id);
+  const first = p1Lines[p1Lines.length - 1]; // the last line of an id is its record (the first says "running")
+  check(p1Lines.length === 2 && p1Lines[0].state === "running" && first.who.user === "lars" && first.who.via === "gate" && first.route === "console" && first.exit === 0 && typeof first.durationMs === "number" && !("output" in first), "every job is a summary line in jobs.jsonl when it starts and when it ends: who, via, route, argv, exit, duration — not its output");
   check(readFileSync(join(dir, "jobs", `${p1.id}.log`), "utf8").includes("ran reconcile"), "…the output is in jobs/<id>.log, read on demand");
   check(lines.some((l) => l.state === "refused"), "refused jobs are recorded too");
   const again = new Jobs({ stateDir: dir, configDir: dir, manifests: () => ms, stream, run });

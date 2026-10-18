@@ -286,6 +286,7 @@ export interface JobSummary {
   exit: number | null;
   truncated: boolean;
   refused: string | null;
+  interrupted?: boolean; // the console stopped while it ran: cut off, no exit code
 }
 export interface Job extends JobSummary {
   output: string;

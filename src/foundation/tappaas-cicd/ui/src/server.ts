@@ -323,7 +323,9 @@ export class ConsoleServer {
     const jobs = this.jobs;
     if (!jobs) return sendJson(res, 503, { error: "this console runs no jobs" });
     if (method === "GET" && !id) {
-      return sendJson(res, 200, { data: { jobs: jobs.list(), queue: jobs.queued(), sweep: await jobs.sweep() } });
+      // busy: a write runs or waits, or a read runs — ui/install.sh defers the
+      // service's restart on it (takeRestartMarker in jobs.ts).
+      return sendJson(res, 200, { data: { jobs: jobs.list(), queue: jobs.queued(), busy: jobs.busy(), sweep: await jobs.sweep() } });
     }
     if (method === "GET" && id && !sub) {
       const job = jobs.get(id);

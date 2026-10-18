@@ -19,7 +19,7 @@ import { lookup } from "dns";
 import { networkInterfaces } from "os";
 import { join } from "path";
 import { AccessConfig, addrMatches, setupState } from "./access";
-import { Jobs } from "./jobs";
+import { Jobs, takeRestartMarker } from "./jobs";
 import { KEY_FILE, LiteLLM } from "./litellm";
 import { Assistant } from "./assistant";
 import { lokiConfig } from "./assistant-tools";
@@ -218,6 +218,13 @@ async function serve(o: ServeOpts): Promise<number> {
       // The identity step puts the console behind the gate: the token goes (D10).
       closeSetupToken(access, log);
       void reads.refreshAfterJob();
+    },
+    // A new build linked while a job ran (ui/install.sh left restart-pending):
+    // now that nothing runs, exit; the unit's Restart=always starts the new one.
+    onIdle: () => {
+      if (!takeRestartMarker(o.stateDir)) return;
+      log("a new build was linked while a job ran: restarting into it now that the runner is idle");
+      process.exit(0);
     },
   });
   // The assistant (D7): LiteLLM with the key litellm:models provisioned.
