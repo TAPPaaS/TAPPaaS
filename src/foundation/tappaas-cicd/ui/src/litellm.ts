@@ -17,6 +17,8 @@
 //               named `default` when the key may use one (an alias the
 //               operator defines in LiteLLM); else the first model LiteLLM
 //               lists for the key.
+//   the chat    POST <base>/chat/completions, streamed, with tool calling
+//               (chat()); the agent loop around it is assistant.ts.
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
@@ -27,6 +29,99 @@ export const KEY_FILE = "/etc/secrets/litellm-svckey.env";
 export interface Credentials {
   key: string;
   baseUrl: string; // e.g. http://litellm.rossen.internal:4000/v1
+}
+
+// ── the OpenAI-compatible chat, as LiteLLM speaks it ──────────────────
+
+export interface ToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+export interface ChatMessage {
+  role: "system" | "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+}
+
+export interface ToolDef {
+  type: "function";
+  function: { name: string; description: string; parameters: Record<string, unknown> };
+}
+
+export interface ChatRequest {
+  model: string;
+  messages: ChatMessage[];
+  tools: ToolDef[];
+}
+
+export interface ChatResult {
+  content: string;
+  toolCalls: ToolCall[];
+  finish: string | null;
+}
+
+// One completion, streamed: each piece of text as it comes (onDelta), the
+// tool calls assembled from their fragments.
+export type ChatFn = (req: ChatRequest, onDelta: (text: string) => void, signal?: AbortSignal) => Promise<ChatResult>;
+
+// The server-sent events of a streamed completion, fed as they arrive.
+export class StreamParser {
+  private buf = "";
+  readonly result: ChatResult = { content: "", toolCalls: [], finish: null };
+  done = false;
+
+  constructor(private readonly onDelta: (text: string) => void) {}
+
+  feed(text: string): void {
+    this.buf += text;
+    let i: number;
+    while ((i = this.buf.indexOf("\n")) >= 0) {
+      const line = this.buf.slice(0, i).replace(/\r$/, "");
+      this.buf = this.buf.slice(i + 1);
+      this.line(line);
+    }
+  }
+
+  end(): ChatResult {
+    if (this.buf.trim()) this.line(this.buf);
+    this.buf = "";
+    this.result.toolCalls = this.result.toolCalls.filter((t) => t && t.function.name);
+    return this.result;
+  }
+
+  private line(line: string): void {
+    if (!line.startsWith("data:")) return;
+    const data = line.slice(5).trim();
+    if (data === "[DONE]") {
+      this.done = true;
+      return;
+    }
+    let chunk: { choices?: { delta?: { content?: string | null; tool_calls?: { index?: number; id?: string; function?: { name?: string; arguments?: string } }[] }; finish_reason?: string | null }[]; error?: { message?: string } };
+    try {
+      chunk = JSON.parse(data);
+    } catch {
+      return;
+    }
+    if (chunk.error) throw new Error(`LiteLLM: ${chunk.error.message ?? "error"}`);
+    const c = chunk.choices?.[0];
+    if (!c) return;
+    const d = c.delta ?? {};
+    if (typeof d.content === "string" && d.content) {
+      this.result.content += d.content;
+      this.onDelta(d.content);
+    }
+    for (const t of d.tool_calls ?? []) {
+      const idx = t.index ?? 0;
+      const cur = (this.result.toolCalls[idx] ??= { id: "", type: "function", function: { name: "", arguments: "" } });
+      if (t.id) cur.id = t.id;
+      if (t.function?.name) cur.function.name += t.function.name;
+      if (t.function?.arguments) cur.function.arguments += t.function.arguments;
+    }
+    if (c.finish_reason) this.result.finish = c.finish_reason;
+  }
 }
 
 export interface AssistantStatus {
@@ -104,6 +199,33 @@ export class LiteLLM {
   model(): string | null {
     return this.last?.available ? this.last.model : null;
   }
+
+  // One streamed completion with tools (ChatFn).
+  readonly chat: ChatFn = async (req, onDelta, signal) => {
+    const c = this.creds;
+    if (!c) throw new Error("no LiteLLM key");
+    const f = this.cfg.fetch ?? fetch;
+    const timeout = AbortSignal.timeout(5 * 60_000);
+    const r = await f(`${c.baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${c.key}`, "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify({ model: req.model, messages: req.messages, tools: req.tools, tool_choice: "auto", stream: true }),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
+    if (!r.ok || !r.body) {
+      const text = (await r.text().catch(() => "")).slice(0, 300);
+      if (r.status === 401 || r.status === 403) void this.status(true);
+      throw new Error(`LiteLLM answered HTTP ${r.status}${text ? `: ${text}` : ""}`);
+    }
+    const p = new StreamParser(onDelta);
+    const dec = new TextDecoder();
+    for await (const part of r.body) {
+      p.feed(dec.decode(part, { stream: true }));
+      if (p.done) break;
+    }
+    p.feed(dec.decode());
+    return p.end();
+  };
 
   // The status, re-checked after five minutes (half a minute while unavailable).
   status(force = false): Promise<AssistantStatus> {

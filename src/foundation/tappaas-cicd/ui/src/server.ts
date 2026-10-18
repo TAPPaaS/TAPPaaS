@@ -12,6 +12,7 @@ import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { Entry, envelope } from "./cache";
 import { JumpKind, jumpsFor } from "./jumps";
+import { Assistant, AssistantEvent } from "./assistant";
 import { LiteLLM } from "./litellm";
 import { Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
@@ -28,6 +29,7 @@ export interface ServerConfig {
   log: (line: string) => void;
   home?: string; // where the Setup wizard's credential files go (secrets.ts)
   litellm?: LiteLLM | null; // the assistant's LiteLLM (ADR-034 D7); absent: no assistant
+  assistant?: Assistant | null; // its agent loop (assistant.ts)
 }
 
 const JSON_TYPE = "application/json; charset=utf-8";
@@ -151,7 +153,7 @@ export class ConsoleServer {
     }
     if (head === "jobs") return this.jobsApi(method, a, b, me, res, req);
     if (head === "secrets") return this.secretsApi(method, a, me, res, req);
-    if (head === "assistant") return this.assistantApi(method, a, me, res);
+    if (head === "assistant") return this.assistantApi(method, a, b, me, res, req);
     if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/${head ?? ""}: reads are GET; a change is a job (POST /api/v1/jobs)` });
 
     const env = <T>(e: Entry<T>, data?: unknown): Record<string, unknown> => ({ ...envelope(e), ...(data !== undefined ? { data } : {}) });
@@ -350,8 +352,13 @@ export class ConsoleServer {
   }
 
   // ── the assistant (ADR-034 D7) ────────────────────────────────────
-  //   GET  /assistant/status     whether it is available, and why not
-  private async assistantApi(method: string, sub: string | undefined, me: Me, res: ServerResponse): Promise<void> {
+  //   GET  /assistant/status              whether it is available, and why not
+  //   POST /assistant/chat {conversation?, message, focus?}
+  //                                       one turn, as server-sent events:
+  //                                       conversation, step, delta, proposal, done, error
+  //   GET  /assistant/conversations[/<id>]  the caller's own conversations
+  // Reads only: a turn changes nothing but the caller's conversation file.
+  private async assistantApi(method: string, sub: string | undefined, id: string | undefined, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
     if (method === "GET" && sub === "status") {
       const at = new Date().toISOString();
       const none = (reason: string) => ({ available: false, reason, model: null, modelFrom: null, endpoint: null, keyFile: null, checkedAt: at });
@@ -359,6 +366,46 @@ export class ConsoleServer {
       if (me.route === "status") return sendJson(res, 200, { data: none("the owner's view has no assistant") });
       if (!this.cfg.litellm) return sendJson(res, 200, { data: none("this console has no assistant") });
       return sendJson(res, 200, { data: await this.cfg.litellm.status() });
+    }
+    const a = this.cfg.assistant;
+    if (me.route === "status") return sendJson(res, 403, { error: "the owner's view has no assistant" });
+    if (!a) return sendJson(res, 503, { error: "this console has no assistant" });
+    if (method === "GET" && sub === "conversations") {
+      if (!id) return sendJson(res, 200, { data: a.list(me) });
+      const c = a.get(me, id);
+      if (!c) return sendJson(res, 404, { error: `no conversation ${id}` });
+      const { messages: _m, ...rest } = c;
+      return sendJson(res, 200, { data: rest });
+    }
+    if (method === "POST" && sub === "chat" && !id) {
+      const ctype = req ? String(req.headers["content-type"] ?? "") : "";
+      if (!/^application\/json\b/i.test(ctype)) return sendJson(res, 415, { error: "a question is posted as application/json" });
+      let body: Record<string, unknown>;
+      try {
+        body = req ? await readJsonBody(req) : {};
+      } catch (e) {
+        return sendJson(res, 400, { error: (e as Error).message });
+      }
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
+      res.setHeader("X-Accel-Buffering", "no");
+      const ac = new AbortController();
+      let ended = false;
+      res.on("close", () => {
+        if (!ended) ac.abort();
+      });
+      const send = (e: AssistantEvent): void => {
+        if (!ended) res.write(`event: ${e.type}\ndata: ${JSON.stringify(e)}\n\n`);
+      };
+      try {
+        await a.chat(me, body, send, ac.signal);
+      } catch (e) {
+        send({ type: "error", message: (e as Error).message });
+      }
+      ended = true;
+      res.end();
+      return;
     }
     return sendJson(res, 404, { error: `assistant/${sub ?? ""}` });
   }

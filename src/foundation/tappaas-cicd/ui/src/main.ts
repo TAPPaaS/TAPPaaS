@@ -21,6 +21,9 @@ import { join } from "path";
 import { AccessConfig, addrMatches, setupState } from "./access";
 import { Jobs } from "./jobs";
 import { KEY_FILE, LiteLLM } from "./litellm";
+import { Assistant } from "./assistant";
+import { lokiConfig } from "./assistant-tools";
+import { Conversations } from "./conversations";
 import { loadManifests } from "./manifest";
 import { Reads } from "./reads";
 import { runAsync, streamAsync } from "./run";
@@ -62,7 +65,9 @@ export const HELP: HelpSpec = {
       "CONSOLE_SETUP_ALLOW, CONSOLE_SETUP_TOKEN_FILE, CONSOLE_SECRETS_DIR (where the wizard's\n" +
       "credential files go; default $HOME), CONSOLE_MANIFEST_FILE\n" +
       "(default <config>/console-setup-token), CONSOLE_JOURNAL_DAYS (default 7),\n" +
-      "CONSOLE_LITELLM_KEY_FILE (the assistant's LiteLLM key; default /etc/secrets/litellm-svckey.env).",
+      "CONSOLE_LITELLM_KEY_FILE (the assistant's LiteLLM key; default /etc/secrets/litellm-svckey.env),\n" +
+      "CONSOLE_LOKI_URL, CONSOLE_LOKI_PASSWORD_FILE (its logs tool), CONSOLE_REPO (the managers' READMEs;\n" +
+      "default /home/tappaas/TAPPaaS).",
   ],
 };
 
@@ -215,7 +220,20 @@ async function serve(o: ServeOpts): Promise<number> {
   });
   // The assistant (D7): LiteLLM with the key litellm:models provisioned.
   const litellm = new LiteLLM({ keyFile: process.env.CONSOLE_LITELLM_KEY_FILE ?? KEY_FILE, configDir: o.configDir, run: runAsync, log });
-  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? process.env.HOME ?? "/home/tappaas", litellm }, reads, jobs);
+  const home = process.env.HOME ?? "/home/tappaas";
+  const assistant = new Assistant({
+    status: () => litellm.status(),
+    chat: litellm.chat,
+    // Reads only: the jobs as Activity lists them, never the runner.
+    tools: { reads, manifests: () => server?.manifests ?? null, jobs: () => jobs.list(), loki: lokiConfig(o.configDir, home), repoRoot: process.env.CONSOLE_REPO ?? "/home/tappaas/TAPPaaS" },
+    store: new Conversations(join(o.stateDir, "assistant")),
+    site: async () => {
+      const s = (await reads.site.get()).value as { site?: { name?: string; displayName?: string } } | null;
+      return { name: s?.site?.name ?? "this site", displayName: s?.site?.displayName ?? null };
+    },
+    log,
+  });
+  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? home, litellm, assistant }, reads, jobs);
   for (const l of listen) {
     await server.listen(l.host, l.port).catch((e: Error) => die(`listen ${l.host}:${l.port}: ${e.message}`));
     info(`console ${VERSION} listening on ${l.host}:${l.port}`);
