@@ -120,3 +120,38 @@ export function wifiSpecs(p: WifiPlan): { remove: StepSpec | null; add: StepSpec
     reconcile: { bin: "ap-controller", verb: "reconcile", initial: {} },
   };
 }
+
+// ── a backup buddy: one pull through one tunnel (backup/BUDDY.md) ─────
+
+export type BuddyKind = "pull" | "remote";
+
+// What each side means, in one line each (BUDDY.md: the system whose data is
+// pulled serves the tunnel; the pulling system dials it).
+export const BUDDY_KINDS: Record<BuddyKind, string> = {
+  pull: "this site pulls the buddy's backups and keeps the copy: it dials the buddy's tunnel and needs no public address",
+  remote: "the buddy pulls this site's backups: this site serves the tunnel and grants the buddy a read-only login",
+};
+
+// The options each kind's form offers (peer add's own, from its manifest);
+// --propagate and --force stay with the CLI. --config-only starts ticked:
+// onboarding prompts for a credential on a terminal, which a job has not.
+const BUDDY_OPTIONS: Record<BuddyKind, string[]> = {
+  pull: ["--host", "--contact", "--tunnel", "--endpoint", "--peer-key", "--tunnel-net", "--namespace", "--remote-namespace", "--store", "--port", "--schedule", "--country", "--city", "--building", "--mtu", "--config-only"],
+  remote: ["--contact", "--tunnel", "--listen-port", "--peer-key", "--tunnel-net", "--auth-id", "--namespace", "--country", "--city", "--building", "--mtu", "--config-only"],
+};
+
+// A buddy's name, as peer add accepts it.
+export function buddyNameProblem(name: string): string | null {
+  if (!name) return "the buddy needs a name";
+  if (!/^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(name)) return "letters, digits, '-' and '_', starting with a letter or digit";
+  return null;
+}
+
+// peer add <kind> <name>, its tunnel side preset (a pull dials, a remote
+// serves) and --config-only ticked, then peer check <kind> <name> as the result.
+export function buddySpecs(kind: BuddyKind, name: string): { add: StepSpec & { only: string[] }; check: StepSpec } {
+  return {
+    add: { bin: "backup-manager", verb: "peer add", words: ["peer", "add", kind], fixed: [name], only: BUDDY_OPTIONS[kind], initial: { "--tunnel": kind === "pull" ? "dial" : "serve", "--config-only": true } },
+    check: { bin: "backup-manager", verb: "peer check", words: ["peer", "check", kind], fixed: [name], initial: {} },
+  };
+}

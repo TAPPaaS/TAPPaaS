@@ -14,6 +14,7 @@ import { SiteRead } from "../types";
 import { ApIn, ZoneIn, wifiVerb, wifiZones } from "../wizards";
 import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
 import { WifiButton } from "./Wifi";
+import { BuddyButton } from "./Buddy";
 
 export function WizardCard({ id, title, tag, children, action }: { id?: string; title: string; tag?: string; children: ReactNode; action: ReactNode }) {
   return (
@@ -63,9 +64,12 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
           Every module of a stack installed in dependency order; the preview is the plan.
         </WizardCard>
       </Group>
-      <Group title="Access">
+      <Group title="Access and backup">
         <WizardCard title="Enrol a device" action={<OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />}>
           A laptop or phone joins the admin VPN; the result is its WireGuard file to download.
+        </WizardCard>
+        <WizardCard title="Add a backup buddy" action={<BuddyButton />}>
+          Another site's PBS keeps an off-site copy — pulled through its own tunnel — or this site keeps theirs.
         </WizardCard>
       </Group>
       <Group title="WiFi">

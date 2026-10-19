@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { buildArgv } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
-import { ApIn, StepSpec, ZoneIn, defaultAp, defaultSsid, isPlaceholderSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { ApIn, BUDDY_KINDS, StepSpec, buddyNameProblem, buddySpecs, ZoneIn, defaultAp, defaultSsid, isPlaceholderSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -58,5 +58,19 @@ check(argv(ch.remove!, verbOf("ap-controller", "ssid remove")) === JSON.stringif
 check(verbOf("ap-controller", "ssid remove").destructive, "…which is destructive: its name typed, the Installer role");
 const noVlan = wifiSpecs({ ap: "Nano HD", ssid: "x", zone: "home", vlan: null, security: "open", replace: null });
 check(!buildArgv(noVlan.add, verbOf("ap-controller", "ssid add"), noVlan.add.initial).includes("--vlan"), "no VLAN known: the controller takes it from the zone");
+
+// ── a backup buddy ────────────────────────────────────────────────────
+const bm = json<{ verbs: ManifestVerb[] }>("wizards/backup-manager.json");
+const bmVerb = (v: string): ManifestVerb => bm.verbs.find((x) => x.verb === v)!;
+const pull = buddySpecs("pull", "rossen-dk");
+check(JSON.stringify(buildArgv(pull.add, bmVerb("peer add"), { ...pull.add.initial, "--host": "10.255.2.1", "--contact": "ops@buddy.example", "--namespace": "buddy/rossen", "--endpoint": "buddy.example:51830" })) === JSON.stringify(["backup-manager", "peer", "add", "pull", "rossen-dk", "--host", "10.255.2.1", "--namespace", "buddy/rossen", "--contact", "ops@buddy.example", "--tunnel", "dial", "--endpoint", "buddy.example:51830", "--config-only"]), "peer add pull <name>: host, namespace, contact, a dialled tunnel, config only");
+const remote = buddySpecs("remote", "rossen-dk");
+check(JSON.stringify(buildArgv(remote.add, bmVerb("peer add"), { ...remote.add.initial, "--contact": "ops@buddy.example" })) === JSON.stringify(["backup-manager", "peer", "add", "remote", "rossen-dk", "--contact", "ops@buddy.example", "--tunnel", "serve", "--config-only"]), "peer add remote <name>: this site serves the tunnel");
+check(!buildArgv(pull.add, bmVerb("peer add"), { ...pull.add.initial, "--config-only": false }).includes("--config-only"), "…unticked, peer add onboards too");
+check(pull.add.only.every((f) => bmVerb("peer add").options.some((o) => o.flag === f)) && remote.add.only.every((f) => bmVerb("peer add").options.some((o) => o.flag === f)), "every option the forms offer is peer add's own");
+check(!pull.add.only.includes("--propagate") && !remote.add.only.includes("--propagate") && !remote.add.only.includes("--force"), "…but not --propagate or --force");
+check(JSON.stringify(buildArgv(pull.check, bmVerb("peer check"), {})) === JSON.stringify(["backup-manager", "peer", "check", "pull", "rossen-dk"]) && bmVerb("peer check").effect === "read", "the result: peer check pull <name>, a read");
+check(/dials/.test(BUDDY_KINDS.pull) && /serves/.test(BUDDY_KINDS.remote), "pull and remote said in one line each");
+check(buddyNameProblem("rossen-dk") === null && buddyNameProblem("Rossen_DK") === null && buddyNameProblem("rossen dk") !== null && buddyNameProblem("-x") !== null && buddyNameProblem("") !== null, "a buddy's name as peer add takes it: letters, digits, '-', '_'");
 
 done("wizards");
