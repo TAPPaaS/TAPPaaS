@@ -1,0 +1,317 @@
+{
+  "name": "backup-manager",
+  "verbs": [
+    {
+      "verb": "peer add",
+      "keys": [
+        [
+          "peer",
+          "add",
+          "pull"
+        ],
+        [
+          "peer",
+          "add",
+          "remote"
+        ],
+        [
+          "peer",
+          "add",
+          "receive"
+        ]
+      ],
+      "usage": "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] [--port P] [--remote-namespace NS] [--max-depth N] [--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] [--country CC] [--city C] [--building B] [--contact EMAIL] [--tunnel serve|dial] [--tunnel-net CIDR] [--listen-port P] [--endpoint H:P] [--peer-key K] [--mtu N] [--force]",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--host",
+          "takesValue": true,
+          "arg": "H",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: the PBS we pull from."
+        },
+        {
+          "flag": "--store",
+          "takesValue": true,
+          "arg": "S",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: its datastore name (default tappaas_backup)."
+        },
+        {
+          "flag": "--namespace",
+          "takesValue": true,
+          "arg": "NS",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: pull/receive — where the data lands here. remote — what they may read (default: the root namespace, our VM backups)."
+        },
+        {
+          "flag": "--port",
+          "takesValue": true,
+          "arg": "P",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: its PBS API port (default 8007)."
+        },
+        {
+          "flag": "--remote-namespace",
+          "takesValue": true,
+          "arg": "NS",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: the namespace to pull FROM (default its root)."
+        },
+        {
+          "flag": "--max-depth",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: how many namespace levels below it to sync (0 = that namespace only; default all)."
+        },
+        {
+          "flag": "--schedule",
+          "takesValue": true,
+          "arg": "SPEC",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: when to pull (default 04:00)."
+        },
+        {
+          "flag": "--group-filter",
+          "takesValue": true,
+          "arg": "F",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull: replicate only part of the source."
+        },
+        {
+          "flag": "--auth-id",
+          "takesValue": true,
+          "arg": "ID",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add remote: the login they pull with (we create it)."
+        },
+        {
+          "flag": "--propagate",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add remote: let the read grant reach child namespaces. Off by default — on the root that would expose fs/ (config + secrets) and other peers' data."
+        },
+        {
+          "flag": "--country",
+          "takesValue": true,
+          "arg": "CC",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: the country the peer's PBS is in (ISO code) — the evidence its copy is off-site (#609)."
+        },
+        {
+          "flag": "--city",
+          "takesValue": true,
+          "arg": "C",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: its city — needed to tell it apart from a Site in the same country."
+        },
+        {
+          "flag": "--building",
+          "takesValue": true,
+          "arg": "B",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: its building or data centre — needed when it shares the Site's city."
+        },
+        {
+          "flag": "--contact",
+          "takesValue": true,
+          "arg": "EMAIL",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: the other site's operator — mailed by the pulse when their PBS stops answering (ADR-031)."
+        },
+        {
+          "flag": "--tunnel",
+          "takesValue": true,
+          "arg": "serve|dial",
+          "choices": [
+            "serve",
+            "dial"
+          ],
+          "repeatable": false,
+          "description": "peer add: carry this pull over its own WireGuard tunnel (#796, BUDDY.md). The pulled site serves (remote), the puller dials (pull)."
+        },
+        {
+          "flag": "--tunnel-net",
+          "takesValue": true,
+          "arg": "CIDR",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: the tunnel's /30. serve: default the next free /30 of zones.json buddy.ip (10.255.2.0/24). dial: the serving side's."
+        },
+        {
+          "flag": "--listen-port",
+          "takesValue": true,
+          "arg": "P",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add remote --tunnel serve: UDP port to listen on (default the next free from 51830)."
+        },
+        {
+          "flag": "--endpoint",
+          "takesValue": true,
+          "arg": "H:P",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add pull --tunnel dial: the serving side's public address (or its satellite's) and port."
+        },
+        {
+          "flag": "--peer-key",
+          "takesValue": true,
+          "arg": "K",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: the other side's WireGuard public key. serve may add it later: re-run with --force."
+        },
+        {
+          "flag": "--mtu",
+          "takesValue": true,
+          "arg": "N",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: tunnel MTU (e.g. 1340 through a satellite relay; default OPNsense's)."
+        },
+        {
+          "flag": "--force",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: overwrite an existing peer config (keeps its tunnel /30 and port unless given)."
+        },
+        {
+          "flag": "--config-only",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: write the config, skip onboarding (no PBS contact)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "adds an off-site PBS relationship (a buddy, a remote, a receiver)"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": [
+        {
+          "flag": "--force",
+          "consequence": "peer add: overwrite an existing peer config (keeps its tunnel /30 and port unless given)."
+        }
+      ]
+    },
+    {
+      "verb": "peer check",
+      "keys": [
+        [
+          "peer",
+          "check",
+          "pull"
+        ],
+        [
+          "peer",
+          "check",
+          "remote"
+        ]
+      ],
+      "usage": "peer check pull|remote <name>",
+      "note": "(the buddy tunnel's live state: instance, key, handshake, PBS reach)",
+      "details": null,
+      "positionals": [
+        {
+          "name": "name",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $CONFIG_DIR or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers."
+        },
+        {
+          "flag": "--pbs",
+          "takesValue": true,
+          "arg": "HOST",
+          "choices": null,
+          "repeatable": false,
+          "description": "Act on a different PBS (e.g. an off-site satellite) instead of this site's."
+        }
+      ],
+      "open": false,
+      "effect": "read",
+      "preview": {
+        "kind": "read"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    }
+  ]
+}

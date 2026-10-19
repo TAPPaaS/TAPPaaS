@@ -12,7 +12,7 @@ import { AccessConfig, Me, decide, setupState } from "../../src/access";
 import { Jobs } from "../../src/jobs";
 import { Runner, Streamer } from "../../src/run";
 import { parseKv, secretStatus, writeSecret } from "../../src/secrets";
-import { SetupInputs, TESTS_FILE, closeSetupToken, gatherSetup, parseSwitches, parseWgvpnPeers, readSetupTests, recordSetupTest, runSetupTests, setupComplete, setupSteps } from "../../src/setup";
+import { SetupInputs, TESTS_FILE, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, runSetupTests, setupComplete, setupSteps, wifiStep } from "../../src/setup";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -26,7 +26,14 @@ async function main(): Promise<void> {
   check(sw.length === 1 && sw[0].ports === 12 && sw[0].discovered === 12 && sw[0].controller === "unifi-controller", "the switch: registered, 12 ports discovered through its controller");
   check(parseSwitches({ switches: { manual: { ports: {} } } })![0].discovered === 0, "a registered switch with no discovered port is not interrogated");
 
-  // ── hrossen: every step done ────────────────────────────────────────
+  // hrossen's WiFi (fixtures/wizards/zones.json, fixtures/aps.json, 2026-10-19):
+  // home 310 Client Active, work 320 Client Inactive, guest 510; every SSID the
+  // template's placeholder; one AP, Nano HD, with no SSID.
+  const wifi: WifiInputs = { zones: readWifiZones(join(FIX, "wizards", "zones.json")), aps: parseApList(readFileSync(join(FIX, "aps.json"), "utf8")) };
+  check(wifi.zones.find((z) => z.name === "home")?.vlan === 310 && wifi.zones.find((z) => z.name === "work")?.state === "Inactive" && wifi.aps?.length === 1 && wifi.aps[0].name === "Nano HD" && wifi.aps[0].ssids.length === 0, "the WiFi records: zones.json's zones, ap-controller list's APs");
+  check(parseApList("ok") === null && parseApList("{}") === null, "…an answer that is not the AP list is unknown, not empty");
+
+  // ── hrossen: every required step done ───────────────────────────────
   const hrossen: SetupInputs = {
     defaultEnv: "rossen",
     dnsMode: "per-service",
@@ -37,10 +44,25 @@ async function main(): Promise<void> {
     clusterNodes: ["tappaas1", "tappaas2", "tappaas3"],
     switches: sw,
     vpnPeers: ["lars-mac"],
+    wifi,
     stacks: ["home", "test"],
   };
   let steps = setupSteps(hrossen);
-  check(steps.every((s) => s.done === true) && setupComplete(steps), "hrossen: every step reads as done");
+  check(steps.filter((s) => s.id !== "wifi").every((s) => s.done === true) && setupComplete(steps), "hrossen: every step reads as done but the optional WiFi");
+
+  // ── the WiFi step ───────────────────────────────────────────────────
+  const ws = wifiStep(wifi);
+  check(!ws.required && ws.done === false && ws.detail === "no SSID for: home", "hrossen: WiFi optional and not done, naming home alone (work is inactive, guest is not a Client zone)");
+  check(clientZonesWithoutWifi(wifi).map((z) => z.name).join() === "home", "…the zones the Day 2 buttons are linked for");
+  const servedAp = { ...wifi, aps: [{ name: "Nano HD", ssids: [{ name: "rossen-home", zone: "home" }] }] };
+  check(wifiStep(servedAp).done === true && wifiStep(servedAp).detail.includes("rossen-home → home"), "an SSID an AP maps to home: done, and named");
+  check(wifiStep({ ...wifi, aps: [{ name: "Nano HD", ssids: [{ name: "Gaest", zone: "guest" }] }] }).done === false, "an SSID on guest only: home still has none");
+  const declared = { ...wifi, zones: wifi.zones.map((z) => (z.name === "home" ? { ...z, ssid: "Rossen" } : z)) };
+  check(wifiStep(declared).done === false && wifiStep(declared).detail.includes("zones.json names Rossen; no access point broadcasts it"), "a name zones.json declares that no AP broadcasts is not WiFi yet, and says so");
+  check(wifiStep({ ...wifi, aps: [] }).detail.startsWith("no access point registered yet"), "no AP at all: says what to do first");
+  check(wifiStep({ ...wifi, aps: null }).done === null, "ap-controller unreadable: unknown");
+  check(wifiStep({ zones: wifi.zones.filter((z) => z.name !== "home"), aps: [] }).done === true, "no active Client zone: nothing to do");
+  check(wifiStep({ zones: [{ name: "lab", type: "Client", state: null, vlan: 330, ssid: null }], aps: [] }).done === false, "a Client zone with no state is active");
   check(steps.find((s) => s.id === "tls")!.detail.includes("per-service"), "per-service: TLS needs no wildcard certificate");
 
   // ── each predicate on its own ───────────────────────────────────────
@@ -113,6 +135,7 @@ async function main(): Promise<void> {
   steps = setupSteps(inputs);
   check(ran.filter((r) => r.startsWith("module-manager test")).length === 3, "the next read is from the kept results: no test ran");
   check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "vpn,stacks", "with the records in place every step is done but the VPN peer (and the optional stacks)");
+  check(steps.find((s) => s.id === "wifi")!.done === true && ran.includes("ap-controller list --json"), "…WiFi: no zones.json, no Client zone to serve (ap-controller list was read)");
   // a module removed: its kept result goes with it on the next refresh
   rmSync(join(cfg, "logging.json"));
   await runSetupTests({ configDir: cfg, stateDir: state, run });

@@ -946,7 +946,7 @@
        "add"
       ]
      ],
-     "usage": "ssid <ap> add <ssid> --zone <z> [--security <s>] [--vlan <v>] [--radius <r>] [--captive] [--disabled]",
+     "usage": "ssid <ap> add <ssid> --zone <z> --security <s> [--vlan <v>] [--radius <r>] [--captive] [--disabled]",
      "note": null,
      "details": null,
      "positionals": [
@@ -969,9 +969,15 @@
        "flag": "--security",
        "takesValue": true,
        "arg": "<s>",
-       "choices": null,
+       "choices": [
+        "wpa2-personal",
+        "wpa3-personal",
+        "open",
+        "wpa2-enterprise",
+        "wpa3-enterprise"
+       ],
        "repeatable": false,
-       "description": "wpa2-personal, wpa3, open\u2026"
+       "description": "How clients join: a WPA passphrase (personal), RADIUS (enterprise), or open."
       },
       {
        "flag": "--vlan",

@@ -74,7 +74,7 @@ async function main(): Promise<void> {
   check(Array.isArray(r.json().data), "/api/v1/gates");
   r = await call("GET", "/api/v1/pulse");
   check(((r.json().data as { gate: { name: string } }).gate.name) === "pulse", "/api/v1/pulse");
-  for (const p of ["site", "zones", "environments", "topology", "activity", "security", "status"]) {
+  for (const p of ["site", "zones", "aps", "environments", "topology", "activity", "security", "status"]) {
     r = await call("GET", `/api/v1/${p}`);
     check(r.status === 200, `/api/v1/${p} answers`);
   }

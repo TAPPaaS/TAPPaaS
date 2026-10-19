@@ -199,6 +199,8 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.site.get()));
       case "zones":
         return sendJson(res, 200, envelope(await r.zones.get()));
+      case "aps":
+        return sendJson(res, 200, envelope(await r.aps.get()));
       case "environments":
         return sendJson(res, 200, envelope(await r.environments.get()));
       case "identity":

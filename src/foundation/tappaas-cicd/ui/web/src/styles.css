@@ -246,6 +246,15 @@ td.toolbar > * { margin: 2px 6px 2px 0; }
 
 /* ── Setup (D10) ─────────────────────────────────────────────────────── */
 ol.setup { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+.wizard-group { margin: 14px 0 6px; }
+.wizard-group h2 { font-size: 14px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+.wizard-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 10px; }
+.wizard-card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.wizard-card-head { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
+.wizard-card p { margin: 0; flex: 1; }
+.wizard-card-action { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.wizard-card-on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.setup-check { margin: 10px 0 4px; }
 .setup-step { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
 .setup-done { border-left: 4px solid var(--pass); }
 .setup-todo { border-left: 4px solid var(--fail); }

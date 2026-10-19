@@ -1,27 +1,33 @@
-// Setup — the rest of the installation after bootstrap.sh (ADR-034 D10, spike
-// §5.12). An ordered checklist whose state the backend derives from the
-// records each time (GET /setup), so it resumes wherever the install stands;
-// each step is a form over its verbs, run as jobs with their previews, and the
-// secrets the scripts read are entered here and never shown again. The same
-// flows serve day 2: add a node, an environment, a stack; enrol a device.
+// Setup — two tabs. Day 1: the rest of the installation after bootstrap.sh
+// (ADR-034 D10, spike §5.12), an ordered checklist whose state the backend
+// derives from the records each time (GET /setup), so it resumes wherever the
+// install stands; each step is a form over its verbs, run as jobs with their
+// previews, and the secrets the scripts read are entered here and never shown
+// again. Day 2 (Day2.tsx): the guided sequences that grow the site afterwards.
+// /setup opens Day 1 while the checklist is incomplete and Day 2 once it is
+// complete; /setup/day1 and /setup/day2 open a tab.
 
 import { ReactNode, useState } from "react";
-import { get, post, useRead } from "../api";
+import { Read, get, post, useRead } from "../api";
 import { Output, stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { Job, SiteRead } from "../types";
-import { Dot, Link, ReadState, Section, since } from "../ui";
+import { Dot, Link, ReadState, navigate, since } from "../ui";
 import { AddNodeButton } from "./AddNode";
-import { addEnvironmentSteps } from "./Environments";
+import { Day2 } from "./Day2";
 
-interface SetupDoc {
+export interface SetupDoc {
   steps: SetupStep[];
   complete: boolean;
-  inputs: { defaultEnv: string | null; dnsMode: string | null };
+  inputs: {
+    defaultEnv: string | null;
+    dnsMode: string | null;
+    wifi?: { zones: { name: string; type: string | null; state: string | null; ssid: string | null }[]; aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null };
+  };
   token: { active: boolean; present: boolean; identityInstalled: boolean };
 }
-interface SecretStatus {
+export interface SecretStatus {
   name: string;
   file: string;
   what: string;
@@ -98,7 +104,7 @@ export function enrolSteps(): Step[] {
 
 // ── secrets ───────────────────────────────────────────────────────────
 
-function SecretForm({ name, fields, status, onSaved }: { name: string; fields: { key: string; label: string; secret?: boolean; placeholder?: string }[]; status: SecretStatus | undefined; onSaved: () => void }) {
+export function SecretForm({ name, fields, status, onSaved }: { name: string; fields: { key: string; label: string; secret?: boolean; placeholder?: string }[]; status: SecretStatus | undefined; onSaved: () => void }) {
   const [v, setV] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<string | null>(null);
   const save = async () => {
@@ -168,10 +174,56 @@ export function StepRow({ s, children, open: forced }: { s: SetupStep; children?
   );
 }
 
+// The WiFi step's way on: the Day 2 button of each active Client zone with no SSID.
+function WifiLinks({ doc }: { doc: SetupDoc | null }) {
+  const w = doc?.inputs.wifi;
+  if (!w) return null;
+  const served = new Set((w.aps ?? []).flatMap((a) => a.ssids.map((s) => s.zone)));
+  const missing = w.zones.filter((z) => z.type === "Client" && (z.state ?? "Active") === "Active" && !served.has(z.name));
+  if (missing.length === 0) return <p className="small">Change an SSID from <Link to="/setup/day2#wifi">Day 2</Link>.</p>;
+  return (
+    <p className="small toolbar">
+      {missing.map((z) => (
+        <Link key={z.name} to={`/setup/day2#wifi-${z.name}`} className="btn">Add WiFi for {z.name} →</Link>
+      ))}
+      <span className="muted">on Day 2: the access point, the SSID, its passphrase, then the reconcile.</span>
+    </p>
+  );
+}
+
 const mm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "module-manager", verb, ...extra });
 
-export function Setup() {
+export type SetupTab = "Day 1" | "Day 2";
+const SETUP_TABS: { name: SetupTab; path: string; what: string }[] = [
+  { name: "Day 1", path: "/setup/day1", what: "the installation" },
+  { name: "Day 2", path: "/setup/day2", what: "growing the site" },
+];
+
+export function Setup({ tab }: { tab?: SetupTab }) {
   const r = useRead<SetupDoc>("setup", 600_000);
+  const d = r.env?.data;
+  // /setup: Day 1 until every required step is done, then Day 2.
+  const shown: SetupTab = tab ?? (d?.complete ? "Day 2" : "Day 1");
+  return (
+    <div className="page">
+      <div className="page-head">
+        <h1>Setup</h1>
+        <span className="muted">{shown === "Day 1" ? `derived from the records · ${since(r.env?.at)}` : "the guided sequences that grow the site"}</span>
+      </div>
+      <div className="tabs" role="tablist">
+        {SETUP_TABS.map((t) => (
+          <button key={t.name} role="tab" aria-selected={shown === t.name} className={shown === t.name ? "tab tab-on" : "tab"} onClick={() => navigate(t.path)} title={t.what}>
+            {t.name}
+            {t.name === "Day 1" && d ? <span className="muted small"> {d.complete ? "· done" : `· ${d.steps.filter((x) => x.required && x.done !== true).length} to do`}</span> : null}
+          </button>
+        ))}
+      </div>
+      {shown === "Day 1" ? <Day1 r={r} /> : <Day2 doc={d ?? null} />}
+    </div>
+  );
+}
+
+function Day1({ r }: { r: Read<SetupDoc> }) {
   const secrets = useRead<SecretStatus[]>("secrets", 600_000);
   const site = useRead<SiteRead>("site").env?.data?.site;
   const [checking, setChecking] = useState(false);
@@ -227,6 +279,7 @@ export function Setup() {
     ),
     vpn: <OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />,
     stacks: <OperateButton label="Add a stack…" title="Add a stack" steps={addStackSteps()} />,
+    wifi: <WifiLinks doc={d ?? null} />,
   };
   for (const m of ["backup", "identity", "logging"]) {
     body[m] = (
@@ -241,22 +294,19 @@ export function Setup() {
   }
 
   return (
-    <div className="page">
-      <div className="page-head">
-        <h1>Setup</h1>
-        <span className="muted">derived from the records · {since(r.env?.at)}</span>
-        <span className="spacer" />
+    <>
+      <div className="toolbar setup-check">
         <button className="btn" disabled={checking} onClick={check} title="Runs module-manager test for backup, identity and logging, then reads the records again">{checking ? "Checking… (the module tests run)" : "Check: run the module tests"}</button>
       </div>
       <ReadState env={r.env} failure={r.failure} what="the setup checklist" />
       {d ? (
         <p className={`readstate ${d.complete ? "" : "readstate-warn"}`}>
           {d.complete ? (
-            <>Every required step is done: the foundation is installed. <Link to="/">Overview</Link> is the site from here.</>
+            <>Every required step is done: the foundation is installed. <Link to="/">Overview</Link> is the site from here, and <Link to="/setup/day2">Day 2</Link> grows it.</>
           ) : (
             "The site is not complete yet: the steps below are what remains, in order."
           )}
-          {d.token.active ? " The setup token is active until identity is installed." : ""}
+          {d.token.active ? " The setup token is active until identity is installed." : d.token.identityInstalled ? " The setup token is closed: identity is installed, so the console is reached through the gate." : ""}
         </p>
       ) : null}
       {r.env && !d && r.env.refreshing ? <p className="muted">Reading the records…</p> : null}
@@ -267,15 +317,6 @@ export function Setup() {
           <StepRow key={s.id} s={s}>{body[s.id]}</StepRow>
         ))}
       </ol>
-      <Section title="Day 2 — the same wizards">
-        <div className="toolbar">
-          <AddNodeButton />
-          <OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} />
-          <OperateButton label="Add a stack…" title="Add a stack" steps={addStackSteps()} />
-          <OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />
-        </div>
-        <SecretForm name="wlan" status={sec("wlan")} onSaved={secrets.reload} fields={[{ key: "ssid", label: "SSID" }, { key: "passphrase", label: "WPA passphrase", secret: true }]} />
-      </Section>
-    </div>
+    </>
   );
 }
