@@ -1,10 +1,10 @@
 // zonegraph.test.ts — the zones graph as data (web/src/zonegraph.ts) over
 // hrossen's zones (test/fixtures/zones.json): the trust column of each zone,
-// and the WAN zone's card standing for the internet.
+// the WAN zone's card standing for the internet, and its public address.
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { COLUMN_TITLES, ZoneLike, wanZone, zoneColumn, zoneEdges } from "../../web/src/zonegraph";
+import { COLUMN_TITLES, ZoneLike, publicAddress, wanZone, zoneColumn, zoneEdges } from "../../web/src/zonegraph";
 import { check, done } from "./check";
 
 const FIX = process.env.CONSOLE_FIXTURES ?? "test/fixtures";
@@ -35,5 +35,10 @@ const both = zoneEdges([{ name: "wan", type: "WAN" }, { name: "home", type: "Cli
 check(both.edges.length === 1, "internet and wan in one access-to: one line");
 const none = zoneEdges([{ name: "home", type: "Client", "access-to": ["internet"] }]);
 check(none.pseudo.join() === "internet" && none.edges[0].target === "internet" && wanZone([]) === null, "no WAN zone: the internet keeps its own card");
+
+// The public address: from site.json's network.publicIp, never the zone's ip.
+check(publicAddress({ network: { publicIp: "auto" } }).auto && publicAddress({ network: { publicIp: "auto" } }).address === null, "auto: the provider's, no address to show");
+check(publicAddress({ network: { publicIp: " 198.51.100.7 " } }).address === "198.51.100.7", "a recorded address is shown");
+check(publicAddress({}).address === null && !publicAddress(null).auto && !publicAddress({ network: { publicIp: null } }).auto, "nothing recorded: nothing shown");
 
 done("zonegraph");

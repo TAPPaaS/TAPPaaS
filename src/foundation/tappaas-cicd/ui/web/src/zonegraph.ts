@@ -72,3 +72,17 @@ export function zoneEdges(zones: ZoneLike[]): { edges: ZoneEdge[]; pseudo: strin
 export function pseudoPlace(p: string): { col: number; order: number } {
   return { col: INTERNET_COLUMN, order: p === "internet" ? 0 : 1 };
 }
+
+// The site's public address as site.json records it (network.publicIp):
+// the address itself, or "auto" (the provider's, found at run time and not
+// recorded), or nothing. The WAN zone's own ip is a placeholder the schema
+// asks for; nothing is built from it, so it is not shown as the WAN's address.
+export interface PublicAddress {
+  address: string | null;
+  auto: boolean;
+}
+export function publicAddress(site: { network?: { publicIp?: string | null } } | null | undefined): PublicAddress {
+  const ip = site?.network?.publicIp?.trim() ?? "";
+  if (ip === "") return { address: null, auto: false };
+  return ip === "auto" ? { address: null, auto: true } : { address: ip, auto: false };
+}

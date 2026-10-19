@@ -13,7 +13,8 @@ import { FieldRow, ZoneFieldSpec, shortValue, zoneFieldRows } from "../forms";
 import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
 import { Dot, ReadState } from "../ui";
-import { COLUMN_TITLES, PSEUDO, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
+import { SiteRead } from "../types";
+import { COLUMN_TITLES, PSEUDO, PublicAddress, publicAddress, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
 
 export interface ZoneRead {
   name: string;
@@ -47,7 +48,10 @@ const reconcile = net("network-manager reconcile", "reconcile", { note: "The pre
 const live = (z: ZoneRead) => z.state === "Active" || z.state === "Mandatory" || z.state === "Manual";
 const dot = (z: ZoneRead) => (z.state === "Active" || z.state === "Mandatory" ? "pass" : z.state === "Manual" ? "info" : "skip");
 
-export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected: string | null): { nodes: GNode[]; edges: GEdge[] } {
+// The site's public address: short on the WAN card, in full on its detail card.
+const publicText = (p: PublicAddress, short = false) => (p.address ? `public ${p.address}` : p.auto ? (short ? "public address auto" : "public address: the provider's (auto)") : short ? "" : "public address not recorded");
+
+export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected: string | null, pub: PublicAddress = { address: null, auto: false }): { nodes: GNode[]; edges: GEdge[] } {
   const color = new Map(zones.map((z) => [z.name, TYPE_COLOR[z.type ?? ""] ?? "#94a3b8"]));
   const wan = wanZone(zones);
   const { edges: lines, pseudo } = zoneEdges(zones);
@@ -74,6 +78,7 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
           <div className="cf-sub">
             <span className="mono">{z.name}</span> · {z.state ?? "?"}
           </div>
+          <div className="cf-sub">{publicText(pub, true)}</div>
         </div>
       ) : (
         <div>
@@ -97,18 +102,23 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
   return { nodes, edges };
 }
 
-function ZoneDetail({ z, schema, envNames, close }: { z: ZoneRead; schema: Record<string, ZoneFieldSpec> | null; envNames: string[]; close: () => void }) {
+function ZoneDetail({ z, schema, envNames, wan, close }: { z: ZoneRead; schema: Record<string, ZoneFieldSpec> | null; envNames: string[]; wan: PublicAddress | null; close: () => void }) {
   const rows: FieldRow[] = schema ? zoneFieldRows(z, schema) : [];
   return (
     <aside className="sidepanel">
       <header>
         <div>
           <h2 className="mono">{z.name}</h2>
-          <div className="muted small">{z.type} · {z.state} · vlan {z.vlantag ?? "—"} · {z.ip ?? ""}</div>
+          <div className="muted small">{z.type} · {z.state} · vlan {z.vlantag ?? "—"} · {wan ? publicText(wan) : z.ip ?? ""}</div>
         </div>
         <button className="btn-x" onClick={close} aria-label="close">×</button>
       </header>
       {z.description ? <p className="small">{z.description}</p> : null}
+      {wan ? (
+        <p className="small">
+          This card stands for the internet as well. The site's public address comes from the site record (network.publicIp){wan.auto ? "; auto means the provider assigns it and the firewall's WAN takes it by DHCP" : ""}. The zone's ip <span className="mono">{z.ip ?? "—"}</span> only fills the schema: no interface, DHCP or rule is built from it.
+        </p>
+      ) : null}
       <div className="toolbar">
         <OperateButton
           label="Modify…"
@@ -157,8 +167,11 @@ function ZoneDetail({ z, schema, envNames, close }: { z: ZoneRead; schema: Recor
 export function ZonesGraph({ zones, envNames, sel, setSel }: { zones: ZoneRead[]; envNames: string[]; sel: string | null; setSel: (z: string | null) => void }) {
   const schemaR = useRead<{ fields?: Record<string, ZoneFieldSpec> }>("schemas/zones", 600_000);
   const schema = schemaR.env?.data?.fields ?? null;
-  const graph = useMemo(() => zoneGraph(zones, setSel, sel), [zones, sel, setSel]);
+  const site = useRead<SiteRead>("site", 600_000).env?.data?.site;
+  const pub = useMemo(() => publicAddress(site), [site]);
+  const graph = useMemo(() => zoneGraph(zones, setSel, sel, pub), [zones, sel, setSel, pub]);
   const z = zones.find((x) => x.name === sel) ?? null;
+  const wan = wanZone(zones);
   return (
     <>
       <ReadState env={schemaR.env} failure={schemaR.failure} what="zones-fields.json" />
@@ -166,7 +179,7 @@ export function ZonesGraph({ zones, envNames, sel, setSel }: { zones: ZoneRead[]
         <div className="zones-canvas">
           <Graph nodes={graph.nodes} edges={graph.edges} rankdir="LR" height={560} nodesep={18} ranksep={70} />
         </div>
-        {z ? <ZoneDetail key={z.name} z={z} schema={schema} envNames={envNames} close={() => setSel(null)} /> : null}
+        {z ? <ZoneDetail key={z.name} z={z} schema={schema} envNames={envNames} wan={z.name === wan ? pub : null} close={() => setSel(null)} /> : null}
       </div>
       <div className="legend">
         {Object.entries(TYPE_COLOR).map(([t, c]) => (
