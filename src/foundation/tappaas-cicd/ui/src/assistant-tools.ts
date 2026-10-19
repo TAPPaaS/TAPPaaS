@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { JobSummary, shellQuote } from "./jobs";
-import { Manifests, applyArgv, previewArgv, validateArgv } from "./manifest";
+import { ManifestVerb, Manifests, applyArgv, findVerb, previewArgv, validateArgv } from "./manifest";
 import { MODULE_NAME, Reads } from "./reads";
 import { HealthDoc } from "./model";
 import { ToolDef } from "./litellm";
@@ -65,56 +65,75 @@ const obj = (properties: Record<string, unknown>, required: string[] = []): Reco
 const str = (description: string): Record<string, unknown> => ({ type: "string", description });
 
 // Every tool the assistant has. Nothing writes; propose_job only proposes.
-export const TOOLS: Record<string, { description: string; parameters: Record<string, unknown> }> = {
+// `line` is how the system prompt lists it: its exact name and arguments.
+export const TOOLS: Record<string, { line: string; description: string; parameters: Record<string, unknown> }> = {
   modules_list: {
+    line: "modules_list(): every deployed module, its node, state and badges",
     description: "Every deployed module: node, vmid, zone, environment, running state, badges (health, backup, cve) and how many health findings name it.",
     parameters: obj({}),
   },
   module_show: {
+    line: "module_show(module): one module: its findings, config, resolved fields, and the fields modify --set may change",
     description: "One module: its summary, every health finding that names it, its config as module-manager shows it, its resolved fields, and the fields `modify --set` may change with their ADR-020 change class.",
     parameters: obj({ module: str("the module's name") }, ["module"]),
   },
   module_drift: {
+    line: "module_drift(module): where the running guest differs from its config",
     description: "One module's drift: where the running guest and its services differ from the config (module-manager drift; can take a minute).",
     parameters: obj({ module: str("the module's name") }, ["module"]),
   },
-  zones: { description: "The network zones: VLAN, network, type, state, access-to and pinholes.", parameters: obj({}) },
-  environments: { description: "The environments: their zones and domains.", parameters: obj({}) },
+  zones: { line: "zones(): the network zones", description: "The network zones: VLAN, network, type, state, access-to and pinholes.", parameters: obj({}) },
+  environments: { line: "environments(): the environments, their zones and domains", description: "The environments: their zones and domains.", parameters: obj({}) },
   topology: {
+    line: "topology(object?): the site as cabled; a node or switch in full",
     description: "The site as cabled (network-manager topology): nodes with their guests and uplinks, switches, LAGs, access points, the outside. Give `object` (a node or switch name) for that object in full.",
     parameters: obj({ object: str("a node or switch name (optional)") }),
   },
   health: {
+    line: "health(gate?, subject?): the health gates and their findings",
     description: "The health gates (health-manager validate): each gate's status and its findings. Give `gate` for one gate in full (e.g. guest-memory, memory-commitment, pulse, backup-status), or `subject` for every finding naming a module or node.",
     parameters: obj({ gate: str("a gate name (optional)"), subject: str("a module or node name (optional)") }),
   },
   backup: {
+    line: "backup(module?): backup policies and restore points",
     description: "Backups: every module's policy and whether it is in the PBS job; with `module`, its policy and restore points (backup-manager show and coverage).",
     parameters: obj({ module: str("a module name (optional)") }),
   },
-  pulse: { description: "The pulse: the off-site buddies and the satellite, whether each answers (the pulse gate and backup-manager peers).", parameters: obj({}) },
+  pulse: { line: "pulse(): the off-site buddies and the satellite", description: "The pulse: the off-site buddies and the satellite, whether each answers (the pulse gate and backup-manager peers).", parameters: obj({}) },
   activity: {
+    line: "activity(module?): the console's jobs and the sweep's runs",
     description: "What was done to the site: the console's jobs (who, the command, the result) and the sweep's runs with their errors; with `module`, only what names it.",
     parameters: obj({ module: str("a module name (optional)") }),
   },
   logs: {
+    line: "logs(host, since?, until?, contains?, limit?): a host's log lines from Loki",
     description: "A host's log lines from Loki (the logging module): newest first. `host` is a guest or node name (immich, tappaas1). `since` and `until` are relative (30m, 2h, 7d) or ISO times; `contains` filters the lines.",
     parameters: obj({ host: str("the host label"), since: str("default 1h"), until: str("default now"), contains: str("a text the line contains (optional)"), limit: { type: "integer", description: "at most 200, default 50" } }, ["host"]),
   },
   help: {
+    line: "help(manager): a manager's verbs, their options and its README",
     description: "A manager's verbs as its --help declares them (each verb's usage, options, whether it changes the site and how it previews) and its README.",
     parameters: obj({ manager: str("e.g. module-manager, network-manager, switch-controller") }, ["manager"]),
   },
   propose_job: {
+    line: "propose_job(argv, rationale): a command as a card the operator previews and runs; argv is an array of words, the manager first",
     description: "Propose a change as a job card the operator previews and runs. You never run it: only the operator's Run does. `argv` is the exact command, the manager first, e.g. [\"module-manager\",\"modify\",\"immich\",\"--set\",\"memory=10240\"], without --apply, --dry-run or --json (the job model adds them). It must be a verb a manifest declares.",
     parameters: obj({ argv: { type: "array", items: { type: "string" }, description: "the command line as an array of words" }, rationale: str("one sentence: why, and its consequence") }, ["argv", "rationale"]),
   },
 };
 
+// The tools this console offers: logs only with Loki.
+export function toolNames(ctx: ToolContext): string[] {
+  return Object.keys(TOOLS).filter((name) => name !== "logs" || ctx.loki !== null);
+}
+
 export function toolDefs(ctx: ToolContext): ToolDef[] {
-  return Object.entries(TOOLS)
-    .filter(([name]) => name !== "logs" || ctx.loki !== null)
-    .map(([name, t]) => ({ type: "function", function: { name, description: t.description, parameters: t.parameters } }));
+  return toolNames(ctx).map((name) => ({ type: "function", function: { name, description: TOOLS[name].description, parameters: TOOLS[name].parameters } }));
+}
+
+// The system prompt's list: one line per tool, by its exact name.
+export function toolLines(ctx: ToolContext): string {
+  return toolNames(ctx).map((name) => `- ${TOOLS[name].line}`).join("\n");
 }
 
 export function cap(text: string, max = RESULT_CHARS): string {
@@ -210,17 +229,69 @@ function manifestView(ms: Manifests, bin: string): unknown {
   };
 }
 
+// The keys of an invented tool's arguments that are a verb's positionals.
+const POSITIONAL_KEYS = ["module", "node", "name", "zone", "environment", "env", "object", "target", "host", "stack", "peer", "kind", "ap"];
+
+// What a model probably meant by a tool named after a verb (site_manager_add_node,
+// module_manager_modify): the manager, the verb's words in either order, its
+// positionals from the arguments, the rest as options (a field as --set f=v).
+export function guessArgv(ms: Manifests, name: string, rawArgs: string): string[] | null {
+  const tokens = name.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t !== "");
+  let best: { bin: string; rest: string[] } | null = null;
+  for (const bin of ms.byBin.keys()) {
+    const bt = bin.split("-");
+    const rest = bt.every((w, i) => tokens[i] === w) ? tokens.slice(bt.length) : ["manager", "controller"].includes(bt[1]) && tokens[0] === bt[0] && tokens[1] !== bt[1] ? tokens.slice(1) : null;
+    if (rest && (!best || rest.length < best.rest.length)) best = { bin, rest };
+  }
+  if (!best) return null;
+  const m = ms.byBin.get(best.bin)!;
+  const orders = best.rest.length === 2 ? [best.rest, [best.rest[1], best.rest[0]]] : [best.rest];
+  let hit: { verb: ManifestVerb; used: number; words: string[] } | null = null;
+  for (const words of orders) {
+    const f = findVerb(m, words);
+    if (f && f.used === words.length && (!hit || f.used > hit.used)) hit = { ...f, words };
+  }
+  if (!hit) return null;
+  let args: Record<string, unknown> = {};
+  try {
+    const v = JSON.parse(rawArgs || "{}") as unknown;
+    if (v && typeof v === "object" && !Array.isArray(v)) args = v as Record<string, unknown>;
+  } catch {
+    /* no arguments to use */
+  }
+  const flags = new Set(hit.verb.options.map((o) => o.flag));
+  const pos: string[] = [];
+  const opts: string[] = [];
+  for (const [k, v] of Object.entries(args)) {
+    const text = Array.isArray(v) ? v.join(",") : typeof v === "string" || typeof v === "number" ? String(v) : null;
+    if (POSITIONAL_KEYS.includes(k) && text !== null) pos.push(text);
+    else if (flags.has(`--${k}`)) opts.push(...(v === true ? [`--${k}`] : text !== null ? [`--${k}`, text] : []));
+    else if (flags.has("--set") && text !== null) opts.push("--set", `${k}=${text}`);
+  }
+  const wanted = hit.verb.positionals.filter((p) => !p.optional);
+  while (pos.length < wanted.length) pos.push(`<${wanted[pos.length].name}>`);
+  return [best.bin, ...hit.words, ...pos, ...opts];
+}
+
+// The refusal of a tool that does not exist: the tools that do, and the call
+// the model probably meant.
+export function refusal(ctx: ToolContext, name: string, rawArgs: string): string {
+  const ms = ctx.manifests();
+  const argv = ms ? guessArgv(ms, name, rawArgs) : null;
+  const lines = [
+    `Refused: there is no tool '${name}'. Your only tools are ${toolNames(ctx).join(", ")}; there is no tool per manager or per verb, and you cannot run, apply or change anything.`,
+    "A manager's verb is only ever proposed: call propose_job with the command as an array, the manager first, and the operator's Run button runs it. To look a verb up first, call help with the manager's name.",
+  ];
+  if (argv) {
+    lines.push(`You probably meant: propose_job({"argv": ${JSON.stringify(argv)}, "rationale": "<why, and its consequence>"})${argv.some((a) => /^<.*>$/.test(a)) ? " with the <…> filled in" : ""}; check its options with help({"manager": "${argv[0]}"}) if unsure.`);
+  }
+  return lines.join("\n");
+}
+
 // Run one tool call. Unknown names are refused: the assistant has no other tool.
 export async function runTool(ctx: ToolContext, name: string, rawArgs: string): Promise<ToolOutcome> {
-  if (!Object.prototype.hasOwnProperty.call(TOOLS, name) || (name === "logs" && !ctx.loki)) {
-    return {
-      ok: false,
-      refused: true,
-      summary: `refused: ${name} (no such tool)`,
-      content:
-        `Refused: there is no tool '${name}'. You cannot run, apply or change anything; nothing here does. ` +
-        "To change the site, call propose_job: it puts a card in front of the operator, and only their Run button runs it.",
-    };
+  if (!toolNames(ctx).includes(name)) {
+    return { ok: false, refused: true, summary: `refused: ${name} (no such tool)`, content: refusal(ctx, name, rawArgs) };
   }
   let args: Record<string, unknown>;
   try {

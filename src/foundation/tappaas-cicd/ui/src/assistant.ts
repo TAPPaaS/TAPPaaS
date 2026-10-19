@@ -11,7 +11,7 @@
 // managers' verbs in short form.
 
 import { AssistantStatus, ChatFn, ChatMessage, ToolCall } from "./litellm";
-import { ToolContext, runTool, toolDefs } from "./assistant-tools";
+import { ToolContext, runTool, toolDefs, toolLines } from "./assistant-tools";
 import { Conversation, Conversations, Focus, Proposal, Step, Turn, trimHistory, userKey } from "./conversations";
 import { Me } from "./access";
 import { Manifests } from "./manifest";
@@ -76,15 +76,20 @@ export function focusText(f: Focus | null): string {
   return `${obj ? `${obj} on ` : ""}the ${f.page} page${f.detail ? ` (${f.detail})` : ""}`;
 }
 
-export function systemPrompt(o: { site: { name: string; displayName: string | null }; me: Me; focus: Focus | null; manifest: string; logs: boolean; now: Date }): string {
+export function systemPrompt(o: { site: { name: string; displayName: string | null }; me: Me; focus: Focus | null; manifest: string; tools: string; now: Date }): string {
   const who = o.me.user ? `${o.me.name ?? o.me.user} (${o.me.user})` : o.me.via === "local" ? "the operator in a shell on tappaas-cicd (tappaas ask)" : o.me.via;
   return [
     `You are the assistant of the TAPPaaS console for the site ${o.site.name}${o.site.displayName && o.site.displayName !== o.site.name ? ` (${o.site.displayName})` : ""}. TAPPaaS runs the site's services as modules on Proxmox nodes behind an OPNsense firewall; managers on the mothership tappaas-cicd own every change.`,
     `You are talking to ${who}, role ${ROLE_WORDS[o.me.role] ?? o.me.role}.`,
     `In view: ${focusText(o.focus)}. Time: ${o.now.toISOString().slice(0, 16)}Z.`,
     "",
+    "Your tools, by their exact names. No other tool exists: any other name is refused.",
+    o.tools,
+    "There is no tool per manager or per verb (no site_manager_add_node, no module_manager_modify). A manager's verb is only ever proposed: call propose_job with the command as an array of words, the manager first. Example, to give immich 10 GiB:",
+    '  propose_job({"argv": ["module-manager", "modify", "immich", "--set", "memory=10240"], "rationale": "immich uses 95% of its 8 GiB; 10 GiB restarts it once."})',
+    "",
     "How you work:",
-    `- You read freely with your tools (modules, a module's config and fields, drift, zones, environments, topology, the health gates, backup, pulse, activity${o.logs ? ", a host's logs" : ""}, a manager's help). Answer from what they return and say what you read; never invent a number, a name or a verb.`,
+    "- You read freely with your tools. Answer from what they return and say what you read; never invent a number, a name, a verb or a tool.",
     "- You never run, apply or change anything, and no tool of yours can. When a change would help, call propose_job with the exact command and a one-sentence rationale: it becomes a card with Preview and Run in front of the operator. Only their click runs it, under their role, and Activity records it as from the assistant.",
     "- A proposal changes nothing, so never ask whether to make one: when the operator asks for a change or a proposal, call propose_job in that same turn, with what is risky about it in the rationale.",
     "- When asked to run, apply or do something (\"run it\", \"do it\", \"go ahead\"), do not pretend and do not call any tool to do it: say that you do not run changes yourself, that the card's Run button does, so the record shows a person decided; if there is no card yet, propose one.",
@@ -93,7 +98,7 @@ export function systemPrompt(o: { site: { name: string; displayName: string | nu
     "- Be brief: the cause with its numbers, at most two ways out with their consequence, the one you suggest. Plain text; short lists; no tables.",
     "- A question about the site's state is answered from a tool you call in this turn, never from memory. Answer in the language the operator writes in.",
     "",
-    "The managers' verbs (W changes the site, D destructive; help(manager) gives the options and the README):",
+    "What propose_job may propose: the managers' verbs (W changes the site, D destructive; help(manager) gives the options and the README). These are commands for argv, never tool names:",
     o.manifest,
   ].join("\n");
 }
@@ -178,7 +183,7 @@ export class Assistant {
     conv.messages.push({ role: "user", content: message });
     const system: ChatMessage = {
       role: "system",
-      content: systemPrompt({ site: await this.d.site(), me, focus, manifest: shortManifest(this.d.tools.manifests()), logs: this.d.tools.loki !== null, now: new Date(this.now()) }),
+      content: systemPrompt({ site: await this.d.site(), me, focus, manifest: shortManifest(this.d.tools.manifests()), tools: toolLines(this.d.tools), now: new Date(this.now()) }),
     };
     const tools = toolDefs(this.d.tools);
     try {

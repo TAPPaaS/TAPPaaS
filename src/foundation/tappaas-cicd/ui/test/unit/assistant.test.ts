@@ -11,7 +11,7 @@ import { join } from "path";
 import { IncomingMessage, ServerResponse, createServer } from "http";
 import { AccessConfig, Me, SetupState } from "../../src/access";
 import { Assistant, AssistantEvent, historyFor, shortManifest } from "../../src/assistant";
-import { TOOLS, logql, lokiConfig, runTool, timeOf, toolDefs, ToolContext } from "../../src/assistant-tools";
+import { TOOLS, guessArgv, logql, lokiConfig, runTool, timeOf, toolDefs, ToolContext } from "../../src/assistant-tools";
 import { Conversations, userKey } from "../../src/conversations";
 import { Jobs } from "../../src/jobs";
 import { ChatMessage, LiteLLM, StreamParser, chooseModel, parseKeyFile } from "../../src/litellm";
@@ -36,10 +36,25 @@ const SPEC: HelpSpec = {
   ],
 };
 
+// site-manager's node add, as the invented tool site_manager_add_node meant it.
+const SITE_SPEC: HelpSpec = {
+  name: "site-manager",
+  version: "1",
+  tagline: "t",
+  verbs: [
+    { usage: "node list [--json]" },
+    { usage: "node add <name> [--pxe] [--mac <mac>]", effect: { noPreview: "registers the node and waits for it" }, options: [["--pxe", "Install it over the network."], ["--mac <mac>", "The port that boots."]] },
+  ],
+};
+
 const me = (over: Partial<Me> = {}): Me => ({ user: "lars", name: "Lars", email: null, groups: ["installer"], role: "installer", via: "gate", route: "console", ...over });
 const closed: SetupState = { active: false, identityInstalled: true, tokenPresent: false };
 
 type Chunk = Record<string, unknown>;
+// A streamed completion made here: one tool call, or a text answer.
+const chunk = (delta: Record<string, unknown>, finish?: string): Chunk => ({ id: "chatcmpl-t", object: "chat.completion.chunk", created: 1, model: "vllm", choices: [{ index: 0, delta, ...(finish ? { finish_reason: finish } : {}) }] });
+const callChunks = (id: string, name: string, args: unknown): Chunk[] => [chunk({ role: "assistant", content: "" }), chunk({ tool_calls: [{ index: 0, type: "function", id, function: { name, arguments: JSON.stringify(args) } }] }), chunk({}, "tool_calls")];
+const textChunks = (text: string): Chunk[] => [chunk({ role: "assistant", content: text }), chunk({}, "stop")];
 const EX = JSON.parse(readFileSync(join(FIX, "litellm-exchange.json"), "utf8")) as { models: unknown; memory: Chunk[][]; runit: Chunk[][]; plain: Chunk[][] };
 
 // The fake LiteLLM: the key it accepts, the request bodies it got, a queue of
@@ -107,7 +122,7 @@ async function main(): Promise<void> {
   check(lokiConfig(dir, dir, {}) === null, "no logs tool without the logging module");
   const site = fakeSite();
   const reads = new Reads({ configDir: dir, stateDir: join(dir, "state"), run: site.run, journalDays: 7 });
-  const ms: Manifests = { byBin: new Map([["module-manager", renderManifest(SPEC)]]), errors: [], loadedAt: "" };
+  const ms: Manifests = { byBin: new Map([["module-manager", renderManifest(SPEC)], ["site-manager", renderManifest(SITE_SPEC)]]), errors: [], loadedAt: "" };
   const ran: string[] = [];
   const stream: Streamer = async (bin, args, onOutput) => {
     ran.push([bin, ...args].join(" "));
@@ -140,6 +155,8 @@ async function main(): Promise<void> {
   check(/In view: module immich on the module page/.test(sys.content ?? ""), "context: the page and the object in view");
   check(/never run, apply or change anything/.test(sys.content ?? "") && /module-manager: list · show <module> · modify <module> --set field=value\.\.\. W · delete <module> D/.test(sys.content ?? ""), "the rule, and the verbs in short form (W, D)");
   const sent = ll.bodies[0].tools.map((t) => t.function.name).sort();
+  check(sent.every((n) => (sys.content ?? "").includes(`\n- ${n}(`)) && /No other tool exists/.test(sys.content ?? "") && /There is no tool per manager or per verb/.test(sys.content ?? ""), "the prompt lists every tool sent, by its exact name, and says there is no other");
+  check((sys.content ?? "").includes('propose_job({"argv": ["module-manager", "modify", "immich", "--set", "memory=10240"]') && /What propose_job may propose: the managers' verbs/.test(sys.content ?? ""), "a worked propose_job, and the verbs introduced as what it may propose");
   check(JSON.stringify(sent) === JSON.stringify(Object.keys(TOOLS).filter((n) => n !== "logs").sort()), "the tools sent are exactly the allow-list (no logs without Loki)");
   check(!sent.some((n) => /apply|run|exec|write|set/.test(n)), "no tool that applies, runs or writes exists");
   check(t1 !== null && t1.steps.map((s) => s.tool).join(",") === "health,module_show,propose_job" && t1.steps.every((s) => s.ok), "the reads, then the proposal");
@@ -208,6 +225,26 @@ async function main(): Promise<void> {
   o = await runTool(tools, "module_show", '{"module":"../etc"}');
   check(!o.ok && /module's name/.test(o.content), "a tool's module argument is checked like a route's");
 
+  // ── an invented tool: refused with the call it meant, then recovered ─
+  check(JSON.stringify(guessArgv(ms, "site_manager_add_node", '{"name":"tappaas3"}')) === '["site-manager","node","add","tappaas3"]', "an invented tool's name read as manager and verb, either word order");
+  check(JSON.stringify(guessArgv(ms, "module_manager_modify", '{"module":"immich","memory":10240}')) === '["module-manager","modify","immich","--set","memory=10240"]', "…a field as --set field=value");
+  check(JSON.stringify(guessArgv(ms, "site_manager_add_node", "{}")) === '["site-manager","node","add","<name>"]' && guessArgv(ms, "apply_job", "{}") === null, "…a missing positional as <name>; no guess for a name that is no manager");
+  const before = { jobs: jobs.list().length, ran: ran.length };
+  ll.queue.push(
+    callChunks("c-inv", "site_manager_add_node", { name: "tappaas3" }),
+    callChunks("c-ok", "propose_job", { argv: ["site-manager", "node", "add", "tappaas3", "--pxe"], rationale: "a third node, installed over the network" }),
+    textChunks("I put a card up to add tappaas3; its Run starts the install."),
+  );
+  const ev3: AssistantEvent[] = [];
+  const t3 = await assistant.chat(me(), { message: "want to add a node" }, (e) => ev3.push(e));
+  check(t3 !== null && t3.steps.map((s) => `${s.tool}:${s.refused ? "refused" : s.ok}`).join(",") === "site_manager_add_node:refused,propose_job:true", "an invented tool is refused, then the model proposes the verb");
+  const told = ll.bodies[ll.bodies.length - 2].messages.filter((m) => m.role === "tool").pop()?.content ?? "";
+  check(/^Refused: there is no tool 'site_manager_add_node'/.test(told) && /no tool per manager or per verb/.test(told) && /call propose_job with the command as an array/.test(told) && /call help/.test(told), "the refusal names the tools to use instead: propose_job, and help to look a verb up");
+  check(told.includes('propose_job({"argv": ["site-manager","node","add","tappaas3"]'), "…and spells out the propose_job call it probably meant");
+  const p3 = ev3.find((e) => e.type === "proposal");
+  check(p3?.type === "proposal" && p3.proposal.argv.join(" ") === "site-manager node add tappaas3 --pxe" && p3.proposal.preview === "none", "the recovered call is a card");
+  check(jobs.list().length === before.jobs && ran.length === before.ran, "and nothing ran");
+
   // ── the logs tool, through Loki's API ───────────────────────────────
   writeFileSync(join(dir, "logging.json"), "{}");
   writeFileSync(join(dir, ".loki-admin-password"), "pw\n");
@@ -271,7 +308,7 @@ async function main(): Promise<void> {
   c = await call("POST", "/api/v1/assistant/chat", { "content-type": "text/plain" });
   check(c.status === 415, "a question is posted as JSON");
   c = await call("GET", "/api/v1/assistant/conversations", gate(), "10.0.0.1");
-  check(c.status === 200 && (c.json().data as { id: string }[])[0]?.id === convId, "the caller's own conversations");
+  check(c.status === 200 && (c.json().data as { id: string }[]).some((x) => x.id === convId), "the caller's own conversations");
   c = await call("GET", "/api/v1/assistant/conversations");
   check((c.json().data as unknown[]).length === 0, "loopback sees only its own (none yet)");
   c = await call("GET", `/api/v1/assistant/conversations/${convId}`, gate(), "10.0.0.1");
