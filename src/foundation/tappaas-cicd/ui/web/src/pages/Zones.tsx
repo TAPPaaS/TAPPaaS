@@ -97,7 +97,7 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
   }
   // A title above each column in use.
   for (const c of new Set(nodes.map((n) => n.col ?? 0))) {
-    nodes.push({ id: `col-${c}`, w: 190, h: 22, col: c, order: -1, className: "zcard-head", content: <div className="cf-sub">{COLUMN_TITLES[c] ?? `column ${c}`}</div> });
+    nodes.push({ id: `col-${c}`, w: 190, h: 22, col: c, head: true, className: "zcard-head", content: <div className="cf-sub">{COLUMN_TITLES[c] ?? `column ${c}`}</div> });
   }
   return { nodes, edges };
 }
@@ -177,7 +177,7 @@ export function ZonesGraph({ zones, envNames, sel, setSel }: { zones: ZoneRead[]
       <ReadState env={schemaR.env} failure={schemaR.failure} what="zones-fields.json" />
       <div className="zones-view">
         <div className="zones-canvas">
-          <Graph nodes={graph.nodes} edges={graph.edges} rankdir="LR" height={560} nodesep={18} ranksep={70} />
+          <Graph nodes={graph.nodes} edges={graph.edges} rankdir="LR" height={560} nodesep={60} ranksep={90} />
         </div>
         {z ? <ZoneDetail key={z.name} z={z} schema={schema} envNames={envNames} wan={z.name === wan ? pub : null} close={() => setSel(null)} /> : null}
       </div>

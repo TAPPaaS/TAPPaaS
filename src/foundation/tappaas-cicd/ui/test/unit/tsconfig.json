@@ -15,6 +15,7 @@
     "../../web/src/types.ts",
     "../../web/src/wizards.ts",
     "../../web/src/consoletargets.ts",
-    "../../web/src/zonegraph.ts"
+    "../../web/src/zonegraph.ts",
+    "../../web/src/columns.ts"
   ]
 }
