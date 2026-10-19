@@ -472,4 +472,31 @@ else
     warn "  CrowdSec did not converge — see the lines above; the firewall update itself is complete"
 fi
 
+# ── The WAN's address ───────────────────────────────────────────────
+#
+# site.json network.publicIp "auto" means the provider's address, which the
+# firewall's WAN takes by DHCP; nothing in config/ records it. Read what the WAN
+# holds now and keep it in /var/lib/tappaas/wan-address.json (run-time state,
+# not config), where the topology and the console show it beside "auto". The
+# zone record is not touched: the wan zone's ip is a placeholder the schema asks
+# for, and rule placement reads it. Exit 3 (the WAN holds no address) drops the
+# file; a failed read keeps the last one.
+_wan_file="${TAPPAAS_WAN_ADDRESS_FILE:-/var/lib/tappaas/wan-address.json}"
+_wan_out="$(/home/tappaas/bin/opnsense-firewall --no-ssl-verify wan --json 2>/dev/null)" && _wan_rc=0 || _wan_rc=$?
+if [[ "${_wan_rc}" -eq 0 ]] && jq -e 'type == "object" and has("ipv4")' >/dev/null 2>&1 <<< "${_wan_out}"; then
+    if _wan_tmp="$(mktemp "${_wan_file}.XXXXXX" 2>/dev/null)" \
+        && jq --arg at "$(date -Is)" '. + {observed: $at}' <<< "${_wan_out}" > "${_wan_tmp}" \
+        && mv -f "${_wan_tmp}" "${_wan_file}"; then
+        debug "  ${GN}✓${CL} WAN address recorded: $(jq -r '.ipv4 // "no IPv4"' "${_wan_file}")"
+    else
+        rm -f "${_wan_tmp:-}"
+        warn "  could not write ${_wan_file} (continuing)"
+    fi
+elif [[ "${_wan_rc}" -eq 3 ]]; then
+    rm -f "${_wan_file}"
+    warn "  the firewall's WAN holds no address"
+else
+    debug "  could not read the WAN's address (rc ${_wan_rc}); the last one recorded stays"
+fi
+
 info "${GN}✓${CL} Firewall update completed"

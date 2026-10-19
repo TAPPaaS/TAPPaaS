@@ -5,7 +5,8 @@
 //
 // Run: NM_FIXTURE_DIR=<network-manager>/test/fixtures node topology.test.js
 
-import { readFileSync } from "fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
 import {
   ApRow, HealthDoc, LagRow, ModuleRow, NodeNetwork, PeerRow, SwitchList, SwitchPorts, TopoSources, Topology,
@@ -206,6 +207,7 @@ check(renderTopology(t).some((l) => /ISP → USW Pro XG 10 PoE port 5, vlan 100/
     configDir: FIX,
     zonesFile: join(FIX, "zones.json"),
     health: null,
+    wanAddressFile: join(FIX, "no-wan-address.json"),
     run: (bin, args) => {
       runs.push(`${bin} ${args.join(" ")}`);
       if (bin === "switch-controller") return { rc: 1, stdout: "", stderr: "zones.json not found", ran: true };
@@ -221,6 +223,31 @@ check(renderTopology(t).some((l) => /ISP → USW Pro XG 10 PoE port 5, vlan 100/
   check(x.sources.some((s) => s.name === "switch-controller list-ports" && !s.ok && /zones\.json not found/.test(s.error ?? "")), "the failing source is named with its error");
   check(x.sources.some((s) => s.name === "module-manager module list" && !s.ok), "a missing binary is named");
   check(x.site.name === "rossen" && x.zones.length > 0, "site.json and zones.json are read from the config dir");
+  check(x.site.wan.discovered === null && x.sources.some((s) => s.name === "wan-address.json" && s.ok), "no WAN address recorded: none shown, and not an error");
+}
+
+// ── the WAN's recorded address (network update.sh → /var/lib/tappaas/wan-address.json)
+check(t.site.wan.discovered === null, "hrossen's capture has no WAN address record: discovered is null");
+{
+  const held = { ipv4: "8.8.4.4", prefix: 24, ipv6: ["2a13:e747:a210:8200::5"], private: false, observed: "2026-10-19T03:12:00+02:00" };
+  const x = buildTopology({ ...hrossen(), wanAddress: held }, new Date("2026-10-19T12:00:00Z"));
+  check(x.site.wan.publicIp === "auto" && x.site.wan.discovered?.ipv4 === "8.8.4.4", "publicIp stays as site.json says (auto); the WAN's address beside it");
+  check(renderTopology(x).some((l) => /public address auto; the WAN holds 8\.8\.4\.4 \(2026-10-19/.test(l)), "the text view names the address the WAN holds");
+  const behind = buildTopology({ ...hrossen(), wanAddress: { ...held, ipv4: "192.168.1.20", private: true } });
+  check(renderTopology(behind).some((l) => /192\.168\.1\.20 \(private: behind another router\)/.test(l)), "a private WAN address says it is behind another router");
+
+  const dir = mkdtempSync(join(tmpdir(), "nm-wan-"));
+  const run = (): { rc: number; stdout: string; stderr: string; ran: boolean } => ({ rc: -1, stdout: "", stderr: "", ran: false });
+  const read = (body: string) => {
+    writeFileSync(join(dir, "wan-address.json"), body);
+    return collectSources({ configDir: FIX, zonesFile: join(FIX, "zones.json"), health: null, run, wanAddressFile: join(dir, "wan-address.json") });
+  };
+  const ok = read(JSON.stringify(held));
+  check(ok.wanAddress?.ipv4 === "8.8.4.4" && ok.wanAddress.ipv6.length === 1 && ok.wanAddress.observed === held.observed, "the record is read from the state file");
+  check(read(JSON.stringify({ ipv4: "", ipv6: [] })).wanAddress === null, "a record without an address reads as none");
+  const bad = read("{ not json");
+  check(bad.wanAddress === null && bad.errors.some((e) => e.source === "wan-address.json"), "a malformed record is named as a source that did not answer");
+  rmSync(dir, { recursive: true, force: true });
 }
 
 console.log(`\ntopology: ${passed} passed, ${failed} failed`);

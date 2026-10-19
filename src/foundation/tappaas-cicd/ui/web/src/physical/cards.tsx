@@ -7,6 +7,7 @@ import { Handle, Node, NodeProps, Position } from "@xyflow/react";
 import { MouseEvent } from "react";
 import { zoneColor } from "../colors";
 import { Dot } from "../ui";
+import { publicAddress, publicText } from "../zonegraph";
 import { ApData, ClusterData, FirewallData, G, IspData, OutsideData, SwitchData, portLabel, portY, uplinkY } from "./layout";
 
 const stop = (f: () => void) => (e: MouseEvent) => {
@@ -28,7 +29,7 @@ export function IspCard({ data }: NodeProps<Node<IspData, "isp">>) {
         <Dot level={data.findings.some((f) => f.level === "warn" || f.level === "fail") ? "warn" : "pass"} /> Internet · ISP
       </div>
       <div className="cf-sub">
-        public IP {w.publicIp ?? "?"}
+        {publicText(publicAddress({ network: { publicIp: w.publicIp } }, w.discovered), true) || `public IP ${w.publicIp ?? "?"}`}
         {w.ipv6 ? " · IPv6" : ""}
       </div>
       <div className="cf-sub">{w.handoff ? `hand-off: ${w.handoff.switch} port ${w.handoff.port}` : "hand-off not on a registered port"}</div>

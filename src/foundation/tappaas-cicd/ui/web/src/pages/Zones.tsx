@@ -14,7 +14,7 @@ import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
 import { Dot, ReadState } from "../ui";
 import { SiteRead } from "../types";
-import { COLUMN_TITLES, PSEUDO, PublicAddress, publicAddress, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
+import { COLUMN_TITLES, PSEUDO, PublicAddress, publicAddress, publicText, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
 
 export interface ZoneRead {
   name: string;
@@ -48,10 +48,7 @@ const reconcile = net("network-manager reconcile", "reconcile", { note: "The pre
 const live = (z: ZoneRead) => z.state === "Active" || z.state === "Mandatory" || z.state === "Manual";
 const dot = (z: ZoneRead) => (z.state === "Active" || z.state === "Mandatory" ? "pass" : z.state === "Manual" ? "info" : "skip");
 
-// The site's public address: short on the WAN card, in full on its detail card.
-const publicText = (p: PublicAddress, short = false) => (p.address ? `public ${p.address}` : p.auto ? (short ? "public address auto" : "public address: the provider's (auto)") : short ? "" : "public address not recorded");
-
-export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected: string | null, pub: PublicAddress = { address: null, auto: false }): { nodes: GNode[]; edges: GEdge[] } {
+export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected: string | null, pub: PublicAddress = publicAddress(null)): { nodes: GNode[]; edges: GEdge[] } {
   const color = new Map(zones.map((z) => [z.name, TYPE_COLOR[z.type ?? ""] ?? "#94a3b8"]));
   const wan = wanZone(zones);
   const { edges: lines, pseudo } = zoneEdges(zones);
@@ -116,7 +113,7 @@ function ZoneDetail({ z, schema, envNames, wan, close }: { z: ZoneRead; schema: 
       {z.description ? <p className="small">{z.description}</p> : null}
       {wan ? (
         <p className="small">
-          This card stands for the internet as well. The site's public address comes from the site record (network.publicIp){wan.auto ? "; auto means the provider assigns it and the firewall's WAN takes it by DHCP" : ""}. The zone's ip <span className="mono">{z.ip ?? "—"}</span> only fills the schema: no interface, DHCP or rule is built from it.
+          This card stands for the internet as well. The site's public address comes from the site record (network.publicIp){wan.auto ? "; auto means the provider assigns it and the firewall's WAN takes it by DHCP, read at each network update" : ""}. The zone's ip <span className="mono">{z.ip ?? "—"}</span> only fills the schema: no interface, DHCP or rule is built from it.
         </p>
       ) : null}
       <div className="toolbar">
@@ -167,8 +164,8 @@ function ZoneDetail({ z, schema, envNames, wan, close }: { z: ZoneRead; schema: 
 export function ZonesGraph({ zones, envNames, sel, setSel }: { zones: ZoneRead[]; envNames: string[]; sel: string | null; setSel: (z: string | null) => void }) {
   const schemaR = useRead<{ fields?: Record<string, ZoneFieldSpec> }>("schemas/zones", 600_000);
   const schema = schemaR.env?.data?.fields ?? null;
-  const site = useRead<SiteRead>("site", 600_000).env?.data?.site;
-  const pub = useMemo(() => publicAddress(site), [site]);
+  const siteR = useRead<SiteRead>("site", 600_000).env?.data;
+  const pub = useMemo(() => publicAddress(siteR?.site, siteR?.wan), [siteR]);
   const graph = useMemo(() => zoneGraph(zones, setSel, sel, pub), [zones, sel, setSel, pub]);
   const z = zones.find((x) => x.name === sel) ?? null;
   const wan = wanZone(zones);

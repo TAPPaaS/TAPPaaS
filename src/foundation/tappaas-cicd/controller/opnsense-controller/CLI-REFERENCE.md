@@ -311,6 +311,12 @@ opnsense-firewall list-rules --no-ssl-verify --search "TAPPaaS"
 # List rules in JSON format
 opnsense-firewall list-rules --no-ssl-verify --json
 
+# The addresses the WAN interface holds (exit 3: none). The network module's
+# update records this in /var/lib/tappaas/wan-address.json; the topology and the
+# console show it when site.json network.publicIp is "auto".
+opnsense-firewall wan --no-ssl-verify --json
+# {"ipv4": "…", "prefix": 24, "ipv6": ["…"], "private": false}
+
 # Delete a rule by description
 opnsense-firewall delete-rule --no-ssl-verify --description "Allow HTTP"
 

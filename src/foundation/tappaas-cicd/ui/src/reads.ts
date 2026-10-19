@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, readFileSync } from "fs";
 import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
+import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan-address";
 import { readZonesFile } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
@@ -50,6 +51,10 @@ export interface ReadsConfig {
   // The repository the managers run from (its schemas/), /home/tappaas/TAPPaaS.
   repoRoot?: string;
   stateDir: string; // where the health document is handed to `topology --health`
+  // What the firewall's WAN held at the last network update (default
+  // $TAPPAAS_WAN_ADDRESS_FILE or /var/lib/tappaas/wan-address.json): shown
+  // beside network.publicIp "auto".
+  wanAddressFile?: string;
   run: Runner;
   journalDays: number;
   now?: () => number;
@@ -507,7 +512,14 @@ export class Reads {
       runJson<unknown[]>(run, "site-manager", ["node", "list", "--json"]).catch(() => null),
       runJson<unknown[]>(run, "site-manager", ["repository", "list", "--json"]).catch(() => null),
     ]);
-    return { site, nodes, repositories, lastSweep: this.readJson("last-update-result.json") };
+    // A missing or unreadable record is no address, not a failed site read.
+    let wan: WanAddress | null = null;
+    try {
+      wan = readWanAddress(this.cfg.wanAddressFile ?? wanAddressFile());
+    } catch {
+      wan = null;
+    }
+    return { site, nodes, repositories, lastSweep: this.readJson("last-update-result.json"), wan };
   }
 
   private async loadActivity(): Promise<Activity> {

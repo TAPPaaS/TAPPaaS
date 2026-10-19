@@ -22,6 +22,7 @@
 import { join } from "path";
 import { ExecResult, captureResult } from "../../../lib/ts/src/exec";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
+import { WanAddress, readWanAddress, wanAddressFile } from "../../../lib/ts/src/wan-address";
 
 // ── the sources, as their verbs print them ────────────────────────────
 
@@ -159,6 +160,7 @@ export interface TopoSources {
   health: HealthDoc | null;
   firewall: Record<string, unknown> | null; // config/<firewall module>.json
   satellites: { name: string; address: string | null }[];
+  wanAddress?: WanAddress | null; // what the WAN held at the last network update
   errors: { source: string; error: string }[];
 }
 
@@ -302,6 +304,9 @@ export interface Topology {
     displayName: string | null;
     wan: {
       publicIp: string | null;
+      // The addresses the firewall's WAN held at the last network update: the
+      // public address when publicIp is "auto" (unless private: behind a router).
+      discovered: WanAddress | null;
       ipv6: boolean;
       isp: string | null;
       zone: string | null;
@@ -729,6 +734,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       displayName: str(src.site?.displayName),
       wan: {
         publicIp: str(net.publicIp),
+        discovered: src.wanAddress ?? null,
         ipv6: src.site?.ipv6 === true,
         isp: str(net.isp),
         zone: wanZone?.name ?? null,
@@ -798,6 +804,7 @@ export const SOURCE_NAMES = [
   "module-manager module list",
   "backup-manager peers",
   "health-manager validate",
+  "wan-address.json",
 ];
 
 export type Runner = (bin: string, args: string[]) => ExecResult;
@@ -809,6 +816,7 @@ export interface CollectOpts {
   // health findings; undefined runs health-manager validate --json.
   health?: HealthDoc | null;
   run?: Runner;
+  wanAddressFile?: string; // default $TAPPAAS_WAN_ADDRESS_FILE or /var/lib/tappaas/wan-address.json
 }
 
 export function collectSources(o: CollectOpts): TopoSources {
@@ -871,6 +879,14 @@ export function collectSources(o: CollectOpts): TopoSources {
   } catch {
     firewall = null;
   }
+  // No record is not an error: the network update writes it (none yet, or the
+  // WAN held no address).
+  let wanAddress: WanAddress | null = null;
+  try {
+    wanAddress = readWanAddress(o.wanAddressFile ?? wanAddressFile());
+  } catch (e) {
+    errors.push({ source: "wan-address.json", error: (e as Error).message });
+  }
   return {
     site,
     nodes,
@@ -885,6 +901,7 @@ export function collectSources(o: CollectOpts): TopoSources {
     health,
     firewall,
     satellites,
+    wanAddress,
     errors,
   };
 }
@@ -899,6 +916,11 @@ export function renderTopology(t: Topology): string[] {
   out.push(
     `  WAN    ${w.handoff ? `ISP → ${w.handoff.switch} port ${w.handoff.port}` : "ISP hand-off not on a registered switch port"}` +
       `${w.vlan ? `, vlan ${w.vlan}` : ""}; ${fw}`,
+  );
+  const held = w.discovered;
+  out.push(
+    `         public address ${w.publicIp ?? "(unset)"}` +
+      (held?.ipv4 ? `; the WAN holds ${held.ipv4}${held.private ? " (private: behind another router)" : ""}${held.observed ? ` (${held.observed})` : ""}` : ""),
   );
   for (const p of w.paths) {
     out.push(`         ${p.active ? "*" : " "} ${p.node}/${p.nic}${p.port ? ` ← ${p.switch} port ${p.port}` : " (no switch port known)"}`);

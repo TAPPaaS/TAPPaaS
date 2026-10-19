@@ -11,6 +11,7 @@ import { TopoFinding, TopoRef, Topology } from "../types";
 import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
+import { publicAddress } from "../zonegraph";
 
 function Findings({ list }: { list: TopoFinding[] }) {
   if (list.length === 0) return <p className="muted small">No finding on it.</p>;
@@ -248,12 +249,14 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
     }
     case "isp": {
       const w = t.site.wan;
+      const pa = publicAddress({ network: { publicIp: w.publicIp } }, w.discovered);
       title = "Internet · ISP";
       body = (
         <>
           <KV
             rows={[
-              ["public IP", w.publicIp],
+              ["public IP", pa.address ? `${pa.address}${pa.auto ? " (auto: what the WAN held)" : ""}` : pa.wan ? `the router's in front of the WAN (the WAN holds ${pa.wan})` : w.publicIp],
+              ["WAN read", pa.observed],
               ["IPv6", w.ipv6 ? "on" : "off"],
               ["ISP", w.isp],
               ["WAN zone", w.zone ? `${w.zone} · vlan ${w.vlan ?? "?"}` : null],
