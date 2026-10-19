@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | – | 1 | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 5 | 13 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 6 | 12 |
 | 6 | G6.2 User interface & physical view | H | L | – | 1 | 4 |
 | 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
@@ -237,7 +237,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 5 · open: 13
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 6 · open: 12
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -249,7 +249,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #125 | Mail relay via M365 Graph API | M | L | |
 | ✅ #853 | switch-controller: unallocated ports parked in `iotLocal`; a verb to park a port; `validate` warns | M | L | **Closed 2026-10-18** (`b91a3f77`): at `interrogate` every port without a record becomes an `iotLocal` access port (a device plugged in gets an address and reaches nothing); `update-port --park` and `remove-port` park a port on the switch before the record goes; a `switch-ports` health gate warns on an unrecorded port that is not parked. Found by the console's first live port change; hrossen's ports 1, 4, 8 and 10 are parked |
 | ✅ #854 | switch-controller: a LAG member follows its lead port | M | L | **Closed 2026-10-18** (`af42829a`): UniFi takes an aggregate's VLANs from its lead port, so a non-lead member no longer reports or receives VLAN drift (hrossen's port 12 was "applied" on every reconcile without effect) |
-| #860 | switch-controller: read the switches after every sweep, so `switch-ports` is not judged on a stale read | M | L | **Opened 2026-10-19** from the #853/#854 review: nothing interrogates a switch on a schedule, so a port changed in the controller's UI, or a device on an unrecorded port, shows only after a manual interrogate. A read-only interrogate (never park, never apply) in the post-sweep checks, the read's age in the gate, mail on change |
+| ✅ #860 | switch-controller: read the switches after every sweep, so `switch-ports` is not judged on a stale read | M | L | **Closed 2026-10-19** (`659a71be`): `interrogate --no-park` reads and parks nothing, every read stamps `lastRead`; `tappaas-switch-read` runs after each real sweep (OnSuccess/OnFailure of update-tappaas, like the security scan), runs the `switch-ports` gate and mails only a finding that is new since the last read; the gate shows the read's age and warns past 26 h. On hrossen: a read in 36 s that changed nothing but `lastRead`, `--if-new-sweep` skipping without a sweep, the mail dry-run sent once and not repeated. The unit arrives with the next self-rebuild |
 | ✅ #856 | admin VPN: the peer config carries the site's DNS and routes to the DMZ gateway | M | L | **Closed 2026-10-18** (`cddd049c`): `wgvpn config` v2 adds `DNS = <mgmt gateway>` and host routes to the DMZ gateway (IPv4 and IPv6), so a published name with `admin` in its zone list is reached over the tunnel; `wgvpn list` names peers still on v1. Needed by the console (#839) |
 | #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
