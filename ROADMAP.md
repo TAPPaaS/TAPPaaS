@@ -106,8 +106,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | – | – | 3 |
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 2 | 12 |
-| 6 | G6.2 User interface & physical view | H | L | – | – | 4 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 5 | 13 |
+| 6 | G6.2 User interface & physical view | H | L | – | 1 | 4 |
 | 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
@@ -116,8 +116,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 18 | 9 | 3 |
-| 3 | G3.2 Identity & SSO wiring | M | L | 10 | 3 | 1 |
-| 3 | G3.3 App module fixes | L | L | 10 | 4 | 7 |
+| 3 | G3.2 Identity & SSO wiring | M | L | 10 | 4 | 1 |
+| 3 | G3.3 App module fixes | L | L | 10 | 5 | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 1 | 3 | 5 |
 | 3 | G3.5 Installer UX | L | L | 1 | 1 | 2 |
 | 2 | G2.1 Firewall exposure & rule order | M | H | 7 | 18 | 2 |
@@ -217,7 +217,7 @@ Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can al
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #840 | devops: a Woodpecker CI module next to Forgejo | H | L | **Opened 2026-10-15.** Forgejo-native CI (OAuth, webhooks); agents on the VM first, KVM agents as an option for #415 |
+| #840 | devops: a Woodpecker CI module next to Forgejo | H | L | **Built 2026-10-19** (`fa66039e`…`813c96ef`): `src/devops/woodpecker`, server + one Docker agent in Forgejo's zone, Login with Forgejo through the new `forgejo:oauth` service (an OAuth2 application, its client on the VM; `forgejo:repo` and it share `service-lib.sh`), no privileged plugins, `woodpeckerAdmins`; pipeline containers reach the internet, DNS and Forgejo's address only (`woodpecker-egress`). Live on hrossen: module test 13/13, `forgejo:oauth` 4/4. Open: the end-to-end pipeline run, after the operator's first login |
 | #415 | Self-hosted KVM Woodpecker runners | H | L | |
 | #284 | forgejo: SQLite → PostgreSQL | M | M | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
 
@@ -237,7 +237,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 5 · open: 12
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 5 · open: 13
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -249,6 +249,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #125 | Mail relay via M365 Graph API | M | L | |
 | ✅ #853 | switch-controller: unallocated ports parked in `iotLocal`; a verb to park a port; `validate` warns | M | L | **Closed 2026-10-18** (`b91a3f77`): at `interrogate` every port without a record becomes an `iotLocal` access port (a device plugged in gets an address and reaches nothing); `update-port --park` and `remove-port` park a port on the switch before the record goes; a `switch-ports` health gate warns on an unrecorded port that is not parked. Found by the console's first live port change; hrossen's ports 1, 4, 8 and 10 are parked |
 | ✅ #854 | switch-controller: a LAG member follows its lead port | M | L | **Closed 2026-10-18** (`af42829a`): UniFi takes an aggregate's VLANs from its lead port, so a non-lead member no longer reports or receives VLAN drift (hrossen's port 12 was "applied" on every reconcile without effect) |
+| #860 | switch-controller: read the switches after every sweep, so `switch-ports` is not judged on a stale read | M | L | **Opened 2026-10-19** from the #853/#854 review: nothing interrogates a switch on a schedule, so a port changed in the controller's UI, or a device on an unrecorded port, shows only after a manual interrogate. A read-only interrogate (never park, never apply) in the post-sweep checks, the read's age in the gate, mail on change |
 | ✅ #856 | admin VPN: the peer config carries the site's DNS and routes to the DMZ gateway | M | L | **Closed 2026-10-18** (`cddd049c`): `wgvpn config` v2 adds `DNS = <mgmt gateway>` and host routes to the DMZ gateway (IPv4 and IPv6), so a published name with `admin` in its zone list is reached over the tunnel; `wgvpn list` names peers still on v1. Needed by the console (#839) |
 | #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
@@ -388,7 +389,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | ✅ #826 | Readiness wait probes UDP ports over TCP — 180 s lost per update | L | L | **Closed 2026-10-13** (`fix(module-ready): do not probe UDP or ICMP ports over TCP`): only TCP, TCP/UDP and unset protocols are probed; deconz-test's wait went 180 s → 0 s; a full `update-module deconz-test` on hrossen now takes 79 s. Found during the #825 test |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
-### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 10 · done for 2.3: 3 · open: 1
+### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 10 · done for 2.3: 4 · open: 1
 
 Every app wired to the identity provider the same way: OIDC for hass, Nextcloud and forgejo (#345, #401, #282), a site-specific login page (#479), logging's SSO dependency (#701), a test for forward-auth (#752), and Jellyfin behind forward-auth (#805) with Authentik sign-in (#806).
 
@@ -397,9 +398,10 @@ Every app wired to the identity provider the same way: OIDC for hass, Nextcloud 
 | #345 | hass: appliance-aware OIDC staging | M | L | |
 | ✅ #401 | Nextcloud: OIDC redirect, trusted domains | M | L | **Closed 2026-10-14 — already met:** login redirects straight to Authentik (`caface4d`, local `/login?direct=1` kept); trusted domains from the module config (`3ea124b0`). Verified on hrossen |
 | ✅ #479 | Site-specific login page | L | L | **Closed 2026-10-14** (`1a065ddb`, `17ecfb92`): the sign-in page shows the site name and its own logo from `site.json` `branding` (light/dark); live on hrossen. Extended 2026-10-14 (`44724af2`): start-page tiles show each module's icon (dashboard-icons) and `displayName`, generated tile otherwise; providers keyed by slug so a rename keeps the OIDC client |
+| ✅ #858 | identity: tile icons and the site logo need `/admin/file/`, so a site below Authentik 2025.12 can never update | M | L | **Closed 2026-10-19** (`370ec3d6`), reported by @AndreasJe: the files API is new in 2025.12 (absent at 2025.10.3), and every app ensure uploaded an icon, so identity and every SSO module rolled back on 2025.6.4 and the site could never climb. Below 2025.12 icons and the logo are skipped (title and flow heading still set); an unreadable version is taken as new. Unit tests 87/87; on hrossen (2026.8.3) identity and Karakeep updated with apps and brand unchanged |
 | ✅ #701 | logging depends on identity though its own code makes SSO optional | L | L | **Closed 2026-10-14** (`344bc8b8`): logging lists identity in `integratesWith`; Grafana's OIDC switch follows identity. Other consumers keep `dependsOn` — identity is always installed |
 
-### G3.3 App module fixes — Ease L · Risk L · released: 10 · done for 2.3: 4 · open: 7
+### G3.3 App module fixes — Ease L · Risk L · released: 10 · done for 2.3: 5 · open: 7
 
 The known rough edges of the app modules, fixed and tested so they stay fixed: Nextcloud Talk end to end (#715), Home Assistant (#552, #568, #571 — maintainer-owned), Nextcloud and euro-office (#332, #751; its test 12, #658, is in G5.2), litellm consumers (#553), windows-server (#411), forgejo (#283, #284), in-guest backups (#754), container stop timeouts (#786).
 
@@ -414,6 +416,7 @@ The known rough edges of the app modules, fixed and tested so they stay fixed: N
 | ✅ #332 | euro-office / Nextcloud install findings | M | L | **Closed 2026-10-15** (`aa92f901`): memory and cores are integers in every module (21 wrote strings; compared numerically, so no drift); nextcloud and euro-office no longer declare the default `proxyPort` 80; euro-office's README says why it needs no `identity:identity`. The other findings were already resolved: the connector is re-applied on update and declared in the schema, `nextcloud:fileservice` is the name, zones follow the default zone, coturn finds its WAN address and NAT itself, tappaas2 trunks the service VLANs |
 | ✅ #807 | Immich: bump `unstableSrc` once `jellyfin-ffmpeg` fixes six upload-reachable CVEs | M | L | **Opened 2026-10-09** from the #788 triage (`cc6790a2`): immich-server's jellyfin-ffmpeg 8.1.2-5 has six heap-corruption flaws any logged-in uploader reaches (RISK medium in `immich-vex.json`); nixos-unstable has no fixed jellyfin-ffmpeg yet, and plain ffmpeg 9.0.1 lacks the `tonemapx` filter immich needs. **2026-10-17:** Jellyfin 12.2 (#850) runs the same jellyfin-ffmpeg 8.1.2-5, so the bump covers both modules. **Closed 2026-10-18** (`a8aea117`, `291e28ad`): jellyfin-ffmpeg 8.1.3-1 for Jellyfin and Immich ahead of the channel (pinned package, new source, the 8.1.2 patch it contains dropped); FFmpeg 8.1.3 fixes VobSub, ADX, TDSC, TY, MACE, DVB subtitles, CFHD, RTP/ASF and the HLS loop. Live on hrossen, both module tests green; Jellyfin 46 → 23 high (18 shared), Immich 27 → 21; the rest decided in VEX (96611/52297/52296 need FFmpeg 9.0, 107696 unfixed upstream). Drop the override when nixos-unstable carries 8.1.3 |
 | ✅ #850 | Upgrade Jellyfin to 12.x and the SSO plugin to the maintained fork | M | M | **Closed 2026-10-17** (`ce3021a0`, `9fe72ca3`, `3a6e54cb`): Jellyfin 12.2 from a pinned nixos-unstable (10.11 gets no more releases; GHSA-hw73 unauthenticated file read open there), SSO plugin K0lin 5.1.1 (an SSO account had no password, so an empty-password login worked — the `lars` account on hrossen; sealed now), the modern `Authorization` header, a start-up guard on case-clashing user names, test checks for the version and for passwordless accounts. Live on hrossen: in-place migration, module test 11/11, Authentik sign-in through the gate verified. VEX re-triaged: 13 jellyfin-ffmpeg findings exploitable (crafted library file or network source), the rest not reachable |
+| ✅ #859 | jellyfin: `jellyfin-tappaas-policy` fails the activation on first run | L | L | **Closed 2026-10-19** (`a9dd2f5e`), reported by @AndreasJe: while Jellyfin starts (and migrates on a version upgrade) its setup server answers `/health` 200 "Degraded" and the API 503, so the unit's `/Users` call failed (exit 22). It now waits on `/System/Info/Public`, adds the key after the start, and is no longer oneshot: an activation neither waits on nor fails over policy. On hrossen: first run with Jellyfin started together, and with its port unreachable for 90 s — the key is made the second Jellyfin answers; module test 17/17. Same day: `pkgs.getent` in karakeep's and nomad's DNS waits (`ff40fa9c`), which had waited out 5 min on every start |
 | ✅ #751 | nextcloud:fileservice has no teardown | M | L | **Closed 2026-10-15** (`2b6c7672`): `delete-service.sh` removes the consumer's env file on the Nextcloud VM and the settings `occ` applied — euro-office's document-server settings, coturn's TURN/STUN, the HPB's signaling server — only when the file names that consumer; never fails the delete. Live on hrossen: each connector removed, re-wired by its update, service tests pass |
 | #754 | In-guest backup timers: drop for PBS or say why they stay | L | L | **2026-10-14:** identity, coturn, euro-office, vaultwarden dropped (three had produced empty archives every night). **litellm and openwebui assigned to @ErikDaniel007** — openwebui's `restore.sh` reads `/var/backup` |
 
