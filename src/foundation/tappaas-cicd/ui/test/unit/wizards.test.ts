@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { buildArgv } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
-import { ApIn, BUDDY_KINDS, SatellitePlan, StepSpec, buddyNameProblem, buddySpecs, satelliteProblems, satelliteSpec, ZoneIn, defaultAp, defaultSsid, isPlaceholderSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { ApIn, BUDDY_KINDS, SatellitePlan, StepSpec, buddyNameProblem, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, defaultAp, defaultSsid, isPlaceholderSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -84,5 +84,16 @@ check(Object.keys(satelliteProblems(sat)).length === 0, "a public IPv4, an envir
 check(satelliteProblems({ ...sat, address: "10.0.0.5" }).address !== undefined && satelliteProblems({ ...sat, address: "100.64.1.1" }).address !== undefined && satelliteProblems({ ...sat, address: "1.2.3" }).address !== undefined, "a private, CGNAT or malformed address is refused");
 check(satelliteProblems({ ...sat, roles: [] }).roles !== undefined && satelliteProblems({ ...sat, roles: ["backup"] }).roles !== undefined, "no role, or backup (lockdown's, never at add), is refused");
 check(satelliteProblems({ ...sat, country: "Finland" }).country !== undefined, "the country is its ISO code");
+
+// ── a user ────────────────────────────────────────────────────────────
+// identity-manager's verbs as hrossen's manifest declares them (an open verb:
+// the field form's own tokens follow the positionals).
+const idAdd: ManifestVerb = { ...mmAdd, verb: "<kind> add", keys: [["user", "add"]], positionals: [{ name: "name", optional: false, repeatable: false }, { name: "field", optional: true, repeatable: false }], options: [{ flag: "--force", takesValue: false, arg: null, choices: null, repeatable: false, description: "" }, { flag: "--no-reconcile", takesValue: false, arg: null, choices: null, repeatable: false, description: "" }], open: true };
+const idRec: ManifestVerb = { ...mmAdd, verb: "reconcile", keys: [["reconcile"]], positionals: [], options: [{ flag: "--apply", takesValue: false, arg: null, choices: null, repeatable: false, description: "" }], open: false, preview: { kind: "apply-flag", flag: "--apply" } };
+const user = identitySpecs("user", "add");
+const fields = ["--displayName", "Ann Rossen", "--email", "ann@rossen.dk", "--state", "active", "--groups", "users", "--roles", "user"];
+check(JSON.stringify(buildArgv(user.change, idAdd, { ...user.change.initial, "@name": "ann", "@fields": fields })) === JSON.stringify(["identity-manager", "user", "add", "ann", "--no-reconcile", ...fields]), "user add <name> --no-reconcile, then the field form's flags");
+check(JSON.stringify(buildArgv(user.reconcile, idRec, {})) === JSON.stringify(["identity-manager", "reconcile"]), "…then reconcile: its preview is the plan against Authentik");
+check(JSON.stringify(identitySpecs("group", "modify", "users").change.fixed) === '["users"]', "a modify names its object");
 
 done("wizards");

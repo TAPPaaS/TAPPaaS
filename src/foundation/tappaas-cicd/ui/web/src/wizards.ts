@@ -200,3 +200,14 @@ export function satelliteSpec(p: SatellitePlan): StepSpec {
   if (p.instance) initial["--instance"] = p.instance;
   return { bin: "module-manager", verb: "add", fixed: ["satellite"], initial };
 }
+
+// ── an identity object: staged, then reconciled (Identity's own flow) ─
+
+// identity-manager <kind> <verb> [<name>] --no-reconcile: config/identities
+// only, so the reconcile after it is the preview of what reaches Authentik.
+export function identitySpecs(kind: string, verb: "add" | "modify" | "delete", name?: string): { change: StepSpec; reconcile: StepSpec } {
+  return {
+    change: { bin: "identity-manager", verb: `<kind> ${verb}`, words: [kind, verb], fixed: name ? [name] : [], initial: { "--no-reconcile": true } },
+    reconcile: { bin: "identity-manager", verb: "reconcile", initial: {} },
+  };
+}

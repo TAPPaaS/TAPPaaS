@@ -13,6 +13,7 @@ import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { ID_KINDS, IdKind, IdNode, identityGraph } from "../relations";
 import { KV, ReadState, Section, since } from "../ui";
+import { identitySpecs } from "../wizards";
 
 const KIND: Record<IdKind, { title: string; one: string; color: string }> = {
   org: { title: "Organizations", one: "organization", color: "#3b6fd4" },
@@ -21,46 +22,23 @@ const KIND: Record<IdKind, { title: string; one: string; color: string }> = {
   role: { title: "Roles", one: "role", color: "#7c3aed" },
 };
 
-const reconcile: Step = {
-  title: "Push to Authentik: identity-manager reconcile",
-  bin: "identity-manager",
-  verb: "reconcile",
-  hide: ["--dry-run"],
-  note: "The preview is the plan against Authentik (what would be created, changed, removed); apply pushes it.",
-};
+const reconcileNote = "The preview is the plan against Authentik (what would be created, changed, removed); apply pushes it.";
+const stagedNote = "Staged in config/identities only; the reconcile below previews what reaches Authentik, then pushes it.";
+const reconcile: Step = { bin: "identity-manager", verb: "reconcile", title: "Push to Authentik: identity-manager reconcile", hide: ["--dry-run"], note: reconcileNote };
 
-function change(kind: string, verb: "add" | "modify" | "delete", name?: string): Step[] {
+// A change to an identity object (also Setup's Day 2 "Add a user"): the
+// schema-driven field form, staged with --no-reconcile, then the reconcile.
+export function identitySteps(kind: string, verb: "add" | "modify" | "delete", name?: string): Step[] {
+  const s = identitySpecs(kind, verb, name);
+  const title = `1 · config/identities: identity-manager ${kind} ${verb}${name ? ` ${name}` : ""} --no-reconcile`;
+  const push: Step = { ...reconcile, ...s.reconcile, title: `2 · ${reconcile.title}` };
   if (verb !== "delete") {
     return [
-      fieldsStep({
-        title: `1 · config/identities: identity-manager ${kind} ${verb}${name ? ` ${name}` : ""} --no-reconcile`,
-        bin: "identity-manager",
-        verb: `<kind> ${verb}`,
-        words: [kind, verb],
-        fixed: name ? [name] : [],
-        kind,
-        name: name ?? null,
-        mode: verb,
-        initial: { "--no-reconcile": true },
-        hide: ["@field"],
-        note: "Staged in config/identities only; the reconcile below previews what reaches Authentik, then pushes it.",
-      }),
-      reconcile,
+      fieldsStep({ ...s.change, title, kind, name: name ?? null, mode: verb, hide: ["@field"], note: stagedNote }),
+      push,
     ];
   }
-  return [
-    {
-      title: `1 · config/identities: identity-manager ${kind} ${verb}${name ? ` ${name}` : ""} --no-reconcile`,
-      bin: "identity-manager",
-      verb: `<kind> ${verb}`,
-      words: [kind, verb],
-      fixed: name ? [name] : [],
-      initial: { "--no-reconcile": true },
-      hide: ["--no-reconcile"],
-      note: "Staged in config/identities only; the reconcile below previews what reaches Authentik, then pushes it.",
-    },
-    reconcile,
-  ];
+  return [{ ...s.change, title, hide: ["--no-reconcile"], note: stagedNote }, push];
 }
 
 function show(v: unknown): string {
@@ -74,8 +52,8 @@ function Verbs({ kind, name }: { kind: string; name: string }) {
   return (
     <span className="toolbar">
       <OperateButton label="Show" title={`${kind} ${name}`} steps={[{ title: `identity-manager ${kind} show ${name}`, bin: "identity-manager", verb: "<kind> show", words: [kind, "show"], fixed: [name] }]} />
-      <OperateButton label="Modify…" title={`Modify ${kind} ${name}`} steps={() => change(kind, "modify", name)} />
-      <OperateButton label="Delete…" kind="danger" title={`Delete ${kind} ${name}`} steps={change(kind, "delete", name)} />
+      <OperateButton label="Modify…" title={`Modify ${kind} ${name}`} steps={() => identitySteps(kind, "modify", name)} />
+      <OperateButton label="Delete…" kind="danger" title={`Delete ${kind} ${name}`} steps={identitySteps(kind, "delete", name)} />
     </span>
   );
 }
@@ -169,7 +147,7 @@ export function Identity() {
         <div className="identity-side">
           {picked ? <Detail n={picked} close={() => setSel(null)} /> : null}
           {ID_KINDS.map((kind) => (
-            <Section key={kind} title={KIND[kind].title} aside={<OperateButton label={`Add ${kind}…`} title={`Add a ${KIND[kind].one}`} steps={() => change(kind, "add")} />}>
+            <Section key={kind} title={KIND[kind].title} aside={<OperateButton label={`Add ${kind}…`} title={`Add a ${KIND[kind].one}`} steps={() => identitySteps(kind, "add")} />}>
               <table className="table compact">
                 <tbody>
                   {(d[kind] ?? []).map((n) => (

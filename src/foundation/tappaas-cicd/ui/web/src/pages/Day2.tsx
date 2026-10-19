@@ -16,6 +16,7 @@ import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
 import { WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
 import { SatelliteButton } from "./Satellite";
+import { identitySteps } from "./Identity";
 
 export function WizardCard({ id, title, tag, children, action }: { id?: string; title: string; tag?: string; children: ReactNode; action: ReactNode }) {
   return (
@@ -60,9 +61,12 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
           A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
         </WizardCard>
       </Group>
-      <Group title="Environments and stacks">
+      <Group title="Environments, people and stacks">
         <WizardCard title="Add an environment" action={<OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} />}>
           A new environment — its record, its zone, its domain — then the reconcile that makes it live.
+        </WizardCard>
+        <WizardCard title="Add a user" action={<OperateButton label="Add a user…" title="Add a user" steps={() => identitySteps("user", "add")} />}>
+          A person who signs in: their name, email, groups and roles, staged and then pushed to Authentik.
         </WizardCard>
         <WizardCard title="Add a stack" action={<OperateButton label="Add a stack…" title="Add a stack" steps={addStackSteps()} />}>
           Every module of a stack installed in dependency order; the preview is the plan.
