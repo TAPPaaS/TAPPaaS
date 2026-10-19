@@ -93,7 +93,7 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
       ),
   }));
   for (const p of pseudo) {
-    nodes.push({ id: p, w: 130, h: 44, ...pseudoPlace(p), className: "zcard-pseudo", content: <div className="cf-title">{PSEUDO[p] ?? p}</div> });
+    nodes.push({ id: p, w: 130, h: 44, ...pseudoPlace(p, zones), className: "zcard-pseudo", content: <div className="cf-title">{PSEUDO[p] ?? p}</div> });
   }
   // A title above each column in use.
   for (const c of new Set(nodes.map((n) => n.col ?? 0))) {

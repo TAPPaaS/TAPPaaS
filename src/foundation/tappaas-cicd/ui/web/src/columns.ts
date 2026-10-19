@@ -13,6 +13,7 @@ export interface ColNode {
   col?: number;
   order?: number; // the starting row within its column (ascending), then the id
   head?: boolean; // the column's title: pinned to the top, outside the spread
+  after?: string; // kept directly below this node of the same column
 }
 
 export interface ColEdge {
@@ -39,6 +40,25 @@ function initialOrder(members: ColNode[]): ColNode[] {
   return [...members].sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id));
 }
 
+// Move each node that names `after` to just below its anchor (in the same
+// column), keeping the rest of the order; one whose anchor is not there stays.
+function keepAfter(list: ColNode[]): ColNode[] {
+  const ids = new Set(list.map((n) => n.id));
+  const out = list.filter((n) => !n.after || !ids.has(n.after));
+  let pending = list.filter((n) => !out.includes(n));
+  while (pending.length > 0) {
+    const left = pending.filter((n) => {
+      const i = out.findIndex((m) => m.id === n.after);
+      if (i < 0) return true;
+      out.splice(i + 1, 0, n);
+      return false;
+    });
+    if (left.length === pending.length) return [...out, ...left]; // anchors that name each other
+    pending = left;
+  }
+  return out;
+}
+
 // The order of each column's cards (heads excluded), from the starting order,
 // improved by `sweeps` barycenter passes: left to right, right to left, and so
 // on. A card's barycenter is the mean of its neighbours' relative rows (0..1)
@@ -47,7 +67,7 @@ function initialOrder(members: ColNode[]): ColNode[] {
 export function orderColumns(nodes: ColNode[], edges: ColEdge[], sweeps = 3): Map<number, ColNode[]> {
   const body = nodes.filter((n) => !n.head);
   const cols = [...new Set(body.map(colOf))].sort((a, b) => a - b);
-  const order = new Map<number, ColNode[]>(cols.map((c) => [c, initialOrder(body.filter((n) => colOf(n) === c))]));
+  const order = new Map<number, ColNode[]>(cols.map((c) => [c, keepAfter(initialOrder(body.filter((n) => colOf(n) === c)))]));
   const byId = new Map(body.map((n) => [n.id, n]));
   const nbrs = new Map<string, string[]>(body.map((n) => [n.id, []]));
   for (const e of edges) {
@@ -79,7 +99,7 @@ export function orderColumns(nodes: ColNode[], edges: ColEdge[], sweeps = 3): Ma
       });
       const cur = new Map(list.map((n, i) => [n.id, i]));
       const sorted = [...list].sort((a, b) => bary.get(a.id)! - bary.get(b.id)! || cur.get(a.id)! - cur.get(b.id)!);
-      order.set(c, sorted);
+      order.set(c, keepAfter(sorted));
     }
   }
   return order;
@@ -88,25 +108,36 @@ export function orderColumns(nodes: ColNode[], edges: ColEdge[], sweeps = 3): Ma
 // Positions: the heads in a row on top, then each column's cards in their
 // order, spread over the height of the tallest column (that one with `gapY`
 // between its cards): every card gets an equal share of the column's free
-// height, half of it above and half below.
+// height, half of it above and half below. A card kept below another stays
+// `gapY` under it: the two take one share.
 export function columnPositions(nodes: ColNode[], edges: ColEdge[], gapX: number, gapY: number): Pos {
   const cols = [...new Set(nodes.map(colOf))].sort((a, b) => a - b);
   const order = orderColumns(nodes, edges);
   const pos: Pos = new Map();
   const headH = Math.max(0, ...nodes.filter((n) => n.head).map((n) => n.h));
   const top = 10 + (headH > 0 ? headH + gapY : 0);
-  const height = Math.max(0, ...[...order.values()].map((list) => list.reduce((s, n) => s + n.h + gapY, 0)));
+  const blocks = new Map<number, ColNode[][]>();
+  for (const [c, list] of order) {
+    const bs: ColNode[][] = [];
+    list.forEach((n, i) => (i > 0 && n.after === list[i - 1].id ? bs[bs.length - 1].push(n) : bs.push([n])));
+    blocks.set(c, bs);
+  }
+  const blockH = (b: ColNode[]): number => b.reduce((s, n) => s + n.h, 0) + gapY * (b.length - 1);
+  const height = Math.max(0, ...[...blocks.values()].map((bs) => bs.reduce((s, b) => s + blockH(b) + gapY, 0)));
   let x = 10;
   for (const c of cols) {
     const all = nodes.filter((n) => colOf(n) === c);
     const colW = Math.max(0, ...all.map((n) => n.w));
     for (const n of all.filter((m) => m.head)) pos.set(n.id, { x: x + (colW - n.w) / 2, y: 10 });
-    const list = order.get(c) ?? [];
-    const share = list.length ? (height - list.reduce((s, n) => s + n.h, 0)) / list.length : 0;
+    const bs = blocks.get(c) ?? [];
+    const share = bs.length ? (height - bs.reduce((s, b) => s + blockH(b), 0)) / bs.length : 0;
     let y = top + share / 2;
-    for (const n of list) {
-      pos.set(n.id, { x: x + (colW - n.w) / 2, y });
-      y += n.h + share;
+    for (const b of bs) {
+      for (const n of b) {
+        pos.set(n.id, { x: x + (colW - n.w) / 2, y });
+        y += n.h + gapY;
+      }
+      y += share - gapY;
     }
     x += colW + gapX;
   }

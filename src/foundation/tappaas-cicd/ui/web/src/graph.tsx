@@ -19,6 +19,7 @@ export interface GNode {
   col?: number; // when every node has one: laid out in columns, left to right, instead of by dagre
   order?: number; // the starting row within its column (ascending), then the id (columns.ts reorders)
   head?: boolean; // the column's title: pinned to the top
+  after?: string; // kept directly below this node of its column
 }
 
 export interface GEdge {

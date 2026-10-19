@@ -68,8 +68,15 @@ export function zoneEdges(zones: ZoneLike[]): { edges: ZoneEdge[]; pseudo: strin
   return { edges, pseudo: [...pseudo] };
 }
 
-// Where a card for a word that is not a zone goes: the internet column.
-export function pseudoPlace(p: string): { col: number; order: number } {
+// Where a card for a word that is not a zone goes. Every zone (`all`) is
+// reached from the management tier: it sits in the tier-0 column, directly
+// below the zone that reaches it (mgmt). The rest go in the internet column.
+export function pseudoPlace(p: string, zones: ZoneLike[] = []): { col: number; order: number; after?: string } {
+  if (p === "all") {
+    const tier0 = zones.filter((z) => zoneColumn(z) === 1);
+    const anchor = tier0.find((z) => (z["access-to"] ?? []).includes("all")) ?? tier0.find((z) => z.type === "Management");
+    return anchor ? { col: 1, order: 0, after: anchor.name } : { col: 1, order: 0 };
+  }
   return { col: INTERNET_COLUMN, order: p === "internet" ? 0 : 1 };
 }
 

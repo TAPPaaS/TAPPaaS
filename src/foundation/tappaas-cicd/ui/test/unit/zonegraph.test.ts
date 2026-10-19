@@ -4,7 +4,7 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { COLUMN_TITLES, ZoneLike, publicAddress, wanZone, zoneColumn, zoneEdges } from "../../web/src/zonegraph";
+import { COLUMN_TITLES, ZoneLike, pseudoPlace, publicAddress, wanZone, zoneColumn, zoneEdges } from "../../web/src/zonegraph";
 import { check, done } from "./check";
 
 const FIX = process.env.CONSOLE_FIXTURES ?? "test/fixtures";
@@ -35,6 +35,11 @@ const both = zoneEdges([{ name: "wan", type: "WAN" }, { name: "home", type: "Cli
 check(both.edges.length === 1, "internet and wan in one access-to: one line");
 const none = zoneEdges([{ name: "home", type: "Client", "access-to": ["internet"] }]);
 check(none.pseudo.join() === "internet" && none.edges[0].target === "internet" && wanZone([]) === null, "no WAN zone: the internet keeps its own card");
+
+// Every zone (all) in the tier-0 column, below the zone that reaches it.
+const all = pseudoPlace("all", zones);
+check(all.col === 1 && all.after === "mgmt" && COLUMN_TITLES[all.col].startsWith("tier 0"), "every zone: tier 0, directly below mgmt");
+check(pseudoPlace("all").after === undefined && pseudoPlace("internet").col === 6 && pseudoPlace("vpn-peers").col === 6, "no zones: no anchor; the other words in the internet column");
 
 // The public address: from site.json's network.publicIp, never the zone's ip.
 check(publicAddress({ network: { publicIp: "auto" } }).auto && publicAddress({ network: { publicIp: "auto" } }).address === null, "auto: the provider's, no address to show");

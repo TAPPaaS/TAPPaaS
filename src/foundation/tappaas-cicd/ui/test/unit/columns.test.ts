@@ -16,7 +16,7 @@ const zones = JSON.parse(readFileSync(join(FIX, "zones.json"), "utf8")) as ZoneL
 const { edges, pseudo } = zoneEdges(zones);
 const nodes: ColNode[] = [
   ...zones.map((z) => ({ id: z.name, w: 190, h: 74, col: zoneColumn(z), order: z.vlantag ?? 0 })),
-  ...pseudo.map((p) => ({ id: p, w: 130, h: 44, ...pseudoPlace(p) })),
+  ...pseudo.map((p) => ({ id: p, w: 130, h: 44, ...pseudoPlace(p, zones) })),
 ];
 for (const c of new Set(nodes.map((n) => n.col))) nodes.push({ id: `col-${c}`, w: 190, h: 22, col: c, head: true });
 const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -59,6 +59,12 @@ check(so.get(1)!.map((n) => n.id).join() === "y,x" && crossings(so, smallEdges) 
 check(orderColumns(small, smallEdges, 0).get(1)!.map((n) => n.id).join() === "x,y", "no sweeps: the starting order (order, then id)");
 byIdOf = keep;
 
+// A card kept below another: every zone directly below mgmt, through every sweep.
+const tier0 = swept.get(1)!.map((n) => n.id);
+check(tier0.indexOf("all") === tier0.indexOf("mgmt") + 1, `every zone sits directly below mgmt (${tier0.join(", ")})`);
+const chain = orderColumns([{ id: "c", w: 1, h: 1, after: "b" }, { id: "b", w: 1, h: 1, after: "a" }, { id: "a", w: 1, h: 1 }, { id: "d", w: 1, h: 1, after: "nowhere" }], []);
+check(chain.get(0)!.map((n) => n.id).join() === "a,b,c,d", "a chain of cards kept below each other; a missing anchor leaves the card where it is");
+
 // The spread.
 const gapY = 18;
 const pos = columnPositions(nodes, edges, 70, gapY);
@@ -72,7 +78,9 @@ const ys = (c: number): { y: number; h: number }[] => swept.get(c)!.map((n) => (
 const gaps = (c: number): number[] => ys(c).slice(1).map((r, i) => r.y - (ys(c)[i].y + ys(c)[i].h));
 check(gaps(tallest).every((g) => Math.abs(g - gapY) < 1e-6), "the tallest column: the minimum gap between its cards");
 check(cols.every((c) => ys(c).every((r) => r.y >= top - 1e-6 && r.y + r.h <= top + height + 1e-6)), "every card within the tallest column's height");
-check(cols.every((c) => gaps(c).every((g) => g >= gapY - 1e-6 && Math.abs(g - gaps(c)[0]) < 1e-6)), "each column evenly spread, never closer than the minimum gap");
+const spread = (c: number): number[] => gaps(c).filter((_, i) => swept.get(c)![i + 1].after !== swept.get(c)![i].id);
+check(cols.every((c) => gaps(c).every((g) => g >= gapY - 1e-6) && spread(c).every((g) => Math.abs(g - spread(c)[0]) < 1e-6)), "each column evenly spread, never closer than the minimum gap");
+check(pos.get("all")!.y === pos.get("mgmt")!.y + 74 + gapY, "every zone stays right under mgmt (the minimum gap), not spread away");
 const wanY = pos.get("wan")!.y + 37;
 check(swept.get(zoneColumn({ type: "WAN" }))!.length > 1 || Math.abs(wanY - (top + height / 2)) < 1e-6, "a lone card sits in the middle of the height");
 check(cols.every((c) => new Set(swept.get(c)!.map((n) => pos.get(n.id)!.x + n.w / 2)).size === 1), "a column's cards share its centre line");
