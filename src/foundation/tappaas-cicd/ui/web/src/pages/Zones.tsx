@@ -7,7 +7,6 @@
 
 import { useMemo } from "react";
 import { useRead } from "../api";
-import { ClassTag } from "../fieldsform";
 import { fieldsStep } from "../fields";
 import { FieldRow, ZoneFieldSpec, shortValue, zoneFieldRows } from "../forms";
 import { GEdge, GNode, Graph } from "../graph";
@@ -135,7 +134,6 @@ function ZoneDetail({ z, schema, envNames, close }: { z: ZoneRead; schema: Recor
             <tr key={r.field} title={r.description}>
               <td className="mono">{r.field}</td>
               <td className={`mono wrap${r.configured ? "" : " muted"}`}>{shortValue(r.value, 60)}{r.configured ? "" : <span className="dflt"> default</span>}</td>
-              <td><ClassTag c={r.class} /></td>
             </tr>
           ))}
         </tbody>
