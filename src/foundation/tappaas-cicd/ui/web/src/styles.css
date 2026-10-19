@@ -280,6 +280,9 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .drawer-foot { padding: 8px 16px 12px; border-top: 1px solid var(--line); }
 .shell.with-drawer .main { margin-right: 440px; }
 @media (max-width: 1100px) { .shell.with-drawer .main { margin-right: 0; } }
+/* A wizard the assistant opened sits beside the drawer, which stays usable. */
+@media (min-width: 1101px) { .shell.with-drawer .modal-back { right: 440px; } }
+.turn-opened { margin: 4px 0; }
 .btn-ask { margin-left: 6px; }
 .drawer[hidden] { display: none; }
 .drawer-ask { display: flex; gap: 8px; padding: 8px 16px; border-top: 1px solid var(--line); align-items: flex-end; }

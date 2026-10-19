@@ -3,15 +3,16 @@
 // tool-calling exchanges of test/fixtures/litellm-exchange.json. The loop,
 // the tool allow-list, the no-apply rule (asked to run a change, it proposes a
 // card and applies nothing; a card's job carries the turn), the context in
-// the system prompt, the conversation store and its caps, the routes.
+// the system prompt, the conversation store and its caps, the routes; an
+// invented tool's refusal and the recovery; open_console and its navigate event.
 
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { IncomingMessage, ServerResponse, createServer } from "http";
 import { AccessConfig, Me, SetupState } from "../../src/access";
-import { Assistant, AssistantEvent, historyFor, shortManifest } from "../../src/assistant";
-import { TOOLS, guessArgv, logql, lokiConfig, runTool, timeOf, toolDefs, ToolContext } from "../../src/assistant-tools";
+import { Assistant, AssistantEvent, historyFor, shortManifest, writtenCalls } from "../../src/assistant";
+import { TOOLS, consoleFormFor, guessArgv, logql, lokiConfig, runTool, timeOf, toolDefs, ToolContext } from "../../src/assistant-tools";
 import { Conversations, userKey } from "../../src/conversations";
 import { Jobs } from "../../src/jobs";
 import { ChatMessage, LiteLLM, StreamParser, chooseModel, parseKeyFile } from "../../src/litellm";
@@ -19,7 +20,7 @@ import { Manifests } from "../../src/manifest";
 import { Reads } from "../../src/reads";
 import { Runner, Streamer } from "../../src/run";
 import { ConsoleServer } from "../../src/server";
-import { proposalText, sseEvents } from "../../src/ask";
+import { openedText, proposalText, sseEvents } from "../../src/ask";
 import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
 import { check, done } from "./check";
 import { FIX, fakeSite } from "./fake-site";
@@ -120,6 +121,7 @@ async function main(): Promise<void> {
   const ll = await fakeLiteLLM();
   writeFileSync(join(dir, "litellm-svckey.env"), `LITELLM_API_KEY=sk-test\nLITELLM_BASE_URL=http://127.0.0.1:${ll.port}/v1\n`);
   check(lokiConfig(dir, dir, {}) === null, "no logs tool without the logging module");
+  writeFileSync(join(dir, "zones.json"), readFileSync(join(FIX, "wizards", "zones.json"), "utf8"));
   const site = fakeSite();
   const reads = new Reads({ configDir: dir, stateDir: join(dir, "state"), run: site.run, journalDays: 7 });
   const ms: Manifests = { byBin: new Map([["module-manager", renderManifest(SPEC)], ["site-manager", renderManifest(SITE_SPEC)]]), errors: [], loadedAt: "" };
@@ -156,7 +158,8 @@ async function main(): Promise<void> {
   check(/never run, apply or change anything/.test(sys.content ?? "") && /module-manager: list · show <module> · modify <module> --set field=value\.\.\. W · delete <module> D/.test(sys.content ?? ""), "the rule, and the verbs in short form (W, D)");
   const sent = ll.bodies[0].tools.map((t) => t.function.name).sort();
   check(sent.every((n) => (sys.content ?? "").includes(`\n- ${n}(`)) && /No other tool exists/.test(sys.content ?? "") && /There is no tool per manager or per verb/.test(sys.content ?? ""), "the prompt lists every tool sent, by its exact name, and says there is no other");
-  check((sys.content ?? "").includes('propose_job({"argv": ["module-manager", "modify", "immich", "--set", "memory=10240"]') && /What propose_job may propose: the managers' verbs/.test(sys.content ?? ""), "a worked propose_job, and the verbs introduced as what it may propose");
+  check((sys.content ?? "").includes('propose_job({"argv": ["module-manager", "update", "immich"]') && /What propose_job may propose: the managers' verbs/.test(sys.content ?? ""), "a worked propose_job, and the verbs introduced as what it may propose");
+  check((sys.content ?? "").includes('open_console({"target": "add-node"})') && (sys.content ?? "").includes("Wizards: add-node (values:") && /modify-module <module>/.test(sys.content ?? "") && /Call propose_job only for a verb the console has no form for/.test(sys.content ?? "") && (sys.content ?? "").includes('open_console({"target": "modify-module immich", "values": {"memory": "10240"}})'), "the prompt: open_console for what the console has a form for, worked, with the wizards");
   check(JSON.stringify(sent) === JSON.stringify(Object.keys(TOOLS).filter((n) => n !== "logs").sort()), "the tools sent are exactly the allow-list (no logs without Loki)");
   check(!sent.some((n) => /apply|run|exec|write|set/.test(n)), "no tool that applies, runs or writes exists");
   check(t1 !== null && t1.steps.map((s) => s.tool).join(",") === "health,module_show,propose_job" && t1.steps.every((s) => s.ok), "the reads, then the proposal");
@@ -241,9 +244,72 @@ async function main(): Promise<void> {
   const told = ll.bodies[ll.bodies.length - 2].messages.filter((m) => m.role === "tool").pop()?.content ?? "";
   check(/^Refused: there is no tool 'site_manager_add_node'/.test(told) && /no tool per manager or per verb/.test(told) && /call propose_job with the command as an array/.test(told) && /call help/.test(told), "the refusal names the tools to use instead: propose_job, and help to look a verb up");
   check(told.includes('propose_job({"argv": ["site-manager","node","add","tappaas3"]'), "…and spells out the propose_job call it probably meant");
+  check(told.includes('open_console({"target":"add-node","values":{"name":"tappaas3"}})') && /open_console/.test(told.split("\n")[0]), "…and, the console having a form for it, the open_console call");
   const p3 = ev3.find((e) => e.type === "proposal");
   check(p3?.type === "proposal" && p3.proposal.argv.join(" ") === "site-manager node add tappaas3 --pxe" && p3.proposal.preview === "none", "the recovered call is a card");
   check(jobs.list().length === before.jobs && ran.length === before.ran, "and nothing ran");
+
+  // ── open_console: a page or a wizard, filled in, nothing changed ───
+  o = await runTool(tools, "open_console", '{"target":"add-node"}');
+  check(o.ok && o.navigate?.path === "/setup/day2" && o.navigate.title === "the Add node wizard" && o.navigate.url === "https://console.hrossen.dk/setup/day2" && /Nothing changed/.test(o.content), "open_console add-node: Day 2, its address under the console's domain, nothing changed");
+  o = await runTool({ ...tools, shell: true }, "open_console", '{"target":"add-node"}');
+  check(o.ok && /in a shell \(tappaas ask\): they were given the address of the Add node wizard, https:\/\/console\.hrossen\.dk\/setup\/day2/.test(o.content), "from tappaas ask the model is told the operator got the address");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "modify-module immich", values: { memory: 10240 } }));
+  check(o.ok && o.navigate?.path === "/modules/immich" && o.navigate.title === "Modify immich" && JSON.stringify(o.navigate.values) === '{"memory":"10240"}', "modify-module immich with memory: the module's page, the value as the form's text");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "modify-module immich", values: { ram: "10240" } }));
+  check(!o.ok && !o.navigate && /immich has no field ram \(its fields: memory\)/.test(o.content), "a field the module does not have is refused, with its fields");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "modify-module plex" }));
+  check(!o.ok && /no deployed module 'plex'/.test(o.content), "a module that is not deployed is refused");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "add-wifi", values: { zone: "home", ssid: "rossen-home" } }));
+  check(o.ok && o.navigate?.target === "add-wifi home" && o.navigate.path === "/setup/day2#wifi-home" && JSON.stringify(o.navigate.values) === '{"ssid":"rossen-home"}', "add-wifi takes its zone after the name or as a value");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "add-wifi work" }));
+  check(!o.ok && /active Client and Guest zones; work is Client, Inactive/.test(o.content), "WiFi only for an active Client or Guest zone");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "modify-zone home", values: { description: "x" } }));
+  check(o.ok && o.navigate?.path === "/environments?zone=home", "modify-zone opens the zone on Environments");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "/site/physical" }));
+  check(o.ok && o.navigate?.title === "the physical view" && o.navigate.values !== undefined, "a page");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "/security" }));
+  check(!o.ok && /no page \/security/.test(o.content), "a page the console does not have is refused");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "add-vm" }));
+  check(!o.ok && /no wizard 'add-vm' \(wizards: add-node,/.test(o.content), "a wizard the console does not have is refused, with the list");
+  o = await runTool(tools, "open_console", JSON.stringify({ target: "add-node", values: { cores: "4" } }));
+  check(!o.ok && /add-node has no cores: its values are name/.test(o.content), "a value a wizard does not take is refused");
+  check(JSON.stringify(consoleFormFor(ms, ["module-manager", "modify", "immich", "--set", "memory=10240"])) === '{"target":"modify-module immich","values":{"memory":"10240"}}' && consoleFormFor(ms, ["module-manager", "show", "immich"]) === null, "the console's form for a command: its wizard, object and fields; none for a read");
+
+  // ── asked to add a node: the invented tool, then the wizard opened ──
+  const before4 = { jobs: jobs.list().length, ran: ran.length };
+  ll.queue.push(
+    callChunks("c-inv2", "site_manager_add_node", {}),
+    callChunks("c-open", "open_console", { target: "add-node" }),
+    textChunks("The Add node wizard is open on Setup, Day 2."),
+  );
+  const ev4: AssistantEvent[] = [];
+  const t4 = await assistant.chat(me(), { message: "want to add a node", focus: { page: "overview" } }, (e) => ev4.push(e));
+  check(t4 !== null && t4.steps.map((s) => `${s.tool}:${s.refused ? "refused" : s.ok}`).join(",") === "site_manager_add_node:refused,open_console:true", "refused, then open_console");
+  const nav = ev4.find((e) => e.type === "navigate");
+  check(nav?.type === "navigate" && nav.target === "add-node" && nav.path === "/setup/day2" && nav.title === "the Add node wizard", "a navigate event on the stream: the target, its route, its title");
+  check(t4?.opened?.length === 1 && t4.opened[0].target === "add-node" && t4.proposals.length === 0, "the turn records what it opened, and proposes nothing");
+  const conv4 = ev4[0]?.type === "conversation" ? ev4[0].id : "";
+  check(store.get("lars", conv4)?.turns[0].opened?.[0]?.path === "/setup/day2", "…in the conversation's record");
+  check(jobs.list().length === before4.jobs && ran.length === before4.ran, "opening a wizard ran nothing");
+  check(/In the console: the Add node wizard — https:\/\/console\.hrossen\.dk\/setup\/day2/.test(openedText(t4!.opened![0])) && /filled in: memory=10240/.test(openedText({ target: "modify-module immich", values: { memory: "10240" }, path: "/modules/immich", title: "Modify immich", url: null })), "tappaas ask prints it as the console's address, with its values");
+
+  // ── a call written as text (hrossen's model after a read) is taken ──
+  check(JSON.stringify(writtenCalls('Opening it:\n```json\nopen_console({"target": "modify-module immich", "values": {"memory": "10240"}})\n```', ["open_console", "propose_job"])) === '[{"name":"open_console","arguments":"{\\"target\\":\\"modify-module immich\\",\\"values\\":{\\"memory\\":\\"10240\\"}}"}]', "a call written as name({...}) in a fence");
+  check(writtenCalls('```json\n{"argv": ["module-manager", "update", "immich"], "rationale": "x"}\n```', ["propose_job"])[0]?.name === "propose_job" && writtenCalls('```json\n{"memory": 10240}\n```', ["open_console", "propose_job"]).length === 0, "…or a bare object shaped as its arguments; any other JSON is no call");
+  check(writtenCalls("I could open_console for you, or propose_job.", ["open_console", "propose_job"]).length === 0 && writtenCalls('apply_job({"p": 1})', ["open_console"]).length === 0, "…a name without arguments, or a tool not offered, is none");
+  ll.queue.push(
+    callChunks("c-show", "module_show", { module: "immich" }),
+    textChunks('immich has 8192 MiB. Opening the form:\n```json\nopen_console({"target": "modify-module immich", "values": {"memory": "10240"}})\n```'),
+    textChunks("The Modify form of immich is open with memory 10240 MiB."),
+  );
+  const ev5: AssistantEvent[] = [];
+  const t5 = await assistant.chat(me(), { message: "change immich's memory to 10 GiB" }, (e) => ev5.push(e));
+  check(t5 !== null && t5.steps.map((s) => `${s.tool}${s.written ? ":written" : ""}`).join(",") === "module_show,open_console:written" && t5.opened?.[0]?.target === "modify-module immich", "the written call is made, marked as written, and the form opened");
+  check(ev5.some((e) => e.type === "navigate" && e.values.memory === "10240") && /Modify form of immich is open/.test(t5?.answer ?? ""), "the navigate event, then the model's answer from the result");
+  const last5 = ll.bodies[ll.bodies.length - 1].messages;
+  check(last5[last5.length - 2]?.tool_calls?.[0]?.function.name === "open_console" && last5[last5.length - 1]?.role === "tool", "the model is sent its written call as made, with its result");
+  check((ll.bodies[ll.bodies.length - 2].messages.filter((m) => m.role === "tool").pop()?.content ?? "").endsWith('call open_console({"target": "modify-module immich", "values": {"<field>": "<value>"}}) now; it changes nothing until the operator applies it.'), "module_show's result ends with the open_console call for a change");
 
   // ── the logs tool, through Loki's API ───────────────────────────────
   writeFileSync(join(dir, "logging.json"), "{}");

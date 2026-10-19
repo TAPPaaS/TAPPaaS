@@ -7,11 +7,11 @@
 // edits become the manager's own verb: `--set f=v` per changed field, or the
 // verb's own flags (fieldlogic.ts).
 
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { useRead } from "./api";
 import { ClassTag } from "./fieldsform";
 import { FieldManifest, ManifestField, classSummary, fieldChanges, initialFieldText, listItems, placeholderOf, typedVars } from "./fieldlogic";
-import { Step, Values } from "./operate";
+import { PrefillContext, Step, Values } from "./operate";
 
 export function fieldsPath(kind: string, name: string | null, mode: "add" | "modify"): string {
   return `fields/${kind}${name ? `/${encodeURIComponent(name)}` : ""}${mode === "add" && name ? "?mode=add" : ""}`;
@@ -61,7 +61,18 @@ function shown(v: unknown): string {
 
 export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; only?: string[]; values: Values; set: (v: Values) => void }) {
   const m = only ? { ...all, fields: all.fields.filter((f) => only.includes(f.name)) } : all;
-  const [edits, setEdits] = useState<Record<string, string>>(() => Object.fromEntries(m.fields.map((f) => [f.name, initialFieldText(f)])));
+  // The assistant's values (open_console), as the field's text: a list one per line.
+  const prefill = useContext(PrefillContext);
+  const pre = (f: ManifestField): string | null => {
+    const v = f.editable ? prefill?.[f.name] : undefined;
+    return v === undefined ? null : Array.isArray(v) ? v.join("\n") : String(v);
+  };
+  const [edits, setEdits] = useState<Record<string, string>>(() => Object.fromEntries(m.fields.map((f) => [f.name, pre(f) ?? initialFieldText(f)])));
+  useEffect(() => {
+    if (!m.fields.some((f) => pre(f) !== null)) return;
+    const c = fieldChanges(m.fields, edits);
+    set({ ...values, "@fields": c.tokens, "@classes": classSummary(c.changed) });
+  }, []);
   const [q, setQ] = useState("");
   const { errors } = fieldChanges(m.fields, edits);
   const vars = typedVars(values);

@@ -5,7 +5,8 @@
 // coverage), Activity (the console's jobs and the sweep's lines that name it) —
 // and the Open-in links.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useOpenRequest } from "../opener";
 import { AskAbout } from "../assistant";
 import { get, useRead } from "../api";
 import { Envelope, ModuleDetail } from "../types";
@@ -147,6 +148,11 @@ function ActivityTab({ d }: { d: ModuleDetail }) {
 export function ModulePage({ name }: { name: string }) {
   const r = useRead<ModuleDetail>(`modules/${encodeURIComponent(name)}`);
   const [tab, setTab] = useState<TabName>("Overview");
+  // The assistant opened this module's Modify: it is on the Config tab.
+  const modify = useOpenRequest("modify-module", name);
+  useEffect(() => {
+    if (modify) setTab("Config");
+  }, [modify?.n]);
   // The owner's route reads what the module is, not how it is configured.
   const owner = useMe()?.route === "status";
   const tabs = TABS.filter((t) => !owner || ["Overview", "Backup"].includes(t));

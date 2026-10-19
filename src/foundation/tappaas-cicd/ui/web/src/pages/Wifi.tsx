@@ -9,6 +9,8 @@
 import { useMemo, useState } from "react";
 import { post, reloadAll, useRead, useVerb } from "../api";
 import { Step, StepView } from "../operate";
+import { TargetValue, TargetValues } from "../consoletargets";
+import { useOpenedBy } from "../opener";
 import { Dot, canOperate, useMe } from "../ui";
 import { ApIn, StepSpec, WifiPlan, WifiZone, defaultAp, defaultSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb } from "../wizards";
 import { SecretStatus, StepRow } from "./Setup";
@@ -19,7 +21,10 @@ function zoneSsids(zone: string, aps: ApIn[]) {
   return aps.flatMap((a) => (a.ssids ?? []).filter((s) => s.zone === zone).map((s) => ({ ap: a.name, ...s })));
 }
 
-export function WifiWizard({ z, aps, site, onClose }: { z: WifiZone; aps: ApIn[]; site: string; onClose: () => void }) {
+const str = (v: TargetValue | undefined): string | null => (typeof v === "string" ? v : null);
+
+// `prefill`: what the assistant opened it with (open_console add-wifi <zone>): ssid, ap, security.
+export function WifiWizard({ z, aps, site, onClose, prefill }: { z: WifiZone; aps: ApIn[]; site: string; onClose: () => void; prefill?: TargetValues | null }) {
   const me = useMe();
   const verb = useVerb("ap-controller", "ssid add");
   const securities = verb?.options.find((o) => o.flag === "--security")?.choices ?? ["wpa2-personal"];
@@ -27,9 +32,9 @@ export function WifiWizard({ z, aps, site, onClose }: { z: WifiZone; aps: ApIn[]
   const kept = (secrets.env?.data ?? []).find((x) => x.name === "wlan")?.keys ?? [];
   const change = wifiVerb(z) === "Change";
   const old = z.ssids[0] ?? null;
-  const [ap, setAp] = useState(defaultAp(z, aps));
-  const [name, setName] = useState(defaultSsid(site, z));
-  const [security, setSecurity] = useState(old?.security ?? "wpa2-personal");
+  const [ap, setAp] = useState(str(prefill?.ap) ?? defaultAp(z, aps));
+  const [name, setName] = useState(str(prefill?.ssid) ?? defaultSsid(site, z));
+  const [security, setSecurity] = useState(str(prefill?.security) ?? old?.security ?? "wpa2-personal");
   const [pass, setPass] = useState("");
   const [savedFor, setSavedFor] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -173,13 +178,19 @@ export function WifiWizard({ z, aps, site, onClose }: { z: WifiZone; aps: ApIn[]
 
 export function WifiButton({ z, aps, site }: { z: WifiZone; aps: ApIn[]; site: string }) {
   const [open, setOpen] = useState(false);
-  if (!canOperate(useMe())) return null;
+  const [prefill, setPrefill] = useState<TargetValues | null>(null);
+  const operator = canOperate(useMe());
+  useOpenedBy("add-wifi", z.zone, (v) => {
+    setPrefill(v);
+    setOpen(true);
+  }, operator);
+  if (!operator) return null;
   const label = `${wifiVerb(z)} WiFi for ${z.zone}…`;
   return (
     <>
       <button className="btn" disabled={aps.length === 0} title={aps.length === 0 ? "No access point is registered (ap-controller add)" : undefined} onClick={() => setOpen(true)}>{label}</button>
       {/* Closing it re-reads the page: the zone may have its SSID now. */}
-      {open ? <WifiWizard z={z} aps={aps} site={site} onClose={() => { setOpen(false); reloadAll(); }} /> : null}
+      {open ? <WifiWizard z={z} aps={aps} site={site} prefill={prefill} onClose={() => { setOpen(false); setPrefill(null); reloadAll(); }} /> : null}
     </>
   );
 }

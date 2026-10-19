@@ -7,16 +7,31 @@
 import { useMemo, useState } from "react";
 import { reloadAll, useRead } from "../api";
 import { Step, StepView } from "../operate";
+import { TargetValue, TargetValues } from "../consoletargets";
+import { useOpenedBy } from "../opener";
 import { EnvironmentRow } from "../types";
 import { canOperate, useMe } from "../ui";
 import { SATELLITE_ROLES, SatellitePlan, satelliteProblems, satelliteSpec } from "../wizards";
 import { StepRow } from "./Setup";
 
-export function SatelliteWizard({ onClose }: { onClose: () => void }) {
+const text = (v: TargetValue | undefined, dflt: string): string => (typeof v === "string" ? v : dflt);
+
+// `prefill`: what the assistant opened it with (open_console add-satellite).
+export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; prefill?: TargetValues | null }) {
   const me = useMe();
   const envs = (useRead<EnvironmentRow[]>("environments").env?.data ?? []).map((e) => e.name);
   const [ready, setReady] = useState(false);
-  const [p, setP] = useState<SatellitePlan>({ address: "", environment: "mgmt", roles: ["reverse-proxy", "admin-vpn"], country: "", city: "", instance: "" });
+  const [p, setP] = useState<SatellitePlan>(() => {
+    const roles = prefill?.roles;
+    return {
+      address: text(prefill?.address, ""),
+      environment: text(prefill?.environment, "mgmt"),
+      roles: Array.isArray(roles) ? roles : typeof roles === "string" ? roles.split(",").map((r) => r.trim()).filter(Boolean) : ["reverse-proxy", "admin-vpn"],
+      country: text(prefill?.country, ""),
+      city: text(prefill?.city, ""),
+      instance: text(prefill?.instance, ""),
+    };
+  });
   const [plan, setPlan] = useState<SatellitePlan | null>(null);
   const [added, setAdded] = useState(false);
   const problems = satelliteProblems(p);
@@ -135,11 +150,17 @@ export function SatelliteWizard({ onClose }: { onClose: () => void }) {
 
 export function SatelliteButton() {
   const [open, setOpen] = useState(false);
-  if (!canOperate(useMe())) return null;
+  const [prefill, setPrefill] = useState<TargetValues | null>(null);
+  const operator = canOperate(useMe());
+  useOpenedBy("add-satellite", undefined, (v) => {
+    setPrefill(v);
+    setOpen(true);
+  }, operator);
+  if (!operator) return null;
   return (
     <>
       <button className="btn" onClick={() => setOpen(true)}>Add a satellite…</button>
-      {open ? <SatelliteWizard onClose={() => { setOpen(false); reloadAll(); }} /> : null}
+      {open ? <SatelliteWizard prefill={prefill} onClose={() => { setOpen(false); setPrefill(null); reloadAll(); }} /> : null}
     </>
   );
 }

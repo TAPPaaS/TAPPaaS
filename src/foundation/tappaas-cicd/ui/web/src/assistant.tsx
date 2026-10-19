@@ -7,13 +7,18 @@
 // the reads the assistant made, its text, and its proposals. A proposal is a
 // card: Preview runs the verb's own dry run and Run applies that preview — the
 // P2 job flow, with the card's conversation and turn on the job, so Activity
-// shows it came via the assistant. The assistant runs nothing itself.
+// shows it came via the assistant. The assistant runs nothing itself. When it
+// opens a page or a wizard (open_console, a `navigate` event), the drawer
+// routes the console there and the wizard opens filled in (opener.ts); the
+// drawer stays open, with a line saying what was opened.
 
 import { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { applyJob, get, previewJob, readJob, useJob } from "./api";
+import { TargetValues, resolveTarget } from "./consoletargets";
+import { requestOpen } from "./opener";
 import { Command, Output, jobResult } from "./jobs";
 import { AssistantStatus, Me } from "./types";
-import { Tag, canOperate, useMe } from "./ui";
+import { Tag, canOperate, navigate, useMe } from "./ui";
 
 // What is in view, sent with every question.
 export interface Focus {
@@ -77,6 +82,15 @@ export interface Proposal {
   preview: string;
 }
 
+// A page or wizard the assistant opened (open_console).
+interface Opened {
+  target: string;
+  values: TargetValues;
+  path: string;
+  title: string;
+  url: string | null;
+}
+
 interface Turn {
   n: number;
   question: string;
@@ -84,6 +98,7 @@ interface Turn {
   steps: Step[];
   answer: string;
   proposals: Proposal[];
+  opened?: Opened[]; // absent in a conversation saved before open_console
   error: string | null;
   pending?: boolean;
 }
@@ -93,8 +108,17 @@ type ChatEvent =
   | { type: "step"; step: Step }
   | { type: "delta"; text: string }
   | { type: "proposal"; proposal: Proposal; conversation: string }
+  | ({ type: "navigate" } & Opened)
   | { type: "done"; turn: Turn }
   | { type: "error"; message: string };
+
+// Follow a navigate event: leave the wizard's request (its button on the page
+// takes it), then route there. The catalog is the backend's (consoletargets.ts).
+function follow(o: Opened): void {
+  const r = resolveTarget(o.target, o.values);
+  if (r.ok && r.wizard) requestOpen(r.wizard, r.arg, r.values);
+  navigate(r.ok ? r.path : o.path);
+}
 
 async function streamChat(body: unknown, onEvent: (e: ChatEvent) => void, signal: AbortSignal): Promise<void> {
   const r = await fetch("/api/v1/assistant/chat", {
@@ -227,7 +251,8 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
 // ── the drawer ────────────────────────────────────────────────────────
 
 function TurnView({ t, conversation, me }: { t: Turn; conversation: string; me: Me | null }) {
-  const reads = t.steps.filter((s) => !s.refused && s.tool !== "propose_job");
+  const reads = t.steps.filter((s) => !s.refused && s.tool !== "propose_job" && s.tool !== "open_console");
+  const operator = canOperate(me);
   const refused = t.steps.filter((s) => s.refused);
   return (
     <div className="turn">
@@ -237,6 +262,17 @@ function TurnView({ t, conversation, me }: { t: Turn; conversation: string; me: 
         assistant{reads.length ? ` · read: ${reads.map((s) => s.summary).join(", ")}` : ""}
       </div>
       {refused.length ? <p className="readstate readstate-warn small">Refused: {refused.map((s) => s.tool).join(", ")} — the assistant has no such tool; it never runs a change.</p> : null}
+      {(t.opened ?? []).map((o, i) => {
+        const vals = Object.entries(o.values).map(([k, v]) => `${k} ${Array.isArray(v) ? v.join(", ") : String(v)}`);
+        const wizard = !o.target.startsWith("/");
+        return (
+          <p key={i} className="turn-opened small">
+            ↗ Opened <a href={o.path} onClick={(e) => { e.preventDefault(); follow(o); }}>{o.title}</a>
+            {vals.length ? <span className="muted"> · filled in: {vals.join(", ")}</span> : null}
+            {wizard && !operator ? <span className="muted"> · its form needs an Admin or Installer</span> : wizard ? <span className="muted"> · nothing changes until you preview and apply it there</span> : null}
+          </p>
+        );
+      })}
       <div className="turn-a">{t.answer || (t.pending ? "…" : "")}</div>
       {t.error ? <p className="readstate readstate-fail small">{t.error}</p> : null}
       {t.proposals.map((p) => (
@@ -282,6 +318,11 @@ export function AssistantDrawer({ status, focus, site, asked, open, onClose }: {
         } else if (e.type === "step") patchLast((t) => ({ ...t, steps: [...t.steps, e.step] }));
         else if (e.type === "delta") patchLast((t) => ({ ...t, answer: t.answer + e.text }));
         else if (e.type === "proposal") patchLast((t) => ({ ...t, proposals: [...t.proposals, e.proposal] }));
+        else if (e.type === "navigate") {
+          const { type: _t, ...o } = e;
+          patchLast((t) => ({ ...t, opened: [...(t.opened ?? []), o] }));
+          follow(o);
+        }
         else if (e.type === "done") patchLast(() => ({ ...e.turn, pending: false }));
         else if (e.type === "error") patchLast((t) => ({ ...t, error: e.message, pending: false }));
       }, ac.signal);
@@ -327,7 +368,7 @@ export function AssistantDrawer({ status, focus, site, asked, open, onClose }: {
       <div className="drawer-body" ref={body}>
         {turns.length === 0 ? (
           <div className="muted small">
-            <p>Ask about the site, a module, a zone, a finding. The assistant reads the console's own records — the health gates, the modules, the topology, backups, Activity, a host's logs when the logging module is installed, and the managers' help — and proposes a change as a card you preview and run.</p>
+            <p>Ask about the site, a module, a zone, a finding. The assistant reads the console's own records — the health gates, the modules, the topology, backups, Activity, a host's logs when the logging module is installed, and the managers' help — opens the console's wizard for a change, filled in, or proposes it as a card you preview and run.</p>
             {earlier.length ? (
               <>
                 <p>Earlier conversations:</p>
@@ -362,7 +403,7 @@ export function AssistantDrawer({ status, focus, site, asked, open, onClose }: {
           <button type="submit" className="btn btn-primary" disabled={!text.trim()}>Ask</button>
         )}
       </form>
-      <footer className="drawer-foot muted small">Reads freely (list, show, drift, validate, logs). Changes only through a Run you click.</footer>
+      <footer className="drawer-foot muted small">Reads freely (list, show, drift, validate, logs); opens a wizard filled in. Changes only through a Preview and Run you click.</footer>
     </aside>
   );
 }

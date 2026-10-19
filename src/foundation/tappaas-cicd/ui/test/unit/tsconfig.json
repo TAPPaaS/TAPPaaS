@@ -13,6 +13,7 @@
     "../../web/src/fieldlogic.ts",
     "../../web/src/argv.ts",
     "../../web/src/types.ts",
-    "../../web/src/wizards.ts"
+    "../../web/src/wizards.ts",
+    "../../web/src/consoletargets.ts"
   ]
 }

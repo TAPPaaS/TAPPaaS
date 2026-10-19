@@ -2,7 +2,9 @@
 // D7, "Elsewhere"). A small client of the console's own backend on loopback:
 // the same agent loop, the same tools, the same conversations, as the local
 // read role. A proposal is printed as the command to run — previewed first —
-// and never run: in a shell the operator runs it, as the card's Run would.
+// and never run: in a shell the operator runs it, as the card's Run would. A
+// wizard the assistant opens (open_console) is printed as its address in the
+// console, with the values it would fill in.
 //
 //   tappaas ask "<question>"     one question, the answer streamed
 //   tappaas ask                  a short conversation in the terminal
@@ -53,6 +55,7 @@ type Event =
   | { type: "step"; step: Step }
   | { type: "delta"; text: string }
   | { type: "proposal"; proposal: Proposal }
+  | ({ type: "navigate" } & Opened)
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -71,6 +74,20 @@ export function proposalText(p: Proposal): string {
   }
   lines.push("  Run it yourself, or from the card in the console (Activity records it there).");
   return lines.join("\n") + "\n";
+}
+
+interface Opened {
+  target: string;
+  values: Record<string, string | boolean | string[]>;
+  path: string;
+  title: string;
+  url: string | null;
+}
+
+// How an opened wizard reads in a shell: where it is in the console.
+export function openedText(o: Opened): string {
+  const vals = Object.entries(o.values).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join(",") : String(v)}`);
+  return [``, `In the console: ${o.title} — ${o.url ?? o.path}`, ...(vals.length ? [`  filled in: ${vals.join(", ")}`] : []), ""].join("\n");
 }
 
 // The server-sent events of one answer, as they come.
@@ -109,13 +126,17 @@ async function askOnce(base: string, question: string, conversation: string | nu
   let atLineStart = true;
   const p = sseEvents((e) => {
     if (e.type === "conversation") conv = e.id;
-    else if (e.type === "step") err(`  · ${e.step.refused || e.step.tool === "propose_job" ? "" : "read: "}${e.step.summary}\n`);
+    else if (e.type === "step") err(`  · ${e.step.refused || e.step.tool === "propose_job" || e.step.tool === "open_console" ? "" : "read: "}${e.step.summary}\n`);
     else if (e.type === "delta") {
       out(e.text);
       atLineStart = e.text.endsWith("\n");
     } else if (e.type === "proposal") {
       if (!atLineStart) out("\n");
       out(proposalText(e.proposal));
+      atLineStart = true;
+    } else if (e.type === "navigate") {
+      if (!atLineStart) out("\n");
+      out(openedText(e));
       atLineStart = true;
     } else if (e.type === "error") {
       failed = true;

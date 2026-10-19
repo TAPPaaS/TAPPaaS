@@ -1,10 +1,12 @@
 // assistant-tools.ts — what the assistant may do (ADR-034 D7): read the site
 // through the console's own reads (the same caches a page is drawn from), read
-// a host's logs in Loki, read a manager's manifest and README, and propose a
-// job. Nothing else. There is no apply tool and no write: a tool name outside
-// TOOLS is refused, and propose_job creates no job — it validates the argv
-// against the manifests and returns a card for the operator, whose click runs
-// it through the job model (jobs.ts) under the operator's own role.
+// a host's logs in Loki, read a manager's manifest and README, propose a job,
+// and open a page or a wizard of the console for the operator. Nothing else.
+// There is no apply tool and no write: a tool name outside TOOLS is refused,
+// propose_job creates no job — it validates the argv against the manifests and
+// returns a card for the operator, whose click runs it through the job model
+// (jobs.ts) under the operator's own role — and open_console only moves the
+// operator's console to a form (web/src/consoletargets.ts), filled in.
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
@@ -14,6 +16,8 @@ import { ManifestVerb, Manifests, applyArgv, findVerb, previewArgv, validateArgv
 import { MODULE_NAME, Reads } from "./reads";
 import { HealthDoc } from "./model";
 import { ToolDef } from "./litellm";
+import { Opened } from "./conversations";
+import { resolveTarget, wizardForVerb } from "../web/src/consoletargets";
 
 export interface LokiConfig {
   url: string; // e.g. http://logging.mgmt.internal:3100
@@ -37,6 +41,7 @@ export interface ToolContext {
   repoRoot: string; // the release checkout, for the managers' READMEs
   fetch?: typeof fetch;
   now?: () => number;
+  shell?: boolean; // the caller is tappaas ask: open_console gives an address, opens nothing
 }
 
 export interface ProposedJob {
@@ -55,6 +60,7 @@ export interface ToolOutcome {
   content: string; // what the model is told
   summary: string; // the line the drawer shows ("read: health guest-memory")
   proposal?: ProposedJob;
+  navigate?: Opened; // where open_console moved the operator's console
   refused?: boolean;
 }
 
@@ -119,6 +125,12 @@ export const TOOLS: Record<string, { line: string; description: string; paramete
     line: "propose_job(argv, rationale): a command as a card the operator previews and runs; argv is an array of words, the manager first",
     description: "Propose a change as a job card the operator previews and runs. You never run it: only the operator's Run does. `argv` is the exact command, the manager first, e.g. [\"module-manager\",\"modify\",\"immich\",\"--set\",\"memory=10240\"], without --apply, --dry-run or --json (the job model adds them). It must be a verb a manifest declares.",
     parameters: obj({ argv: { type: "array", items: { type: "string" }, description: "the command line as an array of words" }, rationale: str("one sentence: why, and its consequence") }, ["argv", "rationale"]),
+  },
+  open_console: {
+    line: "open_console(target, values?): open a page, or a wizard or Modify form with values filled in, in the operator's console; it changes nothing",
+    description:
+      "Move the operator's console to a page or open a wizard there, its form filled in with `values`; the operator previews and applies it. Changes nothing. `target` is a page (\"/modules/immich\", \"/site/physical\", \"/setup/day2\") or a wizard: add-node, add-environment, add-stack, enrol-device, add-wifi <zone>, add-buddy, add-satellite, add-user, modify-module <module>, modify-zone <zone>. For modify-module, `values` are the module's fields by name (module_show lists them), e.g. {\"memory\": \"10240\"}.",
+    parameters: obj({ target: str("a page path or a wizard, e.g. \"add-node\" or \"modify-module immich\""), values: { type: "object", description: "the form's values by name (optional)", additionalProperties: true } }, ["target"]),
   },
 };
 
@@ -273,6 +285,28 @@ export function guessArgv(ms: Manifests, name: string, rawArgs: string): string[
   return [best.bin, ...hit.words, ...pos, ...opts];
 }
 
+// The console's form for a guessed command, as open_console's arguments:
+// the wizard that runs its verb, its object, and its --set fields as values.
+export function consoleFormFor(ms: Manifests, argv: string[]): { target: string; values?: Record<string, string> } | null {
+  const m = ms.byBin.get(argv[0]);
+  const found = m ? findVerb(m, argv.slice(1)) : null;
+  if (!found) return null;
+  const w = wizardForVerb(argv[0], argv.slice(1, 1 + found.used).join(" "));
+  if (!w) return null;
+  const rest = argv.slice(1 + found.used);
+  const object = rest[0] !== undefined && !rest[0].startsWith("-") && !/^<.*>$/.test(rest[0]) ? rest[0] : null;
+  if (w.arg && !object) return null;
+  const values: Record<string, string> = {};
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === "--set" && rest[i + 1]?.includes("=")) {
+      const [k, ...v] = rest[++i].split("=");
+      values[k] = v.join("=");
+    }
+  }
+  if (!w.arg && object && w.keys?.includes("name")) values.name = object;
+  return { target: w.arg ? `${w.name} ${object}` : w.name, ...(Object.keys(values).length ? { values } : {}) };
+}
+
 // The refusal of a tool that does not exist: the tools that do, and the call
 // the model probably meant.
 export function refusal(ctx: ToolContext, name: string, rawArgs: string): string {
@@ -280,10 +314,12 @@ export function refusal(ctx: ToolContext, name: string, rawArgs: string): string
   const argv = ms ? guessArgv(ms, name, rawArgs) : null;
   const lines = [
     `Refused: there is no tool '${name}'. Your only tools are ${toolNames(ctx).join(", ")}; there is no tool per manager or per verb, and you cannot run, apply or change anything.`,
-    "A manager's verb is only ever proposed: call propose_job with the command as an array, the manager first, and the operator's Run button runs it. To look a verb up first, call help with the manager's name.",
+    "A manager's verb is only ever proposed: call propose_job with the command as an array, the manager first, and the operator's Run button runs it. When the console has a wizard or form for it, call open_console instead. To look a verb up first, call help with the manager's name.",
   ];
   if (argv) {
-    lines.push(`You probably meant: propose_job({"argv": ${JSON.stringify(argv)}, "rationale": "<why, and its consequence>"})${argv.some((a) => /^<.*>$/.test(a)) ? " with the <…> filled in" : ""}; check its options with help({"manager": "${argv[0]}"}) if unsure.`);
+    const form = ms ? consoleFormFor(ms, argv) : null;
+    if (form) lines.push(`The console has a form for this: you probably meant open_console(${JSON.stringify(form)}), which opens it filled in for the operator; or else propose_job({"argv": ${JSON.stringify(argv)}, "rationale": "…"}).`);
+    else lines.push(`You probably meant: propose_job({"argv": ${JSON.stringify(argv)}, "rationale": "<why, and its consequence>"})${argv.some((a) => /^<.*>$/.test(a)) ? " with the <…> filled in" : ""}; check its options with help({"manager": "${argv[0]}"}) if unsure.`);
   }
   return lines.join("\n");
 }
@@ -334,13 +370,15 @@ async function call(ctx: ToolContext, name: string, args: Record<string, unknown
       const row = m.value?.modules.find((x) => x.name === name_);
       if (!row) return failed(`module ${name_}`, `no deployed module '${name_}' (modules: ${(m.value?.modules ?? []).map((x) => x.name).join(", ")})`);
       const [show, resolve, fields] = await Promise.all([r.moduleShow.of(name_).get(), r.moduleResolve.of(name_).get(), r.moduleFields.of(name_).get()]);
-      return ok(`module show ${name_}`, {
+      const shown = ok(`module show ${name_}`, {
         module: row,
         findings: findingsFor(h.value, name_),
         show: show.value ?? { error: show.error },
         resolved: resolve.value ?? { error: resolve.error },
         modifiable: fields.value ?? { error: fields.error },
       });
+      // The next step a small model needs spelled out: the form for a change.
+      return { ...shown, content: `${shown.content}\nTo change one of these fields, call open_console({"target": "modify-module ${name_}", "values": {"<field>": "<value>"}}) now; it changes nothing until the operator applies it.` };
     }
     case "module_drift": {
       const name_ = moduleArg();
@@ -414,6 +452,8 @@ async function call(ctx: ToolContext, name: string, args: Record<string, unknown
     }
     case "propose_job":
       return propose(ctx, args);
+    case "open_console":
+      return openConsole(ctx, args);
   }
   return failed(name, `no tool ${name}`);
 }
@@ -493,5 +533,59 @@ function propose(ctx: ToolContext, args: Record<string, unknown>): ToolOutcome {
       (v.read ? "It is a read: the operator's Run shows its result. " : v.preview.kind === "none" ? `It has no dry run (${v.preview.touches}); its preview shows the command. ` : "Its Preview runs the manager's own dry run. ") +
       (v.destructive ? "It is destructive: Installer only, with the object's name typed. " : "") +
       "You have not run it and cannot: tell the operator the card is there and that its Run button runs it.",
+  };
+}
+
+// The console's public address: console.<domain of the console's environment>.
+async function consoleUrl(r: Reads, path: string): Promise<string | null> {
+  const [m, e, s] = await Promise.all([r.modules.get(), r.environments.get(), r.site.get()]);
+  const envs = (e.value ?? []) as { name: string; domains?: { primary?: string } }[];
+  const own = m.value?.modules.find((x) => x.name === "tappaas-cicd")?.environment;
+  const dflt = (s.value?.site as { defaultEnvironment?: string } | undefined)?.defaultEnvironment;
+  const domain = [own, "mgmt", dflt].map((n) => envs.find((x) => x.name === n)?.domains?.primary).find((d) => d);
+  return domain ? `https://console.${domain}${path}` : null;
+}
+
+async function openConsole(ctx: ToolContext, args: Record<string, unknown>): Promise<ToolOutcome> {
+  const r = ctx.reads;
+  const res = resolveTarget(args.target, args.values);
+  const no = (why: string): ToolOutcome => ({ ok: false, summary: `open refused: ${why.slice(0, 100)}`, content: `Not opened: ${why}. Nothing changed.` });
+  if (!res.ok) return no(res.reason);
+  // The object it names must exist here, and a Modify's values be its fields.
+  if (res.arg && (res.wizard === "modify-module" || res.kind === "page")) {
+    const m = await r.modules.get();
+    const names = (m.value?.modules ?? []).map((x) => x.name);
+    if (m.value && !names.includes(res.arg)) return no(`no deployed module '${res.arg}' (modules: ${names.join(", ")})`);
+  }
+  if (res.wizard === "modify-module" && Object.keys(res.values).length) {
+    const f = await r.moduleFields.of(res.arg!).get();
+    const fields = ((f.value as { fields?: { field: string; settable?: boolean }[] } | null)?.fields ?? []);
+    if (fields.length) {
+      const unknown = Object.keys(res.values).filter((k) => !fields.some((x) => x.field === k));
+      if (unknown.length) return no(`${res.arg} has no field ${unknown.join(", ")} (its fields: ${fields.map((x) => x.field).join(", ")})`);
+      const fixed = Object.keys(res.values).filter((k) => fields.some((x) => x.field === k && x.settable === false));
+      if (fixed.length) return no(`${fixed.join(", ")} of ${res.arg} cannot be changed with modify`);
+    }
+  }
+  if (res.wizard === "modify-zone" || res.wizard === "add-wifi") {
+    const z = await r.zones.get();
+    const zones = (z.value ?? []) as { name: string; type?: string; state?: string }[];
+    const zone = zones.find((x) => x.name === res.arg);
+    if (z.value && !zone) return no(`no zone '${res.arg}' (zones: ${zones.map((x) => x.name).join(", ")})`);
+    if (zone && res.wizard === "add-wifi" && (!["Client", "Guest"].includes(zone.type ?? "") || (zone.state ?? "Active") !== "Active")) {
+      return no(`WiFi is offered for active Client and Guest zones; ${res.arg} is ${zone.type ?? "?"}, ${zone.state ?? "Active"}`);
+    }
+  }
+  const nav: Opened = { target: res.target, values: res.values, path: res.path, title: res.title, url: await consoleUrl(r, res.path) };
+  const filled = Object.keys(res.values).length ? ` with ${Object.entries(res.values).map(([k, v]) => `${k}=${Array.isArray(v) ? v.join(",") : v}`).join(", ")} filled in` : "";
+  return {
+    ok: true,
+    summary: `opened: ${res.title}${filled ? ` (${Object.keys(res.values).join(", ")})` : ""}`,
+    navigate: nav,
+    content: ctx.shell
+      ? `The operator is in a shell (tappaas ask): they were given the address of ${res.title}, ${nav.url ?? res.path}${filled}. Nothing changed. Tell them to open it in the console to fill in the rest, preview and apply it.`
+      : `Opened ${res.title} in the operator's console (${res.path})${filled}. Nothing changed: ` +
+      (res.kind === "wizard" ? "the operator fills in the rest there, previews and applies it. " : "") +
+      "Tell them in a sentence what is open and what to check before they apply; do not propose the same change as a job as well.",
   };
 }

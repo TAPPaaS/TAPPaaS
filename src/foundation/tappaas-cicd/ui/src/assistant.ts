@@ -5,14 +5,17 @@
 // the loop ends when the model answers without one (or after MAX_ROUNDS).
 //
 // It proposes and never applies: no tool writes, a tool name outside the
-// allow-list is refused and recorded, and a proposal is a card the operator
-// previews and runs through the job model under their own role. The system
-// prompt says so, with the site, the caller and the page in view, and the
-// managers' verbs in short form.
+// allow-list is refused and recorded, a proposal is a card the operator
+// previews and runs through the job model under their own role, and
+// open_console moves the operator's console to a wizard, filled in (a
+// `navigate` event the drawer follows). The system prompt says so, with the
+// site, the caller and the page in view, the tools by name, the console's
+// wizards, and the managers' verbs in short form.
 
 import { AssistantStatus, ChatFn, ChatMessage, ToolCall } from "./litellm";
 import { ToolContext, runTool, toolDefs, toolLines } from "./assistant-tools";
-import { Conversation, Conversations, Focus, Proposal, Step, Turn, trimHistory, userKey } from "./conversations";
+import { Conversation, Conversations, Focus, Opened, Proposal, Step, Turn, trimHistory, userKey } from "./conversations";
+import { catalogText } from "../web/src/consoletargets";
 import { Me } from "./access";
 import { Manifests } from "./manifest";
 
@@ -43,6 +46,7 @@ export type AssistantEvent =
   | { type: "step"; step: Step }
   | { type: "delta"; text: string }
   | { type: "proposal"; proposal: Proposal; conversation: string }
+  | ({ type: "navigate" } & Opened)
   | { type: "done"; turn: Turn }
   | { type: "error"; message: string };
 
@@ -85,13 +89,20 @@ export function systemPrompt(o: { site: { name: string; displayName: string | nu
     "",
     "Your tools, by their exact names. No other tool exists: any other name is refused.",
     o.tools,
-    "There is no tool per manager or per verb (no site_manager_add_node, no module_manager_modify). A manager's verb is only ever proposed: call propose_job with the command as an array of words, the manager first. Example, to give immich 10 GiB:",
-    '  propose_job({"argv": ["module-manager", "modify", "immich", "--set", "memory=10240"], "rationale": "immich uses 95% of its 8 GiB; 10 GiB restarts it once."})',
+    "There is no tool per manager or per verb (no site_manager_add_node, no module_manager_modify). A manager's verb is only ever proposed: call propose_job with the command as an array of words, the manager first. Example, to take immich to its new release:",
+    '  propose_job({"argv": ["module-manager", "update", "immich"], "rationale": "immich is a release behind; the update restarts it once."})',
+    "",
+    "Choosing the tool for a change: when the console has a wizard or form for it, call open_console, not propose_job. It has one for adding a node, an environment, a stack, a device, WiFi, a backup buddy, a satellite or a user, and for changing any field of a module (memory, cores, disk…) or of a zone: modify-module <module>, modify-zone <zone>. open_console opens that form in the operator's console, filled in, and they preview and apply it there. Read first what the form needs: for add-node nothing; for modify-module call module_show, so the values use the field's real name and unit. Call propose_job only for a verb the console has no form for (update, test, migrate…).",
+    "Example, the operator wants a new node:",
+    '  open_console({"target": "add-node"})',
+    "Example, the operator wants immich at 10 GiB: module_show(immich) lists the field memory in MiB, then",
+    '  open_console({"target": "modify-module immich", "values": {"memory": "10240"}})',
+    catalogText(),
     "",
     "How you work:",
     "- You read freely with your tools. Answer from what they return and say what you read; never invent a number, a name, a verb or a tool.",
-    "- You never run, apply or change anything, and no tool of yours can. When a change would help, call propose_job with the exact command and a one-sentence rationale: it becomes a card with Preview and Run in front of the operator. Only their click runs it, under their role, and Activity records it as from the assistant.",
-    "- A proposal changes nothing, so never ask whether to make one: when the operator asks for a change or a proposal, call propose_job in that same turn, with what is risky about it in the rationale.",
+    "- You never run, apply or change anything, and no tool of yours can. When a change would help and the console has no form for it, call propose_job with the exact command and a one-sentence rationale: it becomes a card with Preview and Run in front of the operator. Only their click runs it, under their role, and Activity records it as from the assistant.",
+    "- A proposal or an opened form changes nothing, so never ask whether to make one: when the operator asks for a change, call open_console or propose_job in that same turn, with what is risky about it said. Never write a tool call or its JSON in your answer: call the tool.",
     "- When asked to run, apply or do something (\"run it\", \"do it\", \"go ahead\"), do not pretend and do not call any tool to do it: say that you do not run changes yourself, that the card's Run button does, so the record shows a person decided; if there is no card yet, propose one.",
     "- Before proposing a change, read what it touches (the module's fields and their change class, the node's memory commitment) and give the consequence: in-place or a restart, downtime, what it commits.",
     "- Destructive verbs (delete, purge, retire, --remove) need the Installer role and the object's name typed; propose them only when asked, and say so.",
@@ -101,6 +112,60 @@ export function systemPrompt(o: { site: { name: string; displayName: string | nu
     "What propose_job may propose: the managers' verbs (W changes the site, D destructive; help(manager) gives the options and the README). These are commands for argv, never tool names:",
     o.manifest,
   ].join("\n");
+}
+
+// The JSON object that starts at text[i] ("{"), or null: braces balanced
+// outside strings.
+function objectAt(text: string, i: number): string | null {
+  let depth = 0;
+  let str = false;
+  for (let j = i; j < text.length; j++) {
+    const c = text[j];
+    if (str) {
+      if (c === "\\") j++;
+      else if (c === '"') str = false;
+    } else if (c === '"') str = true;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return text.slice(i, j + 1);
+  }
+  return null;
+}
+
+// The calls a model wrote in its answer instead of making them (hrossen's
+// model, after a read: "```json open_console({...})```"): an offered tool's
+// name with its JSON arguments, or a fenced object shaped as open_console's
+// {target, values} or propose_job's {argv, rationale}.
+export function writtenCalls(text: string, tools: string[]): { name: string; arguments: string }[] {
+  const out: { name: string; arguments: string }[] = [];
+  const add = (name: string, args: string) => {
+    try {
+      const v = JSON.parse(args) as unknown;
+      if (!v || typeof v !== "object" || Array.isArray(v)) return;
+      const a = JSON.stringify(v);
+      if (!out.some((x) => x.name === name && x.arguments === a)) out.push({ name, arguments: a });
+    } catch {
+      /* not a call */
+    }
+  };
+  const named = new RegExp(`\\b(${tools.join("|")})\\s*\\(\\s*\\{`, "g");
+  for (let m = named.exec(text); m; m = named.exec(text)) {
+    const o = objectAt(text, m.index + m[0].length - 1);
+    if (o) add(m[1], o);
+  }
+  if (out.length) return out;
+  for (const m of text.matchAll(/```(?:json)?\s*(\{)/g)) {
+    const o = objectAt(text, (m.index ?? 0) + m[0].length - 1);
+    if (!o) continue;
+    try {
+      const v = JSON.parse(o) as Record<string, unknown>;
+      const keys = Object.keys(v).sort().join(",");
+      if (tools.includes("open_console") && typeof v.target === "string" && (keys === "target" || keys === "target,values")) add("open_console", o);
+      else if (tools.includes("propose_job") && Array.isArray(v.argv) && (keys === "argv" || keys === "argv,rationale")) add("propose_job", o);
+    } catch {
+      /* not JSON */
+    }
+  }
+  return out;
 }
 
 // The history as sent: earlier tool results shortened, the oldest turns
@@ -177,7 +242,7 @@ export class Assistant {
     } else conv = this.d.store.create(user);
 
     const focus = parseFocus(input.focus);
-    const turn: Turn = { n: conv.turns.length + 1, at: new Date(this.now()).toISOString(), question: message, focus, steps: [], answer: "", proposals: [], model: status.model, error: null };
+    const turn: Turn = { n: conv.turns.length + 1, at: new Date(this.now()).toISOString(), question: message, focus, steps: [], answer: "", proposals: [], opened: [], model: status.model, error: null };
     emit({ type: "conversation", id: conv.id, turn: turn.n, model: status.model });
     const from = conv.messages.length;
     conv.messages.push({ role: "user", content: message });
@@ -186,6 +251,8 @@ export class Assistant {
       content: systemPrompt({ site: await this.d.site(), me, focus, manifest: shortManifest(this.d.tools.manifests()), tools: toolLines(this.d.tools), now: new Date(this.now()) }),
     };
     const tools = toolDefs(this.d.tools);
+    const ctx: ToolContext = me.via === "local" ? { ...this.d.tools, shell: true } : this.d.tools;
+    let tookWritten = false;
     try {
       for (let round = 0; ; round++) {
         if (round >= MAX_ROUNDS) {
@@ -197,21 +264,29 @@ export class Assistant {
         }
         const r = await this.d.chat({ model: status.model, messages: [system, ...historyFor(conv.messages, from)], tools }, (t) => emit({ type: "delta", text: t }), signal);
         if (r.content) turn.answer += (turn.answer && !turn.answer.endsWith("\n") ? "\n" : "") + r.content;
-        if (r.toolCalls.length === 0) {
+        // A call written as text is taken as made, once a turn: it is what
+        // the model meant, and its own next round answers from the result.
+        const written = r.toolCalls.length === 0 && !tookWritten ? writtenCalls(r.content, tools.map((t) => t.function.name)) : [];
+        if (r.toolCalls.length === 0 && written.length === 0) {
           conv.messages.push({ role: "assistant", content: r.content });
           break;
         }
-        const calls: ToolCall[] = r.toolCalls.map((c, i) => ({ ...c, id: c.id || `call-${turn.n}-${round}-${i}`, type: "function" }));
+        if (written.length) {
+          tookWritten = true;
+          this.d.log?.(`assistant: took ${written.map((w) => w.name).join(", ")} written as text for ${user} (conversation ${conv.id}, turn ${turn.n})`);
+        }
+        const made = written.length ? written.map((w) => ({ id: "", type: "function" as const, function: w })) : r.toolCalls;
+        const calls: ToolCall[] = made.map((c, i) => ({ ...c, id: c.id || `call-${turn.n}-${round}-${i}`, type: "function" }));
         conv.messages.push({ role: "assistant", content: r.content || null, tool_calls: calls });
         for (const c of calls) {
-          const out = await runTool(this.d.tools, c.function.name, c.function.arguments);
+          const out = await runTool(ctx, c.function.name, c.function.arguments);
           let args: Record<string, unknown> = {};
           try {
             args = JSON.parse(c.function.arguments || "{}") as Record<string, unknown>;
           } catch {
             args = { raw: c.function.arguments.slice(0, 200) };
           }
-          const step: Step = { tool: c.function.name, args, ok: out.ok, summary: out.summary, ...(out.refused ? { refused: true } : {}) };
+          const step: Step = { tool: c.function.name, args, ok: out.ok, summary: out.summary, ...(out.refused ? { refused: true } : {}), ...(written.length ? { written: true } : {}) };
           turn.steps.push(step);
           emit({ type: "step", step });
           if (out.refused) this.d.log?.(`assistant: refused tool '${c.function.name}' for ${user} (conversation ${conv.id}, turn ${turn.n})`);
@@ -221,6 +296,10 @@ export class Assistant {
             turn.proposals.push(p);
             emit({ type: "proposal", proposal: p, conversation: conv.id });
             content = `${content} (card ${p.id})`;
+          }
+          if (out.navigate) {
+            turn.opened!.push(out.navigate);
+            emit({ type: "navigate", ...out.navigate });
           }
           conv.messages.push({ role: "tool", tool_call_id: c.id, content });
         }

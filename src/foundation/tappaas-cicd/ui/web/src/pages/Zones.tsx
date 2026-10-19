@@ -103,6 +103,7 @@ function ZoneDetail({ z, schema, envNames, close }: { z: ZoneRead; schema: Recor
           label="Modify…"
           kind="primary"
           title={`Modify zone ${z.name}`}
+          opens={{ wizard: "modify-zone", arg: z.name }}
           steps={() => [
             fieldsStep({
               title: `The fields of ${z.name}`,

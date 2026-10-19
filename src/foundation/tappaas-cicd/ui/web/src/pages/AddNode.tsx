@@ -11,7 +11,8 @@
 import { useMemo, useState } from "react";
 import { useJob, useRead } from "../api";
 import { Output } from "../jobs";
-import { OperateButton, Step, StepView } from "../operate";
+import { OperateButton, Step, StepView, Values } from "../operate";
+import { useOpenedBy } from "../opener";
 import { SiteRead } from "../types";
 import { Dot, Link, canOperate, useMe } from "../ui";
 import { StepRow } from "./Setup";
@@ -65,11 +66,17 @@ function tail(text: string, n: number): string {
   return lines.slice(-n).join("\n");
 }
 
-export function AddNodeWizard({ onClose }: { onClose: () => void }) {
+// `prefill`: what the assistant opened it with (open_console add-node): the
+// node's name, and node add's options by name (mac, boot-disk, …).
+export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefill?: Values | null }) {
   const me = useMe();
   const site = useRead<SiteRead>("site").env?.data;
   const known = (site?.nodes ?? []).map((n) => n.name);
-  const [typed, setName] = useState<string | null>(null);
+  const [typed, setName] = useState<string | null>(typeof prefill?.name === "string" ? prefill.name : null);
+  const options = useMemo(() => {
+    const { name: _n, ...rest } = prefill ?? {};
+    return Object.keys(rest).length ? rest : undefined;
+  }, [prefill]);
   const name = typed ?? firstFreeNode(known);
   const [job, setJob] = useState<string | null>(null);
   const [ended, setEnded] = useState<boolean | null>(null);
@@ -101,9 +108,10 @@ export function AddNodeWizard({ onClose }: { onClose: () => void }) {
       },
       choices: { "--lan-mode": ["active-backup", "lacp"] },
       initial: { "--pxe": true, "--yes": true },
+      prefill: options,
       note: "There is no dry run: the preview shows the exact command. Apply starts one job that runs until the node has joined: it registers the node for a network install, opens the PXE window on the mothership (two hours unless --ttl says otherwise), waits for the machine to boot from the network, waits for the install, then joins it to the cluster and records it in site.json.",
     }),
-    [name, valid],
+    [name, valid, options],
   );
   const set: Step = useMemo(
     () => ({
@@ -254,11 +262,17 @@ export function AddNodeWizard({ onClose }: { onClose: () => void }) {
 
 export function AddNodeButton({ label = "Add a node…" }: { label?: string }) {
   const [open, setOpen] = useState(false);
-  if (!canOperate(useMe())) return null;
+  const [prefill, setPrefill] = useState<Values | null>(null);
+  const operator = canOperate(useMe());
+  useOpenedBy("add-node", undefined, (v) => {
+    setPrefill(v);
+    setOpen(true);
+  }, operator);
+  if (!operator) return null;
   return (
     <>
       <button className="btn" onClick={() => setOpen(true)}>{label}</button>
-      {open ? <AddNodeWizard onClose={() => setOpen(false)} /> : null}
+      {open ? <AddNodeWizard prefill={prefill} onClose={() => { setOpen(false); setPrefill(null); }} /> : null}
     </>
   );
 }
