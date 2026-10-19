@@ -20,7 +20,11 @@ import { Day2 } from "./Day2";
 export interface SetupDoc {
   steps: SetupStep[];
   complete: boolean;
-  inputs: { defaultEnv: string | null; dnsMode: string | null };
+  inputs: {
+    defaultEnv: string | null;
+    dnsMode: string | null;
+    wifi?: { zones: { name: string; type: string | null; state: string | null; ssid: string | null }[]; aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null };
+  };
   token: { active: boolean; present: boolean; identityInstalled: boolean };
 }
 export interface SecretStatus {
@@ -170,6 +174,23 @@ export function StepRow({ s, children, open: forced }: { s: SetupStep; children?
   );
 }
 
+// The WiFi step's way on: the Day 2 button of each active Client zone with no SSID.
+function WifiLinks({ doc }: { doc: SetupDoc | null }) {
+  const w = doc?.inputs.wifi;
+  if (!w) return null;
+  const served = new Set((w.aps ?? []).flatMap((a) => a.ssids.map((s) => s.zone)));
+  const missing = w.zones.filter((z) => z.type === "Client" && (z.state ?? "Active") === "Active" && !served.has(z.name));
+  if (missing.length === 0) return <p className="small">Change an SSID from <Link to="/setup/day2#wifi">Day 2</Link>.</p>;
+  return (
+    <p className="small toolbar">
+      {missing.map((z) => (
+        <Link key={z.name} to={`/setup/day2#wifi-${z.name}`} className="btn">Add WiFi for {z.name} →</Link>
+      ))}
+      <span className="muted">on Day 2: the access point, the SSID, its passphrase, then the reconcile.</span>
+    </p>
+  );
+}
+
 const mm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "module-manager", verb, ...extra });
 
 export type SetupTab = "Day 1" | "Day 2";
@@ -258,6 +279,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
     ),
     vpn: <OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />,
     stacks: <OperateButton label="Add a stack…" title="Add a stack" steps={addStackSteps()} />,
+    wifi: <WifiLinks doc={d ?? null} />,
   };
   for (const m of ["backup", "identity", "logging"]) {
     body[m] = (

@@ -253,7 +253,7 @@ ol.setup { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px
 .wizard-card-head { display: flex; gap: 8px; align-items: baseline; justify-content: space-between; }
 .wizard-card p { margin: 0; flex: 1; }
 .wizard-card-action { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
-.wizard-card:target { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.wizard-card-on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 .setup-check { margin: 10px 0 4px; }
 .setup-step { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; }
 .setup-done { border-left: 4px solid var(--pass); }

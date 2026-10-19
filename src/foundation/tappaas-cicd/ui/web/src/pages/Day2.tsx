@@ -4,7 +4,7 @@
 // StepView, Change → Preview → Apply → Result) over the schema-driven field
 // form where the verb has one. WiFi has a card per client zone (Wifi.tsx).
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { useRead } from "../api";
 import { OperateButton } from "../operate";
 import { canOperate, useMe } from "../ui";
@@ -18,9 +18,9 @@ import { BuddyButton } from "./Buddy";
 import { SatelliteButton } from "./Satellite";
 import { identitySteps } from "./Identity";
 
-export function WizardCard({ id, title, tag, children, action }: { id?: string; title: string; tag?: string; children: ReactNode; action: ReactNode }) {
+export function WizardCard({ id, title, tag, on, children, action }: { id?: string; title: string; tag?: string; on?: boolean; children: ReactNode; action: ReactNode }) {
   return (
-    <div className="wizard-card" id={id}>
+    <div className={`wizard-card${on ? " wizard-card-on" : ""}`} id={id}>
       <div className="wizard-card-head">
         <b>{title}</b>
         {tag ? <span className="class-tag">{tag}</span> : null}
@@ -31,9 +31,9 @@ export function WizardCard({ id, title, tag, children, action }: { id?: string; 
   );
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+function Group({ id, title, children }: { id?: string; title: string; children: ReactNode }) {
   return (
-    <section className="wizard-group">
+    <section className="wizard-group" id={id}>
       <h2>{title}</h2>
       <div className="wizard-cards">{children}</div>
     </section>
@@ -47,6 +47,12 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
   const site = useRead<SiteRead>("site").env?.data?.site;
   const aps = apsRead.env?.data ?? [];
   const wifi = wifiZones(zones.env?.data ?? [], aps);
+  // /setup/day2#wifi-<zone> (Day 1's WiFi step): that card, once it is there.
+  const target = window.location.hash.slice(1);
+  const there = target !== "" && (target === "wifi" ? wifi.length > 0 : wifi.some((z) => `wifi-${z.zone}` === target));
+  useEffect(() => {
+    if (there) document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [there, target]);
   return (
     <>
       {doc && !doc.complete ? (
@@ -80,9 +86,9 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
           Another site's PBS keeps an off-site copy — pulled through its own tunnel — or this site keeps theirs.
         </WizardCard>
       </Group>
-      <Group title="WiFi">
+      <Group title="WiFi" id="wifi">
         {wifi.map((z) => (
-          <WizardCard key={z.zone} id={`wifi-${z.zone}`} title={`${wifiVerb(z)} WiFi for ${z.zone}`} tag={z.type} action={<WifiButton z={z} aps={aps} site={site?.name ?? ""} />}>
+          <WizardCard key={z.zone} id={`wifi-${z.zone}`} on={target === `wifi-${z.zone}`} title={`${wifiVerb(z)} WiFi for ${z.zone}`} tag={z.type} action={<WifiButton z={z} aps={aps} site={site?.name ?? ""} />}>
             {z.ssids.length ? (
               <>Broadcast as {z.ssids.map((s) => `${s.name} on ${s.ap}${s.security ? ` (${s.security})` : ""}`).join(", ")}; devices that join land on VLAN {z.vlan ?? "?"}.</>
             ) : (
