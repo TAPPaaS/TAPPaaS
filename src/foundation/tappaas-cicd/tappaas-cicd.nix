@@ -228,12 +228,14 @@ in
     # hard crash exits before that — and the hourly no-op run then clobbers this
     # unit's Result back to success. OnFailure fires on ANY non-zero exit and
     # leaves a durable breadcrumb the operator/monitoring can see.
-    unitConfig.OnFailure = [ "update-tappaas-failure.service" "tappaas-security-scan.service" ];
+    unitConfig.OnFailure = [ "update-tappaas-failure.service" "tappaas-security-scan.service" "tappaas-switch-read.service" ];
     # ADR-011 §9: every sweep is followed by a security scan of what it left
     # running — after a failed sweep too, when the site runs something unplanned.
     # The scan skips itself unless this run wrote a sweep result (--if-new-sweep),
     # so the hourly no-op runs cost one stat.
-    unitConfig.OnSuccess = [ "tappaas-security-scan.service" ];
+    # #860: and by a read of the switches, so the switch-ports gate judges the
+    # ports as they are, not as somebody last read them.
+    unitConfig.OnSuccess = [ "tappaas-security-scan.service" "tappaas-switch-read.service" ];
     # The rebuild in ExecStartPre changes this very unit; a restart on switch
     # would kill the run that is doing the switch (ADR-017 Open).
     restartIfChanged = false;
@@ -517,6 +519,24 @@ in
       # A slow registry must not hold the unit for ever; the scan's own
       # timeouts are shorter.
       TimeoutStartSec = "2h";
+    };
+  };
+
+  # #860: read the switches after every sweep (OnSuccess/OnFailure of
+  # update-tappaas above), never by a timer of its own. `switch-controller
+  # interrogate --no-park` reads every controller and auto switch — it never
+  # parks and never applies — then the switch-ports gate runs over what was read,
+  # and the owner is mailed when it has a finding it did not have the last time.
+  # Like the sweep's own steps it runs in the operator's login shell (#767): the
+  # read logs in to the switch controller and validate reaches the nodes. A
+  # separate unit, so a switch that cannot be read never marks a sweep failed.
+  systemd.services.tappaas-switch-read = {
+    description = "TAPPaaS switch read — the switches as they are, after a sweep (#860)";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "/run/current-system/sw/bin/bash -l -c 'tappaas-switch-read.sh --if-new-sweep --notify'";
+      TimeoutStartSec = "15min";
     };
   };
 

@@ -76,6 +76,9 @@ gets an address, so the port is seen to work, and can do no harm. Its record is
   registration the node uplinks are such ports, and parking them would cut the
   nodes off. A disabled port and a port inside an aggregate are left too.
   `health-manager validate` (`switch-ports`) warns about every port left so.
+- `interrogate --no-park` reads and records, and parks nothing — the read after every
+  sweep (`tappaas-switch-read`, #860). Every read stamps the switch with `lastRead`,
+  which `list-ports --json` carries and the `switch-ports` gate turns into its age.
 - `update-port <switch> <port> --park` and `remove-port` park a port on the
   switch first — only that port is pushed, nothing else pending — and change
   its record only once the switch has it. On a manually managed switch the
@@ -95,7 +98,7 @@ gets an address, so the port is seen to work, and can do no harm. Its record is
 
 | Command | Purpose |
 |---------|---------|
-| `interrogate [--park-zone <zone>]` | Pull live config from controller/auto switches into `actual.json` (via the vendor plugin), and record a port with no record and no link as parked. A controller or switch that cannot be read is left unchanged, the plugin's reason is shown, and the command exits 1. |
+| `interrogate [--park-zone <zone>] [--no-park]` | Pull live config from controller/auto switches into `actual.json` (via the vendor plugin), stamp each switch read with `lastRead`, and record a port with no record and no link as parked (`--no-park`: read only, as after a sweep). A controller or switch that cannot be read is left unchanged, the plugin's reason is shown, and the command exits 1. |
 | `update-desired` | Compute `desired.json` from the actual topology + `zones.json`. |
 | `delta` | Show the desired-vs-actual VLAN differences per port. |
 | `apply` | Push the delta via the vendor plugin; the manual plugin prints the steps to apply by hand. |

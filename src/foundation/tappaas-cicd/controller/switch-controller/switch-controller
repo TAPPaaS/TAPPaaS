@@ -62,6 +62,8 @@ JSON=0
 # The zone a port TAPPaaS does not use is parked in (#853); --park-zone overrides.
 PARK_ZONE="iotLocal"
 PARK_REFUSED=0
+# interrogate --no-park (#860): read only — the post-sweep read never parks.
+NO_PARK=0
 # Port types that are VLAN trunks (carry the full active VLAN set).
 _is_trunk_type() { case " ${1} " in *" node "*|*" switch "*|*" ap "*|*" uplink "*) return 0;; *) return 1;; esac; }
 
@@ -99,9 +101,11 @@ Inventory (recorded in switch-configuration-actual.json):
 --json on list, list-ports and lag list prints the same facts as JSON.
 
 Reconciliation (five-verb provider contract, run in this order):
-  interrogate [--park-zone <zone>]
+  interrogate [--park-zone <zone>] [--no-park]
                           controller/auto switches -> actual.json (via plugin);
                           a port with no record and no link is recorded parked
+                          (not with --no-park: read only, as after a sweep);
+                          each switch read records when (lastRead)
   update-desired          actual topology + zones.json -> desired.json
   delta                   desired-vs-actual VLAN differences per port
   apply                   push delta via plugin (manual plugin prints steps)
@@ -133,7 +137,7 @@ lag: --ports= --apply --json
 list: --json
 list-ports: --json
 show:
-interrogate: --park-zone=
+interrogate: --park-zone= --no-park
 update-desired:
 delta:
 apply:
@@ -603,7 +607,7 @@ cmd_list_ports() {
     if [[ "${JSON}" == 1 ]]; then
         jq --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --arg sw "${target}" "${view}"'
             [.switches // {} | keys[] | select($sw == "" or . == $sw)] as $names
-            | [$names[] as $n | {switch: $n, ports: [ports_of($n; $active; $z[0])]}]' "${ACTUAL}"
+            | [$names[] as $n | {switch: $n, lastRead: (.switches[$n].lastRead // null), ports: [ports_of($n; $active; $z[0])]}]' "${ACTUAL}"
         return 0
     fi
     while IFS= read -r sw; do
@@ -730,9 +734,18 @@ cmd_interrogate() {
         info "  switch ${name}: uploaded $(echo "${state}" | jq -r '.ports // {} | length') port(s)"
     done < <(jq -r '.switches // {} | to_entries[] | select(.value.controller == null) | .key' "${ACTUAL}")
     mark_lag_leads
+    # When each switch was last read (#860): list-ports and the switch-ports
+    # gate say how old what they judge is.
+    jq_actual 'reduce $seen[] as $s (.; .switches[$s].lastRead = $t)' \
+        --argjson seen "${seen}" --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     # Ports that cannot be parked (no park zone) stay as they are: that refuses
     # the parking, not the read — reconcile still converges everything else.
-    park_unrecorded "${seen}" || PARK_REFUSED=1
+    # --no-park reads only: an unrecorded port is the switch-ports gate's to name.
+    if [[ "${NO_PARK}" == 1 ]]; then
+        debug "  --no-park: unrecorded ports are left as the switch has them"
+    else
+        park_unrecorded "${seen}" || PARK_REFUSED=1
+    fi
     if [[ "${failed}" -gt 0 ]]; then
         error "interrogate: ${failed} controller(s)/switch(es) could not be read"
         return 1
@@ -982,6 +995,7 @@ main() {
     for a in "$@"; do
         if [[ "${pz}" == 1 ]]; then PARK_ZONE="${a}"; pz=0
         elif [[ "${a}" == --json ]]; then JSON=1
+        elif [[ "${a}" == --no-park ]]; then NO_PARK=1
         elif [[ "${a}" == --park-zone ]]; then pz=1
         elif [[ "${a}" == --park-zone=* ]]; then PARK_ZONE="${a#--park-zone=}"
         else rest+=("${a}"); fi

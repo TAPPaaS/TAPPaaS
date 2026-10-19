@@ -36,7 +36,10 @@ const ports: SwitchPortRow[] = [
   row("11", { type: "node", desired: trunk, drift: "in-sync", link: "up" }),
   row("12", { type: "node", desired: trunk, drift: "in-sync", lagLead: "11", link: "up" }),
 ];
-const r = switchPortsResult([{ switch: SW, ports }]);
+// The read after the sweep (#860): nine hours before "now".
+const NOW = Date.parse("2026-10-19T12:00:00Z");
+const READ = "2026-10-19T03:00:00Z";
+const r = switchPortsResult([{ switch: SW, lastRead: READ, ports }], NOW);
 const on = (p: string) => (r.rows ?? []).filter((x) => x.subject?.kind === "port" && x.subject.name === `${SW}:${p}`);
 check(r.name === "switch-ports" && r.status === "warn", "a port to park or to set is a WARN, never a FAIL");
 check(on("8").length === 1 && /no record and not parked \(a link is up\)/.test(on("8")[0].text), "an unrecorded port that is not parked is named, with its link");
@@ -49,15 +52,25 @@ check(on("12").length === 0, "a LAG member following its lead is no finding (#85
 check(r.rows!.every((x) => x.status === "warn"), "every row is a warn");
 check(/1 port\(s\) unrecorded and not parked, 2 set otherwise than recorded/.test(r.detail), "the line counts both kinds");
 
-const ok = switchPortsResult([{ switch: SW, ports: [ports[0], ports[1], ports[7]] }]);
-check(ok.status === "pass" && /3 port\(s\) on 1 switch\(es\) as recorded, 1 parked/.test(ok.detail), "all as recorded: pass, with the parked count");
+const ok = switchPortsResult([{ switch: SW, lastRead: READ, ports: [ports[0], ports[1], ports[7]] }], NOW);
+check(ok.status === "pass" && /3 port\(s\) on 1 switch\(es\) as recorded, 1 parked, read 9 h ago/.test(ok.detail), "all as recorded: pass, with the parked count and the read's age");
+
+// #860: the gate judges the switch as last read — an old read, or none, is a finding.
+const sw = (x: { kind: string; name: string } | undefined) => x?.kind === "switch" && x.name === SW;
+const stale = switchPortsResult([{ switch: SW, lastRead: "2026-10-18T06:00:00Z", ports: [ports[0], ports[1]] }], NOW);
+check(stale.status === "warn" && (stale.rows ?? []).some((x) => sw(x.subject) && /last read 30 h ago/.test(x.text)), "a read 30 h old is a WARN on the switch");
+check(/1 switch\(es\) not read in 26 h/.test(stale.detail), "…counted in the line");
+const never = switchPortsResult([{ switch: SW, ports: [ports[0]] }], NOW);
+check(never.status === "warn" && (never.rows ?? []).some((x) => sw(x.subject) && /never read/.test(x.text) && /interrogate --no-park/.test(x.text)), "a switch never read is a WARN, with the verb that reads it");
+const fresh = switchPortsResult([{ switch: SW, lastRead: "2026-10-19T11:30:00Z", ports: [ports[0]] }], NOW);
+check(fresh.status === "pass" && /read 30 min ago/.test(fresh.detail), "a read half an hour old: pass");
 check(switchPortsResult([]).status === "skip", "no switch in the inventory: skip");
 check(switchPortsResult({}).status === "skip", "not a switch list: skip");
 
 // The gate runs switch-controller list-ports --json over the config dir it is given.
 const d = mkdtempSync(join(tmpdir(), "hm-sw-"));
 const bin = join(d, "switch-controller");
-writeFileSync(join(d, "out.json"), JSON.stringify([{ switch: SW, ports }]));
+writeFileSync(join(d, "out.json"), JSON.stringify([{ switch: SW, lastRead: new Date().toISOString(), ports }]));
 writeFileSync(bin, `#!/bin/sh\necho "$CONFIG_DIR $*" > "${d}/argv"\ncat "${d}/out.json"\n`);
 chmodSync(bin, 0o755);
 process.env.SWITCH_CONTROLLER_BIN = bin;

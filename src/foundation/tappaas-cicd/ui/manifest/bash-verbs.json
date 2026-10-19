@@ -728,7 +728,7 @@
        "interrogate"
       ]
      ],
-     "usage": "interrogate [--park-zone <zone>]",
+     "usage": "interrogate [--park-zone <zone>] [--no-park]",
      "note": null,
      "details": null,
      "positionals": [],
@@ -740,13 +740,21 @@
        "choices": null,
        "repeatable": false,
        "description": "The zone a port is parked in (default iotLocal)."
+      },
+      {
+       "flag": "--no-park",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Read only: park nothing (the read after every sweep, #860)."
       }
      ],
      "open": false,
      "effect": "write",
      "preview": {
       "kind": "none",
-      "touches": "reads the controllers and auto switches into switch-configuration-actual.json; records a port with no record and no link as parked (nothing reaches the switch)"
+      "touches": "reads the controllers and auto switches into switch-configuration-actual.json and stamps each with lastRead; records a port with no record and no link as parked, unless --no-park (nothing reaches the switch)"
      },
      "destructive": false,
      "destructiveWhen": [],

@@ -248,6 +248,15 @@ J
 plugin_apply() { cp "${SWITCH_DESIRED:-${CONFIG_DIR}/switch-configuration-desired.json}" "${CONFIG_DIR}/applied.json"; printf '%s' "$2" > "${CONFIG_DIR}/changes.json"; return "${STUB_APPLY_RC:-0}"; }
 EOF
 PLUGIN_DIR="${STUBDIR}" "${SM}" add-controller cpark --vendor stub --ip 1.2.3.5 >/dev/null 2>&1
+# interrogate --no-park (#860): the post-sweep read records the switch and parks nothing.
+out="$(PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate --no-park 2>&1)"; rc=$?
+ck "interrogate --no-park (rc)"           "0"      "${rc}"
+ck "…reads the switch"                    "7"      "$(jq -r '.switches.PSw.ports | length' "${ACT}")"
+ck "…parks nothing"                       ""       "$(jq -r '[.switches.PSw.ports | to_entries[] | select(.value.parked) | .key] | join(",")' "${ACT}")"
+ck "…and says nothing of parking"         "no"     "$(has "${out}" 'parked port(s)')"
+ck "…records when it read the switch"     "yes"    "$(jq -r '.switches.PSw.lastRead // "" | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z$")' "${ACT}" | sed 's/true/yes/; s/false/no/')"
+ck "list-ports --json carries lastRead"   "yes"    "$("${SM}" list-ports PSw --json | jq -r 'if .[0].lastRead then "yes" else "no" end')"
+ck "--no-park elsewhere refused (rc)"     "1"      "$(rc_of "${SM}" delta --no-park)"
 out="$(PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate 2>&1)"
 ck "interrogate parks the free ports"     "1,4"    "$(jq -r '[.switches.PSw.ports | to_entries[] | select(.value.parked) | .key] | join(",")' "${ACT}")"
 ck "…in iotLocal"                         "iotLocal" "$(jq -r '.switches.PSw.ports["1"].zone' "${ACT}")"

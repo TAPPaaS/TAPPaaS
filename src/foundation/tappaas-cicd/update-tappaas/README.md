@@ -208,6 +208,11 @@ site-manager validate                          # checks the schedule, prints the
   on success and on failure, writes `config/sbom/site.cdx.json` and `cve-status.json` and
   mails the owner when a fixable CVE or a failed scan is new (ADR-011;
   `health-manager report security`). Only a run that wrote a result triggers a scan.
+- **A read of the switches**: `tappaas-switch-read.service`, started the same way, runs
+  `switch-controller interrogate --no-park` (it reads every controller and auto switch, and
+  never parks or applies anything), then the `switch-ports` gate over what it read, and mails
+  the owner when the gate has a finding it did not have after the last read (#860). The
+  findings are kept in `config/switch-read.json`.
 
 ## Building
 

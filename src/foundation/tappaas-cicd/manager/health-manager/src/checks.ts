@@ -788,6 +788,9 @@ export function checkSiteTimezone(client: ClusterClient, configDir: string, defa
 //   - a port with no record that is not parked — on the controller's default
 //     profile anything plugged in reaches every network;
 //   - a port the switch sets otherwise than its record (parked or in use).
+// Both judge the switch as last read; the read after every sweep (#860,
+// tappaas-switch-read) keeps that recent, and a read older than a day — or none
+// — is a finding of its own: the rest then says little.
 // WARN, never FAIL: nothing is down, a port is open or not as recorded.
 export interface SwitchPortRow {
   port: string;
@@ -806,16 +809,37 @@ export interface SwitchPortRow {
   disabled?: boolean;
 }
 
-export function switchPortsResult(doc: unknown): CheckResult {
+export const SWITCH_READ_MAX_AGE_H = 26; // a nightly read, with slack
+
+function ageText(hours: number): string {
+  return hours < 1 ? `${Math.round(hours * 60)} min` : hours < 48 ? `${Math.round(hours)} h` : `${Math.round(hours / 24)} days`;
+}
+
+export function switchPortsResult(doc: unknown, now: number = Date.now()): CheckResult {
   if (!Array.isArray(doc)) return { name: "switch-ports", status: "skip", detail: "switch-controller list-ports gave no switch list" };
-  const switches = doc as { switch: string; ports: SwitchPortRow[] }[];
+  const switches = doc as { switch: string; lastRead?: string | null; ports: SwitchPortRow[] }[];
   if (switches.length === 0) return { name: "switch-ports", status: "skip", detail: "no switch in the inventory" };
   const rows: CheckRow[] = [];
   let total = 0;
   let parked = 0;
   let unrecorded = 0;
   let differ = 0;
+  let stale = 0;
+  let oldest: number | null = null;
   for (const s of switches) {
+    const read = s.lastRead ? Date.parse(s.lastRead) : NaN;
+    const subject: CheckSubject = { kind: "switch", name: s.switch };
+    if (Number.isNaN(read)) {
+      stale++;
+      rows.push({ status: "warn", subject, text: `${s.switch}: never read — its ports are judged on nothing; switch-controller interrogate --no-park` });
+    } else {
+      const h = (now - read) / 3_600_000;
+      oldest = oldest === null ? h : Math.max(oldest, h);
+      if (h > SWITCH_READ_MAX_AGE_H) {
+        stale++;
+        rows.push({ status: "warn", subject, text: `${s.switch}: last read ${ageText(h)} ago — the read after each sweep did not run; switch-controller interrogate --no-park` });
+      }
+    }
     for (const p of s.ports ?? []) {
       total++;
       if (p.parked) parked++;
@@ -834,13 +858,16 @@ export function switchPortsResult(doc: unknown): CheckResult {
       }
     }
   }
+  const asOf = oldest === null ? "" : `, read ${ageText(oldest)} ago`;
   if (rows.length === 0) {
-    return { name: "switch-ports", status: "pass", detail: `${total} port(s) on ${switches.length} switch(es) as recorded, ${parked} parked` };
+    return { name: "switch-ports", status: "pass", detail: `${total} port(s) on ${switches.length} switch(es) as recorded, ${parked} parked${asOf}` };
   }
+  const parts = [`${unrecorded} port(s) unrecorded and not parked`, `${differ} set otherwise than recorded`];
+  if (stale > 0) parts.push(`${stale} switch(es) not read in ${SWITCH_READ_MAX_AGE_H} h`);
   return {
     name: "switch-ports",
     status: "warn",
-    detail: `${unrecorded} port(s) unrecorded and not parked, ${differ} set otherwise than recorded (as last read) — switch-controller list-ports`,
+    detail: `${parts.join(", ")}${asOf} — switch-controller list-ports`,
     rows,
   };
 }
