@@ -15,6 +15,7 @@ import { ApIn, ZoneIn, wifiVerb, wifiZones } from "../wizards";
 import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
 import { WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
+import { SatelliteButton } from "./Satellite";
 
 export function WizardCard({ id, title, tag, children, action }: { id?: string; title: string; tag?: string; children: ReactNode; action: ReactNode }) {
   return (
@@ -54,6 +55,9 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
       <Group title="The site">
         <WizardCard title="Add a node" action={<AddNodeButton label="Add a node…" />}>
           A new machine becomes a Proxmox node of this site: declared, installed over the network, joined, its lan uplink set.
+        </WizardCard>
+        <WizardCard title="Add a satellite" action={<SatelliteButton />}>
+          A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
         </WizardCard>
       </Group>
       <Group title="Environments and stacks">

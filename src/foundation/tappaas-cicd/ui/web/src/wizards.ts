@@ -155,3 +155,48 @@ export function buddySpecs(kind: BuddyKind, name: string): { add: StepSpec & { o
     check: { bin: "backup-manager", verb: "peer check", words: ["peer", "check", kind], fixed: [name], initial: {} },
   };
 }
+
+// ── a satellite: a public IPv4 for a site without one (satellite/INSTALL.md) ─
+
+export const SATELLITE_ROLES: Record<string, string> = {
+  "reverse-proxy": "public HTTPS ingress: :443 and :80 passed through to Caddy at home",
+  "admin-vpn": "the relay for the admin VPN, so devices reach the site from anywhere",
+};
+
+export interface SatellitePlan {
+  address: string; // its public IPv4
+  environment: string;
+  roles: string[];
+  country: string; // ISO code: the evidence a backup copy on it is off-site
+  city: string;
+  instance: string; // empty: "satellite"; a second one needs its own name
+}
+
+const IPV4 = /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+// Addresses no VPS answers on from the internet.
+const PRIVATE = [/^10\./, /^127\./, /^0\./, /^169\.254\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[01])\./, /^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./, /^(22[4-9]|2[3-5]\d)\./];
+
+export function satelliteProblems(p: SatellitePlan): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!IPV4.test(p.address)) out.address = "its public IPv4, e.g. 203.0.113.7";
+  else if (PRIVATE.some((r) => r.test(p.address))) out.address = "a private or reserved address: a satellite needs one the internet reaches";
+  if (!p.environment) out.environment = "the environment it belongs to";
+  if (p.roles.length === 0) out.roles = "at least one role";
+  if (p.roles.some((r) => !(r in SATELLITE_ROLES))) out.roles = "reverse-proxy and/or admin-vpn";
+  if (p.country && !/^[A-Z]{2}$/.test(p.country)) out.country = "an ISO country code, e.g. FI";
+  if (p.instance && !/^[a-z][a-z0-9-]{0,30}$/.test(p.instance)) out.instance = "lower-case letters, digits and '-', e.g. satellite-hel1";
+  return out;
+}
+
+// module-manager add satellite: --environment, --instance, and the config
+// fields INSTALL.md gives (an open verb's further options, one per line).
+export function satelliteSpec(p: SatellitePlan): StepSpec {
+  const extra = [`--address ${p.address}`, `--roles ${JSON.stringify(p.roles)}`];
+  const loc: Record<string, string> = {};
+  if (p.country) loc.country = p.country;
+  if (p.city) loc.city = p.city;
+  if (Object.keys(loc).length) extra.push(`--physicalLocation ${JSON.stringify(loc)}`);
+  const initial: Values = { "--environment": p.environment, "@extra": extra };
+  if (p.instance) initial["--instance"] = p.instance;
+  return { bin: "module-manager", verb: "add", fixed: ["satellite"], initial };
+}

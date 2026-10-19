@@ -1,0 +1,84 @@
+{
+  "name": "module-manager",
+  "verbs": [
+    {
+      "verb": "add",
+      "keys": [
+        [
+          "add"
+        ]
+      ],
+      "usage": "add <module> [--environment ENV] [--instance NAME] [--allow-fork] [--reinstall] [--<field> <value>]...",
+      "note": null,
+      "details": null,
+      "positionals": [
+        {
+          "name": "module",
+          "optional": false,
+          "repeatable": false
+        }
+      ],
+      "options": [
+        {
+          "flag": "--environment",
+          "takesValue": true,
+          "arg": "ENV",
+          "choices": null,
+          "repeatable": false,
+          "description": "Target environment to install into (default: foundation→mgmt, else the org env)."
+        },
+        {
+          "flag": "--instance",
+          "takesValue": true,
+          "arg": "NAME",
+          "choices": null,
+          "repeatable": false,
+          "description": "Name the instance: config/NAME.json instead of the default <module>[-<environment>] — e.g. tappaas2 for one of several nodes (ADR-026 D6.4)."
+        },
+        {
+          "flag": "--allow-fork",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Permit forked/non-canonical module sources."
+        },
+        {
+          "flag": "--reinstall",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Delete the existing deployment first, then install fresh — the only way to replace a deployed config (#301, #453)."
+        },
+        {
+          "flag": "--config-dir",
+          "takesValue": true,
+          "arg": "DIR",
+          "choices": null,
+          "repeatable": false,
+          "description": "Config root (default: $TAPPAAS_CONFIG or /home/tappaas/config)."
+        },
+        {
+          "flag": "--json",
+          "takesValue": false,
+          "arg": null,
+          "choices": null,
+          "repeatable": false,
+          "description": "Machine-readable output (list / show / validate)."
+        }
+      ],
+      "open": true,
+      "effect": "write",
+      "preview": {
+        "kind": "none",
+        "touches": "installs the module: writes config/<module>.json, builds and starts its guest, wires the services it depends on"
+      },
+      "destructive": false,
+      "destructiveWhen": [],
+      "readWhen": [],
+      "writeWhen": [],
+      "disruptions": []
+    }
+  ]
+}

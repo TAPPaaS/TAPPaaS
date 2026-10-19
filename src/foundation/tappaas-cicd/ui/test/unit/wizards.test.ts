@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { buildArgv } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
-import { ApIn, BUDDY_KINDS, StepSpec, buddyNameProblem, buddySpecs, ZoneIn, defaultAp, defaultSsid, isPlaceholderSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { ApIn, BUDDY_KINDS, SatellitePlan, StepSpec, buddyNameProblem, buddySpecs, satelliteProblems, satelliteSpec, ZoneIn, defaultAp, defaultSsid, isPlaceholderSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -72,5 +72,17 @@ check(!pull.add.only.includes("--propagate") && !remote.add.only.includes("--pro
 check(JSON.stringify(buildArgv(pull.check, bmVerb("peer check"), {})) === JSON.stringify(["backup-manager", "peer", "check", "pull", "rossen-dk"]) && bmVerb("peer check").effect === "read", "the result: peer check pull <name>, a read");
 check(/dials/.test(BUDDY_KINDS.pull) && /serves/.test(BUDDY_KINDS.remote), "pull and remote said in one line each");
 check(buddyNameProblem("rossen-dk") === null && buddyNameProblem("Rossen_DK") === null && buddyNameProblem("rossen dk") !== null && buddyNameProblem("-x") !== null && buddyNameProblem("") !== null, "a buddy's name as peer add takes it: letters, digits, '-', '_'");
+
+// ── a satellite ───────────────────────────────────────────────────────
+const mmAdd = json<{ verbs: ManifestVerb[] }>("wizards/module-manager.json").verbs[0];
+const sat: SatellitePlan = { address: "37.27.5.237", environment: "mgmt", roles: ["reverse-proxy", "admin-vpn"], country: "FI", city: "Helsinki", instance: "" };
+const satSpec = satelliteSpec(sat);
+check(JSON.stringify(buildArgv(satSpec, mmAdd, satSpec.initial)) === JSON.stringify(["module-manager", "add", "satellite", "--environment", "mgmt", "--address", "37.27.5.237", "--roles", '["reverse-proxy","admin-vpn"]', "--physicalLocation", '{"country":"FI","city":"Helsinki"}']), "add satellite: --environment, then --address, --roles and --physicalLocation as INSTALL.md gives them");
+const sat2 = satelliteSpec({ ...sat, roles: ["reverse-proxy"], country: "", city: "", instance: "satellite-hel1" });
+check(JSON.stringify(buildArgv(sat2, mmAdd, sat2.initial)) === JSON.stringify(["module-manager", "add", "satellite", "--environment", "mgmt", "--instance", "satellite-hel1", "--address", "37.27.5.237", "--roles", '["reverse-proxy"]']), "a second satellite: its --instance; one role; no location given, none passed");
+check(Object.keys(satelliteProblems(sat)).length === 0, "a public IPv4, an environment, a role: nothing to fix");
+check(satelliteProblems({ ...sat, address: "10.0.0.5" }).address !== undefined && satelliteProblems({ ...sat, address: "100.64.1.1" }).address !== undefined && satelliteProblems({ ...sat, address: "1.2.3" }).address !== undefined, "a private, CGNAT or malformed address is refused");
+check(satelliteProblems({ ...sat, roles: [] }).roles !== undefined && satelliteProblems({ ...sat, roles: ["backup"] }).roles !== undefined, "no role, or backup (lockdown's, never at add), is refused");
+check(satelliteProblems({ ...sat, country: "Finland" }).country !== undefined, "the country is its ISO code");
 
 done("wizards");
