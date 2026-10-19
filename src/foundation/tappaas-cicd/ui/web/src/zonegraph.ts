@@ -80,16 +80,38 @@ export function pseudoPlace(p: string, zones: ZoneLike[] = []): { col: number; o
   return { col: INTERNET_COLUMN, order: p === "internet" ? 0 : 1 };
 }
 
-// The site's public address as site.json records it (network.publicIp):
-// the address itself, or "auto" (the provider's, found at run time and not
-// recorded), or nothing. The WAN zone's own ip is a placeholder the schema
-// asks for; nothing is built from it, so it is not shown as the WAN's address.
+// The site's public address: site.json's network.publicIp when it names one;
+// when it says "auto" (the provider's), the address the firewall's WAN held at
+// the last network update, unless that is private (the WAN is behind another
+// router, whose address the firewall cannot see). The WAN zone's own ip is a
+// placeholder the schema asks for; nothing is built from it, so it is never
+// shown as the WAN's address.
 export interface PublicAddress {
   address: string | null;
-  auto: boolean;
+  auto: boolean; // site.json says auto
+  wan: string | null; // the WAN's own address, when it is private
+  observed: string | null; // when the WAN's address was read
 }
-export function publicAddress(site: { network?: { publicIp?: string | null } } | null | undefined): PublicAddress {
+export interface HeldAddress {
+  ipv4?: string | null;
+  private?: boolean;
+  observed?: string | null;
+}
+export function publicAddress(site: { network?: { publicIp?: string | null } } | null | undefined, held?: HeldAddress | null): PublicAddress {
   const ip = site?.network?.publicIp?.trim() ?? "";
-  if (ip === "") return { address: null, auto: false };
-  return ip === "auto" ? { address: null, auto: true } : { address: ip, auto: false };
+  if (ip !== "" && ip !== "auto") return { address: ip, auto: false, wan: null, observed: null };
+  const auto = ip === "auto";
+  const v4 = auto ? held?.ipv4?.trim() || null : null;
+  if (!v4) return { address: null, auto, wan: null, observed: null };
+  const observed = held?.observed ?? null;
+  return held?.private ? { address: null, auto, wan: v4, observed } : { address: v4, auto, wan: null, observed };
+}
+
+// The address in words: short on a card, in full on a detail card.
+export function publicText(p: PublicAddress, short = false): string {
+  const when = p.observed ? ` on ${p.observed.slice(0, 10)}` : "";
+  if (p.address) return short ? `public ${p.address}` : p.auto ? `public address ${p.address} (auto: what the WAN held${when})` : `public address ${p.address}`;
+  if (p.wan) return short ? `WAN ${p.wan} (private)` : `public address: the router's in front of the WAN (the WAN holds ${p.wan}${when})`;
+  if (p.auto) return short ? "public address auto" : "public address: the provider's (auto), not read yet";
+  return short ? "" : "public address not recorded";
 }

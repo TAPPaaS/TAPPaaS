@@ -67,7 +67,8 @@ export const HELP: HelpSpec = {
       "(default <config>/console-setup-token), CONSOLE_JOURNAL_DAYS (default 7),\n" +
       "CONSOLE_LITELLM_KEY_FILE (the assistant's LiteLLM key; default /etc/secrets/litellm-svckey.env),\n" +
       "CONSOLE_LOKI_URL, CONSOLE_LOKI_PASSWORD_FILE (its logs tool), CONSOLE_REPO (the managers' READMEs;\n" +
-      "default /home/tappaas/TAPPaaS).",
+      "default /home/tappaas/TAPPaaS), TAPPAAS_WAN_ADDRESS_FILE (what the WAN held at the last\n" +
+      "network update; default /var/lib/tappaas/wan-address.json).",
   ],
 };
 

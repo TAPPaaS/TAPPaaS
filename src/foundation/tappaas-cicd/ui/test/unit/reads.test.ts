@@ -69,7 +69,8 @@ async function main(): Promise<void> {
   writeFileSync(join(cfgDir, "zones.json"), JSON.stringify({ _README: "doc block, not a zone", mgmt: { state: "Mandatory", vlantag: 0, ip: "10.0.0.0/24" }, rossen: { state: "Active", vlantag: 200 }, notes: { description: "no state, no vlantag: not a zone" } }));
   writeFileSync(join(cfgDir, "update-tappaas.failures"), readFileSync(join(process.env.CONSOLE_FIXTURES ?? "test/fixtures", "update-tappaas.failures"), "utf8"));
   const site = fakeSite();
-  const reads = new Reads({ configDir: cfgDir, stateDir, run: site.run, journalDays: 7 });
+  writeFileSync(join(cfgDir, "wan-address.json"), JSON.stringify({ ipv4: "8.8.4.4", prefix: 24, ipv6: [], private: false, observed: "2026-10-19T03:12:00+02:00" }));
+  const reads = new Reads({ configDir: cfgDir, stateDir, run: site.run, journalDays: 7, wanAddressFile: join(cfgDir, "wan-address.json") });
 
   // ── health ──────────────────────────────────────────────────────────
   const h = await reads.health.get();
@@ -118,6 +119,7 @@ async function main(): Promise<void> {
   check(a.value?.sweepActive === false, "…and whether a sweep runs now");
   const st = await reads.site.get();
   check((st.value?.site as { name?: string }).name === "rossen" && (st.value?.lastSweep as { ok?: boolean }).ok === true, "site: site show and the last sweep");
+  check((st.value?.wan as { ipv4?: string } | null)?.ipv4 === "8.8.4.4", "site: the address the WAN held at the last network update");
 
   // ── a failing source ─────────────────────────────────────────────────
   site.fail.add("environment-manager list");

@@ -111,8 +111,18 @@ export interface Activity {
   sweepActive: boolean;
 }
 
+// What the firewall's WAN held at the last network update (wan-address.json).
+export interface WanAddress {
+  ipv4: string | null;
+  prefix: number | null;
+  ipv6: string[];
+  private: boolean;
+  observed: string | null;
+}
+
 export interface SiteRead {
   site: { name?: string; displayName?: string; channel?: string; version?: string; network?: { publicIp?: string } } & Record<string, unknown>;
+  wan?: WanAddress | null;
   nodes: { name: string; storagePools?: string[] }[] | null;
   repositories: { name: string; branch?: string; url?: string }[] | null;
   lastSweep: { start_time?: string; end_time?: string; total?: number; succeeded?: number; failed?: number; ok?: boolean; reboot?: string; failed_modules?: string[] } | null;
@@ -242,6 +252,7 @@ export interface Topology {
     name: string | null;
     wan: {
       publicIp: string | null;
+      discovered?: WanAddress | null;
       ipv6: boolean;
       isp: string | null;
       zone: string | null;

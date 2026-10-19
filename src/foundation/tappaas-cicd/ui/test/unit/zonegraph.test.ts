@@ -4,7 +4,7 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { COLUMN_TITLES, ZoneLike, pseudoPlace, publicAddress, wanZone, zoneColumn, zoneEdges } from "../../web/src/zonegraph";
+import { COLUMN_TITLES, ZoneLike, pseudoPlace, publicAddress, publicText, wanZone, zoneColumn, zoneEdges } from "../../web/src/zonegraph";
 import { check, done } from "./check";
 
 const FIX = process.env.CONSOLE_FIXTURES ?? "test/fixtures";
@@ -45,5 +45,18 @@ check(pseudoPlace("all").after === undefined && pseudoPlace("internet").col === 
 check(publicAddress({ network: { publicIp: "auto" } }).auto && publicAddress({ network: { publicIp: "auto" } }).address === null, "auto: the provider's, no address to show");
 check(publicAddress({ network: { publicIp: " 198.51.100.7 " } }).address === "198.51.100.7", "a recorded address is shown");
 check(publicAddress({}).address === null && !publicAddress(null).auto && !publicAddress({ network: { publicIp: null } }).auto, "nothing recorded: nothing shown");
+
+// auto: what the firewall's WAN held at the last network update.
+const auto = { network: { publicIp: "auto" } };
+const held = { ipv4: "8.8.4.4", private: false, observed: "2026-10-19T03:12:00+02:00" };
+const seen = publicAddress(auto, held);
+check(seen.address === "8.8.4.4" && seen.auto && seen.wan === null, "auto: the WAN's address is the public one");
+check(publicText(seen, true) === "public 8.8.4.4" && publicText(seen) === "public address 8.8.4.4 (auto: what the WAN held on 2026-10-19)", "…in words, short and in full");
+const behind = publicAddress(auto, { ...held, ipv4: "192.168.1.20", private: true });
+check(behind.address === null && behind.wan === "192.168.1.20" && publicText(behind, true) === "WAN 192.168.1.20 (private)", "a private WAN address is not called public");
+check(/router's in front of the WAN/.test(publicText(behind)), "…the router in front of it holds the public one");
+check(publicAddress({ network: { publicIp: "203.0.113.9" } }, held).address === "203.0.113.9", "a recorded address wins over what the WAN held");
+check(publicAddress(auto, null).address === null && publicText(publicAddress(auto, null), true) === "public address auto", "auto, nothing read yet: says auto");
+check(publicAddress({}, held).address === null, "no publicIp at all: the WAN's address is not shown as public");
 
 done("zonegraph");
