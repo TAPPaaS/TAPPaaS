@@ -109,7 +109,9 @@ export function orderColumns(nodes: ColNode[], edges: ColEdge[], sweeps = 3): Ma
 // order, spread over the height of the tallest column (that one with `gapY`
 // between its cards): every card gets an equal share of the column's free
 // height, half of it above and half below. A card kept below another stays
-// `gapY` under it: the two take one share.
+// `gapY` under it: the two take one share. A column with a single card (or
+// pair) has nothing to spread: it moves to the mean height of its neighbours,
+// so the lines that pass its column do not all run behind it.
 export function columnPositions(nodes: ColNode[], edges: ColEdge[], gapX: number, gapY: number): Pos {
   const cols = [...new Set(nodes.map(colOf))].sort((a, b) => a - b);
   const order = orderColumns(nodes, edges);
@@ -140,6 +142,25 @@ export function columnPositions(nodes: ColNode[], edges: ColEdge[], gapX: number
       y += share - gapY;
     }
     x += colW + gapX;
+  }
+  // The lone blocks, against the spread positions of their neighbours.
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const spreadY = (id: string): number => pos.get(id)!.y + byId.get(id)!.h / 2;
+  const moved: [ColNode[], number][] = [];
+  for (const bs of blocks.values()) {
+    if (bs.length !== 1) continue;
+    const ids = new Set(bs[0].map((n) => n.id));
+    const nbrs = edges.flatMap((e) => (ids.has(e.source) && !ids.has(e.target) ? [e.target] : ids.has(e.target) && !ids.has(e.source) ? [e.source] : [])).filter((id) => byId.has(id) && !byId.get(id)!.head);
+    if (nbrs.length === 0) continue;
+    const want = nbrs.reduce((s, id) => s + spreadY(id), 0) / nbrs.length;
+    moved.push([bs[0], Math.min(Math.max(want - bs[0][0].h / 2, top), top + height - gapY - blockH(bs[0]))]);
+  }
+  for (const [b, y0] of moved) {
+    let y = y0;
+    for (const n of b) {
+      pos.set(n.id, { x: pos.get(n.id)!.x, y });
+      y += n.h + gapY;
+    }
   }
   return pos;
 }

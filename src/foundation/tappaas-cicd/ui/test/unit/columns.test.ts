@@ -81,8 +81,13 @@ check(cols.every((c) => ys(c).every((r) => r.y >= top - 1e-6 && r.y + r.h <= top
 const spread = (c: number): number[] => gaps(c).filter((_, i) => swept.get(c)![i + 1].after !== swept.get(c)![i].id);
 check(cols.every((c) => gaps(c).every((g) => g >= gapY - 1e-6) && spread(c).every((g) => Math.abs(g - spread(c)[0]) < 1e-6)), "each column evenly spread, never closer than the minimum gap");
 check(pos.get("all")!.y === pos.get("mgmt")!.y + 74 + gapY, "every zone stays right under mgmt (the minimum gap), not spread away");
+// A lone card: at the mean height of its neighbours (as they were spread),
+// so the DMZ is not in the way of every line into the WAN card.
+const dmzY = pos.get("dmz")!.y + 37;
 const wanY = pos.get("wan")!.y + 37;
-check(swept.get(zoneColumn({ type: "WAN" }))!.length > 1 || Math.abs(wanY - (top + height / 2)) < 1e-6, "a lone card sits in the middle of the height");
+check(swept.get(5)!.length === 1 && swept.get(6)!.length === 1, "the DMZ and the WAN are alone in their columns");
+check(Math.abs(dmzY - wanY) > 37, `the DMZ card is not level with the WAN card (${Math.round(dmzY)} vs ${Math.round(wanY)})`);
+check(cols.every((c) => ys(c).every((r) => r.y >= top - 1e-6 && r.y + r.h <= top + height + 1e-6)), "…and every card still within the height");
 check(cols.every((c) => new Set(swept.get(c)!.map((n) => pos.get(n.id)!.x + n.w / 2)).size === 1), "a column's cards share its centre line");
 
 // Where the lines leave and enter.
