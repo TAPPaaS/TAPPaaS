@@ -14,6 +14,8 @@ export interface GNode {
   onClick?: () => void;
   className?: string;
   accent?: string; // the card's left border colour
+  col?: number; // when every node has one: laid out in columns, left to right, instead of by dagre
+  order?: number; // the row within its column (ascending), then the id
 }
 
 export interface GEdge {
@@ -63,6 +65,26 @@ export interface TreeGrid {
   cols: number;
 }
 
+// Columns: each node names its column; a column is as wide as its widest
+// card, its cards stacked in their order. The lines between them are drawn by
+// React Flow as usual (not as a tree's bus).
+export function columnPositions(nodes: GNode[], gapX: number, gapY: number): Map<string, { x: number; y: number }> {
+  const cols = [...new Set(nodes.map((n) => n.col ?? 0))].sort((a, b) => a - b);
+  const pos = new Map<string, { x: number; y: number }>();
+  let x = 10;
+  for (const c of cols) {
+    const members = nodes.filter((n) => (n.col ?? 0) === c).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id));
+    const colW = Math.max(0, ...members.map((n) => n.w));
+    let y = 10;
+    for (const n of members) {
+      pos.set(n.id, { x: x + (colW - n.w) / 2, y });
+      y += n.h + gapY;
+    }
+    x += colW + gapX;
+  }
+  return pos;
+}
+
 function gridPositions(nodes: GNode[], grid: TreeGrid, gapX: number, gapY: number): Map<string, { x: number; y: number }> {
   const root = nodes.find((n) => n.id === grid.root);
   const kids = nodes.filter((n) => n.id !== grid.root);
@@ -89,7 +111,9 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
   const ids = new Set(nodes.map((n) => n.id));
   const live = edges.filter((e) => ids.has(e.source) && ids.has(e.target) && e.source !== e.target);
   live.forEach((e, i) => g.setEdge(e.source, e.target, {}, `e${i}`));
-  const fixed = grid ? gridPositions(nodes, grid, nodesep, ranksep) : null;
+  const columns = !grid && nodes.length > 0 && nodes.every((n) => n.col !== undefined);
+  const fixed = grid ? gridPositions(nodes, grid, nodesep, ranksep) : columns ? columnPositions(nodes, ranksep, nodesep) : null;
+  const bus = !!grid; // a tree's lines; columns and dagre keep React Flow's own
   if (!fixed) dagre.layout(g);
   const vertical = rankdir === "TB";
   return {
@@ -102,9 +126,9 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
       id: `e${i}-${e.source}-${e.target}`,
       source: e.source,
       target: e.target,
-      targetHandle: fixed ? "l" : undefined,
+      targetHandle: bus ? "l" : undefined,
       label: e.label,
-      type: fixed ? "bus" : "default",
+      type: bus ? "bus" : "default",
       style: { stroke: e.color ?? "#94a3b8", strokeWidth: 1.6, strokeDasharray: e.dashed ? "5 4" : undefined },
       labelStyle: { fontSize: 11, fill: "#475569" },
       labelBgStyle: { fill: "#f8fafc" },

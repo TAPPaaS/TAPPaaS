@@ -338,6 +338,7 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .zcard-off { opacity: .5; }
 .zcard-on { box-shadow: 0 0 0 2px var(--accent); }
 .zcard-pseudo { background: #f1f5f9; border-style: dashed; text-align: center; }
+.zcard-head { background: transparent; border: 0; box-shadow: none; text-align: center; }
 .zfields td { font-size: 12px; }
 
 /* ── identity (Identity.tsx) ────────────────────────────────────────── */

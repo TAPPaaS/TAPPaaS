@@ -46,6 +46,21 @@ const reconcile = net("network-manager reconcile", "reconcile", { note: "The pre
 
 const live = (z: ZoneRead) => z.state === "Active" || z.state === "Mandatory" || z.state === "Manual";
 
+// The columns of the zones graph: trust runs left to right. Overlays (no
+// tier) first, then tier 0 to 4, the internet (which counts as tier 5, with
+// the WAN), and the tier-6 zones that reach nothing last.
+const COLUMN_TITLES: Record<number, string> = { 0: "overlays", 1: "tier 0 · management", 2: "tier 1 · services", 3: "tier 2 · trusted clients", 4: "tier 3", 5: "tier 4 · DMZ", 6: "internet · tier 5", 7: "tier 6 · no egress" };
+// A zone with no tier recorded (an inactive one, or one authored the low-level
+// way) takes its type's usual tier, as the archetypes give it.
+const TYPE_TIER: Record<string, number> = { Management: 0, Service: 1, Client: 2, Guest: 3, IoT: 3, DMZ: 4 };
+export function zoneColumn(z: Pick<ZoneRead, "type" | "tier">): number {
+  if (z.type === "WAN") return 6;
+  if (z.type === "Overlay") return 0;
+  const tier = typeof z.tier === "number" ? z.tier : TYPE_TIER[z.type ?? ""];
+  if (tier === undefined) return 0;
+  return tier >= 6 ? 7 : tier + 1;
+}
+
 export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected: string | null): { nodes: GNode[]; edges: GEdge[] } {
   const names = new Set(zones.map((z) => z.name));
   const edges: GEdge[] = [];
@@ -65,6 +80,8 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
     id: z.name,
     w: 190,
     h: 74,
+    col: zoneColumn(z),
+    order: z.vlantag ?? 0,
     accent: TYPE_COLOR[z.type ?? ""] ?? "#94a3b8",
     className: `zcard${live(z) ? "" : " zcard-off"}${selected === z.name ? " zcard-on" : ""}`,
     onClick: () => pick(z.name),
@@ -81,7 +98,11 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
     ),
   }));
   for (const p of pseudo) {
-    nodes.push({ id: p, w: 130, h: 44, className: "zcard-pseudo", content: <div className="cf-title">{PSEUDO[p] ?? p}</div> });
+    nodes.push({ id: p, w: 130, h: 44, col: 6, order: p === "internet" ? 0 : 1, className: "zcard-pseudo", content: <div className="cf-title">{PSEUDO[p] ?? p}</div> });
+  }
+  // A title above each column in use.
+  for (const c of new Set(nodes.map((n) => n.col ?? 0))) {
+    nodes.push({ id: `col-${c}`, w: 190, h: 22, col: c, order: -1, className: "zcard-head", content: <div className="cf-sub">{COLUMN_TITLES[c] ?? `column ${c}`}</div> });
   }
   return { nodes, edges };
 }
