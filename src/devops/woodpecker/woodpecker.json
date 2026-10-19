@@ -2,7 +2,7 @@
   "description": "Woodpecker CI — runs the pipelines of the site's Forgejo repositories, sign-in with Forgejo.",
   "displayName": "Woodpecker CI",
   "kind": "vm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "stack": "devops",
   "releaseDate": "2026-10-18",
   "maintainer": "@larsrossen",
@@ -16,6 +16,7 @@
     "templates:nixos",
     "backup:vm",
     "network:proxy",
+    "identity:accessControl",
     "network:rules",
     "forgejo:oauth"
   ],
@@ -37,7 +38,10 @@
       "bridge0": "lan"
     },
     "network:proxy": {
-      "proxyPort": 8000
+      "proxyPort": 8000,
+      "proxyAllowedZones": [
+        "internet"
+      ]
     },
     "forgejo:oauth": {
       "oauthRedirectPaths": [

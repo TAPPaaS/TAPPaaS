@@ -79,12 +79,20 @@ else
     fail "a pipeline container reaches the site's network (${_probe//$'\n'/ })"
 fi
 
-# 6. Published: through the firewall's Caddy.
+# 6. Published through the firewall's Caddy, behind the Authentik gate: an
+#    anonymous request ends at Authentik's login, never at Woodpecker.
 PUB="$(remote "jq -r 'select(.proxyPublished != false) | .proxyDomain // empty' /etc/nixos/woodpecker.json")"
 FW4="$(getent ahostsv4 firewall.mgmt.internal | awk '{print $1; exit}')"
 if [[ -n "${PUB}" && -n "${FW4}" ]]; then
+    _body="$(curl -sL --max-redirs 8 --max-time 20 --resolve "${PUB}:443:${FW4}" "https://${PUB}/" 2>/dev/null)"
     _c="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 --resolve "${PUB}:443:${FW4}" "https://${PUB}/healthz")"
-    [[ "${_c}" == 2* ]] && pass "https://${PUB}/healthz answers ${_c} through Caddy" || fail "https://${PUB}/healthz answers ${_c}"
+    if grep -qi "authentik" <<<"${_body}"; then
+        pass "https://${PUB}/ asks an anonymous visitor to sign in with Authentik"
+    elif [[ "${_c}" == 2* ]]; then
+        fail "https://${PUB}/ reaches Woodpecker without the Authentik gate (healthz ${_c})"
+    else
+        fail "https://${PUB}/ neither shows the Authentik login nor answers (healthz ${_c})"
+    fi
 else
     skipt "not published — checked on the VM only"
 fi

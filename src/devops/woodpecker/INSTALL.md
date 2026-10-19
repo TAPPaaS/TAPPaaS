@@ -20,13 +20,14 @@ install-module.sh woodpecker
 
 This creates the VM, applies its NixOS configuration (Docker, the server and the agent),
 registers Woodpecker with Forgejo as an OAuth2 application, and publishes
-`woodpecker.<domain>` to the site's internal zones.
+`woodpecker.<domain>` behind the Authentik gate.
 
 ## Post-install
 
 1. Make yourself an administrator: `module-manager module modify woodpecker --set 'woodpeckerAdmins=["<forgejo username>"]'`.
-2. Open `https://woodpecker.<domain>` and **Login** — Forgejo asks once to authorise
-   Woodpecker.
+2. Open `https://woodpecker.<domain>` (or its tile in Authentik), sign in with Authentik, and
+   **Login** — Forgejo asks each person once to authorise Woodpecker to act for them (it lists
+   their repositories and sets the webhooks as them).
 3. **Add repository**, pick one, and push a `.woodpecker/ci.yaml`, for example:
 
    ```yaml
@@ -50,7 +51,7 @@ registers Woodpecker with Forgejo as an OAuth2 application, and publishes
 | `/authorize` | hands over to Forgejo |
 | privileged plugins | none |
 | a pipeline container | reaches the internet and Forgejo; refused by Forgejo's VM, which the VM reaches |
-| `https://woodpecker.<domain>/healthz` | 200 through Caddy |
+| `https://woodpecker.<domain>/` | an anonymous visitor gets the Authentik login |
 
 ## Troubleshooting
 
