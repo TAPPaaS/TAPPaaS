@@ -870,6 +870,64 @@ class TestRecoveryFlowEnsure(unittest.TestCase):
             mgr.recovery_flow_ensure()
 
 
+
+class TestBeforeFilesApi(unittest.TestCase):
+    """#858: before 2025.12 Authentik has no /admin/file/. A site there must
+    still update — no icon, no logo upload — or it can never climb to 2025.12."""
+
+    OLD = {("GET", "/admin/version/"): {"version_current": "2025.6.4"}}
+
+    def _no_file_calls(self, calls):
+        self.assertFalse([c for c in calls if c.get("path", c.get("p")) == "/admin/file/"])
+
+    def test_oidc_app_on_an_old_server_gets_no_icon(self):
+        routes = {**TestOidcAppEnsure()._update_routes([]), **self.OLD}
+        mgr, calls = _make_manager(routes)
+        mgr.oidc_app_ensure(OidcApp(name="Immich", slug="immich",
+                                    redirect_uris=["https://immich.test/auth/login"], icon="auto"))
+        app = next(c for c in calls if c["method"] == "PATCH" and c["path"] == "/core/applications/immich/")
+        self.assertNotIn("meta_icon", app["json"])
+        self.assertEqual(app["json"]["name"], "Immich")
+        self._no_file_calls(calls)
+
+    def test_proxy_app_on_an_old_server_gets_no_icon(self):
+        mgr, calls = _make_manager({
+            ("GET", "/flows/instances/"): {"results": [{"pk": "FLOW1"}]},
+            ("GET", "/providers/proxy/"): {"results": []},
+            ("POST", "/providers/proxy/"): {"pk": 42},
+            ("GET", "/core/applications/"): {"results": []},
+            ("POST", "/core/applications/"): {"pk": "APP-UUID-1"},
+            **self.OLD,
+        })
+        mgr.proxy_app_ensure(ProxyApp(name="Open WebUI", slug="openwebui",
+                                      external_host="https://openwebui.test", icon="auto"))
+        app_post = next(c for c in calls if c["method"] == "POST" and c["path"] == "/core/applications/")
+        self.assertNotIn("meta_icon", app_post["json"])
+        self._no_file_calls(calls)
+
+    def test_brand_on_an_old_server_gets_its_title_and_heading_only(self):
+        mgr, calls = TestBrandEnsure()._mgr(dict(TestBrandEnsure.BRAND), [])
+        mgr._version = "2025.6.4"  # noqa: SLF001
+        changed = mgr.brand_ensure("rossen")
+        brand_patch = next(c for c in calls if c["m"] == "PATCH" and c["p"] == "/core/brands/B/")
+        self.assertEqual(brand_patch["json"], {"branding_title": "rossen"})
+        flow_patch = next(c for c in calls if c["m"] == "PATCH" and c["p"].startswith("/flows/instances/"))
+        self.assertEqual(flow_patch["json"], {"title": "Sign in"})
+        self.assertFalse([c for c in calls if c["p"] == "/admin/file/"])
+        self.assertTrue(changed)
+
+    def test_from_2025_12_the_icon_is_uploaded(self):
+        mgr, calls = TestBrandEnsure()._mgr(dict(TestBrandEnsure.BRAND), [])
+        mgr._version = "2025.12.0"  # noqa: SLF001
+        self.assertTrue(mgr.app_icon_ensure("immich", "Immich", "auto").startswith("tappaas-app-immich-"))
+        self.assertTrue([c for c in calls if c["m"] == "POST" and c["p"] == "/admin/file/"])
+
+    def test_an_unreadable_version_is_taken_as_new(self):
+        mgr, _ = TestBrandEnsure()._mgr(dict(TestBrandEnsure.BRAND), [])
+        mgr._version = ""  # noqa: SLF001 — /admin/version/ did not answer
+        self.assertTrue(mgr.has_files_api())
+
+
 if __name__ == "__main__":
     unittest.main()
 

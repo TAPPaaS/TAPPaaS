@@ -270,6 +270,16 @@ class AuthentikManager:
             return tuple(int(p) for p in (v.split(".") + ["0", "0"])[:3] if p.isdigit())
         return key(have) >= key(version)
 
+    def has_files_api(self) -> bool:
+        """Whether the server has the files API (/admin/file/), new in 2025.12.
+
+        App icons and the site's logo are uploaded through it. Older releases
+        have none, and a site walks up one release line per update (#858): there
+        the upload is skipped, and the next update after 2025.12 does it. A
+        version that cannot be read is taken as new, so a site on a current
+        release never loses its icons over a failed version lookup."""
+        return self.server_version() is None or self._at_least("2025.12")
+
     def _get_json(self, path: str, **params) -> dict:
         r = self.client.get(path, params=params)
         r.raise_for_status()
@@ -406,8 +416,8 @@ class AuthentikManager:
             "meta_description": app.description,
             "meta_launch_url": app.launch_url or app.external_host,
         }
-        if app.icon is not None:
-            app_body["meta_icon"] = self.app_icon_ensure(app.slug, app.name, app.icon)
+        if app.icon is not None and (icon_name := self.app_icon_ensure(app.slug, app.name, app.icon)):
+            app_body["meta_icon"] = icon_name
         if existing_app:
             application_pk = existing_app["pk"]
             # Authentik's /core/applications/<x>/ detail endpoint routes on
@@ -839,13 +849,17 @@ class AuthentikManager:
                              data={"name": name, "usage": usage})
         r.raise_for_status()
 
-    def app_icon_ensure(self, slug: str, name: str, icon: tuple[bytes, str] | str) -> str:
+    def app_icon_ensure(self, slug: str, name: str, icon: tuple[bytes, str] | str) -> str | None:
         """Upload an app tile's icon once; return the file name for meta_icon.
 
         ``icon`` is (content, extension), or "auto" for the generated tile. The
         name carries a content hash, so a changed icon is a new file (no stale
-        browser cache) and an unchanged one is not uploaded again.
+        browser cache) and an unchanged one is not uploaded again. None on a
+        server without the files API (before 2025.12, #858): the tile keeps the
+        icon it has.
         """
+        if not self.has_files_api():
+            return None
         data, ext = (app_icon_svg(name).encode(), "svg") if icon == "auto" else icon  # type: ignore[misc]
         fname = f"tappaas-app-{slug}-{hashlib.sha256(data).hexdigest()[:12]}.{ext}"
         if fname not in self.file_names():
@@ -860,10 +874,20 @@ class AuthentikManager:
         ``logo``/``logo_dark`` are the site's own logo as (content, extension);
         without them the logo is generated from the name. One file serves both
         themes; with ``logo_dark`` too, Authentik picks by the viewer's theme.
-        Returns what changed (empty: already so).
+        Returns what changed (empty: already so). Before 2025.12 there is no
+        files API to upload the logo through (#858): the title and the flow
+        heading are set, the logo and the icon wait for a later release.
         """
         changed: list[str] = []
         brand = self.brand_default()
+        if not self.has_files_api():
+            want = {"branding_title": site_name}
+            delta = {k: v for k, v in want.items() if brand.get(k) != v}
+            if delta:
+                self._patch_json(f"/core/brands/{brand['brand_uuid']}/", delta)
+                changed.extend(f"brand {k} → {v}" for k, v in delta.items())
+            changed.extend(self._flow_title_ensure(brand, flow_title))
+            return changed
         if logo is None:
             variants = {t: (site_logo_svg(site_name, t).encode(), "svg") for t in LOGO_COLOURS}
         elif logo_dark is None:
@@ -892,14 +916,19 @@ class AuthentikManager:
         if delta:
             self._patch_json(f"/core/brands/{brand['brand_uuid']}/", delta)
             changed.extend(f"brand {k} → {v}" for k, v in delta.items())
-        flow_pk = brand.get("flow_authentication")
-        if flow_pk:
-            rows = self._get_json("/flows/instances/", page_size=1000).get("results", [])
-            flow = self._find_by_field(rows, "pk", flow_pk)
-            if flow and flow.get("title") != flow_title:
-                self._patch_json(f"/flows/instances/{flow['slug']}/", {"title": flow_title})
-                changed.append(f"flow '{flow['slug']}' title → {flow_title}")
+        changed.extend(self._flow_title_ensure(brand, flow_title))
         return changed
+
+    def _flow_title_ensure(self, brand: dict, flow_title: str) -> list[str]:
+        flow_pk = brand.get("flow_authentication")
+        if not flow_pk:
+            return []
+        rows = self._get_json("/flows/instances/", page_size=1000).get("results", [])
+        flow = self._find_by_field(rows, "pk", flow_pk)
+        if flow and flow.get("title") != flow_title:
+            self._patch_json(f"/flows/instances/{flow['slug']}/", {"title": flow_title})
+            return [f"flow '{flow['slug']}' title → {flow_title}"]
+        return []
 
     def brand_set_recovery_flow(self, flow_pk: str) -> tuple[bool, str]:
         """Point the default brand's flow_recovery at ``flow_pk``.
@@ -1198,8 +1227,8 @@ class AuthentikManager:
         }
         if app.launch_url:
             app_body["meta_launch_url"] = app.launch_url
-        if app.icon is not None:
-            app_body["meta_icon"] = self.app_icon_ensure(app.slug, app.name, app.icon)
+        if app.icon is not None and (icon_name := self.app_icon_ensure(app.slug, app.name, app.icon)):
+            app_body["meta_icon"] = icon_name
         if existing_app:
             application_pk = existing_app["pk"]
             self._patch_json(f"/core/applications/{existing_app['slug']}/", app_body)
