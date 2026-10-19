@@ -15,6 +15,7 @@ from opnsense_controller.dual_stack import (
     parse_overview,
     v6_for,
     v6_on_network,
+    wan_address,
     with_v6,
 )
 
@@ -122,6 +123,30 @@ class TestAaaa(unittest.TestCase):
     def test_an_aaaa_record_is_not_read_as_an_a(self):
         # An AAAA whose address happens to match nothing must not seed another AAAA.
         self.assertFalse(aaaa_plan([_aaaa("x", server="10.6.0.1", ours=False)], IFACES))
+
+
+class TestWanAddress(unittest.TestCase):
+    """The WAN's addresses: the site's public address when site.json says auto."""
+
+    def _wan(self, v4, v6=()):
+        return parse_overview(ROWS + [{"identifier": "wan", "ipv4": [{"ipaddr": v4}] if v4 else None,
+                                       "ipv6": [{"ipaddr": a} for a in v6]}])
+
+    def test_public(self):
+        w = wan_address(self._wan("8.8.4.4/24", ["2a13:e747:a210:8200::5/64", "fe80::1/64"]))
+        self.assertEqual(w, {"ipv4": "8.8.4.4", "prefix": 24, "ipv6": ["2a13:e747:a210:8200::5"], "private": False})
+
+    def test_behind_another_router(self):
+        self.assertTrue(wan_address(self._wan("192.168.1.20/24"))["private"])
+        self.assertTrue(wan_address(self._wan("100.64.3.9/10"))["private"])  # carrier-grade NAT
+
+    def test_ipv6_only(self):
+        w = wan_address(self._wan(None, ["2a13:e747:a210:8200::5/64"]))
+        self.assertEqual((w["ipv4"], w["prefix"], w["private"]), (None, None, False))
+
+    def test_none(self):
+        self.assertIsNone(wan_address(IFACES))                 # no wan row
+        self.assertIsNone(wan_address(self._wan(None, ["fe80::1/64"])))  # link-local only
 
 
 if __name__ == "__main__":

@@ -64,6 +64,25 @@ def read_interfaces(client) -> list[IfaceAddr]:
     return parse_overview(((r.get("result") or {}).get("response") or {}).get("rows") or [])
 
 
+def wan_address(ifaces: list[IfaceAddr]) -> dict | None:
+    """The addresses the WAN interface holds, or None when it holds none.
+
+    What the site's public address is when site.json says "auto" (the
+    provider's, taken by DHCP). `private` marks a WAN behind another router (a
+    private or carrier-grade NAT address): the public address is then that
+    router's, which the firewall cannot see.
+    """
+    w = next((i for i in ifaces if i.identifier == "wan"), None)
+    if w is None or (w.v4 is None and not w.v6):
+        return None
+    return {
+        "ipv4": str(w.v4.ip) if w.v4 else None,
+        "prefix": w.v4.network.prefixlen if w.v4 else None,
+        "ipv6": [str(a.ip) for a in w.v6],
+        "private": bool(w.v4 and not w.v4.ip.is_global),
+    }
+
+
 def _v6_networks(cidr: str, ifaces: list[IfaceAddr]) -> list[str]:
     try:
         net = ipaddress.IPv4Network(cidr, strict=False)

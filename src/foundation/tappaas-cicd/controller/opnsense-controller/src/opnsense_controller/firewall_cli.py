@@ -9,6 +9,7 @@ Usage:
     opnsense-firewall list-rules
     opnsense-firewall delete-rule --description "Allow HTTPS"
     opnsense-firewall apply
+    opnsense-firewall wan --json
 """
 
 import argparse
@@ -18,6 +19,7 @@ import sys
 
 from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
+from .dual_stack import read_interfaces, wan_address
 from .firewall_manager import (
     FirewallManager,
     FirewallRule,
@@ -227,6 +229,27 @@ def cmd_apply(args) -> int:
         else:
             print(f"Error applying changes: {e}", file=sys.stderr)
         return 1
+
+
+def cmd_wan(args) -> int:
+    """The addresses the WAN interface holds (exit 3: it holds none)."""
+    config = get_config(args)
+    try:
+        with FirewallManager(config) as manager:
+            wan = wan_address(read_interfaces(manager.client))
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    if wan is None:
+        print("The WAN interface holds no address", file=sys.stderr)
+        return 3
+    if args.json:
+        print(json.dumps(wan))
+    else:
+        v4 = f"{wan['ipv4']}/{wan['prefix']}" if wan["ipv4"] else "no IPv4"
+        behind = " (private: behind another router)" if wan["private"] else ""
+        print(f"wan: {v4}{behind}" + "".join(f"\n     {a}" for a in wan["ipv6"]))
+    return 0
 
 
 def cmd_test(args) -> int:
@@ -443,6 +466,16 @@ def main():
         description="Test the connection to OPNsense firewall",
     )
     test_parser.set_defaults(func=cmd_test)
+
+    # wan command
+    wan_parser = subparsers.add_parser(
+        "wan",
+        parents=[gp],
+        help="Show the addresses the WAN interface holds",
+        description="The WAN interface's IPv4 and global IPv6 addresses, as the firewall reports them "
+                    "(exit 3: it holds none). --json for {ipv4, prefix, ipv6, private}.",
+    )
+    wan_parser.set_defaults(func=cmd_wan)
 
     args = parse_with_globals(parser, {
         "firewall": "firewall.mgmt.internal",
