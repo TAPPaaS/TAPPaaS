@@ -104,7 +104,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | Wave | Group | Ease | Risk | released | done for 2.3 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
-| 7 | G7.1 DevOps stack | H | M | – | – | 3 |
+| 7 | G7.1 DevOps stack | H | M | – | 1 | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 5 | 13 |
 | 6 | G6.2 User interface & physical view | H | L | – | 1 | 4 |
@@ -211,13 +211,13 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 
 New modules and significant upgrades of existing ones: what a site can run, beyond the foundation and its fixes.
 
-### G7.1 DevOps stack — Ease H · Risk M · open: 3
+### G7.1 DevOps stack — Ease H · Risk M · done for 2.3: 1 · open: 2
 
 Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can also build TAPPaaS itself (#415), and Forgejo on PostgreSQL when load asks for it (#284).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #840 | devops: a Woodpecker CI module next to Forgejo | H | L | **Built 2026-10-19** (`fa66039e`…`813c96ef`): `src/devops/woodpecker`, server + one Docker agent in Forgejo's zone, Login with Forgejo through the new `forgejo:oauth` service (an OAuth2 application, its client on the VM; `forgejo:repo` and it share `service-lib.sh`), no privileged plugins, `woodpeckerAdmins`; pipeline containers reach the internet, DNS and Forgejo's address only (`woodpecker-egress`). Live on hrossen: module test 13/13, `forgejo:oauth` 4/4. Open: the end-to-end pipeline run, after the operator's first login |
+| ✅ #840 | devops: a Woodpecker CI module next to Forgejo | H | L | **Closed 2026-10-19** (`fa66039e`…`56115a1e`): `src/devops/woodpecker`, server + one Docker agent in Forgejo's zone, behind the Authentik gate (group `users`, a tile) and open to the internet; Login with Forgejo through the new `forgejo:oauth` service (`forgejo:repo` and it share `service-lib.sh`); no privileged plugins, `woodpeckerAdmins`; pipeline containers reach the internet, DNS and Forgejo's address only (`woodpecker-egress`). Live on hrossen: module test 13/13, gate 5/5, `forgejo:oauth` 4/4; end to end, a push ran a pipeline that cloned through Caddy, reached the internet, was refused by Forgejo's VM, and showed success on the commit in Forgejo. KVM agents stay with #415 |
 | #415 | Self-hosted KVM Woodpecker runners | H | L | |
 | #284 | forgejo: SQLite → PostgreSQL | M | M | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
 
