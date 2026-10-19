@@ -255,15 +255,27 @@ let
   '';
 
   # The TAPPaaS API key and the policy it keeps (ADR-032 D3). Jellyfin's API
-  # keys are rows in its database; one named TAPPaaS is added once (while
-  # Jellyfin runs: it looks keys up per request) and kept root-only on the VM.
-  # With it, the break-glass account `admin` is kept from signing in from
-  # outside the site -- Jellyfin is published without the Authentik gate, and
-  # admin's password would otherwise face the internet.
+  # keys are rows in its database, looked up on every request; one named TAPPaaS
+  # is added once and kept root-only on the VM. With it, the break-glass account
+  # `admin` is kept from signing in from outside the site -- Jellyfin is
+  # published without the Authentik gate, and admin's password would otherwise
+  # face the internet.
+  #
+  # Wait for Jellyfin to have STARTED, not for /health: while it starts (and a
+  # version upgrade first migrates its database, minutes) a setup server
+  # answers /health "Degraded" with HTTP 200 and every API call with 503 (#859).
+  # /System/Info/Public answers 200 only once Jellyfin itself does. Policy, not
+  # service: what cannot be done is said and left to the next start or update
+  # (test.sh fails while admin can still sign in from outside).
   apiKeyFile = "/var/lib/jellyfin-tappaas/api-key";
   jellyfinPolicy = pkgs.writeShellScript "jellyfin-tappaas-policy" ''
-    set -euo pipefail
+    set -uo pipefail
     db=${config.services.jellyfin.dataDir}/data/jellyfin.db
+    api="http://localhost:8096"
+    say() { echo "jellyfin-tappaas-policy: $*"; }
+    started() { curl -sf -o /dev/null --max-time 5 "$api/System/Info/Public"; }
+    for _ in $(seq 1 180); do started && break; sleep 5; done
+    started || { say "Jellyfin has not started after 15 minutes — policy not applied; the next start or update applies it"; exit 0; }
     # As the jellyfin user: a write as root could leave the database's -wal and
     # -shm files root's, and Jellyfin unable to write its own database.
     sql() { runuser -u jellyfin -- sqlite3 -cmd ".timeout 10000" "$db" "$@"; }
@@ -271,22 +283,27 @@ let
     key="$(cat ${apiKeyFile} 2>/dev/null || true)"
     if [ -z "$key" ] || [ "$(sql "SELECT count(*) FROM ApiKeys WHERE AccessToken = '$key';")" != 1 ]; then
       key="$(od -An -N16 -tx1 /dev/urandom | tr -d ' \n')"
-      sql "INSERT INTO ApiKeys (DateCreated, DateLastActivity, Name, AccessToken) VALUES (strftime('%Y-%m-%d %H:%M:%f','now'), strftime('%Y-%m-%d %H:%M:%f','now'), 'TAPPaaS', '$key');"
+      sql "INSERT INTO ApiKeys (DateCreated, DateLastActivity, Name, AccessToken) VALUES (strftime('%Y-%m-%d %H:%M:%f','now'), strftime('%Y-%m-%d %H:%M:%f','now'), 'TAPPaaS', '$key');" \
+        || { say "could not add the API key to Jellyfin's database — policy not applied"; exit 0; }
       ( umask 077; printf '%s' "$key" > ${apiKeyFile} )
-      echo "jellyfin-tappaas-policy: API key TAPPaaS created"
+      say "API key TAPPaaS created"
     fi
-    api="http://localhost:8096"
     auth="Authorization: MediaBrowser Token=\"$key\""
-    for _ in $(seq 1 60); do curl -sf "$api/health" >/dev/null && break; sleep 2; done
-    admin="$(curl -sf -H "$auth" "$api/Users" | jq -c '.[] | select(.Name == "admin")')"
-    if [ -z "$admin" ]; then echo "jellyfin-tappaas-policy: no user admin"; exit 0; fi
+    users=""
+    for _ in $(seq 1 12); do users="$(curl -sf --max-time 10 -H "$auth" "$api/Users")" && break; users=""; sleep 5; done
+    [ -n "$users" ] || { say "Jellyfin refuses the TAPPaaS API key (/Users) — policy not applied; the next start or update tries again"; exit 0; }
+    admin="$(jq -c '.[] | select(.Name == "admin")' <<<"$users")"
+    if [ -z "$admin" ]; then say "no user admin"; exit 0; fi
     if [ "$(jq -r '.Policy.EnableRemoteAccess' <<<"$admin")" = true ]; then
-      jq -c '.Policy | .EnableRemoteAccess = false' <<<"$admin" \
-        | curl -sf -X POST -H "$auth" -H 'Content-Type: application/json' -d @- \
-            "$api/Users/$(jq -r .Id <<<"$admin")/Policy" >/dev/null
-      echo "jellyfin-tappaas-policy: admin may no longer sign in from outside the site"
+      if jq -c '.Policy | .EnableRemoteAccess = false' <<<"$admin" \
+          | curl -sf --max-time 10 -X POST -H "$auth" -H 'Content-Type: application/json' -d @- \
+              "$api/Users/$(jq -r .Id <<<"$admin")/Policy" >/dev/null; then
+        say "admin may no longer sign in from outside the site"
+      else
+        say "could not change admin's policy — admin may still sign in from outside; the next start or update tries again"
+      fi
     else
-      echo "jellyfin-tappaas-policy: admin signs in from the site only (unchanged)"
+      say "admin signs in from the site only (unchanged)"
     fi
   '';
 in
@@ -416,7 +433,9 @@ in
     wantedBy    = [ "multi-user.target" ];
     after       = [ "jellyfin.service" ];
     requires    = [ "jellyfin.service" ];
-    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; };
+    # Not oneshot: an activation does not wait on a Jellyfin that is migrating
+    # its database, nor fail on policy (#859). It runs once per start and exits.
+    serviceConfig = { Type = "simple"; Restart = "on-failure"; RestartSec = 60; };
     path = [ pkgs.sqlite pkgs.curl pkgs.jq pkgs.coreutils pkgs.util-linux ];
     script = "${jellyfinPolicy}";
   };
