@@ -1,10 +1,12 @@
-// graph.tsx — cards joined by lines, laid out by dagre and drawn by React Flow:
-// a module's config tree, the zones and their reach, the identity objects and
-// their relations. Nothing is placed by hand; each card gives its own size.
+// graph.tsx — cards joined by lines, laid out by dagre (or in columns, or as a
+// tree's grid) and drawn by React Flow: a module's config tree, the zones and
+// their reach, the identity objects and their relations. Nothing is placed by
+// hand; each card gives its own size.
 
 import dagre from "@dagrejs/dagre";
-import { BaseEdge, Background, Controls, Edge, EdgeProps, Handle, MarkerType, Node, NodeProps, Position, ReactFlow } from "@xyflow/react";
+import { BaseEdge, Background, Controls, Edge, EdgeProps, Handle, MarkerType, Node, NodeProps, Position, ReactFlow, getBezierPath } from "@xyflow/react";
 import { ReactNode, useMemo } from "react";
+import { Route, columnPositions, routeEdges } from "./columns";
 
 export interface GNode {
   id: string;
@@ -15,7 +17,9 @@ export interface GNode {
   className?: string;
   accent?: string; // the card's left border colour
   col?: number; // when every node has one: laid out in columns, left to right, instead of by dagre
-  order?: number; // the row within its column (ascending), then the id
+  order?: number; // the starting row within its column (ascending), then the id (columns.ts reorders)
+  head?: boolean; // the column's title: pinned to the top
+  after?: string; // kept directly below this node of its column
 }
 
 export interface GEdge {
@@ -57,32 +61,27 @@ function BusEdge({ sourceX, sourceY, targetX, targetY, style, markerEnd }: EdgeP
   return <BaseEdge path={`M ${sourceX},${sourceY} V ${bus} H ${lane} V ${targetY} H ${targetX}`} style={style} markerEnd={markerEnd} />;
 }
 
-const edgeTypes = { bus: BusEdge };
+// A line between columns: a bezier from the side of one card to the side of
+// the other, at the points columns.ts chose for it.
+function RouteEdge({ data, style, markerEnd, label, labelStyle, labelBgStyle }: EdgeProps<Edge<{ route: Route }, "route">>) {
+  const r = data!.route;
+  const [path, labelX, labelY] = getBezierPath({
+    sourceX: r.sx,
+    sourceY: r.sy,
+    sourcePosition: r.ss === "right" ? Position.Right : Position.Left,
+    targetX: r.tx,
+    targetY: r.ty,
+    targetPosition: r.ts === "left" ? Position.Left : Position.Right,
+  });
+  return <BaseEdge path={path} style={style} markerEnd={markerEnd} label={label} labelX={labelX} labelY={labelY} labelStyle={labelStyle} labelBgStyle={labelBgStyle} />;
+}
+
+const edgeTypes = { bus: BusEdge, route: RouteEdge };
 
 // A tree as a grid: the root centred on top, its children in rows below.
 export interface TreeGrid {
   root: string;
   cols: number;
-}
-
-// Columns: each node names its column; a column is as wide as its widest
-// card, its cards stacked in their order. The lines between them are drawn by
-// React Flow as usual (not as a tree's bus).
-export function columnPositions(nodes: GNode[], gapX: number, gapY: number): Map<string, { x: number; y: number }> {
-  const cols = [...new Set(nodes.map((n) => n.col ?? 0))].sort((a, b) => a - b);
-  const pos = new Map<string, { x: number; y: number }>();
-  let x = 10;
-  for (const c of cols) {
-    const members = nodes.filter((n) => (n.col ?? 0) === c).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.id.localeCompare(b.id));
-    const colW = Math.max(0, ...members.map((n) => n.w));
-    let y = 10;
-    for (const n of members) {
-      pos.set(n.id, { x: x + (colW - n.w) / 2, y });
-      y += n.h + gapY;
-    }
-    x += colW + gapX;
-  }
-  return pos;
 }
 
 function gridPositions(nodes: GNode[], grid: TreeGrid, gapX: number, gapY: number): Map<string, { x: number; y: number }> {
@@ -112,8 +111,9 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
   const live = edges.filter((e) => ids.has(e.source) && ids.has(e.target) && e.source !== e.target);
   live.forEach((e, i) => g.setEdge(e.source, e.target, {}, `e${i}`));
   const columns = !grid && nodes.length > 0 && nodes.every((n) => n.col !== undefined);
-  const fixed = grid ? gridPositions(nodes, grid, nodesep, ranksep) : columns ? columnPositions(nodes, ranksep, nodesep) : null;
-  const bus = !!grid; // a tree's lines; columns and dagre keep React Flow's own
+  const fixed = grid ? gridPositions(nodes, grid, nodesep, ranksep) : columns ? columnPositions(nodes, live, ranksep, nodesep) : null;
+  const bus = !!grid; // a tree's lines; dagre keeps React Flow's own
+  const routes = columns && fixed ? routeEdges(nodes, fixed, live) : null;
   if (!fixed) dagre.layout(g);
   const vertical = rankdir === "TB";
   return {
@@ -128,7 +128,8 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
       target: e.target,
       targetHandle: bus ? "l" : undefined,
       label: e.label,
-      type: bus ? "bus" : "default",
+      type: bus ? "bus" : routes ? "route" : "default",
+      data: routes ? { route: routes[i] } : undefined,
       style: { stroke: e.color ?? "#94a3b8", strokeWidth: 1.6, strokeDasharray: e.dashed ? "5 4" : undefined },
       labelStyle: { fontSize: 11, fill: "#475569" },
       labelBgStyle: { fill: "#f8fafc" },

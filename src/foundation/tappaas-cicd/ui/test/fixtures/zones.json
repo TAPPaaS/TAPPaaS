@@ -1,0 +1,270 @@
+[
+  {
+    "name": "mgmt",
+    "type": "Management",
+    "state": "Manual",
+    "typeId": "0",
+    "subId": "0",
+    "vlantag": 0,
+    "ip": "10.0.0.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "all",
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "description": "Control plane: hypervisors, backup, firewall, identity, cicd",
+    "tier": 0
+  },
+  {
+    "name": "netbird",
+    "type": "Overlay",
+    "state": "Manual",
+    "typeId": "7",
+    "subId": "0",
+    "vlantag": 0,
+    "ip": "100.64.0.0/10",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "description": "NetBird VPN overlay: admin tunnel peers (not a VLAN)"
+  },
+  {
+    "name": "edge",
+    "type": "Overlay",
+    "state": "Manual",
+    "typeId": "7",
+    "subId": "1",
+    "vlantag": 0,
+    "ip": "10.255.0.0/31",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "description": "ADR-010 satellite infra tunnel (external relay; least-privilege)"
+  },
+  {
+    "name": "admin",
+    "type": "Overlay",
+    "state": "Manual",
+    "typeId": "7",
+    "subId": "2",
+    "vlantag": 0,
+    "ip": "10.255.1.0/24",
+    "bridge": "wireguard",
+    "access-to": [
+      "mgmt"
+    ],
+    "pinhole-allowed-from": [],
+    "description": "ADR-010 admin-vpn landing (mgmt tunnel; see ADMIN-VPN.md)"
+  },
+  {
+    "name": "rossen",
+    "type": "Service",
+    "state": "Active",
+    "typeId": "2",
+    "subId": "0",
+    "vlantag": 200,
+    "ip": "10.2.0.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "dmz"
+    ],
+    "description": "Default service zone (renamed to the site's defaultEnvironment at install)",
+    "tier": 1,
+    "ipv6Subnet": 32
+  },
+  {
+    "name": "work",
+    "type": "Client",
+    "state": "Inactive",
+    "typeId": "3",
+    "subId": "20",
+    "vlantag": 320,
+    "SSID": "<WORK_SSID>",
+    "ip": "10.3.20.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "description": "Managed corporate devices: laptops, phones, tablets",
+    "ipv6Subnet": 50
+  },
+  {
+    "name": "iotLocal",
+    "type": "IoT",
+    "state": "Active",
+    "typeId": "4",
+    "subId": "10",
+    "vlantag": 410,
+    "SSID": "<IOT_LOCAL_SSID>",
+    "ip": "10.4.10.0/24",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "description": "Local-only IoT: no internet, automation devices",
+    "tier": 6,
+    "serves": "rossen",
+    "ipv6Subnet": 65
+  },
+  {
+    "name": "iotCloud",
+    "type": "IoT",
+    "state": "Active",
+    "typeId": "4",
+    "subId": "20",
+    "vlantag": 420,
+    "SSID": "<IOT_CLOUD_SSID>",
+    "ip": "10.4.20.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "home"
+    ],
+    "description": "Internet-dependent trusted IoT: smart appliances, media, monitoring",
+    "tier": 3,
+    "serves": "rossen",
+    "ipv6Subnet": 66
+  },
+  {
+    "name": "iotCams",
+    "type": "IoT",
+    "state": "Active",
+    "typeId": "4",
+    "subId": "30",
+    "vlantag": 430,
+    "ip": "10.4.30.0/24",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "description": "Surveillance: cameras + NVR, fully isolated",
+    "tier": 6,
+    "isolated": true,
+    "serves": "rossen",
+    "ipv6Subnet": 67
+  },
+  {
+    "name": "iotUntrust",
+    "type": "IoT",
+    "state": "Disabled",
+    "typeId": "4",
+    "subId": "40",
+    "vlantag": 440,
+    "SSID": "<IOT_UNTRUST_SSID>",
+    "ip": "10.4.40.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "description": "Untrusted IoT: internet-only, fully quarantined",
+    "tier": 3,
+    "isolated": true,
+    "ipv6Subnet": 68
+  },
+  {
+    "name": "dmz",
+    "type": "DMZ",
+    "state": "Mandatory",
+    "typeId": "6",
+    "subId": "10",
+    "vlantag": 610,
+    "ip": "10.6.0.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "internet",
+      "home"
+    ],
+    "description": "Public-facing: reverse proxy (Caddy), internet-exposed services",
+    "tier": 4,
+    "ipv6Subnet": 97
+  },
+  {
+    "name": "home",
+    "type": "Client",
+    "state": "Active",
+    "typeId": "3",
+    "subId": "10",
+    "vlantag": 310,
+    "SSID": "<HOME_SSID>",
+    "ip": "10.3.10.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "description": "Trusted personal devices: laptops, phones, tablets",
+    "tier": 2,
+    "serves": "rossen",
+    "ipv6Subnet": 49
+  },
+  {
+    "name": "guest",
+    "type": "Guest",
+    "state": "Active",
+    "typeId": "5",
+    "subId": "10",
+    "vlantag": 510,
+    "SSID": "<GUEST_SSID>",
+    "ip": "10.5.10.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "description": "Visitors: internet only, fully isolated",
+    "tier": 3,
+    "ipv6Subnet": 81
+  },
+  {
+    "name": "wan",
+    "type": "WAN",
+    "state": "Manual",
+    "typeId": "1",
+    "subId": "0",
+    "vlantag": 100,
+    "ip": "10.1.0.0/24",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "description": "ISP hand-off L2 segment (modem + node WAN NICs); switch-only, no interface, no DHCP"
+  },
+  {
+    "name": "buddy",
+    "type": "Overlay",
+    "state": "Manual",
+    "typeId": "7",
+    "subId": "3",
+    "vlantag": 0,
+    "ip": "10.255.2.0/24",
+    "bridge": "wireguard",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "description": "#796 backup-buddy tunnels (one /30 per pull; see backup/BUDDY.md)"
+  },
+  {
+    "name": "test",
+    "type": "Service",
+    "typeId": "2",
+    "subId": "99",
+    "vlantag": 299,
+    "ip": "10.2.99.0/24",
+    "bridge": "lan",
+    "state": "Active",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "description": "Application/service modules for one environment",
+    "tier": 1,
+    "ipv6Subnet": 1
+  }
+]
