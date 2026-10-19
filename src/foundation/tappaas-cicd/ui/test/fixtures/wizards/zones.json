@@ -1,0 +1,88 @@
+{
+  "mgmt": {
+    "type": "Management",
+    "state": "Manual",
+    "vlantag": 0
+  },
+  "netbird": {
+    "type": "Overlay",
+    "state": "Manual",
+    "vlantag": 0
+  },
+  "edge": {
+    "type": "Overlay",
+    "state": "Manual",
+    "vlantag": 0
+  },
+  "admin": {
+    "type": "Overlay",
+    "state": "Manual",
+    "vlantag": 0
+  },
+  "rossen": {
+    "type": "Service",
+    "state": "Active",
+    "vlantag": 200
+  },
+  "work": {
+    "type": "Client",
+    "state": "Inactive",
+    "vlantag": 320,
+    "SSID": "<WORK_SSID>"
+  },
+  "iotLocal": {
+    "type": "IoT",
+    "state": "Active",
+    "vlantag": 410,
+    "SSID": "<IOT_LOCAL_SSID>"
+  },
+  "iotCloud": {
+    "type": "IoT",
+    "state": "Active",
+    "vlantag": 420,
+    "SSID": "<IOT_CLOUD_SSID>"
+  },
+  "iotCams": {
+    "type": "IoT",
+    "state": "Active",
+    "vlantag": 430
+  },
+  "iotUntrust": {
+    "type": "IoT",
+    "state": "Disabled",
+    "vlantag": 440,
+    "SSID": "<IOT_UNTRUST_SSID>"
+  },
+  "dmz": {
+    "type": "DMZ",
+    "state": "Mandatory",
+    "vlantag": 610
+  },
+  "home": {
+    "type": "Client",
+    "state": "Active",
+    "vlantag": 310,
+    "SSID": "<HOME_SSID>"
+  },
+  "guest": {
+    "type": "Guest",
+    "state": "Active",
+    "vlantag": 510,
+    "SSID": "<GUEST_SSID>"
+  },
+  "wan": {
+    "type": "WAN",
+    "state": "Manual",
+    "vlantag": 100
+  },
+  "buddy": {
+    "type": "Overlay",
+    "state": "Manual",
+    "vlantag": 0
+  },
+  "test": {
+    "type": "Service",
+    "state": "Active",
+    "vlantag": 299
+  }
+}

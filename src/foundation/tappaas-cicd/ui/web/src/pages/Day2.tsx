@@ -2,7 +2,7 @@
 // is installed. Each is a card that says in one line what it does, and a
 // button that opens its sequence: the Setup wizard's steps (operate.tsx's
 // StepView, Change → Preview → Apply → Result) over the schema-driven field
-// form where the verb has one.
+// form where the verb has one. WiFi has a card per client zone (Wifi.tsx).
 
 import { ReactNode } from "react";
 import { useRead } from "../api";
@@ -10,7 +10,10 @@ import { OperateButton } from "../operate";
 import { canOperate, useMe } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
-import { SecretForm, SecretStatus, SetupDoc, addStackSteps, enrolSteps } from "./Setup";
+import { SiteRead } from "../types";
+import { ApIn, ZoneIn, wifiVerb, wifiZones } from "../wizards";
+import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
+import { WifiButton } from "./Wifi";
 
 export function WizardCard({ id, title, tag, children, action }: { id?: string; title: string; tag?: string; children: ReactNode; action: ReactNode }) {
   return (
@@ -36,7 +39,11 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 
 export function Day2({ doc }: { doc: SetupDoc | null }) {
   const me = useMe();
-  const secrets = useRead<SecretStatus[]>("secrets", 600_000);
+  const zones = useRead<ZoneIn[]>("zones");
+  const apsRead = useRead<ApIn[]>("aps");
+  const site = useRead<SiteRead>("site").env?.data?.site;
+  const aps = apsRead.env?.data ?? [];
+  const wifi = wifiZones(zones.env?.data ?? [], aps);
   return (
     <>
       {doc && !doc.complete ? (
@@ -60,11 +67,20 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
         <WizardCard title="Enrol a device" action={<OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />}>
           A laptop or phone joins the admin VPN; the result is its WireGuard file to download.
         </WizardCard>
-        <WizardCard title="A WiFi passphrase" action={null}>
-          The WPA passphrase of an SSID, kept where the access point plugin reads it.
-        </WizardCard>
       </Group>
-      <SecretForm name="wlan" status={(secrets.env?.data ?? []).find((x) => x.name === "wlan")} onSaved={secrets.reload} fields={[{ key: "ssid", label: "SSID" }, { key: "passphrase", label: "WPA passphrase", secret: true }]} />
+      <Group title="WiFi">
+        {wifi.map((z) => (
+          <WizardCard key={z.zone} id={`wifi-${z.zone}`} title={`${wifiVerb(z)} WiFi for ${z.zone}`} tag={z.type} action={<WifiButton z={z} aps={aps} site={site?.name ?? ""} />}>
+            {z.ssids.length ? (
+              <>Broadcast as {z.ssids.map((s) => `${s.name} on ${s.ap}${s.security ? ` (${s.security})` : ""}`).join(", ")}; devices that join land on VLAN {z.vlan ?? "?"}.</>
+            ) : (
+              <>No SSID yet{z.declared ? ` (zones.json names ${z.declared}, no access point broadcasts it)` : ""}: an SSID that puts devices on VLAN {z.vlan ?? "?"}.</>
+            )}
+          </WizardCard>
+        ))}
+        {zones.env?.data && wifi.length === 0 ? <p className="muted small">No active Client or Guest zone.</p> : null}
+        {apsRead.env?.error || apsRead.failure ? <p className="readstate readstate-fail">ap-controller list could not be read: {apsRead.env?.error ?? apsRead.failure}</p> : apsRead.env?.data && aps.length === 0 ? <p className="muted small">No access point is registered yet (ap-controller add).</p> : null}
+      </Group>
     </>
   );
 }

@@ -27,6 +27,7 @@ export const TTL = {
   modules: 5 * MIN,
   topology: 5 * MIN,
   zones: 5 * MIN,
+  aps: 5 * MIN,
   environments: 5 * MIN,
   site: 5 * MIN,
   backup: 10 * MIN,
@@ -100,6 +101,7 @@ export class Reads {
   readonly backup: Cached<BackupRow[]>;
   readonly topology: Cached<TopologyDoc & Record<string, unknown>>;
   readonly zones: Cached<Record<string, unknown>[]>;
+  readonly aps: Cached<Record<string, unknown>[]>;
   readonly environments: Cached<EnvironmentRow[]>;
   readonly site: Cached<Record<string, unknown>>;
   readonly security: Cached<Record<string, unknown> | null>;
@@ -129,6 +131,8 @@ export class Reads {
     this.backup = new Cached("backup", TTL.backup, () => j<BackupRow[]>("backup-manager", ["list", "--json"]), now);
     this.topology = new Cached("topology", TTL.topology, () => this.loadTopology(), now);
     this.zones = new Cached("zones", TTL.zones, () => this.loadZones(), now);
+    // The access points and the SSIDs each maps to a zone (Setup's WiFi).
+    this.aps = new Cached("aps", TTL.aps, () => j<Record<string, unknown>[]>("ap-controller", ["list", "--json"]), now);
     this.environments = new Cached("environments", TTL.environments, () => j<EnvironmentRow[]>("environment-manager", ["list", "--json"]), now);
     this.site = new Cached("site", TTL.site, () => this.loadSite(), now);
     // No scan yet is an answer (null), not a failure.
@@ -396,7 +400,7 @@ export class Reads {
   async refresh(what: string): Promise<string[]> {
     const all: Record<string, Cached<unknown>> = {
       health: this.health, modules: this.modules, backup: this.backup, topology: this.topology,
-      zones: this.zones, environments: this.environments, site: this.site, security: this.security,
+      zones: this.zones, aps: this.aps, environments: this.environments, site: this.site, security: this.security,
       peers: this.peers, activity: this.activity,
     } as Record<string, Cached<unknown>>;
     if (what === "all") {
@@ -448,7 +452,7 @@ export class Reads {
     const identity = this.identity.refresh().then(() => (this.identityRecords.peek().at !== null ? this.identityRecords.refresh() : undefined));
     // The catalogues mark what is installed: after the module list.
     const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
-    return Promise.all([identity, modules, ...[...setup, this.topology, this.zones, this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    return Promise.all([identity, modules, ...[...setup, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
   }
 
   private async loadTopology(): Promise<TopologyDoc & Record<string, unknown>> {
