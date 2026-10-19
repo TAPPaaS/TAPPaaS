@@ -80,6 +80,8 @@ export function App() {
   else if (owner && !["/physical", "/site/physical", "/modules"].some((p) => path === p || path.startsWith(`${p}/`))) page = <OwnerOverview />;
   else if (path === "/" || path === "") page = <Overview setupIncomplete={incomplete} />;
   else if (path === "/setup") page = <Setup />;
+  else if (path === "/setup/day1") page = <Setup tab="Day 1" />;
+  else if (path === "/setup/day2") page = <Setup tab="Day 2" />;
   else if (owner && (path === "/physical" || path === "/site/physical")) page = <Physical />;
   else if (path === "/physical" || path === "/site/physical") page = <Site tab="Physical" />;
   else if (path === "/modules") page = <Modules />;
