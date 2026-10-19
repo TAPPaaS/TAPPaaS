@@ -54,7 +54,7 @@ network-manager add <name>          [options]
 network-manager delete <name>       [--check]
 network-manager enable|disable|manual <name> [--force]
 network-manager bind <zone>         --environment <env> | --unbind
-network-manager reconcile           [--apply] [--only <plane>]
+network-manager reconcile           [--apply] [--only opnsense|proxmox|switch|ap]
 network-manager topology            [--json] [--health <file> | --no-health]
 network-manager init  [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
 network-manager retire      [--apply]

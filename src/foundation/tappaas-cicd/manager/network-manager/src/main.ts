@@ -17,7 +17,7 @@
 //                              [--vlan V] [--variant X] [--no-activate] [--check]
 //   network-manager delete <name> [--check]
 //   network-manager enable|disable|manual <name> [--force]   (was zone-state.sh)
-//   network-manager reconcile [--apply] [--only <plane>]
+//   network-manager reconcile [--apply] [--only opnsense|proxmox|switch|ap]
 //   network-manager init [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
 //   network-manager retire [--apply]
 //   network-manager merge [--diff] [--config-dir <dir>] [--template <tpl>]
@@ -225,11 +225,11 @@ export const HELP: HelpSpec = {
       options: [["--zones <file>", "the authored zones.json (default: the site's config/zones.json)"]],
     },
     {
-      usage: "reconcile [--apply] [--only <plane>]",
+      usage: "reconcile [--apply] [--only opnsense|proxmox|switch|ap]",
       name: "reconcile",
       options: [
         ["--apply", "converge all planes (default is dry-run / report only)"],
-        ["--only <plane>", "one plane: opnsense | proxmox | switch | ap"],
+        ["--only opnsense|proxmox|switch|ap", "one plane only (default: all four)"],
       ],
     },
     {
