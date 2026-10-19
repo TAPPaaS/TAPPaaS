@@ -47,3 +47,24 @@ export function buildArgv(step: ArgvStep, verb: ManifestVerb | null, values: Val
   return out;
 }
 
+// Values the assistant opened a form with (open_console), as this form's
+// values: a key that is one of its open positionals becomes "@<name>" ("name"
+// is the only one, when there is one), one of its options its flag, and on an
+// open verb without a field form any other key a "--key value" line of its
+// further options. Keys that fit none are left to a field form (fields.tsx),
+// or dropped.
+export function prefillValues(step: ArgvStep, verb: ManifestVerb, raw: Values, fieldForm = false): Values {
+  const out: Values = {};
+  const pos = verb.positionals.slice(step.fixed?.length ?? 0);
+  const extra: string[] = [];
+  for (const [key, v] of Object.entries(raw)) {
+    const k = key.replace(/^[@-]+/, "");
+    const p = pos.find((x) => x.name === k) ?? (k === "name" && pos.length === 1 ? pos[0] : undefined);
+    const o = verb.options.find((x) => x.flag === `--${k}`);
+    if (p && typeof v === "string") out[`@${p.name}`] = v;
+    else if (o) out[o.flag] = o.takesValue ? (typeof v === "boolean" ? String(v) : v) : v === true || v === "true";
+    else if (verb.open && !fieldForm && v !== false) extra.push(v === true ? `--${k}` : `--${k} ${Array.isArray(v) ? v.join(",") : v}`);
+  }
+  if (extra.length) out["@extra"] = extra;
+  return out;
+}

@@ -42,6 +42,16 @@ export interface Step {
   ok: boolean;
   summary: string;
   refused?: boolean; // a tool that does not exist (a write the model tried)
+  written?: boolean; // the model wrote the call in its answer; it was taken as made
+}
+
+// A page or wizard the assistant opened in the operator's console (open_console).
+export interface Opened {
+  target: string; // "add-node", "modify-module immich", "/site/physical"
+  values: Record<string, string | boolean | string[]>;
+  path: string;
+  title: string;
+  url: string | null;
 }
 
 export interface Turn {
@@ -52,6 +62,7 @@ export interface Turn {
   steps: Step[];
   answer: string;
   proposals: Proposal[];
+  opened?: Opened[]; // absent in a conversation saved before open_console
   model: string | null;
   error: string | null;
 }

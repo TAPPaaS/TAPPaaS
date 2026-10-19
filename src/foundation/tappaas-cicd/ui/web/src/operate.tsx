@@ -7,9 +7,10 @@
 // the object's name typed and the Installer role. A flow of several steps
 // (update-port, then reconcile) runs them in order.
 
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, createContext, useEffect, useMemo, useState } from "react";
 import { applyJob, previewJob, readJob, reloadAll, useJob, useRead, useVerb } from "./api";
-import { ArgvStep, Values, buildArgv } from "./argv";
+import { ArgvStep, Values, buildArgv, prefillValues } from "./argv";
+import { useOpenedBy } from "./opener";
 import { Command, Output, jobResult } from "./jobs";
 import { Job, ManifestVerb, Me } from "./types";
 import { Link, Tag, canOperate, useMe } from "./ui";
@@ -31,7 +32,14 @@ export interface Step extends ArgvStep {
   // classes of the fields being changed, in the operator's words).
   previewNote?: (values: Values) => ReactNode;
   after?: (job: Job) => ReactNode; // shown once the step's job has finished (a config to download)
+  // Values the assistant opened the form with (open_console): positionals and
+  // options by name, merged in once the verb's manifest is read; a field form
+  // takes the fields among them (PrefillContext).
+  prefill?: Values;
 }
+
+// The assistant's values for the field form of the step that renders it.
+export const PrefillContext = createContext<Values | null>(null);
 
 // Never offered in a form: the job model sets the preview and apply flags; the
 // console reads the config it reads; output formats are for the CLI.
@@ -162,6 +170,15 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
     if (appliedJob && appliedJob.state === "done") onDone(appliedJob.exit === 0);
   }, [appliedJob?.state, appliedJob?.exit]);
 
+  // The assistant's values, once the manifest says which are positionals and options.
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    if (!verb || !step.prefill || prefilled) return;
+    const pre = prefillValues(step, verb, step.prefill, step.render !== undefined);
+    setValues((v) => ({ ...v, ...pre }));
+    setPrefilled(true);
+  }, [verb]);
+
   if (!verb) return <p className="muted">reading the {step.bin} manifest…</p>;
   const writeMark = writeMarkOf(verb, argv);
   const isRead = !writeMark && (verb.effect === "read" || verb.readWhen.some((w) => argv.includes(w)));
@@ -207,7 +224,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       {step.render ? (
         <>
           <VerbForm step={step} verb={verb} values={values} set={setValues} part="top" />
-          {step.render(values, setValues)}
+          <PrefillContext.Provider value={step.prefill ?? null}>{step.render(values, setValues)}</PrefillContext.Provider>
           <VerbForm step={step} verb={verb} values={values} set={setValues} part="bottom" />
         </>
       ) : (
@@ -268,18 +285,27 @@ export function Operate({ title, steps, onClose }: { title: string; steps: Step[
   );
 }
 
-// A button that opens a flow.
-export function OperateButton({ label, title, steps, kind, disabled, hint }: { label: string; title?: string; steps: Step[] | (() => Step[]); kind?: "danger" | "primary"; disabled?: boolean; hint?: string }) {
+// A button that opens a flow. `opens` names the wizard it is for the
+// assistant (open_console): its request opens the flow, the first step filled in.
+export function OperateButton({ label, title, steps, kind, disabled, hint, opens }: { label: string; title?: string; steps: Step[] | (() => Step[]); kind?: "danger" | "primary"; disabled?: boolean; hint?: string; opens?: { wizard: string; arg?: string | null } }) {
   const [open, setOpen] = useState(false);
+  const [prefill, setPrefill] = useState<Values | null>(null);
+  const operator = canOperate(useMe());
+  useOpenedBy(opens?.wizard ?? "", opens?.arg, (v) => {
+    setPrefill(v);
+    setOpen(true);
+  }, opens !== undefined && operator);
   // Only an operator sees a control that runs a job.
-  if (!canOperate(useMe())) return null;
+  if (!operator) return null;
+  const list = open ? (typeof steps === "function" ? steps() : steps) : [];
+  const shown = prefill && list.length ? [{ ...list[0], prefill }, ...list.slice(1)] : list;
   return (
     <>
       <button className={`btn${kind ? ` btn-${kind}` : ""}`} disabled={disabled} title={hint} onClick={() => setOpen(true)}>
         {label}
       </button>
       {/* Closing it re-reads the page: a job may have changed what it shows (a Test job, a Setup step). */}
-      {open ? <Operate title={title ?? label} steps={typeof steps === "function" ? steps() : steps} onClose={() => { setOpen(false); reloadAll(); }} /> : null}
+      {open ? <Operate title={title ?? label} steps={shown} onClose={() => { setOpen(false); setPrefill(null); reloadAll(); }} /> : null}
     </>
   );
 }

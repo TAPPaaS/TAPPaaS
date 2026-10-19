@@ -68,18 +68,18 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
         </WizardCard>
       </Group>
       <Group title="Environments, people and stacks">
-        <WizardCard title="Add an environment" action={<OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} />}>
+        <WizardCard title="Add an environment" action={<OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} opens={{ wizard: "add-environment" }} />}>
           A new environment — its record, its zone, its domain — then the reconcile that makes it live.
         </WizardCard>
-        <WizardCard title="Add a user" action={<OperateButton label="Add a user…" title="Add a user" steps={() => identitySteps("user", "add")} />}>
+        <WizardCard title="Add a user" action={<OperateButton label="Add a user…" title="Add a user" steps={() => identitySteps("user", "add")} opens={{ wizard: "add-user" }} />}>
           A person who signs in: their name, email, groups and roles, staged and then pushed to Authentik.
         </WizardCard>
-        <WizardCard title="Add a stack" action={<OperateButton label="Add a stack…" title="Add a stack" steps={addStackSteps()} />}>
+        <WizardCard title="Add a stack" action={<OperateButton label="Add a stack…" title="Add a stack" steps={addStackSteps()} opens={{ wizard: "add-stack" }} />}>
           Every module of a stack installed in dependency order; the preview is the plan.
         </WizardCard>
       </Group>
       <Group title="Access and backup">
-        <WizardCard title="Enrol a device" action={<OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />}>
+        <WizardCard title="Enrol a device" action={<OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} opens={{ wizard: "enrol-device" }} />}>
           A laptop or phone joins the admin VPN; the result is its WireGuard file to download.
         </WizardCard>
         <WizardCard title="Add a backup buddy" action={<BuddyButton />}>

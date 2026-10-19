@@ -167,22 +167,22 @@ stack is installed. It **reads freely and proposes; it never applies.**
 | **Key** | `/etc/secrets/litellm-svckey.env` on the mothership, written by `litellm:models` (the console module integrates it): read directly, else with the unit's `sudo -n cat`; re-read while missing, so no restart when it arrives |
 | **Reach** | mgmt → `litellm.<zone>.internal:4000`: mgmt's `access-to` covers every zone, so `rules-manager` writes no pinhole (`expected-pinholes console --for litellm:models` says so) |
 | **Model** | `console.json` `assistantModel` when set; else LiteLLM's model named `default`; else the first model LiteLLM lists for the key |
-| **Tools** | `modules_list`, `module_show` (with the fields `modify --set` may change and their class), `module_drift`, `zones`, `environments`, `topology`, `health`, `backup`, `pulse`, `activity` — the console's own cached reads; `logs` (Loki's `query_range` for a host, with the admin credential `~/.loki-admin-password`, only when logging is installed); `help(manager)` (the manifest and the README from `$CONSOLE_REPO`); `propose_job(argv, rationale)` (`src/assistant-tools.ts`) |
-| **Never** | an apply tool: none exists, a tool name outside the list is refused and recorded, `propose_job` creates no job (it validates the argv against the manifests, without `--apply`/`--dry-run`) |
-| **Context** | the system prompt: the site, the caller's name and role, the page and object in view (sent by the front end), the rule, the managers' verbs in short form |
+| **Tools** | `modules_list`, `module_show` (with the fields `modify --set` may change and their class), `module_drift`, `zones`, `environments`, `topology`, `health`, `backup`, `pulse`, `activity` — the console's own cached reads; `logs` (Loki's `query_range` for a host, with the admin credential `~/.loki-admin-password`, only when logging is installed); `help(manager)` (the manifest and the README from `$CONSOLE_REPO`); `propose_job(argv, rationale)`; `open_console(target, values?)`: a page or a wizard of `web/src/consoletargets.ts` (add-node, add-wifi <zone>, modify-module <module>, …), opened in the operator's console with its form filled in (`src/assistant-tools.ts`) |
+| **Never** | an apply tool: none exists, a tool name outside the list is refused and recorded, `propose_job` creates no job (it validates the argv against the manifests, without `--apply`/`--dry-run`), `open_console` only moves the console to a form. An invented tool's refusal names the real ones and spells out the call it probably meant; a call the model writes as text instead of making it is taken as made, once a turn, and marked `written` |
+| **Context** | the system prompt: the site, the caller's name and role, the page and object in view (sent by the front end), the tools by their exact names (no tool per verb), when to open a form and when to propose, the wizards, the managers' verbs in short form as what `propose_job` may propose |
 | **Trail** | a card's Preview/Run are the P2 job flow with `{conversation, proposal}`: the job checks the proposal is in the caller's own conversation with the same argv, and carries `origin: assistant` and the turn; Activity shows "lars · via assistant" |
 | **Store** | `<state dir>/assistant/<user>/<id>.json`, 0600: the newest 50 per user, 40 turns and 256 KiB each; never in `config/` |
 
 API: `GET /assistant/status` (available, and why not; the status route has none) · `POST
 /assistant/chat {conversation?, message, focus?}` (one turn as server-sent events:
-`conversation`, `step`, `delta`, `proposal`, `done`, `error`) · `GET
+`conversation`, `step`, `delta`, `proposal`, `navigate`, `done`, `error`; `navigate` {target, values, path, title, url}: the drawer routes there and the wizard opens filled in, `web/src/opener.ts`; the turn records it as `opened`) · `GET
 /assistant/conversations[/<id>]` (the caller's own). A turn reads; it changes nothing but the
 caller's conversation file. Asked to run something, the assistant says that the card's Run
 does it, so the record shows a person decided.
 
 `tappaas ask "<question>"` (bin `tappaas`, packaged with the console): a client of the backend
 on loopback, so the read role; a proposal is printed as its preview and apply command lines,
-never run. `tappaas ask` with no question is a short conversation; `--conversation <id>` goes
+never run; an opened wizard as its address, `https://console.<domain>/…`. `tappaas ask` with no question is a short conversation; `--conversation <id>` goes
 on with one. Without the AI stack, or with the console down, it says why and exits 1.
 
 ## The verb manifest

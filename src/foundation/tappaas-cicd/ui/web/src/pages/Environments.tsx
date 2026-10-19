@@ -3,7 +3,8 @@
 // add / modify / enable|disable|manual / bind / reconcile / delete, each as a
 // job with its preview. A delete needs the name typed.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useOpenRequest } from "../opener";
 import { useRead } from "../api";
 import { fieldsStep } from "../fields";
 import { OperateButton, Step } from "../operate";
@@ -49,7 +50,12 @@ export function addEnvironmentSteps(): Step[] {
 export function Environments() {
   const envs = useRead<EnvironmentRow[]>("environments");
   const zones = useRead<ZoneRead[]>("zones");
-  const [zone, setZone] = useState<string | null>(null);
+  // ?zone=<name> (the assistant's modify-zone): that zone's details, open.
+  const [zone, setZone] = useState<string | null>(() => new URLSearchParams(window.location.search).get("zone"));
+  const modify = useOpenRequest("modify-zone");
+  useEffect(() => {
+    if (modify?.arg) setZone(modify.arg);
+  }, [modify?.n]);
   const zoneNames = (zones.env?.data ?? []).map((z) => z.name);
   const envNames = (envs.env?.data ?? []).map((e) => e.name);
   return (

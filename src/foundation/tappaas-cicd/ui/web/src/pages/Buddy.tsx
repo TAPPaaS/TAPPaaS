@@ -6,6 +6,8 @@
 import { useMemo, useState } from "react";
 import { reloadAll } from "../api";
 import { Step, StepView } from "../operate";
+import { TargetValues } from "../consoletargets";
+import { useOpenedBy } from "../opener";
 import { canOperate, useMe } from "../ui";
 import { BUDDY_KINDS, BuddyKind, buddyNameProblem, buddySpecs } from "../wizards";
 import { StepRow } from "./Setup";
@@ -27,10 +29,11 @@ const ONBOARD = (kind: BuddyKind, name: string) => (
   </p>
 );
 
-export function BuddyWizard({ onClose }: { onClose: () => void }) {
+// `prefill`: what the assistant opened it with (open_console add-buddy): kind, name.
+export function BuddyWizard({ onClose, prefill }: { onClose: () => void; prefill?: TargetValues | null }) {
   const me = useMe();
-  const [kind, setKind] = useState<BuddyKind>("pull");
-  const [name, setName] = useState("");
+  const [kind, setKind] = useState<BuddyKind>(prefill?.kind === "remote" ? "remote" : "pull");
+  const [name, setName] = useState(typeof prefill?.name === "string" ? prefill.name : "");
   const [chosen, setChosen] = useState<{ kind: BuddyKind; name: string } | null>(null);
   const [added, setAdded] = useState(false);
   const problem = buddyNameProblem(name.trim());
@@ -111,11 +114,17 @@ export function BuddyWizard({ onClose }: { onClose: () => void }) {
 
 export function BuddyButton() {
   const [open, setOpen] = useState(false);
-  if (!canOperate(useMe())) return null;
+  const [prefill, setPrefill] = useState<TargetValues | null>(null);
+  const operator = canOperate(useMe());
+  useOpenedBy("add-buddy", undefined, (v) => {
+    setPrefill(v);
+    setOpen(true);
+  }, operator);
+  if (!operator) return null;
   return (
     <>
       <button className="btn" onClick={() => setOpen(true)}>Add a backup buddy…</button>
-      {open ? <BuddyWizard onClose={() => { setOpen(false); reloadAll(); }} /> : null}
+      {open ? <BuddyWizard prefill={prefill} onClose={() => { setOpen(false); setPrefill(null); reloadAll(); }} /> : null}
     </>
   );
 }

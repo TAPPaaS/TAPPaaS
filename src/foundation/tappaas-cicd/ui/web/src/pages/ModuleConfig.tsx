@@ -9,7 +9,8 @@ import { useRead } from "../api";
 import { fieldsStep } from "../fields";
 import { FieldRow, plainText, shortValue } from "../forms";
 import { GEdge, GNode, Graph } from "../graph";
-import { Operate } from "../operate";
+import { Operate, Values } from "../operate";
+import { useOpenedBy } from "../opener";
 import { ModuleDetail } from "../types";
 import { ReadState, Section, canOperate, since, useMe } from "../ui";
 
@@ -58,8 +59,17 @@ export function ModuleConfig({ d }: { d: ModuleDetail }) {
   const r = useRead<ModuleFields>(`modules/${encodeURIComponent(name)}/fields`, 600_000);
   const operator = canOperate(useMe());
   const [open, setOpen] = useState<CardModel | null>(null);
+  const [prefill, setPrefill] = useState<Values | null>(null);
   const f = r.env?.data ?? null;
   const cards = useMemo(() => (f ? cardsOf(f) : []), [f]);
+  // The assistant's Modify (open_console modify-module <name>): the card that
+  // owns every field it fills in, else one dialog over all the module's fields.
+  useOpenedBy("modify-module", name, (v) => {
+    const keys = Object.keys(v);
+    const card = cards.find((c) => keys.length > 0 && keys.every((k) => c.rows.some((x) => x.field === k))) ?? (keys.length && f ? { id: "", title: name, rows: f.fields, how: "module" as const } : cards[0]);
+    setPrefill(v);
+    setOpen(card ?? null);
+  }, f !== null && operator);
 
   const graph = useMemo(() => {
     const nodes: GNode[] = cards.map((c) => {
@@ -143,8 +153,11 @@ export function ModuleConfig({ d }: { d: ModuleDetail }) {
               fields: open.rows.map((x) => x.field),
               note: "One modify for every field changed: the preview checks them all before anything is written, and applies all of them or none.",
             }),
-          ]}
-          onClose={() => setOpen(null)}
+          ].map((s) => (prefill ? { ...s, prefill } : s))}
+          onClose={() => {
+            setOpen(null);
+            setPrefill(null);
+          }}
         />
       ) : null}
     </Section>
