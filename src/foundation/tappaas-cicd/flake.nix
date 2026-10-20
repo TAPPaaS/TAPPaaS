@@ -48,6 +48,12 @@
       console             = component ./ui;
     };
 
+    # The TypeScript builder, for a manager or controller that lives in a module
+    # outside tappaas-cicd (ADR-035 D2): the same tsc build and lib/ts as the
+    # standard ones. component-install-lib.sh's build_and_link_ts_component
+    # calls it; a component does not need a flake of its own.
+    lib.tsComponent = args: import ./lib/nix/ts-manager.nix ({ inherit pkgs; } // args);
+
     nixosConfigurations.tappaas-cicd = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       # tappaas-cicd.nix imports the machine-specific

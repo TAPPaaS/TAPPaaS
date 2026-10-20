@@ -135,6 +135,19 @@ IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin
 IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/old-mgr-0/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl"
 [[ "${RC}" -ne 0 && "${OUT}" == *"mgr: links to old-mgr-0, which this generation does not build"* ]] \
     && ok "a link into an older build fails, naming it" || bad "stale link passed (exit ${RC}): ${OUT}"
+# A module's own component (ADR-035 D2) is built by its install, not by the
+# generation: its link is not stale when the registry names it, and is otherwise.
+mkdir -p "${ST}/ccc-bar-1/bin"; : > "${ST}/ccc-bar-1/bin/bar-controller"
+jq -n '{version: 1, components: ([
+    "module-manager","site-manager","network-manager","backup-manager","health-manager",
+    "identity-manager","environment-manager","storage-manager"] | map({name: ., kind: "manager", module: "tappaas-cicd"}))
+  + [{name: "bar-controller", kind: "controller", module: "bar"}]}' > "${TMP}/registry-bar.json"
+SELFCHECK_REGISTRY_T="${TMP}/registry-bar.json" IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl" "bar-controller=${ST}/ccc-bar-1/bin/bar-controller"
+[[ "${RC}" -eq 0 && "${OUT}" != *"bar-controller: links to"* ]] \
+    && ok "a registered module component's link is its module's, not stale" || bad "a module's component link failed (exit ${RC}): ${OUT}"
+IMPLIED_JSON="${GOOD}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl" "bar-controller=${ST}/ccc-bar-1/bin/bar-controller"
+[[ "${RC}" -ne 0 && "${OUT}" == *"bar-controller: links to ccc-bar-1"* ]] \
+    && ok "…and the same link is stale when no registry names it" || bad "an unregistered store link passed (exit ${RC}): ${OUT}"
 IMPLIED_JSON="{\"mgr\":\"${ST}/new-mgr-2\",\"ctl\":\"${ST}/bbb-ctl-1\"}" c4 "mgr=${ST}/aaa-mgr-1/bin/mgr" "ctl=${ST}/bbb-ctl-1/bin/ctl"
 [[ "${RC}" -ne 0 && "${OUT}" == *"mgr: not built — this generation implies new-mgr-2"* ]] \
     && ok "an implied path prepare could not build fails" || bad "unbuilt component passed (exit ${RC}): ${OUT}"

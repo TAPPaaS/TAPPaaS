@@ -83,6 +83,45 @@ build_and_link_nix_component() {
     done
 }
 
+# build_and_link_ts_component <component-dir> <name> [manager|controller]
+#
+# Build a TypeScript component that lives in a module, outside tappaas-cicd
+# (ADR-035 D2), with tappaas-cicd's own builder and lib/ts: the flake's
+# lib.tsComponent, so pkgs is the nixpkgs pinned in its flake.lock (#467), not
+# the ambient one. GC-rooted and linked into ~/bin as <name>, like
+# build_and_link_nix_component. The component is written as a standard one is
+# (tsconfig extends ../../lib/ts/tsconfig.base.json). TAPPAAS_CICD_FLAKE
+# overrides where tappaas-cicd's flake is.
+build_and_link_ts_component() {
+    local dir="$1" name="$2" kind="${3:-manager}"
+    local bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
+    local gcroots="${TAPPAAS_GCROOTS:-${HOME}/.tappaas-gcroots}"
+    local flake="${TAPPAAS_CICD_FLAKE:-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd}"
+    local src out log="/tmp/tappaas-build-${name}.log"
+    src="$(cd "${dir}" && pwd)" || return 1
+    [ -f "${flake}/flake.nix" ] || { echo "  ERROR: no tappaas-cicd flake at ${flake}" >&2; return 1; }
+    case "${kind}" in manager|controller) ;; *) echo "  ERROR: kind '${kind}' is not manager or controller" >&2; return 1 ;; esac
+    mkdir -p "${bin}" "${gcroots}"
+    _cil_debug "  building ${name} (tappaas-cicd's TypeScript builder, flake-pinned)..."
+    out="$(
+        nix --extra-experimental-features 'nix-command flakes' build --impure --print-out-paths \
+            --out-link "${gcroots}/${name}" --expr "
+              (builtins.getFlake \"${flake}\").lib.tsComponent {
+                name = \"${name}\"; kind = \"${kind}\"; src = /. + \"${src}\";
+              }" \
+            2> >(tee "${log}" | { _dots=0
+                    while IFS= read -r _; do printf '.' >&2; _dots=1; done
+                    [ "${_dots}" -eq 1 ] && printf '\n' >&2; } )
+    )" || {
+        echo "  ERROR: nix build failed for ${name} — log tail (full log: ${log}):" >&2
+        tail -8 "${log}" >&2 2>/dev/null || true
+        return 1
+    }
+    [ -e "${out}/bin/${name}" ] || { echo "  ERROR: build did not produce ${name}" >&2; return 1; }
+    ln -sfn "${out}/bin/${name}" "${bin}/${name}"
+    _cil_debug "  linked ${bin}/${name} -> ${out}/bin/${name}"
+}
+
 # link_component_executables <component-dir>
 #
 # Link every regular file in <component-dir> into ~/bin, skipping the verb

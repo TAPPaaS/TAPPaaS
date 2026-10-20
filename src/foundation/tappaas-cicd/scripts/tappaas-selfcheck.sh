@@ -244,8 +244,12 @@ else
                 _ok=$((_ok + 1))
             fi
         done < <(jq -r 'to_entries[] | "\(.key) \(.value)"' <<<"${_implied}")
+        # A module's own components (ADR-035 D2) are built by its install, not
+        # by this generation: the registry names them, and their links are theirs.
+        _theirs="$(jq -c '[.components[]? | select(.module != "tappaas-cicd") | .name, (.aliases // [])[]]' "${_registry}" 2>/dev/null || echo '[]')"
         while read -r _root _link; do
             [[ -n "${_root}" ]] || continue
+            jq -e --arg l "${_link}" 'index($l)' >/dev/null 2>&1 <<<"${_theirs}" && continue
             jq -e --arg r "${_root}" 'any(.[]; . == $r)' >/dev/null <<<"${_implied}" \
                 || bad "${_link}: links to ${_root##*/}, which this generation does not build — a stale link"
         done <<<"${_links}"
