@@ -40,6 +40,11 @@ export interface FieldManifest {
   mode: FormMode;
   exists: boolean;
   fields: ManifestField[];
+  // The field the verb's positional fills (environment, identity, site:
+  // `name`): its one-line description, for the form's name row. null where the
+  // schema has no such field (a zone is keyed by its name; a module's is its
+  // catalogue's).
+  nameField: { description: string } | null;
 }
 
 // A field definition as the schema files spell it, normalised.
@@ -301,8 +306,12 @@ export function buildManifest(i: ManifestInput): FieldManifest {
   const flags = FLAGS[i.kind]?.[i.mode] ?? null;
   const hidden = new Set(NAME_FIELDS[i.kind] ?? []);
   const fields: ManifestField[] = [];
+  let nameField: FieldManifest["nameField"] = null;
   for (const def of i.defs) {
-    if (hidden.has(def.name)) continue;
+    if (hidden.has(def.name)) {
+      nameField = { description: oneLine(def.description) };
+      continue;
+    }
     const reported = i.classes?.[def.name];
     const own = i.kind === "module" ? i.moduleClasses?.[def.name] : undefined;
     // A field no service owns takes the class schemas/fields.json declares —
@@ -369,5 +378,5 @@ export function buildManifest(i: ManifestInput): FieldManifest {
       arg,
     });
   }
-  return { kind: i.kind, name: i.name, mode: i.mode, exists: i.record !== null, fields };
+  return { kind: i.kind, name: i.name, mode: i.mode, exists: i.record !== null, fields, nameField };
 }

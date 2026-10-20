@@ -162,6 +162,29 @@ export function setArgs(rows: FieldRow[], edits: Record<string, string>): { sets
   return { sets, errors };
 }
 
+// ── the name row of an add form ─────────────────────────────────────────
+
+// What the object's name is, per kind of form (fields.tsx's name row): `text`
+// where the schema has no description of the name field, and `also` what else
+// the manager derives from the name when its field is left empty.
+export const NAME_TEXT: Record<string, { text: string; also?: string }> = {
+  environment: { text: "The environment's name.", also: "Also the default of its network zone and, capitalised, of its display name." },
+  zone: { text: "The zone's name: camelCase, no hyphens (e.g. iotCams); its key in zones.json." },
+  module: { text: "The module's name in the catalogue." },
+  user: { text: "The user's name.", also: "Also the default of the display name." },
+  group: { text: "The group's name.", also: "Also the default of the display name." },
+  org: { text: "The organization's name.", also: "Also the default of the display name." },
+  role: { text: "The role's name.", also: "Also the default of the display name." },
+};
+
+// The name row's description: the schema's description of the name field
+// where it has one, else the kind's sentence; then what derives from it.
+export function nameDescription(kind: string, schemaText: string | null | undefined): string {
+  const t = NAME_TEXT[kind];
+  const first = schemaText && schemaText.trim() ? schemaText.trim() : t?.text ?? "";
+  return [first, t?.also ?? ""].filter((x) => x !== "").join(" ");
+}
+
 export function capitalised(name: string): string {
   return name ? name.charAt(0).toUpperCase() + name.slice(1) : "";
 }

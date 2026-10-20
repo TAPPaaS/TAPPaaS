@@ -1,4 +1,5 @@
-// fields.tsx — the one field form of every add and modify (ADR-034 D4): the
+// fields.tsx — the one field form of every add and modify (ADR-034 D4): an
+// add's name first, a row like a field's (the verb's positional), then the
 // object's fields from GET fields/<kind>[/<name>], each labelled
 // "<name> · <type>", its input typed from the schema (a dropdown where the value
 // must name a defined object, checkboxes for a list of them), "default <value>"
@@ -9,6 +10,9 @@
 
 import { useContext, useEffect, useState } from "react";
 import { useRead } from "./api";
+import { formParts } from "./argv";
+import { nameDescription } from "./forms";
+import { ManifestVerb } from "./types";
 import { ClassTag } from "./fieldsform";
 import { FieldManifest, ManifestField, classSummary, fieldChanges, fieldGroups, initialFieldText, listItems, placeholderOf, typedVars } from "./fieldlogic";
 import { PrefillContext, Step, Values } from "./operate";
@@ -133,8 +137,35 @@ export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; on
   );
 }
 
-// The form for a kind and object, loaded when the dialog opens.
-function ManifestForm({ kind, name, mode, only, values, set }: { kind: string; name: string | null; mode: "add" | "modify"; only?: string[]; values: Values; set: (v: Values) => void }) {
+// The object's name, the verb's open positional, as a field of its own: the
+// first row of an add form, "name · string" with its description (the
+// schema's, else the kind's sentence: forms.ts), and "no default" in grey.
+function NameRows({ kind, mode, verb, step, values, set, m }: { kind: string; mode: "add" | "modify"; verb: ManifestVerb; step: Pick<Step, "bin" | "fixed" | "hide" | "labels" | "placeholders">; values: Values; set: (v: Values) => void; m: FieldManifest | undefined }) {
+  const names = formParts(step, verb).names;
+  if (!names.length) return null;
+  return (
+    <div className="fieldsform ff-names">
+      {names.map((p, i) => {
+        const key = `@${p.name}`;
+        const v = values[key];
+        return (
+          <div key={key} className="ff-row">
+            <label className="ff-head">
+              <span className="mono ff-name">{step.labels?.[key] ?? (i === 0 ? "name" : p.name)}</span> · <span className="muted">string</span>
+              {!p.optional || (i === 0 && mode === "add") ? <span className="ff-req" title="required"> *</span> : null}
+            </label>
+            <input type="text" placeholder={step.placeholders?.[key] ?? "no default"} value={typeof v === "string" ? v : ""} onChange={(e) => set({ ...values, [key]: e.target.value })} />
+            {i === 0 ? <small className="muted">{nameDescription(kind, m?.nameField?.description)}</small> : null}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// The form for a kind and object, loaded when the dialog opens: the name
+// rows, then the fields.
+function ManifestForm({ kind, name, mode, only, values, set, verb, step }: { kind: string; name: string | null; mode: "add" | "modify"; only?: string[]; values: Values; set: (v: Values) => void; verb: ManifestVerb; step: Step }) {
   const r = useRead<FieldManifest>(fieldsPath(kind, name, mode), 3_600_000);
   const m = r.env?.data;
   // A new manifest (another object) starts the form again.
@@ -142,10 +173,16 @@ function ManifestForm({ kind, name, mode, only, values, set }: { kind: string; n
   useEffect(() => {
     if (m) setKey(`${m.kind}/${m.name ?? ""}/${m.mode}`);
   }, [m]);
-  if (r.failure) return <p className="readstate readstate-fail">The fields could not be read: {r.failure}</p>;
-  if (r.env?.error && !m) return <p className="readstate readstate-fail">The fields could not be read: {r.env.error}</p>;
-  if (!m) return <p className="muted">reading the fields…</p>;
-  return <FieldsForm key={key} m={m} only={only} values={values} set={set} />;
+  const names = <NameRows kind={kind} mode={mode} verb={verb} step={step} values={values} set={set} m={m ?? undefined} />;
+  if (r.failure) return <>{names}<p className="readstate readstate-fail">The fields could not be read: {r.failure}</p></>;
+  if (r.env?.error && !m) return <>{names}<p className="readstate readstate-fail">The fields could not be read: {r.env.error}</p></>;
+  if (!m) return <>{names}<p className="muted">reading the fields…</p></>;
+  return (
+    <>
+      {names}
+      <FieldsForm key={key} m={m} only={only} values={values} set={set} />
+    </>
+  );
 }
 
 // A step whose form is the object's fields: the manager's own verb, the
@@ -167,7 +204,7 @@ export function fieldsStep(o: {
   choices?: Record<string, string[]>;
   note?: Step["note"];
 }): Step {
-  return {
+  const step: Step = {
     title: o.title,
     bin: o.bin,
     verb: o.verb,
@@ -178,7 +215,7 @@ export function fieldsStep(o: {
     initial: o.initial,
     choices: o.choices,
     note: o.note,
-    render: (values, set) => <ManifestForm kind={o.kind} name={o.name} mode={o.mode} only={o.fields} values={values} set={set} />,
+    render: (values, set, verb) => <ManifestForm kind={o.kind} name={o.name} mode={o.mode} only={o.fields} values={values} set={set} verb={verb} step={step} />,
     previewNote: (values) => {
       const lines = Array.isArray(values["@classes"]) ? values["@classes"] : [];
       return lines.length ? (
@@ -195,4 +232,5 @@ export function fieldsStep(o: {
       );
     },
   };
+  return step;
 }

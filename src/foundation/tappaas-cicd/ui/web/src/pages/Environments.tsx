@@ -34,7 +34,7 @@ export function addEnvironmentSteps(): Step[] {
         note: "Writes the environment's record (config/environments/<name>.json; with --create-zone also its zone). Nothing is live until the reconcile below.",
       });
       // The reconcile takes the name typed here.
-      return { ...s, render: (values, set) => ((chosen.name = typeof values["@env"] === "string" ? values["@env"].trim() : ""), s.render!(values, set)) } as Step;
+      return { ...s, render: (values, set, verb) => ((chosen.name = typeof values["@env"] === "string" ? values["@env"].trim() : ""), s.render!(values, set, verb)) } as Step;
     })(),
     {
       ...env("2 · Make it live: environment-manager reconcile", "reconcile", {

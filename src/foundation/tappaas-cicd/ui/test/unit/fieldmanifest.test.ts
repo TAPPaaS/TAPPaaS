@@ -9,6 +9,7 @@ import { composeFields } from "../../../lib/ts/src/compose-fields";
 import { FieldManifest, RefContext, backupDefs, buildManifest, flattenSchema, moduleDefs, oneLine, renderDefault, zoneDefs } from "../../src/fieldmanifest";
 import { classSummary, fieldChanges, fieldGroups, placeholderOf, typedVars } from "../../web/src/fieldlogic";
 import { formParts } from "../../web/src/argv";
+import { nameDescription } from "../../web/src/forms";
 import { ManifestVerb } from "../../web/src/types";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
@@ -135,5 +136,12 @@ const envAddVerb = {
 const parts = formParts({ bin: "environment-manager", only: ["--create-zone"] }, envAddVerb);
 check(parts.names.map((p) => p.name).join() === "env" && parts.options.map((o) => o.flag).join() === "--create-zone" && parts.disruptions.map((d) => d.flag).join() === "--force", "environment add: the name, then --create-zone as the one option the fields leave, then --force as a disruption");
 check(formParts({ bin: "environment-manager", fixed: ["rossen"] }, envAddVerb).names.length === 0 && !formParts({ bin: "x" }, envAddVerb).options.some((o) => o.flag === "--json" || o.flag === "--force"), "…a fixed name is no row; --json is never offered, a disruption never as an option");
+
+// ── the name row: the positional as a field, described ───────────────────
+check(eadd.nameField?.description === "Slug identifier for the environment (e.g. foo, bar, default, mgmt).", "environment add: the name field's description comes from the schema");
+check(nameDescription("environment", eadd.nameField?.description) === "Slug identifier for the environment (e.g. foo, bar, default, mgmt). Also the default of its network zone and, capitalised, of its display name.", "…followed by what the manager derives from the name");
+check(zadd.nameField === null && nameDescription("zone", null) === "The zone's name: camelCase, no hyphens (e.g. iotCams); its key in zones.json.", "zone add: no name field in zones-fields, so the kind's own sentence");
+check(/^Slug identifier, used as the Authentik user identifier\. Also the default of the display name\.$/.test(nameDescription("user", user.nameField?.description)), "user: the schema's description, then the display name it defaults");
+check(org.nameField !== null && role.nameField !== null && group.nameField !== null, "…every identity kind's schema describes its name");
 
 done("fieldmanifest");

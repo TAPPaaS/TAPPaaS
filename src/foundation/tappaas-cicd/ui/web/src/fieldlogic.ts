@@ -33,6 +33,7 @@ export interface FieldManifest {
   mode: "add" | "modify";
   exists: boolean;
   fields: ManifestField[];
+  nameField: { description: string } | null;
 }
 
 // What an empty input says: the real default, or that there is none. A

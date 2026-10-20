@@ -26,7 +26,7 @@ export interface Step extends ArgvStep {
   choices?: Record<string, string[]>; // offered values, by "@name" or flag
   labels?: Record<string, string>;
   placeholders?: Record<string, string>; // an example in place of the help's <arg>, by "@name" or flag
-  render?: (values: Values, set: (v: Values) => void) => ReactNode; // a change form of its own
+  render?: (values: Values, set: (v: Values) => void, verb: ManifestVerb) => ReactNode; // a change form of its own, its name rows included
   note?: ReactNode;
   // The head of the Preview: what the change does (fields.tsx: the change
   // classes of the fields being changed, in the operator's words).
@@ -57,10 +57,10 @@ export function applyForm(verb: ManifestVerb | null, argv: string[]): string[] {
 }
 
 // part: "all" is the positionals, the options and the disruptions. A step with
-// a form of its own (fields.tsx) shows "names" (the positionals) above that
-// form and "bottom" below it: the verb's options that are not fields under
-// "Options", then the disruptions.
-function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb: ManifestVerb; values: Values; set: (v: Values) => void; part?: "all" | "names" | "bottom" }) {
+// a form of its own (fields.tsx: the name rows, then the fields) shows "bottom"
+// below it: the verb's options that are not fields under "Options", then the
+// disruptions.
+function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb: ManifestVerb; values: Values; set: (v: Values) => void; part?: "all" | "bottom" }) {
   const label = (k: string, fallback: string) => step.labels?.[k] ?? fallback;
   const { names: pos, options: opts } = formParts(step, verb);
   const field = (key: string, arg0: string | null, choices: string[] | null, repeatable: boolean) => {
@@ -84,8 +84,7 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
     }
     return <input type="text" placeholder={arg ?? ""} value={typeof v === "string" ? v : ""} onChange={(e) => set({ ...values, [key]: e.target.value })} />;
   };
-  const top = part !== "bottom";
-  const bottom = part !== "names";
+  const top = part === "all";
   const optionRows = opts.map((o) =>
     o.takesValue ? (
       <label key={o.flag} className="form-row">
@@ -123,7 +122,7 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
           {verb.details ? <small className="muted mono wrap">{verb.details}</small> : null}
         </label>
       ) : null}
-      {bottom && verb.disruptions.length ? (
+      {verb.disruptions.length ? (
         <fieldset className="disruptions">
           <legend>Disruption — only if you mean it</legend>
           {verb.disruptions.map((d) => (
@@ -225,8 +224,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       {step.note ? <div className="note">{step.note}</div> : null}
       {step.render ? (
         <>
-          <VerbForm step={step} verb={verb} values={values} set={setValues} part="names" />
-          <PrefillContext.Provider value={step.prefill ?? null}>{step.render(values, setValues)}</PrefillContext.Provider>
+          <PrefillContext.Provider value={step.prefill ?? null}>{step.render(values, setValues, verb)}</PrefillContext.Provider>
           <VerbForm step={step} verb={verb} values={values} set={setValues} part="bottom" />
         </>
       ) : (
