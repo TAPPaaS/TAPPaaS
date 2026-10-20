@@ -9,7 +9,7 @@
 
 import { ReactNode, createContext, useEffect, useMemo, useState } from "react";
 import { applyJob, previewJob, readJob, reloadAll, useJob, useRead, useVerb } from "./api";
-import { ArgvStep, Values, buildArgv, prefillValues } from "./argv";
+import { ArgvStep, Values, buildArgv, formParts, prefillValues } from "./argv";
 import { useOpenedBy } from "./opener";
 import { Command, Output, jobResult } from "./jobs";
 import { Job, ManifestVerb, Me } from "./types";
@@ -41,10 +41,6 @@ export interface Step extends ArgvStep {
 // The assistant's values for the field form of the step that renders it.
 export const PrefillContext = createContext<Values | null>(null);
 
-// Never offered in a form: the job model sets the preview and apply flags; the
-// console reads the config it reads; output formats are for the CLI.
-const ALWAYS_HIDDEN = ["--apply", "--dry-run", "--check", "--diff", "--json", "--config-dir", "--help", "-h", "--debug", "--silent", "--quiet"];
-
 // What Apply will run: the argv with the applying flag (or without the dry run).
 // A read verb's writeWhen option (test --deep) in argv: the call is a write with no dry run.
 export function writeMarkOf(verb: ManifestVerb, argv: string[]): { flag: string; touches: string } | undefined {
@@ -60,14 +56,13 @@ export function applyForm(verb: ManifestVerb | null, argv: string[]): string[] {
   return argv;
 }
 
-// part: "top" is the positionals and options, "bottom" the disruptions; a step
-// with a form of its own (fields.tsx) shows that form between the two.
-function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb: ManifestVerb; values: Values; set: (v: Values) => void; part?: "all" | "top" | "bottom" }) {
-  const hidden = new Set([...ALWAYS_HIDDEN, ...(step.hide ?? [])]);
-  const disruptive = new Set(verb.disruptions.map((d) => d.flag));
+// part: "all" is the positionals, the options and the disruptions. A step with
+// a form of its own (fields.tsx) shows "names" (the positionals) above that
+// form and "bottom" below it: the verb's options that are not fields under
+// "Options", then the disruptions.
+function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb: ManifestVerb; values: Values; set: (v: Values) => void; part?: "all" | "names" | "bottom" }) {
   const label = (k: string, fallback: string) => step.labels?.[k] ?? fallback;
-  const pos = verb.positionals.slice(step.fixed?.length ?? 0).filter((p) => !hidden.has(`@${p.name}`));
-  const opts = verb.options.filter((o) => !hidden.has(o.flag) && !disruptive.has(o.flag) && (!step.only || step.only.includes(o.flag)));
+  const { names: pos, options: opts } = formParts(step, verb);
   const field = (key: string, arg0: string | null, choices: string[] | null, repeatable: boolean) => {
     const offered = step.choices?.[key] ?? choices;
     const arg = step.placeholders?.[key] ?? arg0;
@@ -90,7 +85,21 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
     return <input type="text" placeholder={arg ?? ""} value={typeof v === "string" ? v : ""} onChange={(e) => set({ ...values, [key]: e.target.value })} />;
   };
   const top = part !== "bottom";
-  const bottom = part !== "top";
+  const bottom = part !== "names";
+  const optionRows = opts.map((o) =>
+    o.takesValue ? (
+      <label key={o.flag} className="form-row">
+        <span className="mono">{label(o.flag, o.flag)}</span>
+        {field(o.flag, o.arg, o.choices, o.repeatable)}
+        {o.description ? <small className="muted">{o.description}</small> : null}
+      </label>
+    ) : (
+      <label key={o.flag} className="form-check">
+        <input type="checkbox" checked={values[o.flag] === true} onChange={(e) => set({ ...values, [o.flag]: e.target.checked })} />
+        <span className="mono">{label(o.flag, o.flag)}</span> <small className="muted">{o.description}</small>
+      </label>
+    ),
+  );
   return (
     <div className="form">
       {top && pos.map((p) => (
@@ -99,22 +108,15 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
           {field(`@${p.name}`, `<${p.name}>`, null, false)}
         </label>
       ))}
-      {top && opts.map((o) =>
-        o.takesValue ? (
-          <label key={o.flag} className="form-row">
-            <span className="mono">{label(o.flag, o.flag)}</span>
-            {field(o.flag, o.arg, o.choices, o.repeatable)}
-            {o.description ? <small className="muted">{o.description}</small> : null}
-          </label>
-        ) : (
-          <label key={o.flag} className="form-check">
-            <input type="checkbox" checked={values[o.flag] === true} onChange={(e) => set({ ...values, [o.flag]: e.target.checked })} />
-            <span className="mono">{label(o.flag, o.flag)}</span> <small className="muted">{o.description}</small>
-          </label>
-        ),
-      )}
+      {part === "all" ? optionRows : null}
+      {part === "bottom" && optionRows.length ? (
+        <fieldset className="options">
+          <legend>Options</legend>
+          {optionRows}
+        </fieldset>
+      ) : null}
       {/* A field form (fields.tsx) lists the fields themselves. */}
-      {top && verb.open && !step.render ? (
+      {part === "all" && verb.open && !step.render ? (
         <label className="form-row">
           <span>more options</span>
           <textarea rows={3} placeholder={"one per line: --flag value\n(see the verb's --help)"} value={Array.isArray(values["@extra"]) ? values["@extra"].join("\n") : ""} onChange={(e) => set({ ...values, "@extra": e.target.value.split("\n") })} />
@@ -223,7 +225,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       {step.note ? <div className="note">{step.note}</div> : null}
       {step.render ? (
         <>
-          <VerbForm step={step} verb={verb} values={values} set={setValues} part="top" />
+          <VerbForm step={step} verb={verb} values={values} set={setValues} part="names" />
           <PrefillContext.Provider value={step.prefill ?? null}>{step.render(values, setValues)}</PrefillContext.Provider>
           <VerbForm step={step} verb={verb} values={values} set={setValues} part="bottom" />
         </>

@@ -137,6 +137,26 @@ export function fieldChanges(fields: ManifestField[], edits: Record<string, stri
   return out;
 }
 
+// The order of a field form, top to bottom: the object's name (the verb's
+// open positionals), the schema's fields in the schema's own order, then the
+// verb's options that are not fields under "Options", then the disruptions
+// (operate.tsx). The fields of a nested object stay together under their
+// parent (domains.primary, domains.aliases) even where the schema interleaves
+// them; a top-level field keeps its place between them.
+export const parentOf = (field: string): string => (field.includes(".") ? field.slice(0, field.lastIndexOf(".")) : "");
+
+export function fieldGroups(fields: Pick<ManifestField, "name">[]): { parent: string; fields: string[] }[] {
+  const groups: { parent: string; fields: string[] }[] = [];
+  for (const f of fields) {
+    const parent = parentOf(f.name);
+    const last = groups[groups.length - 1];
+    const g = parent !== "" ? groups.find((x) => x.parent === parent) : last && last.parent === "" ? last : undefined;
+    if (g) g.fields.push(f.name);
+    else groups.push({ parent, fields: [f.name] });
+  }
+  return groups;
+}
+
 // The Preview's head: what the change does, once per class, in the
 // operator's words ("restarts the module: memory, cores").
 export function classSummary(changed: { name: string; class: string | null; apply?: string | null }[]): string[] {

@@ -10,7 +10,7 @@
 import { useContext, useEffect, useState } from "react";
 import { useRead } from "./api";
 import { ClassTag } from "./fieldsform";
-import { FieldManifest, ManifestField, classSummary, fieldChanges, initialFieldText, listItems, placeholderOf, typedVars } from "./fieldlogic";
+import { FieldManifest, ManifestField, classSummary, fieldChanges, fieldGroups, initialFieldText, listItems, placeholderOf, typedVars } from "./fieldlogic";
 import { PrefillContext, Step, Values } from "./operate";
 
 export function fieldsPath(kind: string, name: string | null, mode: "add" | "modify"): string {
@@ -85,27 +85,33 @@ export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; on
   const open = m.fields.filter((f) => f.editable);
   const shut = m.fields.filter((f) => !f.editable);
   const match = (f: ManifestField) => !q || `${f.name} ${f.description}`.toLowerCase().includes(q.toLowerCase());
+  const row = (f: ManifestField) => {
+    const changed = edits[f.name] !== initialFieldText(f);
+    return (
+      <div key={f.name} className={`ff-row${changed ? " ff-changed" : ""}`}>
+        <label className="ff-head">
+          <span className="mono ff-name">{f.name}</span> · <span className="muted">{f.typeText}</span>
+          {f.required ? <span className="ff-req" title="required"> *</span> : null}
+          <span className="spacer" />
+          {f.offRelease ? <span className="ff-note" title="the resolver's .orig note">kept off the release on purpose</span> : null}
+          <ClassTag c={f.class} apply={f.apply} />
+        </label>
+        <Input f={f} text={edits[f.name] ?? ""} set={(t) => edit(f.name, t)} vars={vars} />
+        {f.description ? <small className="muted">{f.description}</small> : null}
+        {errors[f.name] ? <small className="ff-error">{errors[f.name]}</small> : null}
+      </div>
+    );
+  };
   return (
     <div className="fieldsform">
       {open.length > 12 ? <input className="search" placeholder="Filter the fields" value={q} onChange={(e) => setQ(e.target.value)} /> : null}
       {open.length === 0 ? <p className="muted small">Nothing here can be changed through this verb.</p> : null}
-      {open.filter(match).map((f) => {
-        const changed = edits[f.name] !== initialFieldText(f);
-        return (
-          <div key={f.name} className={`ff-row${changed ? " ff-changed" : ""}`}>
-            <label className="ff-head">
-              <span className="mono ff-name">{f.name}</span> · <span className="muted">{f.typeText}</span>
-              {f.required ? <span className="ff-req" title="required"> *</span> : null}
-              <span className="spacer" />
-              {f.offRelease ? <span className="ff-note" title="the resolver's .orig note">kept off the release on purpose</span> : null}
-              <ClassTag c={f.class} apply={f.apply} />
-            </label>
-            <Input f={f} text={edits[f.name] ?? ""} set={(t) => edit(f.name, t)} vars={vars} />
-            {f.description ? <small className="muted">{f.description}</small> : null}
-            {errors[f.name] ? <small className="ff-error">{errors[f.name]}</small> : null}
-          </div>
-        );
-      })}
+      {fieldGroups(open.filter(match)).map((g, i) => (
+        <div key={`${g.parent}-${i}`} className={g.parent && g.fields.length > 1 ? "ff-group" : "ff-top"}>
+          {g.parent && g.fields.length > 1 ? <div className="ff-group-head mono">{g.parent}</div> : null}
+          {g.fields.map((n) => row(open.find((f) => f.name === n)!))}
+        </div>
+      ))}
       {shut.length ? (
         <details className="ff-shut">
           <summary>{shut.length} field{shut.length === 1 ? "" : "s"} not changed here</summary>
@@ -143,7 +149,8 @@ function ManifestForm({ kind, name, mode, only, values, set }: { kind: string; n
 }
 
 // A step whose form is the object's fields: the manager's own verb, the
-// fields' tokens appended, the options in `keep` still offered beside them.
+// fields' tokens appended, the options in `keep` offered below the fields
+// under "Options" (operate.tsx).
 export function fieldsStep(o: {
   title: string;
   bin: string;
@@ -153,7 +160,7 @@ export function fieldsStep(o: {
   kind: string;
   name: string | null;
   mode: "add" | "modify";
-  keep?: string[]; // the verb's own options still offered beside the fields
+  keep?: string[]; // the verb's own options that are not fields, offered under "Options"
   fields?: string[]; // only these fields (a module card's own)
   hide?: string[];
   initial?: Values;

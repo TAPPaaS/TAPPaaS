@@ -7,7 +7,9 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { composeFields } from "../../../lib/ts/src/compose-fields";
 import { FieldManifest, RefContext, backupDefs, buildManifest, flattenSchema, moduleDefs, oneLine, renderDefault, zoneDefs } from "../../src/fieldmanifest";
-import { classSummary, fieldChanges, placeholderOf, typedVars } from "../../web/src/fieldlogic";
+import { classSummary, fieldChanges, fieldGroups, placeholderOf, typedVars } from "../../web/src/fieldlogic";
+import { formParts } from "../../web/src/argv";
+import { ManifestVerb } from "../../web/src/types";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -120,5 +122,18 @@ check(c3.tokens.join(" ") === '--set access-to=["internet","mgmt"]', "zone modif
 check(fieldChanges(mod.fields, { memory: "lots" }).errors.memory === "memory must be a number", "a value of the wrong type is refused in the form");
 check(fieldChanges(env.fields, { displayName: "" }).errors.displayName !== undefined, "emptying a field a verb cannot unset is refused, not sent");
 check(placeholderOf(field(user, "displayName")!) === "no default", "an empty input with no default says so");
+
+// ── the form's order: name, the fields as the schema orders them, Options, disruptions ──
+const eopen = eadd.fields.filter((f) => f.editable);
+check(JSON.stringify(fieldGroups(eopen)) === JSON.stringify([{ parent: "", fields: ["displayName", "ownerOrg"] }, { parent: "domains", fields: ["domains.primary", "domains.dnsMode"] }, { parent: "network", fields: ["network.zone"] }]), "environment add: the fields in the schema's order, a nested object's under its parent");
+check(JSON.stringify(fieldGroups([{ name: "a.x" }, { name: "b" }, { name: "a.y" }, { name: "c" }])) === JSON.stringify([{ parent: "a", fields: ["a.x", "a.y"] }, { parent: "", fields: ["b", "c"] }]), "…a parent's fields stay together where the schema interleaves them");
+const envAddVerb = {
+  verb: "add", keys: [["add"]], positionals: [{ name: "env", optional: true, repeatable: false }],
+  options: ["--name", "--domain", "--owner", "--zone", "--create-zone", "--display", "--dns-mode", "--force", "--json"].map((flag) => ({ flag, takesValue: !["--create-zone", "--force", "--json"].includes(flag), arg: null, choices: null, repeatable: false, description: "" })),
+  disruptions: [{ flag: "--force", consequence: "overwrites" }],
+} as unknown as ManifestVerb;
+const parts = formParts({ bin: "environment-manager", only: ["--create-zone"] }, envAddVerb);
+check(parts.names.map((p) => p.name).join() === "env" && parts.options.map((o) => o.flag).join() === "--create-zone" && parts.disruptions.map((d) => d.flag).join() === "--force", "environment add: the name, then --create-zone as the one option the fields leave, then --force as a disruption");
+check(formParts({ bin: "environment-manager", fixed: ["rossen"] }, envAddVerb).names.length === 0 && !formParts({ bin: "x" }, envAddVerb).options.some((o) => o.flag === "--json" || o.flag === "--force"), "…a fixed name is no row; --json is never offered, a disruption never as an option");
 
 done("fieldmanifest");

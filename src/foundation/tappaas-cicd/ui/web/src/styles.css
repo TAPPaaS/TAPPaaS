@@ -226,6 +226,8 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .form-check { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
 .disruptions { border: 1px solid #f3d19c; background: #fffaf0; border-radius: 6px; padding: 6px 10px; }
 .disruptions legend { font-size: 12px; color: #92400e; padding: 0 4px; }
+.options { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; margin: 8px 0; display: grid; gap: 8px; }
+.options legend { font-size: 12px; color: var(--muted); padding: 0 4px; }
 .actions { display: flex; gap: 8px; align-items: center; margin: 8px 0; flex-wrap: wrap; }
 .btn-primary { background: #1f2933; color: #fff; border-color: #1f2933; }
 .btn-primary:hover:not(:disabled) { background: #323f4b; }
@@ -320,6 +322,10 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .ff-row input, .ff-row select, .ff-row textarea { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; width: 100%; box-sizing: border-box; }
 .ff-row textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .ff-error { color: #a12a2a; }
+/* A nested object's fields together under their parent (domains.primary, domains.aliases). */
+.ff-top, .ff-group { display: grid; gap: 10px; }
+.ff-group { border-left: 2px solid var(--line); padding-left: 8px; }
+.ff-group-head { font-size: 12px; color: var(--muted); }
 /* A list of defined objects: one box each, in a row, then a line for any other value. */
 .ff-checks { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; }
 .ff-check { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; }
