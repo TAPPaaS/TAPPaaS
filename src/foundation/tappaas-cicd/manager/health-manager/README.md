@@ -96,6 +96,7 @@ fails**:
 | `lan-uplink` | the cluster module's `lan-uplink.sh show --json`, one SSH probe per node | never — **WARN** when a node with HA's watchdog armed has its `lan` on one port, a bonded leg is down, active-backup runs on its backup, LACP has no partner or a leg outside the aggregator, both legs reach the same switch (LLDP), MTUs differ, or the live layout differs from the declaration (see the cluster README, *Redundant LAN uplink*) |
 | `cve-status` | `config/sbom/cve-status.json` (the last `scan security`) | never — **WARN** on a failed scan, a fixable Critical/High CVE, or a scan older than 8 days (see below) |
 | `signature-status` | `config/sbom/signatures.json` (written by `check-repo-signatures.sh` after every repository sync, ADR-033) | **FAIL** when a staging/production checkout runs something that is not a verified release, or a repository signs nothing and `site.json` sets `requireSigned`; **WARN** when it signs nothing, runs past its last verified release or has uncommitted changes, a signing key expires within 60 days, or the check is older than 3 days |
+| `control-plane-trust` | `config/control-plane.json` (written by refresh and by module-manager, ADR-035) | never — **WARN** for each controller a module brought from a repository whose release is not verified that plugs into a foundation manager (`switch-manager`, `ap-manager`, …); the install said so too |
 
 A gate with nothing to check (e.g. no reachable guests, backup tooling absent)
 reports **SKIP**, not FAIL. `--threshold` applies cluster-wide. The disk gate is

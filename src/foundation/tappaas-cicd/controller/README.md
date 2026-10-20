@@ -94,7 +94,10 @@ passes over it.
 | [`proxmox-controller`](proxmox-controller/) | Bash | The Proxmox hypervisor L2 layer: per-VM NIC trunk lists and node `lan` bridge VLAN sets, plus VM/node migration and disk resize helpers. |
 | [`authentik-controller`](authentik-controller/) | Python package | The Authentik identity server (admin REST API): users, groups/roles and membership, proxy/OIDC applications, and the forward-auth outpost. |
 | [`pbs-controller`](pbs-controller/) | Bash (reuses foundation PBS libs) | The Proxmox Backup Server: shared-job status, per-module snapshot listing, verify, and datastore namespaces. Reuses `backup/lib/pbs-job.sh` + `pbs-namespace.sh` rather than reimplementing the PBS API; degrades gracefully when PBS is unreachable. |
-| [`unifi-controller`](unifi-controller/) | Bash (plugin functions behind the controller shim) | A UniFi OS controller, for `switch-manager` (`switch/1`) and `ap-manager` (`ap/1`): reads the switches, ports and APs it adopts and programs port VLANs, aggregates and SSIDs. |
+
+A controller can also come with the module that runs its application (ADR-035): installing
+the module links it here and records it in `config/control-plane.json`. `unifi-controller`
+is one — it ships with the Community `unifi-os` module, as UniFi OS is not FLOSS.
 
 Each controller directory contains a `README.md` (user-facing: what it does and
 how to drive its CLI) and a `DESIGN.md` (implementation notes: language, build,

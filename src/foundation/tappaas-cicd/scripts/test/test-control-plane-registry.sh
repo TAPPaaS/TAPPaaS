@@ -46,7 +46,7 @@ T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 REG="${T}/control-plane.json"
 cat > "${REG}" <<'EOF'
 {"version":1,"components":[
- {"name":"foo-controller","kind":"controller","module":"foo","source":"/x/foo/controller/foo-controller","instances":["foo"]},
+ {"name":"foo-controller","kind":"controller","module":"foo","source":"/x/foo/controller/foo-controller","plugsInto":["switch-manager"],"instances":["foo"]},
  {"name":"retired-manager","kind":"manager","module":"tappaas-cicd","source":"/x"}]}
 EOF
 out="$(CONFIG_DIR="${T}" bash "${CICD}/scripts/control-plane-registry.sh" --check)"
@@ -59,7 +59,7 @@ ck "a module's entry is kept as it was" "foo-controller foo" "$(jq -r '.componen
 ck "a standard entry no longer in components.json is gone" "0" "$(jq '[.components[] | select(.name == "retired-manager")] | length' "${REG}")"
 ck "an entry carries its source directory" "${CICD}/manager/module-manager" "$(jq -r '.components[] | select(.name == "module-manager") | .source' "${REG}")"
 ck "…and its manifest kind" "help-json" "$(jq -r '.components[] | select(.name == "module-manager") | .manifest' "${REG}")"
-ck "…and what a controller plugs into" "switch-manager,ap-manager" "$(jq -r '.components[] | select(.name == "unifi-controller") | .plugsInto | join(",")' "${REG}")"
+ck "…a module's controller keeps what it plugs into" "switch-manager" "$(jq -r '.components[] | select(.name == "foo-controller") | .plugsInto | join(",")' "${REG}")"
 ck "…and a renamed component's old names" "switch-controller" "$(jq -r '.components[] | select(.name == "switch-manager") | .aliases | join(",")' "${REG}")"
 ck "the lock file is beside it" "yes" "$([[ -e "${REG}.lock" ]] && echo yes || echo no)"
 printf '{not json' > "${T}/components.json"

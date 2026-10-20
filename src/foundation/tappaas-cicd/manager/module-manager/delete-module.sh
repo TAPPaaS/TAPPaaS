@@ -71,6 +71,18 @@ OPT_DECOMMISSION=false    # ADR-010 §8.4.5: a machine's delete.sh runs only whe
 
 # shellcheck source=common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
+# A module's own controllers and managers (ADR-035 D5): beside this script in
+# the checkout, else linked into ~/bin (lib/*.sh are). Absent — a mothership not
+# yet refreshed to it — a module that declares components cannot register them.
+_cpc_lib="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/control-plane-components.sh"
+[[ -r "${_cpc_lib}" ]] || _cpc_lib="/home/tappaas/bin/control-plane-components.sh"
+if [[ -r "${_cpc_lib}" ]]; then
+    # shellcheck source=../../lib/control-plane-components.sh
+    . "${_cpc_lib}"
+else
+    cpc_register() { error "control plane: ${_cpc_lib} is missing — refresh the control plane first"; return 1; }
+    cpc_unregister() { return 0; }
+fi
 
 # #533: managers run as the tappaas operator, never root — under sudo, SSH
 # resolves identity from /root/.ssh and fails (ADR-018). Refuse root up front.
@@ -537,6 +549,12 @@ main() {
     else
         warn "Cannot find module directory (no .moduleSource in config) — skipping delete.sh"
     fi
+
+    # ── Step 4b: The module's own controllers and managers (ADR-035 D5) ──
+    # After its delete.sh (which takes the instance off its manager, D6): this
+    # instance leaves their entries; a component no other instance uses goes,
+    # with its links.
+    cpc_unregister "${module}" || warn "  could not update config/control-plane.json for '${module}'"
 
     # ── Step 5: Call dependency delete-service.sh scripts (reverse) ──
     info "\n${BOLD}Step 5: Call dependency service deleters (reverse order)${CL}"

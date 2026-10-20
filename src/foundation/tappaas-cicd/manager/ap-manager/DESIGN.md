@@ -55,7 +55,8 @@ exits non-zero on failure.
 
 ## Pending / not yet implemented
 
-- **Vendor controllers are limited.** Only `unifi-controller` and the manual
+- **Vendor controllers are limited.** Only `unifi-controller` (the Community `unifi-os`
+  module) and the manual
   fallback exist. Any other AP brand falls through to manual, so `apply` prints instructions rather than programming the AP.
 - The validations in `delta` rely on the AP's `link` (uplink switch/port) being
   recorded; an AP without a linked uplink cannot have its uplink-VLAN coverage

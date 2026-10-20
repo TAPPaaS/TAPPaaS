@@ -223,6 +223,17 @@ if [ -f scripts/control-plane-registry.sh ]; then
   bash scripts/control-plane-registry.sh || warn "  could not write config/control-plane.json — leaving the existing one"
 fi
 
+# A module's own controllers and managers (ADR-035 D5), rebuilt and relinked
+# from their module's source like tappaas-cicd's own; a link into a module's
+# component that nothing registers any more goes. A failure is a stale group.
+if [ -f lib/control-plane-components.sh ]; then
+  # shellcheck source=../lib/control-plane-components.sh
+  . lib/control-plane-components.sh
+  _cpc_n="$(jq '[.components[]? | select(.module != "tappaas-cicd")] | length' "${CPC_REGISTRY}" 2>/dev/null || echo 0)"
+  [ "${_cpc_n}" -gt 0 ] && info "  relinking ${_cpc_n} module component(s)..."
+  cpc_relink || _comp_failed=$((_comp_failed + 1))
+fi
+
 # ── 4. Recompose the module-field schema ─────────────────────────────
 # config/module-fields.json is every service's fields.json merged (#567): what
 # `module modify --set` accepts and how it types a value. A field a pull just

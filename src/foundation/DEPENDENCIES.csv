@@ -35,6 +35,7 @@ test-ha-vm-lib.sh,tappaas-cicd/lib/,ha-vm-lib.sh
 controller-lib.sh,tappaas-cicd/lib/,controller-shim.sh; controller-manual.sh
 controller-shim.sh,tappaas-cicd/lib/,common-install-routines.sh
 controller-manual.sh,tappaas-cicd/lib/,
+control-plane-components.sh,tappaas-cicd/lib/,
 #
 # === tappaas-cicd/scripts ===
 acme-setup.sh,tappaas-cicd/scripts/,common-install-routines.sh
@@ -107,12 +108,12 @@ src/config.ts,tappaas-cicd/manager/module-manager/,update-module.sh; site.json
 src/validate.ts,tappaas-cicd/manager/module-manager/,validate-module.sh; validate-module-tier-source.sh
 src/types.ts,tappaas-cicd/manager/module-manager/,
 copy-update-json.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; convert-json-to-config.sh
-delete-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
-install-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; copy-update-json.sh; validate-module-tier-source.sh; resolve-module.sh; backup-manager
+delete-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; control-plane-components.sh
+install-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; copy-update-json.sh; validate-module-tier-source.sh; resolve-module.sh; backup-manager; control-plane-components.sh
 module-format.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
 resolve-module.sh,tappaas-cicd/manager/module-manager/,module-catalog-lib.sh; site.json
 snapshot-vm.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; ha-vm-lib.sh; update-module.sh; update-os.sh
-update-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; apply-json-merge.sh; snapshot-vm.sh
+update-module.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh; apply-json-merge.sh; snapshot-vm.sh; control-plane-components.sh
 validate-module.sh,tappaas-cicd/manager/module-manager/,
 validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/,common-install-routines.sh
 test-validate-module-tier-source.sh,tappaas-cicd/manager/module-manager/,validate-module-tier-source.sh
@@ -328,10 +329,6 @@ test-network.sh,network/,common-install-routines.sh; test-network-manager; netwo
 test-caddy-public.sh,network/,common-install-routines.sh; install-module.sh; delete-module.sh
 test-variant-public.sh,network/,common-install-routines.sh; vm-net.sh; network-manager; install-module.sh; delete-module.sh; unbound-manager; network.json; zones.json
 #
-# === tappaas-cicd/controller/unifi-controller (ADR-035 switch/1 + ap/1) ===
-unifi-controller,tappaas-cicd/controller/unifi-controller/,controller-shim.sh; unifi.sh
-unifi.sh,tappaas-cicd/controller/unifi-controller/,
-test-unifi-controller.sh,tappaas-cicd/controller/unifi-controller/,unifi.sh
 #
 # === network/scripts/switch-controller (TS S-TS pilot port; not yet the linked bin) ===
 src/main.ts,network/scripts/switch-controller/,zones.json

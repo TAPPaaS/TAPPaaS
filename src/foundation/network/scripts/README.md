@@ -205,7 +205,8 @@ non-zero; exit 3 means "not mine" (a device-arch controller asked for a
 controller's devices, an unknown vendor).
 
 Shipped controllers:
-- **`unifi-controller`** (`tappaas-cicd/controller/unifi-controller/`) — UniFi
+- **`unifi-controller`** (in the Community `unifi-os` module, which installs and
+  registers it) — UniFi
   OS (controller arch; module `unifi-os`). Maps ports to UniFi
   `port_overrides`, SSIDs to `wlanconf`, VLANs to VLAN-only networks. A failed
   call names its cause: no connection (host, port in `url=`, TLS), HTTP 401/403

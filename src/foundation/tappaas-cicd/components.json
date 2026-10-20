@@ -129,17 +129,6 @@
       "package": null
     },
     {
-      "name": "unifi-controller",
-      "kind": "controller",
-      "path": "controller/unifi-controller",
-      "language": "bash",
-      "package": null,
-      "plugsInto": [
-        "switch-manager",
-        "ap-manager"
-      ]
-    },
-    {
       "name": "update-tappaas",
       "kind": "service",
       "path": "update-tappaas",

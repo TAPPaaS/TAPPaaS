@@ -16,6 +16,8 @@
 //   - switch-ports     (#853: a switch port unrecorded and not parked, or set
 //                       otherwise than its record — WARN)
 //   - signature-status (ADR-033 D10: is what each repository runs a signed release)
+//   - control-plane-trust (ADR-035 D7: a module's controller from an unverified
+//                       repository in a foundation manager — WARN)
 
 import { spawnSync } from "child_process";
 import { join } from "path";
@@ -24,6 +26,7 @@ import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient, Health
 import { existsSync, readFileSync } from "fs";
 import { checkCveStatus } from "./security";
 import { checkSignatureStatus } from "./signatures";
+import { checkControlPlaneTrust } from "./controlplane";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
 // does (defaulting zone0 to "mgmt"), for the gates that probe a guest over SSH.
@@ -905,6 +908,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkPulse(client, opts.configDir),
     checkCveStatus(opts.configDir, Date.now()),
     checkSignatureStatus(opts.configDir, Date.now()),
+    checkControlPlaneTrust(opts.configDir),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;
   return { checks, failed };

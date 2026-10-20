@@ -220,22 +220,9 @@ for tool in opnsense-firewall zone-manager dns-manager caddy-manager rules-manag
     fi
 done
 
-section "Standard 1b: ADR-008 provider unit tests (proxmox/switch/ap; #335/#339)"
-
-# NB: test-{proxmox,switch,ap}-manager.sh moved to tappaas-cicd/controller/<x>-controller/
-# in ADR-007 S0 (run via controller/test.sh); the UniFi one moved with unifi-controller (ADR-035).
-for ut in ../tappaas-cicd/controller/unifi-controller/test-unifi-controller.sh; do
-    if [[ -x "${SCRIPT_DIR}/scripts/${ut}" ]]; then
-        if ut_out=$("${SCRIPT_DIR}/scripts/${ut}" 2>&1); then
-            pass "${ut}"
-        else
-            fail "${ut}"
-            echo "${ut_out}" | sed 's/^/    /'
-        fi
-    else
-        skip "scripts/${ut} not found or not executable"
-    fi
-done
+# (Standard 1b, the provider unit tests, is gone: the proxmox/switch/ap ones run
+# with their components (controller/test.sh, manager/test.sh), and the UniFi one
+# with unifi-controller in the Community unifi-os module's test (ADR-035).)
 
 section "Standard 1c: helper unit tests (lib/test-*.sh)"
 

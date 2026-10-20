@@ -59,7 +59,6 @@ A "direct dependency" is one of:
 | `tappaas-cicd/controller/authentik-controller/` (3 sh + 4 py + 3 test) | 10 |
 | `tappaas-cicd/controller/node-provisioner/` (3 sh + 9 py + 3 test) | 15 |
 | `tappaas-cicd/controller/pbs-controller/` | 3 |
-| `tappaas-cicd/controller/unifi-controller/` | 3 |
 | `tappaas-cicd/controller/opnsense-controller/` (23 py + 8 test) | 31 |
 | `tappaas-cicd/update-tappaas/` (py pkg) | 2 |
 | `tappaas-cicd/opnsense-patch/` (sh + php) | 2 |

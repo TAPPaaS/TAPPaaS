@@ -50,6 +50,18 @@ readonly CONFIG_DIR="/home/tappaas/config"
 
 # shellcheck source=common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
+# A module's own controllers and managers (ADR-035 D5): beside this script in
+# the checkout, else linked into ~/bin (lib/*.sh are). Absent — a mothership not
+# yet refreshed to it — a module that declares components cannot register them.
+_cpc_lib="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/control-plane-components.sh"
+[[ -r "${_cpc_lib}" ]] || _cpc_lib="/home/tappaas/bin/control-plane-components.sh"
+if [[ -r "${_cpc_lib}" ]]; then
+    # shellcheck source=../../lib/control-plane-components.sh
+    . "${_cpc_lib}"
+else
+    cpc_register() { error "control plane: ${_cpc_lib} is missing — refresh the control plane first"; return 1; }
+    cpc_unregister() { return 0; }
+fi
 
 # #533: managers run as the tappaas operator, never root — under sudo, SSH
 # resolves identity from /root/.ssh and fails (ADR-018). Refuse root up front.
@@ -300,6 +312,9 @@ rollback_failed_install() {
     fi
     echo "" >&2
     warn "Install failed — removing what this run created."
+    # Its controllers and managers (ADR-035 D5): an entry another instance
+    # still uses keeps its links; one only this instance had goes with it.
+    cpc_unregister "${INSTALL_MODULE_NAME}" >/dev/null 2>&1 || true
     # A failure INSIDE Step 5 — a service after cluster:vm, such as network:nat —
     # ends the run before INSTALL_CREATED_VM is set, so ask the cluster instead: a
     # VM that was not there before and is there now is this run's. Asking only the
@@ -911,6 +926,16 @@ main() {
                 warn "  ${dep} install-service returned non-zero — optional integration not wired (continuing)"
             fi
         done
+    fi
+
+    # ── Step 5c: The module's own controllers and managers (ADR-035 D5) ──
+    # Before its install.sh, so that install can already use them (it registers
+    # its instance with their manager, D6). Refused or failed: the install fails
+    # and rolls back like any other step.
+    if jq -e '(.controllers // []) + (.managers // []) | length > 0' "./${module}.json" >/dev/null 2>&1; then
+        info "${BOLD}Step 5c: Register the module's controllers and managers${CL}"
+        cpc_register "$(pwd -P)" "${module}" "${effective_module}" \
+            || die "the controllers/managers of '${module}' could not be registered"
     fi
 
     # ── Step 6: Call the module's own install.sh ─────────────────────

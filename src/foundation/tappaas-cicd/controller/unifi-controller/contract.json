@@ -1,8 +1,0 @@
-{
-  "contracts": ["switch/1", "ap/1"],
-  "vendors": ["unifi"],
-  "arch": "controller",
-  "capabilities": ["vlans", "lag", "park", "ap"],
-  "module": "unifi-os",
-  "credentials": "/home/tappaas/.unifi-os-credentials.txt"
-}

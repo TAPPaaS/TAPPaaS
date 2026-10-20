@@ -91,7 +91,7 @@ non-zero on failure.
 
 ## Pending / not yet implemented
 
-- **Vendor controllers are limited.** Only `unifi-controller` (full
+- **Vendor controllers are limited.** Only `unifi-controller` (the Community `unifi-os` module; full
   automation) and the manual fallback exist. Any other brand falls through to
   manual, so
   `apply` prints instructions rather than programming the switch.

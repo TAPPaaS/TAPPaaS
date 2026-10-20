@@ -34,12 +34,22 @@ CREDS="${TMP}/creds.txt"; echo "url=https://ctrl" > "${CREDS}"
 
 echo "test-setup-switches:"
 
-# The brands come from the registry: one with this tree's unifi-controller.
-CICD="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+# The brands come from the registry: one module's controller for unifi (a stub
+# answering describe, as the real one ships with the Community unifi-os module).
+CTLD="${TMP}/unifi-os/controller/unifi-controller"; mkdir -p "${CTLD}"
+cat > "${CTLD}/unifi-controller" <<'EOF'
+#!/usr/bin/env bash
+case "$1" in
+  describe) echo '{"contracts":["switch/1","ap/1"],"vendors":["unifi"],"arch":"controller","module":"unifi-os"}' ;;
+  supports) [[ "$2" == unifi ]] || exit 3 ;;
+  *) exit 3 ;;
+esac
+EOF
+chmod +x "${CTLD}/unifi-controller"
 export CONTROL_PLANE_REGISTRY="${TMP}/control-plane.json"
-jq -n --arg s "${CICD}/controller/unifi-controller" '{version: 1, components: [
-  {name: "unifi-controller", kind: "controller", module: "tappaas-cicd", source: $s,
-   plugsInto: ["switch-manager", "ap-manager"]}]}' > "${CONTROL_PLANE_REGISTRY}"
+jq -n --arg s "${CTLD}" '{version: 1, components: [
+  {name: "unifi-controller", kind: "controller", module: "unifi-os", source: $s,
+   plugsInto: ["switch-manager", "ap-manager"], instances: ["unifi-os"]}]}' > "${CONTROL_PLANE_REGISTRY}"
 
 # ── Unit: source (guarded → main not run) and check helpers ─────────
 # shellcheck source=setup-switches.sh disable=SC1091

@@ -53,6 +53,18 @@ readonly CONFIG_DIR="/home/tappaas/config"
 
 # shellcheck source=common-install-routines.sh
 . /home/tappaas/bin/common-install-routines.sh
+# A module's own controllers and managers (ADR-035 D5): beside this script in
+# the checkout, else linked into ~/bin (lib/*.sh are). Absent — a mothership not
+# yet refreshed to it — a module that declares components cannot register them.
+_cpc_lib="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/control-plane-components.sh"
+[[ -r "${_cpc_lib}" ]] || _cpc_lib="/home/tappaas/bin/control-plane-components.sh"
+if [[ -r "${_cpc_lib}" ]]; then
+    # shellcheck source=../../lib/control-plane-components.sh
+    . "${_cpc_lib}"
+else
+    cpc_register() { error "control plane: ${_cpc_lib} is missing — refresh the control plane first"; return 1; }
+    cpc_unregister() { return 0; }
+fi
 
 # #533: managers run as the tappaas operator, never root — under sudo, SSH
 # resolves identity from /root/.ssh and fails (ADR-018). Refuse root up front.
@@ -740,6 +752,18 @@ main() {
         fi
     else
         info "  Module location not set — skipping"
+    fi
+
+    # ── Step 3.4: The module's own controllers and managers (ADR-035 D5) ──
+    # Rebuilt, relinked and recorded for this instance before the module's
+    # update.sh runs (inside reconcile, below), which registers the instance
+    # with their manager (D6). Two copies of one module both get here: the
+    # second finds the entry and only adds itself to it.
+    if [[ -n "${module_dir}" && -r "${module_dir}/$(basename "${module_dir}").json" ]] \
+       && jq -e '(.controllers // []) + (.managers // []) | length > 0' "${module_dir}/$(basename "${module_dir}").json" >/dev/null 2>&1; then
+        info "${BOLD}Update Step 3.4: Register the module's controllers and managers${CL}"
+        cpc_register "${module_dir}" "$(basename "${module_dir}")" "${module}" \
+            || fatal_with_rollback "${module}" "${snapshot_created}" "the module's controllers/managers could not be registered"
     fi
 
     # ── Step 3.5: Apply the dependsOn delta with the correct verb (#511) ──
