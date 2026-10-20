@@ -20,6 +20,18 @@ MODULE_NAME="$1"
 
 . /home/tappaas/bin/common-install-routines.sh
 
+# From the module's directory, whoever calls: update-os.sh reads the module's
+# build-facts.sh relative to its working directory (#797). reconcile and
+# update-module.sh run this script from there; a bare run from elsewhere
+# silently skipped the collector, and the guest built from a stale
+# /etc/nixos/tappaas-build-facts.env (#861: identity stepped to the version it
+# already ran). The deployed config records the directory, so resolve it here.
+MODULE_DIR="$(get_module_dir "${MODULE_NAME}")" || {
+    error "module '${MODULE_NAME}': its source directory is not resolvable${MODULE_DIR:+ (${MODULE_DIR} is gone)} — not updating its OS blind"
+    exit 1
+}
+cd "${MODULE_DIR}"
+
 VMNAME="$(get_config_value 'vmname' "$MODULE_NAME")"
 VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"

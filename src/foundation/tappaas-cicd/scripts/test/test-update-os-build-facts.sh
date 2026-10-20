@@ -22,6 +22,7 @@ ck() { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo 
 [[ -f "${SRC}" && -f "${COLLECTOR}" ]] || { echo "update-os.sh or identity/build-facts.sh not found — cannot run here."; exit 77; }
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/buildfacts.XXXXXX")"
+TMP="$(cd "${TMP}" && pwd -P)"   # as pwd prints it (macOS TMPDIR ends in /)
 trap 'rm -rf "${TMP}"' EXIT INT TERM
 
 awk '/^    if \[\[ -f \.\/build-facts\.sh \]\]; then$/{f=1} f{print} f&&/^    fi$/{exit}' "${SRC}" > "${TMP}/block.sh"
@@ -33,6 +34,7 @@ run() {
     rm -f "${TMP}/written" "${TMP}/out"
     ( cd "$1" && T="${TMP}" RC="$2" bash -c '
         info(){ :; }
+        debug(){ echo "debug: $*" >> "${T}/out"; }
         die(){ echo died >> "${T}/out"; exit 1; }
         ssh(){
             case "$*" in
@@ -51,7 +53,7 @@ mkdir -p "${TMP}/plain" "${TMP}/ident" "${TMP}/guest/var/lib/authentik"
 cp "${COLLECTOR}" "${TMP}/ident/build-facts.sh"
 printf '2025.4.4\n' > "${TMP}/guest/var/lib/authentik/tappaas-version"
 
-ck "a module without build-facts.sh: nothing collected" "" "$(run "${TMP}/plain" 0)"
+ck "a module without build-facts.sh: nothing collected, and said (#861)" "debug:   no build-facts.sh in ${TMP}/plain — identity builds without facts" "$(run "${TMP}/plain" 0)"
 ck "identity: the guest's facts are written to /etc/nixos" "AUTHENTIK_INSTALLED=2025.4.4 AUTHENTIK_RUNNING=none AUTHENTIK_STEP_BLOCKED=" "$(run "${TMP}/ident" 0)"
 ck "a collector that cannot run stops the update" "died" "$(run "${TMP}/ident" 255)"
 ck "…and writes no facts" "no" "$([[ -f ${TMP}/written ]] && echo yes || echo no)"
