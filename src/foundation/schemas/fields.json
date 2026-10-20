@@ -59,6 +59,16 @@
       "apply": "none",
       "changeNote": "The ADR-020 D8 disruption authorization. Nothing APPLIES it — the converge READS it to decide whether an unattended pass may reboot or offline-migrate this guest. Default false, so silence never authorizes downtime."
     },
+    "sshPort": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Applied by the satellite's own update.sh, which the converge after `modify --set` runs: the OPNsense port forward and edge rule, the satellite's firewall and nginx re-provisioned — sessions on :443/:80 and the admin VPN see a restart of a few seconds. Off (0) removes all of it. Set it together with sshAllow; check-config.sh refuses it alone."
+    },
+    "sshAllow": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Applied by the satellite's own update.sh: its firewall and nginx re-provisioned with the new list (a restart of a few seconds for the relays). Inert while sshPort is off."
+    },
     "sshKeyOnly": {
       "class": "in-place",
       "apply": "none",

@@ -4,9 +4,10 @@
 #
 # A managed satellite (the default) is a Debian machine the sweep patches like
 # any other: its OPNsense edge rules and DNS entry are re-ensured, the nodes'
-# path to it opened exactly while it is the Site's PBS Host (§8.4.3), then the
-# debianhost update runs against it (apt full-upgrade; a reboot only when
-# authorized, else DEFERRED). A locked-down satellite (`management: unmanaged`, §8.4.4) patches
+# path to it opened exactly while it is the Site's PBS Host (§8.4.3), the SSH
+# passthrough to the mothership open exactly while `sshPort` is set (§4.4.2),
+# then the debianhost update runs against it (apt full-upgrade; a reboot only
+# when authorized, else DEFERRED). A locked-down satellite (`management: unmanaged`, §8.4.4) patches
 # itself and admits no login from home: there is nothing to do, and the sweep
 # does not call this for it.
 #
@@ -28,6 +29,8 @@ sat_edge_rules_ensure || warn "  OPNsense edge rules for ${SAT_ROLES} could not 
 sat_dns_ensure || warn "  ${SAT_NAME}.${SAT_DNS_ZONE}.internal could not be registered at the tunnel end"
 # The Site's PBS on it (ADR-010 §8.4.3): the nodes' path open exactly while it is.
 if sat_is_pbs_host; then sat_pbs_path open; else sat_pbs_path close; fi
+# SSH to the mothership through it (sshPort, ADR-010 §4.4.2): on exactly while set.
+sat_ssh_converge || die "  the sshPort path could not be converged (see above)"
 # It watches the home site from outside (ADR-031 P3).
 sat_pulse_ensure || warn "  the satellite does not watch the home site (see above)"
 exec "${HERE}/../debianhost/update.sh" "${INSTANCE}"

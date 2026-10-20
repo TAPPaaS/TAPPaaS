@@ -84,6 +84,51 @@ provider, not in TAPPaaS.
 | `module test` | OPNsense server + peer present, the mothership logs in, tunnel handshake under 5 minutes, nginx active (reverse-proxy), relay rules loaded (admin-vpn), the `debianhost` checks green |
 | reverse-proxy: browse a published name from off-LAN | resolves to the satellite, served by Caddy at home |
 | admin-vpn: `network-manager wgvpn add-peer --name <device> --pubkey <key>` | the printed config's Endpoint is the satellite; the device reaches a node `:8006`, the OPNsense UI and SSH |
+| sshPort (when set): `ssh -p <sshPort> tappaas@<satellite>` from an allow-listed address | a shell on the mothership; from any other address the connection is refused |
+
+## SSH to the mothership through the satellite
+
+A Site with no public address has no direct SSH to its mothership. The admin VPN is the full
+path (every node, the OPNsense UI, PBS); for "just a shell on the mothership" without a
+WireGuard client, the satellite can pass one TCP port through to `tappaas-cicd:22`:
+
+    module-manager module modify <instance> --set sshPort=2222 --set 'sshAllow=["198.51.100.7"]'
+
+`sshAllow` is required: the IPv4 addresses or networks allowed in (your office, your home
+line, a jump host). Everyone else is refused on the satellite, by its firewall and by nginx,
+which sees the real client address. The update that follows sets up:
+
+- **on the satellite:** the firewall admits `tcp/<sshPort>` from `sshAllow` only, and nginx
+  `stream` passes it, blind, to the home end of the tunnel (`10.255.0.1:<sshPort>`);
+- **on OPNsense:** a port forward on the tunnel, `10.255.0.1:<sshPort>` → the mothership
+  `:22` (`tappaas-satellite <instance> sshPort->mothership`), and the edge rule that admits it
+  (`tappaas-satellite edge->mothership ssh <instance>`).
+
+SSH authenticates end to end: the host key you see is the mothership's, and its sshd is
+key-only. Log in as `tappaas`:
+
+    ssh -p 2222 tappaas@<satellite address or name>
+
+or, in `~/.ssh/config`:
+
+    Host mothership-via-satellite
+        HostName satellite1.example.org      # the satellite's public name or address
+        Port 2222
+        User tappaas
+        ServerAliveInterval 60               # nginx drops a relay idle for 12 hours
+
+**What this exposes:** the mothership's sshd, reachable from the `sshAllow` sources over the
+internet, key-only. The mothership sees every relayed login as coming from the satellite's
+tunnel end (`10.255.0.0`), which its sshd exempts from per-source penalties — so one
+client's failed attempts do not lock the others out; the allow-list is what limits who gets
+that far. A port the satellite uses itself (22, 80, 443, 51820, 51821, 8007) is refused, as is
+`sshPort` on a locked-down satellite.
+
+Turn it off with `module-manager module modify <instance> --set sshPort=0`: the update removes
+the port forward, the edge rule, and the satellite's firewall and nginx entries. Decommission
+removes them too. `module-manager module test <instance>` checks the forward, the rule, the
+allow-list on the satellite and the path through the tunnel to the mothership's sshd — or,
+while it is off, that none of it is left.
 
 ## The satellite as the Site's PBS
 
@@ -140,7 +185,8 @@ machine, with that key.
 - `module-manager module delete <instance>` **unregisters** it, like any machine: the tunnel
   stays up and nothing is touched.
 - `module-manager module delete <instance> --decommission` also takes the Site's side down:
-  the OPNsense peer and tunnel server, a vault's read access to the Site's PBS, and the
+  the OPNsense peer and tunnel server, the `sshPort` port forward and its rule, a vault's
+  read access to the Site's PBS, and the
   `edge` rules when no other satellite needs them. **The machine itself — and any copy a
   vault holds — is never touched**: delete it in the provider's console.
 

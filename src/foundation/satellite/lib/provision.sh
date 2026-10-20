@@ -19,6 +19,7 @@ SATELLITE_DEBIAN_SRC="${SATELLITE_DEBIAN_SRC:-${SATELLITE_SRC}/debian}"
 : "${SAT_KEEPALIVE:=25}"          # PersistentKeepalive (home side; keeps CGNAT pinhole open)
 : "${SAT_REBOOT_TIME:=03:30}"     # Debian (Option 3) unattended-upgrades auto-reboot window
 : "${SAT_PROXY_PROTOCOL:=false}"  # reverse-proxy: PROXY-protocol v2 (gate on until Caddy expects it)
+: "${SAT_SSH_TIMEOUT:=12h}"       # sshPort: nginx drops a relayed session idle this long
 # The pull vault's settings (the `backup` role, set by --lockdown, ADR-010 §8.4.4)
 # live in `vault` — `backup` is the module's backup POLICY, which module add
 # writes on every module. A config from before the move kept them in `backup`.
@@ -32,6 +33,47 @@ SAT_VAULT='(.vault // .backup // {})'
 : "${SAT_REMOVE_VANISHED:=false}"                   # home deleting a snapshot must NOT delete our copy
 : "${SAT_PRUNE_SCHEDULE:=daily}"
 : "${SAT_PRUNE_KEEP:=--keep-daily 7 --keep-weekly 4 --keep-monthly 6}"
+
+# --- sshPort: SSH to the mothership through the satellite (ADR-010 §4.4.2) ----
+# Off unless the config sets `sshPort`; then only the sources in `sshAllow` are
+# admitted. Absent, null or 0 is off.
+
+# sat_cfg_ssh_port <config-json> — the port, or nothing when it is off.
+sat_cfg_ssh_port() {
+    jq -r 'if (.sshPort // 0) == 0 then empty else .sshPort end' "$1" 2>/dev/null
+}
+
+# sat_check_ssh_config <config-json> — rc 0 when sshPort/sshAllow are usable;
+# else prints why on stderr and returns 1. Used by check-config.sh (module add,
+# modify --set) and by install/update/test on the deployed config.
+sat_check_ssh_config() {
+    local cfg="$1" port bad
+    port="$(jq -r '.sshPort // 0' "${cfg}")"
+    [[ "${port}" == 0 ]] && return 0
+    if ! jq -e '.sshPort | type == "number" and . == floor and . >= 1 and . <= 65535' "${cfg}" >/dev/null; then
+        echo "satellite: sshPort must be a port number (1-65535), not '${port}'" >&2; return 1
+    fi
+    case " 22 80 443 ${SAT_WGPORT} ${SAT_ADMIN_WGPORT} ${SAT_HOME_PBS_PORT} " in
+        *" ${port} "*) echo "satellite: sshPort ${port} is taken on the satellite (22 is its own sshd; 80, 443, ${SAT_WGPORT}, ${SAT_ADMIN_WGPORT} and ${SAT_HOME_PBS_PORT} its relays) — pick another, e.g. 2222" >&2; return 1 ;;
+    esac
+    [[ "$(jq -r '.management // "managed"' "${cfg}")" == managed ]] \
+        || { echo "satellite: sshPort on a locked-down satellite is refused — a vault opens no path to the mothership" >&2; return 1; }
+    if ! jq -e '(.sshAllow | type) == "array" and (.sshAllow | length) > 0' "${cfg}" >/dev/null 2>&1; then
+        echo "satellite: sshPort needs sshAllow — the addresses or networks admitted, e.g. --set 'sshAllow=[\"198.51.100.7\"]'; it is never open to everyone" >&2
+        return 1
+    fi
+    bad="$(jq -r '.sshAllow[] | select(type != "string"
+              or (test("^([0-9]{1,3}\\.){3}[0-9]{1,3}(/([1-9]|[12][0-9]|3[0-2]))?$") | not)
+              or (split("/")[0] | split(".") | map(tonumber) | any(. > 255))
+              or (split("/") as $p | ($p[1] // "32" | tonumber) as $n
+                  | ($p[0] | split(".") | map(tonumber) | .[0]*16777216 + .[1]*65536 + .[2]*256 + .[3])
+                    % pow(2; 32 - $n) != 0))' "${cfg}" 2>/dev/null)" || bad="(unreadable)"
+    if [[ -n "${bad}" ]]; then
+        echo "satellite: sshAllow takes IPv4 addresses or networks (a.b.c.d, or a.b.c.0/n with no host bits, n 1-32), not: $(paste -sd' ' - <<< "${bad}")" >&2
+        return 1
+    fi
+    return 0
+}
 
 # Read back the satellite's wg-infra PUBLIC key over SSH, with retries for the
 # post-install reboot. Post-reformat the satellite trusts ONLY the OPERATOR key
@@ -72,15 +114,17 @@ sat_read_pubkey() {
 # Args: <config-json> <home-pubkey> <out-dir> [cicd-pubkey-file]
 sat_gen_debian_configs() {
     local cfg="$1" home_pub="$2" out="$3" cicd_pub="${4:-}"
-    local roles mgmt pp=""
+    local roles mgmt pp="" ssh_port ssh_allow
     roles="$(jq -r '(.roles // []) | join(" ")' "${cfg}")"
     mgmt="$(jq -r '.management // "managed"' "${cfg}")"
+    ssh_port="$(sat_cfg_ssh_port "${cfg}")"
+    ssh_allow="$(jq -r '(.sshAllow // [])[]' "${cfg}")"
     [[ "$(jq -r '(.host.operatorSshKeys // []) | length' "${cfg}")" -gt 0 ]] \
         || { echo "ERROR: ${cfg} has no host.operatorSshKeys (operator out-of-band key required)" >&2; return 1; }
     _sat_has_role() { [[ " ${roles} " == *" $1 "* ]]; }
     mkdir -p "${out}"
 
-    printf 'ROLES="%s"\nMANAGEMENT="%s"\n' "${roles}" "${mgmt}" > "${out}/roles.env"
+    printf 'ROLES="%s"\nMANAGEMENT="%s"\nSSH_PORT="%s"\n' "${roles}" "${mgmt}" "${ssh_port}" > "${out}/roles.env"
     if [[ -n "${cicd_pub}" ]]; then cp "${cicd_pub}" "${out}/cicd_key.pub"; fi
 
     jq -r '(.host.operatorSshKeys // [])[]' "${cfg}" > "${out}/operator_authorized_keys"
@@ -130,6 +174,7 @@ sat_gen_debian_configs() {
         echo "    udp dport ${SAT_WGPORT} accept       # infra tunnel"
         _sat_has_role reverse-proxy && echo "    tcp dport { 80, 443 } accept  # reverse-proxy passthrough"
         _sat_has_role admin-vpn     && echo "    udp dport ${SAT_ADMIN_WGPORT} accept       # admin-vpn relay"
+        [[ -n "${ssh_port}" ]] && echo "    ip saddr { $(paste -sd, - <<< "${ssh_allow}" | sed 's/,/, /g') } tcp dport ${ssh_port} accept  # sshPort: the mothership's SSH, allow-listed sources"
         [[ -n "${SAT_PBS_CLIENTS:-}" ]] && echo "    iifname \"wg-infra\" ip saddr ${SAT_PBS_CLIENTS} tcp dport ${SAT_HOME_PBS_PORT} accept  # the Site's PBS: its nodes push here (ADR-010 §8.4.3)"
         echo "  }"
         echo "  chain forward {"
@@ -156,10 +201,13 @@ sat_gen_debian_configs() {
         fi
     } > "${out}/nftables.conf"
 
-    # reverse-proxy — nginx L4 stream passthrough (ADR-010 §2/§5.8).
-    if _sat_has_role reverse-proxy; then
+    # nginx L4 stream passthrough (ADR-010 §2/§5.8): :443/:80 for reverse-proxy,
+    # :sshPort to the mothership's SSH. nginx sees the real client, so the
+    # sshPort allow-list is enforced here as well as in nftables.
+    if _sat_has_role reverse-proxy || [[ -n "${ssh_port}" ]]; then
         [[ "${SAT_PROXY_PROTOCOL}" == "true" ]] && pp=$'\n      proxy_protocol on;'
-        cat > "${out}/nginx-stream.conf" <<EOF
+        {
+        cat <<EOF
 # GENERATED by the satellite module — nginx L4 stream passthrough (ADR-010 §2).
 # The satellite NEVER terminates TLS: all :443 -> Caddy-on-OPNsense over the tunnel;
 # :80 too (Caddy issues the redirect). Single-purpose config (stream only).
@@ -169,6 +217,9 @@ pid /run/nginx.pid;
 include /etc/nginx/modules-enabled/*.conf;
 events { worker_connections 1024; }
 stream {
+EOF
+        if _sat_has_role reverse-proxy; then
+            cat <<EOF
     server {
       listen 443;
       proxy_pass ${SAT_HOME_ADDR}:443;${pp}
@@ -177,8 +228,22 @@ stream {
       listen 80;
       proxy_pass ${SAT_HOME_ADDR}:80;${pp}
     }
-}
 EOF
+        fi
+        if [[ -n "${ssh_port}" ]]; then
+            local a
+            echo "    # sshPort: blind TCP passthrough to the mothership's sshd (OPNsense forwards"
+            echo "    # ${SAT_HOME_ADDR}:${ssh_port} to it); SSH authenticates end to end."
+            echo "    server {"
+            echo "      listen ${ssh_port};"
+            while IFS= read -r a; do [[ -n "${a}" ]] && echo "      allow ${a};"; done <<< "${ssh_allow}"
+            echo "      deny all;"
+            echo "      proxy_timeout ${SAT_SSH_TIMEOUT};"
+            echo "      proxy_pass ${SAT_HOME_ADDR}:${ssh_port};"
+            echo "    }"
+        fi
+        echo "}"
+        } > "${out}/nginx-stream.conf"
     fi
 
     # admin-vpn — enable IP forwarding for the relay.

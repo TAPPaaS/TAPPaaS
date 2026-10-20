@@ -40,6 +40,24 @@ if [[ -n "${INST}" ]]; then
     [[ -n "$(sat_opnsense_uuid client)" ]] && pass "OPNsense peer tappaas-${SAT_NAME}" \
         || fail "OPNsense has no peer tappaas-${SAT_NAME}"
 
+    # sshPort (ADR-010 §4.4.2): the home half exactly while it is set.
+    SSHP="$(sat_ssh_port)"
+    if ! ck="$(sat_check_ssh_config "${SAT_CFG}" 2>&1)"; then
+        fail "${ck}"
+    elif [[ -n "${SSHP}" ]]; then
+        nat="$(sat_ssh_nat_row)"; mother="$(sat_mothership_addr)"
+        if [[ -n "${nat}" ]] && jq -e --arg p "${SSHP}" --arg t "${mother}" '.["destination.port"] == $p and .target == $t' <<< "${nat}" >/dev/null; then
+            pass "sshPort ${SSHP}: OPNsense forwards ${SAT_HOME_ADDR}:${SSHP} to the mothership ${mother}:22"
+        else
+            fail "sshPort ${SSHP}: no matching OPNsense port forward '$(sat_ssh_nat_desc)' (${nat:-none})"
+        fi
+        [[ -n "$(sat_ssh_rule_row)" ]] && pass "sshPort: edge rule '$(sat_ssh_rule_desc)'" \
+            || fail "sshPort: no edge rule '$(sat_ssh_rule_desc)'"
+    else
+        [[ -z "$(sat_ssh_nat_row)" && -z "$(sat_ssh_rule_row)" ]] && pass "sshPort off: no port forward or rule for it on OPNsense" \
+            || fail "sshPort is off but OPNsense still has '$(sat_ssh_nat_desc)' or '$(sat_ssh_rule_desc)' — the next update removes them"
+    fi
+
     if [[ "${SAT_MGMT}" == managed ]]; then
         if sat_ssh true 2>/dev/null; then
             pass "the mothership reaches root@${ADDRESS}"
@@ -53,6 +71,26 @@ if [[ -n "${INST}" ]]; then
             fi
             if sat_has_role admin-vpn; then
                 sat_ssh 'nft list table ip adminvpn' >/dev/null 2>&1 && pass "admin-vpn: relay rules loaded" || fail "admin-vpn: relay rules missing"
+            fi
+            if [[ -n "${SSHP}" ]]; then
+                allow="$(jq -r '.sshAllow[]' "${SAT_CFG}" | sort | paste -sd' ' -)"
+                nftl="$(sat_ssh 'nft list chain inet filter input' 2>/dev/null | grep "tcp dport ${SSHP} accept")"
+                [[ -n "${nftl}" && "${nftl}" == *"ip saddr"* ]] && pass "sshPort: the satellite firewall admits :${SSHP} from the allow-list only" \
+                    || fail "sshPort: the satellite firewall has no allow-listed rule for :${SSHP}"
+                ngx="$(sat_ssh 'nginx -T 2>/dev/null' | awk -v p="listen ${SSHP};" '$0 ~ p {f=1} f && /allow /{gsub(/[;]/,"",$2); print $2} f && /deny all/ {exit}' | sort | paste -sd' ' -)"
+                [[ -n "${ngx}" && "${ngx}" == "${allow}" ]] && pass "sshPort: nginx passes :${SSHP} for ${allow} and denies the rest" \
+                    || fail "sshPort: nginx allows '${ngx:-nothing}' on :${SSHP}, the config says '${allow}'"
+                # The path behind nginx: through the tunnel and OPNsense's forward to the mothership's sshd.
+                banner="$(sat_ssh "timeout 8 bash -c 'exec 3<>/dev/tcp/${SAT_HOME_ADDR}/${SSHP}; head -c 8 <&3'" 2>/dev/null)"
+                [[ "${banner}" == SSH-2.0* ]] && pass "sshPort: through the tunnel to the mothership's sshd (${banner})" \
+                    || fail "sshPort: ${SAT_HOME_ADDR}:${SSHP} through the tunnel does not reach an sshd"
+            else
+                # Off: no allow-listed TCP port outside the tunnel, no nginx listener
+                # beyond the reverse proxy's.
+                left="$(sat_ssh 'nft list chain inet filter input' 2>/dev/null | grep -v iifname | grep -E 'ip saddr .* tcp dport [0-9]+ accept')"
+                left+="$(sat_ssh 'nginx -T 2>/dev/null' | awk '$1=="listen" {gsub(/;/,"",$2); if ($2!="80" && $2!="443") print " nginx:"$2}')"
+                [[ -z "${left}" ]] && pass "sshPort off: nothing on the satellite admits or relays it" \
+                    || fail "sshPort is off but the satellite still has:${left//$'\n'/ } — the next update re-provisions it"
             fi
             # ADR-031 P3: it watches the home site.
             if [[ "$(sat_ssh systemctl is-active tappaas-pulse.timer 2>/dev/null)" == "active" ]]; then
@@ -88,7 +126,7 @@ lib() {
 }
 
 # 1. contract files present, scripts parse
-for f in README.md INSTALL.md satellite.json install.sh update.sh test.sh delete.sh lockdown.sh \
+for f in README.md INSTALL.md satellite.json install.sh update.sh test.sh delete.sh lockdown.sh check-config.sh \
          lib/satellite-lib.sh lib/provision.sh lib/tunnel.sh \
          debian/provision-debian.sh debian/provision-backup.sh debian/set-management.sh; do
     [[ -f "${here}/${f}" ]] || { no "missing: ${f}"; continue; }
@@ -418,7 +456,125 @@ out="$( ( lib; CONFIG_DIR="${P}"; sat_load sat1; _ow_api() { echo "CALLED"; }; s
 grep -q "the Site's PBS Host" <<< "${out}" && ! grep -q CALLED <<< "${out}" \
     && ok "decommission refused while the satellite is the Site's PBS Host" || no "decommission of the PBS Host: ${out}"
 
-# 15. deep: reverse-proxy end-to-end through a live satellite (test-vm-creation/)
+# 15. sshPort — SSH to the mothership through the satellite (ADR-010 §4.4.2)
+#   validation (check-config.sh: module add, modify --set): an allow-list is
+#   required, the port must be free on the satellite, a vault takes none
+cc() { printf '%s' "$1" > "${tmp}/cc.json"; "${here}/check-config.sh" "${tmp}/cc.json" >/dev/null 2>&1; echo $?; }
+if [[ "$(cc '{}')" == 0 && "$(cc '{"sshPort":0}')" == 0 \
+      && "$(cc '{"sshPort":2222,"sshAllow":["198.51.100.7","10.20.0.0/16"]}')" == 0 \
+      && "$(cc '{"sshPort":2222}')" == 1 && "$(cc '{"sshPort":2222,"sshAllow":[]}')" == 1 \
+      && "$(cc '{"sshPort":2222,"sshAllow":["0.0.0.0/0"]}')" == 1 && "$(cc '{"sshPort":2222,"sshAllow":["198.51.100.7/24"]}')" == 1 \
+      && "$(cc '{"sshPort":2222,"sshAllow":["2001:db8::1"]}')" == 1 && "$(cc '{"sshPort":"2222","sshAllow":["198.51.100.7"]}')" == 1 \
+      && "$(cc '{"sshPort":22,"sshAllow":["198.51.100.7"]}')" == 1 && "$(cc '{"sshPort":443,"sshAllow":["198.51.100.7"]}')" == 1 \
+      && "$(cc '{"sshPort":2222,"sshAllow":["198.51.100.7"],"management":"unmanaged"}')" == 1 ]]; then
+    ok "check-config: sshPort needs a non-empty IPv4 allow-list, a free port, a managed satellite"
+else
+    no "check-config sshPort rules"
+fi
+out="$(printf '%s' '{"sshPort":2222}' > "${tmp}/cc.json"; "${here}/check-config.sh" "${tmp}/cc.json" 2>&1)"
+grep -q 'sshAllow' <<< "${out}" && ok "check-config names sshAllow when the allow-list is missing" || no "check-config message: ${out}"
+
+#   rendering: nftables admits the port from the list only; nginx allows the
+#   list, denies the rest and passes to the tunnel's home end; a satellite with
+#   only admin-vpn gets nginx for it; without sshPort none of it appears
+( lib
+  echo '{"roles":["reverse-proxy","admin-vpn"],"sshPort":2222,"sshAllow":["198.51.100.7","10.20.0.0/16"],"host":{"operatorSshKeys":["k"]}}' > "${tmp}/s.json"
+  sat_gen_debian_configs "${tmp}/s.json" "HPUB=" "${tmp}/so" ""
+  echo '{"roles":["admin-vpn"],"sshPort":2222,"sshAllow":["198.51.100.7"],"host":{"operatorSshKeys":["k"]}}' > "${tmp}/s2.json"
+  sat_gen_debian_configs "${tmp}/s2.json" "HPUB=" "${tmp}/so2" "" )
+if grep -q 'ip saddr { 198.51.100.7, 10.20.0.0/16 } tcp dport 2222 accept' "${tmp}/so/nftables.conf" \
+   && grep -q 'SSH_PORT="2222"' "${tmp}/so/roles.env" && grep -q 'SSH_PORT=""' "${tmp}/ao/roles.env" \
+   && awk '/listen 2222;/{f=1} f' "${tmp}/so/nginx-stream.conf" | tr -d '\n ' | grep -q 'allow198.51.100.7;allow10.20.0.0/16;denyall;proxy_timeout12h;proxy_pass10.255.0.1:2222;' \
+   && grep -q 'listen 443;' "${tmp}/so/nginx-stream.conf" \
+   && grep -q 'listen 2222;' "${tmp}/so2/nginx-stream.conf" && ! grep -q 'listen 443;' "${tmp}/so2/nginx-stream.conf" \
+   && ! grep -q 'dport 2222\|ip saddr {' "${tmp}/ao/nftables.conf" && ! grep -q 'listen 2222\|deny all' "${tmp}/ao/nginx-stream.conf"; then
+    ok "sshPort rendering: nftables + nginx allow-list, passthrough to the tunnel; nothing without it"
+else
+    no "sshPort rendering"
+fi
+grep -q 'wants_nginx && PKGS+=(nginx' "${here}/debian/provision-debian.sh" && grep -q 'systemctl disable --now nginx' "${here}/debian/provision-debian.sh" \
+    && ok "provision-debian: nginx for reverse-proxy or sshPort, stopped when neither needs it" || no "provision-debian nginx gating"
+
+#   the home half: a port forward on the tunnel to the mothership :22 and the
+#   edge rule, by this satellite's name — added, left, replaced, removed
+S="${tmp}/scfg"; mkdir -p "${S}"
+HLOG="${tmp}/home.log"
+SSHCFG='{"moduleSource":"/r/satellite","address":"203.0.113.7","roles":["reverse-proxy"],"sshPort":2222,"sshAllow":["198.51.100.7"]}'
+homerun() {  # <ensure|remove> <nat-row-json-or-empty> <rule-row-json-or-empty> [config]
+    : > "${HLOG}"
+    printf '%s' "${4:-${SSHCFG}}" > "${S}/sat1.json"
+    printf '%s' "$2" > "${tmp}/nat.row"; printf '%s' "$3" > "${tmp}/rule.row"
+    # shellcheck disable=SC2034  # read by sat_mothership_addr
+    ( lib; CONFIG_DIR="${S}"; SAT_MOTHERSHIP_ADDR=10.0.0.10; sat_load sat1
+      _ow_api() { case "$*" in
+          *d_nat/searchRule*) echo "{\"rows\":[$(cat "${tmp}/nat.row")]}" ;;
+          *filter/searchRule*) echo "{\"rows\":[$(cat "${tmp}/rule.row")]}" ;;
+          *d_nat/addRule*) echo '{"uuid":"N2","descr":"tappaas-satellite sat1 sshPort->mothership"}' > "${tmp}/nat.row"; printf 'NATADD %s\n' "$*" >> "${HLOG}" ;;
+          *filter/addRule*) echo '{"uuid":"F2","description":"tappaas-satellite edge->mothership ssh sat1"}' > "${tmp}/rule.row"; printf 'RULEADD %s\n' "$*" >> "${HLOG}" ;;
+          *) printf '%s\n' "$*" >> "${HLOG}" ;;
+      esac; }
+      sat_ssh_home "$1" ) >/dev/null 2>&1
+    echo "rc=$? $(tr '\n' '|' < "${HLOG}")"
+}
+NATOK='{"uuid":"N1","descr":"tappaas-satellite sat1 sshPort->mothership","destination.port":"2222","target":"10.0.0.10","local-port":"22","disabled":"0"}'
+RULEOK='{"uuid":"F1","description":"tappaas-satellite edge->mothership ssh sat1","destination_net":"10.0.0.10","destination_port":"22"}'
+h1="$(homerun ensure "" "")"; h2="$(homerun ensure "${NATOK}" "${RULEOK}")"
+h3="$(homerun ensure "${NATOK/2222/2200}" "${RULEOK}")"; h4="$(homerun remove "${NATOK}" "${RULEOK}")"
+h5="$(homerun remove "" "" '{"moduleSource":"/r/satellite","address":"203.0.113.7","roles":["reverse-proxy"]}')"
+if [[ "${h1}" == rc=0\ NATADD*'"interface":"wireguard"'*'"source":{"network":"10.255.0.0"}'*'"destination":{"network":"10.255.0.1","port":"2222"}'*'"target":"10.0.0.10","local-port":"22"'*'sat1 sshPort->mothership'*\|RULEADD*'"source_net":"10.255.0.0/31","destination_net":"10.0.0.10","destination_port":"22","description":"tappaas-satellite edge->mothership ssh sat1"'*\|*d_nat/apply*filter/apply*\| ]] \
+   && [[ "${h2}" == "rc=0 " ]] \
+   && [[ "${h3}" == rc=0\ *d_nat/delRule/N1*\|NATADD*'"port":"2222"'*\|*d_nat/apply* && "${h3}" != *RULEADD* && "${h3}" != *filter/delRule* ]] \
+   && [[ "${h4}" == rc=0\ *d_nat/delRule/N1*filter/delRule/F1*d_nat/apply*filter/apply* ]] \
+   && [[ "${h5}" == "rc=0 " ]]; then
+    ok "sat_ssh_home: forward + edge rule added, left when right, replaced on a new port, removed when off"
+else
+    no "sat_ssh_home: add='${h1}' same='${h2}' port='${h3}' remove='${h4}' none='${h5}'"
+fi
+
+#   the satellite half: re-provisioned only when its firewall or nginx differs
+#   from what the config renders (comments aside)
+RLOG="${tmp}/relay.log"
+relayrun() {  # <sshPort-in-config:0|1> <satellite-has-it:0|1>
+    : > "${RLOG}"
+    local conf='{"moduleSource":"/r/satellite","address":"203.0.113.7","roles":["reverse-proxy"],"host":{"operatorSshKeys":["k"]}'
+    [[ "$1" == 1 ]] && conf+=',"sshPort":2222,"sshAllow":["198.51.100.7"]'
+    printf '%s}' "${conf}" > "${S}/sat1.json"
+    local on='{"moduleSource":"/r/satellite","roles":["reverse-proxy"],"sshPort":2222,"sshAllow":["198.51.100.7"],"host":{"operatorSshKeys":["k"]}}'
+    local off='{"moduleSource":"/r/satellite","roles":["reverse-proxy"],"host":{"operatorSshKeys":["k"]}}'
+    ( lib; [[ "$2" == 1 ]] && printf '%s' "${on}" > "${tmp}/live.json" || printf '%s' "${off}" > "${tmp}/live.json"
+      sat_gen_debian_configs "${tmp}/live.json" "HPUB=" "${tmp}/live" ""
+      sed -i.bak 's/the satellite module/satellite-manager/' "${tmp}/live/nftables.conf" "${tmp}/live/nginx-stream.conf" )
+    # shellcheck disable=SC2034  # read by sat_relay_converge
+    ( lib; CONFIG_DIR="${S}"; SAT_CICD_PUB="${tmp}/cicd.pub"; sat_load sat1
+      sat_home_pubkey() { echo HPUB=; }
+      sat_ssh() { case "$*" in *nftables.conf*) cat "${tmp}/live/nftables.conf" ;; *nginx.conf*) cat "${tmp}/live/nginx-stream.conf" ;; *) return 0 ;; esac; }
+      sat_deploy_run() { echo "DEPLOY ${*:4} $(grep -c 'dport 2222' "$1/nftables.conf")" >> "${RLOG}"; }
+      sat_relay_converge ) >/dev/null 2>&1
+    echo "rc=$? $(tr '\n' '|' < "${RLOG}")"
+}
+r1="$(relayrun 1 0)"; r2="$(relayrun 1 1)"; r3="$(relayrun 0 1)"; r4="$(relayrun 0 0)"
+[[ "${r1}" == "rc=0 DEPLOY provision-debian.sh set-management.sh 1|" && "${r2}" == "rc=0 " \
+   && "${r3}" == "rc=0 DEPLOY provision-debian.sh set-management.sh 0|" && "${r4}" == "rc=0 " ]] \
+    && ok "sat_relay_converge: re-provisions on a difference only, a legacy file's comments aside" \
+    || no "sat_relay_converge: on='${r1}' on-again='${r2}' off='${r3}' off-again='${r4}'"
+
+#   decommission removes this satellite's forward and rule; lockdown refuses
+#   while sshPort is on
+printf '%s' '{"moduleSource":"/r/satellite","address":"203.0.113.7","roles":["reverse-proxy"],"sshPort":2222,"sshAllow":["198.51.100.7"]}' > "${S}/sat1.json"
+rm -f "${S}/backup.json"
+: > "${HLOG}"
+( lib; CONFIG_DIR="${S}"; sat_load sat1
+  _ow_api() { case "$*" in
+      *d_nat/searchRule*) echo "{\"rows\":[${NATOK}]}" ;; *filter/searchRule*) echo "{\"rows\":[${RULEOK}]}" ;;
+      *search*) echo '{"rows":[]}' ;; *) printf '%s\n' "$*" >> "${HLOG}" ;; esac; }
+  sat_decommission ) >/dev/null 2>&1
+grep -q 'd_nat/delRule/N1' "${HLOG}" && grep -q 'filter/delRule/F1' "${HLOG}" \
+    && ok "decommission removes the sshPort forward and edge rule" || no "decommission sshPort: $(tr '\n' ' ' < "${HLOG}")"
+out="$(lk '{"placementState":"node","node":"tappaas3"}' "${V},\"sshPort\":2222,\"sshAllow\":[\"198.51.100.7\"]}")"
+grep -q 'sshPort=0' <<< "${out}" && ! grep -q BM-CALLED <<< "${out}" \
+    && ok "lockdown refused while sshPort is on" || no "lockdown with sshPort: ${out}"
+
+# 16. deep: reverse-proxy end-to-end through a live satellite (test-vm-creation/)
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo "  deep: reverse-proxy end-to-end (test-vm-creation/)"
     if [[ -x "${here}/test-vm-creation/test.sh" ]]; then

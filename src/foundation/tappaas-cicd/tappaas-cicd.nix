@@ -211,6 +211,10 @@ in
     PasswordAuthentication = false;
     KbdInteractiveAuthentication = false;
     PermitRootLogin = "no";
+    # A satellite's sshPort relays logins from its tunnel end (ADR-010 §4.4.2):
+    # one source address for every client, so penalties would lock the operator
+    # out for others' failures. The satellite limits who reaches it instead.
+    PerSourcePenaltyExemptList = "10.255.0.0/32";
   };
 
   # ----------------------------------------

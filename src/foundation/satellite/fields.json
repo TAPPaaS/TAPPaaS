@@ -1,0 +1,30 @@
+{
+  "$schema": "../schemas/fields-schema.json",
+  "scope": "module",
+  "description": "Fields of the satellite module (ADR-010).",
+  "_note": "MODULE TIER (#567). The satellite provides no service; these are read by its own install, update and test (lib/), so they are general fields of this module. The rest of a satellite's config is described in schemas/satellite-fields.json.",
+  "fields": {
+    "sshPort": {
+      "description": "SSH to the mothership through the satellite (ADR-010 §4.4.2): the satellite's public TCP port that passes, blind, to tappaas-cicd:22 — for a Site with no public address, a shell on the mothership without a WireGuard client. Absent or 0: off. Needs sshAllow; only those sources are admitted. Log in as `ssh -p <sshPort> tappaas@<satellite>`; key-only, as the mothership's sshd always is.",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": 2222,
+      "note": "Not a port the satellite uses itself: 22 (its own sshd, the operator's out-of-band login), 80, 443, the tunnel's 51820, the admin VPN's 51821 or 8007. Refused on a locked-down satellite. Turn it on: module-manager module modify <instance> --set sshPort=2222 --set 'sshAllow=[\"198.51.100.7\"]'; off: --set sshPort=0."
+    },
+    "sshAllow": {
+      "description": "The sources sshPort admits: IPv4 addresses or networks (`198.51.100.7`, `198.51.100.0/24`), enforced on the satellite by its firewall and by nginx, which sees the real client. Required, non-empty, while sshPort is set; everyone else is refused.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": [
+        "198.51.100.7"
+      ],
+      "note": "No 0.0.0.0/0 and no network with host bits set. A changing home or mobile address needs the list updated — or the admin WireGuard, which needs no list."
+    }
+  }
+}

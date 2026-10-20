@@ -323,7 +323,7 @@ These modules write their own rules when they are installed or reconfigured, by 
 | Component | Rules |
 |---|---|
 | Admin VPN (`network-manager/wgvpn`) | `tappaas-admin admin->mgmt` (the VPN's peers reach `mgmt`), `tappaas-admin WAN :<port>` |
-| Satellite | `tappaas-satellite edge->caddy`, `edge->admin-wg`, `edge->home-pbs`, `mgmt->pbs <name>` |
+| Satellite | `tappaas-satellite edge->caddy`, `edge->admin-wg`, `edge->home-pbs`, `mgmt->pbs <name>`, `edge->mothership ssh <name>` with its port forward `tappaas-satellite <name> sshPort->mothership` (while the satellite's `sshPort` is set) |
 | Backup buddy | `buddy-<n> serve wg` (WAN), `buddy-<n> pull` (mgmt) |
 | Caddy setup | `TAPPaaS: Allow HTTP/HTTPS to Caddy` (WAN) |
 

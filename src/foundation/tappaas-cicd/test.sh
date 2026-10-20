@@ -253,6 +253,15 @@ for _opt in PasswordAuthentication KbdInteractiveAuthentication PermitRootLogin;
         fail "sshd ${_opt} is '${_val:-unset}', expected 'no' (tappaas-cicd.nix services.openssh.settings)"
     fi
 done
+# A satellite's sshPort relays every login from its tunnel end: exempt from penalties.
+_val=$(awk 'tolower($1) == "persourcepenaltyexemptlist" { print $2; exit }' "${sshd_cfg}" 2>/dev/null || true)
+if [[ ",${_val}," == *",10.255.0.0/32,"* ]]; then
+    pass "sshd PerSourcePenaltyExemptList ${_val} (a satellite's tunnel end)"
+elif [[ "${RUNTIME_ONLY}" == "1" ]]; then
+    skip "sshd PerSourcePenaltyExemptList is '${_val:-unset}' — this update's rebuild should converge it"
+else
+    fail "sshd PerSourcePenaltyExemptList is '${_val:-unset}', expected 10.255.0.0/32 (tappaas-cicd.nix services.openssh.settings)"
+fi
 
 # ── Test 6: Cron job ────────────────────────────────────────────────
 

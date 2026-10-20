@@ -153,6 +153,7 @@ sat_install() {
     # untested machine that could not do the job most satellites exist for.
     [[ "${SAT_OS}" == debian ]] || die "${INSTANCE}: os must be debian, not '${SAT_OS}' — the NixOS satellite was retired (#712)"
     sat_check_roles
+    sat_check_ssh_config "${SAT_CFG}" || die "${INSTANCE}: the sshPort settings are refused (above)"
     command -v jq >/dev/null || die "jq required"
 
     local keys; keys="$(sat_operator_keys)"
@@ -213,6 +214,7 @@ sat_install() {
 
     info "  [6/6] OPNsense edge rules for ${SAT_ROLES}; ${SAT_NAME}.${SAT_DNS_ZONE}.internal at the tunnel end"
     sat_edge_rules_ensure || warn "  edge rule setup reported an issue"
+    sat_ssh_home ensure || warn "  the sshPort path to the mothership could not be set up — the next update retries"
     sat_dns_ensure || warn "  the satellite's DNS entry could not be registered"
     sleep 12
     info "  peer: $(ow_peer_status)"
@@ -238,6 +240,7 @@ sat_decommission() {
     [[ -n "${cli}${srv}" ]] || info "  no OPNsense tunnel objects for ${SAT_NAME} — nothing to remove there"
     local r; r="$(sat_pbs_rule_uuid)"
     [[ -n "${r}" ]] && { _ow_api -X POST "/api/firewall/filter/delRule/${r}" >/dev/null; info "  removed $(sat_pbs_rule_desc)"; }
+    sat_ssh_home remove || true
     sat_dns_remove || true
     # A vault's read access to the Site's PBS (the `remote` peer lockdown added).
     if [[ -f "${CONFIG_DIR:-/home/tappaas/config}/remote-${SAT_NAME}.json" ]]; then
@@ -324,6 +327,8 @@ sat_lockdown() {
     esac
     jq -e '(.host.operatorSshKeys // []) | length > 0' "${SAT_CFG}" >/dev/null \
         || die "${INSTANCE} records no operator key — after lockdown nothing else could log in"
+    [[ -z "$(sat_ssh_port)" ]] \
+        || die "${INSTANCE} relays SSH to the mothership (sshPort) — a vault opens no path home; turn it off first: module-manager module modify ${INSTANCE} --set sshPort=0"
     sat_ssh true || die "the mothership cannot log in to ${ADDRESS} — lockdown runs over its key"
     command -v backup-manager >/dev/null || die "backup-manager not on PATH"
 
@@ -487,4 +492,139 @@ sat_pbs_path() {
     sat_deploy_run "${cdir}" "${SAT_USER}@${ADDRESS}" "${SAT_CICD_PUB%.pub}" provision-debian.sh set-management.sh \
         || { rm -rf "${cdir}"; die "re-provisioning ${INSTANCE} failed"; }
     rm -rf "${cdir}"
+}
+
+
+# ── sshPort: SSH to the mothership through the satellite (ADR-010 §4.4.2) ───
+#
+# Satellite: nftables admits tcp/<sshPort> from sshAllow only, and nginx
+# `stream` (which sees the real client) allows the same list and passes the
+# connection, blind, to the OPNsense end of the tunnel. Home: a port forward on
+# the tunnel interfaces, <home end>:<sshPort> -> the mothership :22, and the
+# edge rule admitting it. Both are this satellite's, by name: created by
+# install/update while sshPort is set, removed by update when it is not and by
+# decommission. The mothership sees every relayed login from the satellite's
+# tunnel end, which its sshd exempts from PerSourcePenalties (tappaas-cicd.nix).
+
+sat_ssh_port() { sat_cfg_ssh_port "${SAT_CFG}"; }
+sat_ssh_nat_desc()  { printf 'tappaas-satellite %s sshPort->mothership' "${SAT_NAME}"; }
+sat_ssh_rule_desc() { printf 'tappaas-satellite edge->mothership ssh %s' "${SAT_NAME}"; }
+
+# sat_mothership_addr — the address the port forward targets: this machine's
+# name in mgmt, else the source address of its default route.
+sat_mothership_addr() {
+    local a="${SAT_MOTHERSHIP_ADDR:-}"
+    [[ -n "${a}" ]] || a="$(getent ahostsv4 "tappaas-cicd.${SAT_DNS_ZONE}.internal" 2>/dev/null | awk 'NR==1 {print $1}')"
+    [[ -n "${a}" ]] || a="$(ip -4 -o route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<NF;i++) if ($i=="src") {print $(i+1); exit}}')"
+    printf '%s' "${a}"
+}
+
+# sat_ssh_nat_row / sat_ssh_rule_row — this satellite's OPNsense objects, as
+# their search rows (JSON), or nothing.
+sat_ssh_nat_row() {
+    _ow_api /api/firewall/d_nat/searchRule \
+        | jq -c --arg d "$(sat_ssh_nat_desc)" '[.rows[]? | select(.descr==$d)] | first // empty'
+}
+sat_ssh_rule_row() {
+    _ow_api /api/firewall/filter/searchRule \
+        | jq -c --arg d "$(sat_ssh_rule_desc)" '[.rows[]? | select(.description==$d)] | first // empty'
+}
+
+# sat_ssh_home <ensure|remove> — converge the home half. ensure needs sshPort
+# set; a rule that no longer matches (another port, another mothership address)
+# is replaced. Idempotent; applies only on a change.
+sat_ssh_home() {
+    local want="$1" port="" target="" row uuid changed=0 nat_ok=0
+    if [[ "${want}" == ensure ]]; then
+        port="$(sat_ssh_port)"
+        [[ -n "${port}" ]] || return 0
+        target="$(sat_mothership_addr)"
+        [[ -n "${target}" ]] || { warn "  cannot tell the mothership's address — set SAT_MOTHERSHIP_ADDR"; return 1; }
+    fi
+    row="$(sat_ssh_nat_row)"
+    if [[ -n "${row}" ]]; then
+        if [[ "${want}" == ensure ]] && jq -e --arg p "${port}" --arg t "${target}" \
+               '.["destination.port"] == $p and .target == $t and (.["local-port"] // "22") == "22" and .disabled != "1"' <<< "${row}" >/dev/null; then
+            nat_ok=1
+        else
+            _ow_api -X POST "/api/firewall/d_nat/delRule/$(jq -r .uuid <<< "${row}")" >/dev/null; changed=1
+            info "  OPNsense: removed the port forward $(sat_ssh_nat_desc)"
+        fi
+    fi
+    if [[ "${want}" == ensure && "${nat_ok}" == 0 ]]; then
+        _ow_api -X POST -H 'Content-Type: application/json' \
+            -d "{\"rule\":{\"disabled\":\"0\",\"interface\":\"wireguard\",\"ipprotocol\":\"inet\",\"protocol\":\"tcp\",\"source\":{\"network\":\"${SAT_SAT_ADDR}\"},\"destination\":{\"network\":\"${SAT_HOME_ADDR}\",\"port\":\"${port}\"},\"target\":\"${target}\",\"local-port\":\"22\",\"pass\":\"\",\"descr\":\"$(sat_ssh_nat_desc)\"}}" \
+            /api/firewall/d_nat/addRule >/dev/null
+        changed=1
+        info "  OPNsense: port forward ${SAT_HOME_ADDR}:${port} -> ${target}:22 on the tunnel"
+    fi
+    row="$(sat_ssh_rule_row)"; uuid=""
+    [[ -n "${row}" ]] && uuid="$(jq -r '.uuid // empty' <<< "${row}")"
+    if [[ -n "${uuid}" && "${want}" == ensure ]] \
+       && ! jq -e --arg t "${target}" '.destination_net == $t and (.destination_port // "") == "22"' <<< "${row}" >/dev/null; then
+        _ow_api -X POST "/api/firewall/filter/delRule/${uuid}" >/dev/null; uuid=""; changed=1
+    fi
+    if [[ "${want}" == ensure && -z "${uuid}" ]]; then
+        sat_ensure_edge_rule "$(sat_ssh_rule_desc)" TCP "${target}" 22 >/dev/null; changed=1
+        info "  OPNsense: $(sat_ssh_rule_desc) (${SAT_SAT_ADDR} -> ${target}:22)"
+    elif [[ "${want}" == remove && -n "${uuid}" ]]; then
+        _ow_api -X POST "/api/firewall/filter/delRule/${uuid}" >/dev/null; changed=1
+        info "  OPNsense: removed $(sat_ssh_rule_desc)"
+    fi
+    if [[ "${changed}" == 1 ]]; then
+        _ow_api -X POST /api/firewall/d_nat/apply >/dev/null
+        _ow_api -X POST /api/firewall/filter/apply >/dev/null
+    fi
+    if [[ "${want}" == ensure ]]; then
+        [[ -n "$(sat_ssh_nat_row)" && -n "$(sat_ssh_rule_row)" ]] \
+            || { warn "  OPNsense did not take the sshPort port forward or its rule"; return 1; }
+    fi
+    return 0
+}
+
+# _sat_conf_norm — a rendered config without comments or blank lines, so the
+# satellite's files compare by what they do, not how they are annotated.
+_sat_conf_norm() { sed -e 's/#.*$//' -e 's/[[:space:]]*$//' | grep -v '^[[:space:]]*$'; }
+
+# sat_relay_converge — the satellite's firewall and nginx as the config says
+# (sshPort on or off): render them, compare with the machine's, and re-provision
+# only when they differ. Managed satellites only.
+sat_relay_converge() {
+    [[ "${SAT_MGMT}" == managed ]] || return 0
+    local pub cdir clients="" cur want f differ=""
+    sat_is_pbs_host && clients="$(sat_mgmt_subnet)"
+    pub="$(sat_home_pubkey)" || { warn "  cannot read the OPNsense end of ${INSTANCE}'s tunnel"; return 1; }
+    cdir="$(mktemp -d)"
+    SAT_PBS_CLIENTS="${clients}" sat_gen_debian_configs "${SAT_CFG}" "${pub}" "${cdir}" "${SAT_CICD_PUB}" \
+        || { rm -rf "${cdir}"; warn "  config rendering failed"; return 1; }
+    for f in nftables.conf:/etc/nftables.conf nginx-stream.conf:/etc/nginx/nginx.conf; do
+        want=""; [[ -f "${cdir}/${f%%:*}" ]] && want="$(_sat_conf_norm < "${cdir}/${f%%:*}")"
+        cur="$(sat_ssh "cat ${f#*:} 2>/dev/null" | _sat_conf_norm)"
+        if [[ "${f%%:*}" == nginx-stream.conf && -z "${want}" ]]; then
+            # No nginx wanted: only a running one of ours is a difference.
+            sat_ssh 'systemctl is-active --quiet nginx' 2>/dev/null && differ+=" nginx"
+        elif [[ "${cur}" != "${want}" ]]; then
+            differ+=" ${f#*:}"
+        fi
+    done
+    if [[ -z "${differ}" ]]; then rm -rf "${cdir}"; return 0; fi
+    sat_assemble_debian_deploy "${cdir}" >/dev/null
+    info "  re-provisioning ${INSTANCE}:${differ} not as the config says (sshPort $(sat_ssh_port | grep . || echo off))"
+    sat_deploy_run "${cdir}" "${SAT_USER}@${ADDRESS}" "${SAT_CICD_PUB%.pub}" provision-debian.sh set-management.sh \
+        || { rm -rf "${cdir}"; warn "  re-provisioning ${INSTANCE} failed"; return 1; }
+    rm -rf "${cdir}"
+}
+
+# sat_ssh_converge — sshPort as the config says, home and satellite. Turning it
+# on opens home first, then the satellite; turning it off closes the satellite
+# first, so neither half is left open alone.
+sat_ssh_converge() {
+    sat_check_ssh_config "${SAT_CFG}" || return 1
+    if [[ -n "$(sat_ssh_port)" ]]; then
+        sat_ssh_home ensure || return 1
+        sat_relay_converge
+    else
+        sat_relay_converge || return 1
+        sat_ssh_home remove
+    fi
 }
