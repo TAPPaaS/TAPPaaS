@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — draft for review |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-10-20 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | Answers **#430** (the controller/manager pattern beyond the foundation) and the registration half of **#731**. First uses: the UniFi controller in the `unifi-os` module, then **#847** (a MikroTik controller and module). Related: #170 (LiteLLM's control plane), #761 (composite modules: `kind` decides which controller acts), #250 (who owns what when community modules hook into core ones). Builds on ADR-007f, ADR-008, ADR-027, ADR-033, ADR-034. |
-| **Changelog** | v0.2 (2026-10-20) — **after the operator's review.** Naming (D3): a controller is `<application>-controller`, named for the application it controls, not the module; a manager's name is first come, first served. Trust (D7) is a warning, not a refusal: a controller from an unverified repository may plug into a foundation manager, and the site says so. UniFi is not FLOSS and stays outside the TAPPaaS repository: its controller lives in the module that runs it, in the Community repository (O1 answered). O3 answered: module-manager builds a module's TypeScript or Python components on tappaas-cicd with tappaas-cicd's own builders and libraries (D2). O4 written out for the conversation with Erik. "Component" now means a controller or a manager, never a module. v0.1 (2026-10-20) — first draft. |
+| **Changelog** | v0.3 (2026-10-20) — **one application, several modules; one module, several copies** (operator, D3 and D5). Two different modules that run the same application and bring the same controller are a warning with an undefined result, not a refusal. Two copies of one module (instances) run install and update once each, with the same result: the controller is registered once with both instances, and removing one copy leaves it for the other. v0.2 (2026-10-20) — **after the operator's review.** Naming (D3): a controller is `<application>-controller`, named for the application it controls, not the module; a manager's name is first come, first served. Trust (D7) is a warning, not a refusal: a controller from an unverified repository may plug into a foundation manager, and the site says so. UniFi is not FLOSS and stays outside the TAPPaaS repository: its controller lives in the module that runs it, in the Community repository (O1 answered). O3 answered: module-manager builds a module's TypeScript or Python components on tappaas-cicd with tappaas-cicd's own builders and libraries (D2). O4 written out for the conversation with Erik. "Component" now means a controller or a manager, never a module. v0.1 (2026-10-20) — first draft. |
 
 ## Context
 
@@ -138,9 +138,15 @@ mandate a tool; it fixes the interface).
   `routeros-controller` (MikroTik's switch OS). A module's name can be more general than its
   application, and one module can run several applications, each with its own controller.
 - A **manager**'s name is first come, first served: the first module to register a name keeps it.
-- A name already registered by another module, or by a standard component, is refused with the
-  owner named (D5). Two modules that run the same application share one controller: the second
-  declares it needs it (`dependsOn`) instead of bringing another copy.
+- A **manager** name already registered by another module, or by a standard component, is refused
+  with the owner named (D5).
+- **Two different modules that run the same application** (two UniFi modules, each bringing
+  `unifi-controller`) are not refused: it is **a warning, and the result is undefined**. Both are
+  recorded; which one's code the name runs is not promised, and the warning names both modules and
+  stays a finding of `health-manager validate` until one of them is removed. Removing one leaves
+  the other's controller in place.
+- **Two copies of the same module** (instances, such as `unifi-os` and `unifi-os-lab`) bring the same
+  controller from the same module source. That is not a clash: see D5.
 
 The standard components follow the controller rule where they do not yet:
 `identity-controller` becomes `authentik-controller`, `backup-controller` becomes
@@ -177,7 +183,22 @@ Installing or updating a module that declares controllers or managers:
 3. records it in `config/control-plane.json`: name, module, instance, path, `plugsInto`, contract,
    version, the repository it came from.
 
-Deleting the module removes its links and its entries. The managers find their controllers in the
+A registry entry is one component from one module source, with the list of instances of that
+module that use it. That keeps several copies of one module from confusing it:
+
+- **Install and update run per instance**, so a module installed twice runs its component's
+  `install.sh` twice. Both runs build and link the same code from the same source to the same
+  name, so the second changes nothing; it only adds its instance to the entry. Each instance still
+  registers *itself* with its manager (D6): two controller instances, one controller.
+- **Deleting an instance** removes its instance from the entry and its own registration with the
+  manager. The component's links and the entry go only with the **last** instance.
+- **Two copies of one module at different versions** (one updated, one not yet) build from the
+  same module source in the checkout, so they share one version of the code: the newer. The entry
+  records it, and the older instance's update brings it up to that code.
+- The registry is written under a lock, so two installs or updates of instances at the same time
+  cannot lose an entry.
+
+Deleting a module's last instance removes its links and its entries. The managers find their controllers in the
 registry, not by globbing a directory: `switch-manager` asks for the controllers that plug into
 it. The built-in components are entries too (`module: tappaas-cicd`), so one list describes the
 whole control plane.
