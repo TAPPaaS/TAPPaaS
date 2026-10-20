@@ -46,8 +46,8 @@ If the firewall is unreachable when tappaas-cicd installs, the module is deploye
 - Set up TLS certificates: run `acme-setup.sh` on the mothership (repo-root
   [INSTALL.md](../INSTALL.md) §2.3). Skippable for internal-only use.
 - Register physical switches and WiFi APs if your site has managed switches or APs:
-  run `setup-switches.sh` (drives `switch-controller`) and `setup-wlan-secrets.sh`
-  (SSID names/passphrases for `ap-controller`), then apply with
+  run `setup-switches.sh` (drives `switch-manager`) and `setup-wlan-secrets.sh`
+  (SSID names/passphrases for `ap-manager`), then apply with
   `network-manager reconcile --only switch --apply` / `--only ap --apply`. Full
   walk-through: repo-root [INSTALL.md](../INSTALL.md) §Step 6; reference:
   [scripts/README.md](scripts/README.md) (ADR-008).

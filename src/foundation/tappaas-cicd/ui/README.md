@@ -39,7 +39,7 @@ jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects th
 as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
 nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
 left); a click opens the object's records, findings, jumps and its day-2 change: a switch
-port's record (`switch-controller update-port`) then `switch-controller reconcile`, a node's
+port's record (`switch-manager update-port`) then `switch-manager reconcile`, a node's
 `node network show / set`. **Modules** — tabs: Installed (the list with its badges, grouped by stack, foundation
 first) and one per registered repository (`GET /api/v1/catalogs`: `site-manager repository list`, each
 repository's module-catalog.json and each module's own JSON; installed = a deployed instance whose
@@ -189,7 +189,7 @@ on with one. Without the AI stack, or with the console down, it says why and exi
 
 At start the console reads every manager's `--help --json` (lib/ts `renderManifest`) and the
 declared bash verbs in [`manifest/bash-verbs.json`](manifest/bash-verbs.json)
-(switch-controller, ap-controller, `tappaas-train.sh`, `acme-setup.sh`); `GET
+(switch-manager, ap-manager, `tappaas-train.sh`, `acme-setup.sh`); `GET
 /api/v1/manifests` serves them. A job's argv must be a verb one of them declares, with options
 that verb declares (`src/manifest.ts`, ADR-034 T2): an undeclared verb or option, a value
 outside an option's choices, a missing or surplus positional, `--config-dir` or `--help` is

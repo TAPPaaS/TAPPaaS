@@ -10,12 +10,12 @@ forward-auth vs OIDC, the access gate). Issues #56, #320, #477.
 
 One person = **one Authentik login**. People are *declared as config* under
 `config/identities/` and reconciled into Authentik by **`identity-manager`**; the identity
-controller CLI **`authentik-manager`** is the runtime path (passwords, ad-hoc
+controller CLI **`authentik-controller`** is the runtime path (passwords, ad-hoc
 inspection). SSO is automatic across modules; access to each app is gated per-app.
 
 > Two tools, two jobs:
 > **`identity-manager`** owns *who exists and what they belong to* (config → Authentik).
-> **`authentik-manager`** drives *the live Authentik service* (credentials, apps, raw
+> **`authentik-controller`** drives *the live Authentik service* (credentials, apps, raw
 > reads). Never hand-edit the JSON under `config/identities/` — drive it through the verbs.
 
 ## The model
@@ -118,7 +118,7 @@ the comma separates, so `--add-groups "authentik Admins"` is one member, not two
 ```bash
 identity-manager user add jane --email jane@example.org --groups users                # ordinary user
 identity-manager user add jane --email jane@example.org --groups users --roles admin  # …or an admin
-authentik-manager user-set-password jane            # give them a password to log in with
+authentik-controller user-set-password jane            # give them a password to log in with
 ```
 
 (The two `add` forms are alternatives — `add` refuses an existing user without `--force`.)
@@ -232,22 +232,22 @@ Credential delivery at user-creation time is not automated yet (it waits on SMTP
 directly against Authentik:
 
 ```bash
-authentik-manager user-set-password <username>                    # generates + prints a password
-authentik-manager user-set-password <username> --password 'newpw' # set one explicitly
+authentik-controller user-set-password <username>                    # generates + prints a password
+authentik-controller user-set-password <username> --password 'newpw' # set one explicitly
 ```
 
 Share a generated password over a secure channel; the user changes it after first login.
 The same command is the **password reset** path — for someone else, or for yourself:
 
 ```bash
-authentik-manager user-set-password jane
+authentik-controller user-set-password jane
 ```
 
 Nicer: print a **one-time reset link** instead of a password, and send them that. The
 person picks their own password and you never see it:
 
 ```bash
-authentik-manager user-recovery-link jane
+authentik-controller user-recovery-link jane
 ```
 
 This works out of the box — `identity/update.sh` installs the recovery flow it needs and
@@ -257,30 +257,30 @@ lands straight on "set a new password" — **no SMTP anywhere in the path**. Re-
 hand any time with:
 
 ```bash
-authentik-manager recovery-flow-ensure     # idempotent; identity/update.sh runs it for you
+authentik-controller recovery-flow-ensure     # idempotent; identity/update.sh runs it for you
 ```
 
 Three things worth knowing about the link:
 
 - **It is a bearer credential.** Anyone holding the URL can set that account's password
   until the token expires. Send it over a channel you trust, same as a password.
-- **Its hostname is the one the API was called on** — `authentik-manager` talks to
+- **Its hostname is the one the API was called on** — `authentik-controller` talks to
   `http://identity.mgmt.internal:9000`, so the printed URL is internal-only. Swap the host
   for `https://identity.<domain>` when the person is coming in from outside.
 - **It does not disable the old password.** Until they use the link, the existing
   credential still works; use `user-set-password` when you need to cut access *now*.
 
 If `user-recovery-link` exits 2, the flow or the brand wiring is missing — run
-`authentik-manager recovery-flow-ensure`, or fall back to `user-set-password`.
+`authentik-controller recovery-flow-ensure`, or fall back to `user-set-password`.
 
-`authentik-manager` reads its URL + API token from `~/.authentik-credentials.txt`
+`authentik-controller` reads its URL + API token from `~/.authentik-credentials.txt`
 (bootstrapped automatically; `url=` + `token=`), so no extra flags are needed. Override
 with `--url` / `--token` / `--credential-file`, or `AUTHENTIK_URL` / `AUTHENTIK_TOKEN`.
-Check the connection with `authentik-manager test`.
+Check the connection with `authentik-controller test`.
 
 **Locked out entirely?** `akadmin` is Authentik's built-in break-glass admin. Log in at
 `https://identity.<domain>`, or reset it the same way:
-`authentik-manager user-set-password akadmin`.
+`authentik-controller user-set-password akadmin`.
 
 ## What a login can reach
 
@@ -316,10 +316,10 @@ brands, stages) that TAPPaaS does not model.
 ## Verify the live state
 
 ```bash
-authentik-manager test                   # token + reachability
-authentik-manager list-users             # what Authentik actually has
-authentik-manager list-groups
-authentik-manager list-roles
-authentik-manager get-user --name jane
+authentik-controller test                   # token + reachability
+authentik-controller list-users             # what Authentik actually has
+authentik-controller list-groups
+authentik-controller list-roles
+authentik-controller get-user --name jane
 identity-manager reconcile                 # config vs live: the drift, as a plan
 ```

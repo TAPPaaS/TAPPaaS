@@ -80,7 +80,7 @@ verb — the suite is driven from the mothership build/test path rather than the
 - **No local verb scripts.** Because build + link happen in the mothership
   `pre-update.sh`, this component is *not* self-contained the way the other
   controllers are (no `install.sh`/`update.sh`/`test.sh` of its own). Adding
-  them would make it follow the same pattern as `identity-controller`.
+  them would make it follow the same pattern as `authentik-controller`.
 - **VLAN interface assignment** in the low-level `opnsense-controller`
   (`--assign`) is noted as requiring a custom OPNsense PHP extension.
 - The pinned `oxl-opnsense-client` relaxes its `ansible-core` dependency

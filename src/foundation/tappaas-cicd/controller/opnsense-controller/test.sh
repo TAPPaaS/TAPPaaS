@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # opnsense-controller/test.sh — build the package env (nix), then run the
 # co-located Python unit tests (stdlib `unittest`) against it. Mirrors
-# identity-controller/test.sh.
+# authentik-controller/test.sh.
 #
 # These are OFFLINE unit tests (mocked OPNsense API) for the zone / rules / dhcp /
 # caddy / acme / dns managers. The LIVE opnsense plane (real rules, NAT, split-

@@ -1,9 +1,9 @@
 {
- "_comment": "The verbs of the bash controllers and scripts the console runs (ADR-034 D4, T2): declared here because they have no lib/ts HelpSpec to answer --help --json. Same shape as a manager's manifest. Keep in step with each script's usage/CLI_SPEC; ui/test checks the switch- and ap-controller options against their CLI_SPEC. A key word \"*\" stands for one positional word (ap-controller ssid <ap> add); an empty key is the script itself. A destructive verb whose object is not its first positional names it: \"object\": {\"positional\", \"within\"} (remove-port: the port, within its switch).",
+ "_comment": "The verbs of the bash controllers and scripts the console runs (ADR-034 D4, T2): declared here because they have no lib/ts HelpSpec to answer --help --json. Same shape as a manager's manifest. Keep in step with each script's usage/CLI_SPEC; ui/test checks the switch- and ap-manager options against their CLI_SPEC. A key word \"*\" stands for one positional word (ap-manager ssid <ap> add); an empty key is the script itself. A destructive verb whose object is not its first positional names it: \"object\": {\"positional\", \"within\"} (remove-port: the port, within its switch).",
  "manifests": [
   {
    "manifest": 1,
-   "name": "switch-controller",
+   "name": "switch-manager",
    "version": "bash",
    "tagline": "physical switches (ADR-008)",
    "common": [],
@@ -439,7 +439,7 @@
      "effect": "write",
      "preview": {
       "kind": "none",
-      "touches": "records the port in switch-configuration-actual.json; switch-controller reconcile previews and applies it"
+      "touches": "records the port in switch-configuration-actual.json; switch-manager reconcile previews and applies it"
      },
      "destructive": false,
      "destructiveWhen": [],
@@ -563,7 +563,7 @@
      "effect": "write",
      "preview": {
       "kind": "none",
-      "touches": "changes the port's record in switch-configuration-actual.json only; nothing reaches the switch until switch-controller reconcile --apply. With --park: sets this one port on the switch at once (an access port in iotLocal), then records it parked"
+      "touches": "changes the port's record in switch-configuration-actual.json only; nothing reaches the switch until switch-manager reconcile --apply. With --park: sets this one port on the switch at once (an access port in iotLocal), then records it parked"
      },
      "destructive": false,
      "destructiveWhen": [],
@@ -857,7 +857,7 @@
   },
   {
    "manifest": 1,
-   "name": "ap-controller",
+   "name": "ap-manager",
    "version": "bash",
    "tagline": "access points and SSIDs (ADR-008)",
    "common": [],
@@ -1024,7 +1024,7 @@
      "effect": "write",
      "preview": {
       "kind": "none",
-      "touches": "maps the SSID to the zone in switch-configuration-desired.json; ap-controller reconcile --apply programs the AP"
+      "touches": "maps the SSID to the zone in switch-configuration-desired.json; ap-manager reconcile --apply programs the AP"
      },
      "destructive": false,
      "destructiveWhen": [],

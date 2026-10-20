@@ -23,7 +23,7 @@
 |------|------------|
 | **Site** | The physical + admin perimeter. One TAPPaaS = one Site. The *container* that holds the three classification terms. Its administrative boundary is the **Administrative Domain** (ADR-022a). |
 | **Administrative Domain** | The boundary of one administrative authority (RFC 4375). What is inside it is *ours*; what is outside is **external**. A Site has one. |
-| **Identity** | `Organization → Group → User` — the identities TAPPaaS manages, kept in `config/identities/` by `identity-manager` and realised in Authentik by the `identity-controller`. A human is one kind of identity, not the domain: a User may be a service account. Group is the RBAC primitive: finer-grained than Organization (org-level RBAC is too coarse), coarser than per-user rules. *(Was **People**, #628.)* |
+| **Identity** | `Organization → Group → User` — the identities TAPPaaS manages, kept in `config/identities/` by `identity-manager` and realised in Authentik by the `authentik-controller`. A human is one kind of identity, not the domain: a User may be a service account. Group is the RBAC primitive: finer-grained than Organization (org-level RBAC is too coarse), coarser than per-user rules. *(Was **People**, #628.)* |
 | **Module** | The atomic deployable unit — one `{name}.json` in `config/`. **The term is Module** (ADR-022f D8): *App* remains a user-facing label, never a type or a field value. See §B for its composition meaning. |
 | **Environments** | Where Modules run — zones, domain, posture. Owned by one Organization. |
 | **Health** | A cross-cutting **lens** (observability overlay) — applies across all classification terms, not a term itself. |

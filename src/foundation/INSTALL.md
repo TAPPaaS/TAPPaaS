@@ -520,17 +520,17 @@ Fastest path is the interactive bootstrap, which registers each brand/switch/upl
 port and then applies:
 
 ```bash
-setup-switches.sh          # interactive; ends by running `switch-controller reconcile --apply`
+setup-switches.sh          # interactive; ends by running `switch-manager reconcile --apply`
 ```
 
-Or register by hand with the `switch-controller` CLI, then reconcile:
+Or register by hand with the `switch-manager` CLI, then reconcile:
 
 ```bash
 # A manual switch with two node-uplink (trunk) ports:
-switch-controller add-switch core --vendor tplink --managed manual
-switch-controller add-port  core 9  --type node --target tappaas1 --target-port eth0
-switch-controller add-port  core 10 --type node --target tappaas2 --target-port eth0
-switch-controller reconcile --apply     # manual switch → prints the VLANs to tag (and records them)
+switch-manager add-switch core --vendor tplink --managed manual
+switch-manager add-port  core 9  --type node --target tappaas1 --target-port eth0
+switch-manager add-port  core 10 --type node --target tappaas2 --target-port eth0
+switch-manager reconcile --apply     # manual switch → prints the VLANs to tag (and records them)
 #   …tag those VLANs on ports 9 & 10 in the switch UI…
 ```
 
@@ -539,7 +539,7 @@ switch-controller reconcile --apply     # manual switch → prints the VLANs to 
 - `--managed auto` → a vendor plugin (currently **UniFi OS**) programs the switch over
   its API on `reconcile --apply`. Auto/controller brands read
   `~/.unifi-os-credentials.txt` (`url`/`username`/`password`, mode 0600).
-- Check state any time: `switch-controller list-ports` (per-port config + drift vs
+- Check state any time: `switch-manager list-ports` (per-port config + drift vs
   `zones.json`), or `network-manager reconcile --only switch` for a dry-run.
 
 ### 6b — Wi-Fi access points
@@ -556,14 +556,14 @@ setup-wlan-secrets.sh --list   # show SSIDs and whether a secret is set
 Then register the AP(s) and map each SSID to a zone, and reconcile:
 
 ```bash
-ap-controller add livingroom --vendor unifi --ip 10.0.0.21
-ap-controller ssid livingroom add HomeWiFi  --zone home  --security wpa2-personal
-ap-controller ssid livingroom add GuestWiFi --zone guest --security wpa2-personal
-ap-controller link livingroom --switch core --port 5      # the AP's uplink port
-ap-controller reconcile --apply
+ap-manager add livingroom --vendor unifi --ip 10.0.0.21
+ap-manager ssid livingroom add HomeWiFi  --zone home  --security wpa2-personal
+ap-manager ssid livingroom add GuestWiFi --zone guest --security wpa2-personal
+ap-manager link livingroom --switch core --port 5      # the AP's uplink port
+ap-manager reconcile --apply
 ```
 
-- With a **UniFi controller**, `switch-controller interrogate` auto-populates the AP
+- With a **UniFi controller**, `switch-manager interrogate` auto-populates the AP
   inventory and marks the AP's uplink port as a WiFi-VLAN trunk — so adopting a
   controller wires most of this up for you.
 - `security`: `open | wpa2-personal | wpa3-personal | wpa2-enterprise | wpa3-enterprise`

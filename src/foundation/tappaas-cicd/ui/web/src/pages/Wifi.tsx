@@ -2,9 +2,9 @@
 // zone's VLAN. 1 the network: the access point, the SSID's name, how clients
 // join, and the WPA passphrase, written to ~/.wlan-secrets.txt through the
 // secrets endpoint and never shown back or put in a command; 2 the mapping
-// (ap-controller ssid <ap> add, after `ssid <ap> remove` of the SSID the zone
+// (ap-manager ssid <ap> add, after `ssid <ap> remove` of the SSID the zone
 // had when it is a change); 3 the reconcile that programs the access point,
-// previewed first; 4 the SSID on its zone, read back from ap-controller list.
+// previewed first; 4 the SSID on its zone, read back from ap-manager list.
 
 import { useMemo, useState } from "react";
 import { post, reloadAll, useRead, useVerb } from "../api";
@@ -26,7 +26,7 @@ const str = (v: TargetValue | undefined): string | null => (typeof v === "string
 // `prefill`: what the assistant opened it with (open_console add-wifi <zone>): ssid, ap, security.
 export function WifiWizard({ z, aps, site, onClose, prefill }: { z: WifiZone; aps: ApIn[]; site: string; onClose: () => void; prefill?: TargetValues | null }) {
   const me = useMe();
-  const verb = useVerb("ap-controller", "ssid add");
+  const verb = useVerb("ap-manager", "ssid add");
   const securities = verb?.options.find((o) => o.flag === "--security")?.choices ?? ["wpa2-personal"];
   const secrets = useRead<SecretStatus[]>("secrets", 600_000);
   const kept = (secrets.env?.data ?? []).find((x) => x.name === "wlan")?.keys ?? [];
@@ -67,17 +67,17 @@ export function WifiWizard({ z, aps, site, onClose, prefill }: { z: WifiZone; ap
     const s = wifiSpecs(plan);
     const disruption = plan.replace ? <> Clients on <b>{plan.replace.ssid}</b> lose the WiFi when the reconcile below programs the access point, and join <b>{plan.ssid}</b> with its passphrase.</> : null;
     return {
-      remove: s.remove ? asStep(s.remove, `ap-controller ssid ${plan.replace!.ap} remove ${plan.replace!.ssid}`, <>Takes <b>{plan.replace!.ssid}</b> off {plan.replace!.ap} in the declared state (switch-configuration-desired.json); the AP keeps broadcasting it until the reconcile.{disruption}</>) : null,
-      add: asStep(s.add, `ap-controller ssid ${plan.ap} add ${plan.ssid}`, <>Maps <b>{plan.ssid}</b> on {plan.ap} to zone <b>{plan.zone}</b>{plan.vlan !== null ? <> (VLAN {plan.vlan})</> : null}, {plan.security}, in the declared state. There is no dry run: the preview is the command; nothing reaches the access point until the reconcile.</>),
-      reconcile: asStep(s.reconcile, "ap-controller reconcile", <>The preview reads the access points and lists what would change (the delta); apply programs them with the passphrase from ~/.wlan-secrets.txt.{disruption}</>),
+      remove: s.remove ? asStep(s.remove, `ap-manager ssid ${plan.replace!.ap} remove ${plan.replace!.ssid}`, <>Takes <b>{plan.replace!.ssid}</b> off {plan.replace!.ap} in the declared state (switch-configuration-desired.json); the AP keeps broadcasting it until the reconcile.{disruption}</>) : null,
+      add: asStep(s.add, `ap-manager ssid ${plan.ap} add ${plan.ssid}`, <>Maps <b>{plan.ssid}</b> on {plan.ap} to zone <b>{plan.zone}</b>{plan.vlan !== null ? <> (VLAN {plan.vlan})</> : null}, {plan.security}, in the declared state. There is no dry run: the preview is the command; nothing reaches the access point until the reconcile.</>),
+      reconcile: asStep(s.reconcile, "ap-manager reconcile", <>The preview reads the access points and lists what would change (the delta); apply programs them with the passphrase from ~/.wlan-secrets.txt.{disruption}</>),
     };
   }, [plan]);
 
   const stages = [
     { id: "network", title: "1 · The network", required: true, done: plan !== null, detail: "Which access point broadcasts it, the SSID's name, how clients join." },
     { id: "map", title: change ? `2 · Replace ${old!.name} with the new SSID` : `2 · Map the SSID to ${z.zone}`, required: true, done: added, detail: change ? "Remove the old mapping, then add the new one — each previewed." : `The SSID on the zone's VLAN${z.vlan !== null ? ` (${z.vlan})` : ""}, in the declared state.` },
-    { id: "reconcile", title: "3 · Program the access point", required: true, done: reconciled, detail: "ap-controller reconcile: the delta first, then apply." },
-    { id: "result", title: `4 · The WiFi on ${z.zone}`, required: false, done: reconciled && now.some((s) => s.name === plan?.ssid), detail: "What ap-controller now maps to the zone." },
+    { id: "reconcile", title: "3 · Program the access point", required: true, done: reconciled, detail: "ap-manager reconcile: the delta first, then apply." },
+    { id: "result", title: `4 · The WiFi on ${z.zone}`, required: false, done: reconciled && now.some((s) => s.name === plan?.ssid), detail: "What ap-manager now maps to the zone." },
   ];
   const current = !plan ? "network" : !added ? "map" : !reconciled ? "reconcile" : "result";
 
@@ -148,7 +148,7 @@ export function WifiWizard({ z, aps, site, onClose, prefill }: { z: WifiZone; ap
             {steps ? (
               <>
                 {steps.remove ? <StepView key={`r-${JSON.stringify(plan)}`} step={steps.remove} me={me} onDone={(ok) => ok && setRemoved(true)} /> : null}
-                {!steps.remove || removed ? <StepView key={`a-${JSON.stringify(plan)}`} step={steps.add} me={me} onDone={(ok) => ok && setAdded(true)} /> : <p className="muted small">Next: ap-controller ssid {plan!.ap} add {plan!.ssid} — once the old mapping is removed.</p>}
+                {!steps.remove || removed ? <StepView key={`a-${JSON.stringify(plan)}`} step={steps.add} me={me} onDone={(ok) => ok && setAdded(true)} /> : <p className="muted small">Next: ap-manager ssid {plan!.ap} add {plan!.ssid} — once the old mapping is removed.</p>}
               </>
             ) : (
               <p className="muted small">Once the network is chosen.</p>
@@ -188,7 +188,7 @@ export function WifiButton({ z, aps, site }: { z: WifiZone; aps: ApIn[]; site: s
   const label = `${wifiVerb(z)} WiFi for ${z.zone}…`;
   return (
     <>
-      <button className="btn" disabled={aps.length === 0} title={aps.length === 0 ? "No access point is registered (ap-controller add)" : undefined} onClick={() => setOpen(true)}>{label}</button>
+      <button className="btn" disabled={aps.length === 0} title={aps.length === 0 ? "No access point is registered (ap-manager add)" : undefined} onClick={() => setOpen(true)}>{label}</button>
       {/* Closing it re-reads the page: the zone may have its SSID now. */}
       {open ? <WifiWizard z={z} aps={aps} site={site} prefill={prefill} onClose={() => { setOpen(false); setPrefill(null); reloadAll(); }} /> : null}
     </>

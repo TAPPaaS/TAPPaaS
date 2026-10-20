@@ -6,7 +6,7 @@
 # Reversible: yes — remove the symlink and restore config/.migrations/backup/0005/people/.
 #
 # WHY. The domain is Identity everywhere else — the `identity` module, the
-# identity-controller, and now identity-manager (was people-manager). What it
+# authentik-controller, and now identity-manager (was people-manager). What it
 # holds are identities: organizations and groups as much as users, and a user
 # may be a service account. The directory is `identities/`, not `identity/`
 # (proposed on #628, for ADR-007a to confirm): config/identity.json is the

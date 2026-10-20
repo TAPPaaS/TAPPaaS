@@ -94,7 +94,7 @@ export interface NetworkClient {
   //
   // SYSTEM-WIDE (#461): network-manager reconcile takes no zone or environment
   // filter — it converges every zone on every plane, and none of the four plane
-  // bins (zone-manager, proxmox-controller, switch-controller, ap-controller)
+  // bins (zone-manager, proxmox-controller, switch-manager, ap-manager)
   // accepts a zone selector either. Callers must NOT present this as scoped to
   // one environment, and must not repeat it per environment: N environments
   // means N identical whole-system passes. See --skip-network.

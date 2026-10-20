@@ -34,7 +34,7 @@ name and options. The typed name is the verb's first positional unless the verb
 declares its `object` — the positional that identifies what it acts on and those it is within
 (`remove-port`: the port, shown as `<switch>:<port>`); a verb that does not declare one has no
 `object` field. The console runs nothing a manifest does not declare; the bash
-controllers' verbs it runs are declared in `ui/manifest/bash-verbs.json`.
+managers' verbs it runs (switch-manager, ap-manager) are declared in `ui/manifest/bash-verbs.json`.
 
 A **controller**, by contrast, owns *runtime / device state*: it talks to a live
 service or device (OPNsense, Authentik, a switch, Proxmox) and reconciles the
@@ -107,7 +107,7 @@ dispatcher.)
 | [`module-manager`](module-manager/) | The module lifecycle: install / update / delete / test / snapshot of TAPPaaS modules, with scope/source classification lint and environment-aware deployment. Owns the per-module JSON in `config/`. |
 | [`network-manager`](network-manager/) | The network front door: owns `zones.json` (CRUD + VLAN allocation) and reconciles four infrastructure planes (OPNsense, Proxmox, switch, access points) by orchestrating their controllers. Also the admin VPN (`network-manager wgvpn`: WireGuard into mgmt, terminating on OPNsense — formerly `satellite-manager admin`). |
 | [`health-manager`](health-manager/) | The health lens (ADR-007e): `validate` asserts the live site is healthy (liveness, disk, memory, backup coverage, pending reboots, CVE status); `update-os` and `reboot` patch and restart a guest; `scan security` / `report security` inventory everything running and match it against CVE databases (ADR-011 — `config/sbom/`, run after every sweep). Read-mostly; owns no config. |
-| [`backup-manager`](backup-manager/) | The backup hierarchy: the Site → Environment → Module backup-policy cascade. Resolves the effective backup policy (retention, residency, enabled, exclude) for any module, reports status across all modules, validates the hierarchy, and delegates restore/PBS ops to `backup-controller` + the foundation `restore.sh`. |
+| [`backup-manager`](backup-manager/) | The backup hierarchy: the Site → Environment → Module backup-policy cascade. Resolves the effective backup policy (retention, residency, enabled, exclude) for any module, reports status across all modules, validates the hierarchy, and delegates restore/PBS ops to `pbs-controller` + the foundation `restore.sh`. |
 | [`storage-manager`](storage-manager/) | Storage for consumer modules (ADR-029 v0.9): owns `config/shares.json`, the Site's NFS shares keyed by name, and changes it one share at a time (`nfs share add/modify/delete/purge`, `nfs grant/revoke`, `nfs show`, `nfs converge`). Each change is validated, written atomically and converged at once — the share's server builds it through its module's NFS hook and the alias `nfs-<share>.mgmt.internal` follows. Consumers mount through the `storage` module's `storage:nfs`. |
 
 The satellite has no manager of its own: `satellite-manager` was retired (ADR-010 §8.4) —

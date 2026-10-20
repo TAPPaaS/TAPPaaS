@@ -20,7 +20,7 @@ bootstrap.sh,tappaas-cicd/,
 install.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; environment-manager; copy-update-json.sh; update-module.sh; site.json; zones.json
 pre-update.sh,tappaas-cicd/,common-install-routines.sh; site.json; zones.json
 update.sh,tappaas-cicd/,common-install-routines.sh
-test.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; validate-site.sh; validate-people.sh; repository.sh; copy-update-json.sh; snapshot-vm.sh; backup-controller; update-os.sh; check-disk-threshold.sh; site.json; zones.json
+test.sh,tappaas-cicd/,common-install-routines.sh; create-site.sh; validate-site.sh; validate-people.sh; repository.sh; copy-update-json.sh; snapshot-vm.sh; pbs-controller; update-os.sh; check-disk-threshold.sh; site.json; zones.json
 #
 # === tappaas-cicd/lib ===
 converge-lib.sh,tappaas-cicd/lib/,common-install-routines.sh
@@ -56,7 +56,7 @@ test.sh,tappaas-cicd/manager/,
 update.sh,tappaas-cicd/manager/,
 #
 # === tappaas-cicd/manager/people-manager (TS manager: people-manager) ===
-src/main.ts,tappaas-cicd/manager/people-manager/,authentik-manager; validate-people.sh
+src/main.ts,tappaas-cicd/manager/people-manager/,authentik-controller; validate-people.sh
 src/bootstrap.ts,tappaas-cicd/manager/people-manager/,minimal-org
 src/config.ts,tappaas-cicd/manager/people-manager/,
 src/entity.ts,tappaas-cicd/manager/people-manager/,
@@ -118,9 +118,9 @@ test.sh,tappaas-cicd/manager/module-manager/,copy-update-json.sh; delete-module.
 update.sh,tappaas-cicd/manager/module-manager/,
 #
 # === tappaas-cicd/manager/network-manager (TS manager: network-manager) ===
-src/main.ts,tappaas-cicd/manager/network-manager/,zone-manager; proxmox-controller; switch-controller; ap-controller; scp; site.json; zones.json
+src/main.ts,tappaas-cicd/manager/network-manager/,zone-manager; proxmox-controller; switch-manager; ap-manager; scp; site.json; zones.json
 src/distribute.ts,tappaas-cicd/manager/network-manager/,Create-TAPPaaS-VM.sh; scp
-src/planes.ts,tappaas-cicd/manager/network-manager/,zone-manager; proxmox-controller; switch-controller; ap-controller
+src/planes.ts,tappaas-cicd/manager/network-manager/,zone-manager; proxmox-controller; switch-manager; ap-manager
 src/reconcile.ts,tappaas-cicd/manager/network-manager/,zones.json
 src/zones.ts,tappaas-cicd/manager/network-manager/,zones.json
 src/zonelifecycle.ts,tappaas-cicd/manager/network-manager/,zones.json
@@ -135,7 +135,7 @@ update.sh,tappaas-cicd/manager/network-manager/,
 #
 # === tappaas-cicd/manager/health-manager (TS manager: health-manager) ===
 src/main.ts,tappaas-cicd/manager/health-manager/,update-os.sh; backup-manager; site.json
-src/checks.ts,tappaas-cicd/manager/health-manager/,check-disk-threshold.sh; backup-manager; switch-controller
+src/checks.ts,tappaas-cicd/manager/health-manager/,check-disk-threshold.sh; backup-manager; switch-manager
 src/inspect.ts,tappaas-cicd/manager/health-manager/,(native)
 src/client.ts,tappaas-cicd/manager/health-manager/,(native ssh/pvesh via lib/ts cluster.ts)
 src/config.ts,tappaas-cicd/manager/health-manager/,site.json
@@ -149,9 +149,9 @@ test.sh,tappaas-cicd/manager/health-manager/,validate.sh
 update.sh,tappaas-cicd/manager/health-manager/,
 #
 # === tappaas-cicd/manager/backup-manager (TS manager: backup-manager) ===
-src/main.ts,tappaas-cicd/manager/backup-manager/,backup-controller; site.json
-src/client.ts,tappaas-cicd/manager/backup-manager/,backup-controller
-src/restore.ts,tappaas-cicd/manager/backup-manager/,backup-controller; restore.sh
+src/main.ts,tappaas-cicd/manager/backup-manager/,pbs-controller; site.json
+src/client.ts,tappaas-cicd/manager/backup-manager/,pbs-controller
+src/restore.ts,tappaas-cicd/manager/backup-manager/,pbs-controller; restore.sh
 src/reconcile.ts,tappaas-cicd/manager/backup-manager/,
 src/modify.ts,tappaas-cicd/manager/backup-manager/,
 src/validate.ts,tappaas-cicd/manager/backup-manager/,
@@ -183,38 +183,38 @@ install.sh,tappaas-cicd/controller/proxmox-controller/,validate.sh
 test.sh,tappaas-cicd/controller/proxmox-controller/,
 update.sh,tappaas-cicd/controller/proxmox-controller/,
 #
-# === tappaas-cicd/controller/switch-controller ===
-switch-controller,tappaas-cicd/controller/switch-controller/,zones.json
-setup-switches.sh,tappaas-cicd/controller/switch-controller/,common-install-routines.sh; install-module.sh
-test-setup-switches.sh,tappaas-cicd/controller/switch-controller/,setup-switches.sh
-test-switch-controller.sh,tappaas-cicd/controller/switch-controller/,switch-controller; zones.json
-install.sh,tappaas-cicd/controller/switch-controller/,validate.sh
-test.sh,tappaas-cicd/controller/switch-controller/,
-update.sh,tappaas-cicd/controller/switch-controller/,
+# === tappaas-cicd/manager/switch-manager ===
+switch-manager,tappaas-cicd/manager/switch-manager/,zones.json
+setup-switches.sh,tappaas-cicd/manager/switch-manager/,common-install-routines.sh; install-module.sh
+test-setup-switches.sh,tappaas-cicd/manager/switch-manager/,setup-switches.sh
+test-switch-manager.sh,tappaas-cicd/manager/switch-manager/,switch-manager; zones.json
+install.sh,tappaas-cicd/manager/switch-manager/,validate.sh
+test.sh,tappaas-cicd/manager/switch-manager/,
+update.sh,tappaas-cicd/manager/switch-manager/,
 #
-# === tappaas-cicd/controller/ap-controller ===
-ap-controller,tappaas-cicd/controller/ap-controller/,zones.json
-setup-wlan-secrets.sh,tappaas-cicd/controller/ap-controller/,common-install-routines.sh; zones.json
-test-ap-manager.sh,tappaas-cicd/controller/ap-controller/,zones.json
-test-setup-wlan-secrets.sh,tappaas-cicd/controller/ap-controller/,setup-wlan-secrets.sh
-install.sh,tappaas-cicd/controller/ap-controller/,validate.sh
-test.sh,tappaas-cicd/controller/ap-controller/,
-update.sh,tappaas-cicd/controller/ap-controller/,
+# === tappaas-cicd/manager/ap-manager ===
+ap-manager,tappaas-cicd/manager/ap-manager/,zones.json
+setup-wlan-secrets.sh,tappaas-cicd/manager/ap-manager/,common-install-routines.sh; zones.json
+test-ap-manager.sh,tappaas-cicd/manager/ap-manager/,zones.json
+test-setup-wlan-secrets.sh,tappaas-cicd/manager/ap-manager/,setup-wlan-secrets.sh
+install.sh,tappaas-cicd/manager/ap-manager/,validate.sh
+test.sh,tappaas-cicd/manager/ap-manager/,
+update.sh,tappaas-cicd/manager/ap-manager/,
 #
-# === tappaas-cicd/controller/identity-controller ===
-install.sh,tappaas-cicd/controller/identity-controller/,common-install-routines.sh
-test.sh,tappaas-cicd/controller/identity-controller/,
-update.sh,tappaas-cicd/controller/identity-controller/,
+# === tappaas-cicd/controller/authentik-controller ===
+install.sh,tappaas-cicd/controller/authentik-controller/,common-install-routines.sh
+test.sh,tappaas-cicd/controller/authentik-controller/,
+update.sh,tappaas-cicd/controller/authentik-controller/,
 #
 # === tappaas-cicd/controller/node-provisioner ===
 install.sh,tappaas-cicd/controller/node-provisioner/,component-install-lib.sh
 test.sh,tappaas-cicd/controller/node-provisioner/,
 update.sh,tappaas-cicd/controller/node-provisioner/,
 #
-# === tappaas-cicd/controller/backup-controller ===
-install.sh,tappaas-cicd/controller/backup-controller/,backup-controller
-test.sh,tappaas-cicd/controller/backup-controller/,backup-controller
-update.sh,tappaas-cicd/controller/backup-controller/,
+# === tappaas-cicd/controller/pbs-controller ===
+install.sh,tappaas-cicd/controller/pbs-controller/,pbs-controller
+test.sh,tappaas-cicd/controller/pbs-controller/,pbs-controller
+update.sh,tappaas-cicd/controller/pbs-controller/,
 #
 # === tappaas-cicd/controller/TEMPLATE ===
 controller.sh,tappaas-cicd/controller/TEMPLATE/,
@@ -257,16 +257,16 @@ test_dns_manager_cli.py,tappaas-cicd/controller/opnsense-controller/src/test/,
 test_rules_manager.py,tappaas-cicd/controller/opnsense-controller/src/test/,
 test_zone_manager.py,tappaas-cicd/controller/opnsense-controller/src/test/,
 #
-# === tappaas-cicd/controller/identity-controller (Python pkg: identity_controller) ===
-__init__.py,tappaas-cicd/controller/identity-controller/src/identity_controller/,authentik_manager.py
-authentik_cli.py,tappaas-cicd/controller/identity-controller/src/identity_controller/,authentik_manager.py; people_primitives.py
-authentik_manager.py,tappaas-cicd/controller/identity-controller/src/identity_controller/,
-people_primitives.py,tappaas-cicd/controller/identity-controller/src/identity_controller/,
+# === tappaas-cicd/controller/authentik-controller (Python pkg: identity_controller) ===
+__init__.py,tappaas-cicd/controller/authentik-controller/src/identity_controller/,authentik_manager.py
+authentik_cli.py,tappaas-cicd/controller/authentik-controller/src/identity_controller/,authentik_manager.py; people_primitives.py
+authentik_manager.py,tappaas-cicd/controller/authentik-controller/src/identity_controller/,
+people_primitives.py,tappaas-cicd/controller/authentik-controller/src/identity_controller/,
 #
-# === tappaas-cicd/controller/identity-controller/src/test ===
-__init__.py,tappaas-cicd/controller/identity-controller/src/test/,
-test_authentik_manager.py,tappaas-cicd/controller/identity-controller/src/test/,
-test_people_primitives.py,tappaas-cicd/controller/identity-controller/src/test/,
+# === tappaas-cicd/controller/authentik-controller/src/test ===
+__init__.py,tappaas-cicd/controller/authentik-controller/src/test/,
+test_authentik_manager.py,tappaas-cicd/controller/authentik-controller/src/test/,
+test_people_primitives.py,tappaas-cicd/controller/authentik-controller/src/test/,
 #
 # === tappaas-cicd/controller/node-provisioner (Python pkg: node_provisioner) ===
 __init__.py,tappaas-cicd/controller/node-provisioner/src/node_provisioner/,
@@ -332,7 +332,7 @@ test-unifi-plugin.sh,network/scripts/,unifi.sh
 manual.sh,network/scripts/plugins/,
 unifi.sh,network/scripts/plugins/,
 #
-# === network/scripts/switch-controller (TS S-TS pilot port; not yet the linked bin) ===
+# === network/scripts/switch-manager (TS S-TS pilot port; not yet the linked bin) ===
 src/main.ts,network/scripts/switch-controller/,zones.json
 #
 # === network/services/proxy ===
@@ -434,7 +434,7 @@ test-service.sh,cluster/services/vm/,common-install-routines.sh
 # === backup ===
 install.sh,backup/,common-install-routines.sh; pbs-job.sh; pbs-namespace.sh; pbs-placement.sh; pbs-client.sh; pbs-immutable.sh; dns-manager
 test-compromise-isolation.sh,backup/,
-test.sh,backup/,backup-controller
+test.sh,backup/,pbs-controller
 update.sh,backup/,common-install-routines.sh; pbs-job.sh; pbs-placement.sh; pbs-client.sh; pbs-immutable.sh
 #
 # === backup/lib ===
@@ -495,15 +495,15 @@ update.sh,identity/,common-install-routines.sh; ensure-authentik-creds.sh; site.
 test.sh,identity/,common-install-routines.sh; install-module.sh; delete-module.sh
 #
 # === identity/lib ===
-ensure-authentik-creds.sh,identity/lib/,authentik-manager; identity.json
+ensure-authentik-creds.sh,identity/lib/,authentik-controller; identity.json
 #
 # === identity/services/accessControl ===
-install-service.sh,identity/services/accessControl/,common-install-routines.sh; ensure-authentik-creds.sh; authentik-manager
+install-service.sh,identity/services/accessControl/,common-install-routines.sh; ensure-authentik-creds.sh; authentik-controller
 update-service.sh,identity/services/accessControl/,install-service.sh
 delete-service.sh,identity/services/accessControl/,common-install-routines.sh
 #
 # === identity/services/identity ===
-install-service.sh,identity/services/identity/,common-install-routines.sh; ensure-authentik-creds.sh; authentik-manager; site.json
+install-service.sh,identity/services/identity/,common-install-routines.sh; ensure-authentik-creds.sh; authentik-controller; site.json
 update-service.sh,identity/services/identity/,install-service.sh
 delete-service.sh,identity/services/identity/,common-install-routines.sh
 test-service.sh,identity/services/identity/,common-install-routines.sh

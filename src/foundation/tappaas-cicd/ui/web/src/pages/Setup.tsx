@@ -270,9 +270,9 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
           label="Register the switch…"
           title="Register and interrogate the switch"
           steps={[
-            { title: "1 · The controller: switch-controller add-controller", bin: "switch-controller", verb: "add-controller", initial: { "@name": "unifi-controller", "--vendor": "unifi" }, note: "--ip: the controller's address (as in the credentials above)." },
-            { title: "2 · Read its switches and ports: switch-controller interrogate", bin: "switch-controller", verb: "interrogate", note: "Every port with no record and no link is recorded parked: an access port in iotLocal (tier 6, no internet, nothing else reachable). A port with a link is left as the switch has it and named — register the node uplinks (add-port) or park it." },
-            { title: "3 · Program the trunks and park the free ports: switch-controller reconcile", bin: "switch-controller", verb: "reconcile", note: "The preview lists every port it would set, the parked ones included; apply pushes them." },
+            { title: "1 · The controller: switch-manager add-controller", bin: "switch-manager", verb: "add-controller", initial: { "@name": "unifi-controller", "--vendor": "unifi" }, note: "--ip: the controller's address (as in the credentials above)." },
+            { title: "2 · Read its switches and ports: switch-manager interrogate", bin: "switch-manager", verb: "interrogate", note: "Every port with no record and no link is recorded parked: an access port in iotLocal (tier 6, no internet, nothing else reachable). A port with a link is left as the switch has it and named — register the node uplinks (add-port) or park it." },
+            { title: "3 · Program the trunks and park the free ports: switch-manager reconcile", bin: "switch-manager", verb: "reconcile", note: "The preview lists every port it would set, the parked ones included; apply pushes them." },
           ]}
         />
       </>

@@ -72,7 +72,7 @@ async function main(): Promise<void> {
       : { rc: 1, stdout: "", stderr: "no", ran: true };
   const bash = join(FIX, "..", "..", "manifest", "bash-verbs.json");
   const ms: Manifests = await loadManifests(run, bash, ["demo-manager", "ghost-manager"]);
-  check(ms.byBin.has("demo-manager") && ms.byBin.has("switch-controller") && ms.byBin.has("ap-controller"), "the managers' and the bash verbs' manifests are loaded");
+  check(ms.byBin.has("demo-manager") && ms.byBin.has("switch-manager") && ms.byBin.has("ap-manager"), "the managers' and the bash verbs' manifests are loaded");
   check(ms.errors.length === 1 && ms.errors[0].bin === "ghost-manager", "a manager that does not answer is reported, not fatal");
 
   const ok = (argv: string[]) => validateArgv(ms, argv);
@@ -127,29 +127,29 @@ async function main(): Promise<void> {
   check(sp.ok && previewArgv(sp) === null, "no dry run: the preview runs nothing");
 
   // ── the bash verbs: their keys, and their options against CLI_SPEC ──
-  const port = ok(["switch-controller", "update-port", "USW Pro XG 10 PoE", "1", "--type", "device", "--mode", "access", "--zone", "iotCams"]);
-  check(port.ok && !port.read && port.verb.preview.kind === "none", "switch-controller update-port: a write with no dry run");
-  check(bad(["switch-controller", "update-port", "s", "1", "--mode", "hybrid"], "one of trunk, access"), "…its --mode is trunk or access");
-  const swr = ok(["switch-controller", "reconcile", "--apply"]);
-  check(swr.ok && previewArgv(swr)?.join(" ") === "switch-controller reconcile", "switch-controller reconcile previews without --apply");
-  const ssid = ok(["ap-controller", "ssid", "Nano HD", "add", "home", "--zone", "home"]);
-  check(ssid.ok && ssid.verb.verb === "ssid add" && ssid.object === "home", "ap-controller ssid <ap> add <ssid>: a '*' key word takes the AP");
+  const port = ok(["switch-manager", "update-port", "USW Pro XG 10 PoE", "1", "--type", "device", "--mode", "access", "--zone", "iotCams"]);
+  check(port.ok && !port.read && port.verb.preview.kind === "none", "switch-manager update-port: a write with no dry run");
+  check(bad(["switch-manager", "update-port", "s", "1", "--mode", "hybrid"], "one of trunk, access"), "…its --mode is trunk or access");
+  const swr = ok(["switch-manager", "reconcile", "--apply"]);
+  check(swr.ok && previewArgv(swr)?.join(" ") === "switch-manager reconcile", "switch-manager reconcile previews without --apply");
+  const ssid = ok(["ap-manager", "ssid", "Nano HD", "add", "home", "--zone", "home"]);
+  check(ssid.ok && ssid.verb.verb === "ssid add" && ssid.object === "home", "ap-manager ssid <ap> add <ssid>: a '*' key word takes the AP");
   check(ok(["acme-setup.sh", "--no-save-creds"]).ok, "acme-setup.sh is its own verb (an empty key)");
-  check(bad(["switch-controller", "remove-switch", "a", "--force"], "unknown option"), "remove-switch takes no option");
+  check(bad(["switch-manager", "remove-switch", "a", "--force"], "unknown option"), "remove-switch takes no option");
   // #855: the typed name is the object, not the first positional.
-  const rp = ok(["switch-controller", "remove-port", "USW Pro XG 10 PoE", "1"]);
+  const rp = ok(["switch-manager", "remove-port", "USW Pro XG 10 PoE", "1"]);
   check(rp.ok && rp.destructive && rp.object === "1" && rp.objectLabel === "USW Pro XG 10 PoE:1", "remove-port: the object is the port, shown as <switch>:<port>");
-  const lr = ok(["switch-controller", "lag", "remove", "USW Pro XG 10 PoE", "tappaas1-lan", "--apply"]);
+  const lr = ok(["switch-manager", "lag", "remove", "USW Pro XG 10 PoE", "tappaas1-lan", "--apply"]);
   check(lr.ok && lr.destructive && lr.object === "tappaas1-lan" && lr.objectLabel === "USW Pro XG 10 PoE:tappaas1-lan", "lag remove: the object is the aggregate");
-  const rs = ok(["switch-controller", "remove-switch", "USW Pro XG 10 PoE"]);
+  const rs = ok(["switch-manager", "remove-switch", "USW Pro XG 10 PoE"]);
   check(rs.ok && rs.object === "USW Pro XG 10 PoE" && rs.objectLabel === rs.object, "remove-switch: the default, its first positional");
   const fd = ok(["demo-manager", "forget-disk", "immich", "scsi1"]);
   check(fd.ok && fd.object === "scsi1" && fd.objectLabel === "immich:scsi1", "a TypeScript manager's declared object works the same");
   check(del.ok && del.objectLabel === del.object, "an undeclared verb: the label is the typed name");
-  check(ok(["switch-controller", "update-port", "s", "2", "--park"]).ok && ok(["switch-controller", "remove-port", "s", "2", "--park-zone", "guest"]).ok, "update-port --park and remove-port --park-zone are declared (#853)");
+  check(ok(["switch-manager", "update-port", "s", "2", "--park"]).ok && ok(["switch-manager", "remove-port", "s", "2", "--park-zone", "guest"]).ok, "update-port --park and remove-port --park-zone are declared (#853)");
 
-  const tree = join(FIX, "..", "..", "..", "controller");
-  for (const [bin, file] of [["switch-controller", "switch-controller/switch-controller"], ["ap-controller", "ap-controller/ap-controller"]]) {
+  const tree = join(FIX, "..", "..", "..", "manager"); // switch-manager and ap-manager (ADR-035 P2)
+  for (const [bin, file] of [["switch-manager", "switch-manager/switch-manager"], ["ap-manager", "ap-manager/ap-manager"]]) {
     const src = readFileSync(join(tree, file), "utf8");
     const spec = /CLI_SPEC=["']([\s\S]*?)["']\n/.exec(src)?.[1] ?? "";
     const ports = /PORT_OPTS='([^']*)'/.exec(src)?.[1] ?? "";
@@ -189,7 +189,7 @@ async function main(): Promise<void> {
     check(registeredManagers(d).join(",") === TS_MANAGERS.join(","), "an unreadable registry: the standard managers");
     writeFileSync(join(d, "control-plane.json"), JSON.stringify({ version: 1, components: [
       { name: "module-manager", kind: "manager", module: "tappaas-cicd", manifest: "help-json" },
-      { name: "switch-controller", kind: "controller", module: "tappaas-cicd", manifest: null },
+      { name: "proxmox-controller", kind: "controller", module: "tappaas-cicd", manifest: null },
       { name: "foo-manager", kind: "manager", module: "foo", manifest: "help-json" },
       { name: "bare-manager", kind: "manager", module: "bar", manifest: null },
     ] }));

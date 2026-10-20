@@ -109,7 +109,7 @@ Check any module's actual coverage rather than assuming:
 backup-manager list                     # OPTED-IN vs IN-PBS-JOB per module, + policy
 backup-manager restore list <module>    # what snapshots exist for one module
 backup-manager restore list-all         # every backup in the datastore
-backup-controller job-status            # the live jobs and their members
+pbs-controller job-status            # the live jobs and their members
 ```
 
 ---

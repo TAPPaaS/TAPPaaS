@@ -1,5 +1,5 @@
 {
-  "_comment": "The control plane's standard components (ADR-035): every manager and controller tappaas-cicd ships, and the two services built beside them. One list: scripts/control-plane-registry.sh writes it into config/control-plane.json, the registry the self-check and the console read, and scripts/test/test-control-plane-registry.sh keeps it equal to the directories and to flake.nix's packages. A manager with manifest 'help-json' answers --help --json and appears in the console. kind: manager | controller | service. package: the flake package that builds it; null for bash, which needs no build.",
+  "_comment": "The control plane's standard components (ADR-035): every manager and controller tappaas-cicd ships, and the two services built beside them. One list: scripts/control-plane-registry.sh writes it into config/control-plane.json, the registry the self-check and the console read, and scripts/test/test-control-plane-registry.sh keeps it equal to the directories and to flake.nix's packages. A manager with manifest 'help-json' answers --help --json and appears in the console. kind: manager | controller | service. package: the flake package that builds it; null for bash, which needs no build. aliases: old names a component also answers to, linked beside it for one release (ADR-035 P2).",
   "version": 1,
   "components": [
     {
@@ -67,25 +67,45 @@
       "manifest": "help-json"
     },
     {
-      "name": "ap-controller",
-      "kind": "controller",
-      "path": "controller/ap-controller",
+      "name": "ap-manager",
+      "kind": "manager",
+      "path": "manager/ap-manager",
       "language": "bash",
-      "package": null
+      "package": null,
+      "aliases": [
+        "ap-controller"
+      ]
     },
     {
-      "name": "backup-controller",
-      "kind": "controller",
-      "path": "controller/backup-controller",
+      "name": "switch-manager",
+      "kind": "manager",
+      "path": "manager/switch-manager",
       "language": "bash",
-      "package": null
+      "package": null,
+      "aliases": [
+        "switch-controller"
+      ]
     },
     {
-      "name": "identity-controller",
+      "name": "pbs-controller",
       "kind": "controller",
-      "path": "controller/identity-controller",
+      "path": "controller/pbs-controller",
+      "language": "bash",
+      "package": null,
+      "aliases": [
+        "backup-controller"
+      ]
+    },
+    {
+      "name": "authentik-controller",
+      "kind": "controller",
+      "path": "controller/authentik-controller",
       "language": "python",
-      "package": "identity-controller"
+      "package": "authentik-controller",
+      "aliases": [
+        "authentik-manager",
+        "identity-controller"
+      ]
     },
     {
       "name": "node-provisioner",
@@ -105,13 +125,6 @@
       "name": "proxmox-controller",
       "kind": "controller",
       "path": "controller/proxmox-controller",
-      "language": "bash",
-      "package": null
-    },
-    {
-      "name": "switch-controller",
-      "kind": "controller",
-      "path": "controller/switch-controller",
       "language": "bash",
       "package": null
     },

@@ -38,7 +38,7 @@ run_ts() {
     fi
 }
 
-# `list`/`show` read job membership from backup-controller (#627). This suite is
+# `list`/`show` read job membership from pbs-controller (#627). This suite is
 # offline BY CONSTRUCTION, and on the mothership the real controller is on PATH
 # and PBS is reachable — so pin the binary to an absent path. Tests that want
 # the job-sourced path point this at a stub instead.
@@ -184,9 +184,9 @@ BM "list --config-dir '${ARCH}'" 2>&1 | grep -c "OPTED-IN" >/dev/null \
 # in neither. A weekly member reading `false` was the second half of #627, so
 # the stub covers a bucket the daily list cannot see.
 STUB="$(mktemp -d "${TMPDIR:-/tmp}/bm-stub.XXXXXX")"
-cat > "${STUB}/backup-controller" <<'STUBEOF'
+cat > "${STUB}/pbs-controller" <<'STUBEOF'
 #!/usr/bin/env bash
-# Stub backup-controller: answers job-status only, from a fixed bucket layout.
+# Stub pbs-controller: answers job-status only, from a fixed bucket layout.
 [[ "$1" == "job-status" ]] || exit 2
 cat <<'JSON'
 {"reachable":true,"jobId":"daily-job","storage":"tappaas_backup",
@@ -195,9 +195,9 @@ cat <<'JSON'
             {"bucket":"weekly","jobId":"weekly-job","vmids":["202"]}]}
 JSON
 STUBEOF
-chmod +x "${STUB}/backup-controller"
+chmod +x "${STUB}/pbs-controller"
 
-lj="$(BACKUP_CONTROLLER_BIN="${STUB}/backup-controller" BM "list --json --config-dir '${FIX}'")"
+lj="$(BACKUP_CONTROLLER_BIN="${STUB}/pbs-controller" BM "list --json --config-dir '${FIX}'")"
 [[ "$(jq -r '.[] | select(.module=="m-site") | .membershipSource' <<<"$lj")" == "job" ]] \
     && ok "membership is labelled job-sourced when PBS answers" || bad "membershipSource=job"
 [[ "$(jq -r '.[] | select(.module=="m-site") | .jobBucket' <<<"$lj")" == "daily" ]] \
@@ -213,7 +213,7 @@ lj="$(BACKUP_CONTROLLER_BIN="${STUB}/backup-controller" BM "list --json --config
 
 # The archived module against a live job: declared, not a member, and the table
 # says WHY rather than reading as drift.
-aj2="$(BACKUP_CONTROLLER_BIN="${STUB}/backup-controller" BM "list --config-dir '${ARCH}'" 2>&1)"
+aj2="$(BACKUP_CONTROLLER_BIN="${STUB}/pbs-controller" BM "list --config-dir '${ARCH}'" 2>&1)"
 grep -q "false (archived)" <<<"$aj2" \
     && ok "an archived non-member is reported as archived, not bare false" || bad "archived cell"
 rm -rf "${STUB}" "${ARCH}"

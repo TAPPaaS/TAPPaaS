@@ -25,7 +25,7 @@ set -uo pipefail
 # shellcheck source=lib/oidc-consumer.sh disable=SC1091
 . "$(cd "$(dirname "$0")" && pwd)/lib/oidc-consumer.sh"
 
-AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
+AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-controller}"
 
 # TESTING.md: the deep tier is "gated by TAPPAAS_TEST_DEEP=1 and/or --deep".
 # This honoured ONLY --deep, so a sweep driving the documented env var ran just
@@ -72,8 +72,8 @@ trap cleanup EXIT
 
 # ── 1. connectivity ─────────────────────────────────────────────────────────
 section "1: Authentik reachable"
-if ${AUTHENTIK_MANAGER} test >/dev/null 2>&1; then pass "authentik-manager connects"
-else error "authentik-manager cannot reach Authentik"; exit 2; fi
+if ${AUTHENTIK_MANAGER} test >/dev/null 2>&1; then pass "authentik-controller connects"
+else error "authentik-controller cannot reach Authentik"; exit 2; fi
 
 # A status code alone is not an answer: Authentik 2026.5.7, with its worker on
 # the server's port, returned 200 with an EMPTY body to every request — the
@@ -155,7 +155,7 @@ else
 fi
 
 # ── 2c. password recovery is wired (brand.flow_recovery → a recovery flow) ──
-# Without this, `authentik-manager user-recovery-link <user>` exits 2 and the
+# Without this, `authentik-controller user-recovery-link <user>` exits 2 and the
 # only reset path is handing out a password. Asserted from the API (no token is
 # minted here — that would be a side effect on a real user).
 section "2c: password recovery flow wired to the default brand"

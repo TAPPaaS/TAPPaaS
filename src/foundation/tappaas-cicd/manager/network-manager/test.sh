@@ -218,13 +218,13 @@ fi
 
 # ── B2. Plane controller bins resolve on PATH (FAST; no cluster needed) ──
 # network-manager reconcile shells out to these exact bins (planes.ts PLANE_BIN).
-# A rename/stale-symlink that leaves one unresolvable (e.g. switch-controller
+# A rename/stale-symlink that leaves one unresolvable (e.g. switch-manager
 # dangling to an old firewall/scripts build) makes that plane ENOENT at runtime —
 # invisible to the FakePlaneClient unit tests above. Assert each resolves AND is
 # not a dangling symlink, so the mismatch fails here instead of in production.
 echo ""
 echo "== network-manager: plane controller bins resolve (fast) =="
-for bin in zone-manager proxmox-controller switch-controller ap-controller; do
+for bin in zone-manager proxmox-controller switch-manager ap-manager; do
     p="$(command -v "${bin}" 2>/dev/null || true)"
     if [[ -z "${p}" ]]; then
         bad "plane bin '${bin}' NOT on PATH (network-manager reconcile would ENOENT this plane)"
@@ -386,7 +386,7 @@ else
     # Dry-run the SWITCH plane only — non-mutating. Distinguish the outcomes:
     #   in-sync (rc 0) / drift (rc 2)         → the plane ran → OK
     #   bin not on PATH / spawn error / other → hard FAIL (this is the very gap
-    #                                           that hid the switch-controller
+    #                                           that hid the switch-manager
     #                                           rename: a "not on PATH" error must
     #                                           NOT be swallowed as "invoked").
     # Pin CONFIG_DIR to the live config so this exercises the real switch state

@@ -1,8 +1,8 @@
 // primitives.ts — CliPrimitiveClient: the real PrimitiveClient implementation.
 //
-// Each method spawnSyncs `authentik-manager <verb> ...` (the identity-controller
+// Each method spawnSyncs `authentik-controller <verb> ...` (the authentik-controller
 // CLI on PATH, S2b-2) and parses its JSON stdout. NO Authentik HTTP is
-// reimplemented here — this is a thin FFI boundary, exactly as switch-controller
+// reimplemented here — this is a thin FFI boundary, exactly as switch-manager
 // shells out to its bash plugins.
 //
 // list-* verbs emit JSON to stdout (NO --json flag); mutating verbs emit a
@@ -13,7 +13,7 @@ import { AkNamed, AkUser, PrimitiveClient } from "./types";
 
 export class AuthentikUnreachable extends Error {}
 
-const BIN = process.env.AUTHENTIK_MANAGER_BIN ?? "authentik-manager";
+const BIN = process.env.AUTHENTIK_MANAGER_BIN ?? "authentik-controller";
 
 // Thin wrapper over the shared exec helper: a spawn FAILURE (binary missing /
 // not executable) must throw AuthentikUnreachable (cmdSync catches it and

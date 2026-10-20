@@ -76,7 +76,7 @@ done
 # minimal-org/ into ~tappaas/config/identities with the installation name +
 # installer identity substituted (the retired user-setup.sh, native since the
 # ADR-007 refactor Phase 8.2); `identity-manager reconcile --apply` then
-# reconciles them into Authentik (via identity-controller). Idempotent: skipped
+# reconciles them into Authentik (via authentik-controller). Idempotent: skipped
 # once config/identities exists, so re-runs never disturb operator-added people.
 # (Supersedes the old ADR-006 roles-ensure bootstrap — ADR-007 is authoritative.)
 if [[ " ${FAILED[*]} " != *" identity "* ]]; then

@@ -67,9 +67,9 @@ honoured in the scheduled sweep and in `site-manager update --allow-disruption`)
 
 | Object | Live location | Owner / how it's written |
 |--------|---------------|--------------------------|
-| **Switch / AP topology** | `switch-configuration-{actual,desired}.json` | schema is `network/switch-configuration-schema.json`; **switch-controller** / **ap-controller** (`add-controller`/`add-switch`/`add-port`/`interrogate`/`reconcile`), driven by **network-manager** `reconcile --only switch\|ap`. |
+| **Switch / AP topology** | `switch-configuration-{actual,desired}.json` | schema is `network/switch-configuration-schema.json`; **switch-manager** / **ap-manager** (`add-controller`/`add-switch`/`add-port`/`interrogate`/`reconcile`), driven by **network-manager** `reconcile --only switch\|ap`. |
 | **TLS cert refids** | `cert-refids.json` | **runtime state** (no schema) — written by `acme-setup.sh`, keyed by environment name. An environment's `domains.dnsMode` (`environment-manager --dns-mode`) selects whether a wildcard cert refid is stored here. |
-| **Backup policy** | not a file — the `.backup` block on `site.json` / `environments/<env>.json` / `<module>.json` (cascade: module > env > site) | **backup-manager** — `modify <module>` writes the module `.backup` layer; site/env layers via `site`/`environment modify`. `list`/`show`/`validate`/`reconcile` (resolve cascade → PBS via backup-controller); `restore`. |
+| **Backup policy** | not a file — the `.backup` block on `site.json` / `environments/<env>.json` / `<module>.json` (cascade: module > env > site) | **backup-manager** — `modify <module>` writes the module `.backup` layer; site/env layers via `site`/`environment modify`. `list`/`show`/`validate`/`reconcile` (resolve cascade → PBS via pbs-controller); `restore`. |
 
 ## Conventions
 

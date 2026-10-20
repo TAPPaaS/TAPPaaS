@@ -22,7 +22,7 @@ export interface ZoneIn {
   vlantag?: number;
   SSID?: string | null;
 }
-// `ap-controller list --json`.
+// `ap-manager list --json`.
 export interface ApSsid {
   name: string;
   zone?: string | null;
@@ -87,7 +87,7 @@ export function defaultAp(z: WifiZone, aps: ApIn[]): string {
 // A personal security mode takes a WPA passphrase (~/.wlan-secrets.txt).
 export const needsPassphrase = (security: string): boolean => /-personal$/.test(security);
 
-// An SSID's name as ap-controller and ~/.wlan-secrets.txt take it: 1–32
+// An SSID's name as ap-manager and ~/.wlan-secrets.txt take it: 1–32
 // characters, no '=' (the secrets file's separator), no control characters.
 export function ssidProblem(name: string): string | null {
   if (!name) return "an SSID needs a name";
@@ -115,9 +115,9 @@ export function wifiSpecs(p: WifiPlan): { remove: StepSpec | null; add: StepSpec
   const add: Values = { "@ssid": p.ssid, "--zone": p.zone, "--security": p.security };
   if (p.vlan !== null) add["--vlan"] = String(p.vlan);
   return {
-    remove: p.replace ? { bin: "ap-controller", verb: "ssid remove", words: ["ssid", p.replace.ap, "remove"], initial: { "@ssid": p.replace.ssid } } : null,
-    add: { bin: "ap-controller", verb: "ssid add", words: ["ssid", p.ap, "add"], initial: add },
-    reconcile: { bin: "ap-controller", verb: "reconcile", initial: {} },
+    remove: p.replace ? { bin: "ap-manager", verb: "ssid remove", words: ["ssid", p.replace.ap, "remove"], initial: { "@ssid": p.replace.ssid } } : null,
+    add: { bin: "ap-manager", verb: "ssid add", words: ["ssid", p.ap, "add"], initial: add },
+    reconcile: { bin: "ap-manager", verb: "reconcile", initial: {} },
   };
 }
 

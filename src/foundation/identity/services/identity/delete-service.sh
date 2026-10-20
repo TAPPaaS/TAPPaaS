@@ -20,13 +20,13 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
+AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-controller}"
 
 MODULE="${1:-}"
 [[ -n "${MODULE}" ]] || die "Usage: $0 <effective-module-name>"
 
 if ! command -v "${AUTHENTIK_MANAGER%% *}" >/dev/null 2>&1 && [[ ! -x "${AUTHENTIK_MANAGER}" ]]; then
-    warn "authentik-manager not in PATH — skipping Authentik teardown for ${MODULE}"
+    warn "authentik-controller not in PATH — skipping Authentik teardown for ${MODULE}"
     exit 0
 fi
 if [[ ! -f "${HOME}/.authentik-credentials.txt" ]]; then

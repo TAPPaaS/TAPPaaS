@@ -92,8 +92,8 @@ fi
 if oidc_domain_unpublished "${PROXY_DOMAIN}"; then
     warn "${PROXY_DOMAIN} is not published (no public DNS record) — no route, so no forward-auth for '${MODULE}'"
     warn "  It is reachable only at ${VMNAME}.${ZONE0}.internal. Create the public record and re-run update to protect it."
-    if command -v authentik-manager >/dev/null 2>&1 && [[ -f "${HOME}/.authentik-credentials.txt" ]]; then
-        authentik-manager app-delete "${GATE_SLUG}" --only-proxy >/dev/null 2>&1 || true
+    if command -v authentik-controller >/dev/null 2>&1 && [[ -f "${HOME}/.authentik-credentials.txt" ]]; then
+        authentik-controller app-delete "${GATE_SLUG}" --only-proxy >/dev/null 2>&1 || true
     fi
     exit 0
 fi
@@ -108,8 +108,8 @@ debug "  external: https://${PROXY_DOMAIN}    upstream: ${UPSTREAM}:${PROXY_PORT
 
 # ── Step 1: Authentik application + provider, attached to embedded outpost ──
 
-if ! command -v authentik-manager >/dev/null 2>&1; then
-    die "authentik-manager not in PATH (rebuild opnsense-controller)"
+if ! command -v authentik-controller >/dev/null 2>&1; then
+    die "authentik-controller not in PATH (rebuild opnsense-controller)"
 fi
 # Bootstrap the cicd-side Authentik credentials on demand (missing or stale
 # token → re-fetch from the identity VM). die()s with remediation if the VM
@@ -128,26 +128,26 @@ if [[ "${GATE_SLUG}" == "${MODULE}" ]]; then
     gate_args=(--name "$(app_tile_name "${MODULE}" "${_mjson}")" --icon "$(app_tile_icon "${MODULE}" "${_mjson}")")
 fi
 if [[ "${GATE_SLUG}" != "${MODULE}" ]]; then
-    authentik-manager app-delete "${MODULE}" --only-proxy >/dev/null \
+    authentik-controller app-delete "${MODULE}" --only-proxy >/dev/null \
         || die "could not remove the old forward-auth app '${MODULE}'"
     gate_args+=(--launch-url "blank://blank")
 fi
 
 debug "  Authentik: ensuring Proxy app/provider '${GATE_SLUG}' (attached to embedded outpost)"
-authentik-manager proxy-app-ensure "${GATE_SLUG}" \
+authentik-controller proxy-app-ensure "${GATE_SLUG}" \
     --external-host "https://${PROXY_DOMAIN}" \
     --description "TAPPaaS forward-auth for ${MODULE} (#45)" \
     "${gate_args[@]}" \
-    --attach-outpost || die "authentik-manager proxy-app-ensure failed for ${GATE_SLUG}"
+    --attach-outpost || die "authentik-controller proxy-app-ensure failed for ${GATE_SLUG}"
 
 # ── Step 1b: access gate (MANDATORY — an unbound app is allow-all) ───────────
 # Authentik lets every user through an application with no policy binding
 # (ADR-006 §5), so without this any account on the identity provider passes the
 # forward-auth gate. Bind the org membership group `users`, as identity:identity
 # does for OIDC apps (#805). group-ensure is the same idempotent safety net.
-authentik-manager group-ensure users >/dev/null 2>&1 \
+authentik-controller group-ensure users >/dev/null 2>&1 \
     || warn "group-ensure users failed; assuming identity-manager already created it"
-_bind_out="$(authentik-manager app-bind-groups "${GATE_SLUG}" --group users)" \
+_bind_out="$(authentik-controller app-bind-groups "${GATE_SLUG}" --group users)" \
     || die "app-bind-groups failed for ${GATE_SLUG} — the app would be open to every Authentik user"
 debug "  ${_bind_out}"
 

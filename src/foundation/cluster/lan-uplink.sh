@@ -238,14 +238,14 @@ verified() {
 }
 
 # ── the switch side of lacp (#40) ──────────────────────────────────────
-# A LACP bond needs its switch ports to be one aggregate. switch-controller
+# A LACP bond needs its switch ports to be one aggregate. switch-manager
 # declares and programs it (`lag set|remove … --apply`); the ports are the ones
 # its inventory records as this node's lan NICs (type node, target <node>,
 # targetPort <nic>). The aggregate is named <node>-lan.
 SW_ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
 LAG_NAME=""
 lag_name() { echo "${NODE}-lan"; }
-have_switch_controller() { command -v switch-controller >/dev/null 2>&1 && [[ -f "${SW_ACTUAL}" ]]; }
+have_switch_controller() { command -v switch-manager >/dev/null 2>&1 && [[ -f "${SW_ACTUAL}" ]]; }
 
 # "<switch>\t<p,p>" for the lan NICs in <names>; non-zero naming what is missing.
 switch_ports_for() {
@@ -258,7 +258,7 @@ switch_ports_for() {
     local nic missing=""
     for nic in ${names}; do awk -F'\t' -v n="${nic}" '$3 == n {f=1} END {exit !f}' <<<"${rows}" || missing+=" ${nic}"; done
     if [[ -n "${missing}" ]]; then
-        echo "switch-controller does not know which switch port${missing} reach(es) — register it: switch-controller add-port <switch> <port> --type node --target ${NODE} --target-port <nic>" >&2
+        echo "switch-manager does not know which switch port${missing} reach(es) — register it: switch-manager add-port <switch> <port> --type node --target ${NODE} --target-port <nic>" >&2
         return 1
     fi
     sw=$(cut -f1 <<<"${rows}" | sort -u)
@@ -269,13 +269,13 @@ switch_ports_for() {
 switch_with_lag() {
     jq -r --arg l "$(lag_name)" '.switches // {} | to_entries[] | select(any(.value.ports[]?; .lag == $l)) | .key' "${SW_ACTUAL}" 2>/dev/null | head -1
 }
-switch_lag() {  # set <switch> <ports> | remove <switch> — indented, rc of switch-controller
+switch_lag() {  # set <switch> <ports> | remove <switch> — indented, rc of switch-manager
     local rc=0
     if [[ "$1" == set ]]; then
-        switch-controller lag set "$2" "$(lag_name)" --ports "$3" --apply 2>&1 | sed 's/^/    /' || true
+        switch-manager lag set "$2" "$(lag_name)" --ports "$3" --apply 2>&1 | sed 's/^/    /' || true
         rc=${PIPESTATUS[0]}
     else
-        switch-controller lag remove "$2" "$(lag_name)" --apply 2>&1 | sed 's/^/    /' || true
+        switch-manager lag remove "$2" "$(lag_name)" --apply 2>&1 | sed 's/^/    /' || true
         rc=${PIPESTATUS[0]}
     fi
     return "${rc}"
@@ -307,7 +307,7 @@ converge() {  # <declaration>
     args="$(setlan_args "${live}" "${decl}")" || exit 1
 
     # The switch side (#40): into lacp the aggregate is formed after the node
-    # speaks LACP; out of it, taken apart before. Both through switch-controller,
+    # speaks LACP; out of it, taken apart before. Both through switch-manager,
     # when it knows the ports; otherwise the operator does it within --switch-wait.
     local want_lacp=0 live_lacp=0 sw_set="" sw_ports="" sw_remove="" names
     [[ "$(jq -r '.lan.mode // ""' <<<"${decl}")" == lacp ]] && want_lacp=1
@@ -326,7 +326,7 @@ converge() {  # <declaration>
             sw_remove=""                                       # no LACP on either side
         fi
     elif [[ "${want_lacp}" == 1 || "${live_lacp}" == 1 ]]; then
-        warn "  switch-controller does not know this site's switches: configure the aggregate by hand, within --switch-wait"
+        warn "  switch-manager does not know this site's switches: configure the aggregate by hand, within --switch-wait"
     fi
 
     info "${BOLD}Converging ${NODE}'s lan uplink${CL}: config-network.sh --set-lan ${args//\'/}"
@@ -337,8 +337,8 @@ converge() {  # <declaration>
         || die "could not copy config-network.sh to ${NODE}"
     rn_node_ssh "${NODE}" "/root/tappaas/lan-uplink/config-network.sh --set-lan --dry-run --non-interactive ${args}" \
         || die "the node refused the change (above) — nothing written"
-    [[ -n "${sw_remove}" ]] && info "  switch side: take apart LAG $(lag_name) on ${sw_remove} first (switch-controller)"
-    [[ -n "${sw_set}" ]] && info "  switch side: ports ${sw_ports} of ${sw_set} become LAG $(lag_name) once ${NODE} speaks LACP (switch-controller)"
+    [[ -n "${sw_remove}" ]] && info "  switch side: take apart LAG $(lag_name) on ${sw_remove} first (switch-manager)"
+    [[ -n "${sw_set}" ]] && info "  switch side: ports ${sw_ports} of ${sw_set} become LAG $(lag_name) once ${NODE} speaks LACP (switch-manager)"
     if [[ "${EXECUTE}" != 1 ]]; then
         info "${YW}Preview only.${CL} To apply: site-manager node network set ${NODE} --apply"
         info "  It drains ${NODE} (HA maintenance), applies under a ${ROLLBACK_SECS}s rollback, checks from here, brings ${NODE} back."

@@ -6,7 +6,7 @@
 // (#461); `--deep` additionally reconciles every module that consumes the
 // environment (shell out to module-manager). NO plane or module logic is
 // reimplemented — it is a thin orchestration boundary, exactly as
-// identity-manager shells out to authentik-manager.
+// identity-manager shells out to authentik-controller.
 //
 // Entity: `environment`. Verbs:
 //   environment list

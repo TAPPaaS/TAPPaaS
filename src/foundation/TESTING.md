@@ -17,7 +17,7 @@ run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
 | network | ✅ | zones audit + opnsense compile + **unifi-plugin unit (incl. `tagged_vlan_mgmt:custom` regression)** + plane-bin-resolves | ✅ live OPNsense rules/NAT/connectivity; switch+ap **5-verb lifecycle via generic/manual plugin only** | no live switch/AP hardware path; proxmox apply + top-level network-manager reconcile only smoke-tested |
 | identity | ✅ | Authentik reachable + role groups + allow-list grep | ✅ live forward-auth gating vs OIDC passthrough (fixture VMs) | §3 is a source grep, not enforcement |
 | logging | ✅ | **live** 8 health probes (Loki/Grafana/Alloy/syslog) | ❌ **none** | liveness-only; ingest assertion weak; no retention/dashboards/alerting |
-| backup | ✅ | `lib/test-pbs-*.sh` unit suites (9 asserts: vmid-list CSV + ACL/parent/retention) | ✅ live PBS reachability via `backup-controller list` | per-VM backup verification is the consumers' `backup:vm` service test; no restore/encryption/prune/GC verification |
+| backup | ✅ | `lib/test-pbs-*.sh` unit suites (9 asserts: vmid-list CSV + ACL/parent/retention) | ✅ live PBS reachability via `pbs-controller list` | per-VM backup verification is the consumers' `backup:vm` service test; no restore/encryption/prune/GC verification |
 | templates | ✅ | template config JSONs valid + service scripts parse (+ flags the NixOS stub) | ✅ template VMs present on the cluster (qm status) | **NixOS `services/nixos/test-service.sh` is still a STUB (zero assertions)** — the base image's applied config is unverified (tracked TODO); Windows test = 4 baseline items |
 | tappaas-cicd | ✅ | config-reader unit tests + bin presence/load smoke + **`test-converge-lib.sh`** (the ADR-020 drift-record runner, fully stubbed: one batched set, migrate last, side effects once in reboot→wait-ip→dns order, `manual` warns while `immutable`/`recreate` fails, hook exit 10 = deferred/rc 0 and 20 = refused/rc 1, `--check` applies nothing) | ✅ live VM create/reinstall/snapshot-rollback/variants; re-dispatches manager+controller suites | Test 11 component checks shallow; silent skips when optional bins absent |
 
@@ -30,7 +30,7 @@ run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
 | environment-manager | config CRUD + cascade | ✅ **light** — read-only-validates the live env | cascade apply not exercised live |
 | module-manager | list/show/validate + reconcile delegation, plus the ADR-020 offline core: the **`modify --set` pre-gate** (`modify.test.ts` — the M1–M9 matrix: immutable/recreate rejected before any write, a mixed set rejected whole, a shrink and a downtime-needing migrate deliberately let through because only live state can judge them), the one **resolver** (`resolve.test.ts`, incl. the mutation proof that one resolver change reddens both it and `inspect`), the **field manifests** (`manifest.test.ts` — vocabulary parity with `schemas/service-fields.json`, coverage, one mutation per lint rule), the one **differ** (`drift.test.ts` — every normalizer symmetric + idempotent, composite escalation, the real cluster:vm manifest against a real reporter payload), and the **reporter client's error model** (`report.test.ts` — exit 4/5/6 stay separable, #526) | ⚠️ gate exists but **same as fast (no live probes)** | no live install/update/reconcile probe; the deep `modify --set` tier arrives with ADR-020 P4 |
 | site-manager | validate + reconcile dispatch | ⚠️ **no extra deep** | cascade/`--deep` not live-tested |
-| backup-manager | cascade resolve + validate + modify (46 asserts) | ⚠️ **no live** (pure config — defensible) | the actual PBS push lives in backup-controller (see below) |
+| backup-manager | cascade resolve + validate + modify (46 asserts) | ⚠️ **no live** (pure config — defensible) | the actual PBS push lives in pbs-controller (see below) |
 | health-manager | inspect/gate unit tests (23 asserts) | ❌ **no deep gate at all** | the manager *reads the live cluster* (`list vm`, `validate`) yet has **no live tier** to exercise it |
 
 ## Controllers
@@ -39,10 +39,10 @@ run) and an optional **deep tier** (live, gated by `TAPPAAS_TEST_DEEP=1` and/or
 |-----------|:-------:|-------|-----|
 | opnsense-controller | ✅ | `test.sh` builds (nix) + runs the stdlib `unittest` suite — **152 tests** (zone/rules/dhcp/caddy/acme/dns) | live behaviour additionally exercised via `network/test.sh` |
 | proxmox-controller | ✅ dispatcher | → `test-proxmox-manager.sh` (unit) | live apply only smoke-tested (in network) |
-| switch-controller | ✅ dispatcher | → `test-switch-controller.sh` + `test-setup-switches.sh` | no live vendor-apply test (the UniFi 10.x fix was verified manually on hardware) |
-| ap-controller | ✅ dispatcher | → `test-ap-manager.sh` + `test-setup-wlan-secrets.sh` | no live AP path |
-| backup-controller | ✅ inline | PBS job/namespace/verify + `--json` | live PBS mutation (`add-to-job`/`apply-schedule`) not live-tested |
-| identity-controller | ✅ runs unittest | → `python -m unittest` → `test_authentik_manager.py` + `test_people_primitives.py` | — |
+| switch-manager | ✅ dispatcher | → `test-switch-manager.sh` + `test-setup-switches.sh` | no live vendor-apply test (the UniFi 10.x fix was verified manually on hardware) |
+| ap-manager | ✅ dispatcher | → `test-ap-manager.sh` + `test-setup-wlan-secrets.sh` | no live AP path |
+| pbs-controller | ✅ inline | PBS job/namespace/verify + `--json` | live PBS mutation (`add-to-job`/`apply-schedule`) not live-tested |
+| authentik-controller | ✅ runs unittest | → `python -m unittest` → `test_authentik_manager.py` + `test_people_primitives.py` | — |
 
 ## Coverage gaps & recommendations (prioritized)
 

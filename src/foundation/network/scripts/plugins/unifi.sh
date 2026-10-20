@@ -1,9 +1,9 @@
 # shellcheck shell=bash
 #
-# plugins/unifi.sh — UniFi vendor plugin for switch-controller + ap-manager (ADR-008 Stage 5, #339).
+# plugins/unifi.sh — UniFi vendor plugin for switch-manager + ap-manager (ADR-008 Stage 5, #339).
 #
 # Configures UniFi switches AND WiFi APs via the self-hosted UniFi OS Server Network
-# API. Sourced by switch-controller and ap-manager (each select_plugin picks this for
+# API. Sourced by switch-manager and ap-manager (each select_plugin picks this for
 # vendor "unifi"). Implements two contracts that share plugin_supports:
 #   switch verbs: plugin_interrogate / plugin_apply       (ports → port_overrides)
 #   AP verbs:     plugin_ap_interrogate / plugin_ap_apply (SSIDs → wlanconf)
@@ -107,7 +107,7 @@ _unifi_send() { local m="$1" path="$2" body="$3"; curl -sk -m 25 -b "${_UNIFI_JA
 
 # A port's live aggregate (#40): the lead port of a LAG lists its members in
 # port_table.aggregate_members (op_mode "aggregate"); every other port lists none.
-# Its link (#853): port_table.up — switch-controller parks only a port with none.
+# Its link (#853): port_table.up — switch-manager parks only a port with none.
 _UNIFI_LAG_JQ='def _lag: if (.op_mode // "") == "aggregate" and ((.aggregate_members // []) | length) > 1
                            then (.aggregate_members | sort) else [] end;
                def _link: if .up == true then "up" elif .up == false then "down" else null end;'
@@ -123,7 +123,7 @@ plugin_arch() { echo "controller"; }
 plugin_controller_module() { echo "unifi-os"; }
 
 # ── Contract: interrogate <name> <mgmt_ip> ──────────────────────────
-# Emit the device's live state in switch-controller's actual-switch shape:
+# Emit the device's live state in switch-manager's actual-switch shape:
 #   {vendor,model,managementIp,ports:{ "<idx>": {mode,nativeVlan,taggedVlans,...} }}
 # Match the UniFi device by management IP first, then by name.
 #
@@ -180,10 +180,10 @@ plugin_interrogate() {
 
 # ── Contract: controller-interrogate <controller> <controller_ip> ───
 # Enumerate every SWITCH (type "usw") the UniFi controller adopts and emit them
-# in switch-controller's controller-upload shape:
+# in switch-manager's controller-upload shape:
 #   { switches: { "<device name>": {vendor,model,managementIp,ports:{ "<idx>":{...} }} } }
 # Port mapping is identical to plugin_interrogate (forward/native/excluded →
-# access/trunk + VLANs). switch-controller merges this into actual, preserving any
+# access/trunk + VLANs). switch-manager merges this into actual, preserving any
 # operator port annotations (type/target/targetPort).
 plugin_controller_interrogate() {
     local name="$1" mgmt_ip="${2:-}"   # mgmt_ip unused: creds carry the URL
@@ -223,7 +223,7 @@ plugin_controller_interrogate() {
                   ))
               } )),
             # APs (type "uap") with their wired uplink resolved to a switch + port,
-            # so switch-controller can register that port as an AP trunk.
+            # so switch-manager can register that port as an AP trunk.
             aps: (reduce (($devs.data // []) | map(select(.type=="uap")) | .[]) as $d ({};
                 ($d.uplink // {}) as $u
                 | .[$d.name] = {
@@ -253,7 +253,7 @@ plugin_controller_interrogate() {
 plugin_apply() {
     local name="$1"  # $2 = delta json (unused; we converge to desired)
     _unifi_login || return 1
-    # SWITCH_DESIRED: a desired holding only the ports to set now (switch-controller
+    # SWITCH_DESIRED: a desired holding only the ports to set now (switch-manager
     # parks one port that way, #853); ports it does not name keep their override.
     local dfile="${SWITCH_DESIRED:-${CONFIG_DIR:-/home/tappaas/config}/switch-configuration-desired.json}"
     [[ -f "${dfile}" ]] || { _unifi_warn "desired config not found: ${dfile}"; return 1; }
@@ -463,7 +463,7 @@ plugin_ap_interrogate() {
 # Converge controller WLANs to the DESIRED ssids of this AP (read from
 # switch-configuration-desired.json). Creates VLAN-only networks as needed,
 # then creates/updates a wlanconf per SSID bound to that network. Does not
-# delete WLANs (mirrors switch-controller — removal stays operator-driven).
+# delete WLANs (mirrors switch-manager — removal stays operator-driven).
 plugin_ap_apply() {
     local name="$1"  # $2 = delta json (unused; we converge to desired)
     _unifi_login || return 1

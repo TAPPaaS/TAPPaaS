@@ -4,7 +4,7 @@
 //
 // This is the FFI boundary, exactly as network-manager's planes.ts shells out to
 // the plane controllers and identity-manager's primitives.ts shells out to
-// authentik-manager. The heavy provisioning stays in the live bash scripts
+// authentik-controller. The heavy provisioning stays in the live bash scripts
 // (they remain the source of truth until their own retire step) — EXCEPT
 // `reconcile` and `inspect`, which are NATIVE TS since the ADR-007
 // post-implementation refactor Phase 7.3 (src/reconcile.ts / src/inspect.ts;

@@ -24,7 +24,7 @@ set -euo pipefail
 _ACCESSCONTROL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../lib/oidc-consumer.sh disable=SC1091
 . "${_ACCESSCONTROL_DIR}/../../lib/oidc-consumer.sh"
-AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
+AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-controller}"
 
 MODULE="${1:-}"
 [[ -n "${MODULE}" ]] || { echo "Usage: $0 <module-name>"; exit 2; }
@@ -48,7 +48,7 @@ fi
 GATE_SLUG="$(accesscontrol_gate_slug "${MODULE}" "${_TS_JSON}")"
 
 if ! ${AUTHENTIK_MANAGER} test >/dev/null 2>&1; then
-    error "  authentik-manager cannot reach Authentik"
+    error "  authentik-controller cannot reach Authentik"
     exit 2
 fi
 CREDS="${HOME}/.authentik-credentials.txt"

@@ -137,7 +137,7 @@ export class Reads {
     this.topology = new Cached("topology", TTL.topology, () => this.loadTopology(), now);
     this.zones = new Cached("zones", TTL.zones, () => this.loadZones(), now);
     // The access points and the SSIDs each maps to a zone (Setup's WiFi).
-    this.aps = new Cached("aps", TTL.aps, () => j<Record<string, unknown>[]>("ap-controller", ["list", "--json"]), now);
+    this.aps = new Cached("aps", TTL.aps, () => j<Record<string, unknown>[]>("ap-manager", ["list", "--json"]), now);
     this.environments = new Cached("environments", TTL.environments, () => j<EnvironmentRow[]>("environment-manager", ["list", "--json"]), now);
     this.site = new Cached("site", TTL.site, () => this.loadSite(), now);
     // No scan yet is an answer (null), not a failure.

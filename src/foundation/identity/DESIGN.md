@@ -57,7 +57,7 @@ opening without it (vaultwarden DESIGN.md).
 ## The login page
 
 The login page shows the site, not Authentik: `identity/update.sh` runs
-`authentik-manager brand-ensure` with `site.json` `displayName` (else `name`). The default
+`authentik-controller brand-ensure` with `site.json` `displayName` (else `name`). The default
 brand gets a logo with the site's name and "powered by TAPPaaS" — a light and a dark variant,
 picked by Authentik's `%(theme)s` file name — the name as page title and a site-initial
 favicon; the login flow's heading becomes "Sign in". Authentik's own footer ("Powered by
@@ -116,7 +116,7 @@ back in about a minute instead of waiting 45.
 `lib/ensure-authentik-creds.sh` is the single source of truth for materialising
 `~/.authentik-credentials.txt` (url= / token=, mode 600) on tappaas-cicd:
 
-- Fast path: file present and `authentik-manager test` passes → no-op.
+- Fast path: file present and `authentik-controller test` passes → no-op.
 - Otherwise: waits for the Authentik API (up to 5 min), fetches the bootstrap token from
   the identity VM over SSH, writes the file, then polls (up to 3 min) until Authentik
   accepts the token (the worker binds it to `akadmin` asynchronously on first boot).
@@ -184,7 +184,7 @@ break-glass identity.
 
 Ownership is split so neither half can silently fail:
 
-- `update.sh` runs `authentik-manager group-ensure "authentik Admins" --superuser`. This
+- `update.sh` runs `authentik-controller group-ensure "authentik Admins" --superuser`. This
   adopts the existing built-in group, and re-creates it **with** `is_superuser` if it was
   deleted — without it, `identity-manager`'s `ensure-group` would recreate a plain group of
   the same name and the grant would become a silent no-op.

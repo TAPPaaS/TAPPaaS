@@ -80,9 +80,9 @@ by spawning each plane's controller bin (each overridable by an env var):
    --zones-file <f>`.
 2. **proxmox** (L2, per node) — `proxmox-controller` (`NM_PROXMOX_BIN`):
    `reconcile [--apply]` plus `bridge-vids [--apply]`.
-3. **switch** (L2, inter-node) — `switch-controller` (`NM_SWITCH_BIN`):
+3. **switch** (L2, inter-node) — `switch-manager` (`NM_SWITCH_BIN`):
    `reconcile [--apply]`.
-4. **ap** (WiFi) — `ap-controller` (`NM_AP_BIN`): `reconcile [--apply]`.
+4. **ap** (WiFi) — `ap-manager` (`NM_AP_BIN`): `reconcile [--apply]`.
 
 Each controller follows an `rc` convention: `0` in sync, `2` drift (in dry-run) /
 needs-manual (after apply), `1`/other error. The engine aggregates per-plane

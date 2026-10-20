@@ -2,10 +2,10 @@
 //
 // The single FRONT DOOR for the network. Owns zones.json (CRUD + delta) and
 // reconciles all four planes by calling the plane-controller bins (opnsense via
-// zone-manager, proxmox via proxmox-manager, switch via switch-controller, ap
+// zone-manager, proxmox via proxmox-manager, switch via switch-manager, ap
 // via ap-manager). It does NOT reimplement any plane's logic — it is a thin
 // orchestration boundary, exactly as identity-manager shells out to
-// authentik-manager. This is `zone-reconcile` + `zone-controller.sh` ported to
+// authentik-controller. This is `zone-reconcile` + `zone-controller.sh` ported to
 // TS, with the #335/#372/#373 fix: it calls the on-PATH bins (NOT the stale
 // firewall/scripts/ paths) and ALWAYS reconciles the switch plane on add/delete.
 //
@@ -112,8 +112,8 @@ export const HELP: HelpSpec = {
         "The physical site as one derived document: nodes with their uplinks, legs, LLDP peers and\n" +
         "guests; switches with their ports, LAGs and drift; access points; zones; the buddies and the\n" +
         "satellite; and the health findings placed on the object each names. Joined from site.json,\n" +
-        "site-manager node list / node network show, switch-controller list / list-ports / lag list,\n" +
-        "ap-controller list, zones.json, module-manager module list, backup-manager peers and\n" +
+        "site-manager node list / node network show, switch-manager list / list-ports / lag list,\n" +
+        "ap-manager list, zones.json, module-manager module list, backup-manager peers and\n" +
         "health-manager validate. Read-only: it stores nothing. A source that does not answer is\n" +
         "named under `sources` and its part is left empty.",
     },

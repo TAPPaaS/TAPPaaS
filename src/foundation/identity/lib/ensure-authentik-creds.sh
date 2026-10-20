@@ -20,7 +20,7 @@
 #                                   Returns 0 on success; die()s on unrecoverable
 #                                   failure with an actionable remediation hint.
 
-# Path to the cicd-side credentials file consumed by authentik-manager.
+# Path to the cicd-side credentials file consumed by authentik-controller.
 : "${AUTHENTIK_CRED_FILE:=${HOME}/.authentik-credentials.txt}"
 
 # Resolve the identity VM's internal FQDN and API URL from the deployed
@@ -112,13 +112,13 @@ _authentik_write_credentials() {
 ensure_authentik_credentials() {
     local cred_file="${AUTHENTIK_CRED_FILE}"
 
-    command -v authentik-manager >/dev/null 2>&1 \
-        || die "authentik-manager not in PATH (rebuild opnsense-controller)"
+    command -v authentik-controller >/dev/null 2>&1 \
+        || die "authentik-controller not in PATH (rebuild opnsense-controller)"
 
     _authentik_identity_endpoints
 
     # Fast path: file present and the token still works → nothing to do.
-    if [[ -f "${cred_file}" ]] && authentik-manager test >/dev/null 2>&1; then
+    if [[ -f "${cred_file}" ]] && authentik-controller test >/dev/null 2>&1; then
         return 0
     fi
 
@@ -139,11 +139,11 @@ ensure_authentik_credentials() {
     info "${BOLD}Waiting for the bootstrap token to be accepted by Authentik...${CL}"
     local i
     for i in $(seq 1 36); do
-        if authentik-manager test >/dev/null 2>&1; then
+        if authentik-controller test >/dev/null 2>&1; then
             info "  ${GN}✓${CL} token accepted"
             return 0
         fi
-        [[ $i -eq 36 ]] && die "authentik-manager test never succeeded after 3 min — token not bound to akadmin. Remediation: cd src/foundation/identity && ./update.sh identity"
+        [[ $i -eq 36 ]] && die "authentik-controller test never succeeded after 3 min — token not bound to akadmin. Remediation: cd src/foundation/identity && ./update.sh identity"
         sleep 5
     done
 }

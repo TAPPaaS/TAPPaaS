@@ -22,6 +22,6 @@ regexes = [
 description = "code that only looks like a credential (matched on the whole line)"
 regexTarget = "line"
 regexes = [
-  # a keyword argument passed through (identity-controller authentik_cli.py)
+  # a keyword argument passed through (authentik-controller authentik_cli.py)
   '''token=token, verify_tls=''',
 ]

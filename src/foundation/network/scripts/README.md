@@ -6,7 +6,7 @@ Proxmox (L2 bridges/trunks), physical switches, and WiFi APs. See
 [ADR-008](../../../../docs/ADR/ADR-008-switch-module-network-infrastructure.md).
 
 They run on the **tappaas-cicd** mothership and are symlinked into `~/bin`, so
-`switch-controller`, `ap-controller`, `network-manager`, `setup-switches.sh`, and
+`switch-manager`, `ap-manager`, `network-manager`, `setup-switches.sh`, and
 `setup-wlan-secrets.sh` are on `PATH`.
 
 ## Model: orchestrator + providers
@@ -20,7 +20,7 @@ Each provider keeps two files under `~/config/` (`$CONFIG_DIR`):
 
 | File | Meaning |
 |------|---------|
-| `switch-configuration-actual.json`  | **reality** — what is really in the network (inventory + live/applied config). Shared by `switch-controller` (`.controllers`/`.switches`) and `ap-controller` (`.accessPoints`). |
+| `switch-configuration-actual.json`  | **reality** — what is really in the network (inventory + live/applied config). Shared by `switch-manager` (`.controllers`/`.switches`) and `ap-manager` (`.accessPoints`). |
 | `switch-configuration-desired.json` | **goal** — *regenerated* from `actual` + `zones.json`; never hand-edited. |
 
 The **5-verb contract** (run in this order):
@@ -54,7 +54,7 @@ the ADR-007 network owner/orchestrator; the OPNsense plane reconciler is
 
 ---
 
-## `switch-controller` — physical switches
+## `switch-manager` — physical switches
 
 Three-tier inventory in `actual`: **controllers** (a management plane such as
 UniFi OS that adopts switches), **switches**, and per-switch **ports**. A port
@@ -67,27 +67,27 @@ matches that — the AP still only broadcasts the SSIDs you configure.)
 
 ```
 # Inventory (written to switch-configuration-actual.json)
-switch-controller add-controller <name> --vendor <v> --ip <ip>     # uploads its switches+ports on interrogate
-switch-controller add-switch <name> --vendor <v> --managed auto|manual \
+switch-manager add-controller <name> --vendor <v> --ip <ip>     # uploads its switches+ports on interrogate
+switch-manager add-switch <name> --vendor <v> --managed auto|manual \
         [--controller <c>] [--ip <ip>] [--model <m>] [--location <l>] [--description <d>]
-switch-controller add-port <switch> <port> --type node|switch|ap|device|uplink \
+switch-manager add-port <switch> <port> --type node|switch|ap|device|uplink \
         [--target <t>] [--target-port <tp>] [--mode trunk|access] \
         [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>]
-switch-controller update-port <switch> <port> [ ...same flags... ]
-switch-controller remove-controller|remove-switch|remove-port ...
-switch-controller list
-switch-controller list-ports [<switch>]   # one line per port: actual config + drift vs zones.json
-switch-controller show <controller|switch>
+switch-manager update-port <switch> <port> [ ...same flags... ]
+switch-manager remove-controller|remove-switch|remove-port ...
+switch-manager list
+switch-manager list-ports [<switch>]   # one line per port: actual config + drift vs zones.json
+switch-manager show <controller|switch>
 
 # Reconcile (5-verb contract)
-switch-controller interrogate | update-desired | delta | apply | confirm
-switch-controller reconcile [--apply]
+switch-manager interrogate | update-desired | delta | apply | confirm
+switch-manager reconcile [--apply]
 ```
 
 - `--managed manual` configures the switch **by hand**: TAPPaaS prints which
   VLANs to tag (via `plugins/manual.sh`) — even for a brand that *has* a plugin
   (e.g. a UniFi switch you want to manage yourself). Apply them on the device,
-  then run `switch-controller confirm`.
+  then run `switch-manager confirm`.
 - `--managed auto` lets the vendor plugin program the switch on `reconcile --apply`.
 - `--ip` is optional for manual switches (only plugin interrogate/apply needs it).
 - **TAPPaaS only manages ports you've annotated** (`add-port`/`update-port` set a
@@ -96,23 +96,23 @@ switch-controller reconcile [--apply]
 
 **Example — a manual TP-Link with two node uplinks:**
 ```
-switch-controller add-switch core --vendor tplink --managed manual
-switch-controller add-port core 9  --type node --target tappaas1 --target-port eth0
-switch-controller add-port core 10 --type node --target tappaas2 --target-port eth0
-switch-controller reconcile --apply    # prints the VLANs to tag on ports 9 & 10 AND records them
+switch-manager add-switch core --vendor tplink --managed manual
+switch-manager add-port core 9  --type node --target tappaas1 --target-port eth0
+switch-manager add-port core 10 --type node --target tappaas2 --target-port eth0
+switch-manager reconcile --apply    # prints the VLANs to tag on ports 9 & 10 AND records them
 #   ...tag those VLANs in the switch UI...
 # (no separate confirm needed — reconcile --apply already recorded the intent)
 ```
 
 ---
 
-## `ap-controller` — WiFi access points (SSID → VLAN)
+## `ap-manager` — WiFi access points (SSID → VLAN)
 
 Stores APs + SSIDs under `.accessPoints` in the same config files. SSID *names*
 and VLANs come from `zones.json` (the `SSID` field per zone); the security level
 is chosen per SSID here; passphrases live in a separate secrets file (below).
 
-**Auto-population:** when `switch-controller interrogate` runs against a UniFi
+**Auto-population:** when `switch-manager interrogate` runs against a UniFi
 controller, it also enumerates the controller's **APs** — registering each into
 the AP inventory (vendor/model/IP) and detecting its **wired uplink** (which
 switch + port). That switch port is automatically marked `type:ap`, so it becomes
@@ -120,13 +120,13 @@ a trunk carrying the WiFi VLANs. So adopting a controller populates the AP list
 and wires up the AP's switch port with no manual steps.
 
 ```
-ap-controller add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]
-ap-controller remove <name> | list | show <name>
-ap-controller ssid <ap> add <ssid> --zone <z> --security <sec> [--vlan <n>] [--radius <srv>] [--captive] [--disabled]
-ap-controller ssid <ap> remove <ssid> | list
-ap-controller link <ap> --switch <switch> --port <port>      # AP uplink (VLAN cross-check)
-ap-controller update-desired | interrogate | delta | apply | confirm
-ap-controller reconcile [--apply]
+ap-manager add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]
+ap-manager remove <name> | list | show <name>
+ap-manager ssid <ap> add <ssid> --zone <z> --security <sec> [--vlan <n>] [--radius <srv>] [--captive] [--disabled]
+ap-manager ssid <ap> remove <ssid> | list
+ap-manager link <ap> --switch <switch> --port <port>      # AP uplink (VLAN cross-check)
+ap-manager update-desired | interrogate | delta | apply | confirm
+ap-manager reconcile [--apply]
 ```
 `security`: `open | wpa2-personal | wpa3-personal | wpa2-enterprise | wpa3-enterprise`
 (enterprise needs a RADIUS profile — currently flagged for manual setup).
@@ -162,7 +162,7 @@ each switch **brand**, one at a time:
    switches of the brand).
 4. Prints a **condensed summary** (one line per switch, ports indented), then
    asks whether to register another brand.
-5. When done, it **automatically runs `switch-controller reconcile --apply`** —
+5. When done, it **automatically runs `switch-manager reconcile --apply`** —
    applying auto switches and printing the VLANs to tag (and recording them) for
    manual ones.
 
@@ -170,7 +170,7 @@ each switch **brand**, one at a time:
 setup-switches.sh                  # interactive
 setup-switches.sh --non-interactive  # skip (CI/bootstrap default)
 ```
-Switch-only; WiFi is handled by `setup-wlan-secrets.sh` + `ap-controller`.
+Switch-only; WiFi is handled by `setup-wlan-secrets.sh` + `ap-manager`.
 
 ---
 
@@ -191,7 +191,7 @@ Secrets file: `~/.wlan-secrets.txt` (env `WLAN_SECRETS`), format `<ssid>=<passph
 
 ## Vendor plugins (`plugins/<vendor>.sh`)
 
-`switch-controller`/`ap-controller` auto-discover plugins and pick the first whose
+`switch-manager`/`ap-manager` auto-discover plugins and pick the first whose
 `plugin_supports <vendor>` matches; `manual.sh` is the catch-all fallback.
 
 A plugin is sourced (not exec'd) and implements:
@@ -204,7 +204,7 @@ A plugin is sourced (not exec'd) and implements:
 | `plugin_controller_interrogate <ctrl> <ip>` | controller-arch: enumerate its switches+ports **and APs (with uplink switch/port)** → `{switches:{...}, aps:{...}}` |
 | `plugin_interrogate <switch> <ip>` | device-arch: one switch's live ports |
 | `plugin_apply <switch> <delta>` | push the desired port config (rc 1 ⇒ manual action required) |
-| `plugin_ap_interrogate` / `plugin_ap_apply` | AP/SSID equivalents (used by `ap-controller`) |
+| `plugin_ap_interrogate` / `plugin_ap_apply` | AP/SSID equivalents (used by `ap-manager`) |
 
 An interrogate prints its JSON answer on **stdout and nothing else**; the
 controllers parse it. Warnings and errors go to **stderr**, which the controllers

@@ -1,6 +1,6 @@
 # shellcheck shell=bash
 #
-# wlan-lib.sh — the zones.json WiFi rules that ap-controller and
+# wlan-lib.sh — the zones.json WiFi rules that ap-manager and
 # setup-wlan-secrets.sh share, so their readings of the same field cannot drift
 # apart (#734). Sourced; needs jq.
 

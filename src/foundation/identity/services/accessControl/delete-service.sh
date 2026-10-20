@@ -25,8 +25,8 @@ set -euo pipefail
 MODULE="${1:-}"
 [[ -n "${MODULE}" ]] || die "Usage: $0 <module-name>"
 
-if ! command -v authentik-manager >/dev/null 2>&1; then
-    warn "authentik-manager not in PATH — skipping Authentik teardown for ${MODULE}"
+if ! command -v authentik-controller >/dev/null 2>&1; then
+    warn "authentik-controller not in PATH — skipping Authentik teardown for ${MODULE}"
     exit 0
 fi
 if [[ ! -f "${HOME}/.authentik-credentials.txt" ]]; then
@@ -43,7 +43,7 @@ _DS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${_DS_DIR}/../../lib/oidc-consumer.sh"
 GATE_SLUG="$(accesscontrol_gate_slug "${MODULE}" \
     "$(normalize_module_config < "${CONFIG_DIR}/${MODULE}.json" 2>/dev/null || echo '{}')")"
-authentik-manager app-delete "${GATE_SLUG}" --only-proxy \
+authentik-controller app-delete "${GATE_SLUG}" --only-proxy \
     || warn "  app-delete for ${GATE_SLUG} returned non-zero (may already be gone)"
 debug "  ${GN}✓${CL} Authentik app/provider ${GATE_SLUG} removed"
 

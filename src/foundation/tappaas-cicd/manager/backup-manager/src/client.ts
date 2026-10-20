@@ -1,9 +1,9 @@
-// client.ts — CliClient: the real Client. Shells out to the `backup-controller`
+// client.ts — CliClient: the real Client. Shells out to the `pbs-controller`
 // bin on PATH for all PBS operations and parses its JSON output. NO PBS API is
 // reimplemented here — this is a thin FFI boundary, exactly as identity-manager
-// shells out to authentik-manager and network-manager to the plane controllers.
+// shells out to authentik-controller and network-manager to the plane controllers.
 //
-// backup-controller is BASH (controller/backup-controller/backup-controller).
+// pbs-controller is BASH (controller/pbs-controller/pbs-controller).
 // Query verbs (`job-status` / `list`) accept `--json` and emit a
 // single JSON object — including {"reachable": false} when PBS/the cluster is
 // offline (the controller degrades gracefully and still exits 0). This client
@@ -17,7 +17,7 @@ import { JobCoverage, BucketMembership, Client, JobStatus, PurgeResult, Schedule
 
 export class BackupControllerUnreachable extends Error {}
 
-const BIN = process.env.BACKUP_CONTROLLER_BIN ?? "backup-controller";
+const BIN = process.env.BACKUP_CONTROLLER_BIN ?? "pbs-controller";
 
 function run(args: string[]): string {
   // The controller reads CONFIG_DIR (module/site JSONs live there); the lib's

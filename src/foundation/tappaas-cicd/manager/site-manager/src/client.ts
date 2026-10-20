@@ -5,7 +5,7 @@
 // live until retire); the --deep cascade shells out to the dependent manager
 // bins (identity-manager / network-manager / environment-manager) — NOT
 // reimplemented here, exactly as network-manager shells out to its plane bins
-// and identity-manager to authentik-manager. The heavy git/cluster I/O of
+// and identity-manager to authentik-controller. The heavy git/cluster I/O of
 // `site add` and `repository add`/`delete` stays in the still-live .sh tools
 // (create-site.sh / repository.sh), invoked here as thin delegations.
 

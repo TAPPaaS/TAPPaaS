@@ -1,6 +1,6 @@
 // fake-client.ts — in-memory PrimitiveClient for offline reconcile unit tests.
 //
-// Mirrors the identity-controller's model: groups and roles are disjoint sets
+// Mirrors the authentik-controller's model: groups and roles are disjoint sets
 // (roles are role-marked groups inside Authentik; from here they are separate).
 // Records mutations so tests can assert exactly what the engine did, and so a
 // second sync against the resulting state proves idempotency.

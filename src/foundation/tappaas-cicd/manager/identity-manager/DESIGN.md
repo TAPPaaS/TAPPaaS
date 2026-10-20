@@ -95,7 +95,7 @@ in-memory fake (`test/unit/fake-client.ts`); production uses `CliPrimitiveClient
 ## How it talks to controllers
 
 The engine does **not** speak the identity service's HTTP API directly. It shells
-out (via `spawnSync`) to the identity controller's CLI, `authentik-manager`
+out (via `spawnSync`) to the identity controller's CLI, `authentik-controller`
 (which must be on `PATH`; override with `AUTHENTIK_MANAGER_BIN`). It calls
 read primitives (`list-users`, `list-groups`, `list-roles`) and, when
 applying, mutating primitives (`ensure-user`, `disable-user`, `delete-user`,

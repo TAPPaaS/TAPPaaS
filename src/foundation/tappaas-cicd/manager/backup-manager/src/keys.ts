@@ -1,6 +1,6 @@
 // keys.ts — where `key export` / `key import` put and find the keys (ADR-012 §2.5.1).
 //
-//   --file <dir>   a directory: the plain copy, written and read by backup-controller.
+//   --file <dir>   a directory: the plain copy, written and read by pbs-controller.
 //                  The files are NOT encrypted — whatever holds them must be guarded.
 //   --usb          a USB stick in a node: encrypted with a password, verified by reading
 //                  it back, ejected (export); or decrypted and imported (import). The

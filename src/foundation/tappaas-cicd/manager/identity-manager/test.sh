@@ -17,7 +17,7 @@
 #      result must pass validate.sh, and write-push.test.ts (#482: add/modify/
 #      delete push to the identity service by default; --no-reconcile stages).
 #   C. LIVE integration test (scoped to zztest- names, self-cleaning) against
-#      real Authentik via `identity-manager sync` + `authentik-manager`. SKIPS
+#      real Authentik via `identity-manager sync` + `authentik-controller`. SKIPS
 #      gracefully if Authentik is unreachable; NEVER touches non-zztest- entities.
 #
 # Prints "Results: N passed, M failed"; exits 1 on any failure.
@@ -293,7 +293,7 @@ echo ""
 echo "== identity-manager live integration test (zztest- scope) =="
 
 PM_BIN="${PEOPLE_MANAGER_BIN:-identity-manager}"
-AK_BIN="${AUTHENTIK_MANAGER_BIN:-authentik-manager}"
+AK_BIN="${AUTHENTIK_MANAGER_BIN:-authentik-controller}"
 ZUSER1="zztest-user-alpha"
 ZUSER2="zztest-user-beta"
 ZORG="zztest-org"
@@ -301,7 +301,7 @@ ZGROUP="${ZORG}__admins"
 ZROLE="zztest-role"
 
 # Delete a single zztest- core group (or role-marked group) via the Authentik
-# REST API. The identity-controller people primitive set has NO group/role
+# REST API. The authentik-controller people primitive set has NO group/role
 # delete verb (existence is additive by design), so the test purges its own
 # zztest- groups/roles directly — STRICTLY guarded to names beginning zztest-.
 AK_CREDS="${AUTHENTIK_CREDENTIALS:-/home/tappaas/.authentik-credentials.txt}"
@@ -341,7 +341,7 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" != "1" ]]; then
 elif ! command -v "$PM_BIN" >/dev/null 2>&1; then
     echo "  SKIP: identity-manager not on PATH (run install.sh first)"
 elif ! "$AK_BIN" test >/dev/null 2>&1; then
-    echo "  SKIP: Authentik unreachable (authentik-manager test failed) — live test skipped"
+    echo "  SKIP: Authentik unreachable (authentik-controller test failed) — live test skipped"
 else
     # Always clean up zztest- residue on exit, even on failure.
     LIVE_WORK="$(mktemp -d "${TMPDIR:-/tmp}/people-live.XXXXXX")"

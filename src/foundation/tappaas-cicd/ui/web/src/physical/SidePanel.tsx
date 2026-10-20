@@ -1,7 +1,7 @@
 // SidePanel.tsx — what the console knows about the object clicked in the
 // Physical view: its records as the managers report them, the findings on it,
 // the day-2 changes it offers (a switch port's zone, spike mockup 3: the port's
-// record with switch-controller update-port, then reconcile previewed and
+// record with switch-manager update-port, then reconcile previewed and
 // applied; a node's uplinks: site-manager node network show / set), and where
 // to open it.
 
@@ -219,7 +219,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         <>
           <KV rows={[["vendor / model", `${a.vendor ?? "?"} · ${a.model ?? "?"}`], ["address", a.address], ["uplink", a.uplink ? `${a.uplink.switch} port ${a.uplink.port}` : null]]} />
           <h3>SSIDs</h3>
-          {a.ssids.length === 0 ? <p className="muted small">No SSID mapped to a zone (ap-controller ssid … add).</p> : null}
+          {a.ssids.length === 0 ? <p className="muted small">No SSID mapped to a zone (ap-manager ssid … add).</p> : null}
           <ul className="plain">
             {a.ssids.map((s) => (
               <li key={s.name}>
@@ -328,8 +328,8 @@ function PortChange({ t, sw, port, type, parked, lag, mode, zone, description }:
   const zones = t.zones.filter((z) => z.vlan !== null && z.state !== "Disabled").map((z) => z.name);
   const steps: Step[] = [
     {
-      title: `1 · The port's record: switch-controller update-port '${sw}' ${port}`,
-      bin: "switch-controller",
+      title: `1 · The port's record: switch-manager update-port '${sw}' ${port}`,
+      bin: "switch-manager",
       verb: "update-port",
       fixed: [sw, port],
       // The port as it is; a zone only for an access port (a trunk's first VLAN is not "its" zone).
@@ -338,8 +338,8 @@ function PortChange({ t, sw, port, type, parked, lag, mode, zone, description }:
       note: "This writes the port's record (switch-configuration-actual.json) and nothing else: the switch is programmed in the next step. An access port carries one zone; a trunk the zones in --tagged.",
     },
     {
-      title: "2 · Program the switch: switch-controller reconcile",
-      bin: "switch-controller",
+      title: "2 · Program the switch: switch-manager reconcile",
+      bin: "switch-manager",
       verb: "reconcile",
       note: "The preview is the delta per port (interrogate, update-desired, delta — nothing applied). Apply programs every pending change on every switch, not only this port's: read the preview's list before you apply.",
     },
@@ -350,13 +350,13 @@ function PortChange({ t, sw, port, type, parked, lag, mode, zone, description }:
   // network, the exposure parking removes.
   const park: Step[] = [
     {
-      title: `Park port ${port}: switch-controller remove-port '${sw}' ${port}`,
-      bin: "switch-controller",
+      title: `Park port ${port}: switch-manager remove-port '${sw}' ${port}`,
+      bin: "switch-manager",
       verb: "remove-port",
       fixed: [sw, port],
       note: "Sets the port on the switch now, alone, as an access port in iotLocal (tier 6, no internet, nothing else reachable), then replaces its record with a parked one. Whatever is plugged in loses what the port carried. Only this port is pushed, nothing else pending on the switch.",
     },
-    { title: "Read the switch again: switch-controller reconcile (preview)", bin: "switch-controller", verb: "reconcile", note: "Its preview interrogates the switch: the port shows parked and in sync. Nothing needs applying for it." },
+    { title: "Read the switch again: switch-manager reconcile (preview)", bin: "switch-manager", verb: "reconcile", note: "Its preview interrogates the switch: the port shows parked and in sync. Nothing needs applying for it." },
   ];
   return (
     <>

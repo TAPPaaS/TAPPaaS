@@ -112,7 +112,7 @@ re-author them.
 
 It is a thin orchestration boundary — it owns `config/environments/*.json` and
 shells out for everything else (no plane/module logic is reimplemented, exactly
-as `identity-manager` shells out to `authentik-manager`):
+as `identity-manager` shells out to `authentik-controller`):
 
 - **`reconcile`** → `network-manager` (`zone exists`, `reconcile [--apply]`) for
   the environment's zone, and `module-manager reconcile <module> [--apply]` per

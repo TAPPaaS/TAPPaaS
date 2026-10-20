@@ -119,7 +119,7 @@ export const TOOLS: Record<string, { line: string; description: string; paramete
   help: {
     line: "help(manager): a manager's verbs, their options and its README",
     description: "A manager's verbs as its --help declares them (each verb's usage, options, whether it changes the site and how it previews) and its README.",
-    parameters: obj({ manager: str("e.g. module-manager, network-manager, switch-controller") }, ["manager"]),
+    parameters: obj({ manager: str("e.g. module-manager, network-manager, switch-manager") }, ["manager"]),
   },
   propose_job: {
     line: "propose_job(argv, rationale): a command as a card the operator previews and runs; argv is an array of words, the manager first",

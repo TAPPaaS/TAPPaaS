@@ -1,5 +1,5 @@
 // types.ts — the People entity model (mirrors src/foundation/schemas/*-fields.json)
-// plus the PrimitiveClient interface (the identity-controller boundary) and the
+// plus the PrimitiveClient interface (the authentik-controller boundary) and the
 // reconcile plan shapes.
 
 // ── People config entities ───────────────────────────────────────────
@@ -44,8 +44,8 @@ export interface PeopleModel {
   users: Map<string, User>;
 }
 
-// ── identity-controller primitive views ──────────────────────────────
-// Shape returned by `authentik-manager list-users`.
+// ── authentik-controller primitive views ──────────────────────────────
+// Shape returned by `authentik-controller list-users`.
 export interface AkUser {
   name: string;
   active: boolean;
@@ -61,7 +61,7 @@ export interface AkNamed {
   displayName: string;
 }
 
-// ── PrimitiveClient — one method per identity-controller verb ─────────
+// ── PrimitiveClient — one method per authentik-controller verb ─────────
 // The reconcile engine depends ONLY on this interface; tests inject an
 // in-memory fake, production uses CliPrimitiveClient (spawnSync).
 export interface PrimitiveClient {

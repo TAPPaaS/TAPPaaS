@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # tappaas-switch-read.sh — read the site's switches after a sweep (#860).
 #
-# switch-controller reads a switch only when someone interrogates it (the
+# switch-manager reads a switch only when someone interrogates it (the
 # console, Setup, an operator), and the switch-ports gate (#853) judges the
 # ports as last read: a port changed in the controller's own UI, or a device
 # plugged into an unrecorded port, stayed invisible until then. This runs after
 # every sweep, next to the security scan (tappaas-switch-read.service, started
 # by update-tappaas on success and on failure):
 #
-#   1. `switch-controller interrogate --no-park` — read every controller and
+#   1. `switch-manager interrogate --no-park` — read every controller and
 #      auto switch into config/switch-configuration-actual.json. Read only: it
 #      never parks a port and never applies anything; that stays an operator's
 #      or the console's decision.
@@ -56,8 +56,8 @@ if [[ ! -s "${ACTUAL}" ]] || [[ "$(jq -r '(.switches // {}) | length' "${ACTUAL}
 fi
 
 rc=0
-info "${BOLD}Reading the switches${CL} (switch-controller interrogate --no-park)"
-switch-controller interrogate --no-park || { rc=1; warn "  a switch could not be read — the gate judges it as last read"; }
+info "${BOLD}Reading the switches${CL} (switch-manager interrogate --no-park)"
+switch-manager interrogate --no-park || { rc=1; warn "  a switch could not be read — the gate judges it as last read"; }
 
 doc="$(health-manager validate --json 2>/dev/null)" || true
 gate="$(jq -c '.gates[]? | select(.name == "switch-ports")' <<<"${doc}" 2>/dev/null)"
@@ -78,8 +78,8 @@ if [[ "${NOTIFY}" == 1 && "$(jq length <<<"${new}")" -gt 0 ]]; then
         echo ""
         jq -r '.[] | "  - " + .' <<<"${new}"
         echo ""
-        echo "All findings now: switch-controller list-ports, or the console's physical view."
-        echo "A port nobody uses is parked with: switch-controller update-port <switch> <port> --park"
+        echo "All findings now: switch-manager list-ports, or the console's physical view."
+        echo "A port nobody uses is parked with: switch-manager update-port <switch> <port> --park"
     } | site-notify.sh --subject "switch ports: $(jq length <<<"${new}") new finding(s)" --what "switch read" \
         || warn "  the notice could not be sent (site-notify.sh)"
 fi

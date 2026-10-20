@@ -1,7 +1,7 @@
 // identity-manager — TAPPaaS Identity → Authentik reconcile manager (ADR-007 P1).
 //
-// Holds the people→Authentik RECONCILE LOGIC and calls the identity-controller
-// PRIMITIVES (the `authentik-manager` CLI, S2b-2) over a thin spawnSync FFI.
+// Holds the people→Authentik RECONCILE LOGIC and calls the authentik-controller
+// PRIMITIVES (the `authentik-controller` CLI, S2b-2) over a thin spawnSync FFI.
 // NO Authentik HTTP is reimplemented here — see src/primitives.ts.
 //
 // Commands:

@@ -8,7 +8,7 @@
 #
 # - -h/--help in ANY position prints that verb's usage and exits 0. After a
 #   verb, a help request used to fall into the verb's own parsing and the verb
-#   ran: `switch-controller remove-switch s1 --help` removed s1.
+#   ran: `switch-manager remove-switch s1 --help` removed s1.
 # - An option the verb does not take exits 1 before anything runs.
 # - An unknown verb returns 0; the CLI reports it as before.
 #

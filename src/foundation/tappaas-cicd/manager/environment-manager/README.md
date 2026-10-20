@@ -23,7 +23,7 @@ A first-pass port presents the standardized ADR-007 verbs on the
 `environment` entity. It is a thin orchestration boundary — it owns
 `config/environments/*.json` and shells out to the plane/module managers for
 reconcile; it reimplements no plane logic (exactly as `identity-manager` shells
-out to `authentik-manager`). The bash scripts below stay live.
+out to `authentik-controller`). The bash scripts below stay live.
 
 ```
 environment-manager list [--json] [--config-dir DIR]

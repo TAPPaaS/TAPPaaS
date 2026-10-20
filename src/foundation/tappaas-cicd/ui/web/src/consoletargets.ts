@@ -36,7 +36,7 @@ export const WIZARDS: WizardDef[] = [
   { name: "enrol-device", title: "the Enrol a device wizard", arg: null, path: () => DAY2, keys: ["name", "pubkey", "ip", "endpoint"], values: "name, pubkey, ip, endpoint", verbs: ["network-manager wgvpn"] },
   {
     name: "add-wifi", title: "the WiFi wizard", arg: "zone", path: (z) => `${DAY2}#wifi-${z}`,
-    keys: ["ssid", "ap", "security"], values: "ssid, ap, security", verbs: ["ap-controller ssid"],
+    keys: ["ssid", "ap", "security"], values: "ssid, ap, security", verbs: ["ap-manager ssid"],
   },
   { name: "add-buddy", title: "the Add a backup buddy wizard", arg: null, path: () => DAY2, keys: ["kind", "name"], values: "kind (pull or remote), name", verbs: ["backup-manager peer add"] },
   {

@@ -4,7 +4,7 @@
 // (#3, Table "backup restore stays special"). Thin operator-facing wrapper:
 // resolves a module → vmid from the deployed config and forwards to the tested
 // foundation restore script (src/foundation/backup/scripts/restore.sh); snapshot LISTING
-// is delegated to backup-controller via the injected Client.
+// is delegated to pbs-controller via the injected Client.
 //
 // Live PBS access is required for an actual restore; offline this prints what it
 // would call and exits cleanly (so tests / dry inspection are safe) — exactly as

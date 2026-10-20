@@ -12,7 +12,7 @@ bin="${TAPPAAS_BIN:-/home/tappaas/bin}"
 mkdir -p "${bin}"
 
 # ── build + link the TypeScript CLI via Nix (ADR-007 #3) ──────────────
-# The TS reconcile resolves the cascade and shells to backup-controller for PBS.
+# The TS reconcile resolves the cascade and shells to pbs-controller for PBS.
 # Shared build+link helper (lib/ doctrine: scaffolding lives once, sourced).
 . "${here}/../../lib/component-install-lib.sh"
 build_and_link_nix_component "${here}" "backup-manager"

@@ -21,7 +21,7 @@
 //   switch     a switch is registered and interrogated (ports discovered)
 //   vpn        the admin VPN has at least one peer (network-manager wgvpn list)
 //   wifi       optional: every active Client zone (zones.json) has an SSID an
-//              access point maps to it (ap-controller list --json); a name
+//              access point maps to it (ap-manager list --json); a name
 //              zones.json declares that no AP broadcasts is not WiFi yet
 //   stacks     optional: which stacks have modules installed
 
@@ -58,7 +58,7 @@ export interface SetupInputs {
 
 export interface WifiInputs {
   zones: { name: string; type: string | null; state: string | null; vlan: number | null; ssid: string | null }[]; // zones.json
-  aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null; // null: ap-controller list could not be read
+  aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null; // null: ap-manager list could not be read
 }
 
 export type StepId = "tls" | "backup" | "identity" | "logging" | "bootstrap" | "nodes" | "switch" | "vpn" | "wifi" | "stacks";
@@ -129,14 +129,14 @@ export function wifiStep(w: WifiInputs): SetupStep {
   const title = "WiFi (optional)";
   const clients = w.zones.filter((z) => z.type === "Client" && (z.state ?? "Active") === "Active").map((z) => z.name);
   if (clients.length === 0) return { id: "wifi", title, required: false, done: true, detail: "no active Client zone: nothing to broadcast" };
-  if (w.aps === null) return { id: "wifi", title, required: false, done: null, detail: "ap-controller list could not be read" };
+  if (w.aps === null) return { id: "wifi", title, required: false, done: null, detail: "ap-manager list could not be read" };
   const missing = clientZonesWithoutWifi(w);
   if (missing.length === 0) {
     const names = w.aps.flatMap((a) => a.ssids.filter((s) => s.zone && clients.includes(s.zone)).map((s) => `${s.name} → ${s.zone}`));
     return { id: "wifi", title, required: false, done: true, detail: `every active Client zone has an SSID: ${names.join(", ")}` };
   }
   const named = missing.map((z) => (z.declared ? `${z.name} (zones.json names ${z.declared}; no access point broadcasts it)` : z.name)).join(", ");
-  return { id: "wifi", title, required: false, done: false, detail: w.aps.length === 0 ? `no access point registered yet (ap-controller add); no SSID for: ${named}` : `no SSID for: ${named}` };
+  return { id: "wifi", title, required: false, done: false, detail: w.aps.length === 0 ? `no access point registered yet (ap-manager add); no SSID for: ${named}` : `no SSID for: ${named}` };
 }
 
 export function setupComplete(steps: SetupStep[]): boolean {
@@ -175,7 +175,7 @@ export function readWifiZones(file: string): WifiInputs["zones"] {
   }
 }
 
-// `ap-controller list --json`: each AP and the SSIDs it maps to a zone; null
+// `ap-manager list --json`: each AP and the SSIDs it maps to a zone; null
 // when it is not that document.
 export function parseApList(out: string): WifiInputs["aps"] {
   try {
@@ -313,7 +313,7 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
     modules[m] = { config, test: explicit && swept ? (Date.parse(explicit.at) >= Date.parse(swept.at) ? explicit : swept) : (explicit ?? swept) };
   }
   const idDir = join(d.configDir, existsSync(join(d.configDir, "identities")) ? "identities" : "people");
-  const [vpn, aps] = await Promise.all([d.run("network-manager", ["wgvpn", "list"], 60_000), d.run("ap-controller", ["list", "--json"], 60_000)]);
+  const [vpn, aps] = await Promise.all([d.run("network-manager", ["wgvpn", "list"], 60_000), d.run("ap-manager", ["list", "--json"], 60_000)]);
   return {
     defaultEnv,
     dnsMode,

@@ -783,7 +783,7 @@ export function checkSiteTimezone(client: ClusterClient, configDir: string, defa
 // ── switch-ports gate (#853) ───────────────────────────────────────────
 // A switch port TAPPaaS does not use is parked: an access port in iotLocal,
 // where a device gets an address and reaches nothing. Two findings, from
-// switch-controller's own list-ports (the delta's rules, read-only, over the
+// switch-manager's own list-ports (the delta's rules, read-only, over the
 // switch as it was last read — reconcile reads it again):
 //   - a port with no record that is not parked — on the controller's default
 //     profile anything plugged in reaches every network;
@@ -816,7 +816,7 @@ function ageText(hours: number): string {
 }
 
 export function switchPortsResult(doc: unknown, now: number = Date.now()): CheckResult {
-  if (!Array.isArray(doc)) return { name: "switch-ports", status: "skip", detail: "switch-controller list-ports gave no switch list" };
+  if (!Array.isArray(doc)) return { name: "switch-ports", status: "skip", detail: "switch-manager list-ports gave no switch list" };
   const switches = doc as { switch: string; lastRead?: string | null; ports: SwitchPortRow[] }[];
   if (switches.length === 0) return { name: "switch-ports", status: "skip", detail: "no switch in the inventory" };
   const rows: CheckRow[] = [];
@@ -831,13 +831,13 @@ export function switchPortsResult(doc: unknown, now: number = Date.now()): Check
     const subject: CheckSubject = { kind: "switch", name: s.switch };
     if (Number.isNaN(read)) {
       stale++;
-      rows.push({ status: "warn", subject, text: `${s.switch}: never read — its ports are judged on nothing; switch-controller interrogate --no-park` });
+      rows.push({ status: "warn", subject, text: `${s.switch}: never read — its ports are judged on nothing; switch-manager interrogate --no-park` });
     } else {
       const h = (now - read) / 3_600_000;
       oldest = oldest === null ? h : Math.max(oldest, h);
       if (h > SWITCH_READ_MAX_AGE_H) {
         stale++;
-        rows.push({ status: "warn", subject, text: `${s.switch}: last read ${ageText(h)} ago — the read after each sweep did not run; switch-controller interrogate --no-park` });
+        rows.push({ status: "warn", subject, text: `${s.switch}: last read ${ageText(h)} ago — the read after each sweep did not run; switch-manager interrogate --no-park` });
       }
     }
     for (const p of s.ports ?? []) {
@@ -847,14 +847,14 @@ export function switchPortsResult(doc: unknown, now: number = Date.now()): Check
       const subject: CheckSubject = { kind: "port", name: `${s.switch}:${p.port}` };
       if (p.drift === "unmanaged" && !p.disabled && !p.lagLead) {
         unrecorded++;
-        rows.push({ status: "warn", subject, text: `${at}: no record and not parked${p.link === "up" ? " (a link is up)" : ""} — park it: switch-controller update-port '${s.switch}' ${p.port} --park, or register it: add-port` });
+        rows.push({ status: "warn", subject, text: `${at}: no record and not parked${p.link === "up" ? " (a link is up)" : ""} — park it: switch-manager update-port '${s.switch}' ${p.port} --park, or register it: add-port` });
       } else if (p.drift === "drift" && p.desired) {
         differ++;
         const has = p.mode === "access" ? `access vlan ${p.nativeVlan}` : `${p.mode} native ${p.nativeVlan}`;
         const want = p.desired.mode === "trunk"
           ? `its trunk wants +${p.add.join(",") || "-"} -${p.remove.join(",") || "-"}`
           : p.parked ? `parked in ${p.zone ?? "?"} (access vlan ${p.desired.nativeVlan}), the switch has ${has}` : `access vlan ${p.desired.nativeVlan}, the switch has ${has}`;
-        rows.push({ status: "warn", subject, text: `${at}: set otherwise than its record — ${want}; switch-controller reconcile previews the change` });
+        rows.push({ status: "warn", subject, text: `${at}: set otherwise than its record — ${want}; switch-manager reconcile previews the change` });
       }
     }
   }
@@ -867,24 +867,24 @@ export function switchPortsResult(doc: unknown, now: number = Date.now()): Check
   return {
     name: "switch-ports",
     status: "warn",
-    detail: `${parts.join(", ")}${asOf} — switch-controller list-ports`,
+    detail: `${parts.join(", ")}${asOf} — switch-manager list-ports`,
     rows,
   };
 }
 
 export function checkSwitchPorts(configDir: string): CheckResult {
-  const bin = process.env.SWITCH_CONTROLLER_BIN ?? "switch-controller";
+  const bin = process.env.SWITCH_CONTROLLER_BIN ?? "switch-manager";
   const r = spawnSync(bin, ["list-ports", "--json"], {
     encoding: "utf8",
     maxBuffer: 16 * 1024 * 1024,
     timeout: 60_000,
     env: { ...process.env, CONFIG_DIR: configDir },
   });
-  if (r.error || r.status !== 0) return { name: "switch-ports", status: "skip", detail: "switch-controller list-ports did not answer" };
+  if (r.error || r.status !== 0) return { name: "switch-ports", status: "skip", detail: "switch-manager list-ports did not answer" };
   try {
     return switchPortsResult(JSON.parse(r.stdout ?? ""));
   } catch {
-    return { name: "switch-ports", status: "skip", detail: "switch-controller list-ports --json not parseable" };
+    return { name: "switch-ports", status: "skip", detail: "switch-manager list-ports --json not parseable" };
   }
 }
 

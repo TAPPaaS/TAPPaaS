@@ -71,7 +71,7 @@ export function fakeSite(): FakeSite {
         if (args[1] === "show" && kind[args[2]]) return ok(JSON.stringify(kind[args[2]]));
         return { rc: 1, stdout: "", stderr: `[Error] no ${args[0]} '${args[2]}'`, ran: true };
       }
-      case "ap-controller list":
+      case "ap-manager list":
         return ok(file("aps.json"));
       case "node-provisioner status":
         return { rc: 1, stdout: "PXE: disabled (no TAPPaaS boot entries; zone 'mgmt')\npending registrations: none\n", stderr: "", ran: true };

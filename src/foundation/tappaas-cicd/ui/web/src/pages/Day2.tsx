@@ -97,7 +97,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
           </WizardCard>
         ))}
         {zones.env?.data && wifi.length === 0 ? <p className="muted small">No active Client or Guest zone.</p> : null}
-        {apsRead.env?.error || apsRead.failure ? <p className="readstate readstate-fail">ap-controller list could not be read: {apsRead.env?.error ?? apsRead.failure}</p> : apsRead.env?.data && aps.length === 0 ? <p className="muted small">No access point is registered yet (ap-controller add).</p> : null}
+        {apsRead.env?.error || apsRead.failure ? <p className="readstate readstate-fail">ap-manager list could not be read: {apsRead.env?.error ?? apsRead.failure}</p> : apsRead.env?.data && aps.length === 0 ? <p className="muted small">No access point is registered yet (ap-manager add).</p> : null}
       </Group>
     </>
   );

@@ -307,7 +307,7 @@ network-manager topology --json --health v.json   # reuse a `health-manager vali
 
 One read-only document joined from what the other verbs already report: `site.json`,
 `site-manager node list` and `node network show` (bonds, legs, LLDP peers, the `wan` port),
-`switch-controller list / list-ports / lag list` (ports, VLANs, LAGs, drift), `ap-controller
+`switch-manager list / list-ports / lag list` (ports, VLANs, LAGs, drift), `ap-manager
 list`, `zones.json`, `module-manager module list` (guests and their run state),
 `backup-manager peers` and `health-manager validate` (findings). It stores nothing.
 

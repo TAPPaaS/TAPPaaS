@@ -50,7 +50,7 @@ pbs_node() {
 # cluster node by <node>.mgmt.internal. The same rule as pbs_host_addr (#601).
 pbs_node_addr() {
     local node="$1" addr
-    # Already a DNS name or an address (`backup-controller --pbs <host>`): as is.
+    # Already a DNS name or an address (`pbs-controller --pbs <host>`): as is.
     [[ "${node}" == *.* ]] && { printf '%s\n' "${node}"; return 0; }
     addr="$(jq -r 'if type == "object" and (.kind // "") == "machine" then (.address // "") else "" end' \
         "${PBS_CONFIG_DIR}/${node}.json" 2>/dev/null || true)"

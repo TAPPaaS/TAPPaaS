@@ -49,7 +49,7 @@ _IDENTITY_SVC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../lib/app-tile.sh
 . "${_IDENTITY_SVC_DIR}/../../lib/app-tile.sh"
 
-AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
+AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-controller}"
 DRY_RUN=0
 
 MODULE=""
@@ -162,7 +162,7 @@ debug "${BOLD}identity:identity (OIDC): wiring ${BL}${MODULE}${CL}"
 debug "  scope '${ENVIRONMENT:-<default>}'  app/slug '${SLUG}'  upstream ${UPSTREAM}"
 
 command -v "${AUTHENTIK_MANAGER%% *}" >/dev/null 2>&1 || [[ -x "${AUTHENTIK_MANAGER}" ]] \
-    || die "authentik-manager not available (rebuild opnsense-controller)"
+    || die "authentik-controller not available (rebuild opnsense-controller)"
 ensure_authentik_credentials
 
 # ── Step 1: access groups (+ opt-in module-admin) ───────────────────────────

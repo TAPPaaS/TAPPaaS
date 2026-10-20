@@ -18,11 +18,11 @@ in the ADR-007 post-implementation refactor, Phase 7.4.
 **The manager resolves the cascade; the controller mutates PBS.** `reconcile`
 resolves the Site→Environment→Module policy per module (pure, `src/config.ts` +
 `src/reconcile.ts`) and drives the controller's mutation verbs via `CliClient`
-(`src/client.ts`, parsing `backup-controller --json`):
+(`src/client.ts`, parsing `pbs-controller --json`):
 
-- `backup-controller add-to-job <vmid> [--retention SPEC]` — ensure a module's
+- `pbs-controller add-to-job <vmid> [--retention SPEC]` — ensure a module's
   VM is a member of the shared managed PBS job (reuses `pbs_ensure_vmid`).
-- `backup-controller apply-schedule <spec>` — set the shared job's start time.
+- `pbs-controller apply-schedule <spec>` — set the shared job's start time.
 
 `reconcile` is whole-cluster and idempotent (preview by default; `--apply`
 commits). No PBS API is reimplemented in the manager.
@@ -64,14 +64,14 @@ resolved policy after a deploy — that path is unchanged and not duplicated her
 ## Pending / aspirations
 
 - **Per-environment schedules.** `reconcile` now pushes the resolved `schedule`
-  to PBS via `backup-controller apply-schedule`, but PBS carries a *single*
+  to PBS via `pbs-controller apply-schedule`, but PBS carries a *single*
   shared-job start time; a true per-environment schedule (multiple jobs) is the
   remaining follow-up — `reconcile` warns when modules resolve >1 distinct
   schedule and applies the first.
 - **Per-job retention.** `add-to-job --retention` is plumbed through but per-job
   prune wiring is a follow-up; the shared job + the foundation prune-job own
   retention today.
-- The companion `backup-controller` is Bash that reuses the foundation PBS libs.
+- The companion `pbs-controller` is Bash that reuses the foundation PBS libs.
   The ADR-007 design names a *Python* controller (`pbs-api.py`); reusing the
   tested bash was the pragmatic choice for P9 — see
-  [`backup-controller/DESIGN.md`](../../controller/backup-controller/DESIGN.md).
+  [`pbs-controller/DESIGN.md`](../../controller/pbs-controller/DESIGN.md).

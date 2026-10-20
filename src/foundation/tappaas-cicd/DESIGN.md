@@ -45,7 +45,7 @@ src/foundation/tappaas-cicd/
   `module-manager`, `network-manager`, `health-manager`.
 - **`controller/`** — owns **runtime state**: APIs, network devices, VMs. A controller
   does **not** ship a `validate.sh`. Examples: `opnsense-controller`,
-  `proxmox-controller`, `switch-controller`, `ap-controller`, `identity-controller`.
+  `proxmox-controller`, `switch-manager`, `ap-manager`, `authentik-controller`.
 - **`lib/`** — shared code sourced by components (e.g. `common-install-routines.sh`).
   Shared logic lives here once; it is never copied into individual components.
 - **top-level entry scripts** — `install.sh` / `update.sh` / `test.sh` at the cicd root.
@@ -300,7 +300,7 @@ retired — they had drifted from what real components look like):
 cp -r manager/site-manager manager/my-manager
 
 # a new bash controller — copy a small real one and rename
-cp -r controller/ap-controller controller/my-controller
+cp -r manager/ap-manager controller/my-controller
 ```
 
 Then rename the entry point, rewrite `src/` (or the entry script), fill in the verb

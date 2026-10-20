@@ -74,14 +74,14 @@ migrate-node.sh,/home/tappaas/bin/migrate-node.sh,tappaas-cicd/controller/proxmo
 migrate-vm.sh,/home/tappaas/bin/migrate-vm.sh,tappaas-cicd/controller/proxmox-controller/migrate-vm.sh,script
 resize-disk.sh,/home/tappaas/bin/resize-disk.sh,tappaas-cicd/controller/proxmox-controller/resize-disk.sh,script
 #
-# --- controller/switch-controller/ (live bin is bash; TS port is the S-TS pilot, not yet linked)
-switch-controller,/home/tappaas/bin/switch-controller,tappaas-cicd/controller/switch-controller/switch-controller,script
-setup-switches.sh,/home/tappaas/bin/setup-switches.sh,tappaas-cicd/controller/switch-controller/setup-switches.sh,script
+# --- manager/switch-manager/ (live bin is bash; TS port is the S-TS pilot, not yet linked)
+switch-manager,/home/tappaas/bin/switch-manager,tappaas-cicd/manager/switch-manager/switch-manager,script
+setup-switches.sh,/home/tappaas/bin/setup-switches.sh,tappaas-cicd/manager/switch-manager/setup-switches.sh,script
 #
-# --- controller/ap-controller/ ------------------------------------------------------------
-ap-controller,/home/tappaas/bin/ap-controller,tappaas-cicd/controller/ap-controller/ap-controller,script
-ap-manager,/home/tappaas/bin/ap-manager,tappaas-cicd/controller/ap-controller/ap-controller,script
-setup-wlan-secrets.sh,/home/tappaas/bin/setup-wlan-secrets.sh,tappaas-cicd/controller/ap-controller/setup-wlan-secrets.sh,script
+# --- manager/ap-manager/ ------------------------------------------------------------
+ap-manager,/home/tappaas/bin/ap-manager,tappaas-cicd/manager/ap-manager/ap-manager,script
+ap-manager,/home/tappaas/bin/ap-manager,tappaas-cicd/manager/ap-manager/ap-manager,script
+setup-wlan-secrets.sh,/home/tappaas/bin/setup-wlan-secrets.sh,tappaas-cicd/manager/ap-manager/setup-wlan-secrets.sh,script
 #
 # --- controller/opnsense-controller/ (Python pkg; console-scripts per pyproject.toml) -----
 acme-manager,/home/tappaas/bin/acme-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/acme_cli.py,python
@@ -98,15 +98,15 @@ test-network-manager,/home/tappaas/bin/test-network-manager,tappaas-cicd/control
 unbound-manager,/home/tappaas/bin/unbound-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/unbound_cli.py,python
 zone-manager,/home/tappaas/bin/zone-manager,tappaas-cicd/controller/opnsense-controller/src/opnsense_controller/zone_manager.py,python
 #
-# --- controller/identity-controller/ (Python pkg; console-scripts per pyproject.toml) -----
-authentik-manager,/home/tappaas/bin/authentik-manager,tappaas-cicd/controller/identity-controller/src/identity_controller/authentik_cli.py,python
-identity-controller,/home/tappaas/bin/identity-controller,tappaas-cicd/controller/identity-controller/src/identity_controller/authentik_cli.py,python
+# --- controller/authentik-controller/ (Python pkg; console-scripts per pyproject.toml) -----
+authentik-controller,/home/tappaas/bin/authentik-controller,tappaas-cicd/controller/authentik-controller/src/identity_controller/authentik_cli.py,python
+authentik-controller,/home/tappaas/bin/authentik-controller,tappaas-cicd/controller/authentik-controller/src/identity_controller/authentik_cli.py,python
 #
 # --- controller/node-provisioner/ (Python pkg; console-script per pyproject.toml) ---------
 node-provisioner,/home/tappaas/bin/node-provisioner,tappaas-cicd/controller/node-provisioner/src/node_provisioner/cli.py,python
 #
-# --- controller/backup-controller/ (PBS provider; wrapped by backup-manager) --------------
-backup-controller,/home/tappaas/bin/backup-controller,tappaas-cicd/controller/backup-controller/,script
+# --- controller/pbs-controller/ (PBS provider; wrapped by backup-manager) --------------
+pbs-controller,/home/tappaas/bin/pbs-controller,tappaas-cicd/controller/pbs-controller/,script
 #
 # --- update-tappaas/ (Python pkg; console-script per pyproject.toml) ----------------------
 update-tappaas,/home/tappaas/bin/update-tappaas,tappaas-cicd/update-tappaas/src/update_tappaas/main.py,python

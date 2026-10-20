@@ -788,15 +788,15 @@ if command -v identity-manager >/dev/null 2>&1; then
 else
     skip "identity-manager not installed"
 fi
-# identity-controller CLI loads
-if command -v authentik-manager >/dev/null 2>&1; then
-    if authentik-manager --help >/dev/null 2>&1; then
-        pass "identity-controller CLI (authentik-manager) loads"
+# authentik-controller CLI loads
+if command -v authentik-controller >/dev/null 2>&1; then
+    if authentik-controller --help >/dev/null 2>&1; then
+        pass "authentik-controller CLI (authentik-controller) loads"
     else
-        fail "authentik-manager --help failed"
+        fail "authentik-controller --help failed"
     fi
 else
-    skip "authentik-manager not installed"
+    skip "authentik-controller not installed"
 fi
 # network-manager TS bin loads + reads zones.json (no reconcile — read-only)
 if command -v network-manager >/dev/null 2>&1; then
@@ -826,16 +826,16 @@ if command -v backup-manager >/dev/null 2>&1; then
 else
     skip "backup-manager not present"
 fi
-# backup-controller: pure-function selftest (no PBS contact)
-_bc="${SCRIPT_DIR}/controller/backup-controller/backup-controller"
+# pbs-controller: pure-function selftest (no PBS contact)
+_bc="${SCRIPT_DIR}/controller/pbs-controller/pbs-controller"
 if [[ -x "${_bc}" ]]; then
     if "${_bc}" --selftest 2>&1 | grep -c "pure-function checks passed" >/dev/null; then
-        pass "backup-controller: pure-function selftest passes"
+        pass "pbs-controller: pure-function selftest passes"
     else
-        fail "backup-controller: selftest failed"
+        fail "pbs-controller: selftest failed"
     fi
 else
-    skip "backup-controller not present"
+    skip "pbs-controller not present"
 fi
 
 # ── Deep Test: VM creation suite ────────────────────────────────────
@@ -913,7 +913,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
     # The cicd module test additionally drives the manager/ + controller/ parent
     # dispatchers, so every relocated component's own test.sh runs as part of the
     # cicd deep gate. Placed in the deep section so the fast unit gate stays green;
-    # a known pre-existing component failure (e.g. ap-controller ADR-008 WIP) is
+    # a known pre-existing component failure (e.g. ap-manager ADR-008 WIP) is
     # judged against the batch baseline ("no NEW failures"), not absolute zero.
     info "${BOLD}Deep Test: manager/ + controller/ component dispatchers, and the console${CL}"
     for _disp in manager controller ui; do

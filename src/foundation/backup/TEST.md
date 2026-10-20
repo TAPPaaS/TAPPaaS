@@ -4,7 +4,7 @@
 - **`./test.sh`** (fast) — the module test.sh; aggregates the pure unit suites
   `lib/test-pbs-job.sh` + `lib/test-pbs-namespace.sh` (no cluster access).
 - **`TAPPAAS_TEST_DEEP=1 ./test.sh`** — adds two read-only live-PBS checks: reachability
-  (`backup-controller job-status` + `namespaces`), and whether every `backup:filesystem`
+  (`pbs-controller job-status` + `namespaces`), and whether every `backup:filesystem`
   consumer has ever actually captured.
 
   The second asserts against PBS, not against the unit (#742). A capture that has **never**
@@ -107,7 +107,7 @@ Elsewhere (run by their own components' `test.sh`):
   in, shape-based module discovery (#544) against the exact files that used to
   be misclassified, membership by either relationship, and numeric-vs-string
   `vmid`.
-- `backup-controller/test.sh` (18) — incl. the key-escrow export/import round
+- `pbs-controller/test.sh` (18) — incl. the key-escrow export/import round
   trip against a throwaway escrow.
 - `site-manager/test.sh` — node-add wires the backup reconcile (§2.4), and the
   orphan-field check honours `integratesWith`.

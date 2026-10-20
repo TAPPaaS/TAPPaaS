@@ -1,6 +1,6 @@
 // types.ts — the backup-policy entity model (the Site → Environment → Module
 // cascade, ADR-007 P9 / verb-alignment #3) plus the Client interface (the
-// backup-controller boundary) and the reconcile plan shapes.
+// pbs-controller boundary) and the reconcile plan shapes.
 //
 // Entity model: the backup `job`/`policy` is the EFFECTIVE backup policy
 // resolved for a deployed module by cascading site.json `.backup`, the
@@ -113,11 +113,11 @@ export interface Peer {
   tunnel: string | null;
 }
 
-// ── Client — the backup-controller boundary ───────────────────────────
+// ── Client — the pbs-controller boundary ───────────────────────────
 // The reconcile/restore logic depends ONLY on this interface; tests inject an
-// in-memory fake, production uses CliClient (spawnSync → `backup-controller`).
+// in-memory fake, production uses CliClient (spawnSync → `pbs-controller`).
 // NO PBS API is reimplemented in TypeScript — exactly as identity-manager shells
-// out to authentik-manager and network-manager to the plane controllers.
+// out to authentik-controller and network-manager to the plane controllers.
 // One managed bucket job (ADR-012 D16) and who is in it.
 export interface BucketMembership {
   bucket: ScheduleBucket;
@@ -155,25 +155,25 @@ export interface PurgeResult {
 }
 
 export interface Client {
-  // backup-controller job-status --json — the shared PBS backup job state.
+  // pbs-controller job-status --json — the shared PBS backup job state.
   jobStatus(): JobStatus;
-  // backup-controller coverage <module> --json — every job covering its VM;
+  // pbs-controller coverage <module> --json — every job covering its VM;
   // null when the cluster did not answer (#554).
   coverage(module: string): JobCoverage[] | null;
-  // backup-controller list <module> --json — snapshot backup-times for a VM.
+  // pbs-controller list <module> --json — snapshot backup-times for a VM.
   listSnapshots(module: string): string[];
   // ── PBS mutations (reconcile apply → controller owns the PBS write) ──
-  // backup-controller add-to-job <vmid> [--retention <spec>] — ensure a vmid
+  // pbs-controller add-to-job <vmid> [--retention <spec>] — ensure a vmid
   // is a member of the shared managed PBS backup job.
   addToJob(vmid: string, retention?: string, bucket?: string): void;
-  // backup-controller apply-schedule <spec> — set the shared job's start time.
+  // pbs-controller apply-schedule <spec> — set the shared job's start time.
   applySchedule(spec: string): void;
-  // backup-controller backup <module>... — take each module's backup NOW, through
+  // pbs-controller backup <module>... — take each module's backup NOW, through
   // the TAPPaaS job that covers it (#759). Streams the controller's output (a
   // backup takes minutes) and returns its exit code: 0 only if every module's
   // snapshot was written and found.
   backupNow(modules: string[]): number;
-  // backup-controller purge <vmid> --json [--yes] (#789) — erase vm/<vmid>'s
+  // pbs-controller purge <vmid> --json [--yes] (#789) — erase vm/<vmid>'s
   // restore points and start GC; without yes, only the plan. Refusals come back
   // in `refused` (the controller exits 1 then), never as a throw.
   purge(vmid: string, yes: boolean): PurgeResult;

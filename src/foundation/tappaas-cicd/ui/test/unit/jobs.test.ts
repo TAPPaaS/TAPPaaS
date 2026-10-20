@@ -48,7 +48,7 @@ async function main(): Promise<void> {
   const u = parseUnitShow("ActiveState=activating\nActiveEnterTimestamp=Sat 2026-10-17 03:00:01 CEST\n");
   check(u.state === "activating" && u.since === "Sat 2026-10-17 03:00:01 CEST", "systemctl show is read for state and since");
   check(parseUnitShow("ActiveState=inactive\nActiveEnterTimestamp=n/a\n").since === null, "n/a is no time");
-  check(shellQuote(["switch-controller", "update-port", "USW Pro XG 10 PoE", "1"]) === "switch-controller update-port 'USW Pro XG 10 PoE' 1", "the argv as one types it, quoted where it must be");
+  check(shellQuote(["switch-manager", "update-port", "USW Pro XG 10 PoE", "1"]) === "switch-manager update-port 'USW Pro XG 10 PoE' 1", "the argv as one types it, quoted where it must be");
 
   // ── a site to run against ───────────────────────────────────────────
   const dir = mkdtempSync(join(tmpdir(), "console-jobs-"));

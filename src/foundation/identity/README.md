@@ -14,7 +14,7 @@ single sign-on across all modules.
 | OIDC provider for native-OIDC apps (e.g. Nextcloud) | consumer modules | module declares `dependsOn: ["identity:identity"]` — OAuth2/OpenID provider, app, group bindings and VM secrets wired automatically |
 | Role-based access (people reconciled by `identity-manager`) | admin (tappaas-cicd) | `identity-manager reconcile --apply`; also manageable in the Authentik admin UI |
 | The console's roles (ADR-034 D3): groups `installer` (Installer), `admin` (the `admin` role: Admin), `users` (read) | the console (`console.<domain>`) | created by the bootstrap; an existing site gets `installer` on update — see [USERS.md](./USERS.md#what-a-fresh-install-has) |
-| Authentik API access for tooling | tappaas-cicd | `authentik-manager` with auto-bootstrapped `~/.authentik-credentials.txt` |
+| Authentik API access for tooling | tappaas-cicd | `authentik-controller` with auto-bootstrapped `~/.authentik-credentials.txt` |
 
 Reference docs in this directory:
 
@@ -109,7 +109,7 @@ In front of an app gated by `identity:accessControl` it authenticates with a
 **service account**:
 
 ```bash
-authentik-manager service-account-ensure <caller> --app <app-slug>
+authentik-controller service-account-ensure <caller> --app <app-slug>
 ```
 
 This creates the Authentik service account `<caller>` (or reuses it), binds it to
@@ -137,7 +137,7 @@ curl -H "Authorization: Bearer ${TOKEN}" https://<app>.<domain>/api/...
   header (its own API key) cannot sit behind the gate.
 - A wrong or expired credential gets a **302** to the login page, not a 401; fetch a
   new token when it expires. A deleted account stops working within a minute.
-- Remove a caller with `authentik-manager user-delete <caller>`.
+- Remove a caller with `authentik-controller user-delete <caller>`.
 
 A path whose callers cannot hold a credential at all — a webhook that signs its
 payload — is served without the gate by a `proxyAccess` rule with
@@ -159,7 +159,7 @@ It ends the person's sessions in those apps whichever group they lost; if they
 still may use an app, they sign in again. A hook that fails is a warning, not a
 failed reconcile — Authentik has already changed — so run that module's script by
 hand. A change made directly in the Authentik admin UI, or with
-`authentik-manager user-delete`, does not run the hooks.
+`authentik-controller user-delete`, does not run the hooks.
 
 ## What is not included
 

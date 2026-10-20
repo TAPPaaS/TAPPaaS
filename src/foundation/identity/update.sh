@@ -10,7 +10,7 @@
 #   2. Read AUTHENTIK_BOOTSTRAP_TOKEN from /etc/secrets/authentik.env (created
 #      on first boot by identity.nix's generate-authentik-secrets service)
 #   3. Persist it to ~/.authentik-credentials.txt on the cicd (mode 600) so
-#      authentik-manager can talk to Authentik
+#      authentik-controller can talk to Authentik
 #   4. Configure Caddy's global AuthProvider = Authentik, point it at the
 #      identity outpost, and register the 12 X-Authentik-* copy-headers
 #      operators previously added by hand in the GUI
@@ -18,7 +18,7 @@
 #   6. Create/update the identity self-application + Proxy Provider and attach
 #      it to the embedded outpost (so https://identity.<domain>/outpost.* works)
 #   7. Create/update the password-recovery flow and point the default brand's
-#      flow_recovery at it, so `authentik-manager user-recovery-link <user>`
+#      flow_recovery at it, so `authentik-controller user-recovery-link <user>`
 #      returns a one-time reset link (no SMTP involved)
 #
 # Re-running is safe: every step is reconcile-in-place.
@@ -36,7 +36,7 @@ IDENTITY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/ensure-authentik-creds.sh disable=SC1091
 . "${IDENTITY_DIR}/lib/ensure-authentik-creds.sh"
 
-# authentik-manager and identity-manager are operator CLIs too: their `==>` /
+# authentik-controller and identity-manager are operator CLIs too: their `==>` /
 # `[ok]` progress is right when a human runs them by hand, and noise when this
 # converge drives them. So the CALLER decides — pipe a call through this to give
 # every line a level. A [DRIFT]/WARNING:/ERROR: line is promoted to warn whatever
@@ -170,15 +170,15 @@ debug "Checking identity self-config for drift (expected ${IDENTITY_PUBLIC})"
 # actually moved is never hidden. stderr is deliberately left alone — it carries
 # the drift summary and any hard API failure, which must stay visible even
 # though this call is otherwise demoted to debug.
-authentik-manager check-self-config --external-host "${IDENTITY_PUBLIC}" \
+authentik-controller check-self-config --external-host "${IDENTITY_PUBLIC}" \
     | _tag debug \
     || info "  drift detected — the steps below converge it to ${IDENTITY_PUBLIC}"
 
 debug "  configuring the Authentik embedded outpost (authentik_host=${IDENTITY_PUBLIC})..."
-authentik-manager outpost-set-authentik-host "${IDENTITY_PUBLIC}" | _tag debug
+authentik-controller outpost-set-authentik-host "${IDENTITY_PUBLIC}" | _tag debug
 
 debug "  registering the identity self-app..."
-authentik-manager proxy-app-ensure identity \
+authentik-controller proxy-app-ensure identity \
     --name "$(jq -r '.displayName // "identity"' "${IDENTITY_DIR}/identity.json")" \
     --icon "${IDENTITY_DIR}/icon.svg" \
     --external-host "${IDENTITY_PUBLIC}" \
@@ -188,17 +188,17 @@ authentik-manager proxy-app-ensure identity \
 # ── Password recovery: flow + brand wiring ──────────────────────────────────
 # Authentik ships NO recovery flow, and `/core/users/<pk>/recovery/` returns a
 # link only when the default brand has flow_recovery set — so without this step
-# `authentik-manager user-recovery-link <user>` exits 2 and the only reset path
+# `authentik-controller user-recovery-link <user>` exits 2 and the only reset path
 # is handing out a password. The flow we install is deliberately minimal (prompt
 # for a new password → write it): the flow_token in the link carries the pending
 # user, so there is no e-mail stage and nothing here waits on SMTP.
 # Non-fatal: a failure costs the link, not the install — user-set-password still
 # works.
 debug "  ensuring the password-recovery flow (brand.flow_recovery)..."
-if authentik-manager recovery-flow-ensure | _tag debug; then
-    debug "  ${GN}✓${CL} 'authentik-manager user-recovery-link <user>' returns a reset link"
+if authentik-controller recovery-flow-ensure | _tag debug; then
+    debug "  ${GN}✓${CL} 'authentik-controller user-recovery-link <user>' returns a reset link"
 else
-    warn "  recovery-flow-ensure failed — password resets fall back to 'authentik-manager user-set-password <user>'"
+    warn "  recovery-flow-ensure failed — password resets fall back to 'authentik-controller user-set-password <user>'"
 fi
 
 # ── The login page shows the site (#479) ─────────────────────────────────────
@@ -222,7 +222,7 @@ for _k in logo logoDark; do
     fi
 done
 if [[ -n "${_site_name}" ]]; then
-    if authentik-manager brand-ensure --site-name "${_site_name}" "${_brand_args[@]}" | _tag debug; then
+    if authentik-controller brand-ensure --site-name "${_site_name}" "${_brand_args[@]}" | _tag debug; then
         debug "  ${GN}✓${CL} login page branded for '${_site_name}'"
     else
         warn "  brand-ensure failed — the login page keeps Authentik's branding"
@@ -235,7 +235,7 @@ fi
 # accounts by email (openwebui) depends on it. Every OIDC provider gets the
 # TAPPaaS mapping in place of the stock one — on every update, so a site that
 # walks past 2025.10 is covered from the step it lands on.
-if authentik-manager oidc-email-verified-ensure | _tag debug; then
+if authentik-controller oidc-email-verified-ensure | _tag debug; then
     debug "  ${GN}✓${CL} OIDC providers send email_verified=true"
 else
     warn "  oidc-email-verified-ensure failed — from Authentik 2025.10 OIDC clients see email_verified=false"
@@ -267,7 +267,7 @@ fi
 AK_ADMIN_GROUP="authentik Admins"
 
 debug "Ensuring the Authentik admin group '${AK_ADMIN_GROUP}' (is_superuser)"
-authentik-manager group-ensure "${AK_ADMIN_GROUP}" --superuser >/dev/null \
+authentik-controller group-ensure "${AK_ADMIN_GROUP}" --superuser >/dev/null \
     || warn "  group-ensure '${AK_ADMIN_GROUP}' failed — the site owner will not get Authentik admin rights"
 
 # Site owner = the owner USER of the organization that owns the default
@@ -304,7 +304,7 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
             _gname="${_grp%%|*}"; _gdisplay="${_grp#*|}"
             debug "Putting the site owner '${OWNER_USER}' in '${_gname}'"
             if [[ "${_gname}" != "${AK_ADMIN_GROUP}" ]]; then
-                authentik-manager group-ensure "${_gname}" >/dev/null \
+                authentik-controller group-ensure "${_gname}" >/dev/null \
                     || warn "  group-ensure '${_gname}' failed"
             fi
             if [[ ! -f "${PEOPLE_DIR}/groups/${_gname}.json" ]]; then
@@ -321,8 +321,8 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
                 || warn "  identity-manager user modify ${OWNER_USER} --add-groups ${_gname} failed"
             # Then converge just this membership in Authentik — the targeted call the
             # skipped reconcile would otherwise have made.
-            if authentik-manager get-user --name "${OWNER_USER}" | jq -e '. != null' >/dev/null 2>&1; then
-                authentik-manager add-member --user "${OWNER_USER}" --group "${_gname}" >/dev/null \
+            if authentik-controller get-user --name "${OWNER_USER}" | jq -e '. != null' >/dev/null 2>&1; then
+                authentik-controller add-member --user "${OWNER_USER}" --group "${_gname}" >/dev/null \
                     && debug "  ${GN}✓${CL} ${OWNER_USER} ∈ ${_gname}" \
                     || warn "  add-member ${OWNER_USER} → ${_gname} failed"
             else
@@ -338,4 +338,4 @@ summary "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
 summary "  Authentik UI : ${IDENTITY_PUBLIC}"
 summary "  Admin login  : the site owner (member of '${AK_ADMIN_GROUP}') — break-glass: akadmin / (see /etc/secrets/authentik.env on ${IDENTITY_FQDN}: AUTHENTIK_BOOTSTRAP_PASSWORD)"
 summary "  Per-app SSO  : every consumer with dependsOn: identity:accessControl gets forward-auth wired automatically"
-summary "  Password reset: authentik-manager user-recovery-link <user>  (one-time link; the URL's host is the one the API was called on)"
+summary "  Password reset: authentik-controller user-recovery-link <user>  (one-time link; the URL's host is the one the API was called on)"

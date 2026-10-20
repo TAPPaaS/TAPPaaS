@@ -84,7 +84,7 @@ graph TD
     classDef default font-size:12px,font-weight:bold;
 
     installsvc["identity:identity install-service.sh<br/><small>generic ADR-006 mechanism, unmodified</small>"]
-    authentikcli["authentik-manager CLI"]
+    authentikcli["authentik-controller CLI"]
     authentikapi["Authentik REST API"]
     secretsenv["/etc/secrets/immich.env<br/><small>OIDC_CLIENT_ID / SECRET / DISCOVERY_URI</small>"]
 
@@ -156,8 +156,8 @@ block:
    module that is not published gets web OAuth only.
 
 Access can be narrowed beyond "every TAPPaaS login" with
-`authentik-manager app-bind-groups immich --group <narrower-group>` (see
-`identity-controller/README.md`), and per-user storage quotas can be wired
+`authentik-controller app-bind-groups immich --group <narrower-group>` (see
+`authentik-controller/README.md`), and per-user storage quotas can be wired
 through an Authentik scope mapping plus `identity.scopes` in `immich.json`
 — see INSTALL.md for both. Mobile installs use the same public URL and
 credentials as the web app.

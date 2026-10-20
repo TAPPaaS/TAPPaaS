@@ -194,7 +194,7 @@ done
 # relocated. Every manager/<x>/ and controller/<x>/ component builds and links
 # its own bins via its install.sh, driven by the per-directory dispatcher —
 # including the COMPILED components (the TS managers, opnsense-controller and
-# identity-controller nix builds). Idempotent: nix no-ops when inputs are
+# authentik-controller nix builds). Idempotent: nix no-ops when inputs are
 # unchanged. A component build failure is reported in the exit code, not raised
 # as a hard error — the previous (stale) bins keep working and the Test-11 smoke
 # slice is what surfaces a broken build.

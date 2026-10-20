@@ -1439,19 +1439,19 @@
    "ok": true
   },
   {
-   "name": "switch-controller list",
+   "name": "switch-manager list",
    "ok": true
   },
   {
-   "name": "switch-controller list-ports",
+   "name": "switch-manager list-ports",
    "ok": true
   },
   {
-   "name": "switch-controller lag list",
+   "name": "switch-manager lag list",
    "ok": true
   },
   {
-   "name": "ap-controller list",
+   "name": "ap-manager list",
    "ok": true
   },
   {

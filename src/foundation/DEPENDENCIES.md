@@ -54,11 +54,11 @@ A "direct dependency" is one of:
 | `tappaas-cicd/manager/backup-manager/` (8 ts + 4 sh) | 12 |
 | `tappaas-cicd/controller/` (dispatchers) | 3 |
 | `tappaas-cicd/controller/proxmox-controller/` | 7 |
-| `tappaas-cicd/controller/switch-controller/` | 6 |
-| `tappaas-cicd/controller/ap-controller/` | 6 |
-| `tappaas-cicd/controller/identity-controller/` (3 sh + 4 py + 3 test) | 10 |
+| `tappaas-cicd/manager/switch-manager/` | 6 |
+| `tappaas-cicd/manager/ap-manager/` | 6 |
+| `tappaas-cicd/controller/authentik-controller/` (3 sh + 4 py + 3 test) | 10 |
 | `tappaas-cicd/controller/node-provisioner/` (3 sh + 9 py + 3 test) | 15 |
-| `tappaas-cicd/controller/backup-controller/` | 3 |
+| `tappaas-cicd/controller/pbs-controller/` | 3 |
 | `tappaas-cicd/controller/opnsense-controller/` (23 py + 8 test) | 31 |
 | `tappaas-cicd/update-tappaas/` (py pkg) | 2 |
 | `tappaas-cicd/opnsense-patch/` (sh + php) | 2 |
@@ -66,7 +66,7 @@ A "direct dependency" is one of:
 | `tappaas-cicd/test-vm-creation/` (+ `rollback-fixture/`) | 10 |
 | `tappaas-cicd/test-repository/` | 1 |
 | `network/` (top level) | 7 |
-| `network/scripts/` (+ `plugins/`, `switch-controller/` TS port) | 4 |
+| `network/scripts/` (+ `plugins/`, `switch-manager/` TS port) | 4 |
 | `network/services/proxy/` | 5 |
 | `network/services/rules/` | 4 |
 | `network/services/nat/` | 5 |
@@ -174,7 +174,7 @@ environment-manager (TS) owns the environments/ tree
 ```
 network-manager (TS)     owns zones.json (single source of truth)
   src/main.ts spawns:  zone-manager (opnsense rules+vlan plane),
-                       proxmox-controller, switch-controller, ap-controller, scp
+                       proxmox-controller, switch-manager, ap-manager, scp
 network/update.sh -> zone-manager (--execute against zones.json)
 ```
 
@@ -196,7 +196,7 @@ network/services/dns/*-service.sh    -> dns-manager  (+ network.json)
 ```
 health-manager (TS)  src/main.ts spawns: update-os.sh,
                      check-disk-threshold.sh, backup-manager
-backup-manager (TS)  src/main.ts spawns: backup-controller,
+backup-manager (TS)  src/main.ts spawns: pbs-controller,
                      foundation backup/restore.sh (restore verb)
 health-manager (TS) checks.ts -> backup-manager list --json
 ```
@@ -242,8 +242,8 @@ foundation tree depends on them:
 - **Identity:** `identity/install.sh`
 - **Nightly update:** `update-tappaas`
 - **Top-level controllers:** `opnsense-controller`, `proxmox-controller`,
-  `switch-controller`, `ap-controller`, `identity-controller`,
-  `backup-controller`, `node-provisioner` (PXE provisioning, design N3;
+  `switch-manager`, `ap-manager`, `authentik-controller`,
+  `pbs-controller`, `node-provisioner` (PXE provisioning, design N3;
   drives `dhcp-manager` from the opnsense-controller family)
 
 ## Mermaid dependency graphs
@@ -315,8 +315,8 @@ graph TD
     NM["network-manager (TS)"] --> ZJ["zones.json"]
     NM --> ZM["zone-manager"]
     NM --> PX["proxmox-controller"]
-    NM --> SC["switch-controller"]
-    NM --> AP["ap-controller"]
+    NM --> SC["switch-manager"]
+    NM --> AP["ap-manager"]
     NU["network/update.sh"] --> ZM
     ZM --> ZJ
 ```
@@ -328,7 +328,7 @@ graph TD
     HM["health-manager (TS)"] --> UOS["update-os.sh"]
     HM --> CDT["check-disk-threshold.sh"]
     HM --> BM["backup-manager (TS)"]
-    BM --> BC["backup-controller"]
+    BM --> BC["pbs-controller"]
     BM --> FR["backup/restore.sh"]
     IM["install-module.sh"] --> BM
 ```
@@ -375,7 +375,7 @@ production script/program executes the legacy verb itself.
 | `validate-people.sh` | people-manager | people-manager flow | MANAGER (clean) |
 | `update-os.sh` | health-manager | health-manager (TS); `templates/services/{nixos,debian}/update-service.sh` | MANAGER + **2 DIRECT** |
 | `check-disk-threshold.sh` | health-manager | health-manager (TS) only | MANAGER (clean) |
-| `backup-controller` | (backup-manager wraps) | backup-manager (TS) only | MANAGER (clean) |
+| `pbs-controller` | (backup-manager wraps) | backup-manager (TS) only | MANAGER (clean) |
 
 \* `network/update.sh` only *mentions* update-module.sh in comments (it is
 *called by* update-module.sh, it does not call it) — not a real DIRECT caller.
@@ -400,7 +400,7 @@ below the manager, not bypassing it.
 **Adoption is strong but not complete: ~7 production DIRECT-call holdouts
 remain** (the environments + people bootstraps moved onto the manager verbs —
 `environment-manager add` / `people-manager bootstrap` — in the ADR-007
-refactor Phase 8). The read-only/backup verbs (`validate-*`, `backup-controller`,
+refactor Phase 8). The read-only/backup verbs (`validate-*`, `pbs-controller`,
 `check-disk-threshold`) are reached **only** through their
 managers — clean (the backup bash layer — `backup-restore`/`backup-status` —
 was retired outright in the ADR-007 refactor Phase 7.4, absorbed into the TS

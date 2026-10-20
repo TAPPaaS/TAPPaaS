@@ -35,7 +35,7 @@ Everything is automated. Beyond creating the VM, the install:
 1. Waits for Authentik's API to come up on the identity VM.
 2. Reads `AUTHENTIK_BOOTSTRAP_TOKEN` from `/etc/secrets/authentik.env` (created on first
    boot by `identity.nix`'s secrets generator) and persists it to
-   `~/.authentik-credentials.txt` on the cicd (mode 600) for `authentik-manager`.
+   `~/.authentik-credentials.txt` on the cicd (mode 600) for `authentik-controller`.
 3. Configures Caddy's global AuthProvider = Authentik and registers the 12
    `X-Authentik-*` copy-headers.
 4. Sets the embedded outpost's `authentik_host` to `https://identity.<domain>` and
@@ -72,9 +72,9 @@ Fast tier asserts Authentik connectivity, role groups and the OIDC allow-list;
 | Check | Expected |
 |-------|----------|
 | Browse `https://identity.<domain>` | Authentik login page |
-| `authentik-manager test` (on tappaas-cicd) | exits 0 — API reachable, token accepted |
+| `authentik-controller test` (on tappaas-cicd) | exits 0 — API reachable, token accepted |
 | Log in as `akadmin` (password from the VM's `/etc/secrets/authentik.env`) | Authentik admin interface |
-| `authentik-manager list-users \| jq '.[] \| select(.name=="<site-owner>") \| .groups'` | includes `authentik Admins` |
+| `authentik-controller list-users \| jq '.[] \| select(.name=="<site-owner>") \| .groups'` | includes `authentik Admins` |
 
 ## Troubleshooting
 

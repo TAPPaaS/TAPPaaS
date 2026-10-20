@@ -791,7 +791,7 @@ roles-ensure.sh --variant acme  # just the acme scope
 
 Each group carries `attributes.tappaas = {variant, role}`. Per-module admin groups
 (`<scope>-<module>-admins`) are opt-in and created at module install / by `user.sh`,
-not here. Talks to Authentik via `authentik-manager` (override with
+not here. Talks to Authentik via `authentik-controller` (override with
 `AUTHENTIK_MANAGER=` for testing).
 
 ---

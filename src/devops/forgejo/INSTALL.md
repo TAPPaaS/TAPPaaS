@@ -31,7 +31,7 @@ install-module.sh forgejo
 ## Post-install
 
 1. **Make yourself a Forgejo admin** — add your Authentik user to the `forgejo-admins`
-   group (`authentik-manager user-add-to-groups <user> forgejo-admins` on tappaas-cicd),
+   group (`authentik-controller user-add-to-groups <user> forgejo-admins` on tappaas-cicd),
    then sign in with Authentik (the Forgejo tile, or *Sign in with authentik* on the login
    page). The first login creates your Forgejo account. No local admin exists — see
    [Local admin](#local-admin) for when you need one.

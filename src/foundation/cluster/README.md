@@ -151,7 +151,7 @@ node returns to HA placement.
 
 **Switching to `lacp`** needs both ends: the node speaking LACP and its switch ports
 one aggregate (LAG). When the switch controller knows which switch ports the node's
-LAN NICs reach (`switch-controller add-port <switch> <port> --type node --target
+LAN NICs reach (`switch-manager add-port <switch> <port> --type node --target
 <node> --target-port <nic>`) and the switch has a vendor plugin (UniFi), `set
 --lan-mode lacp --apply` does both: the node switches to LACP first (running on one
 leg until the switch answers), then the aggregate `<node>-lan` is formed, and the

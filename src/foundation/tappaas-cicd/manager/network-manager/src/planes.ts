@@ -5,9 +5,9 @@
 // This is the #335 / #372 / #373 FIX: the old `zone-reconcile` hardcoded STALE
 // paths under firewall/scripts/{proxmox,switch,ap}-manager (moved by S0, so it
 // was broken). We call the on-PATH bins instead — and crucially we use
-// `switch-controller`, the controller bin in controller/switch-controller/ (the
+// `switch-manager`, the controller bin in manager/switch-manager/ (the
 // executable was renamed from `switch-manager` so its name matches its role and
-// the ap-controller pattern; a stale ~/bin/switch-controller symlink to the old
+// the ap-manager pattern; a stale ~/bin/switch-manager symlink to the old
 // firewall/scripts TS build previously shadowed it and made this plane ENOENT).
 //
 // Per-plane CLI contracts (from zone-reconcile):
@@ -15,8 +15,8 @@
 //              zone-manager --no-ssl-verify --zones-file <ZONES> --detailed-exitcode
 //                + --summary (pinhole validator)                            (dry-run, #645)
 //   proxmox  : proxmox-controller reconcile [--apply]   (+ bridge-vids [--apply])
-//   switch   : switch-controller reconcile [--apply]
-//   ap       : ap-controller reconcile [--apply]
+//   switch   : switch-manager reconcile [--apply]
+//   ap       : ap-manager reconcile [--apply]
 //
 // NO firewall/scripts/ paths appear here.
 
@@ -28,8 +28,8 @@ import { Plane, PlaneClient, PlaneResult, PlaneStatus } from "./types";
 export const PLANE_BIN: Record<Plane, string> = {
   opnsense: process.env.NM_OPNSENSE_BIN ?? "zone-manager",
   proxmox: process.env.NM_PROXMOX_BIN ?? "proxmox-controller",
-  switch: process.env.NM_SWITCH_BIN ?? "switch-controller",
-  ap: process.env.NM_AP_BIN ?? "ap-controller",
+  switch: process.env.NM_SWITCH_BIN ?? "switch-manager",
+  ap: process.env.NM_AP_BIN ?? "ap-manager",
 };
 
 export interface RunResult {

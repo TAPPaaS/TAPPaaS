@@ -4,7 +4,7 @@
 //
 // Owns the Site → Environment → Module backup-policy CASCADE (the entity = the
 // resolved backup `job`/`policy`). Read-only over config; delegates live PBS
-// operations to the `backup-controller` bin via CliClient (src/client.ts) — NO
+// operations to the `pbs-controller` bin via CliClient (src/client.ts) — NO
 // PBS API is reimplemented here.
 //
 // Standardized verbs (ADR-007):
@@ -556,7 +556,7 @@ function printTable(rows: BackupPolicyStatus[]): void {
   if (rows.some((r) => r.membershipSource === "declaration")) {
     warn(
       "PBS / cluster not reachable — IN-PBS-JOB shows the DECLARATION, not job " +
-        "membership (backup-controller job-status when it is back)",
+        "membership (pbs-controller job-status when it is back)",
     );
   }
 }

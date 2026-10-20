@@ -281,6 +281,6 @@ cameras only through its module's pinhole, never zone-wide.
 An optional `SSID` is the WiFi network broadcast on the zone's VLAN, used by the WiFi
 tooling ([`network/scripts/README.md`](../../../network/scripts/README.md)):
 `setup-wlan-secrets.sh` sets the real name and stores the passphrase in a 0600 secrets file
-(never in `zones.json`), and `ap-controller` maps each SSID to its zone's VLAN. A zone
+(never in `zones.json`), and `ap-manager` maps each SSID to its zone's VLAN. A zone
 without WiFi omits it or sets `null`; the shipped `<PLACEHOLDER>` means "not chosen yet".
 Only an `Active` zone broadcasts.

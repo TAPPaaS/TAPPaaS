@@ -3,7 +3,7 @@
 Owns the **backup hierarchy**: the Site → Environment → Module backup-policy
 cascade. It is a *manager* — it owns configuration state (backup policy resolved
 from `site.json`, `environments/*.json`, and per-module JSON) and orchestrates
-the `backup-controller` for live PBS operations. It does **not** talk to PBS
+the `pbs-controller` for live PBS operations. It does **not** talk to PBS
 directly.
 
 ## What it owns
@@ -43,7 +43,7 @@ CLI/help/exec/config-io helpers come from `lib/ts/src/` — mirrors
 `backup-manager` bin; the legacy bash entry scripts (`backup-manager.sh`,
 `backup-status.sh`, `backup-restore.sh`, `validate-backup.sh`,
 `lib-cascade.sh`) were **retired** in the ADR-007 post-implementation refactor,
-Phase 7.4. The `backup-manager` bin shells out to `backup-controller` via
+Phase 7.4. The `backup-manager` bin shells out to `pbs-controller` via
 `CliClient` (`src/client.ts`, parsing `--json` output) — no PBS API is
 reimplemented.
 
@@ -93,7 +93,7 @@ backup-manager backup <module>... [--config-dir DIR]
         runs on, VM or container; waits and names the snapshot (noted "on
         demand"). Refuses a name with no vmid before anything runs, and a module
         no TAPPaaS job covers (add it first). Non-zero if any backup was not
-        taken — an unreachable cluster included. Calls backup-controller backup.
+        taken — an unreachable cluster included. Calls pbs-controller backup.
 
 backup-manager key list
 backup-manager key export --usb [--node N] [--format] | --file DIR
@@ -110,12 +110,12 @@ backup-manager key import --usb [--node N] | --file DIR
 
 backup-manager reconcile [--apply] [--config-dir DIR]
         Converge resolved policies → PBS (whole-cluster; PREVIEW by default,
-        --apply commits). Idempotent. Calls backup-controller add-to-job /
+        --apply commits). Idempotent. Calls pbs-controller add-to-job /
         apply-schedule.
 
 backup-manager restore list <module> | restore <module> [opts] | list-all
         SPECIAL recovery verb — delegates to the foundation backup/restore.sh and
-        backup-controller (snapshot listing). restore <module> overwrites the
+        pbs-controller (snapshot listing). restore <module> overwrites the
         module's own guest after asking; --yes confirms it up front (a script or
         an agent has no terminal). --from <module|vmid> restores another guest's
         backup into it instead. See RESTORE.md §1–§2.
@@ -163,7 +163,7 @@ The single entry point is the `backup-manager` bin (linked onto `PATH` by
 
 ## Controllers it calls
 
-- [`backup-controller`](../../controller/backup-controller/) — PBS job status,
+- [`pbs-controller`](../../controller/pbs-controller/) — PBS job status,
   snapshot listing, verify, namespaces (`--json` for machine output), the
   `reconcile` mutations `add-to-job` / `apply-schedule`, and `backup` (an
   on-demand backup through the module's job) — reusing the foundation PBS libs.

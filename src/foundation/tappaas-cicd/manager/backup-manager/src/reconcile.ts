@@ -28,7 +28,7 @@ import { Action, Client, JobStatus, Plan, ScheduleBucket } from "./types";
 // `false` for a weekly- or monthly-scheduled guest that is backed up perfectly
 // well — the second direction of #627.
 //
-// Legacy fallback: a backup-controller that predates `.buckets` reports only
+// Legacy fallback: a pbs-controller that predates `.buckets` reports only
 // the daily job's `vmids`. The manager and the controller are installed by
 // different modules, so the manager can be the newer one; reading an empty
 // bucket list as "nobody is in any job" would make it report every module as

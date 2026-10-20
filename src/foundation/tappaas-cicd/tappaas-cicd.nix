@@ -28,8 +28,8 @@
 let
   # Import opnsense-controller package
   opnsenseController = import ./controller/opnsense-controller { inherit pkgs; };
-  # Import identity-controller package (Authentik runtime controller; ADR-007 S2b-1)
-  identityController = import ./controller/identity-controller { inherit pkgs; };
+  # Import authentik-controller package (Authentik runtime controller; ADR-007 S2b-1)
+  identityController = import ./controller/authentik-controller { inherit pkgs; };
 in
 {
   imports =
@@ -523,7 +523,7 @@ in
   };
 
   # #860: read the switches after every sweep (OnSuccess/OnFailure of
-  # update-tappaas above), never by a timer of its own. `switch-controller
+  # update-tappaas above), never by a timer of its own. `switch-manager
   # interrogate --no-park` reads every controller and auto switch — it never
   # parks and never applies — then the switch-ports gate runs over what was read,
   # and the owner is mailed when it has a finding it did not have the last time.
@@ -704,7 +704,8 @@ in
         shellcheck   # bash script linting for module *.sh validation (#265)
         # OPNsense controller tools (opnsense-controller, opnsense-firewall, zone-manager, dns-manager)
         opnsenseController.default
-        # Identity controller tools (authentik-manager, identity-controller; ADR-007 S2b-1)
+        # Authentik controller tools (authentik-controller; its old names authentik-manager and
+        # identity-controller are aliases for one release, ADR-035 P2)
         identityController.default
         # TFTP server for node-provisioner's PXE trap (runs tftp-only via
         # systemd-run when provisioning is enabled; node-provisioning.md N3)

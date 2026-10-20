@@ -207,12 +207,12 @@ BASIC_FAIL=${FAIL}
 section "Standard 1: CLI tools available"
 
 # The plane bins network-manager actually shells out to (planes.ts PLANE_BIN):
-# zone-manager (opnsense), proxmox-controller, switch-controller, ap-controller.
+# zone-manager (opnsense), proxmox-controller, switch-manager, ap-manager.
 # (Historically this listed the pre-split names opnsense-manager/proxmox-manager/
-# switch-controller/ap-manager/zone-reconcile — which left the switch-controller
-# rename gap undetected, since switch-controller existed while switch-controller did not.)
+# switch-manager/ap-manager/zone-reconcile — which left the switch-manager
+# rename gap undetected, since switch-manager existed while switch-manager did not.)
 for tool in opnsense-firewall zone-manager dns-manager caddy-manager rules-manager \
-            proxmox-controller switch-controller ap-controller network-manager; do
+            proxmox-controller switch-manager ap-manager network-manager; do
     if command -v "${tool}" >/dev/null 2>&1; then
         pass "${tool} on PATH"
     else
@@ -1189,7 +1189,7 @@ deep_test_adr008_providers() {
         if [[ "$(jq -r "$2" "$3" 2>/dev/null)" == "true" ]]; then pass "$1"; else fail "$1"; fi
     }
 
-    section "Deep A: switch-controller — zone add/change/remove across reconcile phases (#339)"
+    section "Deep A: switch-manager — zone add/change/remove across reconcile phases (#339)"
 
     # Seed two test zones (961, 962) as Active in the isolated zones.json.
     jq '.swdeepA={state:"Active",vlantag:961} | .swdeepB={state:"Active",vlantag:962}' \
@@ -1205,11 +1205,11 @@ deep_test_adr008_providers() {
     # "Unknown command: add", the swallow hid it, the switch was never registered
     # and all 11 downstream assertions failed against a switch that did not
     # exist. A setup failure is not a test result — abort the block instead.
-    _swsetup() { # description, then the switch-controller args
+    _swsetup() { # description, then the switch-manager args
         local _desc="$1"; shift
-        if ! env CONFIG_DIR="${T}" switch-controller "$@" >/dev/null 2>&1; then
-            fail "Deep A setup: ${_desc} failed — \`switch-controller $1\` rejected its arguments"
-            echo "      $(env CONFIG_DIR="${T}" switch-controller "$@" 2>&1 | head -2)" >&2
+        if ! env CONFIG_DIR="${T}" switch-manager "$@" >/dev/null 2>&1; then
+            fail "Deep A setup: ${_desc} failed — \`switch-manager $1\` rejected its arguments"
+            echo "      $(env CONFIG_DIR="${T}" switch-manager "$@" 2>&1 | head -2)" >&2
             return 1
         fi
     }
@@ -1223,36 +1223,36 @@ deep_test_adr008_providers() {
     fi
 
     # ── A1: add zones → update-desired pulls the new VLANs into desired.json ──
-    env CONFIG_DIR="${T}" switch-controller update-desired >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
     _djq "Deep A1: desired trunk port gained added VLANs 961+962" \
         '.switches.testcore.ports["1"].taggedVlans | (index(961) and index(962)) != null' "${D}"
     _djq "Deep A1: access port nativeVlan tracks zone swdeepA (961)" \
         '.switches.testcore.ports["5"].nativeVlan == 961' "${D}"
 
     # ── A2: phases — actual.json only changes after confirm ──────────────────
-    env CONFIG_DIR="${T}" switch-controller interrogate >/dev/null 2>&1 || true   # manual → actual stays empty
-    out="$(env CONFIG_DIR="${T}" switch-controller delta 2>&1 || true)"
+    env CONFIG_DIR="${T}" switch-manager interrogate >/dev/null 2>&1 || true   # manual → actual stays empty
+    out="$(env CONFIG_DIR="${T}" switch-manager delta 2>&1 || true)"
     # delta names the CHANGE KIND now ("trunk-vlans:" / "access-vlan:"); the old
     # generic "configure-port" wording is gone.
     _dgrep "Deep A2: delta reports ports need configuring (actual empty)" "trunk-vlans" "${out}"
     # The switch and its port TOPOLOGY are recorded in actual.json at add-switch
-    # time (that file is the inventory — see `switch-controller --help`). What
+    # time (that file is the inventory — see `switch-manager --help`). What
     # must NOT be there before confirm is the APPLIED VLAN state, i.e. taggedVlans.
     if jq -e '.switches.testcore.ports["1"].taggedVlans' "${AF}" >/dev/null 2>&1; then
         fail "Deep A2: actual.json must NOT carry applied VLAN state before confirm"
     else
         pass "Deep A2: actual.json has no applied VLAN state before confirm"
     fi
-    env CONFIG_DIR="${T}" switch-controller confirm >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-manager confirm >/dev/null 2>&1 || true
     _djq "Deep A2: confirm wrote applied state into actual.json" \
         '.switches.testcore.ports["1"].taggedVlans | index(961) != null' "${AF}"
-    rc=0; env CONFIG_DIR="${T}" switch-controller reconcile >/dev/null 2>&1 || rc=$?
+    rc=0; env CONFIG_DIR="${T}" switch-manager reconcile >/dev/null 2>&1 || rc=$?
     if [[ "${rc}" -eq 0 ]]; then pass "Deep A2: reconcile reports in-sync after confirm (rc 0)"; else fail "Deep A2: reconcile not in-sync after confirm (rc ${rc})"; fi
 
     # ── A3: change a zone's VLAN (961→965) → drift on trunk AND access ──────
     jq '.swdeepA.vlantag=965' "${T}/zones.json" > "${T}/z" && mv "${T}/z" "${T}/zones.json"
-    env CONFIG_DIR="${T}" switch-controller update-desired >/dev/null 2>&1 || true
-    out="$(env CONFIG_DIR="${T}" switch-controller delta 2>&1 || true)"
+    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
+    out="$(env CONFIG_DIR="${T}" switch-manager delta 2>&1 || true)"
     _dgrep "Deep A3: trunk VLAN change detected" "trunk-vlans" "${out}"
     _dgrep "Deep A3: access VLAN change detected" "access-vlan" "${out}"
     _djq "Deep A3: desired.json now has new VLAN 965" \
@@ -1262,12 +1262,12 @@ deep_test_adr008_providers() {
 
     # ── A4: remove a zone → its VLAN drops out of desired.json ─────────────
     jq 'del(.swdeepB)' "${T}/zones.json" > "${T}/z" && mv "${T}/z" "${T}/zones.json"
-    env CONFIG_DIR="${T}" switch-controller update-desired >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
     _djq "Deep A4: removed zone VLAN 962 dropped from desired trunk" \
         '.switches.testcore.ports["1"].taggedVlans | index(962) == null' "${D}"
 
     # ── A5: unknown equipment type → manual instructions cite real port/VLAN ─
-    out="$(env CONFIG_DIR="${T}" switch-controller reconcile --apply 2>&1)"; rc=$?
+    out="$(env CONFIG_DIR="${T}" switch-manager reconcile --apply 2>&1)"; rc=$?
     _dgrep "Deep A5: manual plugin engaged for unknown vendor 'generic'" "MANUAL CONFIGURATION" "${out}"
     _dgrep "Deep A5: manual instructions cite the affected port (port 1)" "port 1" "${out}"
     _dgrep "Deep A5: manual instructions cite the new VLAN (965)" "965" "${out}"
@@ -1297,9 +1297,9 @@ deep_test_adr008_providers() {
     #
     # Runs against the LIVE CONFIG_DIR (not the temp one), and skips cleanly on a
     # system with no registered switch.
-    if ! command -v switch-controller >/dev/null 2>&1; then
-        skip "Deep C: switch-controller not on PATH"
-    elif ! switch-controller list >/dev/null 2>&1 \
+    if ! command -v switch-manager >/dev/null 2>&1; then
+        skip "Deep C: switch-manager not on PATH"
+    elif ! switch-manager list >/dev/null 2>&1 \
          || [[ -z "$(jq -r '.switches // {} | keys[]?' "${CONFIG_DIR}/switch-configuration-actual.json" 2>/dev/null)" ]]; then
         skip "Deep C: no switch registered — run setup-switches.sh to enable live-hardware coverage"
     else
@@ -1309,7 +1309,7 @@ deep_test_adr008_providers() {
 
         # C1: interrogate must reach the real controller and return cleanly. This
         # is the assertion that would have caught a broken vendor plugin.
-        if switch-controller interrogate >/dev/null 2>&1; then
+        if switch-manager interrogate >/dev/null 2>&1; then
             pass "Deep C1: interrogate reached the live equipment via its vendor plugin"
         else
             fail "Deep C1: interrogate against the live switch failed (vendor plugin or controller unreachable)"
@@ -1342,11 +1342,11 @@ deep_test_adr008_providers() {
         # C4: desired-vs-actual on the real switch. Not a pass/fail on drift
         # itself (an operator may legitimately be mid-change) — it asserts the
         # comparison RUNS and reports a definite verdict.
-        _drc=0; switch-controller delta >/dev/null 2>&1 || _drc=$?
+        _drc=0; switch-manager delta >/dev/null 2>&1 || _drc=$?
         if [[ "${_drc}" -eq 0 ]]; then
             pass "Deep C4: live switch is in sync with zones.json"
         elif [[ "${_drc}" -eq 2 ]]; then
-            skip "Deep C4: live switch has pending drift (rc 2) — converge with: switch-controller reconcile --apply"
+            skip "Deep C4: live switch has pending drift (rc 2) — converge with: switch-manager reconcile --apply"
         else
             fail "Deep C4: delta against the live switch errored (rc ${_drc})"
         fi
@@ -1371,14 +1371,14 @@ deep_test_adr008_providers() {
                 info "  Deep C5: exercising the vendor plugin write path on unused port ${_sp} (will be restored)"
                 _before="$(jq -rc --arg s "${_live_sw}" --arg p "${_sp}" '.switches[$s].ports[$p] // {}' "${CONFIG_DIR}/switch-configuration-actual.json")"
                 _restore_spare() {
-                    switch-controller remove-port "${_live_sw}" "${_sp}" >/dev/null 2>&1 || true
-                    switch-controller reconcile --apply >/dev/null 2>&1 || true
+                    switch-manager remove-port "${_live_sw}" "${_sp}" >/dev/null 2>&1 || true
+                    switch-manager reconcile --apply >/dev/null 2>&1 || true
                     info "  Deep C5: port ${_sp} restored (was: ${_before})"
                 }
-                if switch-controller add-port "${_live_sw}" "${_sp}" --type device --target tappaas-test-probe \
+                if switch-manager add-port "${_live_sw}" "${_sp}" --type device --target tappaas-test-probe \
                         --mode access --zone mgmt >/dev/null 2>&1 \
-                   && switch-controller reconcile --apply >/dev/null 2>&1; then
-                    switch-controller interrogate >/dev/null 2>&1 || true
+                   && switch-manager reconcile --apply >/dev/null 2>&1; then
+                    switch-manager interrogate >/dev/null 2>&1 || true
                     _nv="$(jq -r --arg s "${_live_sw}" --arg p "${_sp}" '.switches[$s].ports[$p].nativeVlan // empty' "${CONFIG_DIR}/switch-configuration-actual.json")"
                     if [[ -n "${_nv}" ]]; then
                         pass "Deep C5: vendor plugin applied a real VLAN change (port ${_sp} native ${_nv}) and it read back"
@@ -1409,13 +1409,13 @@ deep_test_adr008_providers() {
     _dgrep "Deep B2: validation flags uplink port not carrying the SSID VLAN" "does not carry VLAN 965" "${out}"
 
     # Fix the uplink: switch port 9 trunk must carry 965 → validation clears.
-    env CONFIG_DIR="${T}" switch-controller add-port testcore 9 --type ap --target testap \
+    env CONFIG_DIR="${T}" switch-manager add-port testcore 9 --type ap --target testap \
         --mode trunk --tagged 965 >/dev/null 2>&1 || true
     # add-port records the port in the INVENTORY (actual.json); the cross-provider
     # uplink check reads the switch's DESIRED trunk, so the switch side has to
     # regenerate it before ap-manager can see the VLAN. Without this the
     # validation can never clear and the assertion below is unsatisfiable.
-    env CONFIG_DIR="${T}" switch-controller update-desired >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" switch-manager update-desired >/dev/null 2>&1 || true
     out="$(env CONFIG_DIR="${T}" ap-manager delta 2>&1 || true)"
     if grep -qF "does not carry VLAN 965" <<< "${out}"; then
         fail "Deep B2: uplink validation should clear once port 9 carries VLAN 965"

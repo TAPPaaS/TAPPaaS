@@ -5,7 +5,7 @@
 //
 //   acme-dns   ~/.acme-dns-credentials.txt   provider=<p>, dns_<key>=<value>   (acme-setup.sh)
 //   unifi      ~/.unifi-os-credentials.txt   url=, username=, password=       (the UniFi plugin)
-//   wlan       ~/.wlan-secrets.txt           <SSID>=<passphrase>, merged by SSID (ap-controller)
+//   wlan       ~/.wlan-secrets.txt           <SSID>=<passphrase>, merged by SSID (ap-manager)
 
 import { chmodSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "fs";
 import { join } from "path";

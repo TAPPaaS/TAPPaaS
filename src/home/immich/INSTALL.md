@@ -70,10 +70,10 @@ need to act on.
 **Restricting access beyond "everyone with a TAPPaaS login"**:
 
 ```bash
-authentik-manager app-bind-groups immich --group <narrower-group>
+authentik-controller app-bind-groups immich --group <narrower-group>
 ```
 
-replaces the default `users` binding — see `identity-controller/README.md`.
+replaces the default `users` binding — see `authentik-controller/README.md`.
 
 **Per-user storage quota** (optional): create a Scope Mapping named e.g.
 `immich` that returns `{"immich_quota": <GiB>}`, add it to `identity.scopes`

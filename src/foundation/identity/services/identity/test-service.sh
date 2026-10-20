@@ -31,7 +31,7 @@ _IDENTITY_SVC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../../lib/oidc-consumer.sh disable=SC1091
 . "${_IDENTITY_SVC_DIR}/../../lib/oidc-consumer.sh"
 
-AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-manager}"
+AUTHENTIK_MANAGER="${AUTHENTIK_MANAGER:-authentik-controller}"
 
 MODULE="${1:-}"
 [[ -n "${MODULE}" ]] || { echo "Usage: $0 <effective-module-name>"; exit 2; }
@@ -61,7 +61,7 @@ if oidc_domain_unpublished "${_TS_DOMAIN}"; then
 fi
 
 if ! ${AUTHENTIK_MANAGER} test >/dev/null 2>&1; then
-    error "  authentik-manager cannot reach Authentik"
+    error "  authentik-controller cannot reach Authentik"
     exit 2
 fi
 

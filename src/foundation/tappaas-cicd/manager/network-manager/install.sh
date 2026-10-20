@@ -3,7 +3,7 @@
 #
 # network-manager is a TypeScript owner + orchestrator (ADR-007 P4 / ADR-008):
 # it owns zones.json (CRUD + delta) and reconciles all four planes by calling
-# the plane-controller bins (zone-manager, proxmox-manager, switch-controller,
+# the plane-controller bins (zone-manager, proxmox-manager, switch-manager,
 # ap-manager). It is built with Nix (tsc, no node_modules) into
 # result/bin/network-manager, then linked onto PATH.
 #

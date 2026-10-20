@@ -1,7 +1,7 @@
 // switch-ports.test.ts — the switch-ports gate (#853): a port with no record
 // that is not parked, and a port the switch sets otherwise than its record, are
 // WARN rows on that port. Offline: switchPortsResult over list-ports rows shaped
-// as hrossen's, and checkSwitchPorts against a fake switch-controller.
+// as hrossen's, and checkSwitchPorts against a fake switch-manager.
 
 import { chmodSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -67,9 +67,9 @@ check(fresh.status === "pass" && /read 30 min ago/.test(fresh.detail), "a read h
 check(switchPortsResult([]).status === "skip", "no switch in the inventory: skip");
 check(switchPortsResult({}).status === "skip", "not a switch list: skip");
 
-// The gate runs switch-controller list-ports --json over the config dir it is given.
+// The gate runs switch-manager list-ports --json over the config dir it is given.
 const d = mkdtempSync(join(tmpdir(), "hm-sw-"));
-const bin = join(d, "switch-controller");
+const bin = join(d, "switch-manager");
 writeFileSync(join(d, "out.json"), JSON.stringify([{ switch: SW, lastRead: new Date().toISOString(), ports }]));
 writeFileSync(bin, `#!/bin/sh\necho "$CONFIG_DIR $*" > "${d}/argv"\ncat "${d}/out.json"\n`);
 chmodSync(bin, 0o755);
@@ -78,7 +78,7 @@ const live = checkSwitchPorts("/some/config");
 check(live.status === "warn" && (live.rows ?? []).length === 3, "checkSwitchPorts reads the controller's rows");
 check(readFileSync(join(d, "argv"), "utf8").trim() === "/some/config list-ports --json", "…with list-ports --json, over the given config dir");
 process.env.SWITCH_CONTROLLER_BIN = join(d, "missing");
-check(checkSwitchPorts("/some/config").status === "skip", "no switch-controller: skip");
+check(checkSwitchPorts("/some/config").status === "skip", "no switch-manager: skip");
 
 console.log(`\nswitch-ports: ${passed} passed, ${failed} failed`);
 process.exit(failed > 0 ? 1 : 0);

@@ -1,7 +1,7 @@
 // topology.ts — `network-manager topology` (ADR-034 D5): the physical site as one
 // derived document. It JOINS what the managers and controllers already report —
-// site.json, `site-manager node list / node network show`, `switch-controller
-// list / list-ports / lag list`, `ap-controller list`, zones.json, `module-manager
+// site.json, `site-manager node list / node network show`, `switch-manager
+// list / list-ports / lag list`, `ap-manager list`, zones.json, `module-manager
 // module list` (guests and their run state, read through lib/ts/cluster.ts),
 // `backup-manager peers` and `health-manager validate` — and stores nothing.
 //
@@ -54,7 +54,7 @@ export interface NodeNetwork {
   findings?: { level: string; text: string }[];
 }
 
-// switch-controller list --json
+// switch-manager list --json
 export interface SwitchList {
   controllers: { name: string; vendor?: string; managementIp?: string; managed?: string }[];
   switches: {
@@ -63,7 +63,7 @@ export interface SwitchList {
   }[];
 }
 
-// switch-controller list-ports --json (one entry per switch)
+// switch-manager list-ports --json (one entry per switch)
 export interface SwitchPortRow {
   port: string;
   type: string | null;
@@ -90,7 +90,7 @@ export interface SwitchPorts {
   ports: SwitchPortRow[];
 }
 
-// switch-controller lag list --json
+// switch-manager lag list --json
 export interface LagRow {
   switch: string;
   name: string;
@@ -99,7 +99,7 @@ export interface LagRow {
   formed: boolean;
 }
 
-// ap-controller list --json
+// ap-manager list --json
 export interface ApRow {
   name: string;
   vendor?: string;
@@ -540,7 +540,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
 
   // A LAG member follows its lead (#854): UniFi takes an aggregate's VLANs from
   // the lead port, so the member carries the lead's VLANs and no drift of its
-  // own. switch-controller names the lead (lagLead); for one that predates it,
+  // own. switch-manager names the lead (lagLead); for one that predates it,
   // the lead is the LAG's lowest-numbered port, as \`lag set\` declares it.
   function followLeads(rows: SwitchPortRow[]): SwitchPortRow[] {
     const byPort = new Map(rows.map((r) => [r.port, r]));
@@ -642,7 +642,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
     for (const u of n.uplinks) {
       for (const l of u.legs) {
         if (l.peer && !l.peer.known) {
-          topoFinding(`${n.name}/${l.nic} reaches "${l.peer.switch}" port ${l.peer.port}, a switch not in the inventory — switch-controller add-switch`, { kind: "node", name: n.name });
+          topoFinding(`${n.name}/${l.nic} reaches "${l.peer.switch}" port ${l.peer.port}, a switch not in the inventory — switch-manager add-switch`, { kind: "node", name: n.name });
         }
       }
     }
@@ -796,10 +796,10 @@ export const SOURCE_NAMES = [
   "site.json",
   "site-manager node list",
   "site-manager node network show",
-  "switch-controller list",
-  "switch-controller list-ports",
-  "switch-controller lag list",
-  "ap-controller list",
+  "switch-manager list",
+  "switch-manager list-ports",
+  "switch-manager lag list",
+  "ap-manager list",
   "zones.json",
   "module-manager module list",
   "backup-manager peers",
@@ -891,10 +891,10 @@ export function collectSources(o: CollectOpts): TopoSources {
     site,
     nodes,
     networks,
-    switches: json<SwitchList>("switch-controller list", "switch-controller", ["list", "--json"]),
-    ports: json<SwitchPorts[]>("switch-controller list-ports", "switch-controller", ["list-ports", "--json"]),
-    lags: json<LagRow[]>("switch-controller lag list", "switch-controller", ["lag", "list", "--json"]),
-    accessPoints: json<ApRow[]>("ap-controller list", "ap-controller", ["list", "--json"]),
+    switches: json<SwitchList>("switch-manager list", "switch-manager", ["list", "--json"]),
+    ports: json<SwitchPorts[]>("switch-manager list-ports", "switch-manager", ["list-ports", "--json"]),
+    lags: json<LagRow[]>("switch-manager lag list", "switch-manager", ["lag", "list", "--json"]),
+    accessPoints: json<ApRow[]>("ap-manager list", "ap-manager", ["list", "--json"]),
     zones: file("zones.json", o.zonesFile),
     modules,
     peers: json<PeerRow[]>("backup-manager peers", "backup-manager", ["peers", "--json"]),

@@ -17,8 +17,8 @@
 # pointing at the last people-manager Nix build, which would go on running OLD
 # code against the renamed config/identities/.
 #
-# The reconcile engine calls the identity-controller PRIMITIVES via the
-# `authentik-manager` bin (must also be on PATH); it does NOT speak Authentik
+# The reconcile engine calls the authentik-controller PRIMITIVES via the
+# `authentik-controller` bin (must also be on PATH); it does NOT speak Authentik
 # HTTP itself. Idempotent.
 set -euo pipefail
 

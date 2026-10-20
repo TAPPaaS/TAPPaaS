@@ -171,7 +171,7 @@ check(renderTopology(t).some((l) => /ISP → USW Pro XG 10 PoE port 5, vlan 100/
 {
   // #854: port 12 follows its lead, port 11 — the VLANs the switch reports on the
   // member itself (UniFi ignores them while the aggregate stands) are no drift.
-  // An older switch-controller: no lagLead, the member drifting by its own VLANs.
+  // An older switch-manager: no lagLead, the member drifting by its own VLANs.
   const s = hrossen();
   check(s.ports![0].ports.every((p) => p.lagLead === undefined), "the fixture is an older controller's: no lagLead");
   s.ports![0].ports = s.ports![0].ports.map((p) =>
@@ -210,7 +210,7 @@ check(renderTopology(t).some((l) => /ISP → USW Pro XG 10 PoE port 5, vlan 100/
     wanAddressFile: join(FIX, "no-wan-address.json"),
     run: (bin, args) => {
       runs.push(`${bin} ${args.join(" ")}`);
-      if (bin === "switch-controller") return { rc: 1, stdout: "", stderr: "zones.json not found", ran: true };
+      if (bin === "switch-manager") return { rc: 1, stdout: "", stderr: "zones.json not found", ran: true };
       if (bin === "site-manager" && args[1] === "list") return { rc: 0, stdout: readFileSync(join(FIX, "node-list.json"), "utf8"), stderr: "", ran: true };
       if (bin === "site-manager") return { rc: 0, stdout: readFileSync(join(FIX, `network-${args[3]}.json`), "utf8"), stderr: "", ran: true };
       return { rc: -1, stdout: "", stderr: "", ran: false };
@@ -220,7 +220,7 @@ check(renderTopology(t).some((l) => /ISP → USW Pro XG 10 PoE port 5, vlan 100/
   check(!runs.some((r) => r.startsWith("health-manager")), "--health given (or none): validate is not run");
   check(runs.filter((r) => r.includes("network show")).length === 3, "one network show per node");
   check(x.switches.length === 0 && x.nodes.length === 3, "no switch inventory: nodes still drawn, no switches");
-  check(x.sources.some((s) => s.name === "switch-controller list-ports" && !s.ok && /zones\.json not found/.test(s.error ?? "")), "the failing source is named with its error");
+  check(x.sources.some((s) => s.name === "switch-manager list-ports" && !s.ok && /zones\.json not found/.test(s.error ?? "")), "the failing source is named with its error");
   check(x.sources.some((s) => s.name === "module-manager module list" && !s.ok), "a missing binary is named");
   check(x.site.name === "rossen" && x.zones.length > 0, "site.json and zones.json are read from the config dir");
   check(x.site.wan.discovered === null && x.sources.some((s) => s.name === "wan-address.json" && s.ok), "no WAN address recorded: none shown, and not an error");
