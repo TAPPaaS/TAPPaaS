@@ -329,7 +329,7 @@ Ansible fits where maintained collections already do the work: MikroTik's Router
 
 ```
 controller/mikrotik-controller/
-  mikrotik-controller        the entry point: answers switch/1 (supports, arch, interrogate, apply)
+  mikrotik-controller        the entry point: answers switch/1 (describe, check-access, interrogate, apply, mlag-status)
   playbooks/interrogate.yml  community.routeros.api_info: bridge ports, bridge VLANs, bonding
   playbooks/apply.yml        community.routeros.api_modify: VLAN entries, PVIDs, bonds
   default.nix                ansible (with its collections) and python3Packages.librouteros, pinned
