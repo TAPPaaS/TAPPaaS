@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | – | 1 | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 8 | 12 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 9 | 11 |
 | 6 | G6.2 User interface & physical view | H | L | – | 1 | 4 |
 | 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
@@ -134,7 +134,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |---|----------|----------|
 | #801 | Default update schedule: daily on every channel — on `stable`/`staging` 13 of 14 runs change nothing, but urgent fixes and OS patches arrive within a day; what to do with sites on the old weekly default | Operator (proposed 2026-10-08, from #797) |
 | #294 | VMID scheme: zone-aligned ranges for new installs only, or not at all — never renumber in place | Lars and @ErikDaniel007 (Future Work) |
-| #430 | Controller/manager pattern for app modules — **ADR-035 v0.7 (2026-10-20)** (pluggable controllers and managers; P1 registry and P2 renames, `switch/1` executables, exported TS builder live on hrossen; P3 module registration built); Ansible first and the foundational/domain line are its O4 | Lars and @ErikDaniel007 (G1.7) |
+| #430 | Controller/manager pattern for app modules — **ADR-035 v0.7 (2026-10-20)** (pluggable controllers and managers; P1 registry and P2 renames, `switch/1` executables, exported TS builder, P3 module registration — all live on hrossen); Ansible first and the foundational/domain line are its O4 | Lars and @ErikDaniel007 (G1.7) |
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
 | #675 | What a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that fails to build. Today a site's own host-level modules are dropped by every scheduled rebuild while the unit reports success (`tappaas-cicd.nix` has no extension point — confirmed) | An ADR first; Ease H · Risk M |
 | #488 | `apply-json-merge`: should a field that `.orig` never recorded be adopted from the release, or kept? #736 made each refused value visible; the rule itself is open | Operator |
@@ -156,7 +156,7 @@ met gates are recorded in the releases that carried their waves.
 
 | ADR | Covers | Gates |
 |-----|--------|-------|
-| Controller pattern for app modules | #430 → ADR-035 (Proposed v0.7; P1–P2 live on hrossen 2026-10-20, P3 built): controllers and managers live in modules, registered by module-manager; then #731 (P3), #847 (P4), #170 (P5) | G1.7, then G6.1 |
+| Controller pattern for app modules | #430 → ADR-035 (Proposed v0.7; P1–P3 live on hrossen 2026-10-20; P4 = #847, P5 = #170): controllers and managers live in modules, registered by module-manager; then #731 (P3), #847 (P4), #170 (P5) | G1.7, then G6.1 |
 | Composite modules | #761: `cluster`, `kubernetes`, and modules that only provide artefacts (`templates`) — a `kind` for them; with @ErikDaniel007 | G3.1 |
 | Control-plane extension | #675 | — |
 | Secrets management | #58 (in Future Work since 2026-10-02): one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later | G1.6, when #58 returns |
@@ -237,7 +237,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 8 · open: 12
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 9 · open: 11
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -254,7 +254,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
 | #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open). Moved from G2.1 2026-10-13: it needs #668's attachment record first |
-| #731 | Controller-architecture modules never register themselves, and inventory drift has no routine check | M | L | **Built 2026-10-20** (`94dcf76b`, Community `3bbc169`; `close #731` on push): module-manager registers a module's controllers in `config/control-plane.json` on install/update and removes them on delete (ADR-035 P3); `unifi-os` brings `unifi-controller` and registers its instance with `switch-manager` once its credentials are set (D6); the routine check is #860. Live test on hrossen after the push |
+| ✅ #731 | Controller-architecture modules never register themselves, and inventory drift has no routine check | M | L | **Closed 2026-10-20** (`94dcf76b`, Community `eda68f4`), live on hrossen: module-manager registers a module's controllers in `config/control-plane.json` on install/update and removes them on delete (ADR-035 P3); `unifi-os` brings `unifi-controller` and registers its instance with `switch-manager` once its credentials are set (D6); `health-manager validate` warns on an unverified one in a foundation manager (D7); the routine check is #860 |
 | #155 | Modules for physical devices | L | L | Docs and examples only (Lars, 2026-05-15) |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 | #236 | RADIUS MAC Auth Bypass: a device's VLAN from its MAC, on Wi-Fi and wired ports | H | M | Future idea; depends on how switch ports and APs are managed (this group) |
@@ -518,7 +518,7 @@ Waiting on a conversation between Lars and @ErikDaniel007, not on work: the cont
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #430 | Controller/manager pattern for app modules | M | L | **ADR-035 v0.7 (2026-10-20)** (operator; P1–P2 live on hrossen, P3 built 2026-10-20): controllers and managers live with their module in tappaas-cicd's layout, declared in its JSON, linked and registered by module-manager in one registry; vendor code a controller, vendor-neutral code a manager. Open for Erik: O4 (Ansible first, the foundational/domain line) |
+| #430 | Controller/manager pattern for app modules | M | L | **ADR-035 v0.7 (2026-10-20)** (operator; P1–P3 live on hrossen 2026-10-20): controllers and managers live with their module in tappaas-cicd's layout, declared in its JSON, linked and registered by module-manager in one registry; vendor code a controller, vendor-neutral code a manager. Open for Erik: O4 (Ansible first, the foundational/domain line) |
 | #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
 | #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | From #750, for @ErikDaniel007: list his modules in `src/image-pins.json` and move the stale pins — euro-office v9.3.1 → v9.3.4 first; litellm and openwebui overlap #621 |
 
