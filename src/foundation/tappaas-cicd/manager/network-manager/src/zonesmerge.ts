@@ -43,6 +43,7 @@ import { existsSync, readFileSync, writeFileSync, renameSync, mkdtempSync, rmSyn
 import { dirname, join } from "path";
 import { isDocKey } from "./zones";
 import { backfillServes } from "./serves";
+import { MOVE_ADVICE, Occupancy, collisionOf } from "./occupancy";
 
 // Operator-pinned fields per zone — never adopted from the release source (#209).
 //
@@ -186,7 +187,15 @@ function zoneNames(raw: Raw): string[] {
 // Compute the 3-way merge. Pure: no I/O. current/baseline/source are raw docs.
 // backfilled: the baseline is a copy of source (no .orig yet), so it cannot
 // tell a zone the operator removed from one the release added.
-export function mergeZones(current: Raw, baseline: Raw, source: Raw, backfilled = false): MergeReport {
+// occupancy (#862): what the firewall carries; a source-only zone whose tag or
+// subnet it holds is not added either, with the holder named.
+export function mergeZones(
+  current: Raw,
+  baseline: Raw,
+  source: Raw,
+  backfilled = false,
+  occupancy?: Occupancy,
+): MergeReport {
   const merged: Raw = {};
   // Carry current's doc blocks (e.g. _README) through untouched.
   for (const [k, v] of Object.entries(current)) {
@@ -230,8 +239,13 @@ export function mergeZones(current: Raw, baseline: Raw, source: Raw, backfilled 
       } else if (!backfilled && isZoneObject(baseline[z])) {
         notAdded.push({ zone: z, reason: "removed here since the last merge" });
       } else {
-        merged[z] = source[z];
-        added.push(z);
+        const c = occupancy ? collisionOf(source[z] as Record<string, unknown>, occupancy) : undefined;
+        if (c) {
+          notAdded.push({ zone: z, reason: `${c.reason} — ${MOVE_ADVICE}, then merge again` });
+        } else {
+          merged[z] = source[z];
+          added.push(z);
+        }
       }
     }
   }
@@ -273,6 +287,9 @@ export interface ZonesMergeOpts {
   // Config root holding environments/ — enables the ADR-014 `serves` back-fill.
   // Absent ⇒ the back-fill is skipped (tests that only exercise merge rules).
   configDir?: string;
+  // #862: what the firewall carries; absent ⇒ zones.json only (it could not be
+  // asked, or a test).
+  occupancy?: Occupancy;
 }
 
 export interface Logger {
@@ -349,7 +366,7 @@ export function runZonesMerge(
   }
 
   // 3. merge.
-  const r = mergeZones(current, baseline, source, backfilled);
+  const r = mergeZones(current, baseline, source, backfilled, opts.occupancy);
 
   const nAdopted = r.adopted.reduce((a, d) => a + d.fields.length, 0);
   const nPinned = r.pinned.reduce((a, d) => a + d.fields.length, 0);
