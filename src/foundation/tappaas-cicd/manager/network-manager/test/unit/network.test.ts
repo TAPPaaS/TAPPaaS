@@ -29,8 +29,10 @@ import {
   zonesInit,
 } from "../../src/zonesinit";
 import { mergeZones, runZonesMerge } from "../../src/zonesmerge";
+import { collisionOf, describeHolder, ipv4Overlaps, occupancyFrom } from "../../src/occupancy";
 import {
   allocateIpv6Subnet,
+  allocateVlan,
   authorZone,
   changeZoneState,
   getZone,
@@ -2293,6 +2295,88 @@ function tmpZones(): string {
   check(JSON.stringify(Object.keys(JSON.parse(readFileSync(eff, "utf8"))).sort())
         === JSON.stringify(Object.keys(JSON.parse(readFileSync(f, "utf8"))).sort()),
     "the effective document carries the same zones");
+}
+
+// ── #862: what the firewall carries is detected, never re-allocated ──
+{
+  // A hand-built NAS segment on VLAN 100 / 10.1.0.0/24 (label 'storage'), a
+  // bare VLAN device 150 with no interface, lan untagged on 10.0.0.0/24.
+  const occ = occupancyFrom({
+    vlans: [
+      { tag: 100, device: "vlan0.100", parent: "vtnet0", description: "storage" },
+      { tag: 150, device: "vlan0.150", parent: "vtnet0", description: "spare" },
+    ],
+    interfaces: [
+      { identifier: "lan", description: "lan", device: "vtnet0", tag: null, ipv4: "10.0.0.0/24" },
+      { identifier: "opt3", description: "storage", device: "vlan0.100", tag: 100, ipv4: "10.1.0.0/24" },
+      { identifier: "opt9", description: "parked", device: "vlan0.300", tag: 300, ipv4: null },
+    ],
+  });
+  const h100 = occ.tag(100);
+  check(h100?.kind === "interface" && h100.name === "storage", "a tag held by an assigned interface names that interface");
+  check(describeHolder(h100!) === "interface 'storage' (opt3, VLAN 100, 10.1.0.0/24)", "the holder is described with identifier, tag and subnet");
+  check(occ.tag(150)?.kind === "vlan", "a VLAN device with no interface is a holder too");
+  check(describeHolder(occ.tag(150)!).startsWith("VLAN device 'spare'"), "…described as a bare device");
+  check(occ.tag(200) === undefined, "a free tag has no holder");
+  check(occ.subnet("10.1.0.0/24")?.identifier === "opt3", "the same subnet is held");
+  check(occ.subnet("10.1.0.128/25")?.identifier === "opt3" && occ.subnet("10.0.0.0/16")?.identifier === "lan",
+    "overlap in either direction is held");
+  check(occ.subnet("10.2.0.0/24") === undefined, "a free subnet has no holder");
+  check(!ipv4Overlaps("garbage", "10.1.0.0/24") && !ipv4Overlaps("10.1.0.0/24", "10.1.0.0/33"),
+    "unparseable input never overlaps");
+  check(collisionOf({ vlantag: 300, ip: "10.9.0.0/24" }, occ)?.reason === "VLAN 300 is already on the firewall: interface 'parked' (opt9, VLAN 300)",
+    "a tag collision is reported before the subnet");
+  check(collisionOf({ vlantag: 275, ip: "10.1.0.0/24" }, occ)?.reason === "10.1.0.0/24 overlaps the firewall's interface 'storage' (opt3, VLAN 100, 10.1.0.0/24)",
+    "a subnet collision is reported on its own");
+  check(collisionOf({ vlantag: 275, ip: "10.2.75.0/24" }, occ) === undefined, "no collision, no report");
+
+  // add: --vlan on a held tag is refused with the holder named …
+  const doc = loadZones(tmpZones());
+  let msg = "";
+  try { authorZone(doc, "nas", { vlan: 100, occupancy: occ }); } catch (e) { msg = (e as Error).message; }
+  check(msg.includes("VLAN 100 is already on the firewall: interface 'storage'") && msg.includes("TAPPaaS's own numbers stay"),
+    "add --vlan <held tag> is refused, naming the holder and the way out");
+  check(!zoneExists(doc, "nas"), "…and nothing is authored");
+  // … and the band allocation is NOT retried when the firewall holds the tag it picks.
+  const picked = allocateVlan(doc, 2);
+  const occTop = occupancyFrom({ interfaces: [{ identifier: "opt5", description: "lab", device: `vlan0.${picked}`, tag: picked, ipv4: null }] });
+  msg = "";
+  try { authorZone(doc, "lab2", { occupancy: occTop }); } catch (e) { msg = (e as Error).message; }
+  check(msg.includes(`VLAN ${picked} is already on the firewall: interface 'lab'`),
+    "an auto-allocated tag the firewall holds is refused, not skipped to the next");
+  check(authorZone(doc, "lab3", { occupancy: occ }).vlantag === picked, "a free allocation authors as before");
+  check(authorZone(doc, "lab4", {}).vlantag !== undefined, "without an occupancy the check is skipped (as before #862)");
+
+  // merge: a source-only zone the firewall's segment collides with is not added.
+  const cur = { mgmt: { vlantag: 0, ip: "10.0.0.0/24", state: "Active" } };
+  const src = { mgmt: { vlantag: 0, ip: "10.0.0.0/24", state: "Active" },
+                wan: { type: "WAN", vlantag: 100, ip: "10.1.0.0/24", state: "Manual" },
+                srv: { vlantag: 200, ip: "10.2.0.0/24", state: "Inactive" } };
+  const r = mergeZones(cur, cur, src, true, occ);
+  check(r.added.length === 1 && r.added[0] === "srv", "merge: the free zone is added");
+  check(r.notAdded.length === 1 && r.notAdded[0].zone === "wan" && r.notAdded[0].reason.includes("interface 'storage'") && r.notAdded[0].reason.includes("then merge again"),
+    "merge: the colliding zone is not added, the holder named");
+  check(!("wan" in r.merged), "…and is absent from the merged document");
+  check(mergeZones(cur, cur, src, true).added.length === 2, "merge without an occupancy adds both (zones.json only, as before)");
+
+  // Through the CLI: a stub opnsense-firewall answers `segments --json`.
+  const stubDir = mkdtempSync(join(tmpdir(), "nm-fw-"));
+  const stub = join(stubDir, "opnsense-firewall");
+  writeFileSync(stub, "#!/bin/sh\n[ \"$1\" = segments ] || exit 2\ncat <<'J'\n" +
+    JSON.stringify({ interfaces: [{ identifier: "opt3", description: "storage", device: "vlan0.100", tag: 100, ipv4: "10.1.0.0/24" }] }) +
+    "\nJ\n");
+  chmodSync(stub, 0o755);
+  const prevBin = process.env.NM_OPNSENSE_FIREWALL_BIN;
+  process.env.NM_OPNSENSE_FIREWALL_BIN = stub;
+  const f = tmpZones();
+  const before = readFileSync(f, "utf8");
+  check(run(["add", "nas", "--vlan", "100", "--zones", f, "--check"]) !== 0, "add --check refuses a tag the stub firewall holds");
+  check(run(["add", "nas", "--vlan", "100", "--zones", f, "--no-activate"]) !== 0 && readFileSync(f, "utf8") === before,
+    "add refuses it for real too, and writes nothing");
+  check(run(["add", "lab5", "--zones", f, "--check"]) === 0, "add --check passes a free allocation");
+  process.env.NM_OPNSENSE_FIREWALL_BIN = join(stubDir, "no-such-bin");
+  check(run(["add", "lab6", "--zones", f, "--check"]) === 0, "a firewall that cannot be asked is said, and add goes on (zones.json only)");
+  if (prevBin === undefined) delete process.env.NM_OPNSENSE_FIREWALL_BIN; else process.env.NM_OPNSENSE_FIREWALL_BIN = prevBin;
 }
 
 console.log("");

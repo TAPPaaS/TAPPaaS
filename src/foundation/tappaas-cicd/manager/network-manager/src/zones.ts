@@ -12,6 +12,7 @@ import { defaultConfigDir, writeJsonAtomic } from "../../../lib/ts/src/config-io
 import { isDocKey, readZonesFile } from "../../../lib/ts/src/zones";
 import { Zone, ZonesDoc } from "./types";
 import { archetypeByName, archetypeNames } from "./archetypes";
+import { MOVE_ADVICE, Occupancy, collisionOf } from "./occupancy";
 
 // Dynamic-allocation VLAN window within a type band (10.<typeId>.<sub>.0/24).
 // Matches zone-controller.sh so zone choices are unchanged.
@@ -181,6 +182,9 @@ export interface AddZoneOpts {
   // neither — validate rejects a half-configured pair.
   tftpServerName?: string;
   bootfileName?: string;
+  // #862: what the firewall already carries. A tag or subnet it holds on a
+  // segment zones.json never knew is refused, never re-allocated.
+  occupancy?: Occupancy;
 }
 
 // Author a new zone entry into the doc (in memory; caller persists). Ports
@@ -266,6 +270,13 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
   }
   const sub = vt % 100;
   const ip = `10.${typeIdNum}.${sub}.0/24`;
+  // #862: zones.json is clear of vt and ip by now; the firewall may still carry
+  // them — a segment built by hand, or left by a deleted zone. Detect only:
+  // the allocation above is not retried, the operator moves that segment.
+  if (opts.occupancy) {
+    const c = collisionOf({ vlantag: vt, ip }, opts.occupancy);
+    if (c) throw new Error(`${c.reason} — ${MOVE_ADVICE}, then add again`);
+  }
   const variant = opts.variant ?? "";
   const arch = opts.archetype ? archetypeByName(opts.archetype) : undefined;
   const descr = variant

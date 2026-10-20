@@ -60,6 +60,8 @@ import {
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { isPubliclyResolvableSync, resolveSplitHorizonTarget } from "./splithorizon";
 import { runZonesMerge } from "./zonesmerge";
+import { readFirewallOccupancy } from "./firewall-occupancy";
+import { MOVE_ADVICE, collisionOf } from "./occupancy";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, DieError, GN, RD, YW, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
@@ -686,8 +688,12 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
       ? ` (from ${opts.fromZone})`
       : "";
   info(`zone-add '${name}'${via}${dtag}`);
+  // #862: what the firewall carries, asked before authoring (a dry run too);
+  // a tag or subnet a hand-built segment holds is refused, never re-allocated.
+  const occupancy = readFirewallOccupancy({ warn }) ?? undefined;
   const res = addZone(client, opts.zonesFile, name, {
     fromZone: opts.fromZone,
+    occupancy,
     type: opts.type,
     typeId: opts.typeId,
     vlan: opts.vlan,
@@ -1050,6 +1056,29 @@ function cmdZonesInit(opts: Opts): void {
     die((e as Error).message);
   }
 
+  // #862: a later profile (`init iot` on a running site) brings template zones
+  // whose tags or subnets the firewall may already carry on segments built by
+  // hand. Asked only when a zones file exists: on a fresh install there is no
+  // firewall yet, and nothing to collide with. Detect only — the operator moves
+  // the site's own segment; the template's numbers stay.
+  if (result.added.length && existsSync(out)) {
+    const occ = readFirewallOccupancy({ warn });
+    if (occ) {
+      const hits: string[] = [];
+      for (const z of result.added) {
+        const c = collisionOf(result.raw[z] as Record<string, unknown>, occ);
+        if (c) hits.push(`${z}: ${c.reason}`);
+      }
+      if (hits.length) {
+        die(
+          `init ${profile}: ${hits.length} zone(s) collide with what the firewall already carries — ` +
+            `${MOVE_ADVICE}, then init again:\n` +
+            hits.map((h) => `    ${h}`).join("\n"),
+        );
+      }
+    }
+  }
+
   writeJsonAtomic(out, result.raw);
   info(
     `  ${GN}✓${CL} init ${profile}: wrote '${out}' ` +
@@ -1272,6 +1301,9 @@ function cmdZonesMerge(opts: Opts): number {
       keepActive,
       diff: opts.diff,
       configDir: cfg,
+      // #862: a template zone whose tag or subnet the firewall already carries
+      // is not added; the operator moves that segment, the template stays.
+      occupancy: readFirewallOccupancy({ warn }) ?? undefined,
     },
     { info, warn },
     (tpl, n, ka) => renameTemplateFile(tpl, n, ka).raw,

@@ -157,7 +157,12 @@ Set it with `network-manager bind` ([network-manager](README.md)):
 
 An archetype is a named bundle of tier-correct defaults: `network-manager add <name>
 --archetype <A>` sets `type`, `tier`, `isolated` and the `access-to` seed, then allocates
-`subId`, `vlantag` and `ip`.
+`subId`, `vlantag` and `ip`. The tag and subnet are then checked against what the
+firewall already carries, not only against `zones.json`: a segment built by hand in
+OPNsense, or left behind by a deleted zone, refuses the add with its label, tag and
+subnet named. Nothing is re-allocated — the site's own segment moves to a free tag,
+TAPPaaS's numbers stay. `init` and `merge` refuse (or skip) a template zone the same way,
+which is how a site whose VLAN 100 is already something else meets the template's `wan`.
 
 | Archetype | type | tier | isolated | `access-to` seed | reference zone |
 |---|---|---|:---:|---|---|

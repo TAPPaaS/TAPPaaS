@@ -105,6 +105,16 @@ VLAN reaches everything). Options:
 - `--no-activate` — author `zones.json` only; skip the all-plane reconcile.
 - `--check` — dry-run: show what would change, mutate nothing.
 
+Before it authors, `add` asks the firewall what it carries (`opnsense-firewall
+segments`). A VLAN tag or subnet that is already there on a segment `zones.json`
+never knew — one built by hand in OPNsense, or left behind by a deleted zone —
+is refused with the holder named, on `--check` too. The allocation is not
+retried: TAPPaaS's own numbers stay the same on every site, and the operator
+moves the site's own segment to a free tag, then adds again. `init` (a later
+profile on a running site) and `merge` (a template zone new in a release)
+make the same check. A firewall that cannot be asked is said, and the check
+covers `zones.json` only, as before.
+
 `delete <name>` disables the zone, reconciles all planes, then removes the
 key. `--check` dry-runs it.
 
