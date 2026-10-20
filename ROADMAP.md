@@ -156,7 +156,7 @@ met gates are recorded in the releases that carried their waves.
 
 | ADR | Covers | Gates |
 |-----|--------|-------|
-| Controller pattern for app modules | #430 → ADR-035 (Proposed v0.7; P1–P3 live on hrossen 2026-10-20; P4 = #847, P5 = #170): controllers and managers live in modules, registered by module-manager; then #731 (P3), #847 (P4), #170 (P5) | G1.7, then G6.1 |
+| Controller pattern for app modules | #430 → ADR-035 (Proposed v0.8; P1–P3 live on hrossen 2026-10-20, P4 built (#847, live test pending hardware); P5 = #170): controllers and managers live in modules, registered by module-manager; then #731 (P3), #847 (P4), #170 (P5) | G1.7, then G6.1 |
 | Composite modules | #761: `cluster`, `kubernetes`, and modules that only provide artefacts (`templates`) — a `kind` for them; with @ErikDaniel007 | G3.1 |
 | Control-plane extension | #675 | — |
 | Secrets management | #58 (in Future Work since 2026-10-02): one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later | G1.6, when #58 returns |
@@ -202,7 +202,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 | #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
 | #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
-| #847 | switch-controller: MikroTik (RouterOS) support, including MLAG | From #40 (2026-10-17): a MikroTik plugin (REST API: VLAN trunks, 802.3ad bonds) and MLAG pairs, so a node's `lacp` uplink can span two switches — 20G when healthy, still connected while one switch reboots. Also `lan-uplink` falls back to manual switch steps instead of refusing. Needs MikroTik MLAG hardware for the live test. **ADR-035** (Proposed): `mikrotik-controller` (Ansible, D10) lives in its own module (P4) and answers `switch/1` |
+| #847 | switch-manager: MikroTik (RouterOS) support, including MLAG | **Built 2026-10-20** (`78069873`, Community `5a63b02`; ADR-035 P4): the Community `mikrotik` module brings `mikrotik-controller` (Ansible `community.routeros`; VLANs, parking, LACP bonds, `mlag-id`), `setup-credentials.sh` adds a switch; switch-manager reads port ids as opaque, records MLAG pairs (`mlag-pair`) and LAGs across them; lan-uplink drives `lacp` over a pair and falls back to the manual switch side instead of refusing; health `mlag-pairs` gate. Offline tests green; **live test needs a MikroTik switch (or a RouterOS CHR on hrossen)** |
 | #849 | node network: USB NICs as bond members, and `set --wan-port` | From #40 (2026-10-17): a USB NIC as an `active-backup` lan leg (udev re-adds it after a late boot or replug, autosuspend off) for nodes without a free PCIe slot; and `--wan-port` to give the wan bridge a port again, so the firewall's WAN role can move between nodes |
 
 ---
