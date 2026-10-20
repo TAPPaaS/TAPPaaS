@@ -21,7 +21,7 @@ Each is its own command on `PATH`.
 | `unbound-manager` | Unbound host overrides (split-horizon / internal DNS), DNSSEC, DNS blocklists. |
 | `caddy-manager` | The Caddy reverse proxy: domains, handlers, access lists. |
 | `nat-manager` | Destination-NAT (port-forward) rules. |
-| `opnsense-firewall` | Individual firewall rules (create/list/delete/apply). |
+| `opnsense-firewall` | Individual firewall rules (create/list/delete/apply); `wan` and `segments` read what the firewall holds. |
 | `rules-manager` | Per-module firewall rules compiled from module JSON + `zones.json`. |
 | `acme-manager` | ACME (Let's Encrypt) wildcard certificates via DNS-01. |
 | `syslog-manager` | OPNsense built-in syslog destinations. |
@@ -134,6 +134,8 @@ opnsense-firewall list [--search <s>]
 opnsense-firewall delete (--description <d> | --uuid <u>) [--no-apply]
 opnsense-firewall apply
 opnsense-firewall test
+opnsense-firewall wan [--json]        # the addresses the WAN interface holds
+opnsense-firewall segments [--json]   # every VLAN device and assigned interface: tag, label, IPv4 network (#862)
 ```
 
 ### `rules-manager` — per-module firewall rules

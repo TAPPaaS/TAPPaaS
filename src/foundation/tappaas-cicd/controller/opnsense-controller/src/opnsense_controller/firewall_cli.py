@@ -20,6 +20,7 @@ import sys
 from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .dual_stack import read_interfaces, wan_address
+from .segments import read_segments
 from .firewall_manager import (
     FirewallManager,
     FirewallRule,
@@ -252,6 +253,27 @@ def cmd_wan(args) -> int:
     return 0
 
 
+def cmd_segments(args) -> int:
+    """What the firewall carries per L2 segment: VLAN devices and assigned interfaces (#862)."""
+    config = get_config(args)
+    try:
+        with FirewallManager(config) as manager:
+            seg = read_segments(manager.client)
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    if args.json:
+        print(json.dumps(seg))
+        return 0
+    for v in seg["vlans"]:
+        print(f"vlan {v['tag']:>4}  {v['device'] or '-':<14} on {v['parent'] or '-':<8} {v['description']}")
+    for i in seg["interfaces"]:
+        tag = f"vlan {i['tag']}" if i["tag"] else "untagged"
+        print(f"if   {i['identifier']:<6} '{i['description']}' {i['device'] or '-'} {tag} "
+              f"{i['ipv4'] or 'no IPv4'}{'' if i['enabled'] else ' (disabled)'}")
+    return 0
+
+
 def cmd_test(args) -> int:
     """Test connection to OPNsense."""
     config = get_config(args)
@@ -476,6 +498,18 @@ def main():
                     "(exit 3: it holds none). --json for {ipv4, prefix, ipv6, private}.",
     )
     wan_parser.set_defaults(func=cmd_wan)
+
+    # segments command (#862)
+    seg_parser = subparsers.add_parser(
+        "segments",
+        parents=[gp],
+        help="Show what the firewall carries per L2 segment (VLAN devices, assigned interfaces)",
+        description="Every VLAN device (tag, device, parent, description) and every assigned "
+                    "interface (label, device, VLAN tag, IPv4 network), as the firewall reports "
+                    "them. What network-manager asks before it authors a zone, so a tag or subnet "
+                    "a hand-built segment holds is refused. --json for {vlans, interfaces}.",
+    )
+    seg_parser.set_defaults(func=cmd_segments)
 
     args = parse_with_globals(parser, {
         "firewall": "firewall.mgmt.internal",
