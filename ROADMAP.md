@@ -134,7 +134,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |---|----------|----------|
 | #801 | Default update schedule: daily on every channel — on `stable`/`staging` 13 of 14 runs change nothing, but urgent fixes and OS patches arrive within a day; what to do with sites on the old weekly default | Operator (proposed 2026-10-08, from #797) |
 | #294 | VMID scheme: zone-aligned ranges for new installs only, or not at all — never renumber in place | Lars and @ErikDaniel007 (Future Work) |
-| #430 | Controller/manager pattern for app modules (Ansible first?) — decide before #170 | Lars and @ErikDaniel007 (G1.7) |
+| #430 | Controller/manager pattern for app modules — **ADR-035 v0.1 drafted 2026-10-20** (pluggable controllers and managers); Ansible first and the foundational/domain line are its O4 | Lars and @ErikDaniel007 (G1.7) |
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
 | #675 | What a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that fails to build. Today a site's own host-level modules are dropped by every scheduled rebuild while the unit reports success (`tappaas-cicd.nix` has no extension point — confirmed) | An ADR first; Ease H · Risk M |
 | #488 | `apply-json-merge`: should a field that `.orig` never recorded be adopted from the release, or kept? #736 made each refused value visible; the rule itself is open | Operator |
@@ -156,7 +156,7 @@ met gates are recorded in the releases that carried their waves.
 
 | ADR | Covers | Gates |
 |-----|--------|-------|
-| Controller pattern for app modules | #430 (Ansible first); later #170 | G1.7, then #170 |
+| Controller pattern for app modules | #430 → ADR-035 (Proposed v0.1): controllers and managers live in modules, registered by module-manager; then #731, #847, #170 | G1.7, then G6.1 |
 | Composite modules | #761: `cluster`, `kubernetes`, and modules that only provide artefacts (`templates`) — a `kind` for them; with @ErikDaniel007 | G3.1 |
 | Control-plane extension | #675 | — |
 | Secrets management | #58 (in Future Work since 2026-10-02): one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later | G1.6, when #58 returns |
@@ -202,7 +202,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 | #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
 | #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
-| #847 | switch-controller: MikroTik (RouterOS) support, including MLAG | From #40 (2026-10-17): a MikroTik plugin (REST API: VLAN trunks, 802.3ad bonds) and MLAG pairs, so a node's `lacp` uplink can span two switches — 20G when healthy, still connected while one switch reboots. Also `lan-uplink` falls back to manual switch steps instead of refusing. Needs MikroTik MLAG hardware for the live test |
+| #847 | switch-controller: MikroTik (RouterOS) support, including MLAG | From #40 (2026-10-17): a MikroTik plugin (REST API: VLAN trunks, 802.3ad bonds) and MLAG pairs, so a node's `lacp` uplink can span two switches — 20G when healthy, still connected while one switch reboots. Also `lan-uplink` falls back to manual switch steps instead of refusing. Needs MikroTik MLAG hardware for the live test. **ADR-035** (Proposed): the MikroTik controller lives in its own module (P4), not in `network/scripts/plugins/` |
 | #849 | node network: USB NICs as bond members, and `set --wan-port` | From #40 (2026-10-17): a USB NIC as an `active-backup` lan leg (udev re-adds it after a late boot or replug, autosuspend off) for nodes without a free PCIe slot; and `--wan-port` to give the wan bridge a port again, so the firewall's WAN role can move between nodes |
 
 ---
@@ -230,7 +230,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 | ✅ #841 | A lazysite module: a Markdown website for the site owner | M | L | **Closed 2026-10-18** (`dbfa2ad9`…`540bb81b`): `src/collaboration/lazysite`, lazysite 0.15.9 in the DMZ — nginx and a FastCGI pool (systemd socket, sandboxed, not root); manager, sign-in, WebDAV and CGI unwired, identity headers stripped. Pages from Forgejo through the new `forgejo:repo` service: repo `websites/<vmname>`, a read-only deploy key, `repoEditors`; the VM pulls every minute (Forgejo cannot reach the DMZ). Live on hrossen at lazysite.hrossen.dk: module test 19/19, commit to site in ≤ 62 s, from the internet Let's Encrypt, 308 to HTTPS, closed paths 404, the visitor's address reaches it |
 | ✅ #129 | Project N.O.M.A.D. in the home stack | M | L | **Closed 2026-10-16** (`34fe2f3b`…`c41b1885`): `src/home/nomad`, inside the site only (no proxy, no identity), pinned images, secrets on the VM; installed and tested on hrossen (11/11). Kiwix has Wikipedia in Danish. **2026-10-17:** in the `dmz` zone (ADR-032 D2): it runs containers it installs itself and keeps no user data, so a compromised NOMAD reaches only the internet |
 | ✅ #842 | A Karakeep module: bookmarks and read-later, AI tagging via the AI stack | M | L | **Closed 2026-10-18** (`267f85ce`…`bdfc6b23`): `src/home/karakeep`, Karakeep 0.34.0 with Chromium and Meilisearch, pinned images; Authentik sign-in only (password sign-up and sign-in refused, sign-ins only from its own address); AI tagging through LiteLLM via `integratesWith` (its key provisioned by the `litellm:models` contract). Live on hrossen at karakeep.hrossen.dk: module test 11/11, end-to-end 7/7, security from outside 11/11 and inside 8/8. VEX: esbuild's Go stdlib and npm's own packages never run; xmldom in pdf2json counted, low risk |
-| #170 | LiteLLM declarative control plane | H | M | Decide with #430 (G1.7) |
+| #170 | LiteLLM declarative control plane | H | M | Decide with #430 (G1.7); an app controller per ADR-035 (P5) |
 
 ## Wave 6 — site fabric and user experience
 
@@ -254,7 +254,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
 | #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open). Moved from G2.1 2026-10-13: it needs #668's attachment record first |
-| #731 | Controller-architecture modules never register themselves, and inventory drift has no routine check | M | L | A controller plugin (`unifi-os`) installs without registering in `switch-controller`/`ap-controller`; inventory drift is never checked. Reported by @ErikDaniel007 |
+| #731 | Controller-architecture modules never register themselves, and inventory drift has no routine check | M | L | A controller plugin (`unifi-os`) installs without registering in `switch-controller`/`ap-controller`; inventory drift is never checked. Reported by @ErikDaniel007. **ADR-035 D5/D6** (Proposed): module-manager registers a module's controller (code and instance); the routine check is #860 |
 | #155 | Modules for physical devices | L | L | Docs and examples only (Lars, 2026-05-15) |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 | #236 | RADIUS MAC Auth Bypass: a device's VLAN from its MAC, on Wi-Fi and wired ports | H | M | Future idea; depends on how switch ports and APs are managed (this group) |
@@ -516,7 +516,7 @@ Waiting on a conversation between Lars and @ErikDaniel007, not on work: the cont
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #430 | Controller/manager pattern for app modules | M | L | Decision (Ansible first) — **parked 2026-09-20** until the operator has agreed it with Erik |
+| #430 | Controller/manager pattern for app modules | M | L | **ADR-035 v0.1 drafted 2026-10-20** (operator): controllers and managers live with their module in tappaas-cicd's layout, declared in its JSON, linked and registered by module-manager in one registry; vendor code a controller, vendor-neutral code a manager. Open for Erik: O4 (Ansible first, the foundational/domain line) |
 | #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
 | #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | From #750, for @ErikDaniel007: list his modules in `src/image-pins.json` and move the stale pins — euro-office v9.3.1 → v9.3.4 first; litellm and openwebui overlap #621 |
 
