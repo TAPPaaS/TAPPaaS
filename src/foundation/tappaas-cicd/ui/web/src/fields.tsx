@@ -100,7 +100,8 @@ export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; on
           {f.required ? <span className="ff-req" title="required"> *</span> : null}
           <span className="spacer" />
           {f.offRelease ? <span className="ff-note" title="the resolver's .orig note">kept off the release on purpose</span> : null}
-          <ClassTag c={f.class} apply={f.apply} />
+          {/* What a change does is a modify's: an add sets the field for the first time. */}
+          {m.mode === "modify" ? <ClassTag c={f.class} apply={f.apply} /> : null}
         </label>
         <Input f={f} text={edits[f.name] ?? ""} set={(t) => edit(f.name, t)} vars={vars} inputs={inputs} />
         {f.description ? <small className="muted">{f.description}</small> : null}
@@ -128,7 +129,7 @@ export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; on
                   <td className="mono">{f.name}</td>
                   <td className="mono wrap">{f.configured ? shown(f.value) : f.default !== null || f.defaultBy.length ? <span className="muted">{placeholderOf(f, vars, inputs)}</span> : "—"}</td>
                   <td className="small muted">{f.why}</td>
-                  <td><ClassTag c={f.class} apply={f.apply} why={f.why} /></td>
+                  <td>{m.mode === "modify" ? <ClassTag c={f.class} apply={f.apply} why={f.why} /> : null}</td>
                 </tr>
               ))}
             </tbody>

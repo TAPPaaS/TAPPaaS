@@ -16,7 +16,7 @@ import { Cached, CachedMap, Entry } from "./cache";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { composeFields } from "../../lib/ts/src/compose-fields";
-import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
+import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, environmentDefaults, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, TopologyDoc } from "./model";
@@ -290,6 +290,11 @@ export class Reads {
             if (v.defaulted === false) record[k] = val;
             else if (val !== null && val !== undefined) defaults[k] = val;
           }
+          // No node configured: cluster:vm creates it on the site's first node.
+          if (record.node === undefined && defaults.node === undefined) {
+            const nodes = ((await this.site.get()).value?.nodes ?? []) as { name?: unknown }[];
+            if (typeof nodes[0]?.name === "string") defaults.node = `${nodes[0].name}, the site's first node`;
+          }
           const own = this.configJson(name) ?? {};
           vars.vmname = typeof own.vmname === "string" ? own.vmname : name;
           vars.zone0 = typeof own.zone0 === "string" ? own.zone0 : null;
@@ -311,7 +316,7 @@ export class Reads {
             defaultEnv: ((site.value?.site as { defaultEnvironment?: string } | undefined)?.defaultEnvironment) ?? null,
             envs: [{ name: "mgmt", zone: "mgmt" }, ...(envs.value ?? []).filter((e) => e.name !== "mgmt").map((e) => ({ name: e.name, zone: e.network?.zone ?? null }))],
             firstNode: typeof nodes[0]?.name === "string" ? nodes[0].name : null,
-            usedVmids: this.configVmids(),
+            usedVmids: this.configVmids(`${name}.json`),
           });
           defaults = { ...defaults, ...computed.defaults };
           defaultBy = computed.by;
@@ -356,15 +361,10 @@ export class Reads {
       }
       case "environment": {
         defs = flattenSchema(this.schemaFile("environment-fields.json"));
-        if (name && mode === "modify") {
-          // The record as environment-manager shows it, every field pre-filled.
-          record = await runJson<Record<string, unknown>>(this.cfg.run, "environment-manager", ["show", name, "--json"]);
-        } else {
-          // environment-manager add's own rules for what is left empty: the
-          // name capitalised, the first organization by name, the zone named
-          // like the environment, and no domains block without --domain.
-          defaults = { displayName: "<Name>", ownerOrg: refs.organizations[0] ?? null, "network.zone": "<name>", "domains.primary": "no public domain (reached only from inside)" };
-        }
+        // The record as environment-manager shows it, every field pre-filled.
+        if (name && mode === "modify") record = await runJson<Record<string, unknown>>(this.cfg.run, "environment-manager", ["show", name, "--json"]);
+        const siteBackup = ((((await this.site.get()).value?.site ?? {}) as Record<string, unknown>).backup ?? {}) as Record<string, unknown>;
+        defaults = environmentDefaults(name && mode === "modify" ? "modify" : "add", { firstOrg: refs.organizations[0] ?? null, siteBackup, record });
         break;
       }
       case "org":
@@ -391,12 +391,12 @@ export class Reads {
     return buildManifest({ kind, name, mode, defs, record, defaults, classes, moduleClasses, services, refs, vars, defaultBy });
   }
 
-  // The VM ids the site's module configs hold (install-module.sh's used_vmids,
-  // without the cluster's own list).
-  private configVmids(): number[] {
+  // The VM ids the site's module configs hold but the instance's own
+  // (install-module.sh's used_vmids, without the cluster's own list).
+  private configVmids(own: string): number[] {
     try {
       return readdirSync(this.cfg.configDir)
-        .filter((f) => f.endsWith(".json"))
+        .filter((f) => f.endsWith(".json") && f !== own)
         .map((f) => {
           try {
             const o = JSON.parse(readFileSync(join(this.cfg.configDir, f), "utf8")) as { vmid?: unknown; config?: { vmid?: unknown } };

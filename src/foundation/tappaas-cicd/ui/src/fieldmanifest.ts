@@ -376,7 +376,8 @@ export function buildManifest(i: ManifestInput): FieldManifest {
     fields.push({
       name: def.name,
       type,
-      typeText: typeTextOf(type, references, en),
+      // A decimal (latitude) takes the integer input but is labelled for what it is.
+      typeText: type === "integer" && /\bnumber\b/.test(JSON.stringify(def.type ?? "")) && !references && !en ? "number" : typeTextOf(type, references, en),
       choices,
       references,
       default: dflt?.text ?? null,
@@ -452,6 +453,23 @@ export function zoneAddDefaults(zones: Array<[string, Obj]>, catalog: Obj): { de
   })));
   per("typeId", Object.fromEntries(Array.from({ length: 10 }, (_, t) => [String(t), bandDefaults(zones, t)])));
   return { defaults, by };
+}
+
+// environment-manager add <env> with fields left empty (main.ts cmdAdd): the
+// name capitalised, the first organization by name, the zone named like the
+// environment, and no domains block at all without --domain. At either verb,
+// what an unset field of the backup cascade gets: the site's retention and
+// schedule, the environment's own data residency.
+export function environmentDefaults(mode: FormMode, o: { firstOrg: string | null; siteBackup: Obj; record: Obj | null }): Record<string, unknown> {
+  const sb = o.siteBackup;
+  const out: Record<string, unknown> = {
+    "domains.primary": "no public domain (reached only from inside)",
+    "backup.retention": `${typeof sb.defaultRetention === "string" ? sb.defaultRetention : "7y"}, the site's`,
+    "backup.schedule": `${typeof sb.defaultSchedule === "string" ? sb.defaultSchedule : "daily"}, the site's`,
+    "backup.residency": `${typeof o.record?.dataResidency === "string" ? o.record.dataResidency : "eu-only"}, the environment's data residency`,
+  };
+  if (mode === "add") Object.assign(out, { displayName: "<Name>", ownerOrg: o.firstOrg, "network.zone": "<name>" });
+  return out;
 }
 
 // module-manager add <module> with fields left empty (install-module.sh): the

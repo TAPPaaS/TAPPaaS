@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { composeFields } from "../../../lib/ts/src/compose-fields";
-import { FieldManifest, RefContext, backupDefs, buildManifest, flattenSchema, moduleAddDefaults, moduleDefs, oneLine, renderDefault, zoneAddDefaults, zoneDefs } from "../../src/fieldmanifest";
+import { FieldManifest, RefContext, backupDefs, buildManifest, environmentDefaults, flattenSchema, moduleAddDefaults, moduleDefs, oneLine, renderDefault, zoneAddDefaults, zoneDefs } from "../../src/fieldmanifest";
 import { classSummary, fieldChanges, fieldGroups, placeholderOf, typedVars } from "../../web/src/fieldlogic";
 import { formParts } from "../../web/src/argv";
 import { nameDescription } from "../../web/src/forms";
@@ -105,6 +105,7 @@ check(role.fields.map((f) => f.arg).join() === "--displayName,--description", "r
 const site = buildManifest({ kind: "site", name: null, mode: "modify", defs: flattenSchema(schema("site-fields.json")), record: { name: "rossen", defaultEnvironment: "rossen", channel: "unstable", location: { country: "DK" }, updateSchedule: { frequency: "weekly", weekday: "Thursday", hour: 2 } }, refs, vars: {} });
 check(field(site, "defaultEnvironment")?.typeText === "an environment" && field(site, "defaultEnvironment")?.editable === false, "site: defaultEnvironment names an environment; site modify has no option for it");
 check(field(site, "updateSchedule.frequency")?.arg === "--updateFrequency" && field(site, "updateSchedule.hour")?.type === "integer" && field(site, "updateSchedule.weekday")?.choices?.length === 7, "…the schedule's three fields, with their flags");
+check(field(site, "location.latitude")?.typeText === "number" && field(site, "updateSchedule.hour")?.typeText === "integer", "…a decimal is labelled number, an integer integer");
 check(field(site, "location.country")?.arg === "--locationCountry" && field(site, "location.country")?.value === "DK", "…a nested field by its path, passed as its flag");
 
 // ── backup: the module's leaf of the cascade ────────────────────────────
@@ -146,10 +147,13 @@ check(org.nameField !== null && role.nameField !== null && group.nameField !== n
 
 // ── the defaults the managers compute, as the form shows them ────────────
 // environment-manager add: the typed name, the first organization, and no domain without --domain
-const eadd2 = buildManifest({ kind: "environment", name: null, mode: "add", defs: edefs, record: null, defaults: { displayName: "<Name>", ownerOrg: "rossen", "network.zone": "<name>", "domains.primary": "no public domain (reached only from inside)" }, refs, vars: { name: null } });
+const eadd2 = buildManifest({ kind: "environment", name: null, mode: "add", defs: edefs, record: null, defaults: environmentDefaults("add", { firstOrg: "rossen", siteBackup: { target: "backup.mgmt.internal", defaultSchedule: "weekly" }, record: null }), refs, vars: { name: null } });
 check(placeholderOf(field(eadd2, "displayName")!) === "default the name, capitalised" && placeholderOf(field(eadd2, "network.zone")!) === "default the name", "environment add, nothing typed: the display name and zone say what they will be, never <Name>");
 check(placeholderOf(field(eadd2, "domains.primary")!) === "default no public domain (reached only from inside)" && placeholderOf(field(eadd2, "ownerOrg")!) === "default rossen", "…domains.primary: no public domain unless one is given (environment-manager writes no domains block); the owner is the first organization");
 check(field(eadd2, "domains.primary")?.required === false, "…so domains.primary is not required");
+check(placeholderOf(field(eadd2, "backup.schedule")!) === "default weekly, the site's" && placeholderOf(field(eadd2, "backup.retention")!) === "default 7y, the site's" && placeholderOf(field(eadd2, "backup.residency")!) === "default eu-only, the environment's data residency", "…the backup cascade's fields: the site's schedule and retention, the environment's residency");
+const emod = buildManifest({ kind: "environment", name: "test", mode: "modify", defs: edefs, record: { name: "test", displayName: "Test", ownerOrg: "rossen", network: { zone: "test" }, dataResidency: "global" }, defaults: environmentDefaults("modify", { firstOrg: "rossen", siteBackup: {}, record: { dataResidency: "global" } }), refs, vars: {} });
+check(placeholderOf(field(emod, "domains.primary")!) === "default no public domain (reached only from inside)" && placeholderOf(field(emod, "backup.residency")!) === "default global, the environment's data residency" && field(emod, "displayName")?.default === null, "environment modify, no domain: the same words; no add-time default for a field the record has");
 
 // network-manager add over hrossen's zones (fixture): band 2 has 200 and 299
 const zfix = (JSON.parse(readFileSync(join(FIX, "zones.json"), "utf8")) as Record<string, unknown>[]).map((z) => [String(z.name), z] as [string, Record<string, unknown>]);
