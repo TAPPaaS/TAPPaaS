@@ -27,15 +27,21 @@ It hid well, which is the part worth remembering:
 So every check an operator would reach for said the node was current. The only
 visible trace was a version difference between nodes, which nothing compares.
 
-Both writers now emit the separator, so install order does not matter. Because
-every site that already installed backup onto a PVE node is in that state,
-`pbs_repair_sources` runs from the **update** path: it inserts the missing
-separator, refreshes the lists, keeps the original as `.pre-749`, and is silent
-when there is nothing to do — so a site heals on its next sweep instead of
-waiting for someone to read a runbook. It is surgical rather than a rewrite from
-known-good stanzas, so whatever else a site keeps in that file survives.
-`lib/test-pbs-sources-repair.sh` covers detection, repair, idempotence, that no
-repository is lost, and three concatenated stanzas.
+Two writers append that stanza: `install.sh` on the PBS node, and the client
+reconcile (`_pbs_client_install_one`) on **every** cluster node. Both now take
+the text from one helper, `pbs_sources_stanza`, which starts with the blank line,
+so install order does not matter. (The first fix covered only `install.sh`; the
+reconcile kept writing the broken file on every other node.)
+
+Because sites that already installed backup are in that state,
+`pbs_repair_sources_all` runs `pbs_repair_sources` from the **update** path on
+every current cluster node, and on the PBS host when it is a machine. It inserts
+the missing separator, refreshes the lists, keeps the original as `.pre-749`,
+and is silent when there is nothing to do, so a site heals on its next sweep. It
+is surgical rather than a rewrite from known-good stanzas, so whatever else a
+site keeps in that file survives. `lib/test-pbs-sources-repair.sh` covers
+detection, repair, idempotence, that no repository is lost, three concatenated
+stanzas, both writers' output, and that the repair visits every node.
 
 ## Backup strategy & disaster recovery
 

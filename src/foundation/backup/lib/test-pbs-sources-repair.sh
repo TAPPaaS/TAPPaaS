@@ -9,7 +9,8 @@
 # against its peers' 9.2.20, with `apt list --upgradable` reporting nothing
 # because there was no candidate to report.
 #
-# These are the two awk programs the repair runs, tested on text. No ssh, no apt.
+# The two awk programs the repair runs, tested on text; then the writers' output
+# and that update.sh repairs every node. No ssh, no apt.
 #
 # Usage: ./test-pbs-sources-repair.sh   (exit 0 = all passed)
 #
@@ -62,6 +63,56 @@ fi
 # on every sweep is a diff nobody wants to read.
 [[ "$(head -c 6 "${W}/fixed")" == "Types:" ]] && ok "no leading blank line is introduced" \
     || bad "the repair prefixed the file with a blank line"
+
+# ── the writers (the half of #749 the first fix missed) ─────────────────
+# The client reconcile appends the same stanza on EVERY node. Run its real
+# remote script against a pve-only file, as a second install would, and check
+# apt would still see two stanzas — dpkg and apt stubbed, nothing installed.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+info() { :; }; warn() { :; }; debug() { :; }; BOLD=""; CL=""; BL=""; GN=""
+# shellcheck source=pbs-placement.sh disable=SC1091
+. "${SCRIPT_DIR}/pbs-placement.sh"
+# shellcheck source=pbs-client.sh disable=SC1091
+. "${SCRIPT_DIR}/pbs-client.sh"
+# shellcheck source=pbs-host.sh disable=SC1091
+. "${SCRIPT_DIR}/pbs-host.sh"
+
+mkdir -p "${W}/bin"
+printf '#!/bin/sh\nexit 1\n' > "${W}/bin/dpkg"; printf '#!/bin/sh\nexit 0\n' > "${W}/bin/apt"
+chmod +x "${W}/bin/dpkg" "${W}/bin/apt"
+printf 'Types: deb\nURIs: http://d/pve\nComponents: pve-no-subscription\n' > "${W}/client"
+# ssh stub: run the script it is handed locally, on the test file.
+ssh() { PATH="${W}/bin:${PATH}" bash -s -- "http://d/pbs" "${W}/client" >/dev/null; }
+_pbs_client_install_one tappaas2 mgmt "http://d/pbs" \
+    && ok "the client writer runs its script" || bad "the client writer failed"
+if ! detect "${W}/client" && grep -q 'http://d/pve' "${W}/client" && grep -q 'http://d/pbs' "${W}/client"; then
+    ok "the client writer keeps the stanzas separated"
+else
+    bad "the client writer merged its stanza into the pve one"
+fi
+_pbs_client_install_one tappaas2 mgmt "http://d/pbs"
+[[ "$(grep -c '^Types:' "${W}/client")" == "2" ]] && ok "the client writer appends once" \
+    || bad "the client writer appended its stanza twice"
+unset -f ssh
+
+printf 'Types: deb\nURIs: http://d/pve\n' > "${W}/inst"; pbs_sources_stanza "http://d/pbs" >> "${W}/inst"
+detect "${W}/inst" && bad "install.sh's stanza is not separated" || ok "install.sh's stanza is separated"
+
+# ── the repair runs on every node, not only the PBS host ────────────────
+get_node_hostname() { echo tappaas1; }
+pbs_cluster_nodes() { printf 'tappaas1\ntappaas2\ntappaas3\n'; }
+CALLS=""; pbs_repair_sources() { CALLS+="$1 "; }
+pbs_repair_sources_all mgmt tappaas3
+[[ "${CALLS}" == "tappaas1 tappaas2 tappaas3 " ]] && ok "the repair visits every node once" \
+    || bad "the repair visited '${CALLS}'"
+CALLS=""; pbs_repair_sources_all mgmt pbs1
+[[ "${CALLS}" == "tappaas1 tappaas2 tappaas3 pbs1 " ]] && ok "a PBS machine is repaired too" \
+    || bad "with a PBS machine the repair visited '${CALLS}'"
+CALLS=""; pbs_repair_sources_all mgmt ""
+[[ "${CALLS}" == "tappaas1 tappaas2 tappaas3 " ]] && ok "a shim still repairs every node" \
+    || bad "a shim repaired '${CALLS}'"
+grep -q '^pbs_repair_sources_all ' "${SCRIPT_DIR}/../update.sh" \
+    && ok "update.sh runs the per-node repair" || bad "update.sh does not call pbs_repair_sources_all"
 
 echo ""
 echo "  ${pass} passed, ${fail} failed"

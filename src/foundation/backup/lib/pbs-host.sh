@@ -126,6 +126,23 @@ REMOTE
     return 0
 }
 
+# pbs_repair_sources_all <zone> [pbs-host] — pbs_repair_sources on EVERY current
+# cluster node, then on the PBS host if it is not one of them (a machine). Every
+# node's file needs it, not only the PBS node's: _pbs_client_install_one appends
+# the same stanza on all of them. Never fails; one unreachable node only warns.
+pbs_repair_sources_all() {
+    local zone="${1:-mgmt}" pbs_host="${2:-}" node seen=" "
+    while IFS= read -r node; do
+        [[ -n "${node}" ]] || continue
+        pbs_repair_sources "${node}" "${zone}"
+        seen+="${node} "
+    done < <(pbs_cluster_nodes "$(get_node_hostname 0)" "${zone}")
+    if [[ -n "${pbs_host}" && "${seen}" != *" ${pbs_host} "* ]]; then
+        pbs_repair_sources "${pbs_host}" "${zone}"
+    fi
+    return 0
+}
+
 pbs_install_on_machine() {
     local host="$1" zone="${2:-mgmt}"
     ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new \

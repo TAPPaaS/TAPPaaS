@@ -11,27 +11,40 @@
 # Requires: common-install-routines.sh (get_node_hostname, info/warn, colour
 # vars) and pbs-placement.sh (pbs_cluster_nodes) sourced first.
 
+# The PBS stanza a PVE node's proxmox.sources gets — the one text both writers
+# (install.sh for the PBS node, _pbs_client_install_one for every node) append.
+# The LEADING BLANK LINE is required, not cosmetic (#749): deb822 separates
+# stanzas with an empty line; without one apt reads this and the pve stanza above
+# it as a SINGLE stanza with duplicate keys, the later URIs win, and the node's
+# PVE repository silently ceases to exist. Args: <image-location>
+pbs_sources_stanza() {
+    printf '\nTypes: deb\nURIs: %s\nSuites: trixie\nComponents: pbs-no-subscription\nSigned-By: /usr/share/keyrings/proxmox-archive-keyring.gpg\n' "$1"
+}
+
 # Ensure proxmox-backup-client on a single node. Idempotent: skips fast when the
 # package is already installed; otherwise registers the PBS apt repo (if missing)
-# and installs. Args: <node> <zone> <image-location>
+# and installs. The stanza is prepended as a variable so the remote side writes
+# exactly pbs_sources_stanza's text. Args: <node> <zone> <image-location>
 _pbs_client_install_one() {
     local node="$1" zone="$2" image_location="$3"
-    ssh -n -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-        "root@${node}.${zone}.internal" "bash -s -- '${image_location}'" <<'REMOTE'
+    { printf 'stanza=%q\n' "$(pbs_sources_stanza "${image_location}")"; _pbs_client_remote; } \
+    | ssh -o ConnectTimeout=15 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@${node}.${zone}.internal" "bash -s -- '${image_location}'"
+}
+
+# The script _pbs_client_install_one runs on the node, after `stanza=...`.
+# $2 (the sources file) exists for the offline test; the node never gets one.
+_pbs_client_remote() {
+    cat <<'REMOTE'
 set -euo pipefail
 image_location="$1"
+f="${2:-/etc/apt/sources.list.d/proxmox.sources}"
 if dpkg -s proxmox-backup-client >/dev/null 2>&1; then
     echo "  proxmox-backup-client already present"
     exit 0
 fi
-if ! grep -q "${image_location}" /etc/apt/sources.list.d/proxmox.sources 2>/dev/null; then
-    cat >> /etc/apt/sources.list.d/proxmox.sources <<EOFPBS
-Types: deb
-URIs: ${image_location}
-Suites: trixie
-Components: pbs-no-subscription
-Signed-By: /usr/share/keyrings/proxmox-archive-keyring.gpg
-EOFPBS
+if ! grep -q "${image_location}" "$f" 2>/dev/null; then
+    printf '%s\n' "${stanza}" >> "$f"
 fi
 apt update
 apt install -y proxmox-backup-client
