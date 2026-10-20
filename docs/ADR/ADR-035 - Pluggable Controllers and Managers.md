@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — draft for review |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-10-20 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | Answers **#430** (the controller/manager pattern beyond the foundation) and the registration half of **#731**. First uses: the UniFi controller in the `unifi-os` module, then **#847** (a MikroTik controller and module). Related: #170 (LiteLLM's control plane), #761 (composite modules: `kind` decides which controller acts), #250 (who owns what when community modules hook into core ones). Builds on ADR-007f, ADR-008, ADR-027, ADR-033, ADR-034. |
-| **Changelog** | v0.3 (2026-10-20) — **one application, several modules; one module, several copies** (operator, D3 and D5). Two different modules that run the same application and bring the same controller are a warning with an undefined result, not a refusal. Two copies of one module (instances) run install and update once each, with the same result: the controller is registered once with both instances, and removing one copy leaves it for the other. v0.2 (2026-10-20) — **after the operator's review.** Naming (D3): a controller is `<application>-controller`, named for the application it controls, not the module; a manager's name is first come, first served. Trust (D7) is a warning, not a refusal: a controller from an unverified repository may plug into a foundation manager, and the site says so. UniFi is not FLOSS and stays outside the TAPPaaS repository: its controller lives in the module that runs it, in the Community repository (O1 answered). O3 answered: module-manager builds a module's TypeScript or Python components on tappaas-cicd with tappaas-cicd's own builders and libraries (D2). O4 written out for the conversation with Erik. "Component" now means a controller or a manager, never a module. v0.1 (2026-10-20) — first draft. |
+| **Changelog** | v0.4 (2026-10-20) — **operator's second review.** Two different modules bringing the same controller are **refused**, like managers (replaces v0.3's warning). Contributed components use the same shared libraries as the standard ones (D2). Ansible is an option, not the default; D10 sketches `mikrotik-controller` (the operator's name, over `mikrotik-controller`) built with it. A controller's or manager's own declarations live in `<name>.json` beside the module JSON, never in it (D11). v0.3 (2026-10-20) — **one application, several modules; one module, several copies** (operator, D3 and D5). Two different modules that run the same application and bring the same controller are a warning with an undefined result, not a refusal. Two copies of one module (instances) run install and update once each, with the same result: the controller is registered once with both instances, and removing one copy leaves it for the other. v0.2 (2026-10-20) — **after the operator's review.** Naming (D3): a controller is `<application>-controller`, named for the application it controls, not the module; a manager's name is first come, first served. Trust (D7) is a warning, not a refusal: a controller from an unverified repository may plug into a foundation manager, and the site says so. UniFi is not FLOSS and stays outside the TAPPaaS repository: its controller lives in the module that runs it, in the Community repository (O1 answered). O3 answered: module-manager builds a module's TypeScript or Python components on tappaas-cicd with tappaas-cicd's own builders and libraries (D2). O4 written out for the conversation with Erik. "Component" now means a controller or a manager, never a module. v0.1 (2026-10-20) — first draft. |
 
 ## Context
 
@@ -79,7 +79,7 @@ the same for code that serves **other** modules or a whole domain.
 - **Vendor-neutral code is a manager; vendor code is a controller.** The switch and AP domains
   follow this from now on: today's `switch-controller` and `ap-controller` are the switch and AP
   *managers* (`switch-manager`, `ap-manager`; the old names stay as aliases, `ap-manager` already
-  exists), and each vendor plugin becomes a controller (`unifi-controller`, `routeros-controller`,
+  exists), and each vendor plugin becomes a controller (`unifi-controller`, `mikrotik-controller`,
   and the built-in `manual` fallback).
 
 ### D2. Where they live: in the module, in tappaas-cicd's layout
@@ -118,6 +118,19 @@ exported by tappaas-cicd, and a component's `default.nix` calls it:
 
 A bash component needs no build.
 
+**Shared libraries.** A contributed component uses the same shared libraries as the standard
+ones, and is expected to:
+
+- bash: `common-install-routines.sh` (logging, config reads, the module's config and zone),
+  `cli-gate.sh` (one CLI spec checks every verb's flags), and the other `lib/*.sh`, which are
+  already linked into `/home/tappaas/bin` on every mothership;
+- TypeScript: `lib/ts` (`--help` and `--help --json` from one HelpSpec, logging, config I/O, zones,
+  module discovery), through the exported builder above;
+- Python: the libraries the Python controllers use, as a package the exported builder adds.
+
+What the shared libraries offer becomes part of the platform's contract: a change that breaks a
+caller is a breaking change of tappaas-cicd, released and noted as one, not an internal refactor.
+
 The implementation language is the component's choice — bash, Python, TypeScript, or an
 executable that runs an Ansible playbook (#430 asked whether Ansible comes first: this ADR does not
 mandate a tool; it fixes the interface).
@@ -135,16 +148,15 @@ mandate a tool; it fixes the interface).
 
 - A **controller** is named **`<application>-controller`**, for the application it controls, not for
   the module that runs it: `opnsense-controller`, `authentik-controller`, `unifi-controller`,
-  `routeros-controller` (MikroTik's switch OS). A module's name can be more general than its
+  `mikrotik-controller`. The name is the application or product as people know it — MikroTik's
+  switches run RouterOS, but `mikrotik-controller` is the name. A module's name can be more general than its
   application, and one module can run several applications, each with its own controller.
 - A **manager**'s name is first come, first served: the first module to register a name keeps it.
-- A **manager** name already registered by another module, or by a standard component, is refused
-  with the owner named (D5).
-- **Two different modules that run the same application** (two UniFi modules, each bringing
-  `unifi-controller`) are not refused: it is **a warning, and the result is undefined**. Both are
-  recorded; which one's code the name runs is not promised, and the warning names both modules and
-  stays a finding of `health-manager validate` until one of them is removed. Removing one leaves
-  the other's controller in place.
+- A name already registered by another module, or by a standard component, is **refused** with the
+  owner named (D5) — for a manager and for a controller alike. **Two different modules that run the
+  same application** (two UniFi modules, each bringing `unifi-controller`): the second module's
+  install stops at that step and rolls back, naming the module that owns the controller. To swap
+  one for the other, the first is removed first.
 - **Two copies of the same module** (instances, such as `unifi-os` and `unifi-os-lab`) bring the same
   controller from the same module source. That is not a clash: see D5.
 
@@ -258,6 +270,54 @@ not re-implement the application's UI or API, and domain configuration (LiteLLM'
 budgets) is automated only where it is a recurring operator burden. Foundational concerns
 (identity, keys, network) stay with the foundation modules that own them.
 
+### D10. Ansible is an option, not the default — `mikrotik-controller` as the example
+
+A controller may be written in bash, Python or TypeScript, or run Ansible playbooks behind an
+executable. None is the default; the manager's contract (D4) is what every controller answers.
+Ansible fits where maintained collections already do the work: MikroTik's RouterOS has
+`community.routeros`, which the first new controller (#847) can build on.
+
+`mikrotik-controller`, in the MikroTik module:
+
+```
+controller/mikrotik-controller/
+  mikrotik-controller        the entry point: answers switch/1 (supports, arch, interrogate, apply)
+  playbooks/interrogate.yml  community.routeros.api_info: bridge ports, bridge VLANs, bonding
+  playbooks/apply.yml        community.routeros.api_modify: VLAN entries, PVIDs, bonds
+  default.nix                ansible (with its collections) and python3Packages.librouteros, pinned
+  contract.json              { "contract": "switch/1", "vendors": ["mikrotik"], "arch": "device" }
+  test.sh                    offline: playbook syntax checks and the JSON mapping over fixtures
+```
+
+- **The runtime comes with the controller.** `default.nix` brings `ansible` and `librouteros` from the
+  release's nixpkgs (both present: ansible 2.21, librouteros 3.4). Nothing is installed on the
+  mothership's system, and the version moves with the release like every other package.
+- **The entry point is the contract.** It runs a playbook with the switch's address and credentials
+  file, reads the playbook's JSON result, and prints it in the shape switch-manager expects. The
+  manager never sees Ansible.
+- **Interrogate and apply stay apart.** `interrogate` only reads (`api_info`). `apply` changes only
+  the ports TAPPaaS has annotated, as the UniFi controller does: `api_modify` with entries for those
+  ports and `handle_absent_entries: ignore`, never `remove`, so a port nobody declared is not
+  touched. A preview is `apply` in Ansible's check mode with `--diff`.
+- **Tests.** Offline: `ansible-playbook --syntax-check`, `ansible-lint`, and the mapping between
+  RouterOS's answers and switch/1 over recorded fixtures. Live: a RouterOS CHR (MikroTik's virtual
+  RouterOS image) as a VM on the test site stands in for a switch before real hardware.
+
+### D11. A controller's or manager's own declarations live in `<name>.json`
+
+What a controller reconciles inside its application (LiteLLM's models, teams, budgets, #170) is not
+put in the module JSON: its fields are defined for every module and do not grow per application.
+A controller or manager that takes declarations has its own file, named after it:
+
+- `<module>/<name>.json` — the release's declaration, beside `<module>.json` (`litellm-controller.json`);
+- `controller/<name>/schema.json` — the controller's own schema for that file, checked by
+  `module-manager validate --blueprint`;
+- the site's copy is deployed with the module and kept in step with the release by the same
+  three-way merge as the module's config (ADR-020), so an operator's change survives an update.
+
+How much the declaration rules — whether a change made in the application's own UI is reverted at
+the next update, or the declaration is only seeded once — is for the conversation with Erik (O4).
+
 ## Use cases
 
 1. **UniFi (the first).** UniFi is not FLOSS, so neither it nor its controller lives in the TAPPaaS
@@ -265,7 +325,7 @@ budgets) is automated only where it is a recurring operator burden. Foundational
    controller, `unifi-os` in the Community repository, as `controller/unifi-controller/`. Installing that module links
    `unifi-controller`, registers it with `switch-manager` and `ap-manager` (D5) and registers the
    controller instance (D6). Its delete takes all of that back.
-2. **MikroTik (#847).** A new module for MikroTik switches contributes `controller/routeros-controller/`
+2. **MikroTik (#847).** A new module for MikroTik switches contributes `controller/mikrotik-controller/`
    (contract `switch/1`, `arch: device`), built and tested in the module. No foundation file
    changes for it.
 3. **LiteLLM (#170).** LiteLLM contributes a controller that reconciles its models and keys from
@@ -281,8 +341,8 @@ budgets) is automated only where it is a recurring operator burden. Foundational
   module's file from a stray one.
 - **Every controller a flake package in tappaas-cicd.** Keeps one build, but a community module
   could never contribute one.
-- **Ansible as the controller technology (#430).** Allowed as an implementation behind the
-  interface, not required: the interface, not the tool, is what managers depend on.
+- **Ansible as the default controller technology (#430).** An option behind the interface (D10),
+  not the default: the interface, not the tool, is what managers depend on.
 
 ## Consequences
 
@@ -304,7 +364,7 @@ budgets) is automated only where it is a recurring operator burden. Foundational
 | P1 | The registry (`config/control-plane.json`) with the built-in components as entries; refresh, self-check and the console read it; module JSON `controllers`/`managers` fields and the blueprint check. No component moves. | The sweep, the self-check and the console work from the registry on hrossen, nothing else changed |
 | P2 | The renames (D1, D3; aliases kept); the switch contract `switch/1` written down; the managers find controllers in the registry; `manual` as the built-in controller; the TypeScript builder exported for components outside tappaas-cicd (D2) | `unifi.sh` still works, now found through the registry |
 | P3 | UniFi: the controller moves into `unifi-os` in the Community repository; install/update/delete link and register it (D5, with D7's warning) and register the instance (D6, #731) | Installing the module on hrossen makes the switch and APs manageable with no operator step; deleting it leaves nothing |
-| P4 | MikroTik (#847): module and controller | A MikroTik switch reconciled on a test site |
+| P4 | MikroTik (#847): module and `mikrotik-controller`, with Ansible (D10) | A MikroTik switch reconciled on a test site |
 | P5 | An app controller (#170, LiteLLM), after the conversation #430 asks for | — |
 
 ## Testing
@@ -335,8 +395,8 @@ budgets) is automated only where it is a recurring operator burden. Foundational
      TypeScript and would not change; a controller must still answer the manager's contract
      (JSON in, JSON out, `interrogate` and `apply` separately), which a playbook needs a wrapper
      for; and offline tests (the switch controller has 149) are harder to write against playbooks.
-     The question for Erik: is "Ansible first" a rule (a review asks why not Ansible), or one
-     allowed implementation among others (this draft)?
+     *Decided (operator, v0.4):* an option, not the default (D10); MikroTik is the first controller
+     to try it.
   2. **Where foundational configuration ends and domain configuration starts.** D9 says a
      controller always automates what wires a module into TAPPaaS, and automates the
      application's own configuration only where it is a recurring burden. LiteLLM shows the line:
@@ -348,9 +408,8 @@ budgets) is automated only where it is a recurring operator burden. Foundational
      - **Authority:** once a controller reconciles domain state, a change made in the
        application's own UI is reverted on the next update. The choice is per item: the
        declaration wins, or the declaration is only seeded once and the UI owns it afterwards.
-     - **Where the declaration lives:** in the module's JSON as fields (validated, modifiable
-       with `module-manager modify --set`), or in a file of the application's own format next to
-       it.
+     - **Where the declaration lives:** *decided (operator, v0.4)*: in `<name>.json`, not the module
+       JSON (D11).
      - **The test for "a recurring burden":** done at every install, or redone after every
        restore or rebuild — or a lower bar.
 
