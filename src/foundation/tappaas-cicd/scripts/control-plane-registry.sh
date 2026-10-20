@@ -70,6 +70,7 @@ flock -w 30 9 || { error "control-plane-registry: ${REGISTRY} is locked by anoth
 [[ -s "${REGISTRY}" ]] && old="$(jq -c . "${REGISTRY}" 2>/dev/null || echo '{}')"
 tmp="$(mktemp "${REGISTRY}.XXXXXX")"
 if build "${old}" > "${tmp}" && jq -e '.components | length > 0' "${tmp}" >/dev/null; then
+    chmod 644 "${tmp}"
     mv -f "${tmp}" "${REGISTRY}"
     info "control plane: $(jq '[.components[] | select(.module == "tappaas-cicd")] | length' "${REGISTRY}") standard component(s), $(jq '[.components[] | select(.module != "tappaas-cicd")] | length' "${REGISTRY}") from modules — ${REGISTRY}"
 else
