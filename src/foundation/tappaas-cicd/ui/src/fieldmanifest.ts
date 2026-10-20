@@ -253,8 +253,12 @@ export function backupDefs(schemaDoc: unknown): FieldDef[] {
 
 // ── how each kind's verb takes a field ─────────────────────────────────
 
-// The verb's own flags, by field. A field with no flag cannot change through
-// that verb: the form shows it read-only.
+// The verb's own flags, by field: the one table from a schema field to the
+// manager's option (displayName → --displayName, primaryEmail → --email,
+// memberOf → --groups, …). A field with no flag cannot change through that
+// verb: the form shows it read-only. test/unit/flags.test.ts holds the
+// identity and backup rows to identity-manager's and backup-manager's own
+// option lists.
 export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<string, string>>>>> = {
   environment: {
     add: { displayName: "--display", ownerOrg: "--owner", "network.zone": "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode" },
