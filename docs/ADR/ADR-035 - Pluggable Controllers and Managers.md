@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — draft for review |
-| **Version** | 0.4 |
+| **Version** | 0.5 |
 | **Date** | 2026-10-20 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | Answers **#430** (the controller/manager pattern beyond the foundation) and the registration half of **#731**. First uses: the UniFi controller in the `unifi-os` module, then **#847** (a MikroTik controller and module). Related: #170 (LiteLLM's control plane), #761 (composite modules: `kind` decides which controller acts), #250 (who owns what when community modules hook into core ones). Builds on ADR-007f, ADR-008, ADR-027, ADR-033, ADR-034. |
-| **Changelog** | v0.4 (2026-10-20) — **operator's second review.** Two different modules bringing the same controller are **refused**, like managers (replaces v0.3's warning). Contributed components use the same shared libraries as the standard ones (D2). Ansible is an option, not the default; D10 sketches `mikrotik-controller` (the operator's name, over `mikrotik-controller`) built with it. A controller's or manager's own declarations live in `<name>.json` beside the module JSON, never in it (D11). v0.3 (2026-10-20) — **one application, several modules; one module, several copies** (operator, D3 and D5). Two different modules that run the same application and bring the same controller are a warning with an undefined result, not a refusal. Two copies of one module (instances) run install and update once each, with the same result: the controller is registered once with both instances, and removing one copy leaves it for the other. v0.2 (2026-10-20) — **after the operator's review.** Naming (D3): a controller is `<application>-controller`, named for the application it controls, not the module; a manager's name is first come, first served. Trust (D7) is a warning, not a refusal: a controller from an unverified repository may plug into a foundation manager, and the site says so. UniFi is not FLOSS and stays outside the TAPPaaS repository: its controller lives in the module that runs it, in the Community repository (O1 answered). O3 answered: module-manager builds a module's TypeScript or Python components on tappaas-cicd with tappaas-cicd's own builders and libraries (D2). O4 written out for the conversation with Erik. "Component" now means a controller or a manager, never a module. v0.1 (2026-10-20) — first draft. |
+| **Changelog** | v0.5 (2026-10-20) — **the `switch/1` contract written down** (D4): the verbs, options, output shapes and exit codes a switch controller answers, `ap/1` beside it, what `<contract>/<major>` means, and UniFi and MikroTik side by side. v0.4 (2026-10-20) — **operator's second review.** Two different modules bringing the same controller are **refused**, like managers (replaces v0.3's warning). Contributed components use the same shared libraries as the standard ones (D2). Ansible is an option, not the default; D10 sketches `mikrotik-controller` (the operator's name, over `mikrotik-controller`) built with it. A controller's or manager's own declarations live in `<name>.json` beside the module JSON, never in it (D11). v0.3 (2026-10-20) — **one application, several modules; one module, several copies** (operator, D3 and D5). Two different modules that run the same application and bring the same controller are a warning with an undefined result, not a refusal. Two copies of one module (instances) run install and update once each, with the same result: the controller is registered once with both instances, and removing one copy leaves it for the other. v0.2 (2026-10-20) — **after the operator's review.** Naming (D3): a controller is `<application>-controller`, named for the application it controls, not the module; a manager's name is first come, first served. Trust (D7) is a warning, not a refusal: a controller from an unverified repository may plug into a foundation manager, and the site says so. UniFi is not FLOSS and stays outside the TAPPaaS repository: its controller lives in the module that runs it, in the Community repository (O1 answered). O3 answered: module-manager builds a module's TypeScript or Python components on tappaas-cicd with tappaas-cicd's own builders and libraries (D2). O4 written out for the conversation with Erik. "Component" now means a controller or a manager, never a module. v0.1 (2026-10-20) — first draft. |
 
 ## Context
 
@@ -169,21 +169,69 @@ The two fields are module-level fields (`schemas/module-fields.json`, owned by n
 by `module-manager validate --blueprint` (ADR-027): every declared path exists and has the layout
 of D2, every `plugsInto` names a manager the site has.
 
-### D4. A contract per manager, versioned
+### D4. A contract per manager, versioned — `switch/1`
 
-Each manager that takes controllers publishes its **controller contract**: the functions or verbs
-a controller must answer, and their input and output — for the switch manager the ADR-008
-provider verbs as the vendor plugins implement them today (`supports`, `arch`, `interrogate`,
-`controller_interrogate`, `apply`, and for APs `ap_interrogate`, `ap_apply`). The contract is
-written down in the manager's `DESIGN.md` and carries a version (`switch/1`). A controller's
-`contract.json` names the contract and version it implements and the vendors it supports:
+Each manager that takes controllers publishes its **controller contract**: the verbs a controller
+answers, their options, the JSON they return and their exit codes. It is written down in the
+manager's `DESIGN.md` and named `<contract>/<major>`.
+
+- **`<contract>`** names the agreement, normally after the manager's domain: `switch` is what
+  `switch-manager` expects of every switch controller, `ap` what `ap-manager` expects.
+- **`<major>`** is the contract's major version. It goes up only when an existing controller would
+  stop working: a verb renamed or removed, an output field that changes meaning, a new required
+  option. A new optional option, a new capability or a new optional output field keep it.
+- A controller's `contract.json` names the contracts and versions it answers; a manager names the
+  versions it drives, and **refuses a controller whose major version it does not know**, saying
+  so — it never calls it and guesses. (The form follows API versioning such as Kubernetes'
+  `apps/v1`; it refers to no other document.)
 
 ```json
-{ "contract": "switch/1", "vendors": ["unifi"], "arch": "controller", "module": "unifi-os" }
+{ "contracts": ["switch/1", "ap/1"], "vendors": ["unifi"], "arch": "controller",
+  "capabilities": ["vlans", "lag", "park", "ap"], "module": "unifi-os" }
 ```
 
-A manager refuses a controller whose contract major version it does not know, and says so; it
-never guesses.
+#### The `switch/1` contract
+
+A controller is an executable answering these verbs. Differences between vendors are facts in
+`describe`, never different verbs.
+
+| Verb | Required | Optional | What it does, and what it returns |
+|---|---|---|---|
+| `describe` | — | — | The controller's facts, as in its `contract.json`, and where its credentials are. |
+| `check-access` | `--ip` | `--credentials`, `--session` | Can it log in: `{ok, apiVersion, user}`. For setup and health. |
+| `interrogate` | `--ip` — the controller's address for `arch: controller`, the switch's for `arch: device` | `--switch NAME`, `--credentials`, `--session` | Reads, never changes. `{switches: {<name>: {vendor, model, managementIp, firmware, ports: {<id>: {mode, nativeVlan, taggedVlans, link, disabled, lagMembers}}}}, aps: {…}}`. One verb and one shape for both architectures: a controller returns every switch and AP it has adopted, a device only itself. |
+| `apply` | `--switch NAME`, `--desired FILE` | `--check`, `--credentials`, `--session`, `--timeout` | Brings the ports the desired file names to it, aggregates included, and waits until they have settled; a port the file does not name is left as it is. `{switch, changed: [{port, from, to}], unchanged, lags}`. `--check` changes nothing and returns what it would change. |
+| `mlag-status` | `--switch NAME`, `--ip` | `--credentials` | With the `mlag` capability only: `{peer, state, ids}`. |
+
+The `ap/1` contract, answered by a controller with the `ap` capability, has the same shape:
+`describe`, `check-access`, `ap-interrogate` (`{aps: {<name>: {vendor, model, ssids: {<ssid>: {vlan,
+enabled, security}}}}}`) and `ap-apply --ap NAME --desired FILE [--check]`, which creates and
+updates SSIDs and their VLAN networks and never deletes one.
+
+**Common to every verb.** JSON on stdout and nothing else; the reason on stderr when something fails
+or is refused. Exit 0 done, 1 the device refused or could not be reached, 2 bad usage, 3 not this
+controller's (a vendor or a capability it does not have). `--credentials FILE` per controller,
+defaulting to the file it documents; `--session DIR`, created by the manager for one run, so a
+controller logs in once per run, not per call; `--config-dir`, `--debug`, `--help` and
+`--help --json`. Port ids are opaque strings (`"1"` on UniFi, `"ether1"` on MikroTik): the manager
+stores and compares them and never reads meaning into them.
+
+**What stays with the manager.** Which ports TAPPaaS manages, the desired state from `zones.json`,
+parking (an `apply` with a desired file holding only that port), confirming a manual switch, the
+inventory and the controller instances (D6). A controller only reads and writes devices.
+
+**UniFi and MikroTik side by side:**
+
+| | `unifi-controller` | `mikrotik-controller` |
+|---|---|---|
+| `arch` | `controller` — one UniFi OS for every switch and AP | `device` — each switch at its own address |
+| `capabilities` | `vlans`, `lag`, `park`, `ap` | `vlans`, `lag`, `park`, `mlag` |
+| `interrogate --ip` | the controller's address; every adopted device | the switch's address; that switch |
+| Login | a session cookie, kept in `--session` | the RouterOS API's own, per call; `--session` unused |
+| Credentials | `~/.unifi-os-credentials.txt` | one file per switch, `~/.mikrotik-credentials/<switch>.txt` |
+| Aggregates | the lead port's override lists its members | a bonding interface on the bridge |
+| `apply --check` | computes the difference itself | Ansible's check mode with `--diff` (D10) |
+| Own option | — | `--bridge NAME` (default `bridge`) |
 
 ### D5. Registration is done by module-manager, recorded in one registry
 
@@ -285,7 +333,7 @@ controller/mikrotik-controller/
   playbooks/interrogate.yml  community.routeros.api_info: bridge ports, bridge VLANs, bonding
   playbooks/apply.yml        community.routeros.api_modify: VLAN entries, PVIDs, bonds
   default.nix                ansible (with its collections) and python3Packages.librouteros, pinned
-  contract.json              { "contract": "switch/1", "vendors": ["mikrotik"], "arch": "device" }
+  contract.json              { "contracts": ["switch/1"], "vendors": ["mikrotik"], "arch": "device", "capabilities": ["vlans", "lag", "park", "mlag"] }
   test.sh                    offline: playbook syntax checks and the JSON mapping over fixtures
 ```
 
