@@ -701,6 +701,32 @@
           "justification": "risk in this deployment, from the triage"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-111064",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "An aiohttp server applies no keepalive timeout before a request's first bytes, so an idle connection holds server capacity. aiohttp 3.14.3 in authentik's Python environment (/ak-root/.venv) is a client library only: nothing in the image serves HTTP through aiohttp. Requests reach authentik's Go server (9000/9443) and its gunicorn ASGI worker; authentik's own code (/authentik) imports aiohttp nowhere. It is pulled in by twilio, geoip2, kubernetes, the Azure and Google SDKs, sentry-sdk and prometheus-client, whose client calls go only to the upstream APIs they are configured for, and TAPPaaS configures none of those integrations. Fixed in aiohttp 3.14.4; verified on hrossen 2026-10-20.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.3"
+        }
+      ]
+    },
+    {
+      "id": "GHSA-2g87-pp6c-29x5",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Excessive memory or CPU in an aiohttp server on attacker-controlled requests (form parsing, the request parser). aiohttp 3.14.3 in authentik's Python environment (/ak-root/.venv) is a client library only: nothing in the image serves HTTP through aiohttp. Requests reach authentik's Go server (9000/9443) and its gunicorn ASGI worker; authentik's own code (/authentik) imports aiohttp nowhere. It is pulled in by twilio, geoip2, kubernetes, the Azure and Google SDKs, sentry-sdk and prometheus-client, whose client calls go only to the upstream APIs they are configured for, and TAPPaaS configures none of those integrations. Fixed in aiohttp 3.14.4; verified on hrossen 2026-10-20.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:pypi/aiohttp@3.14.3"
+        }
+      ]
     }
   ]
 }
