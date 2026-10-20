@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — draft for review |
-| **Version** | 0.5 |
+| **Version** | 0.6 |
 | **Date** | 2026-10-20 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | Answers **#430** (the controller/manager pattern beyond the foundation) and the registration half of **#731**. First uses: the UniFi controller in the `unifi-os` module, then **#847** (a MikroTik controller and module). Related: #170 (LiteLLM's control plane), #761 (composite modules: `kind` decides which controller acts), #250 (who owns what when community modules hook into core ones). Builds on ADR-007f, ADR-008, ADR-027, ADR-033, ADR-034. |
-| **Changelog** | v0.5 (2026-10-20) — **the `switch/1` contract written down** (D4): the verbs, options, output shapes and exit codes a switch controller answers, `ap/1` beside it, what `<contract>/<major>` means, and UniFi and MikroTik side by side. v0.4 (2026-10-20) — **operator's second review.** Two different modules bringing the same controller are **refused**, like managers (replaces v0.3's warning). Contributed components use the same shared libraries as the standard ones (D2). Ansible is an option, not the default; D10 sketches `mikrotik-controller` (the operator's name, over `mikrotik-controller`) built with it. A controller's or manager's own declarations live in `<name>.json` beside the module JSON, never in it (D11). v0.3 (2026-10-20) — **one application, several modules; one module, several copies** (operator, D3 and D5). Two different modules that run the same application and bring the same controller are a warning with an undefined result, not a refusal. Two copies of one module (instances) run install and update once each, with the same result: the controller is registered once with both instances, and removing one copy leaves it for the other. v0.2 (2026-10-20) — **after the operator's review.** Naming (D3): a controller is `<application>-controller`, named for the application it controls, not the module; a manager's name is first come, first served. Trust (D7) is a warning, not a refusal: a controller from an unverified repository may plug into a foundation manager, and the site says so. UniFi is not FLOSS and stays outside the TAPPaaS repository: its controller lives in the module that runs it, in the Community repository (O1 answered). O3 answered: module-manager builds a module's TypeScript or Python components on tappaas-cicd with tappaas-cicd's own builders and libraries (D2). O4 written out for the conversation with Erik. "Component" now means a controller or a manager, never a module. v0.1 (2026-10-20) — first draft. |
+| **Changelog** | v0.6 (2026-10-20) — **P2 built.** The managers run controllers as executables and never source them (D4: `lib/controller-lib.sh` finds them in the registry by `plugsInto`); a bash controller may keep its logic as `plugin_*` functions behind `lib/controller-shim.sh`, as `unifi-controller` does; the manual controller is built into tappaas-cicd. `unifi-controller` sits in `tappaas-cicd/controller/` until P3 moves it to `unifi-os`. The TypeScript builder is exported as the flake's `lib.tsComponent`, called by `build_and_link_ts_component` from a component's install (D2, replacing the `default.nix` sketch); the self-check accepts the store links of a registered module's components. v0.5 (2026-10-20) — **the `switch/1` contract written down** (D4): the verbs, options, output shapes and exit codes a switch controller answers, `ap/1` beside it, what `<contract>/<major>` means, and UniFi and MikroTik side by side. v0.4 (2026-10-20) — **operator's second review.** Two different modules bringing the same controller are **refused**, like managers (replaces v0.3's warning). Contributed components use the same shared libraries as the standard ones (D2). Ansible is an option, not the default; D10 sketches `mikrotik-controller` (the operator's name, over `routeros-controller`) built with it. A controller's or manager's own declarations live in `<name>.json` beside the module JSON, never in it (D11). v0.3 (2026-10-20) — **one application, several modules; one module, several copies** (operator, D3 and D5). Two different modules that run the same application and bring the same controller are a warning with an undefined result, not a refusal. Two copies of one module (instances) run install and update once each, with the same result: the controller is registered once with both instances, and removing one copy leaves it for the other. v0.2 (2026-10-20) — **after the operator's review.** Naming (D3): a controller is `<application>-controller`, named for the application it controls, not the module; a manager's name is first come, first served. Trust (D7) is a warning, not a refusal: a controller from an unverified repository may plug into a foundation manager, and the site says so. UniFi is not FLOSS and stays outside the TAPPaaS repository: its controller lives in the module that runs it, in the Community repository (O1 answered). O3 answered: module-manager builds a module's TypeScript or Python components on tappaas-cicd with tappaas-cicd's own builders and libraries (D2). O4 written out for the conversation with Erik. "Component" now means a controller or a manager, never a module. v0.1 (2026-10-20) — first draft. |
 
 ## Context
 
@@ -110,11 +110,19 @@ ones: the TypeScript builder (`lib/nix/ts-manager.nix`) and the shared TypeScrip
 Python's packaging. Today the TypeScript builder can only build inside the tappaas-cicd tree: it
 finds its sources by a path relative to tappaas-cicd (`cicd = ../..`), so a component in another
 repository's module cannot use it. It becomes a function of the component's own source directory,
-exported by tappaas-cicd, and a component's `default.nix` calls it:
+exported by tappaas-cicd as its flake's `lib.tsComponent`, and a component's `install.sh` calls
+it through the shared install library:
 
-```nix
-{ tappaas }: tappaas.tsComponent { name = "foo-manager"; src = ./.; }
+```bash
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/component-install-lib.sh
+build_and_link_ts_component "${here}" foo-manager manager   # or: … foo-controller controller
 ```
+
+The builder stages the component beside `lib/ts` at `<kind>/<name>`, the depth a standard
+component sits at, so it is written exactly like one (its `tsconfig.json` extends
+`../../lib/ts/tsconfig.base.json`, its code imports `../../../lib/ts/src/…`), and builds it with
+the nixpkgs tappaas-cicd's `flake.lock` pins. The component needs no flake of its own.
 
 A bash component needs no build.
 
@@ -232,6 +240,16 @@ inventory and the controller instances (D6). A controller only reads and writes 
 | Aggregates | the lead port's override lists its members | a bonding interface on the bridge |
 | `apply --check` | computes the difference itself | Ansible's check mode with `--diff` (D10) |
 | Own option | — | `--bridge NAME` (default `bridge`) |
+
+**How a manager runs a controller.** A manager never sources a controller's code: it runs the
+executable, and only through `lib/controller-lib.sh` — `ctl_list <manager>` (the registry's
+controllers whose `plugsInto` names it), `ctl_for_vendor <manager> <vendor>` (the one whose
+`describe` names the vendor, or that answers `supports <vendor>`; else `manual`), `ctl_run <id>
+<verb> …`. The manual controller is built in (`lib/controller-manual.sh`), not a registry entry.
+A bash controller may keep its vendor logic as a file of `plugin_*` functions and make its entry
+point `lib/controller-shim.sh --plugin <file> --contract contract.json "$@"`, which answers the
+verbs from those functions; `unifi-controller` is built that way. `PLUGIN_DIR` (tests only) adds
+every `*.sh` in it as such a controller.
 
 ### D5. Registration is done by module-manager, recorded in one registry
 
@@ -410,7 +428,7 @@ the next update, or the declaration is only seeded once — is for the conversat
 | Phase | What | Done when |
 |---|---|---|
 | P1 | The registry (`config/control-plane.json`) with the built-in components as entries; refresh, self-check and the console read it; module JSON `controllers`/`managers` fields and the blueprint check. No component moves. | The sweep, the self-check and the console work from the registry on hrossen, nothing else changed |
-| P2 | The renames (D1, D3; aliases kept); the switch contract `switch/1` written down; the managers find controllers in the registry; `manual` as the built-in controller; the TypeScript builder exported for components outside tappaas-cicd (D2) | `unifi.sh` still works, now found through the registry |
+| P2 | The renames (D1, D3; aliases kept); the switch contract `switch/1` written down; the managers find controllers in the registry; `manual` as the built-in controller; the TypeScript builder exported for components outside tappaas-cicd (D2) | `unifi.sh` still works, now found through the registry. **Built 2026-10-20** (offline tests green; a TypeScript manager outside the tree built and ran on hrossen); live on hrossen after the push |
 | P3 | UniFi: the controller moves into `unifi-os` in the Community repository; install/update/delete link and register it (D5, with D7's warning) and register the instance (D6, #731) | Installing the module on hrossen makes the switch and APs manageable with no operator step; deleting it leaves nothing |
 | P4 | MikroTik (#847): module and `mikrotik-controller`, with Ansible (D10) | A MikroTik switch reconciled on a test site |
 | P5 | An app controller (#170, LiteLLM), after the conversation #430 asks for | — |
