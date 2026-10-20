@@ -4,10 +4,11 @@
 // a verb a manifest declares, with options the verb declares, nothing else.
 // The bash controllers' declared verbs are checked against their own CLI_SPEC.
 
-import { readFileSync } from "fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { tmpdir } from "os";
 import { join } from "path";
 import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
-import { Manifests, applyArgv, baseArgv, loadManifests, previewArgv, validateArgv } from "../../src/manifest";
+import { Manifests, TS_MANAGERS, applyArgv, baseArgv, loadManifests, previewArgv, registeredManagers, validateArgv } from "../../src/manifest";
 import { Runner } from "../../src/run";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
@@ -178,6 +179,24 @@ async function main(): Promise<void> {
       }
     }
     check(fine, `${bin}: every declared verb and option is in the script's CLI_SPEC`);
+  }
+
+  // ── the managers come from the control plane's registry (ADR-035 D5) ──
+  {
+    const d = mkdtempSync(join(tmpdir(), "console-reg-"));
+    check(registeredManagers(d).join(",") === TS_MANAGERS.join(","), "no registry: the standard managers");
+    writeFileSync(join(d, "control-plane.json"), "{not json");
+    check(registeredManagers(d).join(",") === TS_MANAGERS.join(","), "an unreadable registry: the standard managers");
+    writeFileSync(join(d, "control-plane.json"), JSON.stringify({ version: 1, components: [
+      { name: "module-manager", kind: "manager", module: "tappaas-cicd", manifest: "help-json" },
+      { name: "switch-controller", kind: "controller", module: "tappaas-cicd", manifest: null },
+      { name: "foo-manager", kind: "manager", module: "foo", manifest: "help-json" },
+      { name: "bare-manager", kind: "manager", module: "bar", manifest: null },
+    ] }));
+    const r = registeredManagers(d);
+    check(r.join(",") === "module-manager,foo-manager", "the registry's help-json managers, a module's included; controllers and managers without a manifest are not");
+    writeFileSync(join(d, "control-plane.json"), JSON.stringify({ version: 1, components: [] }));
+    check(registeredManagers(d).join(",") === TS_MANAGERS.join(","), "a registry that lists no manager: the standard managers");
   }
   done("manifest");
 }

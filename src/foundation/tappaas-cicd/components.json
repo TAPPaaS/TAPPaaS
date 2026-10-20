@@ -1,0 +1,133 @@
+{
+  "_comment": "The control plane's standard components (ADR-035): every manager and controller tappaas-cicd ships, and the two services built beside them. One list: scripts/control-plane-registry.sh writes it into config/control-plane.json, the registry the self-check and the console read, and scripts/test/test-control-plane-registry.sh keeps it equal to the directories and to flake.nix's packages. A manager with manifest 'help-json' answers --help --json and appears in the console. kind: manager | controller | service. package: the flake package that builds it; null for bash, which needs no build.",
+  "version": 1,
+  "components": [
+    {
+      "name": "module-manager",
+      "kind": "manager",
+      "path": "manager/module-manager",
+      "language": "typescript",
+      "package": "module-manager",
+      "manifest": "help-json"
+    },
+    {
+      "name": "site-manager",
+      "kind": "manager",
+      "path": "manager/site-manager",
+      "language": "typescript",
+      "package": "site-manager",
+      "manifest": "help-json"
+    },
+    {
+      "name": "network-manager",
+      "kind": "manager",
+      "path": "manager/network-manager",
+      "language": "typescript",
+      "package": "network-manager",
+      "manifest": "help-json"
+    },
+    {
+      "name": "environment-manager",
+      "kind": "manager",
+      "path": "manager/environment-manager",
+      "language": "typescript",
+      "package": "environment-manager",
+      "manifest": "help-json"
+    },
+    {
+      "name": "identity-manager",
+      "kind": "manager",
+      "path": "manager/identity-manager",
+      "language": "typescript",
+      "package": "identity-manager",
+      "manifest": "help-json"
+    },
+    {
+      "name": "backup-manager",
+      "kind": "manager",
+      "path": "manager/backup-manager",
+      "language": "typescript",
+      "package": "backup-manager",
+      "manifest": "help-json"
+    },
+    {
+      "name": "health-manager",
+      "kind": "manager",
+      "path": "manager/health-manager",
+      "language": "typescript",
+      "package": "health-manager",
+      "manifest": "help-json"
+    },
+    {
+      "name": "storage-manager",
+      "kind": "manager",
+      "path": "manager/storage-manager",
+      "language": "typescript",
+      "package": "storage-manager",
+      "manifest": "help-json"
+    },
+    {
+      "name": "ap-controller",
+      "kind": "controller",
+      "path": "controller/ap-controller",
+      "language": "bash",
+      "package": null
+    },
+    {
+      "name": "backup-controller",
+      "kind": "controller",
+      "path": "controller/backup-controller",
+      "language": "bash",
+      "package": null
+    },
+    {
+      "name": "identity-controller",
+      "kind": "controller",
+      "path": "controller/identity-controller",
+      "language": "python",
+      "package": "identity-controller"
+    },
+    {
+      "name": "node-provisioner",
+      "kind": "controller",
+      "path": "controller/node-provisioner",
+      "language": "python",
+      "package": "node-provisioner"
+    },
+    {
+      "name": "opnsense-controller",
+      "kind": "controller",
+      "path": "controller/opnsense-controller",
+      "language": "python",
+      "package": "opnsense-controller"
+    },
+    {
+      "name": "proxmox-controller",
+      "kind": "controller",
+      "path": "controller/proxmox-controller",
+      "language": "bash",
+      "package": null
+    },
+    {
+      "name": "switch-controller",
+      "kind": "controller",
+      "path": "controller/switch-controller",
+      "language": "bash",
+      "package": null
+    },
+    {
+      "name": "update-tappaas",
+      "kind": "service",
+      "path": "update-tappaas",
+      "language": "python",
+      "package": "update-tappaas"
+    },
+    {
+      "name": "console",
+      "kind": "service",
+      "path": "ui",
+      "language": "typescript",
+      "package": "console"
+    }
+  ]
+}

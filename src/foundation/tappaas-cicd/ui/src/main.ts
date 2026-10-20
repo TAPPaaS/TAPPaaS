@@ -24,7 +24,7 @@ import { KEY_FILE, LiteLLM } from "./litellm";
 import { Assistant } from "./assistant";
 import { lokiConfig } from "./assistant-tools";
 import { Conversations } from "./conversations";
-import { loadManifests } from "./manifest";
+import { loadManifests, registeredManagers } from "./manifest";
 import { Reads } from "./reads";
 import { runAsync, streamAsync } from "./run";
 import { ConsoleServer } from "./server";
@@ -263,7 +263,7 @@ async function serve(o: ServeOpts): Promise<number> {
   // What a job may run: every manager's `--help --json` and the declared bash verbs.
   const bashFile = process.env.CONSOLE_MANIFEST_FILE ?? join(__dirname, "..", "..", "..", "manifest", "bash-verbs.json");
   const srv = server;
-  void loadManifests(runAsync, bashFile).then((ms) => {
+  void loadManifests(runAsync, bashFile, registeredManagers(o.configDir)).then((ms) => {
     srv.manifests = ms;
     info(`  verb manifests: ${ms.byBin.size} (${[...ms.byBin.keys()].join(", ")})`);
     for (const e of ms.errors) warn(`  no manifest from ${e.bin}: ${e.error}`);

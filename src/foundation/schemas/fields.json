@@ -169,6 +169,16 @@
       "class": "in-place",
       "apply": "none",
       "changeNote": "Read by woodpecker.nix from the module's companion JSON: the module's update rebuilds its NixOS configuration and restarts the server with the new list. Nothing else changes."
+    },
+    "controllers": {
+      "class": "manual",
+      "apply": "none",
+      "changeNote": "What the control plane links and registers for this module: a change adds or removes a controller other modules' managers drive, so it is made in the module's JSON and released, never set on a running site."
+    },
+    "managers": {
+      "class": "manual",
+      "apply": "none",
+      "changeNote": "What the control plane links and registers for this module: a change adds or removes verbs operators and the console use, so it is made in the module's JSON and released."
     }
   }
 }

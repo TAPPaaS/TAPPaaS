@@ -217,6 +217,12 @@ fi
 # are native in the network-manager TS bin linked by the dispatcher above:
 # `network-manager add/delete/enable/disable/manual`; ADR-007 Phase 7.5.)
 
+# The control plane's registry (ADR-035 D5): the components just linked, so the
+# self-check and the console read one list. Kept as it was on failure.
+if [ -f scripts/control-plane-registry.sh ]; then
+  bash scripts/control-plane-registry.sh || warn "  could not write config/control-plane.json — leaving the existing one"
+fi
+
 # ── 4. Recompose the module-field schema ─────────────────────────────
 # config/module-fields.json is every service's fields.json merged (#567): what
 # `module modify --set` accepts and how it types a value. A field a pull just

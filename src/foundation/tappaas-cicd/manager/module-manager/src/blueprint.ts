@@ -94,7 +94,7 @@ export interface BlueprintTarget {
 
 // Keys of a module JSON that are not fields: the module's identity and wiring,
 // and `config`, whose entries are the fields grouped by service (Pattern A).
-const NOT_FIELDS = new Set(["config", "dependsOn", "integratesWith", "provides"]);
+const NOT_FIELDS = new Set(["config", "dependsOn", "integratesWith", "provides", "controllers", "managers"]);
 
 export function checkModule(t: BlueprintTarget, fs: BlueprintFs, schema: SchemaFacts | null): BlueprintFinding[] {
   const out: BlueprintFinding[] = [];
@@ -167,7 +167,83 @@ export function checkModule(t: BlueprintTarget, fs: BlueprintFs, schema: SchemaF
       add("error", rel("fields.json"), `missing ${rel("fields.json")} — fields name ${t.name}:${s} in usedBy, so the service declares fields (ADR-027 D3, #567)`);
     }
   }
+
+  // ── ADR-035: the controllers and managers the module contributes ──
+  checkComponents(mj, "controllers", "controller", "-controller", must, should, add, fs, t.dir);
+  checkComponents(mj, "managers", "manager", "-manager", must, should, add, fs, t.dir);
   return out;
+}
+
+// One kind of contributed component (ADR-035 D2, D3): each declared entry is a
+// directory laid out as tappaas-cicd's own components, under the naming rule;
+// a directory under controller/ or manager/ nobody declared is dead or a
+// declaration missing — it is never linked either way.
+function checkComponents(
+  mj: Record<string, unknown> | null,
+  field: "controllers" | "managers",
+  dirName: string,
+  suffix: string,
+  must: (rel: string, why: string) => void,
+  should: (rel: string, why: string) => void,
+  add: (severity: Severity, path: string, message: string) => void,
+  fs: BlueprintFs,
+  dir: string,
+): void {
+  const raw = mj?.[field];
+  if (raw !== undefined && !Array.isArray(raw)) {
+    add("error", field, `${field} must be a list of {name, path${field === "controllers" ? ", plugsInto" : ""}} (ADR-035 D3)`);
+    return;
+  }
+  const declared: string[] = [];
+  const seen = new Set<string>();
+  for (const [i, e] of ((raw as unknown[] | undefined) ?? []).entries()) {
+    const o = e && typeof e === "object" && !Array.isArray(e) ? (e as Record<string, unknown>) : null;
+    const name = typeof o?.name === "string" ? o.name : "";
+    const path = typeof o?.path === "string" ? o.path.replace(/\/+$/, "") : "";
+    const at = `${field}[${i}]`;
+    if (!name || !path) {
+      add("error", at, `${at} needs a name and a path (ADR-035 D3)`);
+      continue;
+    }
+    if (!name.endsWith(suffix) || !/^[a-z][a-z0-9-]*$/.test(name)) {
+      add("error", at, `${field === "controllers" ? "a controller" : "a manager"} is named <${field === "controllers" ? "application" : "domain"}>${suffix}, in lower case: '${name}' is not (ADR-035 D3)`);
+    }
+    if (seen.has(name)) add("error", at, `'${name}' is declared twice`);
+    seen.add(name);
+    if (field === "controllers") {
+      const plugs = Array.isArray(o?.plugsInto) ? (o!.plugsInto as unknown[]) : [];
+      if (plugs.length === 0 || plugs.some((m) => typeof m !== "string" || !m.endsWith("-manager"))) {
+        add("error", at, `${name}: plugsInto names the managers that drive it (e.g. ["switch-manager"]) (ADR-035 D3)`);
+      }
+    }
+    if (path.split("/")[0] !== dirName || path.split("/").length !== 2) {
+      add("error", at, `${name}: its path is ${dirName}/<name> in the module, not '${path}' (ADR-035 D2)`);
+    }
+    if (!fs.isDir(join(dir, path))) {
+      add("error", `${path}/`, `declares ${name} but has no ${path}/ (ADR-035 D2)`);
+      continue;
+    }
+    declared.push(path.split("/").slice(-1)[0]);
+    const r = (f: string): string => `${path}/${f}`;
+    must(r("install.sh"), "builds and links it when the module installs (ADR-035 D2)");
+    must(r("update.sh"), "rebuilds and relinks it when the module updates (ADR-035 D2)");
+    must(r("README.md"), "what it does and how to use it, published with the module (ADR-035 D8)");
+    should(r("test.sh"), "its offline self-test (ADR-035 D2)");
+    should(r("DESIGN.md"), `how it works${field === "controllers" ? " and the contract it answers" : ""} (ADR-035 D2, D4)`);
+  }
+  // tappaas-cicd declares its standard components in components.json (ADR-035
+  // D5), not in its module JSON: those directories are declared too.
+  const std = fs.readJson(join(dir, "components.json"));
+  for (const c of Array.isArray(std?.components) ? (std!.components as unknown[]) : []) {
+    const p = c && typeof c === "object" ? (c as Record<string, unknown>).path : undefined;
+    if (typeof p === "string" && p.split("/")[0] === dirName) declared.push(p.split("/").slice(-1)[0]);
+  }
+  const dirs = fs.isDir(join(dir, dirName)) ? fs.list(join(dir, dirName)).filter((d) => fs.isDir(join(dir, dirName, d))) : [];
+  for (const d of dirs) {
+    if (!declared.includes(d)) {
+      add("warning", `${dirName}/${d}/`, `${dirName}/${d}/ is not declared in ${field} — declare it, or remove the directory; an undeclared ${dirName} is never linked (ADR-035 D3)`);
+    }
+  }
 }
 
 // ── which modules a repository has ────────────────────────────────────────

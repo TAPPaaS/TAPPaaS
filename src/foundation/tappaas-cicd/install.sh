@@ -198,6 +198,8 @@ for _disp in manager controller ui; do
     "./${_disp}/install.sh" || _error "  ${_disp}/install.sh reported non-zero rc"
   fi
 done
+# The control plane's registry (ADR-035 D5), read by the self-check and the console.
+[ -f scripts/control-plane-registry.sh ] && { bash scripts/control-plane-registry.sh || _error "  could not write config/control-plane.json"; }
 
 # (The legacy zone-controller/zone-state bash scripts are retired — their verbs
 # are native in the network-manager TS bin linked by the dispatcher above:

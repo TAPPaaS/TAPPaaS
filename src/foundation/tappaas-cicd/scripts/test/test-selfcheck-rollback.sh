@@ -78,6 +78,7 @@ run_check() {  # $1 = baseline file (or ""), sets RC/OUT
     [[ -n "${baseline}" ]] && args=(--baseline "${baseline}")
     # Check 4 (#719) is driven by its own cases below; here there is no flake.
     OUT="$(PATH="${BIN}:${PATH}" TAPPAAS_USER="$(id -un)" SELFCHECK_FLAKE="${SELFCHECK_FLAKE_T:-/nonexistent}" \
+           SELFCHECK_REGISTRY="${SELFCHECK_REGISTRY_T:-/nonexistent}" \
            SELFCHECK_BIN="${SELFCHECK_BIN_T:-${TMP}/nobin}" SELFCHECK_STORE="${SELFCHECK_STORE_T:-/nix/store}" \
            "${SELFCHECK}" "${args[@]}" 2>&1)"
     RC=$?
@@ -88,6 +89,22 @@ make_stubs 0 0
 : > "${TMP}/base"
 FAILED_UNITS="" run_check "${TMP}/base"
 [[ "${RC}" -eq 0 ]] && ok "exit 0 when everything answers" || bad "exit ${RC} on a healthy plane: ${OUT}"
+
+echo "── the managers checked are the registry's (ADR-035 D5) ──"
+# The registry names the seven stubbed managers and one a module contributed;
+# the contributed one is not on PATH, so the check must name it.
+jq -n '{version: 1, components: ([
+    "module-manager","site-manager","network-manager","backup-manager",
+    "health-manager","identity-manager","environment-manager"]
+    | map({name: ., kind: "manager", module: "tappaas-cicd"}))
+  + [{name: "foo-manager", kind: "manager", module: "foo"}, {name: "bar-controller", kind: "controller", module: "bar"}]}' > "${TMP}/registry.json"
+SELFCHECK_REGISTRY_T="${TMP}/registry.json" FAILED_UNITS="" run_check "${TMP}/base"
+[[ "${RC}" -ne 0 && "${OUT}" == *"foo-manager is not on"* ]] && ok "a manager the registry lists is checked — a module's included" \
+    || bad "the registry's foo-manager was not checked (rc ${RC}): ${OUT}"
+[[ "${OUT}" != *"bar-controller"* ]] && ok "…and only managers: a registered controller is not run with --help" || bad "a controller was checked as a manager"
+[[ "${OUT}" != *"storage-manager"* ]] && ok "…instead of the built-in list (no storage-manager in this registry)" || bad "the built-in list was used beside the registry"
+SELFCHECK_REGISTRY_T="${TMP}/missing.json" FAILED_UNITS="" run_check "${TMP}/base"
+[[ "${OUT}" == *"no control-plane registry"* ]] && ok "no registry: says so, and checks the standard managers" || bad "a missing registry was not reported: ${OUT}"
 
 echo "── what the generation implies is what is linked (#719) ──"
 # A fake store and ~/bin: two components, each built and linked. `nix eval`

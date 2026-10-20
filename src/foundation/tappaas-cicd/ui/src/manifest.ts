@@ -7,12 +7,14 @@
 // whether it is destructive.
 
 import { existsSync, readFileSync } from "fs";
+import { join } from "path";
 import { Manifest, ManifestOption, ManifestVerb } from "../../lib/ts/src/help";
 import { Runner, runJson } from "./run";
 
 export type { Manifest, ManifestOption, ManifestVerb };
 
-// The TypeScript managers, each answering `--help --json`.
+// The TypeScript managers, each answering `--help --json`: the standard eight,
+// used when the site has no control-plane registry yet.
 export const TS_MANAGERS = [
   "module-manager",
   "site-manager",
@@ -23,6 +25,24 @@ export const TS_MANAGERS = [
   "health-manager",
   "storage-manager",
 ];
+
+// The managers whose `--help --json` the console loads: those the control
+// plane's registry (config/control-plane.json, ADR-035 D5) lists with a
+// help-json manifest, standard or contributed by a module. Without a registry —
+// or one that lists none — the standard eight (TS_MANAGERS).
+export function registeredManagers(configDir: string): string[] {
+  try {
+    const doc = JSON.parse(readFileSync(join(configDir, "control-plane.json"), "utf8")) as {
+      components?: { name?: unknown; kind?: unknown; manifest?: unknown }[];
+    };
+    const names = (doc.components ?? [])
+      .filter((c) => c.kind === "manager" && c.manifest === "help-json" && typeof c.name === "string")
+      .map((c) => c.name as string);
+    return names.length > 0 ? [...new Set(names)] : TS_MANAGERS;
+  } catch {
+    return TS_MANAGERS;
+  }
+}
 
 // Options a job may never carry: the console's managers read the config the
 // console reads (lib/ts exec.ts configEnv), and a help request is not a job.

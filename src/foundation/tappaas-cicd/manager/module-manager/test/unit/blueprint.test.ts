@@ -115,6 +115,46 @@ console.log("repoTargets / dirTarget");
   check(dirTarget("/r/app", fakeFs(complete("app")))?.moduleJson === "/r/app/app.json", "a directory names its module by <dir>.json");
 }
 
+console.log("checkModule — ADR-035, contributed controllers and managers");
+{
+  const withCtl = (decl: unknown, extra: Record<string, string> = {}): Record<string, string> => ({
+    ...complete("net", {
+      "/r/net/net.json": JSON.stringify({ description: "x", stack: "ai", provides: ["api"], controllers: decl }),
+      "/r/net/services/api/fields.json": "{}",
+      ...extra,
+    }),
+  });
+  const layout = (p: string): Record<string, string> => ({
+    [`/r/net/${p}/install.sh`]: "", [`/r/net/${p}/update.sh`]: "", [`/r/net/${p}/test.sh`]: "",
+    [`/r/net/${p}/README.md`]: "", [`/r/net/${p}/DESIGN.md`]: "", [`/r/net/${p}/unifi-controller`]: "",
+  });
+  const good = [{ name: "unifi-controller", path: "controller/unifi-controller", plugsInto: ["switch-manager", "ap-manager"] }];
+  const okc = run(withCtl(good, layout("controller/unifi-controller")), "net");
+  check(okc.length === 0, `a declared controller in tappaas-cicd's layout reports nothing (${okc.map((f) => f.message).join("; ")})`);
+  check(has(run(withCtl(good), "net"), "error", /declares unifi-controller but has no controller\/unifi-controller\//), "a declared controller with no directory is an error");
+  const noInstall = layout("controller/unifi-controller"); delete noInstall["/r/net/controller/unifi-controller/install.sh"];
+  check(has(run(withCtl(good, noInstall), "net"), "error", /missing controller\/unifi-controller\/install\.sh/), "a controller without install.sh is an error");
+  const noDesign = layout("controller/unifi-controller"); delete noDesign["/r/net/controller/unifi-controller/DESIGN.md"];
+  const nd = run(withCtl(good, noDesign), "net");
+  check(has(nd, "warning", /DESIGN\.md/) && !nd.some((f) => f.severity === "error"), "a controller without DESIGN.md is a warning");
+  check(has(run(withCtl([{ name: "unifi", path: "controller/unifi", plugsInto: ["switch-manager"] }], { "/r/net/controller/unifi/install.sh": "" }), "net"), "error", /named <application>-controller/), "a controller not named <application>-controller is an error");
+  check(has(run(withCtl([{ name: "unifi-controller", path: "controller/unifi-controller" }], layout("controller/unifi-controller")), "net"), "error", /plugsInto names the managers/), "a controller that plugs into no manager is an error");
+  check(has(run(withCtl([{ name: "unifi-controller", path: "lib/unifi-controller", plugsInto: ["switch-manager"] }], { "/r/net/lib/unifi-controller/install.sh": "" }), "net"), "error", /its path is controller\/<name>/), "a controller outside controller/ is an error");
+  check(has(run(withCtl([...good, ...good], layout("controller/unifi-controller")), "net"), "error", /declared twice/), "a controller declared twice is an error");
+  check(has(run(withCtl("unifi-controller"), "net"), "error", /must be a list/), "controllers that is not a list is an error");
+  check(has(run(withCtl([], layout("controller/unifi-controller")), "net"), "warning", /controller\/unifi-controller\/ is not declared in controllers/), "an undeclared controller/ directory is a warning");
+  const mj = (managers: unknown): Record<string, string> => ({
+    ...complete("dom", { "/r/dom/dom.json": JSON.stringify({ description: "x", stack: "ai", provides: ["api"], managers }), "/r/dom/services/api/fields.json": "{}" }),
+    "/r/dom/manager/foo-manager/install.sh": "", "/r/dom/manager/foo-manager/update.sh": "", "/r/dom/manager/foo-manager/test.sh": "",
+    "/r/dom/manager/foo-manager/README.md": "", "/r/dom/manager/foo-manager/DESIGN.md": "",
+  });
+  check(run(mj([{ name: "foo-manager", path: "manager/foo-manager" }]), "dom").length === 0, "a declared manager in the layout reports nothing");
+  check(has(run(mj([{ name: "foo", path: "manager/foo-manager" }]), "dom"), "error", /a manager is named <domain>-manager/), "a manager not named *-manager is an error");
+  check(!run(withCtl(good, layout("controller/unifi-controller")), "net").some((f) => /fields\.json/.test(f.path) && /controllers/.test(f.message)), "controllers is wiring, not a field the module must define");
+  const std = withCtl([], { ...layout("controller/unifi-controller"), "/r/net/components.json": JSON.stringify({ components: [{ name: "unifi-controller", path: "controller/unifi-controller" }] }) });
+  check(!has(run(std, "net"), "warning", /not declared in controllers/), "a directory components.json lists is declared (tappaas-cicd's standard components)");
+}
+
 console.log("realBlueprintFs, on a real tree");
 {
   const d = mkdtempSync(join(tmpdir(), "bp-"));

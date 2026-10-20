@@ -83,7 +83,9 @@
     "natRules",
     "dependsOn",
     "integratesWith",
-    "provides"
+    "provides",
+    "controllers",
+    "managers"
   ],
   "fields": {
     "suspended": {
@@ -370,6 +372,44 @@
         "ha"
       ],
       "note": "Each listed service must have a corresponding services/<service>/install-service.sh and update-service.sh"
+    },
+    "controllers": {
+      "description": "The extended controllers this module contributes to the control plane (ADR-035): code that drives a system for a manager, or reconciles state inside the module's application. Each is {name, path, plugsInto}: `name` is `<application>-controller` (the application it controls, e.g. unifi-controller), `path` its directory in the module (`controller/<name>`, laid out as tappaas-cicd's controllers), `plugsInto` the managers that drive it (e.g. [\"switch-manager\"]). module-manager builds, links and registers each on install and update (config/control-plane.json) and removes it on delete.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "items": "object",
+      "example": [
+        {
+          "name": "unifi-controller",
+          "path": "controller/unifi-controller",
+          "plugsInto": [
+            "switch-manager",
+            "ap-manager"
+          ]
+        }
+      ],
+      "note": "The module's lifecycle scripts (install.sh, update.sh, test.sh, delete.sh, the hooks) are its basic controller and are not listed here. A name another module already registered is refused. Checked by `module-manager validate --blueprint`."
+    },
+    "managers": {
+      "description": "The managers this module contributes to the control plane (ADR-035): the operator's and the console's verbs for a domain no standard manager covers. Each is {name, path}: `name` ends in `-manager` and is first come, first served across the site; `path` is its directory in the module (`manager/<name>`, laid out as tappaas-cicd's managers, answering --help and --help --json). module-manager builds, links and registers each on install and update and removes it on delete.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": [],
+      "items": "object",
+      "example": [
+        {
+          "name": "foo-manager",
+          "path": "manager/foo-manager"
+        }
+      ],
+      "note": "A name already registered, by tappaas-cicd or another module, is refused. Checked by `module-manager validate --blueprint`."
     },
     "config": {
       "description": "Optional Pattern-A nesting (Pattern C hybrid). Groups per-service configuration under the '<module>:<service>' dependency coordinate instead of (or alongside) flat top-level fields. Purely a readability/authoring convenience: TAPPaaS NORMALIZES it to the flat form at deploy (copy-update-json.sh) and at validation (check_json), so all tooling still reads flat top-level fields. A module may be written fully flat (current form), fully Pattern-A, or mixed.",

@@ -3,6 +3,12 @@
 This directory holds the TAPPaaS **controllers**. A controller is the lowest
 layer of the TAPPaaS automation stack: it drives real infrastructure.
 
+**Listed in [`../components.json`](../components.json).** Every controller and manager here has an
+entry there: it is the one list the site's registry (`config/control-plane.json`) is written from,
+and the self-check and the console read the registry, not this directory. A new component without
+an entry fails `scripts/test/test-control-plane-registry.sh`. Modules contribute controllers and
+managers of their own the same way (ADR-035).
+
 ## What a controller is
 
 A **controller owns runtime / device state.** It talks directly to

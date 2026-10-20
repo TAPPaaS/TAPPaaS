@@ -3,6 +3,12 @@
 This directory holds the TAPPaaS **managers**. A manager is one of the two kinds
 of cluster-control component in TAPPaaS (the other is a *controller*).
 
+**Listed in [`../components.json`](../components.json).** Every controller and manager here has an
+entry there: it is the one list the site's registry (`config/control-plane.json`) is written from,
+and the self-check and the console read the registry, not this directory. A new component without
+an entry fails `scripts/test/test-control-plane-registry.sh`. Modules contribute controllers and
+managers of their own the same way (ADR-035).
+
 ## What a manager is
 
 A **manager owns configuration state.** It does CRUD + validation on the JSON
