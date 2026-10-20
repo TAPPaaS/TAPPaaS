@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** — draft for review |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-10-20 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | Answers **#430** (the controller/manager pattern beyond the foundation) and the registration half of **#731**. First uses: the UniFi controller in the `unifi-os` module, then **#847** (a MikroTik controller and module). Related: #170 (LiteLLM's control plane), #761 (composite modules: `kind` decides which controller acts), #250 (who owns what when community modules hook into core ones). Builds on ADR-007f, ADR-008, ADR-027, ADR-033, ADR-034. |
-| **Changelog** | v0.1 (2026-10-20) — first draft. |
+| **Changelog** | v0.2 (2026-10-20) — **after the operator's review.** Naming (D3): a controller is `<application>-controller`, named for the application it controls, not the module; a manager's name is first come, first served. Trust (D7) is a warning, not a refusal: a controller from an unverified repository may plug into a foundation manager, and the site says so. UniFi is not FLOSS and stays outside the TAPPaaS repository: its controller lives in the module that runs it, in the Community repository (O1 answered). O3 answered: module-manager builds a module's TypeScript or Python components on tappaas-cicd with tappaas-cicd's own builders and libraries (D2). O4 written out for the conversation with Erik. "Component" now means a controller or a manager, never a module. v0.1 (2026-10-20) — first draft. |
 
 ## Context
 
@@ -58,7 +58,8 @@ the same for code that serves **other** modules or a whole domain.
 - **R5.** Contributed components are documented and visible like the standard ones: in `--help`,
   in the console, on tappaas.org.
 - **R6.** A contributed component runs with the same power as tappaas-cicd's own (as `tappaas`, on
-  the mothership): it comes only from a repository the site trusts.
+  the mothership): it comes only from a repository the site has declared, and the site can see
+  which of them are not verified.
 - **R7.** The standard managers and controllers keep working unchanged while this is introduced.
 
 ## Decision
@@ -74,10 +75,11 @@ the same for code that serves **other** modules or a whole domain.
 - A **manager** stays what ADR-007f says: the operator's and the console's verbs for a domain,
   orchestrating controllers. A module may contribute one when its domain is new (a manager for
   something no standard manager covers).
+- A **component** is a controller or a manager. A module *contributes* components; it is not one.
 - **Vendor-neutral code is a manager; vendor code is a controller.** The switch and AP domains
   follow this from now on: today's `switch-controller` and `ap-controller` are the switch and AP
   *managers* (`switch-manager`, `ap-manager`; the old names stay as aliases, `ap-manager` already
-  exists), and each vendor plugin becomes a controller (`unifi-controller`, `mikrotik-controller`,
+  exists), and each vendor plugin becomes a controller (`unifi-controller`, `routeros-controller`,
   and the built-in `manual` fallback).
 
 ### D2. Where they live: in the module, in tappaas-cicd's layout
@@ -99,23 +101,51 @@ A module that contributes control-plane code has, beside its lifecycle scripts:
 
 The layout is the one tappaas-cicd's components already share (survey 2026-10-20: every
 component has `install.sh`, `update.sh`, `test.sh`, `README.md`; managers add `default.nix`,
-`src/`, `test/`, `DESIGN.md`). A component built with Nix brings its own `default.nix`; the shared
-builders (`lib/nix/ts-manager.nix`, Python's `buildPythonPackage`) are made usable from outside
-the tappaas-cicd tree.
+`src/`, `test/`, `DESIGN.md`).
+
+**Building.** module-manager runs a module's component install on tappaas-cicd, so a TypeScript
+or Python component is built there, with the same builders and shared libraries as the standard
+ones: the TypeScript builder (`lib/nix/ts-manager.nix`) and the shared TypeScript library
+(`lib/ts`, which gives every manager its `--help`/`--help --json`, logging and the CLI gate), and
+Python's packaging. Today the TypeScript builder can only build inside the tappaas-cicd tree: it
+finds its sources by a path relative to tappaas-cicd (`cicd = ../..`), so a component in another
+repository's module cannot use it. It becomes a function of the component's own source directory,
+exported by tappaas-cicd, and a component's `default.nix` calls it:
+
+```nix
+{ tappaas }: tappaas.tsComponent { name = "foo-manager"; src = ./.; }
+```
+
+A bash component needs no build.
 
 The implementation language is the component's choice — bash, Python, TypeScript, or an
 executable that runs an Ansible playbook (#430 asked whether Ansible comes first: this ADR does not
 mandate a tool; it fixes the interface).
 
-### D3. The module declares what it contributes
+### D3. The module declares what it contributes, under these names
 
 ```json
 "controllers": [
-  { "name": "unifi-controller", "path": "controller/unifi-controller", "plugsInto": "switch-manager" },
-  { "name": "unifi-controller", "path": "controller/unifi-controller", "plugsInto": "ap-manager" }
+  { "name": "unifi-controller", "path": "controller/unifi-controller", "plugsInto": ["switch-manager", "ap-manager"] }
 ],
 "managers": []
 ```
+
+**Names.**
+
+- A **controller** is named **`<application>-controller`**, for the application it controls, not for
+  the module that runs it: `opnsense-controller`, `authentik-controller`, `unifi-controller`,
+  `routeros-controller` (MikroTik's switch OS). A module's name can be more general than its
+  application, and one module can run several applications, each with its own controller.
+- A **manager**'s name is first come, first served: the first module to register a name keeps it.
+- A name already registered by another module, or by a standard component, is refused with the
+  owner named (D5). Two modules that run the same application share one controller: the second
+  declares it needs it (`dependsOn`) instead of bringing another copy.
+
+The standard components follow the controller rule where they do not yet:
+`identity-controller` becomes `authentik-controller`, `backup-controller` becomes
+`pbs-controller` (Proxmox Backup Server), and the switch and AP code becomes managers (D1). The old
+names stay as aliases for a release.
 
 The two fields are module-level fields (`schemas/module-fields.json`, owned by no service), checked
 by `module-manager validate --blueprint` (ADR-027): every declared path exists and has the layout
@@ -142,8 +172,8 @@ never guesses.
 Installing or updating a module that declares controllers or managers:
 
 1. runs the component's own `install.sh` (build when needed);
-2. links its executables into `/home/tappaas/bin` — refused if a name is already taken by a
-   standard component or another module (no silent shadowing);
+2. links its executables into `/home/tappaas/bin` — refused if the name is already taken by a
+   standard component or another module, saying which (D3; no silent shadowing);
 3. records it in `config/control-plane.json`: name, module, instance, path, `plugsInto`, contract,
    version, the repository it came from.
 
@@ -175,15 +205,22 @@ the operator's (`add-switch`, `add-port`), because which device is which is not 
 The routine check #731 also asks for is #860: the switches are read after every sweep, and an
 unregistered controller now shows as a manager with no controller for a vendor the site declares.
 
-### D7. Trust: contributed code runs only from a trusted repository
+### D7. Trust: a warning, not a refusal
 
 A contributed controller or manager runs as `tappaas` on the mothership, with the SSH keys to every
-node. module-manager links it only when its repository is one the site has declared
-(`site.json` `repositories`) and the repository's verification state (ADR-033) allows it:
-verified, or declared unsigned by the operator (ADR-033 D9). The registry records which, and
-`health-manager validate` shows a contributed component from an unsigned repository as a WARN. A
-site-scoped component (one the foundation depends on) comes from an `official` source only
-(ADR-007b's lint).
+node. It can only come from a repository the site has declared (`site.json` `repositories`):
+module-manager installs nothing else. Within that:
+
+- A controller from a repository that is not verified (ADR-033: unsigned, or a verification that
+  failed) may still be linked and may plug into a **foundation manager** (`switch-manager`,
+  `ap-manager`, `network-manager`, …). It is not refused; it is **a warning**, said at install and
+  update and kept as a standing finding of `health-manager validate`, naming the controller, its
+  repository and the manager it plugs into. The UniFi controller from the Community repository is
+  the first such case.
+- The registry records each component's repository and its verification state, so the warning and
+  the console show where the code came from.
+- A failed verification of a repository that was verified before is not a warning but the update
+  stopping, as ADR-033 D6 already does: the site keeps the last verified code.
 
 ### D8. Documentation
 
@@ -202,11 +239,12 @@ budgets) is automated only where it is a recurring operator burden. Foundational
 
 ## Use cases
 
-1. **UniFi (the first).** `unifi.sh` moves from `network/scripts/plugins/` into the module that
-   runs the UniFi controller, as `controller/unifi-controller/`. Installing that module links
+1. **UniFi (the first).** UniFi is not FLOSS, so neither it nor its controller lives in the TAPPaaS
+   repository. `unifi.sh` moves from `network/scripts/plugins/` into the module that runs the UniFi
+   controller, `unifi-os` in the Community repository, as `controller/unifi-controller/`. Installing that module links
    `unifi-controller`, registers it with `switch-manager` and `ap-manager` (D5) and registers the
    controller instance (D6). Its delete takes all of that back.
-2. **MikroTik (#847).** A new module for MikroTik switches contributes `controller/mikrotik-controller/`
+2. **MikroTik (#847).** A new module for MikroTik switches contributes `controller/routeros-controller/`
    (contract `switch/1`, `arch: device`), built and tested in the module. No foundation file
    changes for it.
 3. **LiteLLM (#170).** LiteLLM contributes a controller that reconciles its models and keys from
@@ -232,17 +270,19 @@ budgets) is automated only where it is a recurring operator burden. Foundational
   self-check and the sweep all read it.
 - The switch and AP code changes names (`switch-manager`, `ap-manager`), with aliases for a
   release so scripts and docs keep working.
-- More code runs on the mothership from outside tappaas-cicd; D7 is what keeps that to repositories
-  the site trusts.
-- Where `unifi-os` lives decides where the UniFi controller lives (O1).
+- More code runs on the mothership from outside tappaas-cicd. D7 keeps it to repositories the site
+  declared and makes an unverified one visible; it does not stop it.
+- The TAPPaaS repository no longer carries UniFi code. A site with UniFi switches declares the
+  Community repository and sees D7's warning for `unifi-controller`.
+- Renames for the controller naming rule (D3), with aliases for a release.
 
 ## Implementation plan
 
 | Phase | What | Done when |
 |---|---|---|
 | P1 | The registry (`config/control-plane.json`) with the built-in components as entries; refresh, self-check and the console read it; module JSON `controllers`/`managers` fields and the blueprint check. No component moves. | The sweep, the self-check and the console work from the registry on hrossen, nothing else changed |
-| P2 | `switch-manager`/`ap-manager` names (aliases kept); the switch contract `switch/1` written down; the managers find controllers in the registry; `manual` as the built-in controller | `unifi.sh` still works, now found through the registry |
-| P3 | UniFi: the controller moves into its module (O1); install/update/delete link and register it (D5) and register the instance (D6, #731) | Installing the module on hrossen makes the switch and APs manageable with no operator step; deleting it leaves nothing |
+| P2 | The renames (D1, D3; aliases kept); the switch contract `switch/1` written down; the managers find controllers in the registry; `manual` as the built-in controller; the TypeScript builder exported for components outside tappaas-cicd (D2) | `unifi.sh` still works, now found through the registry |
+| P3 | UniFi: the controller moves into `unifi-os` in the Community repository; install/update/delete link and register it (D5, with D7's warning) and register the instance (D6, #731) | Installing the module on hrossen makes the switch and APs manageable with no operator step; deleting it leaves nothing |
 | P4 | MikroTik (#847): module and controller | A MikroTik switch reconciled on a test site |
 | P5 | An app controller (#170, LiteLLM), after the conversation #430 asks for | — |
 
@@ -256,16 +296,42 @@ budgets) is automated only where it is a recurring operator burden. Foundational
 
 ## Open questions
 
-- **O1. Where `unifi-os` lives.** It is in the Community repository today, while the UniFi plugin is
-  official code in the foundation. Moving the plugin into a Community module lowers its trust
-  (D7); moving the module into the TAPPaaS repository makes it official. To decide before P3.
-- **O2. Names.** A contributed component's name is global in `~/bin`. Required prefix (the module's
-  name), or first come first served with clashes refused (D5 as written)?
-- **O3. Building outside tappaas-cicd.** `ts-manager.nix` builds only inside the tappaas-cicd tree.
-  Generalise it, or require a contributed manager to bring a complete `default.nix`?
-- **O4. #430's points that need Erik.** Ansible first (D2 leaves it open), and the line between
-  foundational and domain configuration (D9). This draft takes positions; they are for the
-  conversation #430 asks for.
+- **O1. Where `unifi-os` lives** — *answered (v0.2)*: UniFi is not FLOSS, so it stays in the
+  Community repository, and its controller with it (Use case 1, D7).
+- **O2. Names** — *answered (v0.2)*: D3.
+- **O3. Building outside tappaas-cicd** — *answered (v0.2)*: D2.
+- **O4. #430's two points, for the conversation with Erik.** #430 (Erik, 2026-08-07) proposed
+  five principles. Three are in this ADR as written: controllers beyond the foundation (D1), a
+  consistent verb set (a contract per manager, D4), and no re-implementing the application (D9).
+  Two need agreeing:
+
+  1. **"Ansible first: build a custom controller only when Ansible cannot do it."** This draft
+     fixes the interface (D4) and leaves the implementation free, Ansible included. The case for
+     Ansible first: maintained modules exist for many of the systems a controller drives
+     (`community.routeros` for MikroTik, OPNsense collections, Proxmox), and a playbook is
+     declarative and idempotent by design. The case against making it the default: it adds a
+     runtime the mothership does not have today; every existing controller is bash, Python or
+     TypeScript and would not change; a controller must still answer the manager's contract
+     (JSON in, JSON out, `interrogate` and `apply` separately), which a playbook needs a wrapper
+     for; and offline tests (the switch controller has 149) are harder to write against playbooks.
+     The question for Erik: is "Ansible first" a rule (a review asks why not Ansible), or one
+     allowed implementation among others (this draft)?
+  2. **Where foundational configuration ends and domain configuration starts.** D9 says a
+     controller always automates what wires a module into TAPPaaS, and automates the
+     application's own configuration only where it is a recurring burden. LiteLLM shows the line:
+     - *Foundational*, always automated, and already a service contract today: a consumer's
+       virtual key (`litellm:models`), its sign-in, its backup, its network.
+     - *Domain*: LiteLLM's models, teams, budgets and rate limits, held inside LiteLLM (#170).
+
+     Three things to agree for the domain side:
+     - **Authority:** once a controller reconciles domain state, a change made in the
+       application's own UI is reverted on the next update. The choice is per item: the
+       declaration wins, or the declaration is only seeded once and the UI owns it afterwards.
+     - **Where the declaration lives:** in the module's JSON as fields (validated, modifiable
+       with `module-manager modify --set`), or in a file of the application's own format next to
+       it.
+     - **The test for "a recurring burden":** done at every install, or redone after every
+       restore or rebuild — or a lower bar.
 
 ## Documentation impact (ADR-013)
 
