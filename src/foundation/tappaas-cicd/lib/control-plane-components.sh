@@ -101,9 +101,9 @@ cpc_register() {
         fi
         [[ -x "${src}/install.sh" ]] || { _cpc_error "control plane: ${module}: ${name} has no install.sh"; _cpc_rollback; return 1; }
         done_names+=("${name}")
-        if ! TAPPAAS_BIN="${CPC_BIN}" bash "${src}/install.sh" > "/tmp/tappaas-component-${name}.log" 2>&1; then
-            _cpc_error "control plane: ${module}: ${name}: install.sh failed — log: /tmp/tappaas-component-${name}.log"
-            tail -5 "/tmp/tappaas-component-${name}.log" >&2
+        if ! TAPPAAS_BIN="${CPC_BIN}" bash "${src}/install.sh" > "${TMPDIR:-/tmp}/tappaas-component-${name}.log" 2>&1; then
+            _cpc_error "control plane: ${module}: ${name}: install.sh failed — log: ${TMPDIR:-/tmp}/tappaas-component-${name}.log"
+            tail -5 "${TMPDIR:-/tmp}/tappaas-component-${name}.log" >&2
             _cpc_rollback; return 1
         fi
         [[ -e "${CPC_BIN}/${name}" ]] || { _cpc_error "control plane: ${module}: ${name}: its install.sh linked no ${CPC_BIN}/${name}"; _cpc_rollback; return 1; }
@@ -175,8 +175,8 @@ cpc_relink() {
             _cpc_warn "  control plane: ${name} is registered but ${src} is gone — delete its module, or restore it"
             failed=$((failed + 1)); continue
         fi
-        TAPPAAS_BIN="${CPC_BIN}" bash "${src}/install.sh" > "/tmp/tappaas-component-${name}.log" 2>&1 \
-            || { _cpc_warn "  control plane: ${name}: install.sh failed — log: /tmp/tappaas-component-${name}.log"; failed=$((failed + 1)); }
+        TAPPAAS_BIN="${CPC_BIN}" bash "${src}/install.sh" > "${TMPDIR:-/tmp}/tappaas-component-${name}.log" 2>&1 \
+            || { _cpc_warn "  control plane: ${name}: install.sh failed — log: ${TMPDIR:-/tmp}/tappaas-component-${name}.log"; failed=$((failed + 1)); }
     done < <(jq -r '.components[]? | select(.module != "tappaas-cicd") | [.name, .source] | @tsv' <<<"${reg}")
     owned="$(jq -c '[.components[]? | .name, (.aliases // [])[]]' <<<"${reg}")"
     for l in "${CPC_BIN}"/*; do

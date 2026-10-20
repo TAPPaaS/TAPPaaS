@@ -14,7 +14,7 @@ ck() { if [[ "$2" == "$3" ]]; then echo "  ✓ $1"; PASS=$((PASS + 1)); else ech
 has() { grep -qF -- "$2" <<<"$1" && echo yes || echo no; }
 
 T="$(cd "$(mktemp -d)" && pwd -P)"; trap 'rm -rf "${T}"' EXIT
-export CONFIG_DIR="${T}/config" TAPPAAS_BIN="${T}/bin" TAPPAAS_GCROOTS="${T}/gcroots"
+export CONFIG_DIR="${T}/config" TAPPAAS_BIN="${T}/bin" TAPPAAS_GCROOTS="${T}/gcroots" TMPDIR="${T}"
 mkdir -p "${CONFIG_DIR}/sbom" "${TAPPAAS_BIN}" "${TAPPAAS_GCROOTS}"
 REG="${CONFIG_DIR}/control-plane.json"
 cat > "${REG}" <<'EOF'
