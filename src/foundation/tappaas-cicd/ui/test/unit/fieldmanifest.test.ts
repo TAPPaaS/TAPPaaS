@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { composeFields } from "../../../lib/ts/src/compose-fields";
-import { FieldManifest, RefContext, backupDefs, buildManifest, flattenSchema, moduleDefs, oneLine, renderDefault, zoneDefs } from "../../src/fieldmanifest";
+import { FieldManifest, RefContext, backupDefs, buildManifest, flattenSchema, moduleAddDefaults, moduleDefs, oneLine, renderDefault, zoneAddDefaults, zoneDefs } from "../../src/fieldmanifest";
 import { classSummary, fieldChanges, fieldGroups, placeholderOf, typedVars } from "../../web/src/fieldlogic";
 import { formParts } from "../../web/src/argv";
 import { nameDescription } from "../../web/src/forms";
@@ -143,5 +143,40 @@ check(nameDescription("environment", eadd.nameField?.description) === "Slug iden
 check(zadd.nameField === null && nameDescription("zone", null) === "The zone's name: camelCase, no hyphens (e.g. iotCams); its key in zones.json.", "zone add: no name field in zones-fields, so the kind's own sentence");
 check(/^Slug identifier, used as the Authentik user identifier\. Also the default of the display name\.$/.test(nameDescription("user", user.nameField?.description)), "user: the schema's description, then the display name it defaults");
 check(org.nameField !== null && role.nameField !== null && group.nameField !== null, "…every identity kind's schema describes its name");
+
+// ── the defaults the managers compute, as the form shows them ────────────
+// environment-manager add: the typed name, the first organization, and no domain without --domain
+const eadd2 = buildManifest({ kind: "environment", name: null, mode: "add", defs: edefs, record: null, defaults: { displayName: "<Name>", ownerOrg: "rossen", "network.zone": "<name>", "domains.primary": "no public domain (reached only from inside)" }, refs, vars: { name: null } });
+check(placeholderOf(field(eadd2, "displayName")!) === "default the name, capitalised" && placeholderOf(field(eadd2, "network.zone")!) === "default the name", "environment add, nothing typed: the display name and zone say what they will be, never <Name>");
+check(placeholderOf(field(eadd2, "domains.primary")!) === "default no public domain (reached only from inside)" && placeholderOf(field(eadd2, "ownerOrg")!) === "default rossen", "…domains.primary: no public domain unless one is given (environment-manager writes no domains block); the owner is the first organization");
+check(field(eadd2, "domains.primary")?.required === false, "…so domains.primary is not required");
+
+// network-manager add over hrossen's zones (fixture): band 2 has 200 and 299
+const zfix = (JSON.parse(readFileSync(join(FIX, "zones.json"), "utf8")) as Record<string, unknown>[]).map((z) => [String(z.name), z] as [string, Record<string, unknown>]);
+const zcomp = zoneAddDefaults(zfix, ((schema("zones-fields.json").archetypes ?? {}) as { catalog: Record<string, unknown> }).catalog);
+const zadd2 = buildManifest({ kind: "zone", name: null, mode: "add", defs: zdefs, record: null, defaults: zcomp.defaults, defaultBy: zcomp.by, refs, vars: {} });
+const zph = (n: string, inputs: Record<string, unknown> = {}, vars: Record<string, string> = {}) => placeholderOf(field(zadd2, n)!, vars, inputs);
+check(zph("vlantag") === "default 298, the highest free in band 2 (260-299)" && zph("type") === "default Service" && zph("typeId") === "default 2", "zone add: a Service zone, the VLAN the highest free in band 2 (298: 299 is taken)");
+check(zph("ip") === "default 10.2.98.0/24" && zph("access-to") === "default internet" && zph("state") === "default Active" && zph("tier") === "default untiered: no archetype", "…its network, access-to, state, and untiered without an archetype");
+check(zph("description", {}, typedVars({ "@name": "lab" })) === "default Zone lab", "…its description follows the typed name");
+const cams = { "--archetype": "iot-cams" };
+check(zph("type", cams) === "default IoT" && zph("tier", cams) === "default 6" && zph("isolated", cams) === "default true" && zph("access-to", cams) === "default empty", "…--archetype iot-cams stamps its type, tier, isolated and access-to seed");
+check(zph("vlantag", cams) === "default 499, the highest free in band 4 (460-499)" && zph("ip", cams) === "default 10.4.99.0/24", "…and its VLAN moves to band 4");
+check(zph("vlantag", { typeId: "3" }) === "default 399, the highest free in band 3 (360-399)", "…a typed typeId moves the VLAN to its band");
+check(zph("type", { "--from-zone": "home" }) === "default Client" && zph("description", { "--from-zone": "home" }, typedVars({ "@name": "kids" })) === "default Zone kids (inherited from home)", "…--from-zone inherits the source zone's type; the description names it");
+
+// module-manager add: the VM's name follows the environment and --instance; a taken VM id the next free
+const mcomp = moduleAddDefaults({ module: "vaultwarden", own: vw, defaultEnv: "rossen", envs: [{ name: "mgmt", zone: "mgmt" }, { name: "rossen", zone: "rossen" }, { name: "test", zone: "test" }], firstNode: "tappaas1", usedVmids: [Number(vw.vmid), Number(vw.vmid) + 1] });
+const madd = buildManifest({ kind: "module", name: "vaultwarden", mode: "add", defs: moduleDefs(composed), record: null, defaults: { ...vw, ...mcomp.defaults }, defaultBy: mcomp.by, moduleClasses, services: (vw.dependsOn as string[]) ?? [], refs, vars: { name: "vaultwarden", vmname: "vaultwarden", domain: "hrossen.dk" } });
+const mph = (n: string, inputs: Record<string, unknown> = {}) => placeholderOf(field(madd, n)!, {}, inputs);
+check(mph("vmname") === "default vaultwarden" && mph("vmname", { "--environment": "rossen" }) === "default vaultwarden" && mph("vmname", { "--environment": "test" }) === "default vaultwarden-test", "module add: vmname is the module's name, suffixed in an environment that is not the default");
+check(mph("vmname", { "--environment": "test", "--instance": "vault2" }) === "default vault2", "…--instance names it");
+check(mph("vmid") === `default ${Number(vw.vmid) + 2}, the next free (${vw.vmid}, the module's own, is taken)`, "…a VM id a config already uses gives way to the next free one");
+check(mph("node") === "default tappaas1, the site's first node", "…no node of its own: the site's first node");
+check(moduleAddDefaults({ module: "x", own: { vmid: 700 }, defaultEnv: null, envs: [], firstNode: null, usedVmids: [] }).defaults.vmid === undefined, "…a free VM id stays the module's own");
+
+// identity-manager <kind> add: the display name is the name
+const uadd = buildManifest({ kind: "user", name: null, mode: "add", defs: flattenSchema(schema("user-fields.json")), record: null, defaults: { displayName: "<name>" }, refs, vars: { name: null } });
+check(placeholderOf(field(uadd, "displayName")!, typedVars({ "@name": "anna" })) === "default anna" && field(uadd, "displayName")?.required === false && field(uadd, "primaryEmail")?.required === true, "user add: the display name defaults to the typed name; the e-mail is still required");
 
 done("fieldmanifest");

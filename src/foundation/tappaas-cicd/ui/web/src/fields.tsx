@@ -21,8 +21,8 @@ export function fieldsPath(kind: string, name: string | null, mode: "add" | "mod
   return `fields/${kind}${name ? `/${encodeURIComponent(name)}` : ""}${mode === "add" && name ? "?mode=add" : ""}`;
 }
 
-function Input({ f, text, set, vars }: { f: ManifestField; text: string; set: (t: string) => void; vars: Record<string, string> }) {
-  const ph = placeholderOf(f, vars);
+function Input({ f, text, set, vars, inputs }: { f: ManifestField; text: string; set: (t: string) => void; vars: Record<string, string>; inputs: Record<string, unknown> }) {
+  const ph = placeholderOf(f, vars, inputs);
   if (f.type === "list" && f.choices) {
     // A list of defined objects: one box each, and a line for any other value
     // the field allows (proxyAllowedZones: internet, a network).
@@ -80,6 +80,8 @@ export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; on
   const [q, setQ] = useState("");
   const { errors } = fieldChanges(m.fields, edits);
   const vars = typedVars(values);
+  // What a computed default follows: the verb's options as set, the fields as typed.
+  const inputs: Record<string, unknown> = { ...values, ...edits };
   const edit = (name: string, text: string) => {
     const next = { ...edits, [name]: text };
     setEdits(next);
@@ -100,7 +102,7 @@ export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; on
           {f.offRelease ? <span className="ff-note" title="the resolver's .orig note">kept off the release on purpose</span> : null}
           <ClassTag c={f.class} apply={f.apply} />
         </label>
-        <Input f={f} text={edits[f.name] ?? ""} set={(t) => edit(f.name, t)} vars={vars} />
+        <Input f={f} text={edits[f.name] ?? ""} set={(t) => edit(f.name, t)} vars={vars} inputs={inputs} />
         {f.description ? <small className="muted">{f.description}</small> : null}
         {errors[f.name] ? <small className="ff-error">{errors[f.name]}</small> : null}
       </div>
@@ -124,7 +126,7 @@ export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; on
               {shut.filter(match).map((f) => (
                 <tr key={f.name}>
                   <td className="mono">{f.name}</td>
-                  <td className="mono wrap">{f.configured ? shown(f.value) : f.default !== null ? <span className="muted">{placeholderOf(f)}</span> : "—"}</td>
+                  <td className="mono wrap">{f.configured ? shown(f.value) : f.default !== null || f.defaultBy.length ? <span className="muted">{placeholderOf(f, vars, inputs)}</span> : "—"}</td>
                   <td className="small muted">{f.why}</td>
                   <td><ClassTag c={f.class} apply={f.apply} why={f.why} /></td>
                 </tr>
