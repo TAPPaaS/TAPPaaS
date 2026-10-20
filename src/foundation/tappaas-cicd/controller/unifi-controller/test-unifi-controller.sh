@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Offline unit tests for plugins/unifi.sh — the UniFi vendor plugin (ADR-008 #339).
+# Offline unit tests for unifi.sh — the UniFi controller's vendor logic (ADR-008 #339).
 #
 # No live controller: sources the plugin, asserts the contract functions, and
 # tests the interrogate VLAN-mapping logic by stubbing _unifi_login/_unifi_get
 # with fixtures (access / customize-trunk / all-trunk ports). The apply path is
 # validated live against real hardware (not unit-tested here).
 #
-# Usage: ./test-unifi-plugin.sh   — exit 0 all passed, 1 otherwise.
+# Usage: ./test-unifi-controller.sh   — exit 0 all passed, 1 otherwise.
 
 set -uo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
@@ -15,10 +15,10 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 PASS=0; FAIL=0
 ck() { local d="$1" exp="$2" got="$3"; if [[ "$exp" == "$got" ]]; then echo "  ok: $d"; PASS=$((PASS+1)); else echo "  FAIL: $d (expected '$exp', got '$got')"; FAIL=$((FAIL+1)); fi; }
 
-# shellcheck source=plugins/unifi.sh disable=SC1091
-. "${SCRIPT_DIR}/plugins/unifi.sh"
+# shellcheck source=unifi.sh disable=SC1091
+. "${SCRIPT_DIR}/unifi.sh"
 
-echo "test-unifi-plugin:"
+echo "test-unifi-controller:"
 
 # Contract: plugin_supports
 if plugin_supports unifi;   then ck "supports unifi"  yes yes; else ck "supports unifi"  yes no; fi
@@ -184,8 +184,8 @@ rm -rf "${APTMP}"
 
 # ── #733: say WHY a call failed, on stderr, and log in once per run ──
 # Re-source: the sections above replaced _unifi_login/_unifi_get with fixtures.
-# shellcheck source=plugins/unifi.sh disable=SC1091
-. "${SCRIPT_DIR}/plugins/unifi.sh"
+# shellcheck source=unifi.sh disable=SC1091
+. "${SCRIPT_DIR}/unifi.sh"
 ETMP="$(mktemp -d)"
 UNIFI_CRED="${ETMP}/cred"; printf 'url=https://ctl:11443\nusername=admin\npassword=pw\n' > "${UNIFI_CRED}"
 warn() { echo "[Warning] $*"; }   # the callers' warn prints to STDOUT
@@ -233,7 +233,7 @@ _UNIFI_JAR=""; _unifi_login() { return 1; }
 out="$(plugin_ap_interrogate ap1 10.0.0.9 2>/dev/null)"; rc=$?
 ck "failed login: interrogate answers {}"   "{}" "${out}"
 ck "…with rc 1"                             "1"  "${rc}"
-. "${SCRIPT_DIR}/plugins/unifi.sh"; _UNIFI_JAR="${ETMP}/jar"; _UNIFI_URL="https://ctl"
+. "${SCRIPT_DIR}/unifi.sh"; _UNIFI_JAR="${ETMP}/jar"; _UNIFI_URL="https://ctl"
 _unifi_login() { return 0; }
 out="$(CURL_GET=401 plugin_controller_interrogate ctrl1 x 2>/dev/null)"; rc=$?
 ck "no device list: controller interrogate rc 1" "1" "${rc}"
@@ -244,7 +244,7 @@ rm -rf "${ETMP}"
 # _unifi_send records the body instead of calling the controller. The overrides
 # are built with the device list as jq input — run it small and padded past
 # 128 KiB, and the PUT must be the same.
-. "${SCRIPT_DIR}/plugins/unifi.sh"
+. "${SCRIPT_DIR}/unifi.sh"
 ATMP="$(mktemp -d)"
 cat > "${ATMP}/switch-configuration-desired.json" <<'JSON'
 {"switches":{"sw1":{"managementIp":"1.2.3.4","ports":{
@@ -332,5 +332,5 @@ unset -f sleep
 rm -rf "${LTMP}"
 
 echo ""
-echo "test-unifi-plugin: ${PASS} passed, ${FAIL} failed"
+echo "test-unifi-controller: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

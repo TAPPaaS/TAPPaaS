@@ -23,13 +23,14 @@ desired/actual state files the switch controller uses
 the switch and AP planes share one topology view. Mutations are atomic `jq`
 rewrites. The active VLAN set and per-zone SSID/VLAN come from `zones.json`.
 
-### Vendor-plugin model
+### Vendor controllers (ADR-035 D4)
 
-Vendor automation lives in `network/scripts/plugins/<vendor>.sh`, with
-`manual.sh` as the fallback. A plugin is selected per-AP by sourcing each plugin
-and asking `plugin_supports <vendor>`. Plugins expose `plugin_ap_interrogate`
-(read live AP state) and `plugin_ap_apply` (push SSID/VLAN changes); `manual.sh`
-prints the steps for the operator instead.
+Vendor automation is a controller answering the `ap/1` verbs, listed in
+`config/control-plane.json` with `ap-manager` in its `plugsInto` and found
+through `lib/controller-lib.sh`. Per AP the manager picks the controller that
+drives its vendor: `ap-interrogate --ap` reads live AP state, `ap-apply --ap`
+pushes SSID/VLAN changes. A brand no controller drives gets the built-in
+manual controller, which prints the steps for the operator.
 
 ### Five-verb reconcile + validations
 
@@ -54,9 +55,8 @@ exits non-zero on failure.
 
 ## Pending / not yet implemented
 
-- **Vendor plugins are limited.** Only `unifi.sh` and the `manual.sh` fallback
-  exist in `network/scripts/plugins/`. Any other AP brand falls through to
-  `manual.sh`, so `apply` prints instructions rather than programming the AP.
+- **Vendor controllers are limited.** Only `unifi-controller` and the manual
+  fallback exist. Any other AP brand falls through to manual, so `apply` prints instructions rather than programming the AP.
 - The validations in `delta` rely on the AP's `link` (uplink switch/port) being
   recorded; an AP without a linked uplink cannot have its uplink-VLAN coverage
   cross-checked.

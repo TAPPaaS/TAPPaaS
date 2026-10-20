@@ -25,10 +25,10 @@ Each provider keeps two files under `~/config/` (`$CONFIG_DIR`):
 
 The **5-verb contract** (run in this order):
 
-1. `interrogate` — read reality into `actual` (controllers/auto switches via plugin; manual = the operator's registration).
+1. `interrogate` — read reality into `actual` (controllers/auto switches via their controller; manual = the operator's registration).
 2. `update-desired` — regenerate `desired` from `actual`'s topology + the active VLAN set.
 3. `delta` — diff `desired` vs `actual`.
-4. `apply` — push via the vendor plugin, or print manual steps.
+4. `apply` — push via the vendor controller, or print manual steps.
 5. `confirm` — record the applied config back into `actual`.
 
 `reconcile [--apply]` runs all five (apply only with `--apply`). On `--apply` the
@@ -85,11 +85,11 @@ switch-manager reconcile [--apply]
 ```
 
 - `--managed manual` configures the switch **by hand**: TAPPaaS prints which
-  VLANs to tag (via `plugins/manual.sh`) — even for a brand that *has* a plugin
+  VLANs to tag (via the manual controller) — even for a brand that *has* one
   (e.g. a UniFi switch you want to manage yourself). Apply them on the device,
   then run `switch-manager confirm`.
-- `--managed auto` lets the vendor plugin program the switch on `reconcile --apply`.
-- `--ip` is optional for manual switches (only plugin interrogate/apply needs it).
+- `--managed auto` lets the vendor controller program the switch on `reconcile --apply`.
+- `--ip` is optional for manual switches (only a controller's interrogate/apply needs it).
 - **TAPPaaS only manages ports you've annotated** (`add-port`/`update-port` set a
   `type`) or that are auto-detected (AP uplinks). Other ports a controller reports
   are left exactly as the switch has them — TAPPaaS won't touch them.
@@ -150,14 +150,14 @@ Run on cicd (offered at the end of `install-platform.sh`, re-runnable any time).
 It first lists any already-registered switches, then walks you through registering
 each switch **brand**, one at a time:
 
-1. Pick the vendor (brands auto-discovered from `plugins/`, plus **Other**). Menu
+1. Pick the vendor (brands auto-discovered from switch-manager's controllers, plus **Other**). Menu
    input is validated — an invalid entry re-prompts (1..N or Ctrl-C), never exits.
-2. Choose how to manage it — choices depend on the brand's plugin architecture:
+2. Choose how to manage it — choices depend on the brand's controller architecture:
    - **controller** brand (UniFi): it first **detects an existing controller**
      (a registered one, or saved credentials) and offers to *use it*; otherwise
      *manual* / *use an existing controller* / *install a controller*.
    - **device** brand (MikroTik, planned): *manual* / *register each switch by IP*
-   - **Other** (no plugin): *manual* only
+   - **Other** (no controller): *manual* only
 3. Register the switch(es) and their node-uplink ports (loops for several
    switches of the brand).
 4. Prints a **condensed summary** (one line per switch, ports indented), then
@@ -189,43 +189,38 @@ Secrets file: `~/.wlan-secrets.txt` (env `WLAN_SECRETS`), format `<ssid>=<passph
 
 ---
 
-## Vendor plugins (`plugins/<vendor>.sh`)
+## Vendor controllers
 
-`switch-manager`/`ap-manager` auto-discover plugins and pick the first whose
-`plugin_supports <vendor>` matches; `manual.sh` is the catch-all fallback.
+`switch-manager` and `ap-manager` drive a brand through a **controller**: an
+executable answering the `switch/1` and `ap/1` verbs (`describe`,
+`check-access`, `interrogate`, `apply`, `ap-interrogate`, `ap-apply`), found in
+the control plane's registry (`config/control-plane.json`) by what it plugs
+into. ADR-035 D4 is the contract. When no controller drives a brand, the
+built-in manual controller prints the delta as copy-paste instructions.
 
-A plugin is sourced (not exec'd) and implements:
+A controller answers JSON on **stdout and nothing else**; warnings and errors go
+to **stderr**, which the managers show. A device it could not read answers `{}`
+with **exit 1**, so the manager leaves `actual.json` alone for it and exits
+non-zero; exit 3 means "not mine" (a device-arch controller asked for a
+controller's devices, an unknown vendor).
 
-| Function | Purpose |
-|----------|---------|
-| `plugin_supports <vendor>` | rc 0 if this plugin handles the brand |
-| `plugin_arch` | `controller` or `device` — drives `setup-switches.sh`'s management menu |
-| `plugin_controller_module` | TAPPaaS module to install for the "install a controller" path |
-| `plugin_controller_interrogate <ctrl> <ip>` | controller-arch: enumerate its switches+ports **and APs (with uplink switch/port)** → `{switches:{...}, aps:{...}}` |
-| `plugin_interrogate <switch> <ip>` | device-arch: one switch's live ports |
-| `plugin_apply <switch> <delta>` | push the desired port config (rc 1 ⇒ manual action required) |
-| `plugin_ap_interrogate` / `plugin_ap_apply` | AP/SSID equivalents (used by `ap-manager`) |
+Shipped controllers:
+- **`unifi-controller`** (`tappaas-cicd/controller/unifi-controller/`) — UniFi
+  OS (controller arch; module `unifi-os`). Maps ports to UniFi
+  `port_overrides`, SSIDs to `wlanconf`, VLANs to VLAN-only networks. A failed
+  call names its cause: no connection (host, port in `url=`, TLS), HTTP 401/403
+  (the credentials — a **local** admin, no SSO/MFA), 404 (`url=` or site), 429
+  (rate-limited), or a 200 whose body is not JSON. The managers give every run
+  a private session directory, so all devices share one login instead of
+  logging in once each — which is what triggers UniFi OS's login rate limit.
+- **manual** (`tappaas-cicd/lib/controller-manual.sh`) — the fallback;
+  `interrogate` returns `{}`, `apply` prints the delta.
 
-An interrogate prints its JSON answer on **stdout and nothing else**; the
-controllers parse it. Warnings and errors go to **stderr**, which the controllers
-show. A device the plugin could not read answers `{}` with **rc 1**, so the
-controller leaves `actual.json` alone for it and exits non-zero; `manual.sh`
-answers `{}` with rc 0 (nothing to read, not a failure).
-
-Shipped plugins:
-- **`unifi.sh`** — UniFi OS (controller arch; module `unifi-os`). Maps ports to
-  UniFi `port_overrides`, SSIDs to `wlanconf`, VLANs to VLAN-only networks.
-  A failed call names its cause: no connection (host, port in `url=`, TLS),
-  HTTP 401/403 (the credentials — a **local** admin, no SSO/MFA), 404 (`url=` or
-  site), 429 (rate-limited), or a 200 whose body is not JSON. The controllers
-  give every run a private `UNIFI_SESSION` directory, so all devices share one
-  login instead of logging in once each — which is what triggers UniFi OS's
-  login rate limit.
-- **`manual.sh`** — fallback; `interrogate` returns `{}`, `apply` prints the
-  delta as copy-paste instructions.
-
-**To add a brand:** drop a `plugins/<vendor>.sh` implementing the contract; it is
-wired in automatically (no changes to the managers or `setup-switches.sh`).
+**To add a brand:** write a `<brand>-controller` in the module that runs it
+(its `controller/<brand>-controller/` directory and `<brand>-controller.json`),
+plugging into `switch-manager`; installing the module registers it. A bash
+controller can keep its logic as `plugin_*` functions behind
+`tappaas-cicd/lib/controller-shim.sh`, as `unifi-controller` does.
 
 ---
 
@@ -233,11 +228,11 @@ wired in automatically (no changes to the managers or `setup-switches.sh`).
 
 | File | Used by |
 |------|---------|
-| `~/.unifi-os-credentials.txt` | `unifi.sh` (controller login: `url`/`username`/`password`) |
+| `~/.unifi-os-credentials.txt` | `unifi-controller` (controller login: `url`/`username`/`password`) |
 | `~/.wlan-secrets.txt`         | WLAN passphrases (`<ssid>=<psk>`), written by `setup-wlan-secrets.sh` |
 
 ## Tests
 
 Each script has an offline test (`test-<name>.sh`) — black-box against a temp
-`CONFIG_DIR`, stubbed plugins/managers, and pty-driven interactive runs. Run them
+`CONFIG_DIR`, stubbed controllers/managers, and pty-driven interactive runs. Run them
 all from this directory: `for t in test-*.sh; do bash "$t"; done`.

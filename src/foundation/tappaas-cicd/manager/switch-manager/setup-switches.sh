@@ -2,23 +2,23 @@
 #
 # setup-switches.sh — registration & setup of switches that carry TAPPaaS traffic (#351, ADR-008)
 #
-# Runs on the cicd mothership (where switch-manager + the vendor plugins live),
+# Runs on the cicd mothership (where switch-manager + its controllers live),
 # normally at the end of the platform install (install-platform.sh) but also
 # re-runnable any time. It walks you through registering each switch BRAND, one
 # at a time, into switch-configuration-actual.json so zone-reconcile / switch-
 # manager keep the physical switch VLANs in sync with zones.json.
 #
-# Flow: pick a brand (auto-discovered from the plugin library, plus "Other") →
-# choose how to manage it (the choices depend on the brand's plugin architecture)
+# Flow: pick a brand (auto-discovered from switch-manager's controllers, plus "Other") →
+# choose how to manage it (the choices depend on the brand's controller architecture)
 # → register switch(es)/controller and node-uplink ports → loop for more brands.
 #
-#   brand has no plugin ("Other")     → manual only
+#   brand has no controller ("Other") → manual only
 #   controller-arch brand (UniFi)     → manual | use existing controller | install a controller
 #   device-arch brand (MikroTik, tbd) → manual | register each switch by IP
 #
 # "manual" records the node-uplink ports (TAPPaaS prints which VLANs to tag, you
 # apply them by hand, then `switch-manager confirm`). Controller/device modes let
-# the plugin program the switch via `switch-manager reconcile --apply`.
+# the controller program the switch via `switch-manager reconcile --apply`.
 #
 # This step is switch-only. WiFi SSID→VLAN is setup-wlan-secrets.sh + ap-manager.
 #
@@ -37,7 +37,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly SCRIPT_DIR
-readonly PLUGIN_DIR="/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins"
+# shellcheck source=../../lib/controller-lib.sh
+. "${SCRIPT_DIR}/../../lib/controller-lib.sh"
 ACTUAL="${ACTUAL:-${CONFIG_DIR}/switch-configuration-actual.json}"
 
 # Injectable so tests can stub the helpers.
@@ -62,30 +63,24 @@ ask_choice() {
     done
 }
 
-# ── Plugin discovery / metadata ──────────────────────────────────────
+# ── Controller discovery / metadata ──────────────────────────────────
 
-discover_brands() {
-    local p b
-    for p in "${PLUGIN_DIR}"/*.sh; do
-        b="$(basename "$p" .sh)"; [[ "$b" == "manual" ]] && continue; echo "$b"
-    done
+# The brands switch-manager has a controller for (ADR-035 D4: the registry's
+# controllers that plug into it, each naming the vendors it drives).
+discover_brands() { ctl_vendors switch-manager; }
+
+# A brand's controller's describe, or {} when it has none (manual).
+_brand_describe() {
+    local id; id="$(ctl_for_vendor switch-manager "$1")"
+    [[ "${id}" == manual ]] && { echo '{}'; return 0; }
+    ctl_describe "${id}"
 }
 
-# Architecture a brand's plugin declares: "controller" | "device" | "" (none).
-plugin_arch_of() {
-    local brand="$1"; local p="${PLUGIN_DIR}/${brand}.sh"
-    [[ -f "$p" ]] || { echo ""; return 0; }
-    # shellcheck disable=SC1090
-    ( . "$p"; declare -F plugin_arch >/dev/null && plugin_arch || echo "" )
-}
+# Architecture a brand's controller declares: "controller" | "device" | "" (none).
+plugin_arch_of() { _brand_describe "$1" | jq -r '.arch // ""'; }
 
 # The TAPPaaS module that provides a controller for this brand (install path).
-plugin_module_of() {
-    local brand="$1"; local p="${PLUGIN_DIR}/${brand}.sh"
-    [[ -f "$p" ]] || { echo ""; return 0; }
-    # shellcheck disable=SC1090
-    ( . "$p"; declare -F plugin_controller_module >/dev/null && plugin_controller_module || echo "" )
-}
+plugin_module_of() { _brand_describe "$1" | jq -r '.module // ""'; }
 
 # ── Shared helpers ───────────────────────────────────────────────────
 

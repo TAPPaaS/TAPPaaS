@@ -8,15 +8,16 @@
 # model and implements the same five-verb contract as switch-manager:
 #
 #   update-desired  zones.json → SSID vlan tracking in desired
-#   interrogate     live AP/controller state → actual (via vendor plugin)
+#   interrogate     live AP/controller state → actual (via its controller)
 #   delta           desired vs actual (SSID add/remove/vlan-change + validations)
-#   apply           push via vendor plugin, or print manual steps
+#   apply           push via the vendor controller, or print manual steps
 #   confirm         record applied state in actual;
 #   reconcile       = the five verbs in order (apply only with --apply)
 #
 # AP inventory + SSIDs live under the .accessPoints key of the SAME files
 # switch-manager uses (switch-configuration-{desired,actual}.json). Vendor
-# automation lives in scripts/plugins/<vendor>.sh; manual.sh is the fallback.
+# automation is a controller (ADR-035 D4) answering the ap/1 verbs; manual is
+# the fallback.
 #
 # Usage: see `ap-manager --help`.
 #
@@ -35,7 +36,9 @@ readonly SCRIPT_DIR
 # is_placeholder, wlan_zones, the per-AP SSID ceiling — shared with setup-wlan-secrets.sh (#734).
 # shellcheck source=../../lib/wlan-lib.sh
 . "${SCRIPT_DIR}/../../lib/wlan-lib.sh"
-PLUGIN_DIR="${PLUGIN_DIR:-/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins}"; readonly PLUGIN_DIR
+# The controllers: the registry's, plus (tests) every PLUGIN_DIR/*.sh.
+# shellcheck source=../../lib/controller-lib.sh
+. "${SCRIPT_DIR}/../../lib/controller-lib.sh"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
@@ -62,9 +65,9 @@ SSID configuration:
 
 Reconciliation (five-verb provider contract):
   update-desired          zones.json -> SSID vlan tracking
-  interrogate             live APs -> actual.json (via vendor plugin)
+  interrogate             live APs -> actual.json (via its controller)
   delta                   show desired-vs-actual + zone/SSID/uplink validations
-  apply                   push delta via plugin (manual plugin prints steps)
+  apply                   push delta via the controller (manual prints steps)
   confirm                 record applied state in actual.json
   reconcile [--apply]     run all five in order (apply only with --apply)
 
@@ -272,38 +275,27 @@ cmd_update_desired() {
     return 0
 }
 
-# ── Phase 1: interrogate (via vendor plugin; manual = no-op) ─────────
-
-select_plugin() {
-    local vendor="$1" p
-    for p in "${PLUGIN_DIR}"/*.sh; do
-        [[ "$(basename "$p")" == "manual.sh" ]] && continue
-        # shellcheck disable=SC1090
-        ( . "$p"; plugin_supports "${vendor}" "" ) >/dev/null 2>&1 && { echo "$p"; return 0; }
-    done
-    echo "${PLUGIN_DIR}/manual.sh"
-}
+# ── Phase 1: interrogate (via its controller; manual = no-op) ────────
 
 cmd_interrogate() {
     info "${BOLD}interrogate${CL} (live APs → actual.json)"
     ensure_files
-    local names name vendor ip plugin state prc tmp failed=0
+    local names name vendor ip ctl state prc tmp failed=0
     names=$(jq -r '.accessPoints // {} | keys[]' "${DESIRED}")
     if [[ -z "${names}" ]]; then info "  (no APs in inventory)"; return 0; fi
     while IFS= read -r name; do
         vendor=$(jq -r --arg n "${name}" '.accessPoints[$n].vendor' "${DESIRED}")
         ip=$(jq -r --arg n "${name}" '.accessPoints[$n].managementIp // ""' "${DESIRED}")
-        plugin=$(select_plugin "${vendor}")
-        # The plugin's stderr is left alone: it says WHY a device could not be
-        # read (#733). Only stdout is its answer.
+        ctl=$(ctl_for_vendor ap-manager "${vendor}")
+        # The controller's stderr is left alone: it says WHY a device could not
+        # be read (#733). Only stdout is its answer.
         prc=0
-        # shellcheck disable=SC1090
-        state=$( . "${plugin}"; plugin_ap_interrogate "${name}" "${ip}" ) || prc=$?
+        state=$(ctl_run "${ctl}" ap-interrogate --ap "${name}" --ip "${ip}") || prc=$?
         if [[ "${prc}" -ne 0 ]] || ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "${state}"; then
             warn "  ${name}: not interrogated — actual left unchanged"
             failed=$((failed + 1)); continue
         fi
-        info "  ${name}: interrogated via $(basename "${plugin}" .sh) plugin"
+        info "  ${name}: interrogated via $(ctl_label "${ctl}")"
         [[ "${state}" != "{}" ]] || continue
         tmp="$(mktemp)"
         # Merge (not replace) so operator/auto-detected fields like
@@ -427,19 +419,18 @@ cmd_delta() {
 # ── Phase 3 / 4: apply / confirm ────────────────────────────────────
 
 cmd_apply() {
-    local delta ap vendor changes plugin rc manual=0 applied=0
+    local delta ap vendor changes ctl rc manual=0 applied=0
     delta=$(compute_delta)
     info "${BOLD}apply${CL}"
-    # One AP per line, on fd 3 so a plugin reading stdin cannot eat the list.
+    # One AP per line, on fd 3 so a controller reading stdin cannot eat the list.
     while IFS= read -r ap <&3; do
         changes=$(echo "${delta}" | jq -c --arg a "${ap}" '{changes: .[$a].changes}')
         [[ "$(echo "${changes}" | jq '.changes|length')" -eq 0 ]] && continue
         vendor=$(jq -r --arg n "${ap}" '.accessPoints[$n].vendor' "${DESIRED}")
-        plugin=$(select_plugin "${vendor}")
+        ctl=$(ctl_for_vendor ap-manager "${vendor}")
         rc=0
-        # shellcheck disable=SC1090
-        ( . "${plugin}"; plugin_ap_apply "${ap}" "${changes}" ) || rc=$?
-        if [[ "${rc}" -eq 0 ]]; then info "  ${GN}✓${CL} ${ap}: applied via $(basename "${plugin}" .sh)"; applied=$((applied+1))
+        ctl_run "${ctl}" ap-apply --ap "${ap}" --changes-json "${changes}" >/dev/null || rc=$?
+        if [[ "${rc}" -eq 0 ]]; then info "  ${GN}✓${CL} ${ap}: applied via $(ctl_label "${ctl}")"; applied=$((applied+1))
         else manual=$((manual+1)); fi
     done 3< <(jq -r 'keys[]' <<< "${delta}")
     APPLY_MANUAL="${manual}"; APPLY_DONE="${applied}"
@@ -496,7 +487,7 @@ main() {
     shift || true
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
     ensure_files
-    # One vendor login per run, shared by every AP's plugin subshell (#733).
+    # One vendor login per run, shared by every AP's controller run (#733).
     UNIFI_SESSION="$(mktemp -d)"
     export UNIFI_SESSION
     trap 'rm -rf "${UNIFI_SESSION}"' EXIT

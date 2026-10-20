@@ -126,16 +126,16 @@ ck "add-controller recorded"         "unifi"  "$(jq -r '.controllers.ctrl1.vendo
 ck "add-controller dup (rc)"         "1"      "$(rc_of "${SM}" add-controller ctrl1 --vendor x --ip y)"
 ck "add-switch bad controller (rc)"  "1"      "$(rc_of "${SM}" add-switch s9 --vendor unifi --managed auto --controller nope)"
 
-# ── managed:manual forces manual.sh even for a brand WITH a plugin ───
+# ── managed:manual forces the manual controller even for a brand WITH one ──
 "${SM}" add-switch usw --vendor unifi --managed manual >/dev/null 2>&1
 "${SM}" add-port usw 1 --type node --target tappaas1 >/dev/null 2>&1
 "${SM}" update-desired >/dev/null 2>&1
 apply_out="$("${SM}" apply 2>&1)"
-ck "unifi+manual uses manual.sh"     "yes"    "$(grep -q 'MANUAL CONFIGURATION' <<<"${apply_out}" && echo yes || echo no)"
+ck "unifi+manual uses manual"         "yes"    "$(grep -q 'MANUAL CONFIGURATION' <<<"${apply_out}" && echo yes || echo no)"
 
 # ── controller interrogate MERGES (preserves operator annotations) ──
 # Regression: a re-interrogate must not wipe a port's type/target set by update-port.
-STUBDIR="${TMP}/plugins"; mkdir -p "${STUBDIR}"; cp "/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins/manual.sh" "${STUBDIR}/"
+STUBDIR="${TMP}/plugins"; mkdir -p "${STUBDIR}"
 cat > "${STUBDIR}/stub.sh" <<'EOF'
 plugin_supports() { [[ "$1" == "stub" ]]; }
 plugin_arch() { echo controller; }

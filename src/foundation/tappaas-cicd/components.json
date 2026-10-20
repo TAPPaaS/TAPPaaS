@@ -1,5 +1,5 @@
 {
-  "_comment": "The control plane's standard components (ADR-035): every manager and controller tappaas-cicd ships, and the two services built beside them. One list: scripts/control-plane-registry.sh writes it into config/control-plane.json, the registry the self-check and the console read, and scripts/test/test-control-plane-registry.sh keeps it equal to the directories and to flake.nix's packages. A manager with manifest 'help-json' answers --help --json and appears in the console. kind: manager | controller | service. package: the flake package that builds it; null for bash, which needs no build. aliases: old names a component also answers to, linked beside it for one release (ADR-035 P2).",
+  "_comment": "The control plane's standard components (ADR-035): every manager and controller tappaas-cicd ships, and the two services built beside them. One list: scripts/control-plane-registry.sh writes it into config/control-plane.json, the registry the self-check and the console read, and scripts/test/test-control-plane-registry.sh keeps it equal to the directories and to flake.nix's packages. A manager with manifest 'help-json' answers --help --json and appears in the console. kind: manager | controller | service. package: the flake package that builds it; null for bash, which needs no build. aliases: old names a component also answers to, linked beside it for one release (ADR-035 P2). plugsInto: the managers a controller plugs into (ADR-035 D3, D5).",
   "version": 1,
   "components": [
     {
@@ -127,6 +127,17 @@
       "path": "controller/proxmox-controller",
       "language": "bash",
       "package": null
+    },
+    {
+      "name": "unifi-controller",
+      "kind": "controller",
+      "path": "controller/unifi-controller",
+      "language": "bash",
+      "package": null,
+      "plugsInto": [
+        "switch-manager",
+        "ap-manager"
+      ]
     },
     {
       "name": "update-tappaas",

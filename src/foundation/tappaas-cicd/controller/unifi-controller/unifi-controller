@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# unifi-controller — the UniFi controller (ADR-035): drives UniFi switches and
+# access points through a UniFi OS controller, for switch-manager (switch/1) and
+# ap-manager (ap/1). The vendor logic is unifi.sh; lib/controller-shim.sh turns it
+# into the contract's verbs. See README.md, and `unifi-controller --help`.
+here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+exec bash "${here}/../../lib/controller-shim.sh" --plugin "${here}/unifi.sh" --contract "${here}/contract.json" "$@"

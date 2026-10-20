@@ -117,7 +117,6 @@ ck "--help works without zones.json" "0"      "$(CONFIG_DIR=/nonexistent rc_of "
 # ── #733: an AP that cannot be read is reported, never merged or swallowed ──
 ACT="${TMP}/switch-configuration-actual.json"
 STUB="${TMP}/plugins"; mkdir -p "${STUB}"
-cp "/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins/manual.sh" "${STUB}/"
 stub() { printf 'plugin_supports() { [[ "$1" == "stub" ]]; }\nplugin_ap_interrogate() { %s; }\n' "$1" > "${STUB}/stub.sh"; }
 stub "echo '{}'"
 PLUGIN_DIR="${STUB}" "${AM}" add ap-stub --vendor stub --ip 10.0.0.30 >/dev/null 2>&1

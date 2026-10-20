@@ -28,16 +28,19 @@ State lives in two JSON files in the config directory:
 Inventory mutations are atomic `jq` rewrites of `actual.json`. The active VLAN
 set (the trunk set for node uplinks) is read from `zones.json`.
 
-### Vendor-plugin model
+### Vendor controllers (ADR-035 D4)
 
-Vendor automation lives in `network/scripts/plugins/<vendor>.sh`, with
-`manual.sh` as the fallback. The plugin directory is overridable via the
-`PLUGIN_DIR` env var (used by tests to supply stub plugins). For each switch the
-controller selects a plugin by sourcing each plugin and asking
-`plugin_supports <vendor>`; a switch marked `managed:manual` always uses
-`manual.sh` even if its brand has a real plugin. The plugin exposes
-`plugin_interrogate` (read live config) and `plugin_apply` (push VLAN changes);
-`manual.sh` instead prints the steps for the operator.
+Vendor automation is a controller: an executable answering the `switch/1`
+verbs, listed in `config/control-plane.json` with `switch-manager` in its
+`plugsInto`. `lib/controller-lib.sh` finds them and runs them; the manager
+never sources vendor code. For each switch the manager picks the controller
+whose `describe` names the switch's vendor (or that answers `supports
+<vendor>`); a switch marked `managed:manual`, or a brand no controller drives,
+gets the built-in manual controller, which prints the steps for the operator.
+`interrogate --controller` reads every device a controller adopts,
+`interrogate --switch` one standalone switch, `apply --switch` pushes its
+changes. `PLUGIN_DIR` (tests) adds every `*.sh` there as a controller run
+through `lib/controller-shim.sh`.
 
 ### Parking (#853)
 
@@ -47,8 +50,8 @@ any access port (delta also counts a trunk that should be an access port as a
 change). `interrogate` parks (`park_unrecorded`) only ports with no record, a
 reported link of `down`, not disabled and outside any aggregate — a port with
 a link may be a node uplink not yet registered. `update-port --park` and
-`remove-port` go through `park_port`: the plugin's `plugin_apply` is handed a
-desired holding only that port (`SWITCH_DESIRED`, which the UniFi plugin reads
+`remove-port` go through `park_port`: the controller's `apply` is handed a
+desired holding only that port (`--desired`, which unifi-controller reads
 instead of the site's desired; ports it does not name keep their override), and
 the record changes after the switch has it. The default profile is never
 restored (README, *Parked ports*).
@@ -83,15 +86,15 @@ provides no per-device logic — the controller and its plugins own that.
 ## Tests
 
 `test.sh` runs the co-located `test-switch-manager.sh` and
-`test-setup-switches.sh` (offline; plugins stubbed via `PLUGIN_DIR`), exiting
+`test-setup-switches.sh` (offline; controllers stubbed via `PLUGIN_DIR`), exiting
 non-zero on failure.
 
 ## Pending / not yet implemented
 
-- **Vendor plugins are limited.** Only `unifi.sh` (full automation) and
-  `manual.sh` (operator-applied fallback) exist in
-  `network/scripts/plugins/`. Any other brand falls through to `manual.sh`, so
+- **Vendor controllers are limited.** Only `unifi-controller` (full
+  automation) and the manual fallback exist. Any other brand falls through to
+  manual, so
   `apply` prints instructions rather than programming the switch.
 - **Device-arch brands** (e.g. MikroTik) are referenced in `setup-switches.sh`
-  as a management mode but have no plugin yet — they are effectively manual
+  as a management mode but have no controller yet — they are effectively manual
   until a plugin lands.

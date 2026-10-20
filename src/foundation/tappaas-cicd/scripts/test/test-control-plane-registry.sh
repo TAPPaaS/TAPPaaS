@@ -59,6 +59,8 @@ ck "a module's entry is kept as it was" "foo-controller foo" "$(jq -r '.componen
 ck "a standard entry no longer in components.json is gone" "0" "$(jq '[.components[] | select(.name == "retired-manager")] | length' "${REG}")"
 ck "an entry carries its source directory" "${CICD}/manager/module-manager" "$(jq -r '.components[] | select(.name == "module-manager") | .source' "${REG}")"
 ck "…and its manifest kind" "help-json" "$(jq -r '.components[] | select(.name == "module-manager") | .manifest' "${REG}")"
+ck "…and what a controller plugs into" "switch-manager,ap-manager" "$(jq -r '.components[] | select(.name == "unifi-controller") | .plugsInto | join(",")' "${REG}")"
+ck "…and a renamed component's old names" "switch-controller" "$(jq -r '.components[] | select(.name == "switch-manager") | .aliases | join(",")' "${REG}")"
 ck "the lock file is beside it" "yes" "$([[ -e "${REG}.lock" ]] && echo yes || echo no)"
 printf '{not json' > "${T}/components.json"
 ck "a broken components.json is refused (rc)" "1" "$(CICD_DIR="${T}" CONFIG_DIR="${T}" bash "${CICD}/scripts/control-plane-registry.sh" >/dev/null 2>&1; echo $?)"

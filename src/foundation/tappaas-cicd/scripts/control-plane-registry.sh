@@ -50,7 +50,7 @@ build() { # build <existing-registry-json>
             [ $c[0].components[] | {
                 name, kind, module: "tappaas-cicd", repository: $repo,
                 source: ($dir + "/" + .path), language, package,
-                manifest: (.manifest // null), aliases: (.aliases // []), instances: [] } ]
+                manifest: (.manifest // null), aliases: (.aliases // []), plugsInto: (.plugsInto // []), instances: [] } ]
             + [ ($old.components // [])[] | select(.module != "tappaas-cicd") ]
           ) }'
 }

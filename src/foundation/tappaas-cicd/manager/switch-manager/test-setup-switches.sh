@@ -34,6 +34,13 @@ CREDS="${TMP}/creds.txt"; echo "url=https://ctrl" > "${CREDS}"
 
 echo "test-setup-switches:"
 
+# The brands come from the registry: one with this tree's unifi-controller.
+CICD="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+export CONTROL_PLANE_REGISTRY="${TMP}/control-plane.json"
+jq -n --arg s "${CICD}/controller/unifi-controller" '{version: 1, components: [
+  {name: "unifi-controller", kind: "controller", module: "tappaas-cicd", source: $s,
+   plugsInto: ["switch-manager", "ap-manager"]}]}' > "${CONTROL_PLANE_REGISTRY}"
+
 # ── Unit: source (guarded → main not run) and check helpers ─────────
 # shellcheck source=setup-switches.sh disable=SC1091
 SWITCH_MANAGER="${STUB_SM}" . "${SUT}"

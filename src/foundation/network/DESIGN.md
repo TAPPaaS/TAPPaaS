@@ -340,8 +340,8 @@ into `~/bin`):
 
 Each provider follows a 5-verb contract (`interrogate → update-desired → delta → apply →
 confirm`) over two files in `~/config/`: `switch-configuration-actual.json` (reality) and
-`…-desired.json` (regenerated from `zones.json`). Vendor automation is plugin-based
-(`scripts/plugins/<vendor>.sh`; `unifi.sh` shipped, `manual.sh` is the by-hand fallback).
+`…-desired.json` (regenerated from `zones.json`). Vendor automation is a controller
+per brand (ADR-035 D4: `unifi-controller` shipped, a built-in manual one is the by-hand fallback).
 
 **Full command reference, the inventory model, and how to add a switch brand:
 [`scripts/README.md`](scripts/README.md).**

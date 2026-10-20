@@ -32,6 +32,9 @@ ha-vm-lib.sh,tappaas-cicd/lib/,snapshot-vm.sh; migrate-vm.sh; reboot-node-lib.sh
 module-catalog-lib.sh,tappaas-cicd/lib/,
 test-config-readers.sh,tappaas-cicd/lib/,common-install-routines.sh
 test-ha-vm-lib.sh,tappaas-cicd/lib/,ha-vm-lib.sh
+controller-lib.sh,tappaas-cicd/lib/,controller-shim.sh; controller-manual.sh
+controller-shim.sh,tappaas-cicd/lib/,common-install-routines.sh
+controller-manual.sh,tappaas-cicd/lib/,
 #
 # === tappaas-cicd/scripts ===
 acme-setup.sh,tappaas-cicd/scripts/,common-install-routines.sh
@@ -184,8 +187,8 @@ test.sh,tappaas-cicd/controller/proxmox-controller/,
 update.sh,tappaas-cicd/controller/proxmox-controller/,
 #
 # === tappaas-cicd/manager/switch-manager ===
-switch-manager,tappaas-cicd/manager/switch-manager/,zones.json
-setup-switches.sh,tappaas-cicd/manager/switch-manager/,common-install-routines.sh; install-module.sh
+switch-manager,tappaas-cicd/manager/switch-manager/,zones.json; controller-lib.sh
+setup-switches.sh,tappaas-cicd/manager/switch-manager/,common-install-routines.sh; install-module.sh; controller-lib.sh
 test-setup-switches.sh,tappaas-cicd/manager/switch-manager/,setup-switches.sh
 test-switch-manager.sh,tappaas-cicd/manager/switch-manager/,switch-manager; zones.json
 install.sh,tappaas-cicd/manager/switch-manager/,validate.sh
@@ -193,7 +196,7 @@ test.sh,tappaas-cicd/manager/switch-manager/,
 update.sh,tappaas-cicd/manager/switch-manager/,
 #
 # === tappaas-cicd/manager/ap-manager ===
-ap-manager,tappaas-cicd/manager/ap-manager/,zones.json
+ap-manager,tappaas-cicd/manager/ap-manager/,zones.json; controller-lib.sh
 setup-wlan-secrets.sh,tappaas-cicd/manager/ap-manager/,common-install-routines.sh; zones.json
 test-ap-manager.sh,tappaas-cicd/manager/ap-manager/,zones.json
 test-setup-wlan-secrets.sh,tappaas-cicd/manager/ap-manager/,setup-wlan-secrets.sh
@@ -325,14 +328,12 @@ test-network.sh,network/,common-install-routines.sh; test-network-manager; netwo
 test-caddy-public.sh,network/,common-install-routines.sh; install-module.sh; delete-module.sh
 test-variant-public.sh,network/,common-install-routines.sh; vm-net.sh; network-manager; install-module.sh; delete-module.sh; unbound-manager; network.json; zones.json
 #
-# === network/scripts ===
-test-unifi-plugin.sh,network/scripts/,unifi.sh
+# === tappaas-cicd/controller/unifi-controller (ADR-035 switch/1 + ap/1) ===
+unifi-controller,tappaas-cicd/controller/unifi-controller/,controller-shim.sh; unifi.sh
+unifi.sh,tappaas-cicd/controller/unifi-controller/,
+test-unifi-controller.sh,tappaas-cicd/controller/unifi-controller/,unifi.sh
 #
-# === network/scripts/plugins ===
-manual.sh,network/scripts/plugins/,
-unifi.sh,network/scripts/plugins/,
-#
-# === network/scripts/switch-manager (TS S-TS pilot port; not yet the linked bin) ===
+# === network/scripts/switch-controller (TS S-TS pilot port; not yet the linked bin) ===
 src/main.ts,network/scripts/switch-controller/,zones.json
 #
 # === network/services/proxy ===

@@ -92,10 +92,9 @@ passes over it.
 |------------|----------|-------------------|
 | [`opnsense-controller`](opnsense-controller/) | Python package | The OPNsense firewall: VLANs/zones, DHCP, split-horizon DNS, the Caddy reverse proxy, NAT port-forwards, firewall rules, ACME/TLS, and syslog. Exposes a family of `*-manager` CLIs. |
 | [`proxmox-controller`](proxmox-controller/) | Bash | The Proxmox hypervisor L2 layer: per-VM NIC trunk lists and node `lan` bridge VLAN sets, plus VM/node migration and disk resize helpers. |
-| [`switch-manager`](switch-manager/) | Bash | Physical managed switches: which VLANs are tagged on which ports, reconciled to `zones.json` via vendor plugins (or printed for manual application). |
-| [`ap-manager`](ap-manager/) | Bash | Wireless access points: the mapping of WiFi SSIDs to VLANs, reconciled to `zones.json` via vendor plugins. |
 | [`authentik-controller`](authentik-controller/) | Python package | The Authentik identity server (admin REST API): users, groups/roles and membership, proxy/OIDC applications, and the forward-auth outpost. |
 | [`pbs-controller`](pbs-controller/) | Bash (reuses foundation PBS libs) | The Proxmox Backup Server: shared-job status, per-module snapshot listing, verify, and datastore namespaces. Reuses `backup/lib/pbs-job.sh` + `pbs-namespace.sh` rather than reimplementing the PBS API; degrades gracefully when PBS is unreachable. |
+| [`unifi-controller`](unifi-controller/) | Bash (plugin functions behind the controller shim) | A UniFi OS controller, for `switch-manager` (`switch/1`) and `ap-manager` (`ap/1`): reads the switches, ports and APs it adopts and programs port VLANs, aggregates and SSIDs. |
 
 Each controller directory contains a `README.md` (user-facing: what it does and
 how to drive its CLI) and a `DESIGN.md` (implementation notes: language, build,

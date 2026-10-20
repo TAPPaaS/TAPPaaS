@@ -26,16 +26,17 @@
 #               VLANs, has no VLAN set of its own, and nothing is pushed to it.
 #
 # Five-verb provider contract (ADR-008 order):
-#   interrogate     live/controller/manual state → actual.json (via vendor plugin)
+#   interrogate     live/controller/manual state → actual.json (via its controller)
 #   update-desired  actual topology + zones.json → desired.json (regenerated)
 #   delta           desired vs actual → VLANs to add/remove per port
-#   apply           push via vendor plugin, or print manual steps
+#   apply           push via the vendor controller, or print manual steps
 #   confirm         record applied VLAN config into actual.json
 #   reconcile       = the five verbs in order (apply only with --apply)
 #
-# Vendor automation lives in scripts/plugins/<vendor>.sh; manual.sh is the
-# fallback (prints a delta for manual application). A switch with managed:manual
-# always uses manual.sh even if its brand has a plugin.
+# Vendor automation is a controller (ADR-035 D4): an executable answering the
+# switch/1 verbs, found in the control plane's registry by what it plugs into.
+# The built-in manual controller is the fallback (prints a delta for manual
+# application); a switch with managed:manual always uses it.
 #
 # Usage: see `switch-manager --help`.
 #
@@ -51,8 +52,9 @@ SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 readonly SCRIPT_DIR
 # shellcheck source=../../lib/cli-gate.sh
 . "${SCRIPT_DIR}/../../lib/cli-gate.sh"
-# PLUGIN_DIR is env-overridable so tests can supply stub vendor plugins.
-PLUGIN_DIR="${PLUGIN_DIR:-/home/tappaas/TAPPaaS/src/foundation/network/scripts/plugins}"; readonly PLUGIN_DIR
+# The controllers: the registry's, plus (tests) every PLUGIN_DIR/*.sh.
+# shellcheck source=../../lib/controller-lib.sh
+. "${SCRIPT_DIR}/../../lib/controller-lib.sh"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
@@ -102,20 +104,20 @@ Inventory (recorded in switch-configuration-actual.json):
 
 Reconciliation (five-verb provider contract, run in this order):
   interrogate [--park-zone <zone>] [--no-park]
-                          controller/auto switches -> actual.json (via plugin);
+                          controller/auto switches -> actual.json (via its controller);
                           a port with no record and no link is recorded parked
                           (not with --no-park: read only, as after a sweep);
                           each switch read records when (lastRead)
   update-desired          actual topology + zones.json -> desired.json
   delta                   desired-vs-actual VLAN differences per port
-  apply                   push delta via plugin (manual plugin prints steps)
+  apply                   push delta via the controller (manual prints steps)
   confirm [<switch>...]   record applied VLAN config in actual.json (all, or just
                           the named switches — use after hand-tagging a manual one)
   reconcile [--apply] [--park-zone <zone>]
                           run all five in order (apply only with --apply)
 
-managed:manual switches are configured by hand (manual.sh prints what to tag);
-managed:auto switches are programmed by their vendor plugin.
+managed:manual switches are configured by hand (the manual controller prints what to tag);
+managed:auto switches are programmed by their vendor controller.
 
 A parked port is an access port in the iotLocal zone (tier 6, no internet,
 nothing else reachable): a device plugged into it gets an address and can do no
@@ -377,22 +379,21 @@ park_vlan() {
     echo "${v}"
 }
 
-# Program ONE port as parked, now: the plugin converges a desired that holds
+# Program ONE port as parked, now: the controller converges a desired that holds
 # only this port, so no other pending change on the switch goes with it.
 # rc 0 programmed, 2 printed for a manual switch, other: not programmed.
 park_on_switch() {
-    local sw="$1" port="$2" vlan="$3" plugin tmpd changes rc=0
-    plugin=$(plugin_for_switch "${sw}")
+    local sw="$1" port="$2" vlan="$3" ctl tmpd changes rc=0
+    ctl=$(controller_for_switch "${sw}")
     tmpd=$(mktemp)
     jq -n --slurpfile a "${ACTUAL}" --arg n "${sw}" --arg p "${port}" --arg z "${PARK_ZONE}" --argjson v "${vlan}" '
         {switches: {($n): (($a[0].switches[$n] | del(.ports))
             + {ports: {($p): {parked: true, zone: $z, mode: "access", nativeVlan: $v}}})}}' > "${tmpd}"
     changes=$(jq -nc --arg p "${port}" --arg z "${PARK_ZONE}" --argjson v "${vlan}" \
         '{changes: [{action: "park", port: $p, description: "port \($p): park in \($z) — an access port on VLAN \($v), nothing tagged"}]}')
-    # shellcheck disable=SC1090
-    ( . "${plugin}"; SWITCH_DESIRED="${tmpd}" plugin_apply "${sw}" "${changes}" ) || rc=$?
+    ctl_run "${ctl}" apply --switch "${sw}" --desired "${tmpd}" --changes-json "${changes}" >/dev/null || rc=$?
     rm -f "${tmpd}"
-    if [[ "${rc}" -ne 0 && "$(basename "${plugin}")" == "manual.sh" ]]; then return 2; fi
+    if [[ "${rc}" -ne 0 && "${ctl}" == "manual" ]]; then return 2; fi
     return "${rc}"
 }
 
@@ -420,7 +421,7 @@ park_port() {
                --arg n "${sw}" --arg p "${port}" --arg z "${PARK_ZONE}" --argjson c "${cur}"
            cmd_update_desired >/dev/null
            info "${sw} port ${port}: recorded as parked in ${PARK_ZONE}; set it by hand as printed, then: switch-manager confirm '${sw}'" ;;
-        *) die "${sw} port ${port}: not parked on the switch ($(basename "$(plugin_for_switch "${sw}")" .sh)) — its record is unchanged" ;;
+        *) die "${sw} port ${port}: not parked on the switch ($(ctl_label "$(controller_for_switch "${sw}")")) — its record is unchanged" ;;
     esac
 }
 
@@ -453,7 +454,7 @@ park_unrecorded() {
 
 # ── lag: a link aggregate (LACP) across ports of one switch (#40) ────
 # Declared like the VLANs: the ports carry `lag: <name>`, update-desired gives
-# the lead port its members, and the plugin forms (or takes apart) the aggregate.
+# the lead port its members, and the controller forms (or takes apart) the aggregate.
 # A LAG spans one switch: across two it needs MC-LAG, which this does not model.
 cmd_lag() {
     local sub="${1:-}"; shift || true
@@ -512,7 +513,7 @@ cmd_lag() {
 # and confirm it — the slice of reconcile --apply a LAG change needs, without
 # touching other switches. Non-zero when the switch was not programmed.
 apply_one() {
-    local sw="$1" changes plugin rc=0
+    local sw="$1" changes ctl rc=0
     cmd_interrogate >/dev/null || die "${sw}: could not read the switches — nothing applied"
     cmd_update_desired >/dev/null
     changes=$(compute_delta | jq -c --arg s "${sw}" '{changes: (.[$s].changes // [])}')
@@ -520,14 +521,13 @@ apply_one() {
         info "  ${GN}✓${CL} ${sw}: in sync"; return 0
     fi
     jq -r '.changes[] | "    \(.action): \(.description)"' <<<"${changes}"
-    plugin=$(plugin_for_switch "${sw}")
-    # shellcheck disable=SC1090
-    ( . "${plugin}"; plugin_apply "${sw}" "${changes}" ) || rc=$?
+    ctl=$(controller_for_switch "${sw}")
+    ctl_run "${ctl}" apply --switch "${sw}" --changes-json "${changes}" >/dev/null || rc=$?
     if [[ "${rc}" -ne 0 ]]; then
-        error "${sw}: not programmed ($(basename "${plugin}" .sh))"; return 2
+        error "${sw}: not programmed ($(ctl_label "${ctl}"))"; return 2
     fi
     cmd_confirm "${sw}" >/dev/null
-    info "  ${GN}✓${CL} ${sw}: applied via $(basename "${plugin}" .sh)"
+    info "  ${GN}✓${CL} ${sw}: applied via $(ctl_label "${ctl}")"
 }
 
 # ── list / show ──────────────────────────────────────────────────────
@@ -634,25 +634,16 @@ cmd_list_ports() {
     return 0
 }
 
-# ── Plugin selection ─────────────────────────────────────────────────
+# ── Controller selection ─────────────────────────────────────────────
 
-select_plugin() {
-    local vendor="$1" p
-    for p in "${PLUGIN_DIR}"/*.sh; do
-        [[ "$(basename "$p")" == "manual.sh" ]] && continue
-        # shellcheck disable=SC1090
-        ( . "$p"; plugin_supports "${vendor}" ) >/dev/null 2>&1 && { echo "$p"; return 0; }
-    done
-    echo "${PLUGIN_DIR}/manual.sh"
-}
-
-# Plugin for an inventory switch, honouring managed:manual (always manual.sh).
-plugin_for_switch() {
+# The controller for an inventory switch: managed:manual is always the manual
+# one; otherwise the controller that drives its vendor (manual when none does).
+controller_for_switch() {
     local name="$1" vendor managed
     managed=$(jq -r --arg n "${name}" '.switches[$n].managed // "auto"' "${ACTUAL}")
-    [[ "${managed}" == "manual" ]] && { echo "${PLUGIN_DIR}/manual.sh"; return 0; }
+    [[ "${managed}" == "manual" ]] && { echo manual; return 0; }
     vendor=$(jq -r --arg n "${name}" '.switches[$n].vendor' "${ACTUAL}")
-    select_plugin "${vendor}"
+    ctl_for_vendor switch-manager "${vendor}"
 }
 
 # ── Verb 1: interrogate (controllers + auto switches -> actual) ──────
@@ -661,20 +652,18 @@ plugin_for_switch() {
 cmd_interrogate() {
     info "${BOLD}interrogate${CL} (controllers + auto switches → actual.json)"
     ensure_files
-    local name vendor ip plugin state tmp prc failed=0 seen='[]'
+    local name vendor ip ctl state tmp prc failed=0 seen='[]'
 
-    # Controllers: upload their switches + ports. The plugin's stderr is left
+    # Controllers: upload their switches + ports. The controller's stderr is left
     # alone — it says WHY a device could not be read (#733); stdout is its answer.
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
         vendor=$(jq -r --arg n "${name}" '.controllers[$n].vendor' "${ACTUAL}")
         ip=$(jq -r --arg n "${name}" '.controllers[$n].managementIp' "${ACTUAL}")
-        plugin=$(select_plugin "${vendor}")
-        # shellcheck disable=SC1090
-        ( . "${plugin}"; declare -F plugin_controller_interrogate >/dev/null ) || { info "  controller ${name}: ${vendor} plugin has no controller interrogate — skipped"; continue; }
+        ctl=$(ctl_for_vendor switch-manager "${vendor}")
         prc=0
-        # shellcheck disable=SC1090
-        state=$( . "${plugin}"; plugin_controller_interrogate "${name}" "${ip}" ) || prc=$?
+        state=$(ctl_run "${ctl}" interrogate --controller "${name}" --ip "${ip}") || prc=$?
+        [[ "${prc}" -eq 3 ]] && { info "  controller ${name}: $(ctl_label "${ctl}") adopts no devices — skipped"; continue; }
         if [[ "${prc}" -ne 0 ]] || ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "${state}"; then
             warn "  controller ${name}: not interrogated — actual left unchanged"
             failed=$((failed + 1)); continue
@@ -710,17 +699,16 @@ cmd_interrogate() {
         info "  controller ${name}: uploaded $(echo "${state}" | jq -r '.switches // {} | length') switch(es), $(echo "${state}" | jq -r '.aps // {} | length') AP(s)"
     done < <(jq -r '.controllers // {} | keys[]' "${ACTUAL}")
 
-    # Standalone auto switches (no controller, brand has a device plugin).
+    # Standalone auto switches (no controller, brand has a device controller).
     while IFS= read -r name; do
         [[ -z "${name}" ]] && continue
-        plugin=$(plugin_for_switch "${name}")
-        [[ "$(basename "${plugin}")" == "manual.sh" ]] && continue
+        ctl=$(controller_for_switch "${name}")
+        [[ "${ctl}" == "manual" ]] && continue
         ip=$(jq -r --arg n "${name}" '.switches[$n].managementIp // ""' "${ACTUAL}")
-        # shellcheck disable=SC1090
-        ( . "${plugin}"; declare -F plugin_interrogate >/dev/null ) || continue
         prc=0
-        # shellcheck disable=SC1090
-        state=$( . "${plugin}"; plugin_interrogate "${name}" "${ip}" ) || prc=$?
+        state=$(ctl_run "${ctl}" interrogate --switch "${name}" --ip "${ip}") || prc=$?
+        [[ "${prc}" -eq 3 ]] && continue
+        [[ "${prc}" -eq 0 ]] && state=$(jq -c --arg n "${name}" '.switches[$n] // {}' <<<"${state}" 2>/dev/null) || prc=1
         if [[ "${prc}" -ne 0 ]] || ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "${state}"; then
             warn "  switch ${name}: not interrogated — actual left unchanged"
             failed=$((failed + 1)); continue
@@ -863,25 +851,24 @@ cmd_delta() {
     return 0
 }
 
-# ── Verb 4: apply (plugin push / manual print) ──────────────────────
+# ── Verb 4: apply (controller push / manual print) ──────────────────────
 APPLY_APPLIED_SWITCHES=()
 APPLY_MANUAL_SWITCHES=()
 cmd_apply() {
-    local delta sw changes plugin rc manual=0 applied=0
+    local delta sw changes ctl rc manual=0 applied=0
     delta=$(compute_delta)
     info "${BOLD}apply${CL}"
     while IFS= read -r sw; do
         [[ -z "${sw}" ]] && continue
         changes=$(echo "${delta}" | jq -c --arg s "${sw}" '{changes: .[$s].changes}')
         [[ "$(echo "${changes}" | jq '.changes|length')" -eq 0 ]] && continue
-        plugin=$(plugin_for_switch "${sw}")
+        ctl=$(controller_for_switch "${sw}")
         rc=0
-        # shellcheck disable=SC1090
-        ( . "${plugin}"; plugin_apply "${sw}" "${changes}" ) || rc=$?
+        ctl_run "${ctl}" apply --switch "${sw}" --changes-json "${changes}" >/dev/null || rc=$?
         if [[ "${rc}" -eq 0 ]]; then
-            info "  ${GN}✓${CL} ${sw}: applied via $(basename "${plugin}" .sh)"
+            info "  ${GN}✓${CL} ${sw}: applied via $(ctl_label "${ctl}")"
             applied=$((applied+1))
-            # Only a switch a plugin actually PROGRAMMED may be confirmed.
+            # Only a switch a controller actually PROGRAMMED may be confirmed.
             APPLY_APPLIED_SWITCHES+=("${sw}")
         else
             manual=$((manual+1))
@@ -899,7 +886,7 @@ cmd_apply() {
 # VLANs a human has not yet tagged writes a FALSE record: the drift disappears
 # from `delta`, and the controller reports in-sync while the physical switch is
 # still on the old VLANs. So confirmation is opt-in per switch:
-#   - `reconcile --apply` confirms ONLY the switches a plugin actually programmed;
+#   - `reconcile --apply` confirms ONLY the switches a controller actually programmed;
 #   - a MANUAL switch is confirmed by the operator running `confirm <switch>`
 #     after they have tagged the VLANs by hand.
 # With no arguments every switch is confirmed (the operator asserting "the
@@ -951,8 +938,8 @@ cmd_reconcile() {
     fi
     if [[ "${apply}" -eq 1 ]]; then
         APPLY_APPLIED_SWITCHES=(); APPLY_MANUAL_SWITCHES=()
-        SM_AUTOCONFIRM=1 cmd_apply; echo ""   # confirm runs right after → tell manual.sh not to ask for it
-        # Confirm ONLY what a plugin actually programmed. A manual switch has had
+        SM_AUTOCONFIRM=1 cmd_apply; echo ""   # confirm runs right after → tell the manual controller not to ask for it
+        # Confirm ONLY what a controller actually programmed. A manual switch has had
         # its VLANs PRINTED, not applied — recording those in actual.json would be
         # a false confirm: the drift would vanish from `delta` while the hardware
         # still carries the old VLANs, and the controller would report in-sync.
@@ -964,13 +951,13 @@ cmd_reconcile() {
             warn "switch-manager: ${APPLY_MANUAL} manual switch(es) still need hand configuration:"
             warn "  tag the VLANs printed above on: ${APPLY_MANUAL_SWITCHES[*]}"
             warn "  then record it with: switch-manager confirm ${APPLY_MANUAL_SWITCHES[*]}"
-            info "${GN}switch-manager: applied${CL} (${APPLY_DONE:-0} via plugin, ${APPLY_MANUAL:-0} awaiting manual)"
+            info "${GN}switch-manager: applied${CL} (${APPLY_DONE:-0} via controller, ${APPLY_MANUAL:-0} awaiting manual)"
             # rc 2 = needs-manual, the five-verb provider contract. network-manager
             # (planes.ts classify()) maps it to "needs-manual" and surfaces it
             # instead of reporting a converged plane.
             return 2
         fi
-        info "${GN}switch-manager: applied${CL} (${APPLY_DONE:-0} via plugin)"
+        info "${GN}switch-manager: applied${CL} (${APPLY_DONE:-0} via controller)"
         return 0
     fi
     if [[ "${DELTA_TOTAL:-0}" -gt 0 ]]; then
@@ -1004,7 +991,7 @@ main() {
     set -- ${rest[@]+"${rest[@]}"}
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
     ensure_files
-    # One vendor login per run, shared by every device's plugin subshell (#733).
+    # One vendor login per run, shared by every device's controller run (#733).
     UNIFI_SESSION="$(mktemp -d)"
     export UNIFI_SESSION
     trap 'rm -rf "${UNIFI_SESSION}"' EXIT

@@ -1,10 +1,12 @@
 # shellcheck shell=bash
 #
-# plugins/unifi.sh — UniFi vendor plugin for switch-manager + ap-manager (ADR-008 Stage 5, #339).
+# unifi.sh — the UniFi controller's vendor logic (ADR-008 Stage 5, #339; ADR-035).
 #
 # Configures UniFi switches AND WiFi APs via the self-hosted UniFi OS Server Network
-# API. Sourced by switch-manager and ap-manager (each select_plugin picks this for
-# vendor "unifi"). Implements two contracts that share plugin_supports:
+# API. Not sourced by the managers: `unifi-controller` (beside it) runs these
+# functions through lib/controller-shim.sh, which answers the switch/1 and ap/1
+# verbs switch-manager and ap-manager call. Implements two contracts that share
+# plugin_supports:
 #   switch verbs: plugin_interrogate / plugin_apply       (ports → port_overrides)
 #   AP verbs:     plugin_ap_interrogate / plugin_ap_apply (SSIDs → wlanconf)
 #
@@ -18,7 +20,7 @@
 #
 # Requires: curl, jq, and the caller's info/warn/error helpers (fallbacks provided).
 
-UNIFI_CRED="${UNIFI_CRED:-/home/tappaas/.unifi-os-credentials.txt}"
+UNIFI_CRED="${UNIFI_CRED:-${CONTROLLER_CREDENTIALS:-/home/tappaas/.unifi-os-credentials.txt}}"
 UNIFI_SITE="${UNIFI_SITE:-default}"
 
 # Per-process session cache.
@@ -114,6 +116,7 @@ _UNIFI_LAG_JQ='def _lag: if (.op_mode // "") == "aggregate" and ((.aggregate_mem
 
 # ── Contract: supports + management metadata ────────────────────────
 plugin_supports() { [[ "${1:-}" == "unifi" ]]; }
+plugin_vendors() { echo unifi; }
 
 # UniFi is a CONTROLLER-architecture brand: switches are adopted by a UniFi OS
 # controller (which setup-switches can install or register), not configured per
@@ -121,6 +124,16 @@ plugin_supports() { [[ "${1:-}" == "unifi" ]]; }
 plugin_arch() { echo "controller"; }
 # The TAPPaaS module that provides a controller for the "install a controller" path.
 plugin_controller_module() { echo "unifi-os"; }
+
+# ── Contract: check-access ─────────────────────────────────────────
+# Can the controller be logged in to with the credentials file: {ok, user}.
+plugin_check_access() {
+    if _unifi_login; then
+        jq -nc --arg u "$(sed -n 's/^username=//p' "${UNIFI_CRED}" 2>/dev/null | head -1)" '{ok: true, user: $u}'
+    else
+        jq -nc '{ok: false}'; return 1
+    fi
+}
 
 # ── Contract: interrogate <name> <mgmt_ip> ──────────────────────────
 # Emit the device's live state in switch-manager's actual-switch shape:
