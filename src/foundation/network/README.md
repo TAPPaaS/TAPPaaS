@@ -127,7 +127,8 @@ that do not exist, and those 404s would look like a scan.
 
 **Never banned:** the site's own clients — private IPv4 (`crowdsecurity/whitelists`)
 and every IPv6 network on the firewall's internal interfaces (`tappaas/site-whitelist`,
-recomputed at every network update, so a changed prefix follows).
+recomputed at every network update, so a changed prefix follows; on an IPv4-only
+site the list is empty, and the network test accepts that).
 
 **Local only.** The instance is not registered with CrowdSec's central API: no
 addresses or scenario names leave the site, and no community blocklist comes in.

@@ -419,7 +419,10 @@ grep -q online_client /usr/local/etc/crowdsec/config.yaml 2>/dev/null && echo "c
 [ -s /usr/local/etc/crowdsec/online_api_credentials.yaml ] && echo "capicreds=yes" || echo "capicreds=no"
 [ -f /usr/local/etc/crowdsec/acquis.d/tappaas-caddy.yaml ] && echo "acquis=yes" || echo "acquis=no"
 cscli scenarios list -o raw --error 2>/dev/null | grep -q '^tappaas/http-login-bf,' && echo "scenario=yes" || echo "scenario=no"
-echo "whitelist=$(grep -c -- '- "' /usr/local/etc/crowdsec/parsers/s02-enrich/tappaas-site-whitelist.yaml 2>/dev/null || echo 0)"
+wl=/usr/local/etc/crowdsec/parsers/s02-enrich/tappaas-site-whitelist.yaml
+if [ ! -f "$wl" ]; then echo "whitelist=missing"
+elif grep -q 'cidr: \[\]' "$wl"; then echo "whitelist=nov6"
+else echo "whitelist=$(grep -c -- '- "' "$wl")"; fi
 CS
 )"
 _csv() { sed -n "s/^$1=//p" <<<"${_cs}"; }
@@ -434,8 +437,15 @@ else
         || fail "CrowdSec is set up for the central API (capi=$(_csv capi), credentials=$(_csv capicreds)) — this site's signals would leave it"
     [[ "$(_csv acquis)" == yes && "$(_csv scenario)" == yes ]] && pass "CrowdSec reads Caddy's access logs and has the TAPPaaS sign-in scenario" \
         || fail "CrowdSec is missing the Caddy acquisition ($(_csv acquis)) or the sign-in scenario ($(_csv scenario))"
-    [[ "$(_csv whitelist)" -gt 0 ]] && pass "CrowdSec never bans the site's own IPv6 networks ($(_csv whitelist) whitelisted)" \
-        || fail "CrowdSec has no site whitelist — a client on the site's IPv6 could be banned"
+    # The converge writes `cidr: []` on a firewall without internal IPv6 networks
+    # (an IPv4-only site, #861): nothing to whitelist is not a missing whitelist —
+    # private IPv4 is crowdsecurity/whitelists. Only an absent file fails.
+    case "$(_csv whitelist)" in
+        missing) fail "CrowdSec has no site whitelist — a client on the site's IPv6 could be banned" ;;
+        nov6)    pass "CrowdSec site whitelist: the firewall has no internal IPv6 networks (private IPv4 is never banned)" ;;
+        0)       fail "CrowdSec site whitelist names no networks and is not the no-IPv6 form — rewrite it with the network update" ;;
+        *)       pass "CrowdSec never bans the site's own IPv6 networks ($(_csv whitelist) whitelisted)" ;;
+    esac
 fi
 
 section "Standard 7: rules-manager dry-run against an installed module"

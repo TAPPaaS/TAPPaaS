@@ -763,6 +763,11 @@ update_nixos() {
             "sudo -n tee /etc/nixos/tappaas-build-facts.env >/dev/null" \
             || die "failed to write the build facts on ${vm_ip}"
         info "Build facts on ${vmname}: $(paste -sd' ' <<<"${_facts}")"
+    else
+        # Relative on purpose: the caller runs from the module directory
+        # (update-service.sh cds there). Said, so a run from elsewhere that
+        # skips a module's collector is visible (#861).
+        debug "  no build-facts.sh in $(pwd) — ${vmname} builds without facts"
     fi
 
     # An empty capture-timer fragment so the module's fixed import resolves on a
