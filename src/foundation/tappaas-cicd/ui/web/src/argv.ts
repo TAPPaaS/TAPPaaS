@@ -3,7 +3,7 @@
 // each value in the manifest's order. Pure, so the unit tests build the same
 // argv the console runs.
 
-import { ManifestVerb } from "./types";
+import { ManifestOption, ManifestVerb } from "./types";
 
 // Form values: an option by its flag, a positional by "@<name>".
 export type Values = Record<string, string | boolean | string[]>;
@@ -12,6 +12,24 @@ export interface ArgvStep {
   bin: string;
   words?: string[]; // the words to emit (default: the verb's first key)
   fixed?: string[]; // positional values the context fixes (the module, the switch and port)
+}
+
+// Never offered in a form: the job model sets the preview and apply flags; the
+// console reads the config it reads; output formats are for the CLI.
+export const ALWAYS_HIDDEN = ["--apply", "--dry-run", "--check", "--diff", "--json", "--config-dir", "--help", "-h", "--debug", "--silent", "--quiet"];
+
+// What a form offers, in its order: the positionals the context leaves open
+// (the object's name first), the verb's options (a field form's "Options"
+// block, after its fields; only those in `only` when it is given), then the
+// disruptions, each a checkbox naming its consequence.
+export function formParts(step: ArgvStep & { hide?: string[]; only?: string[] }, verb: ManifestVerb): { names: ManifestVerb["positionals"]; options: ManifestOption[]; disruptions: ManifestVerb["disruptions"] } {
+  const hidden = new Set([...ALWAYS_HIDDEN, ...(step.hide ?? [])]);
+  const disruptive = new Set(verb.disruptions.map((d) => d.flag));
+  return {
+    names: verb.positionals.slice(step.fixed?.length ?? 0).filter((p) => !hidden.has(`@${p.name}`)),
+    options: verb.options.filter((o) => !hidden.has(o.flag) && !disruptive.has(o.flag) && (!step.only || step.only.includes(o.flag))),
+    disruptions: verb.disruptions,
+  };
 }
 
 export function buildArgv(step: ArgvStep, verb: ManifestVerb | null, values: Values): string[] {

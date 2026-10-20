@@ -32,6 +32,17 @@ export interface ManifestField {
   editable: boolean; // this form may change it
   why: string | null; // why it may not
   arg: string | null; // "--set" (field=value) or the verb's own flag
+  // A default the manager computes from what else the form says: an option's
+  // value (--archetype, --environment) or another field's (typeId). The first
+  // rule whose key has a value listed wins over `default`.
+  defaultBy: DefaultRule[];
+}
+
+// on: an option's flag, or a field's name. values: the default's text per
+// value of it; "*" stands for any value, "<value>" in its text for that value.
+export interface DefaultRule {
+  on: string;
+  values: Record<string, string>;
 }
 
 export interface FieldManifest {
@@ -40,6 +51,11 @@ export interface FieldManifest {
   mode: FormMode;
   exists: boolean;
   fields: ManifestField[];
+  // The field the verb's positional fills (environment, identity, site:
+  // `name`): its one-line description, for the form's name row. null where the
+  // schema has no such field (a zone is keyed by its name; a module's is its
+  // catalogue's).
+  nameField: { description: string } | null;
 }
 
 // A field definition as the schema files spell it, normalised.
@@ -237,8 +253,12 @@ export function backupDefs(schemaDoc: unknown): FieldDef[] {
 
 // ── how each kind's verb takes a field ─────────────────────────────────
 
-// The verb's own flags, by field. A field with no flag cannot change through
-// that verb: the form shows it read-only.
+// The verb's own flags, by field: the one table from a schema field to the
+// manager's option (displayName → --displayName, primaryEmail → --email,
+// memberOf → --groups, …). A field with no flag cannot change through that
+// verb: the form shows it read-only. test/unit/flags.test.ts holds the
+// identity and backup rows to identity-manager's and backup-manager's own
+// option lists.
 export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<string, string>>>>> = {
   environment: {
     add: { displayName: "--display", ownerOrg: "--owner", "network.zone": "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode" },
@@ -295,14 +315,19 @@ export interface ManifestInput {
   services?: string[];
   refs: RefContext;
   vars: Record<string, string | null | undefined>; // a template's values: vmname, domain, zone0, name, …
+  defaultBy?: Record<string, DefaultRule[]>; // by field: the defaults the manager computes from the other inputs
 }
 
 export function buildManifest(i: ManifestInput): FieldManifest {
   const flags = FLAGS[i.kind]?.[i.mode] ?? null;
   const hidden = new Set(NAME_FIELDS[i.kind] ?? []);
   const fields: ManifestField[] = [];
+  let nameField: FieldManifest["nameField"] = null;
   for (const def of i.defs) {
-    if (hidden.has(def.name)) continue;
+    if (hidden.has(def.name)) {
+      nameField = { description: oneLine(def.description) };
+      continue;
+    }
     const reported = i.classes?.[def.name];
     const own = i.kind === "module" ? i.moduleClasses?.[def.name] : undefined;
     // A field no service owns takes the class schemas/fields.json declares —
@@ -351,7 +376,8 @@ export function buildManifest(i: ManifestInput): FieldManifest {
     fields.push({
       name: def.name,
       type,
-      typeText: typeTextOf(type, references, en),
+      // A decimal (latitude) takes the integer input but is labelled for what it is.
+      typeText: type === "integer" && /\bnumber\b/.test(JSON.stringify(def.type ?? "")) && !references && !en ? "number" : typeTextOf(type, references, en),
       choices,
       references,
       default: dflt?.text ?? null,
@@ -367,7 +393,108 @@ export function buildManifest(i: ManifestInput): FieldManifest {
       editable: arg !== null,
       why: arg !== null ? null : why,
       arg,
+      defaultBy: i.defaultBy?.[def.name] ?? [],
     });
   }
-  return { kind: i.kind, name: i.name, mode: i.mode, exists: i.record !== null, fields };
+  return { kind: i.kind, name: i.name, mode: i.mode, exists: i.record !== null, fields, nameField };
+}
+
+// ── the defaults a manager computes at an add ──────────────────────────
+
+const listText = (v: unknown): string => (Array.isArray(v) ? (v.length ? v.map(String).join(", ") : "empty") : String(v ?? ""));
+
+// network-manager add's VLAN: the highest tag free in the zone type's band
+// <typeId>60-<typeId>99 (zones.ts allocateVlan), its subId and network with it.
+export const ZONE_SUB_MIN = 60;
+export const ZONE_SUB_MAX = 99;
+
+export function nextFreeVlan(zones: Array<[string, Obj]>, typeId: number): number | null {
+  const used = new Set(zones.map(([, z]) => Number(z.vlantag)).filter((n) => Number.isInteger(n)));
+  for (let s = ZONE_SUB_MAX; s >= ZONE_SUB_MIN; s--) if (!used.has(typeId * 100 + s)) return typeId * 100 + s;
+  return null;
+}
+
+function bandDefaults(zones: Array<[string, Obj]>, typeId: number): Record<string, string> {
+  const v = nextFreeVlan(zones, typeId);
+  const range = `${typeId * 100 + ZONE_SUB_MIN}-${typeId * 100 + ZONE_SUB_MAX}`;
+  if (v === null) return { vlantag: `none free in band ${typeId} (${range}): give one`, subId: "from the VLAN", ip: "from the VLAN" };
+  const sub = v % 100;
+  return { vlantag: `${v}, the highest free in band ${typeId} (${range})`, subId: String(sub), ip: `10.${typeId}.${sub}.0/24` };
+}
+
+// network-manager add <name> with fields left empty (zones.ts authorZone): a
+// Service zone in band 2 reaching the internet, untiered; --archetype stamps
+// the catalogue's type, typeId, tier, isolated and access-to seed; --from-zone
+// inherits the source zone's; a typed typeId moves the VLAN to its band.
+// catalog: zones-fields.json's archetypes.catalog.
+export function zoneAddDefaults(zones: Array<[string, Obj]>, catalog: Obj): { defaults: Record<string, unknown>; by: Record<string, DefaultRule[]> } {
+  const untiered = "untiered: no archetype";
+  const defaults: Record<string, unknown> = {
+    type: "Service", typeId: 2, ...bandDefaults(zones, 2), state: "Active", bridge: "lan", "access-to": ["internet"], "pinhole-allowed-from": [],
+    tier: untiered, isolated: false, ipv6Subnet: "from the VLAN tag", description: "Zone <name>",
+  };
+  const by: Record<string, DefaultRule[]> = {};
+  const add = (field: string, rule: DefaultRule) => (by[field] = [...(by[field] ?? []), rule]);
+  const per = (on: string, rows: Record<string, Record<string, string>>) => {
+    const fields = new Set(Object.values(rows).flatMap((r) => Object.keys(r)));
+    for (const f of fields) add(f, { on, values: Object.fromEntries(Object.entries(rows).filter(([, r]) => r[f] !== undefined).map(([k, r]) => [k, r[f]])) });
+  };
+  per("--archetype", Object.fromEntries(Object.entries(catalog).map(([name, raw]) => {
+    const a = obj(raw);
+    const t = Number(a.typeId);
+    return [name, { type: String(a.type), typeId: String(t), tier: String(a.tier), isolated: String(a.isolated === true), "access-to": listText(a["access-to"]), "pinhole-allowed-from": "empty", ...bandDefaults(zones, t), description: String(a.description ?? "") }];
+  })));
+  per("--from-zone", Object.fromEntries(zones.map(([name, z]) => {
+    const t = Number(z.typeId);
+    const row: Record<string, string> = { type: String(z.type ?? ""), typeId: String(z.typeId ?? ""), bridge: String(z.bridge ?? "lan"), "access-to": listText(z["access-to"] ?? []), "pinhole-allowed-from": listText(z["pinhole-allowed-from"] ?? []), tier: untiered, description: `Zone <name> (inherited from ${name})` };
+    if (typeof z["tftp-server-name"] === "string") row["tftp-server-name"] = z["tftp-server-name"];
+    if (typeof z["bootfile-name"] === "string") row["bootfile-name"] = z["bootfile-name"];
+    return [name, Number.isInteger(t) ? { ...row, ...bandDefaults(zones, t) } : row];
+  })));
+  per("typeId", Object.fromEntries(Array.from({ length: 10 }, (_, t) => [String(t), bandDefaults(zones, t)])));
+  return { defaults, by };
+}
+
+// environment-manager add <env> with fields left empty (main.ts cmdAdd): the
+// name capitalised, the first organization by name, the zone named like the
+// environment, and no domains block at all without --domain. At either verb,
+// what an unset field of the backup cascade gets: the site's retention and
+// schedule, the environment's own data residency.
+export function environmentDefaults(mode: FormMode, o: { firstOrg: string | null; siteBackup: Obj; record: Obj | null }): Record<string, unknown> {
+  const sb = o.siteBackup;
+  const out: Record<string, unknown> = {
+    "domains.primary": "no public domain (reached only from inside)",
+    "backup.retention": `${typeof sb.defaultRetention === "string" ? sb.defaultRetention : "7y"}, the site's`,
+    "backup.schedule": `${typeof sb.defaultSchedule === "string" ? sb.defaultSchedule : "daily"}, the site's`,
+    "backup.residency": `${typeof o.record?.dataResidency === "string" ? o.record.dataResidency : "eu-only"}, the environment's data residency`,
+  };
+  if (mode === "add") Object.assign(out, { displayName: "<Name>", ownerOrg: o.firstOrg, "network.zone": "<name>" });
+  return out;
+}
+
+// module-manager add <module> with fields left empty (install-module.sh): the
+// VM is named for the module, suffixed with an environment that is neither the
+// default nor mgmt, or for --instance; it keeps the module's own VM id unless a
+// config already uses it (then the next free one up); it goes on the module's
+// node, else the site's first; its zone0 is the module's, else its
+// environment's zone.
+export function moduleAddDefaults(o: { module: string; own: Obj; defaultEnv: string | null; envs: { name: string; zone: string | null }[]; firstNode: string | null; usedVmids: number[] }): { defaults: Record<string, unknown>; by: Record<string, DefaultRule[]> } {
+  const defaults: Record<string, unknown> = { vmname: o.module };
+  const by: Record<string, DefaultRule[]> = {};
+  const named = (env: string) => (env === "mgmt" || env === o.defaultEnv ? o.module : `${o.module}-${env}`);
+  by.vmname = [{ on: "--instance", values: { "*": "<value>" } }, { on: "--environment", values: Object.fromEntries(o.envs.map((e) => [e.name, named(e.name)])) }];
+  const own = Number(o.own.vmid);
+  if (Number.isInteger(own) && own > 0 && o.usedVmids.includes(own)) {
+    let n = own;
+    while (o.usedVmids.includes(n)) n++;
+    defaults.vmid = `${n}, the next free (${own}, the module's own, is taken)`;
+  }
+  if (typeof o.own.node !== "string" && o.firstNode) defaults.node = `${o.firstNode}, the site's first node`;
+  if (typeof o.own.zone0 !== "string") {
+    const zoneOf = (env: string | null) => o.envs.find((e) => e.name === env)?.zone ?? null;
+    const base = zoneOf(o.defaultEnv);
+    if (base) defaults.zone0 = `${base}, the environment's zone`;
+    by.zone0 = [{ on: "--environment", values: Object.fromEntries(o.envs.filter((e) => e.zone).map((e) => [e.name, `${e.zone}, the environment's zone`])) }];
+  }
+  return { defaults, by };
 }

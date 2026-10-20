@@ -6,7 +6,7 @@
 // zones.json through lib/ts zones.ts — the same parse network-manager's own
 // `list` and `show` run, read once instead of one process per zone.
 
-import { existsSync, mkdirSync, readFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan-address";
@@ -16,7 +16,7 @@ import { Cached, CachedMap, Entry } from "./cache";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { composeFields } from "../../lib/ts/src/compose-fields";
-import { FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, flattenSchema, moduleDefs, zoneDefs } from "./fieldmanifest";
+import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, environmentDefaults, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, TopologyDoc } from "./model";
@@ -267,6 +267,7 @@ export class Reads {
     let classes: Record<string, { class: string; apply?: string | null; coordinate?: string; settable: boolean; reason: string | null; offRelease?: boolean }> | undefined;
     let services: string[] | undefined;
     let moduleClasses: Record<string, { class?: string; apply?: string; changeNote?: string }> | undefined;
+    let defaultBy: Record<string, DefaultRule[]> | undefined;
     switch (kind) {
       case "module": {
         const schema = this.moduleSchemaDoc();
@@ -289,6 +290,11 @@ export class Reads {
             if (v.defaulted === false) record[k] = val;
             else if (val !== null && val !== undefined) defaults[k] = val;
           }
+          // No node configured: cluster:vm creates it on the site's first node.
+          if (record.node === undefined && defaults.node === undefined) {
+            const nodes = ((await this.site.get()).value?.nodes ?? []) as { name?: unknown }[];
+            if (typeof nodes[0]?.name === "string") defaults.node = `${nodes[0].name}, the site's first node`;
+          }
           const own = this.configJson(name) ?? {};
           vars.vmname = typeof own.vmname === "string" ? own.vmname : name;
           vars.zone0 = typeof own.zone0 === "string" ? own.zone0 : null;
@@ -300,6 +306,20 @@ export class Reads {
           const own = existsSync(cat.json) ? (JSON.parse(readFileSync(cat.json, "utf8")) as Record<string, unknown>) : {};
           defaults = Object.fromEntries(Object.entries(own).filter(([k]) => k !== "config"));
           services = [...(Array.isArray(own.dependsOn) ? own.dependsOn : []), ...(Array.isArray(own.integratesWith) ? own.integratesWith : [])].filter((x): x is string => typeof x === "string");
+          // What module-manager add computes for a field left empty: the VM's
+          // name and id, its node and zone0.
+          const [envs, site] = await Promise.all([this.environments.get(), this.site.get()]);
+          const nodes = Array.isArray(site.value?.nodes) ? (site.value!.nodes as { name?: unknown }[]) : [];
+          const computed = moduleAddDefaults({
+            module: name,
+            own,
+            defaultEnv: ((site.value?.site as { defaultEnvironment?: string } | undefined)?.defaultEnvironment) ?? null,
+            envs: [{ name: "mgmt", zone: "mgmt" }, ...(envs.value ?? []).filter((e) => e.name !== "mgmt").map((e) => ({ name: e.name, zone: e.network?.zone ?? null }))],
+            firstNode: typeof nodes[0]?.name === "string" ? nodes[0].name : null,
+            usedVmids: this.configVmids(`${name}.json`),
+          });
+          defaults = { ...defaults, ...computed.defaults };
+          defaultBy = computed.by;
           vars.vmname = typeof own.vmname === "string" ? own.vmname : name;
           vars.zone0 = typeof own.zone0 === "string" ? own.zone0 : null;
           vars.domain = await this.domainOf(null);
@@ -323,19 +343,28 @@ export class Reads {
           record = z ? z[1] : null;
           if (!record && mode === "modify") throw new Error(`no zone '${name}'`);
         }
-        // network-manager add's own rules for what is left empty.
-        if (mode === "add") defaults = { type: "Service", typeId: 2, vlantag: "<allocated 60-99 in its band>" };
+        // network-manager add's own rules for what is left empty: the plain
+        // Service zone, else what --archetype, --from-zone or the typeId give.
+        if (mode === "add") {
+          let zones: Array<[string, Record<string, unknown>]> = [];
+          try {
+            zones = readZonesFile(join(this.cfg.configDir, "zones.json")).entries;
+          } catch {
+            zones = [];
+          }
+          const archetypes = (this.schemaFile("zones-fields.json").archetypes ?? {}) as { catalog?: Record<string, unknown> };
+          const computed = zoneAddDefaults(zones, archetypes.catalog ?? {});
+          defaults = computed.defaults;
+          defaultBy = computed.by;
+        }
         break;
       }
       case "environment": {
         defs = flattenSchema(this.schemaFile("environment-fields.json"));
-        if (name && mode === "modify") {
-          // The record as environment-manager shows it, every field pre-filled.
-          record = await runJson<Record<string, unknown>>(this.cfg.run, "environment-manager", ["show", name, "--json"]);
-        } else {
-          // environment-manager add's own rules for what is left empty.
-          defaults = { displayName: "<Name>", ownerOrg: refs.organizations[0] ?? null, "network.zone": "<name>" };
-        }
+        // The record as environment-manager shows it, every field pre-filled.
+        if (name && mode === "modify") record = await runJson<Record<string, unknown>>(this.cfg.run, "environment-manager", ["show", name, "--json"]);
+        const siteBackup = ((((await this.site.get()).value?.site ?? {}) as Record<string, unknown>).backup ?? {}) as Record<string, unknown>;
+        defaults = environmentDefaults(name && mode === "modify" ? "modify" : "add", { firstOrg: refs.organizations[0] ?? null, siteBackup, record });
         break;
       }
       case "org":
@@ -344,6 +373,8 @@ export class Reads {
       case "role": {
         const file = { org: "organization", group: "group", user: "user", role: "role" }[kind];
         defs = flattenSchema(this.schemaFile(`${file}-fields.json`));
+        // identity-manager <kind> add names the object for itself when no display name is given.
+        if (mode === "add") defaults = { displayName: "<name>" };
         if (name && mode === "modify") {
           const all = (await this.identityRecords.get()).value ?? {};
           record = (all[kind] ?? []).find((x) => x.name === name) ?? null;
@@ -357,7 +388,27 @@ export class Reads {
         break;
       }
     }
-    return buildManifest({ kind, name, mode, defs, record, defaults, classes, moduleClasses, services, refs, vars });
+    return buildManifest({ kind, name, mode, defs, record, defaults, classes, moduleClasses, services, refs, vars, defaultBy });
+  }
+
+  // The VM ids the site's module configs hold but the instance's own
+  // (install-module.sh's used_vmids, without the cluster's own list).
+  private configVmids(own: string): number[] {
+    try {
+      return readdirSync(this.cfg.configDir)
+        .filter((f) => f.endsWith(".json") && f !== own)
+        .map((f) => {
+          try {
+            const o = JSON.parse(readFileSync(join(this.cfg.configDir, f), "utf8")) as { vmid?: unknown; config?: { vmid?: unknown } };
+            return Number(o.vmid ?? o.config?.vmid);
+          } catch {
+            return NaN;
+          }
+        })
+        .filter((n) => Number.isInteger(n) && n > 0);
+    } catch {
+      return [];
+    }
   }
 
   // A module's fields for its Modify form: class, owner, type, value, default.

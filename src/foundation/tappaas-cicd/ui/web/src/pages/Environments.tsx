@@ -34,7 +34,7 @@ export function addEnvironmentSteps(): Step[] {
         note: "Writes the environment's record (config/environments/<name>.json; with --create-zone also its zone). Nothing is live until the reconcile below.",
       });
       // The reconcile takes the name typed here.
-      return { ...s, render: (values, set) => ((chosen.name = typeof values["@env"] === "string" ? values["@env"].trim() : ""), s.render!(values, set)) } as Step;
+      return { ...s, render: (values, set, verb) => ((chosen.name = typeof values["@env"] === "string" ? values["@env"].trim() : ""), s.render!(values, set, verb)) } as Step;
     })(),
     {
       ...env("2 · Make it live: environment-manager reconcile", "reconcile", {
@@ -58,6 +58,8 @@ export function Environments() {
   }, [modify?.n]);
   const zoneNames = (zones.env?.data ?? []).map((z) => z.name);
   const envNames = (envs.env?.data ?? []).map((e) => e.name);
+  // network-manager add --archetype: the catalogue zones-fields.json holds.
+  const archetypes = Object.keys(useRead<{ archetypes?: { catalog?: Record<string, unknown> } }>("schemas/zones", 600_000).env?.data?.archetypes?.catalog ?? {});
   return (
     <div className="page">
       <div className="page-head">
@@ -94,7 +96,7 @@ export function Environments() {
         title="Zones"
         aside={
           <span className="toolbar">
-            <OperateButton label="Add a zone…" title="Add a zone" steps={() => [fieldsStep({ title: "network-manager add <name>", bin: "network-manager", verb: "add", kind: "zone", name: null, mode: "add", keep: ["--archetype", "--serves", "--from-zone", "--no-activate"], hide: ["@options"], choices: { "--serves": envNames, "--from-zone": zoneNames } })]} />
+            <OperateButton label="Add a zone…" title="Add a zone" steps={() => [fieldsStep({ title: "network-manager add <name>", bin: "network-manager", verb: "add", kind: "zone", name: null, mode: "add", keep: ["--archetype", "--serves", "--from-zone", "--no-activate"], hide: ["@options"], choices: { "--serves": envNames, "--from-zone": zoneNames, ...(archetypes.length ? { "--archetype": archetypes } : {}) } })]} />
             <OperateButton label="Reconcile the network…" title="Reconcile the network" steps={[net("network-manager reconcile", "reconcile", { note: "The preview runs every plane dry (OPNsense, Proxmox, the switches, the APs); apply converges them all." })]} />
           </span>
         }

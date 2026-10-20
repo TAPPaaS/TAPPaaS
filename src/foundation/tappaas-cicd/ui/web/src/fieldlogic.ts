@@ -25,6 +25,7 @@ export interface ManifestField {
   editable: boolean;
   why: string | null;
   arg: string | null;
+  defaultBy: { on: string; values: Record<string, string> }[];
 }
 
 export interface FieldManifest {
@@ -33,14 +34,32 @@ export interface FieldManifest {
   mode: "add" | "modify";
   exists: boolean;
   fields: ManifestField[];
+  nameField: { description: string } | null;
 }
 
 // What an empty input says: the real default, or that there is none. A
-// template the backend could not fill (an add, before the name is typed) is
-// filled from `vars` where it can be: <name>, <Name>.
-export function placeholderOf(f: ManifestField, vars: Record<string, string> = {}): string {
-  if (f.default === null) return "no default";
-  const d = f.defaultTemplate ? f.default.replace(/<([A-Za-z][\w.]*)>/g, (m, k: string) => vars[k] || m) : f.default;
+// default the manager computes from the form's other inputs (`defaultBy`: an
+// option's value, another field's) follows them as they change; `inputs` holds
+// both, an option by its flag, a field by its name. A template the backend
+// could not fill (an add, before the name is typed) is filled from `vars`
+// where it can be (<name>, <Name>), and said in words where it is nothing but
+// that name.
+export function placeholderOf(f: ManifestField, vars: Record<string, string> = {}, inputs: Record<string, unknown> = {}): string {
+  let d = f.default;
+  let template = f.defaultTemplate;
+  for (const r of f.defaultBy ?? []) {
+    const v = inputs[r.on];
+    if (typeof v !== "string" || v.trim() === "") continue;
+    const t = r.values[v.trim()] ?? r.values["*"];
+    if (t === undefined) continue;
+    d = t.replace(/<value>/g, v.trim());
+    template = /<[A-Za-z][\w.]*>/.test(d);
+    break;
+  }
+  if (d === null) return "no default";
+  if (template) d = d.replace(/<([A-Za-z][\w.]*)>/g, (m, k: string) => vars[k] || m);
+  if (d === "<name>") d = "the name";
+  if (d === "<Name>") d = "the name, capitalised";
   return `default ${d}`;
 }
 
@@ -135,6 +154,26 @@ export function fieldChanges(fields: ManifestField[], edits: Record<string, stri
     out.changed.push({ name: f.name, class: f.class, apply: f.apply });
   }
   return out;
+}
+
+// The order of a field form, top to bottom: the object's name (the verb's
+// open positionals), the schema's fields in the schema's own order, then the
+// verb's options that are not fields under "Options", then the disruptions
+// (operate.tsx). The fields of a nested object stay together under their
+// parent (domains.primary, domains.aliases) even where the schema interleaves
+// them; a top-level field keeps its place between them.
+export const parentOf = (field: string): string => (field.includes(".") ? field.slice(0, field.lastIndexOf(".")) : "");
+
+export function fieldGroups(fields: Pick<ManifestField, "name">[]): { parent: string; fields: string[] }[] {
+  const groups: { parent: string; fields: string[] }[] = [];
+  for (const f of fields) {
+    const parent = parentOf(f.name);
+    const last = groups[groups.length - 1];
+    const g = parent !== "" ? groups.find((x) => x.parent === parent) : last && last.parent === "" ? last : undefined;
+    if (g) g.fields.push(f.name);
+    else groups.push({ parent, fields: [f.name] });
+  }
+  return groups;
 }
 
 // The Preview's head: what the change does, once per class, in the
