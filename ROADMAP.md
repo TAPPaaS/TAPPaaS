@@ -134,7 +134,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |---|----------|----------|
 | #801 | Default update schedule: daily on every channel — on `stable`/`staging` 13 of 14 runs change nothing, but urgent fixes and OS patches arrive within a day; what to do with sites on the old weekly default | Operator (proposed 2026-10-08, from #797) |
 | #294 | VMID scheme: zone-aligned ranges for new installs only, or not at all — never renumber in place | Lars and @ErikDaniel007 (Future Work) |
-| #430 | Controller/manager pattern for app modules — **ADR-035 v0.2 (2026-10-20)** (pluggable controllers and managers); Ansible first and the foundational/domain line are its O4 | Lars and @ErikDaniel007 (G1.7) |
+| #430 | Controller/manager pattern for app modules — **ADR-035 v0.3 (2026-10-20)** (pluggable controllers and managers); Ansible first and the foundational/domain line are its O4 | Lars and @ErikDaniel007 (G1.7) |
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
 | #675 | What a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that fails to build. Today a site's own host-level modules are dropped by every scheduled rebuild while the unit reports success (`tappaas-cicd.nix` has no extension point — confirmed) | An ADR first; Ease H · Risk M |
 | #488 | `apply-json-merge`: should a field that `.orig` never recorded be adopted from the release, or kept? #736 made each refused value visible; the rule itself is open | Operator |
@@ -156,7 +156,7 @@ met gates are recorded in the releases that carried their waves.
 
 | ADR | Covers | Gates |
 |-----|--------|-------|
-| Controller pattern for app modules | #430 → ADR-035 (Proposed v0.2): controllers and managers live in modules, registered by module-manager; then #731, #847, #170 | G1.7, then G6.1 |
+| Controller pattern for app modules | #430 → ADR-035 (Proposed v0.3): controllers and managers live in modules, registered by module-manager; then #731, #847, #170 | G1.7, then G6.1 |
 | Composite modules | #761: `cluster`, `kubernetes`, and modules that only provide artefacts (`templates`) — a `kind` for them; with @ErikDaniel007 | G3.1 |
 | Control-plane extension | #675 | — |
 | Secrets management | #58 (in Future Work since 2026-10-02): one secrets-access helper every module uses instead of reading `/etc/secrets`, OpenBao behind it later | G1.6, when #58 returns |
@@ -516,7 +516,7 @@ Waiting on a conversation between Lars and @ErikDaniel007, not on work: the cont
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #430 | Controller/manager pattern for app modules | M | L | **ADR-035 v0.2 (2026-10-20)** (operator): controllers and managers live with their module in tappaas-cicd's layout, declared in its JSON, linked and registered by module-manager in one registry; vendor code a controller, vendor-neutral code a manager. Open for Erik: O4 (Ansible first, the foundational/domain line) |
+| #430 | Controller/manager pattern for app modules | M | L | **ADR-035 v0.3 (2026-10-20)** (operator): controllers and managers live with their module in tappaas-cicd's layout, declared in its JSON, linked and registered by module-manager in one registry; vendor code a controller, vendor-neutral code a manager. Open for Erik: O4 (Ansible first, the foundational/domain line) |
 | #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
 | #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | From #750, for @ErikDaniel007: list his modules in `src/image-pins.json` and move the stale pins — euro-office v9.3.1 → v9.3.4 first; litellm and openwebui overlap #621 |
 
