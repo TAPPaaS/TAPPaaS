@@ -627,7 +627,7 @@
        "set"
       ]
      ],
-     "usage": "lag set <switch> <name> --ports <p,p,...> [--apply]",
+     "usage": "lag set <switch> <name> --ports <p,p,...> | <a>:<p>,<b>:<q> [--apply]",
      "note": null,
      "details": null,
      "positionals": [
@@ -649,7 +649,7 @@
        "arg": "<p,p,...>",
        "choices": null,
        "repeatable": false,
-       "description": "The ports of the aggregate."
+       "description": "The ports of the aggregate; across an MLAG pair, <switch>:<port> on each."
       },
       {
        "flag": "--apply",
@@ -665,6 +665,117 @@
      "preview": {
       "kind": "apply-flag",
       "flag": "--apply"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "mlag-pair set",
+     "keys": [
+      [
+       "mlag-pair",
+       "set"
+      ]
+     ],
+     "usage": "mlag-pair set <a> <b> [--peer-port <p> | --peer-port <a>:<p>,<b>:<q>]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "a",
+       "optional": false,
+       "repeatable": false
+      },
+      {
+       "name": "b",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--peer-port",
+       "takesValue": true,
+       "arg": "<p>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The peer link's port on both switches, or <a>:<p>,<b>:<q>."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "apply-flag",
+      "flag": "--apply"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "mlag-pair remove",
+     "keys": [
+      [
+       "mlag-pair",
+       "remove"
+      ]
+     ],
+     "usage": "mlag-pair remove <a> <b>",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "a",
+       "optional": false,
+       "repeatable": false
+      },
+      {
+       "name": "b",
+       "optional": true,
+       "repeatable": false
+      }
+     ],
+     "options": [],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "apply-flag",
+      "flag": "--apply"
+     },
+     "destructive": true,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "mlag-pair list",
+     "keys": [
+      [
+       "mlag-pair",
+       "list"
+      ]
+     ],
+     "usage": "mlag-pair list [--json]",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [
+      {
+       "flag": "--json",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Machine-readable output."
+      }
+     ],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
      },
      "destructive": false,
      "destructiveWhen": [],

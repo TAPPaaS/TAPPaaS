@@ -343,6 +343,50 @@ ck "remove-controller deletes"       "false"  "$(jq -e '.controllers | has("ctrl
 ck "--help (rc)"                     "0"      "$(rc_of "${SM}" --help)"
 ck "unknown command (rc)"            "1"      "$(rc_of "${SM}" bogus)"
 
+# ── MikroTik-style port ids and MLAG pairs (#847) ───────────────────
+# Port ids are opaque ("ether2"): ordered naturally, never read as numbers.
+# A stub device controller with the mlag capability stands in for MikroTik.
+MT="${TMP}/mt"; mkdir -p "${MT}"
+cat > "${MT}/mtk.sh" <<'EOF'
+plugin_supports() { [[ "$1" == "mtk" ]]; }
+plugin_vendors() { echo mtk; }
+plugin_arch() { echo device; }
+plugin_capabilities() { printf 'vlans\nlag\npark\nmlag\n'; }
+plugin_mlag_status() { echo "{\"switch\":\"$1\",\"configured\":true,\"peerPort\":\"sfp16\",\"peerLink\":\"up\",\"state\":\"connected\"}"; }
+plugin_apply() { echo "$1 $2" >> "${CONFIG_DIR}/mt-applied.log"; return 0; }
+EOF
+"${SM}" add-switch mtA --vendor mtk --managed auto --ip 10.9.0.1 >/dev/null 2>&1
+"${SM}" add-switch mtB --vendor mtk --managed auto --ip 10.9.0.2 >/dev/null 2>&1
+for pt in ether10 ether2; do "${SM}" add-port mtA "${pt}" --type node --target n9 --target-port "eth-${pt}" >/dev/null 2>&1; done
+"${SM}" add-port mtB ether2 --type node --target n9 --target-port eth-b >/dev/null 2>&1
+ck "ports named ether2, ether10 list in natural order" "ether2 ether10" \
+   "$(PLUGIN_DIR="${MT}" "${SM}" list-ports mtA --json 2>/dev/null | jq -r '.[0].ports | map(.port) | join(" ")')"
+ck "mlag-pair: a switch whose controller cannot do MLAG is refused (rc)" "1" "$(PLUGIN_DIR="${MT}" rc_of "${SM}" mlag-pair set mtA usw)"
+PLUGIN_DIR="${MT}" "${SM}" mlag-pair set mtA mtB --peer-port sfp16 >/dev/null 2>&1; rc=$?
+ck "mlag-pair set (rc)" "0" "${rc}"
+ck "…recorded with its peer link" '["mtA","mtB"] sfp16' "$(jq -c '.mlagPairs["mtA+mtB"].switches' "${ACT}") $(jq -r '.mlagPairs["mtA+mtB"].peerPort.mtB' "${ACT}")"
+ck "lag set across a pair needs a member on each switch (rc)" "1" "$(PLUGIN_DIR="${MT}" rc_of "${SM}" lag set mtA n9-lan --ports mtA:ether2,mtA:ether10)"
+ck "lag set across a pair: only its switches (rc)" "1" "$(PLUGIN_DIR="${MT}" rc_of "${SM}" lag set mtA n9-lan --ports mtA:ether2,usw:1)"
+PLUGIN_DIR="${MT}" "${SM}" lag set mtA n9-lan --ports mtA:ether2,mtB:ether2 >/dev/null 2>&1; rc=$?
+ck "lag set across the pair (rc)" "0" "${rc}"
+ck "…the same LAG and mlag-id on both switches" "n9-lan 10 n9-lan 10" \
+   "$(jq -r '"\(.switches.mtA.ports.ether2.lag) \(.switches.mtA.ports.ether2.mlagId) \(.switches.mtB.ports.ether2.lag) \(.switches.mtB.ports.ether2.mlagId)"' "${ACT}")"
+ck "…a port of the switch not named stays out of it" "null" "$(jq -r '.switches.mtA.ports.ether10.lag' "${ACT}")"
+PLUGIN_DIR="${MT}" "${SM}" update-desired >/dev/null 2>&1
+ck "desired: each side's lead lists its one member, with the mlag-id" '["ether2"] 10' \
+   "$(jq -c '.switches.mtB.ports.ether2.lagMembers' "${DES}") $(jq -r '.switches.mtB.ports.ether2.mlagId' "${DES}")"
+ck "delta: the aggregate is to form on both switches" "2" \
+   "$(PLUGIN_DIR="${MT}" "${SM}" delta 2>&1 | grep -c 'one LACP aggregate (LAG n9-lan)')"
+jq '.switches.mtB.ports.ether2.liveMlagId = 11 | .switches.mtB.ports.ether2.lagMembers = ["ether2"]' "${ACT}" > "${ACT}.t" && mv "${ACT}.t" "${ACT}"
+out="$(PLUGIN_DIR="${MT}" "${SM}" mlag-pair list --json 2>/dev/null)"
+ck "mlag-pair list: the live state of each peer" "connected" "$(jq -r '.[0].status.mtA.state' <<<"${out}")"
+ck "…and an mlag-id the switch has otherwise" "yes" "$(jq -r '.[0].lags[0].problems | join(";")' <<<"${out}" | grep -q 'mtB:ether2 has mlag-id 11' && echo yes || echo no)"
+ck "mlag-pair remove while it carries a LAG (rc)" "1" "$(PLUGIN_DIR="${MT}" rc_of "${SM}" mlag-pair remove mtA)"
+PLUGIN_DIR="${MT}" "${SM}" lag remove mtB n9-lan >/dev/null 2>&1
+ck "lag remove from one side clears both" "null null" "$(jq -r '"\(.switches.mtA.ports.ether2.mlagId) \(.switches.mtB.ports.ether2.lag)"' "${ACT}")"
+PLUGIN_DIR="${MT}" "${SM}" mlag-pair remove mtA >/dev/null 2>&1
+ck "mlag-pair remove" "0" "$(jq '.mlagPairs | length' "${ACT}")"
+
 echo ""
 echo "test-switch-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

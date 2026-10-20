@@ -17,6 +17,7 @@
 #   apply          --switch NAME [--desired FILE] [--changes-json JSON]
 #   ap-interrogate --ap NAME --ip IP
 #   ap-apply       --ap NAME [--changes-json JSON]
+#   mlag-status    --switch NAME --ip IP        (the mlag capability)
 #
 # Common options: --credentials FILE, --session DIR, --config-dir DIR, --debug.
 # JSON on stdout only; the plugin's own messages go to stderr. Exit: the
@@ -72,6 +73,8 @@ case "${verb}" in
         caps='["vlans"]'
         has plugin_controller_interrogate && caps="$(jq -c '. + ["controller"]' <<<"${caps}")"
         has plugin_ap_interrogate && caps="$(jq -c '. + ["ap"]' <<<"${caps}")"
+        has plugin_mlag_status && caps="$(jq -c '. + ["mlag"]' <<<"${caps}")"
+        has plugin_capabilities && caps="$(plugin_capabilities | jq -Rsc 'split("\n") | map(select(. != ""))')"
         base='{}'; [[ -n "${contract}" ]] && base="$(jq -c . "${contract}" 2>/dev/null || echo '{}')"
         jq -n --argjson b "${base}" --arg arch "${arch}" --arg module "${module}" --argjson v "${vendors}" --argjson c "${caps}" \
             --arg plugin "${plugin}" '
@@ -122,8 +125,12 @@ case "${verb}" in
         jq -nc --arg a "${ap}" --argjson rc "${rc}" '{ap: $a, ok: ($rc == 0)}'
         exit "${rc}"
         ;;
+    mlag-status)
+        has plugin_mlag_status || exit 3
+        plugin_mlag_status "${sw}" "${ip}"
+        ;;
     ""|--help|-h)
-        sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+        sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
         ;;
     *)
         echo "controller-shim: unknown verb '${verb}'" >&2; exit 2 ;;

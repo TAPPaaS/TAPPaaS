@@ -93,14 +93,22 @@ Inventory (recorded in switch-configuration-actual.json):
   lag set <switch> <name> --ports <p,p,...> [--apply]
                           ports become one LACP aggregate (a LAG named <name>);
                           --apply programs that switch at once
+  lag set <switch> <name> --ports <a>:<p>,<b>:<q> [--apply]
+                          one aggregate across the two switches of an MLAG pair
+                          (the same mlag-id on both); --apply programs both
   lag remove <switch> <name> [--apply]
   lag list [<switch>] [--json]
+  mlag-pair set <a> <b> [--peer-port <p> | --peer-port <a>:<p>,<b>:<q>]
+                          two switches that present one LACP partner (MLAG);
+                          the peer link is set up once in the switches (README)
+  mlag-pair remove <a> <b>
+  mlag-pair list [--json] each pair, its live state and its LAGs
   list [--json]
   list-ports [<switch>] [--json]
                           one line per port: actual config + drift vs zones.json
   show <controller|switch>
 
---json on list, list-ports and lag list prints the same facts as JSON.
+--json on list, list-ports, lag list and mlag-pair list prints the same facts as JSON.
 
 Reconciliation (five-verb provider contract, run in this order):
   interrogate [--park-zone <zone>] [--no-park]
@@ -136,6 +144,7 @@ add-port: ${PORT_OPTS}
 update-port: ${PORT_OPTS} --park --park-zone=
 remove-port: --park-zone=
 lag: --ports= --apply --json
+mlag-pair: --peer-port= --json
 list: --json
 list-ports: --json
 show:
@@ -175,11 +184,14 @@ jq_actual() {
 # port outside any declared LAG follows nothing: if the switch still has it in
 # an aggregate, the next apply takes that aggregate apart.
 readonly LAG_LEADS_JQ='
+    # Port ids are opaque strings (switch/1): "5" on UniFi, "ether5" on MikroTik.
+    # natkey orders them naturally either way (ether2 before ether10).
+    def natkey: tostring | [scan("[0-9]+|[^0-9]+") | (tonumber? // .)];
     def lag_leads:
         if .ports == null then . else
         .ports as $ps
         | ([ $ps | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, k: .key} ]
-           | group_by(.lag) | map(map(.k) | sort_by(tonumber)) | map(select(length > 1))) as $decl
+           | group_by(.lag) | map(map(.k) | sort_by(natkey)) | map(select(length > 1))) as $decl
         | ([ $ps | to_entries[] | select(((.value.lagMembers // []) | length) > 1)
              | .key as $l | .value.lagMembers[] | tostring | select(. != $l) | {k: ., lead: $l} ]) as $live
         | .ports = ($ps | with_entries(
@@ -437,7 +449,7 @@ park_unrecorded() {
           | .value | lag_leads | .ports // {} | to_entries[]
           | select((.value.type // null) == null and (.value.parked // false) != true and (.value.disabled // false) != true
                    and (.value.lagLead // null) == null and ((.value.lagMembers // []) | length) <= 1)
-          | {switch: $s, port: .key, link: (.value.link // "unknown")} ] | sort_by(.switch, (.port | tonumber))' "${ACTUAL}")
+          | {switch: $s, port: .key, link: (.value.link // "unknown")} ] | sort_by(.switch, (.port | natkey))' "${ACTUAL}")
     jq -r 'group_by(.switch)[] | map(select(.link != "down")) | select(length > 0)
         | "  \(.[0].switch): port(s) \(map(.port) | join(", ")) have no record and a link (or none reported) — left as the switch has them; register (add-port) or park (update-port --park)"' <<<"${found}" \
         | while IFS= read -r l; do warn "${l}"; done
@@ -452,10 +464,153 @@ park_unrecorded() {
     return 0
 }
 
+# ── mlag-pair: two switches as one LACP partner (#847) ───────────────
+# The pair is recorded in actual (.mlagPairs."<a>+<b>"); the peer link, its
+# shared system id and the bridge settings are the operator's, once, in the
+# switches. A LAG across the pair carries `lag: <name>` and the same `mlagId`
+# on its ports of both switches; each switch's controller forms its side with
+# that mlag-id. Only switches whose controller has the mlag capability pair.
+pair_of() {  # pair_of <switch> -> the pair's key, or nothing
+    jq -r --arg s "$1" '[.mlagPairs // {} | to_entries[] | select(.value.switches | index($s)) | .key][0] // empty' "${ACTUAL}"
+}
+peer_of() {  # peer_of <switch>
+    jq -r --arg s "$1" '[.mlagPairs // {} | .[] | select(.switches | index($s)) | .switches[] | select(. != $s)][0] // empty' "${ACTUAL}"
+}
+has_mlag_capability() {
+    ctl_describe "$(controller_for_switch "$1")" | jq -e '(.capabilities // []) | index("mlag")' >/dev/null 2>&1
+}
+
+cmd_mlag_pair() {
+    local sub="${1:-}"; shift || true
+    local a="" b="" peer=""
+    while [[ $# -gt 0 ]]; do case "$1" in
+        --peer-port) peer="$2"; shift 2 ;;
+        -*) die "mlag-pair ${sub}: unknown option '$1'" ;;
+        *) if [[ -z "${a}" ]]; then a="$1"; elif [[ -z "${b}" ]]; then b="$1"; else die "mlag-pair ${sub}: unexpected '$1'"; fi; shift ;;
+    esac; done
+    case "${sub}" in
+        set)
+            [[ -n "${a}" && -n "${b}" && "${a}" != "${b}" ]] || die "mlag-pair set <switch-a> <switch-b> [--peer-port <p>]"
+            local s
+            for s in "${a}" "${b}"; do
+                jq -e --arg n "${s}" '.switches | has($n)' "${ACTUAL}" >/dev/null || die "Switch '${s}' not found"
+                has_mlag_capability "${s}" || die "${s}: its controller ($(ctl_label "$(controller_for_switch "${s}")")) cannot do MLAG — a pair needs the mlag capability on both switches"
+                local other; other="$(pair_of "${s}")"
+                [[ -z "${other}" || "${other}" == "${a}+${b}" || "${other}" == "${b}+${a}" ]] || die "${s} is in MLAG pair ${other} already — mlag-pair remove it first"
+            done
+            local key="${a}+${b}" pj
+            [[ -n "$(pair_of "${a}")" ]] && key="$(pair_of "${a}")"
+            if [[ "${peer}" == *:* ]]; then
+                pj=$(tr ',' '\n' <<<"${peer}" | jq -R 'split(":") | {(.[0]): .[1]}' | jq -sc 'add')
+            elif [[ -n "${peer}" ]]; then
+                pj=$(jq -nc --arg a "${a}" --arg b "${b}" --arg p "${peer}" '{($a): $p, ($b): $p}')
+            else
+                pj='{}'
+            fi
+            jq_actual '.mlagPairs[$k] = {switches: [$a, $b], peerPort: $p}' --arg k "${key}" --arg a "${a}" --arg b "${b}" --argjson p "${pj}"
+            info "${GN}✓${CL} MLAG pair ${key}: ${a} and ${b}$(jq -r 'if length > 0 then " (peer link: " + (to_entries | map("\(.key) \(.value)") | join(", ")) + ")" else "" end' <<<"${pj}")"
+            info "  a LAG across it: switch-manager lag set ${a} <name> --ports ${a}:<port>,${b}:<port> --apply"
+            ;;
+        remove)
+            [[ -n "${a}" ]] || die "mlag-pair remove <switch-a> [<switch-b>]"
+            local key; key="$(pair_of "${a}")"
+            [[ -n "${key}" ]] || { info "${a}: in no MLAG pair — nothing to remove"; return 0; }
+            local lags
+            lags=$(jq -r --argjson sw "$(jq -c --arg k "${key}" '.mlagPairs[$k].switches' "${ACTUAL}")" \
+                '[.switches // {} | to_entries[] | select(.key as $k | $sw | index($k)) | .value.ports[]? | select(.mlagId != null) | .lag] | unique | join(", ")' "${ACTUAL}")
+            [[ -z "${lags}" ]] || die "MLAG pair ${key} carries LAG(s) ${lags} — lag remove them first"
+            jq_actual 'del(.mlagPairs[$k])' --arg k "${key}"
+            info "${GN}✓${CL} MLAG pair ${key} removed (the peer link in the switches is left as it is)"
+            ;;
+        list)
+            local rows='[]' key sws st sw ctl ip
+            while IFS= read -r key; do
+                [[ -n "${key}" ]] || continue
+                sws=$(jq -c --arg k "${key}" '.mlagPairs[$k].switches' "${ACTUAL}")
+                st='{}'
+                for sw in $(jq -r '.[]' <<<"${sws}"); do
+                    ctl=$(controller_for_switch "${sw}")
+                    ip=$(jq -r --arg n "${sw}" '.switches[$n].managementIp // ""' "${ACTUAL}")
+                    local one; one=$(ctl_run "${ctl}" mlag-status --switch "${sw}" --ip "${ip}" 2>/dev/null) || one='{"error":"not read"}'
+                    jq -e 'type == "object"' >/dev/null 2>&1 <<<"${one}" || one='{"error":"not read"}'
+                    st=$(jq -c --arg s "${sw}" --argjson o "${one}" '. + {($s): $o}' <<<"${st}")
+                done
+                rows=$(jq -c --arg k "${key}" --argjson st "${st}" --slurpfile a "${ACTUAL}" '
+                    $a[0] as $A | ($A.mlagPairs[$k]) as $p
+                    | . + [{pair: $k, switches: $p.switches, peerPort: ($p.peerPort // {}), status: $st,
+                            lags: ([ $p.switches[] as $s | $A.switches[$s].ports // {} | to_entries[]
+                                     | select(.value.mlagId != null) | {lag: .value.lag, mlagId: .value.mlagId, switch: $s, port: .key,
+                                                                         live: (.value.liveMlagId // null)} ]
+                                   | group_by(.lag) | map({name: .[0].lag, mlagId: .[0].mlagId,
+                                       ports: map("\(.switch):\(.port)"),
+                                       problems: ([ ($p.switches[] as $s | select(([.[] | select(.switch == $s)] | length) == 0)
+                                                     | "no member on \($s)"),
+                                                    (.[] | select(.live != null and .live != .mlagId) | "\(.switch):\(.port) has mlag-id \(.live) on the switch, not \(.mlagId)") ])}))}]' <<<"${rows}")
+            done < <(jq -r '.mlagPairs // {} | keys[]' "${ACTUAL}")
+            if [[ "${JSON}" == 1 ]]; then jq . <<<"${rows}"; return 0; fi
+            [[ "$(jq length <<<"${rows}")" -gt 0 ]] || { info "no MLAG pair — mlag-pair set <a> <b>"; return 0; }
+            jq -r '.[] | "\(.pair): \(.switches | join(" + "))"
+                + "\n" + (.status | to_entries | map("    \(.key): " + (if .value.error then .value.error elif .value.configured == false then "no MLAG set up in the switch" else "peer \(.value.peerPort // "?") \(.value.peerLink // "?"), \(.value.state // "state unknown")" end)) | join("\n"))
+                + (if (.lags | length) > 0 then "\n" + (.lags | map("    LAG \(.name) (mlag-id \(.mlagId)): \(.ports | join(", "))" + (if (.problems | length) > 0 then " — " + (.problems | join("; ")) else "" end)) | join("\n")) else "" end)' <<<"${rows}"
+            ;;
+        *) die "mlag-pair: set | remove | list" ;;
+    esac
+}
+
+# lag set across an MLAG pair: <a>:<p>,<b>:<q>. Each switch's ports get the
+# lag and one mlag-id, the lowest free id of the pair (from 10).
+lag_set_mlag() {
+    local sw="$1" name="$2" ports="$3" apply="$4" key pj sws bad id
+    key="$(pair_of "${sw}")"
+    [[ -n "${key}" ]] || die "lag set: ${sw} is in no MLAG pair — mlag-pair set ${sw} <peer> first, or name ports of ${sw} alone"
+    sws=$(jq -c --arg k "${key}" '.mlagPairs[$k].switches' "${ACTUAL}")
+    pj=$(tr ',;' '\n' <<<"${ports}" | sed '/^$/d' | jq -R 'if test(":") then split(":") | {s: .[0], p: (.[1:] | join(":"))} else error("\(.): write <switch>:<port>") end' 2>/dev/null | jq -sc 'unique') \
+        || die "lag set: --ports across a pair is <switch>:<port>,<switch>:<port>"
+    bad=$(jq -r --argjson sw "${sws}" '[.[] | .s | select(. as $s | $sw | index($s) | not)] | unique | join(", ")' <<<"${pj}")
+    [[ -z "${bad}" ]] || die "lag set: ${bad} not in MLAG pair ${key}"
+    bad=$(jq -r --argjson sw "${sws}" --argjson pj "${pj}" -n '[ $sw[] as $s | select(([$pj[] | select(.s == $s)] | length) == 0) | $s ] | join(", ")')
+    [[ -z "${bad}" ]] || die "lag set: no port of ${bad} — an MLAG LAG has a member on each switch of the pair"
+    bad=$(jq -r --argjson pj "${pj}" '[ $pj[] as $x | select((.switches[$x.s].ports[$x.p].type // null) == null) | "\($x.s):\($x.p)" ] | join(", ")' "${ACTUAL}")
+    [[ -z "${bad}" ]] || die "lag set: port(s) ${bad} not registered — add-port <switch> <port> --type node --target <node> --target-port <nic> first"
+    bad=$(jq -r --argjson pj "${pj}" --arg l "${name}" '[ $pj[] as $x | .switches[$x.s].ports[$x.p].lag // "" | select(. != "" and . != $l) ] | unique | join(", ")' "${ACTUAL}")
+    [[ -z "${bad}" ]] || die "lag set: a port is in LAG ${bad} already — lag remove it first"
+    id=$(jq -r --argjson sw "${sws}" --arg l "${name}" '
+        [ $sw[] as $s | .switches[$s].ports // {} | .[] | select(.mlagId != null) ] as $all
+        | ([ $all[] | select(.lag == $l) | .mlagId ][0])
+          // ([range(10; 4000)] - [ $all[] | .mlagId ] | .[0])' "${ACTUAL}")
+    jq_actual '
+        reduce $sw[] as $s (.;
+          .switches[$s].ports |= with_entries(
+            .key as $k
+            | if ([ $pj[] | select(.s == $s) | .p ] | index($k)) != null
+               then .value.lag = $l | .value.mlagId = $id
+            elif (.value.lag // "") == $l then .value |= del(.lag, .mlagId) else . end))' \
+        --argjson sw "${sws}" --argjson pj "${pj}" --arg l "${name}" --argjson id "${id}"
+    mark_lag_leads
+    info "${GN}✓${CL} MLAG pair ${key}: LAG ${name} on $(jq -r 'map("\(.s):\(.p)") | join(", ")' <<<"${pj}") (mlag-id ${id})"
+    [[ "${apply}" == 1 ]] || { info "  programs both switches at the next: switch-manager reconcile --apply  (or lag set … --apply)"; return 0; }
+    local s rc=0
+    for s in $(jq -r '.[]' <<<"${sws}"); do apply_one "${s}" || rc=$?; done
+    return "${rc}"
+}
+
+lag_remove_mlag() {
+    local sw="$1" name="$2" apply="$3" key sws s rc=0
+    key="$(pair_of "${sw}")"
+    sws=$(jq -c --arg k "${key}" '.mlagPairs[$k].switches // [$s]' --arg s "${sw}" "${ACTUAL}")
+    jq_actual 'reduce $sw[] as $s (.; .switches[$s].ports |= map_values(if (.lag // "") == $l then del(.lag, .mlagId) else . end))' \
+        --argjson sw "${sws}" --arg l "${name}"
+    mark_lag_leads
+    info "${GN}✓${CL} LAG ${name} removed from the declaration of $(jq -r 'join(" and ")' <<<"${sws}")"
+    [[ "${apply}" == 1 ]] || { info "  programs the switches at the next: switch-manager reconcile --apply  (or lag remove … --apply)"; return 0; }
+    for s in $(jq -r '.[]' <<<"${sws}"); do apply_one "${s}" || rc=$?; done
+    return "${rc}"
+}
+
 # ── lag: a link aggregate (LACP) across ports of one switch (#40) ────
 # Declared like the VLANs: the ports carry `lag: <name>`, update-desired gives
 # the lead port its members, and the controller forms (or takes apart) the aggregate.
-# A LAG spans one switch: across two it needs MC-LAG, which this does not model.
+# A LAG spans one switch, or the two switches of an MLAG pair (mlag-pair, #847).
 cmd_lag() {
     local sub="${1:-}"; shift || true
     local sw="" name="" ports="" apply=0
@@ -469,20 +624,26 @@ cmd_lag() {
         list)
             if [[ "${JSON}" == 1 ]]; then
                 jq --arg sw "${sw}" '[.switches // {} | to_entries[] | select($sw == "" or .key == $sw) | .key as $s
-                    | [ .value.ports // {} | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, p: .key, live: (.value.lagMembers // [])} ]
+                    | [ .value.ports // {} | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, p: .key, live: (.value.lagMembers // []), mlagId: (.value.mlagId // null)} ]
                     | group_by(.lag)[] | ([.[].live[]] | unique) as $live
-                    | {switch: $s, name: .[0].lag, ports: map(.p), live: $live, formed: ($live | length > 0)}]' "${ACTUAL}"
+                    | {switch: $s, name: .[0].lag, ports: map(.p), live: $live, formed: ($live | length > 0), mlagId: .[0].mlagId}]' "${ACTUAL}"
                 return 0
             fi
             jq -r --arg sw "${sw}" '.switches // {} | to_entries[] | select($sw == "" or .key == $sw) | .key as $s
-                | [ .value.ports // {} | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, p: .key, live: (.value.lagMembers // [])} ]
-                | group_by(.lag)[] | "\($s)  LAG \(.[0].lag): ports \(map(.p) | join("+"))  (live: \([.[].live[]] | unique | map(tostring) | join("+") | if . == "" then "not formed" else . end))"' "${ACTUAL}"
+                | [ .value.ports // {} | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, p: .key, live: (.value.lagMembers // []), m: (.value.mlagId // null)} ]
+                | group_by(.lag)[] | "\($s)  LAG \(.[0].lag): ports \(map(.p) | join("+"))\(if .[0].m != null then "  [MLAG id \(.[0].m)]" else "" end)  (live: \([.[].live[]] | unique | map(tostring) | join("+") | if . == "" then "not formed" else . end))"' "${ACTUAL}"
             return 0 ;;
         set|remove) ;;
         *) die "lag: set | remove | list" ;;
     esac
     [[ -n "${sw}" && -n "${name}" ]] || die "lag ${sub} <switch> <name>"
     jq -e --arg n "${sw}" '.switches | has($n)' "${ACTUAL}" >/dev/null || die "Switch '${sw}' not found"
+    if [[ "${sub}" == set && "${ports}" == *:* ]]; then
+        lag_set_mlag "${sw}" "${name}" "${ports}" "${apply}"; return $?
+    fi
+    if [[ "${sub}" == remove ]] && jq -e --arg n "${sw}" --arg l "${name}" 'any(.switches[$n].ports[]?; .lag == $l and .mlagId != null)' "${ACTUAL}" >/dev/null; then
+        lag_remove_mlag "${sw}" "${name}" "${apply}"; return $?
+    fi
     if [[ "${sub}" == set ]]; then
         local pj
         pj=$(tr ',;' '\n' <<<"${ports}" | sed '/^$/d' | jq -R . | jq -sc 'unique')
@@ -497,7 +658,7 @@ cmd_lag() {
                 elif (.value.lag // "") == $l then .value |= del(.lag) else . end)' \
             --arg n "${sw}" --arg l "${name}" --argjson pj "${pj}"
         mark_lag_leads
-        info "${GN}✓${CL} ${sw}: LAG ${name} on ports $(jq -r 'join("+")' <<<"${pj}") (led by port $(jq -r 'sort_by(tonumber) | .[0]' <<<"${pj}"))"
+        info "${GN}✓${CL} ${sw}: LAG ${name} on ports $(jq -r 'join("+")' <<<"${pj}") (led by port $(jq -r "${LAG_LEADS_JQ}"' sort_by(natkey) | .[0]' <<<"${pj}"))"
     else
         jq -e --arg n "${sw}" --arg l "${name}" '[.switches[$n].ports[] | select(.lag == $l)] | length > 0' "${ACTUAL}" >/dev/null \
             || { info "${sw}: no LAG ${name} — nothing to remove"; [[ "${apply}" == 1 ]] || return 0; }
@@ -603,7 +764,7 @@ cmd_list_ports() {
                parked: (($p.parked // false) == true), link: ($p.link // null), disabled: (($p.disabled // false) == true)};
         def ports_of($sw; $active; $zones):
             (.switches[$sw] | lag_leads | .ports // {}) as $ports
-            | $ports | to_entries | sort_by(.key|tonumber) | .[] | port_view($ports; $active; $zones);'
+            | $ports | to_entries | sort_by(.key|natkey) | .[] | port_view($ports; $active; $zones);'
     if [[ "${JSON}" == 1 ]]; then
         jq --argjson active "${active}" --slurpfile z "${ZONES_FILE}" --arg sw "${target}" "${view}"'
             [.switches // {} | keys[] | select($sw == "" or . == $sw)] as $names
@@ -775,12 +936,16 @@ cmd_update_desired() {
                 # A LAG (#40): its lowest port leads and lists the members;
                 # every other managed port lists none. A member that follows
                 # its lead (#854) has no VLAN set of its own to want.
-                | ([ .ports | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, idx: (.key | tonumber)} ]
-                   | group_by(.lag) | map(map(.idx) | sort)) as $groups
+                # Members as the switch names them: a number where the id is one
+                # (UniFi), the id itself otherwise ("ether5" on MikroTik).
+                # An MLAG LAG (#847) keeps its group with one member: the
+                # other member of the aggregate is on the peer switch.
+                | ([ .ports | to_entries[] | select((.value.lag // "") != "") | {lag: .value.lag, idx: (.key | tonumber? // .), m: (.value.mlagId != null)} ]
+                   | group_by(.lag) | map({ids: (map(.idx) | sort_by(natkey)), m: any(.[]; .m)})) as $groups
                 | .ports |= with_entries(
-                    (.key | tonumber) as $i
+                    (.key | tonumber? // .) as $i
                     | if (.value.type // null) == null and (.value.parked // false) != true then .
-                      else .value.lagMembers = ([ $groups[] | select(.[0] == $i and length > 1) ][0] // [])
+                      else .value.lagMembers = ([ $groups[] | select(.ids[0] == $i and ((.ids | length) > 1 or .m)) | .ids ][0] // [])
                       end
                     | if (.value.lagLead // null) != null then .value |= del(.mode, .nativeVlan, .taggedVlans) else . end)
               )) }' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${DESIRED}"
@@ -821,7 +986,8 @@ compute_delta() {
                   # (managed ports), against what the switch reports.
                   ( select($p.value.lagMembers != null)
                     | (($ap.lagMembers) // []) as $alag
-                    | select(($p.value.lagMembers | sort) != ($alag | sort))
+                    | select(($p.value.lagMembers | sort) != ($alag | sort)
+                             or (($p.value.mlagId // null) != (($ap.liveMlagId) // null) and ($p.value.lagMembers | length) > 0))
                     | {action:"lag", port:$p.key,
                        description: (if ($p.value.lagMembers | length) > 0
                          then "ports \($p.value.lagMembers | map(tostring) | join("+")) as one LACP aggregate (LAG \($p.value.lag // "")), led by port \($p.key)"
@@ -1005,6 +1171,7 @@ main() {
         update-port)       cmd_update_port "$@" ;;
         remove-port)       cmd_remove_port "${1:-}" "${2:-}" ;;
         lag)               cmd_lag "$@" ;;
+        mlag-pair)         cmd_mlag_pair "$@" ;;
         list)              cmd_list ;;
         list-ports|--list-ports) cmd_list_ports "${1:-}" ;;
         show)              cmd_show "${1:-}" ;;

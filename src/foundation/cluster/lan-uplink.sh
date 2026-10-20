@@ -247,7 +247,10 @@ LAG_NAME=""
 lag_name() { echo "${NODE}-lan"; }
 have_switch_controller() { command -v switch-manager >/dev/null 2>&1 && [[ -f "${SW_ACTUAL}" ]]; }
 
-# "<switch>\t<p,p>" for the lan NICs in <names>; non-zero naming what is missing.
+# "<switch>\t<p,p>" for the lan NICs in <names> — or, when they reach the two
+# switches of an MLAG pair (#847), "<switch>\t<a>:<p>,<b>:<q>", one aggregate
+# across both. Non-zero, naming why, when switch-manager cannot do the switch side
+# (the operator then does it by hand, within --switch-wait).
 switch_ports_for() {
     local names="$1" rows sw
     rows=$(jq -r --arg n "${NODE}" --arg nics " ${names} " '
@@ -262,8 +265,19 @@ switch_ports_for() {
         return 1
     fi
     sw=$(cut -f1 <<<"${rows}" | sort -u)
-    [[ "$(wc -l <<<"${sw}")" -eq 1 ]] || { echo "the lan NICs reach different switches (${sw//$'\n'/, }): one LAG cannot span them (that needs MC-LAG) — use active-backup" >&2; return 1; }
-    printf '%s\t%s\n' "${sw}" "$(cut -f2 <<<"${rows}" | sort -n | paste -sd, -)"
+    if [[ "$(wc -l <<<"${sw}")" -eq 1 ]]; then
+        printf '%s\t%s\n' "${sw}" "$(cut -f2 <<<"${rows}" | sort -V | paste -sd, -)"
+        return 0
+    fi
+    local a b
+    a="$(head -1 <<<"${sw}")"; b="$(sed -n 2p <<<"${sw}")"
+    if [[ "$(wc -l <<<"${sw}")" -eq 2 ]] && jq -e --arg a "${a}" --arg b "${b}" \
+            'any(.mlagPairs // {} | .[]; (.switches | index($a)) != null and (.switches | index($b)) != null)' "${SW_ACTUAL}" >/dev/null 2>&1; then
+        printf '%s\t%s\n' "${a}" "$(awk -F'\t' '{print $1 ":" $2}' <<<"${rows}" | sort -V | paste -sd, -)"
+        return 0
+    fi
+    echo "the lan NICs reach different switches (${sw//$'\n'/, }) that are not an MLAG pair: one LAG cannot span them (switch-manager mlag-pair set, if they can be one)" >&2
+    return 1
 }
 # The switch that holds this node's LAG in the declaration, if any.
 switch_with_lag() {
@@ -317,9 +331,14 @@ converge() {  # <declaration>
         if [[ "${want_lacp}" == 1 ]]; then
             names="$(jq -r --argjson l "${live}" '[.lan.ports[] | ascii_downcase as $m | $l.ports[] | select(.mac == $m) | .name] | join(" ")' <<<"${decl}")"
             local sp
-            sp="$(switch_ports_for "${names}")" || die "lacp: $(switch_ports_for "${names}" 2>&1 >/dev/null)"
-            sw_set="${sp%%$'\t'*}"; sw_ports="${sp#*$'\t'}"
-            [[ "${sw_remove}" == "${sw_set}" ]] && sw_remove=""   # set re-declares it there
+            if sp="$(switch_ports_for "${names}" 2>/dev/null)"; then
+                sw_set="${sp%%$'\t'*}"; sw_ports="${sp#*$'\t'}"
+                [[ "${sw_remove}" == "${sw_set}" ]] && sw_remove=""   # set re-declares it there
+            else
+                # Not automatable (#847): the operator forms the aggregate by
+                # hand within --switch-wait, as on a site switch-manager does not know.
+                warn "  switch side by hand: $(switch_ports_for "${names}" 2>&1 >/dev/null) — form the aggregate on the switch within --switch-wait"
+            fi
             # Forming the aggregate and its LACP negotiation take longer than 30s.
             (( CONFIRM_BY < 180 )) && { CONFIRM_BY=180; ROLLBACK_SECS=195; }
         elif [[ "${live_lacp}" != 1 ]]; then

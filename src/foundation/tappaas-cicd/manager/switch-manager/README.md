@@ -37,8 +37,12 @@ switch-manager <command> [args]
 | `update-port <switch> <port> [ ...same flags... ]` | Change a port's settings. Giving a parked port a `--type` takes it into use (`add-port` may too). |
 | `update-port <switch> <port> --park [--park-zone <zone>]` | Park the port: set it **on the switch, at once and alone**, as an access port in iotLocal, then record it parked. |
 | `remove-port <switch> <port> [--park-zone <zone>]` | Give the port back: the same as `--park` — the switch first, then the record becomes a parked one. |
-| `lag set <switch> <name> --ports <p,p> [--apply]` | Make registered ports one LACP aggregate (LAG). The lowest-numbered port leads it. `--apply` programs that switch at once; otherwise the next `reconcile --apply` does. |
-| `lag remove <switch> <name> [--apply]` | Take the aggregate apart again. |
+| `lag set <switch> <name> --ports <p,p> [--apply]` | Make registered ports one LACP aggregate (LAG). The lowest port leads it (ports in natural order: `ether2` before `ether10`). `--apply` programs that switch at once; otherwise the next `reconcile --apply` does. |
+| `lag set <switch> <name> --ports <a>:<p>,<b>:<q> [--apply]` | One aggregate across the two switches of an MLAG pair: at least one member on each, the same `mlagId` on both (the lowest free one of the pair, from 10). `--apply` programs both. |
+| `lag remove <switch> <name> [--apply]` | Take the aggregate apart again (on both switches, for an MLAG LAG). |
+| `mlag-pair set <a> <b> [--peer-port <p>]` | Record two switches as an MLAG pair: one LACP partner across both (#847). Both controllers need the `mlag` capability (`mikrotik-controller` has it). The peer link and its shared settings are set up once in the switches; `--peer-port` records which port it is (`<a>:<p>,<b>:<q>` when they differ). |
+| `mlag-pair remove <a> [<b>]` | Forget the pair — refused while a LAG spans it. |
+| `mlag-pair list [--json]` | Each pair, each peer's live MLAG state (`mlag-status` of its controller) and the LAGs across it, with what is wrong (no member on a peer, another mlag-id on the switch). `health-manager validate` checks the same offline (`mlag-pairs`). |
 | `lag list [<switch>] [--json]` | The declared aggregates, and whether the switch has formed them. |
 | `list [--json]` | List controllers and switches. |
 | `list-ports [<switch>] [--json]` | One line per port: actual config and drift vs `zones.json`; `--json` adds what `zones.json` wants on it (`desired`), `drift` (`in-sync`, `drift`, `unmanaged`), `parked`, `link`, `disabled` and `lagLead`. |

@@ -152,13 +152,16 @@ node returns to HA placement.
 **Switching to `lacp`** needs both ends: the node speaking LACP and its switch ports
 one aggregate (LAG). When the switch controller knows which switch ports the node's
 LAN NICs reach (`switch-manager add-port <switch> <port> --type node --target
-<node> --target-port <nic>`) and the switch has a vendor plugin (UniFi), `set
---lan-mode lacp --apply` does both: the node switches to LACP first (running on one
+<node> --target-port <nic>`) and the switch has a vendor controller (UniFi, MikroTik),
+`set --lan-mode lacp --apply` does both: the node switches to LACP first (running on one
 leg until the switch answers), then the aggregate `<node>-lan` is formed, and the
 change is kept once LACP has aggregated — otherwise the aggregate is taken apart and
 the node reverts. Leaving `lacp` takes the aggregate apart first. On a switch that
-is configured by hand, the step is printed, and `--switch-wait 600` gives you time
-to do it while the node waits. Never form the aggregate first, against a node still
+is configured by hand — or whose ports switch-manager does not know, or two switches
+that are not an MLAG pair — the step is printed, and `--switch-wait 600` gives you time
+to do it while the node waits. The two legs may reach two switches when they are a
+declared MLAG pair (`switch-manager mlag-pair set`, MikroTik): the aggregate is then
+formed across both, the same `mlag-id` on each. Never form the aggregate first, against a node still
 in `active-backup`: the switch would send half its frames to the leg the node ignores.
 
 `test --apply` (on a drained node too) takes each leg down for ten seconds and

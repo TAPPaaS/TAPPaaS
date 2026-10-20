@@ -16,6 +16,8 @@
 //   - switch-ports     (#853: a switch port unrecorded and not parked, or set
 //                       otherwise than its record — WARN)
 //   - signature-status (ADR-033 D10: is what each repository runs a signed release)
+//   - mlag-pairs        (#847: a LAG across an MLAG pair has a member on each
+//                       peer and the mlag-id its record has — WARN)
 //   - control-plane-trust (ADR-035 D7: a module's controller from an unverified
 //                       repository in a foundation manager — WARN)
 
@@ -27,6 +29,7 @@ import { existsSync, readFileSync } from "fs";
 import { checkCveStatus } from "./security";
 import { checkSignatureStatus } from "./signatures";
 import { checkControlPlaneTrust } from "./controlplane";
+import { checkMlagPairs } from "./mlag";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
 // does (defaulting zone0 to "mgmt"), for the gates that probe a guest over SSH.
@@ -905,6 +908,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkQuorum(client),
     checkLanUplink(client),
     checkSwitchPorts(opts.configDir),
+    checkMlagPairs(opts.configDir),
     checkPulse(client, opts.configDir),
     checkCveStatus(opts.configDir, Date.now()),
     checkSignatureStatus(opts.configDir, Date.now()),

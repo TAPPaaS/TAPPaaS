@@ -69,6 +69,19 @@ cannot mislead them. A follower's desired record has no mode or VLANs,
 `delta` skips it, `confirm` leaves its live VLANs as read, and the UniFi plugin
 never gives it an override.
 
+### Port ids and MLAG pairs (#847)
+
+Port ids are opaque strings (switch/1): `"5"` on UniFi, `"ether5"` or `"sfp-sfpplus1"`
+on MikroTik. Nothing reads them as numbers: they sort with `natkey` (digits as numbers
+within the name), and a LAG's members keep the type the switch reports (numbers on
+UniFi, names elsewhere). An MLAG pair is recorded in actual as
+`.mlagPairs."<a>+<b>" = {switches, peerPort}`; a LAG across it carries `lag` and the
+same `mlagId` on its ports of both switches. update-desired gives each side's lead its
+members even when there is one (the other is on the peer), and the delta compares
+`mlagId` with what the switch reports (`liveMlagId`), so each side's controller forms
+its half with that id. `lan-uplink` drives a node's `lacp` uplink through the pair when
+its NICs reach both switches.
+
 ### Five-verb reconcile
 
 `reconcile` runs `interrogate → update-desired → delta → apply → confirm`. With
@@ -91,10 +104,9 @@ non-zero on failure.
 
 ## Pending / not yet implemented
 
-- **Vendor controllers are limited.** Only `unifi-controller` (the Community `unifi-os` module; full
-  automation) and the manual fallback exist. Any other brand falls through to
-  manual, so
-  `apply` prints instructions rather than programming the switch.
-- **Device-arch brands** (e.g. MikroTik) are referenced in `setup-switches.sh`
-  as a management mode but have no controller yet — they are effectively manual
-  until a plugin lands.
+- **Vendor controllers:** `unifi-controller` (the Community `unifi-os` module) and
+  `mikrotik-controller` (the Community `mikrotik` module, device arch, MLAG). Any
+  other brand falls through to manual, so `apply` prints instructions rather than
+  programming the switch.
+- **MLAG on UniFi** is not modelled: the controller flags MC-LAG with a capability
+  bit the USW Pro XG 10 PoE lacks, so `unifi-controller` declares no `mlag`.
