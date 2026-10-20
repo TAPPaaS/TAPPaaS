@@ -196,10 +196,18 @@ let
       headline = "lan uplink lost a leg";
       # A node's lan bridge on a bond (#40) keeps running when one leg goes: that
       # is the point, and also why nothing else would tell. The kernel's bonding
-      # driver logs the line when it takes a member out (miimon). Nodes only:
+      # driver logs "link status definitely down" when it takes a member out
+      # (miimon), and "definitely up" when it takes it back. A leg is lost when
+      # it went down more often than it came back in the window: a flap that
+      # recovers is not a loss. A node's boot shows exactly such a flap on a DAC
+      # leg (up, down, up within a second), and the lines arrive in one batch
+      # with the same timestamp, so their order cannot decide — the counts can.
+      # Per leg (host, slave); `or` keeps a leg that only went down. Nodes only:
       # the rule's own query text, logged on this VM, is not from a node.
-      expr = ''sum by (host) (count_over_time(${pve} |~ "lanbond: .*link status definitely down" [5m]))'';
-      summary = "A leg of a node's bonded lan uplink went down. The node runs on the rest; one more port or switch failure cuts it off. See: site-manager node network show <host>.";
+      expr = let
+        leg = state: ''sum by (host, slave) (count_over_time(${pve} |~ `lanbond: \(slave [^)]+\): link status definitely ${state}` | regexp `\(slave (?P<slave>[^)]+)\): link status definitely` [5m]))'';
+      in "(${leg "down"} - ${leg "up"}) or ${leg "down"}";
+      summary = "A leg of a node's bonded lan uplink went down and did not come back. The node runs on the rest; one more port or switch failure cuts it off. See: site-manager node network show <host>.";
       query = ''${pve} |= "lanbond"'';
     })
     (alertRule {

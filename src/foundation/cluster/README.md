@@ -172,7 +172,7 @@ has none gets its current layout recorded by the next cluster update, which also
 installs `lldpd` in receive-only mode so `show` can say which switch and port each
 leg reaches. The health check warns when a leg is down, a bond runs on its backup,
 LACP has no partner, both legs reach the same switch, MTUs differ, or the live
-layout differs from the declaration; a leg going down is also mailed (`LanLegDown`).
+layout differs from the declaration; a leg that goes down and does not come back is also mailed (`LanLegDown`); a flap that recovers within the window, as at a node's boot, is not.
 
 **When you work on the switches,** change one switch at a time and wait until
 `site-manager node network show` reports every leg up again before the next.
