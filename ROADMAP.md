@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | – | 1 | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 6 | 12 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 6 | 13 |
 | 6 | G6.2 User interface & physical view | H | L | – | 1 | 4 |
 | 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
@@ -237,7 +237,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 6 · open: 12
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 6 · open: 13
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -259,6 +259,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 | #236 | RADIUS MAC Auth Bypass: a device's VLAN from its MAC, on Wi-Fi and wired ports | H | M | Future idea; depends on how switch ports and APs are managed (this group) |
 | #63 | Service desk tooling spike | M | L | |
+| #861 | Moving a 2.2 site to main: four bugs and the workarounds used | L | L | **Opened 2026-10-19** by @AndreasJe. Two were already on main: the Jellyfin policy race (#859, `a9dd2f5e`) and the console's first-update rollback (`842e9797`; one rollback for a site whose installed self-prepare predates it, the second update passes). **Fixed 2026-10-20** on branch `issue-861` (`a372b2f7`, `ce1109b6`), to merge: the network test accepts an empty CrowdSec whitelist on an IPv4-only site; templates:nixos `update-service.sh` runs `update-os.sh` from the module directory, so `build-facts.sh` is collected from anywhere. Left: the zones template's `wan` (VLAN 100, 10.1.0.0/24) collides with a site zone on that VLAN and the merge does not check |
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 | ✅ #851 | CrowdSec on the firewall: rate limiting and bans for published names | M | M | **Closed 2026-10-18.** Opened 2026-10-17 from ADR-032 O1: os-caddy takes extra config only globally, so Caddy's built-in `rate_limit` cannot be scoped to one site. CrowdSec (`os-crowdsec`) reads Caddy's log and bans by pf on the WAN; scenarios for Jellyfin's and Authentik's logins and probing; then Jellyfin's per-account lockout can be relaxed (today a known username can be locked out). Complements #843. **Built 2026-10-17** (`5bb4b7be`, `ab38382f`), live on hrossen: local only (no central API — operator), bans by pf on the sign-in scenario `tappaas/http-login-bf` (6 × 400/401 in ~3 min at Jellyfin's login/Quick Connect or Authentik's token endpoint), `http-cve` and bad user agents; generic probing left out (Jellyfin's missing-image 404s); the site's IPv6 /64s whitelisted; Caddy writes one access log per name; ~140 MiB. Tested: replay into the scenario, whitelist, a real ban into pf. Jellyfin's accounts turned out to have no lockout (-1), so nothing to relax. Verified 2026-10-18: the network update converges it (`--check` clean after); its first day banned 56 cloud-hosted port scanners, no site user |
 
