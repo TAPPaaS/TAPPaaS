@@ -327,15 +327,17 @@ _port_set() { # _port_set <add|update> <switch> <port> [flags...]
     local cur upd
     cur=$(jq -c --arg n "${sw}" --arg p "${port}" '.switches[$n].ports[$p] // {}' "${ACTUAL}")
     upd="${cur}"
-    # A parked port given a type is in use: it is no longer parked, and the park
-    # zone is not its zone.
-    [[ -n "${type}" ]] && upd=$(jq -c 'if .parked == true then del(.parked, .zone) else . end' <<<"${upd}")
+    # A parked port given a type is in use: it is no longer parked, and neither
+    # the park zone nor the park's VLAN is its own.
+    [[ -n "${type}" ]] && upd=$(jq -c 'if .parked == true then del(.parked, .zone, .nativeVlan) else . end' <<<"${upd}")
     [[ -n "${type}" ]]        && upd=$(jq -c --arg v "${type}" '.type=$v' <<<"${upd}")
     [[ -n "${target}" ]]      && upd=$(jq -c --arg v "${target}" '.target=$v' <<<"${upd}")
     [[ -n "${target_port}" ]] && upd=$(jq -c --arg v "${target_port}" '.targetPort=$v' <<<"${upd}")
     [[ -n "${zone}" ]]        && upd=$(jq -c --arg v "${zone}" '.zone=$v' <<<"${upd}")
     [[ -n "${description}" ]] && upd=$(jq -c --arg v "${description}" '.description=$v' <<<"${upd}")
-    [[ -n "${native}" ]]      && upd=$(jq -c --argjson v "${native}" '.nativeVlan=$v' <<<"${upd}")
+    # The declared native VLAN (`native`) is kept apart from `nativeVlan`, which
+    # interrogate overwrites with what the switch has.
+    [[ -n "${native}" ]]      && upd=$(jq -c --argjson v "${native}" '.native=$v | .nativeVlan=$v' <<<"${upd}")
     if [[ -n "${tagged}" ]]; then
         local tj; tj=$(echo "${tagged}" | tr ',;' '\n' | sed '/^$/d' | jq -R 'tonumber' | jq -s 'sort')
         upd=$(jq -c --argjson v "${tj}" '.taggedVlans=$v' <<<"${upd}")
@@ -746,7 +748,7 @@ cmd_list_ports() {
             | ($src.type // "") as $t
             | ($src.taggedVlans // []) as $atag
             | ($src.nativeVlan // 0) as $anat
-            | (if ($t=="node" or $t=="switch" or $t=="uplink" or $t=="ap") then {mode:"trunk", tagged:$active, nat:0}
+            | (if ($t=="node" or $t=="switch" or $t=="uplink" or $t=="ap") then {mode:"trunk", tagged:$active, nat:($src.native // 0)}
                elif $t=="device" or ($src.parked // false) == true then {mode:"access", tagged:[],
                      nat:(($src.zone // "") as $zn | if ($zn!="" and ($zones[$zn].vlantag!=null)) then $zones[$zn].vlantag else $anat end)}
                else null end) as $d
@@ -758,7 +760,7 @@ cmd_list_ports() {
                desired: (if $d==null then null else {mode: $d.mode, nativeVlan: $d.nat, taggedVlans: $d.tagged} end),
                drift: (if $d==null then "unmanaged"
                        elif $lead != null then "in-sync"
-                       elif (($add|length)>0 or ($rem|length)>0 or ($d.mode=="access" and ($d.nat != $anat or ($src.mode // "access") != "access"))) then "drift"
+                       elif (($add|length)>0 or ($rem|length)>0 or ($d.mode=="trunk" and $d.nat != $anat) or ($d.mode=="access" and ($d.nat != $anat or ($src.mode // "access") != "access"))) then "drift"
                        else "in-sync" end),
                add: $add, remove: $rem, lag: ($p.lag // null), lagMembers: ($p.lagMembers // []), lagLead: $lead,
                parked: (($p.parked // false) == true), link: ($p.link // null), disabled: (($p.disabled // false) == true)};
@@ -924,13 +926,16 @@ cmd_update_desired() {
                 | $sw + { ports: (($sw.ports // {}) | map_values(
                     . as $p
                     | (.type // "") as $t
+                    # A trunk carries the site untagged (native 0, the mgmt zone)
+                    # unless a native was declared (`native`): what the switch
+                    # has live (`nativeVlan`) is what is, not what is wanted.
                     | if ($t=="node" or $t=="switch" or $t=="uplink" or $t=="ap") then
-                        $p + {mode:"trunk", taggedVlans:$active}
+                        $p + {mode:"trunk", taggedVlans:$active, nativeVlan:($p.native // 0)}
                       elif ($t=="device" or (.parked // false) == true) then
                         # A parked port (#853) is an access port in its park zone.
                         ((.zone // "") as $zn
                          | $p + {mode:"access",
-                                 nativeVlan: (if ($zn!="" and ($zones[$zn].vlantag != null)) then $zones[$zn].vlantag else (.nativeVlan // 0) end)})
+                                 nativeVlan: (if ($zn!="" and ($zones[$zn].vlantag != null)) then $zones[$zn].vlantag else (.native // .nativeVlan // 0) end)})
                       else $p end
                 )) }
                 # A LAG (#40): its lowest port leads and lists the members;
@@ -968,9 +973,10 @@ compute_delta() {
                 | if $p.value.mode=="trunk" then
                     ((($p.value.taggedVlans // []) - (($ap.taggedVlans) // [])) as $addv
                      | (((($ap.taggedVlans) // []) - ($p.value.taggedVlans // []))) as $delv
-                     | if ($addv|length)>0 or ($delv|length)>0 then
+                     | (($p.value.nativeVlan // 0) != (($ap.nativeVlan) // 0)) as $natd
+                     | if ($addv|length)>0 or ($delv|length)>0 or $natd then
                          {action:"trunk-vlans", port:$p.key,
-                          description:"port \($p.key) (\($p.value.type // "trunk") \($p.value.target // "")) trunk: +\($addv|join(",")) -\($delv|join(","))"}
+                          description:"port \($p.key) (\($p.value.type // "trunk") \($p.value.target // "")) trunk: +\($addv|join(",")) -\($delv|join(","))\(if $natd then ", native \(($ap.nativeVlan) // 0) -> \($p.value.nativeVlan // 0)" else "" end)"}
                        else empty end)
                   elif $p.value.mode=="access" then
                     # A trunk that should be an access port is a change even when

@@ -343,6 +343,25 @@ ck "remove-controller deletes"       "false"  "$(jq -e '.controllers | has("ctrl
 ck "--help (rc)"                     "0"      "$(rc_of "${SM}" --help)"
 ck "unknown command (rc)"            "1"      "$(rc_of "${SM}" bogus)"
 
+# ── A trunk's native VLAN is declared (or 0), not what the switch has (#847) ──
+# A port taken out of parking into a trunk kept the park's VLAN as its native,
+# and interrogate's live value was copied into desired: it never converged.
+"${SM}" add-switch nsw --vendor tplink --managed manual >/dev/null 2>&1
+"${SM}" add-port nsw 1 --type device --zone home >/dev/null 2>&1
+jq '.switches.nsw.ports["1"] = {parked: true, zone: "iotLocal", mode: "access", nativeVlan: 410, source: "discovered"}' "${ACT}" > "${ACT}.t" && mv "${ACT}.t" "${ACT}"
+"${SM}" update-port nsw 1 --type switch --target other >/dev/null 2>&1
+ck "unparked into a trunk: the park's VLAN is dropped" "null" "$(jq -r '.switches.nsw.ports["1"].nativeVlan' "${ACT}")"
+jq '.switches.nsw.ports["1"].nativeVlan = 410' "${ACT}" > "${ACT}.t" && mv "${ACT}.t" "${ACT}"   # what the switch reports
+"${SM}" update-desired >/dev/null 2>&1
+ck "a trunk wants native 0, whatever the switch has" "0" "$(jq -r '.switches.nsw.ports["1"].nativeVlan' "${DES}")"
+ck "…and the delta says so" "yes" "$(has "$("${SM}" delta 2>&1)" 'native 410 -> 0')"
+ck "…and list-ports calls it drift" "drift" "$("${SM}" list-ports nsw --json 2>/dev/null | jq -r '.[0].ports[] | select(.port == "1") | .drift')"
+"${SM}" update-port nsw 1 --native 300 >/dev/null 2>&1
+jq '.switches.nsw.ports["1"].nativeVlan = 410' "${ACT}" > "${ACT}.t" && mv "${ACT}.t" "${ACT}"
+"${SM}" update-desired >/dev/null 2>&1
+ck "a declared native survives the switch's value" "300" "$(jq -r '.switches.nsw.ports["1"].nativeVlan' "${DES}")"
+"${SM}" remove-switch nsw >/dev/null 2>&1
+
 # ── MikroTik-style port ids and MLAG pairs (#847) ───────────────────
 # Port ids are opaque ("ether2"): ordered naturally, never read as numbers.
 # A stub device controller with the mlag capability stands in for MikroTik.
