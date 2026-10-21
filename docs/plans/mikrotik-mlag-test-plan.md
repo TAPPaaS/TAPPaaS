@@ -19,7 +19,23 @@ uplink survives a switch reboot.
 
 USW ports 11 and 12 are the SFP+ cages tappaas1 uses today (the CRS317 has only
 SFP+). Management: `crs-a` 10.0.0.21, `crs-b` 10.0.0.22 on the bridge, untagged (the
-mgmt zone, PVID 1) — free today; check they are outside the mgmt DHCP range.
+mgmt zone, PVID 1). Agreed 2026-10-21 (operator): these ports and addresses, and the
+outage of tappaas1's non-HA guests during the swap.
+
+## Reaching the switches from the Mac
+
+- **Phase 1 (bench): the Mac straight into `ether1`**, one switch at a time — both come
+  up as 192.168.88.1 (RouterOS default configuration: every port on `bridge`, that
+  address on it, no DHCP server). The Mac runs no DHCP: give its USB/Thunderbolt
+  Ethernet adapter a fixed 192.168.88.10/24, no router. Log in with `ssh
+  admin@192.168.88.1`, or WinBox, which also connects by MAC address and so survives
+  the address moves below. The password is on the sticker (recent units) or empty.
+- **Not into hrossen's trunk at first:** an unconfigured CRS bridges every port
+  without VLAN filtering and answers at 192.168.88.1 on the untagged mgmt network —
+  a foreign subnet on mgmt and, with two cables to anything, a loop.
+- **Phase 2 onwards: through hrossen.** Once a CRS has 10.0.0.2x and an uplink, it is
+  reached on mgmt like any other device: from the Mac over the admin VPN
+  (`network-manager wgvpn`), or from the mothership. `ether1` stays the rescue path.
 
 ## Today — prepared (no hardware)
 
@@ -32,13 +48,19 @@ mgmt zone, PVID 1) — free today; check they are outside the mgmt DHCP range.
 
 ## Phase 1 — each CRS on the bench (operator, laptop on `ether1`)
 
-Same RouterOS 7 stable on both (`/system package update install`, then
-`/system routerboard upgrade` and a reboot). Then, with `X` = 21 on crs-a, 22 on crs-b:
+Same RouterOS 7 stable on both. On the bench the switch has no internet: download
+`routeros-7.<n>-arm.npk` (`/system resource print` shows the architecture) on the Mac,
+copy it over (`scp routeros-7.<n>-arm.npk admin@192.168.88.1:`, or drag it into
+WinBox's Files), `/system reboot`; then `/system routerboard upgrade` and reboot again.
+
+Work in **Safe Mode** (Ctrl-X in the terminal, or WinBox's Safe Mode button): if a
+step cuts the session, RouterOS undoes it. Then, with `X` = 21 on crs-a, 22 on crs-b:
 
 ```routeros
 /system identity set name=crs-a                      # crs-b on the other
-/interface bridge port remove [find interface=ether1]
-/ip address add address=192.168.88.1/24 interface=ether1   # rescue access stays here
+# ether1 off the bridge, keeping the bench address on it — one line, so the
+# session moves with the address:
+/ip address set [find address="192.168.88.1/24"] interface=ether1; /interface bridge port remove [find interface=ether1]
 /interface bonding add name=peer-link mode=802.3ad lacp-rate=1sec \
     transmit-hash-policy=layer-2-and-3 slaves=sfp-sfpplus15,sfp-sfpplus16
 /interface bridge port add bridge=bridge interface=peer-link pvid=99
