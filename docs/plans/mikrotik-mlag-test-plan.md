@@ -159,6 +159,35 @@ Watch first: nothing else running (`pgrep` for sweeps and other sessions' tests)
 `nic2`/`nic3` → USW 12/11), `lag set "USW Pro XG 10 PoE" tappaas1-lan --ports 11,12
 --apply` after taking `crs-uplink` off 11/12, undrain. The CRS pair stays as it is.
 
+## Results 2026-10-21
+
+- **Phase 1/1b done.** Both CRS on RouterOS 7.23.8 (long-term) and RouterBOARD
+  7.23.8. Mixed versions (7.16.2/7.20.8, then 7.23.8/7.20.8) kept MLAG's ICCP
+  "connected" but passed no data across the peer link — upgrade both together. 7.23
+  moved MLAG into the bridge (`mlag-peer-port`, the bridge monitor's `mlag-state`);
+  the controller reads both forms. On this model `/system package update install`
+  reboots and downloads during startup (16 MB flash): the switch needs a way out.
+  The controller programmed, read back and parked on both (27 changes in one apply).
+- **Phase 2 done, on one uplink.** tappaas1 `nic2` → crs-a `sfp1`, `nic3` → crs-b
+  `sfp1`, LAG `tappaas1-lan` with mlag-id 10: one aggregator over two chassis,
+  partner the pair's ID, lan-uplink "nothing to report". crs-a `sfp14` → USW 11 (DAC)
+  carries everything; crs-b `sfp14` → USW 12 is cabled but off its bridge.
+- **The drain overloads tappaas3.** tappaas1's HA guests may only run on tappaas1 or
+  tappaas3 (node affinity): 37 GB declared on tappaas3's 30 GB beside its own unifi-os
+  and PBS. The OOM killer killed the mothership's VM two minutes after it arrived (HA
+  restarted it); immich was stopped for the window. A drained node with an armed
+  watchdog also had to have `pve-ha-lrm` stopped before its cables moved.
+
+## Still to do
+
+- **The uplink aggregate** (USW 11+12 ↔ crs-a/crs-b `sfp14`, one mlag-id): both ends
+  change on the link that carries the switches' management and tappaas1's corosync.
+  In a window: tappaas1 drained, its LRM stopped, immich stopped (tappaas3's memory),
+  the Mac on crs-a `ether1` as console. Then crs-b `sfp14` back on its bridge, `lag set
+  crs-a usw-uplink --ports crs-a:sfp-sfpplus14,crs-b:sfp-sfpplus14`, `lag set "USW Pro XG
+  10 PoE" crs-uplink --ports 11,12`, preview, apply.
+- Phase 3 (failure tests) after the aggregate.
+
 ## Phase 3 — failure tests
 
 Continuous pings from the mothership to tappaas1, to a guest on tappaas1 and to the
