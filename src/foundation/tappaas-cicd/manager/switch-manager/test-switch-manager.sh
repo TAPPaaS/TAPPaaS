@@ -343,6 +343,9 @@ ck "remove-controller deletes"       "false"  "$(jq -e '.controllers | has("ctrl
 ck "--help (rc)"                     "0"      "$(rc_of "${SM}" --help)"
 ck "unknown command (rc)"            "1"      "$(rc_of "${SM}" bogus)"
 
+ck "add-port with a zone zones.json lacks is refused (rc)" "1" "$(rc_of "${SM}" add-port usw 22 --type device --zone nosuchzone)"
+ck "…naming the zones there are" "yes" "$(has "$("${SM}" add-port usw 22 --type device --zone nosuchzone 2>&1)" "no zone 'nosuchzone' in zones.json")"
+
 # ── A trunk's native VLAN is declared (or 0), not what the switch has (#847) ──
 # A port taken out of parking into a trunk kept the park's VLAN as its native,
 # and interrogate's live value was copied into desired: it never converged.

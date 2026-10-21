@@ -321,6 +321,10 @@ _port_set() { # _port_set <add|update> <switch> <port> [flags...]
     if [[ -n "${type}" ]]; then printf '%s' "${PORT_TYPES}" | tr ' ' '\n' | grep -qxF "${type}" \
         || die "${op}-port: --type must be one of: ${PORT_TYPES}"; fi
     [[ "${op}" == "add" && -z "${type}" ]] && die "add-port requires --type (${PORT_TYPES})"
+    # A zone that zones.json does not have would be taken as native 0 (mgmt).
+    if [[ -n "${zone}" ]] && ! jq -e --arg z "${zone}" 'has($z) and ($z | startswith("_") | not)' "${ZONES_FILE}" >/dev/null 2>&1; then
+        die "${op}-port: no zone '${zone}' in zones.json (zones: $(jq -r 'keys | map(select(startswith("_") | not)) | join(", ")' "${ZONES_FILE}" 2>/dev/null))"
+    fi
 
     # Start from the existing port (update) or a fresh object (add). Default mode
     # follows the type: trunk for node/switch/ap/uplink, access for device.
