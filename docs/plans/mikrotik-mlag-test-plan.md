@@ -48,36 +48,44 @@ outage of tappaas1's non-HA guests during the swap.
 
 ## Phase 1 — each CRS on the bench (operator, laptop on `ether1`)
 
-Same RouterOS 7 stable on both. On the bench the switch has no internet: download
-`routeros-7.<n>-arm.npk` (`/system resource print` shows the architecture) on the Mac,
-copy it over (`scp routeros-7.<n>-arm.npk admin@192.168.88.1:`, or drag it into
-WinBox's Files), `/system reboot`; then `/system routerboard upgrade` and reboot again.
+Both units run RouterOS 7.16.2 with firmware 7.16.2 (checked 2026-10-21): MLAG is
+supported, and the peers match. No upgrade here: the CRS317 has 16 MB of flash with
+3.7 MB free, too little to upload a package; a later upgrade is Netinstall's.
 
 Work in **Safe Mode** (Ctrl-X in the terminal, or WinBox's Safe Mode button): if a
-step cuts the session, RouterOS undoes it. Then, with `X` = 21 on crs-a, 22 on crs-b:
+step cuts the session, RouterOS undoes it. Leave Safe Mode (Ctrl-X again) at the end
+to keep the changes. With `X` = 21 and priority `0x4000` on crs-a, 22 and `0x5000`
+on crs-b:
 
 ```routeros
-/system identity set name=crs-a                      # crs-b on the other
+/user set admin password=<long, in your password manager>
+/system identity set name=crs-a
 # ether1 off the bridge, keeping the bench address on it — one line, so the
 # session moves with the address:
 /ip address set [find address="192.168.88.1/24"] interface=ether1; /interface bridge port remove [find interface=ether1]
-/interface bonding add name=peer-link mode=802.3ad lacp-rate=1sec \
-    transmit-hash-policy=layer-2-and-3 slaves=sfp-sfpplus15,sfp-sfpplus16
+# the peer link: sfp15+16 off the bridge, bonded, back on it as the MLAG peer port
+/interface bridge port remove [find interface=sfp-sfpplus15]
+/interface bridge port remove [find interface=sfp-sfpplus16]
+/interface bonding add name=peer-link mode=802.3ad lacp-rate=1sec transmit-hash-policy=layer-2-and-3 slaves=sfp-sfpplus15,sfp-sfpplus16
 /interface bridge port add bridge=bridge interface=peer-link pvid=99
-/interface bridge vlan add bridge=bridge vlan-ids=200,299,310,410,420,430,510,610 tagged=bridge,peer-link
+/interface bridge vlan add bridge=bridge vlan-ids=200,299,310,410,420,430,510,610 tagged=peer-link
 /interface bridge mlag set bridge=bridge peer-port=peer-link
-/interface bridge set bridge protocol-mode=rstp priority=0x4000    # 0x5000 on crs-b
+/interface bridge set bridge protocol-mode=rstp priority=0x4000
+# management on mgmt (untagged, PVID 1), the API for the mothership only
 /ip address add address=10.0.0.X/24 interface=bridge
 /ip route add gateway=10.0.0.1
+/ip dns set servers=10.0.0.1
 /user group add name=tappaas policy=read,write,api,test
-/user add name=tappaas group=tappaas password=<long, kept in your password manager>
-/ip service set api address=10.0.0.144/32            # the mothership only
-/interface bridge set bridge vlan-filtering=yes      # last: done from ether1
+/user add name=tappaas group=tappaas password=<long, in your password manager>
+/ip service set api address=10.0.0.144/32
+/ip service disable telnet,ftp,www,api-ssl
+# last: VLAN filtering (the session is on ether1, off the bridge)
+/interface bridge set bridge vlan-filtering=yes
 ```
 
-Check against MikroTik's MLAG page for the installed version: whether it wants a
-shared `system-id` or a `priority` under `/interface bridge mlag`, and ICCP's
-untagged VLAN on the peer port (PVID 99 above). Then cable the peer link (both
+VLAN 99 is the peer port's own untagged VLAN, which MLAG's ICCP uses; no zone uses
+it. Check: `/interface bridge mlag print`, `/interface bridge vlan print`,
+`/ip address print`. Then the second switch, then cable the peer link (both
 `sfp15`, both `sfp16`) and check on both: `/interface bridge mlag monitor` →
 connected; `/interface bonding monitor peer-link` → both ports active.
 
