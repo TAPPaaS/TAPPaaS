@@ -230,9 +230,14 @@ let
   #   ZED   class=checksum|io|data|deadman, or a vdev entering a bad state —
   #         the line is `eid=… class=checksum pool='tankc1' vdev=…`
   #   smartd / kernel  pending or uncorrectable sectors, SMART failure, I/O error
+  #   smartd's failures are matched as smartd spells them (FAILED, Failed SMART,
+  #   SMART Failure), not case-blind: "SMART Prefailure Attribute: … changed from
+  #   100 to 64" is an attribute moving, logged at every boot, not a failure.
+  #   test.sh's Check 0 runs real lines against this filter.
+  diskErrorFilter = "class=(checksum|io|data|deadman) |vdev_state=(DEGRADED|FAULTED|UNAVAIL|REMOVED)|SMART.*FAILED|FAILED SMART|Failed SMART|SMART Failure|(?i:I/O error|pool .*(DEGRADED|FAULTED|UNAVAIL)|Currently unreadable|Offline uncorrectable)";
   diskRule = alertRule {
     uid = "tappaas-disk-errors"; title = "DiskErrors"; kind = "state"; window = 86400;
-    expr = ''sum by (host) (count_over_time(${pve} |~ "class=(checksum|io|data|deadman) |vdev_state=(DEGRADED|FAULTED|UNAVAIL|REMOVED)|(?i)(I/O error|pool .*(DEGRADED|FAULTED|UNAVAIL)|SMART.*(FAILED|failure)|Currently unreadable|Offline uncorrectable)" [24h]))'';
+    expr = ''sum by (host) (count_over_time(${pve} |~ "${diskErrorFilter}" [24h]))'';
     summary = "Disk or ZFS errors on a Proxmox node in the last 24 hours (ZED pool events, smartd sector warnings, kernel I/O errors). Repeated once a day while they continue.";
     query = ''${pve} |~ "class=|smartd|I/O error|DEGRADED|FAULTED"'';
   };

@@ -218,6 +218,43 @@ check_loki_query() {
     fi
 }
 
+# Check 0 (offline): the DiskErrors line filter against real lines — the ones it
+# must catch, and the ones it must not. A smartd attribute moving at boot
+# ("SMART Prefailure Attribute: … changed from 100 to 64") once fired it.
+check_disk_filter() {
+    info "Check 0: the DiskErrors filter matches disk errors, not smartd's routine lines"
+    local f re line bad=""
+    f="$(dirname "${BASH_SOURCE[0]}")/logging.nix"
+    re="$(sed -n 's/^  diskErrorFilter = "\(.*\)";$/\1/p' "${f}")"
+    [[ -n "${re}" ]] || { check_fail "no diskErrorFilter in ${f}"; return; }
+    while IFS= read -r line; do
+        grep -qP -- "${re}" <<<"${line}" || bad+=" [missed: ${line}]"
+    done <<'EOF'
+eid=412 class=checksum pool='tankc1' vdev=wwn-0x5000c500a1b2c3d4-part1
+eid=413 class=statechange pool='tankc1' vdev_state=FAULTED
+Device: /dev/sdb [SAT], 8 Currently unreadable (pending) sectors
+Device: /dev/sdb [SAT], 8 Offline uncorrectable sectors
+Device: /dev/sdb [SAT], FAILED SMART self-check. BACK UP DATA NOW!
+Device: /dev/sdb [SAT], Failed SMART usage Attribute: 5 Reallocated_Sector_Ct.
+Device: /dev/sdb [SAT], SMART Failure: DATA CHANNEL IMPENDING FAILURE
+blk_update_request: I/O error, dev sdb, sector 123456 op 0x0:(READ)
+EOF
+    while IFS= read -r line; do
+        grep -qP -- "${re}" <<<"${line}" && bad+=" [false alarm: ${line}]"
+    done <<'EOF'
+Device: /dev/sda [SAT], SMART Prefailure Attribute: 1 Raw_Read_Error_Rate changed from 100 to 64
+Device: /dev/sda [SAT], SMART Usage Attribute: 194 Temperature_Celsius changed from 64 to 62
+eid=7 class=config_sync pool='tanka1'
+eid=8 class=pool_import pool='tankb1'
+Device: /dev/sda [SAT], opened
+EOF
+    if [[ -z "${bad}" ]]; then
+        check_pass "DiskErrors filter: 8 error lines caught, 5 routine lines ignored"
+    else
+        check_fail "DiskErrors filter:${bad}"
+    fi
+}
+
 check_alert_rules() {
     info "Check 9: Grafana has the TAPPaaS alert rules and the webhook contact point (#126)"
     local out want
@@ -280,6 +317,7 @@ main() {
     info "VM: ${VMNAME} (VMID: ${VMID}) at ${VM_HOST}"
     echo ""
 
+    check_disk_filter
     check_ssh
     check_loki_ready
     check_loki_metrics
