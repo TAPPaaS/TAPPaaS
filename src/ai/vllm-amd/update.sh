@@ -275,4 +275,23 @@ if [[ "${TAPPAAS_DEBUG:-0}" == "1" ]]; then
     ' | _tag debug
 fi
 
+# Step 4: a restarted container is ready only once the model is loaded. The OS
+# update earlier in the same reconcile can restart dockerd (a docker-ce upgrade)
+# and with it vLLM; a cold load took ~2m50s on 2026-10-21, past the post-update
+# test's wait. Wait here, bounded, while the container runs: any HTTP answer from
+# the API means the server is up (it may want a key). test.sh still judges it.
+VLLM_READY_WAIT="${VLLM_READY_WAIT:-300}"
+if pct exec "${VMID}" -- docker ps -q --filter name=vllm 2>/dev/null | grep -q .; then
+    _t=0
+    until [[ "$(pct exec "${VMID}" -- curl -s -o /dev/null -w '%{http_code}' --connect-timeout 5 \
+                 http://127.0.0.1:8000/v1/models 2>/dev/null || echo 000)" =~ ^[1-5][0-9][0-9]$ ]]; do
+        if (( _t >= VLLM_READY_WAIT )); then
+            warn "  vLLM API not answering after ${VLLM_READY_WAIT}s — the model may still be loading"
+            break
+        fi
+        sleep 10; _t=$((_t + 10))
+    done
+    (( _t > 0 && _t < VLLM_READY_WAIT )) && info "  vLLM API answering after ${_t}s (the model was loading)"
+fi
+
 info "${VMNAME} converged"

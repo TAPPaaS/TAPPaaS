@@ -142,7 +142,7 @@ api() { pct exec "${VMID}" -- curl -s --connect-timeout 5 "${AUTH[@]}" "$@" 2>/d
 # Bounded on purpose: an unbounded wait would hide a real outage, which is the
 # opposite failure. The elapsed time is reported on success, so a slow start
 # stays visible instead of being smoothed away.
-VLLM_API_RETRIES="${VLLM_API_RETRIES:-12}"   # 12 × 10s ≈ 120s; a model load is not instant
+VLLM_API_RETRIES="${VLLM_API_RETRIES:-30}"   # 30 × 10s ≈ 300s: a cold load took ~2m50s (2026-10-21)
 VLLM_API_WAIT="${VLLM_API_WAIT:-10}"
 
 probe_api_until_ready() { # echo the last HTTP code
