@@ -69,6 +69,7 @@ on crs-b:
 /interface bonding add name=peer-link mode=802.3ad lacp-rate=1sec transmit-hash-policy=layer-2-and-3 slaves=sfp-sfpplus15,sfp-sfpplus16
 /interface bridge port add bridge=bridge interface=peer-link pvid=99
 /interface bridge vlan add bridge=bridge vlan-ids=200,299,310,410,420,430,510,610 tagged=peer-link
+/interface bridge vlan add bridge=bridge vlan-ids=1 tagged=peer-link   # untagged mgmt crosses the pair too
 /interface bridge mlag set bridge=bridge peer-port=peer-link
 /interface bridge set bridge protocol-mode=rstp priority=0x4000
 # management on mgmt (untagged, PVID 1), the API for the mothership only
@@ -89,6 +90,27 @@ it. Check: `/interface bridge mlag print`, `/interface bridge vlan print`,
 `sfp15`, both `sfp16`) and check on both: `/interface bridge mlag monitor` →
 connected; `/interface bonding monitor peer-link` → both ports active.
 
+## Phase 1b — the controller against the real switches (nothing in service on them)
+
+crs-a's uplink port goes in first, on an RJ45 SFP+ module: crs-a `sfp-sfpplus14` →
+USW port 1 (parked today, RJ45). crs-b is reached across the peer link (VLAN 1 tagged
+on it). In Phase 2 that cable moves to USW SFP+ port 11; only the USW end changes.
+
+1. On both CRS: `/interface bridge vlan add bridge=bridge vlan-ids=1 tagged=peer-link`.
+2. Cable crs-a `sfp14` (module) → USW 1.
+3. USW port 1 as a switch port: `switch-manager update-port "USW Pro XG 10 PoE" 1
+   --type switch --target crs-a --target-port sfp-sfpplus14`; `reconcile` (preview: only
+   port 1, trunk, native mgmt) then `reconcile --apply`. The mothership reaches 10.0.0.21
+   and 10.0.0.22.
+4. Operator: `setup-credentials.sh crs-a --ip 10.0.0.21` and `… crs-b --ip 10.0.0.22`.
+5. `mikrotik-controller check-access`, `switch-manager interrogate --no-park`,
+   `list-ports crs-a|crs-b` against RouterOS; `mlag-pair set crs-a crs-b --peer-port
+   peer-link`, `mlag-pair list` (connected, crs-a primary).
+6. One real apply on a spare port: `add-port crs-a sfp-sfpplus5 --type device --zone srv`,
+   `reconcile --apply`, check in RouterOS (PVID 200 on sfp5, VLAN 200 on `peer-link`),
+   then `remove-port crs-a sfp-sfpplus5` (parks it: PVID 430), check, and the port is
+   left parked as interrogate would have.
+
 ## Phase 2 — the swap (tappaas1 drained)
 
 Downtime: guests on tappaas1 that are not HA (logging, nextcloud, coturn, jellyfin,
@@ -106,7 +128,7 @@ Watch first: nothing else running (`pgrep` for sweeps and other sessions' tests)
    --target-port sfp-sfpplus14` (12 → crs-b), and
    `lag set "USW Pro XG 10 PoE" crs-uplink --ports 11,12` (declared, not applied).
 3. **Cabling:** tappaas1 `nic2` → crs-a `sfp1`, `nic3` → crs-b `sfp1`; crs-a `sfp14`
-   → USW 11. crs-b `sfp14` stays unplugged until step 6 (RSTP would block the loop,
+   from USW 1 (RJ45 module) → USW 11 (SFP+), and its record moves with it. crs-b `sfp14` stays unplugged until step 6 (RSTP would block the loop,
    but one uplink keeps it simple while nothing is aggregated).
 4. **Register** (operator types the passwords):
    `setup-credentials.sh crs-a --ip 10.0.0.21`, the same for crs-b;
