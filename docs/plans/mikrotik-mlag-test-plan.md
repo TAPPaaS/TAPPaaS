@@ -54,8 +54,10 @@ supported, and the peers match. No upgrade here: the CRS317 has 16 MB of flash w
 
 Work in **Safe Mode** (Ctrl-X in the terminal, or WinBox's Safe Mode button): if a
 step cuts the session, RouterOS undoes it. Leave Safe Mode (Ctrl-X again) at the end
-to keep the changes. With `X` = 21 and priority `0x4000` on crs-a, 22 and `0x5000`
-on crs-b:
+to keep the changes. With `X` = 21 on crs-a, 22 on crs-b. Both peers need the same
+STP priority and the heartbeat on (MikroTik's MLAG page); a 7.16→7.23 upgrade left
+crs-a with `mlag-heartbeat=none`, and 0x4000/0x5000 (an earlier version of this plan)
+was wrong:
 
 ```routeros
 /user set admin password=<long, in your password manager>
@@ -71,7 +73,8 @@ on crs-b:
 /interface bridge vlan add bridge=bridge vlan-ids=200,299,310,410,420,430,510,610 tagged=peer-link
 /interface bridge vlan add bridge=bridge vlan-ids=1 tagged=peer-link   # untagged mgmt crosses the pair too
 /interface bridge mlag set bridge=bridge peer-port=peer-link
-/interface bridge set bridge protocol-mode=rstp priority=0x4000
+/interface bridge set bridge protocol-mode=rstp priority=0x4000   # the SAME on both peers (MikroTik)
+/interface bridge set bridge mlag-heartbeat=5s mlag-priority=50     # 50 on crs-a (primary); crs-b: leave 128
 # management on mgmt (untagged, PVID 1), the API for the mothership only
 /ip address add address=10.0.0.X/24 interface=bridge
 /ip route add gateway=10.0.0.1
@@ -177,6 +180,20 @@ Watch first: nothing else running (`pgrep` for sweeps and other sessions' tests)
   and PBS. The OOM killer killed the mothership's VM two minutes after it arrived (HA
   restarted it); immich was stopped for the window. A drained node with an armed
   watchdog also had to have `pve-ha-lrm` stopped before its cables moved.
+
+## The reflection (2026-10-21, open)
+
+With both legs of `tappaas1-lan` up, every broadcast tappaas1 sends to crs-a comes
+back to it from crs-b (`tcpdump -Q in -i nic3`, its own source MAC): crs-b floods
+peer-link traffic into its `mlag-id 10` bond, which MikroTik does only while it
+believes the remote leg is down. tappaas1's bridge then relearns the sender on
+`lanbond`, and replies in that window are lost (the mothership could not reach
+unifi-os). Aligning `mlag-heartbeat` (none → 5s), the STP priority (0x5000 → 0x4000)
+and `mlag-priority` did not stop it. Interim: crs-b `sfp1` and `sfp14` disabled —
+tappaas1 on one leg, the uplink on crs-a's member. Next: each bond's MLAG state on
+both peers (`/interface bonding monitor`, `/interface bridge port monitor` for the
+bonds, the log of `mlag`), MikroTik's MLAG page for 7.23 specifics, and whether the
+bonds made through the API differ from ones made in the console.
 
 ## Still to do
 
