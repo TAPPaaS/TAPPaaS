@@ -280,14 +280,14 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 
 Tests, proofs and sign-offs on real systems, kept apart from development and bug fixes: what is built and waits for a real VPS, a real buddy or a real failure, and the test conventions themselves.
 
-### G5.1 Satellite & off-site — Ease H · Risk M · open: 7
+### G5.1 Satellite & off-site — Ease H · Risk M · done for 2.3: 1 · open: 6
 
 Everything the satellite and the off-site copy still have to prove: the satellite as a module on a real VPS (#671) and makerfloss's satellite converted (#775), the site-liveness watchers in a real outage (#776), the buddy tunnel and relay (#796, #795), the sshPort passthrough (#762) and the ADR-010 hardening sign-off (#406).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #671 | Deep test: satellite as a module on a real VPS | H | L | **Test plan written 2026-10-05** (`docs/plans/satellite-test-plan.md`): six phases on hrossen, each with a teardown. Waits for the operator's VPS and a `sat-test` DNS record |
-| #775 | Convert makerfloss's `satellite1` into a module instance | H | L | Split from #671: ADR-010 §8.4.7 with the operator, then #671's phase 1–2 checks. Not before makerfloss runs 2.2; keep a second way in — `satellite1` carries its admin VPN |
+| ✅ #775 | Convert makerfloss's `satellite1` into a module instance | H | L | **Closed 2026-10-21:** converted by hand on site (ADR-010 §8.4.7): `config/satellite1.json`, managed, address and physicalLocation recorded, the mothership's key authorized, unattended-upgrades off; the first update enforced key-only SSH. The next nightly sweep patched and tested it with the other modules (13/13), module test 15/0 |
 | #776 | Report a site that has gone dark (outside heartbeat) | M | L | **Built 2026-10-15** (ADR-031, `7654bedd`, `5cdaf047`, `0005a687`, `8a06e666`): the backup node's pulse watches each buddy we pull (mails both operators), the buddies that pull us (last pull), and this site (uplink, firewall, mothership, PBS); a standalone pulse for a non-TAPPaaS buddy (BUDDY.md Setup 3); a satellite watches its home site's tunnel. Mail via postfix (nodes, debianhosts, satellites: direct). Open before closing: a real alert mail delivered, and a real satellite (#775) |
 | #796 | backup: a buddy's WireGuard tunnel set up with the peer (`peer add … --tunnel`) | H | M | **Built 2026-10-07** on `buddy-tunnel-796`: `peer add … --tunnel serve\|dial` creates and removes the PBS-only tunnel; `peer check`; serving side live-tested on hrossen 2026-10-08, dialling side needs a second site |
 | #795 | satellite: relay a buddy's WireGuard tunnel to the home firewall | M | M | **Opened 2026-10-07** from BUDDY.md: a `buddy-relay` role relaying declared UDP ports (the admin VPN's P5 pattern), so a site reached only through its satellite can serve a buddy |
