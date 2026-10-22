@@ -330,8 +330,8 @@ export interface RackInfo {
   mounts: RackMount[];
 }
 export interface RackCable {
-  from: { device: string; port: string };
-  to: { device: string; port: string };
+  from: { device: string; port: string; side?: "front" | "rear" }; // side: a patch panel's port
+  to: { device: string; port: string; side?: "front" | "rear" };
   kind: string;
   source: "topology" | "recorded";
   zones: string[];

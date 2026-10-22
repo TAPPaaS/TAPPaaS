@@ -558,6 +558,33 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["description", m?.description ?? rec?.description ?? null],
             ]}
           />
+          {rec?.kind === "patch-panel" ? (
+            <>
+              <h3>Ports</h3>
+              <table className="table compact small">
+                <thead>
+                  <tr><th>port</th><th>front</th><th>rear</th></tr>
+                </thead>
+                <tbody>
+                  {(rec.ports ?? []).map((p) => {
+                    const at = (side: "front" | "rear") => {
+                      const c = cables.find((x) => [x.from, x.to].some((e) => e.device === sel.id && e.port === p && (e.side ?? "front") === side));
+                      if (!c) return <span className="muted">free</span>;
+                      const far = c.from.device === sel.id && c.from.port === p ? c.to : c.from;
+                      return `${far.device}:${far.port}`;
+                    };
+                    return (
+                      <tr key={p}>
+                        <td className="mono">{p}</td>
+                        <td>{at("front")}</td>
+                        <td>{at("rear")}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </>
+          ) : null}
           <h3>Cables</h3>
           {cables.length === 0 ? <p className="muted small">No cable on it.</p> : null}
           <ul className="plain">

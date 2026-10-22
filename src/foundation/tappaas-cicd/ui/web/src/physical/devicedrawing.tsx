@@ -52,6 +52,10 @@ export function plateOf(t: Topology, d: DevNode): { plate: ResolvedPlate | null;
 export function DeviceDrawing({ t, d, cabled, ringed, onPort }: { t: Topology; d: DevNode; cabled: Set<string>; ringed: Set<string>; onPort: (port: string) => void }) {
   const { plate, up, catalog } = plateOf(t, d);
   if (!plate) return null;
+  // A patch panel's ports: the front cabled ones underlined, the rear ones overlined.
+  const ends = (t.racks?.cables ?? []).flatMap((c) => [c.from, c.to]).filter((e) => e.device === d.name);
+  const rear = new Set(ends.filter((e) => e.side === "rear").map((e) => e.port));
+  const front = new Set([...cabled].filter((x) => !rear.has(x) || ends.some((e) => e.port === x && e.side !== "rear")));
   const w = plate.width === "full" ? W : plate.width === "half" ? W / 2 : W / 3;
   const h = Math.max(1, plate.units) * R.u * 1.4;
   const p: Placed = {
@@ -67,7 +71,7 @@ export function DeviceDrawing({ t, d, cabled, ringed, onPort }: { t: Topology; d
   return (
     <div className="dev-drawing">
       <svg viewBox={`0 0 ${W + 16} ${h + 14}`} width="100%" role="img" aria-label={`${d.name}'s faceplate`}>
-        <PlateSvg p={p} on={false} portOn={(id) => ringed.has(id)} cabled={cabled} onPlate={() => undefined} onPort={onPort} />
+        <PlateSvg p={p} on={false} portOn={(id) => ringed.has(id)} cabled={front} rear={rear} onPlate={() => undefined} onPort={onPort} />
       </svg>
     </div>
   );

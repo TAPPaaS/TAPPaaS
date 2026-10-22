@@ -208,7 +208,7 @@ function portTitle(p: PlatePort): string {
   return `${p.name}${p.name !== p.id ? ` (${p.id})` : ""} · ${p.kind} · ${st}${p.lag ? ` · LAG ${p.lag}` : ""}${p.zones.length ? ` · ${p.zones.join(", ")}` : ""}`;
 }
 
-function Port({ c, selected, cabled, onClick }: { c: { port: PlatePort; box: Box }; selected: boolean; cabled: boolean; onClick: () => void }) {
+function Port({ c, selected, cabled, rear, onClick }: { c: { port: PlatePort; box: Box }; selected: boolean; cabled: boolean; rear: boolean; onClick: () => void }) {
   const { port: p, box: b } = c;
   const sfp = p.kind === "sfp+" || p.kind === "sfp28";
   return (
@@ -222,6 +222,7 @@ function Port({ c, selected, cabled, onClick }: { c: { port: PlatePort; box: Box
       {p.kind !== "power" ? <rect x={b.x + 2} y={b.y + (sfp ? 2 : 3)} width={b.w - 4} height={b.h - (sfp ? 4 : 5)} rx={1} fill={portFill(p)} opacity={p.kind === "console" ? 0.6 : 1} /> : null}
       {p.kind === "poe" ? <rect x={b.x + 2} y={b.y + 1} width={b.w - 4} height={1.4} fill="#facc15" /> : null}
       {cabled ? <rect x={b.x} y={b.y + b.h + 1.2} width={b.w} height={1.8} rx={0.9} fill="#38bdf8" /> : null}
+      {rear ? <rect x={b.x} y={b.y - 3} width={b.w} height={1.8} rx={0.9} fill="#c084fc"><title>its rear is cabled</title></rect> : null}
       {selected ? <rect x={b.x - 2} y={b.y - 2} width={b.w + 4} height={b.h + 4} rx={2} fill="none" stroke="#f59e0b" strokeWidth={2.2} /> : null}
     </g>
   );
@@ -242,7 +243,7 @@ const isSel = (s: Sel | null, kind: Placed["kind"], device: string): boolean =>
 // One faceplate: its name and model on the left, its LED, its port grid with
 // each port's live state, the cabled ones underlined, the selected one ringed.
 // The rack draws every mount with it; the side panel draws the selected one.
-export function PlateSvg({ p, on, portOn, cabled, onPlate, onPort }: { p: Placed; on: boolean; portOn: (id: string) => boolean; cabled?: Set<string>; onPlate: () => void; onPort: (id: string) => void }) {
+export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: Placed; on: boolean; portOn: (id: string) => boolean; cabled?: Set<string>; rear?: Set<string>; onPlate: () => void; onPort: (id: string) => void }) {
   const cells = portCells(p);
   const led = p.up === true ? "#2f9e44" : p.up === false ? "#d64545" : "#9aa4b2";
   const labelW = Math.min(124, p.box.w * 0.34);
@@ -270,7 +271,7 @@ export function PlateSvg({ p, on, portOn, cabled, onPlate, onPort }: { p: Placed
         </text>
       ) : null}
       {cells.map((c) => (
-        <Port key={c.port.id} c={c} selected={portOn(c.port.id)} cabled={!!cabled?.has(c.port.id)} onClick={() => onPort(c.port.id)} />
+        <Port key={c.port.id} c={c} selected={portOn(c.port.id)} cabled={!!cabled?.has(c.port.id)} rear={!!rear?.has(c.port.id)} onClick={() => onPort(c.port.id)} />
       ))}
     </g>
   );
@@ -308,16 +309,19 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
     .filter((x) => x.a && x.b);
   const hovered = drawn.find((d) => d.i === hover);
 
-  const cabledOf = useMemo(() => {
+  // The cabled ports of each device: a patch panel's front (underlined) and rear (overlined) apart.
+  const [cabledOf, rearOf] = useMemo(() => {
     const m = new Map<string, Set<string>>();
-    for (const c of v.cables) for (const e of [c.from, c.to]) m.set(e.device, (m.get(e.device) ?? new Set()).add(e.port));
-    return m;
+    const r = new Map<string, Set<string>>();
+    for (const c of v.cables) for (const e of [c.from, c.to]) (e.side === "rear" ? r : m).set(e.device, ((e.side === "rear" ? r : m).get(e.device) ?? new Set()).add(e.port));
+    return [m, r];
   }, [v]);
   const plate = (p: Placed): ReactNode => (
     <PlateSvg
       key={`${p.rack ?? "out"}:${p.device}`}
       p={p}
       cabled={cabledOf.get(p.device)}
+      rear={rearOf.get(p.device)}
       on={isSel(sel, p.kind, p.device)}
       portOn={(id) => (sel?.kind === "port" && sel.switch === p.device && sel.id === id) || (sel?.kind === "link" && v.cables.some((c) => linkId(c.from.device, c.to.device) === sel.id && ((c.from.device === p.device && c.from.port === id) || (c.to.device === p.device && c.to.port === id))))}
       onPlate={() => pick(selOf(p.kind, p.device))}
