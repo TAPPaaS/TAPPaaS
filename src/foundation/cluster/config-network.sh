@@ -427,7 +427,11 @@ HELPER
 forget_usb_rules() {
   [[ -f "$USB_RULES" && "$DRY_RUN" != 1 ]] || return 0
   local keep="" p mac tmp
-  for p in $LAN_PORTS; do mac="$(cat "/sys/class/net/$p/address" 2>/dev/null)"; [[ -n "$mac" ]] && keep+=" ${mac,,}"; done
+  # A bond slave's address is the bond's: its own is perm_hwaddr.
+  for p in $LAN_PORTS; do
+    mac="$(cat "/sys/class/net/$p/bonding_slave/perm_hwaddr" 2>/dev/null || cat "/sys/class/net/$p/address" 2>/dev/null)"
+    [[ -n "$mac" ]] && keep+=" ${mac,,}"
+  done
   tmp="$(mktemp)"
   while IFS= read -r line; do
     mac="$(grep -oiE 'address\}=="([0-9a-f]{2}:){5}[0-9a-f]{2}' <<<"$line" | grep -oiE '([0-9a-f]{2}:){5}[0-9a-f]{2}')"
@@ -441,28 +445,35 @@ forget_usb_rules() {
 # prepare_usb_ports: rewrite LAN_PORT so each USB NIC has its pinned name; with
 # --apply, pin and rename it now and install the helper and its udev rule.
 prepare_usb_ports() {
-  local p out="" name mac
+  local p out="" name mac fwnew fwhad
   for p in ${LAN_PORT//,/ }; do
-    if is_usb "$p" && [[ "$p" != usblan* ]]; then
-      name="$(next_usb_name)"; mac="$(cat "/sys/class/net/$p/address")"
-      info "  ${p} is a USB NIC (${mac}): pinned as ${BL}${name}${CL}, USB autosuspend off, rejoins its bond when it reappears (#849)"
-      if [[ "$DRY_RUN" != 1 ]]; then
+    if ! is_usb "$p"; then out+="${out:+,}${p}"; continue; fi
+    name="$p"; mac="$(cat "/sys/class/net/$p/bonding_slave/perm_hwaddr" 2>/dev/null || cat "/sys/class/net/$p/address")"
+    [[ "$p" == usblan* ]] || name="$(next_usb_name)"
+    info "  ${p} is a USB NIC (${mac}): pinned as ${BL}${name}${CL}, USB autosuspend off, rejoins its bond when it reappears (#849)"
+    if [[ "$DRY_RUN" != 1 ]]; then
+      if [[ "$name" != "$p" ]]; then
+        # The pinning tool also writes its rename into interfaces.new (and
+        # host.fw.new), which PVE commits at boot over what we write: drop them.
+        [[ -e /etc/network/interfaces.new ]] \
+          && die "/etc/network/interfaces.new holds pending network changes (the GUI's) — apply or revert them first"
+        fwnew="/etc/pve/nodes/$(hostname -s)/host.fw.new"; fwhad=0; [[ -e "$fwnew" ]] && fwhad=1
         pve-network-interface-pinning generate --interface "$p" --target-name "$name" >/dev/null \
           || die "could not pin ${p} as ${name} (pve-network-interface-pinning)"
+        rm -f /etc/network/interfaces.new; [[ "$fwhad" == 1 ]] || rm -f "$fwnew"
         ip link set "$p" down && ip link set "$p" name "$name" && ip link set "$name" up \
           || die "could not rename ${p} to ${name}"
-        install_usb_helper
-        grep -qi "ATTR{address}==\"${mac}\"" "$USB_RULES" 2>/dev/null \
-          || printf 'ACTION=="add", SUBSYSTEM=="net", ATTR{address}=="%s", RUN+="/usr/bin/systemd-run --no-block --collect %s %s"\n' \
-               "$mac" "$USB_HELPER" "$name" >> "$USB_RULES"
-        udevadm control --reload 2>/dev/null || true
-        "$USB_HELPER" "$name" || true   # autosuspend off now
         PORTS+=("$name")
       fi
-      out+="${out:+,}${name}"
-    else
-      out+="${out:+,}${p}"
+      # Pinned already or now: the helper and its rule are there either way.
+      install_usb_helper
+      grep -qi "ATTR{address}==\"${mac}\"" "$USB_RULES" 2>/dev/null \
+        || printf 'ACTION=="add", SUBSYSTEM=="net", ATTR{address}=="%s", RUN+="/usr/bin/systemd-run --no-block --collect %s %s"\n' \
+             "$mac" "$USB_HELPER" "$name" >> "$USB_RULES"
+      udevadm control --reload 2>/dev/null || true
+      "$USB_HELPER" "$name" || true   # autosuspend off now
     fi
+    out+="${out:+,}${name}"
   done
   # A dry run names the port it will be; resolve_lan must accept that name.
   [[ "$DRY_RUN" == 1 ]] && for p in ${out//,/ }; do in_ports "$p" || PORTS+=("$p"); done

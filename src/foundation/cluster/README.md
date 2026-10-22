@@ -161,6 +161,9 @@ hrossen tappaas3 runs `eno1` + an RTL8156 2.5G dongle (`usblan0`) this way. Pref
 Realtek adapters on the in-kernel `r8152` driver — RTL8153 (1G), RTL8156B (2.5G); ASIX
 AX88179 adapters have a history of dropping out. `node network show` marks a USB leg
 `(USB)`; a missing or down one says how to bring it back (replug, or `ifup lanbond`).
+The pinning tool also stages its rename in `/etc/network/interfaces.new`, which Proxmox
+puts in place at the next boot; the set drops that copy, refuses to pin while the GUI has
+pending network changes there, and `node network show` warns when one is waiting.
 
 **Moving the firewall's WAN role to another node (#849).** A node carries the
 firewall's WAN only when its `wan` bridge has a port. `site-manager node network set

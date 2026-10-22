@@ -89,6 +89,9 @@ check "wan declared as no port, live still on ge1: drift" "$(has "${AB}" '{"lan"
 check "wan as declared: no wan drift"    "$(has "${AB}" '{"wan":{"ports":["AA:00:00:00:00:04"]}}' 'drift: declared wan')" no
 check "wan not declared: not compared"   "$(has "${AB}" '{"lan":{"ports":["aa:00:00:00:00:01","aa:00:00:00:00:03"],"mode":"active-backup"}}' 'wan')" no
 
+check "pending interfaces.new: warned" "$(has "$(jq -c '.pendingNew = true' <<<"${AB}")" '' 'interfaces.new holds pending network changes')" yes
+check "no interfaces.new: quiet"      "$(has "${AB}" '' 'interfaces.new')" no
+
 check "names resolve to name and MAC"     "$(lu_resolve_ports "${AB}" tg1,ge0 | paste -sd' ' -)" "tg1 aa:00:00:00:00:02 ge0 aa:00:00:00:00:03"
 check "a MAC resolves to its port"        "$(lu_resolve_ports "${AB}" AA:00:00:00:00:04)" "ge1 aa:00:00:00:00:04"
 lu_resolve_ports "${AB}" eth9 >/dev/null 2>&1 && r=resolved || r=refused

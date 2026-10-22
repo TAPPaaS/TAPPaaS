@@ -17,6 +17,7 @@
 #   lrmActive  this node's HA LRM is active — its watchdog is armed
 #   corosync   links, disconnected
 #   lldpd      active | inactive | absent
+#   pendingNew /etc/network/interfaces.new exists: PVE puts it in place at boot
 
 lu_probe_script() {
     cat <<'PROBE'
@@ -79,13 +80,14 @@ jq -cn --arg node "$(hostname -s)" --argjson ports "$(arr ${all[@]+"${all[@]}"})
     --argjson lanm "$(arr ${lanm[@]+"${lanm[@]}"})" --argjson wanm "$(arr ${wanm[@]+"${wanm[@]}"})" \
     --arg bond "$bond" --arg mode "$mode" --arg active "$active" --arg primary "$primary" \
     --arg agg "$agg" --arg partner "$partner" --arg bmtu "$bmtu" --arg lmtu "$(rd "$cls/lan/mtu")" \
-    --argjson lrm "$lrm" --arg links "${links:-0}" --arg disc "${disc:-0}" --arg lldpd "$lldpd" \
+    --argjson lrm "$lrm" --argjson pnew "$([ -e /etc/network/interfaces.new ] && echo true || echo false)" --arg links "${links:-0}" --arg disc "${disc:-0}" --arg lldpd "$lldpd" \
     '{node: $node, ports: $ports,
       lan: {mtu: (($lmtu | tonumber?) // 0), bond: $bond, mode: $mode, active: $active, primary: $primary,
             primaryMac: ([$lanm[] | select(.name == $primary) | .mac][0] // ""),
             aggregator: $agg, partnerMac: $partner, bondMtu: (($bmtu | tonumber?) // null), members: $lanm},
       wan: {members: $wanm}, lrmActive: $lrm,
-      corosync: {links: ($links | tonumber), disconnected: ($disc | tonumber)}, lldpd: $lldpd}'
+      corosync: {links: ($links | tonumber), disconnected: ($disc | tonumber)}, lldpd: $lldpd,
+      pendingNew: $pnew}'
 PROBE
 }
 
@@ -159,6 +161,9 @@ lu_findings() {
         | ( if ($mt | length) > 1 then
               {level: "warn", text: "MTU differs between lan, the bond and its ports (\($mt | map(tostring) | join(" / ")))"}
             else empty end ),
+        ( if $L.pendingNew == true then
+            {level: "warn", text: "/etc/network/interfaces.new holds pending network changes: at the next boot PVE puts it in place of the live config — apply or revert them (GUI: node → Network), or delete it"}
+          else empty end ),
         ( if $L.corosync.disconnected > 0 then
             {level: "warn", text: "corosync reports \($L.corosync.disconnected) disconnected link(s)"}
           else empty end ),
