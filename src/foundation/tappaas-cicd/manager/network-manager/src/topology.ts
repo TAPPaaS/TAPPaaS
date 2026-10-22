@@ -3,7 +3,10 @@
 // site.json, `site-manager node list / node network show`, `switch-manager
 // list / list-ports / lag list`, `ap-manager list`, zones.json, `module-manager
 // module list` (guests and their run state, read through lib/ts/cluster.ts),
-// `backup-manager peers` and `health-manager validate` — and stores nothing.
+// `backup-manager peers`, `health-manager validate` and `rack-manager export` —
+// and stores nothing. The racks (rack-manager's config/racks.json and its
+// faceplate catalog) are resolved here against the devices and links found:
+// each mount on its device and plate, every link on faceplate ports.
 //
 // The sources name the same things differently, and the join is where they are
 // reconciled:
@@ -29,6 +32,7 @@ import { join } from "path";
 import { ExecResult, captureResult } from "../../../lib/ts/src/exec";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { WanAddress, readWanAddress, wanAddressFile } from "../../../lib/ts/src/wan-address";
+import { Faceplate, RacksDoc, RacksView, resolveRacks } from "../../../lib/ts/src/racks";
 
 // ── the sources, as their verbs print them ────────────────────────────
 
@@ -185,12 +189,14 @@ export interface TopoSources {
   satellites: { name: string; address: string | null }[];
   wanAddress?: WanAddress | null; // what the WAN held at the last network update
   actual?: SwitchActual | null; // switch-configuration-actual.json: MLAG pairs, peer links
+  // rack-manager export --json; undefined: not read (--no-racks), null: it did not answer
+  racks?: { doc: RacksDoc; catalog: Faceplate[] } | null;
   errors: { source: string; error: string }[];
 }
 
 // ── the document ──────────────────────────────────────────────────────
 
-export type TopoKind = "site" | "node" | "switch" | "port" | "lag" | "ap" | "module" | "peer" | "zone" | "pool";
+export type TopoKind = "site" | "node" | "switch" | "port" | "lag" | "ap" | "module" | "peer" | "zone" | "pool" | "rack";
 export interface TopoRef {
   kind: TopoKind;
   name: string;
@@ -347,6 +353,14 @@ export interface TopoWanPath {
   port: string | null;
   active: boolean; // the firewall runs on this node
 }
+// A device the topology knows besides the nodes, switches and access points:
+// a machine module, or a device a switch port names. What a rack mounts.
+export interface TopoDevice {
+  name: string;
+  kind: "machine" | "device";
+  vendor: string | null;
+  model: string | null;
+}
 export interface Topology {
   version: 1;
   generated: string;
@@ -373,6 +387,9 @@ export interface Topology {
   accessPoints: TopoAp[];
   zones: TopoZone[];
   outside: TopoOutside[];
+  devices: TopoDevice[];
+  // Where the hardware sits (rack-manager): null when the racks were not read.
+  racks: RacksView | null;
   findings: TopoFinding[];
   sources: { name: string; ok: boolean; error?: string }[];
 }
@@ -910,6 +927,35 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   }
   const net = (src.site?.network ?? {}) as Record<string, unknown>;
 
+  // The machines (a satellite is outside, not here) and the devices a switch
+  // port names: what a rack may mount besides nodes, switches and APs.
+  const devices: TopoDevice[] = [];
+  const taken = new Set([...nodes.map((n) => n.name), ...switches.map((x) => x.name), ...accessPoints.map((a) => a.name)]);
+  for (const m of src.modules ?? []) {
+    if (m.kind !== "machine" || src.satellites.some((x) => x.name === m.name) || taken.has(m.name)) continue;
+    taken.add(m.name);
+    devices.push({ name: m.name, kind: "machine", vendor: null, model: null });
+  }
+  for (const s of switches) {
+    for (const p of s.ports) {
+      if (p.target?.kind !== "device" || !p.target.name || taken.has(p.target.name)) continue;
+      taken.add(p.target.name);
+      devices.push({ name: p.target.name, kind: "device", vendor: null, model: null });
+    }
+  }
+
+  // The racks, resolved against what was found; what does not reconcile is a
+  // topology finding on the rack (a mount whose device is gone) or on the
+  // device (mounted nowhere, once the site has a rack).
+  const racks = src.racks ? resolveRacks(src.racks.doc, src.racks.catalog, { nodes, switches, accessPoints, devices }) : null;
+  for (const f of racks?.findings ?? []) {
+    if (f.kind === "gone") topoFinding(f.text, { kind: "rack", name: f.rack ?? "" });
+    else {
+      const kind: TopoKind = nodes.some((n) => n.name === f.device) ? "node" : switches.some((x) => x.name === f.device) ? "switch" : accessPoints.some((a) => a.name === f.device) ? "ap" : "module";
+      topoFinding(f.text, { kind, name: f.device });
+    }
+  }
+
   return {
     version: 1,
     generated: now.toISOString(),
@@ -936,8 +982,10 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
     accessPoints,
     zones,
     outside,
+    devices,
+    racks,
     findings,
-    sources: SOURCE_NAMES.map((name) => {
+    sources: SOURCE_NAMES.filter((name) => name !== RACKS_SOURCE || src.racks !== undefined).map((name) => {
       const e = src.errors.find((x) => x.source === name);
       return e ? { name, ok: false, error: e.error } : { name, ok: true };
     }),
@@ -991,7 +1039,9 @@ export const SOURCE_NAMES = [
   "health-manager validate",
   "wan-address.json",
   "switch-configuration-actual.json",
+  "rack-manager export",
 ];
+const RACKS_SOURCE = "rack-manager export";
 
 export type Runner = (bin: string, args: string[]) => ExecResult;
 
@@ -1003,6 +1053,7 @@ export interface CollectOpts {
   health?: HealthDoc | null;
   run?: Runner;
   wanAddressFile?: string; // default $TAPPAAS_WAN_ADDRESS_FILE or /var/lib/tappaas/wan-address.json
+  racks?: boolean; // read rack-manager export (default); false for rack-manager's own read
 }
 
 export function collectSources(o: CollectOpts): TopoSources {
@@ -1097,6 +1148,8 @@ export function collectSources(o: CollectOpts): TopoSources {
     satellites,
     wanAddress,
     actual,
+    // No racks.json is an empty document, not an error; no rack-manager is.
+    racks: o.racks === false ? undefined : json<{ doc: RacksDoc; catalog: Faceplate[] }>(RACKS_SOURCE, "rack-manager", ["export", "--json"]),
     errors,
   };
 }
@@ -1175,6 +1228,16 @@ export function renderTopology(t: Topology): string[] {
   if (t.outside.length) {
     out.push("", "Outside");
     for (const o of t.outside) out.push(`  ${o.kind.padEnd(10)}${o.name}${o.location ? ` (${o.location})` : ""}${o.state ? `  ${o.state}` : ""}`);
+  }
+  if (t.racks && t.racks.racks.length) {
+    out.push("", "Racks");
+    for (const r of t.racks.racks) {
+      out.push(`  ${r.name}  ${r.units}U ${r.width}${r.building || r.room ? `  ${[r.building, r.room].filter((x) => !!x).join(" / ")}` : ""}`);
+      for (const m of r.mounts) out.push(`    U${m.u}${m.height > 1 ? `-${m.u + m.height - 1}` : ""} ${m.face}  ${m.device}  ${m.faceplate ?? "no plate"}${m.suggested ? " (suggested)" : ""}`);
+    }
+    if (t.racks.unplaced.length) out.push(`  mounted nowhere: ${t.racks.unplaced.map((u) => u.device).join(", ")}`);
+    const recorded = t.racks.cables.filter((c) => c.source === "recorded");
+    out.push(`  cables: ${t.racks.cables.length - recorded.length} seen, ${recorded.length} recorded`);
   }
   if (t.findings.length) {
     out.push("", "Findings");

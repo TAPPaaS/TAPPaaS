@@ -103,21 +103,23 @@ export const HELP: HelpSpec = {
     },
     { usage: "exists <name>", details: "Exit 0 when the zone exists, non-zero when it does not." },
     {
-      usage: "topology [--json] [--health <file> | --no-health]",
+      usage: "topology [--json] [--health <file> | --no-health] [--no-racks]",
       name: "topology",
       options: [
         ["--json", "print the topology document as JSON"],
         ["--health <file>", "take the health findings from this `health-manager validate --json` output instead of running it"],
         ["--no-health", "leave the health findings out (no validate run)"],
+        ["--no-racks", "leave the racks out (no rack-manager run; what rack-manager itself reads)"],
       ],
       details:
         "The physical site as one derived document: nodes with their uplinks, legs, LLDP peers and\n" +
         "guests; switches with their ports, LAGs and drift; access points; zones; the buddies and the\n" +
         "satellite; and the health findings placed on the object each names. Joined from site.json,\n" +
         "site-manager node list / node network show, switch-manager list / list-ports / lag list,\n" +
-        "ap-manager list, zones.json, module-manager module list, backup-manager peers and\n" +
-        "health-manager validate. Read-only: it stores nothing. A source that does not answer is\n" +
-        "named under `sources` and its part is left empty.",
+        "ap-manager list, zones.json, module-manager module list, backup-manager peers,\n" +
+        "health-manager validate and rack-manager export (the racks, each mount on its device and\n" +
+        "faceplate, every link mapped to faceplate ports). Read-only: it stores nothing. A source\n" +
+        "that does not answer is named under `sources` and its part is left empty.",
     },
     {
       usage: "show <name> [--json]",
@@ -385,6 +387,7 @@ interface Opts {
   // topology --health <file> / --no-health
   healthFile?: string;
   noHealth?: boolean;
+  noRacks?: boolean;
   // bind
   environment?: string;
   unbind: boolean;
@@ -450,6 +453,9 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--no-health":
         o.noHealth = true;
+        break;
+      case "--no-racks":
+        o.noRacks = true;
         break;
       case "--apply":
         o.apply = true;
@@ -1332,7 +1338,7 @@ function cmdTopology(opts: Opts): number {
       die(`topology: --health ${opts.healthFile}: ${(e as Error).message}`);
     }
   }
-  const t = buildTopology(collectSources({ configDir: opts.configDir, zonesFile: opts.zonesFile, health }));
+  const t = buildTopology(collectSources({ configDir: opts.configDir, zonesFile: opts.zonesFile, health, racks: !opts.noRacks }));
   if (opts.json) process.stdout.write(JSON.stringify(t, null, 1) + "\n");
   else for (const l of renderTopology(t)) info(l);
   return 0;

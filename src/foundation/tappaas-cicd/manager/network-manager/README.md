@@ -55,7 +55,7 @@ network-manager delete <name>       [--check]
 network-manager enable|disable|manual <name> [--force]
 network-manager bind <zone>         --environment <env> | --unbind
 network-manager reconcile           [--apply] [--only opnsense|proxmox|switch|ap]
-network-manager topology            [--json] [--health <file> | --no-health]
+network-manager topology            [--json] [--health <file> | --no-health] [--no-racks]
 network-manager init  [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
 network-manager retire      [--apply]
 network-manager validate    [--zones <file>] [--config-dir <dir>] [--strict]
@@ -336,6 +336,15 @@ ports read `peer-link`, and a LAG across the pair is drawn once, under the pair 
 `--json`). A LAG is `formed` only when every member is enabled, has link and is aggregated;
 otherwise it says how many members are active and why. A disabled port reads `disabled`. The
 pair's live state is `switch-manager mlag-pair list`.
+
+The racks come from `rack-manager export` (config/racks.json and the faceplate catalog):
+`racks` in `--json` holds each rack with its mounts resolved to their devices and faceplates
+(live port state on every plate port), the devices mounted nowhere, and the cables — every
+link the switches and LLDP see, mapped to faceplate ports, plus the ones rack-manager records
+(the ISP's modem, a patch panel). `devices` lists the machines and the devices switch ports
+name, which a rack may mount besides nodes, switches and access points. A mount whose device
+is gone, and once the site has a rack a device mounted nowhere, are `topology` findings.
+`--no-racks` leaves them out (what rack-manager itself reads, to check device names).
 
 ### `wgvpn` — the admin VPN (ADR-010 §6, §8.4.6)
 

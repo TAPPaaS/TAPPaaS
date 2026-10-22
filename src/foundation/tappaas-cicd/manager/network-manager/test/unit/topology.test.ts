@@ -346,5 +346,45 @@ function mlagSite(): TopoSources {
   check(compactPorts(["sfp-sfpplus15", "sfp-sfpplus16"]) === "sfp-sfpplus15+16" && compactPorts(["11", "12"]) === "11+12", "port lists compact");
 }
 
+// ── the racks (rack-manager export) ─────────────────────────────────
+check(t.racks === null && !t.sources.some((s) => s.name === "rack-manager export"), "no racks read: racks is null and not a source");
+{
+  const plate = (key: string, units: number, generic?: "nics" | "ports") => ({ key, vendor: "Generic", model: key, kind: "server" as const, units, width: "full" as const, rows: [], ...(generic ? { generic } : {}) });
+  const catalog = [plate("generic/server-2u", 2, "nics"), { ...plate("generic/switch-1u", 1, "ports"), kind: "switch" as const }];
+  const doc = {
+    version: 1 as const,
+    racks: { rack1: { units: 42, width: "19in" as const, numbering: "bottom-up" as const } },
+    mounts: {
+      tappaas1: { rack: "rack1", u: 10, height: 2, width: "full" as const, face: "front" as const, faceplate: "generic/server-2u" },
+      [SW]: { rack: "rack1", u: 20, height: 1, width: "full" as const, face: "front" as const },
+      tappaas7: { rack: "rack1", u: 30, height: 1, width: "full" as const, face: "front" as const },
+    },
+  };
+  const x = buildTopology({ ...hrossen(), racks: { doc, catalog } });
+  const r = x.racks!;
+  check(r.racks.length === 1 && r.racks[0].mounts.length === 3, "the rack with its mounts");
+  const m = r.racks[0].mounts.find((y) => y.device === SW)!;
+  check(m.faceplate === "generic/switch-1u" && m.suggested && m.plate!.rows.length === 2, "an unrecorded plate: the generic switch, odd over even");
+  check(r.cables.some((c) => c.to.device === "tappaas1" && c.from.port === "11" && c.lag !== null), "tappaas1's LAG legs are cables on the switch's ports");
+  check(x.findings.some((f) => f.gate === "topology" && f.on.kind === "rack" && f.on.name === "rack1" && /tappaas7/.test(f.text)), "a mount whose device is gone: a finding on the rack");
+  check(x.findings.some((f) => f.gate === "topology" && f.on.kind === "node" && f.on.name === "tappaas2" && /mounted in no rack/.test(f.text)), "a node mounted nowhere: a finding on it");
+  check(x.findings.some((f) => f.on.kind === "ap" && f.on.name === "Nano HD"), "an access point mounted nowhere: a finding on it");
+  check(renderTopology(x).some((l) => /^ {4}U20 front {2}USW Pro XG 10 PoE {2}generic\/switch-1u \(suggested\)/.test(l)), "the text view lists the mounts");
+  const none = buildTopology({ ...hrossen(), racks: { doc: {}, catalog } });
+  check(none.racks!.racks.length === 0 && !none.findings.some((f) => f.gate === "topology"), "an empty racks.json: no rack, no finding");
+}
+{
+  const runs: string[] = [];
+  const fake = (bin: string, args: string[]) => {
+    runs.push(`${bin} ${args.join(" ")}`);
+    return { rc: -1, stdout: "", stderr: "", ran: false };
+  };
+  const skip = collectSources({ configDir: FIX, zonesFile: join(FIX, "zones.json"), health: null, wanAddressFile: join(FIX, "none.json"), run: fake, racks: false });
+  check(!runs.some((r) => r.startsWith("rack-manager")) && skip.racks === undefined, "--no-racks: rack-manager is not run");
+  const asked = collectSources({ configDir: FIX, zonesFile: join(FIX, "zones.json"), health: null, wanAddressFile: join(FIX, "none.json"), run: fake });
+  check(runs.includes("rack-manager export --json") && asked.racks === null, "racks read through rack-manager export");
+  check(buildTopology(asked).sources.some((s) => s.name === "rack-manager export" && !s.ok), "no rack-manager: the source is named");
+}
+
 console.log(`\ntopology: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exitCode = 1;
