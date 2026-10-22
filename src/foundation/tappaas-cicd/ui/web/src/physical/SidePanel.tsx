@@ -8,9 +8,10 @@
 // record, and a passive or outside device's mount and recorded cables. From
 // the storage inventory: a disk, a pool with what it holds, a node's storage.
 
-import { ReactNode } from "react";
+import { ReactNode, useMemo } from "react";
+import { useRead } from "../api";
 import { zoneColor } from "../colors";
-import { StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
+import { Health, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
 import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
@@ -18,6 +19,10 @@ import { MountActions, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackMod
 import { publicAddress } from "../zonegraph";
 import { StorageNote } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
+import { DevLink, DevNode, deviceGraph, deviceState, selectedDevice } from "./devicegraph";
+import { KIND_ICON, KIND_NAME } from "./devicecard";
+import { DeviceDrawing } from "./devicedrawing";
+import { stateClass } from "./states";
 
 function Findings({ list }: { list: TopoFinding[] }) {
   if (list.length === 0) return <p className="muted small">No finding on it.</p>;
@@ -60,8 +65,51 @@ function mountedAt(t: Topology, device: string): string | null {
   return t.racks ? "mounted in no rack" : null;
 }
 
-export function SidePanel({ t, sel, close, storage }: { t: Topology; sel: Sel; close: () => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null }) {
+// The ports of a device that a cable joins, and the link each is on.
+function portsOf(links: DevLink[], device: string): Map<string, DevLink> {
+  const m = new Map<string, DevLink>();
+  for (const l of links) for (const c of l.cables) for (const e of [c.from, c.to]) if (e.device === device) m.set(e.port, l);
+  return m;
+}
+
+// The far end of a link, seen from one device.
+const farEnd = (l: DevLink, device: string) => (l.a === device ? l.b : l.a);
+
+export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null }) {
   const operator = canOperate(useMe());
+  const health = useRead<Health>("health");
+  const g = useMemo(() => deviceGraph(t), [t]);
+  const devOf = (id: string): DevNode | undefined => g.nodes.find((n) => n.id === id);
+  // A port clicked in a drawing: a switch's port is selected, any other's link.
+  const portClick = (d: DevNode) => (port: string) => {
+    if (d.kind === "switch") return pick({ kind: "port", id: port, switch: d.name });
+    const l = portsOf(g.links, d.name).get(port);
+    if (l) pick({ kind: "link", id: l.id, port: `${d.name}:${port}` });
+  };
+  const drawing = (d: DevNode, ringed: Set<string>) => <DeviceDrawing key={d.id} t={t} d={d} cabled={new Set(portsOf(g.links, d.name).keys())} ringed={ringed} onPort={portClick(d)} />;
+  // A device's neighbours, each a click away.
+  const neighbours = (d: DevNode) => {
+    const ls = g.links.filter((l) => l.a === d.id || l.b === d.id);
+    if (!ls.length) return null;
+    return (
+      <>
+        <h3>Connected to</h3>
+        <ul className="plain small">
+          {ls.map((l) => {
+            const far = devOf(farEnd(l, d.id))!;
+            const mine = l.cables.map((c) => (c.from.device === d.name ? c.from.port : c.to.device === d.name ? c.to.port : null)).filter(Boolean);
+            return (
+              <li key={l.id}>
+                <button className="linklike" onClick={() => pick(far.sel)}>{KIND_ICON[far.kind]} {far.name}</button>{" "}
+                <span className="muted">{mine.length ? `on ${mine.join(", ")} · ` : ""}{l.kind}{l.cables.length > 1 ? ` · ${l.cables.length} cables` : ""}</span>{" "}
+                <button className="linklike small" onClick={() => pick({ kind: "link", id: l.id })}>the link</button>
+              </li>
+            );
+          })}
+        </ul>
+      </>
+    );
+  };
   const racks = t.racks ?? null;
   const about = (kind: string, name: string, sw?: string) => t.findings.filter((f) => refIs(f.on, kind, name, sw) || f.refs.some((r) => refIs(r, kind, name, sw)));
   let title: ReactNode = sel.id;
@@ -103,6 +151,16 @@ export function SidePanel({ t, sel, close, storage }: { t: Topology; sel: Sel; c
               ["recorded cable", recorded ? `to ${recorded.from.device === s.name && recorded.from.port === p.port ? `${recorded.to.device}:${recorded.to.port}` : `${recorded.from.device}:${recorded.from.port}`} (${recorded.kind}${recorded.label ? `, ${recorded.label}` : ""})` : null],
             ]}
           />
+          {(() => {
+            const l = portsOf(g.links, s.name).get(p.port);
+            const far = l ? devOf(farEnd(l, s.name)) : undefined;
+            return l && far ? (
+              <p className="toolbar">
+                <button className="btn" onClick={() => pick(far.sel)}>{KIND_ICON[far.kind]} {far.name}</button>
+                <button className="btn" onClick={() => pick({ kind: "link", id: l.id, port: `${s.name}:${p.port}` })}>the link</button>
+              </p>
+            ) : null;
+          })()}
           <h3>Findings</h3>
           <Findings list={about("port", p.port, s.name)} />
         </>
@@ -135,6 +193,19 @@ export function SidePanel({ t, sel, close, storage }: { t: Topology; sel: Sel; c
               ["mounted", mountedAt(t, s.name)],
             ]}
           />
+          <h3>Ports</h3>
+          <table className="table compact small">
+            <tbody>
+              {s.ports.map((p) => (
+                <tr key={p.port} className={p.drift === "drift" ? "row-warn" : undefined}>
+                  <td><button className="linklike" onClick={() => pick({ kind: "port", id: p.port, switch: s.name })}>{p.port}</button></td>
+                  <td className="muted">{p.link ?? ""}</td>
+                  <td>{portLabel(p)}</td>
+                  <td className="muted">{p.role === "parked" || p.parked ? "parked" : p.mode === "access" ? `access ${p.zones[0] ?? p.native}` : p.mode}{p.lag ? ` · ${p.lag}` : ""}{p.drift === "drift" ? " · drift" : ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           <h3>Findings</h3>
           <Findings list={t.findings.filter((f) => f.on.switch === s.name || f.refs.some((r) => r.switch === s.name))} />
         </>
@@ -167,6 +238,7 @@ export function SidePanel({ t, sel, close, storage }: { t: Topology; sel: Sel; c
           <KV
             rows={[
               ["roles", n.roles.join(", ")],
+              ["memory", health.env?.data?.gates.find((x) => x.name === "memory-commitment")?.findings.find((f) => f.subject?.kind === "node" && f.subject.name === n.name)?.text ?? null],
               ["storage pools", n.storagePools.join(", ")],
               ["HA", n.ha ? `lrm ${n.ha.lrm}` : null],
               ["corosync", n.corosync ? `${n.corosync.links} link(s), ${n.corosync.disconnected} disconnected` : null],
@@ -373,6 +445,46 @@ export function SidePanel({ t, sel, close, storage }: { t: Topology; sel: Sel; c
       open = <p className="muted small">A rack is a record of config/racks.json only.</p>;
       break;
     }
+    case "link": {
+      const l = g.links.find((x) => x.id === sel.id);
+      if (!l) break;
+      const [a, b] = [devOf(l.a)!, devOf(l.b)!];
+      title = `${a.name} ↔ ${b.name}`;
+      const ends = (d: DevNode) => new Set(l.cables.flatMap((c) => [c.from, c.to]).filter((e) => e.device === d.name).map((e) => e.port));
+      body = (
+        <>
+          {[a, b].map((d) => drawing(d, ends(d)))}
+          <p>
+            <Tag level={l.up === false ? "fail" : "pass"} /> {l.kind}
+            {l.cables.length > 1 ? `, ${l.cables.length} cables` : ""}
+            {l.kind === "hand-off" ? ": where the provider's line meets the site" : l.kind === "tunnel" ? ": the buddy's WireGuard tunnel, to the firewall on this node" : ""}
+          </p>
+          {l.cables.length ? (
+            <table className="table compact small">
+              <tbody>
+                {l.cables.map((c, i) => (
+                  <tr key={i} className={sel.port && (sel.port === `${c.from.device}:${c.from.port}` || sel.port === `${c.to.device}:${c.to.port}`) ? "row-on" : undefined}>
+                    <td className="mono">{c.from.device}:{c.from.port}</td>
+                    <td className="mono">{c.to.device}:{c.to.port}</td>
+                    <td className="muted">{[c.up === true ? "up" : c.up === false ? "down" : null, c.lag ? `LAG ${c.lag}` : null, c.zones.length ? c.zones.join(", ") : null, c.source === "recorded" ? "recorded" : null, c.label].filter(Boolean).join(" · ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+          <div className="toolbar">
+            <button className="btn" onClick={() => pick(a.sel)}>{KIND_ICON[a.kind]} {a.name}</button>
+            <button className="btn" onClick={() => pick(b.sel)}>{KIND_ICON[b.kind]} {b.name}</button>
+          </div>
+          <h3>Findings</h3>
+          <Findings list={t.findings.filter((f) => l.cables.some((c) => [c.from, c.to].some((e) => (f.on.kind === "port" && f.on.switch === e.device && f.on.name === e.port))))} />
+        </>
+      );
+      const recorded = l.cables.find((c) => c.source === "recorded");
+      actions = racks && recorded ? <OperateButton label="Remove the cable…" kind="danger" title="Remove a recorded cable" steps={() => cableRemoveSteps(`${recorded.from.device}:${recorded.from.port}`)} /> : null;
+      open = <p className="muted small">A link is the topology's and the cable records'; its ends have their own jumps.</p>;
+      break;
+    }
     case "disk":
     case "pool": {
       if (!storage) break;
@@ -433,15 +545,23 @@ export function SidePanel({ t, sel, close, storage }: { t: Topology; sel: Sel; c
     }
   }
 
+  // A device's panel: its drawing on top, its neighbours below its records.
+  const dev = sel.kind === "link" || sel.kind === "disk" || sel.kind === "pool" || sel.kind === "rack" ? undefined : devOf(selectedDevice(g, sel) ?? "");
+  const st = dev ? deviceState(t, dev) : null;
+  const ringed = new Set(sel.kind === "port" ? [sel.id] : sel.kind === "lag" ? t.switches.find((x) => x.name === sel.switch)?.lags.find((x) => x.name === sel.id)?.ports ?? [] : []);
   return (
     <aside className="sidepanel">
       <header>
-        <h2>{title}</h2>
+        <h2>
+          {dev ? <span className={`dev-badge ${stateClass(st!.state)}`} title={`${KIND_NAME[dev.kind]} · ${st!.state}${st!.reasons.length ? `: ${st!.reasons.join("; ")}` : ""}`}>{KIND_ICON[dev.kind]}</span> : null} {title}
+        </h2>
         <button className="btn-x" onClick={close} aria-label="close">
           ×
         </button>
       </header>
+      {dev ? drawing(dev, ringed) : null}
       {body ?? <p className="muted">Not in the current topology.</p>}
+      {dev && sel.kind !== "port" && sel.kind !== "lag" ? neighbours(dev) : null}
       {actions && operator ? (
         <>
           <h3>Change</h3>

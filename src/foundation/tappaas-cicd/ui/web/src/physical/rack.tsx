@@ -26,13 +26,13 @@ const span = (m: { width: string; slot: number }): [number, number] => {
 const rowOf = (r: RackInfo, unit: number) => (r.numbering === "top-down" ? unit - 1 : r.units - unit);
 const unitAt = (r: RackInfo, row: number) => (r.numbering === "top-down" ? row + 1 : r.units - row);
 
-interface Box {
+export interface Box {
   x: number;
   y: number;
   w: number;
   h: number;
 }
-interface Placed {
+export interface Placed {
   device: string;
   kind: RackMount["kind"] | "outside";
   plate: ResolvedPlate | null;
@@ -54,7 +54,7 @@ const key = (device: string, port: string) => `${device}\u0000${port}`;
 
 // Where every port of every plate is drawn: one cell per port of the plate's
 // grid, right-aligned, the label on the left.
-function portCells(p: Placed): { port: PlatePort; box: Box }[] {
+export function portCells(p: Placed): { port: PlatePort; box: Box }[] {
   const rows = p.plate?.rows ?? [];
   if (!rows.length) return [];
   const cols = Math.max(...rows.map((r) => r.length), 1);
@@ -172,7 +172,7 @@ function portTitle(p: PlatePort): string {
   return `${p.name}${p.name !== p.id ? ` (${p.id})` : ""} · ${p.kind} · ${st}${p.lag ? ` · LAG ${p.lag}` : ""}${p.zones.length ? ` · ${p.zones.join(", ")}` : ""}`;
 }
 
-function Port({ c, selected, onClick }: { c: { port: PlatePort; box: Box }; selected: boolean; onClick: () => void }) {
+function Port({ c, selected, cabled, onClick }: { c: { port: PlatePort; box: Box }; selected: boolean; cabled: boolean; onClick: () => void }) {
   const { port: p, box: b } = c;
   const sfp = p.kind === "sfp+" || p.kind === "sfp28";
   return (
@@ -185,7 +185,8 @@ function Port({ c, selected, onClick }: { c: { port: PlatePort; box: Box }; sele
       )}
       {p.kind !== "power" ? <rect x={b.x + 2} y={b.y + (sfp ? 2 : 3)} width={b.w - 4} height={b.h - (sfp ? 4 : 5)} rx={1} fill={portFill(p)} opacity={p.kind === "console" ? 0.6 : 1} /> : null}
       {p.kind === "poe" ? <rect x={b.x + 2} y={b.y + 1} width={b.w - 4} height={1.4} fill="#facc15" /> : null}
-      {selected ? <rect x={b.x - 2} y={b.y - 2} width={b.w + 4} height={b.h + 4} rx={2} fill="none" stroke="#3b6fd4" strokeWidth={2} /> : null}
+      {cabled ? <rect x={b.x} y={b.y + b.h + 1.2} width={b.w} height={1.8} rx={0.9} fill="#38bdf8" /> : null}
+      {selected ? <rect x={b.x - 2} y={b.y - 2} width={b.w + 4} height={b.h + 4} rx={2} fill="none" stroke="#f59e0b" strokeWidth={2.2} /> : null}
     </g>
   );
 }
@@ -201,6 +202,43 @@ export function selOf(kind: Placed["kind"], device: string, port?: string): Sel 
 
 const isSel = (s: Sel | null, kind: Placed["kind"], device: string): boolean =>
   !!s && (((s.kind === "node" || s.kind === "switch" || s.kind === "ap" || s.kind === "mount") && s.id === device) || (s.kind === "port" && s.switch === device && kind === "switch"));
+
+// One faceplate: its name and model on the left, its LED, its port grid with
+// each port's live state, the cabled ones underlined, the selected one ringed.
+// The rack draws every mount with it; the side panel draws the selected one.
+export function PlateSvg({ p, on, portOn, cabled, onPlate, onPort }: { p: Placed; on: boolean; portOn: (id: string) => boolean; cabled?: Set<string>; onPlate: () => void; onPort: (id: string) => void }) {
+  const cells = portCells(p);
+  const led = p.up === true ? "#2f9e44" : p.up === false ? "#d64545" : "#9aa4b2";
+  const labelW = Math.min(124, p.box.w * 0.34);
+  const tight = p.box.h < 34;
+  return (
+    <g className="rack-plate" onClick={(e) => (e.stopPropagation(), onPlate())}>
+      <title>{`${p.title} — ${p.sub}`}</title>
+      <rect x={p.box.x} y={p.box.y} width={p.box.w} height={p.box.h} rx={3} fill={p.kind === "outside" ? "#f1f5f9" : p.plate?.passive ? "#e2e8f0" : "#1e293b"} stroke={on ? "#3b6fd4" : p.kind === "outside" ? "#94a3b8" : "#0f172a"} strokeWidth={on ? 2.5 : 1} strokeDasharray={p.kind === "outside" ? "4 3" : undefined} />
+      {/* the rack ears with their screws */}
+      {p.kind !== "outside" && p.box.w > 300 ? (
+        <>
+          <circle cx={p.box.x - R.rail / 2 + 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="#94a3b8" />
+          <circle cx={p.box.x + p.box.w + R.rail / 2 - 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="#94a3b8" />
+        </>
+      ) : null}
+      <circle cx={p.box.x + 8} cy={p.box.y + 8} r={3.4} fill={led}>
+        <title>{p.up === true ? "up: a port has link" : p.up === false ? "no port has link" : "no live state known"}</title>
+      </circle>
+      <text x={p.box.x + 15} y={p.box.y + (tight ? p.box.h / 2 + 4 : 13)} className={p.kind === "outside" || p.plate?.passive ? "rack-name rack-name-dark" : "rack-name"}>
+        {p.title.length * 6.4 > labelW + 30 && cells.length ? `${p.title.slice(0, Math.max(6, Math.floor((labelW + 30) / 6.4) - 1))}…` : p.title}
+      </text>
+      {!tight ? (
+        <text x={p.box.x + 15} y={p.box.y + 25} className={p.kind === "outside" || p.plate?.passive ? "rack-sub rack-sub-dark" : "rack-sub"}>
+          {p.sub.length * 5.4 > labelW + 20 && cells.length ? `${p.sub.slice(0, Math.max(6, Math.floor((labelW + 20) / 5.4) - 1))}…` : p.sub}
+        </text>
+      ) : null}
+      {cells.map((c) => (
+        <Port key={c.port.id} c={c} selected={portOn(c.port.id)} cabled={!!cabled?.has(c.port.id)} onClick={() => onPort(c.port.id)} />
+      ))}
+    </g>
+  );
+}
 
 export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v: RacksView; sel: Sel | null; pick: (s: Sel) => void; cables: boolean; onPane: () => void }) {
   const L = useMemo(() => layoutRacks(v), [v]);
@@ -234,40 +272,22 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
     .filter((x) => x.a && x.b);
   const hovered = drawn.find((d) => d.i === hover);
 
-  const plate = (p: Placed): ReactNode => {
-    const on = isSel(sel, p.kind, p.device);
-    const cells = portCells(p);
-    const led = p.up === true ? "#2f9e44" : p.up === false ? "#d64545" : "#9aa4b2";
-    const labelW = Math.min(124, p.box.w * 0.34);
-    const tight = p.box.h < 34;
-    return (
-      <g key={`${p.rack ?? "out"}:${p.device}`} className="rack-plate" onClick={(e) => (e.stopPropagation(), pick(selOf(p.kind, p.device)))}>
-        <title>{`${p.title} — ${p.sub}`}</title>
-        <rect x={p.box.x} y={p.box.y} width={p.box.w} height={p.box.h} rx={3} fill={p.kind === "outside" ? "#f1f5f9" : p.plate?.passive ? "#e2e8f0" : "#1e293b"} stroke={on ? "#3b6fd4" : p.kind === "outside" ? "#94a3b8" : "#0f172a"} strokeWidth={on ? 2.5 : 1} strokeDasharray={p.kind === "outside" ? "4 3" : undefined} />
-        {/* the rack ears with their screws */}
-        {p.kind !== "outside" && p.box.w > 300 ? (
-          <>
-            <circle cx={p.box.x - R.rail / 2 + 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="#94a3b8" />
-            <circle cx={p.box.x + p.box.w + R.rail / 2 - 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="#94a3b8" />
-          </>
-        ) : null}
-        <circle cx={p.box.x + 8} cy={p.box.y + 8} r={3.4} fill={led}>
-          <title>{p.up === true ? "up: a port has link" : p.up === false ? "no port has link" : "no live state known"}</title>
-        </circle>
-        <text x={p.box.x + 15} y={p.box.y + (tight ? p.box.h / 2 + 4 : 13)} className={p.kind === "outside" || p.plate?.passive ? "rack-name rack-name-dark" : "rack-name"}>
-          {p.title.length * 6.4 > labelW + 30 && cells.length ? `${p.title.slice(0, Math.max(6, Math.floor((labelW + 30) / 6.4) - 1))}…` : p.title}
-        </text>
-        {!tight ? (
-          <text x={p.box.x + 15} y={p.box.y + 25} className={p.kind === "outside" || p.plate?.passive ? "rack-sub rack-sub-dark" : "rack-sub"}>
-            {p.sub.length * 5.4 > labelW + 20 && cells.length ? `${p.sub.slice(0, Math.max(6, Math.floor((labelW + 20) / 5.4) - 1))}…` : p.sub}
-          </text>
-        ) : null}
-        {cells.map((c) => (
-          <Port key={c.port.id} c={c} selected={sel?.kind === "port" && sel.switch === p.device && sel.id === c.port.id} onClick={() => pick(selOf(p.kind, p.device, c.port.id))} />
-        ))}
-      </g>
-    );
-  };
+  const cabledOf = useMemo(() => {
+    const m = new Map<string, Set<string>>();
+    for (const c of v.cables) for (const e of [c.from, c.to]) m.set(e.device, (m.get(e.device) ?? new Set()).add(e.port));
+    return m;
+  }, [v]);
+  const plate = (p: Placed): ReactNode => (
+    <PlateSvg
+      key={`${p.rack ?? "out"}:${p.device}`}
+      p={p}
+      cabled={cabledOf.get(p.device)}
+      on={isSel(sel, p.kind, p.device)}
+      portOn={(id) => sel?.kind === "port" && sel.switch === p.device && sel.id === id}
+      onPlate={() => pick(selOf(p.kind, p.device))}
+      onPort={(id) => pick(selOf(p.kind, p.device, id))}
+    />
+  );
 
   return (
     <div className="rack-canvas" ref={wrap} onClick={onPane}>

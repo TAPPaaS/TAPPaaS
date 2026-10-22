@@ -59,7 +59,11 @@ its state as the Storage view colours its cards (its findings' worst level; a dr
 node's uplink leg down or a buddy down are warnings; the reason on hover; one legend for both
 views); one line per pair of devices a cable joins (several cables or a LAG thicker, the internet's
 hand-off and the WAN dashed, a buddy's tunnel dotted, a cable down red), labelled with its ports.
-A click opens the device's records, findings, jumps and its day-2 change: a switch
+A click opens the side panel: on top the device's faceplate drawn as the Physical view draws it
+(the rack catalog's plate, or a generic one from the ports the topology knows), its cabled ports
+underlined and the selected link's ports ringed, a click on a port selecting that switch port or
+that port's link; below it the device's records (a switch's ports and what hangs on them, a node's
+memory, uplinks and guests), what it is connected to, its findings, jumps and its day-2 change: a switch
 port's record (`switch-manager update-port`) then `switch-manager reconcile`, a node's
 `node network show / set`. **Storage** (`/site/storage`, `storage-manager inventory`) — in
 columns: the cluster nodes, each node's boot device and pools (with the pool's fill bar), each

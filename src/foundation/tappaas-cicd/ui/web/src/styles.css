@@ -146,7 +146,7 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .canvas { flex: 1; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; min-width: 0; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; margin-top: 10px; font-size: 12.5px; }
 .toggle { font-size: 13px; color: var(--muted); }
-.sidepanel { width: 360px; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow: auto; }
+.sidepanel { width: 400px; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow: auto; }
 /* A side card's header stays on top while its body scrolls, so its × does too. */
 .sidepanel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; position: sticky; top: -14px; z-index: 2; background: var(--panel); margin: -14px -16px 10px; padding: 14px 16px 8px; border-bottom: 1px solid var(--line); }
 .btn-x { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; font-size: 20px; line-height: 1; background: #fff; border: 1px solid var(--line); border-radius: 6px; cursor: pointer; color: var(--ink); }
@@ -463,3 +463,10 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .dev-card { display: flex; align-items: center; gap: 7px; height: 100%; white-space: nowrap; font-size: 13px; font-weight: 600; }
 .dev-icon { font-size: 14px; color: var(--muted); width: 16px; text-align: center; flex: none; }
 .dev-name { overflow: hidden; text-overflow: ellipsis; }
+/* The side panel's device: its kind and state, its drawing. */
+.dev-badge { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 5px; font-size: 13px; vertical-align: -2px; border: 1px solid var(--line); }
+.dev-badge.st-ok { background: var(--pass-bg); }
+.dev-drawing { margin: 0 0 10px; background: #f1f5f9; border: 1px solid var(--line); border-radius: 6px; padding: 4px; }
+.dev-drawing .rack-port { cursor: pointer; }
+.table tr.row-on td { background: #fff7e6; }
+.table tr.row-warn td { background: var(--warn-bg); }

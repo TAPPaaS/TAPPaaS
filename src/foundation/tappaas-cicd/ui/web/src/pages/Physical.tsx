@@ -30,6 +30,7 @@ function selFromUrl(): Sel | null {
   const id = rest.join(":");
   if (kind === "node" || kind === "outside" || kind === "ap" || kind === "guest" || kind === "switch" || kind === "rack" || kind === "mount" || kind === "isp" || kind === "firewall") return { kind, id };
   // port:<switch>:<port>, lag:<switch>:<lag>
+  if (kind === "link" && id) return { kind, id };
   if ((kind === "port" || kind === "lag") && id.includes(":")) return { kind, switch: id.slice(0, id.lastIndexOf(":")), id: id.slice(id.lastIndexOf(":") + 1) };
   // disk:<node>:<device>, pool:<node>:<pool>
   if ((kind === "disk" || kind === "pool") && id.includes(":")) return { kind, node: id.slice(0, id.indexOf(":")), id: id.slice(id.indexOf(":") + 1) };
@@ -157,7 +158,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
           ) : null}
           <div className="physical">
             <div className="canvas" key={sel ? "with-card" : "alone"}>{storage ? <StorageGraph inv={storage.inv} notes={storage.notes} sel={sel} pick={pick} /> : null}</div>
-            {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
+            {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : null}
           </div>
           <div className="legend">
             <StateLegend extra="a pool's bar is its fill" />
@@ -168,7 +169,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
         </>
       ) : shown === "rack" ? (
         <div className="physical physical-rack">
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : null}
           <div className="canvas">
             {t && racks && racks.racks.length ? (
               <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
@@ -187,7 +188,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
           <div className="canvas">
             {t ? <DeviceGraph t={t} sel={sel} pick={pick} labels={showLabels} /> : null}
           </div>
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : null}
         </div>
       )}
       {t && (shown === "rack" || shown === "device") ? (
