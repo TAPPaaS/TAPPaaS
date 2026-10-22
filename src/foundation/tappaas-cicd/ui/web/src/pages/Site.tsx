@@ -90,6 +90,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
   };
   const sched = s.updateSchedule;
   const last = d?.lastSweep;
+  const repos = (d?.repositories ?? []) as Repo[];
   const loc = s.location;
   const pub = publicText(publicAddress({ network: { publicIp: s.network?.publicIp ?? null } }, d?.wan ?? null));
   return (
@@ -127,7 +128,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
             ]}
           />
         </Section>
-        <Section title="Updates" aside={<OperateButton label="Change…" title="Updates" steps={siteModify("site-manager site modify (updates)", UPDATE_FIELDS, "The schedule, the channel, automatic reboot and the snapshots kept.")} />}>
+        <Section title="Updates and repositories" aside={<OperateButton label="Change…" title="Updates" steps={siteModify("site-manager site modify (updates)", UPDATE_FIELDS, "The schedule, the channel, automatic reboot and the snapshots kept.")} />}>
           <KV
             rows={[
               ["frequency", val(sched?.frequency)],
@@ -142,47 +143,37 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
           <div className="toolbar">
             <OperateButton label="Release train: preview" title="tappaas-train.sh preview" steps={[{ title: "tappaas-train.sh preview — the last release against 'if released now'", bin: "tappaas-train.sh", verb: "preview", note: "Nothing built, nothing moved; it writes config/train-preview.json. Text output: the train has no --json yet." }]} />
             <OperateButton label="Release train: status" title="tappaas-train.sh status" steps={[{ title: "tappaas-train.sh status", bin: "tappaas-train.sh", verb: "status" }]} />
+            <OperateButton label="Reconcile repositories…" title="site-manager repository reconcile" steps={[sm("site-manager repository reconcile", "repository reconcile")]} />
           </div>
+          <table className="table compact">
+            <thead>
+              <tr><th>repository</th><th>branch</th><th>managed</th><th>hold</th><th /></tr>
+            </thead>
+            <tbody>
+              {repos.map((x) => (
+                <tr key={x.name}>
+                  <td className="mono" title={x.url}>{x.name}</td>
+                  <td className="mono">{x.branch ?? ""}</td>
+                  <td>{x.managed ?? ""}</td>
+                  <td>{x.hold ? `held${x.hold.until ? ` until ${x.hold.until}` : ""}${x.hold.reason ? ` — ${x.hold.reason}` : ""}` : ""}</td>
+                  <td className="toolbar">
+                    <OperateButton label="Sync…" title={`site-manager repository sync ${x.name}`} steps={[sm(`site-manager repository sync ${x.name}`, "repository sync", { fixed: [x.name], note: "The preview (--dry-run) reports the commits, any pending migration and the modules it would move." })]} />
+                    {x.hold ? (
+                      <OperateButton label="Release" title={`site-manager repository release ${x.name}`} steps={[sm(`site-manager repository release ${x.name}`, "repository release", { fixed: [x.name] })]} />
+                    ) : (
+                      <OperateButton label="Hold…" title={`site-manager repository hold ${x.name}`} steps={[sm(`site-manager repository hold ${x.name}`, "repository hold", { fixed: [x.name] })]} />
+                    )}
+                    <OperateButton label="Stashes" title={`site-manager repository stash list ${x.name}`} steps={[{ ...sm(`site-manager repository stash list ${x.name}`, "repository stash"), words: ["repository", "stash", "list"], fixed: [x.name] }]} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
           <p className="muted small">
             The nodes are the Device and Storage views', the backup target the <Link to="/backup">Backup</Link> page's, the organizations <Link to="/identity">Identity</Link>'s.
           </p>
         </Section>
       </div>
-    </div>
-  );
-}
-
-// Between the physical summary and its findings: the repositories.
-function Repositories({ r }: { r: Read<SiteRead> }) {
-  const repos = (r.env?.data?.repositories ?? []) as Repo[];
-  return (
-    <div className="site-records">
-      <Section title="Repositories" aside={<OperateButton label="Reconcile…" title="site-manager repository reconcile" steps={[sm("site-manager repository reconcile", "repository reconcile")]} />}>
-        <table className="table compact">
-          <thead>
-            <tr><th>repository</th><th>branch</th><th>managed</th><th>hold</th><th /></tr>
-          </thead>
-          <tbody>
-            {repos.map((x) => (
-              <tr key={x.name}>
-                <td className="mono" title={x.url}>{x.name}</td>
-                <td className="mono">{x.branch ?? ""}</td>
-                <td>{x.managed ?? ""}</td>
-                <td>{x.hold ? `held${x.hold.until ? ` until ${x.hold.until}` : ""}${x.hold.reason ? ` — ${x.hold.reason}` : ""}` : ""}</td>
-                <td className="toolbar">
-                  <OperateButton label="Sync…" title={`site-manager repository sync ${x.name}`} steps={[sm(`site-manager repository sync ${x.name}`, "repository sync", { fixed: [x.name], note: "The preview (--dry-run) reports the commits, any pending migration and the modules it would move." })]} />
-                  {x.hold ? (
-                    <OperateButton label="Release" title={`site-manager repository release ${x.name}`} steps={[sm(`site-manager repository release ${x.name}`, "repository release", { fixed: [x.name] })]} />
-                  ) : (
-                    <OperateButton label="Hold…" title={`site-manager repository hold ${x.name}`} steps={[sm(`site-manager repository hold ${x.name}`, "repository hold", { fixed: [x.name] })]} />
-                  )}
-                  <OperateButton label="Stashes" title={`site-manager repository stash list ${x.name}`} steps={[{ ...sm(`site-manager repository stash list ${x.name}`, "repository stash"), words: ["repository", "stash", "list"], fixed: [x.name] }]} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Section>
     </div>
   );
 }
@@ -218,7 +209,7 @@ export function Site({ view = "overview" }: { view?: PhysicalView }) {
         ))}
       </div>
       {view === "overview" ? <SiteTop r={r} /> : null}
-      <Physical embedded view={view} aside={view === "overview" ? <NodeActions /> : undefined} beforeFindings={view === "overview" ? <Repositories r={r} /> : undefined} />
+      <Physical embedded view={view} aside={view === "overview" ? <NodeActions /> : undefined} />
     </div>
   );
 }
