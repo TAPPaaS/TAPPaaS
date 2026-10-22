@@ -458,3 +458,8 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .port.port-st-fail { background: var(--fail-bg); }
 .ov-legend { margin-top: 10px; font-size: 12.5px; }
 .site-records { margin-top: 14px; }
+
+/* The Device view: a device is its name on a card coloured by its state. */
+.dev-card { display: flex; align-items: center; gap: 7px; height: 100%; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.dev-icon { font-size: 14px; color: var(--muted); width: 16px; text-align: center; flex: none; }
+.dev-name { overflow: hidden; text-overflow: ellipsis; }

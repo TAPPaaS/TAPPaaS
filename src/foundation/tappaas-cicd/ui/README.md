@@ -52,12 +52,14 @@ faceplate at its units and width with its ports' live state (link, LAG), the cab
 the zone colours below with a label on hover, a device only a cable record places beside the rack,
 and an Unplaced tray of the devices mounted nowhere, each with Mount…; a click on a plate or a port
 opens the side card to the left of the racks, with Mount…, Move to… and Unmount… besides the
-object's own changes. **Device** (`/site/device`) — the topology laid out under the spike's rules (ISP top-left, the firewall
-as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
-nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
-left), each card and each switch port coloured by its state as the Storage view colours its cards
-(its findings' worst level; a drifting port, a node's uplink leg down or a buddy down are warnings;
-the reason on hover; one legend for both views); a click opens the object's records, findings, jumps and its day-2 change: a switch
+object's own changes. **Device** (`/site/device`) — every physical device (the cluster nodes, the
+switches, the access points, the machines and devices a rack or a cable record names, the internet
+and the backup buddies) as a card with its kind's icon and its name and nothing else, coloured by
+its state as the Storage view colours its cards (its findings' worst level; a drifting port, a
+node's uplink leg down or a buddy down are warnings; the reason on hover; one legend for both
+views); one line per pair of devices a cable joins (several cables or a LAG thicker, the internet's
+hand-off and the WAN dashed, a buddy's tunnel dotted, a cable down red), labelled with its ports.
+A click opens the device's records, findings, jumps and its day-2 change: a switch
 port's record (`switch-manager update-port`) then `switch-manager reconcile`, a node's
 `node network show / set`. **Storage** (`/site/storage`, `storage-manager inventory`) — in
 columns: the cluster nodes, each node's boot device and pools (with the pool's fill bar), each

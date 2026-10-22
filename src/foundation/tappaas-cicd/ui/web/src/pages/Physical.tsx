@@ -6,13 +6,12 @@
 // its connections as lines, laid out automatically. Storage: the nodes, their
 // pools and disks. Click an object for its side card.
 
-import { Background, Controls, ReactFlow } from "@xyflow/react";
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { zoneColor } from "../colors";
 import { OperateButton } from "../operate";
-import { nodeTypes } from "../physical/cards";
-import { Sel, layoutTopology } from "../physical/layout";
+import { Sel } from "../physical/layout";
+import { DeviceGraph } from "../physical/deviceview";
 import { RackCanvas } from "../physical/rack";
 import { MountActions, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
@@ -89,7 +88,6 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
   const [sel, setSel] = useState<Sel | null>(selFromUrl);
-  const [showGuests, setShowGuests] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [showCables, setShowCables] = useState(true);
   const operator = canOperate(useMe());
@@ -109,14 +107,6 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
   }, []);
 
   const pick = useCallback((s: Sel) => setSel(s), []);
-  const memory = useMemo(() => {
-    const m: Record<string, string> = {};
-    for (const f of health.env?.data?.gates.find((g) => g.name === "memory-commitment")?.findings ?? []) {
-      if (f.subject?.kind === "node") m[f.subject.name] = f.text;
-    }
-    return m;
-  }, [health.env]);
-  const flow = useMemo(() => (t && shown === "device" ? layoutTopology(t, { pick, selected: sel, showGuests, showLabels, memory }) : null), [t, shown, pick, sel, showGuests, showLabels, memory]);
   const bad = (t?.sources ?? []).filter((s) => !s.ok);
 
   return (
@@ -138,9 +128,6 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
         <span className="spacer" />
         {shown === "device" ? (
           <>
-            <label className="toggle">
-              <input type="checkbox" checked={showGuests} onChange={(e) => setShowGuests(e.target.checked)} /> guests
-            </label>
             <label className="toggle">
               <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} /> link labels
             </label>
@@ -198,27 +185,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
       ) : (
         <div className="physical">
           <div className="canvas">
-            {flow ? (
-              <ReactFlow
-                nodes={flow.nodes}
-                edges={flow.edges}
-                nodeTypes={nodeTypes}
-                fitView
-                fitViewOptions={{ padding: 0.06 }}
-                minZoom={0.2}
-                nodesDraggable={false}
-                nodesConnectable={false}
-                elementsSelectable={false}
-                proOptions={{ hideAttribution: true }}
-                // A node with no click handler gets no pointer events at all; the
-                // cards select themselves (their port rows and chips more finely).
-                onNodeClick={() => undefined}
-                onPaneClick={() => setSel(null)}
-              >
-                <Background gap={24} color="#e5e7eb" />
-                <Controls showInteractive={false} />
-              </ReactFlow>
-            ) : null}
+            {t ? <DeviceGraph t={t} sel={sel} pick={pick} labels={showLabels} /> : null}
           </div>
           {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
         </div>
@@ -236,7 +203,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
               </span>
             ))}
           <span className="muted">
-            {shown === "rack" ? "— trunk · - - wan · ··· recorded · red: no link · purple ring: LAG member · green port: link up" : "— trunk · - - wan access · ··· tunnel · ⚠ finding"}
+            {shown === "rack" ? "— trunk · - - wan · ··· recorded · red: no link · purple ring: LAG member · green port: link up" : "— trunk · - - wan and the internet · ··· tunnel · red: a cable down · thick: several cables or a LAG"}
           </span>
           {shown === "device" ? <StateLegend /> : null}
           <span className="muted">

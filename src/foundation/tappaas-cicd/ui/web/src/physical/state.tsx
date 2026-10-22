@@ -1,18 +1,7 @@
-// state.tsx — the colour language of the Physical views: every card coloured
-// by its state, ok green, warn amber, fail red, the reason on hover, and the
-// one legend that says so.
+// state.tsx — the one legend of the Physical views' colours (states.ts).
 
-export type CardState = "ok" | "warn" | "fail";
-
-export const STATE_COLOR: Record<CardState, string> = { ok: "var(--pass)", warn: "var(--warn)", fail: "var(--fail)" };
-
-// A card's left border and tint.
-export const stateClass = (s: CardState): string => `st st-${s}`;
-
-// From a finding's level, the worst of a list.
-export function stateOf(levels: ("warn" | "fail" | string)[]): CardState {
-  return levels.includes("fail") ? "fail" : levels.includes("warn") ? "warn" : "ok";
-}
+export { STATE_COLOR, stateClass, stateOf } from "./states";
+export type { CardState } from "./states";
 
 export function StateLegend({ extra }: { extra?: string }) {
   return (
