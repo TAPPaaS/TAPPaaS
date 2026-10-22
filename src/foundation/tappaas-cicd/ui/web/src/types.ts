@@ -342,6 +342,128 @@ export interface RacksView {
   findings: { text: string; device: string; kind: "gone" | "unplaced"; rack: string | null }[];
 }
 
+// ── the storage inventory (storage-manager inventory --json) ──────────
+export type StorageState = "ok" | "warn" | "fail";
+export interface StorageDisk {
+  device: string;
+  byId: string | null;
+  model: string | null;
+  serial: string | null;
+  wwn: string | null;
+  size: number | null;
+  type: "hdd" | "ssd" | "nvme" | "unknown";
+  wearout: number | null; // % of life left
+  smart: {
+    read: boolean;
+    health: string | null;
+    temperature: number | null;
+    reallocated: number | null;
+    pending: number | null;
+    uncorrectable: number | null;
+    mediaErrors: number | null;
+    criticalWarning: number | null;
+    powerOnHours: number | null;
+  } | null;
+  zfs: { pool: string; vdev: string; state: string; read: number; write: number; cksum: number; msg: string | null } | null;
+  exportedPool: { name: string; health: string | null } | null;
+  state: StorageState;
+  reasons: string[];
+}
+export interface StorageVdev {
+  name: string;
+  type: string; // mirror, raidz1, stripe…
+  parity: number | null;
+  role: string; // data, log, cache, spare, special
+  health: string;
+  state: StorageState;
+  disks: StorageDisk[];
+  missing: { name: string; state: string }[]; // a member ZFS names that is not among the node's disks
+}
+export interface StorageVolume {
+  name: string;
+  vmid: number;
+  module: string | null;
+  guest: string | null;
+  kind: "own" | "mirror" | "template" | "orphan";
+  runsOn: string | null;
+  type: string;
+  size: number;
+  used: number;
+  refer: number;
+  snapshots: number;
+  replica: string | null;
+  mirroredOn: string[];
+  note: string | null;
+}
+export interface StorageDataset {
+  name: string;
+  kind: "pbs-datastore" | "nfs-share" | "dataset" | "volume";
+  label: string;
+  mountpoint: string | null;
+  used: number;
+  exact: boolean;
+}
+export interface StoragePool {
+  name: string;
+  declared: boolean;
+  present: boolean;
+  health: string | null;
+  status: string | null;
+  size: number | null;
+  allocated: number | null;
+  free: number | null;
+  fragmentation: number | null;
+  dedup: number | null;
+  compression: string | null;
+  compressRatio: number | null;
+  usable: { total: number; used: number; avail: number; pct: number } | null;
+  scrub: { state: string; last: string | null; errors: number | null; text: string | null };
+  vdevs: StorageVdev[];
+  volumes: StorageVolume[];
+  datasets: StorageDataset[];
+  totals: { total: number; own: number; mirror: number; other: number; free: number };
+  state: StorageState;
+  reasons: string[];
+}
+export interface StorageReplication {
+  id: string;
+  vmid: number;
+  module: string | null;
+  source: string;
+  target: string;
+  schedule: string | null;
+  lastSync: string | null;
+  nextSync: string | null;
+  failCount: number;
+  error: string | null;
+  state: StorageState;
+  reasons: string[];
+}
+export interface StorageNode {
+  name: string;
+  reachable: boolean;
+  boot: StorageDisk[];
+  pools: StoragePool[];
+  otherDisks: StorageDisk[];
+  replication: StorageReplication[];
+  state: StorageState;
+  reasons: string[];
+}
+export interface StorageFinding {
+  level: "fail" | "warn";
+  cause: string;
+  on: { kind: "disk" | "pool" | "replication" | "node"; node: string; name: string };
+  text: string;
+}
+export interface StorageInventory {
+  version: number;
+  generated: string;
+  smart: boolean;
+  nodes: StorageNode[];
+  findings: StorageFinding[];
+  sources: { name: string; ok: boolean; error: string | null }[];
+}
+
 // ── jobs (ADR-034 D4) ─────────────────────────────────────────────────
 export type JobPreview = { kind: "read" } | { kind: "apply-flag"; flag: string } | { kind: "dry-run-flag"; flag: string } | { kind: "none"; touches: string };
 export interface JobSummary {

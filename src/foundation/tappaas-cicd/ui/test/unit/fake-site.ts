@@ -48,6 +48,8 @@ export function fakeSite(): FakeSite {
         return ok(JSON.stringify([{ name: "rasmus", role: "remote" }]));
       case "network-manager topology":
         return ok(file("topology.json"));
+      case "storage-manager inventory":
+        return ok(file("storage-inventory.json"));
       case "environment-manager list":
         return ok(file("environments.json"));
       case "site-manager site":

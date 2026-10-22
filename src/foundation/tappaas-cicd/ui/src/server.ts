@@ -48,7 +48,7 @@ const TYPES: Record<string, string> = {
   txt: "text/plain; charset=utf-8",
 };
 
-const JUMP_KINDS = new Set<JumpKind>(["node", "module", "switch", "port", "lag", "ap", "zone", "peer", "site"]);
+const JUMP_KINDS = new Set<JumpKind>(["node", "module", "switch", "port", "lag", "ap", "zone", "peer", "site", "disk", "pool"]);
 
 function securityHeaders(res: ServerResponse): void {
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -274,6 +274,8 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.backup.get()));
       case "topology":
         return sendJson(res, 200, envelope(await r.topology.get()));
+      case "storage":
+        return sendJson(res, 200, envelope(await r.storage.get()));
       case "security":
         return sendJson(res, 200, envelope(await r.security.get()));
       case "activity": {

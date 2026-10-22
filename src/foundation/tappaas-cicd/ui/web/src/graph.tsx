@@ -138,7 +138,7 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
   };
 }
 
-export function Graph({ nodes, edges, rankdir = "TB", height = 520, nodesep = 30, ranksep = 60, grid }: { nodes: GNode[]; edges: GEdge[]; rankdir?: "TB" | "LR"; height?: number; nodesep?: number; ranksep?: number; grid?: TreeGrid }) {
+export function Graph({ nodes, edges, rankdir = "TB", height = 520, nodesep = 30, ranksep = 60, grid }: { nodes: GNode[]; edges: GEdge[]; rankdir?: "TB" | "LR"; height?: number | string; nodesep?: number; ranksep?: number; grid?: TreeGrid }) {
   const flow = useMemo(() => layout(nodes, edges, rankdir, nodesep, ranksep, grid), [nodes, edges, rankdir, nodesep, ranksep, grid]);
   return (
     <div className="graph" style={{ height }}>

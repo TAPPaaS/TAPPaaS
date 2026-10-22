@@ -401,3 +401,36 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .rack-tray li { padding: 6px 0; border-bottom: 1px solid var(--line); }
 .rack-tray li .btn { margin-top: 4px; }
 .rack-empty { padding: 40px; max-width: 560px; }
+
+/* The Physical views' state colours (physical/state.tsx): a card's left border and tint. */
+.st-warn { background: var(--warn-bg); }
+.st-fail { background: var(--fail-bg); }
+.gcard.st-ok, .card-flow.st-ok { border-left: 4px solid var(--pass); }
+.gcard.st-warn, .card-flow.st-warn { border-left: 4px solid var(--warn); }
+.gcard.st-fail, .card-flow.st-fail { border-left: 4px solid var(--fail); }
+.gcard-on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.state-legend { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
+.st-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; background: var(--skip); }
+.st-swatch.st-ok { background: var(--pass); }
+.st-swatch.st-warn { background: var(--warn); }
+.st-swatch.st-fail { background: var(--fail); }
+
+/* The Storage view. */
+.scard { height: 100%; overflow: hidden; }
+.scard .cf-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scard .cf-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fillbar { height: 7px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 4px 0 3px; }
+.fillbar i { display: block; height: 100%; border-radius: 4px; }
+/* A vdev's disks: its label on the first, a bracket down their right side. */
+.vdev-text { font-size: 11px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; white-space: nowrap; border-bottom: 1px dashed var(--line); margin-bottom: 3px; }
+.gcard.in-vdev { border-right: 3px solid #8a94a6; }
+.pie { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.pie-c1 { font-size: 11px; font-weight: 600; fill: var(--ink); }
+.pie-c2 { font-size: 10px; fill: var(--muted); }
+.pie-list { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.pie-list td { padding: 2px 4px; vertical-align: top; }
+.pie-list td.num { text-align: right; white-space: nowrap; }
+.pie-list tr.pie-hot td { background: var(--info-bg); }
+.pie-list tr.pie-part td { font-size: 11.5px; color: var(--muted); padding-top: 0; }
+.pie-sw { display: inline-block; width: 11px; height: 11px; border-radius: 2px; vertical-align: -1px; }
+.pie-sw-hatch { background: repeating-linear-gradient(45deg, #5b6b8c 0 2px, #c7cfe0 2px 5px); }

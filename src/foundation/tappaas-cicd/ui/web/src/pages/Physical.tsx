@@ -15,7 +15,10 @@ import { Sel, layoutTopology } from "../physical/layout";
 import { RackCanvas } from "../physical/rack";
 import { MountActions, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
-import { Health, RacksView, Topology } from "../types";
+import { Health, RacksView, StorageInventory, Topology } from "../types";
+import { StateLegend } from "../physical/state";
+import { storageNotes } from "../physical/storage";
+import { StorageGraph } from "../physical/storageview";
 import { ReadState, canOperate, navigate, since, useMe } from "../ui";
 
 function selFromUrl(): Sel | null {
@@ -24,6 +27,8 @@ function selFromUrl(): Sel | null {
   const [kind, ...rest] = v.split(":");
   const id = rest.join(":");
   if (kind === "node" || kind === "outside" || kind === "ap" || kind === "guest" || kind === "switch" || kind === "rack" || kind === "mount") return { kind, id };
+  // disk:<node>:<device>, pool:<node>:<pool>
+  if ((kind === "disk" || kind === "pool") && id.includes(":")) return { kind, node: id.slice(0, id.indexOf(":")), id: id.slice(id.indexOf(":") + 1) };
   return null;
 }
 
@@ -88,6 +93,11 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
   const t = topo.env?.data ?? null;
   const racks = t?.racks ?? null;
   const shown: PhysicalView = view ?? (racks && racks.racks.length > 0 ? "rack" : "device");
+  // The storage inventory: read once a view shows it (SMART, ≈15 s the first time).
+  const store = useRead<StorageInventory>(shown === "storage" || shown === "overview" || sel?.kind === "node" ? "storage" : null);
+  const inv = store.env?.data ?? null;
+  const gates = health.env?.data?.gates;
+  const storage = useMemo(() => (inv ? { inv, notes: storageNotes(inv, gates ?? []) } : null), [inv, gates]);
 
   useEffect(() => {
     const on = () => setSel(selFromUrl());
@@ -145,13 +155,30 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
           Not drawn, because these did not answer: {bad.map((s) => `${s.name} (${s.error ?? "?"})`).join("; ")}
         </div>
       ) : null}
-      {shown === "overview" || shown === "storage" ? (
+      {shown === "overview" ? (
         <div className="rack-empty">
           <p className="muted">This view is not drawn yet.</p>
         </div>
+      ) : shown === "storage" ? (
+        <>
+          <ReadState env={store.env} failure={store.failure} what="storage (storage-manager inventory)" />
+          {inv && inv.sources.some((s) => !s.ok) ? (
+            <div className="readstate readstate-warn">Not read: {inv.sources.filter((s) => !s.ok).map((s) => `${s.name} (${s.error ?? "?"})`).join("; ")}</div>
+          ) : null}
+          <div className="physical">
+            <div className="canvas" key={sel ? "with-card" : "alone"}>{storage ? <StorageGraph inv={storage.inv} notes={storage.notes} sel={sel} pick={pick} /> : null}</div>
+            {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
+          </div>
+          <div className="legend">
+            <StateLegend extra="a pool's bar is its fill" />
+            <span className="muted">
+              Data: storage-manager inventory {since(inv?.generated)}{inv && !inv.smart ? " (without SMART)" : ""}
+            </span>
+          </div>
+        </>
       ) : shown === "rack" ? (
         <div className="physical physical-rack">
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
           <div className="canvas">
             {t && racks && racks.racks.length ? (
               <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
@@ -190,7 +217,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
               </ReactFlow>
             ) : null}
           </div>
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
         </div>
       )}
       {t && (shown === "rack" || shown === "device") ? (

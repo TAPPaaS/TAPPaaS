@@ -76,3 +76,14 @@ export interface TopologyDoc {
   zones: { name: string }[];
   outside: { kind: string; name: string }[];
 }
+
+// storage-manager inventory --json (the parts the console checks; the page
+// reads the rest)
+export interface StorageDoc {
+  version: number;
+  generated: string;
+  smart: boolean;
+  nodes: { name: string; reachable: boolean; boot: unknown[]; pools: { name: string; state: string }[]; otherDisks: unknown[]; replication: unknown[]; state: string; reasons: string[] }[];
+  findings: { level: string; cause: string; on: { kind: string; node: string; name: string }; text: string }[];
+  sources: { name: string; ok: boolean; error: string | null }[];
+}

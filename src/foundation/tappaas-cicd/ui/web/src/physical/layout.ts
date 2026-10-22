@@ -22,7 +22,9 @@ export type Sel =
   | { kind: "isp"; id: string }
   | { kind: "firewall"; id: string }
   | { kind: "rack"; id: string }
-  | { kind: "mount"; id: string };
+  | { kind: "mount"; id: string }
+  | { kind: "disk"; id: string; node: string } // id: the device
+  | { kind: "pool"; id: string; node: string };
 
 export type Pick = (s: Sel) => void;
 

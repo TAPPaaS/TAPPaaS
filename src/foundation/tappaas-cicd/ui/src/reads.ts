@@ -1,6 +1,7 @@
 // reads.ts — every read the console serves, each one a manager verb's --json
 // (ADR-034 D1, D4 "P1 is read-only"). One cache per read with its own timer:
-// health 10 minutes, the module list and the topology 5, drift on demand. The
+// health 10 minutes, the module list and the topology 5, drift on demand, the
+// storage inventory when looked at and older than 10 minutes. The
 // only files read directly are the sweep's own record (last-update-result.json
 // and the failures ledger), its journal, which no manager prints, and
 // zones.json through lib/ts zones.ts — the same parse network-manager's own
@@ -19,7 +20,7 @@ import { composeFields } from "../../lib/ts/src/compose-fields";
 import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, environmentDefaults, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
-import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, TopologyDoc } from "./model";
+import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, StorageDoc, TopologyDoc } from "./model";
 
 // The racks the topology carries (network-manager topology .racks), the parts read here.
 interface RacksRead {
@@ -56,6 +57,7 @@ export const TTL = {
   schema: 10 * MIN,
   catalogs: 10 * MIN,
   faceplates: 10 * MIN,
+  storage: 10 * MIN,
   nodeProgress: 10_000, // while a node is being added
   drift: 0, // on demand
 };
@@ -139,6 +141,7 @@ export class Reads {
   readonly nodeProgress: CachedMap<NodeProgress>;
   readonly catalogs: Cached<RepositoryCatalog[]>;
   readonly faceplates: Cached<{ key: string; kind: string; units: number; width: string }[]>;
+  readonly storage: Cached<StorageDoc>;
   readonly setup: Cached<SetupInputs>;
 
   constructor(private readonly cfg: ReadsConfig) {
@@ -191,6 +194,10 @@ export class Reads {
     }, now);
     // The faceplate catalog: the keys a mount's faceplate may name.
     this.faceplates = new Cached("faceplates", TTL.faceplates, () => j<{ key: string; kind: string; units: number; width: string }[]>("rack-manager", ["faceplates", "list", "--json"]), now);
+    // The disks and pools of every node, with SMART (≈15 s on three nodes): no
+    // timer of its own, read when a page asks and the answer is older than
+    // its TTL.
+    this.storage = new Cached("storage", TTL.storage, () => this.loadStorage(), now);
     this.nodeProgress = new CachedMap("node-progress", TTL.nodeProgress, (n) => this.loadNodeProgress(n), now);
     // Every identity object's record, for the graph of their relations: each
     // kind's list, then `show` per object (a name from the manager's own list).
@@ -517,7 +524,7 @@ export class Reads {
     const all: Record<string, Cached<unknown>> = {
       health: this.health, modules: this.modules, backup: this.backup, topology: this.topology,
       zones: this.zones, aps: this.aps, environments: this.environments, site: this.site, security: this.security,
-      peers: this.peers, activity: this.activity,
+      peers: this.peers, activity: this.activity, storage: this.storage,
     } as Record<string, Cached<unknown>>;
     if (what === "all") {
       this.moduleShow.clear();
@@ -527,7 +534,8 @@ export class Reads {
       this.moduleFields.clear();
       // health first: the topology places its findings
       await this.health.refresh();
-      await Promise.all(Object.entries(all).filter(([k]) => k !== "health").map(([, c]) => c.refresh()));
+      // the storage inventory only once someone has looked (SMART on every disk)
+      await Promise.all(Object.entries(all).filter(([k]) => k !== "health" && (k !== "storage" || this.storage.peek().at !== null)).map(([, c]) => c.refresh()));
       if (this.catalogs.peek().at !== null) await this.catalogs.refresh();
       return Object.keys(all);
     }
@@ -568,7 +576,13 @@ export class Reads {
     const identity = this.identity.refresh().then(() => (this.identityRecords.peek().at !== null ? this.identityRecords.refresh() : undefined));
     // The catalogues mark what is installed: after the module list.
     const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
-    return Promise.all([identity, modules, ...[...setup, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    return Promise.all([identity, modules, ...[...setup, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+  }
+
+  private async loadStorage(): Promise<StorageDoc> {
+    const d = await runJson<StorageDoc>(this.cfg.run, "storage-manager", ["inventory", "--json"], { timeoutMs: 3 * MIN });
+    if (!d || !Array.isArray(d.nodes) || !Array.isArray(d.findings)) throw new Error("storage-manager inventory --json gave no inventory (no nodes, no findings)");
+    return d;
   }
 
   private async loadTopology(): Promise<TopologyDoc & Record<string, unknown>> {
