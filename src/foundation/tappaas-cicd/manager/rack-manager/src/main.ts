@@ -60,8 +60,8 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "rack modify <rack> --set <field>=<value>... [--check]",
-      options: [["--set F=V", "displayName, units, width, numbering, building, room, description (repeatable; an empty value clears a text)."], CHECK],
+      usage: "rack modify <rack> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      options: [["--set F=V", "displayName, units, width, numbering, building, room, description (repeatable)."], ["--unset F", "Clear a text field: displayName, building, room, description (repeatable)."], CHECK],
     },
     { usage: "rack delete <rack> [--check]", options: [CHECK], note: "(an empty rack only)" },
     { usage: "mount list [--rack <rack>] [--json]", options: [["--rack R", "Only this rack's."], JSON_OUT] },
@@ -84,8 +84,8 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "mount modify <device> --set <field>=<value>... [--topology <file>] [--check]",
-      options: [["--set F=V", "rack, u, height, width, slot, face, faceplate, label, description (repeatable). A move is rack and u."], TOPO, CHECK],
+      usage: "mount modify <device> [--set <field>=<value>]... [--unset <field>]... [--topology <file>] [--check]",
+      options: [["--set F=V", "rack, u, height, width, slot, face, faceplate, label, description (repeatable). A move is rack and u."], ["--unset F", "Clear faceplate (back to the catalog's suggestion), label or description (repeatable)."], TOPO, CHECK],
     },
     { usage: "mount remove <device> [--check]", options: [CHECK], note: "(the device leaves the rack; nothing else changes)" },
     { usage: "cable list [--json]", options: [JSON_OUT], note: "(the recorded cables; the topology adds the ones it sees)" },
@@ -132,7 +132,7 @@ function opts(args: string[], name: string): string[] {
 }
 const VALUED = [
   "--units", "--width", "--numbering", "--display-name", "--building", "--room", "--description", "--set", "--rack", "--u", "--height", "--slot",
-  "--face", "--faceplate", "--label", "--topology", "--from", "--to", "--kind", "--from-faceplate", "--to-faceplate", "--device",
+  "--face", "--faceplate", "--label", "--topology", "--from", "--to", "--kind", "--from-faceplate", "--to-faceplate", "--device", "--unset",
 ];
 function positional(args: string[], skip: number): string[] {
   const out: string[] = [];
@@ -151,13 +151,15 @@ function intOpt(args: string[], name: string): number | undefined {
   if (!/^\d+$/.test(v)) die(`${name} is a whole number`);
   return Number(v);
 }
+// --set field=value and --unset field (an empty value: a text cleared).
 function sets(args: string[]): Array<[string, string]> {
   const out = opts(args, "--set").map((kv): [string, string] => {
     const i = kv.indexOf("=");
     if (i <= 0) die(`--set ${kv}: write field=value`);
     return [kv.slice(0, i), kv.slice(i + 1)];
   });
-  if (!out.length) die("nothing to change — give --set <field>=<value>");
+  for (const f of opts(args, "--unset")) out.push([f, ""]);
+  if (!out.length) die("nothing to change — give --set <field>=<value> or --unset <field>");
   return out;
 }
 
@@ -349,7 +351,7 @@ export function run(argv: string[]): number {
   }
   if (verb === "rack modify") {
     const [name] = positional(args, 2);
-    if (!name) die("rack modify <rack> --set <field>=<value>...");
+    if (!name) die("rack modify <rack> --set <field>=<value>... --unset <field>...");
     const s = sets(args);
     return change(store, check, readCatalog(), undefined, (d) => modifyRack(d, name, s));
   }
@@ -380,7 +382,7 @@ export function run(argv: string[]): number {
   }
   if (verb === "mount modify") {
     const [device] = positional(args, 2);
-    if (!device) die("mount modify <device> --set <field>=<value>...");
+    if (!device) die("mount modify <device> --set <field>=<value>... --unset <field>...");
     const s = sets(args);
     const catalog = readCatalog();
     return change(store, check, catalog, devicesFor(args), (d) => modifyMount(d, device, s, catalog));

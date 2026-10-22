@@ -56,6 +56,9 @@ RM mount add tappaas9 --rack rack1 --u 20 --topology "${TOPO}" >/dev/null 2>&1 &
 RM mount add "${USW}" --rack rack1 --u 20 --faceplate unifi/usw-pro-xg-10-poe --topology "${TOPO}" >/dev/null 2>&1 && ok "mount add: a name with spaces" || bad "mount add: the switch"
 RM mount modify tappaas1 --set u=14 --topology "${TOPO}" >/dev/null 2>&1 && ok "mount modify: a move" || bad "mount modify: a move"
 [[ "$(jq -r '.mounts.tappaas1.u' "${DOC}")" == "14" ]] && ok "mount modify: recorded" || bad "mount modify: recorded"
+RM mount modify tappaas1 --unset description --topology "${TOPO}" >/dev/null 2>&1 && [[ "$(jq -r '.mounts.tappaas1.description // "gone"' "${DOC}")" == "gone" ]] \
+    && ok "mount modify --unset: a text cleared" || bad "mount modify --unset"
+RM mount modify tappaas1 --set description="placeholder position, set by the operator" --topology "${TOPO}" >/dev/null 2>&1 || bad "mount modify: the description back"
 RM cable add --from "${USW}:5" --to "ISP modem:LAN 1" --to-faceplate generic/isp-modem --kind uplink --label "ISP hand-off" --topology "${TOPO}" >/dev/null 2>&1 \
     && ok "cable add: the ISP hand-off" || bad "cable add: the ISP hand-off"
 RM cable add --from "${USW}:13" --to "tappaas1:nic2" --topology "${TOPO}" >/dev/null 2>&1 && bad "cable add: a port the switch lacks refused" || ok "cable add: a port the switch lacks refused"

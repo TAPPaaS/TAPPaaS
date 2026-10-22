@@ -48,11 +48,11 @@ which carries the racks resolved against the site.
 | `validate [--topology <file>] [--json]` | The whole document: every mount names a device the topology knows, no two mounts overlap, each fits its rack, every faceplate key is in the catalog, every cable end names a port the topology or the catalog has. |
 | `rack list\|show [<rack>] [--json]` | The racks; one rack with its mounts. |
 | `rack add <rack> [--units 42] [--width 19in\|10in] [--numbering bottom-up\|top-down] [--display-name] [--building] [--room] [--description]` | A new rack. |
-| `rack modify <rack> --set <field>=<value>...` | Any field but its name. |
+| `rack modify <rack> --set <field>=<value>... --unset <field>...` | Any field but its name; `--unset` clears a text. |
 | `rack delete <rack>` | An empty rack. |
 | `mount list [--rack <rack>]\|show <device> [--json]` | What is mounted where. |
 | `mount add <device> --rack <rack> --u <n> [--height] [--width] [--slot] [--face] [--faceplate] [--label] [--description]` | A device into a rack. |
-| `mount modify <device> --set <field>=<value>...` | A move (`rack`, `u`, `slot`, `face`) or its plate and label. |
+| `mount modify <device> --set <field>=<value>... --unset <field>...` | A move (`rack`, `u`, `slot`, `face`) or its plate and label; `--unset faceplate` goes back to the suggestion. |
 | `mount remove <device>` | The device leaves the rack. A passive device's recorded cables go with it. |
 | `cable list [--json]` | The recorded cables. |
 | `cable add --from <device:port> --to <device:port> [--kind patch\|uplink\|power] [--label] [--from-faceplate\|--to-faceplate <key>]` | A cable nothing can see. |
