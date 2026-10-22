@@ -80,6 +80,22 @@ const t1b = pool("tappaas1", "tankb1");
 check(t1b.vdevs[0].type === "stripe" && t1b.vdevs[0].disks[0].serial === "ZZ30MJL6", "tankb1 is a single disk, matched by its wwn id");
 check(t1a.state === "ok" && t1b.state === "ok", "tappaas1's pools are ok");
 
+check(inv.nodes.every((n) => n.pools.every((p) => p.vdevs.every((v) => v.missing.length === 0))), "every pool member is matched to a disk of its node");
+check(pool("tappaas3", "tanka1").vdevs[0].disks[0]?.serial === "8061TBFDHY25F220056" && pool("tappaas2", "tanka1").vdevs[0].disks[0]?.serial === "50026B73842AD86F", "the single-NVMe pools of tappaas2 and tappaas3");
+check(t1a.vdevs[0].health === "ONLINE" && t1a.vdevs[0].state === "ok", "a vdev carries ZFS's health and its colour");
+
+// Proxmox names one of a disk's by-id links, not always the one ZFS uses: the
+// fixture has the NVMe's namespace-suffixed one (…_1), matched by its serial;
+// the plain one matches by name. zpool status -L names the kernel path.
+for (const variant of ["suffix", "kernel"]) {
+  const v = hrossen();
+  const t3 = v.nodes.tappaas3.sections!;
+  if (variant === "suffix") t3.disks = { rc: 0, out: t3.disks.out.replace("nvme-ASint_AS806_1TB_8061TBFDHY25F220056_1\"", "nvme-ASint_AS806_1TB_8061TBFDHY25F220056\"") };
+  else t3["zpool-status"] = { rc: 0, out: t3["zpool-status"].out.replace("/dev/disk/by-id/nvme-ASint_AS806_1TB_8061TBFDHY25F220056-part1", "/dev/nvme0n1p1").replace("/dev/disk/by-id/ata-HGST_HDN726050ALE614_NAHW317X-part1", "/dev/sdb1") };
+  const vi = buildInventory(v, NOW).nodes.find((n) => n.name === "tappaas3")!;
+  check(vi.pools.every((p) => p.vdevs.every((x) => x.missing.length === 0 && x.disks.length === 1)) && vi.otherDisks.length === 1, `a member is matched by ${variant === "suffix" ? "the by-id link ZFS uses" : "its kernel path"}`);
+}
+
 // ── tappaas3 tankc1: the failing disk ─────────────────────────────────
 const c1 = pool("tappaas3", "tankc1");
 const hgst = c1.vdevs[0].disks[0];
@@ -87,6 +103,7 @@ check(c1.health === "DEGRADED" && c1.state === "warn", "tankc1 is DEGRADED: warn
 check(hgst.serial === "NAHW317X" && hgst.state === "fail", "its disk NAHW317X fails");
 check(hgst.zfs?.state === "DEGRADED" && hgst.zfs.read === 17980 && hgst.zfs.write === 558 && hgst.zfs.cksum === 25577, "ZFS's exact error counts (zpool status -p), not pvesh's 17.6");
 check(hgst.smart.health === "passed" && hgst.smart.reallocated === 534 && hgst.smart.pending === 64, "SMART still says PASSED, with 534 reallocated and 64 pending sectors");
+check(c1.vdevs[0].name === "ata-HGST_HDN726050ALE614_NAHW317X" && hgst.zfs?.vdev === c1.vdevs[0].name, "a single-disk vdev is named by the disk's by-id name");
 check(hgst.reasons.some((r) => /too many errors/.test(r)), "the reason names ZFS's verdict");
 check(c1.scrub.state === "unknown", "tankc1 has no scrub on record");
 

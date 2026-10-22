@@ -77,7 +77,8 @@ export interface Vdev {
   type: "mirror" | "raidz" | "draid" | "stripe";
   parity: number | null; // raidz1/2/3
   role: "data" | "log" | "cache" | "spare" | "special" | "dedup";
-  state: string;
+  health: string; // ZFS's: ONLINE | DEGRADED | FAULTED | …
+  state: State; // ONLINE ok, DEGRADED warn, anything else fail
   disks: Disk[];
   // Members ZFS names that are not among the node's disks (pulled, dead).
   missing: { name: string; state: string }[];
@@ -502,9 +503,9 @@ const rank: Record<State, number> = { ok: 0, warn: 1, fail: 2 };
 const worst = (...s: State[]): State => s.reduce((a, b) => (rank[b] > rank[a] ? b : a), "ok" as State);
 
 export function gb(bytes: number): string {
-  if (bytes >= 1e12) return `${(bytes / 1e12).toFixed(1)} TB`;
-  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(bytes >= 1e11 ? 0 : 1)} GB`;
-  return `${(bytes / 1e6).toFixed(0)} MB`;
+  const u = [["TiB", 2 ** 40], ["GiB", 2 ** 30], ["MiB", 2 ** 20]] as const;
+  for (const [name, size] of u) if (bytes >= size) return `${(bytes / size).toFixed(bytes / size >= 100 ? 0 : 1)} ${name}`;
+  return bytes > 0 ? "<1 MiB" : "0";
 }
 
 function jsonSection(sec: ProbeSection | undefined): unknown {
@@ -516,16 +517,20 @@ function jsonSection(sec: ProbeSection | undefined): unknown {
   }
 }
 
-// A vdev member (a /dev/disk/by-id path, or a bare by-id name in `zpool import`)
-// → the node's disk it is.
+// A vdev member (a kernel path from `zpool status -L`, a /dev/disk/by-id path,
+// or a bare by-id name in `zpool import`) → the node's disk it is.
 function matchDisk(member: string, disks: Disk[]): Disk | undefined {
   const base = member.replace(/^.*\//, "").replace(/-part\d+$/, "");
   const devpath = member.replace(/-part\d+$|p?\d+$/, "");
-  return disks.find((d) => {
-    if (d.byId && d.byId.replace(/^.*\//, "") === base) return true;
-    if (d.wwn && (base === `nvme-${d.wwn}` || base === `wwn-${d.wwn}`)) return true;
-    return member.startsWith("/dev/") && !member.startsWith("/dev/disk/") && (d.device === member || d.device === devpath);
-  });
+  const kernel = member.startsWith("/dev/") && !member.startsWith("/dev/disk/");
+  return (
+    disks.find((d) => kernel && (d.device === member || d.device === devpath)) ??
+    disks.find((d) => !kernel && d.byId !== null && d.byId.replace(/^.*\//, "") === base) ??
+    disks.find((d) => !kernel && d.wwn !== null && (base === `nvme-${d.wwn}` || base === `wwn-${d.wwn}`)) ??
+    // A disk has several by-id links (an NVMe namespace suffix, the EUI) and
+    // Proxmox names one of them: the serial at the end of the name decides.
+    disks.find((d) => !kernel && d.serial !== null && d.serial.length >= 6 && (base.endsWith(`_${d.serial}`) || base.includes(`_${d.serial}_`)))
+  );
 }
 
 function diskOf(row: Record<string, unknown>, smartDoc: Record<string, unknown> | null, smartRead: boolean): Disk {
@@ -712,6 +717,8 @@ function buildNode(sn: { name: string; storagePools: string[] }, sec: Record<str
   return { name, reachable: true, boot, pools, otherDisks, replication, state, reasons };
 }
 
+const vdevState = (h: string | null): State => (h === "ONLINE" || h === "AVAIL" ? "ok" : h === "DEGRADED" ? "warn" : "fail");
+
 function buildPool(
   node: string,
   pn: string,
@@ -750,13 +757,15 @@ function buildPool(
       const m = /^(mirror|raidz(\d)?|draid(\d)?)[-:]/.exec(row.name);
       if (m) {
         const type: Vdev["type"] = m[1] === "mirror" ? "mirror" : m[1].startsWith("raidz") ? "raidz" : "draid";
-        curVdev = { name: row.name, type, parity: type === "raidz" ? Number(m[2] ?? 1) : type === "draid" ? Number(m[3] ?? 1) : null, role, state: row.state ?? "", disks: [], missing: [] };
+        curVdev = { name: row.name, type, parity: type === "raidz" ? Number(m[2] ?? 1) : type === "draid" ? Number(m[3] ?? 1) : null, role, health: row.state ?? "", state: vdevState(row.state), disks: [], missing: [] };
         vdevs.push(curVdev);
       } else {
         curVdev = null;
-        const v: Vdev = { name: row.name.replace(/^.*\//, "").replace(/-part\d+$/, ""), type: "stripe", parity: null, role, state: row.state ?? "", disks: [], missing: [] };
+        const v: Vdev = { name: row.name.replace(/^.*\//, "").replace(/-part\d+$/, ""), type: "stripe", parity: null, role, health: row.state ?? "", state: vdevState(row.state), disks: [], missing: [] };
         vdevs.push(v);
         member(row, v);
+        const d0 = v.disks[0];
+        if (d0?.byId && d0.zfs) v.name = d0.zfs.vdev = d0.byId.replace(/^.*\//, "");
       }
     } else if (curVdev) member(row, curVdev);
   }
@@ -1053,14 +1062,14 @@ export function renderInventory(inv: Inventory): string[] {
         u ? `${u.pct.toFixed(0)}% used, ${gb(u.avail)} free` : null,
         p.fragmentation !== null ? `frag ${p.fragmentation}%` : null,
         p.scrub.last ? `scrub ${localDay(p.scrub.last)}` : p.present ? "no scrub on record" : null,
-        p.health,
+        p.health === "ONLINE" || !p.present ? p.health : null,
       ].filter(Boolean);
       out.push(line(`  pool ${p.name}  ${facts.join(", ")}${p.reasons.length ? ` — ${p.reasons.filter((x) => !/^disk /.test(x)).join("; ")}` : ""}`.replace(/ — $/, ""), p.state));
       for (const v of p.vdevs) {
         const indent = v.type === "stripe" ? "    " : "      ";
-        if (v.type !== "stripe") out.push(line(`    ${v.name}${v.role !== "data" ? ` (${v.role})` : ""}`, v.state));
+        if (v.type !== "stripe") out.push(line(`    ${v.name}${v.role !== "data" ? ` (${v.role})` : ""} ${v.health}`, v.state));
         for (const d of v.disks) out.push(line(`${indent}${diskLine(d)}`, d.state));
-        for (const m of v.missing) out.push(line(`${indent}${m.name} — not on the node`, m.state));
+        for (const m of v.missing) out.push(line(`${indent}${m.name} ${m.state} — not among the node's disks`, "fail"));
       }
       const t = p.totals;
       const mirrors = p.volumes.filter((v) => v.kind === "mirror");

@@ -217,7 +217,8 @@ export function queryClusterGuests(node: string): ClusterGuest[] | null {
 //                 skipsmart when SMART is not read)
 //   smart <dev>   pvesh /nodes/<n>/disks/smart per physical disk (SMART only)
 //   zpool-list    zpool list -Hp (size, alloc, free, frag, cap, dedup, health)
-//   zpool-status  zpool status -P -p (vdevs, devices, exact error counts, scan)
+//   zpool-status  zpool status -L -P -p (vdevs, devices by their kernel path —
+//                 a by-id link is not stable for NVMe — exact error counts, scan)
 //   zfs           zfs list -Hp every filesystem, volume and snapshot
 //   lsblk         lsblk -J (which disk holds / and /boot/efi)
 //   replication   pvesh /nodes/<n>/replication (the jobs sourced here, state)
@@ -231,7 +232,7 @@ export function nodeStorageProbe(node: string, smart: boolean): string {
     `sec disks pvesh get /nodes/${node}/disks/list --output-format json${smart ? "" : " --skipsmart 1"}`,
     `for d in $(${disks}); do sec "smart $d" pvesh get /nodes/${node}/disks/smart --disk "$d" --output-format json; done`,
     "sec zpool-list zpool list -Hp -o name,size,alloc,free,frag,cap,dedup,health",
-    "sec zpool-status zpool status -P -p",
+    "sec zpool-status zpool status -L -P -p",
     "sec zfs zfs list -Hp -t filesystem,volume,snapshot -o name,type,used,avail,refer,volsize,refquota,usedsnap,origin,mountpoint,compression,compressratio",
     "sec lsblk lsblk -J -b -p -o NAME,TYPE,SIZE,MOUNTPOINTS",
     `sec replication pvesh get /nodes/${node}/replication --output-format json`,
