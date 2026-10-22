@@ -298,7 +298,7 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
   },
   backup: { modify: { enabled: "--enabled", retention: "--retention", exclude: "--exclude" } },
   zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
-  rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", building: "--building", room: "--room", description: "--description" } },
+  rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", room: "--room", description: "--description" } },
   mount: { add: { rack: "--rack", u: "--u", room: "--room", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
 };
 

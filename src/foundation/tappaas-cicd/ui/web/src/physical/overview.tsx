@@ -6,11 +6,12 @@
 // the view and the object it is on.
 
 import { ReactNode } from "react";
-import { RackInfo, StorageInventory, TopoFinding, Topology } from "../types";
+import { RackInfo, SiteRead, StorageInventory, TopoFinding, Topology } from "../types";
 import { Tag, navigate } from "../ui";
 import { publicAddress, publicText } from "../zonegraph";
 import { STATE_COLOR, StateLegend } from "./state";
-import { VIEW_NAME, viewLink } from "./views";
+import { VIEW_NAME, sitePlace, viewLink } from "./views";
+import { useRead } from "../api";
 import { StorageNote, bytes, nodeKey, poolKey, poolPct, stateWith } from "./storage";
 
 type View = "rack" | "device" | "storage";
@@ -120,6 +121,7 @@ function RackThumb({ r }: { r: RackInfo }) {
 export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFindings }: { t: Topology | null; inv: StorageInventory | null; notes: Map<string, StorageNote[]>; storageError: string | null; aside?: ReactNode; beforeFindings?: ReactNode }) {
   const racks = t?.racks?.racks ?? [];
   const rooms = t?.racks?.rooms ?? [];
+  const place = sitePlace((useRead<SiteRead>("site").env?.data?.site ?? null) as Parameters<typeof sitePlace>[0]);
   const disks = inv ? inv.nodes.reduce((s, n) => s + n.boot.length + n.otherDisks.length + n.pools.reduce((a, p) => a + p.vdevs.reduce((b, v) => b + v.disks.length, 0), 0), 0) : null;
   const pools = inv ? inv.nodes.reduce((s, n) => s + n.pools.length, 0) : null;
   const wan = t ? publicText(publicAddress({ network: { publicIp: t.site.wan.publicIp } }, t.site.wan.discovered), true) : "";
@@ -148,6 +150,7 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFin
           </header>
           {racks.length || rooms.length ? (
             <>
+              {place ? <div className="ov-place">{place}</div> : null}
               {rooms.map((room) => (
                 <div key={room.name} className="ov-room">
                   <button className="linklike ov-room-name" onClick={() => navigate(viewLink("rack", `room:${room.name}`))}>{room.displayName ?? room.name}</button>

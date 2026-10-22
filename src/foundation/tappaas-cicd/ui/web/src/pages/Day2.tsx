@@ -123,7 +123,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
       </Group>
       <Group title="Racks">
         <WizardCard title="Add a rack" action={<OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} opens={{ wizard: "add-rack" }} />}>
-          A rack the site's hardware sits in: its height in units, its width, how its units are numbered, its building and room.
+          A rack the site's hardware sits in: its height in units, its width, how its units are numbered, its room (the building is the site's).
         </WizardCard>
         <MountDeviceCard />
       </Group>

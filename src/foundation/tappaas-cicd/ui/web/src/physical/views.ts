@@ -28,3 +28,11 @@ export const MOVED_PATHS: Record<string, string> = {
 
 // A link to a view, with the object to select there.
 export const viewLink = (v: PhysicalView, select?: string | null): string => `${VIEW_PATH[v]}${select ? `?select=${encodeURIComponent(select)}` : ""}`;
+
+// Where the site is, as the heading over its rooms: the building and the city
+// of site.json's location (rooms and racks record none of their own).
+export function sitePlace(site: { location?: { building?: unknown; city?: unknown; country?: unknown } } | null | undefined): string | null {
+  const l = site?.location;
+  const parts = [l?.building, l?.city, l?.country].filter((x): x is string => typeof x === "string" && x.trim() !== "");
+  return parts.length ? parts.join(" · ") : null;
+}

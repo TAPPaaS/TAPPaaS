@@ -142,7 +142,7 @@ export function layoutRacks(v: RacksView): RackLayout {
     }
     drawLoose(room.loose);
     if (x === x0) x += 200; // an empty room still shows
-    rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: [room.building, room.recorded ? null : "not recorded"].filter(Boolean).join(" · "), recorded: room.recorded, x: x0 - R.roomPad, y: 8, w: x - R.gap - x0 + 2 * R.roomPad, h: 0 });
+    rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: room.recorded ? "" : "not recorded", recorded: room.recorded, x: x0 - R.roomPad, y: 8, w: x - R.gap - x0 + 2 * R.roomPad, h: 0 });
     x += 30;
   }
   for (const r of v.racks) if (!roomed.has(r.name)) drawRack(r);
@@ -356,7 +356,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
                 {r.displayName ?? r.name}
               </text>
               <text x={x} y={R.top - 10} className="rack-where">
-                {[`${r.units}U ${r.width}`, r.building, r.room].filter(Boolean).join(" · ")}
+                {[`${r.units}U ${r.width}`, r.room].filter(Boolean).join(" · ")}
               </text>
               <rect x={x} y={R.top} width={iw + 2 * R.rail} height={h} rx={4} fill="#f8fafc" stroke={sel?.kind === "rack" && sel.id === r.name ? "#3b6fd4" : "#334155"} strokeWidth={sel?.kind === "rack" && sel.id === r.name ? 3 : 2} onClick={(e) => (e.stopPropagation(), pick({ kind: "rack", id: r.name }))} />
               <rect x={x + R.rail} y={R.top} width={iw} height={h} fill="#eef2f6" />

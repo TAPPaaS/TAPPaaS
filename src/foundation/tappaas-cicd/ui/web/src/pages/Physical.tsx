@@ -15,12 +15,12 @@ import { DeviceGraph } from "../physical/deviceview";
 import { RackCanvas } from "../physical/rack";
 import { MountActions, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
-import { Health, RacksView, StorageInventory, Topology } from "../types";
+import { Health, RacksView, SiteRead, StorageInventory, Topology } from "../types";
 import { StateLegend } from "../physical/state";
 import { storageNotes } from "../physical/storage";
 import { StorageGraph } from "../physical/storageview";
 import { PhysicalOverview } from "../physical/overview";
-import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
+import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH, sitePlace } from "../physical/views";
 import { ReadState, canOperate, navigate, since, useMe } from "../ui";
 
 function selFromUrl(): Sel | null {
@@ -88,6 +88,8 @@ function Unplaced({ v, pick }: { v: RacksView; pick: (s: Sel) => void }) {
 export function Physical({ embedded, view, aside, beforeFindings }: { embedded?: boolean; view?: PhysicalView; aside?: ReactNode; beforeFindings?: ReactNode }) {
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
+  // The site's building and city: the heading over its rooms.
+  const place = sitePlace((useRead<SiteRead>("site").env?.data?.site ?? null) as Parameters<typeof sitePlace>[0]);
   const [sel, setSel] = useState<Sel | null>(selFromUrl);
   const [showLabels, setShowLabels] = useState(true);
   const [showCables, setShowCables] = useState(true);
@@ -168,6 +170,8 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
           </div>
         </>
       ) : shown === "rack" ? (
+        <>
+        {place ? <h2 className="phys-place">{place}</h2> : null}
         <div className="physical physical-rack">
           {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : null}
           <div className="canvas">
@@ -183,6 +187,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
           </div>
           {racks && racks.racks.length ? <Unplaced v={racks} pick={pick} /> : null}
         </div>
+        </>
       ) : (
         <div className="physical">
           <div className="canvas">

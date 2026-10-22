@@ -324,7 +324,6 @@ export interface RackInfo {
   units: number;
   width: "19in" | "10in";
   numbering: "bottom-up" | "top-down";
-  building: string | null;
   room: string | null;
   description: string | null;
   mounts: RackMount[];
@@ -347,7 +346,6 @@ export interface RackCable {
 export interface RoomInfo {
   name: string;
   displayName: string | null;
-  building: string | null;
   description: string | null;
   recorded: boolean;
   racks: string[];
