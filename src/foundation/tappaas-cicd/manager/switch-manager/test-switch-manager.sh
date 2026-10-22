@@ -403,6 +403,10 @@ jq '.switches.mtB.ports.ether2.liveMlagId = 11 | .switches.mtB.ports.ether2.lagM
 out="$(PLUGIN_DIR="${MT}" "${SM}" mlag-pair list --json 2>/dev/null)"
 ck "mlag-pair list: the live state of each peer" "connected" "$(jq -r '.[0].status.mtA.state' <<<"${out}")"
 ck "…and an mlag-id the switch has otherwise" "yes" "$(jq -r '.[0].lags[0].problems | join(";")' <<<"${out}" | grep -q 'mtB:ether2 has mlag-id 11' && echo yes || echo no)"
+jq '.switches.mtA.mlag = {heartbeat: "none", stpPriority: "0x4000"} | .switches.mtB.mlag = {heartbeat: "5s", stpPriority: "0x5000"}' "${ACT}" > "${ACT}.t" && mv "${ACT}.t" "${ACT}"
+out="$(PLUGIN_DIR="${MT}" "${SM}" mlag-pair list --json 2>/dev/null)"
+ck "mlag-pair list: a peer without the heartbeat" "yes" "$(jq -r '.[0].problems | join(";")' <<<"${out}" | grep -q 'mtA: the MLAG heartbeat is off' && echo yes || echo no)"
+ck "…and peers whose STP priorities differ" "yes" "$(jq -r '.[0].problems | join(";")' <<<"${out}" | grep -q 'different STP priorities (0x4000, 0x5000)' && echo yes || echo no)"
 ck "mlag-pair remove while it carries a LAG (rc)" "1" "$(PLUGIN_DIR="${MT}" rc_of "${SM}" mlag-pair remove mtA)"
 PLUGIN_DIR="${MT}" "${SM}" lag remove mtB n9-lan >/dev/null 2>&1
 ck "lag remove from one side clears both" "null null" "$(jq -r '"\(.switches.mtA.ports.ether2.mlagId) \(.switches.mtB.ports.ether2.lag)"' "${ACT}")"

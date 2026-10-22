@@ -551,13 +551,23 @@ cmd_mlag_pair() {
                                        ports: map("\(.switch):\(.port)"),
                                        problems: ([ ($p.switches[] as $s | select(([.[] | select(.switch == $s)] | length) == 0)
                                                      | "no member on \($s)"),
-                                                    (.[] | select(.live != null and .live != .mlagId) | "\(.switch):\(.port) has mlag-id \(.live) on the switch, not \(.mlagId)") ])}))}]' <<<"${rows}")
+                                                    (.[] | select(.live != null and .live != .mlagId) | "\(.switch):\(.port) has mlag-id \(.live) on the switch, not \(.mlagId)") ])})),
+                            # What the peers must have alike (MikroTik), as each was last read:
+                            # without the heartbeat, or with STP priorities that differ, a
+                            # peer floods its own MLAG bonds (#847).
+                            settings: ([ $p.switches[] as $s | $A.switches[$s].mlag // {} | {switch: $s, heartbeat, stpPriority} ]),
+                            problems: ([ ($p.switches[] as $s | ($A.switches[$s].mlag // {}) as $m
+                                          | select($m.heartbeat == "none" or $m.heartbeat == "")
+                                          | "\($s): the MLAG heartbeat is off (mlag-heartbeat=none) — set it on both peers, then restart the MLAG session"),
+                                         ([ $p.switches[] as $s | ($A.switches[$s].mlag // {}).stpPriority | select(. != null) ] | unique
+                                          | select(length > 1) | "the peers have different STP priorities (\(join(", "))) — they must match") ])}]' <<<"${rows}")
             done < <(jq -r '.mlagPairs // {} | keys[]' "${ACTUAL}")
             if [[ "${JSON}" == 1 ]]; then jq . <<<"${rows}"; return 0; fi
             [[ "$(jq length <<<"${rows}")" -gt 0 ]] || { info "no MLAG pair — mlag-pair set <a> <b>"; return 0; }
             jq -r '.[] | "\(.pair): \(.switches | join(" + "))"
                 + "\n" + (.status | to_entries | map("    \(.key): " + (if .value.error then .value.error elif .value.configured == false then "no MLAG set up in the switch" else "peer \(.value.peerPort // "?") \(.value.peerLink // "?"), \(.value.state // "state unknown")" end)) | join("\n"))
-                + (if (.lags | length) > 0 then "\n" + (.lags | map("    LAG \(.name) (mlag-id \(.mlagId)): \(.ports | join(", "))" + (if (.problems | length) > 0 then " — " + (.problems | join("; ")) else "" end)) | join("\n")) else "" end)' <<<"${rows}"
+                + (if (.lags | length) > 0 then "\n" + (.lags | map("    LAG \(.name) (mlag-id \(.mlagId)): \(.ports | join(", "))" + (if (.problems | length) > 0 then " — " + (.problems | join("; ")) else "" end)) | join("\n")) else "" end)
+                + (if (.problems | length) > 0 then "\n" + (.problems | map("    ! " + .) | join("\n")) else "" end)' <<<"${rows}"
             ;;
         *) die "mlag-pair: set | remove | list" ;;
     esac
