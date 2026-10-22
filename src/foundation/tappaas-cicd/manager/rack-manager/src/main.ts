@@ -17,12 +17,15 @@ import { CL, GN, YW, die, guarded, info, requireOperator, warn } from "../../../
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import {
   Faceplate,
+  Mount,
   RackFinding,
   RacksDoc,
   SiteDevice,
   checkRacks,
   cablesOf,
   devicesOf,
+  roomsOf,
+  mountWhere,
   endText,
   recordedPlate,
   recordedPorts,
@@ -34,7 +37,7 @@ import {
   suggestFaceplate,
 } from "../../../lib/ts/src/racks";
 import { Store, loadCatalog, readDevices } from "./store";
-import { Result, addCable, addDevice, addMount, addRack, deleteRack, modifyDevice, modifyMount, modifyRack, removeCable, removeDevice, removeMount } from "./verbs";
+import { Result, addCable, addDevice, addMount, addRack, addRoom, deleteRack, deleteRoom, modifyDevice, modifyMount, modifyRack, modifyRoom, removeCable, removeDevice, removeMount } from "./verbs";
 
 const VERSION = "0.1.0";
 
@@ -58,7 +61,7 @@ export const HELP: HelpSpec = {
         ["--numbering N", "bottom-up (default: U1 at the bottom) or top-down."],
         ["--display-name T", "The name shown on its frame."],
         ["--building T", "The building it stands in."],
-        ["--room T", "The room it stands in."],
+        ["--room T", "The room it stands in (a room record's name; text until the room is recorded)."],
         ["--description T", "What it is for."],
         CHECK,
       ],
@@ -68,14 +71,27 @@ export const HELP: HelpSpec = {
       options: [["--set F=V", "displayName, units, width, numbering, building, room, description (repeatable)."], ["--unset F", "Clear a text field: displayName, building, room, description (repeatable)."], CHECK],
     },
     { usage: "rack delete <rack> [--check]", options: [CHECK], note: "(an empty rack only)" },
+    { usage: "room list [--json]", options: [JSON_OUT], note: "(the rooms, their racks and the devices loose in them)" },
+    { usage: "room show <room> [--json]", options: [JSON_OUT], object: { positional: "room" } },
+    {
+      usage: "room add <room> [--building <text>] [--display-name <text>] [--description <text>] [--check]",
+      options: [["--building T", "The building it is in."], ["--display-name T", "The name shown."], ["--description T", "What it is."], CHECK],
+    },
+    {
+      usage: "room modify <room> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      options: [["--set F=V", "displayName, building, description (repeatable)."], ["--unset F", "Clear one of them (repeatable)."], CHECK],
+      object: { positional: "room" },
+    },
+    { usage: "room delete <room> [--check]", options: [CHECK], note: "(an empty room only)", object: { positional: "room" } },
     { usage: "mount list [--rack <rack>] [--json]", options: [["--rack R", "Only this rack's."], JSON_OUT] },
     { usage: "mount show <device> [--json]", options: [JSON_OUT] },
     {
       usage:
-        "mount add <device> --rack <rack> --u <n> [--height <n>] [--width full|half|third] [--slot <n>] [--face front|rear] [--faceplate <vendor/model>] [--label <text>] [--description <text>] [--topology <file>] [--check]",
+        "mount add <device> (--rack <rack> --u <n> | --room <room>) [--height <n>] [--width full|half|third] [--slot <n>] [--face front|rear] [--faceplate <vendor/model>] [--label <text>] [--description <text>] [--topology <file>] [--check]",
       options: [
         ["--rack R", "The rack."],
         ["--u N", "The lowest rack unit it takes, as the rack numbers them."],
+        ["--room R", "Loose in this room, in no rack (no --rack, no --u)."],
         ["--height N", "Rack units it takes (default: its faceplate's, else 1)."],
         ["--width W", "full (default), half or third of the rack's width."],
         ["--slot N", "A half or third: its column, 0 at the left."],
@@ -89,7 +105,7 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "mount modify <device> [--set <field>=<value>]... [--unset <field>]... [--topology <file>] [--check]",
-      options: [["--set F=V", "rack, u, height, width, slot, face, faceplate, label, description (repeatable). A move is rack and u."], ["--unset F", "Clear faceplate (back to the catalog's suggestion), label or description (repeatable)."], TOPO, CHECK],
+      options: [["--set F=V", "rack, u, room, height, width, slot, face, faceplate, label, description (repeatable). A move is rack and u, or room (loose in it)."], ["--unset F", "Clear faceplate (back to the catalog's suggestion), label or description (repeatable)."], TOPO, CHECK],
     },
     { usage: "mount remove <device> [--check]", options: [CHECK], note: "(the device leaves the rack; nothing else changes)" },
     { usage: "cable list [--json]", options: [JSON_OUT], note: "(the recorded cables; the topology adds the ones it sees)" },
@@ -247,12 +263,13 @@ function rackRows(doc: RacksDoc) {
 function mountRows(doc: RacksDoc, rack?: string) {
   return Object.entries(mountsOf(doc))
     .filter(([, m]) => !rack || m.rack === rack)
-    .sort(([, a], [, b]) => a.rack.localeCompare(b.rack) || b.u - a.u)
+    // rack by rack, highest first; the loose ones last, by room
+    .sort(([, a], [, b]) => Number(!a.rack) - Number(!b.rack) || (a.rack ?? a.room ?? "").localeCompare(b.rack ?? b.room ?? "") || (b.u ?? 0) - (a.u ?? 0))
     .map(([device, m]) => ({ device, ...m }));
 }
 
-const where = (m: { rack: string; u: number; height: number; face: string; width: string; slot?: number }) =>
-  `${m.rack} U${m.u}${m.height > 1 ? `-U${m.u + m.height - 1}` : ""} ${m.face}${m.width === "full" ? "" : ` ${m.width} slot ${m.slot ?? 0}`}`;
+const where = (m: Mount) =>
+  m.rack ? `${mountWhere(m)} ${m.face}${m.width === "full" ? "" : ` ${m.width} slot ${m.slot ?? 0}`}` : mountWhere(m);
 
 export function run(argv: string[]): number {
   const args = argv;
@@ -306,7 +323,7 @@ export function run(argv: string[]): number {
     if (json) return out({ name, ...r, mounts });
     info(`${GN}${name}${CL}${r.displayName ? ` "${r.displayName}"` : ""}  ${r.units}U ${r.width}, numbered ${r.numbering}${r.building || r.room ? `  in ${[r.building, r.room].filter(Boolean).join(", ")}` : ""}`);
     if (r.description) info(`  ${r.description}`);
-    for (const m of mounts) info(`  U${String(m.u).padStart(2)}${m.height > 1 ? `-${m.u + m.height - 1}` : "   "}  ${m.device.padEnd(24)} ${m.face}${m.width === "full" ? "" : ` ${m.width}/${m.slot ?? 0}`}  ${m.faceplate ?? "(suggested plate)"}${m.label ? `  "${m.label}"` : ""}`);
+    for (const m of mounts) info(`  U${String(m.u).padStart(2)}${m.height > 1 ? `-${(m.u ?? 0) + m.height - 1}` : "   "}  ${m.device.padEnd(24)} ${m.face}${m.width === "full" ? "" : ` ${m.width}/${m.slot ?? 0}`}  ${m.faceplate ?? "(suggested plate)"}${m.label ? `  "${m.label}"` : ""}`);
     if (!mounts.length) info("  (empty)");
     return 0;
   }
@@ -331,6 +348,29 @@ export function run(argv: string[]): number {
     if (json) return out(cables);
     if (!cables.length) info("no recorded cables (the topology draws the ones it sees)");
     for (const c of cables) info(`${endText(c.from)} — ${endText(c.to)}  ${c.kind}${c.label ? `  "${c.label}"` : ""}`);
+    return 0;
+  }
+  if (verb === "room list" || verb === "room show") {
+    const d = store.load();
+    const rows = Object.entries(roomsOf(d)).map(([name, r]) => ({
+      name,
+      ...r,
+      racks: Object.entries(racksOf(d)).filter(([, x]) => x.room === name).map(([n]) => n),
+      loose: Object.entries(mountsOf(d)).filter(([, m]) => !m.rack && m.room === name).map(([n]) => n),
+    }));
+    if (verb === "room show") {
+      const [name] = positional(args, 2);
+      if (!name) die("room show <room>");
+      const r = rows.find((x) => x.name === name) ?? die(`room ${name} does not exist`);
+      if (json) return out(r);
+      info(`${GN}${r.name}${CL}${r.displayName ? ` "${r.displayName}"` : ""}${r.building ? `  in ${r.building}` : ""}`);
+      info(`  racks: ${r.racks.join(", ") || "-"} · loose: ${r.loose.join(", ") || "-"}`);
+      if (r.description) info(`  ${r.description}`);
+      return 0;
+    }
+    if (json) return out(rows);
+    if (!rows.length) info("no rooms (room add <name>)");
+    for (const r of rows) info(`${r.name.padEnd(20)} ${(r.building ?? "-").padEnd(16)} ${r.racks.length} rack(s), ${r.loose.length} loose${r.displayName ? `  "${r.displayName}"` : ""}`);
     return 0;
   }
   if (verb === "device list" || verb === "device show") {
@@ -413,6 +453,22 @@ export function run(argv: string[]): number {
     if (!name) die("rack delete <rack>");
     return change(store, check, readCatalog(), undefined, (d) => deleteRack(d, name));
   }
+  if (verb === "room add") {
+    const [name] = positional(args, 2);
+    if (!name) die("room add <room>");
+    return change(store, check, readCatalog(), undefined, (d) => addRoom(d, name, { building: opt(args, "--building"), displayName: opt(args, "--display-name"), description: opt(args, "--description") }));
+  }
+  if (verb === "room modify") {
+    const [name] = positional(args, 2);
+    if (!name) die("room modify <room> --set <field>=<value>...");
+    const s = sets(args);
+    return change(store, check, readCatalog(), undefined, (d) => modifyRoom(d, name, s));
+  }
+  if (verb === "room delete") {
+    const [name] = positional(args, 2);
+    if (!name) die("room delete <room>");
+    return change(store, check, readCatalog(), undefined, (d) => deleteRoom(d, name));
+  }
   if (verb === "device add") {
     const [name] = positional(args, 2);
     if (!name) die("device add <device> --kind …");
@@ -444,15 +500,17 @@ export function run(argv: string[]): number {
   }
   if (verb === "mount add") {
     const [device] = positional(args, 2);
-    if (!device) die("mount add <device> --rack <rack> --u <n>");
-    const rack = opt(args, "--rack") ?? die("--rack is required");
-    const u = intOpt(args, "--u") ?? die("--u is required");
+    if (!device) die("mount add <device> --rack <rack> --u <n> | --room <room>");
+    const room = opt(args, "--room");
+    const rack = opt(args, "--rack") ?? (room ? undefined : die("--rack (with --u), or --room, is required"));
+    const u = intOpt(args, "--u") ?? (room ? undefined : die("--u is required"));
     const catalog = readCatalog();
     const rec = devicesOf(store.load())[device];
     return change(store, check, catalog, devicesFor(args), (d) =>
       addMount(d, device, {
         rack,
         u,
+        room,
         height: intOpt(args, "--height") ?? (rec && !opt(args, "--faceplate") ? recordedPlate(device, rec, catalog).units : undefined),
         width: opt(args, "--width"),
         slot: intOpt(args, "--slot"),

@@ -1241,12 +1241,13 @@ export function renderTopology(t: Topology): string[] {
     out.push("", "Outside");
     for (const o of t.outside) out.push(`  ${o.kind.padEnd(10)}${o.name}${o.location ? ` (${o.location})` : ""}${o.state ? `  ${o.state}` : ""}`);
   }
-  if (t.racks && t.racks.racks.length) {
+  if (t.racks && (t.racks.racks.length || (t.racks.rooms ?? []).some((r) => r.loose.length))) {
     out.push("", "Racks");
     for (const r of t.racks.racks) {
       out.push(`  ${r.name}  ${r.units}U ${r.width}${r.building || r.room ? `  ${[r.building, r.room].filter((x) => !!x).join(" / ")}` : ""}`);
       for (const m of r.mounts) out.push(`    U${m.u}${m.height > 1 ? `-${m.u + m.height - 1}` : ""} ${m.face}  ${m.device}  ${m.faceplate ?? "no plate"}${m.suggested ? " (suggested)" : ""}`);
     }
+    for (const r of t.racks.rooms ?? []) if (r.loose.length) out.push(`  room ${r.name}, loose: ${r.loose.map((m) => m.device).join(", ")}`);
     if (t.racks.unplaced.length) out.push(`  mounted nowhere: ${t.racks.unplaced.map((u) => u.device).join(", ")}`);
     const recorded = t.racks.cables.filter((c) => c.source === "recorded");
     out.push(`  cables: ${t.racks.cables.length - recorded.length} seen, ${recorded.length} recorded`);

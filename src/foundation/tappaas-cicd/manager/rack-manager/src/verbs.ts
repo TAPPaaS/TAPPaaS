@@ -24,6 +24,10 @@ import {
   RecordedDevice,
   RecordedKind,
   devicesOf,
+  ROOM_NAME_RE,
+  Room,
+  roomsOf,
+  mountWhere,
   RackWidth,
   RacksDoc,
   cablesOf,
@@ -35,7 +39,7 @@ import {
 export type Result = { doc: RacksDoc; summary: string } | { refused: string };
 
 const clone = (d: RacksDoc): RacksDoc => JSON.parse(JSON.stringify(d ?? {}));
-type Doc = Required<Pick<RacksDoc, "racks" | "mounts" | "cables" | "devices">>;
+type Doc = Required<Pick<RacksDoc, "racks" | "mounts" | "cables" | "devices" | "rooms">>;
 function withDoc(doc: RacksDoc, fn: (d: Doc) => void): RacksDoc {
   const d = clone(doc);
   d.version = 1;
@@ -43,7 +47,9 @@ function withDoc(doc: RacksDoc, fn: (d: Doc) => void): RacksDoc {
   d.mounts = d.mounts ?? {};
   d.cables = d.cables ?? [];
   d.devices = d.devices ?? {};
+  d.rooms = d.rooms ?? {};
   fn(d as Doc);
+  if (Object.keys(d.rooms).length === 0) delete d.rooms;
   if (d.cables.length === 0) delete d.cables;
   if (Object.keys(d.devices).length === 0) delete d.devices;
   return d;
@@ -121,8 +127,9 @@ export function deleteRack(doc: RacksDoc, name: string): Result {
 // ── mounts ────────────────────────────────────────────────────────────
 
 export interface MountSpec {
-  rack: string;
-  u: number;
+  rack?: string;
+  u?: number;
+  room?: string; // loose in this room: no rack, no unit
   height?: number;
   width?: string;
   slot?: number;
@@ -132,10 +139,22 @@ export interface MountSpec {
   description?: string;
 }
 
-// mount add — a device into a rack. The height defaults to its faceplate's.
+// mount add — a device into a rack at its units, or loose into a room. The
+// height defaults to its faceplate's.
 export function addMount(doc: RacksDoc, device: string, spec: MountSpec, catalog: Faceplate[]): Result {
   if (!device.trim()) return { refused: "mount add <device>: the device's topology name" };
-  if (mountsOf(doc)[device]) return { refused: `${device} is already mounted in ${mountsOf(doc)[device].rack} — mount modify ${device} --set rack=… to move it` };
+  if (mountsOf(doc)[device]) return { refused: `${device} is already mounted in ${mountWhere(mountsOf(doc)[device])} — mount modify ${device} to move it` };
+  if (spec.room !== undefined) {
+    if (spec.rack !== undefined || spec.u !== undefined) return { refused: "--room places a device loose in a room: no --rack, no --u (a rack names its own room)" };
+    if (!roomsOf(doc)[spec.room]) return { refused: `room ${spec.room} does not exist (room add ${spec.room})` };
+    const fp = spec.faceplate ? catalog.find((f) => f.key === spec.faceplate) : undefined;
+    if (spec.faceplate && !fp) return { refused: `faceplate ${spec.faceplate} is not in the catalog (faceplates list)` };
+    const m: Mount = { room: spec.room, height: spec.height ?? fp?.units ?? 1, width: (spec.width ?? "full") as MountWidth, face: "front" };
+    if (!MOUNT_WIDTHS.includes(m.width)) return { refused: `--width is one of ${MOUNT_WIDTHS.join(", ")}` };
+    for (const k of ["faceplate", "label", "description"] as const) if (spec[k]) m[k] = spec[k];
+    return { doc: withDoc(doc, (d) => void (d.mounts[device] = m)), summary: `${device} stands loose in room ${spec.room}` };
+  }
+  if (spec.rack === undefined || spec.u === undefined) return { refused: "mount add <device> --rack <rack> --u <n>, or --room <room> for a device loose in a room" };
   if (!racksOf(doc)[spec.rack]) return { refused: `rack ${spec.rack} does not exist (rack add ${spec.rack})` };
   const width = (spec.width ?? "full") as MountWidth;
   if (!MOUNT_WIDTHS.includes(width)) return { refused: `--width is one of ${MOUNT_WIDTHS.join(", ")}` };
@@ -148,11 +167,11 @@ export function addMount(doc: RacksDoc, device: string, spec: MountSpec, catalog
   for (const k of ["faceplate", "label", "description"] as const) if (spec[k]) m[k] = spec[k];
   return {
     doc: withDoc(doc, (d) => void (d.mounts[device] = m)),
-    summary: `${device} mounted in ${m.rack} at U${m.u}${m.height > 1 ? `-U${m.u + m.height - 1}` : ""}, ${m.face}${width === "full" ? "" : `, ${width} width slot ${m.slot}`}`,
+    summary: `${device} mounted in ${m.rack} at U${m.u}${m.height > 1 ? `-U${(m.u ?? 0) + m.height - 1}` : ""}, ${m.face}${width === "full" ? "" : `, ${width} width slot ${m.slot}`}`,
   };
 }
 
-const MOUNT_FIELDS = ["rack", "u", "height", "width", "slot", "face", "faceplate", "label", "description"];
+const MOUNT_FIELDS = ["rack", "u", "room", "height", "width", "slot", "face", "faceplate", "label", "description"];
 
 // mount modify — a move (rack, u, slot, face) or its plate and label. The
 // device is the key: another device is another mount.
@@ -166,7 +185,19 @@ export function modifyMount(doc: RacksDoc, device: string, sets: Array<[string, 
       else if (!MOUNT_FIELDS.includes(k)) refused = `mount field '${k}' is not one of ${MOUNT_FIELDS.join(", ")}`;
       else if (k === "rack") {
         if (!d.racks[v]) refused = `rack ${v} does not exist`;
-        else m.rack = v;
+        else {
+          m.rack = v;
+          delete m.room;
+        }
+      } else if (k === "room") {
+        // Loose in a room: out of its rack.
+        if (!d.rooms[v]) refused = `room ${v} does not exist (room add ${v})`;
+        else {
+          m.room = v;
+          delete m.rack;
+          delete m.u;
+          delete m.slot;
+        }
       } else if (k === "u" || k === "height" || k === "slot") {
         const n = int(v);
         if (n === null) refused = `${k} is a whole number`;
@@ -194,6 +225,8 @@ export function modifyMount(doc: RacksDoc, device: string, sets: Array<[string, 
     }
   });
   if (refused) return { refused };
+  const nm = next.mounts![device];
+  if (nm.rack && nm.u === undefined) return { refused: `into rack ${nm.rack}: give its unit too (--set u=<n>)` };
   return { doc: next, summary: `mount ${device}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
 }
 
@@ -322,4 +355,42 @@ export function removeDevice(doc: RacksDoc, name: string): Result {
   const cables = cablesOf(doc).filter((c) => c.from.device === name || c.to.device === name);
   if (cables.length) return { refused: `${name} is an end of ${cables.length} recorded cable(s) — cable remove ${endText(cables[0].from.device === name ? cables[0].from : cables[0].to)} first` };
   return { doc: withDoc(doc, (d) => void delete d.devices[name]), summary: `device ${name} removed` };
+}
+
+// ── rooms ─────────────────────────────────────────────────────────────
+
+const ROOM_FIELDS = ["displayName", "building", "description"];
+
+export function addRoom(doc: RacksDoc, name: string, spec: Room): Result {
+  if (!ROOM_NAME_RE.test(name)) return { refused: `room name '${name}' must match ${ROOM_NAME_RE.source}` };
+  if (roomsOf(doc)[name]) return { refused: `room ${name} already exists` };
+  const r: Room = {};
+  for (const k of ROOM_FIELDS as (keyof Room)[]) if (spec[k]) r[k] = spec[k];
+  const named = Object.entries(racksOf(doc)).filter(([, x]) => x.room === name).map(([n]) => n);
+  return { doc: withDoc(doc, (d) => void (d.rooms[name] = r)), summary: `room ${name} recorded${named.length ? ` (it holds ${named.join(", ")}, which named it already)` : ""}` };
+}
+
+export function modifyRoom(doc: RacksDoc, name: string, sets: Array<[string, string]>): Result {
+  if (!roomsOf(doc)[name]) return { refused: `room ${name} does not exist` };
+  let refused: string | null = null;
+  const next = withDoc(doc, (d) => {
+    for (const [k, v] of sets) {
+      if (k === "name") refused = "a room's name is how racks and mounts name it: add the new room, move them, delete this one";
+      else if (!ROOM_FIELDS.includes(k)) refused = `room field '${k}' is not one of ${ROOM_FIELDS.join(", ")}`;
+      else if (text(v) === undefined) delete d.rooms[name][k as keyof Room];
+      else d.rooms[name][k as keyof Room] = v;
+      if (refused) return;
+    }
+  });
+  if (refused) return { refused };
+  return { doc: next, summary: `room ${name}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
+}
+
+// room delete — only an empty room: no rack names it, nothing stands loose in it.
+export function deleteRoom(doc: RacksDoc, name: string): Result {
+  if (!roomsOf(doc)[name]) return { refused: `room ${name} does not exist` };
+  const racks = Object.entries(racksOf(doc)).filter(([, r]) => r.room === name).map(([n]) => n);
+  const loose = Object.entries(mountsOf(doc)).filter(([, m]) => !m.rack && m.room === name).map(([n]) => n);
+  if (racks.length || loose.length) return { refused: `room ${name} still holds ${[...racks.map((r) => `rack ${r}`), ...loose].join(", ")} — move them first` };
+  return { doc: withDoc(doc, (d) => void delete d.rooms[name]), summary: `room ${name} deleted` };
 }

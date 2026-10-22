@@ -42,9 +42,17 @@ export interface Rack {
   room?: string;
   description?: string;
 }
+// A room: where racks stand and where a device can stand loose.
+export interface Room {
+  displayName?: string;
+  building?: string;
+  description?: string;
+}
+// A mount: in a rack at its units, or loose in a room (no rack, no unit).
 export interface Mount {
-  rack: string;
-  u: number;
+  rack?: string;
+  u?: number;
+  room?: string; // a loose mount's room
   height: number;
   width: MountWidth;
   slot?: number;
@@ -79,12 +87,17 @@ export interface RacksDoc {
   mounts?: Record<string, Mount>;
   cables?: Cable[];
   devices?: Record<string, RecordedDevice>;
+  rooms?: Record<string, Room>;
 }
 
 export const racksOf = (d: RacksDoc): Record<string, Rack> => d.racks ?? {};
 export const mountsOf = (d: RacksDoc): Record<string, Mount> => d.mounts ?? {};
 export const cablesOf = (d: RacksDoc): Cable[] => d.cables ?? [];
 export const devicesOf = (d: RacksDoc): Record<string, RecordedDevice> => d.devices ?? {};
+export const roomsOf = (d: RacksDoc): Record<string, Room> => d.rooms ?? {};
+export const ROOM_NAME_RE = /^[a-z][a-z0-9-]{0,62}$/;
+// Where a mount is, in words: "rack1 U20" or "room basement (loose)".
+export const mountWhere = (m: Mount): string => (m.rack ? `${m.rack} U${m.u ?? "?"}${(m.height ?? 1) > 1 ? `-U${(m.u ?? 0) + m.height - 1}` : ""}` : `room ${m.room ?? "?"} (loose)`);
 
 // ── the catalog ───────────────────────────────────────────────────────
 
@@ -429,7 +442,11 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
   }
   const devices = seen === null ? null : withRecorded(seen, doc, catalog);
 
+  const rooms = roomsOf(doc);
+  for (const name of Object.keys(rooms)) if (!ROOM_NAME_RE.test(name)) err(`room '${name}': a room name is lower case letters, digits and dashes`);
   for (const [name, r] of Object.entries(racks)) {
+    // A rack's room names a room record; free text is accepted until the room is recorded.
+    if (r.room && !rooms[r.room]) warn(`rack ${name}: room '${r.room}' is not recorded (rack-manager room add ${ROOM_NAME_RE.test(r.room) ? r.room : "<name>"}), its text is kept as it is`);
     if (!RACK_NAME_RE.test(name)) err(`rack '${name}': a rack name is lower case letters, digits and dashes`);
     if (!Number.isInteger(r.units) || r.units < 1 || r.units > 60) err(`rack ${name}: units is 1 to 60`);
     if (!RACK_WIDTHS.includes(r.width)) err(`rack ${name}: width is one of ${RACK_WIDTHS.join(", ")}`);
@@ -439,19 +456,30 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
   const placed: { device: string; rack: string; face: Face; lo: number; hi: number; cols: [number, number] }[] = [];
   for (const [device, m] of Object.entries(mounts)) {
     const where = `mount ${device}`;
+    if (!m.rack) {
+      // Loose in a room: the room exists, and nothing of a rack's position.
+      if (!m.room) err(`${where}: neither a rack nor a room`);
+      else if (!rooms[m.room]) err(`${where}: room '${m.room}' does not exist (room add ${m.room})`);
+      if (m.u !== undefined || m.slot !== undefined) err(`${where}: a loose device has no unit or slot`);
+      const fp = byKey(m.faceplate);
+      if (m.faceplate && !fp) err(`${where}: faceplate ${m.faceplate} is not in the catalog`);
+      if (devices !== null && !devices.some((d) => d.name === device) && !recorded[device] && !fp?.passive) err(`${where}: the topology has no device '${device}' and it is not recorded`);
+      continue;
+    }
+    if (m.room) err(`${where}: a rack mount's room is its rack's — give a rack or a room, not both`);
     const rack = racks[m.rack];
     if (!rack) {
       err(`${where}: rack '${m.rack}' does not exist`);
       continue;
     }
-    if (!Number.isInteger(m.u) || m.u < 1) err(`${where}: u is a rack unit from 1`);
+    if (!Number.isInteger(m.u) || (m.u ?? 0) < 1) err(`${where}: u is a rack unit from 1`);
     if (!Number.isInteger(m.height) || m.height < 1) err(`${where}: height is a whole number of rack units`);
     if (!MOUNT_WIDTHS.includes(m.width)) err(`${where}: width is one of ${MOUNT_WIDTHS.join(", ")}`);
     if (!FACES.includes(m.face)) err(`${where}: face is front or rear`);
     const n = COLUMNS[m.width] ?? 1;
     if (m.slot !== undefined && (!Number.isInteger(m.slot) || m.slot < 0 || m.slot >= n)) err(`${where}: slot is 0${n > 1 ? `-${n - 1}` : ""} for a ${m.width}-width device`);
-    if (Number.isInteger(m.u) && Number.isInteger(m.height) && m.u + m.height - 1 > rack.units) {
-      err(`${where}: U${m.u}-U${m.u + m.height - 1} does not fit ${m.rack}'s ${rack.units}U`);
+    if (Number.isInteger(m.u) && Number.isInteger(m.height) && m.u! + m.height - 1 > rack.units) {
+      err(`${where}: U${m.u}-U${m.u! + m.height - 1} does not fit ${m.rack}'s ${rack.units}U`);
     }
     const fp = byKey(m.faceplate);
     if (m.faceplate && !fp) err(`${where}: faceplate ${m.faceplate} is not in the catalog`);
@@ -459,7 +487,7 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
     if (devices !== null && !devices.some((d) => d.name === device) && !recorded[device] && !fp?.passive) {
       err(`${where}: the topology has no device '${device}' (a node, switch, access point, machine or device) — a passive device needs a passive faceplate (a patch panel, a PDU)`);
     }
-    if (Number.isInteger(m.u) && Number.isInteger(m.height)) placed.push({ device, rack: m.rack, face: m.face, lo: m.u, hi: m.u + m.height - 1, cols: columnSpan(m) });
+    if (Number.isInteger(m.u) && Number.isInteger(m.height)) placed.push({ device, rack: m.rack, face: m.face, lo: m.u!, hi: m.u! + m.height - 1, cols: columnSpan(m) });
   }
   for (let i = 0; i < placed.length; i++) {
     for (let j = i + 1; j < placed.length; j++) {
@@ -514,8 +542,9 @@ export interface RackMountView {
   device: string;
   kind: DeviceKind | "passive";
   recorded?: RecordedKind;
-  rack: string;
-  u: number;
+  rack: string; // "" for a loose device
+  room?: string | null; // a loose device's room
+  u: number; // 0 for a loose device
   height: number;
   width: MountWidth;
   slot: number;
@@ -561,8 +590,20 @@ export interface OutsideView {
   faceplate: string | null;
   plate: ResolvedPlate | null;
 }
+// A room: its record, its racks (by name), and the devices loose in it. A
+// room only a rack's free text names is drawn too, not recorded.
+export interface RoomView {
+  name: string;
+  displayName: string | null;
+  building: string | null;
+  description: string | null;
+  recorded: boolean;
+  racks: string[];
+  loose: RackMountView[];
+}
 export interface RacksView {
   racks: RackView[];
+  rooms: RoomView[];
   unplaced: UnplacedView[];
   cables: CableView[];
   outside: OutsideView[];
@@ -645,23 +686,38 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
       description: r.description ?? null,
       mounts: [],
     }));
+  const roomDocs = roomsOf(doc);
+  const rooms: RoomView[] = Object.entries(roomDocs)
+    .sort(([a], [b]) => portCompare(a, b))
+    .map(([name, r]) => ({ name, displayName: r.displayName ?? null, building: r.building ?? null, description: r.description ?? null, recorded: true, racks: [], loose: [] }));
+  for (const r of racks) {
+    if (!r.room) continue;
+    let room = rooms.find((x) => x.name === r.room);
+    if (!room) {
+      room = { name: r.room, displayName: null, building: r.building, description: null, recorded: false, racks: [], loose: [] };
+      rooms.push(room);
+    }
+    room.racks.push(r.name);
+  }
   for (const [device, m] of Object.entries(mounts)) {
-    const rack = racks.find((r) => r.name === m.rack);
+    const rack = m.rack ? racks.find((r) => r.name === m.rack) : undefined;
     const dev = devices.find((d) => d.name === device) ?? null;
     const own = byKey(m.faceplate);
     const rec = recorded[device] ? recordedPlate(device, recorded[device], catalog) : null;
     const key = own ? own.key : rec ? rec.key : dev ? suggestFaceplate(catalog, dev) : null;
     const fp = own ?? rec ?? byKey(key);
-    if (!dev && !fp?.passive) findings.push({ text: `${device} is mounted in ${m.rack} at U${m.u}, but the topology no longer has it`, device, kind: "gone", rack: m.rack });
-    if (!rack) continue;
+    if (!dev && !fp?.passive) findings.push({ text: `${device} is mounted in ${mountWhere(m)}, but the topology no longer has it`, device, kind: "gone", rack: m.rack ?? null });
+    const room = !m.rack && m.room ? rooms.find((x) => x.name === m.room) : undefined;
+    if (!rack && !room) continue;
     const plate = fp ? resolvePlate(fp, dev) : null;
     const states = dev?.ports.map((p) => p.up).filter((x): x is boolean => x !== null) ?? [];
-    rack.mounts.push({
+    (rack ? rack.mounts : room!.loose).push({
       device,
       kind: dev ? dev.kind : "passive",
       ...(dev?.recorded ? { recorded: dev.recorded } : {}),
-      rack: m.rack,
-      u: m.u,
+      rack: m.rack ?? "",
+      ...(room ? { room: room.name } : {}),
+      u: m.u ?? 0,
       height: m.height,
       width: m.width,
       slot: m.width === "full" ? 0 : m.slot ?? 0,
@@ -679,7 +735,7 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
   const unplaced: UnplacedView[] = devices
     .filter((d) => !mounts[d.name])
     .map((d) => ({ device: d.name, kind: d.kind, vendor: d.vendor, model: d.model, suggestion: d.recorded ? recorded[d.name]?.model ?? null : suggestFaceplate(catalog, d), ...(d.recorded ? { recorded: d.recorded } : {}) }));
-  if (hasRack) for (const u of unplaced) findings.push({ text: `${u.device} is mounted in no rack`, device: u.device, kind: "unplaced", rack: null });
+  if (hasRack) for (const u of unplaced) findings.push({ text: `${u.device} is mounted in no rack and stands in no room`, device: u.device, kind: "unplaced", rack: null });
 
   const cables = seenCables(t);
   const outside: OutsideView[] = [];
@@ -691,7 +747,8 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
       outside.push({ device: e.device, faceplate: fp?.key ?? null, plate: fp ? resolvePlate(fp, null) : null });
     }
   }
-  return { racks, unplaced, cables, outside, findings };
+  for (const r of rooms) r.loose.sort((a, b) => a.device.localeCompare(b.device));
+  return { racks, rooms, unplaced, cables, outside, findings };
 }
 
 function swPort(t: TopoLike, e: CableEnd) {
