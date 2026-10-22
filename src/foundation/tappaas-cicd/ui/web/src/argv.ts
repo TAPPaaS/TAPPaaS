@@ -70,8 +70,10 @@ export function buildArgv(step: ArgvStep, verb: ManifestVerb | null, values: Val
 // is the only one, when there is one), one of its options its flag, and on an
 // open verb without a field form any other key a "--key value" line of its
 // further options. Keys that fit none are left to a field form (fields.tsx),
-// or dropped.
-export function prefillValues(step: ArgvStep, verb: ManifestVerb, raw: Values, fieldForm = false): Values {
+// or dropped. With a field form an option is set only when the form offers it
+// besides the fields (`keep`): where a field is the verb's own option (mount
+// add --rack), the field form passes it.
+export function prefillValues(step: ArgvStep, verb: ManifestVerb, raw: Values, fieldForm = false, keep: string[] = []): Values {
   const out: Values = {};
   const pos = verb.positionals.slice(step.fixed?.length ?? 0);
   const extra: string[] = [];
@@ -80,7 +82,7 @@ export function prefillValues(step: ArgvStep, verb: ManifestVerb, raw: Values, f
     const p = pos.find((x) => x.name === k) ?? (k === "name" && pos.length === 1 ? pos[0] : undefined);
     const o = verb.options.find((x) => x.flag === `--${k}`);
     if (p && typeof v === "string") out[`@${p.name}`] = v;
-    else if (o) out[o.flag] = o.takesValue ? (typeof v === "boolean" ? String(v) : v) : v === true || v === "true";
+    else if (o && (!fieldForm || keep.includes(o.flag))) out[o.flag] = o.takesValue ? (typeof v === "boolean" ? String(v) : v) : v === true || v === "true";
     else if (verb.open && !fieldForm && v !== false) extra.push(v === true ? `--${k}` : `--${k} ${Array.isArray(v) ? v.join(",") : v}`);
   }
   if (extra.length) out["@extra"] = extra;

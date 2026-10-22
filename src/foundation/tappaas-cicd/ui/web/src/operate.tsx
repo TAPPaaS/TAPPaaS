@@ -175,7 +175,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
   const [prefilled, setPrefilled] = useState(false);
   useEffect(() => {
     if (!verb || !step.prefill || prefilled) return;
-    const pre = prefillValues(step, verb, step.prefill, step.render !== undefined);
+    const pre = prefillValues(step, verb, step.prefill, step.render !== undefined, step.only);
     setValues((v) => ({ ...v, ...pre }));
     setPrefilled(true);
   }, [verb]);

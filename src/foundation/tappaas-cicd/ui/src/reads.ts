@@ -21,6 +21,21 @@ import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, TopologyDoc } from "./model";
 
+// The racks the topology carries (network-manager topology .racks), the parts read here.
+interface RacksRead {
+  racks: {
+    name: string; displayName: string | null; units: number; width: string; numbering: string; building: string | null; room: string | null; description: string | null;
+    mounts: { device: string; rack: string; u: number; height: number; width: string; slot: number; face: string; faceplate: string | null; suggested: boolean; label: string | null; description: string | null }[];
+  }[];
+  unplaced: { device: string; suggestion: string | null }[];
+}
+
+// Every device the topology names: what a mount may name.
+export function topologyDevices(t: Record<string, unknown> | null): string[] {
+  const names = (k: string) => (Array.isArray(t?.[k]) ? (t![k] as { name?: unknown }[]) : []).map((x) => x.name).filter((n): n is string => typeof n === "string");
+  return [...new Set([...names("nodes"), ...names("switches"), ...names("accessPoints"), ...names("devices")])].sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+}
+
 const MIN = 60_000;
 
 export const TTL = {
@@ -40,6 +55,7 @@ export const TTL = {
   setup: 10 * MIN,
   schema: 10 * MIN,
   catalogs: 10 * MIN,
+  faceplates: 10 * MIN,
   nodeProgress: 10_000, // while a node is being added
   drift: 0, // on demand
 };
@@ -122,6 +138,7 @@ export class Reads {
   readonly schemas: CachedMap<Record<string, unknown>>;
   readonly nodeProgress: CachedMap<NodeProgress>;
   readonly catalogs: Cached<RepositoryCatalog[]>;
+  readonly faceplates: Cached<{ key: string; kind: string; units: number; width: string }[]>;
   readonly setup: Cached<SetupInputs>;
 
   constructor(private readonly cfg: ReadsConfig) {
@@ -172,6 +189,8 @@ export class Reads {
       const instances = (mods.value?.modules ?? []).map((m) => ({ name: m.name, source: moduleSourceOf(cfg.configDir, m.name) }));
       return (Array.isArray(repos) ? repos : []).map((r) => repositoryCatalog(r, instances));
     }, now);
+    // The faceplate catalog: the keys a mount's faceplate may name.
+    this.faceplates = new Cached("faceplates", TTL.faceplates, () => j<{ key: string; kind: string; units: number; width: string }[]>("rack-manager", ["faceplates", "list", "--json"]), now);
     this.nodeProgress = new CachedMap("node-progress", TTL.nodeProgress, (n) => this.loadNodeProgress(n), now);
     // Every identity object's record, for the graph of their relations: each
     // kind's list, then `show` per object (a name from the manager's own list).
@@ -222,8 +241,9 @@ export class Reads {
     return this.readJson(`${name}.json`);
   }
 
-  // The defined objects a `references` field may name.
-  private async refContext(): Promise<RefContext> {
+  // The defined objects a `references` field may name. The racks' kinds also
+  // name the topology's devices, the racks and the faceplates.
+  private async refContext(racks = false): Promise<RefContext> {
     const [envs, site, ids] = await Promise.all([this.environments.get(), this.site.get(), this.identity.get()]);
     let zones: string[] = [];
     try {
@@ -239,7 +259,18 @@ export class Reads {
       .map((n) => ({ name: n.name as string, pools: Array.isArray(n.storagePools) ? n.storagePools.filter((p): p is string => typeof p === "string") : [] }))
       .sort((a, b) => a.name.localeCompare(b.name));
     const list = (k: string) => (ids.value?.[k] ?? []).filter((n) => typeof n === "string" && n !== "" && !n.startsWith("-")).sort();
+    let rackRefs = { devices: [] as string[], racks: [] as string[], faceplates: [] as string[] };
+    if (racks) {
+      const [t, f] = await Promise.all([this.topology.get(), this.faceplates.get()]);
+      const view = (t.value?.racks ?? null) as { racks?: { name: string }[] } | null;
+      rackRefs = {
+        devices: topologyDevices(t.value ?? null),
+        racks: (view?.racks ?? []).map((r) => r.name).sort(),
+        faceplates: (f.value ?? []).map((x) => x.key).sort(),
+      };
+    }
     return {
+      ...rackRefs,
       zones,
       environments: (envs.value ?? []).map((e) => e.name).sort(),
       nodes,
@@ -259,7 +290,7 @@ export class Reads {
   }
 
   async fieldManifest(kind: FieldKind, name: string | null, mode: FormMode): Promise<FieldManifest> {
-    const refs = await this.refContext();
+    const refs = await this.refContext(kind === "rack" || kind === "mount");
     const vars: Record<string, string | null> = { name };
     let defs: FieldDef[] = [];
     let record: Record<string, unknown> | null = null;
@@ -385,6 +416,35 @@ export class Reads {
       case "site": {
         defs = flattenSchema(this.schemaFile("site-fields.json"));
         record = ((await this.site.get()).value?.site ?? null) as Record<string, unknown> | null;
+        break;
+      }
+      case "rack":
+      case "mount": {
+        // racks-fields.json's $defs; the record as the topology resolves it.
+        const $defs = (this.schemaFile("racks-fields.json").$defs ?? {}) as Record<string, unknown>;
+        defs = flattenSchema($defs[kind]);
+        const view = ((await this.topology.get()).value?.racks ?? null) as RacksRead | null;
+        if (kind === "rack" && name) {
+          const r = (view?.racks ?? []).find((x) => x.name === name);
+          if (!r && mode === "modify") throw new Error(`no rack '${name}'`);
+          if (r) record = Object.fromEntries(Object.entries({ displayName: r.displayName, units: r.units, width: r.width, numbering: r.numbering, building: r.building, room: r.room, description: r.description }).filter(([, v]) => v !== null && v !== undefined));
+        }
+        if (kind === "rack" && mode === "add") {
+          // Where the site says it is: its building, when site.json has one.
+          const loc = ((((await this.site.get()).value?.site ?? {}) as Record<string, unknown>).location ?? {}) as Record<string, unknown>;
+          if (typeof loc.building === "string" && loc.building) defaults = { building: `${loc.building}, the site's` };
+        }
+        if (kind === "mount" && name) {
+          const m = (view?.racks ?? []).flatMap((r) => r.mounts).find((x) => x.device === name);
+          if (!m && mode === "modify") throw new Error(`${name} is not mounted`);
+          if (m) {
+            record = Object.fromEntries(Object.entries({ rack: m.rack, u: m.u, height: m.height, width: m.width, slot: m.width === "full" ? null : m.slot, face: m.face, faceplate: m.suggested ? null : m.faceplate, label: m.label, description: m.description }).filter(([, v]) => v !== null && v !== undefined));
+            if (m.suggested && m.faceplate) defaults = { faceplate: `${m.faceplate}, the catalog's suggestion` };
+          } else {
+            const u = (view?.unplaced ?? []).find((x) => x.device === name);
+            if (u?.suggestion) defaults = { faceplate: `${u.suggestion}, the catalog's suggestion` };
+          }
+        }
         break;
       }
     }

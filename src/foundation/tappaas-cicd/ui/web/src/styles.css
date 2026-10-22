@@ -372,3 +372,32 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .checks li { padding: 2px 0; font-size: 13px; }
 .setup-body .step { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 8px; }
 .stack-head td { background: #f8fafc; border-top: 2px solid var(--line); padding-top: 10px; }
+
+/* ── the Physical tab's view switch and the Rack view (physical/rack.tsx) ── */
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); padding: 4px 12px; font: inherit; font-size: 13px; color: var(--muted); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg .seg-on { background: var(--info-bg); color: var(--ink); font-weight: 600; }
+.linklike { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-align: left; }
+.physical-rack .canvas { position: relative; overflow: hidden; }
+.rack-canvas { position: absolute; inset: 0; overflow: auto; }
+.rack-canvas svg { display: block; margin: 0 auto; }
+.rack-zoom { position: sticky; top: 8px; left: 8px; z-index: 3; display: flex; gap: 4px; height: 0; padding-left: 8px; overflow: visible; }
+.rack-zoom .btn { height: 26px; }
+.rack-zoom .btn { padding: 2px 9px; }
+.rack-title { font-size: 15px; font-weight: 700; fill: var(--ink); cursor: pointer; }
+.rack-where { font-size: 11px; fill: var(--muted); }
+.rack-unit { font-size: 9.5px; fill: #64748b; text-anchor: middle; font-family: ui-monospace, monospace; }
+.rack-name { font-size: 11px; font-weight: 600; fill: #f1f5f9; }
+.rack-name-dark { fill: var(--ink); }
+.rack-sub { font-size: 9px; fill: #94a3b8; }
+.rack-sub-dark { fill: var(--muted); }
+.rack-plate, .rack-port { cursor: pointer; }
+.rack-port:hover rect:first-of-type { stroke: #3b6fd4; }
+.rack-cable { cursor: help; }
+.rack-tip { font-size: 11px; fill: #f8fafc; font-family: ui-monospace, monospace; }
+.rack-tray { width: 230px; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow: auto; }
+.rack-tray h3 { margin: 4px 0 8px; font-size: 13px; }
+.rack-tray li { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.rack-tray li .btn { margin-top: 4px; }
+.rack-empty { padding: 40px; max-width: 560px; }

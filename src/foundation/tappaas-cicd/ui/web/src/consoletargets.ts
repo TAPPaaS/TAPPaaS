@@ -45,6 +45,17 @@ export const WIZARDS: WizardDef[] = [
   },
   { name: "add-user", title: "the Add a user wizard", arg: null, path: () => DAY2, keys: null, values: "name and the user's fields (email, groups, …)", verbs: ["identity-manager user add"] },
   {
+    name: "add-rack", title: "the Add a rack wizard", arg: null, path: () => DAY2, keys: null,
+    values: "name and the rack's fields (units, width, numbering, building, room, …)", verbs: ["rack-manager rack add"],
+  },
+  {
+    // The device is a value: a topology name may hold spaces ("USW Pro XG 10 PoE").
+    name: "mount-device", title: "the Mount a device wizard", arg: null, path: () => DAY2,
+    keys: ["device", "rack", "u", "height", "width", "slot", "face", "faceplate", "label", "description"],
+    values: "device (as the physical view names it), rack, u, height, width, slot, face, faceplate, label, description",
+    verbs: ["rack-manager mount add"],
+  },
+  {
     name: "modify-module", title: "Modify", arg: "module", path: (m) => `/modules/${encodeURIComponent(m)}`, keys: null,
     values: "the module's fields by name, as module_show lists them under modifiable: {\"memory\": \"10240\"}",
     verbs: ["module-manager modify"],
@@ -63,6 +74,8 @@ export const PAGES: { path: string; title: string }[] = [
   { path: "/setup/day2", title: "Setup, Day 2" },
   { path: "/site", title: "the Site page" },
   { path: "/site/physical", title: "the physical view" },
+  { path: "/site/physical/rack", title: "the rack view (racks, faceplates, cables)" },
+  { path: "/site/physical/cabling", title: "the cabling view" },
   { path: "/environments", title: "Environments" },
   { path: "/modules", title: "Modules" },
   { path: "/modules/<module>", title: "the module's page" },
@@ -99,9 +112,13 @@ function valueOf(v: unknown): TargetValue | null {
 
 // The catalog's word for a target, with its values checked. Values are what
 // the form starts from; nothing is applied by opening it.
+// Words that name a page.
+export const PAGE_WORDS: Record<string, string> = { "rack-view": "/site/physical/rack" };
+
 export function resolveTarget(target: unknown, values?: unknown): Resolution {
   if (typeof target !== "string" || !target.trim()) return { ok: false, reason: "`target` is a page (\"/modules/immich\") or a wizard (\"add-node\", \"modify-module immich\")" };
-  const t = target.trim().replace(/\s+/g, " ");
+  const said = target.trim().replace(/\s+/g, " ");
+  const t = PAGE_WORDS[said] ?? said;
   if (values !== undefined && values !== null && (typeof values !== "object" || Array.isArray(values))) return { ok: false, reason: "`values` is an object of a form's values: {\"memory\": \"10240\"}" };
   const vals: TargetValues = {};
   for (const [k, v] of Object.entries((values ?? {}) as Record<string, unknown>)) {
@@ -152,6 +169,6 @@ export function wizardForVerb(bin: string, words: string): WizardDef | null {
 export function catalogText(): string {
   return [
     `Wizards: ${WIZARDS.map((w) => `${w.arg ? `${w.name} <${w.arg}>` : w.name} (values: ${w.values})`).join("; ")}.`,
-    `Pages: ${PAGES.map((p) => p.path).join(", ")}.`,
+    `Pages: ${PAGES.map((p) => p.path).join(", ")} (rack-view is ${PAGE_WORDS["rack-view"]}).`,
   ].join("\n");
 }

@@ -3,7 +3,9 @@
 // the day-2 changes it offers (a switch port's zone, spike mockup 3: the port's
 // record with switch-manager update-port, then reconcile previewed and
 // applied; a node's uplinks: site-manager node network show / set), and where
-// to open it.
+// to open it. Where the hardware sits (rack-manager): the mount of a node, a
+// switch or an access point with Mount…, Move to… and Unmount…, a rack's own
+// record, and a passive or outside device's mount and recorded cables.
 
 import { ReactNode } from "react";
 import { zoneColor } from "../colors";
@@ -11,6 +13,7 @@ import { TopoFinding, TopoRef, Topology } from "../types";
 import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
+import { MountActions, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackModifySteps } from "./rackops";
 import { publicAddress } from "../zonegraph";
 
 function Findings({ list }: { list: TopoFinding[] }) {
@@ -45,8 +48,18 @@ function Zones({ t, vlans }: { t: Topology; vlans: number[] }) {
 
 const refIs = (r: TopoRef, kind: string, name: string, sw?: string) => r.kind === kind && r.name === name && (sw === undefined || r.switch === undefined || r.switch === sw);
 
+// Where a device sits, as a row of its card.
+function mountedAt(t: Topology, device: string): string | null {
+  for (const r of t.racks?.racks ?? []) {
+    const m = r.mounts.find((x) => x.device === device);
+    if (m) return `${r.displayName ?? r.name} · U${m.u}${m.height > 1 ? `-U${m.u + m.height - 1}` : ""} · ${m.face}${m.width === "full" ? "" : ` · ${m.width} width, slot ${m.slot}`} · ${m.faceplate ?? "no plate"}${m.suggested ? " (suggested)" : ""}`;
+  }
+  return t.racks ? "mounted in no rack" : null;
+}
+
 export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () => void }) {
   const operator = canOperate(useMe());
+  const racks = t.racks ?? null;
   const about = (kind: string, name: string, sw?: string) => t.findings.filter((f) => refIs(f.on, kind, name, sw) || f.refs.some((r) => refIs(r, kind, name, sw)));
   let title: ReactNode = sel.id;
   let body: ReactNode = null;
@@ -59,6 +72,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
       const p = s?.ports.find((x) => x.port === sel.id);
       if (!s || !p) break;
       const lag = p.lag ? s.lags.find((l) => l.name === p.lag) : undefined;
+      const recorded = racks?.cables.find((c) => c.source === "recorded" && [c.from, c.to].some((e) => e.device === s.name && e.port === p.port));
       title = `Port ${p.port} · ${s.name}`;
       body = (
         <>
@@ -83,6 +97,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
               ["LLDP partner", p.seen ? `${p.seen.node} / ${p.seen.nic}` : null],
               ["description", p.description],
               ["drift", p.drift === "drift" ? `add ${p.add.join(",") || "-"} · remove ${p.remove.join(",") || "-"}` : null],
+              ["recorded cable", recorded ? `to ${recorded.from.device === s.name && recorded.from.port === p.port ? `${recorded.to.device}:${recorded.to.port}` : `${recorded.from.device}:${recorded.from.port}`} (${recorded.kind}${recorded.label ? `, ${recorded.label}` : ""})` : null],
             ]}
           />
           <h3>Findings</h3>
@@ -90,7 +105,13 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </>
       );
       open = <OpenIn kind="port" id={p.port} sw={s.name} />;
-      actions = <PortChange t={t} sw={s.name} port={p.port} type={p.type} parked={p.parked === true} lag={p.lag} mode={p.mode} zone={p.zones[0] ?? ""} description={p.description} />;
+      actions = (
+        <>
+          <PortChange t={t} sw={s.name} port={p.port} type={p.type} parked={p.parked === true} lag={p.lag} mode={p.mode} zone={p.zones[0] ?? ""} description={p.description} />
+          {racks && recorded ? <OperateButton label="Remove the cable…" kind="danger" title={`The recorded cable on ${s.name}:${p.port}`} steps={() => cableRemoveSteps(`${s.name}:${p.port}`)} /> : null}
+          {racks && !recorded && (!p.target || p.target.kind === "isp" || !p.target.name) ? <OperateButton label="Record a cable…" title={`A cable from ${s.name}:${p.port}`} steps={() => cableAddSteps(`${s.name}:${p.port}`)} /> : null}
+        </>
+      );
       break;
     }
     case "switch": {
@@ -108,6 +129,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
               ["LLDP name", s.lldpName],
               ["ports", `${s.ports.length} · ${s.ports.filter((p) => p.parked).length} parked · ${s.ports.filter((p) => p.role === "unmanaged").length} unmanaged · ${s.ports.filter((p) => p.drift === "drift").length} drifting`],
               ["LAGs", s.lags.map((l) => `${l.name} (${l.ports.join("+")})`).join(", ")],
+              ["mounted", mountedAt(t, s.name)],
             ]}
           />
           <h3>Findings</h3>
@@ -115,6 +137,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </>
       );
       open = <OpenIn kind="switch" id={s.name} />;
+      actions = <MountActions device={s.name} v={racks} />;
       break;
     }
     case "lag": {
@@ -145,6 +168,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
               ["HA", n.ha ? `lrm ${n.ha.lrm}` : null],
               ["corosync", n.corosync ? `${n.corosync.links} link(s), ${n.corosync.disconnected} disconnected` : null],
               ["lldpd", n.lldpd],
+              ["mounted", mountedAt(t, n.name)],
             ]}
           />
           <h3>Uplinks</h3>
@@ -180,7 +204,12 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </>
       );
       open = <OpenIn kind="node" id={n.name} />;
-      actions = <NodeNetwork node={n.name} />;
+      actions = (
+        <>
+          <NodeNetwork node={n.name} />
+          <MountActions device={n.name} v={racks} />
+        </>
+      );
       break;
     }
     case "guest": {
@@ -217,7 +246,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
       title = `${a.name} · access point`;
       body = (
         <>
-          <KV rows={[["vendor / model", `${a.vendor ?? "?"} · ${a.model ?? "?"}`], ["address", a.address], ["uplink", a.uplink ? `${a.uplink.switch} port ${a.uplink.port}` : null]]} />
+          <KV rows={[["vendor / model", `${a.vendor ?? "?"} · ${a.model ?? "?"}`], ["address", a.address], ["uplink", a.uplink ? `${a.uplink.switch} port ${a.uplink.port}` : null], ["mounted", mountedAt(t, a.name)]]} />
           <h3>SSIDs</h3>
           {a.ssids.length === 0 ? <p className="muted small">No SSID mapped to a zone (ap-manager ssid … add).</p> : null}
           <ul className="plain">
@@ -231,6 +260,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </>
       );
       open = <OpenIn kind="ap" id={a.name} />;
+      actions = <MountActions device={a.name} v={racks} />;
       break;
     }
     case "outside": {
@@ -297,6 +327,94 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </>
       );
       open = <OpenIn kind="module" id={fw.module} />;
+      break;
+    }
+    case "rack": {
+      const r = racks?.racks.find((x) => x.name === sel.id);
+      if (!r) break;
+      title = `${r.displayName ?? r.name} · rack`;
+      const used = r.mounts.reduce((n, m) => n + (m.width === "full" ? m.height : 0), 0);
+      body = (
+        <>
+          <KV
+            rows={[
+              ["name", r.name],
+              ["height", `${r.units}U, ${r.width}, numbered ${r.numbering === "bottom-up" ? "from the bottom" : "from the top"}`],
+              ["building", r.building],
+              ["room", r.room],
+              ["description", r.description],
+              ["mounts", `${r.mounts.length} · ${used} of ${r.units} units at full width`],
+            ]}
+          />
+          <h3>Mounted</h3>
+          <ul className="plain">
+            {r.mounts.map((m) => (
+              <li key={m.device} className="small">
+                U{m.u}
+                {m.height > 1 ? `-${m.u + m.height - 1}` : ""} {m.face} · {m.device}
+                {m.description ? <span className="muted"> · {m.description}</span> : null}
+              </li>
+            ))}
+          </ul>
+          <h3>Findings</h3>
+          <Findings list={about("rack", r.name)} />
+        </>
+      );
+      actions = (
+        <>
+          <OperateButton label="Change…" title={`Rack ${r.name}`} steps={() => rackModifySteps(r.name)} />
+          {r.mounts.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete rack ${r.name}`} steps={() => rackDeleteSteps(r.name)} /> : null}
+        </>
+      );
+      open = <p className="muted small">A rack is a record of config/racks.json only.</p>;
+      break;
+    }
+    case "mount": {
+      // A device a node, switch or access point card does not cover: a machine,
+      // a device module, a passive plate (patch panel, PDU) or a device a cable
+      // record places (the ISP's modem).
+      const m = racks?.racks.flatMap((r) => r.mounts).find((x) => x.device === sel.id);
+      const out = racks?.outside.find((x) => x.device === sel.id);
+      const un = racks?.unplaced.find((x) => x.device === sel.id);
+      if (!m && !out && !un) break;
+      const cables = (racks?.cables ?? []).filter((c) => c.from.device === sel.id || c.to.device === sel.id);
+      title = sel.id;
+      body = (
+        <>
+          <KV
+            rows={[
+              ["kind", m ? (m.kind === "passive" ? `passive (${m.plate?.kind ?? "plate"})` : m.kind) : out ? "placed by a cable record" : un?.kind ?? null],
+              ["mounted", m ? mountedAt(t, sel.id) : out ? "outside the racks" : "mounted in no rack"],
+              ["faceplate", m?.plate ? `${m.plate.vendor} ${m.plate.model} (${m.faceplate})` : out?.faceplate ?? un?.suggestion ?? null],
+              ["label", m?.label ?? null],
+              ["description", m?.description ?? null],
+            ]}
+          />
+          <h3>Cables</h3>
+          {cables.length === 0 ? <p className="muted small">No cable on it.</p> : null}
+          <ul className="plain">
+            {cables.map((c, i) => (
+              <li key={i} className="small mono">
+                {c.from.device}:{c.from.port} — {c.to.device}:{c.to.port} <span className="muted">{c.kind}{c.source === "recorded" ? " · recorded" : ""}</span>
+              </li>
+            ))}
+          </ul>
+          <h3>Findings</h3>
+          <Findings list={t.findings.filter((f) => f.text.includes(sel.id))} />
+        </>
+      );
+      actions = m ? (
+        <MountActions device={sel.id} v={racks} />
+      ) : out ? (
+        <>
+          {cables.filter((c) => c.source === "recorded").map((c) => (
+            <OperateButton key={`${c.from.device}:${c.from.port}`} label={`Remove the cable on ${c.from.device === sel.id ? c.from.port : c.to.port}…`} kind="danger" title="Remove a recorded cable" steps={() => cableRemoveSteps(c.from.device === sel.id ? `${c.from.device}:${c.from.port}` : `${c.to.device}:${c.to.port}`)} />
+          ))}
+        </>
+      ) : (
+        <MountActions device={sel.id} v={racks} />
+      );
+      open = <p className="muted small">{out ? "Nothing reports on it: it is known only by the cable that names it." : "Its own records are on the module's page."}</p>;
       break;
     }
   }

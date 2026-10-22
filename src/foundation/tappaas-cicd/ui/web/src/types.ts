@@ -267,8 +267,79 @@ export interface Topology {
   accessPoints: TopoAp[];
   zones: TopoZone[];
   outside: TopoOutside[];
+  devices?: { name: string; kind: "machine" | "device"; vendor: string | null; model: string | null }[];
+  // Where the hardware sits (rack-manager), resolved against the site; null or
+  // absent when the racks were not read.
+  racks?: RacksView | null;
   findings: TopoFinding[];
   sources: { name: string; ok: boolean; error?: string }[];
+}
+
+// ── the racks the topology carries (lib/ts racks.ts RacksView) ────────
+export type PortKind = "rj45" | "sfp+" | "sfp28" | "poe" | "console" | "power";
+export interface PlatePort {
+  id: string; // the topology's
+  name: string; // the controller's
+  kind: PortKind;
+  up: boolean | null;
+  disabled: boolean;
+  lag: string | null;
+  zones: string[];
+}
+export interface ResolvedPlate {
+  key: string;
+  vendor: string;
+  model: string;
+  kind: string;
+  units: number;
+  width: "full" | "half" | "third";
+  passive: boolean;
+  rows: (PlatePort | null)[][];
+  labels: { text: string; at?: "left" | "right" }[];
+}
+export interface RackMount {
+  device: string;
+  kind: "node" | "switch" | "ap" | "machine" | "device" | "passive";
+  rack: string;
+  u: number;
+  height: number;
+  width: "full" | "half" | "third";
+  slot: number;
+  face: "front" | "rear";
+  label: string | null;
+  description: string | null;
+  faceplate: string | null;
+  suggested: boolean;
+  plate: ResolvedPlate | null;
+  up: boolean | null;
+}
+export interface RackInfo {
+  name: string;
+  displayName: string | null;
+  units: number;
+  width: "19in" | "10in";
+  numbering: "bottom-up" | "top-down";
+  building: string | null;
+  room: string | null;
+  description: string | null;
+  mounts: RackMount[];
+}
+export interface RackCable {
+  from: { device: string; port: string };
+  to: { device: string; port: string };
+  kind: string;
+  source: "topology" | "recorded";
+  zones: string[];
+  lag: string | null;
+  up: boolean | null;
+  label: string | null;
+}
+export interface RacksView {
+  racks: RackInfo[];
+  unplaced: { device: string; kind: "node" | "switch" | "ap" | "machine" | "device"; vendor: string | null; model: string | null; suggestion: string | null }[];
+  cables: RackCable[];
+  outside: { device: string; faceplate: string | null; plate: ResolvedPlate | null }[];
+  findings: { text: string; device: string; kind: "gone" | "unplaced"; rack: string | null }[];
 }
 
 // ── jobs (ADR-034 D4) ─────────────────────────────────────────────────

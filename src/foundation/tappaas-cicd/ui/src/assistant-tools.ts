@@ -129,7 +129,7 @@ export const TOOLS: Record<string, { line: string; description: string; paramete
   open_console: {
     line: "open_console(target, values?): open a page, or a wizard or Modify form with values filled in, in the operator's console; it changes nothing",
     description:
-      "Move the operator's console to a page or open a wizard there, its form filled in with `values`; the operator previews and applies it. Changes nothing. `target` is a page (\"/modules/immich\", \"/site/physical\", \"/setup/day2\") or a wizard: add-node, add-environment, add-stack, enrol-device, add-wifi <zone>, add-buddy, add-satellite, add-user, modify-module <module>, modify-zone <zone>. For modify-module, `values` are the module's fields by name (module_show lists them), e.g. {\"memory\": \"10240\"}.",
+      "Move the operator's console to a page or open a wizard there, its form filled in with `values`; the operator previews and applies it. Changes nothing. `target` is a page (\"/modules/immich\", \"/site/physical\", \"/setup/day2\") or a wizard: add-node, add-environment, add-stack, enrol-device, add-wifi <zone>, add-buddy, add-satellite, add-user, add-rack, mount-device, modify-module <module>, modify-zone <zone>; \"rack-view\" is the physical view's racks. For mount-device, `values` name the device as the physical view does, e.g. {\"device\": \"tappaas2\", \"rack\": \"rack1\", \"u\": \"12\"}. For modify-module, `values` are the module's fields by name (module_show lists them), e.g. {\"memory\": \"10240\"}.",
     parameters: obj({ target: str("a page path or a wizard, e.g. \"add-node\" or \"modify-module immich\""), values: { type: "object", description: "the form's values by name (optional)", additionalProperties: true } }, ["target"]),
   },
 };

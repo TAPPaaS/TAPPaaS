@@ -11,7 +11,7 @@ import { fieldsStep } from "../fields";
 import { SiteRead } from "../types";
 import { KV, ReadState, Section, navigate, since } from "../ui";
 import { AddNodeButton } from "./AddNode";
-import { Physical } from "./Physical";
+import { Physical, PhysicalView } from "./Physical";
 
 const sm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "site-manager", verb, ...extra });
 
@@ -31,7 +31,7 @@ export const SITE_TABS = [
   { name: "Physical", path: "/site/physical" },
 ] as const;
 
-export function Site({ tab = "Overview" }: { tab?: "Overview" | "Physical" }) {
+export function Site({ tab = "Overview", view }: { tab?: "Overview" | "Physical"; view?: PhysicalView }) {
   const r = useRead<SiteRead>("site");
   const d = r.env?.data;
   const s = (d?.site ?? {}) as Record<string, unknown> & { updateSchedule?: { frequency?: string; weekday?: string; hour?: number } };
@@ -52,10 +52,10 @@ export function Site({ tab = "Overview" }: { tab?: "Overview" | "Physical" }) {
       <div className="page page-wide">
         <div className="page-head">
           <h1>Site</h1>
-          <span className="muted">{s.displayName ? String(s.displayName) : String(s.name ?? "")} as cabled</span>
+          <span className="muted">{s.displayName ? String(s.displayName) : String(s.name ?? "")} as built</span>
         </div>
         {tabs}
-        <Physical embedded />
+        <Physical embedded view={view} />
       </div>
     );
   }

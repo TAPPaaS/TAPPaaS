@@ -16,7 +16,7 @@ import { ModulePage } from "./pages/ModulePage";
 import { Modules } from "./pages/Modules";
 import { Overview } from "./pages/Overview";
 import { OwnerOverview } from "./pages/OwnerOverview";
-import { Physical } from "./pages/Physical";
+import { Physical, PhysicalView } from "./pages/Physical";
 import { AssistantStatus, Me, SiteRead } from "./types";
 import { Link, MeContext, replacePath, usePath } from "./ui";
 
@@ -38,6 +38,9 @@ const OWNER_NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/site/physical", label: "Physical", live: true },
   { to: "/modules", label: "Modules", live: true },
 ];
+
+// The physical view's two views by address; /site/physical shows the default.
+const PHYSICAL_VIEWS: Record<string, PhysicalView> = { "/site/physical/rack": "rack", "/site/physical/cabling": "cabling" };
 
 function active(path: string, to: string): boolean {
   return to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`);
@@ -82,8 +85,8 @@ export function App() {
   else if (path === "/setup") page = <Setup />;
   else if (path === "/setup/day1") page = <Setup tab="Day 1" />;
   else if (path === "/setup/day2") page = <Setup tab="Day 2" />;
-  else if (owner && (path === "/physical" || path === "/site/physical")) page = <Physical />;
-  else if (path === "/physical" || path === "/site/physical") page = <Site tab="Physical" />;
+  else if (owner && (path === "/physical" || path === "/site/physical" || path in PHYSICAL_VIEWS)) page = <Physical view={PHYSICAL_VIEWS[path]} />;
+  else if (path === "/physical" || path === "/site/physical" || path in PHYSICAL_VIEWS) page = <Site tab="Physical" view={PHYSICAL_VIEWS[path]} />;
   else if (path === "/modules") page = <Modules />;
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;
   else if (path === "/activity") page = <Activity />;

@@ -2,7 +2,7 @@
 // (GET /api/v1/fields/<kind>[/<name>]). It is derived from the schema JSONs the
 // managers validate against — the composed module field schema, zones-fields,
 // environment-fields, the identity *-fields, site-fields, the module schema's
-// backup block — plus, where the object exists, its record. Per field: its
+// backup block, racks-fields' rack and mount — plus, where the object exists, its record. Per field: its
 // type, its choices (an enum, or the defined objects a `references` field names),
 // its default (a literal, or a template such as <vmname>.<domain> rendered with
 // the object's values when they are known), the configured value, whether it is
@@ -10,7 +10,7 @@
 // change it, and how a change is passed to the manager's own verb (`--set` or
 // the verb's own flag). Pure: the reads that feed it are in reads.ts.
 
-export const FIELD_KINDS = ["module", "zone", "environment", "org", "group", "user", "role", "site", "backup"] as const;
+export const FIELD_KINDS = ["module", "zone", "environment", "org", "group", "user", "role", "site", "backup", "rack", "mount"] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 export type FormMode = "add" | "modify";
 
@@ -81,6 +81,11 @@ export interface RefContext {
   users: string[];
   groups: string[];
   roles: string[];
+  // The racks' kinds (rack, mount): the topology's devices, the racks, the
+  // faceplate catalog's keys. Empty for the other kinds.
+  devices: string[];
+  racks: string[];
+  faceplates: string[];
 }
 
 type Obj = Record<string, unknown>;
@@ -100,8 +105,8 @@ export function typeOf(t: unknown): ManifestField["type"] {
   return "string";
 }
 
-const ONE: Record<string, string> = { zones: "a zone", environments: "an environment", nodes: "a node", storage: "a storage pool", organizations: "an organization", users: "a user", groups: "a group", roles: "a role" };
-const MANY: Record<string, string> = { zones: "zones", environments: "environments", nodes: "nodes", storage: "storage pools", organizations: "organizations", users: "users", groups: "groups", roles: "roles" };
+const ONE: Record<string, string> = { zones: "a zone", environments: "an environment", nodes: "a node", storage: "a storage pool", organizations: "an organization", users: "a user", groups: "a group", roles: "a role", devices: "a device", racks: "a rack", faceplates: "a faceplate" };
+const MANY: Record<string, string> = { zones: "zones", environments: "environments", nodes: "nodes", storage: "storage pools", organizations: "organizations", users: "users", groups: "groups", roles: "roles", devices: "devices", racks: "racks", faceplates: "faceplates" };
 
 export function typeTextOf(type: ManifestField["type"], references: string | null, enumValues: string[] | null): string {
   if (references) return type === "list" ? MANY[references] ?? references : ONE[references] ?? references;
@@ -184,6 +189,12 @@ export function choicesFor(references: string | null, refs: RefContext, record: 
       return refs.groups;
     case "roles":
       return refs.roles;
+    case "devices":
+      return refs.devices;
+    case "racks":
+      return refs.racks;
+    case "faceplates":
+      return refs.faceplates;
     default:
       return null;
   }
@@ -200,8 +211,9 @@ export function valueAt(record: Obj | null, path: string): unknown {
 }
 
 // A JSON-Schema document's properties as dotted leaves (environment-fields,
-// site-fields, the identity *-fields): an object with properties of its own is
-// walked, every other property is a field. `required` is per level.
+// site-fields, the identity *-fields, a racks-fields $def): an object with
+// properties of its own is walked, every other property is a field. `required`
+// is per level; a property's changeClass is carried where the schema has one.
 export function flattenSchema(doc: unknown, prefix = "", requiredHere = true): FieldDef[] {
   const d = obj(doc);
   const required = new Set(strs(d.required));
@@ -214,7 +226,7 @@ export function flattenSchema(doc: unknown, prefix = "", requiredHere = true): F
       out.push(...flattenSchema(p, name, isReq));
       continue;
     }
-    out.push({ name, type: p.type, enum: p.enum, default: p.default, description: typeof p.description === "string" ? p.description : undefined, references: typeof p.references === "string" ? p.references : undefined, required: isReq });
+    out.push({ name, type: p.type, enum: p.enum, default: p.default, description: typeof p.description === "string" ? p.description : undefined, references: typeof p.references === "string" ? p.references : undefined, required: isReq, ...(typeof p.changeClass === "string" ? { changeClass: p.changeClass } : {}) });
   }
   return out;
 }
@@ -283,17 +295,24 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
   },
   backup: { modify: { enabled: "--enabled", retention: "--retention", exclude: "--exclude" } },
   zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
+  rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", building: "--building", room: "--room", description: "--description" } },
+  mount: { add: { rack: "--rack", u: "--u", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
 };
 
 // Fields a form never offers whatever the schema says: the object's name is
 // the verb's positional.
-const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], site: ["name"] };
+const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], site: ["name"], rack: ["name"], mount: ["device"] };
 
-// zones-fields classes a --set refuses before anything is written.
-const ZONE_REFUSED: Record<string, string> = {
-  immutable: "cannot change in place: delete the zone and add it again",
-  recreate: "only by deleting the zone and adding it again",
-  manual: "has a verb of its own",
+// The classes a --set refuses before anything is written, per kind whose modify
+// is `--set field=value` within each field's class (zones-fields, racks-fields).
+const SET_REFUSED: Partial<Record<FieldKind, Record<string, string>>> = {
+  zone: {
+    immutable: "cannot change in place: delete the zone and add it again",
+    recreate: "only by deleting the zone and adding it again",
+    manual: "has a verb of its own",
+  },
+  rack: { immutable: "the rack's name is its key: add a rack under the new name and move the mounts" },
+  mount: { immutable: "the device is the mount's key: remove the mount and mount the other device" },
 };
 
 // ── the manifest ───────────────────────────────────────────────────────
@@ -366,10 +385,10 @@ export function buildManifest(i: ManifestInput): FieldManifest {
       else if (reported && !reported.settable) why = reported.reason ?? "the pre-gate refuses it";
       else arg = "--set";
     } else if (i.kind === "module") arg = `--${def.name}`;
-    else if (i.kind === "zone" && i.mode === "modify") {
+    else if (SET_REFUSED[i.kind] && i.mode === "modify") {
       const c = def.changeClass ?? "";
       if (!c) why = "has no change class: it cannot be set through a verb";
-      else if (ZONE_REFUSED[c]) why = ZONE_REFUSED[c];
+      else if (SET_REFUSED[i.kind]![c]) why = SET_REFUSED[i.kind]![c];
       else arg = "--set";
     } else if (flags && flags[def.name]) arg = flags[def.name];
     else why = i.mode === "add" ? "not set when adding: change it afterwards" : "the verb has no option for it";

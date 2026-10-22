@@ -4,13 +4,15 @@
 // StepView, Change → Preview → Apply → Result) over the schema-driven field
 // form where the verb has one. WiFi has a card per client zone (Wifi.tsx).
 
-import { ReactNode, useEffect } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useRead } from "../api";
-import { OperateButton } from "../operate";
+import { Operate, OperateButton } from "../operate";
+import { useOpenedBy } from "../opener";
+import { mountSteps, rackAddSteps } from "../physical/rackops";
 import { canOperate, useMe } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
-import { SiteRead } from "../types";
+import { SiteRead, Topology } from "../types";
 import { ApIn, ZoneIn, wifiVerb, wifiZones } from "../wizards";
 import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
 import { WifiButton } from "./Wifi";
@@ -40,6 +42,58 @@ function Group({ id, title, children }: { id?: string; title: string; children: 
   );
 }
 
+// Mount a device: one of the devices mounted nowhere, then its mount form —
+// the rack, the units, the plate the catalog has for its model.
+function MountDeviceCard() {
+  const t = useRead<Topology>("topology").env?.data ?? null;
+  const v = t?.racks ?? null;
+  const [device, setDevice] = useState("");
+  const [open, setOpen] = useState<{ device: string; prefill: Record<string, string | boolean | string[]> } | null>(null);
+  const operator = canOperate(useMe());
+  // open_console mount-device {device, rack, u, …}: the form for that device.
+  useOpenedBy("mount-device", undefined, (values) => {
+    const d = typeof values.device === "string" ? values.device : "";
+    const { device: _d, ...rest } = values;
+    if (d) setOpen({ device: d, prefill: rest });
+  }, operator && v !== null);
+  const choices = v?.unplaced ?? [];
+  const pick = device || choices[0]?.device || "";
+  return (
+    <WizardCard
+      title="Mount a device"
+      action={
+        operator ? (
+          <span className="toolbar">
+            <select value={pick} onChange={(e) => setDevice(e.target.value)} disabled={!choices.length}>
+              {choices.map((u) => (
+                <option key={u.device} value={u.device}>{u.device}</option>
+              ))}
+            </select>
+            <button className="btn" disabled={!pick || !v?.racks.length} onClick={() => setOpen({ device: pick, prefill: {} })}>
+              Mount…
+            </button>
+            {open ? (
+              <Operate
+                title={`Mount ${open.device}`}
+                steps={mountSteps(open.device, v).map((s) => ({ ...s, prefill: { ...s.prefill, ...open.prefill } }))}
+                onClose={() => setOpen(null)}
+              />
+            ) : null}
+          </span>
+        ) : null
+      }
+    >
+      {v === null
+        ? "The topology carries no racks yet."
+        : !v.racks.length
+          ? "Add a rack first: a device is mounted at its units in a rack."
+          : choices.length
+            ? <>Where a device sits: its rack, units and faceplate, for the Rack view. {choices.length} device{choices.length === 1 ? "" : "s"} mounted nowhere.</>
+            : "Every device is mounted."}
+    </WizardCard>
+  );
+}
+
 export function Day2({ doc }: { doc: SetupDoc | null }) {
   const me = useMe();
   const zones = useRead<ZoneIn[]>("zones");
@@ -66,6 +120,12 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
         <WizardCard title="Add a satellite" action={<SatelliteButton />}>
           A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
         </WizardCard>
+      </Group>
+      <Group title="Racks">
+        <WizardCard title="Add a rack" action={<OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} opens={{ wizard: "add-rack" }} />}>
+          A rack the site's hardware sits in: its height in units, its width, how its units are numbered, its building and room.
+        </WizardCard>
+        <MountDeviceCard />
       </Group>
       <Group title="Environments, people and stacks">
         <WizardCard title="Add an environment" action={<OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} opens={{ wizard: "add-environment" }} />}>

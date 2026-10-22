@@ -20,7 +20,9 @@ export type Sel =
   | { kind: "outside"; id: string }
   | { kind: "guest"; id: string }
   | { kind: "isp"; id: string }
-  | { kind: "firewall"; id: string };
+  | { kind: "firewall"; id: string }
+  | { kind: "rack"; id: string }
+  | { kind: "mount"; id: string };
 
 export type Pick = (s: Sel) => void;
 

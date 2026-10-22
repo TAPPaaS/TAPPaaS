@@ -263,7 +263,9 @@ async function serve(o: ServeOpts): Promise<number> {
   // What a job may run: every manager's `--help --json` and the declared bash verbs.
   const bashFile = process.env.CONSOLE_MANIFEST_FILE ?? join(__dirname, "..", "..", "..", "manifest", "bash-verbs.json");
   const srv = server;
-  void loadManifests(runAsync, bashFile, registeredManagers(o.configDir)).then((ms) => {
+  // Development: CONSOLE_EXTRA_MANAGERS loads managers the site's registry does not list yet.
+  const extra = list(process.env.CONSOLE_EXTRA_MANAGERS ?? "");
+  void loadManifests(runAsync, bashFile, [...new Set([...registeredManagers(o.configDir), ...extra])]).then((ms) => {
     srv.manifests = ms;
     info(`  verb manifests: ${ms.byBin.size} (${[...ms.byBin.keys()].join(", ")})`);
     for (const e of ms.errors) warn(`  no manifest from ${e.bin}: ${e.error}`);
