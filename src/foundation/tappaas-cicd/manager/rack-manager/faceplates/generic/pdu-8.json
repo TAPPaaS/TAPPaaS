@@ -1,0 +1,45 @@
+{
+  "vendor": "Generic",
+  "model": "8-outlet PDU",
+  "kind": "pdu",
+  "units": 1,
+  "width": "full",
+  "passive": true,
+  "description": "Passive: its outlets, for recorded power cables.",
+  "rows": [
+    [
+      {
+        "name": "outlet 1",
+        "kind": "power"
+      },
+      {
+        "name": "outlet 2",
+        "kind": "power"
+      },
+      {
+        "name": "outlet 3",
+        "kind": "power"
+      },
+      {
+        "name": "outlet 4",
+        "kind": "power"
+      },
+      {
+        "name": "outlet 5",
+        "kind": "power"
+      },
+      {
+        "name": "outlet 6",
+        "kind": "power"
+      },
+      {
+        "name": "outlet 7",
+        "kind": "power"
+      },
+      {
+        "name": "outlet 8",
+        "kind": "power"
+      }
+    ]
+  ]
+}

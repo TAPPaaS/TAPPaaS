@@ -1,0 +1,16 @@
+{
+  "vendor": "Generic",
+  "model": "Access point",
+  "kind": "ap",
+  "units": 1,
+  "width": "third",
+  "description": "An access point the catalog lacks: its one uplink port.",
+  "rows": [
+    [
+      {
+        "name": "uplink",
+        "kind": "poe"
+      }
+    ]
+  ]
+}

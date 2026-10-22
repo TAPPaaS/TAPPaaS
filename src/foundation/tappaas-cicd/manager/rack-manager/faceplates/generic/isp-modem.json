@@ -1,0 +1,34 @@
+{
+  "vendor": "Generic",
+  "model": "ISP modem",
+  "kind": "modem",
+  "units": 1,
+  "width": "half",
+  "passive": true,
+  "description": "The ISP's modem or ONT: placed by the cable record of the hand-off, or mounted when it sits in the rack.",
+  "rows": [
+    [
+      {
+        "name": "WAN",
+        "kind": "rj45"
+      },
+      null,
+      {
+        "name": "LAN 1",
+        "kind": "rj45"
+      },
+      {
+        "name": "LAN 2",
+        "kind": "rj45"
+      },
+      {
+        "name": "LAN 3",
+        "kind": "rj45"
+      },
+      {
+        "name": "LAN 4",
+        "kind": "rj45"
+      }
+    ]
+  ]
+}

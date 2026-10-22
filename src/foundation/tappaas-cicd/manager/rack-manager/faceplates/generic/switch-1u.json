@@ -1,0 +1,10 @@
+{
+  "vendor": "Generic",
+  "model": "1U switch",
+  "kind": "switch",
+  "units": 1,
+  "width": "full",
+  "generic": "ports",
+  "description": "Filled from the switch: its ports as the switch names them, odd over even.",
+  "rows": []
+}

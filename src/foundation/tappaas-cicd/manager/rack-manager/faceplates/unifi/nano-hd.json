@@ -1,0 +1,28 @@
+{
+  "vendor": "UniFi",
+  "model": "Nano HD",
+  "match": [
+    "U7NHD",
+    "UAP-nanoHD",
+    "UAP nanoHD"
+  ],
+  "kind": "ap",
+  "units": 1,
+  "width": "third",
+  "description": "A ceiling or wall access point, powered over its one port; drawn as a third-width plate when it sits in a rack or on a shelf.",
+  "rows": [
+    [
+      {
+        "name": "Port 1",
+        "id": "uplink",
+        "kind": "poe"
+      }
+    ]
+  ],
+  "labels": [
+    {
+      "text": "UniFi AP",
+      "at": "left"
+    }
+  ]
+}

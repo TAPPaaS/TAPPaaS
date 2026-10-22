@@ -226,7 +226,7 @@ export function suggestFaceplate(catalog: Faceplate[], d: { kind: DeviceKind | "
   const names = [d.model, d.name].map(canon).filter((x) => x !== "");
   const hit = catalog.find((f) => !f.generic && [f.model, ...(f.match ?? [])].some((m) => names.includes(canon(m))));
   if (hit) return hit.key;
-  const generic: Record<string, string> = { node: "generic/server-2u", switch: "generic/switch-1u", machine: "generic/server-1u" };
+  const generic: Record<string, string> = { node: "generic/server-2u", switch: "generic/switch-1u", machine: "generic/server-1u", ap: "generic/ap" };
   const g = generic[d.kind];
   return g && catalog.some((f) => f.key === g) ? g : null;
 }

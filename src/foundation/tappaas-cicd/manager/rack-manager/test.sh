@@ -76,6 +76,13 @@ RM mount remove tappaas1 >/dev/null 2>&1 && RM mount remove "${USW}" >/dev/null 
 RM rack delete rack1 >/dev/null 2>&1 && ok "rack delete: once empty" || bad "rack delete"
 [[ "$(jq -r '.racks | length' "${DOC}")" == "0" ]] && ok "rack delete: recorded" || bad "rack delete: recorded"
 [[ -z "$(ls -A "${FIX}/cfg" | grep -v '^racks.json$')" ]] && ok "no lock or temp file left behind" || bad "left behind: $(ls -A "${FIX}/cfg")"
+# The catalog as shipped, through the CLI.
+RMC() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="${HERE}/faceplates" \
+    run_ts "node '${DIST}/manager/rack-manager/src/main.js' $(printf "'%s' " "$@")"; }
+[[ "$(RMC faceplates list --json 2>/dev/null | jq 'length')" -ge 11 ]] && ok "faceplates list: the shipped catalog" || bad "faceplates list"
+[[ "$(RMC faceplates show mikrotik/crs317-1g-16s 2>/dev/null | grep -c 'sfp-sfpplus')" == "2" ]] && ok "faceplates show: the CRS317's two SFP+ rows" || bad "faceplates show mikrotik/crs317-1g-16s"
+[[ "$(RMC faceplates show unifi/usw-pro-xg-10-poe --device "${USW}" --topology "${TOPO}" --json 2>/dev/null | jq -r '.rows[0][2].zones[0]')" == "wan" ]] \
+    && ok "faceplates show --device: port 5 carries the wan zone" || bad "faceplates show --device on the UniFi plate"
 RM --help --json 2>/dev/null | jq -e '.verbs | length > 10' >/dev/null && ok "--help --json is the verb manifest" || bad "--help --json"
 
 rm -rf -- "${DIST}"

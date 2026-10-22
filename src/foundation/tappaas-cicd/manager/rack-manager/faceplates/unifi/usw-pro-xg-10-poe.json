@@ -1,0 +1,78 @@
+{
+  "vendor": "UniFi",
+  "model": "USW Pro XG 10 PoE",
+  "match": [
+    "USWED77",
+    "USW-Pro-XG-10-PoE"
+  ],
+  "kind": "switch",
+  "units": 1,
+  "width": "full",
+  "description": "1U, ten 10 GbE RJ45 ports with PoE++ (1-10) and two 10G SFP+ cages (11-12); odd ports on the top row, as on the unit.",
+  "rows": [
+    [
+      {
+        "name": "Port 1",
+        "kind": "poe"
+      },
+      {
+        "name": "Port 3",
+        "kind": "poe"
+      },
+      {
+        "name": "Port 5",
+        "kind": "poe"
+      },
+      {
+        "name": "Port 7",
+        "kind": "poe"
+      },
+      {
+        "name": "Port 9",
+        "kind": "poe"
+      },
+      null,
+      {
+        "name": "Port 11",
+        "kind": "sfp+"
+      }
+    ],
+    [
+      {
+        "name": "Port 2",
+        "kind": "poe"
+      },
+      {
+        "name": "Port 4",
+        "kind": "poe"
+      },
+      {
+        "name": "Port 6",
+        "kind": "poe"
+      },
+      {
+        "name": "Port 8",
+        "kind": "poe"
+      },
+      {
+        "name": "Port 10",
+        "kind": "poe"
+      },
+      null,
+      {
+        "name": "Port 12",
+        "kind": "sfp+"
+      }
+    ]
+  ],
+  "labels": [
+    {
+      "text": "UniFi",
+      "at": "left"
+    },
+    {
+      "text": "Pro XG 10 PoE",
+      "at": "right"
+    }
+  ]
+}

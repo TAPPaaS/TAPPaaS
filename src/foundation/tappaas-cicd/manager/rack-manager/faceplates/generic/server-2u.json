@@ -1,0 +1,10 @@
+{
+  "vendor": "Generic",
+  "model": "2U server",
+  "kind": "server",
+  "units": 2,
+  "width": "full",
+  "generic": "nics",
+  "description": "Filled from the node: its NICs, as the node names them, from its uplinks.",
+  "rows": []
+}
