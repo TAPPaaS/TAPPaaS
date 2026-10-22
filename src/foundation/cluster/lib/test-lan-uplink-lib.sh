@@ -48,6 +48,14 @@ check "running on the backup: warned" "$(has "$(live "[${TG0},${GE0}]" active-ba
 DOWN="$(port tg0 aa:00:00:00:00:01 -1 down 1 sw1)"
 check "a leg down: warned" "$(has "$(live "[${DOWN},${GE0}]" active-backup lanbond true ge0 tg0)" '' 'tg0 is down')" yes
 
+# A USB leg (#849): down says how to bring it back; a declared one the node does
+# not have at all (pulled out) is named; with it present nothing is said.
+USBDOWN="$(port usblan0 aa:00:00:00:00:09 -1 down 1 sw2 | jq -c '.usb = true')"
+check "a USB leg down: says replug or ifup" "$(has "$(live "[${TG0},${USBDOWN}]" active-backup lanbond true tg0 tg0)" '' 'a USB NIC: replug it, or on the node: ifup lanbond')" yes
+ABDECL='{"lan":{"ports":["aa:00:00:00:00:01","aa:00:00:00:00:09"],"mode":"active-backup","primary":"aa:00:00:00:00:01"}}'
+check "a declared USB leg the node lacks: named" "$(has "$(live "[${TG0}]" single "" true)" "${ABDECL}" 'declared lan port aa:00:00:00:00:09 is not on tappaas2')" yes
+check "every declared port present: no such finding" "$(has "${AB}" "$(lu_declaration <<<"${AB}")" 'is not on tappaas2')" no
+
 LACP_OK="$(live "[${TG0},${TG1}]" lacp lanbond true '' '' 1 02:11:22:33:44:55)"
 check "healthy LACP across two switches"   "$(findings "${LACP_OK}" "$(lu_declaration <<<"${LACP_OK}")")" "[]"
 check "LACP without a partner: no LAG"     "$(has "$(live "[${TG0},${TG1}]" lacp lanbond true '' '' 1 00:00:00:00:00:00)" '' 'no LACP partner')" yes

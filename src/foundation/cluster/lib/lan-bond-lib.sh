@@ -103,6 +103,16 @@ lb_wan_none() {
     '
 }
 
+# The wan bridge carries <port> (#849): the reverse of lb_wan_none, so the
+# firewall's WAN role can move to this node. stdin → stdout.
+lb_wan_port() {
+    awk -v p="$1" '
+        /^[^ \t]/ { inwan = ($0 ~ /^iface wan( |$)/) }
+        inwan && /^[ \t]+bridge-ports[ \t]/ { print "\tbridge-ports " p; next }
+        { print }
+    '
+}
+
 # The port to prefer in active-backup: the fastest, the first named on a tie.
 # Args: <ports>; speeds from LB_SPEED_CMD <port> (Mb/s, -1 or empty = unknown).
 lb_speed() { cat "/sys/class/net/$1/speed" 2>/dev/null || echo -1; }

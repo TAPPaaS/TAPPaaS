@@ -46,6 +46,9 @@
 #                    With --no-wan the wan bridge gives up its port (bridge-ports
 #                    none, as on a node added with --no-wan), so that port can join
 #                    the lan bond; refused while a guest is on the wan bridge.
+#                    With --wan-port p the wan bridge carries p (#849): the reverse,
+#                    so the firewall's WAN role can move to this node; p must be a
+#                    free physical port, not one of the lan ports.
 #
 # lan uplink (#40):
 #   --lan-port a,b   Two or more ports bond under `lan` as `lanbond`.
@@ -419,6 +422,22 @@ logger -t tappaas-usb-nic "$n rejoined $b"
 HELPER
   chmod 755 "$USB_HELPER"
 }
+# forget_usb_rules: a USB NIC no longer among the lan ports loses its udev rule
+# (its pinned name stays: harmless, and stable if it comes back).
+forget_usb_rules() {
+  [[ -f "$USB_RULES" && "$DRY_RUN" != 1 ]] || return 0
+  local keep="" p mac tmp
+  for p in $LAN_PORTS; do mac="$(cat "/sys/class/net/$p/address" 2>/dev/null)"; [[ -n "$mac" ]] && keep+=" ${mac,,}"; done
+  tmp="$(mktemp)"
+  while IFS= read -r line; do
+    mac="$(grep -oiE 'address\}=="([0-9a-f]{2}:){5}[0-9a-f]{2}' <<<"$line" | grep -oiE '([0-9a-f]{2}:){5}[0-9a-f]{2}')"
+    if [[ -z "$mac" || " ${keep} " == *" ${mac,,} "* ]]; then printf '%s\n' "$line" >> "$tmp"
+    else info "  ${mac} is no longer a lan port: its USB rejoin rule goes"; fi
+  done < "$USB_RULES"
+  if [[ -s "$tmp" ]]; then cat "$tmp" > "$USB_RULES"; else rm -f "$USB_RULES"; fi
+  rm -f "$tmp"; udevadm control --reload 2>/dev/null || true
+}
+
 # prepare_usb_ports: rewrite LAN_PORT so each USB NIC has its pinned name; with
 # --apply, pin and rename it now and install the helper and its udev rule.
 prepare_usb_ports() {
@@ -458,8 +477,17 @@ set_lan() {
   local p wanm cur new gw ok _i
   ip link show lan &>/dev/null || die "--set-lan: this node has no lan bridge — bootstrap it first"
   [[ -n "$LAN_PORT" ]] || die "--set-lan needs --lan-port"
+  [[ "$NO_WAN" == 1 && -n "$WAN_PORT" ]] && die "--no-wan and --wan-port are each other's opposite — give one"
   prepare_usb_ports
   resolve_lan
+  forget_usb_rules
+  if [[ -n "$WAN_PORT" ]]; then
+    in_ports "$WAN_PORT" || die "--wan-port ${WAN_PORT}: not a physical port"
+    [[ " $LAN_PORTS " == *" ${WAN_PORT} "* ]] && die "--wan-port ${WAN_PORT} is one of the lan ports — take it out of --lan-port first"
+    [[ -z "$(ip -o -4 addr show "$WAN_PORT" 2>/dev/null)" ]] || die "--wan-port ${WAN_PORT} has an address of its own — not a free port"
+    [[ -n "$(ip -o link show "$WAN_PORT" | grep -oE 'master [^ ]+' | grep -v 'master wan')" ]] \
+      && die "--wan-port ${WAN_PORT} is in $(ip -o link show "$WAN_PORT" | grep -oE 'master [^ ]+' | awk '{print $2}') — free it first"
+  fi
   wanm=",$(bridge_members wan),"
   if [[ "$NO_WAN" == 1 ]]; then
     # The wan bridge's own guests (the firewall's WAN NIC) would lose their uplink.
@@ -474,7 +502,8 @@ set_lan() {
   cur="$(cat "$INTERFACES")"
   new="$(lb_set_lan "$LAN_BRIDGE_PORT" "$LAN_STANZA" "$LAN_MTU" <<<"$cur")"
   [[ "$NO_WAN" == 1 ]] && new="$(lb_wan_none <<<"$new")"
-  info "${BOLD}lan uplink${CL} ← $(lan_desc)$([[ "$NO_WAN" == 1 ]] && echo "; wan ← no port")"
+  [[ -n "$WAN_PORT" ]] && new="$(lb_wan_port "$WAN_PORT" <<<"$new")"
+  info "${BOLD}lan uplink${CL} ← $(lan_desc)$([[ "$NO_WAN" == 1 ]] && echo "; wan ← no port")$([[ -n "$WAN_PORT" ]] && echo "; wan ← ${WAN_PORT}")"
   if [[ "$new" == "$cur" ]]; then
     info "${GN}✓${CL} ${INTERFACES} already says so — nothing to change."
     [[ "$DRY_RUN" == 1 ]] || echo ok > "$SET_LAN_RESULT"
@@ -642,6 +671,7 @@ if [[ -z "$LAN_PORT" ]]; then
     info "Auto-selected LAN port ${BL}${LAN_PORT}${CL}."
   fi
 fi
+prepare_usb_ports   # a USB lan port is pinned and rejoins its bond (#849), as with --set-lan
 resolve_lan
 [[ -n "$WAN_PORT" && " $LAN_PORTS " == *" ${WAN_PORT} "* ]] && die "LAN and WAN ports must differ."
 

@@ -42,9 +42,10 @@ port_json() {
         --arg mii "$(rd "$d/bonding_slave/mii_status")" --arg agg "$agg" \
         --arg as "$(rd "$d/bonding_slave/ad_actor_oper_port_state")" --arg ps "$(rd "$d/bonding_slave/ad_partner_oper_port_state")" \
         --arg ch "$ch" --arg nm "$(kv "$n" chassis name)" --arg pt "$(kv "$n" port 'ifname|local|mac')" \
+        --arg usb "$(readlink -f "$d/device" 2>/dev/null | grep -q '/usb[0-9]' && echo true || echo false)" \
         '{name: $name, mac: ($mac | ascii_downcase), state: $state,
           speed: (($speed | tonumber?) // -1), mtu: (($mtu | tonumber?) // 0),
-          mii: $mii, aggregator: $agg,
+          mii: $mii, aggregator: $agg, usb: ($usb == "true"),
           actorState: (($as | tonumber?) // -1), partnerState: (($ps | tonumber?) // -1),
           lldp: (if $ch == "" then null else {chassis: $ch, name: $nm, port: $pt} end)}'
 }
@@ -118,7 +119,13 @@ lu_findings() {
           else empty end ),
         ( if ($M | length) > 1 then
             ( $M[] | select(.state != "up" or (.mii != "" and .mii != "up"))
-              | {level: "warn", text: "\(.name) is down — the bond runs on one leg less"} )
+              | {level: "warn", text: "\(.name) is down — the bond runs on one leg less\(if .usb then " (a USB NIC: replug it, or on the node: ifup \($L.lan.bond))" else "" end)"} )
+          else empty end ),
+        # A declared lan port the node does not have at all — on a site that
+        # declares a USB leg, an adapter pulled out or not enumerated (#849).
+        ( if $DL != null then
+            ( $DL.ports[] | ascii_downcase | select(. as $m | [$L.ports[].mac] | index($m) | not)
+              | {level: "warn", text: "declared lan port \(.) is not on \($n) — a USB NIC unplugged or not seen by the kernel? Replug it (lsusb on the node)"} )
           else empty end ),
         ( if $L.lan.mode == "active-backup" and $L.lan.primary != "" and $L.lan.active != $L.lan.primary then
             {level: "warn", text: "active-backup runs on \($L.lan.active), not on its primary \($L.lan.primary)"}

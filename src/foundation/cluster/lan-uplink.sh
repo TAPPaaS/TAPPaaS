@@ -21,7 +21,7 @@
 #       Declared next to live: members, mode, state, speed, LACP aggregator, the
 #       switch each port reaches (LLDP), corosync — and what is wrong with it.
 #   lan-uplink.sh set <node> [--lan-ports <a,b>] [--lan-mode active-backup|lacp]
-#                            [--lan-primary <p>] [--mtu <n>] [--no-wan] [--switch-wait <s>] [--config-only]
+#                            [--lan-primary <p>] [--mtu <n>] [--no-wan | --wan-port <p>] [--switch-wait <s>] [--config-only]
 #                            [--dry-run|--execute] [--yes]
 #       Declares the uplink (ports by name or MAC), then converges the node to it:
 #       a preview by default; --execute drains the node (HA maintenance), carries
@@ -29,6 +29,10 @@
 #       here (mgmt, members up, LACP aggregated, corosync) and only then confirms,
 #       and brings the node back. Without --lan-ports it converges the declaration
 #       there is. --config-only declares without contacting the node (MACs only).
+#       --wan-port <p>: the wan bridge carries <p> (declared wan.ports [<mac>]) — the
+#       reverse of --no-wan, so the firewall's WAN role can move to this node (#849).
+#       <p> by name or MAC; not one of the lan ports. Moving the firewall's failover
+#       there also takes the network module's HANode and the switch port (README).
 #       --no-wan: the wan bridge gives up its port (declared wan.ports []), so it
 #       can join the lan bond — the node can no longer carry the firewall's WAN.
 #       --switch-wait <s>: wait up to <s> seconds (instead of 30) for the change to
@@ -68,7 +72,7 @@ readonly LOCK=/tmp/tappaas-lan-uplink.lock
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
 CMD="${1:-}"; shift || true
-NODE="" JSON=0 LAN_PORTS="" LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" CONFIG_ONLY=0 EXECUTE=0 YES=0 NO_WAN=0
+NODE="" JSON=0 LAN_PORTS="" LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" CONFIG_ONLY=0 EXECUTE=0 YES=0 NO_WAN=0 WAN_PORT=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --json)        JSON=1 ;;
@@ -78,6 +82,7 @@ while [[ $# -gt 0 ]]; do
         --mtu)         LAN_MTU="${2:-}"; shift ;;
         --config-only) CONFIG_ONLY=1 ;;
         --no-wan)      NO_WAN=1 ;;
+        --wan-port)    WAN_PORT="${2:-}"; shift ;;
         --switch-wait) CONFIRM_BY="${2:-}"; shift ;;
         --dry-run)     EXECUTE=0 ;;
         --execute)     EXECUTE=1 ;;
@@ -90,6 +95,7 @@ while [[ $# -gt 0 ]]; do
 done
 [[ -n "${CMD}" && -n "${NODE}" ]] || { usage; exit 2; }
 [[ -z "${LAN_MTU}" || "${LAN_MTU}" =~ ^[0-9]+$ ]] || die "--mtu: not a number"
+[[ "${NO_WAN}" == 1 && -n "${WAN_PORT}" ]] && die "--no-wan and --wan-port are each other's opposite — give one"
 [[ "${CONFIRM_BY}" =~ ^[0-9]+$ && "${CONFIRM_BY}" -ge 30 && "${CONFIRM_BY}" -le 1800 ]] \
     || die "--switch-wait: seconds, 30 to 1800"
 (( CONFIRM_BY + 15 > ROLLBACK_SECS )) && ROLLBACK_SECS=$(( CONFIRM_BY + 15 ))
@@ -124,7 +130,7 @@ show_human() {  # <report>
       | "  live      \($l.mode)\(if $l.bond != "" then " (\($l.bond))" else "" end)  mtu \($l.mtu)"
         + (if $l.mode == "active-backup" then "  active \($l.active), primary \($l.primary)" else "" end)
         + (if $l.mode == "lacp" then "  aggregator \($l.aggregator), partner \($l.partnerMac)" else "" end),
-        ($l.members[] | "    \(.name)\t\(.mac)  \(spd)\t\(.state)\(if .aggregator != "" then "  agg \(.aggregator)" else "" end)\t→ \(lldp)"),
+        ($l.members[] | "    \(.name)\t\(.mac)  \(spd)\t\(.state)\(if .aggregator != "" then "  agg \(.aggregator)" else "" end)\(if .usb then "  (USB)" else "" end)\t→ \(lldp)"),
         "  wan       \([.live.wan.members[].name] | join(", ") | if . == "" then "-" else . end)",
         "  declared  \(if .declared == null or .declared.lan == null then "nothing"
                        else "\(.declared.lan.mode // "-") on \(.declared.lan.ports | join(", "))"
@@ -147,6 +153,28 @@ write_declared() {  # <uplinks-json>: replaces .uplinks.lan, keeps .uplinks.wan 
         || { rm -f "${tmp}"; die "could not write config/${NODE}.json"; }
     chmod --reference="${CFG}" "${tmp}" 2>/dev/null || true
     mv "${tmp}" "${CFG}"
+}
+
+# The wan declaration for --wan-port: {wan: {ports: [<mac>]}}, the port resolved
+# on <live> (or a MAC with --config-only), refused when it is a lan port.
+wan_declaration() {  # [<live>]
+    local live="${1:-}" mac lan
+    if [[ -n "${live}" ]]; then
+        mac="$(lu_resolve_ports "${live}" "${WAN_PORT}" | awk '{print $2}')" || exit 2
+    else
+        [[ "${WAN_PORT,,}" =~ ^([0-9a-f]{2}:){5}[0-9a-f]{2}$ ]] || die "--config-only names the wan port by MAC (${WAN_PORT} is not one)"
+        mac="${WAN_PORT,,}"
+    fi
+    # The lan ports it must not be: the ones given now, else the declared ones.
+    if [[ -n "${LAN_PORTS}" && -n "${live}" ]]; then
+        lan="$(lu_resolve_ports "${live}" "${LAN_PORTS}" | awk '{print $2}' | tr '\n' ' ')"
+    elif [[ -n "${LAN_PORTS}" ]]; then
+        lan="$(lb_ports "${LAN_PORTS}" | tr 'A-F' 'a-f')"
+    else
+        lan="$(declared | jq -r '.lan.ports[]? | ascii_downcase' | tr '\n' ' ')"
+    fi
+    [[ " ${lan} " == *" ${mac} "* ]] && die "--wan-port ${WAN_PORT} is one of ${NODE}'s lan ports — take it out of --lan-ports first"
+    jq -cn --arg m "${mac}" '{wan: {ports: [$m]}}'
 }
 
 # The lan declaration from the flags, checked against the node when <live> is
@@ -214,6 +242,9 @@ setlan_args() {  # <live> <declaration>
         + (if (.primary // "") != "" and (.mode // "active-backup") == "active-backup" then ["--lan-primary", name(.primary)] else [] end)
         + (if .mtu then ["--mtu", (.mtu | tostring)] else [] end)
         + (if $wan == [] and ($l.wan.members | length) > 0 then ["--no-wan"] else [] end)
+        + (if ($wan | type) == "array" and ($wan | length) > 0
+              and ([$l.wan.members[].mac] != [$wan[] | ascii_downcase])
+           then ["--wan-port", name($wan[0])] else [] end)
         | @sh' <<<"$2"
 }
 
@@ -525,12 +556,21 @@ case "${CMD}" in
         if [[ -z "${LAN_PORTS}" && "${NO_WAN}" == 1 ]]; then
             write_declared '{"wan": {"ports": []}}'
             info "${GN}✓${CL} declared in config/${NODE}.json: no wan port"
+        elif [[ -z "${LAN_PORTS}" && -n "${WAN_PORT}" ]]; then
+            [[ "$(declared | jq -c '.lan // null')" != null ]] || die "nothing declared for ${NODE}'s lan — give --lan-ports with --wan-port"
+            if [[ "${CONFIG_ONLY}" == 1 ]]; then d="$(wan_declaration)"
+            else live="$(probe)" || die "cannot reach ${NODE} (--config-only declares without it, by MAC)"; d="$(wan_declaration "${live}")"; fi
+            write_declared "${d}"
+            info "${GN}✓${CL} declared in config/${NODE}.json: $(jq -c . <<<"${d}")"
         elif [[ -n "${LAN_PORTS}" ]]; then
             if [[ "${CONFIG_ONLY}" == 1 ]]; then
                 d="$(declaration_from_flags)"
             else
                 live="$(probe)" || die "cannot reach ${NODE} (--config-only declares without it, by MAC)"
                 d="$(declaration_from_flags "${live}")"
+            fi
+            if [[ -n "${WAN_PORT}" ]]; then
+                d="$(jq -c --argjson w "$(if [[ "${CONFIG_ONLY}" == 1 ]]; then wan_declaration; else wan_declaration "${live}"; fi)" '. + $w' <<<"${d}")"
             fi
             write_declared "${d}"
             info "${GN}✓${CL} declared in config/${NODE}.json: $(jq -c . <<<"${d}")"

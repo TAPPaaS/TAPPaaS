@@ -89,5 +89,10 @@ check "no-wan: the route on wan stays"   "$(grep -c 'post-up ip route' <<<"${NOW
 check "no-wan: lan untouched"            "$(sed -n '/^iface lan/,$p' <<<"${NOWAN}")" "$(sed -n '/^iface lan/,$p' <<<"${ORIG}")"
 check "ge0 moves from wan into the bond" "$(lb_set_lan lanbond "$(lb_bond_stanza 'tg0 ge0' active-backup tg0 '')" <<<"${NOWAN}" | grep -c 'bridge-ports ge0')" "0"
 
+WANP="$(lb_wan_port ge1 <<<"${NOWAN}")"
+check "wan-port: wan carries the port again" "$(sed -n '/^iface wan/,/^$/p' <<<"${WANP}" | grep bridge-ports)" $'\tbridge-ports ge1'
+check "wan-port: lan untouched"          "$(sed -n '/^iface lan/,$p' <<<"${WANP}")" "$(sed -n '/^iface lan/,$p' <<<"${NOWAN}")"
+check "wan-port: the route on wan stays" "$(grep -c 'post-up ip route' <<<"${WANP}")" "1"
+
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

@@ -157,7 +157,26 @@ MAC (Proxmox's `pve-network-interface-pinning`), USB autosuspend is turned off f
 and a udev rule (`/etc/udev/rules.d/90-tappaas-usb-nic.rules`, running
 `/usr/local/sbin/tappaas-usb-nic-up`) puts it back in its bond when it appears after boot
 or a replug; a missing adapter at boot is skipped and the bond runs on the other leg. On
-hrossen tappaas3 runs `eno1` + an RTL8156 2.5G dongle (`usblan0`) this way.
+hrossen tappaas3 runs `eno1` + an RTL8156 2.5G dongle (`usblan0`) this way. Prefer
+Realtek adapters on the in-kernel `r8152` driver — RTL8153 (1G), RTL8156B (2.5G); ASIX
+AX88179 adapters have a history of dropping out. `node network show` marks a USB leg
+`(USB)`; a missing or down one says how to bring it back (replug, or `ifup lanbond`).
+
+**Moving the firewall's WAN role to another node (#849).** A node carries the
+firewall's WAN only when its `wan` bridge has a port. `site-manager node network set
+<node> --wan-port <port> --apply` gives it one (the reverse of `--no-wan`), through the
+same drain and 45s rollback. For the firewall to fail over there as well:
+
+1. the switch port that cable reaches is an access port in the WAN VLAN
+   (`switch-manager add-port <switch> <port> --type device --zone wan`), cabled the
+   same way as the current WAN node's;
+2. the network module's HA placement (its `HANode`, which writes the `ha-network`
+   affinity rule) names the node as the failover target —
+   `module-manager modify network --set HANode=<node>`;
+3. the guest-bridge check (#836) then allows the firewall there, since the node has
+   a `wan` bridge with a port.
+
+The old node can give its WAN port up (`--no-wan`) once the new one carries it.
 
 **Switching to `lacp`** needs both ends: the node speaking LACP and its switch ports
 one aggregate (LAG). When the switch controller knows which switch ports the node's
