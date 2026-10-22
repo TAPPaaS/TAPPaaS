@@ -59,6 +59,9 @@ its state as the Storage view colours its cards (its findings' worst level; a dr
 node's uplink leg down or a buddy down are warnings; the reason on hover; one legend for both
 views); one line per pair of devices a cable joins (several cables or a LAG thicker, the internet's
 hand-off and the WAN dashed, a buddy's tunnel dotted, a cable down red), labelled with its ports.
+The graph is laid out by force around the selected device: it moves to the middle, the devices one
+link away on a ring around it, the rest further out, animated from where they were; cards can be
+dragged, Fit shows every device, `?select=` selects and centres; a click on a line opens its link.
 A click opens the side panel: on top the device's faceplate drawn as the Physical view draws it
 (the rack catalog's plate, or a generic one from the ports the topology knows), its cabled ports
 underlined and the selected link's ports ringed, a click on a port selecting that switch port or

@@ -168,3 +168,111 @@ export function selectedDevice(g: { nodes: DevNode[] }, s: Sel | null): string |
   const n = g.nodes.find((x) => x.sel.kind === s.kind && x.sel.id === s.id);
   return n?.id ?? null;
 }
+
+// ── layout ────────────────────────────────────────────────────────────
+// A force-directed layout around the selected device: it sits at the origin,
+// the devices one link away on a ring around it, two links away on the next
+// ring, and so on; links pull their ends together, devices push each other
+// apart. Without a selection the best-connected device is the centre, but
+// not held there. Deterministic: the same graph and start give the same
+// picture. `from` is where the devices are now, so a new selection moves
+// them from there.
+export interface Pt {
+  x: number;
+  y: number;
+}
+
+const RING = 210;
+
+function hash(s: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0) / 4294967296;
+}
+
+export function depths(ids: string[], links: { a: string; b: string }[], center: string): Map<string, number> {
+  const adj = new Map<string, string[]>(ids.map((i) => [i, []]));
+  for (const l of links) {
+    adj.get(l.a)?.push(l.b);
+    adj.get(l.b)?.push(l.a);
+  }
+  const d = new Map<string, number>([[center, 0]]);
+  const q = [center];
+  while (q.length) {
+    const x = q.shift()!;
+    for (const y of adj.get(x) ?? []) if (!d.has(y)) (d.set(y, d.get(x)! + 1), q.push(y));
+  }
+  const far = Math.max(0, ...d.values()) + 1;
+  for (const i of ids) if (!d.has(i)) d.set(i, far);
+  return d;
+}
+
+export function forceLayout(ids: string[], links: { a: string; b: string }[], center: string | null, from?: Map<string, Pt>): Map<string, Pt> {
+  const deg = new Map(ids.map((i) => [i, links.filter((l) => l.a === i || l.b === i).length]));
+  const hub = center ?? [...ids].sort((a, b) => deg.get(b)! - deg.get(a)! || a.localeCompare(b))[0];
+  if (!hub) return new Map();
+  const depth = depths(ids, links, hub);
+  const pos = new Map<string, Pt>();
+  for (const i of ids) {
+    const p = from?.get(i);
+    const a = hash(i) * 2 * Math.PI;
+    const r = depth.get(i)! * RING;
+    pos.set(i, p ? { ...p } : { x: r * Math.cos(a), y: r * Math.sin(a) });
+  }
+  // The new centre's neighbours start on its side of the old picture.
+  const c0 = pos.get(hub)!;
+  for (const p of pos.values()) (p.x -= c0.x), (p.y -= c0.y);
+  const N = 320;
+  for (let it = 0; it < N; it++) {
+    const alpha = 1 - it / N;
+    const f = new Map(ids.map((i) => [i, { x: 0, y: 0 }]));
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const p = pos.get(ids[i])!;
+        const q = pos.get(ids[j])!;
+        let dx = p.x - q.x;
+        let dy = p.y - q.y;
+        let d2 = dx * dx + dy * dy;
+        if (d2 < 1) (dx = hash(ids[i] + ids[j]) - 0.5), (dy = 0.5 - hash(ids[j] + ids[i])), (d2 = 1);
+        const d = Math.sqrt(d2);
+        const k = Math.min(60, 26000 / d2);
+        f.get(ids[i])!.x += (dx / d) * k;
+        f.get(ids[i])!.y += (dy / d) * k;
+        f.get(ids[j])!.x -= (dx / d) * k;
+        f.get(ids[j])!.y -= (dy / d) * k;
+      }
+    }
+    for (const l of links) {
+      const p = pos.get(l.a);
+      const q = pos.get(l.b);
+      if (!p || !q) continue;
+      const dx = q.x - p.x;
+      const dy = q.y - p.y;
+      const d = Math.max(1, Math.hypot(dx, dy));
+      const k = (d - RING * 0.9) * 0.06;
+      f.get(l.a)!.x += (dx / d) * k;
+      f.get(l.a)!.y += (dy / d) * k;
+      f.get(l.b)!.x -= (dx / d) * k;
+      f.get(l.b)!.y -= (dy / d) * k;
+    }
+    for (const i of ids) {
+      const p = pos.get(i)!;
+      const r = Math.hypot(p.x, p.y);
+      const want = depth.get(i)! * RING;
+      // The rings: each device pulled to its distance from the centre.
+      const k = center ? (want - r) * 0.12 : -r * 0.01;
+      if (r > 0.5) (f.get(i)!.x += (p.x / r) * k), (f.get(i)!.y += (p.y / r) * k);
+    }
+    for (const i of ids) {
+      if (i === hub && center) continue;
+      const p = pos.get(i)!;
+      const v = f.get(i)!;
+      const step = Math.min(40, Math.hypot(v.x, v.y)) * alpha;
+      const n = Math.hypot(v.x, v.y) || 1;
+      p.x += (v.x / n) * step;
+      p.y += (v.y / n) * step;
+    }
+    if (center) pos.set(hub, { x: 0, y: 0 });
+  }
+  return pos;
+}

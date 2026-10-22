@@ -124,7 +124,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
           </div>
         )}
         <span className="muted">
-          {t && (shown === "rack" || shown === "device") ? `${VIEW_NAME[shown]} · ${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout automatic"}` : shown === "storage" ? `Storage · storage-manager inventory ${since(inv?.generated)}` : ""}
+          {t && (shown === "rack" || shown === "device") ? `${VIEW_NAME[shown]} · ${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout by force, around the selection"}` : shown === "storage" ? `Storage · storage-manager inventory ${since(inv?.generated)}` : ""}
         </span>
         <span className="spacer" />
         {shown === "device" ? (
@@ -186,7 +186,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
       ) : (
         <div className="physical">
           <div className="canvas">
-            {t ? <DeviceGraph t={t} sel={sel} pick={pick} labels={showLabels} /> : null}
+            {t ? <DeviceGraph t={t} sel={sel} pick={pick} onPane={() => setSel(null)} labels={showLabels} /> : null}
           </div>
           {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : null}
         </div>
