@@ -55,13 +55,12 @@ export const HELP: HelpSpec = {
     { usage: "rack list [--json]", options: [JSON_OUT] },
     { usage: "rack show <rack> [--json]", options: [JSON_OUT], note: "(the rack and its mounts)" },
     {
-      usage: "rack add <rack> [--units <n>] [--width 19in|10in] [--numbering bottom-up|top-down] [--display-name <text>] [--building <text>] [--room <text>] [--description <text>] [--check]",
+      usage: "rack add <rack> [--units <n>] [--width 19in|10in] [--numbering bottom-up|top-down] [--display-name <text>] [--room <text>] [--description <text>] [--check]",
       options: [
         ["--units N", "Its height in rack units (default 42)."],
         ["--width W", "19in (default) or 10in."],
         ["--numbering N", "bottom-up (default: U1 at the bottom) or top-down."],
         ["--display-name T", "The name shown on its frame."],
-        ["--building T", "The building it stands in."],
         ["--room T", "The room it stands in (a room record's name; text until the room is recorded)."],
         ["--description T", "What it is for."],
         CHECK,
@@ -69,18 +68,19 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "rack modify <rack> [--set <field>=<value>]... [--unset <field>]... [--check]",
-      options: [["--set F=V", "displayName, units, width, numbering, building, room, description (repeatable)."], ["--unset F", "Clear a text field: displayName, building, room, description (repeatable)."], CHECK],
+      options: [["--set F=V", "displayName, units, width, numbering, room, description (repeatable)."], ["--unset F", "Clear a text field: displayName, room, description (repeatable)."], CHECK],
     },
     { usage: "rack delete <rack> [--check]", options: [CHECK], note: "(an empty rack only)" },
     { usage: "room list [--json]", options: [JSON_OUT], note: "(the rooms, their racks and the devices loose in them)" },
     { usage: "room show <room> [--json]", options: [JSON_OUT], object: { positional: "room" } },
     {
-      usage: "room add <room> [--building <text>] [--display-name <text>] [--description <text>] [--check]",
-      options: [["--building T", "The building it is in."], ["--display-name T", "The name shown."], ["--description T", "What it is."], CHECK],
+      usage: "room add <room> [--display-name <text>] [--description <text>] [--check]",
+      options: [["--display-name T", "The name shown."], ["--description T", "What it is."], CHECK],
+      note: "(its building is the site's: site.json location)",
     },
     {
       usage: "room modify <room> [--set <field>=<value>]... [--unset <field>]... [--check]",
-      options: [["--set F=V", "displayName, building, description (repeatable)."], ["--unset F", "Clear one of them (repeatable)."], CHECK],
+      options: [["--set F=V", "displayName, description (repeatable)."], ["--unset F", "Clear one of them (repeatable)."], CHECK],
       object: { positional: "room" },
     },
     { usage: "room delete <room> [--check]", options: [CHECK], note: "(an empty room only)", object: { positional: "room" } },
@@ -183,7 +183,7 @@ function opts(args: string[], name: string): string[] {
   return out;
 }
 const VALUED = [
-  "--units", "--width", "--numbering", "--display-name", "--building", "--room", "--description", "--set", "--rack", "--u", "--height", "--slot",
+  "--units", "--width", "--numbering", "--display-name", "--room", "--description", "--set", "--rack", "--u", "--height", "--slot",
   "--face", "--faceplate", "--label", "--topology", "--from", "--to", "--kind", "--from-faceplate", "--to-faceplate", "--device", "--unset",
   "--model", "--ports", "--port", "--from-side", "--to-side", "--side", "--via",
 ];
@@ -322,7 +322,7 @@ export function run(argv: string[]): number {
     const rows = rackRows(store.load());
     if (json) return out(rows);
     if (!rows.length) info("no racks (rack add <name>)");
-    for (const r of rows) info(`${GN}${r.name}${CL}  ${r.units}U ${r.width} ${r.numbering}  ${[r.building, r.room].filter(Boolean).join(" / ") || "-"}  ${r.mounts} mount(s)${r.displayName ? `  "${r.displayName}"` : ""}`);
+    for (const r of rows) info(`${GN}${r.name}${CL}  ${r.units}U ${r.width} ${r.numbering}  ${r.room ?? "-"}  ${r.mounts} mount(s)${r.displayName ? `  "${r.displayName}"` : ""}`);
     return 0;
   }
   if (verb === "rack show") {
@@ -332,7 +332,7 @@ export function run(argv: string[]): number {
     const r = racksOf(d)[name] ?? die(`rack ${name} does not exist`);
     const mounts = mountRows(d, name);
     if (json) return out({ name, ...r, mounts });
-    info(`${GN}${name}${CL}${r.displayName ? ` "${r.displayName}"` : ""}  ${r.units}U ${r.width}, numbered ${r.numbering}${r.building || r.room ? `  in ${[r.building, r.room].filter(Boolean).join(", ")}` : ""}`);
+    info(`${GN}${name}${CL}${r.displayName ? ` "${r.displayName}"` : ""}  ${r.units}U ${r.width}, numbered ${r.numbering}${r.room ? `  in ${r.room}` : ""}`);
     if (r.description) info(`  ${r.description}`);
     for (const m of mounts) info(`  U${String(m.u).padStart(2)}${m.height > 1 ? `-${(m.u ?? 0) + m.height - 1}` : "   "}  ${m.device.padEnd(24)} ${m.face}${m.width === "full" ? "" : ` ${m.width}/${m.slot ?? 0}`}  ${m.faceplate ?? "(suggested plate)"}${m.label ? `  "${m.label}"` : ""}`);
     if (!mounts.length) info("  (empty)");
@@ -374,14 +374,14 @@ export function run(argv: string[]): number {
       if (!name) die("room show <room>");
       const r = rows.find((x) => x.name === name) ?? die(`room ${name} does not exist`);
       if (json) return out(r);
-      info(`${GN}${r.name}${CL}${r.displayName ? ` "${r.displayName}"` : ""}${r.building ? `  in ${r.building}` : ""}`);
+      info(`${GN}${r.name}${CL}${r.displayName ? ` "${r.displayName}"` : ""}`);
       info(`  racks: ${r.racks.join(", ") || "-"} · loose: ${r.loose.join(", ") || "-"}`);
       if (r.description) info(`  ${r.description}`);
       return 0;
     }
     if (json) return out(rows);
     if (!rows.length) info("no rooms (room add <name>)");
-    for (const r of rows) info(`${r.name.padEnd(20)} ${(r.building ?? "-").padEnd(16)} ${r.racks.length} rack(s), ${r.loose.length} loose${r.displayName ? `  "${r.displayName}"` : ""}`);
+    for (const r of rows) info(`${r.name.padEnd(20)} ${r.racks.length} rack(s), ${r.loose.length} loose${r.displayName ? `  "${r.displayName}"` : ""}`);
     return 0;
   }
   if (verb === "device list" || verb === "device show") {
@@ -447,7 +447,6 @@ export function run(argv: string[]): number {
         width: opt(args, "--width"),
         numbering: opt(args, "--numbering"),
         displayName: opt(args, "--display-name"),
-        building: opt(args, "--building"),
         room: opt(args, "--room"),
         description: opt(args, "--description"),
       }),
@@ -467,7 +466,7 @@ export function run(argv: string[]): number {
   if (verb === "room add") {
     const [name] = positional(args, 2);
     if (!name) die("room add <room>");
-    return change(store, check, readCatalog(), undefined, (d) => addRoom(d, name, { building: opt(args, "--building"), displayName: opt(args, "--display-name"), description: opt(args, "--description") }));
+    return change(store, check, readCatalog(), undefined, (d) => addRoom(d, name, { displayName: opt(args, "--display-name"), description: opt(args, "--description") }));
   }
   if (verb === "room modify") {
     const [name] = positional(args, 2);

@@ -11,7 +11,8 @@
 import { ReactNode, useMemo } from "react";
 import { useRead } from "../api";
 import { zoneColor } from "../colors";
-import { Health, RackCable, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
+import { Health, RackCable, SiteRead, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
+import { sitePlace } from "./views";
 import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
@@ -82,6 +83,7 @@ const farEnd = (l: DevLink, device: string) => (l.a === device ? l.b : l.a);
 export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null }) {
   const operator = canOperate(useMe());
   const health = useRead<Health>("health");
+  const place = sitePlace((useRead<SiteRead>("site").env?.data?.site ?? null) as Parameters<typeof sitePlace>[0]);
   const g = useMemo(() => deviceGraph(t), [t]);
   const devOf = (id: string): DevNode | undefined => g.nodes.find((n) => n.id === id);
   // A port clicked in a drawing: a switch's port is selected, any other's link.
@@ -420,7 +422,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
             rows={[
               ["name", r.name],
               ["height", `${r.units}U, ${r.width}, numbered ${r.numbering === "bottom-up" ? "from the bottom" : "from the top"}`],
-              ["building", r.building],
+              ["building", place ? `${place} (the site's)` : null],
               ["room", r.room],
               ["description", r.description],
               ["mounts", `${r.mounts.length} · ${used} of ${r.units} units at full width`],
@@ -526,7 +528,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       title = `${room.displayName ?? room.name} · room`;
       body = (
         <>
-          <KV rows={[["name", room.name], ["building", room.building], ["description", room.description], ["recorded", room.recorded ? "yes" : "no — only a rack's text names it (rack-manager room add)"]]} />
+          <KV rows={[["name", room.name], ["building", place ? `${place} (the site's)` : "the site's location names none"], ["description", room.description], ["recorded", room.recorded ? "yes" : "no — only a rack's text names it (rack-manager room add)"]]} />
           <h3>Racks</h3>
           <ul className="plain small">
             {room.racks.map((r) => (
@@ -546,11 +548,17 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       const rmStep = (verb: string, t: string, extra: Partial<Step> = {}): Step => ({ title: t, bin: "rack-manager", verb, fixed: [room.name], ...extra });
       actions = room.recorded ? (
         <>
-          <OperateButton label="Change…" title={`Room ${room.name}`} steps={[rmStep("room modify", `rack-manager room modify ${room.name}`, { note: "Its display name, building or description; --check previews." })]} />
+          <OperateButton label="Change…" title={`Room ${room.name}`} steps={[rmStep("room modify", `rack-manager room modify ${room.name}`, { note: "Its display name or description (its building is the site's); --check previews." })]} />
           {room.racks.length === 0 && room.loose.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete room ${room.name}`} steps={[rmStep("room delete", `rack-manager room delete ${room.name}`)]} /> : null}
         </>
-      ) : (
+      ) : /^[a-z][a-z0-9-]{0,62}$/.test(room.name) ? (
         <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `rack-manager room add ${room.name}`)]} />
+      ) : (
+        // A room name is lower case: record it under one, then point the racks at it.
+        <p className="muted small">
+          '{room.name}' is no room name (lower case letters, digits, dashes): record it as{" "}
+          <span className="mono">rack-manager room add {room.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-")} --display-name '{room.name}'</span>, then set each rack's room to it ({room.racks.map((r) => `rack modify ${r} --set room=…`).join(", ")}).
+        </p>
       );
       open = <p className="muted small">A room is a record of config/racks.json only.</p>;
       break;

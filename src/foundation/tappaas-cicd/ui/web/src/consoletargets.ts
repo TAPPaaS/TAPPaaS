@@ -48,7 +48,7 @@ export const WIZARDS: WizardDef[] = [
   { name: "add-user", title: "the Add a user wizard", arg: null, path: () => DAY2, keys: null, values: "name and the user's fields (email, groups, …)", verbs: ["identity-manager user add"] },
   {
     name: "add-rack", title: "the Add a rack wizard", arg: null, path: () => DAY2, keys: null,
-    values: "name and the rack's fields (units, width, numbering, building, room, …)", verbs: ["rack-manager rack add"],
+    values: "name and the rack's fields (units, width, numbering, room, …)", verbs: ["rack-manager rack add"],
   },
   {
     // The device is a value: a topology name may hold spaces ("USW Pro XG 10 PoE").

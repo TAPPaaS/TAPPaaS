@@ -53,7 +53,8 @@ and everything else comes from where it already is.
    the topology already has cannot be recorded.
 8. **Rooms hold racks and loose devices.** A device on a shelf has a room and no
    unit. A rack's room is a reference to a room record; free text from before
-   rooms existed is kept and noted until the room is recorded.
+   rooms existed is kept and noted until the room is recorded. A room has no
+   building of its own: the site's location names it.
 9. **A patch panel splits a wire, not a link.** A link through a panel port is two
    recorded segments, front and rear, each marked with the origin of the link they
    replace. The topology chains them back into one link between the two devices

@@ -30,7 +30,7 @@
       "additionalProperties": { "$ref": "#/$defs/device" }
     },
     "rooms": {
-      "description": "The rooms, keyed by name: where racks stand and devices stand loose.",
+      "description": "The rooms, keyed by name: where racks stand and devices stand loose. Their building is the site's (site.json location).",
       "type": "object",
       "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,62}$" },
       "additionalProperties": { "$ref": "#/$defs/room" }
@@ -74,7 +74,6 @@
           "changeClass": "in-place",
           "changeNote": "Renumbers every mount's position as drawn; the recorded U of each mount stays."
         },
-        "building": { "description": "The building the rack stands in.", "type": "string", "changeClass": "in-place" },
         "room": {
           "description": "The room the rack stands in: a room record's name (rack-manager room add). Text naming no room yet is kept as it is, with a note.",
           "type": "string",
@@ -226,7 +225,6 @@
           "changeNote": "Racks and mounts name it: add the new room, move them, delete this one."
         },
         "displayName": { "description": "The name shown.", "type": "string", "changeClass": "in-place" },
-        "building": { "description": "The building it is in.", "type": "string", "changeClass": "in-place" },
         "description": { "description": "What it is.", "type": "string", "changeClass": "in-place" }
       }
     }

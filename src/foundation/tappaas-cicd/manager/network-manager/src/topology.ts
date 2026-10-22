@@ -1244,7 +1244,7 @@ export function renderTopology(t: Topology): string[] {
   if (t.racks && (t.racks.racks.length || (t.racks.rooms ?? []).some((r) => r.loose.length))) {
     out.push("", "Racks");
     for (const r of t.racks.racks) {
-      out.push(`  ${r.name}  ${r.units}U ${r.width}${r.building || r.room ? `  ${[r.building, r.room].filter((x) => !!x).join(" / ")}` : ""}`);
+      out.push(`  ${r.name}  ${r.units}U ${r.width}${r.room ? `  ${r.room}` : ""}`);
       for (const m of r.mounts) out.push(`    U${m.u}${m.height > 1 ? `-${m.u + m.height - 1}` : ""} ${m.face}  ${m.device}  ${m.faceplate ?? "no plate"}${m.suggested ? " (suggested)" : ""}`);
     }
     for (const r of t.racks.rooms ?? []) if (r.loose.length) out.push(`  room ${r.name}, loose: ${r.loose.map((m) => m.device).join(", ")}`);

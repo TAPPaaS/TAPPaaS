@@ -56,7 +56,7 @@ check(suggestFaceplate(catalog, devices.find((d) => d.name === "tappaas2")!) ===
 
 console.log("— rack verbs");
 let d: RacksDoc = {};
-const r1 = addRack(d, "rack1", { building: "House", room: "Basement" });
+const r1 = addRack(d, "rack1", { room: "Basement" });
 check(ok(r1), "rack add");
 if (ok(r1)) d = r1.doc;
 check(d.racks!.rack1.units === 42 && d.racks!.rack1.width === "19in" && d.racks!.rack1.numbering === "bottom-up", "rack add: 42U, 19in, bottom-up unless told");

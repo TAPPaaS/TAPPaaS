@@ -14,7 +14,9 @@ import { Read, useRead } from "../api";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { SiteRead } from "../types";
-import { KV, ReadState, Section, navigate, since } from "../ui";
+import { ReactNode } from "react";
+import { KV, Link, ReadState, Section, navigate, since } from "../ui";
+import { publicAddress, publicText } from "../zonegraph";
 import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
 import { AddNodeButton } from "./AddNode";
 import { Physical } from "./Physical";
@@ -31,8 +33,6 @@ interface Repo {
   hold?: { reason?: string; until?: string } | null;
 }
 
-const SCHEDULE_FIELDS = ["updateSchedule.frequency", "updateSchedule.weekday", "updateSchedule.hour"];
-
 export const SITE_TABS = PHYSICAL_TABS.map((v) => ({ view: v, name: VIEW_NAME[v], path: VIEW_PATH[v] }));
 
 // Beside the Overview's site line: the nodes the site gains.
@@ -45,47 +45,107 @@ function NodeActions() {
   );
 }
 
-// Above the Overview's physical summary: site.json, the update schedule and
-// the release train.
+// The site's record (site.json, site-fields.json), each part in its card:
+// Site — who and where it is, its WAN, and its settings; Updates — the
+// schedule, the channel and what an update may do. Each Modify is the schema's
+// form, limited to its card's fields. hardware.nodes is drawn by the Device and
+// Storage views, backup by the Backup page, organizations by Identity, the
+// repositories just below.
+const SITE_FIELDS = ["name", "displayName", "version", "defaultEnvironment", "owner", "email", "location", "network"];
+const SETTINGS_FIELDS = ["ipv6", "dnssec", "branding", "dnsBlocklists", "diskAutoGrow", "requireSigned"];
+const UPDATE_FIELDS = ["updateSchedule", "channel", "automaticReboot", "snapshotRetention"];
+
+// A value as the card shows it: absent is the schema's default, an object its
+// fields, a list its items.
+function val(v: unknown, absent = "not set"): ReactNode {
+  if (v === undefined) return <span className="muted">{absent}</span>;
+  if (v === null) return <span className="muted">none</span>;
+  if (typeof v === "boolean") return v ? "yes" : "no";
+  if (Array.isArray(v)) return v.length ? v.map((x) => (typeof x === "object" ? JSON.stringify(x) : String(x))).join(", ") : <span className="muted">none</span>;
+  if (typeof v === "object") {
+    const e = Object.entries(v as Record<string, unknown>);
+    if (!e.length) return <span className="muted">empty</span>;
+    return (
+      <span className="kv-inline">
+        {e.map(([k, x]) => (
+          <span key={k}>
+            <span className="muted">{k}</span> {typeof x === "object" && x !== null ? (Array.isArray(x) ? x.join(", ") : JSON.stringify(x)) : String(x)}
+          </span>
+        ))}
+      </span>
+    );
+  }
+  return String(v);
+}
+
+const siteModify = (title: string, fields: string[], note: string) => () => [fieldsStep({ title, bin: "site-manager", verb: "site modify", kind: "site", name: null, mode: "modify", fields, note })];
+
+// Above the Overview's physical summary: the Site card and the Updates card.
 function SiteTop({ r }: { r: Read<SiteRead> }) {
   const d = r.env?.data;
-  const s = (d?.site ?? {}) as Record<string, unknown> & { updateSchedule?: { frequency?: string; weekday?: string; hour?: number } };
+  const s = (d?.site ?? {}) as Record<string, unknown> & {
+    location?: Record<string, unknown>;
+    network?: { isp?: string | null; publicIp?: string };
+    updateSchedule?: { frequency?: string; weekday?: string; hour?: number };
+  };
   const sched = s.updateSchedule;
   const last = d?.lastSweep;
+  const loc = s.location;
+  const pub = publicText(publicAddress({ network: { publicIp: s.network?.publicIp ?? null } }, d?.wan ?? null));
   return (
     <div className="site-records">
       <ReadState env={r.env} failure={r.failure} what="site" />
       <div className="grid2">
-        <Section title="site.json" aside={<OperateButton label="Modify…" title="site-manager site modify" steps={() => [fieldsStep({ title: "site-manager site modify", bin: "site-manager", verb: "site modify", kind: "site", name: null, mode: "modify", note: "Writes site.json: one modify for every field changed." })]} />}>
+        <Section title="Site" aside={<OperateButton label="Modify…" title="The site" steps={siteModify("site-manager site modify (the site)", [...SITE_FIELDS, ...SETTINGS_FIELDS], "Writes site.json: one modify for every field changed.")} />}>
           <KV
             rows={[
-              ["name", String(s.name ?? "")],
-              ["display name", String(s.displayName ?? "")],
-              ["channel", String(s.channel ?? "")],
-              ["default environment", String(s.defaultEnvironment ?? "")],
-              ["owner", String(s.owner ?? "")],
-              ["email", String(s.email ?? "")],
-              ["automatic reboot", String(s.automaticReboot ?? "")],
-              ["snapshots kept", String(s.snapshotRetention ?? "")],
+              ["name", val(s.name)],
+              ["display name", val(s.displayName)],
+              ["version", val(s.version)],
+              ["default environment", val(s.defaultEnvironment)],
+              ["owner", val(s.owner)],
+              ["email", val(s.email)],
+            ]}
+          />
+          {loc ? (
+            <>
+              <h3>Location</h3>
+              <KV rows={[["country", val(loc.country)], ["city", val(loc.city)], ["building", val(loc.building)], ["timezone", val(loc.timezone)], ["locale", val(loc.locale)], ["keyboard", val(loc.keyboard)], ...(loc.latitude !== undefined || loc.longitude !== undefined ? [["coordinates", `${loc.latitude ?? "?"}, ${loc.longitude ?? "?"}`] as [string, ReactNode]] : [])]} />
+            </>
+          ) : null}
+          <h3>Network</h3>
+          <KV rows={[["ISP", val(s.network?.isp)], ["public IP", val(s.network?.publicIp)], ["WAN", pub]]} />
+          <h3>Settings</h3>
+          <KV
+            rows={[
+              ["IPv6", val(s.ipv6, "off (default)")],
+              ["DNSSEC", val(s.dnssec, "default")],
+              ["branding", val(s.branding, "the generated logo")],
+              ["DNS blocklists", val(s.dnsBlocklists, "none")],
+              ["disk auto-grow", val(s.diskAutoGrow, "on, the defaults")],
+              ["require signed", val(s.requireSigned, "no (default)")],
             ]}
           />
         </Section>
-        <Section
-          title="Update schedule"
-          aside={<OperateButton label="Change…" title="The update schedule" steps={() => [fieldsStep({ title: "site-manager site modify (the schedule)", bin: "site-manager", verb: "site modify", kind: "site", name: null, mode: "modify", fields: SCHEDULE_FIELDS })]} />}
-        >
+        <Section title="Updates" aside={<OperateButton label="Change…" title="Updates" steps={siteModify("site-manager site modify (updates)", UPDATE_FIELDS, "The schedule, the channel, automatic reboot and the snapshots kept.")} />}>
           <KV
             rows={[
-              ["frequency", sched?.frequency ?? ""],
-              ["weekday", sched?.weekday ?? ""],
-              ["hour", sched?.hour !== undefined ? `${sched.hour}:00` : ""],
-              ["last sweep", last ? `${last.end_time ?? "?"} · ${last.succeeded ?? "?"} of ${last.total ?? "?"} ${last.ok ? "ok" : "with failures"}` : ""],
+              ["frequency", val(sched?.frequency)],
+              ["weekday", val(sched?.weekday, "—")],
+              ["hour", sched?.hour !== undefined ? `${sched.hour}:00` : val(undefined)],
+              ["channel", val(s.channel)],
+              ["automatic reboot", val(s.automaticReboot)],
+              ["snapshots kept", val(s.snapshotRetention)],
+              ["last sweep", last ? `${last.end_time ?? "?"} · ${last.succeeded ?? "?"} of ${last.total ?? "?"} ${last.ok ? "ok" : "with failures"}` : val(undefined, "none yet")],
             ]}
           />
           <div className="toolbar">
             <OperateButton label="Release train: preview" title="tappaas-train.sh preview" steps={[{ title: "tappaas-train.sh preview — the last release against 'if released now'", bin: "tappaas-train.sh", verb: "preview", note: "Nothing built, nothing moved; it writes config/train-preview.json. Text output: the train has no --json yet." }]} />
             <OperateButton label="Release train: status" title="tappaas-train.sh status" steps={[{ title: "tappaas-train.sh status", bin: "tappaas-train.sh", verb: "status" }]} />
           </div>
+          <p className="muted small">
+            The nodes are the Device and Storage views', the backup target the <Link to="/backup">Backup</Link> page's, the organizations <Link to="/identity">Identity</Link>'s.
+          </p>
         </Section>
       </div>
     </div>

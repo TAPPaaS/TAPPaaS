@@ -77,7 +77,7 @@ let r: RacksDoc = doc(addRack({}, "rack1", { room: "basement" }));
 check(errs(r).length === 0 && warns(r).some((m) => m.includes("room 'basement' is not recorded")), "a rack's room as free text: valid, with a note until the room is recorded");
 check(resolveRacks(r, catalog, t).rooms.some((x) => x.name === "basement" && !x.recorded && x.racks.join() === "rack1"), "…and drawn as a room all the same");
 check(refused(addRoom(r, "Basement", {}), "must match"), "a room name is lower case");
-r = doc(addRoom(r, "basement", { building: "House", displayName: "Basement" }));
+r = doc(addRoom(r, "basement", { displayName: "Basement" }));
 check(!warns(r).some((m) => m.includes("not recorded")), "recorded: the rack's room is a reference now");
 r = doc(addDevice(r, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, seen));
 check(refused(addMount(r, "ISP modem", { room: "attic" }, catalog), "room attic does not exist"), "mount --room: the room must exist");
@@ -86,7 +86,7 @@ r = doc(addMount(r, "ISP modem", { room: "basement", faceplate: "generic/isp-mod
 check(r.mounts!["ISP modem"].room === "basement" && r.mounts!["ISP modem"].rack === undefined && r.mounts!["ISP modem"].u === undefined && errs(r).length === 0, "mount add --room: loose in the room, valid");
 const rv = resolveRacks(r, catalog, t);
 const base = rv.rooms.find((x) => x.name === "basement")!;
-check(base.recorded && base.building === "House" && base.racks.join() === "rack1" && base.loose.map((m) => m.device).join() === "ISP modem" && base.loose[0].plate?.key === "generic/isp-modem", "the view: the room with its rack and its loose modem, drawn with its plate");
+check(base.recorded && base.displayName === "Basement" && base.racks.join() === "rack1" && base.loose.map((m) => m.device).join() === "ISP modem" && base.loose[0].plate?.key === "generic/isp-modem", "the view: the room with its rack and its loose modem, drawn with its plate");
 check(!rv.unplaced.some((u) => u.device === "ISP modem"), "a loose device is placed");
 check(refused(deleteRoom(r, "basement"), "still holds rack rack1, ISP modem"), "room delete: refused while it holds a rack or a device");
 const moved = doc(modifyMount(r, "ISP modem", [["rack", "rack1"], ["u", "5"]], catalog));
@@ -95,6 +95,10 @@ check(refused(modifyMount(r, "ISP modem", [["rack", "rack1"]], catalog), "give i
 const back = doc(modifyMount(moved, "ISP modem", [["room", "basement"]], catalog));
 check(back.mounts!["ISP modem"].u === undefined && back.mounts!["ISP modem"].room === "basement", "mount modify --set room: out of the rack, loose in the room");
 check(errs({ ...r, mounts: { ...r.mounts, x: { height: 1, width: "full", face: "front" } } }).some((m) => m.includes("neither a rack nor a room")), "a mount in neither is refused by validate");
+const old = { ...r, racks: { rack1: { ...r.racks!.rack1, building: "KnudAnchersVej" } }, rooms: { basement: { ...r.rooms!.basement, building: "House" } } } as RacksDoc;
+check(errs(old).length === 0, "a building recorded before is no error");
+const migrated2 = doc(addRoom(old, "attic", {}));
+check(!("building" in (migrated2.racks!.rack1 as object)) && !("building" in (migrated2.rooms!.basement as object)), "the next write drops a rack's and a room's building, silently (the site's location has it)");
 const empty = doc(deleteRack(doc(modifyRack(r, "rack1", [["room", ""]])), "rack1"));
 check(refused(deleteRoom(empty, "basement"), "ISP modem"), "a loose device keeps its room");
 

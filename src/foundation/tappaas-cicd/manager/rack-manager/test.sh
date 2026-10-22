@@ -43,9 +43,9 @@ RM() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="$
     run_ts "node '${DIST}/manager/rack-manager/src/main.js' $(printf "'%s' " "$@")"; }
 DOC="${FIX}/cfg/racks.json"
 
-RM rack add rack1 --units 42 --building House --check >/dev/null 2>&1
+RM rack add rack1 --units 42 --check >/dev/null 2>&1
 [[ ! -f "${DOC}" ]] && ok "rack add --check writes nothing" || bad "rack add --check wrote racks.json"
-RM rack add rack1 --units 42 --building House >/dev/null 2>&1 && ok "rack add" || bad "rack add"
+RM rack add rack1 --units 42 >/dev/null 2>&1 && ok "rack add" || bad "rack add"
 [[ "$(jq -r '.racks.rack1.numbering' "${DOC}")" == "bottom-up" ]] && ok "rack add: numbered from the bottom" || bad "rack add: numbering"
 RM rack add rack1 >/dev/null 2>&1 && bad "rack add: a duplicate refused" || ok "rack add: a duplicate refused"
 RM mount add tappaas1 --rack rack1 --u 10 --faceplate generic/server-2u --description "placeholder position, set by the operator" --topology "${TOPO}" >/dev/null 2>&1 \
@@ -70,7 +70,8 @@ RM device add "ISP modem" --kind modem --model generic/isp-modem --topology "${T
 RM validate --topology "${TOPO}" 2>&1 | grep -q "neither seen" && bad "validate: still warns after the record" || ok "validate: the recorded modem is a device"
 [[ "$(RM device list --json 2>/dev/null | jq -r '.[0].ports | join(",")')" == "WAN,LAN 1" ]] && ok "device list --json: its ports from its model" || bad "device list"
 RM device add tappaas1 --kind other --ports 1 --topology "${TOPO}" >/dev/null 2>&1 && bad "device add: a seen device refused" || ok "device add: a seen device refused"
-RM room add basement --building House --display-name Basement >/dev/null 2>&1 && ok "room add" || bad "room add"
+RM room add basement --display-name Basement >/dev/null 2>&1 && ok "room add" || bad "room add"
+RM room add attic --building House >/dev/null 2>&1 && bad "room add: --building refused (the site has it)" || ok "room add: --building refused (the site has it)"
 RM mount add "ISP modem" --room basement --topology "${TOPO}" >/dev/null 2>&1 && ok "mount add --room: the modem loose in the basement" || bad "mount add --room"
 [[ "$(jq -r '.mounts["ISP modem"] | "\(.room) \(.rack // "-") \(.u // "-")"' "${DOC}")" == "basement - -" ]] && ok "mount add --room: no rack, no unit" || bad "mount add --room: recorded"
 [[ "$(RM room list --json 2>/dev/null | jq -r '.[0].loose | join(",")')" == "ISP modem" ]] && ok "room list --json: what stands loose in it" || bad "room list"

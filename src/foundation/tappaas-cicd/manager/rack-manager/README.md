@@ -19,7 +19,7 @@ which carries the racks resolved against the site.
 {
   "version": 1,
   "rooms": {
-    "basement": { "displayName": "Basement", "building": "House" }
+    "basement": { "displayName": "Basement" }
   },
   "racks": {
     "rack1": { "units": 42, "width": "19in", "numbering": "bottom-up", "room": "basement" }
@@ -49,6 +49,8 @@ which carries the racks resolved against the site.
   the device's model, else a generic plate.
 - **rooms** are where racks stand and where a device can stand loose. A rack's **room**
   names a room record; text that names no room yet is kept, and `validate` notes it.
+  The building is the site's (`site.json` location): neither a room nor a rack records
+  one, and a building recorded before is dropped at the next write.
 - **devices** are the devices nothing can see — a modem, an ONT, a UPS, a patch panel
   (`modem`, `ont`, `ups`, `patch-panel`, `other`) — each with its catalog **model** or its
   **ports**. A recorded device is a device like any other: the topology lists it with its
@@ -73,15 +75,15 @@ which carries the racks resolved against the site.
 |------|------|
 | `validate [--topology <file>] [--json]` | The whole document: every mount names a device the topology knows or one recorded here, no two mounts overlap, each fits its rack, a loose mount's room exists, every faceplate key is in the catalog, every cable end names a port the topology, a record or the catalog has, a panel port carries one cable a side. It notes a rack's room that is not recorded, and a device only a cable names. |
 | `room list\|show [<room>] [--json]` | The rooms, their racks and what stands loose in them. |
-| `room add <room> [--building] [--display-name] [--description]` | A new room. |
-| `room modify <room> --set <field>=<value>... --unset <field>...` | Its display name, building or description. |
+| `room add <room> [--display-name] [--description]` | A new room (in the site's building). |
+| `room modify <room> --set <field>=<value>... --unset <field>...` | Its display name or description. |
 | `room delete <room>` | An empty room (no rack names it, nothing stands loose in it). |
 | `device list\|show [<device>] [--json]` | The recorded devices, their ports, where they are mounted. |
 | `device add <device> --kind modem\|ont\|ups\|patch-panel\|other [--model <vendor/model>] [--ports <n> \| --port <name>...] [--display-name] [--description]` | A device the topology cannot see. Not a name the topology already has. |
 | `device modify <device> --set <field>=<value>... --unset <field>...` | Its kind, model, ports (a count or a list), display name, description. |
 | `device remove <device>` | Once it is unmounted and no recorded cable names it. |
 | `rack list\|show [<rack>] [--json]` | The racks; one rack with its mounts. |
-| `rack add <rack> [--units 42] [--width 19in\|10in] [--numbering bottom-up\|top-down] [--display-name] [--building] [--room] [--description]` | A new rack. |
+| `rack add <rack> [--units 42] [--width 19in\|10in] [--numbering bottom-up\|top-down] [--display-name] [--room] [--description]` | A new rack. |
 | `rack modify <rack> --set <field>=<value>... --unset <field>...` | Any field but its name; `--unset` clears a text. |
 | `rack delete <rack>` | An empty rack. |
 | `mount list [--rack <rack>]\|show <device> [--json]` | What is mounted where. |
