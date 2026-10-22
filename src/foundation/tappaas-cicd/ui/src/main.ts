@@ -14,7 +14,7 @@
 // Settings fall back to CONSOLE_* environment variables (the unit sets none, so
 // the defaults below are the installed behaviour).
 
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, watchFile } from "fs";
 import { lookup } from "dns";
 import { networkInterfaces } from "os";
 import { join } from "path";
@@ -265,10 +265,22 @@ async function serve(o: ServeOpts): Promise<number> {
   const srv = server;
   // Development: CONSOLE_EXTRA_MANAGERS loads managers the site's registry does not list yet.
   const extra = list(process.env.CONSOLE_EXTRA_MANAGERS ?? "");
-  void loadManifests(runAsync, bashFile, [...new Set([...registeredManagers(o.configDir), ...extra])]).then((ms) => {
-    srv.manifests = ms;
-    info(`  verb manifests: ${ms.byBin.size} (${[...ms.byBin.keys()].join(", ")})`);
-    for (const e of ms.errors) warn(`  no manifest from ${e.bin}: ${e.error}`);
+  const reloadManifests = (): void => {
+    void loadManifests(runAsync, bashFile, [...new Set([...registeredManagers(o.configDir), ...extra])]).then((ms) => {
+      srv.manifests = ms;
+      info(`  verb manifests: ${ms.byBin.size} (${[...ms.byBin.keys()].join(", ")})`);
+      for (const e of ms.errors) warn(`  no manifest from ${e.bin}: ${e.error}`);
+    });
+  };
+  reloadManifests();
+  // The registry is rewritten after the refresh has relinked the console (which
+  // restarts it), so a manager linked in the same refresh — or one a module
+  // contributes later — shows up only by reloading when the registry changes.
+  watchFile(join(o.configDir, "control-plane.json"), { interval: 5_000, persistent: false }, (cur, prev) => {
+    if (cur.mtimeMs !== prev.mtimeMs) {
+      info("  control-plane.json changed: reloading the verb manifests");
+      reloadManifests();
+    }
   });
   return new Promise<number>(() => undefined); // serve until stopped
 }

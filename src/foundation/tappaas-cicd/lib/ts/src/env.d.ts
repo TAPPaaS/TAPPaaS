@@ -89,6 +89,13 @@ declare module "fs" {
   export function statfsSync(path: string): { bavail: number; bsize: number; blocks: number };
   // Tests set a file's times to order it against another.
   export function utimesSync(path: string, atime: Date, mtime: Date): void;
+  // Polls a file's stat — the console reloads its verb manifests when the
+  // control plane's registry is rewritten. A stat of a missing file has mtimeMs 0.
+  export function watchFile(
+    path: string,
+    options: { interval?: number; persistent?: boolean },
+    listener: (cur: StatLike, prev: StatLike) => void,
+  ): void;
 }
 
 // ── node:path ──────────────────────────────────────────────────────────
