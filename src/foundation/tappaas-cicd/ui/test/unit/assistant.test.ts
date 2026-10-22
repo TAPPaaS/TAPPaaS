@@ -267,7 +267,7 @@ async function main(): Promise<void> {
   o = await runTool(tools, "open_console", JSON.stringify({ target: "modify-zone home", values: { description: "x" } }));
   check(o.ok && o.navigate?.path === "/environments?zone=home", "modify-zone opens the zone on Environments");
   o = await runTool(tools, "open_console", JSON.stringify({ target: "/site/physical" }));
-  check(o.ok && o.navigate?.title === "the physical view" && o.navigate.values !== undefined, "a page");
+  check(o.ok && o.navigate?.title.startsWith("the physical view") === true && o.navigate.values !== undefined, "a page");
   o = await runTool(tools, "open_console", JSON.stringify({ target: "/security" }));
   check(!o.ok && /no page \/security/.test(o.content), "a page the console does not have is refused");
   o = await runTool(tools, "open_console", JSON.stringify({ target: "add-vm" }));

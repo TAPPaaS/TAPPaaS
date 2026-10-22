@@ -5,6 +5,8 @@
 // the drawer routes there and opens the wizard (assistant.tsx, opener.ts).
 // Pure, with no DOM and no node: the backend's build compiles it too.
 
+import { MOVED_PATHS } from "./physical/views";
+
 export type TargetValue = string | boolean | string[];
 export type TargetValues = Record<string, TargetValue>;
 
@@ -74,10 +76,9 @@ export const PAGES: { path: string; title: string }[] = [
   { path: "/setup/day2", title: "Setup, Day 2" },
   { path: "/site", title: "the Site page" },
   { path: "/site/overview", title: "the site overview (racks, devices and storage summed up, every finding; Add node)" },
-  { path: "/site/physical", title: "the physical view" },
-  { path: "/site/physical/rack", title: "the rack view (racks, faceplates, cables)" },
-  { path: "/site/physical/device", title: "the device view (every physical device and its connections)" },
-  { path: "/site/physical/storage", title: "the storage view (nodes, pools, disks, what each pool holds)" },
+  { path: "/site/physical", title: "the physical view (racks, faceplates, cables)" },
+  { path: "/site/device", title: "the device view (every physical device and its connections)" },
+  { path: "/site/storage", title: "the storage view (nodes, pools, disks, what each pool holds)" },
   { path: "/environments", title: "Environments" },
   { path: "/modules", title: "Modules" },
   { path: "/modules/<module>", title: "the module's page" },
@@ -115,7 +116,7 @@ function valueOf(v: unknown): TargetValue | null {
 // The catalog's word for a target, with its values checked. Values are what
 // the form starts from; nothing is applied by opening it.
 // Words that name a page.
-export const PAGE_WORDS: Record<string, string> = { "rack-view": "/site/physical/rack" };
+export const PAGE_WORDS: Record<string, string> = { "rack-view": "/site/physical" };
 
 export function resolveTarget(target: unknown, values?: unknown): Resolution {
   if (typeof target !== "string" || !target.trim()) return { ok: false, reason: "`target` is a page (\"/modules/immich\") or a wizard (\"add-node\", \"modify-module immich\")" };
@@ -129,7 +130,8 @@ export function resolveTarget(target: unknown, values?: unknown): Resolution {
     vals[k.replace(/^-+/, "")] = x;
   }
   if (t.startsWith("/")) {
-    const path = t.split(/[?#]/)[0].replace(/\/+$/, "") || "/";
+    const said = t.split(/[?#]/)[0].replace(/\/+$/, "") || "/";
+    const path = MOVED_PATHS[said] ?? said; // an earlier address of a page
     if (Object.keys(vals).length) return { ok: false, reason: "a page takes no values: open a wizard (e.g. modify-module <name>) to fill a form" };
     const m = /^\/modules\/([^/]+)$/.exec(path);
     if (m) {

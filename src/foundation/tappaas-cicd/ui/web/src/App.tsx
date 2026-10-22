@@ -16,12 +16,13 @@ import { ModulePage } from "./pages/ModulePage";
 import { Modules } from "./pages/Modules";
 import { Overview } from "./pages/Overview";
 import { OwnerOverview } from "./pages/OwnerOverview";
-import { PHYSICAL_TABS, Physical, PhysicalView } from "./pages/Physical";
+import { Physical } from "./pages/Physical";
+import { MOVED_PATHS, viewOfPath } from "./physical/views";
 import { AssistantStatus, Me, SiteRead } from "./types";
 import { Link, MeContext, replacePath, usePath } from "./ui";
 
-// The physical view is a tab of the Site page (/site/physical); the owner's
-// route, which has no Site page, reaches it under its own name.
+// The site as built is the Site page's four tabs (physical/views.ts); the
+// owner's route, which has no Site page, reaches them under Physical.
 const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/setup", label: "Setup", live: true },
   { to: "/", label: "Overview", live: true },
@@ -35,12 +36,10 @@ const NAV: { to: string; label: string; live: boolean }[] = [
 ];
 const OWNER_NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/", label: "Overview", live: true },
-  { to: "/site/physical", label: "Physical", live: true },
+  { to: "/site", label: "Site", live: true },
   { to: "/modules", label: "Modules", live: true },
 ];
 
-// The physical view's four views by address; /site/physical shows the default.
-const PHYSICAL_VIEWS: Record<string, PhysicalView> = Object.fromEntries(PHYSICAL_TABS.map((v) => [`/site/physical/${v}`, v]));
 
 function active(path: string, to: string): boolean {
   return to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`);
@@ -58,12 +57,12 @@ export function App() {
   const setup = useRead<{ complete: boolean }>(user && !owner && user.role !== "read" ? "setup" : null, 600_000);
   const incomplete = setup.env?.data?.complete === false;
   const nav = owner ? OWNER_NAV : NAV;
-  // The physical view's old address keeps working (bookmarks, ?select=).
+  // The views' earlier addresses keep working (bookmarks, ?select=).
   useEffect(() => {
-    if (path === "/physical") replacePath(`/site/physical${window.location.search}`);
-    if (path === "/site/physical/cabling") replacePath(`/site/physical/device${window.location.search}`);
-    if (path === "/site/physical/overview") replacePath(`/site/overview${window.location.search}`);
+    const to = MOVED_PATHS[path.replace(/\/+$/, "")];
+    if (to) replacePath(`${to}${window.location.search}`);
   }, [path]);
+  const view = viewOfPath(path);
   const [busy, setBusy] = useState(false);
   const s = site.env?.data?.site;
   // The assistant (D7): only when LiteLLM answers with the console's key.
@@ -82,21 +81,19 @@ export function App() {
 
   let page;
   if ((path === "/" || path === "") && owner) page = <OwnerOverview />;
-  else if (owner && !["/physical", "/site/physical", "/site/overview", "/modules"].some((p) => path === p || path.startsWith(`${p}/`))) page = <OwnerOverview />;
+  else if (owner && !view && !path.startsWith("/modules")) page = <OwnerOverview />;
   else if (path === "/" || path === "") page = <Overview setupIncomplete={incomplete} />;
   else if (path === "/setup") page = <Setup />;
   else if (path === "/setup/day1") page = <Setup tab="Day 1" />;
   else if (path === "/setup/day2") page = <Setup tab="Day 2" />;
-  else if (owner && path === "/site/overview") page = <Physical view="overview" />;
-  else if (owner && (path === "/physical" || path === "/site/physical" || path in PHYSICAL_VIEWS)) page = <Physical view={PHYSICAL_VIEWS[path]} />;
-  else if (path === "/physical" || path === "/site/physical" || path in PHYSICAL_VIEWS) page = <Site tab="Physical" view={PHYSICAL_VIEWS[path]} />;
+  else if (owner && view) page = <Physical view={view} />;
+  else if (view) page = <Site view={view} />;
   else if (path === "/modules") page = <Modules />;
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;
   else if (path === "/activity") page = <Activity />;
   else if (path === "/environments") page = <Environments />;
   else if (path === "/identity") page = <Identity />;
   else if (path === "/backup") page = <Backup />;
-  else if (path === "/site" || path === "/site/overview") page = <Site />;
   else {
     const n = NAV.find((x) => active(path, x.to));
     page = (

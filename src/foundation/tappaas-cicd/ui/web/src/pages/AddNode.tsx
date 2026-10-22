@@ -233,7 +233,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           <StepRow s={steps[3]} open={current === "uplink"}>
             <div className="explain">
               <p>
-                The node carries the management network, the cluster link and every guest's VLANs on its lan uplink. Declare which ports form it (one port, or two bonded as <span className="mono">lanbond</span>), preview, then apply; the failover test after it proves that losing either port keeps the node reachable. For lacp, configure the LAG on the switch side first (the Physical tab, the switch's ports).
+                The node carries the management network, the cluster link and every guest's VLANs on its lan uplink. Declare which ports form it (one port, or two bonded as <span className="mono">lanbond</span>), preview, then apply; the failover test after it proves that losing either port keeps the node reachable. For lacp, configure the LAG on the switch side first (Site › Device, the switch's ports).
               </p>
             </div>
             {joined || !underway ? (
@@ -250,7 +250,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           <StepRow s={steps[4]} open={current === "done"}>
             {valid ? (
               <p className="small">
-                <Link to={`/site/physical?select=node:${encodeURIComponent(name)}`}>Open {name} in the physical view →</Link> {joined ? "" : <span className="muted">(it appears there once it is in site.json)</span>}
+                <Link to={`/site/device?select=node:${encodeURIComponent(name)}`}>Open {name} in the device view →</Link> {joined ? "" : <span className="muted">(it appears there once it is in site.json)</span>}
               </p>
             ) : null}
           </StepRow>

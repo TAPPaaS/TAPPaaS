@@ -37,12 +37,12 @@ function Where({ kind, name }: { kind: string; name: string }) {
   if (kind === "node") {
     return (
       <>
-        <Link to={`/site/physical?select=node:${encodeURIComponent(name)}`} className="jump jump-in">Physical · {name}</Link>
+        <Link to={`/site/device?select=node:${encodeURIComponent(name)}`} className="jump jump-in">Device · {name}</Link>
         <OpenIn kind="node" id={name} compact />
       </>
     );
   }
-  if (kind === "peer") return <Link to={`/site/physical?select=outside:${encodeURIComponent(name)}`} className="jump jump-in">Physical · buddy {name}</Link>;
+  if (kind === "peer") return <Link to={`/site/device?select=outside:${encodeURIComponent(name)}`} className="jump jump-in">Device · buddy {name}</Link>;
   return null;
 }
 
@@ -153,7 +153,7 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
               const findings = t?.findings.filter((f) => f.on.kind === "node" && f.on.name === n.name) ?? [];
               return (
                 <li key={n.name}>
-                  <Link to={`/site/physical?select=node:${encodeURIComponent(n.name)}`} className="node-name">{n.name}</Link>
+                  <Link to={`/site/device?select=node:${encodeURIComponent(n.name)}`} className="node-name">{n.name}</Link>
                   {findings.length ? <Badge level="warn">⚠ {findings.length}</Badge> : null}
                   <div className="muted">
                     {mem ? `${mem.text} · ` : ""}

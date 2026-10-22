@@ -10,6 +10,7 @@ import { RackInfo, StorageInventory, TopoFinding, Topology } from "../types";
 import { Tag, navigate } from "../ui";
 import { publicAddress, publicText } from "../zonegraph";
 import { STATE_COLOR, StateLegend } from "./state";
+import { VIEW_NAME, viewLink } from "./views";
 import { StorageNote, bytes, nodeKey, poolKey, poolPct, stateWith } from "./storage";
 
 type View = "rack" | "device" | "storage";
@@ -21,7 +22,7 @@ interface Place {
   what: string;
 }
 
-const go = (p: Place) => () => navigate(`/site/physical/${p.view}${p.select ? `?select=${encodeURIComponent(p.select)}` : ""}`);
+const go = (p: Place) => () => navigate(viewLink(p.view, p.select));
 
 // A topology finding's place: a device in the Device view, a storage object in
 // the Storage view.
@@ -100,7 +101,7 @@ function RackThumb({ r }: { r: RackInfo }) {
   const used = r.mounts.filter((m) => m.face === "front").reduce((n, m) => n + (m.width === "full" ? m.height : m.height / (m.width === "half" ? 2 : 3)), 0);
   const top = (u: number, h: number) => (r.numbering === "bottom-up" ? (r.units - (u + h - 1)) * px : (u - 1) * px);
   return (
-    <button className="ov-rack" onClick={() => navigate(`/site/physical/rack?select=${encodeURIComponent(`rack:${r.name}`)}`)} title={`${r.displayName ?? r.name}: ${r.mounts.map((m) => `U${m.u} ${m.device}`).join(", ")}`}>
+    <button className="ov-rack" onClick={() => navigate(viewLink("rack", `rack:${r.name}`))} title={`${r.displayName ?? r.name}: ${r.mounts.map((m) => `U${m.u} ${m.device}`).join(", ")}`}>
       <svg width={w + 8} height={r.units * px + 8} role="img" aria-label={`rack ${r.name}`}>
         <rect x={0.5} y={0.5} width={w + 7} height={r.units * px + 7} rx={3} fill="#f1f3f6" stroke="#94a3b8" />
         {r.mounts
@@ -141,14 +142,14 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside }: { t: To
       <div className="ov-grid">
         <section className="section">
           <header className="section-head">
-            <h2><button className="linklike" onClick={() => navigate("/site/physical/rack")}>Rack</button></h2>
+            <h2><button className="linklike" onClick={() => navigate(viewLink("rack"))}>Physical</button></h2>
             <span className="section-aside">{t?.racks ? `${t.racks.unplaced.length} device(s) mounted nowhere` : ""}</span>
           </header>
           {racks.length ? <div className="ov-racks">{racks.map((r) => <RackThumb key={r.name} r={r} />)}</div> : <p className="muted small">{t ? "No rack is recorded yet." : "reading the topology…"}</p>}
         </section>
         <section className="section">
           <header className="section-head">
-            <h2><button className="linklike" onClick={() => navigate("/site/physical/device")}>Device</button></h2>
+            <h2><button className="linklike" onClick={() => navigate(viewLink("device"))}>Device</button></h2>
           </header>
           {t ? (
             <>
@@ -168,7 +169,7 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside }: { t: To
         </section>
         <section className="section">
           <header className="section-head">
-            <h2><button className="linklike" onClick={() => navigate("/site/physical/storage")}>Storage</button></h2>
+            <h2><button className="linklike" onClick={() => navigate(viewLink("storage"))}>Storage</button></h2>
             <span className="section-aside">{inv ? `inventory ${inv.generated.slice(11, 16)}` : storageError ?? ""}</span>
           </header>
           {inv ? (
@@ -228,7 +229,6 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside }: { t: To
   );
 }
 
-const VIEW_NAME: Record<View, string> = { rack: "Rack", device: "Device", storage: "Storage" };
 
 function FindingList({ rows, empty }: { rows: Row[]; empty: string }) {
   if (rows.length === 0) return <p className="muted small">{empty}</p>;

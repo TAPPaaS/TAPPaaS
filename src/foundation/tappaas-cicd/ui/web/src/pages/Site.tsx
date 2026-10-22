@@ -1,19 +1,19 @@
-// Site — the site as built. Overview (/site, /site/overview): the racks, the
-// devices and the storage summed up, every finding linked to its view, and
-// Add node (a guided sequence) beside the site line. Physical: the site's
-// racks, devices and storage (/site/physical).
+// Site — the site as built, in four tabs (physical/views.ts). Overview (/site,
+// /site/overview): the racks, the devices and the storage summed up, every
+// finding linked to its view, and Add node (a guided sequence) beside the site
+// line. Physical (/site/physical): the racks. Device (/site/device): every
+// physical device and its connections. Storage (/site/storage): the nodes,
+// their pools and disks.
 
 import { OperateButton } from "../operate";
 import { useRead } from "../api";
 import { SiteRead } from "../types";
 import { navigate } from "../ui";
+import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
 import { AddNodeButton } from "./AddNode";
-import { Physical, PhysicalView } from "./Physical";
+import { Physical } from "./Physical";
 
-export const SITE_TABS = [
-  { name: "Overview", path: "/site/overview" },
-  { name: "Physical", path: "/site/physical" },
-] as const;
+export const SITE_TABS = PHYSICAL_TABS.map((v) => ({ view: v, name: VIEW_NAME[v], path: VIEW_PATH[v] }));
 
 // Beside the Overview's site line: the nodes the site gains.
 function NodeActions() {
@@ -25,7 +25,7 @@ function NodeActions() {
   );
 }
 
-export function Site({ tab = "Overview", view }: { tab?: "Overview" | "Physical"; view?: PhysicalView }) {
+export function Site({ view = "overview" }: { view?: PhysicalView }) {
   const r = useRead<SiteRead>("site");
   const s = (r.env?.data?.site ?? {}) as Record<string, unknown>;
   return (
@@ -36,12 +36,12 @@ export function Site({ tab = "Overview", view }: { tab?: "Overview" | "Physical"
       </div>
       <div className="tabs" role="tablist">
         {SITE_TABS.map((t) => (
-          <button key={t.name} role="tab" aria-selected={tab === t.name} className={tab === t.name ? "tab tab-on" : "tab"} onClick={() => navigate(t.path)}>
+          <button key={t.view} role="tab" aria-selected={view === t.view} className={view === t.view ? "tab tab-on" : "tab"} onClick={() => navigate(t.path)}>
             {t.name}
           </button>
         ))}
       </div>
-      {tab === "Overview" ? <Physical embedded view="overview" aside={<NodeActions />} /> : <Physical embedded view={view && view !== "overview" ? view : "rack"} />}
+      <Physical embedded view={view} aside={view === "overview" ? <NodeActions /> : undefined} />
     </div>
   );
 }

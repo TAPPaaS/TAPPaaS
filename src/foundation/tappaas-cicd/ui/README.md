@@ -35,27 +35,29 @@ day 2: add a node, an environment, a stack; enrol a device (the wg-quick file to
 
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
-jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects there) has four views,
-each at its own address: Rack, Device and Storage (`/site/physical/<view>`); their Overview is
-the Site page's Overview (`/site/overview`). **Overview** sums the other three: the site in one line (nodes,
-switches, APs, racks, pools, disks, the public address), each rack as a thumbnail of its units (a
-click opens the Rack view), the Device view as counts with the findings on devices, each node's
+jumps. **Site** — the site as built, in four tabs, each at its own address: Overview
+(`/site/overview`, also `/site`), Physical (`/site/physical`), Device (`/site/device`) and Storage
+(`/site/storage`); the earlier addresses (`/physical`, `/site/physical/<view>`) redirect to them.
+**Overview** sums the other three: the site in one line (nodes, switches, APs, racks, pools,
+disks, the public address) with Add node and Register joined nodes (`site-manager node
+reconcile`) beside it, each rack as a thumbnail of its units (a click opens the Physical view),
+the Device view as counts with the findings on devices, each node's
 pools with a fill bar coloured by state and its disks with a problem, and every finding of the
 topology and the storage inventory, each linked to the view and the object it is on.
-**Rack** (`/site/physical/rack`): each rack of rack-manager's
+**Physical** (`/site/physical`): each rack of rack-manager's
 `config/racks.json` as a frame with its units numbered as the rack numbers them, each mount as its
 faceplate at its units and width with its ports' live state (link, LAG), the cables port to port in
 the zone colours below with a label on hover, a device only a cable record places beside the rack,
 and an Unplaced tray of the devices mounted nowhere, each with Mount…; a click on a plate or a port
 opens the side card to the left of the racks, with Mount…, Move to… and Unmount… besides the
-object's own changes. **Device** (`/site/physical/device`) — the topology laid out under the spike's rules (ISP top-left, the firewall
+object's own changes. **Device** (`/site/device`) — the topology laid out under the spike's rules (ISP top-left, the firewall
 as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
 nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
 left), each card and each switch port coloured by its state as the Storage view colours its cards
 (its findings' worst level; a drifting port, a node's uplink leg down or a buddy down are warnings;
 the reason on hover; one legend for both views); a click opens the object's records, findings, jumps and its day-2 change: a switch
 port's record (`switch-manager update-port`) then `switch-manager reconcile`, a node's
-`node network show / set`. **Storage** (`/site/physical/storage`, `storage-manager inventory`) — in
+`node network show / set`. **Storage** (`/site/storage`, `storage-manager inventory`) — in
 columns: the cluster nodes, each node's boot device and pools (with the pool's fill bar), each
 pool's disks (a mirror's or a raidz's disks carry its label and a bracket), lines node → pool →
 disk; every card coloured by its state (ok green, warn amber, fail red, the reason on hover),
@@ -86,9 +88,7 @@ groups, users and roles as a graph of their relations (a group's owning organiza
 groups, the roles of users and groups, an organization's owner and parent; `GET /api/v1/identity/records`:
 `identity-manager <kind> show` for each), the list beside it, a click for the record and its verbs; a change is staged with `--no-reconcile` and pushed by `identity-manager
 reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
-modify, purge (typed). **Site** — two tabs. Overview (`/site/overview`, also `/site`): the physical overview below, with
-Add node and Register joined nodes (`site-manager node reconcile`) beside the site line. Physical:
-the views above. Add node is a guided sequence in Setup's step rows: declare
+modify, purge (typed). **Site** — the four tabs above. Add node is a guided sequence in Setup's step rows: declare
 the node (`site-manager node add tappaasN --pxe` with its PXE port's MAC, boot disk, WAN and lan
 ports, pools), boot it from the network by hand, the install and join watched live (`GET
 /api/v1/nodes/<name>/progress`: the provisioning registration, `node-provisioner status`, cluster

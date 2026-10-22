@@ -1,4 +1,4 @@
-// rack.tsx — the Physical tab's Rack view: each rack drawn as a frame with its
+// rack.tsx — the Site page's Physical view: each rack drawn as a frame with its
 // unit rows numbered as the rack numbers them, each mount as its faceplate at
 // its units and width with its port grid, the ports' live state from the
 // topology (link up or down, LAG), and the cables port to port in the zone

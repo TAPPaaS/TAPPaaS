@@ -1,5 +1,6 @@
-// Physical — the site as it is built, in four views. Overview: the other three
-// summed up. Rack: the racks with each device's faceplate at its units and the
+// Physical — the site as it is built, in four views, each a tab of the Site
+// page (physical/views.ts). Overview: the other three summed up. Physical: the
+// racks with each device's faceplate at its units and the
 // cables port to port (physical/rack.tsx), the devices mounted nowhere in a
 // tray. Device (ADR-034 D5, mockup ui-02): every physical device as a card and
 // its connections as lines, laid out automatically. Storage: the nodes, their
@@ -20,6 +21,7 @@ import { StateLegend } from "../physical/state";
 import { storageNotes } from "../physical/storage";
 import { StorageGraph } from "../physical/storageview";
 import { PhysicalOverview } from "../physical/overview";
+import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
 import { ReadState, canOperate, navigate, since, useMe } from "../ui";
 
 function selFromUrl(): Sel | null {
@@ -35,9 +37,7 @@ function selFromUrl(): Sel | null {
   return null;
 }
 
-export const PHYSICAL_TABS = ["overview", "rack", "device", "storage"] as const;
-export type PhysicalView = (typeof PHYSICAL_TABS)[number];
-const TAB_NAME: Record<PhysicalView, string> = { overview: "Overview", rack: "Rack", device: "Device", storage: "Storage" };
+export type { PhysicalView } from "../physical/views";
 
 // The devices mounted nowhere, each with Mount… (the catalog's plate for it,
 // the first rack's highest free units).
@@ -82,9 +82,9 @@ function Unplaced({ v, pick }: { v: RacksView; pick: (s: Sel) => void }) {
   );
 }
 
-// Standalone (the owner's route) or on the Site page (embedded: the Site page
-// has the heading, and its Overview tab is this Overview). view: the one the
-// address names, else the Overview.
+// Standalone (the owner's route: its own switch between the views) or on the
+// Site page (embedded: the Site page has the heading and the tabs). view: the
+// one the address names, else the Overview.
 export function Physical({ embedded, view, aside }: { embedded?: boolean; view?: PhysicalView; aside?: ReactNode }) {
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
@@ -122,14 +122,16 @@ export function Physical({ embedded, view, aside }: { embedded?: boolean; view?:
   return (
     <div className={embedded ? "" : "page page-wide"}>
       <div className="page-head">
-        {embedded ? null : <h1>Physical</h1>}
-        <div className="seg" role="tablist" aria-label="view">
-          {PHYSICAL_TABS.filter((x) => !embedded || x !== "overview").map((x) => (
-            <button key={x} role="tab" aria-selected={shown === x} className={shown === x ? "seg-on" : ""} onClick={() => navigate(`/site/physical/${x}`)}>
-              {TAB_NAME[x]}
-            </button>
-          ))}
-        </div>
+        {embedded ? null : <h1>Site</h1>}
+        {embedded ? null : (
+          <div className="seg" role="tablist" aria-label="view">
+            {PHYSICAL_TABS.map((x) => (
+              <button key={x} role="tab" aria-selected={shown === x} className={shown === x ? "seg-on" : ""} onClick={() => navigate(VIEW_PATH[x])}>
+                {VIEW_NAME[x]}
+              </button>
+            ))}
+          </div>
+        )}
         <span className="muted">
           {t && (shown === "rack" || shown === "device") ? `${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout automatic"}` : ""}
         </span>

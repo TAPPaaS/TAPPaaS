@@ -17,6 +17,7 @@
     "../../web/src/consoletargets.ts",
     "../../web/src/zonegraph.ts",
     "../../web/src/columns.ts",
-    "../../web/src/physical/storage.ts"
+    "../../web/src/physical/storage.ts",
+    "../../web/src/physical/views.ts"
   ]
 }
