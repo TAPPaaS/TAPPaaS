@@ -54,6 +54,9 @@
 #   --lan-primary p  active-backup: the port that carries traffic when it is up
 #                    (default: the fastest).
 #   --mtu n          MTU on the bond and the lan bridge (default: unchanged).
+#   A USB NIC among the lan ports (#849) is pinned to `usblanN` by its MAC, USB
+#   autosuspend is turned off for it, and a udev rule puts it back in its bond
+#   when it appears after boot or a replug (ifupdown2 skips a missing member).
 #
 # Usage:
 #   config-network.sh [--lan-port <ifname>[,<ifname>...]] [--wan-port <ifname>]
@@ -377,11 +380,85 @@ resolve_lan() {
 }
 lan_desc() { echo "${LAN_PORTS}$([[ "$LAN_MODE" == single ]] || echo " as ${LB_BOND} (${LAN_MODE}${LAN_PRIMARY:+, primary ${LAN_PRIMARY}})")${LAN_MTU:+, mtu ${LAN_MTU}}"; }
 
+# ── USB NICs as lan ports (#849) ──────────────────────────────────────
+# A USB NIC's kernel name (enx<mac>) is pinned to usblanN, so the bond names
+# something stable; /usr/local/sbin/tappaas-usb-nic-up, run by a udev rule when
+# it appears, turns USB autosuspend off and re-adds it to the bond that lists it.
+readonly USB_HELPER=/usr/local/sbin/tappaas-usb-nic-up
+readonly USB_RULES=/etc/udev/rules.d/90-tappaas-usb-nic.rules
+is_usb() { readlink -f "/sys/class/net/$1/device" 2>/dev/null | grep -q '/usb[0-9]'; }
+next_usb_name() {
+  local i=0
+  while [[ -e "/sys/class/net/usblan${i}" ]] || grep -q "Name=usblan${i}\$" /usr/local/lib/systemd/network/*.link /etc/systemd/network/*.link 2>/dev/null; do
+    i=$((i + 1))
+  done
+  echo "usblan${i}"
+}
+install_usb_helper() {
+  cat > "$USB_HELPER" <<'HELPER'
+#!/bin/sh
+# tappaas-usb-nic-up <ifname> — a USB lan port appeared (#849): USB autosuspend
+# off for its device, and back into the bond /etc/network/interfaces lists it in.
+# Run by udev (90-tappaas-usb-nic.rules) through systemd-run; installed by
+# config-network.sh --set-lan.
+n="$1"; [ -n "$n" ] || exit 2
+d="$(readlink -f "/sys/class/net/$n/device")"
+while [ -n "$d" ] && [ "$d" != "/" ]; do
+  if [ -f "$d/idVendor" ] && [ -w "$d/power/control" ]; then echo on > "$d/power/control"; break; fi
+  d="$(dirname "$d")"
+done
+b="$(awk -v n="$n" '/^iface /{i=$2} $1=="bond-slaves"{for(k=2;k<=NF;k++) if($k==n) print i}' /etc/network/interfaces | head -1)"
+[ -n "$b" ] || exit 0
+# Before networking is up the bond does not exist: ifupdown2 enslaves it then.
+[ -d "/sys/class/net/$b/bonding" ] || exit 0
+case " $(cat "/sys/class/net/$b/bonding/slaves" 2>/dev/null) " in *" $n "*) exit 0 ;; esac
+if ! ifup "$b" >/dev/null 2>&1 || ! grep -qw "$n" "/sys/class/net/$b/bonding/slaves"; then
+  ip link set "$n" down; ip link set "$n" master "$b"; ip link set "$n" up
+fi
+logger -t tappaas-usb-nic "$n rejoined $b"
+HELPER
+  chmod 755 "$USB_HELPER"
+}
+# prepare_usb_ports: rewrite LAN_PORT so each USB NIC has its pinned name; with
+# --apply, pin and rename it now and install the helper and its udev rule.
+prepare_usb_ports() {
+  local p out="" name mac
+  for p in ${LAN_PORT//,/ }; do
+    if is_usb "$p" && [[ "$p" != usblan* ]]; then
+      name="$(next_usb_name)"; mac="$(cat "/sys/class/net/$p/address")"
+      info "  ${p} is a USB NIC (${mac}): pinned as ${BL}${name}${CL}, USB autosuspend off, rejoins its bond when it reappears (#849)"
+      if [[ "$DRY_RUN" != 1 ]]; then
+        pve-network-interface-pinning generate --interface "$p" --target-name "$name" >/dev/null \
+          || die "could not pin ${p} as ${name} (pve-network-interface-pinning)"
+        ip link set "$p" down && ip link set "$p" name "$name" && ip link set "$name" up \
+          || die "could not rename ${p} to ${name}"
+        install_usb_helper
+        grep -qi "ATTR{address}==\"${mac}\"" "$USB_RULES" 2>/dev/null \
+          || printf 'ACTION=="add", SUBSYSTEM=="net", ATTR{address}=="%s", RUN+="/usr/bin/systemd-run --no-block --collect %s %s"\n' \
+               "$mac" "$USB_HELPER" "$name" >> "$USB_RULES"
+        udevadm control --reload 2>/dev/null || true
+        "$USB_HELPER" "$name" || true   # autosuspend off now
+        PORTS+=("$name")
+      fi
+      out+="${out:+,}${name}"
+    else
+      out+="${out:+,}${p}"
+    fi
+  done
+  # A dry run names the port it will be; resolve_lan must accept that name.
+  [[ "$DRY_RUN" == 1 ]] && for p in ${out//,/ }; do in_ports "$p" || PORTS+=("$p"); done
+  [[ -n "${LAN_PRIMARY}" ]] && for p in ${LAN_PORT//,/ }; do
+    [[ "$LAN_PRIMARY" == "$p" ]] && is_usb "$p" && warn "--lan-primary ${p} is the USB NIC: a USB port is better as the backup"
+  done
+  LAN_PORT="$out"
+}
+
 # ── Mode: re-carry a running node's lan bridge (#40) ──────────────────
 set_lan() {
   local p wanm cur new gw ok _i
   ip link show lan &>/dev/null || die "--set-lan: this node has no lan bridge — bootstrap it first"
   [[ -n "$LAN_PORT" ]] || die "--set-lan needs --lan-port"
+  prepare_usb_ports
   resolve_lan
   wanm=",$(bridge_members wan),"
   if [[ "$NO_WAN" == 1 ]]; then
