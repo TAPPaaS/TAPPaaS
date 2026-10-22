@@ -108,7 +108,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 9 | 11 |
 | 6 | G6.2 User interface & physical view | H | L | – | 1 | 4 |
-| 5 | G5.1 Satellite & off-site | H | M | – | – | 7 |
+| 5 | G5.1 Satellite & off-site | H | M | – | 1 | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
 | 4 | ✅ G4.2 Proxy & ingress | M | L | 3 | 5 | – |
@@ -202,7 +202,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 | #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
 | #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
-| #847 | switch-manager: MikroTik (RouterOS) support, including MLAG | **Built 2026-10-20** (`78069873`, Community `5a63b02`; ADR-035 P4): the Community `mikrotik` module brings `mikrotik-controller` (Ansible `community.routeros`; VLANs, parking, LACP bonds, `mlag-id`), `setup-credentials.sh` adds a switch; switch-manager reads port ids as opaque, records MLAG pairs (`mlag-pair`) and LAGs across them; lan-uplink drives `lacp` over a pair and falls back to the manual switch side instead of refusing; health `mlag-pairs` gate. Offline tests green; **live test needs a MikroTik switch (or a RouterOS CHR on hrossen)** |
+| #847 | switch-manager: MikroTik (RouterOS) support, including MLAG | **Live on hrossen 2026-10-22** (ADR-035 P4; TAPPaaS `78069873`…`73526954`, Community `5a63b02`…`d33416f`): two CRS317 as an MLAG pair (RouterOS 7.23.8), tappaas1's `lacp` uplink across both (`tappaas1-lan`, mlag-id 10, one aggregator, two chassis), the pair uplinked to the UniFi switch by one aggregate (`usw-uplink`/`crs-uplink`); all through `mikrotik-controller`. The reflection was crs-a without the MLAG heartbeat: fixed, and now flagged by `mlag-pair list` and health `mlag-pairs`. Topology draws the pair (`f8f16aa0`). Left: Phase 3 failure tests (reboot each CRS, pull the peer link, an uplink), the console Physical page for MLAG pairs, one echoed broadcast per burst |
 | #849 | node network: USB NICs as bond members, and `set --wan-port` | From #40 (2026-10-17): a USB NIC as an `active-backup` lan leg (udev re-adds it after a late boot or replug, autosuspend off) for nodes without a free PCIe slot; and `--wan-port` to give the wan bridge a port again, so the firewall's WAN role can move between nodes |
 
 ---
