@@ -530,6 +530,69 @@ export function checkStoragePools(client: ClusterClient): CheckResult {
   return { name: "storage-pools", status: worst, detail, rows };
 }
 
+// ── storage-disks gate ────────────────────────────────────────────────
+// The disks and pools under the guests, as storage-manager inventory judges
+// them: a disk SMART calls failed or that shows reallocated or pending sectors,
+// one ZFS has degraded or faulted, a pool that is not ONLINE, a replication job
+// (an HA guest's mirror copy) in error or behind its schedule. The inventory
+// does the join; this only collects its verdicts. Pool usage is storage-pools'.
+// WARN, never FAIL: the guests still run, one more failure takes data with it.
+export interface InventoryFinding {
+  level: string;
+  cause: string;
+  on: { kind: string; node: string; name: string };
+  text: string;
+}
+interface InventoryDoc {
+  nodes?: { name: string; replication?: { id: string; module: string | null; state: string; reasons: string[]; source: string; target: string }[] }[];
+  findings?: InventoryFinding[];
+}
+
+const DISK_CAUSES = ["smart", "zfs", "wear", "temperature"];
+
+export function storageDisksResult(doc: unknown): CheckResult {
+  const inv = (doc ?? {}) as InventoryDoc;
+  if (!Array.isArray(inv.nodes) || !Array.isArray(inv.findings)) {
+    return { name: "storage-disks", status: "skip", detail: "storage-manager inventory gave no document" };
+  }
+  const rows: CheckRow[] = [];
+  for (const f of inv.findings) {
+    if (f.on.kind === "disk" && DISK_CAUSES.includes(f.cause)) {
+      rows.push({ status: "warn", text: f.text, subject: { kind: "disk", name: `${f.on.node}:${f.on.name}` } });
+    } else if (f.on.kind === "pool" && f.cause === "health") {
+      rows.push({ status: "warn", text: f.text, subject: { kind: "pool", name: `${f.on.node}/${f.on.name}` } });
+    }
+  }
+  for (const n of inv.nodes) {
+    for (const j of n.replication ?? []) {
+      if (j.state === "ok") continue;
+      rows.push({
+        status: "warn",
+        text: `${j.module ?? j.id}: replication ${j.source} → ${j.target} ${j.reasons.join("; ")}`,
+        subject: j.module ? mod(j.module) : { kind: "node", name: n.name },
+      });
+    }
+  }
+  if (rows.length === 0) return { name: "storage-disks", status: "pass", detail: `${inv.nodes.length} node(s): disks, pools and replication healthy` };
+  return { name: "storage-disks", status: "warn", detail: `${rows.length} finding(s) — storage-manager inventory`, rows };
+}
+
+export function checkStorageDisks(configDir: string): CheckResult {
+  const bin = process.env.STORAGE_MANAGER_BIN ?? "storage-manager";
+  const r = spawnSync(bin, ["inventory", "--json"], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+    timeout: 180_000,
+    env: { ...process.env, CONFIG_DIR: configDir },
+  });
+  if (r.error || r.status !== 0) return { name: "storage-disks", status: "skip", detail: "storage-manager inventory did not answer" };
+  try {
+    return storageDisksResult(JSON.parse(r.stdout ?? ""));
+  } catch {
+    return { name: "storage-disks", status: "skip", detail: "storage-manager inventory --json not parseable" };
+  }
+}
+
 // ── cpu-impact report (#827) ──────────────────────────────────────────
 // What an HA guest gives up when haCpu common puts it on the CPU level its two
 // nodes share. Measured, not guessed, for the instructions that can be: the
@@ -900,6 +963,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkDiskThreshold(client, opts.configDir, opts.defaultNode, opts.threshold),
     checkMemoryCommitment(client, opts.memoryThreshold),
     checkStoragePools(client),
+    checkStorageDisks(opts.configDir),
     checkCpuImpact(client, opts.configDir, opts.defaultNode),
     checkGuestMemory(client),
     checkBackupStatus(opts.configDir),

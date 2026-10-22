@@ -1,0 +1,25 @@
+{
+  "nfs": {
+    "shares": {
+      "media": {
+        "server": "tappaas1",
+        "pool": "tankb1",
+        "quota": "1T",
+        "properties": {
+          "recordsize": "1M",
+          "compression": "lz4"
+        },
+        "backup": {
+          "enabled": false
+        },
+        "owner": {
+          "uid": 64000,
+          "gid": 64000
+        },
+        "grants": {
+          "jellyfin": "rw"
+        }
+      }
+    }
+  }
+}

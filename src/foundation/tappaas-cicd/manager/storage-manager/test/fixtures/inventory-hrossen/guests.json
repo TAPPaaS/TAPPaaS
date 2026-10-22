@@ -1,0 +1,178 @@
+[
+ {
+  "vmid": 110,
+  "name": "network",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 130,
+  "name": "tappaas-cicd",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 140,
+  "name": "identity",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 150,
+  "name": "logging",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 213,
+  "name": "deconz-test",
+  "node": "tappaas2",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 310,
+  "name": "litellm",
+  "node": "tappaas2",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 311,
+  "name": "openwebui",
+  "node": "tappaas2",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 312,
+  "name": "vllm-amd",
+  "node": "tappaas2",
+  "status": "running",
+  "type": "lxc",
+  "template": false
+ },
+ {
+  "vmid": 340,
+  "name": "nextcloud",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 341,
+  "name": "coturn",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 342,
+  "name": "nextcloud-hpb",
+  "node": "tappaas2",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 343,
+  "name": "euro-office",
+  "node": "tappaas2",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 350,
+  "name": "forgejo",
+  "node": "tappaas2",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 351,
+  "name": "woodpecker",
+  "node": "tappaas2",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 360,
+  "name": "jellyfin",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 361,
+  "name": "immich",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 370,
+  "name": "nomad",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 371,
+  "name": "karakeep",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 380,
+  "name": "lazysite",
+  "node": "tappaas2",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 610,
+  "name": "vaultwarden",
+  "node": "tappaas1",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ },
+ {
+  "vmid": 8080,
+  "name": "tappaas-nixos",
+  "node": "tappaas1",
+  "status": "stopped",
+  "type": "qemu",
+  "template": true
+ },
+ {
+  "vmid": 811,
+  "name": "unifi-os",
+  "node": "tappaas3",
+  "status": "running",
+  "type": "qemu",
+  "template": false
+ }
+]

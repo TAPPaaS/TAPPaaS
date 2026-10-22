@@ -80,6 +80,8 @@ console.log("checkPendingReboot");
     "a same-release generation shows both builds");
   check(!text.includes("litellm") && !text.includes("gone"), "neither a current nor an archived guest is listed");
 
+  // Not the live inventory: its gate has its own test (storage-disks.test).
+  process.env.STORAGE_MANAGER_BIN ??= "/nonexistent/storage-manager";
   const report = runHealthGates(c, { configDir: dir, defaultNode: "tappaas1", threshold: 80, memoryThreshold: 100 });
   const gate = report.checks.find((x) => x.name === "pending-reboot");
   check(gate?.status === "warn", "validate runs the gate");

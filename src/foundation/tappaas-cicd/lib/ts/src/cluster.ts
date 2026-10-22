@@ -206,3 +206,91 @@ export function queryClusterGuests(node: string): ClusterGuest[] | null {
   }
   return out;
 }
+
+// ── a node's storage, for storage-manager inventory ───────────────────
+// One ssh per node runs every read the inventory needs: each pvesh call costs a
+// perl start (~0.6s), and the SMART reads one more per disk, so a call apiece
+// would take a minute on a three-node site. The probe prints one section per
+// read, `@@section <name>` before it and `@@rc <exit code>` after it; a read
+// that fails leaves its section with a non-zero rc, the others still answer.
+//   disks         pvesh /nodes/<n>/disks/list (health + wearout from smartctl;
+//                 skipsmart when SMART is not read)
+//   smart <dev>   pvesh /nodes/<n>/disks/smart per physical disk (SMART only)
+//   zpool-list    zpool list -Hp (size, alloc, free, frag, cap, dedup, health)
+//   zpool-status  zpool status -L -P -p (vdevs, devices by their kernel path —
+//                 a by-id link is not stable for NVMe — exact error counts, scan)
+//   zfs           zfs list -Hp every filesystem, volume and snapshot
+//   lsblk         lsblk -J (which disk holds / and /boot/efi)
+//   replication   pvesh /nodes/<n>/replication (the jobs sourced here, state)
+//   exported      zpool import (pools on the node's disks not imported)
+//   pbs           proxmox-backup-manager datastore list (where PBS runs)
+export function nodeStorageProbe(node: string, smart: boolean): string {
+  const sec = 'sec() { n="$1"; shift; echo "@@section $n"; "$@"; r=$?; echo; echo "@@rc $r"; }';
+  const disks = (smart ? "lsblk -dnp -o NAME,TYPE | awk '$2==\"disk\" && $1 ~ /^\\/dev\\/(sd|nvme|hd|vd)/ {print $1}'" : "true");
+  return [
+    sec,
+    `sec disks pvesh get /nodes/${node}/disks/list --output-format json${smart ? "" : " --skipsmart 1"}`,
+    `for d in $(${disks}); do sec "smart $d" pvesh get /nodes/${node}/disks/smart --disk "$d" --output-format json; done`,
+    "sec zpool-list zpool list -Hp -o name,size,alloc,free,frag,cap,dedup,health",
+    "sec zpool-status zpool status -L -P -p",
+    "sec zfs zfs list -Hp -t filesystem,volume,snapshot -o name,type,used,avail,refer,volsize,refquota,usedsnap,origin,mountpoint,compression,compressratio",
+    "sec lsblk lsblk -J -b -p -o NAME,TYPE,SIZE,MOUNTPOINTS",
+    `sec replication pvesh get /nodes/${node}/replication --output-format json`,
+    "sec exported zpool import",
+    "pbs() { command -v proxmox-backup-manager >/dev/null || { echo '[]'; return 0; }; proxmox-backup-manager datastore list --output-format json; }",
+    "sec pbs pbs",
+    "true",
+  ].join("\n");
+}
+
+export interface ProbeSection {
+  rc: number;
+  out: string;
+}
+
+// The probe's stdout → its sections by name. Pure. A section cut off before its
+// `@@rc` line (the ssh dropped) is absent.
+export function parseProbeSections(stdout: string): Record<string, ProbeSection> {
+  const out: Record<string, ProbeSection> = {};
+  let name: string | null = null;
+  let lines: string[] = [];
+  for (const line of stdout.split("\n")) {
+    const s = /^@@section (.+)$/.exec(line);
+    if (s) {
+      name = s[1];
+      lines = [];
+      continue;
+    }
+    const r = /^@@rc (-?\d+)$/.exec(line);
+    if (r && name !== null) {
+      out[name] = { rc: Number(r[1]), out: lines.join("\n").replace(/\n+$/, "") };
+      name = null;
+      continue;
+    }
+    if (name !== null) lines.push(line);
+  }
+  return out;
+}
+
+// A node's storage reads (nodeStorageProbe), by section; null when the node
+// could not be reached at all.
+export function queryNodeStorage(node: string, opts: { smart: boolean }): Record<string, ProbeSection> | null {
+  const r = ssh("root", `${node}.${mgmtDomain()}`, `bash -s <<'TAPPAAS_PROBE'\n${nodeStorageProbe(node, opts.smart)}\nTAPPAAS_PROBE`);
+  if (!r.ran || r.rc === 255) return null;
+  const sections = parseProbeSections(r.stdout);
+  return Object.keys(sections).length > 0 ? sections : null;
+}
+
+// The cluster's replication jobs (pvesh /cluster/replication): id, guest,
+// source, target, schedule — the configuration, not the state (that is the
+// source node's /nodes/<n>/replication). null on any failure.
+export function queryClusterReplication(node: string): Record<string, unknown>[] | null {
+  const r = ssh("root", `${node}.${mgmtDomain()}`, "pvesh get /cluster/replication --output-format json");
+  if (!r.ran || r.rc !== 0) return null;
+  try {
+    const arr = JSON.parse(r.stdout) as unknown;
+    return Array.isArray(arr) ? (arr as Record<string, unknown>[]) : null;
+  } catch {
+    return null;
+  }
+}

@@ -56,6 +56,54 @@ The same script is what the `storage` module's `update.sh` (the sweep) and the
 declaration itself. Servers never write back: the document is complete the
 moment it is written, and a share keeps its owner across a move.
 
+## The inventory: one derived document
+
+`inventory` is a read, built like network-manager's `topology`: the sources are
+collected first, then one pure function joins them, and nothing is cached.
+
+```
+collectSources  site.json, one probe per node, the cluster's guests and
+                replication jobs, module-manager list, config/shares.json
+buildInventory  pure: parse, match, judge — what the unit tests run over
+                hrossen's captured reads (test/fixtures/inventory-hrossen)
+renderInventory the text view; --json prints the document as built
+```
+
+**One ssh per node.** Every read goes through `lib/ts/src/cluster.ts`, never a
+shell of the manager's own. `queryNodeStorage` runs one probe on the node
+(`nodeStorageProbe`) whose sections are the reads: pvesh starts perl each time
+(~0.6 s), so a call apiece would cost a minute on three nodes. A section that
+fails carries its exit code and the rest still answer; a node that does not
+answer is listed as such, not dropped. The cluster-wide reads (guests, jobs) go
+through the first node that answered, so `--node` still knows which copies are
+mirrors.
+
+**Matching.** ZFS names its members by `/dev/disk/by-id` path; Proxmox's disk
+list gives each disk's by-id link and WWN. A member matches a disk by its by-id
+name (partition suffix dropped), or by `nvme-<eui>` / `wwn-<wwn>` against the
+WWN. A member that matches no disk is listed as *missing* under its vdev — the
+disk is dead or pulled. `zpool import`'s listing is matched the same way, which
+is how a disk in no imported pool is named with the pool on it.
+
+**Own or mirror.** A volume's vmid names its guest (`vm-`, `base-`, `subvol-`).
+The guest runs on this node → own; it runs elsewhere and a replication job
+targets this node → mirror; it runs elsewhere and no job does → orphan (a copy
+left behind; its `__replicate_` snapshot still says when it was last synced); no
+such guest → orphan. A template's volumes are templates.
+
+**The pie.** The totals use the pool's top dataset: own and mirror are the sums
+of the volumes' `used`; other is the rest of the dataset's `used` (datastores,
+shares, templates, orphans, metadata); free is its `available`. They add up to
+the pool's usable size exactly, which raw `zpool list` (parity, slop) would not.
+
+**States.** Each disk, pool and job is judged once, with its reasons; a node is
+the worst of them, and every non-ok object adds a finding naming its node. The
+thresholds are constants at the top of `inventory.ts`; pool usage uses the
+`storage-pools` gate's 80/90%. A disk ZFS has degraded fails even when SMART
+says PASSED (tappaas3's tankc1 disk does exactly that). health-manager's
+`storage-disks` gate runs `inventory --json` and reports its disk, pool-health
+and replication findings — it does not repeat the join.
+
 ## What is deliberately not here
 
 - **`share move`** — a change of `server` or `pool` is a data migration; refused by

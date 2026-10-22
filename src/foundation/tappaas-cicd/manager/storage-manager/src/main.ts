@@ -15,6 +15,7 @@ import { stream } from "../../../lib/ts/src/exec";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { NfsFinding, SharesDoc, checkShares, shareAlias, sharesOf } from "../../../lib/ts/src/nfs-shares";
 import { Store } from "./store";
+import { buildInventory, collectSources, renderInventory } from "./inventory";
 import { AddSpec, Result, addShare, deleteShare, grant, modifyShare, revoke } from "./verbs";
 import { join } from "path";
 
@@ -26,6 +27,21 @@ export const HELP: HelpSpec = {
   tagline: "TAPPaaS storage control plane — NFS shares in config/shares.json (ADR-029)",
   verbs: [
     { usage: "validate", note: "(config/shares.json, against the deployed instances)" },
+    {
+      usage: "inventory [--json] [--node <n>] [--no-smart]",
+      name: "inventory",
+      effect: "read",
+      options: [
+        ["--json", "inventory: the document as JSON."],
+        ["--node <n>", "inventory: only this node."],
+        ["--no-smart", "inventory: skip the SMART reads (slow); the document says so."],
+      ],
+      details:
+        "The site's storage, read live and stored nowhere: per node its boot device, its ZFS pools with\n" +
+        "their vdevs and disks, what each pool holds (the guests' own volumes, the HA mirror copies of\n" +
+        "guests running on another node, the backup datastore, NFS shares) and its free space, and the\n" +
+        "replication jobs. Every disk, pool and job carries a state — ok, warn or fail — and why.",
+    },
     {
       usage: "nfs show [<share>] [--server <instance>] [--json]",
       name: "nfs show",
@@ -159,6 +175,18 @@ function show(store: Store, args: string[]): number {
   return 0;
 }
 
+function inventory(args: string[]): number {
+  const extra = positional(args, 1, ["--node"]);
+  if (extra.length) die(`inventory: unexpected argument ${extra[0]}`);
+  const node = opt(args, "--node");
+  if (args.includes("--node") && !node) die("inventory --node <n>");
+  const inv = buildInventory(collectSources({ configDir: defaultConfigDir(), only: node ?? null, smart: !args.includes("--no-smart") }));
+  if (node && inv.nodes.length === 0) die(`${node} is not a node in site.json`);
+  if (args.includes("--json")) process.stdout.write(JSON.stringify(inv, null, 1) + "\n");
+  else for (const l of renderInventory(inv)) info(l);
+  return 0;
+}
+
 export function run(argv: string[]): number {
   const args = argv;
   // `--help --json` is the verb manifest: checkArgs prints it (ADR-034 D4).
@@ -182,6 +210,7 @@ export function run(argv: string[]): number {
     info(`${GN}✓${CL} config/shares.json valid (${Object.keys(sharesOf(store.load())).length} share(s))`);
     return 0;
   }
+  if (args[0] === "inventory") return inventory(args);
   if (args[0] !== "nfs") die(`unknown verb '${args[0]}' — see 'storage-manager --help'`);
   if (args[1] === "show") return show(store, args);
   requireOperator();

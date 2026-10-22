@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # test.sh — storage-manager offline test suite (ADR-029 v0.9).
 #
-# Compiles the TS sources + unit tests, runs the unit suite (the verbs and the shared
-# share model), then drives the compiled CLI against a temp config dir: a fake node
+# Compiles the TS sources + unit tests, runs the unit suite (the verbs, the shared
+# share model, and the inventory over hrossen's captured reads), then drives the compiled CLI against a temp config dir: a fake node
 # whose module "ships" a hook, a fake storage module whose nfs-converge.sh records
 # what it is asked to converge — never the live config, a node or the firewall.
 # The end-to-end suite against a real node is the storage module's
@@ -28,7 +28,7 @@ run_ts "tsc --noEmit -p '${HERE}/tsconfig.json'" >/dev/null 2>&1 && ok "tsc --no
 if run_ts "tsc -p '${HERE}/test/unit/tsconfig.json'" >/dev/null 2>&1; then ok "sources + unit tests compile"
 else bad "unit tests do not compile"; echo "storage-manager test: ${pass} passed, ${fail} failed"; exit 1; fi
 for unit in $(cd "${HERE}/test/unit" && ls *.test.ts | sed 's/\.test\.ts$//'); do
-    run_ts "node '${DIST}/manager/storage-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1 \
+    run_ts "SM_FIXTURE_DIR='${HERE}/test/fixtures' node '${DIST}/manager/storage-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1 \
         && ok "unit: ${unit}" || bad "unit: ${unit} (rerun: node ${DIST}/manager/storage-manager/test/unit/${unit}.test.js)"
 done
 
@@ -85,6 +85,8 @@ SM nfs share add x --server debhost --pool p --backup false >/dev/null 2>&1 && b
 echo '{"kind":"machine","management":"unmanaged","zone0":"home","address":"10.3.10.50"}' > "${FIX}/cfg/nas1.json"
 SM nfs share add video --server nas1 --path /volume1/video --version 4.1 >/dev/null 2>&1 && ok "add: a registered server's share" || bad "add: a registered server's share"
 SM nfs share add old --server nas1 --path /v --version 3 >/dev/null 2>&1 && bad "add: NFSv3 without pinned ports refused" || ok "add: NFSv3 without pinned ports refused"
+SM inventory --help >/dev/null 2>&1 && ok "inventory --help" || bad "inventory --help"
+SM inventory --bogus >/dev/null 2>&1 && bad "inventory: an unknown option refused" || ok "inventory: an unknown option refused"
 
 rm -rf -- "${DIST}"
 echo ""
