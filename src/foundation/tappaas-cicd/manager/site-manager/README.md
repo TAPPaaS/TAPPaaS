@@ -153,9 +153,14 @@ is written by the installer, from the fingerprints published in the root `INSTAL
 `--backupOffsite`, `--locationCountry`, `--locationTimezone`,
 `--locationLocale`, `--locationKeyboard`, `--locationLatitude`,
 `--locationLongitude`, `--locationCity`, `--locationBuilding` (#609: what an off-site copy is compared
-with), `--networkIsp`, `--networkPublicIp`. The discovery-derived
+with), `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`,
+`--brandingLogo`, `--brandingLogoDark`, `--dnsBlocklistsLists|Zones|Allow` (comma lists, `''`
+empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the
+update schedule. That is every field `site-fields.json` classes `in-place`. `name`, `version`
+and `defaultEnvironment` are `immutable`: `--name`, `--version` and `--defaultEnvironment` are
+refused, with the reason the schema gives, and nothing is written. The discovery-derived
 `hardware.nodes[]` (use `node …`) and the `repositories`/`environments`/
-`organizations` lists (own CRUD / own managers) are **not** modifiable here.
+`organizations` lists (own CRUD / own managers) are `manual`: **not** modifiable here.
 
 ### `channel` — which release the site takes (ADR-028 D9, D11)
 

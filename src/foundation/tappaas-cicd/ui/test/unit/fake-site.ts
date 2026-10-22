@@ -44,6 +44,8 @@ export function fakeSite(): FakeSite {
         return ok(JSON.stringify({ module: args[1], enabled: true, inPbsJob: true }));
       case "backup-manager coverage":
         return ok(JSON.stringify({ reachable: true, module: args[1], jobs: [] }));
+      case "backup-manager restore":
+        return ok(file("backup-runs.json"));
       case "backup-manager peers":
         return ok(JSON.stringify([{ name: "rasmus", role: "remote" }]));
       case "network-manager topology":

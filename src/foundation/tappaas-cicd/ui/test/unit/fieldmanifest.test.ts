@@ -111,6 +111,11 @@ check(field(site, "defaultEnvironment")?.typeText === "an environment" && field(
 check(field(site, "updateSchedule.frequency")?.arg === "--updateFrequency" && field(site, "updateSchedule.hour")?.type === "integer" && field(site, "updateSchedule.weekday")?.choices?.length === 7, "…the schedule's three fields, with their flags");
 check(field(site, "location.latitude")?.typeText === "number" && field(site, "updateSchedule.hour")?.typeText === "integer", "…a decimal is labelled number, an integer integer");
 check(field(site, "location.country")?.arg === "--locationCountry" && field(site, "location.country")?.value === "DK", "…a nested field by its path, passed as its flag");
+check(field(site, "name")?.editable === false && /^immutable: The site's code/.test(field(site, "name")?.why ?? "") && field(site, "name")?.value === "rossen", "…name shown, refused with the schema's reason");
+check(/^immutable: Written once/.test(field(site, "version")?.why ?? "") && /^immutable: /.test(field(site, "defaultEnvironment")?.why ?? ""), "…version and defaultEnvironment too");
+check(field(site, "dnssec")?.arg === "--dnssec" && field(site, "dnssec")?.type === "boolean" && field(site, "dnsBlocklists.zones")?.type === "list" && field(site, "dnsBlocklists.zones")?.typeText === "zones", "…dnssec a boolean, the blocklist zones a list of zones");
+check(field(site, "diskAutoGrow.threshold")?.arg === "--diskAutoGrowThreshold" && field(site, "diskAutoGrow.threshold")?.default === "80" && field(site, "branding.logoDark")?.arg === "--brandingLogoDark", "…disk growth by key, with its defaults; branding's two files");
+check(field(site, "location.city")?.class === "in-place" && /^manual: /.test(field(site, "hardware.nodes")?.why ?? ""), "…a leaf takes its object's class; hardware is manual, with its reason");
 
 // ── backup: the module's leaf of the cascade ────────────────────────────
 const bk = buildManifest({ kind: "backup", name: "vaultwarden", mode: "modify", defs: backupDefs(composed), record: {}, defaults: { enabled: true, retention: "7y", exclude: [], schedule: "daily" }, refs, vars: {} });

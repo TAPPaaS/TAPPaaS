@@ -1,0 +1,521 @@
+{
+  "reachable": true,
+  "node": "tappaas3",
+  "store": "tappaas_backup",
+  "guests": [
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "110",
+      "module": "network",
+      "snapshots": 25,
+      "lastBackup": 1792609206,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "130",
+      "module": "tappaas-cicd",
+      "snapshots": 21,
+      "lastBackup": 1792609218,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "140",
+      "module": "identity",
+      "snapshots": 25,
+      "lastBackup": 1792609688,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "150",
+      "module": "logging",
+      "snapshots": 25,
+      "lastBackup": 1792609742,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "213",
+      "module": "deconz-test",
+      "snapshots": 13,
+      "lastBackup": 1792609200,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792609207,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "310",
+      "module": "litellm",
+      "snapshots": 25,
+      "lastBackup": 1792609208,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "311",
+      "module": "openwebui",
+      "snapshots": 24,
+      "lastBackup": 1792609289,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "ct",
+      "id": "312",
+      "module": "vllm-amd",
+      "snapshots": 25,
+      "lastBackup": 1792609483,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "340",
+      "module": "nextcloud",
+      "snapshots": 24,
+      "lastBackup": 1792609875,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "341",
+      "module": "coturn",
+      "snapshots": 19,
+      "lastBackup": 1792609943,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792609963,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "342",
+      "module": "nextcloud-hpb",
+      "snapshots": 19,
+      "lastBackup": 1792609722,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792609740,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "343",
+      "module": "euro-office",
+      "snapshots": 24,
+      "lastBackup": 1792609740,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "350",
+      "module": "forgejo",
+      "snapshots": 16,
+      "lastBackup": 1792609828,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792609884,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "351",
+      "module": "woodpecker",
+      "snapshots": 3,
+      "lastBackup": 1792609884,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792609920,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "360",
+      "module": "jellyfin",
+      "snapshots": 15,
+      "lastBackup": 1792609963,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792609998,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "361",
+      "module": "immich",
+      "snapshots": 15,
+      "lastBackup": 1792609206,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792609480,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "370",
+      "module": "nomad",
+      "snapshots": 6,
+      "lastBackup": 1792609999,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792610105,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "371",
+      "module": "karakeep",
+      "snapshots": 4,
+      "lastBackup": 1792610106,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792610169,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "610",
+      "module": "vaultwarden",
+      "snapshots": 17,
+      "lastBackup": 1792610170,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792610197,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "",
+      "type": "vm",
+      "id": "811",
+      "module": "unifi-os",
+      "snapshots": 25,
+      "lastBackup": 1792609480,
+      "job": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "bucket": "daily",
+      "outcome": "ok",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "fs/tappaas-cicd",
+      "type": "host",
+      "id": "tappaas-cicd",
+      "module": null,
+      "snapshots": 21,
+      "lastBackup": 1792606109,
+      "job": null,
+      "bucket": null,
+      "outcome": "not-in-job",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "fs/tappaas1",
+      "type": "host",
+      "id": "tappaas1",
+      "module": null,
+      "snapshots": 19,
+      "lastBackup": 1792607941,
+      "job": null,
+      "bucket": null,
+      "outcome": "not-in-job",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792607941,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "fs/tappaas2",
+      "type": "host",
+      "id": "tappaas2",
+      "module": null,
+      "snapshots": 19,
+      "lastBackup": 1792606159,
+      "job": null,
+      "bucket": null,
+      "outcome": "not-in-job",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792606160,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    },
+    {
+      "ns": "fs/tappaas3",
+      "type": "host",
+      "id": "tappaas3",
+      "module": null,
+      "snapshots": 19,
+      "lastBackup": 1792607159,
+      "job": null,
+      "bucket": null,
+      "outcome": "not-in-job",
+      "latestVerify": "ok",
+      "lastVerify": {
+        "time": 1792607160,
+        "state": "ok"
+      },
+      "failedVerifies": 0
+    }
+  ],
+  "targets": [
+    {
+      "ns": "",
+      "kind": "own",
+      "groups": 20,
+      "snapshots": 370,
+      "lastBackup": 1792610170,
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "unverified": 0,
+      "failedVerifies": 0
+    },
+    {
+      "ns": "fs/tappaas-cicd",
+      "kind": "host",
+      "groups": 1,
+      "snapshots": 21,
+      "lastBackup": 1792606109,
+      "lastVerify": {
+        "time": 1792634400,
+        "state": "ok"
+      },
+      "unverified": 0,
+      "failedVerifies": 0
+    },
+    {
+      "ns": "fs/tappaas1",
+      "kind": "host",
+      "groups": 1,
+      "snapshots": 19,
+      "lastBackup": 1792607941,
+      "lastVerify": {
+        "time": 1792607941,
+        "state": "ok"
+      },
+      "unverified": 0,
+      "failedVerifies": 0
+    },
+    {
+      "ns": "fs/tappaas2",
+      "kind": "host",
+      "groups": 1,
+      "snapshots": 19,
+      "lastBackup": 1792606159,
+      "lastVerify": {
+        "time": 1792606160,
+        "state": "ok"
+      },
+      "unverified": 0,
+      "failedVerifies": 0
+    },
+    {
+      "ns": "fs/tappaas3",
+      "kind": "host",
+      "groups": 1,
+      "snapshots": 19,
+      "lastBackup": 1792607159,
+      "lastVerify": {
+        "time": 1792607160,
+        "state": "ok"
+      },
+      "unverified": 0,
+      "failedVerifies": 0
+    }
+  ],
+  "jobs": [
+    {
+      "id": "c8bfecdc-b02f-421d-9708-178ec67d46c1",
+      "managed": true,
+      "bucket": "daily",
+      "schedule": "21:00",
+      "enabled": true,
+      "guests": 20
+    }
+  ],
+  "runs": [
+    {
+      "node": "tappaas3",
+      "time": 1792609205,
+      "end": 1792609606,
+      "state": "OK",
+      "guest": null
+    },
+    {
+      "node": "tappaas3",
+      "time": 1792522801,
+      "end": 1792523044,
+      "state": "OK",
+      "guest": "811"
+    }
+  ],
+  "verifyJobs": [
+    {
+      "id": "verify-tappaas_backup",
+      "schedule": "04:00",
+      "lastRun": {
+        "time": 1792634400,
+        "end": 1792635772,
+        "state": "OK"
+      },
+      "nextRun": 1792720800
+    }
+  ],
+  "syncJobs": []
+}

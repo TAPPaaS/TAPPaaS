@@ -2,7 +2,7 @@
 // no PBS, no cluster). Records calls so tests can assert exactly what the manager
 // asked the controller to do. Mirrors identity-manager/test/unit/fake-client.ts.
 
-import { JobCoverage, Client, JobStatus, PurgeResult, ScheduleBucket } from "../../src/types";
+import { JobCoverage, Client, JobStatus, PurgeResult, RawRuns, ScheduleBucket } from "../../src/types";
 
 export class FakeClient implements Client {
   job: JobStatus = { jobId: null, vmids: [], storage: null, buckets: [], reachable: true };
@@ -48,6 +48,11 @@ export class FakeClient implements Client {
     this.log.push(`purge ${vmid}${yes ? " --yes" : ""}`);
     const p = this.purgePlans.get(vmid) ?? { vmid, store: "tappaas_backup", snapshots: 0, bytes: 0, refused: [] };
     return { ...p, refused: [...p.refused], purged: yes && p.refused.length === 0 && p.snapshots > 0 };
+  }
+  rawRuns: RawRuns = { reachable: false };
+  runs(): RawRuns {
+    this.log.push("runs");
+    return this.rawRuns;
   }
   listSnapshots(module: string): string[] {
     this.log.push(`list ${module}`);

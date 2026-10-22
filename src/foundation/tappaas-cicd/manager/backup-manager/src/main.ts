@@ -34,7 +34,7 @@ import {
 import { BackupControllerUnreachable, CliClient } from "./client";
 import { addToBackupJob, modifyBackup, ModifyOpts, removeFromBackupJob } from "./modify";
 import { applyPlan, computePlan, jobBucketIndex } from "./reconcile";
-import { restoreList, restoreListAll, restoreRun, moduleScriptDir } from "./restore";
+import { restoreList, restoreListAll, restoreRun, moduleScriptDir, shapeRuns } from "./restore";
 import {
   PeerKind,
   PeerSpec,
@@ -129,7 +129,11 @@ export const HELP: HelpSpec = {
         ["--yes", "Overwrite the module's own guest without asking — for a script or an agent with no terminal."],
       ],
     },
-    { usage: "restore list-all", name: "restore list-all" },
+    {
+      usage: "restore list-all [--json]", name: "restore list-all", effect: "read",
+      note: "(everything stored; --json: each guest's last backup and last verify, per namespace and job)",
+      options: [["--json", "restore list-all: per guest and per target, the last backup (in its job's interval or late) and the last verify with its outcome."]],
+    },
     { usage: "placement", effect: "read", name: "placement", note: "(where PBS lives for this site)" },
     {
       usage: "placement reset [--peer NAME] [--yes] [--no-update]", effect: { noPreview: "moves PBS back to a node of this site" }, destructive: true,
@@ -221,7 +225,7 @@ export const HELP: HelpSpec = {
   ],
   common: [
     ["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."],
-    ["--json", "Machine output (JSON) for list/show/resolve/placement/peers."],
+    ["--json", "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."],
     ["--pbs HOST", "Act on a different PBS (e.g. an off-site satellite) instead of this site's."],
   ],
   notes: [
@@ -249,7 +253,8 @@ export const HELP: HelpSpec = {
               schedules. Previews by default; --apply commits.
   restore     Recover a module — 'restore list <module>' shows its snapshots,
               'restore restore <module>' restores it, 'restore list-all' shows
-              everything stored. Options after the module name are passed to
+              everything stored (--json: each guest's last backup and last
+              verify, and whether it is within its job's interval). Options after the module name are passed to
               restore.sh (--node, --storage, --backup-id, --target-vmid);
               --from <module|vmid> restores another guest's backup INTO this
               module's guest (onto a system that never had it, RESTORE.md §2).
@@ -1066,8 +1071,16 @@ function cmdRestore(opts: Opts, client: Client): number {
       // module's own guest with no terminal to ask on (#829).
       return restoreRun(deps, module, [...opts.rest.slice(2), ...(opts.yes ? ["--yes"] : [])]);
     }
-    case "list-all":
-      return restoreListAll(opts.configDir);
+    case "list-all": {
+      if (!opts.json) return restoreListAll(opts.configDir);
+      const vmids = new Map<string, string>();
+      for (const m of listModules(opts.configDir)) {
+        const v = moduleVmid(opts.configDir, m);
+        if (v && !vmids.has(v)) vmids.set(v, m);
+      }
+      info(JSON.stringify(shapeRuns(client.runs(), (v) => vmids.get(v) ?? null, Math.floor(Date.now() / 1000))));
+      return 0;
+    }
     default:
       die("restore: expected 'list <module>', 'restore <module>', or 'list-all'");
   }

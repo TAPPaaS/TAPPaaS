@@ -154,6 +154,80 @@ export interface PurgeResult {
   purged: boolean;
 }
 
+// pbs-controller runs --json: the datastore's snapshots, the verify and sync
+// jobs, the cluster's backup jobs and recent vzdump tasks, as PBS/PVE give them.
+// Shaped into BackupRuns by restore.ts (shapeRuns).
+export interface RawSnapshot {
+  ns: string;
+  type: string; // vm | ct | host
+  id: string;
+  time: number;
+  size?: number | null;
+  verification?: { state?: string; upid?: string } | null;
+}
+export interface RawRuns {
+  reachable: boolean;
+  node?: string;
+  store?: string;
+  marker?: string;
+  snapshots?: RawSnapshot[];
+  verifyJobs?: Record<string, unknown>[];
+  syncJobs?: Record<string, unknown>[];
+  backupJobs?: { id: string; comment: string; schedule: string; enabled: boolean; vmid: string; storage: string }[];
+  tasks?: { node?: string; id?: string; starttime?: number; endtime?: number; status?: string }[];
+}
+
+export type VerifyState = "ok" | "failed" | "unverified";
+export interface LastVerify { time: number | null; state: "ok" | "failed" }
+
+// One backup group (a guest, or a host's file backup) in one namespace.
+export interface GuestRuns {
+  ns: string;
+  type: string;
+  id: string;
+  module: string | null;
+  snapshots: number;
+  lastBackup: number | null;
+  // The job that covers it (own guests) and how often that job runs.
+  job: string | null;
+  bucket: ScheduleBucket | null;
+  // ok: backed up within its job's interval · late: not · not-in-job: no
+  // TAPPaaS job covers it (a removed guest, a copy, a host's file backup).
+  outcome: "ok" | "late" | "not-in-job";
+  // The newest snapshot's verification, and the newest verify of any snapshot.
+  latestVerify: VerifyState;
+  lastVerify: LastVerify | null;
+  failedVerifies: number;
+}
+
+// One namespace: this site's own guests, a host's file backups, another
+// site's copy pulled or pushed here.
+export interface TargetRuns {
+  ns: string;
+  kind: "own" | "host" | "pull" | "receive" | "other";
+  groups: number;
+  snapshots: number;
+  lastBackup: number | null;
+  lastVerify: LastVerify | null;
+  unverified: number;
+  failedVerifies: number;
+}
+
+export interface JobLastRun { time: number; end: number | null; state: string }
+export interface BackupRuns {
+  reachable: boolean;
+  node: string | null;
+  store: string | null;
+  guests: GuestRuns[];
+  targets: TargetRuns[];
+  // The cluster's backup jobs; lastRun is the newest scheduled vzdump run on
+  // any node (PVE does not name the job in its task), per node in `runs`.
+  jobs: { id: string; managed: boolean; bucket: ScheduleBucket | null; schedule: string; enabled: boolean; guests: number }[];
+  runs: { node: string; time: number; end: number | null; state: string; guest: string | null }[];
+  verifyJobs: { id: string; schedule: string; lastRun: JobLastRun | null; nextRun: number | null }[];
+  syncJobs: { id: string; remote: string; ns: string; schedule: string; lastRun: JobLastRun | null; nextRun: number | null }[];
+}
+
 export interface Client {
   // pbs-controller job-status --json — the shared PBS backup job state.
   jobStatus(): JobStatus;
@@ -177,6 +251,9 @@ export interface Client {
   // restore points and start GC; without yes, only the plan. Refusals come back
   // in `refused` (the controller exits 1 then), never as a throw.
   purge(vmid: string, yes: boolean): PurgeResult;
+  // pbs-controller runs --json — what restore list-all --json shapes;
+  // {reachable:false} when PBS/the cluster did not answer.
+  runs(): RawRuns;
   keyList(): void;
   keyExport(dest: string): void;
   keyImport(src: string): void;

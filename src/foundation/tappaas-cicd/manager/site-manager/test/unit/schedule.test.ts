@@ -10,7 +10,7 @@ import { mkdtempSync, writeFileSync, readFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { HELP, run, readSchedule, writeSchedule } from "../../src/main";
-import { loadSite } from "../../src/config";
+import { loadSite, refusedField, siteSchema } from "../../src/config";
 import { FakeSiteClient } from "./fake-client";
 
 let passed = 0;
@@ -97,6 +97,51 @@ check(opts.includes("--updateFrequency") && opts.includes("--updateWeekday") && 
   run(["site", "modify", "--requireSigned", "false", "--config-dir", dir], c);
   check(req() === false, "…and --requireSigned false writes false");
 }
+
+// ── the settings the schema calls in-place: dnssec, dnsBlocklists, diskAutoGrow ──
+{
+  const doc = (): Record<string, unknown> => JSON.parse(readFileSync(siteFile, "utf8"));
+  writeFileSync(siteFile, JSON.stringify({ name: "s", version: "1.0", defaultEnvironment: "home" }));
+  check(run(["site", "modify", "--dnssec", "false", "--config-dir", dir], c) === 0 && doc().dnssec === false, "--dnssec false writes a boolean");
+  check(run(["site", "modify", "--dnssec", "maybe", "--config-dir", dir], c) !== 0, "…and anything but true|false is refused");
+  run(["site", "modify", "--dnsBlocklistsLists", "atf, hgz011", "--dnsBlocklistsZones", "home,guest", "--dnsBlocklistsAllow", "example.org", "--config-dir", dir], c);
+  check(JSON.stringify(doc().dnsBlocklists) === '{"lists":["atf","hgz011"],"zones":["home","guest"],"allow":["example.org"]}', "dnsBlocklists: three comma lists");
+  run(["site", "modify", "--dnsBlocklistsZones", "", "--config-dir", dir], c);
+  check(JSON.stringify(doc().dnsBlocklists) === '{"lists":["atf","hgz011"],"zones":[],"allow":["example.org"]}', "…'' empties one, the others kept");
+  run(["site", "modify", "--diskAutoGrowThreshold", "85", "--diskAutoGrowPoolCeiling", "75", "--diskAutoGrowEnabled", "true", "--config-dir", dir], c);
+  check(JSON.stringify(doc().diskAutoGrow) === '{"enabled":true,"threshold":85,"poolCeiling":75}', "diskAutoGrow: integers and a boolean, by key");
+  run(["site", "modify", "--diskAutoGrowGrowPercent", "100", "--diskAutoGrowMinGrowGB", "10", "--config-dir", dir], c);
+  check((doc().diskAutoGrow as Record<string, unknown>).minGrowGB === 10 && (doc().diskAutoGrow as Record<string, unknown>).threshold === 85, "…a later one keeps the rest");
+  for (const [flag, v] of [["--diskAutoGrowThreshold", "101"], ["--diskAutoGrowPoolCeiling", "0"], ["--diskAutoGrowMinGrowGB", "1.5"], ["--diskAutoGrowGrowPercent", "x"]]) {
+    check(run(["site", "modify", flag, v, "--config-dir", dir], c) !== 0, `${flag} ${v} is refused`);
+  }
+  run(["site", "modify", "--brandingLogo", "branding/logo.svg", "--config-dir", dir], c);
+  check(JSON.stringify(doc().branding) === '{"logo":"branding/logo.svg"}', "branding.logo");
+
+  // name, version and defaultEnvironment: immutable, refused with the schema's reason, nothing written
+  const before = readFileSync(siteFile, "utf8");
+  const err = console.error;
+  for (const [flag, words] of [["--name", "cluster"], ["--version", "installed from"], ["--defaultEnvironment", "renamed srv"]]) {
+    let said = "";
+    console.error = (...a: unknown[]): void => { said += a.map(String).join(" "); };
+    let rc: number;
+    try { rc = run(["site", "modify", flag, "x", "--displayName", "Y", "--config-dir", dir], c); } finally { console.error = err; }
+    check(rc! !== 0 && said.includes(`${flag} is refused — immutable:`) && said.includes(words), `${flag} is refused with the schema's reason (${said.trim()})`);
+  }
+  check(readFileSync(siteFile, "utf8") === before, "…and nothing is written, not even the field given beside it");
+
+  // Every field the schema calls in-place has an option; the others have a reason.
+  const schema = siteSchema("");
+  const props = (schema?.properties ?? {}) as Record<string, { changeClass?: string; changeNote?: string }>;
+  check(Object.keys(props).length > 15 && Object.values(props).every((p) => typeof p.changeClass === "string"), "site-fields.json classes every field");
+  const modify = HELP.verbs.find((v) => v.usage.startsWith("site modify"))!;
+  const flags = (modify.options ?? []).map(([f]) => f.split(" ")[0]);
+  const missing = Object.entries(props).filter(([k, p]) => p.changeClass === "in-place" && !flags.some((f) => f.startsWith(k === "updateSchedule" ? "--update" : `--${k}`)));
+  check(missing.length === 0, `every in-place field has a site modify option (missing: ${missing.map(([k]) => k).join(", ")})`);
+  check(Object.entries(props).filter(([, p]) => p.changeClass !== "in-place").every(([, p]) => (p.changeNote ?? "").length > 20), "every other field says why");
+  check(refusedField(schema, "dnssec") === null && refusedField(schema, "hardware")!.startsWith("manual:"), "refusedField: in-place none, manual its reason");
+}
+
 
 // ── repository trust (ADR-033 D5): add forwards the introduction; introduce exists ──
 {

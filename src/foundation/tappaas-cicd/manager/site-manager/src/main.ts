@@ -24,7 +24,7 @@
 
 import { DEFAULT_HOLD, describeHold, makeHold, parseUntil, readHolds, releaseHold, validRepoName, writeHold } from "./hold";
 import { UNIT, buildRequest, dropRequest, readResult, repoStatusLine, summaryLine, writeRequest } from "./unitrun";
-import { clusterScript, defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, writeSite } from "./config";
+import { clusterScript, defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, refusedField, siteSchema, writeSite } from "./config";
 import { CliSiteClient } from "./client";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { evacuateNode, evacuateExitCode } from "./evacuate";
@@ -47,6 +47,8 @@ export const HELP: HelpSpec = {
     {
       usage: "site modify <field options>", effect: { noPreview: "writes the fields given into site.json" },
       name: "site modify (fields; at least one)",
+      // Accepted so the refusal can say why (the schema's change class).
+      hidden: ["--name <s>", "--version <s>", "--defaultEnvironment <s>"],
       options: [
         ["--channel <c>", "release channel: unstable | staging | production. Checks EVERY registered repository against the branch it declares for that channel in its channels.json, warns where they disagree or where none is declared, and proposes the fix; moving towards production needs --force."],
         ["--force", "authorize a channel move towards production — older code, and migrations do not run backwards."],
@@ -67,6 +69,15 @@ export const HELP: HelpSpec = {
         ["--locationKeyboard <kb>", "location.keyboard — the console layout every OS family is set from"],
         ["--brandingLogo <path>", "branding.logo — the sign-in page's logo (svg, png, jpg, webp), relative to the config dir; applied by the identity update"],
         ["--brandingLogoDark <path>", "branding.logoDark — its dark-theme variant, same file type"],
+        ["--dnssec true|false", "the firewall's resolver validates DNSSEC (default true); applied by the next network update"],
+        ["--dnsBlocklistsLists <a,b>", "dnsBlocklists.lists — OPNsense blocklist codes (atf, hgz011, oisd1, ag, …); '' blocks nothing. Applied by the next network update"],
+        ["--dnsBlocklistsZones <a,b>", "dnsBlocklists.zones — the zones whose clients are filtered; '' filters every client"],
+        ["--dnsBlocklistsAllow <a,b>", "dnsBlocklists.allow — domains never blocked"],
+        ["--diskAutoGrowEnabled true|false", "diskAutoGrow.enabled — grow a VM's disk when its / fills up, at every module update"],
+        ["--diskAutoGrowThreshold <pct>", "diskAutoGrow.threshold — grow at or over this % full (default 80)"],
+        ["--diskAutoGrowGrowPercent <pct>", "diskAutoGrow.growPercent — grow by this % of the disk (default 50)"],
+        ["--diskAutoGrowMinGrowGB <gb>", "diskAutoGrow.minGrowGB — and by at least this many GB (default 5)"],
+        ["--diskAutoGrowPoolCeiling <pct>", "diskAutoGrow.poolCeiling — only while the pool stays at or under this % used (default 80)"],
         ["--locationLatitude <deg>", "location.latitude, decimal degrees"],
         ["--locationLongitude <deg>", "location.longitude, decimal degrees"],
         ["--locationCity <c>", "location.city — lets an off-site copy in the same country show it is elsewhere"],
@@ -392,6 +403,12 @@ function cmdSite(o: Opts): void {
   if (sub === "modify") {
     const raw = loadRaw(siteFile);
     if (Object.keys(raw).length === 0) die(`site.json not found: ${siteFile}`);
+    // A field whose change class is not in-place is refused before anything
+    // is written, with the schema's reason.
+    for (const field of ["name", "version", "defaultEnvironment"]) {
+      if (!o.flags.has(`--${field}`) && !o.boolFlags.has(`--${field}`)) continue;
+      die(`site modify: --${field} is refused — ${refusedField(siteSchema(o.schemaDir), field) ?? "not changed by site modify"}`);
+    }
     let changed = 0;
     // The approved editable surface: scalar site-wide fields, mapped to schema
     // paths. The discovery-derived hardware.nodes[] and the repositories/
@@ -427,6 +444,21 @@ function cmdSite(o: Opts): void {
       if (!Number.isFinite(n)) die(`${flag} must be a number, in decimal degrees`);
       if (n < min || n > max) die(`${flag} must be between ${min} and ${max}`);
       setDeep(raw, path, n);
+      changed++;
+    };
+
+    // A comma list; '' is the empty list.
+    const setList = (flag: string, path: string[]): void => {
+      const v = o.flags.get(flag) ?? (o.boolFlags.has(flag) ? "" : undefined);
+      if (v === undefined) return;
+      setDeep(raw, path, v.split(",").map((x) => x.trim()).filter(Boolean));
+      changed++;
+    };
+    const setRange = (flag: string, path: string[], min: number, max: number): void => {
+      const v = o.flags.get(flag);
+      if (v === undefined) return;
+      if (!/^\d+$/.test(v) || Number(v) < min || Number(v) > max) die(`${flag} must be an integer ${max === Infinity ? `of ${min} or more` : `${min}-${max}`}`);
+      setDeep(raw, path, Number(v));
       changed++;
     };
 
@@ -543,6 +575,15 @@ function cmdSite(o: Opts): void {
     setStr("--locationKeyboard", ["location", "keyboard"]);
     setStr("--brandingLogo", ["branding", "logo"]);
     setStr("--brandingLogoDark", ["branding", "logoDark"]);
+    setBool("--dnssec", ["dnssec"]);
+    setList("--dnsBlocklistsLists", ["dnsBlocklists", "lists"]);
+    setList("--dnsBlocklistsZones", ["dnsBlocklists", "zones"]);
+    setList("--dnsBlocklistsAllow", ["dnsBlocklists", "allow"]);
+    setBool("--diskAutoGrowEnabled", ["diskAutoGrow", "enabled"]);
+    setRange("--diskAutoGrowThreshold", ["diskAutoGrow", "threshold"], 1, 100);
+    setRange("--diskAutoGrowGrowPercent", ["diskAutoGrow", "growPercent"], 1, Infinity);
+    setRange("--diskAutoGrowMinGrowGB", ["diskAutoGrow", "minGrowGB"], 1, Infinity);
+    setRange("--diskAutoGrowPoolCeiling", ["diskAutoGrow", "poolCeiling"], 1, 100);
     setNum("--locationLatitude", ["location", "latitude"], -90, 90);
     setNum("--locationLongitude", ["location", "longitude"], -180, 180);
     setStr("--locationCity", ["location", "city"]);

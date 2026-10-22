@@ -276,6 +276,8 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.topology.get()));
       case "storage":
         return sendJson(res, 200, envelope(await r.storage.get()));
+      case "backup-runs":
+        return sendJson(res, 200, envelope(await r.backupRuns.get()));
       case "security":
         return sendJson(res, 200, envelope(await r.security.get()));
       case "activity": {
