@@ -1,0 +1,64 @@
+[
+ {
+  "switch": "USW Pro XG 10 PoE",
+  "name": "crs-uplink",
+  "ports": [
+   "11",
+   "12"
+  ],
+  "live": [
+   11,
+   12
+  ],
+  "formed": true,
+  "mlagId": null
+ },
+ {
+  "switch": "crs-a",
+  "name": "tappaas1-lan",
+  "ports": [
+   "sfp-sfpplus1"
+  ],
+  "live": [
+   "sfp-sfpplus1"
+  ],
+  "formed": true,
+  "mlagId": 10
+ },
+ {
+  "switch": "crs-a",
+  "name": "usw-uplink",
+  "ports": [
+   "sfp-sfpplus14"
+  ],
+  "live": [
+   "sfp-sfpplus14"
+  ],
+  "formed": true,
+  "mlagId": 11
+ },
+ {
+  "switch": "crs-b",
+  "name": "tappaas1-lan",
+  "ports": [
+   "sfp-sfpplus1"
+  ],
+  "live": [
+   "sfp-sfpplus1"
+  ],
+  "formed": true,
+  "mlagId": 10
+ },
+ {
+  "switch": "crs-b",
+  "name": "usw-uplink",
+  "ports": [
+   "sfp-sfpplus14"
+  ],
+  "live": [
+   "sfp-sfpplus14"
+  ],
+  "formed": true,
+  "mlagId": 11
+ }
+]

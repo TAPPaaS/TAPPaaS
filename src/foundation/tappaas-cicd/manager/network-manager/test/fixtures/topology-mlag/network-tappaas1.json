@@ -1,0 +1,96 @@
+{
+ "node": "tappaas1",
+ "live": {
+  "ports": [
+   {
+    "name": "nic2",
+    "mac": "aa:bb:cc:00:00:02",
+    "state": "up",
+    "speed": 10000,
+    "mtu": 9000,
+    "lldp": {
+     "chassis": "04:f4:1c:00:25:60",
+     "name": "crs-a",
+     "port": "sfp-sfpplus1"
+    }
+   },
+   {
+    "name": "nic3",
+    "mac": "aa:bb:cc:00:00:03",
+    "state": "down",
+    "speed": 10000,
+    "mtu": 9000,
+    "lldp": null
+   },
+   {
+    "name": "nic4",
+    "mac": "aa:bb:cc:00:00:04",
+    "state": "up",
+    "speed": 10000,
+    "mtu": 9000,
+    "lldp": {
+     "name": "USW-Pro-XG-10-PoE",
+     "port": "Port 6"
+    }
+   }
+  ],
+  "lan": {
+   "mtu": 9000,
+   "bond": "lanbond",
+   "mode": "lacp",
+   "members": [
+    {
+     "name": "nic2",
+     "mac": "aa:bb:cc:00:00:02",
+     "state": "up",
+     "speed": 10000,
+     "mtu": 9000,
+     "lldp": {
+      "chassis": "04:f4:1c:00:25:60",
+      "name": "crs-a",
+      "port": "sfp-sfpplus1"
+     }
+    },
+    {
+     "name": "nic3",
+     "mac": "aa:bb:cc:00:00:03",
+     "state": "down",
+     "speed": 10000,
+     "mtu": 9000,
+     "lldp": null
+    }
+   ]
+  },
+  "wan": {
+   "members": [
+    {
+     "name": "nic4",
+     "mac": "aa:bb:cc:00:00:04",
+     "state": "up",
+     "speed": 10000,
+     "mtu": 9000,
+     "lldp": {
+      "name": "USW-Pro-XG-10-PoE",
+      "port": "Port 6"
+     }
+    }
+   ]
+  },
+  "lrmActive": true,
+  "lldpd": "active"
+ },
+ "declared": {
+  "lan": {
+   "mode": "lacp",
+   "ports": [
+    "nic2",
+    "nic3"
+   ]
+  },
+  "wan": {
+   "ports": [
+    "nic4"
+   ]
+  }
+ }
+}

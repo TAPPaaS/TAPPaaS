@@ -9,8 +9,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import {
-  ApRow, HealthDoc, LagRow, ModuleRow, NodeNetwork, PeerRow, SwitchList, SwitchPorts, TopoSources, Topology,
-  buildTopology, canon, collectSources, lldpPort, renderTopology, speedLabel,
+  ApRow, HealthDoc, LagRow, ModuleRow, NodeNetwork, PeerRow, SwitchActual, SwitchList, SwitchPorts, TopoPort, TopoSources, Topology,
+  buildTopology, canon, collectSources, compactPorts, lldpPort, portCompare, renderTopology, speedLabel,
 } from "../../src/topology";
 
 let passed = 0;
@@ -248,6 +248,102 @@ check(t.site.wan.discovered === null, "hrossen's capture has no WAN address reco
   const bad = read("{ not json");
   check(bad.wanAddress === null && bad.errors.some((e) => e.source === "wan-address.json"), "a malformed record is named as a source that did not answer");
   rmSync(dir, { recursive: true, force: true });
+}
+
+// ── an MLAG pair (test/fixtures/topology-mlag): two MikroTik switches, a LAG
+// across them to tappaas1 (crs-b's member disabled), a LAG across them up to the
+// UniFi switch, which aggregates 11+12 ────────────────────────────────────────
+const MFIX = join(process.env.NM_FIXTURE_DIR ?? "test/fixtures", "topology-mlag");
+const mload = <T>(f: string): T => JSON.parse(readFileSync(join(MFIX, f), "utf8")) as T;
+function mlagSite(): TopoSources {
+  return {
+    site: { name: "lab" },
+    nodes: [{ name: "tappaas1", storagePools: [] }],
+    networks: { tappaas1: mload<NodeNetwork>("network-tappaas1.json") },
+    switches: mload<SwitchList>("switches.json"),
+    ports: mload<SwitchPorts[]>("switch-ports.json"),
+    lags: mload<LagRow[]>("lags.json"),
+    accessPoints: [],
+    zones: load<Record<string, unknown>>("zones.json"),
+    modules: [],
+    peers: [],
+    health: null,
+    firewall: null,
+    satellites: [],
+    actual: mload<SwitchActual>("actual.json"),
+    errors: [],
+  };
+}
+{
+  const m = buildTopology(mlagSite());
+  const text = renderTopology(m);
+  const line = (re: RegExp): string | undefined => text.find((l) => re.test(l));
+  const mport = (sw: string, p: string): TopoPort => m.switches.find((x) => x.name === sw)!.ports.find((x) => x.port === p)!;
+
+  // node legs on two switches
+  const legs = m.nodes[0].uplinks.find((u) => u.name === "lan")!.legs;
+  check(legs.map((l) => `${l.nic}:${l.peer?.switch}:${l.peer?.port}:${l.peer?.via}`).join(" ") === "nic2:crs-a:sfp-sfpplus1:lldp nic3:crs-b:sfp-sfpplus1:inventory",
+    "MLAG: nic2 on crs-a sfp-sfpplus1 (LLDP, port id kept whole), nic3 on crs-b sfp-sfpplus1 (inventory)");
+  check(!!line(/^  tappaas1 +lan lacp lanbond nic2@10G→crs-a:sfp-sfpplus1 nic3@10G\(down\)→crs-b:sfp-sfpplus1; wan single nic4@10G→USW Pro XG 10 PoE:6$/),
+    "MLAG: the node line names <switch>:<port> for each leg");
+  check(!m.findings.some((f) => f.gate === "topology"), "MLAG: the fixture reconciles, no topology findings");
+
+  // the pair and its peer link
+  check(m.mlagPairs.length === 1 && m.mlagPairs[0].name === "crs-a+crs-b" && m.mlagPairs[0].switches.join(",") === "crs-a,crs-b", "MLAG: the pair crs-a + crs-b");
+  check(m.mlagPairs[0].peerLink.every((x) => x.port === "peer-link" && x.members.join(",") === "sfp-sfpplus15,sfp-sfpplus16"), "MLAG: each side's peer link and its members");
+  check(!!line(/^  MLAG pair crs-a \+ crs-b — peer link crs-a peer-link \(sfp-sfpplus15\+16\), crs-b peer-link \(sfp-sfpplus15\+16\)$/), "MLAG: the text view draws the pair and its peer link");
+  check(!!line(/^    live state: switch-manager mlag-pair list$/), "MLAG: …and names the verb for its live state");
+  const pl = mport("crs-a", "sfp-sfpplus16");
+  check(pl.role === "peer-link" && pl.status === "peer-link" && pl.peerLink && pl.target?.name === "crs-b" && pl.target.port === "peer-link",
+    "MLAG: a peer-link member is a peer-link port to the other switch, not unmanaged");
+  check(!text.some((l) => /sfp-sfpplus1[56] +unmanaged/.test(l)), "MLAG: no peer-link member reads unmanaged");
+  check(m.switches.filter((x) => x.mlagPair === "crs-a+crs-b").length === 2, "MLAG: both switches know their pair");
+
+  // LAGs across the pair, once
+  check(m.switches.every((x) => x.lags.every((l) => l.pair === null)) && m.switches.find((x) => x.name === "crs-a")!.lags.length === 0, "MLAG: no LAG across the pair is listed under a switch");
+  check(text.filter((l) => /LAG tappaas1-lan/.test(l) && /^ {4}LAG/.test(l)).length === 1, "MLAG: tappaas1-lan is drawn once");
+  const tl = m.mlagPairs[0].lags.find((l) => l.name === "tappaas1-lan")!;
+  check(tl.mlagId === 10 && tl.ports.join(",") === "crs-a:sfp-sfpplus1,crs-b:sfp-sfpplus1" && tl.node === "tappaas1" && tl.bond === "lanbond", "MLAG: tappaas1-lan across the pair, mlag-id 10, tappaas1's lanbond");
+  check(!tl.formed && tl.members.map((x) => `${x.switch}:${x.port}:${x.active}:${x.why}`).join(" ") === "crs-a:sfp-sfpplus1:true:null crs-b:sfp-sfpplus1:false:disabled",
+    "MLAG: a disabled member: not formed, member state per switch");
+  check(!!line(/^    LAG tappaas1-lan across crs-a \+ crs-b \(mlag-id 10\): crs-a:sfp-sfpplus1, crs-b:sfp-sfpplus1 1 of 2 members active \(crs-b:sfp-sfpplus1 disabled\) — tappaas1 lanbond$/),
+    "MLAG: the text view says 1 of 2 members active, which and why");
+  const ul = m.mlagPairs[0].lags.find((l) => l.name === "usw-uplink")!;
+  check(ul.formed && ul.mlagId === 11 && ul.peer?.kind === "switch" && ul.peer.name === "USW Pro XG 10 PoE", "MLAG: usw-uplink across the pair is formed, up to the UniFi switch");
+  check(!!line(/^    LAG usw-uplink across crs-a \+ crs-b \(mlag-id 11\): crs-a:sfp-sfpplus14, crs-b:sfp-sfpplus14 formed — switch USW Pro XG 10 PoE$/), "MLAG: …drawn under the pair");
+  const cu = m.switches.find((x) => x.name === "USW Pro XG 10 PoE")!.lags[0];
+  check(cu.name === "crs-uplink" && cu.formed && cu.pair === null && cu.peer?.kind === "pair" && cu.peer.name === "crs-a+crs-b", "MLAG: the UniFi LAG on 11+12 stays under its switch, up to the pair");
+  check(!!line(/^    LAG crs-uplink: ports 11\+12 formed — MLAG pair crs-a \+ crs-b$/), "MLAG: …and reads so");
+
+  // disabled ports
+  const d = mport("crs-b", "sfp-sfpplus1");
+  check(d.disabled && d.status === "disabled" && d.drift === "in-sync", "MLAG: a disabled port reads disabled, not in-sync");
+  check(!!line(/^    sfp-sfpplus1 +node-lan  node tappaas1\/nic3 +trunk 8 +disabled  LAG tappaas1-lan$/), "MLAG: …in the text view");
+  const e1 = mport("crs-a", "ether1");
+  check(e1.bridged === false && e1.status === "unmanaged" && e1.role === "unmanaged", "MLAG: ether1 off the bridge stays unmanaged, not disabled");
+  check(text.some((l) => /^ {4}sfp-sfpplus10  parked/.test(l)) && !text.some((l) => /sfp-sfpplus10[a-z]/.test(l)), "MLAG: port ids keep their own column");
+
+  // LAG members down: formed is not claimed from configured members
+  const s2 = mlagSite();
+  s2.ports![0].ports = s2.ports![0].ports.map((p) => (p.port === "12" ? { ...p, link: "down" } : p));
+  const cu2 = buildTopology(s2).switches[0].lags[0];
+  check(!cu2.formed && cu2.members.find((x) => x.port === "12")?.why === "link down", "a LAG member with its link down: the LAG is not formed");
+  check(renderTopology(buildTopology(s2)).some((l) => /^    LAG crs-uplink: ports 11\+12 1 of 2 members active \(12 link down\)/.test(l)), "…1 of 2 members active (12 link down)");
+  const s3 = mlagSite();
+  s3.lags = s3.lags!.filter((l) => !(l.switch === "crs-b" && l.name === "usw-uplink"));
+  const ul3 = buildTopology(s3).mlagPairs[0].lags.find((l) => l.name === "usw-uplink")!;
+  check(!ul3.formed && ul3.missing.join(",") === "crs-b", "a LAG with no member on one peer is not formed and says which");
+
+  // JSON carries the pair and the LAGs across it
+  const j = JSON.parse(JSON.stringify(m)) as Topology;
+  check(j.mlagPairs[0].lags.length === 2 && j.mlagPairs[0].lags.every((l) => l.members.length === 2), "--json carries the pair and both LAGs across it");
+
+  // a single-switch (UniFi-only) site keeps the bare port id
+  check(renderTopology(t).some((l) => /^  tappaas1 +lan lacp lanbond nic2@10G→12 nic3@10G→11; wan single nic4@10G→6$/.test(l)), "one switch: the node line keeps bare port ids");
+  check(t.mlagPairs.length === 0 && !renderTopology(t).some((l) => /MLAG/.test(l)), "no pair: nothing about MLAG");
+  check(renderTopology(t).some((l) => /^    LAG tappaas1-lan: ports 11\+12 formed — tappaas1 lanbond$/.test(l)), "one switch: the LAG line is as before");
+  check(portCompare("sfp-sfpplus2", "sfp-sfpplus10") < 0 && portCompare("2", "11") < 0, "ports order naturally");
+  check(compactPorts(["sfp-sfpplus15", "sfp-sfpplus16"]) === "sfp-sfpplus15+16" && compactPorts(["11", "12"]) === "11+12", "port lists compact");
 }
 
 console.log(`\ntopology: ${passed} passed, ${failed} failed`);

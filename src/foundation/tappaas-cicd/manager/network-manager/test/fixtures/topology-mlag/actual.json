@@ -1,0 +1,299 @@
+{
+ "mlagPairs": {
+  "crs-a+crs-b": {
+   "switches": [
+    "crs-a",
+    "crs-b"
+   ],
+   "peerPort": {
+    "crs-a": "peer-link",
+    "crs-b": "peer-link"
+   }
+  }
+ },
+ "switches": {
+  "USW Pro XG 10 PoE": {
+   "ports": {}
+  },
+  "crs-a": {
+   "mlag": {
+    "bridge": "bridge",
+    "peerPort": "peer-link"
+   },
+   "ports": {
+    "ether1": {
+     "mode": "access",
+     "nativeVlan": 0,
+     "taggedVlans": [],
+     "source": "discovered",
+     "link": "down",
+     "disabled": true,
+     "lagMembers": [],
+     "bridged": false
+    },
+    "sfp-sfpplus1": {
+     "mode": "trunk",
+     "nativeVlan": 0,
+     "taggedVlans": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "source": "discovered",
+     "link": "up",
+     "disabled": false,
+     "lagMembers": [
+      "sfp-sfpplus1"
+     ],
+     "type": "node",
+     "target": "tappaas1",
+     "targetPort": "nic2",
+     "lag": "tappaas1-lan",
+     "mlagId": 10,
+     "liveMlagId": 10,
+     "bond": "bond-sfp-sfpplus1"
+    },
+    "sfp-sfpplus2": {
+     "mode": "access",
+     "nativeVlan": 410,
+     "taggedVlans": [],
+     "source": "discovered",
+     "link": "down",
+     "disabled": false,
+     "lagMembers": [],
+     "parked": true,
+     "zone": "iotLocal"
+    },
+    "sfp-sfpplus10": {
+     "mode": "access",
+     "nativeVlan": 410,
+     "taggedVlans": [],
+     "source": "discovered",
+     "link": "down",
+     "disabled": false,
+     "lagMembers": [],
+     "parked": true,
+     "zone": "iotLocal"
+    },
+    "sfp-sfpplus14": {
+     "mode": "trunk",
+     "nativeVlan": 0,
+     "taggedVlans": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "source": "discovered",
+     "link": "up",
+     "disabled": false,
+     "lagMembers": [
+      "sfp-sfpplus14"
+     ],
+     "type": "switch",
+     "target": "USW Pro XG 10 PoE",
+     "targetPort": "11",
+     "lag": "usw-uplink",
+     "mlagId": 11,
+     "liveMlagId": 11,
+     "bond": "bond-sfp-sfpplus14"
+    },
+    "sfp-sfpplus16": {
+     "mode": "trunk",
+     "nativeVlan": 0,
+     "taggedVlans": [
+      1,
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "source": "discovered",
+     "link": "up",
+     "disabled": true,
+     "lagMembers": [],
+     "bond": "peer-link",
+     "peerLink": true,
+     "lagLead": "sfp-sfpplus15"
+    },
+    "sfp-sfpplus15": {
+     "mode": "trunk",
+     "nativeVlan": 0,
+     "taggedVlans": [
+      1,
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "source": "discovered",
+     "link": "up",
+     "disabled": true,
+     "lagMembers": [
+      "sfp-sfpplus15",
+      "sfp-sfpplus16"
+     ],
+     "bond": "peer-link",
+     "peerLink": true
+    }
+   }
+  },
+  "crs-b": {
+   "mlag": {
+    "bridge": "bridge",
+    "peerPort": "peer-link"
+   },
+   "ports": {
+    "ether1": {
+     "mode": "access",
+     "nativeVlan": 0,
+     "taggedVlans": [],
+     "source": "discovered",
+     "link": "down",
+     "disabled": true,
+     "lagMembers": [],
+     "bridged": false
+    },
+    "sfp-sfpplus1": {
+     "mode": "trunk",
+     "nativeVlan": 0,
+     "taggedVlans": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "source": "discovered",
+     "link": "down",
+     "disabled": true,
+     "lagMembers": [
+      "sfp-sfpplus1"
+     ],
+     "type": "node",
+     "target": "tappaas1",
+     "targetPort": "nic3",
+     "lag": "tappaas1-lan",
+     "mlagId": 10,
+     "liveMlagId": 10,
+     "bond": "bond-sfp-sfpplus1"
+    },
+    "sfp-sfpplus2": {
+     "mode": "access",
+     "nativeVlan": 410,
+     "taggedVlans": [],
+     "source": "discovered",
+     "link": "down",
+     "disabled": false,
+     "lagMembers": [],
+     "parked": true,
+     "zone": "iotLocal"
+    },
+    "sfp-sfpplus10": {
+     "mode": "access",
+     "nativeVlan": 410,
+     "taggedVlans": [],
+     "source": "discovered",
+     "link": "down",
+     "disabled": false,
+     "lagMembers": [],
+     "parked": true,
+     "zone": "iotLocal"
+    },
+    "sfp-sfpplus14": {
+     "mode": "trunk",
+     "nativeVlan": 0,
+     "taggedVlans": [
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "source": "discovered",
+     "link": "up",
+     "disabled": false,
+     "lagMembers": [
+      "sfp-sfpplus14"
+     ],
+     "type": "switch",
+     "target": "USW Pro XG 10 PoE",
+     "targetPort": "12",
+     "lag": "usw-uplink",
+     "mlagId": 11,
+     "liveMlagId": 11,
+     "bond": "bond-sfp-sfpplus14"
+    },
+    "sfp-sfpplus16": {
+     "mode": "trunk",
+     "nativeVlan": 0,
+     "taggedVlans": [
+      1,
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "source": "discovered",
+     "link": "up",
+     "disabled": true,
+     "lagMembers": [],
+     "bond": "peer-link",
+     "peerLink": true,
+     "lagLead": "sfp-sfpplus15"
+    },
+    "sfp-sfpplus15": {
+     "mode": "trunk",
+     "nativeVlan": 0,
+     "taggedVlans": [
+      1,
+      200,
+      299,
+      310,
+      410,
+      420,
+      430,
+      510,
+      610
+     ],
+     "source": "discovered",
+     "link": "up",
+     "disabled": true,
+     "lagMembers": [
+      "sfp-sfpplus15",
+      "sfp-sfpplus16"
+     ],
+     "bond": "peer-link",
+     "peerLink": true
+    }
+   }
+  }
+ }
+}

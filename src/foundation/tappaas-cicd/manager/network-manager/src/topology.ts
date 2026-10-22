@@ -16,6 +16,12 @@
 //     target; a `device` port in the wan zone with no target is the ISP hand-off.
 // What does not reconcile is reported as a `topology` finding, not guessed away.
 //
+// An MLAG pair (two MikroTik switches presenting one LACP partner) and the LAGs
+// across it come from switch-manager's switch-configuration-actual.json: the pair
+// and its peer link, which ports are the peer link's members, and each port's
+// mlag-id. A LAG across the pair is drawn once, under the pair; its members'
+// live state (disabled, link) decides whether it is formed.
+//
 // buildTopology() is pure (the unit tests run it over hrossen's captured
 // outputs); collectSources() runs the verbs.
 
@@ -60,6 +66,7 @@ export interface SwitchList {
   switches: {
     name: string; vendor?: string; model?: string; managementIp?: string; controller?: string;
     managed?: string; location?: string; description?: string; ports?: number;
+    mlag?: { peerPort?: string; bridge?: string } | null;
   }[];
 }
 
@@ -79,7 +86,7 @@ export interface SwitchPortRow {
   add: number[];
   remove: number[];
   lag: string | null;
-  lagMembers: number[];
+  lagMembers: (number | string)[]; // port ids: numbers on UniFi, names on MikroTik
   lagLead?: string | null; // the LAG's lead port this member follows (#854); absent from an older controller
   parked?: boolean; // a port TAPPaaS does not use: an access port in iotLocal (#853)
   link?: string | null; // "up" | "down", when the switch says
@@ -95,8 +102,24 @@ export interface LagRow {
   switch: string;
   name: string;
   ports: string[];
-  live: number[];
+  live: (number | string)[];
   formed: boolean;
+  mlagId?: number | null;
+}
+
+// ~/config/switch-configuration-actual.json (switch-manager), the parts read here
+export interface ActualPort {
+  lag?: string | null;
+  mlagId?: number | null;
+  liveMlagId?: number | null;
+  peerLink?: boolean; // a member of the MLAG peer link
+  bridged?: boolean; // false: not on the switch's bridge (MikroTik ether1)
+  disabled?: boolean;
+  bond?: string;
+}
+export interface SwitchActual {
+  mlagPairs?: Record<string, { switches?: string[]; peerPort?: Record<string, string> }>;
+  switches?: Record<string, { mlag?: { peerPort?: string; bridge?: string } | null; ports?: Record<string, ActualPort> }>;
 }
 
 // ap-manager list --json
@@ -161,6 +184,7 @@ export interface TopoSources {
   firewall: Record<string, unknown> | null; // config/<firewall module>.json
   satellites: { name: string; address: string | null }[];
   wanAddress?: WanAddress | null; // what the WAN held at the last network update
+  actual?: SwitchActual | null; // switch-configuration-actual.json: MLAG pairs, peer links
   errors: { source: string; error: string }[];
 }
 
@@ -215,7 +239,9 @@ export interface TopoNode {
   uplinks: TopoUplink[];
   guests: TopoGuest[];
 }
-export type PortRole = "node-lan" | "node-wan" | "isp" | "ap" | "switch" | "uplink" | "device" | "parked" | "unmanaged";
+export type PortRole = "node-lan" | "node-wan" | "isp" | "ap" | "switch" | "uplink" | "device" | "parked" | "peer-link" | "unmanaged";
+// What the port is now: its drift, unless it is a peer-link member or disabled.
+export type PortStatus = "in-sync" | "drift" | "unmanaged" | "disabled" | "peer-link";
 export interface TopoPort {
   port: string;
   role: PortRole;
@@ -231,17 +257,41 @@ export interface TopoPort {
   parked: boolean; // an access port in the park zone, TAPPaaS uses it for nothing (#853)
   link: string | null;
   drift: "in-sync" | "drift" | "unmanaged";
+  status: PortStatus;
+  disabled: boolean; // admin-disabled (or, unmanaged, off the bridge)
+  peerLink: boolean; // a member of the MLAG peer link
+  bridged: boolean | null; // false: not on the switch's bridge; null: not known
+  mlagId: number | null; // declared
   add: number[];
   remove: number[];
   seen: { node: string; nic: string } | null; // who LLDP says is on the other end
 }
+export interface TopoLagMember {
+  switch: string;
+  port: string;
+  active: boolean; // enabled, link not down, aggregated where the switch says
+  why: "disabled" | "link down" | "not aggregated" | null;
+}
 export interface TopoLag {
   name: string;
-  ports: string[];
-  formed: boolean;
+  ports: string[]; // port ids; "<switch>:<port>" for a LAG across an MLAG pair
+  formed: boolean; // every member active and the switch(es) report it formed
   live: string[];
   node: string | null;
   bond: string | null;
+  switches: string[]; // the switch(es) its members are on
+  mlagId: number | null;
+  pair: string | null; // the MLAG pair it runs across
+  members: TopoLagMember[];
+  missing: string[]; // pair switches with no member
+  peer: { kind: "switch" | "pair"; name: string } | null; // a switch uplink: the other end
+}
+export interface TopoMlagPair {
+  name: string; // "<a>+<b>", as switch-manager keys it
+  switches: string[];
+  peerLink: { switch: string; port: string | null; members: string[] }[];
+  lags: TopoLag[];
+  live: string; // the verb that reads the pair's live state from the switches
 }
 export interface TopoSwitch {
   name: string;
@@ -253,7 +303,8 @@ export interface TopoSwitch {
   controller: string | null;
   controllerAddress: string | null; // the controller's management URL (UniFi OS …)
   ports: TopoPort[];
-  lags: TopoLag[];
+  lags: TopoLag[]; // its own; a LAG across an MLAG pair is on the pair
+  mlagPair: string | null;
 }
 export interface TopoAp {
   name: string;
@@ -318,6 +369,7 @@ export interface Topology {
   };
   nodes: TopoNode[];
   switches: TopoSwitch[];
+  mlagPairs: TopoMlagPair[];
   accessPoints: TopoAp[];
   zones: TopoZone[];
   outside: TopoOutside[];
@@ -335,6 +387,23 @@ export const canon = (s: string | null | undefined): string => (s ?? "").toLower
 export function lldpPort(p: string): string {
   const m = /(\d+)\s*$/.exec(p);
   return m ? m[1] : p;
+}
+
+// Port ids are opaque ("11" on UniFi, "sfp-sfpplus1" on MikroTik): ordered
+// naturally, the digits within a name compared as numbers.
+export const portCompare = (a: string, b: string): number => a.localeCompare(b, "en", { numeric: true });
+
+// "sfp-sfpplus15", "sfp-sfpplus16" → "sfp-sfpplus15+16"; "11", "12" → "11+12".
+export function compactPorts(ports: string[]): string {
+  if (ports.length === 0) return "";
+  const head = /^(.*?)(\d+)$/.exec(ports[0]);
+  return ports
+    .map((p, i) => {
+      if (i === 0 || !head) return p;
+      const m = /^(.*?)(\d+)$/.exec(p);
+      return m && m[1] === head[1] ? m[2] : p;
+    })
+    .join("+");
 }
 
 const isMac = (s: string): boolean => /^[0-9a-f]{2}([:-]?[0-9a-f]{2}){5}$/i.test(s);
@@ -419,6 +488,14 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   const nodeByCanon = new Map<string, string>();
   for (const n of siteNodes) nodeByCanon.set(canon(n.name), n.name);
 
+  // LLDP's port: the switch's own id when it has a port by that name
+  // ("sfp-sfpplus1" on MikroTik), else the trailing number ("Port 11" → "11").
+  const resolvePort = (sw: string, p: string): string => {
+    const rows = portsBySwitch.get(sw) ?? [];
+    if (rows.some((r) => r.port === p)) return p;
+    return lldpPort(p);
+  };
+
   // Legs, and who LLDP says sits on each switch port.
   const seenAt = new Map<string, { node: string; nic: string }>(); // `${switch}\0${port}`
   const key = (sw: string, port: string): string => `${sw}\u0000${port}`;
@@ -426,7 +503,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
     let peer: TopoPeerPort | null = null;
     if (p.lldp && p.lldp.name) {
       const sw = resolveSwitch(p.lldp.name);
-      peer = { switch: sw.name, port: lldpPort(p.lldp.port), known: sw.known, via: "lldp" };
+      peer = { switch: sw.name, port: resolvePort(sw.name, p.lldp.port), known: sw.known, via: "lldp" };
       seenAt.set(key(peer.switch, peer.port), { node, nic: p.name });
     } else {
       // No LLDP answer: the switch inventory may still name this NIC.
@@ -512,18 +589,20 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   // Switches and their ports, reconciled against the legs.
   const apByCanon = new Map<string, string>();
   for (const a of src.accessPoints ?? []) apByCanon.set(canon(a.name), a.name);
+  // MLAG pairs (switch-manager's actual.json): the pair, each side's peer-link
+  // bond and the ports in it.
+  const actual = src.actual ?? null;
+  const actualPort = (sw: string, port: string): ActualPort | null => actual?.switches?.[sw]?.ports?.[port] ?? null;
+  const pairDefs = Object.entries(actual?.mlagPairs ?? {})
+    .filter(([, p]) => Array.isArray(p?.switches) && p.switches.length === 2)
+    .map(([name, p]) => ({ name, switches: p.switches as string[], peerPort: p.peerPort ?? {} }));
+  const pairOf = (sw: string): (typeof pairDefs)[number] | null => pairDefs.find((p) => p.switches.includes(sw)) ?? null;
+  const peerBond = (sw: string): string | null =>
+    str(pairOf(sw)?.peerPort[sw]) ?? str(actual?.switches?.[sw]?.mlag?.peerPort) ?? str(invSwitches.find((x) => x.name === sw)?.mlag?.peerPort);
+
   const switches: TopoSwitch[] = invSwitches.map((s) => {
     const rows = followLeads(portsBySwitch.get(s.name) ?? []);
     const ports: TopoPort[] = rows.map((r) => portOf(s.name, r));
-    const lags: TopoLag[] = (src.lags ?? [])
-      .filter((l) => l.switch === s.name)
-      .map((l) => {
-        const members = ports.filter((p) => l.ports.includes(p.port));
-        const owners = [...new Set(members.map((p) => (p.target?.kind === "node" ? p.target.name : null)).filter((x): x is string => !!x))];
-        const owner = owners.length === 1 ? owners[0] : null;
-        const bond = owner ? (nodeNamed(owner)?.uplinks.find((u) => u.name === "lan")?.bond ?? null) : null;
-        return { name: l.name, ports: l.ports, formed: l.formed, live: l.live.map(String), node: owner, bond };
-      });
     return {
       name: s.name,
       lldpName: lldpNames.get(s.name) ?? null,
@@ -534,8 +613,93 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       controller: str(s.controller),
       controllerAddress: str(src.switches?.controllers.find((c) => c.name === s.controller)?.managementIp),
       ports,
-      lags,
+      lags: [],
+      mlagPair: pairOf(s.name)?.name ?? null,
     };
+  });
+  const switchNamed = (name: string): TopoSwitch | undefined => switches.find((x) => x.name === name);
+
+  // LAGs. A member is active when it is enabled, its link is not down, and the
+  // switch counts it in the aggregate; formed is every member active, never
+  // the configured members alone.
+  const memberOf = (sw: string, port: string, live: string[]): TopoLagMember => {
+    const p = switchNamed(sw)?.ports.find((x) => x.port === port);
+    const why: TopoLagMember["why"] = p?.disabled ? "disabled" : p?.link === "down" ? "link down" : live.length > 0 && !live.includes(port) ? "not aggregated" : null;
+    return { switch: sw, port, active: why === null, why };
+  };
+  const lagOwner = (members: TopoLagMember[]): Pick<TopoLag, "node" | "bond" | "peer"> => {
+    const targets = members.map((m) => switchNamed(m.switch)?.ports.find((x) => x.port === m.port)?.target ?? null);
+    const nodesOn = [...new Set(targets.map((t) => (t?.kind === "node" ? t.name : null)).filter((x): x is string => !!x))];
+    const node = nodesOn.length === 1 ? nodesOn[0] : null;
+    const bond = node ? (nodeNamed(node)?.uplinks.find((u) => u.name === "lan")?.bond ?? null) : null;
+    let peer: TopoLag["peer"] = null;
+    const sws = [...new Set(targets.map((t) => (t?.kind === "switch" ? t.name : null)).filter((x): x is string => !!x))];
+    if (!node && sws.length > 0 && targets.every((t) => t?.kind === "switch")) {
+      const resolved = sws.map((x) => switchByCanon.get(canon(x)) ?? x);
+      const pair = resolved.length === 2 ? pairDefs.find((p) => resolved.every((x) => p.switches.includes(x))) : undefined;
+      if (pair) peer = { kind: "pair", name: pair.name };
+      else if (resolved.length === 1) peer = { kind: "switch", name: resolved[0] };
+    }
+    return { node, bond, peer };
+  };
+  const rowMlagId = (l: LagRow): number | null => {
+    if (typeof l.mlagId === "number") return l.mlagId;
+    for (const p of l.ports) {
+      const id = actualPort(l.switch, p)?.mlagId;
+      if (typeof id === "number") return id;
+    }
+    return null;
+  };
+  const acrossPair = new Map<string, Map<number, LagRow[]>>(); // pair → mlag-id → rows
+  for (const l of src.lags ?? []) {
+    const pair = pairOf(l.switch);
+    const id = rowMlagId(l);
+    if (pair && id !== null) {
+      const byId = acrossPair.get(pair.name) ?? new Map<number, LagRow[]>();
+      byId.set(id, [...(byId.get(id) ?? []), l]);
+      acrossPair.set(pair.name, byId);
+      continue;
+    }
+    const sw = switchNamed(l.switch);
+    if (!sw) continue;
+    const live = l.live.map(String);
+    const members = [...l.ports].sort(portCompare).map((p) => memberOf(l.switch, p, live));
+    sw.lags.push({
+      name: l.name, ports: l.ports, formed: l.formed && members.every((m) => m.active), live,
+      switches: [l.switch], mlagId: id, pair: null, members, missing: [], ...lagOwner(members),
+    });
+  }
+  const mlagPairs: TopoMlagPair[] = pairDefs.map((pd) => {
+    const lags: TopoLag[] = [...(acrossPair.get(pd.name) ?? new Map<number, LagRow[]>()).entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([id, rows]) => {
+        const members: TopoLagMember[] = [];
+        for (const sw of pd.switches) {
+          for (const r of rows.filter((x) => x.switch === sw)) {
+            const live = r.live.map(String);
+            for (const p of [...r.ports].sort(portCompare)) members.push(memberOf(sw, p, live));
+          }
+        }
+        const missing = pd.switches.filter((sw) => !rows.some((r) => r.switch === sw));
+        return {
+          name: [...new Set(rows.map((r) => r.name))].join("/"),
+          ports: members.map((m) => `${m.switch}:${m.port}`),
+          formed: missing.length === 0 && rows.every((r) => r.formed) && members.every((m) => m.active),
+          live: rows.flatMap((r) => r.live.map((p) => `${r.switch}:${p}`)),
+          switches: pd.switches.filter((sw) => rows.some((r) => r.switch === sw)),
+          mlagId: id,
+          pair: pd.name,
+          members,
+          missing,
+          ...lagOwner(members),
+        };
+      });
+    const peerLink = pd.switches.map((sw) => ({
+      switch: sw,
+      port: peerBond(sw),
+      members: (switchNamed(sw)?.ports ?? []).filter((p) => p.peerLink).map((p) => p.port).sort(portCompare),
+    }));
+    return { name: pd.name, switches: pd.switches, peerLink, lags, live: "switch-manager mlag-pair list" };
   });
 
   // A LAG member follows its lead (#854): UniFi takes an aggregate's VLANs from
@@ -547,7 +711,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
     const leadOf = (r: SwitchPortRow): string | null => {
       if (r.lagLead !== undefined) return r.lagLead;
       if (!r.lag) return null;
-      const first = rows.filter((x) => x.lag === r.lag).map((x) => x.port).sort((a, b) => Number(a) - Number(b))[0];
+      const first = rows.filter((x) => x.lag === r.lag).map((x) => x.port).sort(portCompare)[0];
       return first !== r.port ? first : null;
     };
     return rows.map((r) => {
@@ -567,8 +731,16 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
     const ref: TopoRef = { kind: "port", name: r.port, switch: sw };
     let target: TopoPort["target"] = null;
     let role: PortRole = "unmanaged";
+    const ap = actualPort(sw, r.port);
+    const bond = peerBond(sw);
+    const peerLink = ap?.peerLink === true || (bond !== null && ap?.bond === bond);
     const targetNode = nodeNamed(r.target);
-    if (targetNode) {
+    if (peerLink) {
+      // A member of the MLAG peer link: to the other switch of the pair.
+      const other = pairOf(sw)?.switches.find((x) => x !== sw) ?? null;
+      target = { kind: "switch", name: other, port: other ? peerBond(other) : null };
+      role = "peer-link";
+    } else if (targetNode) {
       // The node's own name for the NIC: LLDP first, then name or MAC.
       const net = src.networks[targetNode.name];
       let nic: string | null = null;
@@ -616,6 +788,12 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
         refs: [],
       });
     }
+    const bridged = ap ? ap.bridged !== false : null;
+    const disabled = r.disabled === true || ap?.disabled === true;
+    // Disabled is the port's state, unless it is a peer-link member or an
+    // unmanaged port off the bridge (MikroTik ether1), which the switch reports
+    // as disabled for being outside the bridge.
+    const status: PortStatus = peerLink ? "peer-link" : disabled && !(r.drift === "unmanaged" && bridged === false) ? "disabled" : r.drift;
     return {
       port: r.port,
       role,
@@ -631,6 +809,11 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       parked: r.parked === true,
       link: r.link ?? null,
       drift: r.drift,
+      status,
+      disabled,
+      peerLink,
+      bridged,
+      mlagId: typeof ap?.mlagId === "number" ? ap.mlagId : null,
       add: r.add,
       remove: r.remove,
       seen,
@@ -694,6 +877,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
         // A lan-uplink finding is about the node's bond: put it on its LAG and the
         // switch ports its legs land on, where the physical view draws them.
         for (const s of switches) for (const l of s.lags) if (l.node === on.name) refs.push({ kind: "lag", name: l.name, switch: s.name });
+        for (const pr of mlagPairs) for (const l of pr.lags) if (l.node === on.name) refs.push({ kind: "lag", name: l.name, switch: pr.name });
         for (const u of nodeNamed(on.name)?.uplinks ?? []) {
           if (u.name !== "lan") continue;
           for (const l of u.legs) if (l.peer) refs.push({ kind: "port", name: l.peer.port, switch: l.peer.switch });
@@ -748,6 +932,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
     },
     nodes,
     switches,
+    mlagPairs,
     accessPoints,
     zones,
     outside,
@@ -805,6 +990,7 @@ export const SOURCE_NAMES = [
   "backup-manager peers",
   "health-manager validate",
   "wan-address.json",
+  "switch-configuration-actual.json",
 ];
 
 export type Runner = (bin: string, args: string[]) => ExecResult;
@@ -887,6 +1073,14 @@ export function collectSources(o: CollectOpts): TopoSources {
   } catch (e) {
     errors.push({ source: "wan-address.json", error: (e as Error).message });
   }
+  // switch-manager's actual state: the MLAG pairs and peer links. No file is
+  // not an error (no switch registered yet).
+  let actual: SwitchActual | null = null;
+  try {
+    actual = readJsonObject(join(o.configDir, "switch-configuration-actual.json")) as SwitchActual | null;
+  } catch (e) {
+    errors.push({ source: "switch-configuration-actual.json", error: (e as Error).message });
+  }
   return {
     site,
     nodes,
@@ -902,6 +1096,7 @@ export function collectSources(o: CollectOpts): TopoSources {
     firewall,
     satellites,
     wanAddress,
+    actual,
     errors,
   };
 }
@@ -926,22 +1121,52 @@ export function renderTopology(t: Topology): string[] {
     out.push(`         ${p.active ? "*" : " "} ${p.node}/${p.nic}${p.port ? ` ← ${p.switch} port ${p.port}` : " (no switch port known)"}`);
   }
   out.push("", "Nodes");
+  // A leg names its switch when the site has more than one (or LLDP puts it on
+  // one the inventory does not hold).
+  const onlySwitch = t.switches.length === 1 ? t.switches[0].name : null;
+  const legPeer = (p: TopoPeerPort): string => (p.switch === onlySwitch ? p.port : `${p.switch}:${p.port}`);
   for (const n of t.nodes) {
     const ups = n.uplinks
-      .map((u) => `${u.name} ${u.mode}${u.bond ? ` ${u.bond}` : ""} ${u.legs.map((l) => `${l.nic}${l.speed ? `@${l.speed}` : ""}${l.up ? "" : "(down)"}→${l.peer ? `${l.peer.port}` : "?"}`).join(" ")}`)
+      .map((u) => `${u.name} ${u.mode}${u.bond ? ` ${u.bond}` : ""} ${u.legs.map((l) => `${l.nic}${l.speed ? `@${l.speed}` : ""}${l.up ? "" : "(down)"}→${l.peer ? legPeer(l.peer) : "?"}`).join(" ")}`)
       .join("; ");
     out.push(`  ${n.name.padEnd(12)}${ups || "(no network report)"}`);
     out.push(`  ${"".padEnd(12)}${n.guests.length} guest(s)${n.roles.length ? ` — ${n.roles.join(", ")}` : ""}`);
   }
+  const pairLabel = (name: string): string => t.mlagPairs.find((p) => p.name === name)?.switches.join(" + ") ?? name.replace("+", " + ");
+  const lagTail = (l: TopoLag): string => {
+    const owner = l.node ? ` — ${l.node}${l.bond ? ` ${l.bond}` : ""}` : l.peer ? ` — ${l.peer.kind === "pair" ? `MLAG pair ${pairLabel(l.peer.name)}` : `switch ${l.peer.name}`}` : "";
+    return `${lagState(l)}${owner}`;
+  };
+  const lagState = (l: TopoLag): string => {
+    if (l.formed) return "formed";
+    const across = l.pair !== null;
+    const label = (m: TopoLagMember): string => (across ? `${m.switch}:${m.port}` : m.port);
+    const reasons = [...l.members.filter((m) => !m.active).map((m) => `${label(m)} ${m.why}`), ...l.missing.map((sw) => `no member on ${sw}`)];
+    const active = l.members.filter((m) => m.active).length;
+    if (reasons.length === 0) return "not formed";
+    return `${active} of ${l.members.length} member${l.members.length === 1 ? "" : "s"} active (${reasons.join(", ")})`;
+  };
   out.push("", "Switches");
   for (const s of t.switches) {
-    out.push(`  ${s.name}${s.lldpName ? ` (LLDP: ${s.lldpName})` : ""}  [${s.vendor ?? "?"}] ${s.managed ?? ""}  ${s.ports.length} port(s)`);
+    out.push(`  ${s.name}${s.lldpName ? ` (LLDP: ${s.lldpName})` : ""}  [${s.vendor ?? "?"}] ${s.managed ?? ""}  ${s.ports.length} port(s)${s.mlagPair ? `  MLAG pair ${pairLabel(s.mlagPair)}` : ""}`);
+    const tgtOf = (p: TopoPort): string => (p.target ? `${p.target.kind}${p.target.name ? ` ${p.target.name}` : ""}${p.target.port ? `/${p.target.port}` : ""}` : "—");
+    // Numbered ports (UniFi) right-aligned, named ones (MikroTik) left-aligned.
+    const pw = Math.max(3, ...s.ports.map((p) => p.port.length));
+    const numbered = s.ports.every((p) => /^\d+$/.test(p.port));
+    const tw = Math.max(26, ...s.ports.map((p) => tgtOf(p).length + 1));
     for (const p of s.ports) {
-      const tgt = p.target ? `${p.target.kind}${p.target.name ? ` ${p.target.name}` : ""}${p.target.port ? `/${p.target.port}` : ""}` : "—";
       const vl = p.mode === "access" ? `access ${p.native}` : `trunk ${p.tagged.length}`;
-      out.push(`    ${p.port.padStart(3)}  ${p.role.padEnd(10)}${tgt.padEnd(26)}${vl.padEnd(12)}${p.drift}${p.lag ? `  LAG ${p.lag}` : ""}`);
+      out.push(`    ${numbered ? p.port.padStart(pw) : p.port.padEnd(pw)}  ${p.role.padEnd(10)}${tgtOf(p).padEnd(tw)}${vl.padEnd(12)}${p.status}${p.lag ? `  LAG ${p.lag}` : ""}`);
     }
-    for (const l of s.lags) out.push(`    LAG ${l.name}: ports ${l.ports.join("+")} ${l.formed ? "formed" : "not formed"}${l.node ? ` — ${l.node}${l.bond ? ` ${l.bond}` : ""}` : ""}`);
+    for (const l of s.lags) out.push(`    LAG ${l.name}: ports ${compactPorts(l.ports)} ${lagTail(l)}`);
+  }
+  for (const pr of t.mlagPairs) {
+    const links = pr.peerLink.map((x) => `${x.switch} ${x.port ?? "?"}${x.members.length ? ` (${compactPorts(x.members)})` : ""}`).join(", ");
+    out.push(`  MLAG pair ${pr.switches.join(" + ")} — peer link ${links}`);
+    for (const l of pr.lags) {
+      out.push(`    LAG ${l.name} across ${l.switches.join(" + ") || pr.switches.join(" + ")}${l.mlagId !== null ? ` (mlag-id ${l.mlagId})` : ""}: ${l.ports.join(", ")} ${lagTail(l)}`);
+    }
+    out.push(`    live state: ${pr.live}`);
   }
   if (t.accessPoints.length) {
     out.push("", "Access points");

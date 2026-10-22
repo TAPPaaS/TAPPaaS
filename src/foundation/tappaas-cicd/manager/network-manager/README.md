@@ -330,6 +330,13 @@ switch nobody registered — is a `topology` finding. Health findings are placed
 they name; a `lan-uplink` finding is also put on the node's LAG and switch ports. A source that
 does not answer is listed under `sources` and its part is left empty.
 
+On a site with more than one switch a node's legs read `<switch>:<port>`. An MLAG pair (from
+`switch-configuration-actual.json`) is drawn under Switches with its peer link; its member
+ports read `peer-link`, and a LAG across the pair is drawn once, under the pair (`mlagPairs` in
+`--json`). A LAG is `formed` only when every member is enabled, has link and is aggregated;
+otherwise it says how many members are active and why. A disabled port reads `disabled`. The
+pair's live state is `switch-manager mlag-pair list`.
+
 ### `wgvpn` — the admin VPN (ADR-010 §6, §8.4.6)
 
 The operator's WireGuard session into the management plane. It terminates on
