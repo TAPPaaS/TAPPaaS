@@ -181,7 +181,22 @@ Watch first: nothing else running (`pgrep` for sweeps and other sessions' tests)
   restarted it); immich was stopped for the window. A drained node with an armed
   watchdog also had to have `pve-ha-lrm` stopped before its cables moved.
 
-## The reflection (2026-10-21, open)
+## The reflection — found and fixed (2026-10-22)
+
+Cause: crs-a ran without the MLAG heartbeat (`mlag-heartbeat=none`, left by its
+7.16→7.23 upgrade; crs-b had the default 5s, and logged "MLAG: remote heartbeat
+timeout"). The peers' state sync broke, so crs-b treated crs-a's legs of the MLAG
+bonds as down and flooded peer-link traffic into its own. Turning the heartbeat on
+(and the STP priorities alike) did not resync a running session: flapping the peer
+link from crs-a did (`/interface bonding disable peer-link`, 8 s, enable — crs-b's
+own legs were disabled meanwhile). Then both legs of `tappaas1-lan` and both members
+of `usw-uplink` were enabled: 30/30 pings mothership → unifi-os, HTTPS 10/10,
+tappaas2/3 → mothership loss-free; health lan-uplink, switch-ports, mlag-pairs PASS.
+Residual: the first broadcast of a burst can still come back once (1 of 10); the
+rest are suppressed. switch-manager `mlag-pair list` and health's `mlag-pairs` now
+flag a peer without the heartbeat, or peers with different STP priorities.
+
+### Earlier notes (2026-10-21)
 
 With both legs of `tappaas1-lan` up, every broadcast tappaas1 sends to crs-a comes
 back to it from crs-b (`tcpdump -Q in -i nic3`, its own source MAC): crs-b floods
@@ -197,7 +212,9 @@ bonds made through the API differ from ones made in the console.
 
 ## Still to do
 
-- **The uplink aggregate** (USW 11+12 ↔ crs-a/crs-b `sfp14`, one mlag-id): both ends
+- ~~**The uplink aggregate**~~ — done 2026-10-21 (no drain: tappaas1's HA services
+  `ignored` and its LRM stopped, UniFi's side first, the CRS side over tappaas1's
+  legs; 25 s), live on both members since 2026-10-22. Original notes: both ends
   change on the link that carries the switches' management and tappaas1's corosync.
   In a window: tappaas1 drained, its LRM stopped, immich stopped (tappaas3's memory),
   the Mac on crs-a `ether1` as console. Then crs-b `sfp14` back on its bridge, `lag set
