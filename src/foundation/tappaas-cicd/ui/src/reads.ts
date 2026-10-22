@@ -21,7 +21,7 @@ import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, 
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { ModuleIcon, moduleIcon } from "./icons";
-import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, StorageDoc, TopologyDoc } from "./model";
+import { BackupRow, BackupRunsDoc, EnvironmentRow, HealthDoc, ModuleList, StorageDoc, TopologyDoc } from "./model";
 
 // The racks the topology carries (network-manager topology .racks), the parts read here.
 interface RacksRead {
@@ -59,6 +59,7 @@ export const TTL = {
   catalogs: 10 * MIN,
   faceplates: 10 * MIN,
   storage: 10 * MIN,
+  backupRuns: 10 * MIN,
   icons: 10 * MIN,
   nodeProgress: 10_000, // while a node is being added
   drift: 0, // on demand
@@ -144,6 +145,7 @@ export class Reads {
   readonly catalogs: Cached<RepositoryCatalog[]>;
   readonly faceplates: Cached<{ key: string; kind: string; units: number; width: string }[]>;
   readonly storage: Cached<StorageDoc>;
+  readonly backupRuns: Cached<BackupRunsDoc>;
   readonly moduleIcons: CachedMap<ModuleIcon | null>;
   readonly setup: Cached<SetupInputs>;
 
@@ -201,6 +203,16 @@ export class Reads {
     // timer of its own, read when a page asks and the answer is older than
     // its TTL.
     this.storage = new Cached("storage", TTL.storage, () => this.loadStorage(), now);
+    // Each guest's and target's last backup and last verify: one ssh to the PBS
+    // Host and one to a node. Like the storage inventory, no timer of its own:
+    // read when the Backup page asks and the answer is older than its TTL.
+    this.backupRuns = new Cached("backup-runs", TTL.backupRuns, async () => {
+      const d = await j<BackupRunsDoc>("backup-manager", ["restore", "list-all", "--json"]);
+      if (!d || typeof d.reachable !== "boolean" || !Array.isArray(d.guests) || !Array.isArray(d.targets)) {
+        throw new Error("backup-manager restore list-all --json gave no runs (no reachable, guests, targets)");
+      }
+      return d;
+    }, now);
     // A module's icon file (icons.ts): read once per ten minutes at most.
     this.moduleIcons = new CachedMap("icon", TTL.icons, async (m) => moduleIcon(cfg.configDir, m), now);
     this.nodeProgress = new CachedMap("node-progress", TTL.nodeProgress, (n) => this.loadNodeProgress(n), now);
@@ -530,7 +542,7 @@ export class Reads {
     const all: Record<string, Cached<unknown>> = {
       health: this.health, modules: this.modules, backup: this.backup, topology: this.topology,
       zones: this.zones, aps: this.aps, environments: this.environments, site: this.site, security: this.security,
-      peers: this.peers, activity: this.activity, storage: this.storage,
+      peers: this.peers, activity: this.activity, storage: this.storage, "backup-runs": this.backupRuns,
     } as Record<string, Cached<unknown>>;
     if (what === "all") {
       this.moduleShow.clear();
@@ -541,8 +553,10 @@ export class Reads {
       this.moduleFields.clear();
       // health first: the topology places its findings
       await this.health.refresh();
-      // the storage inventory only once someone has looked (SMART on every disk)
-      await Promise.all(Object.entries(all).filter(([k]) => k !== "health" && (k !== "storage" || this.storage.peek().at !== null)).map(([, c]) => c.refresh()));
+      // the storage inventory (SMART on every disk) and the backup runs only
+      // once someone has looked
+      const looked = (k: string) => (k !== "storage" && k !== "backup-runs") || all[k].peek().at !== null;
+      await Promise.all(Object.entries(all).filter(([k]) => k !== "health" && looked(k)).map(([, c]) => c.refresh()));
       if (this.catalogs.peek().at !== null) await this.catalogs.refresh();
       return Object.keys(all);
     }
@@ -584,7 +598,7 @@ export class Reads {
     const identity = this.identity.refresh().then(() => (this.identityRecords.peek().at !== null ? this.identityRecords.refresh() : undefined));
     // The catalogues mark what is installed: after the module list.
     const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
-    return Promise.all([identity, modules, ...[...setup, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    return Promise.all([identity, modules, ...[...setup, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
   }
 
   private async loadStorage(): Promise<StorageDoc> {

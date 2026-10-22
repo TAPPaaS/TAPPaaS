@@ -120,6 +120,14 @@ backup-manager restore list <module> | restore <module> [opts] | list-all
         an agent has no terminal). --from <module|vmid> restores another guest's
         backup into it instead. See RESTORE.md §1–§2.
 
+backup-manager restore list-all --json
+        Per guest and per target (this site's guests, each host's file backups,
+        another site's copy kept here): the last backup, whether it is within
+        its job's interval (ok) or not (late), the newest snapshot's
+        verification and the last verify with its outcome; with the backup,
+        verify and sync jobs and their last runs. Reads PBS through
+        pbs-controller runs; {"reachable": false} when it does not answer.
+
 backup-manager coverage <module> [--json]
         Every cluster backup job that covers the module's VM — TAPPaaS's own
         bucket jobs and any other — and how (by vmid, --all, or pool). Two

@@ -15,7 +15,7 @@ import { join } from "path";
 import { defaultConfigDir, moduleNode, moduleVmid } from "./config";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { stream } from "../../../lib/ts/src/exec";
-import { Client } from "./types";
+import { BackupRuns, Client, GuestRuns, JobLastRun, LastVerify, RawRuns, RawSnapshot, ScheduleBucket, TargetRuns } from "./types";
 import { moduleSourceOf } from "../../../lib/ts/src/instance";
 
 // Foundation restore script (the tested VM-restore logic this verb drives).
@@ -181,4 +181,163 @@ export function restoreListAll(configDir?: string): number {
     return 1;
   }
   return spawnInherit(script, ["--list-all"]);
+}
+
+// ── restore list-all --json: last backup and last verify ──────────────
+// What the text table cannot answer at a glance: when each guest last backed
+// up, whether that is within its job's interval, and when a verify last read
+// it — per guest, per namespace (target), per job. From `pbs-controller runs`.
+
+// The start time a UPID carries (hex). PBS: UPID:node:pid:pstart:task:start:…;
+// PVE has no task field: UPID:node:pid:pstart:start:…
+export function upidTime(upid: string | undefined): number | null {
+  if (!upid || !upid.startsWith("UPID:")) return null;
+  const p = upid.split(":");
+  const hex = p.length >= 10 ? p[5] : p[4];
+  const n = parseInt(hex ?? "", 16);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+const DAY = 86400;
+const INTERVAL: Record<ScheduleBucket, number> = { daily: DAY, weekly: 7 * DAY, monthly: 31 * DAY };
+// A job's run takes time, and a guest late in a long run is not late.
+const SLACK = 6 * 3600;
+
+function bucketOf(comment: string, marker: string): ScheduleBucket | null {
+  if (!marker) return null;
+  if (comment === marker) return "daily";
+  if (comment === `${marker}-weekly`) return "weekly";
+  if (comment === `${marker}-monthly`) return "monthly";
+  return null;
+}
+
+export function targetKind(ns: string): TargetRuns["kind"] {
+  if (ns === "") return "own";
+  const top = ns.split("/")[0];
+  if (top === "fs") return "host";
+  if (top === "pull") return "pull";
+  if (top === "receive" || top === "external") return "receive";
+  return "other";
+}
+
+function verifyOf(s: RawSnapshot): { state: "ok" | "failed"; time: number | null } | null {
+  const st = s.verification?.state;
+  if (!st) return null;
+  return { state: st === "ok" ? "ok" : "failed", time: upidTime(s.verification?.upid) };
+}
+
+function newerVerify(a: LastVerify | null, b: LastVerify | null): LastVerify | null {
+  if (!a) return b;
+  if (!b) return a;
+  return (b.time ?? 0) > (a.time ?? 0) ? b : a;
+}
+
+function lastRun(j: Record<string, unknown>): JobLastRun | null {
+  const end = typeof j["last-run-endtime"] === "number" ? (j["last-run-endtime"] as number) : null;
+  const state = typeof j["last-run-state"] === "string" ? (j["last-run-state"] as string) : null;
+  const start = upidTime(typeof j["last-run-upid"] === "string" ? (j["last-run-upid"] as string) : undefined);
+  if (end === null && state === null && start === null) return null;
+  return { time: start ?? end ?? 0, end, state: state ?? "running" };
+}
+
+const str = (v: unknown): string => (typeof v === "string" ? v : typeof v === "number" ? String(v) : "");
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+/** Pure: shape the controller's raw answer. `moduleOf` maps a VMID to its module. */
+export function shapeRuns(raw: RawRuns, moduleOf: (vmid: string) => string | null, now: number): BackupRuns {
+  const out: BackupRuns = {
+    reachable: raw.reachable === true, node: raw.node ?? null, store: raw.store ?? null,
+    guests: [], targets: [], jobs: [], runs: [], verifyJobs: [], syncJobs: [],
+  };
+  if (!out.reachable) return out;
+  const marker = raw.marker ?? "";
+
+  // Jobs, and which one covers each VMID (an enabled TAPPaaS job first).
+  const cover = new Map<string, { job: string; bucket: ScheduleBucket | null; managed: boolean }>();
+  for (const j of raw.backupJobs ?? []) {
+    const bucket = bucketOf(j.comment, marker);
+    const vmids = j.vmid.split(",").map((v) => v.trim()).filter(Boolean);
+    out.jobs.push({ id: j.id, managed: bucket !== null, bucket, schedule: j.schedule, enabled: j.enabled, guests: vmids.length });
+    if (!j.enabled) continue;
+    for (const v of vmids) {
+      const had = cover.get(v);
+      if (!had || (!had.managed && bucket !== null)) cover.set(v, { job: j.id, bucket, managed: bucket !== null });
+    }
+  }
+  out.runs = (raw.tasks ?? [])
+    .filter((t) => typeof t.starttime === "number")
+    .map((t) => ({ node: t.node ?? "", time: t.starttime as number, end: num(t.endtime), state: t.status ?? "running", guest: t.id ? t.id : null }))
+    .sort((a, b) => b.time - a.time);
+
+  // Groups: one per (namespace, type, id).
+  const groups = new Map<string, RawSnapshot[]>();
+  for (const s of raw.snapshots ?? []) {
+    const k = `${s.ns}\u0000${s.type}\u0000${s.id}`;
+    const g = groups.get(k);
+    if (g) g.push(s); else groups.set(k, [s]);
+  }
+  for (const snaps of groups.values()) {
+    const { ns, type, id } = snaps[0];
+    snaps.sort((a, b) => b.time - a.time);
+    const latest = snaps[0];
+    let lastVerify: LastVerify | null = null;
+    let failed = 0;
+    for (const s of snaps) {
+      const v = verifyOf(s);
+      if (!v) continue;
+      if (v.state === "failed") failed++;
+      lastVerify = newerVerify(lastVerify, { time: v.time, state: v.state });
+    }
+    const own = ns === "" && (type === "vm" || type === "ct");
+    const c = own ? cover.get(id) : undefined;
+    const interval = c ? INTERVAL[c.bucket ?? "daily"] : 0;
+    out.guests.push({
+      ns, type, id,
+      module: own ? moduleOf(id) : null,
+      snapshots: snaps.length,
+      lastBackup: latest.time,
+      job: c?.job ?? null,
+      bucket: c?.bucket ?? null,
+      outcome: !c ? "not-in-job" : now - latest.time <= interval + SLACK ? "ok" : "late",
+      latestVerify: verifyOf(latest)?.state ?? "unverified",
+      lastVerify,
+      failedVerifies: failed,
+    });
+  }
+  // A guest a job covers with no snapshot at all: never backed up.
+  const seen = new Set(out.guests.filter((g) => g.ns === "").map((g) => g.id));
+  for (const [vmid, c] of cover) {
+    if (seen.has(vmid)) continue;
+    out.guests.push({
+      ns: "", type: "vm", id: vmid, module: moduleOf(vmid), snapshots: 0, lastBackup: null,
+      job: c.job, bucket: c.bucket, outcome: "late", latestVerify: "unverified", lastVerify: null, failedVerifies: 0,
+    });
+  }
+  out.guests.sort((a, b) => a.ns.localeCompare(b.ns) || Number(a.id) - Number(b.id) || a.id.localeCompare(b.id));
+
+  // Targets: per namespace.
+  const byNs = new Map<string, GuestRuns[]>();
+  for (const g of out.guests) {
+    if (g.snapshots === 0) continue;
+    const l = byNs.get(g.ns);
+    if (l) l.push(g); else byNs.set(g.ns, [g]);
+  }
+  for (const [ns, gs] of [...byNs].sort((a, b) => a[0].localeCompare(b[0]))) {
+    out.targets.push({
+      ns, kind: targetKind(ns), groups: gs.length,
+      snapshots: gs.reduce((n, g) => n + g.snapshots, 0),
+      lastBackup: Math.max(...gs.map((g) => g.lastBackup ?? 0)) || null,
+      lastVerify: gs.reduce<LastVerify | null>((v, g) => newerVerify(v, g.lastVerify), null),
+      unverified: gs.filter((g) => g.latestVerify === "unverified").length,
+      failedVerifies: gs.reduce((n, g) => n + g.failedVerifies, 0),
+    });
+  }
+
+  out.verifyJobs = (raw.verifyJobs ?? []).map((j) => ({
+    id: str(j.id), schedule: str(j.schedule), lastRun: lastRun(j), nextRun: num(j["next-run"]),
+  }));
+  out.syncJobs = (raw.syncJobs ?? []).map((j) => ({
+    id: str(j.id), remote: str(j.remote), ns: str(j.ns), schedule: str(j.schedule), lastRun: lastRun(j), nextRun: num(j["next-run"]),
+  }));
+  return out;
 }

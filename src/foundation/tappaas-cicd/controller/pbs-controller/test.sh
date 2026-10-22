@@ -74,6 +74,11 @@ if run_offline namespaces >/dev/null 2>&1; then
 else
     bad "namespaces did not degrade gracefully"
 fi
+if run_offline runs --json 2>/dev/null | jq -e '.reachable == false' >/dev/null; then
+    ok "runs --json degrades to {reachable:false} when PBS unreachable"
+else
+    bad "runs --json did not degrade to the offline marker"
+fi
 
 # list/verify with a fixture module resolve the vmid then skip offline (exit 0).
 FIX="$(mktemp -d "${TMPDIR:-/tmp}/bc-fix.XXXXXX")"

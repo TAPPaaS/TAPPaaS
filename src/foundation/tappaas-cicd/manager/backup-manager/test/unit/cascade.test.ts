@@ -23,7 +23,7 @@ import { retentionValid, validate } from "../../src/validate";
 import { asPlace, offsiteTargets, pbsOnSatelliteWarnings, separation } from "../../src/offsite";
 import { placementFinishReset, placementReset, placementUseExternal, urlHost } from "../../src/placement-reset";
 import { applyPlan, computePlan, jobBucketIndex } from "../../src/reconcile";
-import { restoreArgs, restoreList, restoreRun } from "../../src/restore";
+import { restoreArgs, restoreList, restoreRun, shapeRuns, targetKind, upidTime } from "../../src/restore";
 import {
   buildPeerConfig,
   findPeer,
@@ -1187,6 +1187,88 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(`${deep.remotePort} ${deep.remoteNamespace} ${deep.maxDepth}`, "8443 site/a 2", "…recorded");
   check(call(["peer", "add", "pull", "z", "--host", "h", "--max-depth", "9"]) !== 0, "max-depth beyond PBS's 7 is refused");
   check(call(["peer", "add", "remote", "z", "--auth-id", "z@pbs", "--port", "8443"]) !== 0, "--port on a remote is refused");
+}
+
+// ── restore list-all --json: last backup, last verify (shapeRuns) ─────
+{
+  console.log("\n== restore list-all --json ==");
+  const NOW = 1_800_000_000;
+  const H = 3600;
+  // PBS UPID (task field before the start), and PVE's (without it).
+  const pbsUpid = (t: number) => `UPID:tappaas3:000006AA:0000034C:00000014:${t.toString(16).toUpperCase()}:verify:tappaas_backup\\x3act-312:tappaas@pbs:`;
+  eq(upidTime(pbsUpid(NOW - H)), NOW - H, "a PBS UPID's start time");
+  eq(upidTime(`UPID:tappaas3:00134A47:00E832A3:${(NOW).toString(16)}:vzdump::root@pam:`), NOW, "a PVE UPID's start time");
+  eq(upidTime("nonsense"), null, "not a UPID: no time");
+  eq(["", "fs/tappaas1", "pull/rasmus", "receive", "external/x", "remote"].map(targetKind).join(" "),
+    "own host pull receive receive other", "namespaces become target kinds");
+
+  const M = "TAPPaaS-backup-vm-managed";
+  const raw = {
+    reachable: true, node: "tappaas3", store: "tappaas_backup", marker: M,
+    backupJobs: [
+      { id: "daily1", comment: M, schedule: "21:00", enabled: true, vmid: "110,311,999", storage: "tappaas_backup" },
+      { id: "weekly1", comment: `${M}-weekly`, schedule: "sun 21:00", enabled: true, vmid: "312", storage: "tappaas_backup" },
+      { id: "other", comment: "", schedule: "02:00", enabled: false, vmid: "500", storage: "x" },
+    ],
+    snapshots: [
+      { ns: "", type: "vm", id: "110", time: NOW - 2 * H, verification: null },
+      { ns: "", type: "vm", id: "110", time: NOW - 26 * H, verification: { state: "ok", upid: pbsUpid(NOW - 20 * H) } },
+      { ns: "", type: "vm", id: "311", time: NOW - 40 * H, verification: { state: "failed", upid: pbsUpid(NOW - 30 * H) } },
+      { ns: "", type: "ct", id: "312", time: NOW - 5 * 24 * H, verification: { state: "ok", upid: pbsUpid(NOW - 4 * 24 * H) } },
+      { ns: "", type: "vm", id: "777", time: NOW - 90 * 24 * H, verification: { state: "ok", upid: pbsUpid(NOW - 80 * 24 * H) } },
+      { ns: "fs/tappaas1", type: "host", id: "tappaas1", time: NOW - 3 * H, verification: { state: "ok", upid: pbsUpid(NOW - H) } },
+      { ns: "pull/rasmus", type: "vm", id: "110", time: NOW - 10 * H, verification: null },
+    ],
+    verifyJobs: [{ id: "verify-tappaas_backup", schedule: "04:00", "last-run-endtime": NOW - 5 * H, "last-run-state": "OK",
+      "last-run-upid": pbsUpid(NOW - 6 * H), "next-run": NOW + 18 * H }],
+    syncJobs: [{ id: "s1", remote: "rasmus", ns: "pull/rasmus", schedule: "04:00", "last-run-state": "connection refused", "last-run-endtime": NOW - 9 * H }],
+    tasks: [
+      { node: "tappaas3", id: "", starttime: NOW - 3 * H, endtime: NOW - 2 * H, status: "OK" },
+      { node: "tappaas1", id: "811", starttime: NOW - 30 * H, endtime: NOW - 29 * H, status: "job errors" },
+    ],
+  };
+  const mods: Record<string, string> = { "110": "nextcloud", "311": "openwebui", "312": "jellyfin" };
+  const r = shapeRuns(raw, (v) => mods[v] ?? null, NOW);
+  const g = (ns: string, id: string) => r.guests.find((x) => x.ns === ns && x.id === id)!;
+  eq(r.reachable && r.node === "tappaas3" && r.store === "tappaas_backup", true, "reachable, node and store carried");
+  eq(`${g("", "110").module} ${g("", "110").snapshots} ${g("", "110").lastBackup}`, `nextcloud 2 ${NOW - 2 * H}`, "a guest: its module, count, newest backup");
+  eq(`${g("", "110").outcome} ${g("", "110").job} ${g("", "110").bucket}`, "ok daily1 daily", "backed up within its daily job's interval: ok");
+  eq(g("", "110").latestVerify, "unverified", "the newest snapshot not yet verified: unverified");
+  eq(JSON.stringify(g("", "110").lastVerify), JSON.stringify({ time: NOW - 20 * H, state: "ok" }), "…and the last verify of any snapshot, with its time");
+  eq(`${g("", "311").outcome} ${g("", "311").latestVerify} ${g("", "311").failedVerifies}`, "late failed 1", "40 h old in a daily job: late; a failed verify counted");
+  eq(`${g("", "312").outcome} ${g("", "312").bucket}`, "ok weekly", "5 days old in the weekly job: ok");
+  eq(`${g("", "777").outcome} ${g("", "777").module}`, "not-in-job null", "a guest no job covers: not-in-job");
+  eq(`${g("", "999").snapshots} ${g("", "999").outcome} ${g("", "999").lastBackup}`, "0 late null", "a job's guest with no snapshot: listed, late, never backed up");
+  eq(`${g("pull/rasmus", "110").module} ${g("pull/rasmus", "110").outcome}`, "null not-in-job", "another site's copy is not this site's module");
+  check(!r.guests.some((x) => x.id === "500"), "a disabled job's guests are not expected");
+  eq(r.targets.map((t) => `${t.ns || "-"}:${t.kind}:${t.groups}:${t.snapshots}`).join(" "),
+    "-:own:4:5 fs/tappaas1:host:1:1 pull/rasmus:pull:1:1", "targets per namespace, the never-backed-up guest not among them");
+  const own = r.targets[0];
+  eq(`${own.lastBackup} ${own.lastVerify?.time} ${own.lastVerify?.state} ${own.unverified} ${own.failedVerifies}`,
+    `${NOW - 2 * H} ${NOW - 20 * H} ok 1 1`, "a target: newest backup, newest verify, unverified and failed counts");
+  eq(r.jobs.map((j) => `${j.id}:${j.managed}:${j.bucket}:${j.guests}`).join(" "), "daily1:true:daily:3 weekly1:true:weekly:1 other:false:null:1", "jobs, TAPPaaS's marked");
+  eq(`${r.runs[0].node} ${r.runs[0].state} ${r.runs[0].guest} | ${r.runs[1].state} ${r.runs[1].guest}`, "tappaas3 OK null | job errors 811", "runs newest first, an on-demand one names its guest");
+  eq(JSON.stringify(r.verifyJobs[0]), JSON.stringify({ id: "verify-tappaas_backup", schedule: "04:00", lastRun: { time: NOW - 6 * H, end: NOW - 5 * H, state: "OK" }, nextRun: NOW + 18 * H }),
+    "the verify job: last run start, end, state, next run");
+  eq(`${r.syncJobs[0].remote} ${r.syncJobs[0].lastRun?.state} ${r.syncJobs[0].lastRun?.time}`, `rasmus connection refused ${NOW - 9 * H}`, "a sync job's last run, its end standing in for a start");
+  const off = shapeRuns({ reachable: false }, () => null, NOW);
+  eq(`${off.reachable} ${off.guests.length} ${off.targets.length}`, "false 0 0", "PBS not answering: reachable false, nothing guessed");
+
+  // The CLI: --json goes to the controller, without it the text table.
+  const fake = new FakeClient();
+  fake.rawRuns = raw;
+  const lines: string[] = [];
+  const orig = console.log;
+  console.log = (...a: unknown[]) => { lines.push(a.join(" ")); };
+  let rc: number;
+  try { rc = run(["restore", "list-all", "--json", "--config-dir", FIX], fake); } finally { console.log = orig; }
+  eq(rc!, 0, "restore list-all --json exits 0");
+  check(fake.log.includes("runs"), "…asked the controller for its runs");
+  let parsed: { guests?: unknown[] } = {};
+  try { parsed = JSON.parse(lines.join("\n")); } catch { /* checked below */ }
+  check(Array.isArray(parsed.guests), "…and printed one JSON document");
+  const lsa = HELP.verbs.find((v) => v.name === "restore list-all");
+  check(lsa?.effect === "read", "the manifest marks restore list-all a read");
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

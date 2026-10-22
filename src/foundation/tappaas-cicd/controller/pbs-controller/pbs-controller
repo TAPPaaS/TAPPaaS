@@ -24,6 +24,11 @@
 #                           Every cluster backup job that covers the module's VM —
 #                           TAPPaaS's own and any other — and how (#554)
 #   namespaces [--json]     List the datastore's namespaces
+#   runs [--json]           What backup-manager's `restore list-all --json`
+#                           shapes: every snapshot (namespace, guest, time,
+#                           verification), the verify and sync jobs with their
+#                           last run, and the cluster's backup jobs with their
+#                           recent runs
 #   add-to-job <vmid> [--retention <spec>] [--bucket daily|weekly|monthly]
 #                           Place <vmid> in the backup job for its schedule, and
 #                           remove it from the others — a guest belongs to exactly
@@ -102,6 +107,7 @@ purge: --json --yes --pbs=
 verify:
 backup: --json
 namespaces: --json --pbs=
+runs: --json --pbs=
 add-to-job: --retention= --bucket=
 apply-schedule:
 key list:
@@ -469,6 +475,53 @@ cmd_namespaces() {
     fi
 }
 
+# `runs`: the raw material for "when did each guest last back up, and was it
+# verified" — one ssh to the PBS Host for the datastore (every namespace's
+# snapshots, verify and sync jobs), one to a mgmt node for the cluster's backup
+# jobs and their recent vzdump tasks. Shaping is backup-manager's (restore.ts).
+cmd_runs() {
+    parse_args "$@"
+    have_pbs_libs || skip_offline "runs (PBS libs not loaded)"
+    pbs_reachable || skip_offline "runs"
+    local node store ds jobs tasks
+    node="$(pbs_node)" || skip_offline "runs (no PBS Host)"
+    store="$(pbs_storage_name)"
+    ds="$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@$(pbs_node_addr "${node}")" "bash -s -- '${store}'" 2>/dev/null <<'REMOTE'
+store="$1"
+api() { proxmox-backup-debug api get "$@" --output-format json 2>/dev/null; }
+# One JSON line per snapshot, to a file: hundreds of them overflow an argument.
+lines="$(mktemp)"; trap 'rm -f "${lines}"' EXIT
+while IFS= read -r ns; do
+    api "/admin/datastore/${store}/snapshots" ${ns:+--ns "${ns}"} \
+        | jq -c --arg ns "${ns}" '.[] | {ns: $ns, type: .["backup-type"], id: .["backup-id"],
+              time: .["backup-time"], size: (.size // null), verification: (.verification // null)}' >> "${lines}"
+done < <(api "/admin/datastore/${store}/namespace" | jq -r '.[].ns')
+jq -n --slurpfile snaps "${lines}" --argjson verify "$(api /admin/verify || echo '[]')" \
+    --argjson sync "$(api /admin/sync || echo '[]')" \
+    '{snapshots: $snaps, verifyJobs: $verify, syncJobs: $sync}'
+REMOTE
+)" || skip_offline "runs (${node} did not answer)"
+    jq -e 'type == "object"' >/dev/null 2>&1 <<<"${ds}" || skip_offline "runs (no datastore answer from ${node})"
+    jobs="$(_pbs_ssh "pvesh get /cluster/backup --output-format json" 2>/dev/null)" || jobs="[]"
+    tasks="$(_pbs_ssh "pvesh get /cluster/tasks --output-format json" 2>/dev/null \
+        | jq -c '[ .[] | select(.type == "vzdump") | {node, id, starttime, endtime, status} ]' 2>/dev/null)" || tasks="[]"
+    if [[ "$JSON_OUT" -eq 1 ]]; then
+        # The datastore answer on stdin: as an argument it overflows ARG_MAX.
+        jq --arg node "${node}" --arg store "${store}" --arg marker "${PBS_JOB_MARKER:-}" \
+            --argjson jobs "${jobs:-[]}" --argjson tasks "${tasks:-[]}" \
+            '{reachable: true, node: $node, store: $store, marker: $marker,
+              backupJobs: [ $jobs[] | {id, comment: (.comment // ""), schedule: (.schedule // ""),
+                            enabled: ((.enabled // 1) | tostring != "0"), vmid: ((.vmid // "") | tostring),
+                            storage: (.storage // "")} ],
+              tasks: $tasks} + .' <<<"${ds}"
+    else
+        info "Backups in ${store} on ${node}:"
+        jq -r '.snapshots | group_by(.ns)[] | "  \(.[0].ns // "" | if . == "" then "(own guests)" else . end): \(length) snapshot(s)"' <<<"${ds}"
+        jq -r '.verifyJobs[] | "  verify \(.id): last \(.["last-run-state"] // "never")"' <<<"${ds}"
+    fi
+}
+
 # ── PBS mutations (driven by backup-manager reconcile) ────────────────
 # add-to-job <vmid> [--retention <spec>] [--bucket daily|weekly|monthly] —
 # place <vmid> in the backup job for its resolved schedule (ADR-012 §3.2/D16),
@@ -693,6 +746,7 @@ main() {
         coverage)       cmd_coverage "$@" ;;
         purge)          cmd_purge "$@" ;;
         namespaces)     cmd_namespaces "$@" ;;
+        runs)           cmd_runs "$@" ;;
         add-to-job)     cmd_add_to_job "$@" ;;
         apply-schedule) cmd_apply_schedule "$@" ;;
         key)            cmd_key "$@" ;;

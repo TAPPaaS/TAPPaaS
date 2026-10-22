@@ -77,6 +77,14 @@ export interface TopologyDoc {
   outside: { kind: string; name: string }[];
 }
 
+// backup-manager restore list-all --json (the parts the console checks; the
+// page reads the rest)
+export interface BackupRunsDoc {
+  reachable: boolean;
+  guests: { ns: string; id: string; module: string | null; outcome: string; latestVerify: string }[];
+  targets: { ns: string; kind: string }[];
+}
+
 // storage-manager inventory --json (the parts the console checks; the page
 // reads the rest)
 export interface StorageDoc {

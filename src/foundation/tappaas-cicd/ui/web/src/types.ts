@@ -554,6 +554,46 @@ export interface Manifest {
 }
 
 // backup-manager list --json
+// backup-manager restore list-all --json: each guest's and target's last
+// backup and last verify (GET /api/v1/backup-runs).
+export interface LastVerify { time: number | null; state: "ok" | "failed" }
+export interface JobLastRun { time: number; end: number | null; state: string }
+export interface GuestRuns {
+  ns: string;
+  type: string;
+  id: string;
+  module: string | null;
+  snapshots: number;
+  lastBackup: number | null;
+  job: string | null;
+  bucket: "daily" | "weekly" | "monthly" | null;
+  outcome: "ok" | "late" | "not-in-job";
+  latestVerify: "ok" | "failed" | "unverified";
+  lastVerify: LastVerify | null;
+  failedVerifies: number;
+}
+export interface TargetRuns {
+  ns: string;
+  kind: "own" | "host" | "pull" | "receive" | "other";
+  groups: number;
+  snapshots: number;
+  lastBackup: number | null;
+  lastVerify: LastVerify | null;
+  unverified: number;
+  failedVerifies: number;
+}
+export interface BackupRuns {
+  reachable: boolean;
+  node: string | null;
+  store: string | null;
+  guests: GuestRuns[];
+  targets: TargetRuns[];
+  jobs: { id: string; managed: boolean; bucket: string | null; schedule: string; enabled: boolean; guests: number }[];
+  runs: { node: string; time: number; end: number | null; state: string; guest: string | null }[];
+  verifyJobs: { id: string; schedule: string; lastRun: JobLastRun | null; nextRun: number | null }[];
+  syncJobs: { id: string; remote: string; ns: string; schedule: string; lastRun: JobLastRun | null; nextRun: number | null }[];
+}
+
 export interface BackupRowView {
   module: string;
   enabled: boolean;
