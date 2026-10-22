@@ -24,6 +24,7 @@ import {
   RecordedDevice,
   RecordedKind,
   devicesOf,
+  isPanel,
   ROOM_NAME_RE,
   Room,
   roomsOf,
@@ -249,15 +250,18 @@ export function removeMount(doc: RacksDoc, device: string, passive: boolean): Re
 
 export function addCable(doc: RacksDoc, from: CableEnd, to: CableEnd, kind: string, label?: string): Result {
   if (!CABLE_KINDS.includes(kind as CableKind)) return { refused: `--kind is one of ${CABLE_KINDS.join(", ")}` };
-  const taken = cablesOf(doc).find((c) => [c.from, c.to].some((e) => [from, to].some((x) => e.device === x.device && e.port === x.port)));
+  // The same port (and, on a patch panel, the same side).
+  const same = (e: CableEnd, x: CableEnd) => e.device === x.device && e.port === x.port && (!isPanel(doc, e.device) || (e.side ?? "front") === (x.side ?? "front"));
+  const taken = cablesOf(doc).find((c) => [c.from, c.to].some((e) => [from, to].some((x) => same(e, x))));
   if (taken) return { refused: `${endText(taken.from)} — ${endText(taken.to)} already uses one of these ports: remove it first` };
   const c: Cable = { from, to, kind: kind as CableKind, ...(label ? { label } : {}) };
   return { doc: withDoc(doc, (d) => void d.cables.push(c)), summary: `cable ${endText(from)} — ${endText(to)} (${kind}) recorded` };
 }
 
-// cable remove <device:port> — the recorded cable on that port.
+// cable remove <device:port> — the recorded cable on that port (a patch
+// panel's: on the side given, front unless told).
 export function removeCable(doc: RacksDoc, end: CableEnd): Result {
-  const on = (e: CableEnd) => e.device === end.device && e.port === end.port;
+  const on = (e: CableEnd) => e.device === end.device && e.port === end.port && (!isPanel(doc, e.device) || (e.side ?? "front") === (end.side ?? "front"));
   const c = cablesOf(doc).find((x) => on(x.from) || on(x.to));
   if (!c) return { refused: `no recorded cable on ${endText(end)} (a cable the topology sees is not recorded here)` };
   return { doc: withDoc(doc, (d) => void (d.cables = d.cables.filter((x) => x !== d.cables.find((y) => on(y.from) || on(y.to))))), summary: `cable ${endText(c.from)} — ${endText(c.to)} removed` };
@@ -353,7 +357,8 @@ export function removeDevice(doc: RacksDoc, name: string): Result {
   if (!devicesOf(doc)[name]) return { refused: `device ${name} is not recorded` };
   if (mountsOf(doc)[name]) return { refused: `${name} is mounted — mount remove ${name} first` };
   const cables = cablesOf(doc).filter((c) => c.from.device === name || c.to.device === name);
-  if (cables.length) return { refused: `${name} is an end of ${cables.length} recorded cable(s) — cable remove ${endText(cables[0].from.device === name ? cables[0].from : cables[0].to)} first` };
+  const e = cables[0]?.from.device === name ? cables[0].from : cables[0]?.to;
+  if (cables.length) return { refused: `${name} is an end of ${cables.length} recorded cable(s) — cable remove '${e.device}:${e.port}' first` };
   return { doc: withDoc(doc, (d) => void delete d.devices[name]), summary: `device ${name} removed` };
 }
 

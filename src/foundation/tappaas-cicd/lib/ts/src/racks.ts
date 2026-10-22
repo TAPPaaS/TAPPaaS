@@ -61,10 +61,13 @@ export interface Mount {
   label?: string;
   description?: string;
 }
+export const SIDES = ["front", "rear"] as const;
+export type Side = (typeof SIDES)[number];
 export interface CableEnd {
   device: string;
   port: string;
   faceplate?: string; // a device only this cable places (the ISP's modem)
+  side?: Side; // a patch panel's port: its front (default) or its rear
 }
 export interface Cable {
   from: CableEnd;
@@ -514,8 +517,12 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
     for (const e of [c.from, c.to]) {
       const p = endProblem(e, devices, plateOf, catalog);
       if (p) err(`${where}: ${p}`);
-      const k = `${e?.device}\u0000${e?.port}`;
-      if (used.has(k)) err(`${where}: ${e.device} port ${e.port} already carries cable ${used.get(k)}`);
+      // A patch panel's port takes one cable on its front and one on its rear.
+      const panel = isPanel(doc, e?.device);
+      if (e?.side !== undefined && !SIDES.includes(e.side)) err(`${where}: ${e.device} port ${e.port}: side is front or rear`);
+      if (e?.side !== undefined && !panel) err(`${where}: ${e.device} is no patch panel: its ports have no front and rear`);
+      const k = `${e?.device}\u0000${e?.port}${panel ? `\u0000${e.side ?? "front"}` : ""}`;
+      if (used.has(k)) err(`${where}: ${e.device} port ${e.port}${panel ? ` (${e.side ?? "front"})` : ""} already carries cable ${used.get(k)}`);
       else used.set(k, i + 1);
     }
     if (c.from?.device === c.to?.device && c.from?.port === c.to?.port) err(`${where}: both ends are the same port`);
@@ -528,13 +535,16 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
   return out;
 }
 
+// A recorded patch panel: its ports have a front and a rear.
+export const isPanel = (doc: RacksDoc, device: string | undefined): boolean => !!device && devicesOf(doc)[device]?.kind === "patch-panel";
+
 // "USW Pro XG 10 PoE:5" → the device and the port; a device name may hold ":".
 export function parseEnd(s: string): CableEnd | null {
   const i = s.lastIndexOf(":");
   if (i <= 0 || i === s.length - 1) return null;
   return { device: s.slice(0, i), port: s.slice(i + 1) };
 }
-export const endText = (e: CableEnd): string => `${e.device}:${e.port}`;
+export const endText = (e: CableEnd): string => `${e.device}:${e.port}${e.side ? ` (${e.side})` : ""}`;
 
 // ── the view the topology carries ──────────────────────────────────────
 
@@ -568,8 +578,8 @@ export interface RackView {
   mounts: RackMountView[];
 }
 export interface CableView {
-  from: { device: string; port: string };
-  to: { device: string; port: string };
+  from: { device: string; port: string; side?: Side };
+  to: { device: string; port: string; side?: Side };
   kind: string; // a recorded cable's kind; a seen link's role (lan, wan, uplink, ap, peer-link, device)
   source: "topology" | "recorded";
   zones: string[];
@@ -740,7 +750,8 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
   const cables = seenCables(t);
   const outside: OutsideView[] = [];
   for (const c of cablesOf(doc)) {
-    cables.push({ from: { device: c.from.device, port: c.from.port }, to: { device: c.to.device, port: c.to.port }, kind: c.kind, source: "recorded", zones: zonesAt(t, c.from) ?? zonesAt(t, c.to) ?? [], lag: null, up: upAt(t, c.from) ?? upAt(t, c.to), label: c.label ?? null });
+    const end = (e: CableEnd) => ({ device: e.device, port: e.port, ...(isPanel(doc, e.device) ? { side: e.side ?? "front" } : {}) });
+    cables.push({ from: end(c.from), to: end(c.to), kind: c.kind, source: "recorded", zones: zonesAt(t, c.from) ?? zonesAt(t, c.to) ?? [], lag: null, up: upAt(t, c.from) ?? upAt(t, c.to), label: c.label ?? null });
     for (const e of [c.from, c.to]) {
       if (mounts[e.device] || devices.some((d) => d.name === e.device) || outside.some((o) => o.device === e.device)) continue;
       const fp = byKey(e.faceplate);

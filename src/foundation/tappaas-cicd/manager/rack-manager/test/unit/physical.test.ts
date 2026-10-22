@@ -98,5 +98,20 @@ check(errs({ ...r, mounts: { ...r.mounts, x: { height: 1, width: "full", face: "
 const empty = doc(deleteRack(doc(modifyRack(r, "rack1", [["room", ""]])), "rack1"));
 check(refused(deleteRoom(empty, "basement"), "ISP modem"), "a loose device keeps its room");
 
+console.log("— patch panels");
+let pp: RacksDoc = doc(addRack({}, "rack1", {}));
+pp = doc(addDevice(pp, "patch1", { kind: "patch-panel", ports: 24 }, catalog, seen));
+pp = doc(addDevice(pp, "patch2", { kind: "patch-panel", model: "generic/patch-panel-24" }, catalog, seen));
+pp = doc(addMount(pp, "patch1", { rack: "rack1", u: 30 }, catalog));
+const pv = resolveRacks(pp, catalog, t).racks[0].mounts.find((m) => m.device === "patch1")!;
+check(pv.recorded === "patch-panel" && pv.plate!.kind === "patch-panel" && pv.plate!.passive && pv.plate!.rows[0].length === 24, "a recorded panel by port count: a generic 24-port panel plate");
+check(recordedPlate("patch2", pp.devices!.patch2, catalog).key === "generic/patch-panel-24", "a panel by model: the catalog's plate");
+const front = doc(addCable(pp, { device: "tappaas2", port: "enp97s0" }, { device: "patch1", port: "1", side: "front" }, "patch"));
+const both = doc(addCable(front, { device: "patch1", port: "1", side: "rear" }, { device: USW, port: "2" }, "patch"));
+check(errs(both).length === 0, "a panel port takes one cable on its front and one on its rear");
+check(refused(addCable(both, { device: "patch1", port: "1" }, { device: "tappaas3", port: "eno1" }, "patch"), "already uses"), "cable add: a side already taken is refused");
+check(errs({ ...both, cables: [...both.cables!, { from: { device: "patch1", port: "1", side: "rear" }, to: { device: "tappaas3", port: "eno1" }, kind: "patch" }] }).some((m) => m.includes("patch1 port 1 (rear) already carries cable 2")), "validate refuses a panel port used twice on one side");
+check(errs({ ...pp, cables: [{ from: { device: USW, port: "3", side: "rear" }, to: { device: "patch1", port: "4" }, kind: "patch" }] }).some((m) => m.includes("is no patch panel")), "a side on a port that is no panel's is refused");
+
 console.log(`\nrack-manager physical: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

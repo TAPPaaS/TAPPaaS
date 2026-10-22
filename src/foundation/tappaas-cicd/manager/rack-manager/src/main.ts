@@ -110,7 +110,7 @@ export const HELP: HelpSpec = {
     { usage: "mount remove <device> [--check]", options: [CHECK], note: "(the device leaves the rack; nothing else changes)" },
     { usage: "cable list [--json]", options: [JSON_OUT], note: "(the recorded cables; the topology adds the ones it sees)" },
     {
-      usage: "cable add --from <device:port> --to <device:port> [--kind patch|uplink|power] [--label <text>] [--from-faceplate <vendor/model>] [--to-faceplate <vendor/model>] [--topology <file>] [--check]",
+      usage: "cable add --from <device:port> --to <device:port> [--kind patch|uplink|power] [--label <text>] [--from-faceplate <vendor/model>] [--to-faceplate <vendor/model>] [--from-side front|rear] [--to-side front|rear] [--topology <file>] [--check]",
       options: [
         ["--from D:P", "One end: a device and its port, as its faceplate or the topology names it."],
         ["--to D:P", "The other end."],
@@ -118,11 +118,13 @@ export const HELP: HelpSpec = {
         ["--label T", "The label on the cable."],
         ["--from-faceplate K", "A device only this cable places (the ISP's modem): its faceplate."],
         ["--to-faceplate K", "The same, for the other end."],
+        ["--from-side S", "A patch panel's port: front (default) or rear."],
+        ["--to-side S", "The same, for the other end."],
         TOPO,
         CHECK,
       ],
     },
-    { usage: "cable remove <device:port> [--check]", options: [CHECK], object: { positional: "device:port" } },
+    { usage: "cable remove <device:port> [--side front|rear] [--check]", options: [["--side S", "On a patch panel's port: the front (default) or the rear cable."], CHECK], object: { positional: "device:port" } },
     { usage: "device list [--json]", options: [JSON_OUT], note: "(the recorded devices: what the topology cannot see)" },
     { usage: "device show <device> [--json]", options: [JSON_OUT], object: { positional: "device" } },
     {
@@ -174,7 +176,7 @@ function opts(args: string[], name: string): string[] {
 const VALUED = [
   "--units", "--width", "--numbering", "--display-name", "--building", "--room", "--description", "--set", "--rack", "--u", "--height", "--slot",
   "--face", "--faceplate", "--label", "--topology", "--from", "--to", "--kind", "--from-faceplate", "--to-faceplate", "--device", "--unset",
-  "--model", "--ports", "--port",
+  "--model", "--ports", "--port", "--from-side", "--to-side", "--side",
 ];
 function positional(args: string[], skip: number): string[] {
   const out: string[] = [];
@@ -544,12 +546,22 @@ export function run(argv: string[]): number {
     const tf = opt(args, "--to-faceplate");
     if (ff) from.faceplate = ff;
     if (tf) to.faceplate = tf;
+    const fs = opt(args, "--from-side");
+    const ts = opt(args, "--to-side");
+    for (const [e, sd] of [[from, fs], [to, ts]] as const) {
+      if (sd === undefined) continue;
+      if (sd !== "front" && sd !== "rear") die("a side is front or rear");
+      e.side = sd;
+    }
     const catalog = readCatalog();
     return change(store, check, catalog, devicesFor(args), (d) => addCable(d, from, to, opt(args, "--kind") ?? "patch", opt(args, "--label")));
   }
   if (verb === "cable remove") {
     const [e] = positional(args, 2);
     const end = parseEnd(e ?? "") ?? die("cable remove <device>:<port>");
+    const side = opt(args, "--side");
+    if (side !== undefined && side !== "front" && side !== "rear") die("--side is front or rear");
+    if (side) end.side = side;
     return change(store, check, readCatalog(), undefined, (d) => removeCable(d, end));
   }
   die(`unknown verb 'rack-manager ${args.slice(0, 2).join(" ")}' — see 'rack-manager --help'`);
