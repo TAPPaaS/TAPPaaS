@@ -236,6 +236,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
           <span className="muted">
             {shown === "rack" ? "— trunk · - - wan · ··· recorded · red: no link · purple ring: LAG member · green port: link up" : "— trunk · - - wan access · ··· tunnel · ⚠ finding"}
           </span>
+          {shown === "device" ? <StateLegend /> : null}
           <span className="muted">
             Data: {(t.sources ?? []).filter((s) => s.ok).map((s) => s.name).join(" · ")}
           </span>

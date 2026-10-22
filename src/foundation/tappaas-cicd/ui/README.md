@@ -51,7 +51,9 @@ opens the side card to the left of the racks, with Mount…, Move to… and Unmo
 object's own changes. **Device** (`/site/physical/device`) — the topology laid out under the spike's rules (ISP top-left, the firewall
 as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
 nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
-left); a click opens the object's records, findings, jumps and its day-2 change: a switch
+left), each card and each switch port coloured by its state as the Storage view colours its cards
+(its findings' worst level; a drifting port, a node's uplink leg down or a buddy down are warnings;
+the reason on hover; one legend for both views); a click opens the object's records, findings, jumps and its day-2 change: a switch
 port's record (`switch-manager update-port`) then `switch-manager reconcile`, a node's
 `node network show / set`. **Storage** (`/site/physical/storage`, `storage-manager inventory`) — in
 columns: the cluster nodes, each node's boot device and pools (with the pool's fill bar), each

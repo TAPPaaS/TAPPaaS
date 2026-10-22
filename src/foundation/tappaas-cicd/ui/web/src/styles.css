@@ -453,3 +453,5 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 @media (max-width: 1200px) { .ov-grid { grid-template-columns: 1fr; } }
 .ov-storage td:nth-child(2) { min-width: 210px; }
 .ov-pool .small { white-space: nowrap; }
+.port.port-st-warn { background: var(--warn-bg); }
+.port.port-st-fail { background: var(--fail-bg); }

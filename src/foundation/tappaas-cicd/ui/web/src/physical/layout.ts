@@ -50,7 +50,7 @@ export type IspData = { wan: Topology["site"]["wan"]; pick: Pick; findings: Topo
 export type FirewallData = { wan: Topology["site"]["wan"]; pick: Pick; findings: TopoFinding[] };
 export type SwitchData = { sw: TopoSwitch; zones: TopoZone[]; pick: Pick; findings: TopoFinding[]; selected: Sel | null };
 export type ClusterData = { node: TopoNode; pick: Pick; findings: TopoFinding[]; moduleLevel: Record<string, "fail" | "warn">; memory: string | null; showGuests: boolean; fwModule: string | null };
-export type ApData = { ap: TopoAp; pick: Pick };
+export type ApData = { ap: TopoAp; pick: Pick; findings: TopoFinding[] };
 export type OutsideData = { o: TopoOutside | null; kind: "buddy" | "satellite"; pick: Pick; findings: TopoFinding[] };
 
 export function switchHeight(sw: TopoSwitch): number {
@@ -141,7 +141,7 @@ export function layoutTopology(t: Topology, o: LayoutOpts): { nodes: Node[]; edg
   // ── access points below the switches ───────────────────────────────
   let apX = G.colSwitch;
   for (const a of t.accessPoints) {
-    nodes.push({ id: `ap:${a.name}`, type: "ap", position: { x: apX, y: switchesBottom + 20 }, data: { ap: a, pick: o.pick } satisfies ApData, style: { width: 220 } });
+    nodes.push({ id: `ap:${a.name}`, type: "ap", position: { x: apX, y: switchesBottom + 20 }, data: { ap: a, pick: o.pick, findings: on("ap", a.name) } satisfies ApData, style: { width: 220 } });
     const sw = a.uplink ? t.switches.find((s) => s.name === a.uplink!.switch) : undefined;
     if (sw && a.uplink) {
       edges.push({
