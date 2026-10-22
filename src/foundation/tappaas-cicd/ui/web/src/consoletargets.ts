@@ -63,7 +63,7 @@ export const WIZARDS: WizardDef[] = [
     verbs: ["module-manager modify"],
   },
   {
-    name: "modify-zone", title: "Modify", arg: "zone", path: (z) => `/environments?zone=${encodeURIComponent(z)}`, keys: null,
+    name: "modify-zone", title: "Modify", arg: "zone", path: (z) => `/zones?zone=${encodeURIComponent(z)}`, keys: null,
     values: "the zone's fields by name", verbs: ["network-manager modify"],
   },
 ];
@@ -80,6 +80,7 @@ export const PAGES: { path: string; title: string }[] = [
   { path: "/site/device", title: "the device view (every physical device and its connections)" },
   { path: "/site/storage", title: "the storage view (nodes, pools, disks, what each pool holds)" },
   { path: "/environments", title: "Environments" },
+  { path: "/zones", title: "Zones (the zones graph, each zone's fields and verbs)" },
   { path: "/modules", title: "Modules" },
   { path: "/modules/<module>", title: "the module's page" },
   { path: "/identity", title: "Identity" },

@@ -6,14 +6,15 @@
 // fields and its verbs; Modify lists every field of zones-fields.json with its
 // value, default and change class, several per job.
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useOpenRequest } from "../opener";
 import { useRead } from "../api";
 import { fieldsStep } from "../fields";
 import { FieldRow, ZoneFieldSpec, shortValue, zoneFieldRows } from "../forms";
 import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
-import { Dot, ReadState } from "../ui";
-import { SiteRead } from "../types";
+import { Dot, ReadState, Section, since } from "../ui";
+import { EnvironmentRow, SiteRead } from "../types";
 import { COLUMN_TITLES, PSEUDO, PublicAddress, publicAddress, publicText, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
 
 export interface ZoneRead {
@@ -188,5 +189,82 @@ export function ZonesGraph({ zones, envNames, sel, setSel }: { zones: ZoneRead[]
         <span className="muted">→ may reach (access-to) · ⇢ may be let in through a pinhole (pinhole-allowed-from) · faded: inactive or disabled · click a zone for its fields and Modify</span>
       </div>
     </>
+  );
+}
+
+// The Zones page (/zones): the graph with its side card, the zones' table and
+// their verbs (network-manager add / modify / enable|disable|manual / bind /
+// reconcile / delete, each as a job with its preview; a delete needs the name
+// typed). ?zone=<name> (the assistant's modify-zone, the Environments page's
+// zone boxes): that zone's details, open.
+export function ZonesPage() {
+  const envs = useRead<EnvironmentRow[]>("environments");
+  const zones = useRead<ZoneRead[]>("zones");
+  const [zone, setZone] = useState<string | null>(() => new URLSearchParams(window.location.search).get("zone"));
+  useEffect(() => {
+    const on = () => setZone(new URLSearchParams(window.location.search).get("zone"));
+    window.addEventListener("popstate", on);
+    return () => window.removeEventListener("popstate", on);
+  }, []);
+  const modify = useOpenRequest("modify-zone");
+  useEffect(() => {
+    if (modify?.arg) setZone(modify.arg);
+  }, [modify?.n]);
+  const zoneNames = (zones.env?.data ?? []).map((z) => z.name);
+  const envNames = (envs.env?.data ?? []).map((e) => e.name);
+  // network-manager add --archetype: the catalogue zones-fields.json holds.
+  const archetypes = Object.keys(useRead<{ archetypes?: { catalog?: Record<string, unknown> } }>("schemas/zones", 600_000).env?.data?.archetypes?.catalog ?? {});
+  return (
+    <div className="page">
+      <div className="page-head">
+        <h1>Zones</h1>
+        <span className="muted">network-manager · read {since(zones.env?.at)}</span>
+      </div>
+      <Section
+        title="Zones"
+        aside={
+          <span className="toolbar">
+            <OperateButton label="Add a zone…" title="Add a zone" steps={() => [fieldsStep({ title: "network-manager add <name>", bin: "network-manager", verb: "add", kind: "zone", name: null, mode: "add", keep: ["--archetype", "--serves", "--from-zone", "--no-activate"], hide: ["@options"], choices: { "--serves": envNames, "--from-zone": zoneNames, ...(archetypes.length ? { "--archetype": archetypes } : {}) } })]} />
+            <OperateButton label="Reconcile the network…" title="Reconcile the network" steps={[net("network-manager reconcile", "reconcile", { note: "The preview runs every plane dry (OPNsense, Proxmox, the switches, the APs); apply converges them all." })]} />
+          </span>
+        }
+      >
+        <ReadState env={zones.env} failure={zones.failure} what="zones" />
+        {zones.env?.data ? <ZonesGraph zones={zones.env.data} envNames={envNames} sel={zone} setSel={setZone} /> : null}
+        <table className="table compact">
+          <thead>
+            <tr><th>zone</th><th>vlan</th><th>state</th><th>type</th><th>tier</th><th>network</th><th /></tr>
+          </thead>
+          <tbody>
+            {(zones.env?.data ?? []).map((z) => (
+              <tr key={z.name}>
+                <td className="mono" title={z.description}>{z.name}</td>
+                <td>{z.vlantag ?? ""}</td>
+                <td><Dot level={z.state === "Active" ? "pass" : "skip"} /> {z.state ?? z.error ?? ""}</td>
+                <td>{z.type ?? ""}</td>
+                <td>{z.tier ?? ""}</td>
+                <td className="mono">{z.ip ?? ""}</td>
+                <td className="toolbar">
+                  <button className="btn" onClick={() => { setZone(z.name); document.querySelector(".zones-view")?.scrollIntoView({ behavior: "smooth" }); }}>Details · Modify…</button>
+                  {(z.state === "Active" ? ["disable", "manual"] : ["enable"]).map((w) => (
+                    <OperateButton
+                      key={w}
+                      label={`${w[0].toUpperCase()}${w.slice(1)}…`}
+                      title={`network-manager ${w} ${z.name}`}
+                      steps={[
+                        { ...net(`network-manager ${w} ${z.name}`, "enable|disable|manual", { fixed: [z.name], note: "Writes the zone's state into zones.json only; the reconcile after makes it live." }), words: [w] },
+                        net("network-manager reconcile", "reconcile"),
+                      ]}
+                    />
+                  ))}
+                  <OperateButton label="Bind…" title={`Bind ${z.name} to an environment`} steps={[net(`network-manager bind ${z.name}`, "bind", { fixed: [z.name], choices: { "--environment": envNames } })]} />
+                  <OperateButton label="Delete…" kind="danger" title={`Delete zone ${z.name}`} steps={[net(`network-manager delete ${z.name}`, "delete", { fixed: [z.name] })]} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Section>
+    </div>
   );
 }

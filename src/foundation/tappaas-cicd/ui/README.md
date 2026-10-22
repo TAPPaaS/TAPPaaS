@@ -91,11 +91,12 @@ a tree of cards: the module's own (kind, node, environment, zone and the fields 
 on top, one per service in dependsOn below. Each card's Modify lists every field it owns, typed
 from the field schema, its value configured or default, its change class; the fields changed go
 to one `module-manager modify <m> --set a=b --set c=d` job (`GET /api/v1/modules/<m>/fields`:
-`module-manager fields` + `resolve` + `config/module-fields.json`). **Environments** — environments and
-zones with environment-manager's and network-manager's verbs; adding an environment says for each
+`module-manager fields` + `resolve` + `config/module-fields.json`). **Environments** — the
+environments with environment-manager's verbs; adding an environment says for each
 input whether it must be given or what the manager uses when it is left empty (owner: the first
-organization; zone and display name: from the name; DNS mode: the schema's default). The zones
-are drawn as cards coloured by type, with an arrow for each `access-to` and a dashed one for each
+organization; zone and display name: from the name; DNS mode: the schema's default). **Zones**
+(`/zones`; `/environments?zone=<z>` redirects there) — the zones with network-manager's verbs,
+drawn as cards coloured by type, with an arrow for each `access-to` and a dashed one for each
 `pinhole-allowed-from`; a click opens the zone's fields and verbs, and Modify lists every field of
 `zones-fields.json` with its value, default and class (one `network-manager modify <zone> --set …`). **Identity** — organizations,
 groups, users and roles as a graph of their relations (a group's owning organization, a user's

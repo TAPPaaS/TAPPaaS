@@ -9,6 +9,7 @@ import { AssistantApi, AssistantContext, AssistantDrawer, Focus, focusOf } from 
 import { Activity } from "./pages/Activity";
 import { Backup } from "./pages/Backup";
 import { Environments } from "./pages/Environments";
+import { ZonesPage } from "./pages/Zones";
 import { Identity } from "./pages/Identity";
 import { Setup } from "./pages/Setup";
 import { Site } from "./pages/Site";
@@ -28,6 +29,7 @@ const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/setup", label: "Setup", live: true },
   { to: "/site", label: "Site", live: true },
   { to: "/environments", label: "Environments", live: true },
+  { to: "/zones", label: "Zones", live: true },
   { to: "/modules", label: "Modules", live: true },
   { to: "/identity", label: "Identity", live: true },
   { to: "/backup", label: "Backup", live: true },
@@ -61,6 +63,8 @@ export function App() {
   useEffect(() => {
     const to = MOVED_PATHS[path.replace(/\/+$/, "")];
     if (to) replacePath(`${to}${window.location.search}`);
+    // A zone's earlier address: Environments with ?zone=, or /environments/zones.
+    if ((path === "/environments" && new URLSearchParams(window.location.search).has("zone")) || path === "/environments/zones") replacePath(`/zones${window.location.search}`);
   }, [path]);
   const view = viewOfPath(path);
   const [busy, setBusy] = useState(false);
@@ -92,6 +96,7 @@ export function App() {
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;
   else if (path === "/activity") page = <Activity />;
   else if (path === "/environments") page = <Environments />;
+  else if (path === "/zones") page = <ZonesPage />;
   else if (path === "/identity") page = <Identity />;
   else if (path === "/backup") page = <Backup />;
   else {
