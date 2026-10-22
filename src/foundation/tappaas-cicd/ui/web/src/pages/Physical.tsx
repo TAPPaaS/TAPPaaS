@@ -1,9 +1,9 @@
-// Physical — the site as it is built, laid out from `network-manager topology`
-// and nothing else, in two views. Rack (the default once a rack is recorded):
-// the racks with each device's faceplate at its units and the cables port to
-// port (physical/rack.tsx), the devices mounted nowhere in a tray. Cabling
-// (ADR-034 D5, mockup ui-02): the cards and links laid out automatically.
-// Click an object for its side card.
+// Physical — the site as it is built, in four views. Overview: the other three
+// summed up. Rack: the racks with each device's faceplate at its units and the
+// cables port to port (physical/rack.tsx), the devices mounted nowhere in a
+// tray. Device (ADR-034 D5, mockup ui-02): every physical device as a card and
+// its connections as lines, laid out automatically. Storage: the nodes, their
+// pools and disks. Click an object for its side card.
 
 import { Background, Controls, ReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -27,7 +27,9 @@ function selFromUrl(): Sel | null {
   return null;
 }
 
-export type PhysicalView = "rack" | "cabling";
+export const PHYSICAL_TABS = ["overview", "rack", "device", "storage"] as const;
+export type PhysicalView = (typeof PHYSICAL_TABS)[number];
+const TAB_NAME: Record<PhysicalView, string> = { overview: "Overview", rack: "Rack", device: "Device", storage: "Storage" };
 
 // The devices mounted nowhere, each with Mount… (the catalog's plate for it,
 // the first rack's highest free units).
@@ -85,7 +87,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
   const operator = canOperate(useMe());
   const t = topo.env?.data ?? null;
   const racks = t?.racks ?? null;
-  const shown: PhysicalView = view ?? (racks && racks.racks.length > 0 ? "rack" : "cabling");
+  const shown: PhysicalView = view ?? (racks && racks.racks.length > 0 ? "rack" : "device");
 
   useEffect(() => {
     const on = () => setSel(selFromUrl());
@@ -101,7 +103,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
     }
     return m;
   }, [health.env]);
-  const flow = useMemo(() => (t && shown === "cabling" ? layoutTopology(t, { pick, selected: sel, showGuests, showLabels, memory }) : null), [t, shown, pick, sel, showGuests, showLabels, memory]);
+  const flow = useMemo(() => (t && shown === "device" ? layoutTopology(t, { pick, selected: sel, showGuests, showLabels, memory }) : null), [t, shown, pick, sel, showGuests, showLabels, memory]);
   const bad = (t?.sources ?? []).filter((s) => !s.ok);
 
   return (
@@ -109,17 +111,17 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
       <div className="page-head">
         {embedded ? null : <h1>Physical</h1>}
         <div className="seg" role="tablist" aria-label="view">
-          {(["rack", "cabling"] as const).map((x) => (
+          {PHYSICAL_TABS.map((x) => (
             <button key={x} role="tab" aria-selected={shown === x} className={shown === x ? "seg-on" : ""} onClick={() => navigate(`/site/physical/${x}`)}>
-              {x === "rack" ? "Rack" : "Cabling"}
+              {TAB_NAME[x]}
             </button>
           ))}
         </div>
         <span className="muted">
-          {t ? `${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout automatic"}` : ""}
+          {t && (shown === "rack" || shown === "device") ? `${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout automatic"}` : ""}
         </span>
         <span className="spacer" />
-        {shown === "cabling" ? (
+        {shown === "device" ? (
           <>
             <label className="toggle">
               <input type="checkbox" checked={showGuests} onChange={(e) => setShowGuests(e.target.checked)} /> guests
@@ -128,14 +130,14 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
               <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} /> link labels
             </label>
           </>
-        ) : (
+        ) : shown === "rack" ? (
           <>
             <label className="toggle">
               <input type="checkbox" checked={showCables} onChange={(e) => setShowCables(e.target.checked)} /> cables
             </label>
             {operator ? <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} /> : null}
           </>
-        )}
+        ) : null}
       </div>
       <ReadState env={topo.env} failure={topo.failure} what="topology (network-manager topology)" />
       {bad.length ? (
@@ -143,7 +145,11 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
           Not drawn, because these did not answer: {bad.map((s) => `${s.name} (${s.error ?? "?"})`).join("; ")}
         </div>
       ) : null}
-      {shown === "rack" ? (
+      {shown === "overview" || shown === "storage" ? (
+        <div className="rack-empty">
+          <p className="muted">This view is not drawn yet.</p>
+        </div>
+      ) : shown === "rack" ? (
         <div className="physical physical-rack">
           {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} /> : null}
           <div className="canvas">
@@ -187,7 +193,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
           {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} /> : null}
         </div>
       )}
-      {t ? (
+      {t && (shown === "rack" || shown === "device") ? (
         <div className="legend">
           <span className="muted">Zones on links:</span>
           {t.zones

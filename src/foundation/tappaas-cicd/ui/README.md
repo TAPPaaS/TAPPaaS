@@ -35,14 +35,15 @@ day 2: add a node, an environment, a stack; enrol a device (the wg-quick file to
 
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
-jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects there) has two views.
+jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects there) has four views,
+each at its own address: Overview, Rack, Device and Storage (`/site/physical/<view>`).
 **Rack** (`/site/physical/rack`, the default once a rack is recorded): each rack of rack-manager's
 `config/racks.json` as a frame with its units numbered as the rack numbers them, each mount as its
 faceplate at its units and width with its ports' live state (link, LAG), the cables port to port in
 the zone colours below with a label on hover, a device only a cable record places beside the rack,
 and an Unplaced tray of the devices mounted nowhere, each with Mount…; a click on a plate or a port
 opens the side card to the left of the racks, with Mount…, Move to… and Unmount… besides the
-object's own changes. **Cabling** (`/site/physical/cabling`) — the topology laid out under the spike's rules (ISP top-left, the firewall
+object's own changes. **Device** (`/site/physical/device`) — the topology laid out under the spike's rules (ISP top-left, the firewall
 as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
 nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
 left); a click opens the object's records, findings, jumps and its day-2 change: a switch
