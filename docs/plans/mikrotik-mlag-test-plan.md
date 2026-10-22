@@ -241,7 +241,11 @@ HA and corosync every 5 s. No test fenced, lost quorum or stopped a guest.
 - **Losing the primary costs ~4 s**: crs-b concluding crs-a is gone (heartbeat 5 s).
   Worth a retest with `mlag-heartbeat=1s` on both (the loss once blamed on 1 s was the
   boot-time desync).
-- Still to test: the peer link pulled (split-brain risk — with the operator watching).
+- **Peer link pulled (both cables at crs-b, 78 s):** tappaas1 no loss; the firewall and
+  the mothership 0.2 s on the cut, 2.6 s on reconnect; no corosync disconnect. Neither
+  peer disabled its MLAG legs or changed role; with their tables already synced,
+  traffic carried on. crs-b's own address was unreachable from tappaas2 during the cut
+  (its replies need the peer link), back at once after.
 
 ## Phase 3 — failure tests
 
