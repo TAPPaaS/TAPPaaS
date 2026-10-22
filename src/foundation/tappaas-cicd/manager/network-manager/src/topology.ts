@@ -32,7 +32,7 @@ import { join } from "path";
 import { ExecResult, captureResult } from "../../../lib/ts/src/exec";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { WanAddress, readWanAddress, wanAddressFile } from "../../../lib/ts/src/wan-address";
-import { Faceplate, RacksDoc, RacksView, resolveRacks } from "../../../lib/ts/src/racks";
+import { Faceplate, RacksDoc, RacksView, RecordedKind, recordedPorts, resolveRacks } from "../../../lib/ts/src/racks";
 
 // ── the sources, as their verbs print them ────────────────────────────
 
@@ -357,9 +357,15 @@ export interface TopoWanPath {
 // a machine module, or a device a switch port names. What a rack mounts.
 export interface TopoDevice {
   name: string;
-  kind: "machine" | "device";
+  kind: "machine" | "device" | RecordedKind;
   vendor: string | null;
   model: string | null;
+  // A device rack-manager records (nothing can see it): its ports and how it
+  // is shown.
+  recorded?: true;
+  ports?: string[];
+  displayName?: string | null;
+  description?: string | null;
 }
 export interface Topology {
   version: 1;
@@ -942,6 +948,12 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       taken.add(p.target.name);
       devices.push({ name: p.target.name, kind: "device", vendor: null, model: null });
     }
+  }
+  // The devices rack-manager records: what nothing above can see.
+  for (const [name, d] of Object.entries(src.racks?.doc.devices ?? {})) {
+    if (taken.has(name)) continue;
+    taken.add(name);
+    devices.push({ name, kind: d.kind, vendor: null, model: d.model ?? null, recorded: true, ports: recordedPorts(d, src.racks!.catalog), displayName: d.displayName ?? null, description: d.description ?? null });
   }
 
   // The racks, resolved against what was found; what does not reconcile is a

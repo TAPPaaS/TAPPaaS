@@ -18,7 +18,12 @@ import {
   Numbering,
   RACK_NAME_RE,
   RACK_WIDTHS,
+  DEVICE_NAME_RE,
+  RECORDED_KINDS,
   Rack,
+  RecordedDevice,
+  RecordedKind,
+  devicesOf,
   RackWidth,
   RacksDoc,
   cablesOf,
@@ -30,14 +35,17 @@ import {
 export type Result = { doc: RacksDoc; summary: string } | { refused: string };
 
 const clone = (d: RacksDoc): RacksDoc => JSON.parse(JSON.stringify(d ?? {}));
-function withDoc(doc: RacksDoc, fn: (d: Required<Pick<RacksDoc, "racks" | "mounts" | "cables">>) => void): RacksDoc {
+type Doc = Required<Pick<RacksDoc, "racks" | "mounts" | "cables" | "devices">>;
+function withDoc(doc: RacksDoc, fn: (d: Doc) => void): RacksDoc {
   const d = clone(doc);
   d.version = 1;
   d.racks = d.racks ?? {};
   d.mounts = d.mounts ?? {};
   d.cables = d.cables ?? [];
-  fn(d as Required<Pick<RacksDoc, "racks" | "mounts" | "cables">>);
+  d.devices = d.devices ?? {};
+  fn(d as Doc);
   if (d.cables.length === 0) delete d.cables;
+  if (Object.keys(d.devices).length === 0) delete d.devices;
   return d;
 }
 
@@ -220,4 +228,98 @@ export function removeCable(doc: RacksDoc, end: CableEnd): Result {
   const c = cablesOf(doc).find((x) => on(x.from) || on(x.to));
   if (!c) return { refused: `no recorded cable on ${endText(end)} (a cable the topology sees is not recorded here)` };
   return { doc: withDoc(doc, (d) => void (d.cables = d.cables.filter((x) => x !== d.cables.find((y) => on(y.from) || on(y.to))))), summary: `cable ${endText(c.from)} — ${endText(c.to)} removed` };
+}
+
+// ── recorded devices ──────────────────────────────────────────────────
+
+export interface DeviceSpec {
+  kind?: string;
+  model?: string;
+  ports?: number;
+  port?: string[];
+  displayName?: string;
+  description?: string;
+}
+
+// The ports a spec names: --port names, else 1..--ports.
+function portsOf(spec: DeviceSpec): string[] | undefined | { refused: string } {
+  if (spec.port?.length && spec.ports !== undefined) return { refused: "give --ports <n> or --port <name>..., not both" };
+  if (spec.port?.length) return spec.port;
+  if (spec.ports !== undefined) {
+    if (spec.ports < 1 || spec.ports > 96) return { refused: "--ports is 1 to 96" };
+    return Array.from({ length: spec.ports }, (_, i) => String(i + 1));
+  }
+  return undefined;
+}
+
+// device add — a device the topology cannot see. Its name is how cables and
+// mounts name it; seen is the topology's device names (null: not read).
+export function addDevice(doc: RacksDoc, name: string, spec: DeviceSpec, catalog: Faceplate[], seen: string[] | null): Result {
+  if (!DEVICE_NAME_RE.test(name)) return { refused: `device name '${name}': letters, digits, spaces, dots, dashes and underscores, up to 63` };
+  if (devicesOf(doc)[name]) return { refused: `device ${name} is already recorded (device modify ${name})` };
+  if (seen?.includes(name)) return { refused: `the topology sees a device named ${name}: record only what it cannot see` };
+  if (!RECORDED_KINDS.includes(spec.kind as RecordedKind)) return { refused: `--kind is one of ${RECORDED_KINDS.join(", ")}` };
+  if (spec.model && !catalog.some((f) => f.key === spec.model)) return { refused: `model ${spec.model} is not in the catalog (faceplates list)` };
+  const ports = portsOf(spec);
+  if (ports && !Array.isArray(ports)) return ports;
+  if (!spec.model && !ports) return { refused: "give its ports (--ports <n> or --port <name>...) or a --model from the catalog" };
+  const d: RecordedDevice = { kind: spec.kind as RecordedKind };
+  if (spec.model) d.model = spec.model;
+  if (ports) d.ports = ports;
+  if (spec.displayName) d.displayName = spec.displayName;
+  if (spec.description) d.description = spec.description;
+  const n = recordedPortsCount(d, catalog);
+  return { doc: withDoc(doc, (x) => void (x.devices[name] = d)), summary: `device ${name} recorded (${d.kind}${d.model ? `, ${d.model}` : ""}, ${n} port(s))` };
+}
+
+function recordedPortsCount(d: RecordedDevice, catalog: Faceplate[]): number {
+  if (d.ports?.length) return d.ports.length;
+  const f = d.model ? catalog.find((x) => x.key === d.model) : undefined;
+  return f ? f.rows.flat().filter(Boolean).length : 0;
+}
+
+const DEVICE_FIELDS = ["kind", "model", "ports", "displayName", "description"];
+
+// device modify — its kind, model, ports (a list, comma separated, or a
+// count), display name or description. A port a cable uses stays.
+export function modifyDevice(doc: RacksDoc, name: string, sets: Array<[string, string]>, catalog: Faceplate[]): Result {
+  if (!devicesOf(doc)[name]) return { refused: `device ${name} is not recorded` };
+  let refused: string | null = null;
+  const next = withDoc(doc, (d) => {
+    const r = d.devices[name];
+    for (const [k, v] of sets) {
+      if (k === "name") refused = "a device's name is how cables and mounts name it: record the new one, move them, remove this one";
+      else if (!DEVICE_FIELDS.includes(k)) refused = `device field '${k}' is not one of ${DEVICE_FIELDS.join(", ")}`;
+      else if (k === "kind") {
+        if (!RECORDED_KINDS.includes(v as RecordedKind)) refused = `kind is one of ${RECORDED_KINDS.join(", ")}`;
+        else r.kind = v as RecordedKind;
+      } else if (k === "model") {
+        if (text(v) === undefined) delete r.model;
+        else if (!catalog.some((f) => f.key === v)) refused = `model ${v} is not in the catalog (faceplates list)`;
+        else r.model = v;
+      } else if (k === "ports") {
+        const n = int(v);
+        const list = n !== null ? Array.from({ length: n }, (_, i) => String(i + 1)) : v.split(",").map((x) => x.trim()).filter(Boolean);
+        if (text(v) === undefined) delete r.ports;
+        else r.ports = list;
+      } else {
+        const key = k as "displayName" | "description";
+        if (text(v) === undefined) delete r[key];
+        else r[key] = v;
+      }
+      if (refused) return;
+    }
+  });
+  if (refused) return { refused };
+  return { doc: next, summary: `device ${name}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
+}
+
+// device remove — only a device nothing names: unmount it and remove its
+// cables first.
+export function removeDevice(doc: RacksDoc, name: string): Result {
+  if (!devicesOf(doc)[name]) return { refused: `device ${name} is not recorded` };
+  if (mountsOf(doc)[name]) return { refused: `${name} is mounted — mount remove ${name} first` };
+  const cables = cablesOf(doc).filter((c) => c.from.device === name || c.to.device === name);
+  if (cables.length) return { refused: `${name} is an end of ${cables.length} recorded cable(s) — cable remove ${endText(cables[0].from.device === name ? cables[0].from : cables[0].to)} first` };
+  return { doc: withDoc(doc, (d) => void delete d.devices[name]), summary: `device ${name} removed` };
 }

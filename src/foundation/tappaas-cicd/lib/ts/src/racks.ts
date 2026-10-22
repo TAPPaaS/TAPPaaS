@@ -5,8 +5,10 @@
 // catalogs in, findings and views out.
 //
 // Devices are named as the topology names them; a rack never holds a copy of
-// a device's record. A cable the switches or LLDP can see comes from the
-// topology; racks.json records only the ones nothing can see.
+// a device's record. A device the topology cannot see (the ISP's modem, an
+// ONT, a UPS, a patch panel) is recorded here, and is then a device like any
+// other. A cable the switches or LLDP can see comes from the topology;
+// racks.json records only the ones nothing can see.
 
 export const RACKS_FILE = "racks.json";
 export const RACK_NAME_RE = /^[a-z][a-z0-9-]{0,62}$/;
@@ -19,6 +21,8 @@ export const FACES = ["front", "rear"] as const;
 export const CABLE_KINDS = ["patch", "uplink", "power"] as const;
 export const PORT_KINDS = ["rj45", "sfp+", "sfp28", "poe", "console", "power"] as const;
 export const PLATE_KINDS = ["server", "switch", "ap", "patch-panel", "pdu", "modem", "other"] as const;
+export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "other"] as const;
+export const DEVICE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$/;
 
 export type RackWidth = (typeof RACK_WIDTHS)[number];
 export type Numbering = (typeof NUMBERINGS)[number];
@@ -27,6 +31,7 @@ export type Face = (typeof FACES)[number];
 export type CableKind = (typeof CABLE_KINDS)[number];
 export type PortKind = (typeof PORT_KINDS)[number];
 export type PlateKind = (typeof PLATE_KINDS)[number];
+export type RecordedKind = (typeof RECORDED_KINDS)[number];
 
 export interface Rack {
   displayName?: string;
@@ -59,16 +64,27 @@ export interface Cable {
   kind: CableKind;
   label?: string;
 }
+// A device nothing can see, recorded by its name: its kind, its plate in the
+// catalog (model) or its ports, and how it is shown.
+export interface RecordedDevice {
+  kind: RecordedKind;
+  model?: string; // a catalog key, <vendor>/<model>
+  ports?: string[]; // its port names, when the model does not give them
+  displayName?: string;
+  description?: string;
+}
 export interface RacksDoc {
   version?: 1;
   racks?: Record<string, Rack>;
   mounts?: Record<string, Mount>;
   cables?: Cable[];
+  devices?: Record<string, RecordedDevice>;
 }
 
 export const racksOf = (d: RacksDoc): Record<string, Rack> => d.racks ?? {};
 export const mountsOf = (d: RacksDoc): Record<string, Mount> => d.mounts ?? {};
 export const cablesOf = (d: RacksDoc): Cable[] => d.cables ?? [];
+export const devicesOf = (d: RacksDoc): Record<string, RecordedDevice> => d.devices ?? {};
 
 // ── the catalog ───────────────────────────────────────────────────────
 
@@ -170,13 +186,14 @@ export interface TopoLike {
     ports?: { port: string; role?: string; link?: string | null; disabled?: boolean; lag?: string | null; zones?: string[]; target?: { kind: string; name: string | null; port: string | null } | null }[];
   }[];
   accessPoints?: { name: string; vendor?: string | null; model?: string | null; uplink?: { switch: string; port: string } | null }[];
-  devices?: { name: string; kind: string; vendor?: string | null; model?: string | null }[];
+  devices?: { name: string; kind: string; vendor?: string | null; model?: string | null; ports?: string[]; recorded?: boolean }[];
 }
 
 export type DeviceKind = "node" | "switch" | "ap" | "machine" | "device";
 export interface SiteDevice {
   name: string;
   kind: DeviceKind;
+  recorded?: RecordedKind; // recorded in racks.json, not seen
   vendor: string | null;
   model: string | null;
   ports: { id: string; up: boolean | null; lag: string | null; zones: string[]; disabled: boolean }[];
@@ -216,7 +233,56 @@ export function siteDevices(t: TopoLike): SiteDevice[] {
   }
   for (const d of t.devices ?? []) {
     if (out.some((x) => x.name === d.name)) continue;
-    out.push({ name: d.name, kind: d.kind === "machine" ? "machine" : "device", vendor: d.vendor ?? null, model: d.model ?? null, ports: [] });
+    out.push({
+      name: d.name,
+      kind: d.kind === "machine" ? "machine" : "device",
+      ...(d.recorded && RECORDED_KINDS.includes(d.kind as RecordedKind) ? { recorded: d.kind as RecordedKind } : {}),
+      vendor: d.vendor ?? null,
+      model: d.model ?? null,
+      ports: (d.ports ?? []).map((id) => ({ id, up: null, lag: null, zones: [], disabled: false })),
+    });
+  }
+  return out;
+}
+
+// ── recorded devices ──────────────────────────────────────────────────
+
+// A recorded device's ports: its own list, else its model's plate's.
+export function recordedPorts(d: RecordedDevice, catalog: Faceplate[]): string[] {
+  if (d.ports?.length) return d.ports;
+  const f = d.model ? catalog.find((x) => x.key === d.model) : undefined;
+  return f ? f.rows.flat().filter((p): p is CatalogPort => !!p).map(portId) : [];
+}
+
+const PLATE_OF_KIND: Record<RecordedKind, PlateKind> = { modem: "modem", ont: "modem", ups: "pdu", "patch-panel": "patch-panel", other: "other" };
+
+// A recorded device's plate: its model's from the catalog, else one made from
+// its ports (a patch panel 24 to a row, a modem or an ONT half width).
+export function recordedPlate(name: string, d: RecordedDevice, catalog: Faceplate[]): Faceplate {
+  const f = d.model ? catalog.find((x) => x.key === d.model) : undefined;
+  if (f && !d.ports?.length) return f;
+  const ports = recordedPorts(d, catalog).map((n): CatalogPort => ({ name: n, kind: d.kind === "ups" ? "power" : "rj45" }));
+  const rows: CatalogPort[][] = [];
+  for (let i = 0; i < ports.length; i += 24) rows.push(ports.slice(i, i + 24));
+  const small = d.kind === "modem" || d.kind === "ont";
+  return {
+    key: f?.key ?? `recorded/${d.kind}`,
+    vendor: f?.vendor ?? "Generic",
+    model: f?.model ?? (d.kind === "patch-panel" ? `${ports.length}-port patch panel` : d.kind === "ups" ? "UPS" : d.kind === "ont" ? "ONT" : d.kind === "modem" ? "modem" : name),
+    kind: PLATE_OF_KIND[d.kind] ?? "other",
+    units: f?.units ?? (rows.length > 2 ? 2 : 1),
+    width: f?.width ?? (small ? "half" : "full"),
+    passive: true,
+    rows,
+  };
+}
+
+// The site's devices and the recorded ones, each once (a seen device wins).
+export function withRecorded(devices: SiteDevice[], doc: RacksDoc, catalog: Faceplate[]): SiteDevice[] {
+  const out = [...devices];
+  for (const [name, d] of Object.entries(devicesOf(doc))) {
+    if (out.some((x) => x.name === name)) continue;
+    out.push({ name, kind: "device", recorded: d.kind, vendor: null, model: d.model ?? null, ports: recordedPorts(d, catalog).map((id) => ({ id, up: null, lag: null, zones: [], disabled: false })) });
   }
   return out;
 }
@@ -338,14 +404,30 @@ function endProblem(e: CableEnd, devices: SiteDevice[] | null, plateOf: (device:
 // its rack, every faceplate key is in the catalog, every cable end names a
 // port the topology or the catalog has. devices null: the topology could not
 // be read, and the device checks are skipped with a warning.
-export function checkRacks(doc: RacksDoc, catalog: Faceplate[], devices: SiteDevice[] | null): RackFinding[] {
+export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice[] | null): RackFinding[] {
   const out: RackFinding[] = [];
   const err = (message: string) => out.push({ severity: "error", message });
   const warn = (message: string) => out.push({ severity: "warn", message });
   const racks = racksOf(doc);
   const mounts = mountsOf(doc);
+  const recorded = devicesOf(doc);
   const byKey = (k: string | undefined) => (k ? catalog.find((f) => f.key === k) ?? null : null);
-  if (devices === null) warn("the topology could not be read: the devices and their ports are not checked");
+  if (seen === null) warn("the topology could not be read: the devices and their ports are not checked");
+
+  // The recorded devices: a kind, a model the catalog has, ports named once,
+  // and not a device the topology sees (that one is the topology's).
+  for (const [name, d] of Object.entries(recorded)) {
+    const where = `device ${name}`;
+    if (!DEVICE_NAME_RE.test(name)) err(`${where}: a device name is letters, digits, spaces, dots, dashes and underscores`);
+    if (!RECORDED_KINDS.includes(d.kind)) err(`${where}: kind is one of ${RECORDED_KINDS.join(", ")}`);
+    if (d.model && !byKey(d.model)) err(`${where}: model ${d.model} is not in the catalog (faceplates list)`);
+    const ports = d.ports ?? [];
+    const dup = ports.find((x, i) => ports.indexOf(x) !== i);
+    if (dup) err(`${where}: port ${dup} appears twice`);
+    if (ports.some((x) => typeof x !== "string" || x.trim() === "" || x.includes(":"))) err(`${where}: a port name is text without a colon`);
+    if (seen?.some((x) => x.name === name && !x.recorded)) err(`${where}: the topology sees a device of that name — record only what it cannot see`);
+  }
+  const devices = seen === null ? null : withRecorded(seen, doc, catalog);
 
   for (const [name, r] of Object.entries(racks)) {
     if (!RACK_NAME_RE.test(name)) err(`rack '${name}': a rack name is lower case letters, digits and dashes`);
@@ -374,7 +456,7 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], devices: SiteDev
     const fp = byKey(m.faceplate);
     if (m.faceplate && !fp) err(`${where}: faceplate ${m.faceplate} is not in the catalog`);
     if (fp && fp.units !== m.height) warn(`${where}: ${m.height}U high, its faceplate ${fp.key} is ${fp.units}U`);
-    if (devices !== null && !devices.some((d) => d.name === device) && !fp?.passive) {
+    if (devices !== null && !devices.some((d) => d.name === device) && !recorded[device] && !fp?.passive) {
       err(`${where}: the topology has no device '${device}' (a node, switch, access point, machine or device) — a passive device needs a passive faceplate (a patch panel, a PDU)`);
     }
     if (Number.isInteger(m.u) && Number.isInteger(m.height)) placed.push({ device, rack: m.rack, face: m.face, lo: m.u, hi: m.u + m.height - 1, cols: columnSpan(m) });
@@ -393,6 +475,7 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], devices: SiteDev
   const plateOf = (device: string): Faceplate | null => {
     const m = mounts[device];
     if (m?.faceplate) return byKey(m.faceplate);
+    if (recorded[device]) return recordedPlate(device, recorded[device], catalog);
     const d = devices?.find((x) => x.name === device);
     return d ? byKey(suggestFaceplate(catalog, d) ?? undefined) : null;
   };
@@ -408,6 +491,11 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], devices: SiteDev
       else used.set(k, i + 1);
     }
     if (c.from?.device === c.to?.device && c.from?.port === c.to?.port) err(`${where}: both ends are the same port`);
+    // A device only this cable names: it works, but it is no device yet.
+    for (const e of [c.from, c.to]) {
+      if (!isStr(e?.device) || recorded[e.device] || mounts[e.device] || devices === null || devices.some((d) => d.name === e.device)) continue;
+      warn(`${where}: ${e.device} is neither seen by the topology nor recorded — record it: rack-manager device add '${e.device}' --kind modem|ont|ups|patch-panel|other${e.faceplate ? ` --model ${e.faceplate}` : ""}`);
+    }
   }
   return out;
 }
@@ -425,6 +513,7 @@ export const endText = (e: CableEnd): string => `${e.device}:${e.port}`;
 export interface RackMountView {
   device: string;
   kind: DeviceKind | "passive";
+  recorded?: RecordedKind;
   rack: string;
   u: number;
   height: number;
@@ -462,6 +551,7 @@ export interface CableView {
 export interface UnplacedView {
   device: string;
   kind: DeviceKind;
+  recorded?: RecordedKind;
   vendor: string | null;
   model: string | null;
   suggestion: string | null;
@@ -537,7 +627,8 @@ export function seenCables(t: TopoLike): CableView[] {
 // its plate, the cables the topology sees plus the recorded ones, the devices
 // mounted nowhere, and what does not reconcile.
 export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): RacksView {
-  const devices = siteDevices(t);
+  const devices = withRecorded(siteDevices(t), doc, catalog);
+  const recorded = devicesOf(doc);
   const mounts = mountsOf(doc);
   const byKey = (k: string | null | undefined) => (k ? catalog.find((f) => f.key === k) ?? null : null);
   const findings: RacksView["findings"] = [];
@@ -557,9 +648,10 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
   for (const [device, m] of Object.entries(mounts)) {
     const rack = racks.find((r) => r.name === m.rack);
     const dev = devices.find((d) => d.name === device) ?? null;
-    const recorded = byKey(m.faceplate);
-    const key = recorded ? recorded.key : dev ? suggestFaceplate(catalog, dev) : null;
-    const fp = recorded ?? byKey(key);
+    const own = byKey(m.faceplate);
+    const rec = recorded[device] ? recordedPlate(device, recorded[device], catalog) : null;
+    const key = own ? own.key : rec ? rec.key : dev ? suggestFaceplate(catalog, dev) : null;
+    const fp = own ?? rec ?? byKey(key);
     if (!dev && !fp?.passive) findings.push({ text: `${device} is mounted in ${m.rack} at U${m.u}, but the topology no longer has it`, device, kind: "gone", rack: m.rack });
     if (!rack) continue;
     const plate = fp ? resolvePlate(fp, dev) : null;
@@ -567,6 +659,7 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
     rack.mounts.push({
       device,
       kind: dev ? dev.kind : "passive",
+      ...(dev?.recorded ? { recorded: dev.recorded } : {}),
       rack: m.rack,
       u: m.u,
       height: m.height,
@@ -576,7 +669,7 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
       label: m.label ?? null,
       description: m.description ?? null,
       faceplate: fp?.key ?? null,
-      suggested: !recorded && !!fp,
+      suggested: !own && !rec && !!fp,
       plate,
       up: states.length ? states.some((x) => x) : null,
     });
@@ -585,7 +678,7 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
   const hasRack = racks.length > 0;
   const unplaced: UnplacedView[] = devices
     .filter((d) => !mounts[d.name])
-    .map((d) => ({ device: d.name, kind: d.kind, vendor: d.vendor, model: d.model, suggestion: suggestFaceplate(catalog, d) }));
+    .map((d) => ({ device: d.name, kind: d.kind, vendor: d.vendor, model: d.model, suggestion: d.recorded ? recorded[d.name]?.model ?? null : suggestFaceplate(catalog, d), ...(d.recorded ? { recorded: d.recorded } : {}) }));
   if (hasRack) for (const u of unplaced) findings.push({ text: `${u.device} is mounted in no rack`, device: u.device, kind: "unplaced", rack: null });
 
   const cables = seenCables(t);

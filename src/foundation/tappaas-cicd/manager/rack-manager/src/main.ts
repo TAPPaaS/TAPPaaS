@@ -1,6 +1,7 @@
 // rack-manager — where the site's hardware sits. Owns config/racks.json: the
 // racks, what is mounted where (keyed by the device's topology name; the
-// device's own record is never touched), and the cables nothing can see. The
+// device's own record is never touched), the devices the topology cannot see
+// (a modem, an ONT, a UPS, a patch panel) and the cables nothing can see. The
 // faceplate catalog (faceplates/<vendor>/<model>.json) says what each device
 // looks like. network-manager's topology carries the result: the racks with
 // their mounts resolved and every link mapped to faceplate ports.
@@ -21,7 +22,10 @@ import {
   SiteDevice,
   checkRacks,
   cablesOf,
+  devicesOf,
   endText,
+  recordedPlate,
+  recordedPorts,
   mountsOf,
   parseEnd,
   racksOf,
@@ -30,7 +34,7 @@ import {
   suggestFaceplate,
 } from "../../../lib/ts/src/racks";
 import { Store, loadCatalog, readDevices } from "./store";
-import { Result, addCable, addMount, addRack, deleteRack, modifyMount, modifyRack, removeCable, removeMount } from "./verbs";
+import { Result, addCable, addDevice, addMount, addRack, deleteRack, modifyDevice, modifyMount, modifyRack, removeCable, removeDevice, removeMount } from "./verbs";
 
 const VERSION = "0.1.0";
 
@@ -103,6 +107,27 @@ export const HELP: HelpSpec = {
       ],
     },
     { usage: "cable remove <device:port> [--check]", options: [CHECK], object: { positional: "device:port" } },
+    { usage: "device list [--json]", options: [JSON_OUT], note: "(the recorded devices: what the topology cannot see)" },
+    { usage: "device show <device> [--json]", options: [JSON_OUT], object: { positional: "device" } },
+    {
+      usage: "device add <device> --kind modem|ont|ups|patch-panel|other [--model <vendor/model>] [--ports <n> | --port <name>...] [--display-name <text>] [--description <text>] [--topology <file>] [--check]",
+      options: [
+        ["--kind K", "modem, ont, ups, patch-panel or other."],
+        ["--model K", "Its plate in the catalog (faceplates list); its ports come from it unless given."],
+        ["--ports N", "Its ports, named 1 to N (a patch panel)."],
+        ["--port P", "A port by name (repeatable): WAN, LAN 1, …"],
+        ["--display-name T", "The name shown."],
+        ["--description T", "What it is, where it comes from."],
+        TOPO,
+        CHECK,
+      ],
+    },
+    {
+      usage: "device modify <device> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      options: [["--set F=V", "kind, model, ports (a count or a comma-separated list), displayName, description (repeatable)."], ["--unset F", "Clear model, ports, displayName or description (repeatable)."], CHECK],
+      object: { positional: "device" },
+    },
+    { usage: "device remove <device> [--check]", options: [CHECK], note: "(only once it is unmounted and no recorded cable names it)", object: { positional: "device" } },
     { usage: "faceplates list [--json]", options: [JSON_OUT] },
     {
       usage: "faceplates show <vendor/model> [--device <name>] [--topology <file>] [--json]",
@@ -133,6 +158,7 @@ function opts(args: string[], name: string): string[] {
 const VALUED = [
   "--units", "--width", "--numbering", "--display-name", "--building", "--room", "--description", "--set", "--rack", "--u", "--height", "--slot",
   "--face", "--faceplate", "--label", "--topology", "--from", "--to", "--kind", "--from-faceplate", "--to-faceplate", "--device", "--unset",
+  "--model", "--ports", "--port",
 ];
 function positional(args: string[], skip: number): string[] {
   const out: string[] = [];
@@ -307,6 +333,33 @@ export function run(argv: string[]): number {
     for (const c of cables) info(`${endText(c.from)} — ${endText(c.to)}  ${c.kind}${c.label ? `  "${c.label}"` : ""}`);
     return 0;
   }
+  if (verb === "device list" || verb === "device show") {
+    const d = store.load();
+    const { catalog } = loadCatalog();
+    const rows = Object.entries(devicesOf(d)).map(([name, r]) => ({
+      name,
+      ...r,
+      ports: recordedPorts(r, catalog),
+      plate: recordedPlate(name, r, catalog).key,
+      mounted: mountsOf(d)[name] ? where(mountsOf(d)[name]) : null,
+      cables: cablesOf(d).filter((c) => c.from.device === name || c.to.device === name).length,
+    }));
+    if (verb === "device show") {
+      const [name] = positional(args, 2);
+      if (!name) die("device show <device>");
+      const r = rows.find((x) => x.name === name) ?? die(`device ${name} is not recorded`);
+      if (json) return out(r);
+      info(`${GN}${r.name}${CL}  ${r.kind}${r.model ? `  ${r.model}` : ""}${r.displayName ? `  "${r.displayName}"` : ""}`);
+      info(`  ports: ${r.ports.join(", ") || "-"}`);
+      info(`  mounted: ${r.mounted ?? "nowhere"} · ${r.cables} recorded cable(s)`);
+      if (r.description) info(`  ${r.description}`);
+      return 0;
+    }
+    if (json) return out(rows);
+    if (!rows.length) info("no recorded devices (device add <name> --kind …)");
+    for (const r of rows) info(`${r.name.padEnd(24)} ${r.kind.padEnd(12)} ${String(r.ports.length).padStart(2)} port(s)  ${r.mounted ?? "mounted nowhere"}${r.model ? `  ${r.model}` : ""}`);
+    return 0;
+  }
   if (verb === "faceplates list") {
     const { catalog, errors } = loadCatalog();
     if (json) return out(catalog.map((f) => ({ key: f.key, vendor: f.vendor, model: f.model, kind: f.kind, units: f.units, width: f.width, passive: f.passive === true, generic: f.generic ?? null, match: f.match ?? [], ports: f.rows.flat().filter(Boolean).length })));
@@ -360,17 +413,47 @@ export function run(argv: string[]): number {
     if (!name) die("rack delete <rack>");
     return change(store, check, readCatalog(), undefined, (d) => deleteRack(d, name));
   }
+  if (verb === "device add") {
+    const [name] = positional(args, 2);
+    if (!name) die("device add <device> --kind …");
+    const catalog = readCatalog();
+    const devices = devicesFor(args);
+    const seen = devices ? devices.filter((x) => !x.recorded).map((x) => x.name) : null;
+    return change(store, check, catalog, devices, (d) =>
+      addDevice(d, name, {
+        kind: opt(args, "--kind"),
+        model: opt(args, "--model"),
+        ports: intOpt(args, "--ports"),
+        port: opts(args, "--port"),
+        displayName: opt(args, "--display-name"),
+        description: opt(args, "--description"),
+      }, catalog, seen),
+    );
+  }
+  if (verb === "device modify") {
+    const [name] = positional(args, 2);
+    if (!name) die("device modify <device> --set <field>=<value>...");
+    const s = sets(args);
+    const catalog = readCatalog();
+    return change(store, check, catalog, undefined, (d) => modifyDevice(d, name, s, catalog));
+  }
+  if (verb === "device remove") {
+    const [name] = positional(args, 2);
+    if (!name) die("device remove <device>");
+    return change(store, check, readCatalog(), undefined, (d) => removeDevice(d, name));
+  }
   if (verb === "mount add") {
     const [device] = positional(args, 2);
     if (!device) die("mount add <device> --rack <rack> --u <n>");
     const rack = opt(args, "--rack") ?? die("--rack is required");
     const u = intOpt(args, "--u") ?? die("--u is required");
     const catalog = readCatalog();
+    const rec = devicesOf(store.load())[device];
     return change(store, check, catalog, devicesFor(args), (d) =>
       addMount(d, device, {
         rack,
         u,
-        height: intOpt(args, "--height"),
+        height: intOpt(args, "--height") ?? (rec && !opt(args, "--faceplate") ? recordedPlate(device, rec, catalog).units : undefined),
         width: opt(args, "--width"),
         slot: intOpt(args, "--slot"),
         face: opt(args, "--face"),
@@ -392,7 +475,8 @@ export function run(argv: string[]): number {
     if (!device) die("mount remove <device>");
     const catalog = readCatalog();
     const m = mountsOf(store.load())[device];
-    const passive = !!m?.faceplate && catalog.find((f) => f.key === m.faceplate)?.passive === true;
+    // A recorded device keeps its cables; a passive plate nothing records takes them along.
+    const passive = !!m?.faceplate && catalog.find((f) => f.key === m.faceplate)?.passive === true && !devicesOf(store.load())[device];
     return change(store, check, catalog, undefined, (d) => removeMount(d, device, passive));
   }
   if (verb === "cable add") {

@@ -370,6 +370,11 @@ check(t.racks === null && !t.sources.some((s) => s.name === "rack-manager export
   check(x.findings.some((f) => f.gate === "topology" && f.on.kind === "node" && f.on.name === "tappaas2" && /mounted in no rack/.test(f.text)), "a node mounted nowhere: a finding on it");
   check(x.findings.some((f) => f.on.kind === "ap" && f.on.name === "Nano HD"), "an access point mounted nowhere: a finding on it");
   check(renderTopology(x).some((l) => /^ {4}U20 front {2}USW Pro XG 10 PoE {2}generic\/switch-1u \(suggested\)/.test(l)), "the text view lists the mounts");
+  // A device rack-manager records is a device of the topology, with its kind and ports.
+  const rec = buildTopology({ ...hrossen(), racks: { doc: { ...doc, devices: { "ISP modem": { kind: "modem" as const, ports: ["WAN", "LAN 1"], displayName: "Provider modem" } } }, catalog } });
+  const modem = rec.devices.find((y) => y.name === "ISP modem");
+  check(modem?.kind === "modem" && modem.recorded === true && modem.ports?.join() === "WAN,LAN 1" && modem.displayName === "Provider modem", "a recorded device: in devices, with its kind, ports and name");
+  check(rec.racks!.unplaced.some((u) => u.device === "ISP modem" && u.recorded === "modem"), "…and mounted nowhere, until it is mounted");
   const none = buildTopology({ ...hrossen(), racks: { doc: {}, catalog } });
   check(none.racks!.racks.length === 0 && !none.findings.some((f) => f.gate === "topology"), "an empty racks.json: no rack, no finding");
 }
