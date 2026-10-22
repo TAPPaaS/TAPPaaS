@@ -173,7 +173,7 @@ export function cableStyle(c: RackCable, t: Topology): { stroke: string; width: 
 
 export function cableText(c: RackCable): string {
   const st = c.up === true ? "up" : c.up === false ? "down" : "state unknown";
-  return `${c.from.device}:${c.from.port} — ${c.to.device}:${c.to.port} · ${c.kind}${c.lag ? ` · LAG ${c.lag}` : ""} · ${st}${c.zones.length ? ` · ${c.zones.join(", ")}` : ""}${c.source === "recorded" ? " · recorded" : ""}${c.label ? ` · ${c.label}` : ""}`;
+  return `${c.from.device}:${c.from.port} — ${c.to.device}:${c.to.port} · ${c.kind}${c.lag ? ` · LAG ${c.lag}` : ""} · ${st}${c.zones.length ? ` · ${c.zones.join(", ")}` : ""}${c.source === "recorded" ? " · recorded" : ""}${c.via?.length ? ` · via ${c.via.map((v) => `${v.device}:${v.port}`).join(", ")}` : ""}${c.label ? ` · ${c.label}` : ""}`;
 }
 
 // The cable's path: out of the rack's side between two ports of one rack
@@ -304,8 +304,11 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
     setScale(Math.max(0.2, Math.min(3, (scale ?? 1) * f)));
   };
   const k = scale ?? 1;
-  const drawn = v.cables
-    .map((c, i) => ({ c, i, a: L.ports.get(key(c.from.device, c.from.port)), b: L.ports.get(key(c.to.device, c.to.port)) }))
+  // One wire per cable, or per segment of a link split at a patch panel (each
+  // segment carries its link: its style, its selection).
+  const wires = v.cables.flatMap((c) => (c.segments?.length ? c.segments.map((s) => ({ c, from: s.from, to: s.to })) : [{ c, from: c.from, to: c.to }]));
+  const drawn = wires
+    .map((w, i) => ({ c: w.c, w, i, a: L.ports.get(key(w.from.device, w.from.port)), b: L.ports.get(key(w.to.device, w.to.port)) }))
     .filter((x) => x.a && x.b);
   const hovered = drawn.find((d) => d.i === hover);
 
@@ -313,7 +316,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
   const [cabledOf, rearOf] = useMemo(() => {
     const m = new Map<string, Set<string>>();
     const r = new Map<string, Set<string>>();
-    for (const c of v.cables) for (const e of [c.from, c.to]) (e.side === "rear" ? r : m).set(e.device, ((e.side === "rear" ? r : m).get(e.device) ?? new Set()).add(e.port));
+    for (const c of v.cables) for (const s of c.segments?.length ? c.segments : [c]) for (const e of [s.from, s.to]) (e.side === "rear" ? r : m).set(e.device, ((e.side === "rear" ? r : m).get(e.device) ?? new Set()).add(e.port));
     return [m, r];
   }, [v]);
   const plate = (p: Placed): ReactNode => (
@@ -323,7 +326,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
       cabled={cabledOf.get(p.device)}
       rear={rearOf.get(p.device)}
       on={isSel(sel, p.kind, p.device)}
-      portOn={(id) => (sel?.kind === "port" && sel.switch === p.device && sel.id === id) || (sel?.kind === "link" && v.cables.some((c) => linkId(c.from.device, c.to.device) === sel.id && ((c.from.device === p.device && c.from.port === id) || (c.to.device === p.device && c.to.port === id))))}
+      portOn={(id) => (sel?.kind === "port" && sel.switch === p.device && sel.id === id) || (sel?.kind === "link" && v.cables.some((c) => linkId(c.from.device, c.to.device) === sel.id && (c.segments?.length ? c.segments : [c]).some((w) => [w.from, w.to].some((e) => e.device === p.device && e.port === id))))}
       onPlate={() => pick(selOf(p.kind, p.device))}
       onPort={(id) => pick(selOf(p.kind, p.device, id))}
     />

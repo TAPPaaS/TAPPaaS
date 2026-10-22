@@ -21,7 +21,7 @@ export interface DevNode {
 
 // One cable, as the topology resolves it or as recorded; the internet's and a
 // buddy's links have none (a hand-off and a tunnel).
-export type Cable = Pick<RackCable, "from" | "to" | "kind" | "source" | "zones" | "lag" | "up" | "label">;
+export type Cable = Pick<RackCable, "from" | "to" | "kind" | "source" | "zones" | "lag" | "up" | "label" | "segments" | "via">;
 
 export interface DevLink {
   id: string;
@@ -116,6 +116,12 @@ export function deviceGraph(t: Topology): { nodes: DevNode[]; links: DevLink[] }
     if (fwNode) join(peerId(o.name), fwNode, "tunnel");
   }
   return { nodes: [...nodes.values()], links: [...links.values()] };
+}
+
+// The free ports of the recorded patch panels: neither side cabled.
+export function freePanelPorts(t: Topology): string[] {
+  const used = new Set((t.racks?.cables ?? []).flatMap((c) => (c.segments?.length ? c.segments : [c]).flatMap((w) => [w.from, w.to])).map((e) => `${e.device}:${e.port}`));
+  return (t.devices ?? []).filter((d) => d.recorded && d.kind === "patch-panel").flatMap((d) => (d.ports ?? []).map((p) => `${d.name}:${p}`)).filter((x) => !used.has(x));
 }
 
 // ── state ─────────────────────────────────────────────────────────────

@@ -6,7 +6,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { Topology } from "../../web/src/types";
-import { ISP, depths, deviceGraph, deviceState, forceLayout, linkId, selectedDevice } from "../../web/src/physical/devicegraph";
+import { ISP, depths, deviceGraph, deviceState, forceLayout, freePanelPorts, linkId, selectedDevice } from "../../web/src/physical/devicegraph";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -39,6 +39,19 @@ check(selectedDevice(g, { kind: "port", id: "5", switch: "USW Pro XG 10 PoE" }) 
   const m = g2.nodes.find((n) => n.id === "ISP modem");
   check(m?.kind === "device" && m.recorded === "modem" && m.sel.kind === "mount" && g2.nodes.find((n) => n.id === "ups1")?.recorded === "ups", "recorded devices are devices of the graph, their kind kept");
   check(g2.links.some((l) => l.id === linkId(ISP, "ISP modem") && l.kind === "hand-off") && g2.links.some((l) => l.id === linkId("ISP modem", "USW Pro XG 10 PoE")), "the recorded modem keeps its hand-off and its cable");
+}
+
+// A link split at a patch panel: one link in the graph, its two wires listed;
+// the panel's other ports are free to split another.
+{
+  const USW = "USW Pro XG 10 PoE";
+  const seg = { from: { device: USW, port: "2" }, to: { device: "tappaas2", port: "enp97s0" }, kind: "lan", source: "topology" as const, zones: [], lag: null, up: true, label: null, segments: [{ from: { device: USW, port: "2" }, to: { device: "patch1", port: "1", side: "front" as const } }, { from: { device: "patch1", port: "1", side: "rear" as const }, to: { device: "tappaas2", port: "enp97s0" } }], via: [{ device: "patch1", port: "1" }] };
+  const cables = t.racks!.cables.filter((c) => !(c.to.device === "tappaas2" && c.to.port === "enp97s0"));
+  const t3 = { ...t, devices: [...(t.devices ?? []), { name: "patch1", kind: "patch-panel" as const, vendor: null, model: null, recorded: true as const, ports: ["1", "2", "3"] }], racks: { ...t.racks!, cables: [...cables, seg] } };
+  const g3 = deviceGraph(t3);
+  const l = g3.links.find((x) => x.id === linkId(USW, "tappaas2"))!;
+  check(l.cables.length === 1 && l.cables[0].segments?.length === 2 && !g3.links.some((x) => x.a === "patch1" || x.b === "patch1"), "a split link: one link between the two devices, its segments with it, no link to the panel");
+  check(freePanelPorts(t3).join() === "patch1:2,patch1:3", "the panel's free ports: the ones neither side of which is cabled");
 }
 
 // ── the layout ────────────────────────────────────────────────────────

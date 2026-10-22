@@ -332,6 +332,9 @@ export interface RackInfo {
 export interface RackCable {
   from: { device: string; port: string; side?: "front" | "rear" }; // side: a patch panel's port
   to: { device: string; port: string; side?: "front" | "rear" };
+  // A link split at patch panels: its wires end to end, and the panel ports it runs through.
+  segments?: { from: { device: string; port: string; side?: "front" | "rear" }; to: { device: string; port: string; side?: "front" | "rear" } }[];
+  via?: { device: string; port: string }[];
   kind: string;
   source: "topology" | "recorded";
   zones: string[];

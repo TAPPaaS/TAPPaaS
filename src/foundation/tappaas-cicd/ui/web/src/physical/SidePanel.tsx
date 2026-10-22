@@ -11,7 +11,7 @@
 import { ReactNode, useMemo } from "react";
 import { useRead } from "../api";
 import { zoneColor } from "../colors";
-import { Health, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
+import { Health, RackCable, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
 import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
@@ -19,7 +19,7 @@ import { MountActions, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackMod
 import { publicAddress } from "../zonegraph";
 import { StorageNote } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
-import { DevLink, DevNode, deviceGraph, deviceState, selectedDevice } from "./devicegraph";
+import { DevLink, DevNode, deviceGraph, deviceState, freePanelPorts, selectedDevice } from "./devicegraph";
 import { iconOf, kindName } from "./devicecard";
 import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
@@ -458,6 +458,11 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       body = (
         <>
           {[a, b].map((d) => drawing(d, ends(d)))}
+          {/* the patch panels it runs through, their ports ringed */}
+          {[...new Set(l.cables.flatMap((c) => c.via ?? []).map((v) => v.device))].map((p) => {
+            const pd = devOf(p);
+            return pd ? drawing(pd, new Set(l.cables.flatMap((c) => c.via ?? []).filter((v) => v.device === p).map((v) => v.port))) : null;
+          })}
           <p>
             <Tag level={l.up === false ? "fail" : "pass"} /> {l.cables.length ? [...new Set(l.cables.map((c) => c.kind))].join(" and ") : l.kind}
             {l.cables.length > 1 ? `, ${l.cables.length} cables` : ""}
@@ -470,7 +475,18 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
                   <tr key={i} className={sel.port && (sel.port === `${c.from.device}:${c.from.port}` || sel.port === `${c.to.device}:${c.to.port}`) ? "row-on" : undefined}>
                     <td className="mono">{c.from.device}:{c.from.port}</td>
                     <td className="mono">{c.to.device}:{c.to.port}</td>
-                    <td className="muted">{[c.up === true ? "up" : c.up === false ? "down" : null, c.lag ? `LAG ${c.lag}` : null, c.zones.length ? c.zones.join(", ") : null, c.source === "recorded" ? "recorded" : null, c.label].filter(Boolean).join(" · ")}</td>
+                    <td className="muted">
+                      {[c.up === true ? "up" : c.up === false ? "down" : null, c.lag ? `LAG ${c.lag}` : null, c.zones.length ? c.zones.join(", ") : null, c.source === "recorded" ? "recorded" : null, c.label].filter(Boolean).join(" · ")}
+                      {c.segments?.length ? (
+                        <ol className="segments">
+                          {c.segments.map((w, j) => (
+                            <li key={j} className="mono">
+                              {w.from.device}:{w.from.port}{w.from.side ? ` (${w.from.side})` : ""} → {w.to.device}:{w.to.port}{w.to.side ? ` (${w.to.side})` : ""}
+                            </li>
+                          ))}
+                        </ol>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -484,8 +500,13 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={t.findings.filter((f) => l.cables.some((c) => [c.from, c.to].some((e) => (f.on.kind === "port" && f.on.switch === e.device && f.on.name === e.port))))} />
         </>
       );
-      const recorded = l.cables.find((c) => c.source === "recorded");
-      actions = racks && recorded ? <OperateButton label="Remove the cable…" kind="danger" title="Remove a recorded cable" steps={() => cableRemoveSteps(`${recorded.from.device}:${recorded.from.port}`)} /> : null;
+      const recorded = l.cables.find((c) => c.source === "recorded" && !c.segments?.length);
+      actions = racks ? (
+        <>
+          {l.cables.map((c, i) => (c.segments?.length ? <PanelJoin key={i} c={c} /> : <PanelSplit key={i} t={t} c={c} many={l.cables.length > 1} />))}
+          {recorded ? <OperateButton label="Remove the cable…" kind="danger" title="Remove a recorded cable" steps={() => cableRemoveSteps(`${recorded.from.device}:${recorded.from.port}`)} /> : null}
+        </>
+      ) : null;
       open = <p className="muted small">A link is the topology's and the cable records'; its ends have their own jumps.</p>;
       break;
     }
@@ -724,5 +745,32 @@ function DeviceRecordActions({ name, cabled, mounted }: { name: string; cabled: 
       <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("device modify", `rack-manager device modify '${name}'`, { note: "Its kind, model, ports (a count or a list), display name or description; --check previews." })]} />
       {!mounted && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("device remove", `rack-manager device remove '${name}'`)]} /> : null}
     </>
+  );
+}
+
+// A wire through a patch panel: rack-manager cable split, its --check the preview.
+function PanelSplit({ t, c, many }: { t: Topology; c: RackCable; many: boolean }) {
+  const free = freePanelPorts(t);
+  if (!free.length) return null;
+  const end = `${c.from.device}:${c.from.port}`;
+  return (
+    <OperateButton
+      label={many ? `Attach ${c.from.port} ↔ ${c.to.port} to a patch panel…` : "Attach to patch panel…"}
+      title={`${end} — ${c.to.device}:${c.to.port} through a patch panel`}
+      steps={[{ title: `rack-manager cable split '${end}' --via <panel:port>`, bin: "rack-manager", verb: "cable split", fixed: [end], only: ["--via"], choices: { "--via": free }, note: "The link becomes two recorded wires: this port to the panel port's front, its rear to the far end. The Device view keeps one link; the racks draw the two wires. Preview: rack-manager's --check." }]}
+    />
+  );
+}
+
+// Undo it: rack-manager cable join at the panel port.
+function PanelJoin({ c }: { c: RackCable }) {
+  const v = c.via?.[0];
+  if (!v) return null;
+  return (
+    <OperateButton
+      label="Remove patch panel"
+      title={`${c.from.device}:${c.from.port} — ${c.to.device}:${c.to.port} without ${v.device}`}
+      steps={[{ title: `rack-manager cable join '${v.device}:${v.port}'`, bin: "rack-manager", verb: "cable join", fixed: [`${v.device}:${v.port}`], note: "The two wires through the panel port are one link again: the topology's own, or one recorded cable when it was recorded. Preview: rack-manager's --check." }]}
+    />
   );
 }
