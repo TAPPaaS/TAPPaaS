@@ -63,4 +63,15 @@ for (const kind of ["rack", "mount"] as FieldKind[]) {
   check(same(Object.keys(table), fields), `${kind} add: every field of racks-fields' ${kind} has its flag`);
 }
 
+// ── site-manager site modify: its options over site-fields.json ─────────
+const sm = readFileSync(join(MANAGERS, "site-manager", "src", "main.ts"), "utf8");
+const smBlock = sm.slice(sm.indexOf("options: [", sm.indexOf('name: "site modify')), sm.indexOf('{ usage: "node list'));
+const smOpts = [...smBlock.matchAll(/\["(--\w+)[ "]/g)].map((m) => m[1]).filter((f) => f !== "--force");
+const stable = FLAGS.site?.modify ?? {};
+const sdefs = flattenSchema(schema("site-fields.json"));
+check(same(Object.values(stable), [...smOpts, "--channel"]) && smOpts.length > 30, `site modify: the table is site-manager site modify's options, flag for flag (${smOpts.filter((f) => !Object.values(stable).includes(f)).join(" ")})`);
+check(Object.keys(stable).every((f) => sdefs.some((d) => d.name === f && d.changeClass === "in-place")), "…each a field site-fields.json classes in-place");
+check(["dnssec", "dnsBlocklists.lists", "diskAutoGrow.threshold", "branding.logo"].every((f) => stable[f]), "…dnssec, the blocklists, disk growth and branding among them");
+check(["name", "version", "defaultEnvironment"].every((f) => !stable[f] && sdefs.find((d) => d.name === f)?.changeClass === "immutable"), "…name, version and defaultEnvironment immutable, with no flag");
+
 done("flags");

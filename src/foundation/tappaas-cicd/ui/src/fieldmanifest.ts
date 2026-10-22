@@ -69,6 +69,7 @@ export interface FieldDef {
   references?: string;
   required?: boolean;
   changeClass?: string;
+  changeNote?: string; // why that class (site-fields: why a field is refused)
   usedBy?: unknown;
 }
 
@@ -217,7 +218,7 @@ export function valueAt(record: Obj | null, path: string): unknown {
 // site-fields, the identity *-fields, a racks-fields $def): an object with
 // properties of its own is walked, every other property is a field. `required`
 // is per level; a property's changeClass is carried where the schema has one.
-export function flattenSchema(doc: unknown, prefix = "", requiredHere = true): FieldDef[] {
+export function flattenSchema(doc: unknown, prefix = "", requiredHere = true, inherited: { changeClass?: string; changeNote?: string } = {}): FieldDef[] {
   const d = obj(doc);
   const required = new Set(strs(d.required));
   const out: FieldDef[] = [];
@@ -225,11 +226,13 @@ export function flattenSchema(doc: unknown, prefix = "", requiredHere = true): F
     const p = obj(raw);
     const name = prefix ? `${prefix}.${k}` : k;
     const isReq = requiredHere && required.has(k);
+    // A leaf takes its object's class (site.json: location in-place, so location.city).
+    const cls = typeof p.changeClass === "string" ? { changeClass: p.changeClass, ...(typeof p.changeNote === "string" ? { changeNote: p.changeNote } : {}) } : inherited;
     if (Object.keys(obj(p.properties)).length > 0) {
-      out.push(...flattenSchema(p, name, isReq));
+      out.push(...flattenSchema(p, name, isReq, cls));
       continue;
     }
-    out.push({ name, type: p.type, enum: p.enum, default: p.default, description: typeof p.description === "string" ? p.description : undefined, references: typeof p.references === "string" ? p.references : undefined, required: isReq, ...(typeof p.changeClass === "string" ? { changeClass: p.changeClass } : {}) });
+    out.push({ name, type: p.type, enum: p.enum, default: p.default, description: typeof p.description === "string" ? p.description : undefined, references: typeof p.references === "string" ? p.references : undefined, required: isReq, ...cls });
   }
   return out;
 }
@@ -293,6 +296,9 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
       "backup.defaultRetention": "--backupDefaultRetention", "location.country": "--locationCountry", "location.timezone": "--locationTimezone", "location.locale": "--locationLocale",
       "location.keyboard": "--locationKeyboard", "location.latitude": "--locationLatitude", "location.longitude": "--locationLongitude", "location.city": "--locationCity",
       "location.building": "--locationBuilding", "branding.logo": "--brandingLogo", "branding.logoDark": "--brandingLogoDark", "network.isp": "--networkIsp", "network.publicIp": "--networkPublicIp",
+      dnssec: "--dnssec", "dnsBlocklists.lists": "--dnsBlocklistsLists", "dnsBlocklists.zones": "--dnsBlocklistsZones", "dnsBlocklists.allow": "--dnsBlocklistsAllow",
+      "diskAutoGrow.enabled": "--diskAutoGrowEnabled", "diskAutoGrow.threshold": "--diskAutoGrowThreshold", "diskAutoGrow.growPercent": "--diskAutoGrowGrowPercent",
+      "diskAutoGrow.minGrowGB": "--diskAutoGrowMinGrowGB", "diskAutoGrow.poolCeiling": "--diskAutoGrowPoolCeiling",
       "updateSchedule.frequency": "--updateFrequency", "updateSchedule.weekday": "--updateWeekday", "updateSchedule.hour": "--updateHour",
     },
   },
@@ -304,7 +310,7 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
 
 // Fields a form never offers whatever the schema says: the object's name is
 // the verb's positional.
-const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], site: ["name"], rack: ["name"], mount: ["device"] };
+const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], rack: ["name"], mount: ["device"] };
 
 // The classes a --set refuses before anything is written, per kind whose modify
 // is `--set field=value` within each field's class (zones-fields, racks-fields).
@@ -393,6 +399,9 @@ export function buildManifest(i: ManifestInput): FieldManifest {
       if (!c) why = "has no change class: it cannot be set through a verb";
       else if (SET_REFUSED[i.kind]![c]) why = SET_REFUSED[i.kind]![c];
       else arg = "--set";
+    } else if (i.kind === "site" && i.mode === "modify" && def.changeClass && def.changeClass !== "in-place") {
+      // site-fields.json's class: name, version, defaultEnvironment are immutable
+      why = `${def.changeClass}: ${oneLine(def.changeNote) || "site modify does not change it"}`;
     } else if (flags && flags[def.name]) arg = flags[def.name];
     else why = i.mode === "add" ? "not set when adding: change it afterwards" : "the verb has no option for it";
     fields.push({

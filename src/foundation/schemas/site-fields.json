@@ -18,32 +18,41 @@
     "name": {
       "description": "Neutral site code (e.g. warmelo1 — place plus number). Aligned with the Proxmox cluster name at creation, informational afterwards (ADR-007d #426). Not used to name any environment, organization, or zone — those key on defaultEnvironment.",
       "type": "string",
-      "pattern": "^[A-Za-z0-9_.-]+$"
+      "pattern": "^[A-Za-z0-9_.-]+$",
+      "changeClass": "immutable",
+      "changeNote": "The site's code, given when the site was created and aligned with its Proxmox cluster's name then. Nothing renames the cluster, so the two would no longer match."
     },
     "defaultEnvironment": {
       "description": "Name of the default (tenant) environment — also its network zone and owner organization. Decoupled from the site code so site.name can be renamed with a single edit without touching any environment/org/zone (ADR-007d #426). Must be a valid zone/environment slug.",
       "type": "string",
       "references": "environments",
-      "pattern": "^[a-z][a-z0-9-]*$"
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "changeClass": "immutable",
+      "changeNote": "The install created the default environment, its zone and its owner organization under this name, and renamed srv to it. Pointing it at another name would leave those behind under the old one."
     },
     "displayName": {
       "description": "Human-readable site name.",
       "type": "string",
-      "minLength": 1
+      "minLength": 1,
+      "changeClass": "in-place"
     },
     "owner": {
       "description": "Reference to the site-owner Organization.name (config/identities/organizations/<owner>.json).",
       "references": "organizations",
-      "type": "string"
+      "type": "string",
+      "changeClass": "in-place"
     },
     "email": {
       "description": "Installer/admin contact email (Let's Encrypt ACME account, people bootstrap). Carried over from configuration.json .tappaas.email during the S3b reader cutover.",
-      "type": "string"
+      "type": "string",
+      "changeClass": "in-place"
     },
     "version": {
       "description": "The TAPPaaS release this site was installed from, written once by create-site.sh. Not the version it runs: that is read from the checkout (git describe; site-manager site show, ADR-028 D13).",
       "type": "string",
-      "default": "1.0"
+      "default": "1.0",
+      "changeClass": "immutable",
+      "changeNote": "Written once when the site was created: the release it was installed from. The release it runs is read from the checkout."
     },
     "location": {
       "description": "Physical/legal location of the site, and the master data every module reads for time and locale (#408). The operator answers country/keyboard/timezone once, on the first Proxmox install; that node is the source these are derived from, not the mothership's own clock — a NixOS template, which is how a Danish site came to record NL/Europe/Amsterdam.",
@@ -94,7 +103,8 @@
           "minimum": -180,
           "maximum": 180
         }
-      }
+      },
+      "changeClass": "in-place"
     },
     "network": {
       "description": "Site WAN configuration. No rootDomain — domains are per-environment.",
@@ -149,7 +159,8 @@
             }
           }
         }
-      }
+      },
+      "changeClass": "in-place"
     },
     "hardware": {
       "description": "Physical hardware: the Proxmox nodes that make up the cluster.",
@@ -186,7 +197,9 @@
             }
           }
         }
-      }
+      },
+      "changeClass": "manual",
+      "changeNote": "Has verbs of its own: site-manager node add, node delete."
     },
     "backup": {
       "description": "Site-wide backup target. null when no backup is configured yet.",
@@ -232,7 +245,8 @@
           "type": "string",
           "default": "daily"
         }
-      }
+      },
+      "changeClass": "in-place"
     },
     "updateSchedule": {
       "description": "Site-wide update schedule (ADR-017 D7). {frequency: none|daily|weekly|monthly, weekday: day name, hour: 0-23}. weekday is read only under weekly and monthly; hour defaults to 2. The legacy [period, day, hour] triple is still read, and migration 0003 rewrites it.",
@@ -262,58 +276,83 @@
         "frequency": "weekly",
         "weekday": "Thursday",
         "hour": 2
-      }
+      },
+      "changeClass": "in-place"
     },
     "channel": {
       "description": "Which release channel this site takes, and therefore how much risk it accepts (ADR-028 D9). `unstable` is where development is proven, `staging` soaks a revision under real use for one boundary, `production` is what everyone else runs. The channel is a promise about risk; the branch each repository tracks is where the code sits — they are expected to agree (TAPPaaS: unstable=main, staging=staging, production=stable) and `site-manager` warns when they do not.",
       "type": "string",
       "enum": ["unstable", "staging", "production"],
       "default": "production",
-      "note": "Changing it is allowed in both directions, but moving towards production takes the site to OLDER code: `site modify --channel` warns and requires --force, because ADR-025 config migrations are forward-only and a site that has applied a migration cannot run code that predates it."
+      "note": "Changing it is allowed in both directions, but moving towards production takes the site to OLDER code: `site modify --channel` warns and requires --force, because ADR-025 config migrations are forward-only and a site that has applied a migration cannot run code that predates it.",
+      "changeClass": "in-place"
     },
     "automaticReboot": {
       "description": "Whether updates may reboot automatically. Site-wide until P3 (then moves to Environment).",
       "type": "boolean",
-      "default": true
+      "default": true,
+      "changeClass": "in-place"
     },
     "ipv6": {
       "description": "Whether this site runs IPv6 next to IPv4, applied by the network module's update. True: the firewall allows IPv6, takes a prefix from the WAN (network.wan.ipv6) and gives every zone with an ipv6Subnet its /64. False: no zone has IPv6, and the firewall drops all IPv6 and Unbound resolves over IPv4 only. See network-manager/IPV6.md.",
       "type": "boolean",
       "default": false,
-      "note": "Set it true only when the upstream provides IPv6. Changing it reloads the firewall's filter and Unbound once; IPv4 traffic is not interrupted."
+      "note": "Set it true only when the upstream provides IPv6. Changing it reloads the firewall's filter and Unbound once; IPv4 traffic is not interrupted.",
+      "changeClass": "in-place"
     },
     "dnssec": {
       "description": "Whether the firewall's resolver (Unbound) validates DNSSEC, applied by the network module's update. True: answers for signed domains are validated and a forged or broken answer is refused (SERVFAIL). The site's own names are not affected: the internal domain and private reverse zones are marked insecure, and the split-horizon answers for published names are local data.",
       "type": "boolean",
       "default": true,
-      "note": "Turn it off only if an upstream path breaks DNSSEC (a middlebox that strips signatures). Changing it reloads Unbound once."
+      "note": "Turn it off only if an upstream path breaks DNSSEC (a middlebox that strips signatures). Changing it reloads Unbound once.",
+      "changeClass": "in-place"
     },
     "branding": {
       "description": "The site's own look on its sign-in page (Authentik). logo: an image file (svg, png, jpg or webp, at most 2 MB) shown above the login form in place of the logo generated from displayName; logoDark: a variant for the dark theme, of the same file type (absent: logo serves both). Paths are relative to the config directory. Applied by the identity module's update.",
       "type": "object",
       "default": null,
       "example": {"logo": "branding/logo.svg", "logoDark": "branding/logo-dark.svg"},
-      "note": "Without branding the logo is generated: the site's displayName with \"powered by TAPPaaS\" beneath, in a light and a dark variant. A missing file leaves the login page as it is and says so."
+      "note": "Without branding the logo is generated: the site's displayName with \"powered by TAPPaaS\" beneath, in a light and a dark variant. A missing file leaves the login page as it is and says so.",
+      "changeClass": "in-place",
+      "properties": {
+        "logo": {"description": "The sign-in page's logo: an svg, png, jpg or webp file of at most 2 MB, relative to the config directory.", "type": "string"},
+        "logoDark": {"description": "Its variant for the dark theme, of the same file type (absent: logo serves both).", "type": "string"}
+      }
     },
     "dnsBlocklists": {
       "description": "DNS blocklists the firewall's resolver applies, by the network module's update. Absent: none. lists are OPNsense's blocklist codes (atf = abuse.ch ThreatFox, hgz011 = hagezi threat intelligence, oisd1 = OISD big, ag = AdGuard, ...); zones limits filtering to those zones' clients, IPv4 and IPv6 (none listed: every client); allow names domains never blocked. A blocked name answers NXDOMAIN.",
       "type": "object",
       "default": null,
       "example": {"lists": ["atf", "hgz011"], "zones": ["home", "guest"], "allow": ["example.org"]},
-      "note": "Service zones are best left out: their modules fetch updates, images and models, and a false positive there fails an update. A change takes effect as cached answers expire (minutes). An unknown list code is refused with the codes the firewall offers."
+      "note": "Service zones are best left out: their modules fetch updates, images and models, and a false positive there fails an update. A change takes effect as cached answers expire (minutes). An unknown list code is refused with the codes the firewall offers.",
+      "changeClass": "in-place",
+      "properties": {
+        "lists": {"description": "OPNsense's blocklist codes (atf, hgz011, oisd1, ag, ...). None: no blocking.", "type": "array", "items": {"type": "string"}},
+        "zones": {"description": "The zones whose clients are filtered (none listed: every client).", "type": "array", "items": {"type": "string"}, "references": "zones"},
+        "allow": {"description": "Domains never blocked.", "type": "array", "items": {"type": "string"}}
+      }
     },
     "diskAutoGrow": {
       "description": "Automatic disk growth: on every module update, a VM whose / is at or over threshold % full has its disk grown by growPercent % (at least minGrowGB), if the disk's pool — on the guest's node and on its HA replica node — stays at or under poolCeiling % used. Absent: on, with the defaults shown. A module opts out with diskAutoGrow: false and caps growth with diskSizeMax.",
       "type": "object",
       "default": {"enabled": true, "threshold": 80, "growPercent": 50, "minGrowGB": 5, "poolCeiling": 80},
       "example": {"threshold": 85, "poolCeiling": 75},
-      "note": "Linux VMs only; a container's disk is grown by hand. A grow without room prints a DEFERRED: line the update summary collects. Pool use is Proxmox's (pvesm status), which counts a thick disk's full size."
+      "note": "Linux VMs only; a container's disk is grown by hand. A grow without room prints a DEFERRED: line the update summary collects. Pool use is Proxmox's (pvesm status), which counts a thick disk's full size.",
+      "changeClass": "in-place",
+      "properties": {
+        "enabled": {"description": "Grow disks automatically at all.", "type": "boolean", "default": true},
+        "threshold": {"description": "Grow a VM's disk when its / is at or over this % full.", "type": "integer", "minimum": 1, "maximum": 100, "default": 80},
+        "growPercent": {"description": "Grow it by this % of its size.", "type": "integer", "minimum": 1, "default": 50},
+        "minGrowGB": {"description": "…and by at least this many GB.", "type": "integer", "minimum": 1, "default": 5},
+        "poolCeiling": {"description": "Only while the disk's pool, on the guest's node and its HA replica's, stays at or under this % used.", "type": "integer", "minimum": 1, "maximum": 100, "default": 80}
+      }
     },
     "snapshotRetention": {
       "description": "Number of snapshots to retain. Site-wide until P3 (then moves to Environment).",
       "type": "integer",
       "minimum": 0,
-      "default": 5
+      "default": 5,
+      "changeClass": "in-place"
     },
     "repositories": {
       "description": "Registry of checked-out repositories whose module catalogs back NAME-based module resolution (resolve-module.sh, ADR-004). This is NOT the only way a module is located and NOT required for a module to work: install-module.sh takes the current directory first, recording the module's source dir as .location in its deployed config, so a module installed from an unregistered path resolves through .location alone (issue #460).",
@@ -389,13 +428,16 @@
             }
           }
         }
-      }
+      },
+      "changeClass": "manual",
+      "changeNote": "Has verbs of its own: site-manager repository add, modify, delete."
     },
     "requireSigned": {
       "description": "Refuse to update a repository on the staging or production channel unless it signs its releases (ADR-033 D9). false (the default): a repository that lists no signing keys in .tappaas/allowed_signers still updates, and the health check reports it as unsigned. A repository that does list keys is always verified, whatever this says.",
       "type": "boolean",
       "default": false,
-      "note": "Turn it on when the site must show that everything it runs comes from signed releases. Unstable branches are never signed and are not affected."
+      "note": "Turn it on when the site must show that everything it runs comes from signed releases. Unstable branches are never signed and are not affected.",
+      "changeClass": "in-place"
     },
     "organizations": {
       "description": "Paths to organization JSON files (config/identities/organizations/*.json).",
@@ -403,7 +445,9 @@
       "items": {
         "type": "string"
       },
-      "default": []
+      "default": [],
+      "changeClass": "manual",
+      "changeNote": "Each organization is identity-manager's."
     }
   }
 }

@@ -33,6 +33,33 @@ export function defaultSchemaDir(): string {
   return process.env.SITE_SCHEMA_DIR ?? "";
 }
 
+// site-fields.json itself, for what `site modify` reads from it (a field's
+// change class and why): --schema-dir, $SITE_SCHEMA_DIR, the schemas/ beside
+// the source tree this runs from, the installed checkout's. null: none found.
+export function siteSchema(schemaDir: string): Record<string, unknown> | null {
+  const dirs = [schemaDir, process.env.SITE_SCHEMA_DIR ?? ""];
+  for (let d = __dirname, i = 0; i < 12; i++, d = join(d, "..")) dirs.push(join(d, "schemas"));
+  dirs.push("/home/tappaas/TAPPaaS/src/foundation/schemas");
+  for (const d of dirs) {
+    const f = d ? join(d, "site-fields.json") : "";
+    if (!f || !existsSync(f)) continue;
+    try {
+      return JSON.parse(readFileSync(f, "utf8")) as Record<string, unknown>;
+    } catch { /* the next */ }
+  }
+  return null;
+}
+
+// Why a top-level site field cannot change through `site modify` — its change
+// class is not in-place — in the schema's words; null when it may.
+export function refusedField(schema: Record<string, unknown> | null, field: string): string | null {
+  const props = (schema?.properties ?? {}) as Record<string, { changeClass?: string; changeNote?: string }>;
+  const p = props[field];
+  if (!p) return schema ? `site.json has no field '${field}'` : null;
+  if (!p.changeClass || p.changeClass === "in-place") return null;
+  return `${p.changeClass}: ${p.changeNote ?? "not changed by site modify"}`;
+}
+
 // Load and (loosely) normalise site.json into the Site model. Structural
 // validation against the schema is `validate` (validate-site.sh), kept separate
 // so read commands work even on a slightly-off document.
