@@ -13,7 +13,7 @@ import { OperateButton } from "../operate";
 import { Sel } from "../physical/layout";
 import { DeviceGraph } from "../physical/deviceview";
 import { RackCanvas } from "../physical/rack";
-import { AddRoomButton, MountActions, rackAddSteps } from "../physical/rackops";
+import { AddRoomButton, MountActions, PhysicalHowTo, RecordDeviceButton, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
 import { Health, RacksView, SiteRead, StorageInventory, Topology } from "../types";
 import { StateLegend } from "../physical/state";
@@ -144,6 +144,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
               <>
                 <AddRoomButton />
                 <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} />
+                <RecordDeviceButton />
               </>
             ) : null}
           </>
@@ -178,7 +179,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
         <>
         {place ? <h2 className="phys-place">{place}</h2> : null}
         <div className="physical physical-rack">
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : operator ? <PhysicalHowTo /> : null}
           <div className="canvas">
             {t && racks && racks.racks.length ? (
               <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
@@ -190,7 +191,8 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
                   <span className="toolbar">
                     <AddRoomButton />
                     <OperateButton label="Add a rack…" kind="primary" title="Add a rack" steps={rackAddSteps} />
-                      </span>
+                    <RecordDeviceButton />
+                  </span>
                 ) : null}
               </div>
             ) : null}

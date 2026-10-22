@@ -16,7 +16,7 @@ import { sitePlace } from "./views";
 import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
-import { MountActions, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackModifySteps } from "./rackops";
+import { MountActions, RecordDeviceButton, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackModifySteps } from "./rackops";
 import { publicAddress } from "../zonegraph";
 import { StorageNote } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
@@ -446,6 +446,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         <>
           <OperateButton label="Change…" title={`Rack ${r.name}`} steps={() => rackModifySteps(r.name)} />
           {r.mounts.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete rack ${r.name}`} steps={() => rackDeleteSteps(r.name)} /> : null}
+          <RecordDeviceButton />
         </>
       );
       open = <p className="muted small">A rack is a record of config/racks.json only.</p>;
@@ -550,6 +551,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         <>
           <OperateButton label="Change…" title={`Room ${room.name}`} steps={[rmStep("room modify", `rack-manager room modify ${room.name}`, { note: "Its display name or description (its building is the site's); --check previews." })]} />
           {room.racks.length === 0 && room.loose.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete room ${room.name}`} steps={[rmStep("room delete", `rack-manager room delete ${room.name}`)]} /> : null}
+          <RecordDeviceButton />
         </>
       ) : /^[a-z][a-z0-9-]{0,62}$/.test(room.name) ? (
         <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `rack-manager room add ${room.name}`)]} />
@@ -589,6 +591,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           />
           {rec?.kind === "patch-panel" ? (
             <>
+              <p className="small howto-line">To use it: mount it in a rack, then select a wire and Attach to patch panel….</p>
               <h3>Ports</h3>
               <table className="table compact small">
                 <thead>

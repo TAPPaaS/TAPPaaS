@@ -276,6 +276,9 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.topology.get()));
       case "storage":
         return sendJson(res, 200, envelope(await r.storage.get()));
+      case "faceplates":
+        // The faceplate catalog's keys and kinds (rack-manager faceplates list): a form's suggestions.
+        return sendJson(res, 200, envelope(await r.faceplates.get()));
       case "security":
         return sendJson(res, 200, envelope(await r.security.get()));
       case "activity": {

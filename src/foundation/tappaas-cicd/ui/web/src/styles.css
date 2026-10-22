@@ -508,3 +508,6 @@ button.mod-tile:hover { background: var(--info-bg); }
 .kv-inline { display: inline-flex; flex-wrap: wrap; gap: 2px 12px; }
 .phys-place { font-size: 0.95rem; margin: 2px 0 8px; color: #334155; }
 .ov-place { font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px; }
+.howto ol { padding-left: 18px; margin: 6px 0 10px; }
+.howto li { margin-bottom: 6px; }
+.howto-line { background: var(--info-bg); border-radius: 6px; padding: 6px 8px; }
