@@ -456,3 +456,4 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .port.port-st-warn { background: var(--warn-bg); }
 .port.port-st-fail { background: var(--fail-bg); }
 .ov-legend { margin-top: 10px; font-size: 12.5px; }
+.site-records { margin-top: 14px; }

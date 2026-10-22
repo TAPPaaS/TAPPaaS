@@ -40,10 +40,12 @@ jumps. **Site** — the site as built, in four tabs, each at its own address: Ov
 (`/site/storage`); the earlier addresses (`/physical`, `/site/physical/<view>`) redirect to them.
 **Overview** sums the other three: the site in one line (nodes, switches, APs, racks, pools,
 disks, the public address) with Add node and Register joined nodes (`site-manager node
-reconcile`) beside it, each rack as a thumbnail of its units (a click opens the Physical view),
+reconcile`) beside it, Update now (`site update`, its plan first) at the top, each rack as a thumbnail of its units (a click opens the Physical view),
 the Device view as counts with the findings on devices, each node's
 pools with a fill bar coloured by state and its disks with a problem, and every finding of the
-topology and the storage inventory, each linked to the view and the object it is on.
+topology and the storage inventory, each linked to the view and the object it is on. Below
+that, the site's records: `site.json` (Modify), the update schedule, the release train's preview
+and status, and the repositories (sync, hold, release, stashes, reconcile).
 **Physical** (`/site/physical`): each rack of rack-manager's
 `config/racks.json` as a frame with its units numbered as the rack numbers them, each mount as its
 faceplate at its units and width with its ports' live state (link, LAG), the cables port to port in
