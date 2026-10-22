@@ -222,6 +222,27 @@ bonds made through the API differ from ones made in the console.
   10 PoE" crs-uplink --ports 11,12`, preview, apply.
 - Phase 3 (failure tests) after the aggregate.
 
+## Phase 3 results (2026-10-22)
+
+Pings every 0.2 s from tappaas2 to tappaas1, the firewall, the mothership and both CRS;
+HA and corosync every 5 s. No test fenced, lost quorum or stopped a guest.
+
+| Test | Pause on failure | Pause on return | After |
+|---|---|---|---|
+| crs-a (primary) power, before up-delay | 4.2 s | 5 s | 0 % loss |
+| crs-b (secondary) power, before up-delay | 0.2 s | 2.8 s | **1–4 % loss until the MLAG session was restarted** |
+| uplink crs-a sfp14 ↔ USW 11 pulled 20 s | 1.2 s | 2.4 s | — |
+| crs-b power, with up-delay 20 s | none | 3 s (guests on tappaas1) | 0 % loss |
+| crs-a power, with up-delay 20 s | 4.2 s | 2.4 s | 0 % loss |
+
+- **Boot-time desync:** a switch that boots brings its MLAG legs up while the peers
+  sync, and the pair then floods its own MLAG bonds now and then. `up-delay=20s` on
+  the MLAG bonds (now the controller's default, Community `73b131b`) fixes it.
+- **Losing the primary costs ~4 s**: crs-b concluding crs-a is gone (heartbeat 5 s).
+  Worth a retest with `mlag-heartbeat=1s` on both (the loss once blamed on 1 s was the
+  boot-time desync).
+- Still to test: the peer link pulled (split-brain risk — with the operator watching).
+
 ## Phase 3 — failure tests
 
 Continuous pings from the mothership to tappaas1, to a guest on tappaas1 and to the
