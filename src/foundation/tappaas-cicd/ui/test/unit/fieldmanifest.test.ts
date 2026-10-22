@@ -198,6 +198,8 @@ const radd = buildManifest({ kind: "rack", name: null, mode: "add", defs: flatte
 check(radd.nameField !== null && !field(radd, "name"), "rack add: the name is the verb's positional, not a field");
 check(field(radd, "units")?.arg === "--units" && field(radd, "units")?.default === "42" && field(radd, "displayName")?.arg === "--display-name", "rack add: each field through its flag, with the schema's default");
 check(field(radd, "numbering")?.choices?.join(",") === "bottom-up,top-down", "rack add: numbering is a choice");
+const room = buildManifest({ kind: "room", name: null, mode: "add", defs: flattenSchema(rdefs.room), record: null, refs, vars: {} });
+check(room.nameField !== null && !field(room, "name") && field(room, "displayName")?.arg === "--display-name" && field(room, "description")?.arg === "--description" && room.fields.length === 2, "room add: the name is the positional; display name and description, and no building (the site's)");
 const rmod = buildManifest({ kind: "rack", name: "rack1", mode: "modify", defs: flattenSchema(rdefs.rack), record: { units: 42, width: "19in", numbering: "bottom-up" }, refs, vars: {} });
 check(field(rmod, "units")?.arg === "--set" && field(rmod, "units")?.class === "in-place" && field(rmod, "units")?.value === 42, "rack modify: --set within the field's class, the value shown");
 const mnt = buildManifest({ kind: "mount", name: "tappaas2", mode: "add", defs: flattenSchema(rdefs.mount), record: null, defaults: { faceplate: "generic/server-2u, the catalog's suggestion" }, refs, vars: {} });

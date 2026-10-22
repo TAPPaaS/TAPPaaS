@@ -51,10 +51,10 @@ check(Object.keys(bflags).length === 3 && JSON.stringify(btable) === JSON.string
 check(Object.keys(btable).every((f) => bfields.includes(f)), "…each a field of the module's backup block");
 check(bfields.includes("schedule") && btable.schedule === undefined, "…schedule is in the block but backup-manager modify cannot set it: read-only in the form");
 
-// ── rack-manager rack add / mount add: their usage lines' options ───────
+// ── rack-manager rack add / mount add / room add: their usage lines' options
 const rm = readFileSync(join(MANAGERS, "rack-manager", "src", "main.ts"), "utf8");
 const racks = schema("racks-fields.json").$defs as Record<string, unknown>;
-for (const kind of ["rack", "mount"] as FieldKind[]) {
+for (const kind of ["rack", "mount", "room"] as FieldKind[]) {
   const usage = new RegExp(`"(${kind} add [^"]*)"`).exec(rm)?.[1] ?? "";
   const opts = [...usage.matchAll(/(--[a-z-]+)/g)].map((m) => m[1]).filter((f) => !["--check", "--topology"].includes(f));
   const table = FLAGS[kind]?.add ?? {};

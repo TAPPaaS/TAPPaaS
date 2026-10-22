@@ -26,10 +26,11 @@ import { BackupRow, BackupRunsDoc, EnvironmentRow, HealthDoc, ModuleList, Storag
 // The racks the topology carries (network-manager topology .racks), the parts read here.
 interface RacksRead {
   racks: {
-    name: string; displayName: string | null; units: number; width: string; numbering: string; building: string | null; room: string | null; description: string | null;
+    name: string; displayName: string | null; units: number; width: string; numbering: string; room: string | null; description: string | null;
     mounts: { device: string; rack: string; u: number; height: number; width: string; slot: number; face: string; faceplate: string | null; suggested: boolean; label: string | null; description: string | null }[];
   }[];
   unplaced: { device: string; suggestion: string | null }[];
+  rooms?: { name: string; displayName: string | null; description: string | null; recorded: boolean }[];
 }
 
 // Every device the topology names: what a mount may name.
@@ -444,7 +445,8 @@ export class Reads {
         break;
       }
       case "rack":
-      case "mount": {
+      case "mount":
+      case "room": {
         // racks-fields.json's $defs; the record as the topology resolves it.
         const $defs = (this.schemaFile("racks-fields.json").$defs ?? {}) as Record<string, unknown>;
         defs = flattenSchema($defs[kind]);
@@ -452,12 +454,12 @@ export class Reads {
         if (kind === "rack" && name) {
           const r = (view?.racks ?? []).find((x) => x.name === name);
           if (!r && mode === "modify") throw new Error(`no rack '${name}'`);
-          if (r) record = Object.fromEntries(Object.entries({ displayName: r.displayName, units: r.units, width: r.width, numbering: r.numbering, building: r.building, room: r.room, description: r.description }).filter(([, v]) => v !== null && v !== undefined));
+          if (r) record = Object.fromEntries(Object.entries({ displayName: r.displayName, units: r.units, width: r.width, numbering: r.numbering, room: r.room, description: r.description }).filter(([, v]) => v !== null && v !== undefined));
         }
-        if (kind === "rack" && mode === "add") {
-          // Where the site says it is: its building, when site.json has one.
-          const loc = ((((await this.site.get()).value?.site ?? {}) as Record<string, unknown>).location ?? {}) as Record<string, unknown>;
-          if (typeof loc.building === "string" && loc.building) defaults = { building: `${loc.building}, the site's` };
+        if (kind === "room" && name) {
+          const r = (view?.rooms ?? []).find((x) => x.name === name && x.recorded);
+          if (!r && mode === "modify") throw new Error(`no room '${name}'`);
+          if (r) record = Object.fromEntries(Object.entries({ displayName: r.displayName, description: r.description }).filter(([, v]) => v !== null && v !== undefined));
         }
         if (kind === "mount" && name) {
           const m = (view?.racks ?? []).flatMap((r) => r.mounts).find((x) => x.device === name);

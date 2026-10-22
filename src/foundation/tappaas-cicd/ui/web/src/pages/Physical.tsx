@@ -13,7 +13,7 @@ import { OperateButton } from "../operate";
 import { Sel } from "../physical/layout";
 import { DeviceGraph } from "../physical/deviceview";
 import { RackCanvas } from "../physical/rack";
-import { MountActions, rackAddSteps } from "../physical/rackops";
+import { AddRoomButton, MountActions, PhysicalHowTo, RecordDeviceButton, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
 import { Health, RacksView, SiteRead, StorageInventory, Topology } from "../types";
 import { StateLegend } from "../physical/state";
@@ -140,7 +140,13 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
             <label className="toggle">
               <input type="checkbox" checked={showCables} onChange={(e) => setShowCables(e.target.checked)} /> cables
             </label>
-            {operator ? <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} /> : null}
+            {operator ? (
+              <>
+                <AddRoomButton />
+                <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} />
+                <RecordDeviceButton />
+              </>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -173,7 +179,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
         <>
         {place ? <h2 className="phys-place">{place}</h2> : null}
         <div className="physical physical-rack">
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : operator ? <PhysicalHowTo /> : null}
           <div className="canvas">
             {t && racks && racks.racks.length ? (
               <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
@@ -181,7 +187,13 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
               <div className="rack-empty">
                 <p>{racks ? "No rack is recorded yet." : "The topology carries no racks (rack-manager did not answer)."}</p>
                 <p className="muted small">A rack is recorded with rack-manager: its height, width and numbering; then each device is mounted at its units, with the faceplate the catalog has for its model.</p>
-                {operator && racks ? <OperateButton label="Add a rack…" kind="primary" title="Add a rack" steps={rackAddSteps} /> : null}
+                {operator && racks ? (
+                  <span className="toolbar">
+                    <AddRoomButton />
+                    <OperateButton label="Add a rack…" kind="primary" title="Add a rack" steps={rackAddSteps} />
+                    <RecordDeviceButton />
+                  </span>
+                ) : null}
               </div>
             ) : null}
           </div>

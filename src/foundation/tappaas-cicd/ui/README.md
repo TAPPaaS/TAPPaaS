@@ -53,7 +53,9 @@ faceplate at its units and width with its ports' live state (link, LAG), the cab
 underlined (a patch panel's rear-cabled ports overlined), the cables port to port in
 the zone colours below with a label on hover — a link through a patch panel as its two wires —, a
 device only a cable record places beside the rack, and an Unplaced tray of the devices mounted
-nowhere, each with Mount… and Place in a room…; a click on a cable opens its link, whose panel
+nowhere, each with Mount… and Place in a room…; the header's Add a room… (`rack-manager room add`), Add a
+rack… and Record a device… (`rack-manager device add`: kind, a catalog model or free text, ports), the last
+also in a rack's and a room's card, and a How to card while nothing is selected; a click on a cable opens its link, whose panel
 lists the wires and offers Attach to patch panel… (`rack-manager cable split`, its `--check` the
 preview, the free panel ports to choose from) or Remove patch panel (`cable join`); a click on a plate or a port
 opens the side card to the left of the racks, with Mount…, Move to… and Unmount… besides the

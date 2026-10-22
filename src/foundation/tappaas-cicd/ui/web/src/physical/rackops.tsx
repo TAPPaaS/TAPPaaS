@@ -3,6 +3,7 @@
 // cable nothing can see recorded or removed. Each is a Step (operate.tsx):
 // Change → Preview (--check) → Apply. Nothing here touches a device.
 
+import { useRead } from "../api";
 import { fieldsStep } from "../fields";
 import { OperateButton, Step } from "../operate";
 import { RackInfo, RacksView } from "../types";
@@ -81,6 +82,31 @@ export function unmountSteps(device: string): Step[] {
   return [{ title: `rack-manager mount remove '${device}'`, bin: RM, verb: "mount remove", fixed: [device], note: "The device leaves the rack drawing and goes to Unplaced; nothing else changes. A passive device's recorded cables go with it." }];
 }
 
+// Add a room: its name, display name and description (racks-fields' room);
+// its building is the site's.
+export function roomAddSteps(): Step[] {
+  return [fieldsStep({ title: "rack-manager room add", bin: RM, verb: "room add", kind: "room", name: null, mode: "add", note: "A room in config/racks.json: where racks stand and devices stand loose. Its building is the site's (site.json location). Racks and devices are placed in it afterwards." })];
+}
+
+export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "other"];
+
+// Record a device the topology cannot see: its kind, its model from the
+// faceplate catalog (or typed), its ports (a count, or names), how it is shown.
+export function deviceAddSteps(models: string[]): Step[] {
+  return [
+    {
+      title: "rack-manager device add <name>",
+      bin: RM,
+      verb: "device add",
+      only: ["--kind", "--model", "--ports", "--port", "--display-name", "--description"],
+      choices: { "--kind": RECORDED_KINDS },
+      suggest: { "--model": models },
+      placeholders: { "--ports": "a count: 24", "--port": "a port's name: WAN, LAN 1, …" },
+      note: "A device nothing can see — a modem, an ONT, a UPS, a patch panel — recorded with its kind and its ports (from its model, a count, or by name). It then stands unplaced: Mount… it in a rack or Place it in a room. A patch panel: mount it in a rack, then select a wire and Attach to patch panel…. --check previews.",
+    },
+  ];
+}
+
 export function rackAddSteps(): Step[] {
   return [fieldsStep({ title: "rack-manager rack add", bin: RM, verb: "rack add", kind: "rack", name: null, mode: "add", note: "A rack in config/racks.json: its height in units, its width and how its units are numbered. Devices are mounted in it afterwards." })];
 }
@@ -136,5 +162,36 @@ export function MountActions({ device, v }: { device: string; v: RacksView | nul
       <OperateButton label="Change mount…" title={`${device}'s mount`} steps={() => mountModifySteps(device)} hint="Its plate, label and place" />
       <OperateButton label="Unmount…" kind="danger" title={`Unmount ${device}`} steps={() => unmountSteps(device)} />
     </>
+  );
+}
+
+export function AddRoomButton({ kind }: { kind?: "primary" }) {
+  return <OperateButton label="Add a room…" kind={kind} title="Add a room" steps={roomAddSteps} />;
+}
+
+// Record a device…: the catalog's models as the model's suggestions.
+export function RecordDeviceButton() {
+  const fp = useRead<{ key: string }[]>("faceplates", 600_000);
+  const models = (fp.env?.data ?? []).map((f) => f.key);
+  return <OperateButton label="Record a device…" title="Record a device the topology cannot see" steps={() => deviceAddSteps(models)} />;
+}
+
+// The Physical view with nothing selected: what to do, in order.
+export function PhysicalHowTo() {
+  return (
+    <aside className="sidepanel howto">
+      <header>
+        <h2>How to</h2>
+      </header>
+      <ol className="small">
+        <li><b>Add a room</b> the hardware stands in (its building is the site's).</li>
+        <li><b>Add a rack</b> to the room.</li>
+        <li><b>Mount</b> the devices the topology sees — nodes, switches, access points — from Unplaced.</li>
+        <li><b>Record a device</b> it cannot see — a modem, an ONT, a UPS, a patch panel — then mount it or place it in a room.</li>
+        <li><b>Record a cable</b> nothing sees: select a port, then Record a cable….</li>
+        <li><b>Split a wire at a patch panel</b>: select the wire, then Attach to patch panel….</li>
+      </ol>
+      <p className="muted small">A click on a room, a rack, a device or a wire opens its card here.</p>
+    </aside>
   );
 }
