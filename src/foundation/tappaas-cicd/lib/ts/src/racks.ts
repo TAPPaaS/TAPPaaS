@@ -74,6 +74,10 @@ export interface Cable {
   to: CableEnd;
   kind: CableKind;
   label?: string;
+  // A segment of a link split at a patch panel (cable split): what the link
+  // was before — one the topology sees, or a recorded cable (cable join
+  // records it again).
+  origin?: "seen" | "recorded";
 }
 // A device nothing can see, recorded by its name: its kind, its plate in the
 // catalog (model) or its ports, and how it is shown.
@@ -586,6 +590,10 @@ export interface CableView {
   lag: string | null;
   up: boolean | null;
   label: string | null;
+  // A link split at patch panels (cable split): the wires it is made of, end
+  // to end, and the panel ports it runs through.
+  segments?: { from: { device: string; port: string; side?: Side }; to: { device: string; port: string; side?: Side } }[];
+  via?: { device: string; port: string }[];
 }
 export interface UnplacedView {
   device: string;
@@ -759,7 +767,64 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
     }
   }
   for (const r of rooms) r.loose.sort((a, b) => a.device.localeCompare(b.device));
-  return { racks, rooms, unplaced, cables, outside, findings };
+  return { racks, rooms, unplaced, cables: chainSegments(doc, cables), outside, findings };
+}
+
+// The segments of links split at patch panels, each chain from a device port
+// through the panels' front and rear to the far device port, become one cable
+// with its segments: a link the topology sees keeps its role and live state,
+// the segments only say which wires it is. A chain that stops at a panel port
+// (one side cabled) stays as its segments.
+export function chainSegments(doc: RacksDoc, cables: CableView[]): CableView[] {
+  const panel = (d: string) => isPanel(doc, d);
+  const same = (a: { device: string; port: string }, b: { device: string; port: string }) => a.device === b.device && a.port === b.port;
+  const segs = cables.filter((c) => c.source === "recorded" && (panel(c.from.device) || panel(c.to.device)));
+  const drop = new Set<CableView>();
+  const merged: CableView[] = [];
+  for (const s0 of segs) {
+    if (drop.has(s0)) continue;
+    const start = !panel(s0.from.device) ? s0.from : !panel(s0.to.device) ? s0.to : null;
+    if (!start) continue; // a middle segment: reached from an end
+    const chain: CableView[] = [];
+    const via: { device: string; port: string }[] = [];
+    let cur = s0;
+    let from = start;
+    let end: CableView["to"];
+    for (;;) {
+      chain.push(cur);
+      const next = same(cur.from, from) && (cur.from.side ?? "") === (from.side ?? "") ? cur.to : cur.from;
+      if (!panel(next.device)) {
+        end = next;
+        break;
+      }
+      via.push({ device: next.device, port: next.port });
+      const other = (next.side ?? "front") === "front" ? "rear" : "front";
+      const nx = segs.find((c) => !chain.includes(c) && [c.from, c.to].some((e) => same(e, next) && (e.side ?? "front") === other));
+      if (!nx) {
+        end = next;
+        break;
+      }
+      from = [nx.from, nx.to].find((e) => same(e, next) && (e.side ?? "front") === other)!;
+      cur = nx;
+    }
+    if (chain.length < 2 || panel(end.device)) continue;
+    const base = cables.find((c) => c.source === "topology" && ((same(c.from, start) && same(c.to, end)) || (same(c.to, start) && same(c.from, end))));
+    for (const c of chain) drop.add(c);
+    if (base) drop.add(base);
+    merged.push({
+      from: base ? base.from : { device: start.device, port: start.port },
+      to: base ? base.to : { device: end.device, port: end.port },
+      kind: base?.kind ?? chain[0].kind,
+      source: base ? "topology" : "recorded",
+      zones: base?.zones ?? chain.find((c) => c.zones.length)?.zones ?? [],
+      lag: base?.lag ?? null,
+      up: base?.up ?? chain.map((c) => c.up).find((u) => u !== null) ?? null,
+      label: chain[0].label,
+      segments: chain.map((c) => ({ from: c.from, to: c.to })),
+      via,
+    });
+  }
+  return [...cables.filter((c) => !drop.has(c)), ...merged];
 }
 
 function swPort(t: TopoLike, e: CableEnd) {

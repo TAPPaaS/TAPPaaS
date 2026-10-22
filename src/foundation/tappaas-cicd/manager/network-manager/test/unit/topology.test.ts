@@ -375,6 +375,10 @@ check(t.racks === null && !t.sources.some((s) => s.name === "rack-manager export
   const modem = rec.devices.find((y) => y.name === "ISP modem");
   check(modem?.kind === "modem" && modem.recorded === true && modem.ports?.join() === "WAN,LAN 1" && modem.displayName === "Provider modem", "a recorded device: in devices, with its kind, ports and name");
   check(rec.racks!.unplaced.some((u) => u.device === "ISP modem" && u.recorded === "modem"), "…and mounted nowhere, until it is mounted");
+  // A link split at a patch panel: one link still, with its two wires.
+  const split = buildTopology({ ...hrossen(), racks: { doc: { ...doc, devices: { patch1: { kind: "patch-panel" as const, ports: ["1", "2"] } }, cables: [{ from: { device: SW, port: "3" }, to: { device: "patch1", port: "1", side: "front" as const }, kind: "patch" as const, origin: "seen" as const }, { from: { device: "patch1", port: "1", side: "rear" as const }, to: { device: "tappaas3", port: "eno1" }, kind: "patch" as const, origin: "seen" as const }] }, catalog } });
+  const thru = split.racks!.cables.filter((c) => [c.from.device, c.to.device].includes("tappaas3") && [c.from.port, c.to.port].includes("eno1"));
+  check(thru.length === 1 && thru[0].source === "topology" && thru[0].segments?.length === 2 && thru[0].via?.[0].device === "patch1", "a split link: one cable with its segments and the panel port");
   const none = buildTopology({ ...hrossen(), racks: { doc: {}, catalog } });
   check(none.racks!.racks.length === 0 && !none.findings.some((f) => f.gate === "topology"), "an empty racks.json: no rack, no finding");
 }

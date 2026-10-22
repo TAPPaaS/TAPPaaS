@@ -399,3 +399,68 @@ export function deleteRoom(doc: RacksDoc, name: string): Result {
   if (racks.length || loose.length) return { refused: `room ${name} still holds ${[...racks.map((r) => `rack ${r}`), ...loose].join(", ")} — move them first` };
   return { doc: withDoc(doc, (d) => void delete d.rooms[name]), summary: `room ${name} deleted` };
 }
+
+// ── segments: a link split at a patch panel ───────────────────────────
+
+const sameEnd = (a: { device: string; port: string }, b: { device: string; port: string }) => a.device === b.device && a.port === b.port;
+
+// cable split <device:port> --via <panel:port> — the link on that port (a
+// recorded cable, or one the topology sees: seen) becomes two recorded
+// segments: the port to the panel port's front, the panel port's rear to the
+// far end.
+export function splitCable(doc: RacksDoc, end: CableEnd, via: CableEnd, seen: { from: CableEnd; to: CableEnd; kind: string }[] | null): Result {
+  const panel = devicesOf(doc)[via.device];
+  if (!panel || panel.kind !== "patch-panel") return { refused: `${via.device} is no recorded patch panel (device add ${via.device} --kind patch-panel --ports <n>)` };
+  if (!(panel.ports ?? []).includes(via.port) && !panel.model) return { refused: `patch panel ${via.device} has no port ${via.port}` };
+  const busy = cablesOf(doc).find((c) => [c.from, c.to].some((e) => sameEnd(e, via)));
+  if (busy) return { refused: `${via.device} port ${via.port} already carries ${endText(busy.from)} — ${endText(busy.to)}: choose a free panel port` };
+  if (isPanel(doc, end.device)) return { refused: "split a link at one of its device ends, not at a panel port" };
+  const rec = cablesOf(doc).find((c) => sameEnd(c.from, end) || sameEnd(c.to, end));
+  if (rec && (isPanel(doc, rec.from.device) || isPanel(doc, rec.to.device))) return { refused: `${end.device}:${end.port} already runs through a patch panel (cable join to undo it)` };
+  const s = rec ? null : seen?.find((c) => sameEnd(c.from, end) || sameEnd(c.to, end)) ?? null;
+  if (!rec && !s) return { refused: `no link on ${end.device}:${end.port}${seen === null ? " (the topology could not be read: give --topology)" : ""}` };
+  const link = (rec ?? s)!;
+  const far = sameEnd(link.from, end) ? link.to : link.from;
+  const kind = (rec ? rec.kind : CABLE_KINDS.includes(link.kind as CableKind) ? link.kind : "patch") as CableKind;
+  const origin = rec ? "recorded" : "seen";
+  const label = rec?.label;
+  const a: Cable = { from: { device: end.device, port: end.port }, to: { device: via.device, port: via.port, side: "front" }, kind, origin, ...(label ? { label } : {}) };
+  const b: Cable = { from: { device: via.device, port: via.port, side: "rear" }, to: { device: far.device, port: far.port }, kind, origin, ...(label ? { label } : {}) };
+  return {
+    doc: withDoc(doc, (d) => {
+      if (rec) d.cables = d.cables.filter((c) => !(sameEnd(c.from, rec.from) && sameEnd(c.to, rec.to)));
+      d.cables.push(a, b);
+    }),
+    summary: `${end.device}:${end.port} — ${far.device}:${far.port} now runs through ${via.device} port ${via.port} (front ← ${end.device}, rear → ${far.device})`,
+  };
+}
+
+// cable join <end> — undo a split: the two segments at the panel port the
+// end names (the panel's port, or a device end of one of its segments) are
+// one link again; a recorded cable when it was one, else the topology's.
+export function joinCable(doc: RacksDoc, end: CableEnd): Result {
+  const cables = cablesOf(doc);
+  let panelEnd: CableEnd | null = null;
+  if (isPanel(doc, end.device)) panelEnd = { device: end.device, port: end.port };
+  else {
+    const seg = cables.find((c) => (sameEnd(c.from, end) || sameEnd(c.to, end)) && (isPanel(doc, c.from.device) || isPanel(doc, c.to.device)));
+    if (seg) panelEnd = isPanel(doc, seg.from.device) ? seg.from : seg.to;
+  }
+  if (!panelEnd) return { refused: `no link through a patch panel on ${end.device}:${end.port}` };
+  const at = (side: string) => cables.find((c) => [c.from, c.to].some((e) => sameEnd(e, panelEnd!) && (e.side ?? "front") === side));
+  const f = at("front");
+  const r = at("rear");
+  if (!f || !r) return { refused: `${panelEnd.device} port ${panelEnd.port} carries only its ${f ? "front" : "rear"} cable: nothing to join (cable remove it instead)` };
+  const other = (c: Cable) => (sameEnd(c.from, panelEnd!) ? c.to : c.from);
+  const x = other(f);
+  const y = other(r);
+  const keep = f.origin === "recorded" || r.origin === "recorded" || isPanel(doc, x.device) || isPanel(doc, y.device) || (!f.origin && !r.origin);
+  const joined: Cable = { from: x, to: y, kind: f.kind, ...(f.label ? { label: f.label } : {}), ...(isPanel(doc, x.device) || isPanel(doc, y.device) ? { origin: f.origin ?? "recorded" } : {}) };
+  return {
+    doc: withDoc(doc, (d) => {
+      d.cables = d.cables.filter((c) => c !== d.cables.find((z) => z.from.device === f.from.device && z.from.port === f.from.port && z.to.device === f.to.device && z.to.port === f.to.port) && c !== d.cables.find((z) => z.from.device === r.from.device && z.from.port === r.from.port && z.to.device === r.to.device && z.to.port === r.to.port));
+      if (keep) d.cables.push(joined);
+    }),
+    summary: `${endText(x)} — ${endText(y)} no longer runs through ${panelEnd.device} port ${panelEnd.port}${keep ? " (recorded as one cable)" : " (the topology's link again)"}`,
+  };
+}

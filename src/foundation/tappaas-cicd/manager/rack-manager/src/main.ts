@@ -34,10 +34,11 @@ import {
   racksOf,
   renderPlate,
   resolvePlate,
+  seenCables,
   suggestFaceplate,
 } from "../../../lib/ts/src/racks";
 import { Store, loadCatalog, readDevices } from "./store";
-import { Result, addCable, addDevice, addMount, addRack, addRoom, deleteRack, deleteRoom, modifyDevice, modifyMount, modifyRack, modifyRoom, removeCable, removeDevice, removeMount } from "./verbs";
+import { Result, addCable, addDevice, addMount, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyMount, modifyRack, modifyRoom, removeCable, removeDevice, removeMount, splitCable } from "./verbs";
 
 const VERSION = "0.1.0";
 
@@ -146,6 +147,13 @@ export const HELP: HelpSpec = {
       object: { positional: "device" },
     },
     { usage: "device remove <device> [--check]", options: [CHECK], note: "(only once it is unmounted and no recorded cable names it)", object: { positional: "device" } },
+    {
+      usage: "cable split <device:port> --via <panel:port> [--topology <file>] [--check]",
+      options: [["--via P:N", "The patch panel port the link runs through: the device's port to its front, its rear to the far end."], TOPO, CHECK],
+      object: { positional: "device:port" },
+      note: "(the link on that port, seen or recorded, becomes two recorded segments)",
+    },
+    { usage: "cable join <device:port> [--check]", options: [CHECK], object: { positional: "device:port" }, note: "(undo a split: a panel port, or a device end of one of its segments)" },
     { usage: "faceplates list [--json]", options: [JSON_OUT] },
     {
       usage: "faceplates show <vendor/model> [--device <name>] [--topology <file>] [--json]",
@@ -155,6 +163,7 @@ export const HELP: HelpSpec = {
   ],
   notes: [
     "A mount names a device as `network-manager topology` does. A cable the switches or LLDP see is drawn from the topology and never recorded; record only what nothing can see — the ISP's modem, a patch panel, a PDU.",
+    "A device nothing can see is recorded (device add), then mounted in a rack or loose in a room (mount add --room). A link through a patch panel is split there (cable split): the topology still shows one link, the racks its two wires.",
   ],
 };
 
@@ -176,7 +185,7 @@ function opts(args: string[], name: string): string[] {
 const VALUED = [
   "--units", "--width", "--numbering", "--display-name", "--building", "--room", "--description", "--set", "--rack", "--u", "--height", "--slot",
   "--face", "--faceplate", "--label", "--topology", "--from", "--to", "--kind", "--from-faceplate", "--to-faceplate", "--device", "--unset",
-  "--model", "--ports", "--port", "--from-side", "--to-side", "--side",
+  "--model", "--ports", "--port", "--from-side", "--to-side", "--side", "--via",
 ];
 function positional(args: string[], skip: number): string[] {
   const out: string[] = [];
@@ -555,6 +564,20 @@ export function run(argv: string[]): number {
     }
     const catalog = readCatalog();
     return change(store, check, catalog, devicesFor(args), (d) => addCable(d, from, to, opt(args, "--kind") ?? "patch", opt(args, "--label")));
+  }
+  if (verb === "cable split") {
+    const [e] = positional(args, 2);
+    const end = parseEnd(e ?? "") ?? die("cable split <device>:<port> --via <panel>:<port>");
+    const via = parseEnd(opt(args, "--via") ?? die("--via <panel>:<port> is required")) ?? die("--via is <panel>:<port>");
+    const read = readDevices(opt(args, "--topology"));
+    if (read.error) note(`the topology could not be read (${read.error}): only a recorded cable can be split`);
+    const seen = read.topology ? seenCables(read.topology) : null;
+    return change(store, check, readCatalog(), read.devices, (d) => splitCable(d, end, via, seen));
+  }
+  if (verb === "cable join") {
+    const [e] = positional(args, 2);
+    const end = parseEnd(e ?? "") ?? die("cable join <device>:<port>");
+    return change(store, check, readCatalog(), undefined, (d) => joinCable(d, end));
   }
   if (verb === "cable remove") {
     const [e] = positional(args, 2);

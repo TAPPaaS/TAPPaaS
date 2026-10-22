@@ -86,6 +86,14 @@ RM faceplates show unifi/usw-pro-xg-10-poe 2>/dev/null | grep -q '\[11 Port 11·
 [[ "$(RM faceplates show generic/server-2u --device tappaas1 --topology "${TOPO}" --json 2>/dev/null | jq -r '[.rows[0][].id] | join(",")')" == "nic2,nic3,nic4" ]] \
     && ok "faceplates show --device: a generic plate filled from the node" || bad "faceplates show --device"
 RM rack delete rack1 >/dev/null 2>&1 && bad "rack delete: refused while it holds mounts" || ok "rack delete: refused while it holds mounts"
+RM device add patch1 --kind patch-panel --ports 24 --topology "${TOPO}" >/dev/null 2>&1 && RM mount add patch1 --rack rack1 --u 30 --topology "${TOPO}" >/dev/null 2>&1 && ok "a patch panel recorded and mounted" || bad "patch panel"
+RM cable split "${USW}:2" --via patch1:1 --topology "${TOPO}" --check >/dev/null 2>&1 && [[ "$(jq '[.cables[] | select(.origin)] | length' "${DOC}")" == "0" ]] && ok "cable split --check: a preview, nothing written" || bad "cable split --check"
+RM cable split "${USW}:2" --via patch1:1 --topology "${TOPO}" >/dev/null 2>&1 && ok "cable split: the seen link through the panel" || bad "cable split"
+[[ "$(jq -r '[.cables[] | select(.origin == "seen") | "\(.from.device):\(.from.port)>\(.to.device):\(.to.port):\(.to.side // .from.side)"] | join(" ")' "${DOC}")" == "${USW}:2>patch1:1:front patch1:1>tappaas2:enp97s0:rear" ]] \
+    && ok "cable split: two segments, front and rear" || bad "cable split: segments"
+RM cable split "${USW}:3" --via patch1:1 --topology "${TOPO}" >/dev/null 2>&1 && bad "cable split: a busy panel port refused" || ok "cable split: a busy panel port refused"
+RM cable join patch1:1 >/dev/null 2>&1 && [[ "$(jq '[.cables[] | select(.origin)] | length' "${DOC}")" == "0" ]] && ok "cable join: the link is the topology's again" || bad "cable join"
+RM mount remove patch1 >/dev/null 2>&1 && RM device remove patch1 >/dev/null 2>&1 || bad "patch panel removed"
 RM cable remove "ISP modem:LAN 1" >/dev/null 2>&1 && ok "cable remove" || bad "cable remove"
 RM device remove "ISP modem" >/dev/null 2>&1 && bad "device remove: refused while mounted" || ok "device remove: refused while mounted"
 RM mount remove "ISP modem" >/dev/null 2>&1 || bad "mount remove: the loose modem"

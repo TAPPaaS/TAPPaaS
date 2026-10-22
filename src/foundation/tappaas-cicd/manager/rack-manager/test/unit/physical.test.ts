@@ -7,8 +7,8 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { addCable, addDevice, addMount, addRack, addRoom, deleteRack, deleteRoom, modifyDevice, modifyMount, modifyRack, removeDevice } from "../../src/verbs";
-import { Faceplate, RacksDoc, TopoLike, checkRacks, recordedPlate, resolveRacks, siteDevices } from "../../../../lib/ts/src/racks";
+import { addCable, addDevice, addMount, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyMount, modifyRack, removeDevice, splitCable } from "../../src/verbs";
+import { Faceplate, RacksDoc, TopoLike, checkRacks, recordedPlate, resolveRacks, seenCables, siteDevices } from "../../../../lib/ts/src/racks";
 
 let passed = 0;
 let failed = 0;
@@ -112,6 +112,28 @@ check(errs(both).length === 0, "a panel port takes one cable on its front and on
 check(refused(addCable(both, { device: "patch1", port: "1" }, { device: "tappaas3", port: "eno1" }, "patch"), "already uses"), "cable add: a side already taken is refused");
 check(errs({ ...both, cables: [...both.cables!, { from: { device: "patch1", port: "1", side: "rear" }, to: { device: "tappaas3", port: "eno1" }, kind: "patch" }] }).some((m) => m.includes("patch1 port 1 (rear) already carries cable 2")), "validate refuses a panel port used twice on one side");
 check(errs({ ...pp, cables: [{ from: { device: USW, port: "3", side: "rear" }, to: { device: "patch1", port: "4" }, kind: "patch" }] }).some((m) => m.includes("is no patch panel")), "a side on a port that is no panel's is refused");
+
+console.log("— cable segments");
+const wires = seenCables(t);
+const sp = doc(splitCable(pp, { device: USW, port: "2" }, { device: "patch1", port: "1" }, wires));
+check(sp.cables!.length === 2 && sp.cables!.every((c) => c.origin === "seen") && sp.cables![0].to.side === "front" && sp.cables![1].from.side === "rear" && sp.cables![1].to.device === "tappaas2", "cable split: the seen link USW:2 — tappaas2 becomes two segments, front and rear");
+check(errs(sp).length === 0, "the split document is valid");
+const sv = resolveRacks(sp, catalog, t).cables;
+const one = sv.filter((c) => [c.from, c.to].some((e) => e.device === "tappaas2"));
+check(one.length === 1 && one[0].source === "topology" && one[0].segments?.length === 2 && one[0].via?.[0].port === "1" && one[0].kind === "lan" && one[0].up === true, "the topology still has one link, its live state kept, its two wires and the panel port listed");
+check(refused(splitCable(sp, { device: "tappaas2", port: "enp97s0" }, { device: "patch1", port: "2" }, wires), "already runs through"), "a link already through a panel is refused");
+check(refused(splitCable(sp, { device: USW, port: "3" }, { device: "patch1", port: "1" }, wires), "choose a free panel port"), "a panel port in use is refused");
+check(refused(splitCable(sp, { device: USW, port: "3" }, { device: USW, port: "4" }, wires), "no recorded patch panel"), "--via must be a recorded patch panel");
+check(refused(splitCable(sp, { device: USW, port: "8" }, { device: "patch1", port: "5" }, wires), "no link on"), "a port with no link is refused");
+const jn = doc(joinCable(sp, { device: "patch1", port: "1" }));
+check((jn.cables ?? []).length === 0 && resolveRacks(jn, catalog, t).cables.filter((c) => c.to.device === "tappaas2" && !c.segments).length === 1, "cable join: the segments go, the topology's link is back as it was");
+const isp = doc(addCable(doc(addDevice(pp, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, seen)), { device: USW, port: "5" }, { device: "ISP modem", port: "LAN 1" }, "uplink", "ISP hand-off"));
+const ispSplit = doc(splitCable(isp, { device: "ISP modem", port: "LAN 1" }, { device: "patch1", port: "3" }, wires));
+check(ispSplit.cables!.length === 2 && ispSplit.cables!.every((c) => c.origin === "recorded" && c.label === "ISP hand-off"), "a recorded cable splits too, its kind and label on both segments");
+check(resolveRacks(ispSplit, catalog, t).cables.some((c) => c.source === "recorded" && c.segments?.length === 2 && [c.from.device, c.to.device].sort().join() === `ISP modem,${USW}`), "…one recorded link with its two wires");
+const rejoined = doc(joinCable(ispSplit, { device: USW, port: "5" }));
+check(rejoined.cables!.length === 1 && rejoined.cables![0].label === "ISP hand-off" && [rejoined.cables![0].from.device, rejoined.cables![0].to.device].sort().join() === `ISP modem,${USW}` && !rejoined.cables![0].origin, "cable join from a device end: the recorded cable again");
+check(refused(joinCable(isp, { device: USW, port: "5" }), "no link through a patch panel"), "join on a link that runs through no panel is refused");
 
 console.log(`\nrack-manager physical: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
