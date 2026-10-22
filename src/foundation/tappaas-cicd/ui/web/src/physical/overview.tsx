@@ -116,7 +116,7 @@ function RackThumb({ r }: { r: RackInfo }) {
   );
 }
 
-export function PhysicalOverview({ t, inv, notes, storageError }: { t: Topology | null; inv: StorageInventory | null; notes: Map<string, StorageNote[]>; storageError: string | null }) {
+export function PhysicalOverview({ t, inv, notes, storageError, aside }: { t: Topology | null; inv: StorageInventory | null; notes: Map<string, StorageNote[]>; storageError: string | null; aside?: ReactNode }) {
   const racks = t?.racks?.racks ?? [];
   const disks = inv ? inv.nodes.reduce((s, n) => s + n.boot.length + n.otherDisks.length + n.pools.reduce((a, p) => a + p.vdevs.reduce((b, v) => b + v.disks.length, 0), 0), 0) : null;
   const pools = inv ? inv.nodes.reduce((s, n) => s + n.pools.length, 0) : null;
@@ -136,7 +136,7 @@ export function PhysicalOverview({ t, inv, notes, storageError }: { t: Topology 
         <Stat n={disks ?? "…"} label="disks" />
         <span className="ov-stat">{wan || "public address not recorded"}</span>
         <span className="spacer" />
-        <StateLegend />
+        {aside}
       </div>
       <div className="ov-grid">
         <section className="section">
@@ -216,6 +216,7 @@ export function PhysicalOverview({ t, inv, notes, storageError }: { t: Topology 
           )}
         </section>
       </div>
+      <div className="ov-legend"><StateLegend /></div>
       <section className="section">
         <header className="section-head">
           <h2>Findings</h2>

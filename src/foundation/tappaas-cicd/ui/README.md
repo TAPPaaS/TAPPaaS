@@ -36,8 +36,8 @@ day 2: add a node, an environment, a stack; enrol a device (the wg-quick file to
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
 jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects there) has four views,
-each at its own address: Overview, Rack, Device and Storage (`/site/physical/<view>`).
-**Overview** (`/site/physical`, the default) sums the other three: the site in one line (nodes,
+each at its own address: Rack, Device and Storage (`/site/physical/<view>`); their Overview is
+the Site page's Overview (`/site/overview`). **Overview** sums the other three: the site in one line (nodes,
 switches, APs, racks, pools, disks, the public address), each rack as a thumbnail of its units (a
 click opens the Rack view), the Device view as counts with the findings on devices, each node's
 pools with a fill bar coloured by state and its disks with a problem, and every finding of the
@@ -86,9 +86,9 @@ groups, users and roles as a graph of their relations (a group's owning organiza
 groups, the roles of users and groups, an organization's owner and parent; `GET /api/v1/identity/records`:
 `identity-manager <kind> show` for each), the list beside it, a click for the record and its verbs; a change is staged with `--no-reconcile` and pushed by `identity-manager
 reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
-modify, purge (typed). **Site** — two tabs. Overview: `site.json`, the update schedule, Update now (`site update`,
-its plan first), the release train, nodes and their uplinks, repositories (sync, hold, release,
-stashes). Physical: the view above. Add node is a guided sequence in Setup's step rows: declare
+modify, purge (typed). **Site** — two tabs. Overview (`/site/overview`, also `/site`): the physical overview below, with
+Add node and Register joined nodes (`site-manager node reconcile`) beside the site line. Physical:
+the views above. Add node is a guided sequence in Setup's step rows: declare
 the node (`site-manager node add tappaasN --pxe` with its PXE port's MAC, boot disk, WAN and lan
 ports, pools), boot it from the network by hand, the install and join watched live (`GET
 /api/v1/nodes/<name>/progress`: the provisioning registration, `node-provisioner status`, cluster

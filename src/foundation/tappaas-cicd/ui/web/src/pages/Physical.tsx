@@ -6,7 +6,7 @@
 // pools and disks. Click an object for its side card.
 
 import { Background, Controls, ReactFlow } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { zoneColor } from "../colors";
 import { OperateButton } from "../operate";
@@ -82,10 +82,10 @@ function Unplaced({ v, pick }: { v: RacksView; pick: (s: Sel) => void }) {
   );
 }
 
-// Standalone (the owner's route) or as the Site page's Physical tab (embedded:
-// the Site page has the heading). view: the one the address names, else the
-// Overview.
-export function Physical({ embedded, view }: { embedded?: boolean; view?: PhysicalView }) {
+// Standalone (the owner's route) or on the Site page (embedded: the Site page
+// has the heading, and its Overview tab is this Overview). view: the one the
+// address names, else the Overview.
+export function Physical({ embedded, view, aside }: { embedded?: boolean; view?: PhysicalView; aside?: ReactNode }) {
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
   const [sel, setSel] = useState<Sel | null>(selFromUrl);
@@ -124,7 +124,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
       <div className="page-head">
         {embedded ? null : <h1>Physical</h1>}
         <div className="seg" role="tablist" aria-label="view">
-          {PHYSICAL_TABS.map((x) => (
+          {PHYSICAL_TABS.filter((x) => !embedded || x !== "overview").map((x) => (
             <button key={x} role="tab" aria-selected={shown === x} className={shown === x ? "seg-on" : ""} onClick={() => navigate(`/site/physical/${x}`)}>
               {TAB_NAME[x]}
             </button>
@@ -159,7 +159,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
         </div>
       ) : null}
       {shown === "overview" ? (
-        <PhysicalOverview t={t} inv={inv} notes={storage?.notes ?? new Map()} storageError={store.failure ?? store.env?.error ?? null} />
+        <PhysicalOverview aside={aside} t={t} inv={inv} notes={storage?.notes ?? new Map()} storageError={store.failure ?? store.env?.error ?? null} />
       ) : shown === "storage" ? (
         <>
           <ReadState env={store.env} failure={store.failure} what="storage (storage-manager inventory)" />

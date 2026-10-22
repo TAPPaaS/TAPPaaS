@@ -62,6 +62,7 @@ export function App() {
   useEffect(() => {
     if (path === "/physical") replacePath(`/site/physical${window.location.search}`);
     if (path === "/site/physical/cabling") replacePath(`/site/physical/device${window.location.search}`);
+    if (path === "/site/physical/overview") replacePath(`/site/overview${window.location.search}`);
   }, [path]);
   const [busy, setBusy] = useState(false);
   const s = site.env?.data?.site;
@@ -81,11 +82,12 @@ export function App() {
 
   let page;
   if ((path === "/" || path === "") && owner) page = <OwnerOverview />;
-  else if (owner && !["/physical", "/site/physical", "/modules"].some((p) => path === p || path.startsWith(`${p}/`))) page = <OwnerOverview />;
+  else if (owner && !["/physical", "/site/physical", "/site/overview", "/modules"].some((p) => path === p || path.startsWith(`${p}/`))) page = <OwnerOverview />;
   else if (path === "/" || path === "") page = <Overview setupIncomplete={incomplete} />;
   else if (path === "/setup") page = <Setup />;
   else if (path === "/setup/day1") page = <Setup tab="Day 1" />;
   else if (path === "/setup/day2") page = <Setup tab="Day 2" />;
+  else if (owner && path === "/site/overview") page = <Physical view="overview" />;
   else if (owner && (path === "/physical" || path === "/site/physical" || path in PHYSICAL_VIEWS)) page = <Physical view={PHYSICAL_VIEWS[path]} />;
   else if (path === "/physical" || path === "/site/physical" || path in PHYSICAL_VIEWS) page = <Site tab="Physical" view={PHYSICAL_VIEWS[path]} />;
   else if (path === "/modules") page = <Modules />;
@@ -94,7 +96,7 @@ export function App() {
   else if (path === "/environments") page = <Environments />;
   else if (path === "/identity") page = <Identity />;
   else if (path === "/backup") page = <Backup />;
-  else if (path === "/site") page = <Site />;
+  else if (path === "/site" || path === "/site/overview") page = <Site />;
   else {
     const n = NAV.find((x) => active(path, x.to));
     page = (

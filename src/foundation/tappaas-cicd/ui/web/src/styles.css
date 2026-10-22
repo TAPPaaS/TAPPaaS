@@ -455,3 +455,4 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .ov-pool .small { white-space: nowrap; }
 .port.port-st-warn { background: var(--warn-bg); }
 .port.port-st-fail { background: var(--fail-bg); }
+.ov-legend { margin-top: 10px; font-size: 12.5px; }
