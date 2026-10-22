@@ -81,6 +81,12 @@ export function unmountSteps(device: string): Step[] {
   return [{ title: `rack-manager mount remove '${device}'`, bin: RM, verb: "mount remove", fixed: [device], note: "The device leaves the rack drawing and goes to Unplaced; nothing else changes. A passive device's recorded cables go with it." }];
 }
 
+// Add a room: its name, display name and description (racks-fields' room);
+// its building is the site's.
+export function roomAddSteps(): Step[] {
+  return [fieldsStep({ title: "rack-manager room add", bin: RM, verb: "room add", kind: "room", name: null, mode: "add", note: "A room in config/racks.json: where racks stand and devices stand loose. Its building is the site's (site.json location). Racks and devices are placed in it afterwards." })];
+}
+
 export function rackAddSteps(): Step[] {
   return [fieldsStep({ title: "rack-manager rack add", bin: RM, verb: "rack add", kind: "rack", name: null, mode: "add", note: "A rack in config/racks.json: its height in units, its width and how its units are numbered. Devices are mounted in it afterwards." })];
 }
@@ -137,4 +143,8 @@ export function MountActions({ device, v }: { device: string; v: RacksView | nul
       <OperateButton label="Unmount…" kind="danger" title={`Unmount ${device}`} steps={() => unmountSteps(device)} />
     </>
   );
+}
+
+export function AddRoomButton({ kind }: { kind?: "primary" }) {
+  return <OperateButton label="Add a room…" kind={kind} title="Add a room" steps={roomAddSteps} />;
 }

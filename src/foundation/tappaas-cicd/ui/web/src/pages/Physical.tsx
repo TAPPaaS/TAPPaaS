@@ -13,7 +13,7 @@ import { OperateButton } from "../operate";
 import { Sel } from "../physical/layout";
 import { DeviceGraph } from "../physical/deviceview";
 import { RackCanvas } from "../physical/rack";
-import { MountActions, rackAddSteps } from "../physical/rackops";
+import { AddRoomButton, MountActions, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
 import { Health, RacksView, SiteRead, StorageInventory, Topology } from "../types";
 import { StateLegend } from "../physical/state";
@@ -140,7 +140,12 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
             <label className="toggle">
               <input type="checkbox" checked={showCables} onChange={(e) => setShowCables(e.target.checked)} /> cables
             </label>
-            {operator ? <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} /> : null}
+            {operator ? (
+              <>
+                <AddRoomButton />
+                <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} />
+              </>
+            ) : null}
           </>
         ) : null}
       </div>
@@ -181,7 +186,12 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
               <div className="rack-empty">
                 <p>{racks ? "No rack is recorded yet." : "The topology carries no racks (rack-manager did not answer)."}</p>
                 <p className="muted small">A rack is recorded with rack-manager: its height, width and numbering; then each device is mounted at its units, with the faceplate the catalog has for its model.</p>
-                {operator && racks ? <OperateButton label="Add a rack…" kind="primary" title="Add a rack" steps={rackAddSteps} /> : null}
+                {operator && racks ? (
+                  <span className="toolbar">
+                    <AddRoomButton />
+                    <OperateButton label="Add a rack…" kind="primary" title="Add a rack" steps={rackAddSteps} />
+                      </span>
+                ) : null}
               </div>
             ) : null}
           </div>

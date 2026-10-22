@@ -10,7 +10,7 @@
 // change it, and how a change is passed to the manager's own verb (`--set` or
 // the verb's own flag). Pure: the reads that feed it are in reads.ts.
 
-export const FIELD_KINDS = ["module", "zone", "environment", "org", "group", "user", "role", "site", "backup", "rack", "mount"] as const;
+export const FIELD_KINDS = ["module", "zone", "environment", "org", "group", "user", "role", "site", "backup", "rack", "mount", "room"] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 export type FormMode = "add" | "modify";
 
@@ -299,12 +299,13 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
   backup: { modify: { enabled: "--enabled", retention: "--retention", exclude: "--exclude" } },
   zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
   rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", room: "--room", description: "--description" } },
+  room: { add: { displayName: "--display-name", description: "--description" } },
   mount: { add: { rack: "--rack", u: "--u", room: "--room", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
 };
 
 // Fields a form never offers whatever the schema says: the object's name is
 // the verb's positional.
-const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], site: ["name"], rack: ["name"], mount: ["device"] };
+const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], site: ["name"], rack: ["name"], mount: ["device"], room: ["name"] };
 
 // The classes a --set refuses before anything is written, per kind whose modify
 // is `--set field=value` within each field's class (zones-fields, racks-fields).
@@ -316,6 +317,7 @@ const SET_REFUSED: Partial<Record<FieldKind, Record<string, string>>> = {
   },
   rack: { immutable: "the rack's name is its key: add a rack under the new name and move the mounts" },
   mount: { immutable: "the device is the mount's key: remove the mount and mount the other device" },
+  room: { immutable: "the room's name is how racks and mounts name it: add the new room, move them, delete this one" },
 };
 
 // ── the manifest ───────────────────────────────────────────────────────
