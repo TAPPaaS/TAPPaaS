@@ -50,6 +50,11 @@ check(rec.disruptions.some((d) => d.flag === "--allow-disruption" && d.consequen
 check(v("add").preview.kind === "dry-run-flag" && (v("add").preview as { flag: string }).flag === "--check", "a verb with --check previews with it");
 check(JSON.stringify(v("add").options.find((o) => o.flag === "--mode")?.choices) === '["a","b"]', "an option's fixed values are its choices");
 check(renderManifest({ name: "x", version: "1", tagline: "t", verbs: [{ usage: "set <n> [--ports <a,b>]", options: [["--ports <a,b>", "Ports."]] }] }).verbs[0].options[0].arg === "<a,b>", "a placeholder with a comma stays whole (<a,b>)");
+{
+  // "(--rack <rack> --u <n> | --room <room>)": a group of alternatives; its values are the options', not positionals.
+  const pv = renderManifest({ name: "x", version: "1", tagline: "t", verbs: [{ usage: "mount add <device> (--rack <rack> --u <n> | --room <room>) [--label <text>]", options: [["--rack <rack>", "The rack."], ["--u <n>", "The unit."], ["--room <room>", "The room."], ["--label <text>", "A label."]] }] }).verbs[0];
+  check(pv.positionals.length === 1 && pv.positionals[0].name === "device", `a (group | of alternatives) adds no positional (${pv.positionals.map((p) => p.name).join(", ")})`);
+}
 check(v("modify").preview.kind === "dry-run-flag" && v("modify").options.find((o) => o.flag === "--set")?.repeatable === true, "--set field=value... is repeatable; --dry-run previews");
 check(v("delete").destructive && v("delete").preview.kind === "none", "delete is destructive by its name and has no dry run");
 check(v("suspend").preview.kind === "none" && (v("suspend").preview as { touches: string }).touches === "stops the guest", "a declared no-preview carries what it touches");

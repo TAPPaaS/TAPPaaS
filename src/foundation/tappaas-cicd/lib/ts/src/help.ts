@@ -393,8 +393,10 @@ function positionalsOf(v: HelpVerb, keys: string[][]): ManifestVerb["positionals
       const outer = depth;
       depth += opens - (raw.match(/\]/g) ?? []).length;
       if (i < start) continue;
-      const bare = raw.replace(/^\[+/, "").replace(/[\].]+$/, "");
-      const prev = (toks[i - 1] ?? "").replace(/^\[+/, "");
+      // A (group | of alternatives) is read like a [group]: its parentheses
+      // are not part of the word, so "(--rack <rack>" is a flag and its value.
+      const bare = raw.replace(/^[[(]+/, "").replace(/[\]).]+$/, "");
+      const prev = (toks[i - 1] ?? "").replace(/^[[(]+/, "");
       if (FLAG.test(bare) || OPEN_FLAG.test(bare) || FLAG.test(prev) || OPEN_FLAG.test(prev)) continue;
       const m = /^<([^<>]+)>$/.exec(bare);
       // A bare sub-word counts at the top level or first in its [group];
