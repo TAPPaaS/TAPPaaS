@@ -117,7 +117,7 @@ function RackThumb({ r }: { r: RackInfo }) {
   );
 }
 
-export function PhysicalOverview({ t, inv, notes, storageError, aside }: { t: Topology | null; inv: StorageInventory | null; notes: Map<string, StorageNote[]>; storageError: string | null; aside?: ReactNode }) {
+export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFindings }: { t: Topology | null; inv: StorageInventory | null; notes: Map<string, StorageNote[]>; storageError: string | null; aside?: ReactNode; beforeFindings?: ReactNode }) {
   const racks = t?.racks?.racks ?? [];
   const disks = inv ? inv.nodes.reduce((s, n) => s + n.boot.length + n.otherDisks.length + n.pools.reduce((a, p) => a + p.vdevs.reduce((b, v) => b + v.disks.length, 0), 0), 0) : null;
   const pools = inv ? inv.nodes.reduce((s, n) => s + n.pools.length, 0) : null;
@@ -218,6 +218,7 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside }: { t: To
         </section>
       </div>
       <div className="ov-legend"><StateLegend /></div>
+      {beforeFindings}
       <section className="section">
         <header className="section-head">
           <h2>Findings</h2>

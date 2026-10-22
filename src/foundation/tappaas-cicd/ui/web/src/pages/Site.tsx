@@ -45,13 +45,12 @@ function NodeActions() {
   );
 }
 
-// Below the Overview's physical summary: site.json, the update schedule and
-// the release train, the repositories.
-function SiteRecords({ r }: { r: Read<SiteRead> }) {
+// Above the Overview's physical summary: site.json, the update schedule and
+// the release train.
+function SiteTop({ r }: { r: Read<SiteRead> }) {
   const d = r.env?.data;
   const s = (d?.site ?? {}) as Record<string, unknown> & { updateSchedule?: { frequency?: string; weekday?: string; hour?: number } };
   const sched = s.updateSchedule;
-  const repos = (d?.repositories ?? []) as Repo[];
   const last = d?.lastSweep;
   return (
     <div className="site-records">
@@ -89,6 +88,15 @@ function SiteRecords({ r }: { r: Read<SiteRead> }) {
           </div>
         </Section>
       </div>
+    </div>
+  );
+}
+
+// Between the physical summary and its findings: the repositories.
+function Repositories({ r }: { r: Read<SiteRead> }) {
+  const repos = (r.env?.data?.repositories ?? []) as Repo[];
+  return (
+    <div className="site-records">
       <Section title="Repositories" aside={<OperateButton label="Reconcile…" title="site-manager repository reconcile" steps={[sm("site-manager repository reconcile", "repository reconcile")]} />}>
         <table className="table compact">
           <thead>
@@ -149,8 +157,8 @@ export function Site({ view = "overview" }: { view?: PhysicalView }) {
           </button>
         ))}
       </div>
-      <Physical embedded view={view} aside={view === "overview" ? <NodeActions /> : undefined} />
-      {view === "overview" ? <SiteRecords r={r} /> : null}
+      {view === "overview" ? <SiteTop r={r} /> : null}
+      <Physical embedded view={view} aside={view === "overview" ? <NodeActions /> : undefined} beforeFindings={view === "overview" ? <Repositories r={r} /> : undefined} />
     </div>
   );
 }

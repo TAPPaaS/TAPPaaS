@@ -24,8 +24,8 @@ import { Link, MeContext, replacePath, usePath } from "./ui";
 // The site as built is the Site page's four tabs (physical/views.ts); the
 // owner's route, which has no Site page, reaches them under Physical.
 const NAV: { to: string; label: string; live: boolean }[] = [
-  { to: "/setup", label: "Setup", live: true },
   { to: "/", label: "Overview", live: true },
+  { to: "/setup", label: "Setup", live: true },
   { to: "/site", label: "Site", live: true },
   { to: "/environments", label: "Environments", live: true },
   { to: "/modules", label: "Modules", live: true },
@@ -115,7 +115,7 @@ export function App() {
     <div className={`shell${assistant.open ? " with-drawer" : ""}`}>
       <nav className="nav">
         <div className="brand">
-          <div className="brand-name">TAPPaaS</div>
+          <a className="brand-name" href="https://tappaas.org/operate/" target="_blank" rel="noreferrer" title="The operator documentation, tappaas.org">TAPPaaS</a>
           <div className="brand-site">{s?.displayName ?? s?.name ?? "…"}</div>
         </div>
         <ul>

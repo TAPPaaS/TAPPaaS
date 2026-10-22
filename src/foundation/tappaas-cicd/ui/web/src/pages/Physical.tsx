@@ -85,7 +85,7 @@ function Unplaced({ v, pick }: { v: RacksView; pick: (s: Sel) => void }) {
 // Standalone (the owner's route: its own switch between the views) or on the
 // Site page (embedded: the Site page has the heading and the tabs). view: the
 // one the address names, else the Overview.
-export function Physical({ embedded, view, aside }: { embedded?: boolean; view?: PhysicalView; aside?: ReactNode }) {
+export function Physical({ embedded, view, aside, beforeFindings }: { embedded?: boolean; view?: PhysicalView; aside?: ReactNode; beforeFindings?: ReactNode }) {
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
   const [sel, setSel] = useState<Sel | null>(selFromUrl);
@@ -161,7 +161,7 @@ export function Physical({ embedded, view, aside }: { embedded?: boolean; view?:
         </div>
       ) : null}
       {shown === "overview" ? (
-        <PhysicalOverview aside={aside} t={t} inv={inv} notes={storage?.notes ?? new Map()} storageError={store.failure ?? store.env?.error ?? null} />
+        <PhysicalOverview aside={aside} beforeFindings={beforeFindings} t={t} inv={inv} notes={storage?.notes ?? new Map()} storageError={store.failure ?? store.env?.error ?? null} />
       ) : shown === "storage" ? (
         <>
           <ReadState env={store.env} failure={store.failure} what="storage (storage-manager inventory)" />
