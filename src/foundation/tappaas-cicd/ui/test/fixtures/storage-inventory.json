@@ -1,0 +1,2020 @@
+{
+ "version": 1,
+ "generated": "2026-10-22T08:39:12.586Z",
+ "smart": true,
+ "nodes": [
+  {
+   "name": "tappaas1",
+   "reachable": true,
+   "boot": [
+    {
+     "device": "/dev/nvme0n1",
+     "byId": "/dev/disk/by-id/nvme-WD_BLACK_SN7100_1TB_260923802321",
+     "model": "WD_BLACK SN7100 1TB",
+     "serial": "260923802321",
+     "wwn": "eui.e8238fa6bf530001001b448b43658108",
+     "size": 1000204886016,
+     "type": "nvme",
+     "wearout": 100,
+     "smart": {
+      "read": true,
+      "health": "passed",
+      "temperature": 33,
+      "reallocated": null,
+      "pending": null,
+      "uncorrectable": null,
+      "mediaErrors": 0,
+      "criticalWarning": 0,
+      "powerOnHours": 735
+     },
+     "zfs": null,
+     "exportedPool": null,
+     "state": "ok",
+     "reasons": []
+    }
+   ],
+   "pools": [
+    {
+     "name": "tanka1",
+     "declared": true,
+     "present": true,
+     "health": "ONLINE",
+     "status": null,
+     "size": 3985729650688,
+     "allocated": 141953576960,
+     "free": 3843776073728,
+     "fragmentation": 13,
+     "dedup": 1,
+     "compression": "lz4",
+     "compressRatio": 1.75,
+     "usable": {
+      "total": 3861712470016,
+      "used": 629665431552,
+      "avail": 3232047038464,
+      "pct": 16.3
+     },
+     "scrub": {
+      "state": "finished",
+      "last": "2026-10-10T22:26:18.000Z",
+      "errors": 0,
+      "text": "scrub repaired 0B in 00:02:17 with 0 errors on Sun Oct 11 00:26:18 2026"
+     },
+     "vdevs": [
+      {
+       "name": "mirror-0",
+       "type": "mirror",
+       "parity": null,
+       "role": "data",
+       "health": "ONLINE",
+       "state": "ok",
+       "disks": [
+        {
+         "device": "/dev/nvme2n1",
+         "byId": "/dev/disk/by-id/nvme-Samsung_SSD_990_PRO_with_Heatsink_4TB_S7DSNJ0YB04294X_1",
+         "model": "Samsung SSD 990 PRO with Heatsink 4TB",
+         "serial": "S7DSNJ0YB04294X",
+         "wwn": "eui.0025384b5140498f",
+         "size": 4000787030016,
+         "type": "nvme",
+         "wearout": 100,
+         "smart": {
+          "read": true,
+          "health": "passed",
+          "temperature": 43,
+          "reallocated": null,
+          "pending": null,
+          "uncorrectable": null,
+          "mediaErrors": 0,
+          "criticalWarning": 0,
+          "powerOnHours": 2412
+         },
+         "zfs": {
+          "pool": "tanka1",
+          "vdev": "mirror-0",
+          "state": "ONLINE",
+          "read": 0,
+          "write": 0,
+          "cksum": 0,
+          "msg": null
+         },
+         "exportedPool": null,
+         "state": "ok",
+         "reasons": []
+        },
+        {
+         "device": "/dev/nvme1n1",
+         "byId": "/dev/disk/by-id/nvme-Samsung_SSD_990_PRO_4TB_S7DPNU0YA10709Z_1",
+         "model": "Samsung SSD 990 PRO 4TB",
+         "serial": "S7DPNU0YA10709Z",
+         "wwn": "eui.0025384a51a33cfb",
+         "size": 4000787030016,
+         "type": "nvme",
+         "wearout": 100,
+         "smart": {
+          "read": true,
+          "health": "passed",
+          "temperature": 44,
+          "reallocated": null,
+          "pending": null,
+          "uncorrectable": null,
+          "mediaErrors": 0,
+          "criticalWarning": 0,
+          "powerOnHours": 2305
+         },
+         "zfs": {
+          "pool": "tanka1",
+          "vdev": "mirror-0",
+          "state": "ONLINE",
+          "read": 0,
+          "write": 0,
+          "cksum": 0,
+          "msg": null
+         },
+         "exportedPool": null,
+         "state": "ok",
+         "reasons": []
+        }
+       ],
+       "missing": []
+      }
+     ],
+     "volumes": [
+      {
+       "name": "tanka1/vm-110-disk-0",
+       "vmid": 110,
+       "module": "network",
+       "guest": "network",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 34359738368,
+       "used": 39023546368,
+       "refer": 3586330624,
+       "snapshots": 542035968,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-110-disk-1",
+       "vmid": 110,
+       "module": "network",
+       "guest": "network",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6574080,
+       "refer": 94208,
+       "snapshots": 188416,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-130-cloudinit",
+       "vmid": 130,
+       "module": "tappaas-cicd",
+       "guest": "tappaas-cicd",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-130-disk-0",
+       "vmid": 130,
+       "module": "tappaas-cicd",
+       "guest": "tappaas-cicd",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3309568,
+       "refer": 86016,
+       "snapshots": 77824,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-130-disk-1",
+       "vmid": 130,
+       "module": "tappaas-cicd",
+       "guest": "tappaas-cicd",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 68719476736,
+       "used": 112148934656,
+       "refer": 38028869632,
+       "snapshots": 4376186880,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-140-cloudinit",
+       "vmid": 140,
+       "module": "identity",
+       "guest": "identity",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-140-disk-0",
+       "vmid": 140,
+       "module": "identity",
+       "guest": "identity",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3620864,
+       "refer": 86016,
+       "snapshots": 389120,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-140-disk-1",
+       "vmid": 140,
+       "module": "identity",
+       "guest": "identity",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 34359738368,
+       "used": 51417063424,
+       "refer": 15713406976,
+       "snapshots": 818499584,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-150-cloudinit",
+       "vmid": 150,
+       "module": "logging",
+       "guest": "logging",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-150-disk-0",
+       "vmid": 150,
+       "module": "logging",
+       "guest": "logging",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3575808,
+       "refer": 73728,
+       "snapshots": 430080,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-150-disk-1",
+       "vmid": 150,
+       "module": "logging",
+       "guest": "logging",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 34359738368,
+       "used": 49158066176,
+       "refer": 12049850368,
+       "snapshots": 2913447936,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-340-cloudinit",
+       "vmid": 340,
+       "module": "nextcloud",
+       "guest": "nextcloud",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-340-disk-0",
+       "vmid": 340,
+       "module": "nextcloud",
+       "guest": "nextcloud",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3543040,
+       "refer": 98304,
+       "snapshots": 376832,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-340-disk-1",
+       "vmid": 340,
+       "module": "nextcloud",
+       "guest": "nextcloud",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 85899345920,
+       "used": 101464084480,
+       "refer": 13788217344,
+       "snapshots": 499179520,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-341-cloudinit",
+       "vmid": 341,
+       "module": "coturn",
+       "guest": "coturn",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-341-disk-0",
+       "vmid": 341,
+       "module": "coturn",
+       "guest": "coturn",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3571712,
+       "refer": 122880,
+       "snapshots": 376832,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-341-disk-1",
+       "vmid": 341,
+       "module": "coturn",
+       "guest": "coturn",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 17179869184,
+       "used": 22682935296,
+       "refer": 4990672896,
+       "snapshots": 278147072,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-360-cloudinit",
+       "vmid": 360,
+       "module": "jellyfin",
+       "guest": "jellyfin",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-360-disk-0",
+       "vmid": 360,
+       "module": "jellyfin",
+       "guest": "jellyfin",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3538944,
+       "refer": 90112,
+       "snapshots": 376832,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-360-disk-1",
+       "vmid": 360,
+       "module": "jellyfin",
+       "guest": "jellyfin",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 34359738368,
+       "used": 43173564416,
+       "refer": 8053981184,
+       "snapshots": 260575232,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-361-cloudinit",
+       "vmid": 361,
+       "module": "immich",
+       "guest": "immich",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-361-disk-0",
+       "vmid": 361,
+       "module": "immich",
+       "guest": "immich",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 507904,
+       "refer": 102400,
+       "snapshots": 405504,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-361-disk-1",
+       "vmid": 361,
+       "module": "immich",
+       "guest": "immich",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 536870912000,
+       "used": 14731182080,
+       "refer": 14456508416,
+       "snapshots": 274673664,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-370-cloudinit",
+       "vmid": 370,
+       "module": "nomad",
+       "guest": "nomad",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-370-disk-0",
+       "vmid": 370,
+       "module": "nomad",
+       "guest": "nomad",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3534848,
+       "refer": 94208,
+       "snapshots": 372736,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-370-disk-1",
+       "vmid": 370,
+       "module": "nomad",
+       "guest": "nomad",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 137438953472,
+       "used": 145482342400,
+       "refer": 5758619648,
+       "snapshots": 174247936,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-371-cloudinit",
+       "vmid": 371,
+       "module": "karakeep",
+       "guest": "karakeep",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-371-disk-0",
+       "vmid": 371,
+       "module": "karakeep",
+       "guest": "karakeep",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 466944,
+       "refer": 90112,
+       "snapshots": 376832,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-371-disk-1",
+       "vmid": 371,
+       "module": "karakeep",
+       "guest": "karakeep",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 68719476736,
+       "used": 9210806272,
+       "refer": 8147664896,
+       "snapshots": 1063141376,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-610-cloudinit",
+       "vmid": 610,
+       "module": "vaultwarden",
+       "guest": "vaultwarden",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-610-disk-0",
+       "vmid": 610,
+       "module": "vaultwarden",
+       "guest": "vaultwarden",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3633152,
+       "refer": 90112,
+       "snapshots": 397312,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-610-disk-1",
+       "vmid": 610,
+       "module": "vaultwarden",
+       "guest": "vaultwarden",
+       "kind": "own",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 17179869184,
+       "used": 21849022464,
+       "refer": 4118638592,
+       "snapshots": 285437952,
+       "replica": null,
+       "mirroredOn": [
+        "tappaas3"
+       ],
+       "note": null
+      },
+      {
+       "name": "tanka1/base-8080-disk-0",
+       "vmid": 8080,
+       "module": null,
+       "guest": "tappaas-nixos",
+       "kind": "template",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 17179869184,
+       "used": 18885402624,
+       "refer": 1435000832,
+       "snapshots": 8192,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/base-8080-disk-1",
+       "vmid": 8080,
+       "module": null,
+       "guest": "tappaas-nixos",
+       "kind": "template",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6365184,
+       "refer": 73728,
+       "snapshots": 8192,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-8080-cloudinit",
+       "vmid": 8080,
+       "module": null,
+       "guest": "tappaas-nixos",
+       "kind": "template",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      }
+     ],
+     "datasets": [
+      {
+       "name": "tanka1/ORPHAN-130-cloudinit",
+       "kind": "volume",
+       "label": "ORPHAN-130-cloudinit",
+       "mountpoint": null,
+       "used": 6291456,
+       "exact": true
+      },
+      {
+       "name": "tanka1/ORPHAN-140-cloudinit",
+       "kind": "volume",
+       "label": "ORPHAN-140-cloudinit",
+       "mountpoint": null,
+       "used": 6291456,
+       "exact": true
+      }
+     ],
+     "totals": {
+      "total": 3861712470016,
+      "own": 610440339456,
+      "mirror": 0,
+      "other": 19225092096,
+      "free": 3232047038464
+     },
+     "state": "ok",
+     "reasons": []
+    },
+    {
+     "name": "tankb1",
+     "declared": true,
+     "present": true,
+     "health": "ONLINE",
+     "status": null,
+     "size": 11991548690432,
+     "allocated": 2412544,
+     "free": 11991546277888,
+     "fragmentation": 0,
+     "dedup": 1,
+     "compression": "lz4",
+     "compressRatio": 1,
+     "usable": {
+      "total": 11854109736960,
+      "used": 2408448,
+      "avail": 11854107328512,
+      "pct": 0
+     },
+     "scrub": {
+      "state": "finished",
+      "last": "2026-10-10T22:24:03.000Z",
+      "errors": 0,
+      "text": "scrub repaired 0B in 00:00:01 with 0 errors on Sun Oct 11 00:24:03 2026"
+     },
+     "vdevs": [
+      {
+       "name": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+       "type": "stripe",
+       "parity": null,
+       "role": "data",
+       "health": "ONLINE",
+       "state": "ok",
+       "disks": [
+        {
+         "device": "/dev/sda",
+         "byId": "/dev/disk/by-id/ata-ST12000VN0008-3MH101_ZZ30MJL6",
+         "model": "ST12000VN0008-3MH101",
+         "serial": "ZZ30MJL6",
+         "wwn": "0x5000c500fdb4c263",
+         "size": 12000138625024,
+         "type": "hdd",
+         "wearout": null,
+         "smart": {
+          "read": true,
+          "health": "passed",
+          "temperature": 36,
+          "reallocated": 0,
+          "pending": 0,
+          "uncorrectable": 0,
+          "mediaErrors": null,
+          "criticalWarning": null,
+          "powerOnHours": 2583
+         },
+         "zfs": {
+          "pool": "tankb1",
+          "vdev": "ata-ST12000VN0008-3MH101_ZZ30MJL6",
+          "state": "ONLINE",
+          "read": 0,
+          "write": 0,
+          "cksum": 0,
+          "msg": null
+         },
+         "exportedPool": null,
+         "state": "ok",
+         "reasons": []
+        }
+       ],
+       "missing": []
+      }
+     ],
+     "volumes": [],
+     "datasets": [
+      {
+       "name": "tankb1/tappaas-nfs/media",
+       "kind": "nfs-share",
+       "label": "media",
+       "mountpoint": "/tappaas-nfs/media",
+       "used": 114688,
+       "exact": true
+      }
+     ],
+     "totals": {
+      "total": 11854109736960,
+      "own": 0,
+      "mirror": 0,
+      "other": 2408448,
+      "free": 11854107328512
+     },
+     "state": "ok",
+     "reasons": []
+    }
+   ],
+   "otherDisks": [],
+   "replication": [
+    {
+     "id": "110-0",
+     "vmid": 110,
+     "module": "network",
+     "source": "tappaas1",
+     "target": "tappaas3",
+     "schedule": "*/15",
+     "lastSync": "2026-10-22T08:30:02.000Z",
+     "nextSync": "2026-10-22T08:45:00.000Z",
+     "failCount": 0,
+     "error": null,
+     "state": "ok",
+     "reasons": []
+    },
+    {
+     "id": "130-0",
+     "vmid": 130,
+     "module": "tappaas-cicd",
+     "source": "tappaas1",
+     "target": "tappaas3",
+     "schedule": "*/15",
+     "lastSync": "2026-10-22T08:30:05.000Z",
+     "nextSync": "2026-10-22T08:45:00.000Z",
+     "failCount": 0,
+     "error": null,
+     "state": "ok",
+     "reasons": []
+    },
+    {
+     "id": "140-0",
+     "vmid": 140,
+     "module": "identity",
+     "source": "tappaas1",
+     "target": "tappaas3",
+     "schedule": "*/15",
+     "lastSync": "2026-10-22T08:30:08.000Z",
+     "nextSync": "2026-10-22T08:45:00.000Z",
+     "failCount": 0,
+     "error": null,
+     "state": "ok",
+     "reasons": []
+    },
+    {
+     "id": "361-0",
+     "vmid": 361,
+     "module": "immich",
+     "source": "tappaas1",
+     "target": "tappaas3",
+     "schedule": "*/15",
+     "lastSync": "2026-10-22T08:30:12.000Z",
+     "nextSync": "2026-10-22T08:45:00.000Z",
+     "failCount": 0,
+     "error": null,
+     "state": "ok",
+     "reasons": []
+    },
+    {
+     "id": "610-0",
+     "vmid": 610,
+     "module": "vaultwarden",
+     "source": "tappaas1",
+     "target": "tappaas3",
+     "schedule": "*/15",
+     "lastSync": "2026-10-22T08:30:15.000Z",
+     "nextSync": "2026-10-22T08:45:00.000Z",
+     "failCount": 0,
+     "error": null,
+     "state": "ok",
+     "reasons": []
+    }
+   ],
+   "state": "ok",
+   "reasons": []
+  },
+  {
+   "name": "tappaas2",
+   "reachable": true,
+   "boot": [
+    {
+     "device": "/dev/nvme1n1",
+     "byId": "/dev/disk/by-id/nvme-SanDisk_SSD_Plus_500GB_A3N_25414A800205_1",
+     "model": "SanDisk SSD Plus 500GB A3N",
+     "serial": "25414A800205",
+     "wwn": "eui.e8238fa6bf530001001b448b4f9c112f",
+     "size": 500107862016,
+     "type": "nvme",
+     "wearout": 100,
+     "smart": {
+      "read": true,
+      "health": "passed",
+      "temperature": 34,
+      "reallocated": null,
+      "pending": null,
+      "uncorrectable": null,
+      "mediaErrors": 0,
+      "criticalWarning": 0,
+      "powerOnHours": 6538
+     },
+     "zfs": null,
+     "exportedPool": null,
+     "state": "ok",
+     "reasons": []
+    }
+   ],
+   "pools": [
+    {
+     "name": "tanka1",
+     "declared": true,
+     "present": true,
+     "health": "ONLINE",
+     "status": null,
+     "size": 2044404432896,
+     "allocated": 137391689728,
+     "free": 1907012743168,
+     "fragmentation": 7,
+     "dedup": 1,
+     "compression": "lz4",
+     "compressRatio": 1.59,
+     "usable": {
+      "total": 1981053685760,
+      "used": 297948540928,
+      "avail": 1683105144832,
+      "pct": 15
+     },
+     "scrub": {
+      "state": "finished",
+      "last": "2026-10-10T22:26:53.000Z",
+      "errors": 0,
+      "text": "scrub repaired 0B in 00:02:52 with 0 errors on Sun Oct 11 00:26:53 2026"
+     },
+     "vdevs": [
+      {
+       "name": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F_1",
+       "type": "stripe",
+       "parity": null,
+       "role": "data",
+       "health": "ONLINE",
+       "state": "ok",
+       "disks": [
+        {
+         "device": "/dev/nvme0n1",
+         "byId": "/dev/disk/by-id/nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F_1",
+         "model": "KINGSTON OM8TAP42048K1-A00",
+         "serial": "50026B73842AD86F",
+         "wwn": "eui.0026b73842ad86f5",
+         "size": 2048408248320,
+         "type": "nvme",
+         "wearout": 99,
+         "smart": {
+          "read": true,
+          "health": "passed",
+          "temperature": 30,
+          "reallocated": null,
+          "pending": null,
+          "uncorrectable": null,
+          "mediaErrors": 0,
+          "criticalWarning": 0,
+          "powerOnHours": 29
+         },
+         "zfs": {
+          "pool": "tanka1",
+          "vdev": "nvme-KINGSTON_OM8TAP42048K1-A00_50026B73842AD86F_1",
+          "state": "ONLINE",
+          "read": 0,
+          "write": 0,
+          "cksum": 0,
+          "msg": null
+         },
+         "exportedPool": null,
+         "state": "ok",
+         "reasons": []
+        }
+       ],
+       "missing": []
+      }
+     ],
+     "volumes": [
+      {
+       "name": "tanka1/vm-213-cloudinit",
+       "vmid": 213,
+       "module": "deconz-test",
+       "guest": "deconz-test",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-213-disk-0",
+       "vmid": 213,
+       "module": "deconz-test",
+       "guest": "deconz-test",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3522560,
+       "refer": 86016,
+       "snapshots": 368640,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-213-disk-1",
+       "vmid": 213,
+       "module": "deconz-test",
+       "guest": "deconz-test",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 17179869184,
+       "used": 21975461888,
+       "refer": 4296134656,
+       "snapshots": 268898304,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-310-cloudinit",
+       "vmid": 310,
+       "module": "litellm",
+       "guest": "litellm",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-310-disk-0",
+       "vmid": 310,
+       "module": "litellm",
+       "guest": "litellm",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3575808,
+       "refer": 73728,
+       "snapshots": 430080,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-310-disk-1",
+       "vmid": 310,
+       "module": "litellm",
+       "guest": "litellm",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 34359738368,
+       "used": 43412107264,
+       "refer": 8005746688,
+       "snapshots": 610721792,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-311-cloudinit",
+       "vmid": 311,
+       "module": "openwebui",
+       "guest": "openwebui",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-311-disk-0",
+       "vmid": 311,
+       "module": "openwebui",
+       "guest": "openwebui",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3526656,
+       "refer": 86016,
+       "snapshots": 372736,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-311-disk-1",
+       "vmid": 311,
+       "module": "openwebui",
+       "guest": "openwebui",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 34359738368,
+       "used": 47864901632,
+       "refer": 12417245184,
+       "snapshots": 630013952,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/subvol-312-disk-0",
+       "vmid": 312,
+       "module": "vllm-amd",
+       "guest": "vllm-amd",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "filesystem",
+       "size": 85899345920,
+       "used": 39506599936,
+       "refer": 39506599936,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-342-cloudinit",
+       "vmid": 342,
+       "module": "nextcloud-hpb",
+       "guest": "nextcloud-hpb",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-342-disk-0",
+       "vmid": 342,
+       "module": "nextcloud-hpb",
+       "guest": "nextcloud-hpb",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3567616,
+       "refer": 118784,
+       "snapshots": 376832,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-342-disk-1",
+       "vmid": 342,
+       "module": "nextcloud-hpb",
+       "guest": "nextcloud-hpb",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 17179869184,
+       "used": 22557163520,
+       "refer": 4938846208,
+       "snapshots": 206143488,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-343-cloudinit",
+       "vmid": 343,
+       "module": "euro-office",
+       "guest": "euro-office",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-343-disk-0",
+       "vmid": 343,
+       "module": "euro-office",
+       "guest": "euro-office",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3555328,
+       "refer": 106496,
+       "snapshots": 380928,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-343-disk-1",
+       "vmid": 343,
+       "module": "euro-office",
+       "guest": "euro-office",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 34359738368,
+       "used": 60691349504,
+       "refer": 23285379072,
+       "snapshots": 3096989696,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-350-cloudinit",
+       "vmid": 350,
+       "module": "forgejo",
+       "guest": "forgejo",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-350-disk-0",
+       "vmid": 350,
+       "module": "forgejo",
+       "guest": "forgejo",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3522560,
+       "refer": 86016,
+       "snapshots": 368640,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-350-disk-1",
+       "vmid": 350,
+       "module": "forgejo",
+       "guest": "forgejo",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 21474836480,
+       "used": 25570664448,
+       "refer": 3643588608,
+       "snapshots": 173821952,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-351-cloudinit",
+       "vmid": 351,
+       "module": "woodpecker",
+       "guest": "woodpecker",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-351-disk-0",
+       "vmid": 351,
+       "module": "woodpecker",
+       "guest": "woodpecker",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 1048576,
+       "used": 466944,
+       "refer": 90112,
+       "snapshots": 376832,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-351-disk-1",
+       "vmid": 351,
+       "module": "woodpecker",
+       "guest": "woodpecker",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 68719476736,
+       "used": 3685224448,
+       "refer": 3497136128,
+       "snapshots": 188088320,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-380-cloudinit",
+       "vmid": 380,
+       "module": "lazysite",
+       "guest": "lazysite",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-380-disk-0",
+       "vmid": 380,
+       "module": "lazysite",
+       "guest": "lazysite",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 1048576,
+       "used": 471040,
+       "refer": 94208,
+       "snapshots": 376832,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-380-disk-1",
+       "vmid": 380,
+       "module": "lazysite",
+       "guest": "lazysite",
+       "kind": "own",
+       "runsOn": "tappaas2",
+       "type": "volume",
+       "size": 17179869184,
+       "used": 2978193408,
+       "refer": 2835763200,
+       "snapshots": 142430208,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      }
+     ],
+     "datasets": [
+      {
+       "name": "tanka1/vllm-models",
+       "kind": "dataset",
+       "label": "vllm-models",
+       "mountpoint": "/tanka1/vllm-models",
+       "used": 29558865920,
+       "exact": true
+      }
+     ],
+     "totals": {
+      "total": 1981053685760,
+      "own": 268314206208,
+      "mirror": 0,
+      "other": 29634334720,
+      "free": 1683105144832
+     },
+     "state": "ok",
+     "reasons": []
+    }
+   ],
+   "otherDisks": [],
+   "replication": [],
+   "state": "ok",
+   "reasons": []
+  },
+  {
+   "name": "tappaas3",
+   "reachable": true,
+   "boot": [
+    {
+     "device": "/dev/sdc",
+     "byId": "/dev/disk/by-id/ata-MTFDDAK256MAM-1K12_13180938FDB1",
+     "model": "MTFDDAK256MAM-1K12",
+     "serial": "13180938FDB1",
+     "wwn": "0x500a07510938fdb1",
+     "size": 256060514304,
+     "type": "ssd",
+     "wearout": 95,
+     "smart": {
+      "read": true,
+      "health": "passed",
+      "temperature": null,
+      "reallocated": 0,
+      "pending": 0,
+      "uncorrectable": 0,
+      "mediaErrors": null,
+      "criticalWarning": null,
+      "powerOnHours": 1159
+     },
+     "zfs": null,
+     "exportedPool": null,
+     "state": "ok",
+     "reasons": []
+    }
+   ],
+   "pools": [
+    {
+     "name": "tanka1",
+     "declared": true,
+     "present": true,
+     "health": "ONLINE",
+     "status": null,
+     "size": 1022202216448,
+     "allocated": 96915275776,
+     "free": 925286940672,
+     "fragmentation": 15,
+     "dedup": 1,
+     "compression": "lz4",
+     "compressRatio": 1.65,
+     "usable": {
+      "total": 990526832640,
+      "used": 308241698816,
+      "avail": 682285133824,
+      "pct": 31.1
+     },
+     "scrub": {
+      "state": "finished",
+      "last": "2026-10-10T22:25:12.000Z",
+      "errors": 0,
+      "text": "scrub repaired 0B in 00:01:11 with 0 errors on Sun Oct 11 00:25:12 2026"
+     },
+     "vdevs": [
+      {
+       "name": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056_1",
+       "type": "stripe",
+       "parity": null,
+       "role": "data",
+       "health": "ONLINE",
+       "state": "ok",
+       "disks": [
+        {
+         "device": "/dev/nvme0n1",
+         "byId": "/dev/disk/by-id/nvme-ASint_AS806_1TB_8061TBFDHY25F220056_1",
+         "model": "ASint AS806 1TB",
+         "serial": "8061TBFDHY25F220056",
+         "wwn": "eui.541d61d7fec38753",
+         "size": 1024209543168,
+         "type": "nvme",
+         "wearout": 100,
+         "smart": {
+          "read": true,
+          "health": "passed",
+          "temperature": 40,
+          "reallocated": null,
+          "pending": null,
+          "uncorrectable": null,
+          "mediaErrors": 0,
+          "criticalWarning": 0,
+          "powerOnHours": 5684
+         },
+         "zfs": {
+          "pool": "tanka1",
+          "vdev": "nvme-ASint_AS806_1TB_8061TBFDHY25F220056_1",
+          "state": "ONLINE",
+          "read": 0,
+          "write": 0,
+          "cksum": 0,
+          "msg": null
+         },
+         "exportedPool": null,
+         "state": "ok",
+         "reasons": []
+        }
+       ],
+       "missing": []
+      }
+     ],
+     "volumes": [
+      {
+       "name": "tanka1/vm-110-disk-0",
+       "vmid": 110,
+       "module": "network",
+       "guest": "network",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 34359738368,
+       "used": 39022899200,
+       "refer": 3586035712,
+       "snapshots": 537632768,
+       "replica": {
+        "job": "110-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:02.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-110-disk-1",
+       "vmid": 110,
+       "module": "network",
+       "guest": "network",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6574080,
+       "refer": 94208,
+       "snapshots": 188416,
+       "replica": {
+        "job": "110-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:02.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-130-disk-0",
+       "vmid": 130,
+       "module": "tappaas-cicd",
+       "guest": "tappaas-cicd",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3309568,
+       "refer": 86016,
+       "snapshots": 77824,
+       "replica": {
+        "job": "130-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:05.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-130-disk-1",
+       "vmid": 130,
+       "module": "tappaas-cicd",
+       "guest": "tappaas-cicd",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 68719476736,
+       "used": 112147369984,
+       "refer": 38026526720,
+       "snapshots": 4324478976,
+       "replica": {
+        "job": "130-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:05.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-140-disk-0",
+       "vmid": 140,
+       "module": "identity",
+       "guest": "identity",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3620864,
+       "refer": 86016,
+       "snapshots": 389120,
+       "replica": {
+        "job": "140-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:08.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-140-disk-1",
+       "vmid": 140,
+       "module": "identity",
+       "guest": "identity",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 34359738368,
+       "used": 51416301568,
+       "refer": 15713140736,
+       "snapshots": 803930112,
+       "replica": {
+        "job": "140-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:08.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-361-disk-0",
+       "vmid": 361,
+       "module": "immich",
+       "guest": "immich",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 507904,
+       "refer": 102400,
+       "snapshots": 405504,
+       "replica": {
+        "job": "361-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:12.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-361-disk-1",
+       "vmid": 361,
+       "module": "immich",
+       "guest": "immich",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 536870912000,
+       "used": 14724501504,
+       "refer": 14456377344,
+       "snapshots": 268124160,
+       "replica": {
+        "job": "361-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:12.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-610-disk-0",
+       "vmid": 610,
+       "module": "vaultwarden",
+       "guest": "vaultwarden",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 1048576,
+       "used": 3633152,
+       "refer": 90112,
+       "snapshots": 397312,
+       "replica": {
+        "job": "610-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:15.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-610-disk-1",
+       "vmid": 610,
+       "module": "vaultwarden",
+       "guest": "vaultwarden",
+       "kind": "mirror",
+       "runsOn": "tappaas1",
+       "type": "volume",
+       "size": 17179869184,
+       "used": 21848743936,
+       "refer": 4118429696,
+       "snapshots": 279912448,
+       "replica": {
+        "job": "610-0",
+        "source": "tappaas1",
+        "lastSync": "2026-10-22T08:30:15.000Z"
+       },
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-811-cloudinit",
+       "vmid": 811,
+       "module": "unifi-os",
+       "guest": "unifi-os",
+       "kind": "own",
+       "runsOn": "tappaas3",
+       "type": "volume",
+       "size": 4194304,
+       "used": 6291456,
+       "refer": 77824,
+       "snapshots": 0,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      },
+      {
+       "name": "tanka1/vm-811-disk-0",
+       "vmid": 811,
+       "module": "unifi-os",
+       "guest": "unifi-os",
+       "kind": "own",
+       "runsOn": "tappaas3",
+       "type": "volume",
+       "size": 53687091200,
+       "used": 68909838336,
+       "refer": 13071294464,
+       "snapshots": 1576710144,
+       "replica": null,
+       "mirroredOn": [],
+       "note": null
+      }
+     ],
+     "datasets": [],
+     "totals": {
+      "total": 990526832640,
+      "own": 68916129792,
+      "mirror": 239177461760,
+      "other": 148107264,
+      "free": 682285133824
+     },
+     "state": "ok",
+     "reasons": []
+    },
+    {
+     "name": "tankc1",
+     "declared": true,
+     "present": true,
+     "health": "DEGRADED",
+     "status": "One or more devices has experienced an unrecoverable error.  An attempt was made to correct the error.  Applications are unaffected. Determine if the device needs to be replaced, and clear the errors using 'zpool clear' or replace the device with 'zpool replace'.",
+     "size": 4999341932544,
+     "allocated": 404308897792,
+     "free": 4595033034752,
+     "fragmentation": 1,
+     "dedup": 1,
+     "compression": "on",
+     "compressRatio": 1.04,
+     "usable": {
+      "total": 4861902979072,
+      "used": 404308783104,
+      "avail": 4457594195968,
+      "pct": 8.3
+     },
+     "scrub": {
+      "state": "unknown",
+      "last": null,
+      "errors": null,
+      "text": null
+     },
+     "vdevs": [
+      {
+       "name": "ata-HGST_HDN726050ALE614_NAHW317X",
+       "type": "stripe",
+       "parity": null,
+       "role": "data",
+       "health": "DEGRADED",
+       "state": "warn",
+       "disks": [
+        {
+         "device": "/dev/sdb",
+         "byId": "/dev/disk/by-id/ata-HGST_HDN726050ALE614_NAHW317X",
+         "model": "HGST_HDN726050ALE614",
+         "serial": "NAHW317X",
+         "wwn": "0x5000cca242da68ef",
+         "size": 5000981078016,
+         "type": "hdd",
+         "wearout": null,
+         "smart": {
+          "read": true,
+          "health": "passed",
+          "temperature": 41,
+          "reallocated": 534,
+          "pending": 64,
+          "uncorrectable": 1667,
+          "mediaErrors": null,
+          "criticalWarning": null,
+          "powerOnHours": 66032
+         },
+         "zfs": {
+          "pool": "tankc1",
+          "vdev": "ata-HGST_HDN726050ALE614_NAHW317X",
+          "state": "DEGRADED",
+          "read": 17980,
+          "write": 558,
+          "cksum": 25577,
+          "msg": "too many errors"
+         },
+         "exportedPool": null,
+         "state": "fail",
+         "reasons": [
+          "ZFS DEGRADED in tankc1: too many errors",
+          "ZFS errors read 17980, write 558, checksum 25577",
+          "SMART: 534 reallocated, 64 pending, 1667 uncorrectable sectors"
+         ]
+        }
+       ],
+       "missing": []
+      }
+     ],
+     "volumes": [],
+     "datasets": [
+      {
+       "name": "tankc1:tappaas_backup",
+       "kind": "pbs-datastore",
+       "label": "tappaas_backup",
+       "mountpoint": "/tankc1/tappaas_backup",
+       "used": 404216061952,
+       "exact": false
+      }
+     ],
+     "totals": {
+      "total": 4861902979072,
+      "own": 0,
+      "mirror": 0,
+      "other": 404308783104,
+      "free": 4457594195968
+     },
+     "state": "warn",
+     "reasons": [
+      "DEGRADED: one or more devices has experienced an unrecoverable error",
+      "disk /dev/sdb fail"
+     ]
+    }
+   ],
+   "otherDisks": [
+    {
+     "device": "/dev/sda",
+     "byId": "/dev/disk/by-id/ata-ST8000AS0002-1NA17Z_Z840DMA1",
+     "model": "ST8000AS0002-1NA17Z",
+     "serial": "Z840DMA1",
+     "wwn": "0x5000c50087e61dbb",
+     "size": 8001563222016,
+     "type": "hdd",
+     "wearout": null,
+     "smart": {
+      "read": true,
+      "health": "passed",
+      "temperature": 37,
+      "reallocated": 2808,
+      "pending": 632,
+      "uncorrectable": 632,
+      "mediaErrors": null,
+      "criticalWarning": null,
+      "powerOnHours": 71990
+     },
+     "zfs": null,
+     "exportedPool": {
+      "name": "larsbackup",
+      "state": "DEGRADED",
+      "deviceState": "ONLINE"
+     },
+     "state": "warn",
+     "reasons": [
+      "SMART: 2808 reallocated, 632 pending, 632 uncorrectable sectors"
+     ]
+    }
+   ],
+   "replication": [],
+   "state": "warn",
+   "reasons": [
+    "tankc1 warn",
+    "/dev/sda warn"
+   ]
+  }
+ ],
+ "findings": [
+  {
+   "level": "fail",
+   "cause": "zfs",
+   "on": {
+    "kind": "disk",
+    "node": "tappaas3",
+    "name": "/dev/sdb"
+   },
+   "text": "tappaas3 /dev/sdb (HGST_HDN726050ALE614, NAHW317X) in tankc1: ZFS DEGRADED in tankc1: too many errors; ZFS errors read 17980, write 558, checksum 25577; SMART: 534 reallocated, 64 pending, 1667 uncorrectable sectors"
+  },
+  {
+   "level": "warn",
+   "cause": "health",
+   "on": {
+    "kind": "pool",
+    "node": "tappaas3",
+    "name": "tankc1"
+   },
+   "text": "tappaas3/tankc1: DEGRADED: one or more devices has experienced an unrecoverable error"
+  },
+  {
+   "level": "warn",
+   "cause": "smart",
+   "on": {
+    "kind": "disk",
+    "node": "tappaas3",
+    "name": "/dev/sda"
+   },
+   "text": "tappaas3 /dev/sda (ST8000AS0002-1NA17Z, Z840DMA1), in the pool larsbackup that is not imported: SMART: 2808 reallocated, 632 pending, 632 uncorrectable sectors"
+  }
+ ],
+ "sources": [
+  {
+   "name": "site.json",
+   "ok": true,
+   "error": null
+  },
+  {
+   "name": "cluster resources",
+   "ok": true,
+   "error": null
+  },
+  {
+   "name": "cluster replication",
+   "ok": true,
+   "error": null
+  },
+  {
+   "name": "module-manager list",
+   "ok": true,
+   "error": null
+  },
+  {
+   "name": "shares.json",
+   "ok": true,
+   "error": null
+  },
+  {
+   "name": "tappaas1 storage",
+   "ok": true,
+   "error": null
+  },
+  {
+   "name": "tappaas2 storage",
+   "ok": true,
+   "error": null
+  },
+  {
+   "name": "tappaas3 storage",
+   "ok": true,
+   "error": null
+  }
+ ]
+}

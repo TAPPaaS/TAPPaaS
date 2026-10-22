@@ -5,16 +5,19 @@
 // applied; a node's uplinks: site-manager node network show / set), and where
 // to open it. Where the hardware sits (rack-manager): the mount of a node, a
 // switch or an access point with Mount…, Move to… and Unmount…, a rack's own
-// record, and a passive or outside device's mount and recorded cables.
+// record, and a passive or outside device's mount and recorded cables. From
+// the storage inventory: a disk, a pool with what it holds, a node's storage.
 
 import { ReactNode } from "react";
 import { zoneColor } from "../colors";
-import { TopoFinding, TopoRef, Topology } from "../types";
+import { StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
 import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
 import { MountActions, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackModifySteps } from "./rackops";
 import { publicAddress } from "../zonegraph";
+import { StorageNote } from "./storage";
+import { DiskBody, NodeStorage, PoolBody } from "./storageview";
 
 function Findings({ list }: { list: TopoFinding[] }) {
   if (list.length === 0) return <p className="muted small">No finding on it.</p>;
@@ -57,7 +60,7 @@ function mountedAt(t: Topology, device: string): string | null {
   return t.racks ? "mounted in no rack" : null;
 }
 
-export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () => void }) {
+export function SidePanel({ t, sel, close, storage }: { t: Topology; sel: Sel; close: () => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null }) {
   const operator = canOperate(useMe());
   const racks = t.racks ?? null;
   const about = (kind: string, name: string, sw?: string) => t.findings.filter((f) => refIs(f.on, kind, name, sw) || f.refs.some((r) => refIs(r, kind, name, sw)));
@@ -201,6 +204,7 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
             const g = t.findings.filter((f) => f.on.kind === "module" && n.guests.some((x) => x.module === f.on.name)).length;
             return g ? <p className="muted small">and {g} finding(s) on its guests — click a guest chip.</p> : null;
           })()}
+          {storage ? <NodeStorage inv={storage.inv} notes={storage.notes} node={n.name} /> : null}
         </>
       );
       open = <OpenIn kind="node" id={n.name} />;
@@ -367,6 +371,16 @@ export function SidePanel({ t, sel, close }: { t: Topology; sel: Sel; close: () 
         </>
       );
       open = <p className="muted small">A rack is a record of config/racks.json only.</p>;
+      break;
+    }
+    case "disk":
+    case "pool": {
+      if (!storage) break;
+      const b = sel.kind === "disk" ? DiskBody({ inv: storage.inv, notes: storage.notes, node: sel.node, device: sel.id }) : PoolBody({ inv: storage.inv, notes: storage.notes, node: sel.node, pool: sel.id });
+      if (!b) break;
+      title = b.title;
+      body = b.body;
+      open = b.open;
       break;
     }
     case "mount": {

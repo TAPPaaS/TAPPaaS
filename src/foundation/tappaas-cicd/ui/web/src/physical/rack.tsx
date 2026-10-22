@@ -2,7 +2,7 @@
 // unit rows numbered as the rack numbers them, each mount as its faceplate at
 // its units and width with its port grid, the ports' live state from the
 // topology (link up or down, LAG), and the cables port to port in the zone
-// colours of the Cabling view, labelled on hover. A device only a cable record
+// colours of the Device view, labelled on hover. A device only a cable record
 // places (the ISP's modem) stands left of the racks. Everything comes from
 // `network-manager topology` .racks; nothing is placed by hand here.
 
@@ -120,7 +120,7 @@ export function layoutRacks(v: RacksView): RackLayout {
   return { width: Math.max(x - R.gap + R.margin + 60, 400), height: Math.max(R.top + maxH + R.bottom, outsideH + R.bottom), racks, placed, ports };
 }
 
-// A cable's colour and dash, as the Cabling view draws links: a wan link
+// A cable's colour and dash, as the Device view draws links: a wan link
 // dashed in the wan colour, an access link in its zone's colour, a trunk
 // slate, a link that is down red and dotted.
 export function cableStyle(c: RackCable, t: Topology): { stroke: string; width: number; dash?: string } {

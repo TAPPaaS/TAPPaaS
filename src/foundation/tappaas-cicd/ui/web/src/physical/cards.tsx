@@ -1,14 +1,26 @@
 // cards.tsx — the Physical view's objects as React Flow nodes (homelable's
 // grammar: a status dot on every card, ports drawn on the switch, guests as
-// chips on their node, a finding as ⚠ where it belongs). A click selects; the
-// side panel shows the records.
+// chips on their node, a finding as ⚠ where it belongs). Every card, and every
+// port row, coloured by its state as the other Physical views colour theirs
+// (state.tsx): its findings' worst level, a port's drift a warning; the reason
+// on hover. A click selects; the side panel shows the records.
 
 import { Handle, Node, NodeProps, Position } from "@xyflow/react";
 import { MouseEvent } from "react";
 import { zoneColor } from "../colors";
 import { Dot } from "../ui";
 import { publicAddress, publicText } from "../zonegraph";
+import { TopoFinding } from "../types";
 import { ApData, ClusterData, FirewallData, G, IspData, OutsideData, SwitchData, portLabel, portY, uplinkY } from "./layout";
+import { CardState, stateClass, stateOf } from "./state";
+
+// A card's state from its findings (and anything else that is wrong with it),
+// and the hover that says why.
+function cardState(findings: TopoFinding[], extra: { level: "warn" | "fail"; text: string }[] = []): { cls: string; state: CardState; title: string } {
+  const all = [...findings.map((f) => ({ level: f.level, text: `${f.gate}: ${f.text}` })), ...extra];
+  const state = stateOf(all.map((x) => x.level));
+  return { cls: stateClass(state), state, title: all.length ? `${state}: ${all.map((x) => x.text).join("; ")}` : "ok" };
+}
 
 const stop = (f: () => void) => (e: MouseEvent) => {
   e.stopPropagation();
@@ -23,8 +35,9 @@ function Warn({ n }: { n: number }) {
 // ── the ISP ───────────────────────────────────────────────────────────
 export function IspCard({ data }: NodeProps<Node<IspData, "isp">>) {
   const w = data.wan;
+  const st = cardState(data.findings);
   return (
-    <div className="card-flow card-isp" onClick={stop(() => data.pick({ kind: "isp", id: "isp" }))}>
+    <div className={`card-flow card-isp ${st.cls}`} title={st.title} onClick={stop(() => data.pick({ kind: "isp", id: "isp" }))}>
       <div className="cf-title">
         <Dot level={data.findings.some((f) => f.level === "warn" || f.level === "fail") ? "warn" : "pass"} /> Internet · ISP
       </div>
@@ -43,10 +56,11 @@ export function FirewallCard({ data }: NodeProps<Node<FirewallData, "firewall">>
   const fw = data.wan.firewall!;
   const active = data.wan.paths.find((p) => p.active);
   const others = data.wan.paths.filter((p) => !p.active);
+  const st = cardState(data.findings);
   return (
-    <div className="card-flow card-fw" onClick={stop(() => data.pick({ kind: "firewall", id: fw.module }))}>
+    <div className={`card-flow card-fw ${st.cls}`} title={st.title} onClick={stop(() => data.pick({ kind: "firewall", id: fw.module }))}>
       <div className="cf-title">
-        <Dot level="pass" /> {fw.module} · OPNsense {fw.vmid ? `(VM ${fw.vmid})` : ""} <Warn n={data.findings.length} />
+        <Dot level={st.state === "ok" ? "pass" : st.state} /> {fw.module} · OPNsense {fw.vmid ? `(VM ${fw.vmid})` : ""} <Warn n={data.findings.length} />
       </div>
       <div className="cf-sub">wan bridge ← vlan {data.wan.vlan ?? "?"}{active ? ` via ${active.node}/${active.nic}` : ""}</div>
       <div className="cf-sub">
@@ -61,12 +75,15 @@ export function FirewallCard({ data }: NodeProps<Node<FirewallData, "firewall">>
 export function SwitchCard({ data }: NodeProps<Node<SwitchData, "switch">>) {
   const s = data.sw;
   const zoneOf = (name: string) => data.zones.find((z) => z.name === name) ?? { name };
-  const portFindings = (p: string) => data.findings.filter((f) => (f.on.kind === "port" && f.on.name === p) || f.refs.some((r) => r.kind === "port" && r.name === p)).length;
+  const portFindingList = (p: string) => data.findings.filter((f) => (f.on.kind === "port" && f.on.name === p) || f.refs.some((r) => r.kind === "port" && r.name === p));
+  const portFindings = (p: string) => portFindingList(p).length;
+  const drift = (p: (typeof s.ports)[number]) => (p.drift === "drift" ? [{ level: "warn" as const, text: `port ${p.port} drifts: add ${p.add.join(",") || "-"}, remove ${p.remove.join(",") || "-"}` }] : []);
+  const st = cardState(data.findings, s.ports.flatMap(drift));
   const sel = data.selected;
   return (
-    <div className="card-flow card-switch" onClick={stop(() => data.pick({ kind: "switch", id: s.name }))}>
+    <div className={`card-flow card-switch ${st.cls}`} title={st.title} onClick={stop(() => data.pick({ kind: "switch", id: s.name }))}>
       <div className="cf-title">
-        <Dot level={s.ports.some((p) => p.drift === "drift") ? "warn" : "pass"} /> {s.name}
+        <Dot level={st.state === "ok" ? "pass" : st.state} /> {s.name}
       </div>
       <div className="cf-sub">
         {s.vendor ?? "?"} · {s.managed ?? "?"}
@@ -76,13 +93,14 @@ export function SwitchCard({ data }: NodeProps<Node<SwitchData, "switch">>) {
         {s.ports.map((p) => {
           const n = portFindings(p.port);
           const on = sel?.kind === "port" && sel.switch === s.name && sel.id === p.port;
+          const ps = cardState(portFindingList(p.port), drift(p));
           return (
             <div
               key={p.port}
-              className={`port port-${p.role}${on ? " port-on" : ""}`}
+              className={`port port-${p.role}${on ? " port-on" : ""}${ps.state === "ok" ? "" : ` port-st-${ps.state}`}`}
               style={{ height: G.portRow }}
               onClick={stop(() => data.pick({ kind: "port", id: p.port, switch: s.name }))}
-              title={`port ${p.port}: ${p.mode} ${p.mode === "access" ? p.native : p.tagged.join(",")}`}
+              title={`port ${p.port}: ${p.mode} ${p.mode === "access" ? p.native : p.tagged.join(",")}${ps.state === "ok" ? "" : ` — ${ps.title}`}`}
             >
               <span className="port-no">{p.port}</span>
               <span className="port-vlans">
@@ -124,9 +142,11 @@ export function SwitchCard({ data }: NodeProps<Node<SwitchData, "switch">>) {
 export function ClusterCard({ data }: NodeProps<Node<ClusterData, "cluster">>) {
   const n = data.node;
   const pick = data.pick;
-  const nodeLevel = data.findings.some((f) => f.level === "fail") ? "fail" : data.findings.length ? "warn" : "pass";
+  const downLegs = n.uplinks.flatMap((u) => u.legs.filter((l) => !l.up).map((l) => ({ level: "warn" as const, text: `${u.name} leg ${l.nic} is down` })));
+  const st = cardState(data.findings, downLegs);
+  const nodeLevel = st.state === "ok" ? "pass" : st.state;
   return (
-    <div className="card-flow card-node" onClick={stop(() => pick({ kind: "node", id: n.name }))}>
+    <div className={`card-flow card-node ${st.cls}`} title={st.title} onClick={stop(() => pick({ kind: "node", id: n.name }))}>
       <div className="cf-title">
         <Dot level={nodeLevel} title={n.ha ? `HA lrm ${n.ha.lrm}` : undefined} /> {n.name} <Warn n={data.findings.length} />
         <span className="cf-roles">{n.roles.join(" · ")}</span>
@@ -173,10 +193,11 @@ export function ClusterCard({ data }: NodeProps<Node<ClusterData, "cluster">>) {
 // ── an access point ───────────────────────────────────────────────────
 export function ApCard({ data }: NodeProps<Node<ApData, "ap">>) {
   const a = data.ap;
+  const st = cardState(data.findings);
   return (
-    <div className="card-flow card-ap" onClick={stop(() => data.pick({ kind: "ap", id: a.name }))}>
+    <div className={`card-flow card-ap ${st.cls}`} title={st.title} onClick={stop(() => data.pick({ kind: "ap", id: a.name }))}>
       <div className="cf-title">
-        <Dot level="pass" /> {a.name} · AP
+        <Dot level={st.state === "ok" ? "pass" : st.state} /> {a.name} · AP <Warn n={data.findings.length} />
       </div>
       <div className="cf-sub">
         {a.address ?? "—"} · {a.ssids.length} SSID(s) mapped
@@ -197,8 +218,9 @@ export function OutsideCard({ data }: NodeProps<Node<OutsideData, "outside">>) {
       </div>
     );
   }
+  const st = cardState(data.findings, o.state === "down" ? [{ level: "warn", text: `${o.name} is down` }] : []);
   return (
-    <div className="card-flow card-outside" onClick={stop(() => data.pick({ kind: "outside", id: o.name }))}>
+    <div className={`card-flow card-outside ${st.cls}`} title={st.title} onClick={stop(() => data.pick({ kind: "outside", id: o.name }))}>
       <div className="cf-title">
         <Dot level={o.state === "down" ? "warn" : o.state === "up" ? "pass" : "unknown"} title={o.state ?? undefined} /> {o.kind} {o.name}{" "}
         <Warn n={data.findings.length} />

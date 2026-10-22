@@ -20,7 +20,7 @@ export interface JumpContext {
   pbsStore: string; // the PBS datastore the site backs up to
 }
 
-export type JumpKind = "node" | "module" | "switch" | "port" | "lag" | "ap" | "zone" | "peer" | "site";
+export type JumpKind = "node" | "module" | "switch" | "port" | "lag" | "ap" | "zone" | "peer" | "site" | "disk" | "pool";
 
 const enc = encodeURIComponent;
 
@@ -36,6 +36,13 @@ function publicName(ctx: JumpContext, module: string): string | null {
 export function proxmoxUrl(ctx: JumpContext, node: string, guest?: { vmid: number; kind: string }): string {
   const what = guest ? `${guest.kind === "lxc" ? "lxc" : "qemu"}/${guest.vmid}` : `node/${node}`;
   return `https://${node}.${ctx.mgmtDomain}:8006/#v1:0:=${what}`;
+}
+
+// A node's own panel in Proxmox, at one tab: its state hash is view, the
+// selected object, the log tab (4: tasks), then the node's tab (2: Disks,
+// "=zfs": Disks › ZFS).
+export function proxmoxNodeTab(ctx: JumpContext, node: string, tab: "disks" | "zfs"): string {
+  return `${proxmoxUrl(ctx, node)}:4:${tab === "disks" ? "2" : "=zfs"}`;
 }
 
 // Grafana Explore on the logs of one host (the logging module's Loki, uid "loki").
@@ -120,6 +127,14 @@ export function jumpsFor(kind: JumpKind, id: string, ctx: JumpContext, sw?: stri
         const g = publicName(ctx, "logging");
         if (g) push("grafana", "Grafana", `https://${g}/`);
       }
+      break;
+    // A disk or a pool: id is its node.
+    case "disk":
+      push("proxmox", `Proxmox · ${id} disks`, proxmoxNodeTab(ctx, id, "disks"));
+      break;
+    case "pool":
+      push("proxmox", `Proxmox · ${id} ZFS`, proxmoxNodeTab(ctx, id, "zfs"));
+      push("proxmox", `Proxmox · ${id} disks`, proxmoxNodeTab(ctx, id, "disks"));
       break;
     case "peer":
       if (installed(ctx, "backup")) push("pbs", "PBS · remotes", `https://backup.${ctx.mgmtDomain}:8007/#pbsRemoteView`);

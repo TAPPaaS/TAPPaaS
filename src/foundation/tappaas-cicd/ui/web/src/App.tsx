@@ -16,7 +16,7 @@ import { ModulePage } from "./pages/ModulePage";
 import { Modules } from "./pages/Modules";
 import { Overview } from "./pages/Overview";
 import { OwnerOverview } from "./pages/OwnerOverview";
-import { Physical, PhysicalView } from "./pages/Physical";
+import { PHYSICAL_TABS, Physical, PhysicalView } from "./pages/Physical";
 import { AssistantStatus, Me, SiteRead } from "./types";
 import { Link, MeContext, replacePath, usePath } from "./ui";
 
@@ -39,8 +39,8 @@ const OWNER_NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/modules", label: "Modules", live: true },
 ];
 
-// The physical view's two views by address; /site/physical shows the default.
-const PHYSICAL_VIEWS: Record<string, PhysicalView> = { "/site/physical/rack": "rack", "/site/physical/cabling": "cabling" };
+// The physical view's four views by address; /site/physical shows the default.
+const PHYSICAL_VIEWS: Record<string, PhysicalView> = Object.fromEntries(PHYSICAL_TABS.map((v) => [`/site/physical/${v}`, v]));
 
 function active(path: string, to: string): boolean {
   return to === "/" ? path === "/" : path === to || path.startsWith(`${to}/`);
@@ -61,6 +61,7 @@ export function App() {
   // The physical view's old address keeps working (bookmarks, ?select=).
   useEffect(() => {
     if (path === "/physical") replacePath(`/site/physical${window.location.search}`);
+    if (path === "/site/physical/cabling") replacePath(`/site/physical/device${window.location.search}`);
   }, [path]);
   const [busy, setBusy] = useState(false);
   const s = site.env?.data?.site;

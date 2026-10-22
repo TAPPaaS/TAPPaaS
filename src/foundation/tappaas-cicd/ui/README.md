@@ -35,19 +35,36 @@ day 2: add a node, an environment, a stack; enrol a device (the wg-quick file to
 
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
-jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects there) has two views.
-**Rack** (`/site/physical/rack`, the default once a rack is recorded): each rack of rack-manager's
+jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects there) has four views,
+each at its own address: Overview, Rack, Device and Storage (`/site/physical/<view>`).
+**Overview** (`/site/physical`, the default) sums the other three: the site in one line (nodes,
+switches, APs, racks, pools, disks, the public address), each rack as a thumbnail of its units (a
+click opens the Rack view), the Device view as counts with the findings on devices, each node's
+pools with a fill bar coloured by state and its disks with a problem, and every finding of the
+topology and the storage inventory, each linked to the view and the object it is on.
+**Rack** (`/site/physical/rack`): each rack of rack-manager's
 `config/racks.json` as a frame with its units numbered as the rack numbers them, each mount as its
 faceplate at its units and width with its ports' live state (link, LAG), the cables port to port in
 the zone colours below with a label on hover, a device only a cable record places beside the rack,
 and an Unplaced tray of the devices mounted nowhere, each with Mount…; a click on a plate or a port
 opens the side card to the left of the racks, with Mount…, Move to… and Unmount… besides the
-object's own changes. **Cabling** (`/site/physical/cabling`) — the topology laid out under the spike's rules (ISP top-left, the firewall
+object's own changes. **Device** (`/site/physical/device`) — the topology laid out under the spike's rules (ISP top-left, the firewall
 as a callout on the WAN path, the switch in the centre with its ports coloured by VLAN, the
 nodes to the right with their uplinks and guests, APs below, buddies and the satellite on the
-left); a click opens the object's records, findings, jumps and its day-2 change: a switch
+left), each card and each switch port coloured by its state as the Storage view colours its cards
+(its findings' worst level; a drifting port, a node's uplink leg down or a buddy down are warnings;
+the reason on hover; one legend for both views); a click opens the object's records, findings, jumps and its day-2 change: a switch
 port's record (`switch-manager update-port`) then `switch-manager reconcile`, a node's
-`node network show / set`. **Modules** — tabs: Installed (the list with its badges, grouped by stack, foundation
+`node network show / set`. **Storage** (`/site/physical/storage`, `storage-manager inventory`) — in
+columns: the cluster nodes, each node's boot device and pools (with the pool's fill bar), each
+pool's disks (a mirror's or a raidz's disks carry its label and a bracket), lines node → pool →
+disk; every card coloured by its state (ok green, warn amber, fail red, the reason on hover),
+raised by the storage-pools and storage-disks findings on it. A disk's card: model, serial, size,
+SMART, life left, temperature, sector counts, its ZFS errors and the jump to the node's Disks in
+Proxmox; a pool's: size, used, free, health, scrub, its vdevs and a pie of what it holds — one
+slice per guest with its own disks there (linked to its module page), the HA mirror copies of
+other nodes' guests as one slice (expandable to the guests), datastores and shares, other
+datasets, free. **Modules** — tabs: Installed (the list with its badges, grouped by stack, foundation
 first) and one per registered repository (`GET /api/v1/catalogs`: `site-manager repository list`, each
 repository's module-catalog.json and each module's own JSON; installed = a deployed instance whose
 `moduleSource` is the module's directory, with the instances named and linked; Install = `module-manager
@@ -109,6 +126,7 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | a form's schema (`schemas/zones`, `schemas/environment`, the rack and mount `$defs` of `racks-fields`) | `src/foundation/schemas/<name>-fields.json` of `$CONSOLE_REPO` | 10 min |
 | topology (the Physical page) | `network-manager topology --json --health <the cached validate>` | every 5 min |
 | the faceplate catalog (a mount's faceplate choices) | `rack-manager faceplates list --json` | 10 min |
+| storage (Physical › Storage and Overview) | `storage-manager inventory --json` (SMART included, ≈15 s on three nodes) | 10 min, read when a page asks; no timer of its own |
 | zones | `network-manager list --json`, `show <zone> --json` | every 5 min |
 | environments | `environment-manager list --json` | every 5 min |
 | site | `site-manager site show / node list / repository list --json`, `config/last-update-result.json` | every 5 min |
@@ -123,9 +141,10 @@ now (it changes nothing on the site).
 ## API (`/api/v1`)
 
 Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
-`modules/<m>/drift[?refresh=1]` · `zones` · `environments` · `topology` · `security` ·
+`modules/<m>/drift[?refresh=1]` · `zones` · `environments` · `topology` · `storage` · `security` ·
 `activity[?module=<m>]` (the sweep's runs, and `jobs`) · `manifests` ·
-`jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site).
+`jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site;
+disk and pool, whose id is the node: its Disks and ZFS panels in Proxmox).
 Each answers `{data, at, ageSeconds, refreshing, error}`.
 
 ## Jobs — every change (ADR-034 D4)

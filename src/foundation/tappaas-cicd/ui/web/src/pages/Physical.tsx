@@ -1,9 +1,9 @@
-// Physical — the site as it is built, laid out from `network-manager topology`
-// and nothing else, in two views. Rack (the default once a rack is recorded):
-// the racks with each device's faceplate at its units and the cables port to
-// port (physical/rack.tsx), the devices mounted nowhere in a tray. Cabling
-// (ADR-034 D5, mockup ui-02): the cards and links laid out automatically.
-// Click an object for its side card.
+// Physical — the site as it is built, in four views. Overview: the other three
+// summed up. Rack: the racks with each device's faceplate at its units and the
+// cables port to port (physical/rack.tsx), the devices mounted nowhere in a
+// tray. Device (ADR-034 D5, mockup ui-02): every physical device as a card and
+// its connections as lines, laid out automatically. Storage: the nodes, their
+// pools and disks. Click an object for its side card.
 
 import { Background, Controls, ReactFlow } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -15,7 +15,11 @@ import { Sel, layoutTopology } from "../physical/layout";
 import { RackCanvas } from "../physical/rack";
 import { MountActions, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
-import { Health, RacksView, Topology } from "../types";
+import { Health, RacksView, StorageInventory, Topology } from "../types";
+import { StateLegend } from "../physical/state";
+import { storageNotes } from "../physical/storage";
+import { StorageGraph } from "../physical/storageview";
+import { PhysicalOverview } from "../physical/overview";
 import { ReadState, canOperate, navigate, since, useMe } from "../ui";
 
 function selFromUrl(): Sel | null {
@@ -23,11 +27,17 @@ function selFromUrl(): Sel | null {
   if (!v) return null;
   const [kind, ...rest] = v.split(":");
   const id = rest.join(":");
-  if (kind === "node" || kind === "outside" || kind === "ap" || kind === "guest" || kind === "switch" || kind === "rack" || kind === "mount") return { kind, id };
+  if (kind === "node" || kind === "outside" || kind === "ap" || kind === "guest" || kind === "switch" || kind === "rack" || kind === "mount" || kind === "isp" || kind === "firewall") return { kind, id };
+  // port:<switch>:<port>, lag:<switch>:<lag>
+  if ((kind === "port" || kind === "lag") && id.includes(":")) return { kind, switch: id.slice(0, id.lastIndexOf(":")), id: id.slice(id.lastIndexOf(":") + 1) };
+  // disk:<node>:<device>, pool:<node>:<pool>
+  if ((kind === "disk" || kind === "pool") && id.includes(":")) return { kind, node: id.slice(0, id.indexOf(":")), id: id.slice(id.indexOf(":") + 1) };
   return null;
 }
 
-export type PhysicalView = "rack" | "cabling";
+export const PHYSICAL_TABS = ["overview", "rack", "device", "storage"] as const;
+export type PhysicalView = (typeof PHYSICAL_TABS)[number];
+const TAB_NAME: Record<PhysicalView, string> = { overview: "Overview", rack: "Rack", device: "Device", storage: "Storage" };
 
 // The devices mounted nowhere, each with Mount… (the catalog's plate for it,
 // the first rack's highest free units).
@@ -73,8 +83,8 @@ function Unplaced({ v, pick }: { v: RacksView; pick: (s: Sel) => void }) {
 }
 
 // Standalone (the owner's route) or as the Site page's Physical tab (embedded:
-// the Site page has the heading). view: the one the address names, else Rack
-// when a rack is recorded.
+// the Site page has the heading). view: the one the address names, else the
+// Overview.
 export function Physical({ embedded, view }: { embedded?: boolean; view?: PhysicalView }) {
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
@@ -85,7 +95,12 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
   const operator = canOperate(useMe());
   const t = topo.env?.data ?? null;
   const racks = t?.racks ?? null;
-  const shown: PhysicalView = view ?? (racks && racks.racks.length > 0 ? "rack" : "cabling");
+  const shown: PhysicalView = view ?? "overview";
+  // The storage inventory: read once a view shows it (SMART, ≈15 s the first time).
+  const store = useRead<StorageInventory>(shown === "storage" || shown === "overview" || sel?.kind === "node" ? "storage" : null);
+  const inv = store.env?.data ?? null;
+  const gates = health.env?.data?.gates;
+  const storage = useMemo(() => (inv ? { inv, notes: storageNotes(inv, gates ?? []) } : null), [inv, gates]);
 
   useEffect(() => {
     const on = () => setSel(selFromUrl());
@@ -101,7 +116,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
     }
     return m;
   }, [health.env]);
-  const flow = useMemo(() => (t && shown === "cabling" ? layoutTopology(t, { pick, selected: sel, showGuests, showLabels, memory }) : null), [t, shown, pick, sel, showGuests, showLabels, memory]);
+  const flow = useMemo(() => (t && shown === "device" ? layoutTopology(t, { pick, selected: sel, showGuests, showLabels, memory }) : null), [t, shown, pick, sel, showGuests, showLabels, memory]);
   const bad = (t?.sources ?? []).filter((s) => !s.ok);
 
   return (
@@ -109,17 +124,17 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
       <div className="page-head">
         {embedded ? null : <h1>Physical</h1>}
         <div className="seg" role="tablist" aria-label="view">
-          {(["rack", "cabling"] as const).map((x) => (
+          {PHYSICAL_TABS.map((x) => (
             <button key={x} role="tab" aria-selected={shown === x} className={shown === x ? "seg-on" : ""} onClick={() => navigate(`/site/physical/${x}`)}>
-              {x === "rack" ? "Rack" : "Cabling"}
+              {TAB_NAME[x]}
             </button>
           ))}
         </div>
         <span className="muted">
-          {t ? `${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout automatic"}` : ""}
+          {t && (shown === "rack" || shown === "device") ? `${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout automatic"}` : ""}
         </span>
         <span className="spacer" />
-        {shown === "cabling" ? (
+        {shown === "device" ? (
           <>
             <label className="toggle">
               <input type="checkbox" checked={showGuests} onChange={(e) => setShowGuests(e.target.checked)} /> guests
@@ -128,14 +143,14 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
               <input type="checkbox" checked={showLabels} onChange={(e) => setShowLabels(e.target.checked)} /> link labels
             </label>
           </>
-        ) : (
+        ) : shown === "rack" ? (
           <>
             <label className="toggle">
               <input type="checkbox" checked={showCables} onChange={(e) => setShowCables(e.target.checked)} /> cables
             </label>
             {operator ? <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} /> : null}
           </>
-        )}
+        ) : null}
       </div>
       <ReadState env={topo.env} failure={topo.failure} what="topology (network-manager topology)" />
       {bad.length ? (
@@ -143,9 +158,28 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
           Not drawn, because these did not answer: {bad.map((s) => `${s.name} (${s.error ?? "?"})`).join("; ")}
         </div>
       ) : null}
-      {shown === "rack" ? (
+      {shown === "overview" ? (
+        <PhysicalOverview t={t} inv={inv} notes={storage?.notes ?? new Map()} storageError={store.failure ?? store.env?.error ?? null} />
+      ) : shown === "storage" ? (
+        <>
+          <ReadState env={store.env} failure={store.failure} what="storage (storage-manager inventory)" />
+          {inv && inv.sources.some((s) => !s.ok) ? (
+            <div className="readstate readstate-warn">Not read: {inv.sources.filter((s) => !s.ok).map((s) => `${s.name} (${s.error ?? "?"})`).join("; ")}</div>
+          ) : null}
+          <div className="physical">
+            <div className="canvas" key={sel ? "with-card" : "alone"}>{storage ? <StorageGraph inv={storage.inv} notes={storage.notes} sel={sel} pick={pick} /> : null}</div>
+            {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
+          </div>
+          <div className="legend">
+            <StateLegend extra="a pool's bar is its fill" />
+            <span className="muted">
+              Data: storage-manager inventory {since(inv?.generated)}{inv && !inv.smart ? " (without SMART)" : ""}
+            </span>
+          </div>
+        </>
+      ) : shown === "rack" ? (
         <div className="physical physical-rack">
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
           <div className="canvas">
             {t && racks && racks.racks.length ? (
               <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
@@ -184,10 +218,10 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
               </ReactFlow>
             ) : null}
           </div>
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} storage={storage} /> : null}
         </div>
       )}
-      {t ? (
+      {t && (shown === "rack" || shown === "device") ? (
         <div className="legend">
           <span className="muted">Zones on links:</span>
           {t.zones
@@ -202,6 +236,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
           <span className="muted">
             {shown === "rack" ? "— trunk · - - wan · ··· recorded · red: no link · purple ring: LAG member · green port: link up" : "— trunk · - - wan access · ··· tunnel · ⚠ finding"}
           </span>
+          {shown === "device" ? <StateLegend /> : null}
           <span className="muted">
             Data: {(t.sources ?? []).filter((s) => s.ok).map((s) => s.name).join(" · ")}
           </span>
