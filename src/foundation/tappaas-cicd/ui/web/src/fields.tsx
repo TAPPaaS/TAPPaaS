@@ -64,7 +64,8 @@ function shown(v: unknown): string {
 }
 
 export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; only?: string[]; values: Values; set: (v: Values) => void }) {
-  const m = only ? { ...all, fields: all.fields.filter((f) => only.includes(f.name)) } : all;
+  // A name or a block: "location" is every location.* field.
+  const m = only ? { ...all, fields: all.fields.filter((f) => only.some((o) => f.name === o || f.name.startsWith(`${o}.`))) } : all;
   // The assistant's values (open_console), as the field's text: a list one per line.
   const prefill = useContext(PrefillContext);
   const pre = (f: ManifestField): string | null => {
@@ -201,7 +202,7 @@ export function fieldsStep(o: {
   name: string | null;
   mode: "add" | "modify";
   keep?: string[]; // the verb's own options that are not fields, offered under "Options"
-  fields?: string[]; // only these fields (a module card's own)
+  fields?: string[]; // only these fields, or blocks of them ("location": location.*) — a card's own
   hide?: string[];
   initial?: Values;
   choices?: Record<string, string[]>;

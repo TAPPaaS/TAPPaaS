@@ -505,3 +505,4 @@ button.mod-tile:hover { background: var(--info-bg); }
 .ov-room { margin-bottom: 8px; }
 .ov-room-name { font-weight: 600; font-size: 13px; }
 .segments { margin: 3px 0 0; padding-left: 18px; color: var(--ink); }
+.kv-inline { display: inline-flex; flex-wrap: wrap; gap: 2px 12px; }
