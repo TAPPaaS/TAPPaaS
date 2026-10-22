@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "racks-fields.json",
+  "title": "TAPPaaS Racks",
+  "description": "config/racks.json — where the site's hardware sits: the racks, what is mounted where, and the cables nothing can see. Site state, written only by rack-manager. A mount is keyed by the device's name in the physical topology (a node, a switch, an access point, a machine or a device module); the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": { "description": "The document's format.", "const": 1 },
+    "racks": {
+      "description": "The racks, keyed by name.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+      "additionalProperties": { "$ref": "#/$defs/rack" }
+    },
+    "mounts": {
+      "description": "What is mounted where, keyed by the device's topology name (or, for a passive device nothing can see — a patch panel, a PDU — its own name).",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/mount" }
+    },
+    "cables": {
+      "description": "Cables nothing can see: the ISP hand-off, a patch panel, a PDU. A port carries at most one cable.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/cable" }
+    }
+  },
+  "$defs": {
+    "rack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["units", "width", "numbering"],
+      "properties": {
+        "name": {
+          "description": "The rack's name: lower case, digits and dashes. It is the record's key.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "changeClass": "immutable",
+          "changeNote": "The mounts name the rack: add a rack under the new name, move the mounts, delete the old one."
+        },
+        "displayName": { "description": "The name shown on the rack's frame.", "type": "string", "changeClass": "in-place" },
+        "units": {
+          "description": "The rack's height in rack units (U).",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 42,
+          "changeClass": "in-place",
+          "changeNote": "Refused while a mount would no longer fit."
+        },
+        "width": {
+          "description": "The rack's width: a 19-inch rack, or a 10-inch one.",
+          "type": "string",
+          "enum": ["19in", "10in"],
+          "default": "19in",
+          "changeClass": "in-place"
+        },
+        "numbering": {
+          "description": "How the rack's units are numbered: U1 at the bottom (bottom-up), or at the top (top-down).",
+          "type": "string",
+          "enum": ["bottom-up", "top-down"],
+          "default": "bottom-up",
+          "changeClass": "in-place",
+          "changeNote": "Renumbers every mount's position as drawn; the recorded U of each mount stays."
+        },
+        "building": { "description": "The building the rack stands in.", "type": "string", "changeClass": "in-place" },
+        "room": { "description": "The room the rack stands in.", "type": "string", "changeClass": "in-place" },
+        "description": { "description": "What the rack is for, in a line.", "type": "string", "changeClass": "in-place" }
+      }
+    },
+    "mount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rack", "u", "height", "width", "face"],
+      "properties": {
+        "device": {
+          "description": "The mounted device: its name in the physical topology. It is the record's key.",
+          "type": "string",
+          "references": "devices",
+          "changeClass": "immutable",
+          "changeNote": "A mount is one device's: remove it and mount the other device."
+        },
+        "rack": { "description": "The rack it is mounted in.", "type": "string", "references": "racks", "changeClass": "in-place" },
+        "u": {
+          "description": "The lowest rack unit it occupies, as the rack numbers its units.",
+          "type": "integer",
+          "minimum": 1,
+          "changeClass": "in-place"
+        },
+        "height": {
+          "description": "How many rack units it occupies.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "default": "<computed: the faceplate's height, else 1>",
+          "changeClass": "in-place"
+        },
+        "width": {
+          "description": "How much of the rack's width it takes: all of it, a half or a third.",
+          "type": "string",
+          "enum": ["full", "half", "third"],
+          "default": "full",
+          "changeClass": "in-place"
+        },
+        "slot": {
+          "description": "For a half- or third-width device: its column, 0 at the left.",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 0,
+          "changeClass": "in-place"
+        },
+        "face": {
+          "description": "The side of the rack it faces.",
+          "type": "string",
+          "enum": ["front", "rear"],
+          "default": "front",
+          "changeClass": "in-place"
+        },
+        "faceplate": {
+          "description": "The faceplate drawn for it, from the catalog (vendor/model). Unset: the catalog's suggestion for the device's model, else a generic plate.",
+          "type": "string",
+          "references": "faceplates",
+          "changeClass": "in-place"
+        },
+        "label": { "description": "The label on the device, drawn on its plate.", "type": "string", "changeClass": "in-place" },
+        "description": { "description": "A note on the mount.", "type": "string", "changeClass": "in-place" }
+      }
+    },
+    "cableEnd": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device", "port"],
+      "properties": {
+        "device": {
+          "description": "A device of the topology, a mounted device, or one this cable places (with its faceplate).",
+          "type": "string",
+          "references": "devices"
+        },
+        "port": { "description": "The port, as the device's faceplate or the topology names it.", "type": "string" },
+        "faceplate": {
+          "description": "For a device only this cable places (the ISP's modem): its faceplate.",
+          "type": "string",
+          "references": "faceplates"
+        }
+      }
+    },
+    "cable": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to", "kind"],
+      "properties": {
+        "from": { "description": "One end.", "$ref": "#/$defs/cableEnd", "changeClass": "immutable", "changeNote": "Remove the cable and add it again." },
+        "to": { "description": "The other end.", "$ref": "#/$defs/cableEnd", "changeClass": "immutable", "changeNote": "Remove the cable and add it again." },
+        "kind": {
+          "description": "What the cable carries.",
+          "type": "string",
+          "enum": ["patch", "uplink", "power"],
+          "default": "patch",
+          "changeClass": "immutable"
+        },
+        "label": { "description": "The label on the cable.", "type": "string", "changeClass": "immutable" }
+      }
+    }
+  }
+}
