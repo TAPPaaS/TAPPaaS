@@ -149,6 +149,16 @@ LACP has aggregated and corosync is connected — and only then keeps the change
 Anything else and the node goes back to its previous uplink on its own. Then the
 node returns to HA placement.
 
+**A USB NIC as a lan leg (#849).** A node without a free PCIe slot can take a USB
+Ethernet adapter as its second `lan` leg, normally the `active-backup` backup:
+`site-manager node network set <node> --lan-ports <onboard>,<usb-mac> --lan-mode
+active-backup --lan-primary <onboard> --apply`. The adapter is pinned to `usblanN` by its
+MAC (Proxmox's `pve-network-interface-pinning`), USB autosuspend is turned off for it,
+and a udev rule (`/etc/udev/rules.d/90-tappaas-usb-nic.rules`, running
+`/usr/local/sbin/tappaas-usb-nic-up`) puts it back in its bond when it appears after boot
+or a replug; a missing adapter at boot is skipped and the bond runs on the other leg. On
+hrossen tappaas3 runs `eno1` + an RTL8156 2.5G dongle (`usblan0`) this way.
+
 **Switching to `lacp`** needs both ends: the node speaking LACP and its switch ports
 one aggregate (LAG). When the switch controller knows which switch ports the node's
 LAN NICs reach (`switch-manager add-port <switch> <port> --type node --target
