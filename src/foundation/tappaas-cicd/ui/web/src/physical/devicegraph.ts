@@ -5,7 +5,7 @@
 // with its cables, and each device's state from the findings on it. Plain
 // data, no React: the unit tests run it over hrossen's topology.
 
-import { RackCable, Topology, TopoFinding } from "../types";
+import { RackCable, RecordedKind, Topology, TopoFinding } from "../types";
 import { Sel } from "./layout";
 import { CardState, stateOf } from "./states";
 
@@ -16,6 +16,7 @@ export interface DevNode {
   name: string;
   kind: DevKind;
   sel: Sel;
+  recorded?: RecordedKind; // a device rack-manager records
 }
 
 // One cable, as the topology resolves it or as recorded; the internet's and a
@@ -42,13 +43,13 @@ const KIND_RANK: DevLink["kind"][] = ["wan", "hand-off", "tunnel", "peer-link", 
 
 export function deviceGraph(t: Topology): { nodes: DevNode[]; links: DevLink[] } {
   const nodes = new Map<string, DevNode>();
-  const add = (id: string, kind: DevKind, sel: Sel, name = id): void => {
-    if (!nodes.has(id)) nodes.set(id, { id, name, kind, sel });
+  const add = (id: string, kind: DevKind, sel: Sel, name = id, recorded?: RecordedKind): void => {
+    if (!nodes.has(id)) nodes.set(id, { id, name, kind, sel, ...(recorded ? { recorded } : {}) });
   };
   for (const s of t.switches) add(s.name, "switch", { kind: "switch", id: s.name });
   for (const n of t.nodes) add(n.name, "node", { kind: "node", id: n.name });
   for (const a of t.accessPoints) add(a.name, "ap", { kind: "ap", id: a.name });
-  for (const d of t.devices ?? []) add(d.name, d.kind, { kind: "mount", id: d.name });
+  for (const d of t.devices ?? []) add(d.name, d.kind === "machine" ? "machine" : "device", { kind: "mount", id: d.name }, d.name, d.recorded ? (d.kind as RecordedKind) : undefined);
   for (const o of t.racks?.outside ?? []) add(o.device, "device", { kind: "mount", id: o.device });
   // A mounted plate nothing else names (a patch panel, a PDU).
   for (const m of t.racks?.racks.flatMap((r) => r.mounts) ?? []) add(m.device, m.kind === "machine" ? "machine" : "device", { kind: "mount", id: m.device });

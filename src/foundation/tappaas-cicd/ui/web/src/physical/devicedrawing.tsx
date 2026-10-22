@@ -25,7 +25,16 @@ function genericPlate(t: Topology, d: DevNode): ResolvedPlate | null {
     ports = (n?.uplinks ?? []).flatMap((u) => u.legs.map((l) => ({ id: l.nic, name: l.nic, kind: kindOfPort(l.nic), up: l.up, disabled: false, lag: u.bond, zones: [] })));
   } else if (d.kind === "ap") {
     ports = [{ id: "uplink", name: "uplink", kind: "poe", up: null, disabled: false, lag: null, zones: [] }];
-  } else return null;
+  } else {
+    // A recorded device: the ports its record names.
+    const rec = t.devices?.find((x) => x.name === d.name && x.recorded);
+    if (!rec?.ports?.length) return null;
+    ports = rec.ports.map((p) => ({ id: p, name: p, kind: rec.kind === "ups" ? "power" : "rj45", up: null, disabled: false, lag: null, zones: [] }));
+    const per = ports.length > 24 ? Math.ceil(ports.length / 2) : ports.length;
+    const rows: (PlatePort | null)[][] = [ports.slice(0, per), ...(ports.length > per ? [ports.slice(per)] : [])];
+    const small = rec.kind === "modem" || rec.kind === "ont";
+    return { key: "recorded", vendor: "Generic", model: rec.kind === "patch-panel" ? `${ports.length}-port patch panel` : rec.kind, kind: rec.kind, units: rows.length > 1 ? 2 : 1, width: small ? "half" : "full", passive: true, rows, labels: [] };
+  }
   const per = ports.length > 12 ? Math.ceil(ports.length / 2) : ports.length;
   const rows: (PlatePort | null)[][] = per ? [ports.slice(0, per), ...(ports.length > per ? [ports.slice(per)] : [])] : [];
   return { key: "generic", vendor: "Generic", model: d.kind === "node" ? "server" : d.kind === "ap" ? "access point" : "switch", kind: d.kind, units: rows.length > 1 ? 2 : 1, width: d.kind === "ap" ? "half" : "full", passive: false, rows, labels: [] };

@@ -3,16 +3,22 @@
 // details are the side panel's); a link's colour and dash.
 
 import { zoneColor } from "../colors";
-import { Topology } from "../types";
+import { RecordedKind, Topology } from "../types";
 import { DevKind, DevLink, DevNode, DevState } from "./devicegraph";
 
 export const KIND_ICON: Record<DevKind, string> = { node: "▤", switch: "⇄", ap: "◉", isp: "☁", buddy: "⇆", machine: "▣", device: "▭" };
 export const KIND_NAME: Record<DevKind, string> = { node: "cluster node", switch: "switch", ap: "access point", isp: "internet", buddy: "backup buddy", machine: "machine", device: "device" };
 
+// A recorded device's own kind: its icon and its word.
+export const RECORDED_ICON: Record<RecordedKind, string> = { modem: "⌁", ont: "⌁", ups: "ϟ", "patch-panel": "▦", other: "▭" };
+export const RECORDED_NAME: Record<RecordedKind, string> = { modem: "modem", ont: "fibre terminal (ONT)", ups: "UPS", "patch-panel": "patch panel", other: "device" };
+export const iconOf = (d: DevNode): string => (d.recorded ? RECORDED_ICON[d.recorded] : KIND_ICON[d.kind]);
+export const kindName = (d: DevNode): string => (d.recorded ? `${RECORDED_NAME[d.recorded]} (recorded)` : KIND_NAME[d.kind]);
+
 export function DevLabel({ d, s }: { d: DevNode; s: DevState }) {
   return (
-    <div className="dev-card" title={`${d.name} · ${KIND_NAME[d.kind]} · ${s.reasons.length ? `${s.state}: ${s.reasons.join("; ")}` : "ok"}`}>
-      <span className="dev-icon" aria-label={KIND_NAME[d.kind]}>{KIND_ICON[d.kind]}</span>
+    <div className="dev-card" title={`${d.name} · ${kindName(d)} · ${s.reasons.length ? `${s.state}: ${s.reasons.join("; ")}` : "ok"}`}>
+      <span className="dev-icon" aria-label={kindName(d)}>{iconOf(d)}</span>
       <span className="dev-name">{d.name}</span>
     </div>
   );

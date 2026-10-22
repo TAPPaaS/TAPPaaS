@@ -20,7 +20,7 @@ import { publicAddress } from "../zonegraph";
 import { StorageNote } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
 import { DevLink, DevNode, deviceGraph, deviceState, selectedDevice } from "./devicegraph";
-import { KIND_ICON, KIND_NAME } from "./devicecard";
+import { iconOf, kindName } from "./devicecard";
 import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
 
@@ -100,7 +100,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
             const mine = l.cables.map((c) => (c.from.device === d.name ? c.from.port : c.to.device === d.name ? c.to.port : null)).filter(Boolean);
             return (
               <li key={l.id}>
-                <button className="linklike" onClick={() => pick(far.sel)}>{KIND_ICON[far.kind]} {far.name}</button>{" "}
+                <button className="linklike" onClick={() => pick(far.sel)}>{iconOf(far)} {far.name}</button>{" "}
                 <span className="muted">{mine.length ? `on ${mine.join(", ")} · ` : ""}{l.kind}{l.cables.length > 1 ? ` · ${l.cables.length} cables` : ""}</span>{" "}
                 <button className="linklike small" onClick={() => pick({ kind: "link", id: l.id })}>the link</button>
               </li>
@@ -156,7 +156,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
             const far = l ? devOf(farEnd(l, s.name)) : undefined;
             return l && far ? (
               <p className="toolbar">
-                <button className="btn" onClick={() => pick(far.sel)}>{KIND_ICON[far.kind]} {far.name}</button>
+                <button className="btn" onClick={() => pick(far.sel)}>{iconOf(far)} {far.name}</button>
                 <button className="btn" onClick={() => pick({ kind: "link", id: l.id, port: `${s.name}:${p.port}` })}>the link</button>
               </p>
             ) : null;
@@ -473,8 +473,8 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
             </table>
           ) : null}
           <div className="toolbar">
-            <button className="btn" onClick={() => pick(a.sel)}>{KIND_ICON[a.kind]} {a.name}</button>
-            <button className="btn" onClick={() => pick(b.sel)}>{KIND_ICON[b.kind]} {b.name}</button>
+            <button className="btn" onClick={() => pick(a.sel)}>{iconOf(a)} {a.name}</button>
+            <button className="btn" onClick={() => pick(b.sel)}>{iconOf(b)} {b.name}</button>
           </div>
           <h3>Findings</h3>
           <Findings list={t.findings.filter((f) => l.cables.some((c) => [c.from, c.to].some((e) => (f.on.kind === "port" && f.on.switch === e.device && f.on.name === e.port))))} />
@@ -504,16 +504,19 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       const un = racks?.unplaced.find((x) => x.device === sel.id);
       if (!m && !out && !un) break;
       const cables = (racks?.cables ?? []).filter((c) => c.from.device === sel.id || c.to.device === sel.id);
-      title = sel.id;
+      const rec = t.devices?.find((x) => x.name === sel.id && x.recorded);
+      title = rec?.displayName ? `${rec.displayName} · ${sel.id}` : sel.id;
       body = (
         <>
           <KV
             rows={[
-              ["kind", m ? (m.kind === "passive" ? `passive (${m.plate?.kind ?? "plate"})` : m.kind) : out ? "placed by a cable record" : un?.kind ?? null],
+              ["kind", rec ? `${rec.kind} (recorded: nothing can see it)` : m ? (m.kind === "passive" ? `passive (${m.plate?.kind ?? "plate"})` : m.kind) : out ? "placed by a cable record" : un?.kind ?? null],
+              ["model", rec?.model ?? null],
+              ["ports", rec?.ports?.length ? rec.ports.join(", ") : null],
               ["mounted", m ? mountedAt(t, sel.id) : out ? "outside the racks" : "mounted in no rack"],
               ["faceplate", m?.plate ? `${m.plate.vendor} ${m.plate.model} (${m.faceplate})` : out?.faceplate ?? un?.suggestion ?? null],
               ["label", m?.label ?? null],
-              ["description", m?.description ?? null],
+              ["description", m?.description ?? rec?.description ?? null],
             ]}
           />
           <h3>Cables</h3>
@@ -529,8 +532,12 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={t.findings.filter((f) => f.text.includes(sel.id))} />
         </>
       );
+      const recActs = rec ? <DeviceRecordActions name={sel.id} cabled={cables.some((c) => c.source === "recorded")} mounted={!!m} /> : null;
       actions = m ? (
-        <MountActions device={sel.id} v={racks} />
+        <>
+          <MountActions device={sel.id} v={racks} />
+          {recActs}
+        </>
       ) : out ? (
         <>
           {cables.filter((c) => c.source === "recorded").map((c) => (
@@ -538,9 +545,12 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           ))}
         </>
       ) : (
-        <MountActions device={sel.id} v={racks} />
+        <>
+          <MountActions device={sel.id} v={racks} />
+          {recActs}
+        </>
       );
-      open = <p className="muted small">{out ? "Nothing reports on it: it is known only by the cable that names it." : "Its own records are on the module's page."}</p>;
+      open = <p className="muted small">{rec ? "Nothing reports on it: rack-manager records it." : out ? "Nothing reports on it: it is known only by the cable that names it — record it (rack-manager device add) to mount it." : "Its own records are on the module's page."}</p>;
       break;
     }
   }
@@ -553,7 +563,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
     <aside className="sidepanel">
       <header>
         <h2>
-          {dev ? <span className={`dev-badge ${stateClass(st!.state)}`} title={`${KIND_NAME[dev.kind]} · ${st!.state}${st!.reasons.length ? `: ${st!.reasons.join("; ")}` : ""}`}>{KIND_ICON[dev.kind]}</span> : null} {title}
+          {dev ? <span className={`dev-badge ${stateClass(st!.state)}`} title={`${kindName(dev)} · ${st!.state}${st!.reasons.length ? `: ${st!.reasons.join("; ")}` : ""}`}>{iconOf(dev)}</span> : null} {title}
         </h2>
         <button className="btn-x" onClick={close} aria-label="close">
           ×
@@ -636,6 +646,17 @@ function NodeNetwork({ node }: { node: string }) {
           },
         ]}
       />
+    </>
+  );
+}
+
+// A recorded device's own record: change it, or remove it once nothing names it.
+function DeviceRecordActions({ name, cabled, mounted }: { name: string; cabled: boolean; mounted: boolean }) {
+  const rm = (verb: string, title: string, extra: Partial<Step> = {}): Step => ({ title, bin: "rack-manager", verb, fixed: [name], ...extra });
+  return (
+    <>
+      <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("device modify", `rack-manager device modify '${name}'`, { note: "Its kind, model, ports (a count or a list), display name or description; --check previews." })]} />
+      {!mounted && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("device remove", `rack-manager device remove '${name}'`)]} /> : null}
     </>
   );
 }

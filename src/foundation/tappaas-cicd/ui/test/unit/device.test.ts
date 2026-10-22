@@ -32,6 +32,15 @@ check(st("Nano HD").state === "warn" && /mounted in no rack/.test(st("Nano HD").
 check(st("buddy rasmus").state === "warn" && st("tappaas2").state === "ok", "a buddy down is amber; a node without a finding is green");
 check(selectedDevice(g, { kind: "port", id: "5", switch: "USW Pro XG 10 PoE" }) === "USW Pro XG 10 PoE" && selectedDevice(g, { kind: "outside", id: "rasmus" }) === "buddy rasmus" && selectedDevice(g, null) === null, "a selection names its device");
 
+// A device rack-manager records: a device like the others, its kind kept.
+{
+  const t2 = { ...t, devices: [...(t.devices ?? []), { name: "ISP modem", kind: "modem" as const, vendor: null, model: "generic/isp-modem", recorded: true as const, ports: ["WAN", "LAN 1"] }, { name: "ups1", kind: "ups" as const, vendor: null, model: null, recorded: true as const, ports: ["1", "2"] }] };
+  const g2 = deviceGraph(t2);
+  const m = g2.nodes.find((n) => n.id === "ISP modem");
+  check(m?.kind === "device" && m.recorded === "modem" && m.sel.kind === "mount" && g2.nodes.find((n) => n.id === "ups1")?.recorded === "ups", "recorded devices are devices of the graph, their kind kept");
+  check(g2.links.some((l) => l.id === linkId(ISP, "ISP modem") && l.kind === "hand-off") && g2.links.some((l) => l.id === linkId("ISP modem", "USW Pro XG 10 PoE")), "the recorded modem keeps its hand-off and its cable");
+}
+
 // ── the layout ────────────────────────────────────────────────────────
 const nodeIds = g.nodes.map((n) => n.id);
 const L = forceLayout(nodeIds, g.links, "tappaas1");

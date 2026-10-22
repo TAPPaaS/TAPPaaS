@@ -267,7 +267,9 @@ export interface Topology {
   accessPoints: TopoAp[];
   zones: TopoZone[];
   outside: TopoOutside[];
-  devices?: { name: string; kind: "machine" | "device"; vendor: string | null; model: string | null }[];
+  // The machines, the devices a switch port names, and the devices rack-manager
+  // records (recorded: a modem, an ONT, a UPS, a patch panel; with their ports).
+  devices?: { name: string; kind: "machine" | "device" | RecordedKind; vendor: string | null; model: string | null; recorded?: true; ports?: string[]; displayName?: string | null; description?: string | null }[];
   // Where the hardware sits (rack-manager), resolved against the site; null or
   // absent when the racks were not read.
   racks?: RacksView | null;
@@ -277,6 +279,7 @@ export interface Topology {
 
 // ── the racks the topology carries (lib/ts racks.ts RacksView) ────────
 export type PortKind = "rj45" | "sfp+" | "sfp28" | "poe" | "console" | "power";
+export type RecordedKind = "modem" | "ont" | "ups" | "patch-panel" | "other";
 export interface PlatePort {
   id: string; // the topology's
   name: string; // the controller's
@@ -300,6 +303,7 @@ export interface ResolvedPlate {
 export interface RackMount {
   device: string;
   kind: "node" | "switch" | "ap" | "machine" | "device" | "passive";
+  recorded?: RecordedKind;
   rack: string;
   u: number;
   height: number;
@@ -336,7 +340,7 @@ export interface RackCable {
 }
 export interface RacksView {
   racks: RackInfo[];
-  unplaced: { device: string; kind: "node" | "switch" | "ap" | "machine" | "device"; vendor: string | null; model: string | null; suggestion: string | null }[];
+  unplaced: { device: string; kind: "node" | "switch" | "ap" | "machine" | "device"; recorded?: RecordedKind; vendor: string | null; model: string | null; suggestion: string | null }[];
   cables: RackCable[];
   outside: { device: string; faceplate: string | null; plate: ResolvedPlate | null }[];
   findings: { text: string; device: string; kind: "gone" | "unplaced"; rack: string | null }[];
