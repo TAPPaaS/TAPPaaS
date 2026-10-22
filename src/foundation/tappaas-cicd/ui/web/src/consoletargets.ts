@@ -79,7 +79,7 @@ export const PAGES: { path: string; title: string }[] = [
   { path: "/site/physical", title: "the physical view (racks, faceplates, cables)" },
   { path: "/site/device", title: "the device view (every physical device and its connections)" },
   { path: "/site/storage", title: "the storage view (nodes, pools, disks, what each pool holds)" },
-  { path: "/environments", title: "Environments" },
+  { path: "/environments", title: "Environments (a card per environment with its zones and their modules; a click opens its record and verbs)" },
   { path: "/zones", title: "Zones (the zones graph, each zone's fields and verbs)" },
   { path: "/modules", title: "Modules" },
   { path: "/modules/<module>", title: "the module's page" },

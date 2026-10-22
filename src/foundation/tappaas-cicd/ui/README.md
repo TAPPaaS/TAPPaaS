@@ -98,7 +98,10 @@ zones and modules), and inside it one box per zone it owns (its own zone and eve
 each with the modules installed there as their icons (`GET /api/v1/modules/<m>/icon`: the file the
 module's config declares as `icon`, else `icon.svg` or `icon.png` in its module directory; SVG and
 PNG only, nothing outside the config or module directory; none: a tile with the initial), each
-coloured by its health; environment-manager's verbs on each card; adding an environment says for each
+coloured by its health. A click on a card's head opens its panel left of the cards (`?env=<name>`):
+the whole record, its zones and modules, and environment-manager's verbs (Modify through the
+schema's form, Reconcile, Delete behind the typed name, Show); a zone's head opens it on the Zones
+page, a module its page. Adding an environment says for each
 input whether it must be given or what the manager uses when it is left empty (owner: the first
 organization; zone and display name: from the name; DNS mode: the schema's default). **Zones**
 (`/zones`; `/environments?zone=<z>` redirects there) — the zones with network-manager's verbs,
