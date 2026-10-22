@@ -19,6 +19,7 @@ import { Health, RacksView, StorageInventory, Topology } from "../types";
 import { StateLegend } from "../physical/state";
 import { storageNotes } from "../physical/storage";
 import { StorageGraph } from "../physical/storageview";
+import { PhysicalOverview } from "../physical/overview";
 import { ReadState, canOperate, navigate, since, useMe } from "../ui";
 
 function selFromUrl(): Sel | null {
@@ -26,7 +27,9 @@ function selFromUrl(): Sel | null {
   if (!v) return null;
   const [kind, ...rest] = v.split(":");
   const id = rest.join(":");
-  if (kind === "node" || kind === "outside" || kind === "ap" || kind === "guest" || kind === "switch" || kind === "rack" || kind === "mount") return { kind, id };
+  if (kind === "node" || kind === "outside" || kind === "ap" || kind === "guest" || kind === "switch" || kind === "rack" || kind === "mount" || kind === "isp" || kind === "firewall") return { kind, id };
+  // port:<switch>:<port>, lag:<switch>:<lag>
+  if ((kind === "port" || kind === "lag") && id.includes(":")) return { kind, switch: id.slice(0, id.lastIndexOf(":")), id: id.slice(id.lastIndexOf(":") + 1) };
   // disk:<node>:<device>, pool:<node>:<pool>
   if ((kind === "disk" || kind === "pool") && id.includes(":")) return { kind, node: id.slice(0, id.indexOf(":")), id: id.slice(id.indexOf(":") + 1) };
   return null;
@@ -80,8 +83,8 @@ function Unplaced({ v, pick }: { v: RacksView; pick: (s: Sel) => void }) {
 }
 
 // Standalone (the owner's route) or as the Site page's Physical tab (embedded:
-// the Site page has the heading). view: the one the address names, else Rack
-// when a rack is recorded.
+// the Site page has the heading). view: the one the address names, else the
+// Overview.
 export function Physical({ embedded, view }: { embedded?: boolean; view?: PhysicalView }) {
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
@@ -92,7 +95,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
   const operator = canOperate(useMe());
   const t = topo.env?.data ?? null;
   const racks = t?.racks ?? null;
-  const shown: PhysicalView = view ?? (racks && racks.racks.length > 0 ? "rack" : "device");
+  const shown: PhysicalView = view ?? "overview";
   // The storage inventory: read once a view shows it (SMART, ≈15 s the first time).
   const store = useRead<StorageInventory>(shown === "storage" || shown === "overview" || sel?.kind === "node" ? "storage" : null);
   const inv = store.env?.data ?? null;
@@ -156,9 +159,7 @@ export function Physical({ embedded, view }: { embedded?: boolean; view?: Physic
         </div>
       ) : null}
       {shown === "overview" ? (
-        <div className="rack-empty">
-          <p className="muted">This view is not drawn yet.</p>
-        </div>
+        <PhysicalOverview t={t} inv={inv} notes={storage?.notes ?? new Map()} storageError={store.failure ?? store.env?.error ?? null} />
       ) : shown === "storage" ? (
         <>
           <ReadState env={store.env} failure={store.failure} what="storage (storage-manager inventory)" />

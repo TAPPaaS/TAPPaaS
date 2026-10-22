@@ -37,7 +37,12 @@ day 2: add a node, an environment, a stack; enrol a device (the wg-quick file to
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
 jumps. **Physical** (a tab of Site at `/site/physical`; `/physical` redirects there) has four views,
 each at its own address: Overview, Rack, Device and Storage (`/site/physical/<view>`).
-**Rack** (`/site/physical/rack`, the default once a rack is recorded): each rack of rack-manager's
+**Overview** (`/site/physical`, the default) sums the other three: the site in one line (nodes,
+switches, APs, racks, pools, disks, the public address), each rack as a thumbnail of its units (a
+click opens the Rack view), the Device view as counts with the findings on devices, each node's
+pools with a fill bar coloured by state and its disks with a problem, and every finding of the
+topology and the storage inventory, each linked to the view and the object it is on.
+**Rack** (`/site/physical/rack`): each rack of rack-manager's
 `config/racks.json` as a frame with its units numbered as the rack numbers them, each mount as its
 faceplate at its units and width with its ports' live state (link, LAG), the cables port to port in
 the zone colours below with a label on hover, a device only a cable record places beside the rack,
