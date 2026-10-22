@@ -49,6 +49,9 @@ function withDoc(doc: RacksDoc, fn: (d: Doc) => void): RacksDoc {
   d.cables = d.cables ?? [];
   d.devices = d.devices ?? {};
   d.rooms = d.rooms ?? {};
+  // A building is the site's now (site.json location): one recorded on a rack
+  // or a room before goes, silently, at the next write.
+  for (const x of [...Object.values(d.racks), ...Object.values(d.rooms)] as Record<string, unknown>[]) delete x.building;
   fn(d as Doc);
   if (Object.keys(d.rooms).length === 0) delete d.rooms;
   if (d.cables.length === 0) delete d.cables;
@@ -66,7 +69,6 @@ export interface RackSpec {
   width?: string;
   numbering?: string;
   displayName?: string;
-  building?: string;
   room?: string;
   description?: string;
 }
@@ -80,11 +82,11 @@ export function addRack(doc: RacksDoc, name: string, spec: RackSpec): Result {
   const numbering = (spec.numbering ?? "bottom-up") as Numbering;
   if (!NUMBERINGS.includes(numbering)) return { refused: `--numbering is one of ${NUMBERINGS.join(", ")}` };
   const rack: Rack = { units: spec.units ?? 42, width, numbering };
-  for (const k of ["displayName", "building", "room", "description"] as const) if (spec[k]) rack[k] = spec[k];
+  for (const k of ["displayName", "room", "description"] as const) if (spec[k]) rack[k] = spec[k];
   return { doc: withDoc(doc, (d) => void (d.racks[name] = rack)), summary: `rack ${name} added (${rack.units}U, ${width}, numbered ${numbering})` };
 }
 
-const RACK_FIELDS = ["displayName", "units", "width", "numbering", "building", "room", "description"];
+const RACK_FIELDS = ["displayName", "units", "width", "numbering", "room", "description"];
 
 // rack modify — any field but the name; units may not shrink below a mount.
 export function modifyRack(doc: RacksDoc, name: string, sets: Array<[string, string]>): Result {
@@ -106,7 +108,7 @@ export function modifyRack(doc: RacksDoc, name: string, sets: Array<[string, str
         if (!NUMBERINGS.includes(v as Numbering)) refused = `numbering is one of ${NUMBERINGS.join(", ")}`;
         else r.numbering = v as Numbering;
       } else {
-        const key = k as "displayName" | "building" | "room" | "description";
+        const key = k as "displayName" | "room" | "description";
         if (text(v) === undefined) delete r[key];
         else r[key] = v;
       }
@@ -364,7 +366,7 @@ export function removeDevice(doc: RacksDoc, name: string): Result {
 
 // ── rooms ─────────────────────────────────────────────────────────────
 
-const ROOM_FIELDS = ["displayName", "building", "description"];
+const ROOM_FIELDS = ["displayName", "description"];
 
 export function addRoom(doc: RacksDoc, name: string, spec: Room): Result {
   if (!ROOM_NAME_RE.test(name)) return { refused: `room name '${name}' must match ${ROOM_NAME_RE.source}` };

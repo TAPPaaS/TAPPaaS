@@ -38,14 +38,13 @@ export interface Rack {
   units: number;
   width: RackWidth;
   numbering: Numbering;
-  building?: string;
   room?: string;
   description?: string;
 }
-// A room: where racks stand and where a device can stand loose.
+// A room: where racks stand and where a device can stand loose. Its building
+// is the site's (site.json location), not recorded here.
 export interface Room {
   displayName?: string;
-  building?: string;
   description?: string;
 }
 // A mount: in a rack at its units, or loose in a room (no rack, no unit).
@@ -576,7 +575,6 @@ export interface RackView {
   units: number;
   width: RackWidth;
   numbering: Numbering;
-  building: string | null;
   room: string | null;
   description: string | null;
   mounts: RackMountView[];
@@ -613,7 +611,6 @@ export interface OutsideView {
 export interface RoomView {
   name: string;
   displayName: string | null;
-  building: string | null;
   description: string | null;
   recorded: boolean;
   racks: string[];
@@ -699,7 +696,6 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
       units: r.units,
       width: r.width,
       numbering: r.numbering,
-      building: r.building ?? null,
       room: r.room ?? null,
       description: r.description ?? null,
       mounts: [],
@@ -707,12 +703,12 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
   const roomDocs = roomsOf(doc);
   const rooms: RoomView[] = Object.entries(roomDocs)
     .sort(([a], [b]) => portCompare(a, b))
-    .map(([name, r]) => ({ name, displayName: r.displayName ?? null, building: r.building ?? null, description: r.description ?? null, recorded: true, racks: [], loose: [] }));
+    .map(([name, r]) => ({ name, displayName: r.displayName ?? null, description: r.description ?? null, recorded: true, racks: [], loose: [] }));
   for (const r of racks) {
     if (!r.room) continue;
     let room = rooms.find((x) => x.name === r.room);
     if (!room) {
-      room = { name: r.room, displayName: null, building: r.building, description: null, recorded: false, racks: [], loose: [] };
+      room = { name: r.room, displayName: null, description: null, recorded: false, racks: [], loose: [] };
       rooms.push(room);
     }
     room.racks.push(r.name);
