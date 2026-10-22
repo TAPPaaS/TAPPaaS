@@ -46,11 +46,16 @@ pools with a fill bar coloured by state and its disks with a problem, and every 
 topology and the storage inventory, each linked to the view and the object it is on. Below
 that, the site's records: `site.json` (Modify), the update schedule, the release train's preview
 and status, and the repositories (sync, hold, release, stashes, reconcile).
-**Physical** (`/site/physical`): each rack of rack-manager's
-`config/racks.json` as a frame with its units numbered as the rack numbers them, each mount as its
-faceplate at its units and width with its ports' live state (link, LAG), the cables port to port in
-the zone colours below with a label on hover, a device only a cable record places beside the rack,
-and an Unplaced tray of the devices mounted nowhere, each with Mount…; a click on a plate or a port
+**Physical** (`/site/physical`): each room of rack-manager's
+`config/racks.json` as an area with its racks and, beside them, the devices standing loose in it;
+each rack as a frame with its units numbered as the rack numbers them, each mount as its
+faceplate at its units and width with its ports' live state (link, LAG), the cabled ports
+underlined (a patch panel's rear-cabled ports overlined), the cables port to port in
+the zone colours below with a label on hover — a link through a patch panel as its two wires —, a
+device only a cable record places beside the rack, and an Unplaced tray of the devices mounted
+nowhere, each with Mount… and Place in a room…; a click on a cable opens its link, whose panel
+lists the wires and offers Attach to patch panel… (`rack-manager cable split`, its `--check` the
+preview, the free panel ports to choose from) or Remove patch panel (`cable join`); a click on a plate or a port
 opens the side card to the left of the racks, with Mount…, Move to… and Unmount… besides the
 object's own changes. **Device** (`/site/device`) — every physical device (the cluster nodes, the
 switches, the access points, the machines and devices a rack or a cable record names, the internet

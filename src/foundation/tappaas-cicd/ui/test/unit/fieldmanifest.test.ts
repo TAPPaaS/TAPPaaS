@@ -26,6 +26,7 @@ const refs: RefContext = {
   roles: ["admin", "root", "user"],
   devices: ["Nano HD", "USW Pro XG 10 PoE", "tappaas1", "tappaas2"],
   racks: ["rack1"],
+  rooms: ["basement"],
   faceplates: ["generic/server-2u", "unifi/usw-pro-xg-10-poe"],
 };
 const field = (m: FieldManifest, n: string) => m.fields.find((f) => f.name === n);
@@ -198,7 +199,7 @@ const mnt = buildManifest({ kind: "mount", name: "tappaas2", mode: "add", defs: 
 check(mnt.nameField !== null && !field(mnt, "device"), "mount add: the device is the verb's positional");
 check(field(mnt, "rack")?.typeText === "a rack" && field(mnt, "rack")?.choices?.join(",") === "rack1", "mount add: the rack is one of the racks");
 check(field(mnt, "faceplate")?.typeText === "a faceplate" && field(mnt, "faceplate")?.choices?.includes("unifi/usw-pro-xg-10-poe") === true && field(mnt, "faceplate")?.default === "generic/server-2u, the catalog's suggestion", "mount add: the faceplate from the catalog, the suggestion as its default");
-check(field(mnt, "u")?.required === true && field(mnt, "u")?.arg === "--u", "mount add: u is required, --u");
+check(field(mnt, "u")?.required !== true && field(mnt, "u")?.arg === "--u" && field(mnt, "room")?.typeText === "a room" && field(mnt, "room")?.choices?.join() === "basement" && field(mnt, "room")?.arg === "--room", "mount add: a rack and its u, or a room (one of the rooms): neither is required alone");
 const mmod = buildManifest({ kind: "mount", name: "tappaas1", mode: "modify", defs: flattenSchema(rdefs.mount), record: { rack: "rack1", u: 10, height: 2, width: "full", face: "front" }, refs, vars: {} });
 check(field(mmod, "u")?.arg === "--set" && field(mmod, "rack")?.arg === "--set", "mount modify: a move is --set rack and u");
 check(fieldChanges(mmod.fields, { u: "14" }).tokens.join(" ") === "--set u=14", "mount modify: a move is one --set");

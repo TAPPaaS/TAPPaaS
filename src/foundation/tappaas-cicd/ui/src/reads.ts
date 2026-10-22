@@ -271,13 +271,14 @@ export class Reads {
       .map((n) => ({ name: n.name as string, pools: Array.isArray(n.storagePools) ? n.storagePools.filter((p): p is string => typeof p === "string") : [] }))
       .sort((a, b) => a.name.localeCompare(b.name));
     const list = (k: string) => (ids.value?.[k] ?? []).filter((n) => typeof n === "string" && n !== "" && !n.startsWith("-")).sort();
-    let rackRefs = { devices: [] as string[], racks: [] as string[], faceplates: [] as string[] };
+    let rackRefs = { devices: [] as string[], racks: [] as string[], rooms: [] as string[], faceplates: [] as string[] };
     if (racks) {
       const [t, f] = await Promise.all([this.topology.get(), this.faceplates.get()]);
-      const view = (t.value?.racks ?? null) as { racks?: { name: string }[] } | null;
+      const view = (t.value?.racks ?? null) as { racks?: { name: string }[]; rooms?: { name: string; recorded: boolean }[] } | null;
       rackRefs = {
         devices: topologyDevices(t.value ?? null),
         racks: (view?.racks ?? []).map((r) => r.name).sort(),
+        rooms: (view?.rooms ?? []).filter((r) => r.recorded).map((r) => r.name).sort(),
         faceplates: (f.value ?? []).map((x) => x.key).sort(),
       };
     }

@@ -85,6 +85,7 @@ export interface RefContext {
   // faceplate catalog's keys. Empty for the other kinds.
   devices: string[];
   racks: string[];
+  rooms: string[];
   faceplates: string[];
 }
 
@@ -105,8 +106,8 @@ export function typeOf(t: unknown): ManifestField["type"] {
   return "string";
 }
 
-const ONE: Record<string, string> = { zones: "a zone", environments: "an environment", nodes: "a node", storage: "a storage pool", organizations: "an organization", users: "a user", groups: "a group", roles: "a role", devices: "a device", racks: "a rack", faceplates: "a faceplate" };
-const MANY: Record<string, string> = { zones: "zones", environments: "environments", nodes: "nodes", storage: "storage pools", organizations: "organizations", users: "users", groups: "groups", roles: "roles", devices: "devices", racks: "racks", faceplates: "faceplates" };
+const ONE: Record<string, string> = { zones: "a zone", environments: "an environment", nodes: "a node", storage: "a storage pool", organizations: "an organization", users: "a user", groups: "a group", roles: "a role", devices: "a device", racks: "a rack", rooms: "a room", faceplates: "a faceplate" };
+const MANY: Record<string, string> = { zones: "zones", environments: "environments", nodes: "nodes", storage: "storage pools", organizations: "organizations", users: "users", groups: "groups", roles: "roles", devices: "devices", racks: "racks", rooms: "rooms", faceplates: "faceplates" };
 
 export function typeTextOf(type: ManifestField["type"], references: string | null, enumValues: string[] | null): string {
   if (references) return type === "list" ? MANY[references] ?? references : ONE[references] ?? references;
@@ -193,6 +194,8 @@ export function choicesFor(references: string | null, refs: RefContext, record: 
       return refs.devices;
     case "racks":
       return refs.racks;
+    case "rooms":
+      return refs.rooms;
     case "faceplates":
       return refs.faceplates;
     default:
@@ -296,7 +299,7 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
   backup: { modify: { enabled: "--enabled", retention: "--retention", exclude: "--exclude" } },
   zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
   rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", building: "--building", room: "--room", description: "--description" } },
-  mount: { add: { rack: "--rack", u: "--u", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
+  mount: { add: { rack: "--rack", u: "--u", room: "--room", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
 };
 
 // Fields a form never offers whatever the schema says: the object's name is

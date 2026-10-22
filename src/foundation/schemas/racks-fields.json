@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "racks-fields.json",
   "title": "TAPPaaS Racks",
-  "description": "config/racks.json — where the site's hardware sits: the racks, what is mounted where, and the cables nothing can see. Site state, written only by rack-manager. A mount is keyed by the device's name in the physical topology (a node, a switch, an access point, a machine or a device module); the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one.",
+  "description": "config/racks.json — where the site's hardware sits: the racks, what is mounted where, the devices and the cables nothing can see, and the rooms. Site state, written only by rack-manager. A mount is keyed by the device's name in the physical topology (a node, a switch, an access point, a machine or a device module); the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -14,14 +14,26 @@
       "additionalProperties": { "$ref": "#/$defs/rack" }
     },
     "mounts": {
-      "description": "What is mounted where, keyed by the device's topology name (or, for a passive device nothing can see — a patch panel, a PDU — its own name).",
+      "description": "What is mounted where, keyed by the device's name: in a rack at its units, or loose in a room (no rack, no unit). A passive device nothing records (a patch panel, a PDU) by its own name.",
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/mount" }
     },
     "cables": {
-      "description": "Cables nothing can see: the ISP hand-off, a patch panel, a PDU. A port carries at most one cable.",
+      "description": "Cables nothing can see: the ISP hand-off, a patch panel, a PDU; and the segments of a link split at a patch panel. A port carries at most one cable, a patch panel's port one on its front and one on its rear.",
       "type": "array",
       "items": { "$ref": "#/$defs/cable" }
+    },
+    "devices": {
+      "description": "The devices nothing can see (a modem, an ONT, a UPS, a patch panel), keyed by name: a device like the topology's, mountable and a cable end.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$" },
+      "additionalProperties": { "$ref": "#/$defs/device" }
+    },
+    "rooms": {
+      "description": "The rooms, keyed by name: where racks stand and devices stand loose.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+      "additionalProperties": { "$ref": "#/$defs/room" }
     }
   },
   "$defs": {
@@ -63,14 +75,19 @@
           "changeNote": "Renumbers every mount's position as drawn; the recorded U of each mount stays."
         },
         "building": { "description": "The building the rack stands in.", "type": "string", "changeClass": "in-place" },
-        "room": { "description": "The room the rack stands in.", "type": "string", "changeClass": "in-place" },
+        "room": {
+          "description": "The room the rack stands in: a room record's name (rack-manager room add). Text naming no room yet is kept as it is, with a note.",
+          "type": "string",
+          "references": "rooms",
+          "changeClass": "in-place"
+        },
         "description": { "description": "What the rack is for, in a line.", "type": "string", "changeClass": "in-place" }
       }
     },
     "mount": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["rack", "u", "height", "width", "face"],
+      "required": ["height", "width", "face"],
       "properties": {
         "device": {
           "description": "The mounted device: its name in the physical topology. It is the record's key.",
@@ -79,11 +96,17 @@
           "changeClass": "immutable",
           "changeNote": "A mount is one device's: remove it and mount the other device."
         },
-        "rack": { "description": "The rack it is mounted in.", "type": "string", "references": "racks", "changeClass": "in-place" },
+        "rack": { "description": "The rack it is mounted in. A device loose in a room has none.", "type": "string", "references": "racks", "changeClass": "in-place" },
         "u": {
-          "description": "The lowest rack unit it occupies, as the rack numbers its units.",
+          "description": "The lowest rack unit it occupies, as the rack numbers its units. A device loose in a room has none.",
           "type": "integer",
           "minimum": 1,
+          "changeClass": "in-place"
+        },
+        "room": {
+          "description": "For a device in no rack: the room it stands loose in. A rack mount's room is its rack's.",
+          "type": "string",
+          "references": "rooms",
           "changeClass": "in-place"
         },
         "height": {
@@ -132,7 +155,7 @@
       "required": ["device", "port"],
       "properties": {
         "device": {
-          "description": "A device of the topology, a mounted device, or one this cable places (with its faceplate).",
+          "description": "A device of the topology, a recorded device, a mounted device, or one this cable places (with its faceplate).",
           "type": "string",
           "references": "devices"
         },
@@ -141,7 +164,8 @@
           "description": "For a device only this cable places (the ISP's modem): its faceplate.",
           "type": "string",
           "references": "faceplates"
-        }
+        },
+        "side": { "description": "On a patch panel's port: its front (the default) or its rear.", "type": "string", "enum": ["front", "rear"], "default": "front" }
       }
     },
     "cable": {
@@ -158,7 +182,52 @@
           "default": "patch",
           "changeClass": "immutable"
         },
-        "label": { "description": "The label on the cable.", "type": "string", "changeClass": "immutable" }
+        "label": { "description": "The label on the cable.", "type": "string", "changeClass": "immutable" },
+        "origin": {
+          "description": "A segment of a link split at a patch panel (cable split): what the link was — one the topology sees, or a recorded cable that cable join records again.",
+          "type": "string",
+          "enum": ["seen", "recorded"],
+          "changeClass": "immutable"
+        }
+      }
+    },
+    "device": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "name": {
+          "description": "The device's name: how mounts and cables name it. It is the record's key.",
+          "type": "string",
+          "changeClass": "immutable",
+          "changeNote": "Mounts and cables name it: record the new one, move them, remove this one."
+        },
+        "kind": { "description": "What it is.", "type": "string", "enum": ["modem", "ont", "ups", "patch-panel", "other"], "changeClass": "in-place" },
+        "model": {
+          "description": "Its plate in the faceplate catalog (vendor/model); its ports come from it unless given.",
+          "type": "string",
+          "references": "faceplates",
+          "changeClass": "in-place"
+        },
+        "ports": { "description": "Its ports by name (a patch panel: 1 to N).", "type": "array", "items": { "type": "string" }, "changeClass": "in-place" },
+        "displayName": { "description": "The name shown.", "type": "string", "changeClass": "in-place" },
+        "description": { "description": "What it is, where it comes from.", "type": "string", "changeClass": "in-place" }
+      }
+    },
+    "room": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "The room's name: how racks and mounts name it. It is the record's key.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "changeClass": "immutable",
+          "changeNote": "Racks and mounts name it: add the new room, move them, delete this one."
+        },
+        "displayName": { "description": "The name shown.", "type": "string", "changeClass": "in-place" },
+        "building": { "description": "The building it is in.", "type": "string", "changeClass": "in-place" },
+        "description": { "description": "What it is.", "type": "string", "changeClass": "in-place" }
       }
     }
   }
