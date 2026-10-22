@@ -11,6 +11,8 @@ declare function clearInterval(handle: unknown): void;
 
 declare const Buffer: {
   from(s: string, encoding?: string): NodeBuffer;
+  from(bytes: number[]): NodeBuffer;
+  alloc(n: number): NodeBuffer;
   concat(list: NodeBuffer[]): NodeBuffer;
   byteLength(s: string): number;
 };
@@ -78,9 +80,23 @@ declare module "http" {
   export function createServer(handler: (req: IncomingMessage, res: ServerResponse) => void): Server;
 }
 
+// A module's icon (icons.ts): its bytes, compared by content.
+interface NodeBuffer {
+  equals(other: NodeBuffer): boolean;
+}
+
 declare module "fs" {
   export function appendFileSync(path: string, data: string, encoding?: "utf8"): void;
+  export function realpathSync(path: string): string;
+  export function symlinkSync(target: string, path: string): void;
+  export function writeFileSync(path: string, data: NodeBuffer): void;
   export function writeFileSync(path: string, data: string, options: { encoding?: "utf8"; mode?: number }): void;
+}
+
+declare module "path" {
+  export function extname(p: string): string;
+  export function isAbsolute(p: string): boolean;
+  export const sep: string;
 }
 
 declare module "crypto" {

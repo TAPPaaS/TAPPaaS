@@ -1,12 +1,21 @@
-// Environments — the environments (spike §5.2, Appendix A): environment-
-// manager add / modify / reconcile / delete, each as a job with its preview. A
-// delete needs the name typed. Their zones have a page of their own (Zones.tsx).
+// Environments — one card per environment (envcards.ts): its record in brief
+// and, inside it, a box per zone it owns, each with the modules installed
+// there as their icons (moduleicon.tsx). environment-manager add / modify /
+// reconcile / delete, each as a job with its preview (spike §5.2, Appendix
+// A); a delete needs the name typed. The zones have a page of their own
+// (Zones.tsx).
 
+import { useMemo } from "react";
 import { useRead } from "../api";
+import { EnvCard, ZoneLike, envCards } from "../envcards";
+import { ModuleIcon } from "../moduleicon";
+import { StateLegend } from "../physical/state";
+import { CardState, stateClass, stateOf } from "../physical/states";
+import { TYPE_COLOR, ZoneRead } from "./Zones";
 import { fieldsStep } from "../fields";
 import { OperateButton, Step } from "../operate";
-import { EnvironmentRow } from "../types";
-import { ReadState, Section, since } from "../ui";
+import { EnvironmentRow, ModuleSummary, SiteRead } from "../types";
+import { ReadState, since } from "../ui";
 
 const env = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "environment-manager", verb, ...extra });
 
@@ -44,38 +53,83 @@ export function addEnvironmentSteps(): Step[] {
 
 export function Environments() {
   const envs = useRead<EnvironmentRow[]>("environments");
+  const zones = useRead<ZoneRead[]>("zones");
+  const mods = useRead<ModuleSummary[]>("modules");
+  const site = useRead<SiteRead>("site");
+  const def = ((site.env?.data?.site ?? {}) as { defaultEnvironment?: string }).defaultEnvironment ?? null;
+  const cards = useMemo(() => envCards(envs.env?.data ?? [], (zones.env?.data ?? []) as ZoneLike[], mods.env?.data ?? [], def), [envs.env, zones.env, mods.env, def]);
   return (
-    <div className="page">
+    <div className="page page-wide">
       <div className="page-head">
         <h1>Environments</h1>
         <span className="muted">environment-manager · read {since(envs.env?.at)}</span>
+        <span className="spacer" />
+        <OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} kind="primary" />
       </div>
-      <Section
-        title="Environments"
-        aside={<OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} kind="primary" />}
-      >
-        <ReadState env={envs.env} failure={envs.failure} what="environments" />
-        <table className="table compact">
-          <thead>
-            <tr><th>name</th><th>display name</th><th>zone</th><th>domain</th><th /></tr>
-          </thead>
-          <tbody>
-            {(envs.env?.data ?? []).map((e) => (
-              <tr key={e.name}>
-                <td className="mono">{e.name}</td>
-                <td>{e.displayName ?? ""}</td>
-                <td className="mono">{e.network?.zone ?? ""}</td>
-                <td className="mono">{e.domains?.primary ?? ""}</td>
-                <td className="toolbar">
-                  <OperateButton label="Modify…" title={`Modify ${e.name}`} steps={() => [fieldsStep({ title: `The fields of ${e.name}`, bin: "environment-manager", verb: "modify", fixed: [e.name], kind: "environment", name: e.name, mode: "modify", note: "Writes the record only; the reconcile below makes it live." }), env(`environment-manager reconcile ${e.name}`, "reconcile", { fixed: [e.name] })]} />
-                  <OperateButton label="Reconcile" title={`Reconcile ${e.name}`} steps={[env(`environment-manager reconcile ${e.name}`, "reconcile", { fixed: [e.name] })]} />
-                  <OperateButton label="Delete…" kind="danger" title={`Delete ${e.name}`} steps={[env(`environment-manager delete ${e.name}`, "delete", { fixed: [e.name] })]} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Section>
+      <ReadState env={envs.env} failure={envs.failure} what="environments" />
+      <div className="env-cards">
+        {cards.map((c) => (
+          <EnvCardView key={c.env.name} c={c} />
+        ))}
+      </div>
+      <div className="legend">
+        <StateLegend extra="a module's colour is its health" />
+      </div>
     </div>
+  );
+}
+
+type Card = EnvCard<EnvironmentRow, ModuleSummary>;
+
+// A module's state on its tile: its health badge.
+const modState = (m: ModuleSummary): CardState => (m.badges.health === "fail" ? "fail" : m.badges.health === "warn" ? "warn" : "ok");
+
+function EnvCardView({ c }: { c: Card }) {
+  const e = c.env;
+  const state = stateOf(c.boxes.flatMap((b) => b.modules.map(modState)));
+  return (
+    <section className={`env-card ${stateClass(state)}`}>
+      <header className="env-head">
+        <div>
+          <h2>
+            {e.displayName ?? e.name} <span className="muted mono small">{e.name}</span>
+          </h2>
+          <div className="muted small">
+            {[c.type, c.isDefault ? "the default environment" : null, e.domains?.primary ?? "no public domain"].filter(Boolean).join(" · ")}
+          </div>
+          <div className="small">
+            {c.boxes.filter((b) => b.own).length} zone{c.boxes.filter((b) => b.own).length === 1 ? "" : "s"} · {c.modules} module{c.modules === 1 ? "" : "s"}
+          </div>
+        </div>
+        {c.isDefault ? <span className="badge badge-pass">default</span> : null}
+      </header>
+      <div className="env-zones">
+        {c.boxes.map((b) => (
+          <div key={b.zone ?? "-"} className={`zone-box${b.own ? "" : " zone-box-shared"}`} style={{ borderTopColor: TYPE_COLOR[b.record?.type ?? ""] ?? "#94a3b8" }}>
+            <div className="zone-box-head">
+              <b>{b.zone ?? "no zone"}</b>
+              <span className="muted small">
+                {b.record ? [b.record.vlantag !== undefined ? `vlan ${b.record.vlantag}` : null, b.record.type, b.record.state].filter(Boolean).join(" · ") : b.zone ? "" : "modules without a zone"}
+                {b.own ? "" : b.zone ? " · shared" : ""}
+              </span>
+            </div>
+            <div className="zone-mods">
+              {b.modules.length === 0 ? <span className="muted small">nothing installed</span> : null}
+              {b.modules.map((m) => (
+                <span key={m.name} className={`mod-tile st-${modState(m)}`} title={`${m.name} · ${m.kind}${m.vmid ? ` ${m.vmid}` : ""} · health ${m.badges.health} · ${m.badges.run}`}>
+                  <ModuleIcon name={m.name} />
+                  <span className="mod-name">{m.name}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="toolbar">
+        <OperateButton label="Modify…" title={`Modify ${e.name}`} steps={() => [fieldsStep({ title: `The fields of ${e.name}`, bin: "environment-manager", verb: "modify", fixed: [e.name], kind: "environment", name: e.name, mode: "modify", note: "Writes the record only; the reconcile below makes it live." }), env(`environment-manager reconcile ${e.name}`, "reconcile", { fixed: [e.name] })]} />
+        <OperateButton label="Reconcile" title={`Reconcile ${e.name}`} steps={[env(`environment-manager reconcile ${e.name}`, "reconcile", { fixed: [e.name] })]} />
+        <OperateButton label="Delete…" kind="danger" title={`Delete ${e.name}`} steps={[env(`environment-manager delete ${e.name}`, "delete", { fixed: [e.name] })]} />
+      </div>
+    </section>
   );
 }

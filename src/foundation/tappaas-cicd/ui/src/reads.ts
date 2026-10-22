@@ -20,6 +20,7 @@ import { composeFields } from "../../lib/ts/src/compose-fields";
 import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, environmentDefaults, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
+import { ModuleIcon, moduleIcon } from "./icons";
 import { BackupRow, EnvironmentRow, HealthDoc, ModuleList, StorageDoc, TopologyDoc } from "./model";
 
 // The racks the topology carries (network-manager topology .racks), the parts read here.
@@ -58,6 +59,7 @@ export const TTL = {
   catalogs: 10 * MIN,
   faceplates: 10 * MIN,
   storage: 10 * MIN,
+  icons: 10 * MIN,
   nodeProgress: 10_000, // while a node is being added
   drift: 0, // on demand
 };
@@ -142,6 +144,7 @@ export class Reads {
   readonly catalogs: Cached<RepositoryCatalog[]>;
   readonly faceplates: Cached<{ key: string; kind: string; units: number; width: string }[]>;
   readonly storage: Cached<StorageDoc>;
+  readonly moduleIcons: CachedMap<ModuleIcon | null>;
   readonly setup: Cached<SetupInputs>;
 
   constructor(private readonly cfg: ReadsConfig) {
@@ -198,6 +201,8 @@ export class Reads {
     // timer of its own, read when a page asks and the answer is older than
     // its TTL.
     this.storage = new Cached("storage", TTL.storage, () => this.loadStorage(), now);
+    // A module's icon file (icons.ts): read once per ten minutes at most.
+    this.moduleIcons = new CachedMap("icon", TTL.icons, async (m) => moduleIcon(cfg.configDir, m), now);
     this.nodeProgress = new CachedMap("node-progress", TTL.nodeProgress, (n) => this.loadNodeProgress(n), now);
     // Every identity object's record, for the graph of their relations: each
     // kind's list, then `show` per object (a name from the manager's own list).
@@ -528,6 +533,7 @@ export class Reads {
     } as Record<string, Cached<unknown>>;
     if (what === "all") {
       this.moduleShow.clear();
+      this.moduleIcons.clear();
       this.moduleResolve.clear();
       this.moduleBackup.clear();
       this.moduleDrift.clear();
@@ -565,6 +571,7 @@ export class Reads {
   // (health keeps its own ten-minute timer; validate takes half a minute).
   refreshAfterJob(): Promise<void> {
     this.moduleShow.clear();
+    this.moduleIcons.clear();
     this.moduleResolve.clear();
     this.moduleBackup.clear();
     this.moduleDrift.clear();

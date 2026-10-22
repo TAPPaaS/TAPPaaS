@@ -87,6 +87,13 @@ async function main(): Promise<void> {
   check(r.status === 200 && det.summary.name === "immich" && det.show.data !== null && det.backup.data !== null, "/api/v1/modules/immich: summary, show, resolve, backup");
   r = await call("GET", "/api/v1/modules/immich/drift");
   check(r.status === 200 && (r.json().data as { module: string }).module === "immich", "/api/v1/modules/immich/drift on demand");
+  mkdirSync(join(dir, "src-immich"));
+  writeFileSync(join(dir, "src-immich", "icon.svg"), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  writeFileSync(join(dir, "immich.json"), JSON.stringify({ moduleSource: join(dir, "src-immich") }));
+  r = await call("GET", "/api/v1/modules/immich/icon");
+  check(r.status === 200 && r.headers["content-type"] === "image/svg+xml" && /sandbox/.test(r.headers["content-security-policy"] ?? "") && r.body.startsWith("<svg"), "/api/v1/modules/immich/icon: its icon.svg, sandboxed");
+  r = await call("GET", "/api/v1/modules/jellyfin/icon");
+  check(r.status === 404, "a module without an icon: 404 (the page draws its initial)");
   r = await call("GET", "/api/v1/modules/immich/fields");
   const mf = r.json().data as { fields: { field: string; service: string; settable: boolean }[] };
   check(r.status === 200 && mf.fields[0].field === "memory" && mf.fields[0].service === "cluster:vm" && mf.fields[0].settable, "/api/v1/modules/immich/fields: the Modify form's rows");

@@ -19,6 +19,7 @@
     "../../web/src/columns.ts",
     "../../web/src/physical/storage.ts",
     "../../web/src/physical/views.ts",
+    "../../web/src/envcards.ts",
     "../../web/src/physical/devicegraph.ts",
     "../../web/src/physical/states.ts",
     "../../web/src/physical/layout.ts"

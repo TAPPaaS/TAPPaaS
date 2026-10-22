@@ -91,8 +91,14 @@ a tree of cards: the module's own (kind, node, environment, zone and the fields 
 on top, one per service in dependsOn below. Each card's Modify lists every field it owns, typed
 from the field schema, its value configured or default, its change class; the fields changed go
 to one `module-manager modify <m> --set a=b --set c=d` job (`GET /api/v1/modules/<m>/fields`:
-`module-manager fields` + `resolve` + `config/module-fields.json`). **Environments** — the
-environments with environment-manager's verbs; adding an environment says for each
+`module-manager fields` + `resolve` + `config/module-fields.json`). **Environments** — one card per
+environment (its name, display name, type, whether it is the default, its public domain, how many
+zones and modules), and inside it one box per zone it owns (its own zone and every zone that
+`serves` it; a zone its modules use but it does not own, like the DMZ, as a dashed shared box),
+each with the modules installed there as their icons (`GET /api/v1/modules/<m>/icon`: the file the
+module's config declares as `icon`, else `icon.svg` or `icon.png` in its module directory; SVG and
+PNG only, nothing outside the config or module directory; none: a tile with the initial), each
+coloured by its health; environment-manager's verbs on each card; adding an environment says for each
 input whether it must be given or what the manager uses when it is left empty (owner: the first
 organization; zone and display name: from the name; DNS mode: the schema's default). **Zones**
 (`/zones`; `/environments?zone=<z>` redirects there) — the zones with network-manager's verbs,
@@ -158,7 +164,7 @@ now (it changes nothing on the site).
 Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
 `modules/<m>/drift[?refresh=1]` · `zones` · `environments` · `topology` · `storage` · `security` ·
 `activity[?module=<m>]` (the sweep's runs, and `jobs`) · `manifests` ·
-`jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site;
+`modules/<m>/icon` (SVG or PNG, 404 when it has none) · `jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site;
 disk and pool, whose id is the node: its Disks and ZFS panels in Proxmox).
 Each answers `{data, at, ageSeconds, refreshing, error}`.
 

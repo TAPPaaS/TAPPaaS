@@ -323,6 +323,18 @@ export class ConsoleServer {
       return sendJson(res, 200, envelope(await c.get()));
     }
     if (sub === "fields") return sendJson(res, 200, envelope(await r.moduleFieldsOf(name)));
+    if (sub === "icon") {
+      // The module's icon (icons.ts), or 404: the page draws its initial.
+      const icon = (await r.moduleIcons.of(name).get()).value;
+      if (!icon) return sendJson(res, 404, { error: `no icon for '${name}'` });
+      res.statusCode = 200;
+      res.setHeader("Content-Type", icon.type);
+      res.setHeader("Cache-Control", "private, max-age=600");
+      // An SVG opened on its own runs nothing.
+      res.setHeader("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox");
+      res.end(icon.body);
+      return;
+    }
     if (sub !== undefined) return sendJson(res, 404, { error: `modules/${name}/${sub}` });
     const [show, resolve, backup, act] = await Promise.all([
       r.moduleShow.of(name).get(),
