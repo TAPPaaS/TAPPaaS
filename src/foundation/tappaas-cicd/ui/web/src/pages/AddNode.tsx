@@ -142,7 +142,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
     { id: "boot", title: "2 · Boot the machine from the network (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and choose network boot once; the mothership answers with the installer." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto the boot disk, the node reboots, joins the cluster and is recorded in site.json." },
     { id: "uplink", title: "4 · The lan uplink", required: false, done: tested ? true : uplinkSet ? null : false, detail: "Which ports carry lan, then the failover test — each previewed first." },
-    { id: "done", title: "5 · The node in the physical view", required: false, done: joined, detail: "Its uplinks, its switch ports and its guests, as cabled." },
+    { id: "done", title: "5 · The node in the device view", required: false, done: joined, detail: "Its uplinks, its switch ports and its guests, as cabled." },
   ];
   const current = !underway ? "declare" : !progress || progress.registration === "pending" ? "boot" : !joined ? "wait" : !tested ? "uplink" : "done";
 

@@ -88,7 +88,7 @@ function MountDeviceCard() {
         : !v.racks.length
           ? "Add a rack first: a device is mounted at its units in a rack."
           : choices.length
-            ? <>Where a device sits: its rack, units and faceplate, for the Rack view. {choices.length} device{choices.length === 1 ? "" : "s"} mounted nowhere.</>
+            ? <>Where a device sits: its rack, units and faceplate, for the Physical view. {choices.length} device{choices.length === 1 ? "" : "s"} mounted nowhere.</>
             : "Every device is mounted."}
     </WizardCard>
   );

@@ -133,7 +133,7 @@ export function Physical({ embedded, view, aside }: { embedded?: boolean; view?:
           </div>
         )}
         <span className="muted">
-          {t && (shown === "rack" || shown === "device") ? `${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout automatic"}` : ""}
+          {t && (shown === "rack" || shown === "device") ? `${VIEW_NAME[shown]} · ${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout automatic"}` : shown === "storage" ? `Storage · storage-manager inventory ${since(inv?.generated)}` : ""}
         </span>
         <span className="spacer" />
         {shown === "device" ? (

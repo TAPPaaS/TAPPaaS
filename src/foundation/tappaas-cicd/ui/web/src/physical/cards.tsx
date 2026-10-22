@@ -214,7 +214,7 @@ export function OutsideCard({ data }: NodeProps<Node<OutsideData, "outside">>) {
     return (
       <div className="card-flow card-outside card-absent">
         <div className="cf-title">satellite · none installed</div>
-        <div className="cf-sub">ADR-010: would show the edge tunnel</div>
+        <div className="cf-sub">would show the edge tunnel</div>
       </div>
     );
   }
