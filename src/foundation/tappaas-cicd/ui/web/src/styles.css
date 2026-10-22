@@ -383,7 +383,7 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .physical-rack .canvas { position: relative; overflow: hidden; }
 .rack-canvas { position: absolute; inset: 0; overflow: auto; }
 .rack-canvas svg { display: block; margin: 0 auto; }
-.rack-zoom { position: sticky; top: 8px; left: 8px; z-index: 3; display: flex; gap: 4px; height: 0; padding-left: 8px; overflow: visible; }
+.rack-zoom { position: sticky; top: 8px; left: 8px; z-index: 3; display: flex; justify-content: flex-end; gap: 4px; height: 0; padding-right: 8px; overflow: visible; }
 .rack-zoom .btn { height: 26px; }
 .rack-zoom .btn { padding: 2px 9px; }
 .rack-title { font-size: 15px; font-weight: 700; fill: var(--ink); cursor: pointer; }
@@ -500,3 +500,7 @@ button.mod-tile:hover { background: var(--info-bg); }
 .micon-tile { display: inline-flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; }
 .env-page { display: flex; gap: 14px; align-items: flex-start; }
 .env-page .sidepanel { position: sticky; top: 10px; max-height: calc(100vh - 120px); }
+.rack-room { cursor: pointer; }
+.rack-room-title { font-size: 15px; font-weight: 700; fill: #334155; }
+.ov-room { margin-bottom: 8px; }
+.ov-room-name { font-weight: 600; font-size: 13px; }

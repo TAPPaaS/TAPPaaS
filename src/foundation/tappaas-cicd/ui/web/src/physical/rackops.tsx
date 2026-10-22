@@ -112,12 +112,23 @@ export function cableRemoveSteps(end: string): Step[] {
 
 // The rack actions on a device's side card: Mount… when it is mounted
 // nowhere, else Move to… and Unmount….
+// A device loose in a room: no rack, no unit (rack-manager mount add --room).
+export function roomSteps(device: string, v: RacksView): Step[] {
+  return [{ title: `rack-manager mount add '${device}' --room …`, bin: RM, verb: "mount add", fixed: [device], only: ["--room", "--faceplate", "--width", "--label", "--description"], choices: { "--room": (v.rooms ?? []).filter((r) => r.recorded).map((r) => r.name) }, note: "Places the device in the room, in no rack: it is drawn beside the room's racks. --check previews." }];
+}
+
 export function MountActions({ device, v }: { device: string; v: RacksView | null | undefined }) {
   if (!v) return null;
-  const mounted = v.racks.some((r) => r.mounts.some((m) => m.device === device));
+  const mounted = v.racks.some((r) => r.mounts.some((m) => m.device === device)) || (v.rooms ?? []).some((r) => r.loose.some((m) => m.device === device));
   if (!mounted) {
-    if (!v.racks.length) return <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} />;
-    return <OperateButton label="Mount…" title={`Mount ${device}`} steps={() => mountSteps(device, v)} />;
+    const room = (v.rooms ?? []).some((r) => r.recorded) ? <OperateButton label="Place in a room…" title={`Place ${device} in a room`} steps={() => roomSteps(device, v)} /> : null;
+    if (!v.racks.length) return room ?? <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} />;
+    return (
+      <>
+        <OperateButton label="Mount…" title={`Mount ${device}`} steps={() => mountSteps(device, v)} />
+        {room}
+      </>
+    );
   }
   return (
     <>

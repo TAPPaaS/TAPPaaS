@@ -512,7 +512,7 @@ export function run(argv: string[]): number {
         u,
         room,
         height: intOpt(args, "--height") ?? (rec && !opt(args, "--faceplate") ? recordedPlate(device, rec, catalog).units : undefined),
-        width: opt(args, "--width"),
+        width: opt(args, "--width") ?? (rec && !opt(args, "--faceplate") ? recordedPlate(device, rec, catalog).width : undefined),
         slot: intOpt(args, "--slot"),
         face: opt(args, "--face"),
         faceplate: opt(args, "--faceplate"),

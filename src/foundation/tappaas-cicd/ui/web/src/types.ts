@@ -304,7 +304,8 @@ export interface RackMount {
   device: string;
   kind: "node" | "switch" | "ap" | "machine" | "device" | "passive";
   recorded?: RecordedKind;
-  rack: string;
+  rack: string; // "" for a device loose in a room
+  room?: string | null;
   u: number;
   height: number;
   width: "full" | "half" | "third";
@@ -338,8 +339,20 @@ export interface RackCable {
   up: boolean | null;
   label: string | null;
 }
+// A room: its racks (by name) and the devices loose in it; recorded false: a
+// room only a rack's free text names.
+export interface RoomInfo {
+  name: string;
+  displayName: string | null;
+  building: string | null;
+  description: string | null;
+  recorded: boolean;
+  racks: string[];
+  loose: RackMount[];
+}
 export interface RacksView {
   racks: RackInfo[];
+  rooms?: RoomInfo[];
   unplaced: { device: string; kind: "node" | "switch" | "ap" | "machine" | "device"; recorded?: RecordedKind; vendor: string | null; model: string | null; suggestion: string | null }[];
   cables: RackCable[];
   outside: { device: string; faceplate: string | null; plate: ResolvedPlate | null }[];

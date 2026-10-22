@@ -119,6 +119,7 @@ function RackThumb({ r }: { r: RackInfo }) {
 
 export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFindings }: { t: Topology | null; inv: StorageInventory | null; notes: Map<string, StorageNote[]>; storageError: string | null; aside?: ReactNode; beforeFindings?: ReactNode }) {
   const racks = t?.racks?.racks ?? [];
+  const rooms = t?.racks?.rooms ?? [];
   const disks = inv ? inv.nodes.reduce((s, n) => s + n.boot.length + n.otherDisks.length + n.pools.reduce((a, p) => a + p.vdevs.reduce((b, v) => b + v.disks.length, 0), 0), 0) : null;
   const pools = inv ? inv.nodes.reduce((s, n) => s + n.pools.length, 0) : null;
   const wan = t ? publicText(publicAddress({ network: { publicIp: t.site.wan.publicIp } }, t.site.wan.discovered), true) : "";
@@ -145,7 +146,27 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFin
             <h2><button className="linklike" onClick={() => navigate(viewLink("rack"))}>Physical</button></h2>
             <span className="section-aside">{t?.racks ? `${t.racks.unplaced.length} device(s) mounted nowhere` : ""}</span>
           </header>
-          {racks.length ? <div className="ov-racks">{racks.map((r) => <RackThumb key={r.name} r={r} />)}</div> : <p className="muted small">{t ? "No rack is recorded yet." : "reading the topology…"}</p>}
+          {racks.length || rooms.length ? (
+            <>
+              {rooms.map((room) => (
+                <div key={room.name} className="ov-room">
+                  <button className="linklike ov-room-name" onClick={() => navigate(viewLink("rack", `room:${room.name}`))}>{room.displayName ?? room.name}</button>
+                  <div className="ov-racks">
+                    {room.racks.map((n) => racks.find((r) => r.name === n)).filter((r): r is RackInfo => !!r).map((r) => <RackThumb key={r.name} r={r} />)}
+                  </div>
+                  {room.loose.length ? <div className="muted small">loose: {room.loose.map((m) => m.device).join(", ")}</div> : null}
+                </div>
+              ))}
+              {racks.some((r) => !rooms.some((x) => x.racks.includes(r.name))) ? (
+                <div className="ov-room">
+                  {rooms.length ? <span className="muted small">in no room</span> : null}
+                  <div className="ov-racks">{racks.filter((r) => !rooms.some((x) => x.racks.includes(r.name))).map((r) => <RackThumb key={r.name} r={r} />)}</div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <p className="muted small">{t ? "No rack is recorded yet." : "reading the topology…"}</p>
+          )}
         </section>
         <section className="section">
           <header className="section-head">

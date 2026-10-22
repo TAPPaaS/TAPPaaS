@@ -28,7 +28,7 @@ function selFromUrl(): Sel | null {
   if (!v) return null;
   const [kind, ...rest] = v.split(":");
   const id = rest.join(":");
-  if (kind === "node" || kind === "outside" || kind === "ap" || kind === "guest" || kind === "switch" || kind === "rack" || kind === "mount" || kind === "isp" || kind === "firewall") return { kind, id };
+  if (kind === "node" || kind === "outside" || kind === "ap" || kind === "guest" || kind === "switch" || kind === "rack" || kind === "room" || kind === "mount" || kind === "isp" || kind === "firewall") return { kind, id };
   // port:<switch>:<port>, lag:<switch>:<lag>
   if (kind === "link" && id) return { kind, id };
   if ((kind === "port" || kind === "lag") && id.includes(":")) return { kind, switch: id.slice(0, id.lastIndexOf(":")), id: id.slice(id.lastIndexOf(":") + 1) };

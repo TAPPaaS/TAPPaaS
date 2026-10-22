@@ -62,7 +62,11 @@ function mountedAt(t: Topology, device: string): string | null {
     const m = r.mounts.find((x) => x.device === device);
     if (m) return `${r.displayName ?? r.name} · U${m.u}${m.height > 1 ? `-U${m.u + m.height - 1}` : ""} · ${m.face}${m.width === "full" ? "" : ` · ${m.width} width, slot ${m.slot}`} · ${m.faceplate ?? "no plate"}${m.suggested ? " (suggested)" : ""}`;
   }
-  return t.racks ? "mounted in no rack" : null;
+  for (const r of t.racks?.rooms ?? []) {
+    const m = r.loose.find((x) => x.device === device);
+    if (m) return `loose in room ${r.displayName ?? r.name} · ${m.faceplate ?? "no plate"}`;
+  }
+  return t.racks ? "mounted in no rack, in no room" : null;
 }
 
 // The ports of a device that a cable joins, and the link each is on.
@@ -495,11 +499,46 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       open = b.open;
       break;
     }
+    case "room": {
+      const room = racks?.rooms?.find((x) => x.name === sel.id);
+      if (!room) break;
+      title = `${room.displayName ?? room.name} · room`;
+      body = (
+        <>
+          <KV rows={[["name", room.name], ["building", room.building], ["description", room.description], ["recorded", room.recorded ? "yes" : "no — only a rack's text names it (rack-manager room add)"]]} />
+          <h3>Racks</h3>
+          <ul className="plain small">
+            {room.racks.map((r) => (
+              <li key={r}><button className="linklike" onClick={() => pick({ kind: "rack", id: r })}>{r}</button></li>
+            ))}
+            {room.racks.length === 0 ? <li className="muted">none</li> : null}
+          </ul>
+          <h3>Loose in it</h3>
+          <ul className="plain small">
+            {room.loose.map((m) => (
+              <li key={m.device}><button className="linklike" onClick={() => pick({ kind: "mount", id: m.device })}>{m.device}</button> <span className="muted">{m.plate ? `${m.plate.vendor} ${m.plate.model}` : m.kind}</span></li>
+            ))}
+            {room.loose.length === 0 ? <li className="muted">nothing</li> : null}
+          </ul>
+        </>
+      );
+      const rmStep = (verb: string, t: string, extra: Partial<Step> = {}): Step => ({ title: t, bin: "rack-manager", verb, fixed: [room.name], ...extra });
+      actions = room.recorded ? (
+        <>
+          <OperateButton label="Change…" title={`Room ${room.name}`} steps={[rmStep("room modify", `rack-manager room modify ${room.name}`, { note: "Its display name, building or description; --check previews." })]} />
+          {room.racks.length === 0 && room.loose.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete room ${room.name}`} steps={[rmStep("room delete", `rack-manager room delete ${room.name}`)]} /> : null}
+        </>
+      ) : (
+        <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `rack-manager room add ${room.name}`)]} />
+      );
+      open = <p className="muted small">A room is a record of config/racks.json only.</p>;
+      break;
+    }
     case "mount": {
       // A device a node, switch or access point card does not cover: a machine,
       // a device module, a passive plate (patch panel, PDU) or a device a cable
       // record places (the ISP's modem).
-      const m = racks?.racks.flatMap((r) => r.mounts).find((x) => x.device === sel.id);
+      const m = [...(racks?.racks.flatMap((r) => r.mounts) ?? []), ...(racks?.rooms?.flatMap((r) => r.loose) ?? [])].find((x) => x.device === sel.id);
       const out = racks?.outside.find((x) => x.device === sel.id);
       const un = racks?.unplaced.find((x) => x.device === sel.id);
       if (!m && !out && !un) break;

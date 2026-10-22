@@ -16,7 +16,7 @@ import { linkId } from "./devicegraph";
 
 // Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
 // interior (wider than true scale, so a 12-port plate stays legible).
-export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 46, margin: 24, outsideW: 230, bottom: 40 };
+export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 80, margin: 24, outsideW: 230, bottom: 40, roomPad: 18, looseGap: 18 };
 
 const inner = (r: RackInfo) => (r.width === "10in" ? R.w10 : R.w19);
 const COLS: Record<string, number> = { full: 1, half: 2, third: 3 };
@@ -49,6 +49,8 @@ export interface RackLayout {
   width: number;
   height: number;
   racks: { r: RackInfo; x: number }[];
+  // Each room an area: its racks and the devices loose in it.
+  rooms: { name: string; title: string; sub: string; recorded: boolean; x: number; y: number; w: number; h: number }[];
   placed: Placed[];
   ports: Map<string, { x: number; y: number; rackRight: number; rack: string | null }>;
 }
@@ -93,8 +95,9 @@ export function layoutRacks(v: RacksView): RackLayout {
     x += R.outsideW + R.gap * 0.7;
   }
   const racks: RackLayout["racks"] = [];
+  const rooms: RackLayout["rooms"] = [];
   let maxH = 0;
-  for (const r of v.racks) {
+  const drawRack = (r: RackInfo) => {
     racks.push({ r, x });
     const iw = inner(r);
     for (const m of r.mounts) {
@@ -114,13 +117,43 @@ export function layoutRacks(v: RacksView): RackLayout {
     }
     maxH = Math.max(maxH, r.units * R.u);
     x += iw + 2 * R.rail + R.gap;
+  };
+  // The devices loose in a room: a column of faceplates beside its racks.
+  const drawLoose = (ms: RackMount[]) => {
+    if (!ms.length) return;
+    let y = R.top;
+    const colW = Math.max(...ms.map((m) => (m.width === "full" ? 320 : m.width === "half" ? 180 : 130)));
+    for (const m of ms) {
+      const w = m.width === "full" ? 320 : m.width === "half" ? 180 : 130;
+      const h = Math.max(1, m.height) * R.u;
+      placed.push({ device: m.device, kind: m.kind, plate: m.plate, box: { x, y, w, h }, up: m.up, title: m.label ? `${m.device} · ${m.label}` : m.device, sub: m.plate ? `${m.plate.vendor} ${m.plate.model}` : "no faceplate", rack: null });
+      y += h + R.looseGap;
+    }
+    maxH = Math.max(maxH, y - R.top);
+    x += colW + R.gap;
+  };
+  // Room by room (a rack in no room after them, in no area).
+  const roomed = new Set((v.rooms ?? []).flatMap((r) => r.racks));
+  for (const room of v.rooms ?? []) {
+    const x0 = x;
+    for (const name of room.racks) {
+      const r = v.racks.find((y) => y.name === name);
+      if (r) drawRack(r);
+    }
+    drawLoose(room.loose);
+    if (x === x0) x += 200; // an empty room still shows
+    rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: [room.building, room.recorded ? null : "not recorded"].filter(Boolean).join(" · "), recorded: room.recorded, x: x0 - R.roomPad, y: 8, w: x - R.gap - x0 + 2 * R.roomPad, h: 0 });
+    x += 30;
   }
+  for (const r of v.racks) if (!roomed.has(r.name)) drawRack(r);
   for (const p of placed) {
     const rackRight = p.rack ? (racks.find((x) => x.r.name === p.rack)!.x + inner(racks.find((x) => x.r.name === p.rack)!.r) + 2 * R.rail) : p.box.x + p.box.w;
     for (const c of portCells(p)) ports.set(key(p.device, c.port.id), { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2, rackRight, rack: p.rack });
   }
   const outsideH = placed.filter((p) => p.kind === "outside").reduce((h, p) => Math.max(h, p.box.y + p.box.h), 0);
-  return { width: Math.max(x - R.gap + R.margin + 60, 400), height: Math.max(R.top + maxH + R.bottom, outsideH + R.bottom), racks, placed, ports };
+  const height = Math.max(R.top + maxH + R.bottom, outsideH + R.bottom);
+  for (const room of rooms) room.h = height - room.y - 10;
+  return { width: Math.max(x - R.gap + R.margin + 60, 400), height, racks, rooms, placed, ports };
 }
 
 // A cable's colour and dash, as the Device view draws links: a wan link
@@ -300,6 +333,13 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
         <button className="btn" onClick={() => zoom(1.2)} aria-label="zoom in">+</button>
       </div>
       <svg width={L.width * k} height={L.height * k} viewBox={`0 0 ${L.width} ${L.height}`} role="img" aria-label="the racks">
+        {L.rooms.map((room) => (
+          <g key={room.name} className="rack-room" onClick={(e) => (e.stopPropagation(), pick({ kind: "room", id: room.name }))}>
+            <rect x={room.x} y={room.y} width={room.w} height={room.h} rx={10} fill="#f8fafc" stroke="#94a3b8" strokeDasharray={room.recorded ? undefined : "6 4"} />
+            <text x={room.x + 12} y={room.y + 22} className="rack-room-title">{room.title}</text>
+            {room.sub ? <text x={room.x + 12} y={room.y + 38} className="rack-where">{room.sub}</text> : null}
+          </g>
+        ))}
         {L.racks.map(({ r, x }) => {
           const iw = inner(r);
           const h = r.units * R.u;
