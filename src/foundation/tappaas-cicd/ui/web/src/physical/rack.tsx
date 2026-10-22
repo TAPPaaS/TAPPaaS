@@ -2,14 +2,17 @@
 // unit rows numbered as the rack numbers them, each mount as its faceplate at
 // its units and width with its port grid, the ports' live state from the
 // topology (link up or down, LAG), and the cables port to port in the zone
-// colours of the Device view, labelled on hover. A device only a cable record
-// places (the ISP's modem) stands left of the racks. Everything comes from
-// `network-manager topology` .racks; nothing is placed by hand here.
+// colours of the Device view, labelled on hover, a click opening the cable's
+// link in the side panel (the same panel the Device view opens). A device
+// only a cable record places (the ISP's modem) stands left of the racks.
+// Everything comes from `network-manager topology` .racks; nothing is placed
+// by hand here.
 
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { zoneColor } from "../colors";
 import { PlatePort, RackCable, RackInfo, RackMount, RacksView, ResolvedPlate, Topology } from "../types";
 import { Sel } from "./layout";
+import { linkId } from "./devicegraph";
 
 // Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
 // interior (wider than true scale, so a 12-port plate stays legible).
@@ -283,7 +286,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
       p={p}
       cabled={cabledOf.get(p.device)}
       on={isSel(sel, p.kind, p.device)}
-      portOn={(id) => sel?.kind === "port" && sel.switch === p.device && sel.id === id}
+      portOn={(id) => (sel?.kind === "port" && sel.switch === p.device && sel.id === id) || (sel?.kind === "link" && v.cables.some((c) => linkId(c.from.device, c.to.device) === sel.id && ((c.from.device === p.device && c.from.port === id) || (c.to.device === p.device && c.to.port === id))))}
       onPlate={() => pick(selOf(p.kind, p.device))}
       onPort={(id) => pick(selOf(p.kind, p.device, id))}
     />
@@ -326,9 +329,9 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
               const st = cableStyle(c, t);
               const d = cablePath(a!, b!);
               return (
-                <g key={i} className="rack-cable" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((h) => (h === i ? null : h))}>
+                <g key={i} className="rack-cable" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((h) => (h === i ? null : h))} onClick={(e) => (e.stopPropagation(), pick({ kind: "link", id: linkId(c.from.device, c.to.device), port: `${c.from.device}:${c.from.port}` }))}>
                   <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
-                  <path d={d} fill="none" stroke={st.stroke} strokeWidth={hover === i ? st.width + 1.5 : st.width} strokeDasharray={st.dash} opacity={hover === null || hover === i ? 0.9 : 0.35} strokeLinecap="round" />
+                  <path d={d} fill="none" stroke={sel?.kind === "link" && sel.id === linkId(c.from.device, c.to.device) ? "#f59e0b" : st.stroke} strokeWidth={hover === i || (sel?.kind === "link" && sel.id === linkId(c.from.device, c.to.device)) ? st.width + 1.5 : st.width} strokeDasharray={st.dash} opacity={hover === null || hover === i ? 0.9 : 0.35} strokeLinecap="round" />
                 </g>
               );
             })

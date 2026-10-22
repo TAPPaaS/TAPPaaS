@@ -62,6 +62,9 @@ hand-off and the WAN dashed, a buddy's tunnel dotted, a cable down red), labelle
 The graph is laid out by force around the selected device: it moves to the middle, the devices one
 link away on a ring around it, the rest further out, animated from where they were; cards can be
 dragged, Fit shows every device, `?select=` selects and centres; a click on a line opens its link.
+The Physical view opens the same side panel: a device selected in a rack shows its drawing,
+records and actions as in the Device view; a cable clicked there opens its link, highlighted in
+the rack with its ports ringed; a rack keeps its own record in the same panel.
 A click opens the side panel: on top the device's faceplate drawn as the Physical view draws it
 (the rack catalog's plate, or a generic one from the ports the topology knows), its cabled ports
 underlined and the selected link's ports ringed, a click on a port selecting that switch port or

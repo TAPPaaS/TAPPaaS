@@ -50,6 +50,8 @@ export function deviceGraph(t: Topology): { nodes: DevNode[]; links: DevLink[] }
   for (const a of t.accessPoints) add(a.name, "ap", { kind: "ap", id: a.name });
   for (const d of t.devices ?? []) add(d.name, d.kind, { kind: "mount", id: d.name });
   for (const o of t.racks?.outside ?? []) add(o.device, "device", { kind: "mount", id: o.device });
+  // A mounted plate nothing else names (a patch panel, a PDU).
+  for (const m of t.racks?.racks.flatMap((r) => r.mounts) ?? []) add(m.device, m.kind === "machine" ? "machine" : "device", { kind: "mount", id: m.device });
 
   // The cables: the racks' list when the topology carries it (the topology's
   // own links and the recorded ones), else what the uplinks and the access

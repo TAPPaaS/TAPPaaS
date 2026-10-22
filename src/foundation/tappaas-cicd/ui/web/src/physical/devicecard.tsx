@@ -25,10 +25,12 @@ export function linkStyle(l: DevLink, t: Topology): { stroke: string; width: num
   const width = l.cables.length > 1 || l.cables.some((c) => c.lag) ? 3.4 : 2;
   if (l.up === false) return { stroke: "#d64545", width, dash: "3 3" };
   if (l.kind === "tunnel") return { stroke: "#7c3aed", width: 1.6, dash: "1 4" };
-  if (l.kind === "wan" || l.kind === "hand-off" || (l.zones.length === 1 && l.zones[0] === t.site.wan.zone)) return { stroke: zoneColor({ name: "wan" }), width, dash: "6 4" };
-  if (l.zones.length === 1) {
-    const z = t.zones.find((x) => x.name === l.zones[0]);
-    return { stroke: zoneColor(z ?? { name: l.zones[0] }), width };
+  // (a pair joined by a wan and a lan cable is drawn as the lan's)
+  if (l.kind === "hand-off" || (l.cables.length > 0 && l.cables.every((c) => c.kind === "wan")) || (l.zones.length === 1 && l.zones[0] === t.site.wan.zone)) return { stroke: zoneColor({ name: "wan" }), width, dash: "6 4" };
+  const zs = l.cables.every((c) => c.kind === "wan") ? l.zones : l.cables.filter((c) => c.kind !== "wan").flatMap((c) => c.zones);
+  if (new Set(zs).size === 1) {
+    const z = t.zones.find((x) => x.name === zs[0]);
+    return { stroke: zoneColor(z ?? { name: zs[0] }), width };
   }
   return { stroke: "#475569", width };
 }

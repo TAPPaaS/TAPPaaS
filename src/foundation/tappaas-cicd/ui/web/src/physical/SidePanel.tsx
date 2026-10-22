@@ -455,7 +455,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         <>
           {[a, b].map((d) => drawing(d, ends(d)))}
           <p>
-            <Tag level={l.up === false ? "fail" : "pass"} /> {l.kind}
+            <Tag level={l.up === false ? "fail" : "pass"} /> {l.cables.length ? [...new Set(l.cables.map((c) => c.kind))].join(" and ") : l.kind}
             {l.cables.length > 1 ? `, ${l.cables.length} cables` : ""}
             {l.kind === "hand-off" ? ": where the provider's line meets the site" : l.kind === "tunnel" ? ": the buddy's WireGuard tunnel, to the firewall on this node" : ""}
           </p>
