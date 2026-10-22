@@ -68,7 +68,7 @@ export const HELP: HelpSpec = {
       options: [
         ["--threshold PCT", `Disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).`],
         ["--memory-threshold PCT", `Committed-memory percent of a node's physical RAM before the gate fails (default ${DEFAULT_MEMORY_THRESHOLD}).`],
-        ["--json", "Print every gate as JSON: status, detail and its findings, each with the module, node, pool or peer it is about."],
+        ["--json", "Print every gate as JSON: status, detail and its findings, each with the module, node, pool, disk or peer it is about."],
       ],
     },
     {

@@ -231,7 +231,7 @@ export interface CheckRow {
 // The object a finding mentions. A module is named as config/<module>.json
 // names it; a pool is "<node>/<storage>"; a peer is a backup buddy (ADR-031).
 export interface CheckSubject {
-  kind: "module" | "node" | "pool" | "peer" | "site" | "switch" | "port"; // a port is "<switch>:<port>"
+  kind: "module" | "node" | "pool" | "disk" | "peer" | "site" | "switch" | "port"; // a port is "<switch>:<port>", a disk "<node>:<device>"
   name: string;
 }
 
