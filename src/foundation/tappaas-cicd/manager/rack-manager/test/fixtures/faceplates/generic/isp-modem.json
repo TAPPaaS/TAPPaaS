@@ -1,0 +1,2 @@
+{ "vendor": "Generic", "model": "ISP modem", "kind": "modem", "units": 1, "width": "half", "passive": true,
+  "rows": [[{ "name": "WAN", "kind": "rj45" }, { "name": "LAN 1", "kind": "rj45" }]] }

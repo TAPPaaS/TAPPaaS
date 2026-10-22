@@ -67,6 +67,14 @@
       "manifest": "help-json"
     },
     {
+      "name": "rack-manager",
+      "kind": "manager",
+      "path": "manager/rack-manager",
+      "language": "typescript",
+      "package": "rack-manager",
+      "manifest": "help-json"
+    },
+    {
       "name": "ap-manager",
       "kind": "manager",
       "path": "manager/ap-manager",

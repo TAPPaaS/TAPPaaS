@@ -122,12 +122,12 @@ bad() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 # What this check does earn: a dangling or garbage-collected link, and a manager
 # that starts but cannot run.
 # Which managers: the control plane's registry (ADR-035 D5), written by every
-# prepare step; the standard eight when it is not there yet (a first install).
+# prepare step; the standard nine when it is not there yet (a first install).
 _registry="${SELFCHECK_REGISTRY:-/home/${TAPPAAS_USER}/config/control-plane.json}"
 _managers="$(jq -r '.components[]? | select(.kind == "manager") | .name' "${_registry}" 2>/dev/null)"
 if [[ -z "${_managers}" ]]; then
     warn "  no control-plane registry (${_registry}) — checking the standard managers"
-    _managers="module-manager site-manager network-manager backup-manager health-manager identity-manager environment-manager storage-manager"
+    _managers="module-manager site-manager network-manager backup-manager health-manager identity-manager environment-manager storage-manager rack-manager"
 fi
 for mgr in ${_managers}; do
     if ! as_tappaas bash -c 'command -v "$1"' _ "${mgr}" >/dev/null 2>&1; then

@@ -1,0 +1,784 @@
+{
+  "_comment": "hrossen network-manager topology --json, captured 2026-10-22, trimmed to what rack-manager reads",
+  "nodes": [
+    {
+      "name": "tappaas1",
+      "uplinks": [
+        {
+          "name": "lan",
+          "mode": "lacp",
+          "bond": "lanbond",
+          "legs": [
+            {
+              "nic": "nic2",
+              "speed": "10G",
+              "up": true,
+              "peer": {
+                "switch": "crs-a",
+                "port": "1"
+              }
+            },
+            {
+              "nic": "nic3",
+              "speed": "10G",
+              "up": true,
+              "peer": {
+                "switch": "crs-b",
+                "port": "1"
+              }
+            }
+          ]
+        },
+        {
+          "name": "wan",
+          "mode": "single",
+          "bond": null,
+          "legs": [
+            {
+              "nic": "nic4",
+              "speed": "10G",
+              "up": true,
+              "peer": {
+                "switch": "USW Pro XG 10 PoE",
+                "port": "6"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tappaas3",
+      "uplinks": [
+        {
+          "name": "lan",
+          "mode": "single",
+          "bond": null,
+          "legs": [
+            {
+              "nic": "eno1",
+              "speed": "2.5G",
+              "up": true,
+              "peer": {
+                "switch": "USW Pro XG 10 PoE",
+                "port": "3"
+              }
+            }
+          ]
+        },
+        {
+          "name": "wan",
+          "mode": "single",
+          "bond": null,
+          "legs": [
+            {
+              "nic": "enp3s0",
+              "speed": "2.5G",
+              "up": true,
+              "peer": {
+                "switch": "USW Pro XG 10 PoE",
+                "port": "7"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "tappaas2",
+      "uplinks": [
+        {
+          "name": "lan",
+          "mode": "single",
+          "bond": null,
+          "legs": [
+            {
+              "nic": "enp97s0",
+              "speed": "10G",
+              "up": true,
+              "peer": {
+                "switch": "USW Pro XG 10 PoE",
+                "port": "2"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "switches": [
+    {
+      "name": "USW Pro XG 10 PoE",
+      "vendor": "unifi",
+      "model": "USWED77",
+      "ports": [
+        {
+          "port": "1",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "2",
+          "role": "node-lan",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": {
+            "kind": "node",
+            "name": "tappaas2",
+            "port": "enp97s0"
+          }
+        },
+        {
+          "port": "3",
+          "role": "node-lan",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": {
+            "kind": "node",
+            "name": "tappaas3",
+            "port": "eno1"
+          }
+        },
+        {
+          "port": "4",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "5",
+          "role": "isp",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "wan"
+          ],
+          "target": {
+            "kind": "isp",
+            "name": null,
+            "port": null
+          }
+        },
+        {
+          "port": "6",
+          "role": "node-wan",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "wan"
+          ],
+          "target": {
+            "kind": "node",
+            "name": "tappaas1",
+            "port": "nic4"
+          }
+        },
+        {
+          "port": "7",
+          "role": "node-wan",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "wan"
+          ],
+          "target": {
+            "kind": "node",
+            "name": "tappaas3",
+            "port": "enp3s0"
+          }
+        },
+        {
+          "port": "8",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "9",
+          "role": "ap",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": {
+            "kind": "ap",
+            "name": "Nano HD",
+            "port": null
+          }
+        },
+        {
+          "port": "10",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "11",
+          "role": "switch",
+          "link": "up",
+          "disabled": null,
+          "lag": "crs-uplink",
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": {
+            "kind": "switch",
+            "name": "crs-a",
+            "port": "sfp-sfpplus14"
+          }
+        },
+        {
+          "port": "12",
+          "role": "switch",
+          "link": "up",
+          "disabled": null,
+          "lag": "crs-uplink",
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": {
+            "kind": "switch",
+            "name": "crs-b",
+            "port": "sfp-sfpplus14"
+          }
+        }
+      ]
+    },
+    {
+      "name": "crs-a",
+      "vendor": "mikrotik",
+      "model": "CRS317-1G-16S+",
+      "ports": [
+        {
+          "port": "ether1",
+          "role": "unmanaged",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus1",
+          "role": "node-lan",
+          "link": "up",
+          "disabled": null,
+          "lag": "tappaas1-lan",
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": {
+            "kind": "node",
+            "name": "tappaas1",
+            "port": "nic2"
+          }
+        },
+        {
+          "port": "sfp-sfpplus2",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus3",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus4",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus5",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus6",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus7",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus8",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus9",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus10",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus11",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus12",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus13",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus14",
+          "role": "switch",
+          "link": "up",
+          "disabled": null,
+          "lag": "usw-uplink",
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": {
+            "kind": "switch",
+            "name": "USW Pro XG 10 PoE",
+            "port": "11"
+          }
+        },
+        {
+          "port": "sfp-sfpplus15",
+          "role": "unmanaged",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus16",
+          "role": "unmanaged",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": null
+        }
+      ]
+    },
+    {
+      "name": "crs-b",
+      "vendor": "mikrotik",
+      "model": "CRS317-1G-16S+",
+      "ports": [
+        {
+          "port": "ether1",
+          "role": "unmanaged",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus1",
+          "role": "node-lan",
+          "link": "up",
+          "disabled": null,
+          "lag": "tappaas1-lan",
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": {
+            "kind": "node",
+            "name": "tappaas1",
+            "port": "nic3"
+          }
+        },
+        {
+          "port": "sfp-sfpplus2",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus3",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus4",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus5",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus6",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus7",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus8",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus9",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus10",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus11",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus12",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus13",
+          "role": "parked",
+          "link": "down",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "iotLocal"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus14",
+          "role": "switch",
+          "link": "up",
+          "disabled": null,
+          "lag": "usw-uplink",
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": {
+            "kind": "switch",
+            "name": "USW Pro XG 10 PoE",
+            "port": "12"
+          }
+        },
+        {
+          "port": "sfp-sfpplus15",
+          "role": "unmanaged",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": null
+        },
+        {
+          "port": "sfp-sfpplus16",
+          "role": "unmanaged",
+          "link": "up",
+          "disabled": null,
+          "lag": null,
+          "zones": [
+            "rossen",
+            "test",
+            "home",
+            "iotLocal",
+            "iotCloud",
+            "iotCams",
+            "guest",
+            "dmz"
+          ],
+          "target": null
+        }
+      ]
+    }
+  ],
+  "accessPoints": [
+    {
+      "name": "Nano HD",
+      "vendor": "unifi",
+      "model": "U7NHD",
+      "uplink": {
+        "switch": "USW Pro XG 10 PoE",
+        "port": "9"
+      }
+    }
+  ]
+}
