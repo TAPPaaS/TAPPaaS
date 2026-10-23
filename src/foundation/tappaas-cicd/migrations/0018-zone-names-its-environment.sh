@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# 0017-zone-names-its-environment.sh — each zone names its environment; environments name no zone
+# 0018-zone-names-its-environment.sh — each zone names its environment; environments name no zone
 #
 # Introduced: 2.3.  Required by: #865 (src/DATAMODEL.md finding 1).
 # Touches: config/zones.json and config/environments/*.json (only).
-# Reversible: yes — restore config/.migrations/backup/0017/ (zones.json and environments/).
+# Reversible: yes — restore config/.migrations/backup/0018/ (zones.json and environments/).
 #
 # WHY. The environment ↔ zone link ran both ways: an environment named its
 # service zone (environments/<env>.json `network.zone`) and a Client, IoT or
@@ -31,21 +31,21 @@
 #   - an environment file whose `name` differs from its file name, or that is
 #     not JSON.
 #
-# Usage: 0017-zone-names-its-environment.sh [--check]
+# Usage: 0018-zone-names-its-environment.sh [--check]
 # Exit:  0 applied, or nothing to do · 1 a shape it will not guess at
 
 set -euo pipefail
 
 CONFIG_DIR="${CONFIG_DIR:-${TAPPAAS_CONFIG_DIR:-/home/tappaas/config}}"
-BACKUP_DIR="${TAPPAAS_MIGRATION_BACKUP_DIR:-${CONFIG_DIR}/.migrations/backup/0017}"
+BACKUP_DIR="${TAPPAAS_MIGRATION_BACKUP_DIR:-${CONFIG_DIR}/.migrations/backup/0018}"
 ZONES="${CONFIG_DIR}/zones.json"
 ENVDIR="${CONFIG_DIR}/environments"
 CHECK=0
 [[ "${1:-}" == "--check" ]] && CHECK=1
 
-say()  { echo -e "\033[32m[Info]\033[m   0017: $*"; }
-note() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m   0017: $*"; }
-stop() { echo -e "\033[01;31m[Error]\033[m 0017: $*" >&2; exit 1; }
+say()  { echo -e "\033[32m[Info]\033[m   0018: $*"; }
+note() { [[ "${TAPPAAS_DEBUG:-0}" == "1" ]] || return 0; echo -e "\033[36m[Debug]\033[m   0018: $*"; }
+stop() { echo -e "\033[01;31m[Error]\033[m 0018: $*" >&2; exit 1; }
 
 [[ -f "${ZONES}" ]] || { say "no ${ZONES} — nothing to migrate"; exit 0; }
 jq empty "${ZONES}" 2>/dev/null || stop "${ZONES} is not valid JSON — refusing to guess"
@@ -106,7 +106,7 @@ plan="$(jq --argjson E "${envs}" '
 
 problems="$(jq -r '.problems[]' <<<"${plan}")"
 if [[ -n "${problems}" ]]; then
-    while IFS= read -r p; do echo -e "\033[01;31m[Error]\033[m 0017: ${p}" >&2; done <<<"${problems}"
+    while IFS= read -r p; do echo -e "\033[01;31m[Error]\033[m 0018: ${p}" >&2; done <<<"${problems}"
     stop "refusing to migrate — zones.json and environments/ are unchanged; a person should look at this"
 fi
 
@@ -149,7 +149,7 @@ done <<<"${drop_net}"
 # Render every new file first; move them into place only when all are good.
 tmps=()
 cleanup() { local t; for t in "${tmps[@]}"; do rm -f "${t}"; done; }
-ztmp="${ZONES}.0017.tmp"; tmps+=("${ztmp}")
+ztmp="${ZONES}.0018.tmp"; tmps+=("${ztmp}")
 jq --argjson P "$(jq -c '.zones' <<<"${plan}")" '
     reduce $P[] as $p (.;
         if ($p.envs | length) == 1 then .[$p.zone].environment = $p.envs[0] else . end
@@ -158,7 +158,7 @@ jq --argjson P "$(jq -c '.zones' <<<"${plan}")" '
 jq empty "${ztmp}" 2>/dev/null || { cleanup; stop "the rewritten zones.json is not valid JSON — nothing is changed"; }
 while IFS= read -r f; do
     [[ -n "${f}" ]] || continue
-    t="${f}.0017.tmp"; tmps+=("${t}")
+    t="${f}.0018.tmp"; tmps+=("${t}")
     jq 'del(.network)' "${f}" > "${t}" || { cleanup; stop "rewrite of ${f} failed — nothing is changed"; }
 done <<<"${drop_net}"
 
@@ -166,8 +166,8 @@ chmod --reference="${BACKUP_DIR}/zones.json" "${ztmp}" 2>/dev/null || true
 mv -f "${ztmp}" "${ZONES}"
 while IFS= read -r f; do
     [[ -n "${f}" ]] || continue
-    chmod --reference="${f}" "${f}.0017.tmp" 2>/dev/null || true
-    mv -f "${f}.0017.tmp" "${f}"
+    chmod --reference="${f}" "${f}.0018.tmp" 2>/dev/null || true
+    mv -f "${f}.0018.tmp" "${f}"
 done <<<"${drop_net}"
 
 describe "gave"

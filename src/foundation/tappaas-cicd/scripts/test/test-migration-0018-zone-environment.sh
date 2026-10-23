@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-migration-0017-zone-environment.sh — the fixture test for migration 0017 (#865).
+# test-migration-0018-zone-environment.sh — the fixture test for migration 0018 (#865).
 #
 # before → after on a site shaped like the reference system (an environment per
 # Service zone, mgmt on the Management zone, client and IoT zones serving one),
@@ -10,7 +10,7 @@ set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CICD="$(cd "${HERE}/../.." && pwd)"
-M="${CICD}/migrations/0017-zone-names-its-environment.sh"
+M="${CICD}/migrations/0018-zone-names-its-environment.sh"
 
 pass=0; fail=0
 ck() { if [[ "$2" == "$3" ]]; then echo "  ✓ $1"; pass=$((pass+1)); else echo "  ✗ $1 (expected '$2', got '$3')"; fail=$((fail+1)); fi; }
@@ -18,7 +18,7 @@ has() { [[ "$1" == *"$2"* ]] && echo yes || echo no; }
 
 [[ -f "${M}" ]] || { echo "  ✗ ${M} not found"; exit 1; }
 
-TMP="$(mktemp -d "${TMPDIR:-/tmp}/mig0017.XXXXXX")"
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/mig0018.XXXXXX")"
 trap 'rm -rf "${TMP}"' EXIT INT TERM
 CFG="${TMP}/config"
 
@@ -45,7 +45,7 @@ J
     done
     if [[ -n "${2:-}" ]]; then ( cd "${CFG}/environments" && eval "$2" ); fi
 }
-run() { CONFIG_DIR="${CFG}" TAPPAAS_MIGRATION_BACKUP_DIR="${CFG}/.migrations/backup/0017" bash "${M}" "$@" 2>&1; }
+run() { CONFIG_DIR="${CFG}" TAPPAAS_MIGRATION_BACKUP_DIR="${CFG}/.migrations/backup/0018" bash "${M}" "$@" 2>&1; }
 env_of() { jq -r --arg z "$1" '.[$z].environment // "none"' "${CFG}/zones.json"; }
 snapshot() { (cd "${CFG}" && cat zones.json environments/*.json); }
 
@@ -67,8 +67,8 @@ ck "…nothing else in zones.json changes"               "$(jq -c 'walk(if type 
                                                        "$(jq -c 'walk(if type == "object" then del(.environment) else . end)' "${CFG}/zones.json")"
 ck "…each link is reported"                            yes "$(has "${out}" "gave zone home environment rossen (it serves rossen)")"
 ck "…and its own zone said as such"                    yes "$(has "${out}" "gave zone rossen environment rossen (its zone)")"
-ck "the zones.json pre-image is backed up"             "${zbefore}" "$(cat "${CFG}/.migrations/backup/0017/zones.json")"
-ck "an environment's pre-image is backed up"           "${rbefore}" "$(cat "${CFG}/.migrations/backup/0017/environments/rossen.json")"
+ck "the zones.json pre-image is backed up"             "${zbefore}" "$(cat "${CFG}/.migrations/backup/0018/zones.json")"
+ck "an environment's pre-image is backed up"           "${rbefore}" "$(cat "${CFG}/.migrations/backup/0018/environments/rossen.json")"
 after="$(snapshot)"; out="$(run)"
 ck "a second run changes nothing"                      "${after}" "$(snapshot)"
 ck "…and says so"                                      yes "$(has "${out}" "nothing to migrate")"
@@ -115,5 +115,5 @@ rm -rf "${CFG}"; mkdir -p "${CFG}"
 out="$(run)"; rc=$?
 ck "no zones.json is nothing to migrate"               0 "${rc}"
 
-echo "  test-migration-0017: ${pass} passed, ${fail} failed"
+echo "  test-migration-0018: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

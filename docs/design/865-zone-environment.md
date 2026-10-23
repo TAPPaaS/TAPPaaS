@@ -36,7 +36,7 @@ Decision (operator, 2026-10-23): one `environment` per zone. Every environment i
 exactly one zone of type Service or Management (`mgmt`'s zone is its Management zone); a
 Client, IoT, DMZ or Guest zone names at most one. A zone that must reach a second
 environment's zone gets an authored `access-to` (IoT: `pinhole-allowed-from`) entry, which
-the render keeps. Migration 0017 refuses a zone that would get two environments. ADR-014
+the render keeps. Migration 0018 refuses a zone that would get two environments. ADR-014
 v1.4 withdraws the v1.3 list and ZONES.md describes the authored entry instead.
 
 `environment` keeps the change class `serves` had, `manual` ("has a verb of its own"), not
@@ -139,14 +139,14 @@ None read either field: zone-manager, rules_manager and the Caddy access lists r
 | network-manager README, DESIGN, ZONES.md, FIREWALL-RULES.md (example, diagram edge) | `environment` |
 | module-manager DESIGN l.282, cluster lxc/vm README zone0 note | the zone naming the environment |
 | `src/DATAMODEL.md` diagram `ENV -- network.zone --> ZONE`, table, finding 1 | edge reversed `ZONE -- environment --> ENV`, finding 1 resolved |
-| `migrations/README.md` | row for 0017 |
+| `migrations/README.md` | row for 0018 |
 
 Design and history docs (`docs/design/ADR-0*-implementation*.md`, zone-rules-review,
 plans) record what was done at the time and are left as they are.
 
-## Migration 0017
+## Migration 0018
 
-`0017-zone-names-its-environment.sh`, zones.json and environments/*.json:
+`0018-zone-names-its-environment.sh`, zones.json and environments/*.json:
 
 1. each environment's `network.zone` Z → `zones.Z.environment = <env>`;
 2. each zone's `serves` → `environment`;
