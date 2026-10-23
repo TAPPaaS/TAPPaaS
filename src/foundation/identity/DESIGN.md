@@ -44,7 +44,7 @@ opening without it (vaultwarden DESIGN.md).
 ## Stack (identity.nix)
 
 - Authentik server + worker as podman containers; the release's target version is the
-  last of the release lines in `identity.nix` (`2026.8.3`); web UI + API on ports 9000
+  last of the release lines in `identity.nix` (`2026.8.5`); web UI + API on ports 9000
   (HTTP) / 9443 (HTTPS).
 - PostgreSQL 16 runs natively on the VM (Redis only below Authentik 2025.10).
 - VM firewall open: 22 (SSH), 9000, 9443.
@@ -90,7 +90,7 @@ tmpfiles `R` rule removes the directories from VMs that still have them.
 Authentik refuses to skip a release line, moves to each line's latest patch before the
 next, and cannot go back. `ak-step.nix` therefore builds **one step per update** along
 the release lines in `identity.nix`: an older patch goes to its line's latest, a line's
-latest to the next line. A guest on 2025.2.x reaches 2026.8.3 in **eight updates** — eight
+latest to the next line. A guest on 2025.2.x reaches 2026.8.5 in **eight updates** — eight
 nights on a site with a daily update schedule, or eight runs of
 `module-manager update identity` to do it now.
 

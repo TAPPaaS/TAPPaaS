@@ -53,7 +53,7 @@ let
     # ports (akWorkerEnv below); without that 2026.5.7 answered every request
     # with an empty page on hrossen (#748, 2026-10-03).
     lines = [ "2025.2.3" "2025.4.4" "2025.6.4" "2025.8.6" "2025.10.4"
-              "2025.12.6" "2026.2.7" "2026.5.7" "2026.8.3" ];
+              "2025.12.6" "2026.2.7" "2026.5.7" "2026.8.5" ];
   };
 
   # Settings, as opposed to secrets: declared here, so a change reaches every
