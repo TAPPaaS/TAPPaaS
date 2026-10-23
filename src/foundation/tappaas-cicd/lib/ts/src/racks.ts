@@ -10,7 +10,10 @@
 // other. A cable the switches or LLDP can see comes from the topology;
 // racks.json records only the ones nothing can see.
 
-export const RACKS_FILE = "racks.json";
+export const POSITIONS_FILE = "positions.json";
+// The file's name before position-manager (migration 0020 renames it): read
+// while it is still there, never written.
+export const LEGACY_RACKS_FILE = "racks.json";
 export const RACK_NAME_RE = /^[a-z][a-z0-9-]{0,62}$/;
 export const FACEPLATE_KEY_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9.+-]*$/;
 
@@ -452,7 +455,7 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
   for (const name of Object.keys(rooms)) if (!ROOM_NAME_RE.test(name)) err(`room '${name}': a room name is lower case letters, digits and dashes`);
   for (const [name, r] of Object.entries(racks)) {
     // A rack's room names a room record; free text is accepted until the room is recorded.
-    if (r.room && !rooms[r.room]) warn(`rack ${name}: room '${r.room}' is not recorded (rack-manager room add ${ROOM_NAME_RE.test(r.room) ? r.room : "<name>"}), its text is kept as it is`);
+    if (r.room && !rooms[r.room]) warn(`rack ${name}: room '${r.room}' is not recorded (position-manager room add ${ROOM_NAME_RE.test(r.room) ? r.room : "<name>"}), its text is kept as it is`);
     if (!RACK_NAME_RE.test(name)) err(`rack '${name}': a rack name is lower case letters, digits and dashes`);
     if (!Number.isInteger(r.units) || r.units < 1 || r.units > 60) err(`rack ${name}: units is 1 to 60`);
     if (!RACK_WIDTHS.includes(r.width)) err(`rack ${name}: width is one of ${RACK_WIDTHS.join(", ")}`);
@@ -532,7 +535,7 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
     // A device only this cable names: it works, but it is no device yet.
     for (const e of [c.from, c.to]) {
       if (!isStr(e?.device) || recorded[e.device] || mounts[e.device] || devices === null || devices.some((d) => d.name === e.device)) continue;
-      warn(`${where}: ${e.device} is neither seen by the topology nor recorded — record it: rack-manager device add '${e.device}' --kind modem|ont|ups|patch-panel|other${e.faceplate ? ` --model ${e.faceplate}` : ""}`);
+      warn(`${where}: ${e.device} is neither seen by the topology nor recorded — record it: position-manager device add '${e.device}' --kind modem|ont|ups|patch-panel|other${e.faceplate ? ` --model ${e.faceplate}` : ""}`);
     }
   }
   return out;

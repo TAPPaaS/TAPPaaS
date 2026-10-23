@@ -1,4 +1,4 @@
-// help.test.ts — rack-manager's --help is its verb manifest (`--help --json`):
+// help.test.ts — position-manager's --help is its verb manifest (`--help --json`):
 // every option a usage names is described, the reads are reads, the writes
 // preview with --check, and what removes something is destructive.
 
@@ -29,5 +29,5 @@ for (const x of ["rack add", "rack modify", "mount add", "mount modify", "cable 
 check(v("cable remove").object?.positional === "device:port", "cable remove names its port as the object");
 check(v("mount add").positionals[0]?.name === "device", "mount add's positional is the device");
 
-console.log(`\nrack-manager help: ${passed} passed, ${failed} failed`);
+console.log(`\nposition-manager help: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

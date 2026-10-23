@@ -1,10 +1,10 @@
-// verbs.test.ts — what each rack-manager verb does to config/racks.json, the
+// verbs.test.ts — what each position-manager verb does to config/positions.json, the
 // whole-document check, and the view the topology carries, over hrossen's
 // topology (test/fixtures/topology-hrossen.json, captured 2026-10-22).
 // Offline: documents in, documents out; the catalog is in memory here
 // (catalog.test.ts reads the real one).
 //
-// Run: RM_FIXTURE_DIR=<rack-manager>/test/fixtures node verbs.test.js
+// Run: RM_FIXTURE_DIR=<position-manager>/test/fixtures node verbs.test.js
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -161,5 +161,5 @@ const plate = sw.racks[0].mounts.find((m) => m.device === USW)!.plate!;
 check(plate.rows[0][2]!.id === "5" && plate.rows[0][2]!.zones.includes("wan") && plate.rows[1][5]!.lag === "crs-uplink", "the UniFi plate's ports carry the switch's live state");
 check(unitAtRow({ units: 42, numbering: "bottom-up" }, 0) === 42 && unitAtRow({ units: 42, numbering: "top-down" }, 0) === 1, "the top row is U42 bottom-up, U1 top-down");
 
-console.log(`\nrack-manager verbs: ${passed} passed, ${failed} failed`);
+console.log(`\nposition-manager verbs: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

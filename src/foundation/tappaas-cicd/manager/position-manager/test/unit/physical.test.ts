@@ -1,9 +1,9 @@
 // physical.test.ts — the recorded devices, rooms, patch panels and cable
-// segments of config/racks.json: the verbs, the whole-document check and the
+// segments of config/positions.json: the verbs, the whole-document check and the
 // view the topology carries, over hrossen's topology
 // (test/fixtures/topology-hrossen.json). Offline; the catalog is in memory.
 //
-// Run: RM_FIXTURE_DIR=<rack-manager>/test/fixtures node physical.test.js
+// Run: RM_FIXTURE_DIR=<position-manager>/test/fixtures node physical.test.js
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -139,5 +139,5 @@ const rejoined = doc(joinCable(ispSplit, { device: USW, port: "5" }));
 check(rejoined.cables!.length === 1 && rejoined.cables![0].label === "ISP hand-off" && [rejoined.cables![0].from.device, rejoined.cables![0].to.device].sort().join() === `ISP modem,${USW}` && !rejoined.cables![0].origin, "cable join from a device end: the recorded cable again");
 check(refused(joinCable(isp, { device: USW, port: "5" }), "no link through a patch panel"), "join on a link that runs through no panel is refused");
 
-console.log(`\nrack-manager physical: ${passed} passed, ${failed} failed`);
+console.log(`\nposition-manager physical: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

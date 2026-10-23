@@ -127,7 +127,7 @@ _registry="${SELFCHECK_REGISTRY:-/home/${TAPPAAS_USER}/config/control-plane.json
 _managers="$(jq -r '.components[]? | select(.kind == "manager") | .name' "${_registry}" 2>/dev/null)"
 if [[ -z "${_managers}" ]]; then
     warn "  no control-plane registry (${_registry}) — checking the standard managers"
-    _managers="module-manager site-manager network-manager backup-manager health-manager identity-manager environment-manager storage-manager rack-manager"
+    _managers="module-manager site-manager network-manager backup-manager health-manager identity-manager environment-manager storage-manager position-manager"
 fi
 for mgr in ${_managers}; do
     if ! as_tappaas bash -c 'command -v "$1"' _ "${mgr}" >/dev/null 2>&1; then

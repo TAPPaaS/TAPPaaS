@@ -1,4 +1,4 @@
-// verbs.ts — what each rack-manager verb does to config/racks.json, as pure
+// verbs.ts — what each position-manager verb does to config/positions.json, as pure
 // functions over the document: a verb returns the new document or a refusal.
 // Validating the whole result and writing it are main.ts's; this is what the
 // unit tests pin.

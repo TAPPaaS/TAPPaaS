@@ -1,5 +1,5 @@
-// rack-manager — where the site's hardware sits. Owns config/racks.json: the
-// racks, what is mounted where (keyed by the device's topology name; the
+// position-manager — where the site's hardware is (ADR-036 D3). Owns
+// config/positions.json: the rooms, the racks, what is mounted where (keyed by the device's topology name; the
 // device's own record is never touched), the devices the topology cannot see
 // (a modem, an ONT, a UPS, a patch panel) and the cables nothing can see. The
 // faceplate catalog (faceplates/<vendor>/<model>.json) says what each device
@@ -9,6 +9,9 @@
 // Every changing verb: lock → change → validate the WHOLE resulting file →
 // write atomically. A verb that fails validation writes nothing. --check
 // prints the result instead. Nothing here touches a device.
+//
+// rack-manager is its old name: the package links it beside position-manager
+// for one release (ADR-035 P2), and it answers the same verbs.
 //
 // Exit codes: ok=0, error=1.
 
@@ -40,18 +43,18 @@ import {
 import { Store, loadCatalog, readDevices } from "./store";
 import { Result, addCable, addDevice, addMount, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyMount, modifyRack, modifyRoom, removeCable, removeDevice, removeMount, splitCable } from "./verbs";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 
 const CHECK: [string, string] = ["--check", "Show the result; change nothing."];
 const TOPO: [string, string] = ["--topology F", "A `network-manager topology --json` document to check against, instead of running it."];
 const JSON_OUT: [string, string] = ["--json", "As JSON."];
 
 export const HELP: HelpSpec = {
-  name: "rack-manager",
+  name: "position-manager",
   version: VERSION,
-  tagline: "where the site's hardware sits — racks, mounts and the cables nothing can see, in config/racks.json",
+  tagline: "where the site's hardware sits — racks, mounts and the cables nothing can see, in config/positions.json",
   verbs: [
-    { usage: "validate [--topology <file>] [--json]", options: [TOPO, ["--json", "The findings as JSON."]], note: "(config/racks.json against the topology and the catalog)" },
+    { usage: "validate [--topology <file>] [--json]", options: [TOPO, ["--json", "The findings as JSON."]], note: "(config/positions.json against the topology and the catalog)" },
     { usage: "rack list [--json]", options: [JSON_OUT] },
     { usage: "rack show <rack> [--json]", options: [JSON_OUT], note: "(the rack and its mounts)" },
     {
@@ -163,6 +166,7 @@ export const HELP: HelpSpec = {
   ],
   notes: [
     "A mount names a device as `network-manager topology` does. A cable the switches or LLDP see is drawn from the topology and never recorded; record only what nothing can see — the ISP's modem, a patch panel, a PDU.",
+    "rack-manager is the old name of position-manager and answers the same verbs for one release; config/racks.json becomes config/positions.json by migration.",
     "A device nothing can see is recorded (device add), then mounted in a rack or loose in a room (mount add --room). A link through a patch panel is split there (cable split): the topology still shows one link, the racks its two wires.",
   ],
 };
@@ -240,12 +244,13 @@ function readCatalog(): Faceplate[] {
 // change — the shared sequence of every changing verb. Devices are read only
 // for a verb that names one (a mount, a cable); a rack's own fields need none.
 function change(store: Store, check: boolean, catalog: Faceplate[], devices: SiteDevice[] | null | undefined, fn: (doc: RacksDoc) => Result): number {
+  if (!check && store.legacy) die(`${store.legacy} is still there: migration 0020 makes it config/positions.json (the next update, or scripts/run-migrations.sh) — nothing was changed`);
   return store.withLock(() => {
     const r = fn(store.load());
     if ("refused" in r) die(r.refused);
     const findings = checkRacks(r.doc, catalog, devices ?? null).filter((f) => devices !== undefined || !f.message.startsWith("the topology could not be read"));
     const errors = report(findings.filter((f) => f.severity === "error" || !check));
-    if (errors) die("config/racks.json would not be valid — nothing was changed");
+    if (errors) die("config/positions.json would not be valid — nothing was changed");
     if (check) {
       info(`[check] ${r.summary}`);
       info(JSON.stringify(r.doc, null, 2));
@@ -289,7 +294,7 @@ export function run(argv: string[]): number {
     return 0;
   }
   if (args[0] === "--version" || args[0] === "version") {
-    info(`rack-manager ${VERSION}`);
+    info(`position-manager ${VERSION}`);
     return 0;
   }
   const rc = checkArgs(HELP, args);
@@ -309,7 +314,7 @@ export function run(argv: string[]): number {
     }
     if (report(findings)) return 1;
     const d = store.load();
-    info(`${GN}✓${CL} config/racks.json valid (${Object.keys(racksOf(d)).length} rack(s), ${Object.keys(mountsOf(d)).length} mount(s), ${cablesOf(d).length} recorded cable(s))`);
+    info(`${GN}✓${CL} config/positions.json valid (${Object.keys(racksOf(d)).length} rack(s), ${Object.keys(mountsOf(d)).length} mount(s), ${cablesOf(d).length} recorded cable(s))`);
     return 0;
   }
   if (args[0] === "export") {
@@ -586,7 +591,7 @@ export function run(argv: string[]): number {
     if (side) end.side = side;
     return change(store, check, readCatalog(), undefined, (d) => removeCable(d, end));
   }
-  die(`unknown verb 'rack-manager ${args.slice(0, 2).join(" ")}' — see 'rack-manager --help'`);
+  die(`unknown verb 'position-manager ${args.slice(0, 2).join(" ")}' — see 'position-manager --help'`);
 }
 
 if (require.main === module) {
