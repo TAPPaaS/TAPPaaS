@@ -181,3 +181,30 @@ rooms without location.
 5. The topology and the console.
 6. Migration 0020 and its fixture test.
 7. Docs.
+
+## As built
+
+- The topology key is `positions` (was `racks`), and its rack view's `mounts` are
+  `placements`; the console and network-manager ship together, so neither keeps the old key.
+- The console's internal selection key for a device's card stays `mount:<device>` in
+  `?select=`; only what it shows changed.
+- A seen device is named by its MAC (lower case), else `<switch>:<port>`; it is not a
+  `topology` finding until it is recorded, and its port's link is drawn to it. A port's
+  neighbours are what the controller's interrogate merges into the port in
+  `switch-configuration-actual.json`; the UniFi and MikroTik controllers in the Community
+  repository do not report them yet (a follow-up there), so on hrossen today a seen device
+  is only a port that is up with nothing recorded on it — there is none.
+- `device record` refuses a port a recorded cable already lands on and a MAC already
+  recorded; its device port is `--port`, else LLDP's, else its model's first, else `1`; its
+  display name is LLDP's name or the lease's hostname.
+- A loose placement given `--height/--width/--slot/--face` is refused (its plate gives its
+  size); `place modify --set room=…` drops them, and a move from a room into a rack takes the
+  plate's height and width.
+- position-manager's `rack show --json` lists `placements`, `device list --json` gives
+  `placed` (was `mounted`).
+- Found on the way: `ui/web` did not type-check on main (`deviceview.tsx` `onEdgeClick`
+  parameters implicitly `any`); typed here so `ui/test.sh` is green.
+- On a copy of hrossen's config: migration 0020 writes `positions.json` (8 placements, the ISP
+  modem and Nano HD reduced to their room, basement and stue at `knudanchersvej95`), a second
+  run does nothing; `position-manager validate` passes (the placeholder heights warn as
+  before); the registry lists position-manager with its alias.

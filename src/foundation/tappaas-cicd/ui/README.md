@@ -46,21 +46,27 @@ pools with a fill bar coloured by state and its disks with a problem, and every 
 topology and the storage inventory, each linked to the view and the object it is on. Below
 that, the site's records: `site.json` (Modify), the update schedule, the release train's preview
 and status, and the repositories (sync, hold, release, stashes, reconcile).
-**Physical** (`/site/physical`): each room of rack-manager's
-`config/racks.json` as an area with its racks and, beside them, the devices standing loose in it;
-each rack as a frame with its units numbered as the rack numbers them, each mount as its
+**Physical** (`/site/physical`): the site's locations (the primary first), each as an area around
+its rooms — a location with no room lists the devices that are somewhere there — and each room of
+position-manager's `config/positions.json` as an area with its racks and, beside them, the devices
+standing loose in it; each rack as a frame with its units numbered as the rack numbers them, each placed device as its
 faceplate at its units and width with its ports' live state (link, LAG), the cabled ports
 underlined (a patch panel's rear-cabled ports overlined), the cables port to port in
 the zone colours below with a label on hover — a link through a patch panel as its two wires —, a
-device only a cable record places beside the rack, and an Unplaced tray of the devices mounted
-nowhere, each with Mount… and Place in a room…; the header's Add a room… (`rack-manager room add`), Add a
-rack… and Record a device… (`rack-manager device add`: kind, a catalog model or free text, ports), the last
+device only a cable record places beside the rack, and an Unplaced tray of the devices placed
+nowhere, by location, each with Place… (one form: a rack and its units, or loose in a room;
+`position-manager place`) — or, for a device a switch port sees and nobody recorded, Record…
+(`position-manager device record`: its MAC kept, the port's link recorded as its cable); the header's
+Add a room… (`position-manager room add`, at one of the site's locations), Add a
+rack… and Record a device… (`position-manager device add`: kind, a catalog model or free text, ports, location), the last
 also in a rack's and a room's card, and a How to card while nothing is selected; a click on a cable opens its link, whose panel
-lists the wires and offers Attach to patch panel… (`rack-manager cable split`, its `--check` the
+lists the wires and offers Attach to patch panel… (`position-manager cable split`, its `--check` the
 preview, the free panel ports to choose from) or Remove patch panel (`cable join`); a click on a plate or a port
-opens the side card to the left of the racks, with Mount…, Move to… and Unmount… besides the
-object's own changes. **Device** (`/site/device`) — every physical device (the cluster nodes, the
-switches, the access points, the machines and devices a rack or a cable record names, the internet
+opens the side card to the left of the racks, with the device's location and placement as two
+lines (each a link to its object) and Place…, Move to…, Change placement… and Unplace… besides the
+object's own changes; a seen device's card shows the port it is seen at, its MAC, what LLDP and
+the lease say, and Record…. **Device** (`/site/device`) — every physical device (the cluster nodes, the
+switches, the access points, the machines and devices a placement or a cable record names, the devices a switch port sees (marked as seen), the internet
 and the backup buddies) as a card with its kind's icon and its name and nothing else, coloured by
 its state as the Storage view colours its cards (its findings' worst level; a drifting port, a
 node's uplink leg down or a buddy down are warnings; the reason on hover; one legend for both
@@ -154,9 +160,9 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | a module's drift | `module-manager drift <m> --json` | on demand only |
 | a module's fields (its Modify forms) | `module-manager fields <m> --json` with `resolve` and `config/module-fields.json` | 5 min, on first view |
 | the repositories' catalogues (`catalogs`) | `site-manager repository list --json`, `<path>/<catalog>`, each module's JSON, `config/<m>.json` moduleSource | 10 min, and after a job |
-| a form's schema (`schemas/zones`, `schemas/environment`, the rack and mount `$defs` of `racks-fields`) | `src/foundation/schemas/<name>-fields.json` of `$CONSOLE_REPO` | 10 min |
+| a form's schema (`schemas/zones`, `schemas/environment`, the rack, room and placement `$defs` of `positions-fields`) | `src/foundation/schemas/<name>-fields.json` of `$CONSOLE_REPO` | 10 min |
 | topology (the Physical page) | `network-manager topology --json --health <the cached validate>` | every 5 min |
-| the faceplate catalog (a mount's faceplate choices) | `rack-manager faceplates list --json` | 10 min |
+| the faceplate catalog (a placement's faceplate choices) | `position-manager faceplates list --json` | 10 min |
 | storage (Physical › Storage and Overview) | `storage-manager inventory --json` (SMART included, ≈15 s on three nodes) | 10 min, read when a page asks; no timer of its own |
 | zones | `network-manager list --json`, `show <zone> --json` | every 5 min |
 | environments | `environment-manager list --json` | every 5 min |
