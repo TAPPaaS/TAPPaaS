@@ -24,12 +24,12 @@ import { ModuleIcon, moduleIcon } from "./icons";
 import { BackupRow, BackupRunsDoc, EnvironmentRow, HealthDoc, ModuleList, StorageDoc, TopologyDoc } from "./model";
 
 // The positions the topology carries (network-manager topology .positions), the parts read here.
-interface PositionsRead {
+export interface PositionsRead {
   racks: {
     name: string; displayName: string | null; units: number; width: string; numbering: string; room: string | null; description: string | null;
     placements: { device: string; rack: string; u: number; height: number; width: string; slot: number; face: string; faceplate: string | null; suggested: boolean; label: string | null; description: string | null }[];
   }[];
-  unplaced: { device: string; suggestion: string | null }[];
+  unplaced: { device: string; suggestion: string | null; location?: string | null }[];
   rooms?: { name: string; displayName: string | null; description: string | null; location?: string | null; recorded: boolean; loose?: (PositionsRead["racks"][number]["placements"][number] & { room?: string | null })[] }[];
 }
 
@@ -37,6 +37,28 @@ interface PositionsRead {
 export function topologyDevices(t: Record<string, unknown> | null): string[] {
   const names = (k: string) => (Array.isArray(t?.[k]) ? (t![k] as { name?: unknown }[]) : []).map((x) => x.name).filter((n): n is string => typeof n === "string");
   return [...new Set([...names("nodes"), ...names("switches"), ...names("accessPoints"), ...names("devices")])].sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
+}
+
+// The location a device is at (ADR-036 D2): the topology's word on it, else
+// the view's for a device placed nowhere, else the primary.
+export function deviceLocationIn(t: Record<string, unknown> | null, device: string, primary: string | null): string | null {
+  for (const k of ["nodes", "switches", "accessPoints", "devices"]) {
+    const d = (Array.isArray(t?.[k]) ? (t![k] as { name?: unknown; location?: unknown }[]) : []).find((x) => x.name === device);
+    if (typeof d?.location === "string" && d.location) return d.location;
+  }
+  const u = ((t?.positions as PositionsRead | null | undefined)?.unplaced ?? []).find((x) => x.device === device);
+  return u?.location ?? primary;
+}
+
+// Where a device can be placed: the rooms at its location, and the racks in
+// them (a rack in no room only at the primary location, where validate puts it).
+export function placesAt(view: PositionsRead | null, location: string | null, primary: string | null): { rooms: string[]; racks: string[] } {
+  const rooms = (view?.rooms ?? []).filter((r) => (r.location ?? primary) === location);
+  const names = new Set(rooms.map((r) => r.name));
+  return {
+    rooms: rooms.filter((r) => r.recorded).map((r) => r.name).sort(),
+    racks: (view?.racks ?? []).filter((r) => (r.room ? names.has(r.room) : location === primary)).map((r) => r.name).sort(),
+  };
 }
 
 const MIN = 60_000;
@@ -323,7 +345,7 @@ export class Reads {
   }
 
   async fieldManifest(kind: FieldKind, name: string | null, mode: FormMode): Promise<FieldManifest> {
-    const refs = await this.refContext(kind === "rack" || kind === "placement" || kind === "room");
+    let refs = await this.refContext(kind === "rack" || kind === "placement" || kind === "room");
     const vars: Record<string, string | null> = { name };
     let defs: FieldDef[] = [];
     let record: Record<string, unknown> | null = null;
@@ -473,7 +495,13 @@ export class Reads {
         // positions-fields.json's $defs; the record as the topology resolves it.
         const $defs = (this.schemaFile("positions-fields.json").$defs ?? {}) as Record<string, unknown>;
         defs = flattenSchema($defs[kind]);
-        const view = ((await this.topology.get()).value?.positions ?? null) as PositionsRead | null;
+        const topo = (await this.topology.get()).value ?? null;
+        const view = (topo?.positions ?? null) as PositionsRead | null;
+        const primary = ((((await this.site.get()).value?.site ?? {}) as { primaryLocation?: unknown }).primaryLocation as string | undefined) ?? null;
+        // A room is at the primary location unless it names another.
+        if (kind === "room" && mode === "add" && primary) defaults = { location: `${primary}, the primary location` };
+        // A device is placed only in a room, or a rack, at its own location.
+        if (kind === "placement" && name) refs = { ...refs, ...placesAt(view, deviceLocationIn(topo as unknown as Record<string, unknown> | null, name, primary), primary) };
         if (kind === "rack" && name) {
           const r = (view?.racks ?? []).find((x) => x.name === name);
           if (!r && mode === "modify") throw new Error(`no rack '${name}'`);

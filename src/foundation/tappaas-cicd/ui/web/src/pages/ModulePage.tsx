@@ -9,13 +9,14 @@ import { ReactNode, useEffect, useState } from "react";
 import { useOpenRequest } from "../opener";
 import { AskAbout } from "../assistant";
 import { get, useRead } from "../api";
-import { Envelope, ModuleDetail } from "../types";
-import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, levelOf, since, useMe, when } from "../ui";
+import { Envelope, ModuleDetail, Topology } from "../types";
+import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, canOperate, levelOf, since, useMe, when } from "../ui";
 import { ModuleBadges } from "./Modules";
 import { JobList } from "../jobs";
 import { ModuleConfig } from "./ModuleConfig";
 import { ModuleOperate } from "./ModuleOperate";
-import { LocationLine, useSiteLocations } from "../locations";
+import { LocationLine, PlacementLine, useSiteLocations } from "../locations";
+import { PlaceActions } from "../physical/rackops";
 
 const TABS = ["Overview", "Config", "Drift", "Backup", "Activity"] as const;
 type TabName = (typeof TABS)[number];
@@ -165,6 +166,9 @@ export function ModulePage({ name }: { name: string }) {
   // the module directory's old field, never a place.
   const machine = show_.kind === "machine" || m?.kind === "machine";
   const at = typeof show_.location === "string" && show_.location !== "" && !show_.location.includes("/") ? show_.location : null;
+  // A machine's placement is position-manager's, read from the topology.
+  const positions = useRead<Topology>(machine ? "topology" : null).env?.data?.positions;
+  const operator = canOperate(useMe());
   return (
     <div className="page">
       <div className="page-head">
@@ -216,7 +220,12 @@ export function ModulePage({ name }: { name: string }) {
                 ["version", `${show(show_.version)}${show_.releaseDate ? ` · released ${show(show_.releaseDate)}` : ""}`],
                 ["maturity", show(show_.status)],
                 ["maintainer", show(show_.maintainer)],
-                ...(machine ? [["location", <LocationLine name={at} locations={locations} />] as [string, ReactNode]] : []),
+                ...(machine
+                  ? ([
+                      ["location", <LocationLine name={at} locations={locations} />],
+                      ["placement", <span className="kv-with-actions"><span><PlacementLine v={positions} device={name} location={at ?? locations.find((l) => l.primary)?.name ?? null} /></span>{operator && positions ? <span className="toolbar"><PlaceActions device={name} v={positions} /></span> : null}</span>],
+                    ] as [string, ReactNode][])
+                  : []),
                 ["installed", show(show_.installTime)],
                 ["updated", show(show_.updateTime)],
                 ["source", <span className="mono">{show(show_.moduleSource)}</span>],

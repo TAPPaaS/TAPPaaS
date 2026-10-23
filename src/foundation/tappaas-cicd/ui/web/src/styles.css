@@ -524,3 +524,4 @@ button.mod-tile:hover { background: var(--info-bg); }
 .howto ol { padding-left: 18px; margin: 6px 0 10px; }
 .howto li { margin-bottom: 6px; }
 .howto-line { background: var(--info-bg); border-radius: 6px; padding: 6px 8px; }
+.kv-with-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }

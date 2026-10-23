@@ -28,11 +28,23 @@ export function firstFree(r: RackInfo, height: number, face: "front" | "rear" = 
   return null;
 }
 
+// Where a device placed nowhere can go: the recorded rooms at its location and
+// the racks in them (a rack in no room only at the primary location) — the
+// console's backend narrows the form's choices the same way.
+export function placesFor(v: PositionsView | null | undefined, device: string): { location: string | null; rooms: string[]; racks: RackInfo[] } {
+  const primary = v?.locations?.find((l) => l.primary)?.name ?? null;
+  const location = v?.unplaced.find((x) => x.device === device)?.location ?? primary;
+  const rooms = (v?.rooms ?? []).filter((r) => (r.location ?? primary) === location);
+  const names = new Set(rooms.map((r) => r.name));
+  return { location, rooms: rooms.filter((r) => r.recorded).map((r) => r.name), racks: (v?.racks ?? []).filter((r) => (r.room ? names.has(r.room) : location === primary)) };
+}
+
 // What a new placement starts from: the catalog's plate for the device, its
-// height and width, the first rack and the highest units free there.
+// height and width, the first rack at its location and the highest units free there.
 export function placePrefill(v: PositionsView | null | undefined, device: string, rack?: string): Record<string, string> {
   const u = v?.unplaced.find((x) => x.device === device);
-  const r = v?.racks.find((x) => x.name === rack) ?? v?.racks[0];
+  const at = placesFor(v, device).racks;
+  const r = at.find((x) => x.name === rack) ?? at[0];
   const out: Record<string, string> = {};
   if (u?.suggestion) out.faceplate = u.suggestion;
   if (r) {
@@ -74,12 +86,13 @@ export function placeSteps(device: string, v: PositionsView | null | undefined, 
   const base = { title: `position-manager place '${device}'`, bin: RM, verb: "place", fixed: [device], kind: "placement", name: device, mode: "add" as const };
   const inRack = fieldsStep({ ...base, fields: IN_RACK });
   const inRoom = fieldsStep({ ...base, fields: IN_ROOM });
-  const canRack = !!v?.racks.length;
-  const canRoom = (v?.rooms ?? []).some((r) => r.recorded);
+  const at = placesFor(v, device);
+  const canRack = at.racks.length > 0;
+  const canRoom = at.rooms.length > 0;
   return [
     {
       ...inRack,
-      note: "Records where the device stands, in config/positions.json: in a rack at its units, or loose in a room (its plate gives its size). The device and its record are not touched. The plate is the catalog's suggestion for its model unless you choose another; its ports are drawn with the topology's live state.",
+      note: `Records where the device stands, in config/positions.json: in a rack at its units, or loose in a room (its plate gives its size) — a rack or room at ${at.location ?? "its location"}, where the device is. The device and its record are not touched. The plate is the catalog's suggestion for its model unless you choose another; its ports are drawn with the topology's live state.`,
       render: (values, set, verb) => <PlaceWhere values={values} set={set} verb={verb} rack={inRack} room={inRoom} canRack={canRack} canRoom={canRoom} />,
       prefill: placePrefill(v, device, rack),
     },
@@ -111,9 +124,11 @@ export function unplaceSteps(device: string): Step[] {
   return [{ title: `position-manager unplace '${device}'`, bin: RM, verb: "unplace", fixed: [device], note: "The device leaves its rack or room and goes to Unplaced, under its location; nothing else changes. A passive device's recorded cables go with it." }];
 }
 
-// Add a room: its name, location, display name and description (positions-fields' room).
-export function roomAddSteps(): Step[] {
-  return [fieldsStep({ title: "position-manager room add", bin: RM, verb: "room add", kind: "room", name: null, mode: "add", note: "A room in config/positions.json: where racks stand and devices stand loose, in one of the site's locations (the primary one unless you choose another). Racks and devices are placed in it afterwards." })];
+// Add a room: its name, location, display name and description (positions-fields' room);
+// at: the location it starts at, else the primary.
+export function roomAddSteps(at?: string | null): Step[] {
+  const step = fieldsStep({ title: "position-manager room add", bin: RM, verb: "room add", kind: "room", name: null, mode: "add", note: "A room in config/positions.json: where racks stand and devices stand loose, in one of the site's locations (the primary one unless you choose another). Racks and devices are placed in it afterwards." });
+  return [at ? { ...step, prefill: { location: at } } : step];
 }
 
 export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "other"];
@@ -204,8 +219,8 @@ export function PlaceActions({ device, v }: { device: string; v: PositionsView |
   if (!v) return null;
   const at = placedIn(v, device);
   if (!at) {
-    const room = (v.rooms ?? []).some((r) => r.recorded);
-    if (!v.racks.length && !room) return <OperateButton label="Add a room…" title="Add a room" steps={roomAddSteps} />;
+    const here = placesFor(v, device);
+    if (!here.racks.length && !here.rooms.length) return <OperateButton label="Add a room…" title={`Add a room at ${here.location ?? "its location"}`} steps={() => roomAddSteps(here.location)} hint={`${here.location ?? "its location"} has no room yet`} />;
     return <OperateButton label="Place…" title={`Place ${device}`} steps={() => placeSteps(device, v)} />;
   }
   return (
@@ -218,7 +233,7 @@ export function PlaceActions({ device, v }: { device: string; v: PositionsView |
 }
 
 export function AddRoomButton({ kind }: { kind?: "primary" }) {
-  return <OperateButton label="Add a room…" kind={kind} title="Add a room" steps={roomAddSteps} />;
+  return <OperateButton label="Add a room…" kind={kind} title="Add a room" steps={() => roomAddSteps()} />;
 }
 
 // The catalog's models and the site's locations, for the record forms.

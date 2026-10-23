@@ -7,7 +7,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { Cached } from "../../src/cache";
-import { Reads } from "../../src/reads";
+import { PositionsRead, Reads, deviceLocationIn, placesAt } from "../../src/reads";
 import { attention, moduleSummaries } from "../../src/badges";
 import { check, done } from "./check";
 import { fakeSite } from "./fake-site";
@@ -163,6 +163,31 @@ async function main(): Promise<void> {
     check((v.user.find((u) => u.name === "lars")?.memberOf as string[]).join() === "users,authentik Admins", "a record as identity-manager shows it");
     check(!site.calls.some((c) => c.includes("show -x")), "a listed name that looks like an option never reaches an argv");
     check(site.calls.includes("identity-manager group show authentik Admins --json"), "a name with a space is one argument");
+  }
+
+  // ── a placement's choices: the rooms and racks at the device's location ──
+  {
+    const view: PositionsRead = {
+      racks: [
+        { name: "rack1", displayName: null, units: 37, width: "19in", numbering: "bottom-up", room: "basement", description: null, placements: [] },
+        { name: "far-rack", displayName: null, units: 12, width: "10in", numbering: "bottom-up", room: "loft", description: null, placements: [] },
+        { name: "loose-rack", displayName: null, units: 12, width: "10in", numbering: "bottom-up", room: null, description: null, placements: [] },
+      ],
+      unplaced: [{ device: "buddy-nas", suggestion: null, location: "hareskov" }, { device: "printer", suggestion: null, location: null }],
+      rooms: [
+        { name: "basement", displayName: null, description: null, location: "home", recorded: true },
+        { name: "stue", displayName: null, description: null, location: null, recorded: true },
+        { name: "loft", displayName: null, description: null, location: "hareskov", recorded: true },
+      ],
+    };
+    const topo = { nodes: [{ name: "tappaas1", location: "home" }], switches: [{ name: "crs-b", location: "hareskov" }], positions: view };
+    check(deviceLocationIn(topo, "crs-b", "home") === "hareskov", "a switch is at the location the topology gives it");
+    check(deviceLocationIn(topo, "buddy-nas", "home") === "hareskov", "…a device placed nowhere at the view's");
+    check(deviceLocationIn(topo, "printer", "home") === "home", "…else at the primary");
+    const home = placesAt(view, "home", "home");
+    check(home.rooms.join() === "basement,stue" && home.racks.join() === "loose-rack,rack1", "the primary location: its rooms, their racks and a rack in no room");
+    const far = placesAt(view, "hareskov", "home");
+    check(far.rooms.join() === "loft" && far.racks.join() === "far-rack", "another location: only its own rooms and racks");
   }
 
   done("reads");

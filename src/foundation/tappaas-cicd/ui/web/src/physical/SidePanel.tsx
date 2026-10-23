@@ -25,7 +25,7 @@ import { DevLink, DevNode, deviceGraph, deviceState, freePanelPorts, selectedDev
 import { iconOf, kindName } from "./devicecard";
 import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
-import { DeviceLocationButton, LocationLink } from "../locations";
+import { DeviceLocationButton, LocationLink, PlacementLine } from "../locations";
 
 function Findings({ list }: { list: TopoFinding[] }) {
   if (list.length === 0) return <p className="muted small">No finding on it.</p>;
@@ -66,9 +66,9 @@ function locationOf(t: Topology, device: string): string | null {
 }
 
 // Where a device is, as two rows of its card: its location (with its place),
-// and its placement — a rack and its units, loose in a room, or nowhere — each
-// a link to its object.
-function placeRows(t: Topology, device: string, pick: (s: Sel) => void): [string, ReactNode][] {
+// a link to its record on the Site page, and its placement — a rack and its
+// units, loose in a room, or nowhere — a link to it in the Physical view.
+function placeRows(t: Topology, device: string): [string, ReactNode][] {
   const v = t.positions;
   if (!v) return [];
   const name = locationOf(t, device);
@@ -81,31 +81,9 @@ function placeRows(t: Topology, device: string, pick: (s: Sel) => void): [string
       {loc?.primary ? <span className="muted"> · primary</span> : null}
     </>
   ) : null;
-  const room = (r: string) => {
-    const x = v.rooms?.find((y) => y.name === r);
-    return <button className="linklike" onClick={() => pick({ kind: "room", id: r })}>{x?.displayName ?? r}</button>;
-  };
-  let placement: ReactNode = loc && !loc.rooms.length ? <span className="muted">somewhere at this location (it has no room)</span> : <span className="muted">placed nowhere</span>;
-  for (const r of v.racks) {
-    const m = r.placements.find((x) => x.device === device);
-    if (m) {
-      placement = (
-        <>
-          <button className="linklike" onClick={() => pick({ kind: "rack", id: r.name })}>{r.displayName ?? r.name}</button> U{m.u}{m.height > 1 ? `-U${m.u + m.height - 1}` : ""} · {m.face}
-          {m.width === "full" ? "" : ` · ${m.width} width, slot ${m.slot}`}
-          {r.room ? <> · in {room(r.room)}</> : null} · {m.faceplate ?? "no plate"}
-          {m.suggested ? " (suggested)" : ""}
-        </>
-      );
-    }
-  }
-  for (const r of v.rooms ?? []) {
-    const m = r.loose.find((x) => x.device === device);
-    if (m) placement = <>loose in {room(r.name)} · {m.faceplate ?? "no plate"}</>;
-  }
   return [
     ["location", location],
-    ["placement", placement],
+    ["placement", <PlacementLine v={v} device={device} location={name} />],
   ];
 }
 
@@ -234,7 +212,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["LLDP name", s.lldpName],
               ["ports", `${s.ports.length} · ${s.ports.filter((p) => p.parked).length} parked · ${s.ports.filter((p) => p.role === "unmanaged").length} unmanaged · ${s.ports.filter((p) => p.drift === "drift").length} drifting`],
               ["LAGs", s.lags.map((l) => `${l.name} (${l.ports.join("+")})`).join(", ")],
-              ...placeRows(t, s.name, pick),
+              ...placeRows(t, s.name),
             ]}
           />
           <h3>Ports</h3>
@@ -292,7 +270,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["HA", n.ha ? `lrm ${n.ha.lrm}` : null],
               ["corosync", n.corosync ? `${n.corosync.links} link(s), ${n.corosync.disconnected} disconnected` : null],
               ["lldpd", n.lldpd],
-              ...placeRows(t, n.name, pick),
+              ...placeRows(t, n.name),
             ]}
           />
           <h3>Uplinks</h3>
@@ -371,7 +349,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       title = `${a.name} · access point`;
       body = (
         <>
-          <KV rows={[["vendor / model", `${a.vendor ?? "?"} · ${a.model ?? "?"}`], ["address", a.address], ["uplink", a.uplink ? `${a.uplink.switch} port ${a.uplink.port}` : null], ...placeRows(t, a.name, pick)]} />
+          <KV rows={[["vendor / model", `${a.vendor ?? "?"} · ${a.model ?? "?"}`], ["address", a.address], ["uplink", a.uplink ? `${a.uplink.switch} port ${a.uplink.port}` : null], ...placeRows(t, a.name)]} />
           <h3>SSIDs</h3>
           {a.ssids.length === 0 ? <p className="muted small">No SSID mapped to a zone (ap-manager ssid … add).</p> : null}
           <ul className="plain">
@@ -470,7 +448,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
             rows={[
               ["name", r.name],
               ["height", `${r.units}U, ${r.width}, numbered ${r.numbering === "bottom-up" ? "from the bottom" : "from the top"}`],
-              ["location", r.location ? racks?.locations?.find((l) => l.name === r.location)?.displayName ?? r.location : null],
+              ["location", r.location ? <LocationLink name={r.location}>{racks?.locations?.find((l) => l.name === r.location)?.displayName ?? r.location}</LocationLink> : null],
               ["room", r.room ? <button className="linklike" onClick={() => pick({ kind: "room", id: r.room! })}>{r.room}</button> : null],
               ["description", r.description],
               ["placed", `${r.placements.length} device(s) · ${used} of ${r.units} units at full width`],
@@ -583,7 +561,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["location", (() => {
                 const l = racks?.locations?.find((x) => x.name === room.location);
                 const p = l?.place ? [l.place.address, l.place.city, l.place.country].filter(Boolean).join(", ") : "";
-                return room.location ? `${l?.displayName ?? room.location}${p ? ` · ${p}` : ""}${l?.primary ? " · primary" : ""}` : null;
+                return room.location ? <><LocationLink name={room.location}>{l?.displayName ?? room.location}</LocationLink>{p || l?.primary ? <span className="muted">{p ? ` · ${p}` : ""}{l?.primary ? " · primary" : ""}</span> : null}</> : null;
               })()],
               ["description", room.description],
               ["recorded", room.recorded ? "yes" : "no — only a rack's text names it (position-manager room add)"],
@@ -648,7 +626,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
                 ["MAC", s.mac ? <span className="mono">{s.mac}</span> : <span className="muted">not reported — the port is up, nothing is recorded on it</span>],
                 ["LLDP", s.lldp ? `${s.lldp.name}${s.lldp.port ? ` · port ${s.lldp.port}` : ""}` : null],
                 ["lease", s.lease ? [s.lease.hostname, s.lease.address].filter(Boolean).join(" · ") : null],
-                ...placeRows(t, sel.id, pick),
+                ...placeRows(t, sel.id),
               ]}
             />
             <p className="muted small">Record… keeps its MAC and records the port's link as its cable; then Place… it in a rack or a room.</p>
@@ -666,7 +644,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["kind", rec ? `${rec.kind} (recorded: nothing manages it)` : m ? (m.kind === "passive" ? `passive (${m.plate?.kind ?? "plate"})` : m.kind) : out ? "placed by a cable record" : un?.kind ?? null],
               ["model", rec?.model ?? null],
               ["ports", rec?.ports?.length ? rec.ports.join(", ") : null],
-              ...(out ? ([["placement", "outside the racks: only a cable record names it"]] as [string, ReactNode][]) : placeRows(t, sel.id, pick)),
+              ...(out ? ([["placement", "outside the racks: only a cable record names it"]] as [string, ReactNode][]) : placeRows(t, sel.id)),
               ["faceplate", m?.plate ? `${m.plate.vendor} ${m.plate.model} (${m.faceplate})` : out?.faceplate ?? un?.suggestion ?? null],
               ["label", m?.label ?? null],
               ["description", m?.description ?? rec?.description ?? null],

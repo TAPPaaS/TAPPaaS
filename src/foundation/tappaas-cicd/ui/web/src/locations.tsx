@@ -1,11 +1,13 @@
 // locations.tsx — where a device is (ADR-036 D2): the site's locations by
-// name, a link to one (the Site page's Locations card), and the form that
-// moves a switch or an access point to another.
+// name, a link to one (the Site page's Locations card), a device's placement
+// as a link to its room or rack in the Physical view, and the form that moves
+// a switch or an access point to another.
 
 import { ReactNode } from "react";
 import { useRead } from "./api";
 import { OperateButton, Step } from "./operate";
-import { SiteRead } from "./types";
+import { viewLink } from "./physical/views";
+import { PositionsView, SiteRead } from "./types";
 import { Link } from "./ui";
 
 export interface SiteLocation {
@@ -51,6 +53,32 @@ export function LocationLine({ name, locations }: { name: string | null; locatio
       {l.primary ? <span className="muted"> · primary{name === null ? " (it names none)" : ""}</span> : null}
     </>
   );
+}
+
+// A device's placement (position-manager's): a rack and its units, or loose
+// in a room, each a link to it in the Physical view; else placed nowhere —
+// somewhere at its location when that has no room.
+export function PlacementLine({ v, device, location }: { v: PositionsView | null | undefined; device: string; location: string | null }) {
+  if (!v) return <span className="muted">—</span>;
+  const room = (name: string) => <Link to={viewLink("rack", `room:${name}`)}>{v.rooms?.find((r) => r.name === name)?.displayName ?? name}</Link>;
+  for (const r of v.racks) {
+    const m = r.placements.find((x) => x.device === device);
+    if (!m) continue;
+    return (
+      <>
+        <Link to={viewLink("rack", `rack:${r.name}`)}>{r.displayName ?? r.name}</Link> U{m.u}{m.height > 1 ? `-U${m.u + m.height - 1}` : ""} · {m.face}
+        {m.width === "full" ? "" : ` · ${m.width} width, slot ${m.slot}`}
+        {r.room ? <> · in {room(r.room)}</> : null} · {m.faceplate ?? "no plate"}
+        {m.suggested ? " (suggested)" : ""}
+      </>
+    );
+  }
+  for (const r of v.rooms ?? []) {
+    const m = r.loose.find((x) => x.device === device);
+    if (m) return <>loose in {room(r.name)} · {m.faceplate ?? "no plate"}</>;
+  }
+  const loc = v.locations?.find((l) => l.name === location);
+  return loc && !loc.rooms.length ? <span className="muted">somewhere at this location (it has no room)</span> : <span className="muted">placed nowhere</span>;
 }
 
 // switch-manager modify-switch / ap-manager modify --location: the location
