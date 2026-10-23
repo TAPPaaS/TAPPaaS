@@ -7,7 +7,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { loadCatalog } from "../../src/store";
-import { TopoLike, platePorts, portId, renderPlate, resolvePlate, siteDevices, suggestFaceplate } from "../../../../lib/ts/src/racks";
+import { TopoLike, platePorts, portId, renderPlate, resolvePlate, siteDevices, suggestFaceplate } from "../../../../lib/ts/src/positions";
 
 let passed = 0;
 let failed = 0;

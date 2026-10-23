@@ -375,7 +375,7 @@ check(t.racks === null && !t.sources.some((s) => s.name === "rack-manager export
   check(m.faceplate === "generic/switch-1u" && m.suggested && m.plate!.rows.length === 2, "an unrecorded plate: the generic switch, odd over even");
   check(r.cables.some((c) => c.to.device === "tappaas1" && c.from.port === "11" && c.lag !== null), "tappaas1's LAG legs are cables on the switch's ports");
   check(x.findings.some((f) => f.gate === "topology" && f.on.kind === "rack" && f.on.name === "rack1" && /tappaas7/.test(f.text)), "a mount whose device is gone: a finding on the rack");
-  check(x.findings.some((f) => f.gate === "topology" && f.on.kind === "node" && f.on.name === "tappaas2" && /mounted in no rack/.test(f.text)), "a node mounted nowhere: a finding on it");
+  check(x.findings.some((f) => f.gate === "topology" && f.on.kind === "node" && f.on.name === "tappaas2" && /placed nowhere/.test(f.text)), "a node placed nowhere: a finding on it");
   check(x.findings.some((f) => f.on.kind === "ap" && f.on.name === "Nano HD"), "an access point mounted nowhere: a finding on it");
   check(renderTopology(x).some((l) => /^ {4}U20 front {2}USW Pro XG 10 PoE {2}generic\/switch-1u \(suggested\)/.test(l)), "the text view lists the mounts");
   // A device rack-manager records is a device of the topology, with its kind and ports.

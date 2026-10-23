@@ -32,7 +32,7 @@ import { join } from "path";
 import { ExecResult, captureResult } from "../../../lib/ts/src/exec";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { WanAddress, readWanAddress, wanAddressFile } from "../../../lib/ts/src/wan-address";
-import { Faceplate, RacksDoc, RacksView, RecordedKind, recordedPorts, resolveRacks } from "../../../lib/ts/src/racks";
+import { Faceplate, PositionsDoc, RacksView, RecordedKind, recordedPorts, resolvePositions } from "../../../lib/ts/src/positions";
 
 // ── the sources, as their verbs print them ────────────────────────────
 
@@ -194,7 +194,7 @@ export interface TopoSources {
   wanAddress?: WanAddress | null; // what the WAN held at the last network update
   actual?: SwitchActual | null; // switch-configuration-actual.json: MLAG pairs, peer links
   // rack-manager export --json; undefined: not read (--no-racks), null: it did not answer
-  racks?: { doc: RacksDoc; catalog: Faceplate[] } | null;
+  racks?: { doc: PositionsDoc; catalog: Faceplate[] } | null;
   errors: { source: string; error: string }[];
 }
 
@@ -962,7 +962,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   // The racks, resolved against what was found; what does not reconcile is a
   // topology finding on the rack (a mount whose device is gone) or on the
   // device (mounted nowhere, once the site has a rack).
-  const racks = src.racks ? resolveRacks(src.racks.doc, src.racks.catalog, { nodes, switches, accessPoints, devices }) : null;
+  const racks = src.racks ? resolvePositions(src.racks.doc, src.racks.catalog, { nodes, switches, accessPoints, devices }) : null;
   for (const f of racks?.findings ?? []) {
     if (f.kind === "gone") topoFinding(f.text, { kind: "rack", name: f.rack ?? "" });
     else {
@@ -1164,7 +1164,7 @@ export function collectSources(o: CollectOpts): TopoSources {
     wanAddress,
     actual,
     // No racks.json is an empty document, not an error; no rack-manager is.
-    racks: o.racks === false ? undefined : json<{ doc: RacksDoc; catalog: Faceplate[] }>(RACKS_SOURCE, "rack-manager", ["export", "--json"]),
+    racks: o.racks === false ? undefined : json<{ doc: PositionsDoc; catalog: Faceplate[] }>(RACKS_SOURCE, "rack-manager", ["export", "--json"]),
     errors,
   };
 }

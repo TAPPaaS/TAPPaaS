@@ -50,13 +50,13 @@ RM rack add rack1 --units 42 >/dev/null 2>&1 && ok "rack add" || bad "rack add"
 RM rack add rack1 >/dev/null 2>&1 && bad "rack add: a duplicate refused" || ok "rack add: a duplicate refused"
 RM mount add tappaas1 --rack rack1 --u 10 --faceplate generic/server-2u --description "placeholder position, set by the operator" --topology "${TOPO}" >/dev/null 2>&1 \
     && ok "mount add: a node" || bad "mount add: a node"
-[[ "$(jq -r '.mounts.tappaas1.height' "${DOC}")" == "2" ]] && ok "mount add: its faceplate's height" || bad "mount add: height"
+[[ "$(jq -r '.placements.tappaas1.height' "${DOC}")" == "2" ]] && ok "mount add: its faceplate's height" || bad "mount add: height"
 RM mount add tappaas2 --rack rack1 --u 11 --faceplate generic/server-2u --topology "${TOPO}" >/dev/null 2>&1 && bad "mount add: an overlap refused" || ok "mount add: an overlap refused"
 RM mount add tappaas9 --rack rack1 --u 20 --topology "${TOPO}" >/dev/null 2>&1 && bad "mount add: a device the topology lacks refused" || ok "mount add: a device the topology lacks refused"
 RM mount add "${USW}" --rack rack1 --u 20 --faceplate unifi/usw-pro-xg-10-poe --topology "${TOPO}" >/dev/null 2>&1 && ok "mount add: a name with spaces" || bad "mount add: the switch"
 RM mount modify tappaas1 --set u=14 --topology "${TOPO}" >/dev/null 2>&1 && ok "mount modify: a move" || bad "mount modify: a move"
-[[ "$(jq -r '.mounts.tappaas1.u' "${DOC}")" == "14" ]] && ok "mount modify: recorded" || bad "mount modify: recorded"
-RM mount modify tappaas1 --unset description --topology "${TOPO}" >/dev/null 2>&1 && [[ "$(jq -r '.mounts.tappaas1.description // "gone"' "${DOC}")" == "gone" ]] \
+[[ "$(jq -r '.placements.tappaas1.u' "${DOC}")" == "14" ]] && ok "mount modify: recorded" || bad "mount modify: recorded"
+RM mount modify tappaas1 --unset description --topology "${TOPO}" >/dev/null 2>&1 && [[ "$(jq -r '.placements.tappaas1.description // "gone"' "${DOC}")" == "gone" ]] \
     && ok "mount modify --unset: a text cleared" || bad "mount modify --unset"
 RM mount modify tappaas1 --set description="placeholder position, set by the operator" --topology "${TOPO}" >/dev/null 2>&1 || bad "mount modify: the description back"
 RM cable add --from "${USW}:5" --to "ISP modem:LAN 1" --to-faceplate generic/isp-modem --kind uplink --label "ISP hand-off" --topology "${TOPO}" >/dev/null 2>&1 \
@@ -71,9 +71,14 @@ RM validate --topology "${TOPO}" 2>&1 | grep -c "neither seen" >/dev/null && bad
 [[ "$(RM device list --json 2>/dev/null | jq -r '.[0].ports | join(",")')" == "WAN,LAN 1" ]] && ok "device list --json: its ports from its model" || bad "device list"
 RM device add tappaas1 --kind other --ports 1 --topology "${TOPO}" >/dev/null 2>&1 && bad "device add: a seen device refused" || ok "device add: a seen device refused"
 RM room add basement --display-name Basement >/dev/null 2>&1 && ok "room add" || bad "room add"
+printf '{"locations":{"home":{"country":"DK","timezone":"Europe/Copenhagen"},"far":{"country":"DE"}},"primaryLocation":"home"}' > "${FIX}/cfg/site.json"
+RM room add shed --location nowhere >/dev/null 2>&1 && bad "room add: a location the site lacks refused" || ok "room add: a location the site lacks refused"
+RM room add shed --location far >/dev/null 2>&1 && [[ "$(jq -r '.rooms.shed.location' "${DOC}")" == "far" ]] && ok "room add --location" || bad "room add --location"
+[[ "$(RM room show shed --json 2>/dev/null | jq -r '.location')" == "far" ]] && ok "room show --json: its location" || bad "room show: location"
+RM room delete shed >/dev/null 2>&1 || bad "room delete shed"
 RM room add attic --building House >/dev/null 2>&1 && bad "room add: --building refused (the site has it)" || ok "room add: --building refused (the site has it)"
 RM mount add "ISP modem" --room basement --topology "${TOPO}" >/dev/null 2>&1 && ok "mount add --room: the modem loose in the basement" || bad "mount add --room"
-[[ "$(jq -r '.mounts["ISP modem"] | "\(.room) \(.rack // "-") \(.u // "-")"' "${DOC}")" == "basement - -" ]] && ok "mount add --room: no rack, no unit" || bad "mount add --room: recorded"
+[[ "$(jq -r '.placements["ISP modem"] | "\(.room) \(.rack // "-") \(.u // "-")"' "${DOC}")" == "basement - -" ]] && ok "mount add --room: no rack, no unit" || bad "mount add --room: recorded"
 [[ "$(RM room list --json 2>/dev/null | jq -r '.[0].loose | join(",")')" == "ISP modem" ]] && ok "room list --json: what stands loose in it" || bad "room list"
 RM room delete basement >/dev/null 2>&1 && bad "room delete: refused while it holds a device" || ok "room delete: refused while it holds a device"
 RM validate --topology "${TOPO}" >/dev/null 2>&1 && ok "validate: the result is valid" || bad "validate"
@@ -103,7 +108,7 @@ RM room delete basement >/dev/null 2>&1 && ok "room delete: once empty" || bad "
 RM mount remove tappaas1 >/dev/null 2>&1 && RM mount remove "${USW}" >/dev/null 2>&1 && ok "mount remove" || bad "mount remove"
 RM rack delete rack1 >/dev/null 2>&1 && ok "rack delete: once empty" || bad "rack delete"
 [[ "$(jq -r '.racks | length' "${DOC}")" == "0" ]] && ok "rack delete: recorded" || bad "rack delete: recorded"
-[[ -z "$(ls -A "${FIX}/cfg" | grep -v '^positions.json$')" ]] && ok "no lock or temp file left behind" || bad "left behind: $(ls -A "${FIX}/cfg")"
+[[ -z "$(ls -A "${FIX}/cfg" | grep -v '^positions.json$' | grep -v '^site.json$')" ]] && ok "no lock or temp file left behind" || bad "left behind: $(ls -A "${FIX}/cfg")"
 # The catalog as shipped, through the CLI.
 RMC() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="${HERE}/faceplates" \
     run_ts "node '${DIST}/manager/position-manager/src/main.js' $(printf "'%s' " "$@")"; }

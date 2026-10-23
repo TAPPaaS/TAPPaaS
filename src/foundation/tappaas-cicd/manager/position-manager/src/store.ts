@@ -9,7 +9,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, statSync }
 import { join } from "path";
 import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { captureResult } from "../../../lib/ts/src/exec";
-import { Faceplate, LEGACY_RACKS_FILE, POSITIONS_FILE, RacksDoc, SiteDevice, TopoLike, parseFaceplate, siteDevices } from "../../../lib/ts/src/racks";
+import { Faceplate, LEGACY_RACKS_FILE, POSITIONS_FILE, PositionsDoc, SiteDevice, TopoLike, parseFaceplate, siteDevices } from "../../../lib/ts/src/positions";
 
 export class Store {
   constructor(readonly configDir: string) {}
@@ -24,15 +24,15 @@ export class Store {
     return existsSync(f) ? f : null;
   }
 
-  load(): RacksDoc {
+  load(): PositionsDoc {
     const file = existsSync(this.file) ? this.file : this.legacy;
     if (!file) return {};
     const v: unknown = JSON.parse(readFileSync(file, "utf8"));
     if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error(`${file} is not a JSON object`);
-    return v as RacksDoc;
+    return v as PositionsDoc;
   }
 
-  save(doc: RacksDoc): void {
+  save(doc: PositionsDoc): void {
     if (this.legacy) throw new Error(`${this.legacy} is still there: migration 0020 makes it positions.json (the next update, or scripts/run-migrations.sh) — nothing was changed`);
     writeJsonAtomic(this.file, doc);
   }

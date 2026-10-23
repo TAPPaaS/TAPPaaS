@@ -1,14 +1,17 @@
-// racks.ts — config/racks.json and the faceplate catalog: where the site's
-// hardware sits (schemas/racks-fields.json). rack-manager writes the document
-// and validates it here; network-manager's topology resolves it against the
-// site here (mounts to devices, links to faceplate ports). Pure: documents and
-// catalogs in, findings and views out.
+// positions.ts — config/positions.json and the faceplate catalog: where the
+// site's hardware is inside its locations (schemas/positions-fields.json,
+// ADR-036 D3). position-manager writes the document and validates it here;
+// network-manager's topology resolves it against the site here (placements to
+// devices, links to faceplate ports). Pure: documents and catalogs in,
+// findings and views out.
 //
-// Devices are named as the topology names them; a rack never holds a copy of
-// a device's record. A device the topology cannot see (the ISP's modem, an
+// A room is in a location of site.json (absent: the primary one); a rack is in
+// a room; a device is placed in a rack or loose in a room, at most once.
+// Devices are named as the topology names them; a placement never holds a
+// copy of a device's record. A device nothing manages (the ISP's modem, an
 // ONT, a UPS, a patch panel) is recorded here, and is then a device like any
 // other. A cable the switches or LLDP can see comes from the topology;
-// racks.json records only the ones nothing can see.
+// positions.json records only the ones nothing can see.
 
 export const POSITIONS_FILE = "positions.json";
 // The file's name before position-manager (migration 0020 renames it): read
@@ -44,21 +47,23 @@ export interface Rack {
   room?: string;
   description?: string;
 }
-// A room: where racks stand and where a device can stand loose. Its building
-// is the site's (site.json location), not recorded here.
+// A room: where racks stand and where a device can stand loose, in a location
+// of site.json (absent: the primary location).
 export interface Room {
   displayName?: string;
   description?: string;
+  location?: string;
 }
-// A mount: in a rack at its units, or loose in a room (no rack, no unit).
-export interface Mount {
+// A placement: in a rack at its units (height, width, slot, face), or loose in
+// a room (no rack, no unit: its plate gives its size).
+export interface Placement {
   rack?: string;
   u?: number;
-  room?: string; // a loose mount's room
-  height: number;
-  width: MountWidth;
+  room?: string; // a loose placement's room
+  height?: number;
+  width?: MountWidth;
   slot?: number;
-  face: Face;
+  face?: Face;
   faceplate?: string;
   label?: string;
   description?: string;
@@ -89,24 +94,51 @@ export interface RecordedDevice {
   ports?: string[]; // its port names, when the model does not give them
   displayName?: string;
   description?: string;
+  location?: string; // a location of site.json; absent: the primary one
+  mac?: string; // the MAC a switch port saw it by (device record)
 }
-export interface RacksDoc {
+export interface PositionsDoc {
   version?: 1;
+  rooms?: Record<string, Room>;
   racks?: Record<string, Rack>;
-  mounts?: Record<string, Mount>;
+  placements?: Record<string, Placement>;
+  // racks.json's name for the placements, read until migration 0020 has run
+  mounts?: Record<string, Placement>;
   cables?: Cable[];
   devices?: Record<string, RecordedDevice>;
-  rooms?: Record<string, Room>;
 }
 
-export const racksOf = (d: RacksDoc): Record<string, Rack> => d.racks ?? {};
-export const mountsOf = (d: RacksDoc): Record<string, Mount> => d.mounts ?? {};
-export const cablesOf = (d: RacksDoc): Cable[] => d.cables ?? [];
-export const devicesOf = (d: RacksDoc): Record<string, RecordedDevice> => d.devices ?? {};
-export const roomsOf = (d: RacksDoc): Record<string, Room> => d.rooms ?? {};
+// A rack's height, width and face, and what a loose placement draws with.
+export const heightOf = (m: Placement): number => m.height ?? 1;
+export const widthOf = (m: Placement): MountWidth => m.width ?? "full";
+export const faceOf = (m: Placement): Face => m.face ?? "front";
+
+// An unmigrated document's mounts, as placements: a loose one keeps its room,
+// plate, label and description, as migration 0020 writes it.
+export function legacyPlacements(mounts: Record<string, Placement> | undefined): Record<string, Placement> {
+  const out: Record<string, Placement> = {};
+  for (const [d, m] of Object.entries(mounts ?? {})) {
+    if (m.rack) out[d] = { ...m };
+    else {
+      const p: Placement = {};
+      for (const k of ["room", "faceplate", "label", "description"] as const) if (m[k] !== undefined) p[k] = m[k];
+      out[d] = p;
+    }
+  }
+  return out;
+}
+
+export const racksOf = (d: PositionsDoc): Record<string, Rack> => d.racks ?? {};
+export const placementsOf = (d: PositionsDoc): Record<string, Placement> => d.placements ?? legacyPlacements(d.mounts);
+export const cablesOf = (d: PositionsDoc): Cable[] => d.cables ?? [];
+export const devicesOf = (d: PositionsDoc): Record<string, RecordedDevice> => d.devices ?? {};
+export const roomsOf = (d: PositionsDoc): Record<string, Room> => d.rooms ?? {};
 export const ROOM_NAME_RE = /^[a-z][a-z0-9-]{0,62}$/;
 // Where a mount is, in words: "rack1 U20" or "room basement (loose)".
-export const mountWhere = (m: Mount): string => (m.rack ? `${m.rack} U${m.u ?? "?"}${(m.height ?? 1) > 1 ? `-U${(m.u ?? 0) + m.height - 1}` : ""}` : `room ${m.room ?? "?"} (loose)`);
+export const placeWhere = (m: Placement): string => (m.rack ? `${m.rack} U${m.u ?? "?"}${heightOf(m) > 1 ? `-U${(m.u ?? 0) + heightOf(m) - 1}` : ""}` : `room ${m.room ?? "?"} (loose)`);
+
+// The room a placement is in: its own, or its rack's.
+export const roomOf = (doc: PositionsDoc, m: Placement): string | null => (m.rack ? racksOf(doc)[m.rack]?.room ?? null : m.room ?? null);
 
 // ── the catalog ───────────────────────────────────────────────────────
 
@@ -300,7 +332,7 @@ export function recordedPlate(name: string, d: RecordedDevice, catalog: Faceplat
 }
 
 // The site's devices and the recorded ones, each once (a seen device wins).
-export function withRecorded(devices: SiteDevice[], doc: RacksDoc, catalog: Faceplate[]): SiteDevice[] {
+export function withRecorded(devices: SiteDevice[], doc: PositionsDoc, catalog: Faceplate[]): SiteDevice[] {
   const out = [...devices];
   for (const [name, d] of Object.entries(devicesOf(doc))) {
     if (out.some((x) => x.name === name)) continue;
@@ -392,7 +424,7 @@ export function renderPlate(p: ResolvedPlate): string[] {
 
 // ── validation ────────────────────────────────────────────────────────
 
-export interface RackFinding {
+export interface PositionFinding {
   severity: "error" | "warn";
   message: string;
 }
@@ -400,9 +432,10 @@ export interface RackFinding {
 const COLUMNS: Record<MountWidth, number> = { full: 1, half: 2, third: 3 };
 
 // The share of the rack's width a mount takes, as [from, to) in sixths.
-export function columnSpan(m: Pick<Mount, "width" | "slot">): [number, number] {
-  const n = COLUMNS[m.width] ?? 1;
-  const s = m.width === "full" ? 0 : m.slot ?? 0;
+export function columnSpan(m: Pick<Placement, "width" | "slot">): [number, number] {
+  const w = m.width ?? "full";
+  const n = COLUMNS[w] ?? 1;
+  const s = w === "full" ? 0 : m.slot ?? 0;
   return [(s * 6) / n, ((s + 1) * 6) / n];
 }
 
@@ -421,17 +454,26 @@ function endProblem(e: CableEnd, devices: SiteDevice[] | null, plateOf: (device:
   return `${e.device} has no port ${e.port}${fp ? ` (faceplate ${fp.key}: ${plateIds.join(", ") || "its ports come from the device"})` : ""}`;
 }
 
-// checkRacks — the whole document: every mount names a device the topology
-// knows (or a passive plate's own), no two mounts overlap in a rack, each fits
-// its rack, every faceplate key is in the catalog, every cable end names a
-// port the topology or the catalog has. devices null: the topology could not
-// be read, and the device checks are skipped with a warning.
-export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice[] | null): RackFinding[] {
-  const out: RackFinding[] = [];
+// The site's locations, as the checks need them: their names and the primary.
+export interface SiteLocs {
+  names: string[];
+  primary: string | null;
+}
+
+// checkPositions — the whole document: every placement names a device the
+// topology knows (or a passive plate's own), no two overlap in a rack, each
+// fits its rack, every faceplate key is in the catalog, every cable end names
+// a port the topology or the catalog has; every location a room or a device
+// names is the site's, a device stands in a room at its own location, and a
+// device at a location without a room is pointed out. seen null: the topology
+// could not be read, and the device checks are skipped with a warning; sites
+// null: site.json could not be read, and the location checks are skipped.
+export function checkPositions(doc: PositionsDoc, catalog: Faceplate[], seen: SiteDevice[] | null, sites: SiteLocs | null = null): PositionFinding[] {
+  const out: PositionFinding[] = [];
   const err = (message: string) => out.push({ severity: "error", message });
   const warn = (message: string) => out.push({ severity: "warn", message });
   const racks = racksOf(doc);
-  const mounts = mountsOf(doc);
+  const mounts = placementsOf(doc);
   const recorded = devicesOf(doc);
   const byKey = (k: string | undefined) => (k ? catalog.find((f) => f.key === k) ?? null : null);
   if (seen === null) warn("the topology could not be read: the devices and their ports are not checked");
@@ -462,9 +504,21 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
     if (!NUMBERINGS.includes(r.numbering)) err(`rack ${name}: numbering is one of ${NUMBERINGS.join(", ")}`);
   }
 
+  // Locations: a room's and a recorded device's name one of the site's.
+  const locOf = (room: string | null): string | null => (room ? rooms[room]?.location ?? sites?.primary ?? null : null);
+  if (sites) {
+    const known = (l: string) => sites.names.includes(l);
+    for (const [name, r] of Object.entries(rooms)) if (r.location !== undefined && !known(r.location)) err(`room ${name}: location '${r.location}' is not one of the site's (site-manager location list)`);
+    for (const [name, d] of Object.entries(recorded)) if (d.location !== undefined && !known(d.location)) err(`device ${name}: location '${d.location}' is not one of the site's (site-manager location list)`);
+  }
+
   const placed: { device: string; rack: string; face: Face; lo: number; hi: number; cols: [number, number] }[] = [];
   for (const [device, m] of Object.entries(mounts)) {
-    const where = `mount ${device}`;
+    const where = `placement ${device}`;
+    // A device stands at its own location: its room is there.
+    const own = recorded[device]?.location;
+    const at = locOf(roomOf(doc, m));
+    if (sites && own !== undefined && at !== null && at !== own) err(`${where}: room ${roomOf(doc, m)} is at ${at}, the device is at ${own} — place it in a room at ${own}, or change the device's location`);
     if (!m.rack) {
       // Loose in a room: the room exists, and nothing of a rack's position.
       if (!m.room) err(`${where}: neither a rack nor a room`);
@@ -475,28 +529,41 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
       if (devices !== null && !devices.some((d) => d.name === device) && !recorded[device] && !fp?.passive) err(`${where}: the topology has no device '${device}' and it is not recorded`);
       continue;
     }
-    if (m.room) err(`${where}: a rack mount's room is its rack's — give a rack or a room, not both`);
+    if (m.room) err(`${where}: a device in a rack is in its rack's room — give a rack or a room, not both`);
     const rack = racks[m.rack];
     if (!rack) {
       err(`${where}: rack '${m.rack}' does not exist`);
       continue;
     }
+    const h = m.height ?? 0;
     if (!Number.isInteger(m.u) || (m.u ?? 0) < 1) err(`${where}: u is a rack unit from 1`);
-    if (!Number.isInteger(m.height) || m.height < 1) err(`${where}: height is a whole number of rack units`);
-    if (!MOUNT_WIDTHS.includes(m.width)) err(`${where}: width is one of ${MOUNT_WIDTHS.join(", ")}`);
-    if (!FACES.includes(m.face)) err(`${where}: face is front or rear`);
-    const n = COLUMNS[m.width] ?? 1;
+    if (!Number.isInteger(m.height) || h < 1) err(`${where}: height is a whole number of rack units`);
+    if (!MOUNT_WIDTHS.includes(m.width as MountWidth)) err(`${where}: width is one of ${MOUNT_WIDTHS.join(", ")}`);
+    if (!FACES.includes(m.face as Face)) err(`${where}: face is front or rear`);
+    const n = COLUMNS[widthOf(m)] ?? 1;
     if (m.slot !== undefined && (!Number.isInteger(m.slot) || m.slot < 0 || m.slot >= n)) err(`${where}: slot is 0${n > 1 ? `-${n - 1}` : ""} for a ${m.width}-width device`);
-    if (Number.isInteger(m.u) && Number.isInteger(m.height) && m.u! + m.height - 1 > rack.units) {
-      err(`${where}: U${m.u}-U${m.u! + m.height - 1} does not fit ${m.rack}'s ${rack.units}U`);
+    if (Number.isInteger(m.u) && Number.isInteger(m.height) && m.u! + h - 1 > rack.units) {
+      err(`${where}: U${m.u}-U${m.u! + h - 1} does not fit ${m.rack}'s ${rack.units}U`);
     }
     const fp = byKey(m.faceplate);
     if (m.faceplate && !fp) err(`${where}: faceplate ${m.faceplate} is not in the catalog`);
-    if (fp && fp.units !== m.height) warn(`${where}: ${m.height}U high, its faceplate ${fp.key} is ${fp.units}U`);
+    if (fp && fp.units !== h) warn(`${where}: ${h}U high, its faceplate ${fp.key} is ${fp.units}U`);
     if (devices !== null && !devices.some((d) => d.name === device) && !recorded[device] && !fp?.passive) {
       err(`${where}: the topology has no device '${device}' (a node, switch, access point, machine or device) — a passive device needs a passive faceplate (a patch panel, a PDU)`);
     }
-    if (Number.isInteger(m.u) && Number.isInteger(m.height)) placed.push({ device, rack: m.rack, face: m.face, lo: m.u!, hi: m.u! + m.height - 1, cols: columnSpan(m) });
+    if (Number.isInteger(m.u) && Number.isInteger(m.height)) placed.push({ device, rack: m.rack, face: faceOf(m), lo: m.u!, hi: m.u! + h - 1, cols: columnSpan(m) });
+  }
+
+  // A device at a location with no room is somewhere there, unplaced — said
+  // once the site records a room at all (before that, nothing is placed).
+  if (sites && Object.keys(rooms).length) {
+    const roomed = new Set(Object.keys(rooms).map((r) => locOf(r)));
+    const names = new Set([...(devices ?? []).map((d) => d.name), ...Object.keys(recorded)]);
+    for (const name of names) {
+      if (mounts[name]) continue;
+      const at = recorded[name]?.location ?? sites.primary;
+      if (at && !roomed.has(at)) warn(`${name} is at ${at}, which has no room: it is somewhere there, unplaced (position-manager room add <room> --location ${at})`);
+    }
   }
   for (let i = 0; i < placed.length; i++) {
     for (let j = i + 1; j < placed.length; j++) {
@@ -505,7 +572,7 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
       if (a.rack !== b.rack || a.face !== b.face) continue;
       if (a.hi < b.lo || b.hi < a.lo) continue;
       if (a.cols[1] <= b.cols[0] || b.cols[1] <= a.cols[0]) continue;
-      err(`mounts ${a.device} and ${b.device} overlap in ${a.rack} (U${Math.max(a.lo, b.lo)}${Math.min(a.hi, b.hi) > Math.max(a.lo, b.lo) ? `-U${Math.min(a.hi, b.hi)}` : ""}, ${a.face})`);
+      err(`placements ${a.device} and ${b.device} overlap in ${a.rack} (U${Math.max(a.lo, b.lo)}${Math.min(a.hi, b.hi) > Math.max(a.lo, b.lo) ? `-U${Math.min(a.hi, b.hi)}` : ""}, ${a.face})`);
     }
   }
 
@@ -542,7 +609,7 @@ export function checkRacks(doc: RacksDoc, catalog: Faceplate[], seen: SiteDevice
 }
 
 // A recorded patch panel: its ports have a front and a rear.
-export const isPanel = (doc: RacksDoc, device: string | undefined): boolean => !!device && devicesOf(doc)[device]?.kind === "patch-panel";
+export const isPanel = (doc: PositionsDoc, device: string | undefined): boolean => !!device && devicesOf(doc)[device]?.kind === "patch-panel";
 
 // "USW Pro XG 10 PoE:5" → the device and the port; a device name may hold ":".
 export function parseEnd(s: string): CableEnd | null {
@@ -682,13 +749,13 @@ export function seenCables(t: TopoLike): CableView[] {
   return out;
 }
 
-// resolveRacks — racks.json against the site: each mount on its device with
+// resolvePositions — racks.json against the site: each mount on its device with
 // its plate, the cables the topology sees plus the recorded ones, the devices
 // mounted nowhere, and what does not reconcile.
-export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): RacksView {
+export function resolvePositions(doc: PositionsDoc, catalog: Faceplate[], t: TopoLike): RacksView {
   const devices = withRecorded(siteDevices(t), doc, catalog);
   const recorded = devicesOf(doc);
-  const mounts = mountsOf(doc);
+  const mounts = placementsOf(doc);
   const byKey = (k: string | null | undefined) => (k ? catalog.find((f) => f.key === k) ?? null : null);
   const findings: RacksView["findings"] = [];
   const racks: RackView[] = Object.entries(racksOf(doc))
@@ -723,7 +790,7 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
     const rec = recorded[device] ? recordedPlate(device, recorded[device], catalog) : null;
     const key = own ? own.key : rec ? rec.key : dev ? suggestFaceplate(catalog, dev) : null;
     const fp = own ?? rec ?? byKey(key);
-    if (!dev && !fp?.passive) findings.push({ text: `${device} is mounted in ${mountWhere(m)}, but the topology no longer has it`, device, kind: "gone", rack: m.rack ?? null });
+    if (!dev && !fp?.passive) findings.push({ text: `${device} is placed in ${placeWhere(m)}, but the topology no longer has it`, device, kind: "gone", rack: m.rack ?? null });
     const room = !m.rack && m.room ? rooms.find((x) => x.name === m.room) : undefined;
     if (!rack && !room) continue;
     const plate = fp ? resolvePlate(fp, dev) : null;
@@ -735,10 +802,11 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
       rack: m.rack ?? "",
       ...(room ? { room: room.name } : {}),
       u: m.u ?? 0,
-      height: m.height,
-      width: m.width,
-      slot: m.width === "full" ? 0 : m.slot ?? 0,
-      face: m.face,
+      // A loose device is drawn at its plate's size.
+      height: rack ? heightOf(m) : fp?.units ?? 1,
+      width: rack ? widthOf(m) : fp?.width ?? "full",
+      slot: rack && widthOf(m) !== "full" ? m.slot ?? 0 : 0,
+      face: faceOf(m),
       label: m.label ?? null,
       description: m.description ?? null,
       faceplate: fp?.key ?? null,
@@ -752,7 +820,7 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
   const unplaced: UnplacedView[] = devices
     .filter((d) => !mounts[d.name])
     .map((d) => ({ device: d.name, kind: d.kind, vendor: d.vendor, model: d.model, suggestion: d.recorded ? recorded[d.name]?.model ?? null : suggestFaceplate(catalog, d), ...(d.recorded ? { recorded: d.recorded } : {}) }));
-  if (hasRack) for (const u of unplaced) findings.push({ text: `${u.device} is mounted in no rack and stands in no room`, device: u.device, kind: "unplaced", rack: null });
+  if (hasRack) for (const u of unplaced) findings.push({ text: `${u.device} is placed nowhere: in no rack and in no room`, device: u.device, kind: "unplaced", rack: null });
 
   const cables = seenCables(t);
   const outside: OutsideView[] = [];
@@ -774,7 +842,7 @@ export function resolveRacks(doc: RacksDoc, catalog: Faceplate[], t: TopoLike): 
 // with its segments: a link the topology sees keeps its role and live state,
 // the segments only say which wires it is. A chain that stops at a panel port
 // (one side cabled) stays as its segments.
-export function chainSegments(doc: RacksDoc, cables: CableView[]): CableView[] {
+export function chainSegments(doc: PositionsDoc, cables: CableView[]): CableView[] {
   const panel = (d: string) => isPanel(doc, d);
   const same = (a: { device: string; port: string }, b: { device: string; port: string }) => a.device === b.device && a.port === b.port;
   const segs = cables.filter((c) => c.source === "recorded" && (panel(c.from.device) || panel(c.to.device)));

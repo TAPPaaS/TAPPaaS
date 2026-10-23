@@ -30,7 +30,7 @@ interface RacksRead {
     mounts: { device: string; rack: string; u: number; height: number; width: string; slot: number; face: string; faceplate: string | null; suggested: boolean; label: string | null; description: string | null }[];
   }[];
   unplaced: { device: string; suggestion: string | null }[];
-  rooms?: { name: string; displayName: string | null; description: string | null; recorded: boolean }[];
+  rooms?: { name: string; displayName: string | null; description: string | null; location?: string | null; recorded: boolean }[];
 }
 
 // Every device the topology names: what a mount may name.
@@ -469,9 +469,9 @@ export class Reads {
       case "rack":
       case "mount":
       case "room": {
-        // racks-fields.json's $defs; the record as the topology resolves it.
-        const $defs = (this.schemaFile("racks-fields.json").$defs ?? {}) as Record<string, unknown>;
-        defs = flattenSchema($defs[kind]);
+        // positions-fields.json's $defs; the record as the topology resolves it.
+        const $defs = (this.schemaFile("positions-fields.json").$defs ?? {}) as Record<string, unknown>;
+        defs = flattenSchema($defs[kind === "mount" ? "placement" : kind]);
         const view = ((await this.topology.get()).value?.racks ?? null) as RacksRead | null;
         if (kind === "rack" && name) {
           const r = (view?.racks ?? []).find((x) => x.name === name);
@@ -481,7 +481,7 @@ export class Reads {
         if (kind === "room" && name) {
           const r = (view?.rooms ?? []).find((x) => x.name === name && x.recorded);
           if (!r && mode === "modify") throw new Error(`no room '${name}'`);
-          if (r) record = Object.fromEntries(Object.entries({ displayName: r.displayName, description: r.description }).filter(([, v]) => v !== null && v !== undefined));
+          if (r) record = Object.fromEntries(Object.entries({ displayName: r.displayName, description: r.description, location: r.location }).filter(([, v]) => v !== null && v !== undefined));
         }
         if (kind === "mount" && name) {
           const m = (view?.racks ?? []).flatMap((r) => r.mounts).find((x) => x.device === name);
