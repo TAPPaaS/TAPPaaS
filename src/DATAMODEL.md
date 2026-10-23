@@ -59,7 +59,8 @@ flowchart LR
   subgraph hardware["Hardware the cluster sees"]
     NODE["cluster nodes: their pvehost instances<br/>config/&lt;node&gt;.json (address, uplinks, pools)"]:::record
     POOL["storage pools (ZFS)"]:::seen
-    DEVICE["a physical device:<br/>node, switch, access point,<br/>recorded or seen device"]:::seen
+    DEVICE["a physical device:<br/>node, switch, access point, machine,<br/>recorded or seen device"]:::seen
+    TOPO["network-manager topology<br/>every device with its location,<br/>placement and source (derived)"]:::seen
   end
 
   %% site and tenancy
@@ -119,6 +120,10 @@ flowchart LR
   NODE -. "is one of" .-> DEVICE
   SWCFG -. "switches and APs are" .-> DEVICE
   CABLE -- "from.device, to.device" --> DEVICE
+  NODE -- "location (on its pvehost instance)" --> LOC
+  TOPO -. "joins the records into" .-> DEVICE
+  DEVICE -. "location (its record's, else the primary)" .-> LOC
+  DEVICE -. "placement (at most one)" .-> PLACE
   CABLE -- "via a patch panel port (split)" --> RDEV
   ROOM -- "location (default the primary)" --> LOC
   SWCFG -- "switches{}.location, accessPoints{}.location (default the primary)" --> LOC
@@ -132,7 +137,7 @@ source tree, not under `~/config/`.
 
 | Object | File | Owner | Names (field → object) |
 |---|---|---|---|
-| Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner` → organization; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `locations{}` → its places; `primaryLocation` → the one it is at, whose timezone is the site's and whose building every room is in; `locale`, `keyboard` are site-wide |
+| Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner` → organization; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `locations{}` → its places; `primaryLocation` → the one it is at, whose timezone is the site's and where a device or room that names none is; `locale`, `keyboard` are site-wide |
 | Location | `site.json` → `locations{}` | site-manager | names nothing: a place with a country, city, address and timezone, of kind `site` (this site's own equipment) or `remote` (another site's). A backup peer, a machine module, a switch, an access point, a room and a recorded device name one; the primary one and one that is named cannot be deleted |
 | Environment | `environments/<env>.json` | environment-manager | `ownerOrg` → organization; `domains` are its own (no file names them back). It names no zone: its zone is the Service zone naming it |
 | Zone | `zones.json` (one object per zone) | network-manager | `environment` → the environment it belongs to: a Service zone's (and `mgmt`'s) own environment, exactly one per environment, or the one or several a client, IoT or guest zone serves; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `bridge` → an interface, not an object |
@@ -182,6 +187,14 @@ giving each its `location`, its `placement` and the `source` it came from:
 or a split segment names it, and the topology resolves the name. A name that is
 neither seen nor recorded is what `position-manager validate` warns about.
 
+Where a device is has two parts, each with one owner: its **location**, the
+`location` name on its own record (unset: the primary), resolved by site-manager
+to an address; and its **placement**, position-manager's — a rack and its units,
+or loose in a room at that same location, or none. The console's Physical view
+draws the site that way: location by location (the primary first), each with
+its rooms, each room with its racks and loose devices, then what is at the
+location placed nowhere; a device's panel shows the two lines, each a link.
+
 ## Where the model is harder than it needs to be
 
 These are the places where one thing is said in two ways, or where a reference
@@ -197,12 +210,14 @@ nothing here is a bug.
    `locations{}`, with `primaryLocation` naming the site's own. Everything that is
    somewhere names one by `location`, unset meaning the primary: a backup peer, a
    machine module, a switch and an access point, a room and a recorded device.
-3. **Devices live in three kinds of record** (the nodes' and machines' module
-   instances, the switch configuration, positions) and are only joined by name in
-   the derived topology, which gives each one its location, placement and source.
-   A node is one record, its `pvehost` instance: its uplinks and storage pools are
-   on it. One device list with a `seenBy` would make placements, cables and ports
-   reference one thing.
+3. **Devices — resolved.** Each kind of device has one record and one owner:
+   a node or machine its module instance (a node is its `pvehost` instance, with
+   its uplinks and storage pools), a switch or access point the switch
+   configuration, anything else `positions.json`'s `devices{}`; a device a port
+   only sees has no record until it is recorded. No device is written twice. The
+   topology is the one list of them, derived, giving each its location, its
+   placement and the record it came from; placements, cables and the console
+   name a device by that one name.
 4. **Resolved — organizations are listed once.** They are the files under
    `identities/organizations/`, which identity-manager owns; `site.json` no
    longer carries a list of paths to them.

@@ -26,12 +26,20 @@ time it ran — the three tests run only on `GET /setup?refresh=1`, the page's C
 never on a read; each result and its time is kept in `<state dir>/setup-tests.json`), the
 identity bootstrap (`config/identities` has an organization and a user),
 the nodes (every registered node — its `pvehost` instance — a cluster member, lib/ts `queryClusterNodes`), the switch
-(registered, ports discovered), the admin VPN (a peer in `wgvpn list`), stacks (optional).
+(registered, ports discovered), the admin VPN (a peer in `wgvpn list`), the physical site
+(optional: a room recorded and every node and switch placed, from `config/positions.json`), stacks (optional).
 Each step is a form over its verbs as jobs. Secrets go through `POST /api/v1/secrets/<name>`
 (Installer or the setup token): `acme-dns` → `~/.acme-dns-credentials.txt`, `unifi` →
 `~/.unifi-os-credentials.txt`, `wlan` → `~/.wlan-secrets.txt`, mode 0600, in Activity with their
 keys and never their values; `GET /api/v1/secrets` names the keys set. The same flows serve
-day 2: add a node, an environment, a stack; enrol a device (the wg-quick file to download).
+day 2: add a node, adopt a running machine (`module-manager adopt`), an environment, a stack; enrol a
+device (the wg-quick file to download). Day 2's **physical site** is a step with that state and
+its sequence: record the rooms (by location), add a rack, place the nodes and switches, record
+what the cluster cannot see (the modem, a patch panel). Every form that takes a location (room
+add and modify, device add and record, machine add and adopt, a switch's or AP's Location…, a
+buddy's peer add) offers the site's locations as a dropdown, the primary preselected (not for a
+buddy, which is elsewhere), with a link to the Site page's Locations section (`/site#locations`)
+for one the site does not have yet.
 
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
@@ -40,14 +48,18 @@ jumps. **Site** — the site as built, in four tabs, each at its own address: Ov
 (`/site/storage`); the earlier addresses (`/physical`, `/site/physical/<view>`) redirect to them.
 **Overview** sums the other three: the site in one line (nodes, switches, APs, racks, pools,
 disks, the public address) with Add node and Register joined nodes (`site-manager node
-reconcile`) beside it, Update now (`site update`, its plan first) at the top, each rack as a thumbnail of its units (a click opens the Physical view),
+reconcile`) beside it, Update now (`site update`, its plan first) at the top, the locations (the primary first, each
+a link to its record) with their rooms, each rack a thumbnail of its units (a click opens the
+Physical view), what is at the location placed nowhere and a buddy or satellite there,
 the Device view as counts with the findings on devices, each node's
 pools with a fill bar coloured by state and its disks with a problem, and every finding of the
 topology and the storage inventory, each linked to the view and the object it is on. Below
 that, the site's records: `site.json` (Modify), the update schedule, the release train's preview
 and status, and the repositories (sync, hold, release, stashes, reconcile).
-**Physical** (`/site/physical`): the site's locations (the primary first), each as an area around
-its rooms — a location with no room lists the devices that are somewhere there — and each room of
+**Physical** (`/site/physical`): every location of the site (the primary first), each as an area
+headed by its name — a link to its row in the Site page's Locations — and its address, around its
+rooms and, after them, what is at it placed nowhere (with no room: somewhere there) and a backup
+buddy or satellite that is there; each room of
 position-manager's `config/positions.json` as an area with its racks and, beside them, the devices
 standing loose in it; each rack as a frame with its units numbered as the rack numbers them, each placed device as its
 faceplate at its units and width with its ports' live state (link, LAG), the cabled ports
@@ -63,8 +75,10 @@ also in a rack's and a room's card, and a How to card while nothing is selected;
 lists the wires and offers Attach to patch panel… (`position-manager cable split`, its `--check` the
 preview, the free panel ports to choose from) or Remove patch panel (`cable join`); a click on a plate or a port
 opens the side card to the left of the racks, with the device's location and placement as two
-lines (each a link to its object) and Place…, Move to…, Change placement… and Unplace… besides the
-object's own changes; a seen device's card shows the port it is seen at, its MAC, what LLDP and
+lines — the location a link to its row on the Site page, the placement to its rack or room in the
+Physical view, from any view — and Place… (the rooms and racks at the device's own location only;
+with none there, Add a room… at it), Move to…, Change placement… and Unplace… besides the
+object's own changes; a machine module's page shows the same two lines with the same actions; a seen device's card shows the port it is seen at, its MAC, what LLDP and
 the lease say, and Record…. **Device** (`/site/device`) — every physical device (the cluster nodes, the
 switches, the access points, the machines and devices a placement or a cable record names, the devices a switch port sees (marked as seen), the internet
 and the backup buddies) as a card with its kind's icon and its name and nothing else, coloured by
