@@ -57,7 +57,9 @@ import {
   hasEnvironments,
   ownZonesOf,
   refreshEffective,
+  environmentValue,
   zoneEnvironment,
+  zoneEnvironments,
 } from "./serves";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { isPubliclyResolvableSync, resolveSplitHorizonTarget } from "./splithorizon";
@@ -190,10 +192,13 @@ export const HELP: HelpSpec = {
         ["--environment <env>", "a Service zone: the environment whose zone it is (one per environment);\n" +
           "                      a Client/IoT/Guest/DMZ zone: the environment it serves.\n" +
           "                      Replaces any link the zone has."],
-        ["--unbind", "clear the link; with --environment, only when it names that one"],
+        ["--add", "with --environment: add it to a Client/IoT/Guest/DMZ zone's environments\n" +
+          "                      instead of replacing them (such a zone may serve several)"],
+        ["--unbind", "clear the link; with --environment, remove only that one"],
       ],
       note:
-        "Sets the zone's `environment` field. A zone names one environment.\n" +
+        "Sets the zone's `environment` field: one environment for a Service zone,\n" +
+        "one or several for a zone that serves them.\n" +
         "For a Client/Guest/IoT zone the access-to / pinhole-allowed-from edge\n" +
         "is DERIVED from it on every reconcile (into zones.effective.json), so it\n" +
         "survives the install-time srv→<environment> rename.\n" +
@@ -396,7 +401,7 @@ interface Opts {
   unbind: boolean;
   // add --archetype (ADR-014 D5); add --environment shares `environment`
   archetype?: string;
-  add?: boolean; // bind --add: refused (a zone names one environment, #865)
+  add?: boolean; // bind --add: one more environment for a zone that serves several
   // add --tftp-server-name / --bootfile-name (DHCP options 66/67, #546)
   tftpServerName?: string;
   bootfileName?: string;
@@ -611,7 +616,7 @@ function cmdZone(sub: string, opts: Opts): void {
         const t = zoneTier(z?.tier);
         const iso = z?.isolated === true ? " isolated" : "";
         line += ` ${(t === undefined ? "tier -" : `tier ${t}`).padEnd(7)}` +
-          ` ${(zoneEnvironment(z) ? `environment ${zoneEnvironment(z)}` : "").padEnd(24)}${iso}`;
+          ` ${(zoneEnvironments(z).length ? `environment ${zoneEnvironments(z).join(",")}` : "").padEnd(24)}${iso}`;
       }
       info(line.trimEnd());
     }
@@ -890,8 +895,8 @@ function cmdBind(opts: Opts): void {
   if (!opts.unbind && !opts.environment) {
     die("bind: expected --environment <env> (or --unbind to clear the link)");
   }
-  if (opts.add) {
-    die("bind: a zone names one environment — there is no --add. Reach a second environment's zone with access-to (or pinhole-allowed-from for an IoT zone).");
+  if (opts.add && (opts.unbind || !opts.environment)) {
+    die("bind: --add goes with --environment <env> (and not with --unbind)");
   }
 
   const doc = loadZones(opts.zonesFile);
@@ -904,19 +909,23 @@ function cmdBind(opts: Opts): void {
         `IoT, Guest and DMZ zones name an environment.`,
     );
   }
+  const owner = OWNER_TYPES.has(type);
+  if (owner && opts.add) {
+    die(`bind: zone '${name}' is a ${type} zone — the zone of exactly one environment; --add is for a zone that serves several`);
+  }
 
   const configDir = dirname(opts.zonesFile);
-  const before = zoneEnvironment(z);
-  const shown = (e: string | undefined) => (e ? `'${e}'` : "(none)");
-  let after: string | undefined;
+  const before = zoneEnvironments(z);
+  const shown = (envs: string[]) => (envs.length ? envs.map((e) => `'${e}'`).join(", ") : "(none)");
+  let after: string[];
 
   if (opts.unbind) {
-    // --unbind clears the link; --unbind --environment E only when it is E.
-    if (before === undefined || (opts.environment && before !== opts.environment)) {
+    // --unbind clears the link; --unbind --environment E removes only E.
+    after = opts.environment ? before.filter((e) => e !== opts.environment) : [];
+    if (after.length === before.length) {
       info(`${name}: ${opts.environment ? `does not name '${opts.environment}'` : "names no environment"} — no change`);
       return;
     }
-    after = undefined;
   } else {
     const env = opts.environment as string;
     // Resolve up front so a typo is caught here, not three commands later.
@@ -926,34 +935,39 @@ function cmdBind(opts: Opts): void {
           `— create it first (\`environment-manager add ${env}\`).`,
       );
     }
-    if (before === env) {
-      info(`${name}: already names ${shown(env)} — no change`);
+    after = opts.add ? [...before, env] : [env];
+    if (JSON.stringify(environmentValue(after)) === JSON.stringify(environmentValue(before))) {
+      info(`${name}: already names ${shown(before)} — no change`);
       return;
     }
-    if (OWNER_TYPES.has(type)) {
+    if (owner) {
       // One zone per environment: refuse a second, and refuse taking a zone
       // away from the environment it already is.
       const own = ownZonesOf(doc, env).filter((n) => n !== name);
       if (own.length > 0) {
         die(`bind: environment '${env}' already has its zone '${own[0]}' — unbind that first, or move the environment with \`environment-manager modify ${env} --zone ${name}\``);
       }
-      if (before !== undefined) {
-        die(`bind: zone '${name}' is environment '${before}''s zone — move that environment first (\`environment-manager modify ${before} --zone <other>\`)`);
+      if (zoneEnvironment(z) !== undefined) {
+        die(`bind: zone '${name}' is environment '${zoneEnvironment(z)}''s zone — move that environment first (\`environment-manager modify ${zoneEnvironment(z)} --zone <other>\`)`);
       }
     } else if (ownZonesOf(doc, env).length === 0) {
       die(`bind: environment '${env}' has no zone of its own yet — bind its Service zone first`);
     }
-    if (before !== undefined) info(`${name}: replacing ${shown(before)}`);
-    after = env;
+    // Without --add the link REPLACES what the zone had — said out loud, so a
+    // second bind never drops an edge silently.
+    if (!opts.add && before.length && !before.every((e) => e === env)) {
+      info(`${name}: replacing ${shown(before)}${owner ? "" : ` — use --add to keep them and add '${env}'`}`);
+    }
   }
 
+  const value = environmentValue(after);
   const rawZone = doc.raw[name] as Record<string, unknown>;
-  if (after === undefined) {
+  if (value === undefined) {
     delete z.environment;
     delete rawZone.environment;
   } else {
-    z.environment = after;
-    rawZone.environment = after;
+    z.environment = value;
+    rawZone.environment = value;
   }
   saveZones(opts.zonesFile, doc);
   info(`${name}: environment ${shown(before)} → ${GN}${shown(after)}${CL}`);

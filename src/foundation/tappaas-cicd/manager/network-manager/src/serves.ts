@@ -265,40 +265,42 @@ export function resolveServes(
   const { errors, bad } = linkErrors(doc, configDir);
 
   for (const [name, z] of doc.zones) {
-    const env = zoneEnvironment(z);
     const type = typeof z.type === "string" ? z.type : "";
-    if (env === undefined || !CONSUMER_TYPES.has(type) || bad.has(name)) continue;
+    if (!CONSUMER_TYPES.has(type) || bad.has(name)) continue;
 
-    if (hasEnvironments(configDir) && !environmentExists(configDir, env)) continue; // reported by linkErrors
-    const own = ownZonesOf(doc, env);
-    if (own.length === 0) {
-      errors.push(
-        `zone '${name}' serves environment '${env}', which no Service zone names ` +
-          `(bind its zone: \`network-manager bind <zone> --environment ${env}\`).`,
-      );
-      continue;
-    }
-    if (own.length > 1) continue; // reported by linkErrors
-    const svc = own[0];
-    if (type === "DMZ") continue; // records the link; derives no edge
-
-    const self = out[name] as Record<string, unknown> | undefined;
-    if (!self) continue;
-
-    // The edge is always LOCAL to the declaring zone — see the header.
-    const added: string[] = [];
-    if (type === "IoT") {
-      // The environment's modules drive the devices: record who may pinhole in.
-      // Never touches access-to, so R2 holds structurally, isolated or not.
-      if (addRef(self, "pinhole-allowed-from", svc)) {
-        added.push(`${name}.pinhole-allowed-from += ${svc}`);
+    // One edge per environment the zone serves: the union of what each derives.
+    for (const env of zoneEnvironments(z)) {
+      if (hasEnvironments(configDir) && !environmentExists(configDir, env)) continue; // reported by linkErrors
+      const own = ownZonesOf(doc, env);
+      if (own.length === 0) {
+        errors.push(
+          `zone '${name}' serves environment '${env}', which no Service zone names ` +
+            `(bind its zone: \`network-manager bind <zone> --environment ${env}\`).`,
+        );
+        continue;
       }
-    } else if (SERVES_DERIVES_ZONE_WIDE_CLIENT_ACCESS) {
-      // Client / Guest: the client consumes the service, zone-wide (F2).
-      if (addRef(self, "access-to", svc)) added.push(`${name}.access-to += ${svc}`);
-    }
+      if (own.length > 1) continue; // reported by linkErrors
+      const svc = own[0];
+      if (type === "DMZ") continue; // records the link; derives no edge
 
-    edges.push({ zone: name, environment: env, serviceZone: svc, added });
+      const self = out[name] as Record<string, unknown> | undefined;
+      if (!self) continue;
+
+      // The edge is always LOCAL to the declaring zone — see the header.
+      const added: string[] = [];
+      if (type === "IoT") {
+        // The environment's modules drive the devices: record who may pinhole in.
+        // Never touches access-to, so R2 holds structurally, isolated or not.
+        if (addRef(self, "pinhole-allowed-from", svc)) {
+          added.push(`${name}.pinhole-allowed-from += ${svc}`);
+        }
+      } else if (SERVES_DERIVES_ZONE_WIDE_CLIENT_ACCESS) {
+        // Client / Guest: the client consumes the service, zone-wide (F2).
+        if (addRef(self, "access-to", svc)) added.push(`${name}.access-to += ${svc}`);
+      }
+
+      edges.push({ zone: name, environment: env, serviceZone: svc, added });
+    }
   }
 
   return { edges, errors };
@@ -417,29 +419,28 @@ export function backfillServes(raw: Record<string, unknown>, configDir: string):
     const field = type === "IoT" ? "pinhole-allowed-from" : "access-to";
     const refs = Array.isArray(z[field]) ? (z[field] as unknown[]) : [];
 
-    const already = zoneEnvironment(z);
-    // A zone the operator already bound: still prune the now-derived literal so
+    const already = zoneEnvironments(z);
+    // A zone the operator already bound: still prune the now-derived literals so
     // a re-run converges, but do not re-point the link.
-    const targetEnv = already ?? (() => {
+    const targets = already.length > 0 ? already : (() => {
       for (const r of refs) {
-        if (typeof r === "string" && envByZone.has(r)) return envByZone.get(r) as string;
+        if (typeof r === "string" && envByZone.has(r)) return [envByZone.get(r) as string];
       }
-      return undefined;
+      return [];
     })();
-    if (targetEnv === undefined) continue;
+    if (targets.length === 0) continue;
+    if (already.length === 0) z["environment"] = targets[0];
 
-    const svc = zoneByEnv.get(targetEnv);
-    if (svc === undefined) continue;
-
-    if (already === undefined) z["environment"] = targetEnv;
-
-    // Drop ONLY the local literal the render now derives. The service zone's own
-    // entries are authored state that no link reproduces (see header) —
-    // pruning them here would silently narrow the graph.
-    const dropped = dropRef(z, field, svc);
-
-    if (already === undefined || dropped) {
-      changes.push({ zone: name, environment: targetEnv, serviceZone: svc, droppedFrom: field });
+    for (const targetEnv of targets) {
+      const svc = zoneByEnv.get(targetEnv);
+      if (svc === undefined) continue;
+      // Drop ONLY the local literal the render now derives. The service zone's own
+      // entries are authored state that no link reproduces (see header) —
+      // pruning them here would silently narrow the graph.
+      const dropped = dropRef(z, field, svc);
+      if (already.length === 0 || dropped) {
+        changes.push({ zone: name, environment: targetEnv, serviceZone: svc, droppedFrom: field });
+      }
     }
   }
   return { changes };

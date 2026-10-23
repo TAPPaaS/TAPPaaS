@@ -32,7 +32,8 @@ export interface Zone {
   // zone, for mgmt) names the environment whose zone it IS; a Client, IoT,
   // Guest or DMZ zone names the environment it serves. Symbolic, so it survives
   // the srv→<env> rename that strands literal service-zone names (#424).
-  environment?: string;
+  // A Client/IoT/Guest/DMZ zone may name several, as a list.
+  environment?: string | string[];
   description?: string;
   parent?: string;
   variant?: string;

@@ -125,8 +125,8 @@ export class CliNetworkClient implements NetworkClient {
     run(NETWORK_MANAGER_BIN(), ["bind", zone, "--environment", env, ...this.zonesArgs]);
   }
 
-  unbindZone(zone: string): void {
-    run(NETWORK_MANAGER_BIN(), ["bind", zone, "--unbind", ...this.zonesArgs]);
+  unbindZone(zone: string, env?: string): void {
+    run(NETWORK_MANAGER_BIN(), ["bind", zone, "--unbind", ...(env ? ["--environment", env] : []), ...this.zonesArgs]);
   }
 
   reconcileNetwork(apply: boolean): void {

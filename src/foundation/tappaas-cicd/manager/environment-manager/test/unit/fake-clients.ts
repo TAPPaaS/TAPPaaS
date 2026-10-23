@@ -41,8 +41,8 @@ export class FakeNetworkClient implements NetworkClient {
     this.log.push(`bind ${zone} ${env}`);
     this.envs.set(zone, env);
   }
-  unbindZone(zone: string): void {
-    this.log.push(`unbind ${zone}`);
+  unbindZone(zone: string, env?: string): void {
+    this.log.push(env ? `unbind ${zone} ${env}` : `unbind ${zone}`);
     this.envs.delete(zone);
   }
   reconcileNetwork(apply: boolean): void {

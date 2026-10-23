@@ -117,8 +117,10 @@ environment_file() {
 
 # Resolve an environment's zone: the one Service (or, for mgmt, Management) zone
 # in zones.json whose `environment` names it (#865 — the zone names the
-# environment, nothing points the other way). Echoes the zone; empty with
-# return 1 when zones.json is absent or no single zone names it.
+# environment, nothing points the other way). Such a zone names its one
+# environment as a string; a client or IoT zone may list several it serves, and
+# never counts here. Echoes the zone; empty with return 1 when zones.json is
+# absent or no single zone names it.
 #   environment_zone <env-name> [zones_file]
 environment_zone() {
     local env="$1"

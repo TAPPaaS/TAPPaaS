@@ -52,7 +52,10 @@ export interface EnvironmentModel {
 // engines stay pure and testable.
 export interface ZoneLink {
   type?: string;
+  // The single environment it names (a Service/Management zone's own) ...
   environment?: string;
+  // ... and every environment it names (a client or IoT zone may serve several).
+  environments: string[];
 }
 
 export interface RefSources {
@@ -98,7 +101,8 @@ export interface NetworkClient {
   // Link an existing zone to an environment, or clear its link
   // (`network-manager bind`).
   bindZone(zone: string, env: string): void;
-  unbindZone(zone: string): void;
+  // Clear the zone's link, or with `env` only that environment.
+  unbindZone(zone: string, env?: string): void;
   // Converge the network planes. apply=false ⇒ dry-run/preview (the default).
   //
   // SYSTEM-WIDE (#461): network-manager reconcile takes no zone or environment

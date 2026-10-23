@@ -606,9 +606,10 @@ function cmdDelete(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: DnsTls
   // as a zone, and the zones that served it stop reaching it.
   const refs = loadRefSources(opts.configDir);
   for (const [z, l] of refs.zones) {
-    if (l.environment !== name) continue;
+    if (!l.environments.includes(name)) continue;
     try {
-      if (!dry) net.unbindZone(z);
+      // A zone serving several environments keeps the others.
+      if (!dry) net.unbindZone(z, l.environments.length > 1 ? name : undefined);
       say(`clear zone '${z}''s link to '${name}'`);
     } catch (e) {
       leftover.push(`zone '${z}' still names '${name}' (network-manager bind ${z} --unbind): ${(e as Error).message}`);

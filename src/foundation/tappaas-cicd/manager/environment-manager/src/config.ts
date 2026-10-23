@@ -117,9 +117,11 @@ export function readZoneLinks(zonesFile: string): Map<string, ZoneLink> {
   for (const [k, v] of Object.entries(z as Record<string, unknown>)) {
     if (k.startsWith("_") || !v || typeof v !== "object" || Array.isArray(v)) continue;
     const o = v as Record<string, unknown>;
+    const list = Array.isArray(o.environment) ? o.environment : [o.environment];
     out.set(k, {
       type: typeof o.type === "string" ? o.type : undefined,
       environment: typeof o.environment === "string" && o.environment ? o.environment : undefined,
+      environments: list.filter((e): e is string => typeof e === "string" && e.length > 0),
     });
   }
   return out;
@@ -145,8 +147,8 @@ export function environmentZone(refs: Pick<RefSources, "zones">, env: string): s
 // add/modify --zone before network-manager is asked to make it so.
 export function withBinding(refs: RefSources, zone: string, env: string): RefSources {
   const zones = new Map(refs.zones);
-  for (const n of ownZones(zones, env)) zones.set(n, { ...zones.get(n), environment: undefined });
-  zones.set(zone, { type: zones.get(zone)?.type ?? "Service", environment: env });
+  for (const n of ownZones(zones, env)) zones.set(n, { ...zones.get(n)!, environment: undefined, environments: [] });
+  zones.set(zone, { type: zones.get(zone)?.type ?? "Service", environment: env, environments: [env] });
   return { ...refs, zones, zoneNames: new Set([...refs.zoneNames, zone]) };
 }
 

@@ -47,7 +47,7 @@ import { reconcileAll } from "../../src/reconcile";
 import { addZone, deleteZone } from "../../src/zonelifecycle";
 import { runChecks } from "../../src/zonescheck";
 import { ARCHETYPES, TIER_EXEMPT_TYPES, archetypeNames } from "../../src/archetypes";
-import { backfillServes, environmentZoneIn, renderEffective, zoneEnvironment } from "../../src/serves";
+import { backfillServes, environmentValue, environmentZoneIn, renderEffective, zoneEnvironment, zoneEnvironments } from "../../src/serves";
 import {
   ZonesFieldsSchema,
   applyZoneSet,
@@ -1518,6 +1518,32 @@ function tmpZones(): string {
       && environmentZoneIn(loadZones(write(base(), "zones-own.json")), "mgmt") === "mgmt",
       "#865: an environment's zone is the Service/Management zone naming it");
     check(zoneEnvironment({ environment: "a" }) === "a" && zoneEnvironment({}) === undefined, "#865: zoneEnvironment reads the field");
+  }
+
+  // (a3) #865: a zone serving several environments gets the union of their edges.
+  {
+    writeFileSync(join(d, "environments", "lab.json"), JSON.stringify({ name: "lab" }), "utf8");
+    const b = base() as Record<string, Record<string, unknown>>;
+    b.lab = { type: "Service", state: "Active", typeId: "2", subId: "1", vlantag: 299, ip: "10.2.99.0/24", tier: 1, environment: "lab", "access-to": ["internet"], "pinhole-allowed-from": [] };
+    b.home.environment = ["warmelo", "lab"];
+    b.iotLocal.environment = ["warmelo", "lab"];
+    const eff = renderEffective(loadZones(write(b, "zones-union.json")), d);
+    const z = (k: string) => eff.raw[k] as Record<string, unknown>;
+    const at = z("home")["access-to"] as string[];
+    check(at.includes("warmelo") && at.includes("lab"), "#865: a client serving two environments reaches both of their zones");
+    const paf = z("iotLocal")["pinhole-allowed-from"] as string[];
+    check(paf.includes("warmelo") && paf.includes("lab"), "#865: an IoT zone serving two environments accepts pinholes from both");
+    check(eff.edges.filter((e) => e.zone === "home").length === 2 && eff.errors.length === 0, "#865: one derived edge per environment, no errors");
+    check(zoneEnvironments({ environment: ["a", "b"] }).join() === "a,b" && zoneEnvironments({ environment: "a" }).join() === "a" && zoneEnvironment({ environment: ["a"] }) === undefined,
+      "#865: zoneEnvironments reads both forms; zoneEnvironment only the single one");
+    check(JSON.stringify(environmentValue(["a"])) === '"a"' && JSON.stringify(environmentValue(["a", "b", "a"])) === '["a","b"]' && environmentValue([]) === undefined,
+      "#865: one environment is written as a string, several as a list");
+    // the back-fill prunes each derived literal of a zone that already serves several
+    const legacy = JSON.parse(JSON.stringify(b)) as Record<string, any>;
+    legacy.home["access-to"] = ["internet", "warmelo", "lab"];
+    const bf = backfillServes(legacy, d);
+    check(JSON.stringify(legacy.home["access-to"]) === '["internet"]' && bf.changes.filter((c) => c.zone === "home").length === 2,
+      "#865: the back-fill drops every literal a listed environment now derives");
   }
 
   // (b) the authored document is never mutated by rendering.

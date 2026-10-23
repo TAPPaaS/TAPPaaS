@@ -185,10 +185,20 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         else
             bad "bind guest --environment lab failed"
         fi
-        if run_ts "${NMB} bind home --environment lab --add ${ZCZ}" >/dev/null 2>&1; then
-            bad "bind --add was accepted (a zone names one environment)"
+        if run_ts "${NMB} bind home --environment lab --add ${ZCZ}" >/dev/null 2>&1 && [[ "$(zenv home)" == "acme,lab" ]]; then
+            ok "bind --add: a client zone serves acme and lab"
         else
-            ok "bind --add is refused: a zone names one environment"
+            bad "bind --add did not give home both environments (got $(zenv home))"
+        fi
+        if run_ts "${NMB} bind home --unbind --environment lab ${ZCZ}" >/dev/null 2>&1 && [[ "$(zenv home)" == "acme" ]]; then
+            ok "bind --unbind --environment lab: only that one goes"
+        else
+            bad "unbinding lab from home left $(zenv home)"
+        fi
+        if run_ts "${NMB} bind labZone --environment acme --add ${ZCZ}" >/dev/null 2>&1; then
+            bad "bind --add was accepted on a Service zone"
+        else
+            ok "bind --add is refused on a Service zone: it is the zone of one environment"
         fi
         if run_ts "${NMB} bind acme --environment lab ${ZCZ}" >/dev/null 2>&1 || [[ "$(zenv acme)" != "acme" ]]; then
             bad "bind moved acme's own zone to lab"

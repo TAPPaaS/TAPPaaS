@@ -36,7 +36,7 @@ import { join } from "path";
 import { CL, GN, RD, YW } from "../../../lib/ts/src/cli";
 import { Zone, ZonesDoc } from "./types";
 import { NO_IPV6_TYPES, loadZones } from "./zones";
-import { CONSUMER_TYPES, environmentsWithoutZone, hasEnvironments, renderEffective, resolveServes, zoneEnvironment } from "./serves";
+import { CONSUMER_TYPES, environmentsWithoutZone, hasEnvironments, renderEffective, resolveServes, zoneEnvironments } from "./serves";
 import {
   CONTROL_PLANE_ZONE,
   TIER_INTERNET,
@@ -553,7 +553,7 @@ function indexRendered(raw: Record<string, unknown>): Map<string, Zone> {
 // environment named by two Service zones, and — when the site has environments
 // — an environment that no Service or Management zone names.
 function checkServes(doc: ZonesDoc, configDir: string, rep: Reporter): void {
-  const linked = Array.from(doc.zones.values()).filter((z) => zoneEnvironment(z) !== undefined);
+  const linked = Array.from(doc.zones.values()).filter((z) => zoneEnvironments(z).length > 0);
   const orphans = hasEnvironments(configDir) ? environmentsWithoutZone(doc, configDir) : [];
   for (const e of orphans) {
     rep.err(
@@ -689,7 +689,7 @@ export function zonesCheck(
   // clean result read as a verdict on the whole firewall.
   if (!opts.effective) {
     const linked = Array.from(doc.zones.values()).filter(
-      (z) => zoneEnvironment(z) !== undefined && CONSUMER_TYPES.has(String(z.type ?? "")) && z.type !== "DMZ",
+      (z) => zoneEnvironments(z).length > 0 && CONSUMER_TYPES.has(String(z.type ?? "")) && z.type !== "DMZ",
     ).length;
     if (linked > 0) {
       log(

@@ -233,11 +233,11 @@ throwsDie(() => parseOpts(["-x"]), "unknown short flag -x is rejected");
   check(r.rc === 0 && r.log.length === 0, "#865 modify --zone onto the zone it already has: no change");
 
   // delete: every zone naming the environment loses the link
-  d = setup({ acme: { type: "Service", state: "Active", environment: "acme" }, home: { type: "Client", state: "Active", environment: "acme" }, guest: { type: "Guest", state: "Active" } });
+  d = setup({ acme: { type: "Service", state: "Active", environment: "acme" }, home: { type: "Client", state: "Active", environment: "acme" }, work: { type: "Client", state: "Active", environment: ["acme", "lab"] }, guest: { type: "Guest", state: "Active" } });
   writeFileSync(join(d, "environments", "acme.json"), JSON.stringify({ name: "acme", displayName: "Acme", ownerOrg: "o" }));
   r = go(d, ["delete", "acme", "--force"]);
-  check(r.rc === 0 && JSON.stringify(r.log) === JSON.stringify(["unbind acme", "unbind home"]),
-    "#865 delete: the zones naming the environment are unbound");
+  check(r.rc === 0 && JSON.stringify(r.log) === JSON.stringify(["unbind acme", "unbind home", "unbind work acme"]),
+    "#865 delete: the zones naming the environment are unbound; one serving several keeps the others");
 }
 
 console.log(`\n${passed} passed, ${failed} failed.`);

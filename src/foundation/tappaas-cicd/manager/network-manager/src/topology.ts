@@ -328,7 +328,7 @@ export interface TopoZone {
   tier: number | null;
   bridge: string | null;
   ip: string | null;
-  environment: string | null; // the environment the zone names (#865)
+  environments: string[]; // the environment(s) the zone names (#865)
 }
 export interface TopoOutside {
   kind: "buddy" | "satellite";
@@ -476,7 +476,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       tier: num(z.tier),
       bridge: str(z.bridge),
       ip: str(z.ip),
-      environment: str(z.environment),
+      environments: (Array.isArray(z.environment) ? z.environment : [z.environment]).filter((e): e is string => typeof e === "string" && e.length > 0),
     });
   }
   const zoneByVlan = new Map<number, string>();
