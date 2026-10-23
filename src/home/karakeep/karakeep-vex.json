@@ -934,6 +934,86 @@
           "ref": "pkg:golang/stdlib@v1.23.10"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-5773",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "curl and libcurl from Meilisearch's Alpine base image. Meilisearch is a Rust binary linked only against musl and libgcc (ldd); it does not load libcurl. The container runs only tini and /bin/meilisearch, has no healthcheck, and nothing calls curl in it. Verified live on hrossen with Meilisearch v1.55.0.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:apk/alpine/curl@8.14.1-r3"
+        },
+        {
+          "ref": "pkg:apk/alpine/libcurl@8.14.1-r3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-6276",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "curl and libcurl from Meilisearch's Alpine base image. Meilisearch is a Rust binary linked only against musl and libgcc (ldd); it does not load libcurl. The container runs only tini and /bin/meilisearch, has no healthcheck, and nothing calls curl in it. Verified live on hrossen with Meilisearch v1.55.0.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:apk/alpine/curl@8.14.1-r3"
+        },
+        {
+          "ref": "pkg:apk/alpine/libcurl@8.14.1-r3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-8286",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "curl and libcurl from Meilisearch's Alpine base image. Meilisearch is a Rust binary linked only against musl and libgcc (ldd); it does not load libcurl. The container runs only tini and /bin/meilisearch, has no healthcheck, and nothing calls curl in it. Verified live on hrossen with Meilisearch v1.55.0.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:apk/alpine/curl@8.14.1-r3"
+        },
+        {
+          "ref": "pkg:apk/alpine/libcurl@8.14.1-r3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-8927",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "curl and libcurl from Meilisearch's Alpine base image. Meilisearch is a Rust binary linked only against musl and libgcc (ldd); it does not load libcurl. The container runs only tini and /bin/meilisearch, has no healthcheck, and nothing calls curl in it. Verified live on hrossen with Meilisearch v1.55.0.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:apk/alpine/curl@8.14.1-r3"
+        },
+        {
+          "ref": "pkg:apk/alpine/libcurl@8.14.1-r3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92392",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "curl and libcurl from Meilisearch's Alpine base image. Meilisearch is a Rust binary linked only against musl and libgcc (ldd); it does not load libcurl. The container runs only tini and /bin/meilisearch, has no healthcheck, and nothing calls curl in it. Verified live on hrossen with Meilisearch v1.55.0.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:apk/alpine/curl@8.14.1-r3"
+        },
+        {
+          "ref": "pkg:apk/alpine/libcurl@8.14.1-r3"
+        }
+      ]
     }
   ]
 }
