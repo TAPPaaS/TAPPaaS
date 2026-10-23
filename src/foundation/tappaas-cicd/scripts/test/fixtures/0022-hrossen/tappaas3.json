@@ -1,0 +1,47 @@
+{
+  "description": "A Proxmox VE cluster node as a module: registered, visible and tested; serves the NFS shares config/shares.json declares for it, through its server hook (ADR-029 v0.9); its OS is still patched by the cluster module (ADR-026 D4 stage 1)",
+  "version": "0.3.0",
+  "releaseDate": "2026-09-19",
+  "installTime": "20260919-08:36:17",
+  "updateTime": "20261023-13:54:36",
+  "status": "Development",
+  "rebootOk": false,
+  "kind": "machine",
+  "management": "managed",
+  "source": "official",
+  "moduleSource": "/home/tappaas/TAPPaaS/src/foundation/pvehost",
+  "environment": "mgmt",
+  "backup": {
+    "exclude": [
+      "/root/*.iso"
+    ],
+    "filesystemPaths": [
+      "/etc",
+      "/var/lib/pve-cluster",
+      "/root"
+    ]
+  },
+  "os": "debian",
+  "zone0": "mgmt",
+  "address": "tappaas3.mgmt.internal",
+  "uplinks": {
+    "lan": {
+      "mode": "active-backup",
+      "ports": [
+        "c8:ff:bf:05:0d:30",
+        "00:e0:4c:68:00:d1"
+      ],
+      "primary": "c8:ff:bf:05:0d:30"
+    },
+    "wan": {
+      "ports": [
+        "c8:ff:bf:05:0d:31"
+      ]
+    }
+  },
+  "dependsOn": [],
+  "integratesWith": [
+    "backup:filesystem"
+  ],
+  "stack": "foundation"
+}
