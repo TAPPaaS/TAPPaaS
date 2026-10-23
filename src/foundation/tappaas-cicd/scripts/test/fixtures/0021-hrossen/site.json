@@ -1,0 +1,86 @@
+{
+  "name": "rossen",
+  "displayName": "rossen",
+  "owner": "rossen",
+  "version": "2.0",
+  "network": {
+    "isp": "Netnørden",
+    "publicIp": "auto"
+  },
+  "hardware": {
+    "nodes": [
+      {
+        "name": "tappaas1",
+        "storagePools": [
+          "tanka1",
+          "tankb1"
+        ]
+      },
+      {
+        "name": "tappaas3",
+        "storagePools": [
+          "tanka1",
+          "tankc1"
+        ]
+      },
+      {
+        "name": "tappaas2",
+        "storagePools": [
+          "tanka1"
+        ]
+      }
+    ]
+  },
+  "backup": {
+    "target": "backup.mgmt.internal",
+    "defaultSchedule": "daily"
+  },
+  "updateSchedule": {
+    "frequency": "daily",
+    "hour": 2
+  },
+  "automaticReboot": true,
+  "snapshotRetention": 5,
+  "repositories": [
+    {
+      "name": "TAPPaaS",
+      "url": "codeberg.org/TAPPaaS/TAPPaaS",
+      "branch": "main",
+      "path": "/home/tappaas/TAPPaaS",
+      "managed": "full",
+      "catalog": "src/module-catalog.json"
+    },
+    {
+      "name": "Community",
+      "url": "codeberg.org/TAPPaaS/Community",
+      "branch": "main",
+      "path": "/home/tappaas/Community",
+      "managed": "full",
+      "catalog": "src/module-catalog.json"
+    }
+  ],
+  "defaultEnvironment": "rossen",
+  "channel": "unstable",
+  "ipv6": true,
+  "branding": {
+    "logo": "branding/rossen-logo.svg"
+  },
+  "locations": {
+    "knudanchersvej95": {
+      "displayName": "KnudAnchersVej95",
+      "country": "DK",
+      "city": "Rodovre",
+      "address": "KnudAnchersVej95",
+      "timezone": "Europe/Copenhagen"
+    },
+    "hareskov": {
+      "displayName": "Hareskov",
+      "kind": "remote",
+      "country": "DK",
+      "city": "Hareskov"
+    }
+  },
+  "primaryLocation": "knudanchersvej95",
+  "locale": "en_US",
+  "keyboard": "dk"
+}
