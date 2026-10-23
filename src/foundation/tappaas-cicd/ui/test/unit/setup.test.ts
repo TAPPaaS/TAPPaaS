@@ -12,7 +12,7 @@ import { AccessConfig, Me, decide, setupState } from "../../src/access";
 import { Jobs } from "../../src/jobs";
 import { Runner, Streamer } from "../../src/run";
 import { parseKv, secretStatus, writeSecret } from "../../src/secrets";
-import { SetupInputs, TESTS_FILE, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, runSetupTests, setupComplete, setupSteps, wifiStep } from "../../src/setup";
+import { SetupInputs, TESTS_FILE, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, runSetupTests, setupComplete, setupSteps, wifiStep } from "../../src/setup";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -45,6 +45,7 @@ async function main(): Promise<void> {
     switches: sw,
     vpnPeers: ["lars-mac"],
     wifi,
+    physical: { rooms: [{ name: "basement", location: "knudanchersvej95" }], placed: ["tappaas1", "tappaas2", "tappaas3", ...sw!.map((x) => x.name)], recorded: [] },
     stacks: ["home", "test"],
   };
   let steps = setupSteps(hrossen);
@@ -80,6 +81,17 @@ async function main(): Promise<void> {
   check(one({ switches: [] }, "switch").done === false && one({ switches: [{ name: "s", ports: 0, discovered: 0, controller: null }] }, "switch").done === false, "no switch, or one not interrogated: not done");
   check(one({ vpnPeers: [] }, "vpn").done === false, "no admin VPN peer: not done");
   check(!one({ stacks: [] }, "stacks").required && setupComplete(setupSteps({ ...hrossen, stacks: [] })), "stacks are optional");
+
+  // The physical site (Day 2): rooms, then every node and switch placed.
+  const nodes = ["tappaas1", "tappaas2"];
+  check(physicalStep(undefined, nodes, ["crs-a"]).done === false && !physicalStep(undefined, nodes, []).required, "no positions.json: not done, and optional");
+  check(physicalStep(null, nodes, []).done === null, "…unknown when it cannot be read");
+  const rooms = [{ name: "basement", location: "home" }];
+  const half = physicalStep({ rooms, placed: ["tappaas1"], recorded: [] }, nodes, ["crs-a"]);
+  check(half.done === false && /placed nowhere: tappaas2, crs-a/.test(half.detail) && /basement at home/.test(half.detail), "a room, a node placed: the rest are named");
+  const all = physicalStep({ rooms, placed: ["tappaas1", "tappaas2", "crs-a"], recorded: [{ name: "modem", kind: "modem" }] }, nodes, ["crs-a"]);
+  check(all.done === true && /modem \(modem\)/.test(all.detail), "every node and switch placed: done, the recorded devices listed");
+  check(physicalStep({ rooms: [], placed: ["tappaas1", "tappaas2"], recorded: [] }, nodes, []).done === false, "…but not without a room");
 
   // ── gathered from a config tree: a fresh install ────────────────────
   const dir = mkdtempSync(join(tmpdir(), "console-setup-"));
@@ -136,7 +148,17 @@ async function main(): Promise<void> {
   inputs = await gather();
   steps = setupSteps(inputs);
   check(ran.filter((r) => r.startsWith("module-manager test")).length === 3, "the next read is from the kept results: no test ran");
-  check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "vpn,stacks", "with the records in place every step is done but the VPN peer (and the optional stacks)");
+  check(steps.filter((s) => s.done !== true).map((s) => s.id).join() === "vpn,physical,stacks", "with the records in place every step is done but the VPN peer (and the optional physical site and stacks)");
+  check(readPhysical(cfg)?.rooms.length === 0, "no positions.json: an empty one");
+  writeFileSync(join(cfg, "racks.json"), JSON.stringify({ rooms: { basement: {} }, mounts: { tappaas1: { rack: "rack1", u: 1 } } }));
+  check(readPhysical(cfg)?.placed.join() === "tappaas1", "racks.json's mounts until migration 0020 has run");
+  writeFileSync(join(cfg, "positions.json"), JSON.stringify({ rooms: { basement: { location: "home" } }, placements: { tappaas1: { rack: "rack1", u: 1 }, tappaas2: { room: "basement" } }, devices: { modem: { kind: "modem" } } }));
+  const ph = readPhysical(cfg);
+  check(ph?.rooms[0].location === "home" && ph.placed.join() === "tappaas1,tappaas2" && ph.recorded[0].name === "modem", "positions.json: its rooms, placements and recorded devices");
+  writeFileSync(join(cfg, "positions.json"), "{ not json");
+  check(readPhysical(cfg) === null, "…none when it cannot be read");
+  unlinkSync(join(cfg, "positions.json"));
+  unlinkSync(join(cfg, "racks.json"));
   check(steps.find((s) => s.id === "wifi")!.done === true && ran.includes("ap-manager list --json"), "…WiFi: no zones.json, no Client zone to serve (ap-manager list was read)");
   // a module removed: its kept result goes with it on the next refresh
   rmSync(join(cfg, "logging.json"));

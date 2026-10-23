@@ -23,12 +23,17 @@
 //   wifi       optional: every active Client zone (zones.json) has an SSID an
 //              access point maps to it (ap-manager list --json); a name
 //              zones.json declares that no AP broadcasts is not WiFi yet
+//   physical   optional (Day 2): the site's rooms are recorded and every node
+//              and switch is placed, in a rack or loose in a room
+//              (config/positions.json, racks.json until migration 0020);
+//              the devices recorded there that nothing manages are listed
 //   stacks     optional: which stacks have modules installed
 
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "fs";
 import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { clusterNodeNames } from "../../lib/ts/src/nodes";
+import { LEGACY_RACKS_FILE, POSITIONS_FILE, PositionsDoc, devicesOf, placementsOf, roomsOf } from "../../lib/ts/src/positions";
 import { readZonesFile } from "../../lib/ts/src/zones";
 import { AccessConfig, setupState } from "./access";
 import { Runner } from "./run";
@@ -54,7 +59,16 @@ export interface SetupInputs {
   switches: { name: string; ports: number; discovered: number; controller: string | null }[] | null;
   vpnPeers: string[] | null; // null: wgvpn list could not be read
   wifi: WifiInputs;
+  physical?: PhysicalInputs | null; // null: positions.json could not be read
   stacks: string[];
+}
+
+// What positions.json says of the site's hardware: its rooms (and where), the
+// devices placed somewhere, the devices recorded there that nothing manages.
+export interface PhysicalInputs {
+  rooms: { name: string; location: string | null }[];
+  placed: string[];
+  recorded: { name: string; kind: string }[];
 }
 
 export interface WifiInputs {
@@ -62,7 +76,7 @@ export interface WifiInputs {
   aps: { name: string; ssids: { name: string; zone: string | null }[] }[] | null; // null: ap-manager list could not be read
 }
 
-export type StepId = "tls" | "backup" | "identity" | "logging" | "bootstrap" | "nodes" | "switch" | "vpn" | "wifi" | "stacks";
+export type StepId = "tls" | "backup" | "identity" | "logging" | "bootstrap" | "nodes" | "switch" | "vpn" | "wifi" | "physical" | "stacks";
 
 export interface SetupStep {
   id: StepId;
@@ -113,6 +127,7 @@ export function setupSteps(i: SetupInputs): SetupStep[] {
   else steps.push({ id: "vpn", title: "The admin VPN", required: true, done: i.vpnPeers.length > 0, detail: i.vpnPeers.length ? `peer(s): ${i.vpnPeers.join(", ")}` : "no peer yet: enrol a device" });
 
   steps.push(wifiStep(i.wifi));
+  steps.push(physicalStep(i.physical, i.siteNodes, (i.switches ?? []).map((s) => s.name)));
 
   steps.push({ id: "stacks", title: "Stacks (optional)", required: false, done: i.stacks.length > 0, detail: i.stacks.length ? `installed: ${i.stacks.join(", ")}` : "none yet" });
   return steps;
@@ -138,6 +153,39 @@ export function wifiStep(w: WifiInputs): SetupStep {
   }
   const named = missing.map((z) => (z.declared ? `${z.name} (zones.json names ${z.declared}; no access point broadcasts it)` : z.name)).join(", ");
   return { id: "wifi", title, required: false, done: false, detail: w.aps.length === 0 ? `no access point registered yet (ap-manager add); no SSID for: ${named}` : `no SSID for: ${named}` };
+}
+
+// The physical site: the rooms, then every node and switch placed (Day 2).
+export function physicalStep(p: PhysicalInputs | null | undefined, nodes: string[], switches: string[]): SetupStep {
+  const title = "The physical site (optional)";
+  if (p === null) return { id: "physical", title, required: false, done: null, detail: "config/positions.json could not be read" };
+  const rooms = p?.rooms ?? [];
+  const placed = new Set(p?.placed ?? []);
+  const open = [...nodes, ...switches].filter((d) => !placed.has(d));
+  const recorded = p?.recorded ?? [];
+  const what = recorded.length ? `; recorded: ${recorded.map((d) => `${d.name} (${d.kind})`).join(", ")}` : "; nothing the cluster cannot see is recorded yet (a modem, a patch panel)";
+  if (rooms.length === 0) return { id: "physical", title, required: false, done: false, detail: "no room recorded yet (config/positions.json)" };
+  const where = `${rooms.length} room(s): ${rooms.map((r) => (r.location ? `${r.name} at ${r.location}` : r.name)).join(", ")}`;
+  return {
+    id: "physical",
+    title,
+    required: false,
+    done: open.length === 0,
+    detail: open.length ? `${where}; placed nowhere: ${open.join(", ")}${what}` : `${where}; every node and switch placed${what}`,
+  };
+}
+
+// positions.json (racks.json before migration 0020); an absent file is an empty one.
+export function readPhysical(configDir: string): PhysicalInputs | null {
+  const file = [POSITIONS_FILE, LEGACY_RACKS_FILE].map((f) => join(configDir, f)).find((f) => existsSync(f));
+  if (!file) return { rooms: [], placed: [], recorded: [] };
+  const doc = readJson(file) as PositionsDoc | null;
+  if (!doc) return null;
+  return {
+    rooms: Object.entries(roomsOf(doc)).map(([name, r]) => ({ name, location: r.location ?? null })),
+    placed: Object.keys(placementsOf(doc)),
+    recorded: Object.entries(devicesOf(doc)).map(([name, d]) => ({ name, kind: d.kind })),
+  };
 }
 
 export function setupComplete(steps: SetupStep[]): boolean {
@@ -327,6 +375,7 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
     switches: existsSync(join(d.configDir, "switch-configuration-actual.json")) ? parseSwitches(readJson(join(d.configDir, "switch-configuration-actual.json"))) : [],
     vpnPeers: vpn.ran && vpn.rc === 0 ? parseWgvpnPeers(vpn.stdout + vpn.stderr) : null,
     wifi: { zones: readWifiZones(join(d.configDir, "zones.json")), aps: aps.ran && aps.rc === 0 ? parseApList(aps.stdout) : null },
+    physical: readPhysical(d.configDir),
     stacks: await d.stacks().catch(() => []),
   };
 }

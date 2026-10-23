@@ -3,18 +3,23 @@
 // button that opens its sequence: the Setup wizard's steps (operate.tsx's
 // StepView, Change → Preview → Apply → Result) over the schema-driven field
 // form where the verb has one. WiFi has a card per client zone (Wifi.tsx).
+// The physical site is a step with its state (setup.ts physicalStep): the
+// rooms at each location, the racks, the nodes and switches placed, and the
+// devices the cluster cannot see recorded.
 
 import { ReactNode, useEffect, useState } from "react";
 import { useRead } from "../api";
 import { Operate, OperateButton } from "../operate";
 import { useOpenedBy } from "../opener";
-import { placeSteps, rackAddSteps } from "../physical/rackops";
-import { canOperate, useMe } from "../ui";
+import { RecordDeviceButton, placeSteps, placesFor, rackAddSteps, roomAddSteps } from "../physical/rackops";
+import { LocationLink } from "../locations";
+import { viewLink } from "../physical/views";
+import { Link, canOperate, useMe } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
 import { ApIn, ZoneIn, wifiVerb, wifiZones } from "../wizards";
-import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
+import { SetupDoc, StepRow, addStackSteps, enrolSteps } from "./Setup";
 import { WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
 import { SatelliteButton } from "./Satellite";
@@ -42,10 +47,10 @@ function Group({ id, title, children }: { id?: string; title: string; children: 
   );
 }
 
-// Place a device: one of the devices placed nowhere, then its Place form — a
-// rack and its units, or a room — with the plate the catalog has for its model.
-function PlaceDeviceCard() {
-  const t = useRead<Topology>("topology").env?.data ?? null;
+// Place a device: one of the devices placed nowhere (the nodes and switches
+// first), then its Place form — a rack and its units, or a room at its
+// location — with the plate the catalog has for its model.
+function PlaceDeviceCard({ t }: { t: Topology | null }) {
   const v = t?.positions ?? null;
   const [device, setDevice] = useState("");
   const [open, setOpen] = useState<{ device: string; prefill: Record<string, string | boolean | string[]> } | null>(null);
@@ -56,20 +61,24 @@ function PlaceDeviceCard() {
     const { device: _d, ...rest } = values;
     if (d) setOpen({ device: d, prefill: rest });
   }, operator && v !== null);
-  const choices = v?.unplaced ?? [];
+  const first = (k: string) => (k === "node" ? 0 : k === "switch" ? 1 : 2);
+  const choices = [...(v?.unplaced ?? [])].filter((u) => !u.seen).sort((a, b) => first(a.kind) - first(b.kind));
   const pick = device || choices[0]?.device || "";
+  const here = placesFor(v, pick);
+  const core = (t?.nodes.length ?? 0) + (t?.switches.length ?? 0);
+  const coreOpen = choices.filter((u) => u.kind === "node" || u.kind === "switch").length;
   return (
     <WizardCard
-      title="Place a device"
+      title="Place the nodes and switches"
       action={
         operator ? (
           <span className="toolbar">
             <select value={pick} onChange={(e) => setDevice(e.target.value)} disabled={!choices.length}>
               {choices.map((u) => (
-                <option key={u.device} value={u.device}>{u.device}</option>
+                <option key={u.device} value={u.device}>{u.device} · {u.kind}{u.location ? ` at ${u.location}` : ""}</option>
               ))}
             </select>
-            <button className="btn" disabled={!pick || (!v?.racks.length && !(v?.rooms ?? []).some((r) => r.recorded))} onClick={() => setOpen({ device: pick, prefill: {} })}>
+            <button className="btn" disabled={!pick || (!here.racks.length && !here.rooms.length)} title={pick && !here.racks.length && !here.rooms.length ? `${here.location ?? "its location"} has no room or rack yet` : undefined} onClick={() => setOpen({ device: pick, prefill: {} })}>
               Place…
             </button>
             {open ? (
@@ -88,9 +97,79 @@ function PlaceDeviceCard() {
         : !v.racks.length && !(v.rooms ?? []).some((r) => r.recorded)
           ? "Add a room or a rack first: a device stands in a rack at its units, or loose in a room."
           : choices.length
-            ? <>Where a device stands: a rack and its units, or a room, for the Physical view. {choices.length} device{choices.length === 1 ? "" : "s"} placed nowhere.</>
+            ? <>Where each device stands: a rack and its units, or loose in a room at its own location. {core - coreOpen} of {core} nodes and switches placed; {choices.length} device{choices.length === 1 ? "" : "s"} placed nowhere.</>
             : "Every device is placed."}
     </WizardCard>
+  );
+}
+
+// The rooms at each location, and Add a room… with the location dropdown.
+function RoomsCard({ t }: { t: Topology | null }) {
+  const v = t?.positions ?? null;
+  const locs = (v?.locations ?? []).filter((l) => l.kind === "site" || l.rooms.length);
+  return (
+    <WizardCard title="Record the rooms" action={<OperateButton label="Add a room…" title="Add a room" steps={() => roomAddSteps()} />}>
+      {v === null ? (
+        "The topology carries no positions yet."
+      ) : (
+        <>
+          Where the hardware stands, at one of the site's locations (the primary unless you choose another; a location the site lacks is added in the Site page's <Link to="/site#locations">Locations</Link>).{" "}
+          {locs.map((l, i) => (
+            <span key={l.name}>
+              {i ? "; " : ""}
+              <LocationLink name={l.name}>{l.displayName ?? l.name}</LocationLink>:{" "}
+              {l.rooms.length
+                ? l.rooms.map((r, j) => (
+                    <span key={r}>
+                      {j ? ", " : ""}
+                      <Link to={viewLink("rack", `room:${r}`)}>{v.rooms?.find((x) => x.name === r)?.displayName ?? r}</Link>
+                    </span>
+                  ))
+                : "no room"}
+            </span>
+          ))}
+          {locs.length ? "." : null}
+        </>
+      )}
+    </WizardCard>
+  );
+}
+
+// What the cluster cannot see: the modem, a patch panel, a UPS.
+function RecordCard({ t }: { t: Topology | null }) {
+  const rec = (t?.devices ?? []).filter((d) => d.recorded);
+  return (
+    <WizardCard title="Record what the cluster cannot see" action={<RecordDeviceButton />}>
+      A device nothing manages — the ISP's modem, an ONT, a UPS, a patch panel — with its kind, ports and location; then place it.{" "}
+      {rec.length ? <>Recorded: {rec.map((d) => d.name).join(", ")}.</> : "Nothing recorded yet."}
+    </WizardCard>
+  );
+}
+
+// The physical site: a step with its state from positions.json (every node
+// and switch placed), its cards in the order the work goes.
+function PhysicalSite({ doc }: { doc: SetupDoc | null }) {
+  const t = useRead<Topology>("topology").env?.data ?? null;
+  const step = doc?.steps.find((s) => s.id === "physical") ?? { id: "physical", title: "The physical site (optional)", required: false, done: null, detail: "reading the records…" };
+  return (
+    <section className="wizard-group" id="physical">
+      <h2>The physical site</h2>
+      <ol className="setup">
+        <StepRow s={{ ...step, title: "Rooms, racks and where each device stands" }} open>
+          <div className="wizard-cards">
+            <RoomsCard t={t} />
+            <WizardCard title="Add a rack" action={<OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} opens={{ wizard: "add-rack" }} />}>
+              A rack the site's hardware stands in: its height in units, its width, how its units are numbered, and its room.
+            </WizardCard>
+            <PlaceDeviceCard t={t} />
+            <RecordCard t={t} />
+          </div>
+          <p className="small muted">
+            Done when every node and switch is placed. The <Link to={viewLink("rack")}>Physical view</Link> draws the result by location, room and rack.
+          </p>
+        </StepRow>
+      </ol>
+    </section>
   );
 }
 
@@ -103,7 +182,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
   const wifi = wifiZones(zones.env?.data ?? [], aps);
   // /setup/day2#wifi-<zone> (Day 1's WiFi step): that card, once it is there.
   const target = window.location.hash.slice(1);
-  const there = target !== "" && (target === "wifi" ? wifi.length > 0 : wifi.some((z) => `wifi-${z.zone}` === target));
+  const there = target !== "" && (target === "wifi" ? wifi.length > 0 : target === "physical" ? doc !== null : wifi.some((z) => `wifi-${z.zone}` === target));
   useEffect(() => {
     if (there) document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [there, target]);
@@ -121,12 +200,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
           A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
         </WizardCard>
       </Group>
-      <Group title="Positions">
-        <WizardCard title="Add a rack" action={<OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} opens={{ wizard: "add-rack" }} />}>
-          A rack the site's hardware stands in: its height in units, its width, how its units are numbered, and its room (in one of the site's locations).
-        </WizardCard>
-        <PlaceDeviceCard />
-      </Group>
+      <PhysicalSite doc={doc} />
       <Group title="Environments, people and stacks">
         <WizardCard title="Add an environment" action={<OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} opens={{ wizard: "add-environment" }} />}>
           A new environment — its record, its zone, its domain — then the reconcile that makes it live.

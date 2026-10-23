@@ -280,6 +280,12 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
     vpn: <OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />,
     stacks: <OperateButton label="Add a stack…" title="Add a stack" steps={addStackSteps()} />,
     wifi: <WifiLinks doc={d ?? null} />,
+    physical: (
+      <p className="small toolbar">
+        <Link to="/setup/day2#physical" className="btn">The physical site →</Link>
+        <span className="muted">on Day 2: the rooms at each location, the racks, every node and switch placed, the modem and panels recorded.</span>
+      </p>
+    ),
   };
   for (const m of ["backup", "identity", "logging"]) {
     body[m] = (
