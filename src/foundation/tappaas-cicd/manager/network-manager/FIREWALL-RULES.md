@@ -34,7 +34,7 @@ firewall reads:
     "access-to": ["internet"],         // zones it may reach, whole subnet, every port
     "pinhole-allowed-from": [],        // zones whose modules may open a pinhole into it
     "snat-allowed-from": [],           // zones whose traffic may be masqueraded into it
-    "environment": "warmelo"           // the environment it serves: adds its zone (derived)
+    "environment": "warmelo"           // the environment(s) it serves: adds each one's zone (derived)
 }
 ```
 
@@ -166,7 +166,8 @@ flowchart TD
 
 1. **Effective zones.** `network-manager reconcile` adds the edges a zone's `environment`
    derives — a Client or Guest zone that serves an environment reaches that environment's zone
-   (the Service zone naming it); an IoT zone accepts pinholes from it — and writes
+   (the Service zone naming it), and one serving several reaches each; an IoT zone accepts
+   pinholes from them — and writes
    `config/zones.effective.json`. Only the zone that names the environment changes
    ([ZONES.md](ZONES.md#a-zone-and-its-environment-environment)).
 2. **`all`.** Where `mgmt` says `all`, it is read as `internet` plus every zone that is not

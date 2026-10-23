@@ -127,12 +127,11 @@ A zone names the environment it belongs to; the environment's own file names no 
 - A **Service** zone names the environment whose zone it is: the segment that environment's
   modules run in. Every environment is named by exactly one Service zone — the control plane's
   is the **Management** zone `mgmt`, which names the `mgmt` environment.
-- A **Client** or **Guest** zone names the environment it serves, and gets that environment's
-  zone added to its `access-to`.
-- An **IoT** zone names the environment whose modules drive its devices, and gets that
-  environment's zone added to its `pinhole-allowed-from`, so an `isolated` zone never gains
-  inbound reach.
-- A **DMZ** zone may name the environment it fronts; that adds nothing.
+- A **Client** or **Guest** zone names the environment it serves — or a list, when it serves
+  several — and gets each one's zone added to its `access-to`.
+- An **IoT** zone names the environment(s) whose modules drive its devices, and gets each one's
+  zone added to its `pinhole-allowed-from`, so an `isolated` zone never gains inbound reach.
+- A **DMZ** zone may name the environment(s) it fronts; that adds nothing.
 - **Overlay** and **WAN** zones name none.
 
 Naming the service zone literally would break when `network-manager init` renames
@@ -152,10 +151,11 @@ is derived from its current zone on every reconcile:
 }
 ```
 
-The derived edges live in `config/zones.effective.json`, never in `zones.json`. A zone names
-**one** environment. A workstation zone that must also reach a development environment's zone
-lists that zone in its `access-to` (an IoT zone: in its `pinhole-allowed-from`); the derived
-edge is added to it, never replaces it.
+The derived edges live in `config/zones.effective.json`, never in `zones.json`. A client zone
+that reaches several environments — a business's office zone reaching each customer's work
+environment, say — lists them: `"environment": ["custA", "custB"]`, and gets the union of their
+edges. A Service zone always names exactly one, as a string. An authored `access-to` entry is
+kept alongside: the derived edges are added to it, never replace it.
 
 Set it with `network-manager bind` ([network-manager](README.md)), or for an environment's own
 zone with `environment-manager add|modify <env> --zone <zone>`:
@@ -163,10 +163,13 @@ zone with `environment-manager add|modify <env> --zone <zone>`:
 | Command | Effect |
 |---|---|
 | `bind <zone> --environment <env>` | the zone names `<env>`, **replacing** any link it had |
-| `bind <zone> --unbind` | the link is cleared |
+| `bind <zone> --environment <env> --add` | a client, IoT, guest or DMZ zone names `<env>` **as well** |
+| `bind <zone> --unbind --environment <env>` | the zone no longer names `<env>`; the others stay |
+| `bind <zone> --unbind` | every link is cleared |
 
 `network-manager validate` refuses a zone naming an environment that does not exist, an
-environment named by no Service zone or by two, and `environment` on an Overlay or WAN zone.
+environment named by no Service zone or by two, a list on a Service or Management zone, a list
+that is empty or repeats a name, and `environment` on an Overlay or WAN zone.
 
 ### Archetypes
 

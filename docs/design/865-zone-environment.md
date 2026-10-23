@@ -21,7 +21,7 @@ gets one field, `environment`:
 Service (or Management) zone naming it; the zones an environment owns are the zones
 naming it.
 
-## Several environments per zone — decided
+## Several environments per zone — decided, then revised
 
 The brief said: a zone serves one environment only; if hrossen or the docs rely on a zone
 serving several, say so and stop before breaking it.
@@ -32,12 +32,25 @@ serving several, say so and stop before breaking it.
 - **The docs** did: ADR-014 v1.3 D2 (`serves` as a list, `bind --add`) and ZONES.md (a
   workstation zone reaching a production and a development environment).
 
-Decision (operator, 2026-10-23): one `environment` per zone. Every environment is named by
-exactly one zone of type Service or Management (`mgmt`'s zone is its Management zone); a
-Client, IoT, DMZ or Guest zone names at most one. A zone that must reach a second
-environment's zone gets an authored `access-to` (IoT: `pinhole-allowed-from`) entry, which
-the render keeps. Migration 0018 refuses a zone that would get two environments. ADR-014
-v1.4 withdraws the v1.3 list and ZONES.md describes the authored entry instead.
+First decision (operator, 2026-10-23): one `environment` per zone (ADR-014 v1.4).
+
+Revised the same day (ADR-014 v1.5), after the operator checked the v1.3 history: another
+installation has a client zone reaching every work environment (one service zone per client of
+the business), where naming the environments is more natural than authoring `access-to`
+entries. The direction stays zone → environment, but:
+
+- a Service or Management zone names exactly one environment, as a string, and every
+  environment is named by exactly one such zone;
+- a Client, IoT, Guest or DMZ zone names one environment or a non-empty list of distinct,
+  existing ones; the render takes the union (`access-to` for Client/Guest,
+  `pinhole-allowed-from` for IoT), as v1.3 did;
+- `bind --environment` replaces, `--add` adds one, `--unbind --environment` removes one (the
+  field goes with the last); `zoneEnvironments(z)` reads the list where a reader means
+  "serves", `zoneEnvironment(z)` the single string where it means "is the service zone of"
+  (environment-manager's lookup, `environment_zone`, `install-module.sh`, `environmentZoneIn`);
+- migration 0018 (amended in place before any release) carries a `serves` list over as the
+  list; it refuses only a zone two environments name as their own, and a `serves` or existing
+  `environment` that disagrees with the environment naming the zone as its own.
 
 `environment` keeps the change class `serves` had, `manual` ("has a verb of its own"), not
 `in-place`: `modify --set` would bypass `bind`'s one-zone-per-environment guard, and the

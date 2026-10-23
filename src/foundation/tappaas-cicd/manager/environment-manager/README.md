@@ -95,7 +95,7 @@ Service or Management zone names, or that two name. network-manager writes
   cleared and `Z` is bound to it.
 - **`delete <env>`** clears the link on every zone naming the environment: its
   own zone stays as a zone, and the client and IoT zones that served it stop
-  reaching it.
+  reaching it (a zone serving several environments keeps the others).
 - **`reconcile <env>`** finds the zone naming the environment. When none does and
   no zone of its name exists, it **plans the zone's creation** and authors it
   before the network pass. When two zones name it, or a zone of its name exists
@@ -104,8 +104,8 @@ Service or Management zone names, or that two name. network-manager writes
   `modify <env> --zone <serviceZone>`.
 
 A client, IoT or guest zone names the environment it *serves* in the same field
-(`network-manager bind <zone> --environment <env>`); that does not make it the
-environment's zone.
+— or a list, when it serves several (`network-manager bind <zone> --environment
+<env> [--add]`); that does not make it the environment's zone.
 
 ```bash
 environment-manager add acme --create-zone          # env + service zone 'acme'

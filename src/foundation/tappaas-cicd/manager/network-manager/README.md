@@ -98,7 +98,7 @@ VLAN reaches everything). Options:
 - `--environment <env>` — the environment the new zone belongs to, in the same
   command (see `bind` below): for a Service zone the environment whose zone it
   is (refused when that environment already has one), for a Client/IoT/Guest/DMZ
-  zone the environment it serves. The environment must exist.
+  zone the environment(s) it serves (`a,b` for several). The environments must exist.
 - `--from-zone <src>` — inherit type/typeId/bridge/access-to/pinhole from `<src>`.
 - `--type <T>` — zone type (default `Service`).
 - `--typeId <N>` — numeric type band (default `2`).
@@ -140,24 +140,26 @@ names no zone.
   modules run in. Every environment has exactly one (the **Management** zone
   `mgmt` is the `mgmt` environment's). `environment-manager add|modify --zone`
   sets it for you.
-- A **Client**, **Guest** or **IoT** zone names the environment it serves. A
+- A **Client**, **Guest** or **IoT** zone names the environment it serves, or a
+  list of them when it serves several (it gets the edges of each). A
   client zone reaches its services, and an IoT zone is reached by them; writing
   that as a **literal** service-zone name does not survive install (`init`
   renames `srv` → `<defaultEnvironment>`, and the literal is stranded), so the
   edge is derived from the environment's current zone on every reconcile.
-- A **DMZ** zone may name the environment it fronts; that derives nothing.
+- A **DMZ** zone may name the environment(s) it fronts; that derives nothing.
 - **Overlay** and **WAN** zones name none.
 
 ```bash
-network-manager bind home    --environment warmelo   # home serves warmelo
-network-manager bind lab     --environment lab       # lab is the lab environment's zone
-network-manager bind iotCams --unbind                # clears the link
+network-manager bind home    --environment warmelo        # home serves warmelo
+network-manager bind home    --environment lab --add      # ... and lab as well
+network-manager bind home    --unbind --environment lab   # ... no longer lab
+network-manager bind lab     --environment lab            # lab is the lab environment's zone
+network-manager bind iotCams --unbind                     # clears the link
 ```
 
-A zone names **one** environment. A client zone that must reach a second
-environment's service zone gets an authored `access-to` entry for it (an IoT
-zone: `pinhole-allowed-from`). `bind` refuses an unknown environment, a second
-Service zone for an environment, and taking a Service zone away from the
+A Service zone names **one** environment; `--add` is for a zone that serves
+several. `bind` refuses an unknown environment, a second Service zone for an
+environment, and taking a Service zone away from the
 environment it belongs to (move the environment with `environment-manager modify
 <env> --zone <zone>`), and prints the edge the link derives. Like
 `enable`/`disable` it does not reconcile; apply with `network-manager reconcile
