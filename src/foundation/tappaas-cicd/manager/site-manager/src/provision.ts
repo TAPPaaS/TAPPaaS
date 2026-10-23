@@ -20,7 +20,9 @@
 //                                       IP mid-run, so the ssh drop is
 //                                       EXPECTED — completion is polled)
 //   c. /etc/hosts fix + pvecm add      (ssh trust seeded via tappaas1)
-//   d. node reconcile --apply          (site.json capture)
+//   d. module adopt                    (the node's pvehost record, with its
+//                                       storagePools — written first, then
+//                                       read back for the storage entries)
 //
 // All remote work is plain ssh with the cicd keys (installed by the answer
 // file on PXE installs; installed by make-install-media.sh --ssh-key or by
@@ -32,6 +34,7 @@ import * as fs from "fs";
 
 import { GN, YW, CL, die, info, warn } from "../../../lib/ts/src/cli";
 import { mgmtDomain } from "../../../lib/ts/src/cluster";
+import { clusterNode } from "../../../lib/ts/src/nodes";
 import { clusterScript, defaultConfigDir } from "./config";
 
 const SERVE_UNIT = "tappaas-repo-serve";
@@ -220,13 +223,18 @@ function readSiteName(): string {
 }
 
 // A joined node becomes a module instance: config/<name>.json, module pvehost
-// (ADR-026 D4 stage 1). `module adopt` does it — the same path the cluster
-// module's update uses for nodes that joined before this existed. A failure is
-// a warning, never a failed join: the node is in the cluster already, and the
+// (ADR-026 D4 stage 1) — the node's record, the only list of nodes there is
+// (ADR-036 D6). `module adopt` does it — the same path the cluster module's
+// update uses for nodes that joined before this existed — recording the pools
+// named with --storage-pools, else the zpools on the node. A failure is a
+// warning, never a failed join: the node is in the cluster already, and the
 // next cluster update registers it anyway.
-function registerNode(name: string): void {
+function registerNode(name: string, pools: string[]): void {
   const addr = `${name}.${mgmtDomain()}`;
-  if (runStream("adopt-module.sh", [addr, "--wait", "0"]) !== 0) {
+  // A --pxe pool is name=layout:disk; its record keeps the name.
+  const names = [...new Set(pools.map((p) => p.split("=")[0]).filter((p) => /^tank/.test(p)))];
+  const args = [addr, "--wait", "0", ...(names.length ? ["--set", `storagePools=${JSON.stringify(names)}`] : [])];
+  if (runStream("adopt-module.sh", args) !== 0) {
     warn(`  ${name} is not registered as a module yet — run ${YW}module-manager module adopt ${addr}${CL}, ` +
          `or let the next cluster update do it`);
     return;
@@ -262,10 +270,8 @@ export function adoptNode(o: ProvisionOpts): void {
     info(`  ${o.name} is already in a cluster — skipping straight to capture`);
     const noKvm = kvmProblem(o.name, stdIp);
     if (noKvm) warn(`  ${noKvm}`);
-    step("capturing the node in site.json (node reconcile --apply)");
-    runStream("site-manager", ["node", "reconcile", "--apply"]);
     step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
-    registerNode(o.name);
+    registerNode(o.name, o.pools);
     return;
   }
 
@@ -527,23 +533,20 @@ function joinAndCapture(
   }
 
   // capture ------------------------------------------------------------------
-  step("capturing the node in site.json (node reconcile --apply)");
-  runStream("site-manager", ["node", "reconcile", "--apply"]);
+  // The pvehost record first: it is the node, and it carries the pools the
+  // storage registration below reads.
+  step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
+  registerNode(o.name, pools);
 
   // storage registration ------------------------------------------------------
   // The node's pools were CREATED pre-join (config-storage in the node
   // step), but joining replaced /etc/pve — dropping this node from every
   // pool's cluster storage nodes-list, which pvesm shows as 'disabled'
   // (stage-2 finding: tappaas2 AND the earlier tappaas4 were silently
-  // missing). Re-add the node per its CAPTURED pools (site.json, which the
-  // reconcile above just refreshed from the live zpools).
+  // missing). Re-add the node per its CAPTURED pools (its pvehost record,
+  // written above from the live zpools).
   step("registering the node in its pools' cluster storage entries");
-  let capturedPools: string[] = [];
-  try {
-    const site = JSON.parse(fs.readFileSync(`${defaultConfigDir()}/site.json`, "utf8"));
-    const entry = (site.hardware?.nodes ?? []).find((n: { name: string }) => n.name === o.name);
-    capturedPools = entry?.storagePools ?? [];
-  } catch { /* leave empty */ }
+  const capturedPools = clusterNode(defaultConfigDir(), o.name)?.storagePools ?? [];
   if (capturedPools.length === 0) {
     info("  no pools captured for this node — nothing to register");
   }
@@ -584,9 +587,6 @@ function joinAndCapture(
          `run ${YW}module-manager modify backup${CL} once it is reachable, ` +
          `or its VMs will not be backed up`);
   }
-
-  step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
-  registerNode(o.name);
 
   // key-only SSH now, not at the next sweep (#19; #729 §3 — the rejoined node
   // took root passwords over ssh for hours). Same drop-in and guard as the

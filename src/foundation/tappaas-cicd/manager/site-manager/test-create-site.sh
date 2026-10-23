@@ -13,7 +13,7 @@
 #   - --organization decouples .defaultEnvironment/.owner from .name
 #   - site.json validates against site-fields.json (validate-site.sh)
 #   - NO configuration.json is created in the temp dir (site-native)
-#   - hardware.nodes[] non-empty when the cluster is reachable (else skip)
+#   - no hardware block (the nodes are their pvehost instances)
 #   - non-force re-run REFUSES (exit != 0) and leaves site.json unchanged
 #   - --force re-run is idempotent (succeeds, still valid)
 #   - --name is required (no --name -> error)
@@ -95,17 +95,8 @@ if run_validate "$SITE"; then ok "site.json validates against site-fields.json";
 [[ "$(jqv "$SITE" 'has("environments")')" == "false" ]] && ok "no .environments field" || bad ".environments should not be written"
 [[ "$(jqv "$SITE" 'has("organizations")')" == "false" ]] && ok "no .organizations field" || bad ".organizations should not be written"
 
-# hardware.nodes[] non-empty IFF cluster reachable, else skip
-NODE_COUNT="$(jqv "$SITE" '.hardware.nodes | length')"
-if [[ "$NODE_COUNT" =~ ^[0-9]+$ && "$NODE_COUNT" -gt 0 ]]; then
-    ok "hardware.nodes[] non-empty ($NODE_COUNT node(s) discovered)"
-    # each node has a storagePools array
-    [[ "$(jqv "$SITE" '.hardware.nodes[0].storagePools | type')" == "array" ]] && ok "node[0].storagePools is an array" || bad "storagePools not an array"
-    # no ip leaked into node object (site-native node shape)
-    [[ "$(jqv "$SITE" '.hardware.nodes[0] | has("ip")')" == "false" ]] && ok "node ip not present (site shape)" || bad "node ip leaked"
-else
-    skip "cluster unreachable — hardware.nodes[] empty (node asserts skipped)"
-fi
+# the nodes are not a site field: they are their pvehost instances (ADR-036 D6)
+[[ "$(jqv "$SITE" 'has("hardware")')" == "false" ]] && ok "no .hardware field (the nodes are their pvehost instances)" || bad ".hardware should not be written"
 
 # --- Case 2: non-force re-run REFUSES, leaves site.json unchanged ---
 SUM_BEFORE="$(sha256sum "$SITE" | cut -d' ' -f1)"

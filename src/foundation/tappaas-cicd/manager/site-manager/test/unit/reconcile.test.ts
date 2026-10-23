@@ -26,7 +26,7 @@ function site(repos: Repository[]): Site {
     owner: "demo",
     locations: { home: { name: "home", country: "NL", timezone: "Europe/Amsterdam" } },
     primaryLocation: "home",
-    hardware: { nodes: [{ name: "tappaas1", storagePools: ["tanka1"] }] },
+    nodes: [{ name: "tappaas1", address: "tappaas1.mgmt.internal", storagePools: ["tanka1"] }],
     repositories: repos,
   };
 }
@@ -224,7 +224,7 @@ const TAPPAAS: Repository = {
   const c = new FakeSiteClient();
   c.seedClone(TAPPAAS.path!, "stable");
   const s2 = site([TAPPAAS]);
-  s2.hardware.nodes = [{ name: "tappaas1", storagePools: [] }]; // registered pre-discovery
+  s2.nodes = [{ name: "tappaas1", address: "tappaas1.mgmt.internal", storagePools: [] }]; // registered pre-discovery
   const plan = computePlan(s2, c, { deep: false, apply: true, siteFile: "x" });
   const upd = plan.actions.filter((a) => a.kind === "update-node-pools");
   check(upd.length === 1 && upd[0].target.includes("tanka1"), "empty declared pools get a fill action from discovery");

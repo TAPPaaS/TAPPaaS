@@ -13,12 +13,13 @@ import { existsSync, readdirSync, rmSync } from "fs";
 import { basename, join } from "path";
 import {
   defaultNodeCandidates,
+  mgmtDomain,
   queryClusterNodes,
   queryNodeTankPools,
   reachableNodes, queryClusterGuests} from "../../../lib/ts/src/cluster";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { capture as run, captureResult, stream as runStreaming } from "../../../lib/ts/src/exec";
-import { loadRaw, writeSite } from "./config";
+import { setNodeStoragePools } from "../../../lib/ts/src/nodes";
 import { RepositoryTrust, SiteClient } from "./types";
 import { UNIT } from "./unitrun";
 import { spawn, spawnSync } from "child_process";
@@ -110,25 +111,18 @@ export class CliSiteClient implements SiteClient {
     return queryNodeTankPools(node);
   }
 
-  // Append a discovered node to site.json .hardware.nodes (idempotent).
-  registerNode(siteFile: string, name: string, pools: string[]): void {
-    const raw = loadRaw(siteFile);
-    const hw = (raw.hardware ?? (raw.hardware = {})) as Record<string, unknown>;
-    const nodes = (Array.isArray(hw.nodes) ? hw.nodes : (hw.nodes = [])) as unknown[];
-    if (nodes.some((n) => (n as Record<string, unknown> | null)?.name === name)) return;
-    nodes.push({ name, storagePools: pools });
-    writeSite(siteFile, raw);
+  // Register a cluster member as its pvehost instance (ADR-036 D6): module
+  // adopt writes config/<name>.json, recording the pools given (else the
+  // node's own tankXY zpools). Idempotent: an adopted node is left alone.
+  registerNode(_configDir: string, name: string, pools: string[]): number {
+    const args = [`${name}.${mgmtDomain()}`, "--wait", "0"];
+    if (pools.length > 0) args.push("--set", `storagePools=${JSON.stringify(pools)}`);
+    return runStreaming(process.env.SITE_ADOPT_BIN ?? "adopt-module.sh", args);
   }
 
-  // Fill a known node's storagePools (only ever called for empty lists).
-  setNodePools(siteFile: string, name: string, pools: string[]): void {
-    const raw = loadRaw(siteFile);
-    const hw = (raw.hardware ?? {}) as Record<string, unknown>;
-    const nodes = (Array.isArray(hw.nodes) ? hw.nodes : []) as Record<string, unknown>[];
-    const node = nodes.find((n) => n?.name === name);
-    if (!node) return;
-    node.storagePools = pools;
-    writeSite(siteFile, raw);
+  // Fill a registered node's storagePools (only ever called for empty lists).
+  setNodePools(configDir: string, name: string, pools: string[]): void {
+    setNodeStoragePools(configDir, name, pools);
   }
 
   // ── (2) --deep cascade ──────────────────────────────────────────────

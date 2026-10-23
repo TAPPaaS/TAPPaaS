@@ -3,6 +3,7 @@
 // reconcile plan shapes. Mirrors identity-manager/src/types.ts.
 
 import { Location } from "../../../lib/ts/src/locations";
+import { ClusterNode } from "../../../lib/ts/src/nodes";
 
 // ── Site config entities (site.json) ──────────────────────────────────
 export interface SiteNetwork {
@@ -10,11 +11,8 @@ export interface SiteNetwork {
   publicIp?: string;
 }
 
-// A Proxmox node in hardware.nodes[].
-export interface SiteNode {
-  name: string;
-  storagePools: string[];
-}
+// A Proxmox node: its pvehost instance (ADR-036 D6), listed by lib/ts nodes.ts.
+export type SiteNode = ClusterNode;
 
 export interface SiteBackup {
   target?: string | null;
@@ -64,7 +62,9 @@ export interface Site {
   locale?: string;
   keyboard?: string; // #408: the first node's XKBLAYOUT — what every OS family is set from
   network?: SiteNetwork;
-  hardware: { nodes: SiteNode[] };
+  // The cluster's nodes: not a site.json field — the pvehost instances in the
+  // same config directory (clusterNodes), read with the site.
+  nodes: SiteNode[];
   backup?: SiteBackup | null;
   // ADR-017 D7: the named object, or the legacy [frequency, weekday, hour]
   // triple that migration 0003 rewrites. Readers accept both (readSchedule).
@@ -88,9 +88,9 @@ export interface Site {
 }
 
 // TODO(question): the editable surface of `site modify`. See PARKED Q1.
-// The fields a `site modify --<field> <value>` is allowed to set. Discovery-
-// derived fields (hardware.nodes via `node` CRUD) and lists managed by their
-// own CRUD (repositories) are EXCLUDED here. (Environments are
+// The fields a `site modify --<field> <value>` is allowed to set. Lists
+// managed by their own CRUD (repositories) are EXCLUDED here; the nodes are
+// not a site field (their pvehost instances, `node` verbs). (Environments are
 // not a site field — they are the config/environments/*.json files.)
 export type SiteModifiableField =
   | "channel"
@@ -189,12 +189,13 @@ export interface SiteClient {
   // The tankXY zpools physically present on <node> (create-site.sh's
   // discovery: `zpool list` on the node, tank* filter). null = query failed.
   nodeStoragePools(node: string): string[] | null;
-  // Append a newly discovered cluster node to site.json .hardware.nodes
-  // with its discovered pools (empty when discovery failed).
-  registerNode(siteFile: string, name: string, pools: string[]): void;
-  // Fill a known node's storagePools (used when site.json has [] but the
-  // node reports pools — conservative: never overwrites a non-empty list).
-  setNodePools(siteFile: string, name: string, pools: string[]): void;
+  // Register a cluster member as its pvehost instance (module adopt: the
+  // instance config/<name>.json, with the pools given, else the discovered
+  // ones). Returns the exit code.
+  registerNode(configDir: string, name: string, pools: string[]): number;
+  // Fill a registered node's storagePools (used when its instance has [] but
+  // the node reports pools — conservative: never overwrites a non-empty list).
+  setNodePools(configDir: string, name: string, pools: string[]): void;
 
   // (2) --deep cascade — shell out to a dependent manager's `reconcile`.
   // `apply` toggles preview vs commit (maps to the manager's --apply/--dry-run).

@@ -22,6 +22,7 @@
 // The engine depends only on SiteClient (injected) — pure planning + apply,
 // exactly like identity-manager/src/reconcile.ts.
 
+import { dirname } from "path";
 import {
   Site,
   SiteAction,
@@ -62,16 +63,17 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
 
   const scope = opts.scope ?? "all";
 
-  // ── (1a) own concern: capture live cluster nodes into site.json ──────
-  // The join path (cluster/install.sh on a NEW node) cannot write this
-  // site.json, so membership is reconciled from the cicd side: nodes in the
-  // live cluster but missing from .hardware.nodes are REGISTERED (with empty
-  // storagePools — the operator declares pools); site.json nodes that left
-  // the cluster are WARNED about, never auto-removed. Fixes the 2-node gap
-  // where HA fold / zone distribution could not see a joined node
-  // (docs/design/node-provisioning.md, Phase N1).
+  // ── (1a) own concern: every live cluster node is a pvehost instance ──
+  // The join path (cluster/install.sh on a NEW node) cannot register itself
+  // with this mothership, so membership is reconciled from the cicd side:
+  // nodes in the live cluster with no pvehost instance are REGISTERED (module
+  // adopt, with their discovered storagePools); instances whose node left the
+  // cluster are WARNED about, never auto-removed. The nodes are their
+  // instances (ADR-036 D6), so HA fold / zone distribution see a joined node
+  // once it is registered (docs/design/node-provisioning.md, Phase N1).
   if (scope !== "repositories") {
-    const known = site.hardware.nodes.map((n) => n.name);
+    const configDir = dirname(opts.siteFile);
+    const known = site.nodes.map((n) => n.name);
     const live = client.clusterNodes(known);
     if (live === null) {
       warnings.push("cluster unreachable — node inventory not reconciled this run");
@@ -79,27 +81,24 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
       const knownSet = new Set(known);
       for (const n of live) {
         if (!knownSet.has(n)) {
-          // Discover the node's tankXY pools at PLAN time (create-site.sh's
-          // zpool-list discovery) so registration lands complete.
+          // Discover the node's tankXY pools at PLAN time so registration
+          // lands complete.
           const pools = client.nodeStoragePools(n) ?? [];
           const poolTxt =
             pools.length > 0
               ? `storagePools: [${pools.join(", ")}] (discovered)`
-              : "storagePools: [] — pool discovery failed; declare via 'node add' or edit";
+              : "storagePools: [] — pool discovery failed; set them with module-manager modify <node> --set storagePools=…";
           actions.push({
             kind: "register-node",
-            target: `node ${n} → register in site.json (${poolTxt})`,
-            apply: (c) => {
-              c.registerNode(opts.siteFile, n, pools);
-              return 0;
-            },
+            target: `node ${n} → register as a pvehost instance (${poolTxt})`,
+            apply: (c) => c.registerNode(configDir, n, pools),
           });
         }
       }
       for (const n of known) {
         if (!live.includes(n)) {
           warnings.push(
-            `site.json node '${n}' is not in the live cluster (removed? renamed?) — not auto-removed; use 'node delete ${n}' if intentional`,
+            `node '${n}' is not in the live cluster (removed? renamed?) — not auto-removed; use 'node delete ${n}' if intentional`,
           );
           continue;
         }
@@ -107,7 +106,7 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
         // registered before discovery existed, or pools created later).
         // Never overwrite a non-empty list — an operator-authored subset is
         // legitimate; disagreement is a warning only.
-        const declared = site.hardware.nodes.find((x) => x.name === n)?.storagePools ?? [];
+        const declared = site.nodes.find((x) => x.name === n)?.storagePools ?? [];
         const livePoolList = client.nodeStoragePools(n);
         if (livePoolList === null) continue;
         if (declared.length === 0 && livePoolList.length > 0) {
@@ -115,7 +114,7 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
             kind: "update-node-pools",
             target: `node ${n} → fill storagePools [${livePoolList.join(", ")}] (discovered; was empty)`,
             apply: (c) => {
-              c.setNodePools(opts.siteFile, n, livePoolList);
+              c.setNodePools(configDir, n, livePoolList);
               return 0;
             },
           });
@@ -124,7 +123,7 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
           declared.slice().sort().join(",") !== livePoolList.slice().sort().join(",")
         ) {
           warnings.push(
-            `node '${n}': site.json declares pools [${declared.join(", ")}] but the node reports [${livePoolList.join(", ")}] — not auto-changed`,
+            `node '${n}': its pvehost record names pools [${declared.join(", ")}] but the node reports [${livePoolList.join(", ")}] — not auto-changed`,
           );
         }
       }

@@ -2,8 +2,10 @@
 // D6): the lib/ts helper every manager lists them through, its order, the
 // window before migration 0022, and the one writer of a node's pools.
 
+import { run } from "../../src/main";
+import { FakeSiteClient } from "./fake-client";
 import { clusterNode, clusterNodeNames, clusterNodes, compareNodeNames, nodeErrors, setNodeStoragePools } from "../../../../lib/ts/src/nodes";
-import { mkdtempSync, readFileSync, writeFileSync } from "fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -83,6 +85,61 @@ function cfg(files: Record<string, Obj>): string {
 check(nodeErrors({ name: "s", hardware: { nodes: [] } }).some((e) => /hardware.*retired.*0022/.test(e)), "nodeErrors refuses a leftover hardware");
 check(nodeErrors({ name: "s" }).length === 0, "nodeErrors is quiet without it");
 check(clusterNodes("/nonexistent/config").length === 0, "no config directory: no nodes");
+
+// 4. The node verbs read and write the instances.
+function quiet(argv: string[]): { rc: number; out: string[] } {
+  const out: string[] = [];
+  const [l, e] = [console.log, console.error];
+  console.log = (m: string) => void out.push(String(m));
+  console.error = (m: string) => void out.push(String(m));
+  try {
+    return { rc: run(argv, new FakeSiteClient()), out };
+  } finally {
+    [console.log, console.error] = [l, e];
+  }
+}
+{
+  const SITE = { name: "acme", displayName: "Acme", owner: "acme", defaultEnvironment: "acme",
+    locations: { home: { country: "DK", timezone: "Europe/Copenhagen" } }, primaryLocation: "home", repositories: [] };
+  const dir = cfg({
+    "site.json": SITE,
+    "tappaas1.json": { ...PVE, address: "tappaas1.mgmt.internal", storagePools: ["tanka1"] },
+    "tappaas2.json": { ...PVE, address: "tappaas2.mgmt.internal", storagePools: [], location: "home" },
+  });
+  const list = quiet(["node", "list", "--json", "--config-dir", dir]);
+  const parsed = JSON.parse(list.out.join("\n")) as { name: string; storagePools: string[]; location?: string }[];
+  check(list.rc === 0 && parsed.map((n) => n.name).join() === "tappaas1,tappaas2" && parsed[1].location === "home", `node list --json lists the instances (${list.out.join(" ")})`);
+
+  // node add --config-only writes the pvehost record through copy-update-json.sh.
+  const bin = join(dir, "bin");
+  mkdirSync(bin);
+  const mod = join(dir, "pvehost");
+  mkdirSync(mod);
+  writeFileSync(join(mod, "pvehost.json"), JSON.stringify({ kind: "machine" }));
+  writeFileSync(join(bin, "copy-update-json.sh"),
+    '#!/usr/bin/env bash\necho "$PWD $*" > "$CONFIG_DIR/copy.args"\n' +
+    'printf \'{"kind":"machine","moduleSource":"%s","address":"tappaas3.mgmt.internal","storagePools":["tanka1","tankc1"]}\' "$PWD" > "$CONFIG_DIR/tappaas3.json"\n');
+  chmodSync(join(bin, "copy-update-json.sh"), 0o755);
+  process.env.SITE_COPY_JSON_BIN = join(bin, "copy-update-json.sh");
+  process.env.SITE_PVEHOST_DIR = mod;
+  const add = quiet(["node", "add", "tappaas3", "--config-only", "--storage-pools", "tanka1,tankc1", "--config-dir", dir]);
+  const args = existsSync(join(dir, "copy.args")) ? readFileSync(join(dir, "copy.args"), "utf8") : "";
+  check(add.rc === 0 && args.startsWith(`${mod} pvehost --instance tappaas3 --address tappaas3.mgmt.internal --zone0 mgmt --environment mgmt --storagePools ["tanka1","tankc1"]`),
+    `node add --config-only writes the pvehost record with its pools (${args.trim()} | ${add.out.join(" ")})`);
+  check(!("hardware" in (JSON.parse(readFileSync(join(dir, "site.json"), "utf8")) as Obj)), "node add writes nothing into site.json");
+  const again = quiet(["node", "add", "tappaas1", "--config-only", "--config-dir", dir]);
+  check(again.rc !== 0 && again.out.some((l) => l.includes("already exists")), "node add refuses a node that has its record");
+  delete process.env.SITE_COPY_JSON_BIN;
+  delete process.env.SITE_PVEHOST_DIR;
+
+  const reboot = quiet(["node", "reboot", "tappaas9", "--config-dir", dir]);
+  check(reboot.rc !== 0 && reboot.out.some((l) => l.includes("not one of this site's nodes")), "node reboot refuses a name that is no node");
+
+  // validate refuses the retired list.
+  writeFileSync(join(dir, "site.json"), JSON.stringify({ ...SITE, hardware: { nodes: [{ name: "tappaas1", storagePools: [] }] } }));
+  const v = quiet(["validate", join(dir, "site.json")]);
+  check(v.rc !== 0 && v.out.some((l) => l.includes("hardware, which is retired")), `validate refuses a leftover hardware (rc ${v.rc}: ${v.out.join(" | ")})`);
+}
 
 console.log(`nodes.test: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

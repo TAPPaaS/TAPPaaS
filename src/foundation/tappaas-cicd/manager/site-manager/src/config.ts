@@ -10,14 +10,14 @@
 
 import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { dirname, join } from "path";
 import {
   asString,
-  asStringArray,
   defaultConfigDir,
   writeJsonAtomic,
 } from "../../../lib/ts/src/config-io";
 import { readLocations, siteLocale } from "../../../lib/ts/src/locations";
+import { clusterNodes } from "../../../lib/ts/src/nodes";
 import { Repository, Site, SiteNode } from "./types";
 
 export { defaultConfigDir };
@@ -72,12 +72,8 @@ export function loadSite(siteFile: string): Site {
 
   // The pre-0019 location reads as the primary location it becomes.
   const { locations, primary } = readLocations(raw);
-  const hw = (raw.hardware ?? {}) as Record<string, unknown>;
-  const rawNodes = Array.isArray(hw.nodes) ? hw.nodes : [];
-  const nodes: SiteNode[] = rawNodes.map((n) => {
-    const o = n as Record<string, unknown>;
-    return { name: asString(o.name), storagePools: asStringArray(o.storagePools) };
-  });
+  // The nodes are their pvehost instances beside site.json (ADR-036 D6).
+  const nodes: SiteNode[] = clusterNodes(dirname(siteFile));
 
   const rawRepos = Array.isArray(raw.repositories) ? raw.repositories : [];
   const repositories: Repository[] = rawRepos.map((r) => {
@@ -101,7 +97,7 @@ export function loadSite(siteFile: string): Site {
     primaryLocation: primary,
     ...siteLocale(raw),
     network: (raw.network ?? undefined) as Site["network"],
-    hardware: { nodes },
+    nodes,
     backup: (raw.backup ?? null) as Site["backup"],
     updateSchedule: Array.isArray(raw.updateSchedule) ? raw.updateSchedule : undefined,
     channel: raw.channel === "unstable" || raw.channel === "staging" || raw.channel === "production"

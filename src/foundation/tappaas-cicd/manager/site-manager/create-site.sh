@@ -29,8 +29,6 @@
 #   keyboard          <- the first node's XKBLAYOUT, when it answers
 #   network.isp       <- null
 #   network.publicIp  <- "auto"
-#   hardware.nodes[]  <- discovered cluster nodes; each {name, storagePools:[...]}
-#                        where storagePools = the tankXY zpools present on that node
 #   backup            <- null
 #   updateSchedule    <- [--schedule, --weekday, --hour]
 #   automaticReboot   <- preserved from existing site.json, else true
@@ -42,6 +40,10 @@
 #                        preserving any existing operator-set repositories; the
 #                        TAPPaaS entry's trust from config/.trust/TAPPaaS.introduction.json
 #                        (bootstrap.sh, ADR-033 D5), verified against the checkout
+#   (the cluster's nodes are NOT a site.json field — they are their pvehost
+#    instances, config/<node>.json, registered by the cluster update and
+#    `site-manager node add` with each node's storagePools; a --force re-run
+#    keeps a hardware block migration 0022 has not moved yet.)
 #   (environments and organizations are NOT site.json fields — they are the
 #    config/environments/*.json and config/identities/organizations/*.json
 #    files; the site singleton keeps no list of either.)
@@ -355,18 +357,34 @@ read_existing_site() {
         EXISTING_SITE="$(jq -c '.' "$SITE_FILE")"
         EXISTING_REPOS="$(jq -c '.repositories // []' "$SITE_FILE")"
         EXISTING_EMAIL="$(jq -r '.email // ""' "$SITE_FILE")"
-        EXISTING_PRIMARY_NODE="$(jq -r '.hardware.nodes[0].name // ""' "$SITE_FILE")"
+        EXISTING_PRIMARY_NODE="$(site_primary_node)"
         return 0
     fi
     return 1
 }
 
+# The first of the cluster's nodes (their pvehost instances beside site.json):
+# the node discovery asks, as it was when the site was made. "" before any.
+site_primary_node() {
+    if ! declare -F tappaas_cluster_nodes >/dev/null 2>&1; then
+        local _cnl
+        for _cnl in "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/cluster-nodes.sh" \
+                    /home/tappaas/bin/cluster-nodes.sh; do
+            # shellcheck source=/dev/null
+            [[ -r "${_cnl}" ]] && { . "${_cnl}"; break; }
+        done
+    fi
+    declare -F tappaas_cluster_nodes >/dev/null 2>&1 || return 0
+    tappaas_cluster_nodes "$(dirname "$SITE_FILE")" 2>/dev/null | head -1
+}
+
 # ---------------------------------------------------------------------------
-# Cluster discovery — node list (replicates create-configuration.sh) plus the
-# tankXY zpools physically present on each node (-> storagePools).
+# Cluster discovery — the node list (replicates create-configuration.sh) and,
+# from the primary node, the email and locale. The nodes are not written here:
+# each becomes its pvehost instance, with the zpools it carries as its
+# storagePools, when the cluster update registers it.
 # ---------------------------------------------------------------------------
 NODES=()
-declare -A NODE_POOLS=()
 discover_cluster() {
     info "Discovering Proxmox cluster nodes..."
 
@@ -418,39 +436,9 @@ discover_cluster() {
             continue
         fi
         NODES+=("$node")
-
-        # storagePools: the tankXY zpools actually present on the node. We query
-        # the node directly (zpool list) — the cluster storage.cfg lists pools
-        # cluster-wide even when not physically present on a node.
-        local node_fqdn="${node}.${MGMT}.internal"
-        local pools
-        pools=$(ssh -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node_fqdn}" \
-            "zpool list -H -o name 2>/dev/null" 2>/dev/null | grep -E '^tank' | LC_ALL=C sort || true)
-        NODE_POOLS["$node"]="$pools"
-        debug "  ${node}: pools=[${pools//$'\n'/, }]"
     done
 
     info "  Total nodes: ${#NODES[@]}"
-}
-
-# ---------------------------------------------------------------------------
-# Build hardware.nodes[] JSON from discovery.
-# ---------------------------------------------------------------------------
-build_nodes_json() {
-    local node pools_arr
-    local out="[]"
-    (( ${#NODES[@]} == 0 )) && { printf '%s' "$out"; return 0; }
-    for node in "${NODES[@]}"; do
-        # Convert the newline-separated pool list to a JSON array.
-        if [[ -n "${NODE_POOLS[$node]:-}" ]]; then
-            pools_arr=$(printf '%s\n' "${NODE_POOLS[$node]}" | jq -R . | jq -s 'map(select(length>0))')
-        else
-            pools_arr='[]'
-        fi
-        out=$(jq -c --arg n "$node" --argjson p "$pools_arr" \
-            '. + [{name: $n, storagePools: $p}]' <<<"$out")
-    done
-    printf '%s' "$out"
 }
 
 # ---------------------------------------------------------------------------
@@ -565,14 +553,18 @@ apply_tappaas_anchor() {
 build_and_write_site() {
     info "Generating site.json..."
 
-    local tz country locale keyboard version nodes_json schedule_json repos_json email
+    local tz country locale keyboard version schedule_json repos_json email
     tz="$(master_timezone)"
     country="$(country_from_timezone "$tz")"
     locale="$(master_locale)"
     keyboard="$(master_keyboard)"
     version="$(resolve_version)"
-    nodes_json="$(build_nodes_json)"
     schedule_json="$(build_schedule_json)"
+    # A retired hardware block migration 0022 has not moved yet stays as it is:
+    # its storagePools are the nodes' until the migration puts them on their
+    # pvehost instances.
+    local hardware_json=null
+    [[ -n "${EXISTING_SITE}" ]] && hardware_json="$(jq -c '.hardware // null' <<<"${EXISTING_SITE}")"
     repos_json="$(build_repos_json)"
     repos_json="$(apply_tappaas_anchor "$repos_json")"
 
@@ -660,7 +652,7 @@ build_and_write_site() {
         --arg locale "$locale_v" \
         --arg keyboard "$keyboard_v" \
         --argjson network "$network" \
-        --argjson nodes "$nodes_json" \
+        --argjson hardware "${hardware_json}" \
         --argjson backup "$backup" \
         --argjson updateSchedule "$schedule_json" \
         --argjson automaticReboot "$automaticReboot" \
@@ -679,7 +671,6 @@ build_and_write_site() {
             primaryLocation: $primary,
             locale: $locale,
             network: $network,
-            hardware: { nodes: $nodes },
             backup: $backup,
             updateSchedule: $updateSchedule,
             automaticReboot: $automaticReboot,
@@ -687,7 +678,8 @@ build_and_write_site() {
             snapshotRetention: $snapshotRetention,
             repositories: $repositories
          } + (if $keyboard == "" then {} else {keyboard: $keyboard} end)
-           + (if $channel == null then {} else {channel: $channel} end)' > "$TMP_SITE"
+           + (if $channel == null then {} else {channel: $channel} end)
+           + (if $hardware == null then {} else {hardware: $hardware} end)' > "$TMP_SITE"
 
     jq empty "$TMP_SITE" >/dev/null 2>&1 || die "Generated site.json is invalid JSON."
 

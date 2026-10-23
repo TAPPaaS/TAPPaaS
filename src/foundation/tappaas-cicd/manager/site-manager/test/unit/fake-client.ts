@@ -60,11 +60,12 @@ export class FakeSiteClient implements SiteClient {
     const p = this.livePools.get(node);
     return p === undefined ? null : [...p];
   }
-  registerNode(_siteFile: string, name: string, pools: string[]): void {
+  registerNode(_configDir: string, name: string, pools: string[]): number {
     this.log.push(`register-node ${name} [${pools.join(",")}]`);
     this.registeredNodes.push(name);
+    return 0;
   }
-  setNodePools(_siteFile: string, name: string, pools: string[]): void {
+  setNodePools(_configDir: string, name: string, pools: string[]): void {
     this.log.push(`set-node-pools ${name} [${pools.join(",")}]`);
   }
   cascade(manager: "people" | "network", apply: boolean): number {

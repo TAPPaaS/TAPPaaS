@@ -1,8 +1,9 @@
 // site-manager — TAPPaaS Site manager (ADR-007 P2, all-managers-to-TS #3).
 //
 // The Site is the umbrella over a whole TAPPaaS installation (site-wide
-// identity, location, hardware nodes + storage pools, backup, update schedule,
-// module repositories). It is a SINGLETON: exactly one config/site.json.
+// identity, locations, backup, update schedule, module repositories). It is a
+// SINGLETON: exactly one config/site.json. Its nodes are their pvehost
+// instances (ADR-036 D6), which the `node` verbs register and list.
 //
 // Entity model (the entity is the first arg):
 //   site       (SINGLETON) → show | modify
@@ -33,12 +34,14 @@ import { evacuateNode, evacuateExitCode } from "./evacuate";
 import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
-import { Site, SiteClient, SiteNode } from "./types";
+import { Site, SiteClient } from "./types";
 import { runningVersion } from "./version";
 import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { dirname } from "path";
 import { locationErrors, placeText, readLocations } from "../../../lib/ts/src/locations";
+import { clusterNode, clusterNodes, nodeErrors } from "../../../lib/ts/src/nodes";
+import { mgmtDomain } from "../../../lib/ts/src/cluster";
 
 const VERSION = "0.1.0";
 
@@ -126,9 +129,9 @@ export const HELP: HelpSpec = {
     { usage: "location delete <name> [--check]", effect: { dryRun: "--check" },
       note: "(refused for the primary location and for one a peer, room or device names)",
       options: [["--check", "say whether it can go; write nothing."]] },
-    { usage: "node list [--json]" },
-    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--pool <p>] [--ttl <s>] [--config-only] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it, adds it to the cluster and site.json" },
-      hidden: ["--name <N>", "--provision"],
+    { usage: "node list [--json]", note: "(the cluster's nodes: their pvehost instances, with their storage pools)" },
+    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--storage-pools <a,b>] [--ttl <s>] [--config-only] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it, adds it to the cluster and registers it as a pvehost instance" },
+      hidden: ["--name <N>", "--provision", "--pool <p>"],
       options: [
         ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
         ["--pxe", "Bare machine: PXE-install first, then join + capture. Omit --boot-disk to be asked on the NODE console; WAN port + pools are asked here."],
@@ -139,18 +142,18 @@ export const HELP: HelpSpec = {
         ["--lan-ports <a,b>", "the node's lan port(s); two or more bond under lan as lanbond. Default: auto-detected, one port."],
         ["--lan-mode <m>", "active-backup (default for 2+ ports: any switches, any speeds) or lacp (equal speeds; the switch side one LAG)."],
         ["--lan-primary <if>", "active-backup: the port that carries traffic when up (default: the fastest)."],
-        ["--pool <p>", "a storage pool on the node (more pools: extra positionals)."],
+        ["--storage-pools <a,b>", "the node's storage pools (its tankXY zpools). Default: the zpools found on the node."],
         ["--ttl <s>", "--pxe: seconds the PXE offer stays open (default 7200)."],
         ["--yes", "do not ask for confirmation."],
-        ["--config-only", "Only write the site.json entry (no machine contact)."],
+        ["--config-only", "Only write the node's pvehost record, config/<N>.json (no machine contact)."],
       ] },
     { usage: "node delete <name> [--apply] [--shutdown] [--erase] [--config-only]",
       options: [
         ["(default)", "Preview: what still holds the node (guests, replication, HA rules, the PBS) and the plan. Changes nothing."],
-        ["--apply", "Remove it from the cluster (pvecm delnode, /etc/pve/nodes/<n>, storage entries, known_hosts), then from site.json; its pvehost module is archived. Refused while anything holds it; asks for the node name."],
+        ["--apply", "Remove it from the cluster (pvecm delnode, /etc/pve/nodes/<n>, storage entries, known_hosts); then its pvehost module is archived. Refused while anything holds it; asks for the node name."],
         ["--shutdown", "Power the node off first — Proxmox removes a node only once it is off. A node that is already down needs nothing."],
         ["--erase", "Before the power-off: destroy its ZFS pools and wipe their disks, wipe the boot disk's partitions and partition table, delete its boot entry. Asks for ERASE as well. Implies --shutdown."],
-        ["--config-only", "Only drop the site.json entry and the pvehost module; the cluster is not touched."],
+        ["--config-only", "Only archive the node's pvehost module; the cluster is not touched."],
       ] },
     { usage: "node reboot <name> [--apply]",
       options: [
@@ -365,6 +368,24 @@ function unregisterNodeModule(name: string, configDir: string): void {
   else warn(`the pvehost module instance '${name}' is still registered — module-manager delete ${name}`);
 }
 
+// `node add --config-only`: the node's pvehost record, config/<name>.json,
+// written the way `module add` writes a config (copy-update-json.sh, from the
+// pvehost module's source) without its install — nothing contacts the node.
+function writeNodeRecord(configDir: string, name: string, pools: string[]): void {
+  const site = loadRaw(`${configDir}/site.json`) as { repositories?: { name?: string; path?: string }[] };
+  const repo = (site.repositories ?? []).find((r) => r.name === "TAPPaaS")?.path ?? "/home/tappaas/TAPPaaS";
+  const moduleDir = process.env.SITE_PVEHOST_DIR ?? `${repo}/src/foundation/pvehost`;
+  if (!existsSync(`${moduleDir}/pvehost.json`)) die(`node add: the pvehost module is not at ${moduleDir}`);
+  const args = ["pvehost", "--instance", name, "--address", `${name}.${mgmtDomain()}`, "--zone0", "mgmt", "--environment", "mgmt"];
+  if (pools.length > 0) args.push("--storagePools", JSON.stringify(pools));
+  const r = spawnSync(process.env.SITE_COPY_JSON_BIN ?? "copy-update-json.sh", args, {
+    cwd: moduleDir,
+    stdio: "inherit",
+    env: { ...process.env, CONFIG_DIR: configDir },
+  });
+  if (r.status !== 0) die(`node add: writing config/${name}.json failed (copy-update-json.sh exited ${r.status ?? -1})`);
+}
+
 function siteFileOf(o: Opts): string {
   return o.siteFile ?? `${o.configDir.replace(/\/$/, "")}/site.json`;
 }
@@ -398,7 +419,7 @@ function cmdSite(o: Opts): void {
           .filter((x) => x != null && x !== "")
           .join(" ")
       : "(unset)";
-    const nodes = site.hardware?.nodes ?? [];
+    const nodes = site.nodes;
     const repos = site.repositories ?? [];
     const lbl = (k: string): string => `${GN}${(k + ":").padEnd(15)}${CL}`;
     info(`${lbl("Site")}${site.name}${site.displayName && site.displayName !== site.name ? ` (${site.displayName})` : ""}`);
@@ -448,8 +469,8 @@ function cmdSite(o: Opts): void {
     }
     let changed = 0;
     // The approved editable surface: scalar site-wide fields, mapped to schema
-    // paths. The discovery-derived hardware.nodes[] and the repositories list
-    // are NOT modifiable here — each has its own CRUD (node …, repository …).
+    // paths. The repositories list is NOT modifiable here — it has its own
+    // CRUD (repository …); the nodes are their pvehost instances (node …).
     // (Environments and organizations are not site fields at all — they are the
     // config/environments/ and config/identities/organizations/ files.)
     const setStr = (flag: string, path: string[]): void => {
@@ -746,11 +767,13 @@ function setDeep(obj: Record<string, unknown>, path: string[], value: unknown): 
   cur[path[path.length - 1]] = value;
 }
 
-// ── `node` CRUD + reconcile (hardware.nodes[]) ─────────────────────────
+// ── `node` CRUD + reconcile (the pvehost instances, ADR-036 D6) ─────────
 function cmdNode(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
   if (!sub) die("node: expected 'list' | 'add' | 'delete' | 'reconcile' | 'reboot'");
   const siteFile = siteFileOf(o);
+  // The nodes are the pvehost instances beside site.json (ADR-036 D6).
+  const nodesDir = dirname(siteFile);
 
   if (sub === "reconcile") {
     // Capture cluster membership into site.json (docs/design/
@@ -768,20 +791,20 @@ function cmdNode(o: Opts, client: SiteClient): void {
       const res = applyPlan(client, plan);
       info("");
       for (const f of res.failures) warn(`${f.target} failed: ${f.error}`);
-      info(`${GN}Applied ${res.applied} action(s) — declare storage pools for new nodes before installing modules on them.${CL}`);
+      info(`${GN}Applied ${res.applied} action(s) — check each new node's storage pools (node list) before installing modules on it.${CL}`);
     }
     return;
   }
 
   if (sub === "list") {
-    const site: Site = loadSite(siteFile);
+    const nodes = clusterNodes(nodesDir);
     if (o.json) {
-      info(JSON.stringify(site.hardware.nodes, null, 2));
-    } else if (site.hardware.nodes.length === 0) {
+      info(JSON.stringify(nodes, null, 2));
+    } else if (nodes.length === 0) {
       info("(no nodes)");
     } else {
-      for (const n of site.hardware.nodes) {
-        info(`${n.name}\t[${n.storagePools.join(", ")}]`);
+      for (const n of nodes) {
+        info(`${n.name}\t[${n.storagePools.join(", ")}]${n.location ? `\t${n.location}` : ""}`);
       }
     }
     return;
@@ -795,15 +818,12 @@ function cmdNode(o: Opts, client: SiteClient): void {
     // also accept trailing positionals after the name as pools.
     const pools = collectPools(o, name);
     if (o.boolFlags.has("--config-only")) {
-      // Just declare the node in site.json (no machine contact).
-      const raw = loadRaw(siteFile);
-      if (Object.keys(raw).length === 0) die(`site.json not found: ${siteFile}`);
-      const hw = (raw.hardware ?? (raw.hardware = {})) as Record<string, unknown>;
-      const nodes = (Array.isArray(hw.nodes) ? hw.nodes : (hw.nodes = [])) as SiteNode[];
-      if (nodes.some((n) => n.name === name)) die(`node '${name}' already exists`);
-      nodes.push({ name, storagePools: pools });
-      writeSite(siteFile, raw);
-      info(`${GN}✓${CL} node '${name}' added (pools: ${pools.join(", ") || "none"})`);
+      // Just write the node's pvehost record (no machine contact).
+      if (!existsSync(siteFile)) die(`site.json not found: ${siteFile}`);
+      if (clusterNode(nodesDir, name)) die(`node '${name}' already exists`);
+      if (existsSync(`${nodesDir}/${name}.json`)) die(`config/${name}.json already exists and is no pvehost instance — a node's instance is its node name`);
+      writeNodeRecord(nodesDir, name, pools);
+      info(`${GN}✓${CL} node '${name}' added as a pvehost instance (pools: ${pools.join(", ") || "none"})`);
       return;
     }
     if (o.boolFlags.has("--provision")) {
@@ -835,22 +855,11 @@ function cmdNode(o: Opts, client: SiteClient): void {
   if (sub === "delete") {
     const name = o.rest[1];
     if (!name) die("node delete: expected <name>");
-    const raw = loadRaw(siteFile);
-    const hw = (raw.hardware ?? {}) as Record<string, unknown>;
-    const nodes = (Array.isArray(hw.nodes) ? hw.nodes : []) as SiteNode[];
-    const inSite = nodes.some((n) => n.name === name);
-    const dropFromSite = (): void => {
-      if (!inSite) return;
-      hw.nodes = nodes.filter((n) => n.name !== name);
-      raw.hardware = hw;
-      writeSite(siteFile, raw);
-      info(`${GN}✓${CL} node '${name}' dropped from site.json`);
-    };
+    const inSite = clusterNode(nodesDir, name) !== null;
 
     if (o.boolFlags.has("--config-only")) {
-      if (!inSite) die(`node '${name}' not found`);
-      dropFromSite();
-      unregisterNodeModule(name, o.configDir);
+      if (!inSite) die(`node '${name}' not found (site-manager node list)`);
+      unregisterNodeModule(name, nodesDir);
       return;
     }
 
@@ -866,13 +875,12 @@ function cmdNode(o: Opts, client: SiteClient): void {
     info(`${o.apply ? "" : "[preview] "}node delete '${name}' → ${script} ${args.join(" ")}`);
     const r = spawnSync(script, args, { stdio: "inherit" });
     const rc = r.status ?? -1;
-    if (rc !== 0) die(`remove-node.sh exited ${rc} — site.json and the node's module are unchanged`);
+    if (rc !== 0) die(`remove-node.sh exited ${rc} — the node's pvehost module is unchanged`);
     if (!o.apply) {
-      if (inSite) info(`  then: '${name}' is dropped from site.json and its pvehost module archived`);
+      if (inSite) info(`  then: its pvehost module '${name}' is archived`);
       return;
     }
-    dropFromSite();
-    unregisterNodeModule(name, o.configDir);
+    unregisterNodeModule(name, nodesDir);
     // A node rebuilt under this name brings a new host key: no stale pin here.
     for (const h of [name, `${name}.mgmt.internal`]) spawnSync("ssh-keygen", ["-R", h], { stdio: "ignore" });
     return;
@@ -883,13 +891,10 @@ function cmdNode(o: Opts, client: SiteClient): void {
     if (!name) die("node reboot: expected <name>");
 
     // Refuse a node this site does not own, rather than letting the script
-    // discover it later: site.json is the register of what belongs here, and a
-    // typo should not reach a command that drains HA services.
-    const raw = loadRaw(siteFile);
-    const hw = (raw.hardware ?? {}) as Record<string, unknown>;
-    const nodes = (Array.isArray(hw.nodes) ? hw.nodes : []) as SiteNode[];
-    if (!nodes.some((n) => n.name === name)) {
-      die(`node '${name}' not found in ${siteFile} (site-manager node list)`);
+    // discover it later: the pvehost instances are the register of what
+    // belongs here, and a typo should not reach a command that drains HA services.
+    if (!clusterNode(nodesDir, name)) {
+      die(`node '${name}' is not one of this site's nodes (site-manager node list)`);
     }
 
     const script = clusterScript("reboot-node.sh");
@@ -969,6 +974,8 @@ function cmdNode(o: Opts, client: SiteClient): void {
 
 function collectPools(o: Opts, name: string): string[] {
   const pools: string[] = [];
+  for (const p of (o.flags.get("--storage-pools") ?? "").split(",")) if (p.trim()) pools.push(p.trim());
+  // --pool <p> and extra positionals: the spelling before --storage-pools.
   const single = o.flags.get("--pool");
   if (single) pools.push(single);
   // positionals after the node name (rest[0]=node, rest[1]=name?) are pools.
@@ -1218,7 +1225,8 @@ function cmdValidate(o: Opts, client: SiteClient): void {
   // names are looked for beside the site.json validated.
   if (existsSync(siteFile)) {
     try {
-      errs.push(...locationErrors(loadRaw(siteFile), dirname(siteFile)));
+      const raw = loadRaw(siteFile);
+      errs.push(...locationErrors(raw, dirname(siteFile)), ...nodeErrors(raw));
     } catch {
       // not JSON: validate-site.sh has said so
     }

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "site-fields.json",
   "title": "TAPPaaS Site",
-  "description": "The Site is the top-level umbrella for a TAPPaaS installation (ADR-007d). It holds site-wide identity, its locations (the primary one is where it is), hardware (Proxmox nodes + their storage pools), backup target, update schedule, module catalog repositories, and references to the organization config files. Environments are NOT listed here — they are simply whatever is present under config/environments/*.json (enumerated from the directory, not from site.json). Domain, DNS, and identity are per-environment (NOT site-wide) and live in config/environments/*.json. site.json replaces configuration.json at cutover; during the phased migration both files may coexist. See ADR-007 P2.",
+  "description": "The Site is the top-level umbrella for a TAPPaaS installation (ADR-007d). It holds site-wide identity, its locations (the primary one is where it is), backup target, update schedule, module catalog repositories, and references to the organization config files. The cluster's nodes are not listed here either: they are their pvehost instances (config/<node>.json). Environments are NOT listed here — they are simply whatever is present under config/environments/*.json (enumerated from the directory, not from site.json). Domain, DNS, and identity are per-environment (NOT site-wide) and live in config/environments/*.json. site.json replaces configuration.json at cutover; during the phased migration both files may coexist. See ADR-007 P2.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -12,7 +12,6 @@
     "owner",
     "locations",
     "primaryLocation",
-    "hardware",
     "repositories"
   ],
   "$defs": {
@@ -218,43 +217,11 @@
       "changeClass": "in-place"
     },
     "hardware": {
-      "description": "Physical hardware: the Proxmox nodes that make up the cluster.",
+      "description": "RETIRED — the cluster's nodes are their pvehost instances (config/<node>.json), each with its storagePools; never write this field. Retained so a site.json migration 0022 has not reached is classified rather than reported unknown; site-manager validate refuses it, and the node readers still read it until the migration has run.",
+      "deprecated": true,
       "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "nodes"
-      ],
-      "properties": {
-        "nodes": {
-          "description": "List of Proxmox nodes. nodeCount is computed from this array (no separate field).",
-          "type": "array",
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "name"
-            ],
-            "properties": {
-              "name": {
-                "description": "Node name (e.g. tappaas1).",
-                "type": "string",
-                "pattern": "^[A-Za-z0-9_-]+$"
-              },
-              "storagePools": {
-                "description": "Storage pools available on this node (e.g. [\"tanka1\", \"tankb1\"]).",
-                "type": "array",
-                "items": {
-                  "type": "string"
-                },
-                "uniqueItems": true,
-                "default": []
-              }
-            }
-          }
-        }
-      },
       "changeClass": "manual",
-      "changeNote": "Has verbs of its own: site-manager node add, node delete."
+      "changeNote": "Retired: migration 0022 moves each node's storagePools onto its pvehost instance. The nodes have verbs of their own: site-manager node add, node delete."
     },
     "backup": {
       "description": "Site-wide backup target. null when no backup is configured yet.",

@@ -7,7 +7,7 @@
 #   - migrate fixture configuration.json -> site.json
 #   - site.json validates against site-fields.json
 #   - mapped fields present: name (from domain label), location.timezone,
-#     hardware.nodes mapped from tappaas-nodes, repositories carried over
+#     repositories carried over
 #   - dropped fields absent: domain / variants / nodeCount
 #   - email CARRIED to site.json .email (S3b reader cutover)
 #   - migration is idempotent (2nd run is a no-op; --force overwrites)
@@ -112,7 +112,7 @@ echo ""
 
 # --- Case 3: a deliberately-bad site.json fails validate-site.sh ---
 BAD="${WORK}/bad-site.json"
-# missing required 'owner', 'locations', 'primaryLocation', 'hardware', 'repositories'
+# missing required 'owner', 'locations', 'primaryLocation', 'repositories'
 cat > "$BAD" <<'JSON'
 { "name": "broken", "displayName": "Broken" }
 JSON
@@ -148,7 +148,6 @@ cat > "$BAD2" <<'JSON'
 {
   "name": "x", "displayName": "X", "owner": "o",
   "locations": { "home": { "country": "NL", "timezone": "Europe/Amsterdam" } }, "primaryLocation": "home",
-  "hardware": { "nodes": [] },
   "repositories": [],
   "bogusExtraField": true
 }
@@ -161,7 +160,7 @@ if run_validate "$BAD2"; then bad "site.json with extra field wrongly passed"; e
 echo "== site master data (#408) =="
 
 _loc_site() {   # a minimal valid site.json: the given primary location, and the given top-level extras
-    printf '{"name":"s","displayName":"S","owner":"o","defaultEnvironment":"o","locations":{"home":%s},"primaryLocation":"home"%s,"hardware":{"nodes":[]},"repositories":[]}' "$1" "${2:-}"
+    printf '{"name":"s","displayName":"S","owner":"o","defaultEnvironment":"o","locations":{"home":%s},"primaryLocation":"home"%s,"repositories":[]}' "$1" "${2:-}"
 }
 
 GOODLOC="${WORK}/loc-good.json"
@@ -181,7 +180,7 @@ if python3 -c "import jsonschema" >/dev/null 2>&1; then
     if run_validate "$BADLAT"; then bad "latitude 355 wrongly passed"; else ok "latitude is bounded to +/-90"; fi
 
     BADNAME="${WORK}/loc-badname.json"
-    printf '{"name":"s","displayName":"S","owner":"o","defaultEnvironment":"o","locations":{"Home Office":{"country":"DK","timezone":"UTC"}},"primaryLocation":"home","hardware":{"nodes":[]},"repositories":[]}' > "$BADNAME"
+    printf '{"name":"s","displayName":"S","owner":"o","defaultEnvironment":"o","locations":{"Home Office":{"country":"DK","timezone":"UTC"}},"primaryLocation":"home","repositories":[]}' > "$BADNAME"
     if run_validate "$BADNAME"; then bad "a location name with capitals and a space wrongly passed"; else ok "a location's name is lower-case, no spaces"; fi
 else
     echo "  skip: keyboard pattern, latitude bound, location name (no python jsonschema here; the jq fallback checks none)"
