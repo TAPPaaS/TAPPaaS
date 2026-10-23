@@ -182,3 +182,20 @@ DK/Hareskov): → `rodovre` primary, `hareskov` kind remote, the peer names it, 
 `keyboard` at the top; `--check` writes nothing; twice is a no-op; the backups hold the
 pre-images; a second peer at the same place shares the location; a peer in the site's own
 place maps to the primary; a name clash gets `-2`; each refusal leaves every file as it was.
+
+## As built
+
+- The peers recorded their place as `physicalLocation {country, city, building}`, not as
+  top-level `country`/`city`; the building became the location's `address`.
+- Two readers the survey missed: the console's Physical heading (`web/src/physical/views.ts`
+  `sitePlace`) now reads the primary location, and the buddy wizard offers `--location`.
+- `lib/ts` `moduleSourceOf` and `isModuleConfig`, and the opnsense-controller's
+  `module_source_of`, read a top-level `location` as a module directory only when it holds a
+  `/`: a location's name never does, so a peer's or (later) a device's `location` is never
+  taken for a module path. The bash `.moduleSource // .location` readers are left as they
+  are — every module config has `moduleSource` since 0006, so they never reach `location`.
+- `site modify --locationCountry/Timezone/City/Building/Latitude/Longitude` stay hidden for one
+  release and write the primary location; `--locationLocale/Keyboard` write `locale`/`keyboard`.
+- On hrossen's config copy, 0019 names the primary `knudanchersvej95` (its building) and the
+  buddy rasmus's place `hareskov` (kind remote); `site-manager validate` and
+  `backup-manager validate` pass, and rasmus stays "separate" (no off-site warning).

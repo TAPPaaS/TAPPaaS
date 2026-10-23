@@ -47,7 +47,7 @@ the running cluster and **exits non-zero if any FAIL**.
 | `guest-memory` | `pvesh` + one `ps` / `qm status` per node | a module using ≥ 90% of its declared memory (WARN ≥ 75%), or allocated above the declared limit | cluster unreachable / nothing running |
 | `backup-status` | `backup-manager list --json` | a module disabled, or enabled-but-not-in-PBS-job | backup tooling absent / unparseable |
 | `pending-reboot` | one SSH probe per guest (booted system vs profile; Debian `reboot-required`) | never — **WARN** per waiting guest (#730) | no reachable guest |
-| `site-timezone` | `site.json` `.location.timezone` + one `timedatectl` per node and per guest | never — **WARN** per node or guest on another zone, or when site.json has none (#837) | nothing answered |
+| `site-timezone` | the primary location's timezone (`site.json` `locations[primaryLocation].timezone`) + one `timedatectl` per node and per guest | never — **WARN** per node or guest on another zone, or when site.json has none (#837) | nothing answered |
 | `pulse` | the backup node's `tappaas-pulse --status` | never — **WARN** when its timer is not running or a target is down (ADR-031) | no backup node, or it does not answer |
 | `quorum` | `pvecm status` on the first answering node | never — **WARN** on two votes without a QDevice (#835) | no node answers |
 | `switch-ports` | `switch-manager list-ports --json` (read-only: the switch as last read, by the delta's rules) | never — **WARN** per port with no record that is not parked, and per port set otherwise than its record (#853) | no switch-manager, or no switch |

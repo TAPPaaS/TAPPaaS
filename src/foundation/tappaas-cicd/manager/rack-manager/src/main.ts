@@ -76,7 +76,7 @@ export const HELP: HelpSpec = {
     {
       usage: "room add <room> [--display-name <text>] [--description <text>] [--check]",
       options: [["--display-name T", "The name shown."], ["--description T", "What it is."], CHECK],
-      note: "(its building is the site's: site.json location)",
+      note: "(its building is the site's primary location)",
     },
     {
       usage: "room modify <room> [--set <field>=<value>]... [--unset <field>]... [--check]",

@@ -49,7 +49,7 @@ which carries the racks resolved against the site.
   the device's model, else a generic plate.
 - **rooms** are where racks stand and where a device can stand loose. A rack's **room**
   names a room record; text that names no room yet is kept, and `validate` notes it.
-  The building is the site's (`site.json` location): neither a room nor a rack records
+  The building is the site's primary location (`site-manager location show`): neither a room nor a rack records
   one, and a building recorded before is dropped at the next write.
 - **devices** are the devices nothing can see — a modem, an ONT, a UPS, a patch panel
   (`modem`, `ont`, `ups`, `patch-panel`, `other`) — each with its catalog **model** or its

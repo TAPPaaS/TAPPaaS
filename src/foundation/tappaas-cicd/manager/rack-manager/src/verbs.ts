@@ -49,7 +49,7 @@ function withDoc(doc: RacksDoc, fn: (d: Doc) => void): RacksDoc {
   d.cables = d.cables ?? [];
   d.devices = d.devices ?? {};
   d.rooms = d.rooms ?? {};
-  // A building is the site's now (site.json location): one recorded on a rack
+  // A building is the site's now (its primary location): one recorded on a rack
   // or a room before goes, silently, at the next write.
   for (const x of [...Object.values(d.racks), ...Object.values(d.rooms)] as Record<string, unknown>[]) delete x.building;
   fn(d as Doc);

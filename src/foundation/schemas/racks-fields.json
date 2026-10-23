@@ -30,7 +30,7 @@
       "additionalProperties": { "$ref": "#/$defs/device" }
     },
     "rooms": {
-      "description": "The rooms, keyed by name: where racks stand and devices stand loose. Their building is the site's (site.json location).",
+      "description": "The rooms, keyed by name: where racks stand and devices stand loose. Their building is the site's primary location (site.json primaryLocation).",
       "type": "object",
       "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,62}$" },
       "additionalProperties": { "$ref": "#/$defs/room" }

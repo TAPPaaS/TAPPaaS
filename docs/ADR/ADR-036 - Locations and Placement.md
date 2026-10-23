@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-23) |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Date** | 2026-10-23 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | Findings 2 and 3 of [`src/DATAMODEL.md`](../../src/DATAMODEL.md) (location recorded in four shapes; devices in three files). Related: #865 (the zone names its environment), ADR-012 §1.5 (a machine's physical location), ADR-026 (machines), ADR-010 §8.4 (the satellite), ADR-034 (the console's Physical view), ADR-035 (a manager's rename and aliases). |
-| **Changelog** | v1.0 (2026-10-23) — **Accepted** by the operator; O2 becomes #868 (a site-local faceplate catalog), O3 closed: `locale` and `keyboard` stay site-wide. · v0.3 (2026-10-23) — **D6** the cluster's nodes are their `pvehost` machine instances and `site.hardware.nodes[]` goes, `storagePools` moving to the instance (operator, 2026-10-23); O1 closed; the console decision is D7. · v0.2 (2026-10-23) — **D5** a backup buddy's place is a location of this site, named by the peer record (operator, 2026-10-23); the console decision is D6. · v0.1 (2026-10-23) — first draft, from the operator's direction of 2026-10-23: a device has a location and a placement; site-manager owns locations with a primary one; rack-manager becomes position-manager and owns every placement; devices carry no room or rack field. |
+| **Changelog** | v1.1 (2026-10-23) — **Step 1 built** (#869). `site.json` `locations{}` (name → displayName, kind `site`/`remote`, country, city, address, timezone, latitude, longitude; `$defs.location`, the name immutable) and `primaryLocation`, whose timezone is the site's; `locale` and `keyboard` site-wide; `location` retired. One helper, `lib/ts/src/locations.ts` (`siteLocation(name?)`, `primaryLocation()`, the edits and the rules), used by site-manager's `location list/show/add/modify/delete` (`--check` previews; delete refused for the primary and for a named location) and by backup-manager's `peer add --location` (`--country/--city/--building` find the location at that place or add one of kind `remote`). Every reader of `site.location` reads the primary location (guests' time and keymap, node timezone, PXE answer, install media, health's timezone gate, the buddy dial command, the console). Migration 0019 makes `site.location` the primary location (named from the building, else the city, else the site code) and each peer's `physicalLocation` a location the peer names, matched by country, city and building so no off-site verdict changes. A machine's `physicalLocation` is step 3's; validate already resolves a machine's `location` name when one is recorded. v1.0 (2026-10-23) — **Accepted** by the operator; O2 becomes #868 (a site-local faceplate catalog), O3 closed: `locale` and `keyboard` stay site-wide. · v0.3 (2026-10-23) — **D6** the cluster's nodes are their `pvehost` machine instances and `site.hardware.nodes[]` goes, `storagePools` moving to the instance (operator, 2026-10-23); O1 closed; the console decision is D7. · v0.2 (2026-10-23) — **D5** a backup buddy's place is a location of this site, named by the peer record (operator, 2026-10-23); the console decision is D6. · v0.1 (2026-10-23) — first draft, from the operator's direction of 2026-10-23: a device has a location and a placement; site-manager owns locations with a primary one; rack-manager becomes position-manager and owns every placement; devices carry no room or rack field. |
 
 Where a thing is has two parts: the **location** it is at (a place with an address: the site's
 building, a provider's data centre, a second house) and its **placement** inside that location (a
@@ -182,9 +182,9 @@ site-manager. The device panel shows location and placement as two lines, each a
 
 ## Implementation plan
 
-1. **Schema and site-manager:** `locations{}`, `primaryLocation`, the `location` verbs, the
-   `site.location` migration; `backup-manager validate` reads a machine's and a peer's location
-   through site-manager, and the peers' `country`/`city` migrate into locations.
+1. **Schema and site-manager** *(built, #869)*: `locations{}`, `primaryLocation`, the `location`
+   verbs, the `site.location` migration; `backup-manager validate` reads a machine's and a peer's
+   location through site-manager, and the peers' `country`/`city` migrate into locations.
 2. **position-manager:** the rename with aliases, `positions.json`, rooms with a location,
    `placements{}` and the `place`/`unplace` verbs, `device record` from a seen device, the
    `racks.json` migration; the topology's `location`, `placement` and `source` on every device.

@@ -22,6 +22,7 @@ flowchart LR
     SITE["site.json<br/>site-manager"]:::record
     ENV["environments/&lt;env&gt;.json<br/>environment-manager"]:::record
     REPO["site.repositories[]<br/>site-manager"]:::record
+    LOC["site.locations{}<br/>places by name, one primary<br/>site-manager"]:::record
   end
 
   subgraph people["People (identities/)"]
@@ -67,6 +68,7 @@ flowchart LR
   SITE -- "dnsBlocklists.zones[]" --> ZONE
   SITE -- "hardware.nodes[]" --> NODE
   SITE -- "backup.target / offsite" --> PEER
+  SITE -- "locations{}, primaryLocation" --> LOC
   NODE -- "storagePools[]" --> POOL
   REPO -- "catalog" --> CATALOG
   ENV -- "ownerOrg" --> ORG
@@ -102,6 +104,7 @@ flowchart LR
   SHARE -- "nfs.shares[].pool" --> POOL
   SHARE -- "nfs.shares[].grants{} (consumer instance)" --> MOD
   PEER -- "a module instance (kind machine or remote PBS)" --> MOD
+  PEER -- "location" --> LOC
 
   %% physical
   RACK -- "room" --> ROOM
@@ -115,7 +118,7 @@ flowchart LR
   SWCFG -. "switches and APs are" .-> DEVICE
   CABLE -- "from.device, to.device" --> DEVICE
   CABLE -- "via a patch panel port (split)" --> RDEV
-  SITE -- "location (country, city, building)<br/>is the building every room is in" --> ROOM
+  LOC -- "the primary one<br/>is the building every room is in" --> ROOM
 ```
 
 Solid boxes are records a manager writes. Dashed boxes are what the system
@@ -126,7 +129,8 @@ source tree, not under `~/config/`.
 
 | Object | File | Owner | Names (field → object) |
 |---|---|---|---|
-| Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner` → organization; `hardware.nodes[]` → the cluster's nodes, each with its `storagePools[]`; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `location` → the building every room is in |
+| Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner` → organization; `hardware.nodes[]` → the cluster's nodes, each with its `storagePools[]`; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `locations{}` → its places; `primaryLocation` → the one it is at, whose timezone is the site's and whose building every room is in; `locale`, `keyboard` are site-wide |
+| Location | `site.json` → `locations{}` | site-manager | names nothing: a place with a country, city, address and timezone, of kind `site` (this site's own equipment) or `remote` (another site's). A backup peer names one; the primary one and one that is named cannot be deleted |
 | Environment | `environments/<env>.json` | environment-manager | `ownerOrg` → organization; `domains` are its own (no file names them back). It names no zone: its zone is the Service zone naming it |
 | Zone | `zones.json` (one object per zone) | network-manager | `environment` → the environment it belongs to: a Service zone's (and `mgmt`'s) own environment, exactly one per environment, or the one or several a client, IoT or guest zone serves; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `bridge` → an interface, not an object |
 | Switches and access points | `switch-configuration-desired.json` (`-actual.json` is the interrogated copy) | switch-manager, ap-manager, driven by network-manager | `switches{}.ports{}.zone` → zone (access and native VLAN); `ports{}.target` → the node, switch or AP on the other end; `accessPoints{}.uplinkSwitch` → switch; `ssids` → zones by VLAN |
@@ -138,9 +142,9 @@ source tree, not under `~/config/`.
 | Group | `identities/groups/<group>.json` | identity-manager | `ownerOrg` → organization; `roles[]` → roles |
 | Role | `identities/roles/<role>.json` | identity-manager | names nothing |
 | Shares | `shares.json` | storage-manager | `nfs.shares{}.server` → the module instance carrying the share; `pool` → a pool on it; `grants{}` → consumer module instances |
-| Backup peers | `remote-<peer>.json`, `pull-<peer>.json`, `receive-<peer>.json` | backup-manager | each is a module instance of a peer kind; `site.backup.offsite` and an environment's `backup.residency` are checked against the peer's location |
+| Backup peers | `remote-<peer>.json`, `pull-<peer>.json`, `receive-<peer>.json` | backup-manager | each is a module instance of a peer kind; `location` → a location of the site, compared with the primary one to show its copy is off-site; `site.backup.offsite` and an environment's `backup.residency` are checked against the peer's location |
 | Satellite | `<instance>.json` of kind machine | module-manager (satellite module) | a module instance; `vault.pull.*` → the home PBS and datastore; `physicalLocation` → its own site |
-| Room | `racks.json` → `rooms{}` | rack-manager | names nothing; the building is the site's `location` |
+| Room | `racks.json` → `rooms{}` | rack-manager | names nothing; the building is the site's primary location |
 | Rack | `racks.json` → `racks{}` | rack-manager | `room` → room |
 | Mount | `racks.json` → `mounts{}` (keyed by device) | rack-manager | `device` → a physical device; `rack` → rack, or `room` → room when loose; `faceplate` → the catalog |
 | Recorded device | `racks.json` → `devices{}` | rack-manager | `model` → the faceplate catalog; its `ports` are its own; it is a physical device like a node, switch or AP |
@@ -184,10 +188,11 @@ nothing here is a bug.
    served. Now the zone names the environment in one field, `environment` (a
    client or IoT zone may list several), and nothing points the other way. An environment's zone is the Service zone
    naming it; the zones it owns are the zones naming it.
-2. **Location is recorded in four shapes.** `site.location` (country, city,
-   building) is the building; `rooms` are rack-manager's; a machine module has
-   `physicalLocation` (same shape as the site's); a switch or AP has a free-text
-   `location`. The two free-text ones could name a room.
+2. **Location — partly resolved.** The site's places are one list,
+   `site.json` `locations{}`, with `primaryLocation` naming the site's own, and a
+   backup peer names its location. Still in their own shapes: a machine module's
+   `physicalLocation`, a switch's or AP's free-text `location`, and `rooms`, which
+   are assumed to be at the primary location.
 3. **Devices live in three files** (site hardware, switch configuration, racks)
    and are only joined by name in the derived topology. A node's uplinks are on
    a fifth object (the `pvehost` instance). One device list with a `seenBy`

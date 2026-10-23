@@ -85,7 +85,7 @@ export function unmountSteps(device: string): Step[] {
 // Add a room: its name, display name and description (racks-fields' room);
 // its building is the site's.
 export function roomAddSteps(): Step[] {
-  return [fieldsStep({ title: "rack-manager room add", bin: RM, verb: "room add", kind: "room", name: null, mode: "add", note: "A room in config/racks.json: where racks stand and devices stand loose. Its building is the site's (site.json location). Racks and devices are placed in it afterwards." })];
+  return [fieldsStep({ title: "rack-manager room add", bin: RM, verb: "room add", kind: "room", name: null, mode: "add", note: "A room in config/racks.json: where racks stand and devices stand loose. Its building is the site's primary location. Racks and devices are placed in it afterwards." })];
 }
 
 export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "other"];
