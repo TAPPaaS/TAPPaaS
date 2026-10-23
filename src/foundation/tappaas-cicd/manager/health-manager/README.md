@@ -179,7 +179,7 @@ it against the CVE source of its layer, read-only on every target:
 | a module's LXC | `kind: lxc` | the same probe, through `pct exec` on the node it runs on | `trivy rootfs` |
 | a running image | the containers `podman`/`docker ps` lists inside each target | the image by its **registry digest**, never its tag — one target per image | `trivy image` |
 | …its bundled native libraries | the same containers | what the container's own Python reports: FFmpeg in PyAV, libsndfile in soundfile, Pillow's codecs, OpenSSL in cryptography, OpenBLAS in numpy, Python's expat | `grype` by CPE, on the image's target |
-| a node | `site.json` `.hardware.nodes` | its dpkg status | `trivy rootfs` |
+| a node | the `pvehost` instances (`site-manager node list`) | its dpkg status | `trivy rootfs` |
 | the firewall | the module that provides `network:rules` | `pkg query` | `pkg audit` + `pkg upgrade -nU` |
 
 trivy sees an image's OS and Python packages but not the shared libraries a wheel
@@ -351,8 +351,8 @@ guest's pending state before and after, and hands the reboot to
 
 ## Node source
 
-The cluster node list is read from `site.json` (`.hardware.nodes[].name`, the
-`get_all_node_hostnames` equivalent). When `site.json` yields no nodes,
+The cluster node list is the nodes' `pvehost` instances (lib/ts `nodes.ts`, the
+`get_all_node_hostnames` equivalent). When none is registered,
 health-manager falls back to scanning `tappaas1..9`. Either way each candidate is
 ping-probed and only reachable nodes are used.
 

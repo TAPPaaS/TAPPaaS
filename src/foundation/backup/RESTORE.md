@@ -382,7 +382,7 @@ Reusing the same name is deliberate: module declarations, HA affinity rules and
 storage entries all reference nodes by name, so a replacement called `tappaas2`
 inherits its predecessor's role instead of needing every reference rewritten.
 
-Node-add joins the cluster, captures the node in `site.json`, registers its pools
+Node-add joins the cluster, registers the node as its `pvehost` instance, registers its pools
 as cluster storage, and **reconciles the backup client onto it** (ADR-012 §2.4) —
 without that last step, VMs later placed there would silently have no backups.
 

@@ -57,7 +57,7 @@ flowchart LR
   end
 
   subgraph hardware["Hardware the cluster sees"]
-    NODE["site.hardware.nodes[]<br/>Proxmox nodes and their pools"]:::record
+    NODE["cluster nodes: their pvehost instances<br/>config/&lt;node&gt;.json (address, uplinks, pools)"]:::record
     POOL["storage pools (ZFS)"]:::seen
     DEVICE["a physical device:<br/>node, switch, access point,<br/>recorded or seen device"]:::seen
   end
@@ -66,7 +66,6 @@ flowchart LR
   SITE -- "defaultEnvironment" --> ENV
   SITE -- "owner" --> ORG
   SITE -- "dnsBlocklists.zones[]" --> ZONE
-  SITE -- "hardware.nodes[]" --> NODE
   SITE -- "backup.target / offsite" --> PEER
   SITE -- "locations{}, primaryLocation" --> LOC
   NODE -- "storagePools[]" --> POOL
@@ -94,6 +93,7 @@ flowchart LR
   MOD -- "environment" --> ENV
   MOD -- "zone0, zone1" --> ZONE
   MOD -- "node, config.cluster:ha.HANode" --> NODE
+  MOD -. "a pvehost instance is" .-> NODE
   MOD -- "config.cluster:vm.storage" --> POOL
   MOD -- "dependsOn[], integratesWith[]" --> SVC
   MOD -- "provides[]" --> SVC
@@ -132,7 +132,7 @@ source tree, not under `~/config/`.
 
 | Object | File | Owner | Names (field → object) |
 |---|---|---|---|
-| Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner` → organization; `hardware.nodes[]` → the cluster's nodes, each with its `storagePools[]`; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `locations{}` → its places; `primaryLocation` → the one it is at, whose timezone is the site's and whose building every room is in; `locale`, `keyboard` are site-wide |
+| Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner` → organization; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `locations{}` → its places; `primaryLocation` → the one it is at, whose timezone is the site's and whose building every room is in; `locale`, `keyboard` are site-wide |
 | Location | `site.json` → `locations{}` | site-manager | names nothing: a place with a country, city, address and timezone, of kind `site` (this site's own equipment) or `remote` (another site's). A backup peer, a machine module, a switch, an access point, a room and a recorded device name one; the primary one and one that is named cannot be deleted |
 | Environment | `environments/<env>.json` | environment-manager | `ownerOrg` → organization; `domains` are its own (no file names them back). It names no zone: its zone is the Service zone naming it |
 | Zone | `zones.json` (one object per zone) | network-manager | `environment` → the environment it belongs to: a Service zone's (and `mgmt`'s) own environment, exactly one per environment, or the one or several a client, IoT or guest zone serves; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `bridge` → an interface, not an object |
@@ -172,7 +172,7 @@ giving each its `location`, its `placement` and the `source` it came from:
 
 | Device kind | Recorded in | Seen by |
 |---|---|---|
-| Cluster node | `site.hardware.nodes[]` | Proxmox (and a `pvehost` module instance for its `uplinks`) |
+| Cluster node | its `pvehost` module instance, `config/<node>.json` (`address`, `uplinks`, `storagePools`, `location`) | Proxmox |
 | Switch | `switch-configuration-desired.json` | the switch controller (`-actual.json`) |
 | Access point | `switch-configuration-desired.json` → `accessPoints{}` | the AP controller |
 | Modem, ONT, UPS, patch panel | `positions.json` → `devices{}` | nothing: it is known by its record and its cables |
@@ -197,11 +197,12 @@ nothing here is a bug.
    `locations{}`, with `primaryLocation` naming the site's own. Everything that is
    somewhere names one by `location`, unset meaning the primary: a backup peer, a
    machine module, a switch and an access point, a room and a recorded device.
-3. **Devices live in three files** (site hardware, switch configuration, positions)
-   and are only joined by name in the derived topology, which gives each one its
-   location, placement and source. A node's uplinks are on
-   a fifth object (the `pvehost` instance). One device list with a `seenBy`
-   would make placements, cables and ports reference one thing.
+3. **Devices live in three kinds of record** (the nodes' and machines' module
+   instances, the switch configuration, positions) and are only joined by name in
+   the derived topology, which gives each one its location, placement and source.
+   A node is one record, its `pvehost` instance: its uplinks and storage pools are
+   on it. One device list with a `seenBy` would make placements, cables and ports
+   reference one thing.
 4. **Resolved — organizations are listed once.** They are the files under
    `identities/organizations/`, which identity-manager owns; `site.json` no
    longer carries a list of paths to them.

@@ -62,7 +62,7 @@ moment it is written, and a share keeps its owner across a move.
 collected first, then one pure function joins them, and nothing is cached.
 
 ```
-collectSources  site.json, one probe per node, the cluster's guests and
+collectSources  the node records, one probe per node, the cluster's guests and
                 replication jobs, module-manager list, config/shares.json
 buildInventory  pure: parse, match, judge — what the unit tests run over
                 hrossen's captured reads (test/fixtures/inventory-hrossen)

@@ -195,9 +195,9 @@ if [ "$ROLE" != "created" ]; then
   msg_ok "Node step complete (cluster role: ${ROLE:-unknown})."
   echo -e "  This node ${BOLD}joined${CL} an existing TAPPaaS cluster — the firewall, gateway"
   echo -e "  and platform already exist, so the chain stops here."
-  echo -e "  On ${BL}tappaas-cicd${CL} run ${BL}site-manager update${CL} — it captures this node into"
-  echo -e "  site.json (site-manager node reconcile) and folds it into HA + replication."
-  echo -e "  Then declare its storage pools: ${BL}site-manager node list${CL} / edit site.json."
+  echo -e "  On ${BL}tappaas-cicd${CL} run ${BL}site-manager update${CL} — it registers this node as its"
+  echo -e "  pvehost instance (site-manager node reconcile), with its storage pools, and folds it"
+  echo -e "  into HA + replication. Check its pools: ${BL}site-manager node list${CL}."
   exit 0
 fi
 

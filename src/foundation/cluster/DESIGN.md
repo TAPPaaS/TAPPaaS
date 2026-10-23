@@ -28,7 +28,7 @@ A guest is **either** a VM **or** a container, never both.
 | `install-platform.sh` | Run once on the first node after all nodes + firewall are up — imports the prebuilt NixOS template (vmid 8080) and builds the `tappaas-cicd` mothership (vmid 130). |
 | `make-install-media.sh` | Build a preconfigured Proxmox install USB stick on your laptop (answers baked in; only the boot disk is asked on the target). |
 | `Create-TAPPaaS-VM.sh` / `Create-TAPPaaS-LXC.sh` | Guest provisioners, distributed to every node and invoked by the `cluster:vm` / `cluster:lxc` services. |
-| `reconcile-storage-nodes.sh` | Reconcile PVE storage node lists with reality. |
+| `reconcile-storage-nodes.sh` | Reconcile PVE storage node lists with the nodes' records: a node whose `pvehost` instance names a pool is added to that pool's storage list; an extra node is reported, never removed. |
 | `setup-ssd-lifecycle.sh` | Autotrim + TRIM/SMART cron jobs. |
 | `setup-realtek-nic.sh` | Realtek RTL8127 10GbE driver fix for MS-S1 MAX nodes — hardware-gated, idempotent. See [Node hardware quirks](#node-hardware-quirks). |
 | `reboot-node.sh` / `reboot-cluster.sh` | Controlled HA node reboot (single node / orchestrated kernel-reboot pass). A node is drained only when every running HA guest on it can move live to the node HA would choose — `proxmox-controller live-ok` per guest; otherwise it is left alone for a window. |

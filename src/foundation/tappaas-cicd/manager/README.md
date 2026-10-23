@@ -102,7 +102,7 @@ dispatcher.)
 | Manager | Owns / does |
 |---------|-------------|
 | [`identity-manager`](identity-manager/) | The People domain: Organizations, Groups, Users, and Roles. CRUD/read on `config/identities/`, bootstrap of a minimal org, and a reconcile/`sync` engine that drives the identity (Authentik) controller. |
-| [`site-manager`](site-manager/) | The Site: site-wide identity, location, hardware (Proxmox nodes + storage pools), backup, update schedule, repositories. Owns `config/site.json` and migrates the legacy `configuration.json` into it. |
+| [`site-manager`](site-manager/) | The Site: site-wide identity, locations, the nodes (their `pvehost` instances, with their storage pools), backup, update schedule, repositories. Owns `config/site.json` and migrates the legacy `configuration.json` into it. |
 | [`environment-manager`](environment-manager/) | The Environment taxonomy: per-tenant deployment contexts (public domain(s), DNS mode, network-zone reference, data residency, backup, legal). Owns `config/environments/*.json` and bootstraps the always-required `mgmt` + default environments. |
 | [`module-manager`](module-manager/) | The module lifecycle: install / update / delete / test / snapshot of TAPPaaS modules, with scope/source classification lint and environment-aware deployment. Owns the per-module JSON in `config/`. |
 | [`network-manager`](network-manager/) | The network front door: owns `zones.json` (CRUD + VLAN allocation) and reconciles four infrastructure planes (OPNsense, Proxmox, switch, access points) by orchestrating their controllers. Also the admin VPN (`network-manager wgvpn`: WireGuard into mgmt, terminating on OPNsense — formerly `satellite-manager admin`). |

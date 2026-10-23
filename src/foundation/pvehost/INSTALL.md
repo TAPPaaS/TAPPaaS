@@ -9,7 +9,8 @@ The cluster module's update registers every node that has no instance yet (Step 
 module-manager module adopt tappaas2.mgmt.internal
 ```
 
-`adopt` sees Proxmox VE on the machine, checks that `site.json` lists it as a cluster node, and
-installs it as a `pvehost` instance named after the node. Nothing on the node changes. A
+`adopt` sees Proxmox VE on the machine, checks that it is a member of this Site's cluster, and
+installs it as a `pvehost` instance named after the node, with its tankXY zpools as its
+`storagePools`. Nothing on the node changes. A
 Proxmox host that is not in this Site's cluster is refused: join it first with
 `site-manager node add <name>`.

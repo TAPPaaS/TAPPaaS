@@ -11,8 +11,8 @@ it. `adopt` chooses by OS first and then by role: Debian with `pveversion` answe
 `pvehost`, Debian without → `debianhost` (`adopt_module_for_os`).
 
 **Stage 1 is inert (#665).** `install.sh` verifies and changes nothing: root by key,
-`ID=debian`, `pveversion`, hostname = instance name, and membership in `site.json`
-`hardware.nodes`. `update.sh` is a documented no-op. Nothing about patching, reboots or cluster
+`ID=debian`, `pveversion`, hostname = instance name, and membership in this Site's
+cluster (its cluster status names another of the site's nodes, or the site). `update.sh` is a documented no-op. Nothing about patching, reboots or cluster
 membership moves.
 
 **Who registers.** The cluster module's `update.sh` Step 7 runs `adopt-module.sh

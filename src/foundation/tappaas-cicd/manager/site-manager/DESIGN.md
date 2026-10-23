@@ -37,7 +37,7 @@ Entities are the first arg (`<entity> <verb>`, as in `network-manager`):
 | Entity | Verbs | Notes |
 |---|---|---|
 | `site` (singleton) | `show`, `modify` | one `site.json`; no add/delete |
-| `node` | `list`, `add`, `delete` | `hardware.nodes[]` CRUD |
+| `node` | `list`, `add`, `delete` | the nodes' `pvehost` instances (`lib/ts/src/nodes.ts`): `add` registers one, `delete` archives it |
 | `repository` | `list`, `add`, `delete`, `reconcile`, `hold`, `release` | add/delete delegate to `repository.sh`; reconcile = repo-scoped converge; hold/release stop and resume the scheduled pull of one repository (#653) |
 
 Top-level lifecycle verbs: `add` (create the singleton, = `create-site.sh`),
@@ -58,7 +58,7 @@ Common options: `--config-dir`, `--json` (machine output for list/show),
 `site modify` editable fields are the **scalar site-wide** ones only:
 `displayName`, `owner`, `email`, `automaticReboot`, `snapshotRetention`,
 `backup.target`/`offsite`, `primaryLocation`, `locale`, `keyboard`,
-`network.isp`/`publicIp`. `hardware.nodes[]` (via `node …`), `locations{}` (via
+`network.isp`/`publicIp`. `locations{}` (via
 `location …`, edited through `lib/ts/src/locations.ts`, which backup-manager's
 `peer add` uses too) and the `repositories` list are excluded (own CRUD). Environments and organizations are
 not site fields: they are the `config/environments/` and
@@ -95,13 +95,15 @@ injected `SiteClient`; `CliSiteClient` performs the actual `spawnSync` calls.
 - **`site.json`** — the canonical Site document: `name`, `displayName`, `owner`,
   `email`, `version`, `locations{}` and `primaryLocation` (ADR-036 D1; the
   primary location's timezone is the site's), `locale`, `keyboard`, `network`,
-  `hardware.nodes[]` (each with `storagePools`), `backup`, `updateSchedule`,
+  `backup`, `updateSchedule`,
   `automaticReboot`, `snapshotRetention`, `repositories[]`. Validated against `site-fields.json` (JSON Schema 2020-12).
+- **the nodes** — not in `site.json`: each is its `pvehost` instance,
+  `config/<node>.json`, with `storagePools` (ADR-036 D6), listed by
+  `clusterNodes()` in `lib/ts/src/nodes.ts`.
 - **`configuration.json`** — the legacy predecessor (fields under `.tappaas` plus
   a `.tappaas-nodes[]` array). The migration source.
 
-The migration maps the domain label to `name`, `tappaas-nodes` to
-`hardware.nodes`, and carries email / repositories / update schedule / reboot /
+The migration maps the domain label to `name`, and carries email / repositories / update schedule / reboot /
 snapshot-retention; it drops `domain`, `variants`, and `nodeCount`. The owner is
 derived from `config/identities/organizations/`.
 

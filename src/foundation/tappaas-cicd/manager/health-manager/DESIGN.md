@@ -92,7 +92,7 @@ a full one shows up as the placement problem it is.
   the **`ClusterClient`** interface (the Proxmox/cluster boundary).
 - `src/config.ts` — loads module JSONs from `config/` (skips non-module configs
   with no `vmid`), resolves the git source JSON via `moduleSource`, and reads the
-  `site.json` node list (`siteNodeHostnames`).
+  cluster's node list, the `pvehost` instances (`siteNodeHostnames`, through lib/ts `nodes.ts`).
 - `src/inspect.ts` — pure inspection logic: `inspectCluster` (`list vm`),
   `inspectVm` (`show vm` three-way), `clusterDiff` (`list vm --diff` rollup).
 - `src/checks.ts` — the health gates + `runHealthGates` aggregation.
@@ -105,7 +105,7 @@ a full one shows up as the placement problem it is.
 
 - **Module config** `config/<module>.json` (vmid, node, zone, diskSize, vmname,
   location, the `status` field — `archived` / `external` / implicit-active).
-- **Site config** `config/site.json` — `.hardware.nodes[].name` for the cluster
+- **Node records** `config/<node>.json` — the `pvehost` instances are the cluster
   node list (with a `tappaas1..9` scan fallback).
 - **Zone config** `config/zones.json` — for the NIC-drift VLAN mapping (consumed
   by the deferred NIC follow-up, not the scalar diff in this pass).
@@ -115,7 +115,7 @@ a full one shows up as the placement problem it is.
 ## How it talks to the cluster
 
 Directly over SSH to the Proxmox nodes (`root@<node>.mgmt.internal`), with `ping`
-reachability probes against the `site.json` node list. `pvesh get
+reachability probes against the cluster's node list (the `pvehost` instances). `pvesh get
 /cluster/resources` enumerates VMs/CTs; `qm config` / `qm status` give live VM
 detail; the disk gate SSHes to the guest (`tappaas@<vmname>.<zone0>.internal`)
 and reads `df /`. It drives no control-plane controller.
@@ -128,7 +128,7 @@ and reads `df /`. It drives no control-plane controller.
 - **`test/unit/inspect.test.ts`** — offline unit tests (no SSH, no Proxmox) with
   an injected `FakeClusterClient`: cluster classification, the three-way `show vm`
   drift levels, the `--diff` rollup (managed-only, unreachable degradation), the
-  health gates (pass/fail/skip), and the `site.json` node source. 23 assertions,
+  health gates (pass/fail/skip), and the node source (the `pvehost` instances). 23 assertions,
   no deep/live tier (the live tooling has no self-contained disruptive test).
 
 ## Deferred follow-ups (coordinator-approved, TODOs in source)

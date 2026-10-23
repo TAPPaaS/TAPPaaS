@@ -43,12 +43,12 @@ edit `config/shares.json`, then `storage-manager nfs converge <share>`.
 ## Inventory
 
 `storage-manager inventory` reads the site's storage live and prints it; it
-changes nothing and stores nothing. Per cluster node (the nodes of `site.json`):
+changes nothing and stores nothing. Per cluster node (the `pvehost` instances, `site-manager node list`):
 
 - **boot** — the disk that holds `/` and the EFI partition: model, serial, size,
   type, life left, temperature, SMART health;
-- **pools** — every ZFS pool on the node and every pool `site.json` declares for
-  it (a declared pool that is not imported is listed, and fails): size, how much
+- **pools** — every ZFS pool on the node and every pool its record declares
+  (`storagePools`) (a declared pool that is not imported is listed, and fails): size, how much
   is used and free, fragmentation, compression, health, the last scrub;
   - its **vdevs** (mirror, raidz, stripe) and under them the **physical disks**,
     with SMART (health, temperature, reallocated, pending and uncorrectable

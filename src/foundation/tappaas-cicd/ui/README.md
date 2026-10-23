@@ -25,7 +25,7 @@ issue), backup, identity and logging (`config/<m>.json`, and `module test` passe
 time it ran — the three tests run only on `GET /setup?refresh=1`, the page's Check button,
 never on a read; each result and its time is kept in `<state dir>/setup-tests.json`), the
 identity bootstrap (`config/identities` has an organization and a user),
-the nodes (every `site.json` node a cluster member, lib/ts `queryClusterNodes`), the switch
+the nodes (every registered node — its `pvehost` instance — a cluster member, lib/ts `queryClusterNodes`), the switch
 (registered, ports discovered), the admin VPN (a peer in `wgvpn list`), stacks (optional).
 Each step is a form over its verbs as jobs. Secrets go through `POST /api/v1/secrets/<name>`
 (Installer or the setup token): `acme-dns` → `~/.acme-dns-credentials.txt`, `unifi` →
@@ -129,7 +129,7 @@ modify, purge (typed). **Site** — the four tabs above. Add node is a guided se
 the node (`site-manager node add tappaasN --pxe` with its PXE port's MAC, boot disk, WAN and lan
 ports, pools), boot it from the network by hand, the install and join watched live (`GET
 /api/v1/nodes/<name>/progress`: the provisioning registration, `node-provisioner status`, cluster
-membership, site.json; every 10 s), then `node network set` and `node network test`, previewed. **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
+membership, the node's `pvehost` record; every 10 s), then `node network set` and `node network test`, previewed. **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
 result. Security is a later phase.
 
 Every change is the operate dialog (`web/src/operate.tsx`, spike §5.4): a form built from the

@@ -514,9 +514,13 @@ for every user, root by key only, the console keeping its password. `--set sshKe
 the answer for a machine someone reaches by password; `module modify <instance> --set
 sshKeyOnly=…` changes it later.
 
+A Proxmox node's instance records its tankXY zpools as `storagePools` (unless `--set
+storagePools=[…]` names them): the instance is the node's record, and the cluster's nodes are
+exactly the `pvehost` instances. Adopting a node whose instance was archived registers it again.
+
 Refused, with nothing written: a key that never works, an OS with no machine module, a
-Proxmox VE host that is not in this Site's cluster (`site.json` `hardware.nodes` — join it with
-`site-manager node add`), an instance name another
+Proxmox VE host that is not in this Site's cluster (its own cluster status names none of the
+site's nodes and is not named after the site — join it with `site-manager node add`), an instance name another
 machine has (`--instance`), an address another instance already has, and an address in no
 active zone (`--zone`), and a `--set` that is not `field=value` or names no schema field.
 

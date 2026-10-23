@@ -1,7 +1,7 @@
 # site-manager
 
 The **Site** manager. The Site is the umbrella over a whole TAPPaaS installation:
-site-wide identity, its locations, hardware (Proxmox nodes + storage pools), backup,
+site-wide identity, its locations, its nodes (each a `pvehost` instance with its storage pools), backup,
 update schedule, repositories, and the default environment and owning
 organization by name. (Domain / DNS / identity are *per-environment*, owned by
 `environment-manager`, not here. The organizations themselves are the files in
@@ -41,7 +41,7 @@ location           location list [--json]
 node               node list [--json]
                    node add <N> [--pxe] [--boot-disk <d>] [--mac <m>]
                             [--wan-port <if>|--no-wan] [--lan-ports <a,b>]
-                            [--lan-mode <m>] [--lan-primary <if>] [--pool <p>] [--ttl <s>]
+                            [--lan-mode <m>] [--lan-primary <if>] [--storage-pools <a,b>] [--ttl <s>]
                             [--config-only]
                    node delete <name> [--apply] [--shutdown|--erase|--lost]
                                [--config-only]
@@ -164,9 +164,9 @@ is written by the installer, from the fingerprints published in the root `INSTAL
 empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the
 update schedule. That is every field `site-fields.json` classes `in-place`. `name`, `version`
 and `defaultEnvironment` are `immutable`: `--name`, `--version` and `--defaultEnvironment` are
-refused, with the reason the schema gives, and nothing is written. The discovery-derived
-`hardware.nodes[]` (use `node …`), the `locations` (use `location …`) and the `repositories`
-list (own CRUD) are `manual`: **not** modifiable here. The older `--locationCountry`,
+refused, with the reason the schema gives, and nothing is written. The `locations` (use
+`location …`) and the `repositories` list (own CRUD) are `manual`: **not** modifiable here. The
+nodes are not a site field: they are their `pvehost` instances (use `node …`). The older `--locationCountry`,
 `--locationTimezone`, `--locationCity`, `--locationBuilding`, `--locationLatitude` and
 `--locationLongitude` are still accepted for one release and change the primary location;
 `--locationLocale` and `--locationKeyboard` change `--locale` and `--keyboard`.
@@ -269,6 +269,18 @@ adopt the master.
 `latitude` / `longitude` are operator-set: no node knows where it is. They exist for
 modules that need a position rather than a country.
 
+### The nodes are their `pvehost` instances
+
+The cluster's nodes are not listed in `site.json`: each is a `pvehost` module instance,
+`config/<node>.json`, with its `address`, `uplinks`, `location` and `storagePools` (the
+tankXY zpools it carries). `node list` lists them (`--json`: name, address, storagePools,
+location), in node order — by name, numbers as numbers; the first is the primary node.
+`node add` registers one, `node delete` archives it, `node reconcile` registers a cluster
+member that has no instance yet and fills a record's empty pools from the node. Every
+manager and the bash layer list the nodes the same way (`lib/ts/src/nodes.ts`,
+`lib/cluster-nodes.sh`), and `validate` refuses a `site.json` that still carries
+`hardware`.
+
 ### `node add` — standing up a follow-on node (design N3/N4)
 
 `node add <tappaasN>` is the operator front door for growing the cluster;
@@ -286,16 +298,18 @@ hardware-validated end-to-end on 2026-07-07. Three modes:
   cicd install (`prepare-netboot.sh`). Booting the SAME prepared ISO from a
   USB stick instead of PXE works identically (the answer still comes over
   HTTP from the mothership).
-- **`--config-only`** — just write the `hardware.nodes[]` entry (no machine
-  contact); the pre-N3 behaviour.
+- **`--config-only`** — just write the node's `pvehost` record, `config/<N>.json`,
+  with `--storage-pools` (no machine contact).
 
 The join pipeline (shared by adopt and `--pxe`): asks for the WAN NIC and
 the data-pool declarations with the node's REAL hardware listed (skip the
 questions with `--wan-port <if>`/`--no-wan` and `--pool 'tanka1=…'`),
 serves the repo from the mothership on :8090 (committed branch state — no
 GitHub dependency), runs the node step (`install.sh --join`), corrects
-`/etc/hosts`, seeds node→tappaas1 ssh trust, `pvecm add`, and captures the
-node + its pools via `node reconcile --apply`. Every wait is time-boxed and
+`/etc/hosts`, seeds node→tappaas1 ssh trust, `pvecm add`, and registers the
+node as its `pvehost` instance (`module adopt`) with its pools — `--storage-pools`,
+else the tankXY zpools on the node — before it registers the node on those pools'
+cluster storage entries, which it reads from that record. Every wait is time-boxed and
 the PXE trap is disarmed on every exit path. Fully unattended example:
 
 ```
