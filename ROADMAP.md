@@ -108,7 +108,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 9 | 11 |
 | 6 | G6.2 User interface & physical view | H | L | – | 4 | 1 |
-| 6 | G6.3 Data model | M | M | – | 3 | 6 |
+| 6 | G6.3 Data model | M | M | – | 6 | 3 |
 | 5 | G5.1 Satellite & off-site | H | M | – | 1 | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
@@ -279,7 +279,7 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 | ✅ #183 | TAPPaaS service catalog | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Folded into #839** (ADR-034 D6): the console's Modules page is the catalog — every registered repository's modules, installed or not, with Install |
 | ✅ #91 | Backstage as a component of tappaas-cicd | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Not adopted** (ADR-034 A3): a developer portal, not an operations console |
 
-### G6.3 Data model — Ease M · Risk M · done for 2.3: 3 · open: 6
+### G6.3 Data model — Ease M · Risk M · done for 2.3: 6 · open: 3
 
 The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/DATAMODEL.md) (2026-10-22: every JSON, which field names which object, and seven places where the model says one thing twice). The operator decided to fix the first four and park the rest (#866). Where a thing is becomes two things, a location and a placement, by ADR-036 (Accepted 2026-10-23). Linked to G6.2: the console's Physical view draws what this group models.
 
@@ -289,8 +289,8 @@ The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/
 | ✅ #867 | Drop `site.organizations`: the identities/organizations directory is the list | L | L | **Done 2026-10-23** (`9495f551`, on `main`): nothing read the field; gone from the schema, site-manager and the console; migration 0017 removes it from every site.json; DATAMODEL finding 4 closed |
 | ✅ #869 | ADR-036 step 1: site-manager owns locations, with a primary one; a backup buddy's place is a location | M | M | **Done 2026-10-23** (`8f1320a4`, on `main`): `site.locations{}` (kind site or remote) and `primaryLocation`, `location list/show/add/modify/delete`, every reader of the old `site.location` through one helper; a backup peer names a location and the off-site check compares locations; migration 0019 (on hrossen: primary `knudanchersvej95`, buddy rasmus at `hareskov`, runs at the next update); the Site card's Locations section and buddies by location |
 | ✅ #870 | ADR-036 step 2: position-manager (was rack-manager), placements in rooms in a location | M | M | **Done 2026-10-23** (`ebe813f2`, on `main`): position-manager with `rack-manager` and the `mount` verbs as aliases for one release, `positions.json` (rooms and recorded devices carry a location, mounts are placements), `place`/`place modify`/`unplace`, `device record <switch:port>\|<mac>`; the topology gives every device `location`, `placement` and `source`, with seen devices from a port's `neighbors`; the rack view grouped by location → room → rack; migration 0020 (runs on hrossen at the next update). **Gap:** no switch controller reports `neighbors` yet (UniFi and MikroTik controllers live in Community), so seen devices are only ports up with nothing recorded |
-| #871 | ADR-036 step 3: every device record names its location | M | L | machine modules (replacing `physicalLocation`), switches and APs (the free text becomes a name), recorded devices. After #869 |
-| #872 | ADR-036 step 4: the nodes are `pvehost` machines; `site.hardware.nodes` goes | M | H | `storagePools` on the instance, node verbs over `module add pvehost`, ~30 readers moved to one helper, a migration. After #865's migration |
+| ✅ #871 | ADR-036 step 3: every device record names its location | M | L | **Done 2026-10-23** (`9867f7b8`, on `main`): a machine module's `location` (replacing `physicalLocation`; `--location` on add and adopt), a switch's or AP's `location` a validated name (free text kept as `description`), the topology and the console reading them; migration 0021 |
+| ✅ #872 | ADR-036 step 4: the nodes are `pvehost` machines; `site.hardware.nodes` goes | M | H | **Done 2026-10-23** (`b4d4bfea`, on `main`): `storagePools` on the pvehost instance, `clusterNodes()` in lib/ts and `tappaas_cluster_nodes` in bash as the only node lists, `node add` writing the pvehost record first, cluster membership from the cluster's own status, every reader moved; migration 0022 refuses a node without its instance and names the adopt command; the Site page gains a Nodes table. Not run live: `reconcile-storage-nodes.sh`, `node add`, `module adopt` |
 | #873 | ADR-036 step 5: the console draws locations, rooms, racks | M | L | Physical view and Overview by location, the device panel's two lines, the Setup step; DATAMODEL findings 2 and 3 closed. After #869–#871 |
 | #868 | Faceplate catalog: a site adds plates for models the catalog lacks | L | L | from ADR-036 O2; the generic plates stay the fallback |
 | #866 | Data model: parked simplifications (backup cascade, module placement, `module:service`) | – | – | **Parked** (operator, 2026-10-23): findings 5–7 of `src/DATAMODEL.md`, recorded so they are not lost |
