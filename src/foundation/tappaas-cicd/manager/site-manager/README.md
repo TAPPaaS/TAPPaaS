@@ -2,9 +2,11 @@
 
 The **Site** manager. The Site is the umbrella over a whole TAPPaaS installation:
 site-wide identity, location, hardware (Proxmox nodes + storage pools), backup,
-update schedule, repositories, and references to the environment/organization
-config. (Domain / DNS / identity are *per-environment*, owned by
-`environment-manager`, not here.)
+update schedule, repositories, and the default environment and owning
+organization by name. (Domain / DNS / identity are *per-environment*, owned by
+`environment-manager`, not here. The organizations themselves are the files in
+`config/identities/organizations/`, owned by `identity-manager`; the site keeps
+no list of them.)
 
 ## What it owns
 
@@ -159,8 +161,8 @@ empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling
 update schedule. That is every field `site-fields.json` classes `in-place`. `name`, `version`
 and `defaultEnvironment` are `immutable`: `--name`, `--version` and `--defaultEnvironment` are
 refused, with the reason the schema gives, and nothing is written. The discovery-derived
-`hardware.nodes[]` (use `node …`) and the `repositories`/`environments`/
-`organizations` lists (own CRUD / own managers) are `manual`: **not** modifiable here.
+`hardware.nodes[]` (use `node …`) and the `repositories` list (own CRUD) are `manual`:
+**not** modifiable here.
 
 ### `channel` — which release the site takes (ADR-028 D9, D11)
 

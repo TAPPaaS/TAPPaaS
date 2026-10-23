@@ -59,7 +59,9 @@ Common options: `--config-dir`, `--json` (machine output for list/show),
 `displayName`, `owner`, `email`, `automaticReboot`, `snapshotRetention`,
 `backup.target`/`offsite`, `location.country`/`timezone`/`locale`,
 `network.isp`/`publicIp`. `hardware.nodes[]` (via `node …`) and the
-`repositories`/`environments`/`organizations` lists are excluded (own CRUD).
+`repositories` list is excluded (own CRUD). Environments and organizations are
+not site fields: they are the `config/environments/` and
+`config/identities/organizations/` files.
 
 ## Reconcile cascade
 
@@ -92,8 +94,7 @@ injected `SiteClient`; `CliSiteClient` performs the actual `spawnSync` calls.
 - **`site.json`** — the canonical Site document: `name`, `displayName`, `owner`,
   `email`, `version`, `location` (country/timezone/locale), `network`,
   `hardware.nodes[]` (each with `storagePools`), `backup`, `updateSchedule`,
-  `automaticReboot`, `snapshotRetention`, `repositories[]`, `environments[]`,
-  `organizations[]`. Validated against `site-fields.json` (JSON Schema 2020-12).
+  `automaticReboot`, `snapshotRetention`, `repositories[]`. Validated against `site-fields.json` (JSON Schema 2020-12).
 - **`configuration.json`** — the legacy predecessor (fields under `.tappaas` plus
   a `.tappaas-nodes[]` array). The migration source.
 
