@@ -77,7 +77,9 @@ check(buddyNameProblem("rossen-dk") === null && buddyNameProblem("Rossen_DK") ==
 const mmAdd = json<{ verbs: ManifestVerb[] }>("wizards/module-manager.json").verbs[0];
 const sat: SatellitePlan = { address: "37.27.5.237", environment: "mgmt", roles: ["reverse-proxy", "admin-vpn"], country: "FI", city: "Helsinki", instance: "" };
 const satSpec = satelliteSpec(sat);
-check(JSON.stringify(buildArgv(satSpec, mmAdd, satSpec.initial)) === JSON.stringify(["module-manager", "add", "satellite", "--environment", "mgmt", "--address", "37.27.5.237", "--roles", '["reverse-proxy","admin-vpn"]', "--physicalLocation", '{"country":"FI","city":"Helsinki"}']), "add satellite: --environment, then --address, --roles and --physicalLocation as INSTALL.md gives them");
+check(JSON.stringify(buildArgv(satSpec, mmAdd, satSpec.initial)) === JSON.stringify(["module-manager", "add", "satellite", "--environment", "mgmt", "--address", "37.27.5.237", "--roles", '["reverse-proxy","admin-vpn"]', "--country", "FI", "--city", "Helsinki"]), "add satellite: --environment, then --address, --roles and its place as INSTALL.md gives them");
+const satAt = satelliteSpec({ ...sat, location: "hetzner-hel1" });
+check(JSON.stringify(buildArgv(satAt, mmAdd, satAt.initial).slice(-2)) === JSON.stringify(["--location", "hetzner-hel1"]), "…or the site's location it names");
 const sat2 = satelliteSpec({ ...sat, roles: ["reverse-proxy"], country: "", city: "", instance: "satellite-hel1" });
 check(JSON.stringify(buildArgv(sat2, mmAdd, sat2.initial)) === JSON.stringify(["module-manager", "add", "satellite", "--environment", "mgmt", "--instance", "satellite-hel1", "--address", "37.27.5.237", "--roles", '["reverse-proxy"]']), "a second satellite: its --instance; one role; no location given, none passed");
 check(Object.keys(satelliteProblems(sat)).length === 0, "a public IPv4, an environment, a role: nothing to fix");

@@ -214,7 +214,8 @@ export function gitSourceWarnings(gitFound: boolean, location: string): OutLine[
 // A module that does not declare network:proxy is never asked about proxyPort.
 
 // Fields the DEPLOYED config owns rather than the release. Diffing them against
-// git reports a difference on every module forever: `location` is a path on this
+// git reports a difference on every module forever: `moduleSource` (`location`
+// before #609; a machine's `location` now, the site's place) is a path on this
 // mothership, `installTime`/`updateTime` are stamps, `kind` is applied at
 // install (ADR-007 #3), and `config` is the Pattern A container, not a field.
 // The same judgement apply-json-merge.sh makes in AUTO_FIELDS, for the same
@@ -726,7 +727,9 @@ export function inspectModule(module: string, opts: InspectOptions = {}): number
   // named after its directory (ADR-026 D6.3), with the instance name only as a
   // fallback. Never vmname — that is an instance name too.
   // getField, not moduleSourceOf: cfg may still be in the Pattern A shape.
-  const location = getField(cfg, "moduleSource") || getField(cfg, "location");
+  // A `location` without a '/' is the location a machine is at, not a directory.
+  const old = getField(cfg, "location");
+  const location = getField(cfg, "moduleSource") || (old.includes("/") ? old : "");
   let git: Record<string, unknown> | null = null;
   if (location) {
     for (const cand of [moduleSourceJson(location), join(location, `${module}.json`)]) {

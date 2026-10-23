@@ -10,7 +10,9 @@
 //                                  §8.4 config/satellite-<name>.json) that
 //                                  carries the backup role — the pull vault — or
 //                                  is the Site's PBS Host (backup.json .node):
-//                                  its `physicalLocation`, or a `location` name
+//                                  the location it names (`location`, ADR-036
+//                                  D2); before migration 0021 it carried a
+//                                  `physicalLocation`
 //   config/remote-<name>.json      a peer that pulls OUR backups
 //   config/pull-<name>.json        a peer WE pull — our copy is THEIR off-site
 //                                  a peer names a location of the site
@@ -30,6 +32,7 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { Location, primaryLocation, siteLocation } from "../../../lib/ts/src/locations";
+import { moduleSourceOf } from "../../../lib/ts/src/instance";
 
 export interface Place {
   country?: string;
@@ -106,7 +109,8 @@ export function sitePlace(configDir: string): Place | null {
   return locationPlace(primaryLocation(configDir));
 }
 
-// Where a target is: the location it names, else its own physicalLocation.
+// Where a target is: the location it names, else (before migrations 0019 and
+// 0021) its own physicalLocation.
 function targetPlace(cfg: Record<string, unknown> | null, configDir: string, primary: string | null): { place: Place | null; location?: string; missing?: boolean; primary?: boolean } {
   const name = cfg?.location;
   if (typeof name === "string" && name !== "" && !name.includes("/")) {
@@ -124,8 +128,8 @@ const TARGET_PREFIXES: Array<[string, string]> = [
 /** True when a config is an instance of the satellite module — by its
  *  recorded source, or the file name satellite-manager used before §8.4. */
 function isSatellite(file: string, cfg: Record<string, unknown>): boolean {
-  const src = cfg.moduleSource ?? cfg.location;
-  if (typeof src === "string" && src.replace(/\/+$/, "").split("/").pop() === "satellite") return true;
+  const src = moduleSourceOf(cfg);
+  if (src && src.replace(/\/+$/, "").split("/").pop() === "satellite") return true;
   return /(^|\/)satellite-[^/]*\.json$/.test(file);
 }
 
@@ -181,7 +185,7 @@ export function offsiteWarnings(configDir: string): string[] {
     } else if (t.separation === "unrecorded") {
       warnings.push(
         t.role === "satellite"
-          ? `${what} records no physicalLocation — nothing shows it is off-site. Add "physicalLocation": {"country": "XX", "city": "…"} to ${t.file}`
+          ? `${what} names no location — nothing shows it is off-site: module-manager module modify ${t.name} --set location=<name> (one of site-manager location list; add one with site-manager location add <name> --country <CC> --kind remote)`
           : `${what} names no location — nothing shows it is off-site. Add "location": "<name>" (one of site-manager location list) to ${t.file}`,
       );
     } else if (t.separation === "same") {

@@ -532,9 +532,10 @@ EOF
         return 1
     fi
 
-    # Resolve module_dir from the installed .moduleSource field (.location before 0006).
+    # Resolve module_dir from the installed .moduleSource field (.location before
+    # 0006; a .location without a '/' is a machine's place, never a directory).
     local module_dir
-    module_dir="$(jq -r '.moduleSource // .location // ""' "${current}")"
+    module_dir="$(jq -r '.moduleSource // (.location | select(type == "string" and contains("/"))) // ""' "${current}")"
     if [[ -z "${module_dir}" || ! -d "${module_dir}" ]]; then
         # Fall back to get_module_dir if common-install-routines is sourced.
         if declare -F get_module_dir >/dev/null 2>&1; then

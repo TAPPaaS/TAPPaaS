@@ -347,9 +347,13 @@ sat_lockdown() {
     # 1. home: the read-only login, as a `remote` peer of the satellite's name
     pw="$(head -c 48 /dev/urandom | base64 | tr -d '/+=\n' | head -c 40)"
     [[ ${#pw} -ge 32 ]] || die "could not generate a password for ${authid}"
+    # Where the vault is: the location it names (ADR-036 D2); a satellite
+    # migration 0021 has not reached still carries a physicalLocation.
     local place=()
-    local c; c="$(jq -r '.physicalLocation.country // empty' "${SAT_CFG}")"
+    local c; c="$(jq -r 'if (.location | type) == "string" and (.location | contains("/") | not) then .location else empty end' "${SAT_CFG}")"
     if [[ -n "${c}" ]]; then
+        place=(--location "${c}")
+    elif c="$(jq -r '.physicalLocation.country // empty' "${SAT_CFG}")"; [[ -n "${c}" ]]; then
         place=(--country "${c}")
         c="$(jq -r '.physicalLocation.city // empty' "${SAT_CFG}")"; [[ -n "${c}" ]] && place+=(--city "${c}")
         c="$(jq -r '.physicalLocation.building // empty' "${SAT_CFG}")"; [[ -n "${c}" ]] && place+=(--building "${c}")

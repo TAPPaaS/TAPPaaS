@@ -324,7 +324,7 @@ get_module_dir() {
     fi
 
     local location
-    location=$(jq -r '.moduleSource // .location // empty' "${module_json}" 2>/dev/null)
+    location=$(jq -r '.moduleSource // (.location | select(type == "string" and contains("/"))) // empty' "${module_json}" 2>/dev/null)
 
     if [[ -z "${location}" ]]; then
         return 1

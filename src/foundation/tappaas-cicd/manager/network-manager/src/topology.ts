@@ -203,7 +203,10 @@ export interface TopoSources {
   peers: PeerRow[] | null;
   health: HealthDoc | null;
   firewall: Record<string, unknown> | null; // config/<firewall module>.json
-  satellites: { name: string; address: string | null }[];
+  satellites: { name: string; address: string | null; location?: string | null }[];
+  // Each machine module's location name (ADR-036 D2): a cluster node's pvehost
+  // instance, a satellite, an adopted host. Absent: at the primary location.
+  machineLocations?: Record<string, string>;
   wanAddress?: WanAddress | null; // what the WAN held at the last network update
   actual?: SwitchActual | null; // switch-configuration-actual.json: MLAG pairs, peer links
   // position-manager export --json; undefined: not read (--no-positions), null: it did not answer
@@ -928,9 +931,14 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       address: str(p.remoteHost),
       state: pulseState.get(p.name) ?? null,
     })),
-    ...src.satellites.map((s): TopoOutside => ({
-      kind: "satellite", name: s.name, role: null, location: null, tunnel: null, address: s.address, state: null,
-    })),
+    ...src.satellites.map((s): TopoOutside => {
+      const l = s.location ? readLocations(src.site).locations[s.location] : undefined;
+      return {
+        kind: "satellite", name: s.name, role: null,
+        location: l ? [l.city, l.country].filter((x) => !!x).join(", ") || l.displayName || l.name : s.location ?? null,
+        tunnel: null, address: s.address, state: null,
+      };
+    }),
   ];
 
   // Health findings, on the object each names (warn and fail only).
@@ -1003,12 +1011,13 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   }
 
   // Where each device is. A location is the site's (site.json); a device names
-  // its own on its record — a recorded device here, a switch or an AP whose
-  // location text names one — else it is at the primary location.
+  // its own on its record — a machine module (a node's pvehost instance), a
+  // switch or an AP, a recorded device — else it is at the primary location.
   const sites = readLocations(src.site);
   const known = (l: unknown): string | null => (typeof l === "string" && sites.locations[l] ? l : null);
   const primary = sites.primary;
   const switchLoc = (sw: string): string | null => known(invSwitches.find((x) => x.name === sw)?.location) ?? primary;
+  const machineLoc = (m: string): string | null => known(src.machineLocations?.[m]) ?? primary;
   // The devices a switch port sees and no record names: what its controller
   // reports behind the port (a MAC, LLDP, a lease), else a port that is up
   // with nothing recorded on it. A port of a node, an AP, a switch or the ISP
@@ -1052,11 +1061,12 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
     const m = placements[name];
     return m ? { room: roomOf(posDoc, m), rack: m.rack ?? null, u: m.u ?? null } : null;
   };
-  for (const n of nodes) Object.assign(n, { location: primary, placement: placementOf(n.name) });
+  for (const n of nodes) Object.assign(n, { location: machineLoc(n.name), placement: placementOf(n.name) });
   for (const x of switches) Object.assign(x, { location: switchLoc(x.name), placement: placementOf(x.name) });
   for (const a of accessPoints) Object.assign(a, { location: known((src.accessPoints ?? []).find((r) => r.name === a.name)?.location) ?? primary, placement: placementOf(a.name) });
   for (const d of devices) {
     if (d.source === "recorded") d.location = known(posDoc.devices?.[d.name]?.location) ?? posDoc.devices?.[d.name]?.location ?? primary;
+    else if (d.source === "module") d.location = machineLoc(d.name);
     else if (d.source !== "seen") d.location = primary;
     d.placement = placementOf(d.name);
   }
@@ -1219,8 +1229,11 @@ export function collectSources(o: CollectOpts): TopoSources {
     // validate exits 1 when a gate fails; its document is complete either way.
     health = json<HealthDoc>("health-manager validate", "health-manager", ["validate", "--json"], [0, 1]);
   }
-  // A satellite is a machine module of the satellite kind (ADR-010).
-  const satellites: { name: string; address: string | null }[] = [];
+  // A satellite is a machine module of the satellite kind (ADR-010). Every
+  // machine names the location it is at (ADR-036 D2); a `location` with a '/'
+  // is the module directory field migration 0006 renamed, never a place.
+  const satellites: { name: string; address: string | null; location?: string | null }[] = [];
+  const machineLocations: Record<string, string> = {};
   for (const m of (modules ?? []).filter((x) => x.kind === "machine")) {
     let cfg: Record<string, unknown> | null = null;
     try {
@@ -1228,7 +1241,9 @@ export function collectSources(o: CollectOpts): TopoSources {
     } catch {
       cfg = null;
     }
-    if (/\/satellite\/?$/.test(String(cfg?.moduleSource ?? ""))) satellites.push({ name: m.name, address: str(cfg?.address) });
+    const at = typeof cfg?.location === "string" && cfg.location !== "" && !cfg.location.includes("/") ? cfg.location : null;
+    if (at) machineLocations[m.name] = at;
+    if (/\/satellite\/?$/.test(String(cfg?.moduleSource ?? ""))) satellites.push({ name: m.name, address: str(cfg?.address), location: at });
   }
   let firewall: Record<string, unknown> | null = null;
   try {
@@ -1266,6 +1281,7 @@ export function collectSources(o: CollectOpts): TopoSources {
     health,
     firewall,
     satellites,
+    machineLocations,
     wanAddress,
     actual,
     // No positions.json is an empty document, not an error; no position-manager is.

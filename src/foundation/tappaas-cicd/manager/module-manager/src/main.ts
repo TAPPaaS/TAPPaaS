@@ -66,6 +66,7 @@ import { CHANGE_CLASS_NAMES } from "../../../lib/ts/src/service-fields";
 import { cmdResolve } from "./resolve";
 import { realServiceFs } from "./services";
 import { validateModules } from "./validate";
+import { PlaceFlags, releaseKind, resolvePlace, takePlaceFlags } from "./location";
 import { BlueprintTarget, SchemaFacts, checkModule, dirTarget, realBlueprintFs, repoTargets, schemaFacts } from "./blueprint";
 import { composeFields } from "../../../lib/ts/src/compose-fields";
 
@@ -150,16 +151,24 @@ export const HELP: HelpSpec = {
         ["--instance NAME", "Name the instance: config/NAME.json instead of the default <module>[-<environment>] — e.g. tappaas2 for one of several nodes (ADR-026 D6.4)."],
         ["--allow-fork", "Permit forked/non-canonical module sources."],
         ["--reinstall", "Delete the existing deployment first, then install fresh — the only way to replace a deployed config (#301, #453)."],
+        ["--location NAME", "A machine: the site's location it is at (site-manager location list); absent, the primary location."],
+        ["--country CC", "A machine: where it is, instead of --location — the site's location at that place, added as a location of kind remote when there is none."],
+        ["--city CITY", "With --country: the city."],
+        ["--building B", "With --country: the building or data centre, when the city is the site's own."],
         ["--<field> <value>", "Override any config field, passed through to install-module.sh, which checks the name against module-fields.json."],
       ],
     },
     {
-      usage: "adopt <address> [--instance NAME] [--zone ZONE] [--wait SECONDS] [--set field=value]...", effect: { noPreview: "makes a running machine a module: writes its config, turns its SSH key-only" },
+      usage: "adopt <address> [--instance NAME] [--zone ZONE] [--location NAME | --country CC [--city C] [--building B]] [--wait SECONDS] [--set field=value]...", effect: { noPreview: "makes a running machine a module: writes its config, turns its SSH key-only" },
       name: "adopt",
       note: "(ADR-026 D8.1: a machine that already runs becomes a module; its SSH becomes key-only unless --set sshKeyOnly=false — nothing else on it is changed)",
       options: [
         ["--instance NAME", "Name the instance instead of the machine's hostname — when that name is taken by another machine."],
         ["--zone ZONE", "The zone it sits in, when its address is in no active zone (a Location reached through a tunnel)."],
+        ["--location NAME", "The site's location it is at (site-manager location list); absent, the primary location."],
+        ["--country CC", "Where it is, instead of --location: the site's location at that place, added as a location of kind remote when there is none."],
+        ["--city CITY", "With --country: the city."],
+        ["--building B", "With --country: the building or data centre, when the city is the site's own."],
         ["--wait SECONDS", "How long to wait for root to accept the mothership's key (default 300); nothing is written until it does."],
         ["--set field=value", "Write a field into the new config before its install runs. --set sshKeyOnly=false keeps password SSH as the machine has it (#756); without it, the machine refuses password logins over SSH, as the cluster nodes do."],
       ],
@@ -858,6 +867,7 @@ function cmdValidate(opts: Opts): number {
     // `usedBy` is what says which fields a provider service owns, so it is what
     // manifest coverage is measured against.
     schema: loadModuleFields(opts.configDir),
+    configDir: opts.configDir,
   });
   if (opts.json) {
     info(JSON.stringify(report, null, 2));
@@ -887,13 +897,44 @@ function cmdAdd(opts: Opts, client: ModuleClient): number {
   if (opts.force) {
     die(`add has no --force: take the release forward with 'module-manager module update ${module}' (local modifications survive), change a field with 'module modify ${module} --set field=value', or replace the deployment with 'add ${module} --reinstall'`);
   }
+  let place: PlaceFlags;
+  let passthrough: string[];
+  try {
+    ({ place, rest: passthrough } = takePlaceFlags(addFieldOverrides(opts)));
+  } catch (e) {
+    die(`add: ${(e as Error).message}`);
+  }
+  if (passthrough.includes("--physicalLocation")) {
+    die("add: physicalLocation is retired — give the place with --location <name> (site-manager location list) or --country/--city/--building");
+  }
+  if (Object.keys(place).length > 0) {
+    // Only a machine is somewhere of its own; a guest is where its node is.
+    const kind = releaseKind(resolveViaCatalog(opts.configDir, module)?.moduleJson ?? "");
+    if (kind !== "" && kind !== "machine") die(`add: ${module} is a ${kind}, not a machine — only a machine names a location`);
+    const i = passthrough.indexOf("--instance");
+    const at = placeOrDie("add", opts.configDir, place, (i >= 0 ? passthrough[i + 1] : undefined) ?? module);
+    if (at) passthrough.push("--location", at);
+  }
   const a: AddOptions = {
     environment: opts.environment,
     allowFork: opts.allowFork,
     reinstall: opts.reinstall,
-    passthrough: addFieldOverrides(opts),
+    passthrough,
   };
   return client.add(module, a);
+}
+
+// The location a machine's add or adopt names, from --location or
+// --country/--city/--building (site.json gains a location of kind remote when
+// none is at that place); null when no place was given.
+function placeOrDie(verb: string, configDir: string, place: PlaceFlags, fallback: string): string | null {
+  try {
+    const r = resolvePlace(configDir, place, fallback);
+    if (r?.created) info(`${GN}✓${CL} added location '${r.name}' to site.json (site-manager location show ${r.name})`);
+    return r?.name ?? null;
+  } catch (e) {
+    return die(`${verb}: ${(e as Error).message}`);
+  }
 }
 
 // ── add-stack (#763) ─────────────────────────────────────────────────
@@ -1034,7 +1075,13 @@ function cmdAdopt(opts: Opts, client: ModuleClient): number {
     if (!/^[A-Za-z][A-Za-z0-9_.]*=/.test(s)) die(`adopt: --set '${s}' is not field=value`);
   }
   if (opts.unsets.length > 0) die("adopt: --unset has nothing to remove — the config does not exist yet");
-  const p = opts.passthrough;
+  let p: string[];
+  let place: PlaceFlags;
+  try {
+    ({ place, rest: p } = takePlaceFlags(opts.passthrough));
+  } catch (e) {
+    die(`adopt: ${(e as Error).message}`);
+  }
   for (let i = 0; i < p.length; i++) {
     const v = p[i + 1];
     if (v === undefined || v.startsWith("--")) die(`adopt: ${p[i]} requires an argument`);
@@ -1044,6 +1091,9 @@ function cmdAdopt(opts: Opts, client: ModuleClient): number {
     else die(`adopt: unknown option '${p[i]}'`);
     i++;
   }
+  if (a.sets?.some((s) => /^(location|physicalLocation)=/.test(s))) die("adopt: give the place with --location <name> or --country/--city/--building, not --set");
+  const at = placeOrDie("adopt", opts.configDir, place, a.instance ?? address);
+  if (at) a.sets = [...(a.sets ?? []), `location=${at}`];
   return client.adopt(address, a);
 }
 

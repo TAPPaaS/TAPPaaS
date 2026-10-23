@@ -30,6 +30,7 @@ import { checkMounts } from "./nfs";
 import { moduleSourceOf } from "../../../lib/ts/src/instance";
 import { MODULE_STATUS_VALUES, ModuleConfig, ValidateFinding, ValidateReport } from "./types";
 import { moduleScope } from "../../../lib/ts/src/scope";
+import { locationFindings } from "./location";
 
 export const VALID_SOURCES = ["official", "community", "private", "local"] as const;
 
@@ -49,6 +50,9 @@ export interface ValidateOptions {
   // no ownership to check coverage against, and inventing one would report
   // every field as unowned.
   schema?: Record<string, { usedBy?: string[] } | undefined>;
+  // The config directory, for the location a machine names (site.json's
+  // locations, ADR-036 D2). Omitted and that check is SKIPPED.
+  configDir?: string;
 }
 
 // Lint one module config; append findings to `out`.
@@ -127,6 +131,13 @@ export function validateModule(
   // storage:nfs (ADR-029 v0.9): a consumer's mounts checked against the shares
   // in config/shares.json and their grants — before any install runs.
   validateNfs(m, opts.fs, out);
+
+  // A machine's location names one of the site's (ADR-036 D2).
+  if (opts.configDir) {
+    const f = locationFindings(opts.configDir, m.raw);
+    for (const e of f.errors) err(e);
+    for (const w of f.warnings) warn(w);
+  }
 
   // #683 — a declared field whose consumer is not wired. Needs the schema's
   // `usedBy` ownership, so it is SKIPPED without it rather than guessing.

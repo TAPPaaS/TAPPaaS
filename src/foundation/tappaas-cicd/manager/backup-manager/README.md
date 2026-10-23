@@ -190,10 +190,10 @@ in-job modules require `site.backup.target`).
 It also **warns** — never fails — about an off-site target not shown to be off-site
 (`src/offsite.ts`): a `remote-` or `pull-` peer that names no location, names one
 `site.json` does not have, names the primary location itself, or names one equal to the
-primary location at every level both record (country, city, address); and a satellite whose
-`physicalLocation` is missing or equal in the same way. A peer's place is read through
-`site-manager`'s locations (`lib/ts/src/locations.ts`); a peer migration 0019 has not reached
-still carries its own `physicalLocation`, which is read until then.
+primary location at every level both record (country, city, address); and a satellite holding
+a copy whose `location` is missing or names a place in the same way. Both places are read
+through `site-manager`'s locations (`lib/ts/src/locations.ts`); a peer or satellite the
+migrations have not reached still carries its own `physicalLocation`, which is read until then.
 
 `peers` lists each peer with the location it names and that location's place
 (`--json`: `location` and `place`). `peer add` takes `--location <name>`, or

@@ -40,7 +40,7 @@ host with your operator key — then:
 
     module-manager module add satellite \
         --address <public-ip> \
-        --physicalLocation '{"country":"FI","city":"Helsinki"}'
+        --country FI --city Helsinki
 
 - **Instance name:** `satellite` (config `~/config/satellite.json`). A second satellite
   needs `--instance <name>`, e.g. `--instance satellite-hel1`. The install also registers
@@ -48,10 +48,13 @@ host with your operator key — then:
 - **Roles:** `reverse-proxy` and `admin-vpn` by default; one of them only with
   `--roles '["reverse-proxy"]'`. The `backup` role is not given here — it comes with
   locking the satellite down as the vault (below).
-- **`--physicalLocation` (#609):** where the satellite physically runs. A backup copy is
-  only off-site if it is somewhere else, and only this record shows it:
-  `backup-manager validate` compares it with `site.json`'s `location`. Give the city when
-  the Site is in the same country.
+- **Where it is:** `--location <name>` names one of the site's locations
+  (`site-manager location list`); `--country [--city] [--building]` use the location at that
+  place, or add one of kind `remote` (named after the building, else the city). A backup copy
+  is only off-site if it is somewhere else, and only this record shows it:
+  `backup-manager validate` compares the satellite's location with the site's primary one. Give
+  the city when the site is in the same country. Change it later with
+  `module-manager module modify <instance> --set location=<name>`.
 - **Operator key:** recorded from your forwarded agent (`ssh-add -L`) as
   `host.operatorSshKeys`; set `TAPPAAS_OPERATOR_KEY` (a key or a `.pub` file) instead when
   the agent holds other keys too. The mothership's own key is never recorded as one.
@@ -198,10 +201,12 @@ module (ADR-010 §8.4.7), on `tappaas-cicd`:
 
 1. Rename it, keeping the name so the OPNsense peer and tunnel keep theirs:
    `mv ~/config/satellite-<name>.json ~/config/<name>.json`
-2. Record its address and management, drop the stop-gap status, add where it is:
+2. Record its address and management, drop the stop-gap status, name where it is (a location
+   of the site: `site-manager location add hetzner-hel1 --country FI --city Helsinki --kind remote`
+   first, when the site has none there):
 
        jq '.address = .host.publicIp | .management = "managed" | del(.status)
-           | .physicalLocation = {"country":"FI","city":"Helsinki"}' \
+           | .location = "hetzner-hel1"' \
            ~/config/<name>.json > /tmp/sat.json && mv /tmp/sat.json ~/config/<name>.json
 
 3. Authorize the mothership's key on it, from your workstation:
