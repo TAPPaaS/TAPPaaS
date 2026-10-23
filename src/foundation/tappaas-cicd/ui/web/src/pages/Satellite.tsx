@@ -12,6 +12,7 @@ import { useOpenedBy } from "../opener";
 import { EnvironmentRow } from "../types";
 import { canOperate, useMe } from "../ui";
 import { SATELLITE_ROLES, SatellitePlan, satelliteProblems, satelliteSpec } from "../wizards";
+import { useSiteLocations } from "../locations";
 import { StepRow } from "./Setup";
 
 const text = (v: TargetValue | undefined, dflt: string): string => (typeof v === "string" ? v : dflt);
@@ -20,6 +21,7 @@ const text = (v: TargetValue | undefined, dflt: string): string => (typeof v ===
 export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; prefill?: TargetValues | null }) {
   const me = useMe();
   const envs = (useRead<EnvironmentRow[]>("environments").env?.data ?? []).map((e) => e.name);
+  const locations = useSiteLocations();
   const [ready, setReady] = useState(false);
   const [p, setP] = useState<SatellitePlan>(() => {
     const roles = prefill?.roles;
@@ -27,6 +29,7 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
       address: text(prefill?.address, ""),
       environment: text(prefill?.environment, "mgmt"),
       roles: Array.isArray(roles) ? roles : typeof roles === "string" ? roles.split(",").map((r) => r.trim()).filter(Boolean) : ["reverse-proxy", "admin-vpn"],
+      location: text(prefill?.location, ""),
       country: text(prefill?.country, ""),
       city: text(prefill?.city, ""),
       instance: text(prefill?.instance, ""),
@@ -114,14 +117,28 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
                 {problems.roles ? <small className="ff-error">{problems.roles}</small> : <small className="muted">Both by default. The backup role comes later, with locking it down as the off-site vault.</small>}
               </div>
               <label className="form-row">
-                <span>country</span>
-                <input type="text" value={p.country} disabled={plan !== null} placeholder="ISO code, e.g. FI" onChange={(e) => set({ country: e.target.value.trim().toUpperCase() })} />
-                {problems.country ? <small className="ff-error">{problems.country}</small> : <small className="muted">Where it physically runs: a backup copy on it is only off-site if it is somewhere else, and only this record shows it.</small>}
+                <span>location</span>
+                <select value={p.location ?? ""} disabled={plan !== null} onChange={(e) => set({ location: e.target.value })}>
+                  <option value="">a place the site has no location for yet (country, city below)</option>
+                  {locations.map((l) => (
+                    <option key={l.name} value={l.name}>{l.displayName ?? l.name}{l.place ? ` · ${l.place}` : ""}{l.primary ? " · primary" : ""}</option>
+                  ))}
+                </select>
+                <small className="muted">Where it physically runs: a backup copy on it is only off-site if it is somewhere else, and only this record shows it. One of the site's locations, or the place below, which the add records as a location of kind remote.</small>
               </label>
-              <label className="form-row">
-                <span>city</span>
-                <input type="text" value={p.city} disabled={plan !== null} placeholder="e.g. Helsinki — needed when the site is in the same country" onChange={(e) => set({ city: e.target.value })} />
-              </label>
+              {p.location ? null : (
+                <>
+                  <label className="form-row">
+                    <span>country</span>
+                    <input type="text" value={p.country} disabled={plan !== null} placeholder="ISO code, e.g. FI" onChange={(e) => set({ country: e.target.value.trim().toUpperCase() })} />
+                    {problems.country ? <small className="ff-error">{problems.country}</small> : null}
+                  </label>
+                  <label className="form-row">
+                    <span>city</span>
+                    <input type="text" value={p.city} disabled={plan !== null} placeholder="e.g. Helsinki — needed when the site is in the same country" onChange={(e) => set({ city: e.target.value })} />
+                  </label>
+                </>
+              )}
               <label className="form-row">
                 <span>instance</span>
                 <input type="text" value={p.instance} disabled={plan !== null} placeholder="satellite" onChange={(e) => set({ instance: e.target.value.trim() })} />

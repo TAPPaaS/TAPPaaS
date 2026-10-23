@@ -5,7 +5,7 @@
 // coverage), Activity (the console's jobs and the sweep's lines that name it) —
 // and the Open-in links.
 
-import { useEffect, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { useOpenRequest } from "../opener";
 import { AskAbout } from "../assistant";
 import { get, useRead } from "../api";
@@ -15,6 +15,7 @@ import { ModuleBadges } from "./Modules";
 import { JobList } from "../jobs";
 import { ModuleConfig } from "./ModuleConfig";
 import { ModuleOperate } from "./ModuleOperate";
+import { LocationLine, useSiteLocations } from "../locations";
 
 const TABS = ["Overview", "Config", "Drift", "Backup", "Activity"] as const;
 type TabName = (typeof TABS)[number];
@@ -159,6 +160,11 @@ export function ModulePage({ name }: { name: string }) {
   const d = r.env?.data;
   const m = d?.summary;
   const show_ = d?.show.data ?? {};
+  const locations = useSiteLocations();
+  // A machine is at a location of the site (ADR-036 D2); a value with a '/' is
+  // the module directory's old field, never a place.
+  const machine = show_.kind === "machine" || m?.kind === "machine";
+  const at = typeof show_.location === "string" && show_.location !== "" && !show_.location.includes("/") ? show_.location : null;
   return (
     <div className="page">
       <div className="page-head">
@@ -210,6 +216,7 @@ export function ModulePage({ name }: { name: string }) {
                 ["version", `${show(show_.version)}${show_.releaseDate ? ` · released ${show(show_.releaseDate)}` : ""}`],
                 ["maturity", show(show_.status)],
                 ["maintainer", show(show_.maintainer)],
+                ...(machine ? [["location", <LocationLine name={at} locations={locations} />] as [string, ReactNode]] : []),
                 ["installed", show(show_.installTime)],
                 ["updated", show(show_.updateTime)],
                 ["source", <span className="mono">{show(show_.moduleSource)}</span>],

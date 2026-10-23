@@ -369,7 +369,8 @@ export interface TopoOutside {
   kind: "buddy" | "satellite";
   name: string;
   role: string | null;
-  location: string | null;
+  location: string | null; // its place, as text
+  at?: string | null; // the location it names (a satellite), when it names one
   tunnel: string | null;
   address: string | null;
   state: "up" | "down" | null; // from the pulse
@@ -936,6 +937,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       return {
         kind: "satellite", name: s.name, role: null,
         location: l ? [l.city, l.country].filter((x) => !!x).join(", ") || l.displayName || l.name : s.location ?? null,
+        at: s.location ?? null,
         tunnel: null, address: s.address, state: null,
       };
     }),

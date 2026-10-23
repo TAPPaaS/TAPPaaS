@@ -135,6 +135,8 @@ const quiet = <T>(f: () => T): T => {
   check(!bad.ok && bad.rejections[0].reason.includes("no location 'atlantis'"), "…a location the site lacks is refused");
   const guest = g("wiki", "hareskov");
   check(!guest.ok && guest.rejections[0].reason.includes("not a machine"), "a guest's location is refused: it is where its node is");
+  const listed = preGateSet(cfg, "sat1", [{ field: "location", value: "" }], SCHEMA, MM);
+  check(listed.ok, "asked with no value (module-manager fields), a machine's location is settable");
 }
 
 // ── validate ────────────────────────────────────────────────────────────

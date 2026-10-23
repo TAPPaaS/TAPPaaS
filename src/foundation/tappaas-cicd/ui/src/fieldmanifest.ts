@@ -402,7 +402,9 @@ export function buildManifest(i: ManifestInput): FieldManifest {
         if (moduleLevel && notByHand) continue;
         const usedBy = strs(def.usedBy);
         const mine = i.defaults !== undefined && Object.prototype.hasOwnProperty.call(i.defaults, def.name);
-        if (!mine && !usedBy.some((u) => (i.services ?? []).includes(u))) continue;
+        // A machine is somewhere: its add names one of the site's locations.
+        const place = def.name === "location" && i.defaults?.kind === "machine";
+        if (!mine && !place && !usedBy.some((u) => (i.services ?? []).includes(u))) continue;
       }
     }
     const type = typeOf(def.type);
@@ -538,7 +540,7 @@ export function environmentDefaults(mode: FormMode, o: { firstOrg: string | null
 // config already uses it (then the next free one up); it goes on the module's
 // node, else the site's first; its zone0 is the module's, else its
 // environment's zone.
-export function moduleAddDefaults(o: { module: string; own: Obj; defaultEnv: string | null; envs: { name: string; zone: string | null }[]; firstNode: string | null; usedVmids: number[] }): { defaults: Record<string, unknown>; by: Record<string, DefaultRule[]> } {
+export function moduleAddDefaults(o: { module: string; own: Obj; defaultEnv: string | null; envs: { name: string; zone: string | null }[]; firstNode: string | null; usedVmids: number[]; primaryLocation?: string | null }): { defaults: Record<string, unknown>; by: Record<string, DefaultRule[]> } {
   const defaults: Record<string, unknown> = { vmname: o.module };
   const by: Record<string, DefaultRule[]> = {};
   const named = (env: string) => (env === "mgmt" || env === o.defaultEnv ? o.module : `${o.module}-${env}`);
@@ -550,6 +552,8 @@ export function moduleAddDefaults(o: { module: string; own: Obj; defaultEnv: str
     defaults.vmid = `${n}, the next free (${own}, the module's own, is taken)`;
   }
   if (typeof o.own.node !== "string" && o.firstNode) defaults.node = `${o.firstNode}, the site's first node`;
+  // A machine is at the primary location unless it names another (ADR-036 D2).
+  if (o.own.kind === "machine" && o.primaryLocation) defaults.location = `${o.primaryLocation}, the primary location`;
   if (typeof o.own.zone0 !== "string") {
     const zoneOf = (env: string | null) => o.envs.find((e) => e.name === env)?.zone ?? null;
     const base = zoneOf(o.defaultEnv);

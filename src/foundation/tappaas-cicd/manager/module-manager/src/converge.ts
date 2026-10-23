@@ -321,9 +321,10 @@ export function classifySet(
       } catch {
         kind = undefined;
       }
+      // `fields` asks with no value: whether it may be set, not to what.
       const why = kind !== undefined && kind !== "machine"
         ? `'${module}' is a ${String(kind)}, not a machine — a guest is where its node is`
-        : locationRefusal(configDir, req.value);
+        : req.value === "" ? null : locationRefusal(configDir, req.value);
       if (why) {
         rejections.push({ field: req.field, reason: why });
         continue;

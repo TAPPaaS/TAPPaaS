@@ -381,6 +381,7 @@ export class Reads {
             envs: [{ name: "mgmt", zone: "mgmt" }, ...(envs.value ?? []).filter((e) => e.name !== "mgmt").map((e) => ({ name: e.name, zone: e.zone ?? null }))],
             firstNode: typeof nodes[0]?.name === "string" ? nodes[0].name : null,
             usedVmids: this.configVmids(`${name}.json`),
+            primaryLocation: ((site.value?.site as { primaryLocation?: string } | undefined)?.primaryLocation) ?? null,
           });
           defaults = { ...defaults, ...computed.defaults };
           defaultBy = computed.by;
