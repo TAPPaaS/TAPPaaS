@@ -84,7 +84,6 @@ mkdir -p "${FIX}/environments"
 cat > "${FIX}/site.json" <<'JSON'
 { "name": "test-site", "displayName": "Test", "owner": "o",
   "location": {"country":"NL","timezone":"Europe/Amsterdam"},
-  "hardware": {"nodes":[{"name":"tappaas1"}]},
   "repositories": [{"name":"r","url":"u"}],
   "backup": {"target":"pbs1","offsite":"buddy","offsiteResidency":"eu-only","defaultRetention":"7y"} }
 JSON

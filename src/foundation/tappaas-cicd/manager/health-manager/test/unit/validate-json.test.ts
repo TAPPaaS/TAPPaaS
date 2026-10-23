@@ -26,7 +26,8 @@ const dir = mkdtempSync(join(tmpdir(), "hm-json-"));
 writeFileSync(join(dir, "immich.json"), JSON.stringify({ vmname: "immich", vmid: 361, node: "tappaas1", zone0: "rossen" }));
 writeFileSync(join(dir, "jellyfin.json"), JSON.stringify({ vmname: "jellyfin", vmid: 360, node: "tappaas1", zone0: "rossen" }));
 writeFileSync(join(dir, "backup.json"), JSON.stringify({ node: "tappaas3" }));
-writeFileSync(join(dir, "site.json"), JSON.stringify({ hardware: { nodes: [{ name: "tappaas1" }, { name: "tappaas3" }] } }));
+writeFileSync(join(dir, "site.json"), JSON.stringify({ name: "s" }));
+for (const n of ["tappaas1", "tappaas3"]) writeFileSync(join(dir, `${n}.json`), JSON.stringify({ kind: "machine", moduleSource: "/x/pvehost", address: `${n}.mgmt.internal` }));
 
 const capacity = (): NodeCapacity[] => [{
   node: "tappaas1", physicalMem: 61 * G, usedMem: 40 * G, committedMem: 20 * G,

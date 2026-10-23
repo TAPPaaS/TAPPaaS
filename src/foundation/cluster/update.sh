@@ -8,7 +8,7 @@
 #   2. Distributes Create-TAPPaaS-VM.sh, Create-TAPPaaS-LXC.sh and zones.json to each node
 #   3-4. Refreshes SSD lifecycle and the Realtek NIC fix on each node
 #   5. Makes each node's sshd key-only (#19) — only over a key connection
-#   6. Reconciles the storage node lists from site.json
+#   6. Reconciles the storage node lists from the node records (storagePools)
 #   7. Registers each node as a `pvehost` module instance, if it is not one yet
 #      (ADR-026 D4 stage 1, #665) — inert: nothing on the node changes
 #   7b. lldpd (receive-only) on each node, and its lan uplink recorded as its
@@ -343,11 +343,11 @@ if [[ -n "${_site_tz}" ]]; then
     done <<< "$NODES"
 fi
 
-# Step 6: Drift-heal the cluster storage `nodes` lists from site.json.
+# Step 6: Drift-heal the cluster storage `nodes` lists from the nodes' records.
 # The lists have only one-shot writers (config-storage at pool creation,
 # site-manager node add after a join) — a node that joined by any other
 # path shows its pools 'disabled' until reconciled (node-provisioning §7.3).
-info "${BOLD}Step 6: Reconciling storage node lists from site.json${CL}"
+info "${BOLD}Step 6: Reconciling storage node lists from the node records${CL}"
 if ! bash "${SCRIPT_DIR}/reconcile-storage-nodes.sh"; then
     warn "storage nodes reconcile reported an error — run reconcile-storage-nodes.sh manually"
 fi

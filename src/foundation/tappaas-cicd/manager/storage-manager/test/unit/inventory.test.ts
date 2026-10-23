@@ -45,7 +45,7 @@ const NOW = new Date(readFileSync(join(FIX, "now.txt"), "utf8").trim());
 
 function hrossen(): InvSources {
   return {
-    site: load<Record<string, unknown>>("site.json"),
+    clusterNodes: load<{ name: string; storagePools: string[] }[]>("nodes.json"),
     only: null,
     smart: true,
     nodes: Object.fromEntries(["tappaas1", "tappaas2", "tappaas3"].map((n) => [n, { sections: load<Record<string, ProbeSection>>(`${n}.json`) }])),
@@ -62,7 +62,7 @@ const node = (n: string) => inv.nodes.find((x) => x.name === n)!;
 const pool = (n: string, p: string) => node(n).pools.find((x) => x.name === p)!;
 
 // ── the nodes, their boot devices and pools ───────────────────────────
-check(inv.nodes.map((n) => n.name).join(",") === "tappaas1,tappaas2,tappaas3", "the three nodes of site.json, in order");
+check(inv.nodes.map((n) => n.name).join(",") === "tappaas1,tappaas2,tappaas3", "the three nodes of the node records, in order");
 check(inv.nodes.every((n) => n.reachable), "every node answered");
 check(node("tappaas3").boot.map((d) => d.device).join() === "/dev/sdc", "tappaas3 boots from /dev/sdc (/ on its LVM, the ESP)");
 check(node("tappaas1").boot.map((d) => d.serial).join() === "260923802321", "tappaas1's boot device is the WD SN7100 by serial");
@@ -70,7 +70,7 @@ check(node("tappaas3").boot[0].smart.temperature === null, "an SSD reporting 0°
 check(node("tappaas1").pools.map((p) => p.name).join() === "tanka1,tankb1", "tappaas1: tanka1, tankb1");
 check(node("tappaas2").pools.map((p) => p.name).join() === "tanka1", "tappaas2: tanka1");
 check(node("tappaas3").pools.map((p) => p.name).join() === "tanka1,tankc1", "tappaas3: tanka1, tankc1");
-check(inv.nodes.every((n) => n.pools.every((p) => p.declared)), "every pool is one site.json declares");
+check(inv.nodes.every((n) => n.pools.every((p) => p.declared)), "every pool is one its node declares");
 
 // ── vdevs and their disks ─────────────────────────────────────────────
 const t1a = pool("tappaas1", "tanka1");
@@ -227,7 +227,7 @@ check(b.nodes.find((n) => n.name === "tappaas2")?.reachable === false && b.sourc
 const full = hrossen();
 const t2sec = full.nodes.tappaas2.sections!;
 t2sec.zfs = { rc: 0, out: t2sec.zfs.out.replace(/^tanka1\tfilesystem\t\d+\t\d+/m, "tanka1\tfilesystem\t1800000000000\t150000000000") };
-(full.site!.hardware as { nodes: { name: string; storagePools: string[] }[] }).nodes.find((n) => n.name === "tappaas2")!.storagePools.push("tankb1");
+full.clusterNodes.find((n) => n.name === "tappaas2")!.storagePools.push("tankb1");
 const f = buildInventory(full, NOW);
 check(f.findings.some((x) => x.cause === "usage" && x.level === "fail" && x.on.node === "tappaas2"), "a pool at 92% fails on usage");
 const gone = f.nodes.find((n) => n.name === "tappaas2")!.pools.find((p) => p.name === "tankb1");
@@ -242,7 +242,10 @@ check(renderInventory(nsInv).some((l) => /SMART was not read/.test(l)), "--no-sm
 
 // collectSources over fake reads: --node reads one node, the cluster-wide reads go through it.
 const tmp = mkdtempSync(join(tmpdir(), "sm-inv-"));
-writeFileSync(join(tmp, "site.json"), readFileSync(join(FIX, "site.json"), "utf8"));
+// The nodes are their pvehost instances in the config directory.
+for (const n of load<{ name: string; storagePools: string[] }[]>("nodes.json")) {
+  writeFileSync(join(tmp, `${n.name}.json`), JSON.stringify({ kind: "machine", moduleSource: "/x/pvehost", address: `${n.name}.mgmt.internal`, storagePools: n.storagePools }));
+}
 const asked: string[] = [];
 const src = collectSources({
   configDir: tmp,

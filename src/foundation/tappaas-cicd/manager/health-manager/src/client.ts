@@ -29,9 +29,9 @@ import { Avx512Use, ClusterClient, LanUplink, NodeCapacity, PendingReboot, Runni
 
 export class CliClusterClient implements ClusterClient {
   reachableNodes(): string[] {
-    // Primary source: site.json .hardware.nodes[].name (the bash
+    // Primary source: the cluster's nodes, their pvehost instances (the bash
     // get_all_node_hostnames path). defaultNodeCandidates falls back to the
-    // tappaas1..9 scan only when site.json yields no nodes — exactly as
+    // tappaas1..9 scan only when there are none — exactly as
     // inspect-cluster.sh does. Either way each candidate is ping-probed (at
     // <name>.<mgmtDomain()>) so only reachable nodes are returned.
     return pingReachableNodes(defaultNodeCandidates(siteNodeHostnames(defaultConfigDir())));

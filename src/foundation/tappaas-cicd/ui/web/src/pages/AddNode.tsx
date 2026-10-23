@@ -4,7 +4,7 @@
 // --pxe: one job that registers it for a network install, opens the PXE window
 // and waits for it); 2 boot the machine from the network, by hand; 3 the
 // install and the join, watched live (the provisioning registration, the PXE
-// window, the cluster, site.json, and the job's own output); 4 its lan uplink
+// window, the cluster, the node's pvehost record, and the job's own output); 4 its lan uplink
 // (node network set, then node network test, each previewed); 5 the node in
 // the physical view.
 
@@ -109,7 +109,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       choices: { "--lan-mode": ["active-backup", "lacp"] },
       initial: { "--pxe": true, "--yes": true },
       prefill: options,
-      note: "There is no dry run: the preview shows the exact command. Apply starts one job that runs until the node has joined: it registers the node for a network install, opens the PXE window on the mothership (two hours unless --ttl says otherwise), waits for the machine to boot from the network, waits for the install, then joins it to the cluster and records it in site.json.",
+      note: "There is no dry run: the preview shows the exact command. Apply starts one job that runs until the node has joined: it registers the node for a network install, opens the PXE window on the mothership (two hours unless --ttl says otherwise), waits for the machine to boot from the network, waits for the install, then joins it to the cluster and registers it as a pvehost instance, with its storage pools.",
     }),
     [name, valid, options],
   );
@@ -140,7 +140,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   const steps = [
     { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, how it boots, its disks and ports — then start the job that adds it." },
     { id: "boot", title: "2 · Boot the machine from the network (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and choose network boot once; the mothership answers with the installer." },
-    { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto the boot disk, the node reboots, joins the cluster and is recorded in site.json." },
+    { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto the boot disk, the node reboots, joins the cluster and is registered as a pvehost instance." },
     { id: "uplink", title: "4 · The lan uplink", required: false, done: tested ? true : uplinkSet ? null : false, detail: "Which ports carry lan, then the failover test — each previewed first." },
     { id: "done", title: "5 · The node in the device view", required: false, done: joined, detail: "Its uplinks, its switch ports and its guests, as cabled." },
   ];
@@ -200,14 +200,14 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           <StepRow s={steps[2]} open={current === "wait"}>
             <div className="explain">
               <p>
-                Nothing to do here but wait, typically 10–20 minutes: the installer writes Proxmox to the boot disk and reboots, the job waits for the node at its address, checks it, creates its pools and joins it to the cluster, then records it in site.json. Watch the node's screen if it takes much longer.
+                Nothing to do here but wait, typically 10–20 minutes: the installer writes Proxmox to the boot disk and reboots, the job waits for the node at its address, checks it, creates its pools and joins it to the cluster, then registers it as a pvehost instance. Watch the node's screen if it takes much longer.
               </p>
             </div>
             {progress ? (
               <ul className="plain checks">
                 <Check ok={progress.registration === "answered"} label="the installer fetched its answer" />
                 <Check ok={progress.inCluster} label="in the Proxmox cluster" detail={progress.cluster ? `members: ${progress.cluster.join(", ")}` : "no node answered the membership read"} />
-                <Check ok={progress.inSite} label="recorded in site.json" />
+                <Check ok={progress.inSite} label="registered as a pvehost instance" />
               </ul>
             ) : null}
             {running ? (
@@ -220,7 +220,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
             ) : null}
             {progress?.inCluster && !progress.inSite && ended !== null ? (
               <p className="small">
-                In the cluster but not in site.json: <OperateButton label="Register joined nodes…" title="site-manager node reconcile" steps={[{ title: "site-manager node reconcile", bin: "site-manager", verb: "node reconcile", note: "The preview lists the nodes that joined the cluster and are not in site.json; apply records them." }]} />
+                In the cluster but not registered: <OperateButton label="Register joined nodes…" title="site-manager node reconcile" steps={[{ title: "site-manager node reconcile", bin: "site-manager", verb: "node reconcile", note: "The preview lists the nodes that joined the cluster and have no pvehost instance; apply registers them, with their storage pools." }]} />
               </p>
             ) : null}
             {progress?.pxe.text ? (
@@ -250,7 +250,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           <StepRow s={steps[4]} open={current === "done"}>
             {valid ? (
               <p className="small">
-                <Link to={`/site/device?select=node:${encodeURIComponent(name)}`}>Open {name} in the device view →</Link> {joined ? "" : <span className="muted">(it appears there once it is in site.json)</span>}
+                <Link to={`/site/device?select=node:${encodeURIComponent(name)}`}>Open {name} in the device view →</Link> {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}
               </p>
             ) : null}
           </StepRow>

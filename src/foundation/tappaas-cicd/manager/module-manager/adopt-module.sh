@@ -15,11 +15,16 @@
 #                Proxmox VE node (Debian underneath) → pvehost (#665). An OS with
 #                no machine module stops the adoption; there is no near match.
 #                A Proxmox node is adopted only if it is a member of THIS Site's
-#                cluster (site.json hardware.nodes) — joining is `site-manager
-#                node add`, never a side effect of adopting.
+#                cluster (its own cluster status names another of the site's
+#                nodes, or, for the first node, the site) — joining is
+#                `site-manager node add`, never a side effect of adopting. Its
+#                tankXY zpools become its storagePools (unless --set names them):
+#                the pvehost instance is the node's record (ADR-036 D6).
 #   4. Name    — the instance is named after the machine (ADR-022f D2); a name
 #                already taken by another machine is refused (--instance
-#                overrides). Adopting the same machine again changes nothing.
+#                overrides). Adopting the same machine again changes nothing,
+#                except that a node whose instance was archived (node delete)
+#                is registered again.
 #   5. Zone    — the zone whose subnet holds its address (most specific wins);
 #                an address in no active zone stops the adoption (--zone overrides).
 #   6. Module  — install-module.sh <module> --instance --address --zone0 --os,
@@ -92,9 +97,12 @@ adopt_module_for_os() {
     esac
 }
 
-# adopt_site_member <name> <site.json> — rc 0 when the Site's cluster lists <name>.
-adopt_site_member() {
-    jq -e --arg n "$1" 'any(.hardware.nodes[]?; .name == $n)' "$2" >/dev/null 2>&1
+# A Proxmox node's membership of the Site's cluster is tappaas_cluster_member
+# (cluster-nodes.sh, re-exported by common-install-routines.sh).
+
+# adopt_pools_json <zpool names...> — the tankXY pools as a JSON array, sorted.
+adopt_pools_json() {
+    printf '%s\n' "$@" | grep -E '^tank' | LC_ALL=C sort -u | jq -Rsc 'split("\n") | map(select(. != ""))'
 }
 
 # adopt_ip_of <address> — an IPv4 address as is, a DNS name resolved (rc 1 when
@@ -177,10 +185,20 @@ main() {
     module="$(adopt_module_for_os "${id}" "${pve}")" \
         || die "no machine module for os '${id:-unknown}' — one module per OS (ADR-026 D7); nothing was written"
     if [[ "${module}" == pvehost ]]; then
-        adopt_site_member "${host}" "${CONFIG_DIR}/site.json" \
-            || die "${ADDRESS} is a Proxmox VE host that is not in this Site's cluster (site.json hardware.nodes) — join it with 'site-manager node add ${host}'; adopting never joins"
+        local status site_name
+        status="$(_adopt_ssh 'pvesh get /cluster/status --output-format json' 2>/dev/null)" || status=""
+        site_name="$(jq -r '.name // ""' "${CONFIG_DIR}/site.json" 2>/dev/null)"
+        tappaas_cluster_member "${host}" "${status}" "${site_name}" "${CONFIG_DIR}" \
+            || die "${ADDRESS} is a Proxmox VE host that is not in this Site's cluster — join it with 'site-manager node add ${host}'; adopting never joins"
         [[ -z "${instance}" || "${instance}" == "${host}" ]] \
             || die "a cluster node's instance is its node name '${host}' — --instance does not apply"
+        # The node's record carries the pools it has, unless --set names them.
+        if ! printf '%s\n' ${sets[@]+"${sets[@]}"} | grep -q '^storagePools='; then
+            local zp
+            zp="$(_adopt_ssh 'zpool list -H -o name' 2>/dev/null)" || zp=""
+            # shellcheck disable=SC2086
+            sets+=("storagePools=$(adopt_pools_json ${zp})")
+        fi
     fi
 
     # 4. Name
@@ -191,6 +209,18 @@ main() {
     if [[ -f "${existing}" ]]; then
         local had; had="$(jq -r '.address // empty' "${existing}")"
         if [[ -n "${had}" && "$(adopt_ip_of "${had}")" == "${ip}" && "$(module_of "${instance}" 2>/dev/null)" == "${module}" ]]; then
+            if [[ "${module}" == pvehost && "$(jq -r '.status // ""' "${existing}")" == archived ]]; then
+                # A deleted node that joined again: its record is the node, so
+                # it is registered again (the release's status back, its pools).
+                local rel pools
+                rel="$(jq -r '.status // "Development"' "$(jq -r '.moduleSource' "${existing}")/pvehost.json" 2>/dev/null)" || rel=Development
+                pools="$(printf '%s\n' ${sets[@]+"${sets[@]}"} | sed -n 's/^storagePools=//p' | tail -1)"
+                jq --arg s "${rel:-Development}" --argjson p "${pools:-null}" \
+                    '.status = $s | if $p == null then . else .storagePools = $p end' "${existing}" > "${existing}.tmp" \
+                    && mv "${existing}.tmp" "${existing}" || die "could not re-register ${instance}"
+                info "${GN}✓${CL} ${ADDRESS} is registered again as ${instance} (its instance was archived)"
+                exit 0
+            fi
             info "${GN}✓${CL} ${ADDRESS} is already adopted as ${instance} — nothing to do"
             exit 0
         fi

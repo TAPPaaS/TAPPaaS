@@ -9,6 +9,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { basename, dirname, join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { clusterNodeNames } from "../../../lib/ts/src/nodes";
 import { discoverModules, isModuleConfig } from "../../../lib/ts/src/module-discovery";
 import { ModuleConfig, ModuleStatus } from "./types";
 import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
@@ -19,31 +20,12 @@ import { Scope, moduleScope } from "../../../lib/ts/src/scope";
 // CONFIG_DIR, then /home/tappaas/config). Re-exported for main.ts/client.ts.
 export { defaultConfigDir };
 
-// Node hostnames from site.json (.hardware.nodes[].name) — the bash
-// `get_all_node_hostnames` equivalent (ported from health-manager). Authoritative
-// source for the cluster node list; an empty array means "fall back to the
-// tappaas1..9 scan" (the CliModuleClient does that for its live cluster query).
+// Node hostnames: the cluster's nodes, their pvehost instances (lib/ts
+// nodes.ts — the bash `get_all_node_hostnames` reads the same). An empty array
+// means "fall back to the tappaas1..9 scan" (the CliModuleClient does that for
+// its live cluster query).
 export function siteNodeHostnames(configDir: string): string[] {
-  const siteFile = join(configDir, "site.json");
-  if (!existsSync(siteFile)) return [];
-  let raw: Record<string, unknown>;
-  try {
-    raw = JSON.parse(readFileSync(siteFile, "utf8")) as Record<string, unknown>;
-  } catch {
-    return [];
-  }
-  const hw = raw.hardware;
-  if (!hw || typeof hw !== "object") return [];
-  const nodes = (hw as Record<string, unknown>).nodes;
-  if (!Array.isArray(nodes)) return [];
-  const out: string[] = [];
-  for (const n of nodes) {
-    if (n && typeof n === "object") {
-      const name = (n as Record<string, unknown>).name;
-      if (typeof name === "string" && name) out.push(name);
-    }
-  }
-  return out;
+  return clusterNodeNames(configDir);
 }
 
 // Non-module config files that also live in config/ and must NOT be enumerated

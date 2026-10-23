@@ -28,6 +28,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync } from "fs";
 import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
+import { clusterNodeNames } from "../../lib/ts/src/nodes";
 import { readZonesFile } from "../../lib/ts/src/zones";
 import { AccessConfig, setupState } from "./access";
 import { Runner } from "./run";
@@ -300,7 +301,8 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
   const defaultEnv = (site.defaultEnvironment as string | undefined) ?? (site.name as string | undefined) ?? null;
   const envDoc = defaultEnv ? readJson(join(d.configDir, "environments", `${defaultEnv}.json`)) : null;
   const dnsMode = ((envDoc?.domains as { dnsMode?: string } | undefined)?.dnsMode === "wildcard" ? "wildcard" : envDoc ? "per-service" : null) as SetupInputs["dnsMode"];
-  const siteNodes = (((site.hardware as { nodes?: { name?: string }[] } | undefined)?.nodes ?? []).map((n) => n.name).filter((n): n is string => typeof n === "string"));
+  // The cluster's nodes are their pvehost instances (ADR-036 D6).
+  const siteNodes = clusterNodeNames(d.configDir);
   // The module tests are not run here (every Setup read gathers): their last
   // result is a record in the state directory, written by runSetupTests.
   const tests = readSetupTests(d.stateDir);

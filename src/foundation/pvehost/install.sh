@@ -3,7 +3,7 @@
 #
 # Proves, and changes NOTHING on the node: the mothership reaches it as root by
 # key; it runs Proxmox VE on Debian; its hostname is the instance name; and it is
-# a member of THIS Site's cluster (site.json hardware.nodes). Joining a node is
+# a member of THIS Site's cluster (pn_cluster_member). Joining a node is
 # `site-manager node add`; registering one is this. Its OS stays patched by the
 # cluster module (update-os.sh) until stage 2.
 #
@@ -23,7 +23,7 @@ host="$(sed -n 1p <<< "${facts}")"; id="$(sed -n 2p <<< "${facts}")"; pve="$(sed
 [[ "${id}" == "debian" ]] || die "${INSTANCE} runs '${id:-unknown}', not debian"
 [[ "${pve}" == pve-manager/* ]] || die "${INSTANCE} runs no Proxmox VE (pveversion failed) — a plain Debian machine is a debianhost"
 [[ "${host}" == "${INSTANCE}" ]] || die "the node at ${ADDRESS} calls itself '${host}', not '${INSTANCE}' — a node's instance is named after it"
-pn_site_member "${INSTANCE}" || die "${INSTANCE} is not in site.json hardware.nodes — join it with 'site-manager node add ${INSTANCE}' first"
+pn_cluster_member "${INSTANCE}" || die "${INSTANCE} is not a member of this Site's cluster — join it with 'site-manager node add ${INSTANCE}' first"
 
 info "  ${GN}✓${CL} root by key; ${pve}; a member of this Site's cluster"
 pn_ssh 'test -c /dev/kvm' 2>/dev/null \

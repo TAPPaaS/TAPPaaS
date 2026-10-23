@@ -69,12 +69,14 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     # ADR-031: the pulse runs on the backup node, and nothing it watches is down.
     echo "== backup (deep): the pulse on the backup node =="
     _pnode="$(jq -r '.node // empty' "${CONFIG_DIR:-/home/tappaas/config}/backup.json" 2>/dev/null)"
-    # A cluster node is a `kind: machine` module too (pvehost): site.json says which
-    # it is. A debianhost is reached by its address; a satellite has no pulse yet.
+    # A cluster node is a `kind: machine` module too (pvehost): the node list says
+    # which it is. A debianhost is reached by its address; a satellite has no pulse yet.
     _pcfg="${CONFIG_DIR:-/home/tappaas/config}/${_pnode}.json"
     _paddr="${_pnode}.mgmt.internal"
-    if ! jq -e --arg n "${_pnode}" '[.hardware.nodes[]?.name] | index($n) != null' \
-            "${CONFIG_DIR:-/home/tappaas/config}/site.json" >/dev/null 2>&1; then
+    declare -F tappaas_cluster_nodes >/dev/null 2>&1 \
+        || . "$(dirname "${BASH_SOURCE[0]}")/../tappaas-cicd/lib/cluster-nodes.sh" 2>/dev/null \
+        || . /home/tappaas/bin/cluster-nodes.sh 2>/dev/null || true
+    if ! tappaas_cluster_nodes "${CONFIG_DIR:-/home/tappaas/config}" 2>/dev/null | grep -cx -- "${_pnode}" >/dev/null; then
         _paddr="$(jq -r '.address // empty' "${_pcfg}" 2>/dev/null)"
         jq -e '(.moduleSource // "") | test("/satellite/?$")' "${_pcfg}" >/dev/null 2>&1 && _paddr=""
     fi

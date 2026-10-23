@@ -54,3 +54,20 @@ tappaas_cluster_nodes_json() {
 tappaas_cluster_nodes() {
     tappaas_cluster_nodes_json "$@" | jq -r '.[].name'
 }
+
+# tappaas_cluster_member <name> <cluster-status-json> <site-name> [config-dir]
+# — rc 0 when the Proxmox node <name>, by its own `pvesh get /cluster/status`,
+# is a member of this site's cluster: its cluster lists another of the site's
+# nodes, or the cluster carries the site's name (the cluster TAPPaaS creates is
+# named after the site — what lets the install's first node in).
+# A Proxmox host that is merely reachable is not part of the site.
+tappaas_cluster_member() {
+    local name="$1" status="$2" site="$3" dir="${4:-${TAPPAAS_CONFIG:-${CONFIG_DIR:-/home/tappaas/config}}}"
+    local known
+    jq -e --arg n "${name}" 'any(.[]?; .type == "node" and .name == $n)' <<<"${status}" >/dev/null 2>&1 || return 1
+    known="$(tappaas_cluster_nodes "${dir}" | grep -vx -- "${name}" | jq -Rsc 'split("\n") | map(select(. != ""))')"
+    jq -e --argjson known "${known}" --arg n "${name}" --arg site "${site}" '
+        ([.[]? | select(.type == "node" and .name != $n) | .name] as $others
+         | any($others[]; . as $o | any($known[]; . == $o)))
+        or ($site != "" and any(.[]?; .type == "cluster" and .name == $site))' <<<"${status}" >/dev/null 2>&1
+}

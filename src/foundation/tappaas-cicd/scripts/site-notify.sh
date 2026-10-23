@@ -86,7 +86,14 @@ fi
 if [[ -n "${TAPPAAS_NOTIFY_NODES:-}" ]]; then
     read -r -a nodes <<<"${TAPPAAS_NOTIFY_NODES}"
 else
-    mapfile -t nodes < <(jq -r '.hardware.nodes[]?.name // empty' "${SITE}" 2>/dev/null | grep -E '^[A-Za-z0-9_-]+$')
+    # The cluster's nodes (their pvehost instances, cluster-nodes.sh).
+    for _cnl in "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib/cluster-nodes.sh" /home/tappaas/bin/cluster-nodes.sh; do
+        # shellcheck source=/dev/null
+        [[ -r "${_cnl}" ]] && { . "${_cnl}"; break; }
+    done
+    nodes=()
+    declare -F tappaas_cluster_nodes >/dev/null 2>&1 \
+        && mapfile -t nodes < <(tappaas_cluster_nodes "${CONFIG_DIR}" 2>/dev/null | grep -E '^[A-Za-z0-9_-]+$')
     [[ ${#nodes[@]} -gt 0 ]] || nodes=(tappaas1)
 fi
 

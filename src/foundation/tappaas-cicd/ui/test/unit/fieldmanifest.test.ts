@@ -121,7 +121,7 @@ check(field(site, "name")?.editable === false && /^immutable: The site's code/.t
 check(/^immutable: Written once/.test(field(site, "version")?.why ?? "") && /^immutable: /.test(field(site, "defaultEnvironment")?.why ?? ""), "…version and defaultEnvironment too");
 check(field(site, "dnssec")?.arg === "--dnssec" && field(site, "dnssec")?.type === "boolean" && field(site, "dnsBlocklists.zones")?.type === "list" && field(site, "dnsBlocklists.zones")?.typeText === "zones", "…dnssec a boolean, the blocklist zones a list of zones");
 check(field(site, "diskAutoGrow.threshold")?.arg === "--diskAutoGrowThreshold" && field(site, "diskAutoGrow.threshold")?.default === "80" && field(site, "branding.logoDark")?.arg === "--brandingLogoDark", "…disk growth by key, with its defaults; branding's two files");
-check(/^manual: Has verbs of its own: site-manager location/.test(field(site, "locations")?.why ?? "") && /^manual: /.test(field(site, "hardware.nodes")?.why ?? ""), "…the locations and hardware are manual, with their reasons");
+check(/^manual: Has verbs of its own: site-manager location/.test(field(site, "locations")?.why ?? "") && /^manual: Retired: migration 0022/.test(field(site, "hardware")?.why ?? ""), "…the locations are manual and the retired hardware says why");
 
 check(field(site, "primaryLocation")?.typeText === "a location" && field(site, "primaryLocation")?.choices?.join() === "hareskov,rodovre", "…the primary location is one of the site's locations");
 

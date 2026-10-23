@@ -11,6 +11,7 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { clusterNodeNames } from "../../../lib/ts/src/nodes";
 import { ConfigModule } from "./types";
 import { moduleSourceJson, moduleSourceOf } from "../../../lib/ts/src/instance";
 
@@ -42,26 +43,12 @@ export function readModuleJson(path: string): Record<string, unknown> | null {
   }
 }
 
-// Node hostnames from site.json (.hardware.nodes[].name) — the bash
-// `get_all_node_hostnames` equivalent. Authoritative source for the cluster
-// node list; an empty array means "fall back to the tappaas1..9 scan" (the
-// CliClusterClient does that). Read here so the inspection logic and the SSH
-// client share one source of truth.
+// Node hostnames: the cluster's nodes, their pvehost instances (lib/ts
+// nodes.ts — the bash `get_all_node_hostnames` reads the same). An empty array
+// means "fall back to the tappaas1..9 scan" (the CliClusterClient does that).
+// Read here so the inspection logic and the SSH client share one source of truth.
 export function siteNodeHostnames(configDir: string): string[] {
-  const raw = readModuleJson(join(configDir, "site.json"));
-  if (!raw) return [];
-  const hw = raw.hardware;
-  if (!hw || typeof hw !== "object") return [];
-  const nodes = (hw as Record<string, unknown>).nodes;
-  if (!Array.isArray(nodes)) return [];
-  const out: string[] = [];
-  for (const n of nodes) {
-    if (n && typeof n === "object") {
-      const name = (n as Record<string, unknown>).name;
-      if (typeof name === "string" && name) out.push(name);
-    }
-  }
-  return out;
+  return clusterNodeNames(configDir);
 }
 
 // Enumerate the configured modules (the JSONs in config/ that carry a vmid).

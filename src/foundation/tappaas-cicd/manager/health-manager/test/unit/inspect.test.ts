@@ -237,18 +237,18 @@ function testClusterDiff(): void {
   check(diff2.unreachable.some((u) => u.module === "ghost"), "unqueryable managed VM degrades to unreachable");
 }
 
-// ── site.json node source (Q8) ────────────────────────────────────────
+// ── the node source: the pvehost instances (Q8, ADR-036 D6) ───────────
 function testSiteNodes(): void {
   const dir = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "health-site-"));
-  writeFileSync(
-    join(dir, "site.json"),
-    JSON.stringify({ name: "s", hardware: { nodes: [{ name: "tappaas1" }, { name: "tappaas2" }] } }),
-  );
+  writeFileSync(join(dir, "site.json"), JSON.stringify({ name: "s" }));
+  for (const n of ["tappaas2", "tappaas1"]) {
+    writeFileSync(join(dir, `${n}.json`), JSON.stringify({ kind: "machine", moduleSource: "/x/pvehost", address: `${n}.mgmt.internal` }));
+  }
   const nodes = siteNodeHostnames(dir);
-  check(nodes.length === 2 && nodes[0] === "tappaas1" && nodes[1] === "tappaas2", "site.json node hostnames read");
+  check(nodes.length === 2 && nodes[0] === "tappaas1" && nodes[1] === "tappaas2", "the nodes' pvehost instances read, in node order");
 
   const empty = mkdtempSync(join(process.env.TMPDIR ?? "/tmp", "health-nosite-"));
-  check(siteNodeHostnames(empty).length === 0, "no site.json → empty list (caller falls back to scan)");
+  check(siteNodeHostnames(empty).length === 0, "no node registered → empty list (caller falls back to scan)");
 }
 
 console.log("health-manager inspect/gate unit tests");

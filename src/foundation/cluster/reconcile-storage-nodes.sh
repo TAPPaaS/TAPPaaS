@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
 # reconcile-storage-nodes.sh — drift-heal the cluster storage `nodes` lists
-# from site.json (docs/design/node-provisioning.md §7.3 finding 4).
+# from the nodes' records (docs/design/node-provisioning.md §7.3 finding 4).
 #
-# site.json declares which nodes carry which pools (.hardware.nodes[]
-# .storagePools). The live truth is /etc/pve/storage.cfg's per-pool `nodes`
+# Each node's pvehost instance declares the pools it carries (storagePools;
+# tappaas_cluster_nodes_json lists them). The live truth is /etc/pve/storage.cfg's per-pool `nodes`
 # list — and that list has only ONE-SHOT writers (config-storage.sh at pool
 # creation, `site-manager node add` after a join), so any other path leaves
 # it drifted: a node joined before the node-add fix existed, a manual
@@ -12,7 +12,7 @@
 # pool 'disabled' on a node that has it ONLINE in zfs.
 #
 # Converge rule (mirrors the site-manager reconcile doctrine):
-#   - a site.json-declared node MISSING from the pool's list is ADDED;
+#   - a node that declares the pool but is MISSING from its list is ADDED;
 #   - an extra node in the list is WARNED about, never removed (operator
 #     hand-edits are legitimate; removal is an operator decision);
 #   - a pool with NO `nodes` restriction is left alone (unrestricted =
@@ -20,7 +20,7 @@
 #   - a declared pool with no storage.cfg entry at all is warned about
 #     (creating entries is config-storage.sh's job, not ours).
 #
-# Runs on the tappaas-cicd mothership (site.json + ssh to the primary
+# Runs on the tappaas-cicd mothership (the node records + ssh to the primary
 # node); invoked by cluster/update.sh every update cycle and safe to run
 # standalone. Idempotent. Exit 0 = converged/no-op, 1 = error.
 #
@@ -28,28 +28,25 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-SITE_JSON="${TAPPAAS_CONFIG:-/home/tappaas/config}/site.json"
+NODES_JSON="$(tappaas_cluster_nodes_json "${TAPPAAS_CONFIG:-${CONFIG_DIR:-/home/tappaas/config}}")"
 NODE1_FQDN="$(get_primary_node_fqdn)"
 SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new)
 
-[[ -f "$SITE_JSON" ]] || { error "site.json not found: $SITE_JSON"; exit 1; }
-
-# All pools declared by any node in site.json.
-mapfile -t POOLS < <(jq -r '[.hardware.nodes[].storagePools[]?] | unique | .[]' "$SITE_JSON")
+# All pools declared by any node.
+mapfile -t POOLS < <(jq -r '[.[].storagePools[]?] | unique | .[]' <<<"$NODES_JSON")
 if [[ "${#POOLS[@]}" -eq 0 ]]; then
-    debug "site.json declares no storage pools — nothing to reconcile"
+    debug "no node declares a storage pool — nothing to reconcile"
     exit 0
 fi
 
 CHANGED=0
 for pool in "${POOLS[@]}"; do
     desired="$(jq -r --arg p "$pool" \
-        '[.hardware.nodes[] | select((.storagePools // []) | index($p)) | .name] | join(",")' \
-        "$SITE_JSON")"
+        '[.[] | select(.storagePools | index($p)) | .name] | join(",")' <<<"$NODES_JSON")"
 
     if ! ssh -n "${SSH_OPTS[@]}" root@"$NODE1_FQDN" \
             "grep -q '^zfspool: ${pool}\$' /etc/pve/storage.cfg" 2>/dev/null; then
-        warn "pool '${pool}' declared in site.json but has no storage.cfg entry — create it with config-storage.sh"
+        warn "pool '${pool}' declared by a node but has no storage.cfg entry — create it with config-storage.sh"
         continue
     fi
 
@@ -62,7 +59,7 @@ for pool in "${POOLS[@]}"; do
         continue
     fi
 
-    # Missing = declared in site.json but absent from the live list.
+    # Missing = declared by the node but absent from the live list.
     missing=""
     for n in ${desired//,/ }; do
         case ",${current}," in
@@ -74,12 +71,12 @@ for pool in "${POOLS[@]}"; do
     for n in ${current//,/ }; do
         case ",${desired}," in
             *",${n},"*) ;;
-            *) warn "  ${pool}: '${n}' is in the storage nodes list but site.json does not declare the pool for it (not removing — operator decision)" ;;
+            *) warn "  ${pool}: '${n}' is in the storage nodes list but its record does not declare the pool (not removing — operator decision)" ;;
         esac
     done
 
     if [[ -z "$missing" ]]; then
-        debug "  ${pool}: nodes list matches site.json (${current})"
+        debug "  ${pool}: nodes list matches the node records (${current})"
         continue
     fi
 
@@ -96,5 +93,5 @@ done
 if [[ "$CHANGED" -gt 0 ]]; then
     info "Storage nodes lists reconciled (${CHANGED} pool(s) updated)"
 else
-    debug "Storage nodes lists already match site.json"
+    debug "Storage nodes lists already match the node records"
 fi

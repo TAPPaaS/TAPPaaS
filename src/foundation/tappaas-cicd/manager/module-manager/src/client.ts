@@ -172,7 +172,7 @@ export class CliModuleClient implements ModuleClient {
   // BEST-EFFORT live cluster query — returns [] on ANY failure (no reachable
   // node, ssh/pvesh error, bad JSON) so `module list` degrades to config-only
   // and still exits 0. Uses the shared lib/ts cluster helpers (candidates from
-  // site.json .hardware.nodes[].name, else the tappaas1..9 scan; each
+  // the pvehost instances (siteNodeHostnames), else the tappaas1..9 scan; each
   // ping-probed; then pvesh via the first reachable node). queryClusterGuests
   // returns null on failure — mapped to [] here (degrade, never throw). The
   // mgmt-zone DNS suffix is overridable via TAPPAAS_MGMT_DOMAIN (lib cluster.ts;

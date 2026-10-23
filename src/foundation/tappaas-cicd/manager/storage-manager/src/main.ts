@@ -181,7 +181,7 @@ function inventory(args: string[]): number {
   const node = opt(args, "--node");
   if (args.includes("--node") && !node) die("inventory --node <n>");
   const inv = buildInventory(collectSources({ configDir: defaultConfigDir(), only: node ?? null, smart: !args.includes("--no-smart") }));
-  if (node && inv.nodes.length === 0) die(`${node} is not a node in site.json`);
+  if (node && inv.nodes.length === 0) die(`${node} is not one of the cluster's nodes (site-manager node list)`);
   if (args.includes("--json")) process.stdout.write(JSON.stringify(inv, null, 1) + "\n");
   else for (const l of renderInventory(inv)) info(l);
   return 0;

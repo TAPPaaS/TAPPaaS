@@ -679,15 +679,13 @@ function tmpZones(): string {
   const emptyCfg = mkdtempSync(join(tmpdir(), "nm-cfg-empty-"));
   check(enumerateNodes(emptyCfg).length === 0, "enumerateNodes returns [] when configuration.json is absent");
 
-  // (a2) site.json is canonical: hardware.nodes[].name wins over the legacy file.
+  // (a2) the node records are canonical: the pvehost instances win over the legacy file.
   const siteCfg = mkdtempSync(join(tmpdir(), "nm-cfg-site-"));
-  writeFileSync(
-    join(siteCfg, "site.json"),
-    JSON.stringify({
-      hardware: { nodes: [{ name: "alpha" }, { name: "beta" }, { notname: "x" }] },
-    }),
-    "utf8",
-  );
+  writeFileSync(join(siteCfg, "site.json"), JSON.stringify({ name: "s" }), "utf8");
+  for (const n of ["beta", "alpha"]) {
+    writeFileSync(join(siteCfg, `${n}.json`), JSON.stringify({ kind: "machine", moduleSource: "/x/pvehost", address: `${n}.mgmt.internal` }), "utf8");
+  }
+  writeFileSync(join(siteCfg, "nas.json"), JSON.stringify({ kind: "machine", moduleSource: "/x/debianhost", address: "10.0.0.90" }), "utf8");
   writeFileSync(
     join(siteCfg, "configuration.json"),
     JSON.stringify({ "tappaas-nodes": [{ hostname: "legacy1" }] }),
@@ -695,13 +693,13 @@ function tmpZones(): string {
   );
   check(
     enumerateNodes(siteCfg).join(",") === "alpha,beta",
-    `enumerateNodes prefers site.json hardware.nodes[].name (got ${enumerateNodes(siteCfg).join(",")})`,
+    `enumerateNodes prefers the pvehost instances (got ${enumerateNodes(siteCfg).join(",")})`,
   );
 
   // (a3) an empty canonical node list falls through to the legacy file, so a
   //      not-yet-migrated system keeps distributing.
   const siteEmpty = mkdtempSync(join(tmpdir(), "nm-cfg-site-empty-"));
-  writeFileSync(join(siteEmpty, "site.json"), JSON.stringify({ hardware: { nodes: [] } }), "utf8");
+  writeFileSync(join(siteEmpty, "site.json"), JSON.stringify({ name: "s" }), "utf8");
   writeFileSync(
     join(siteEmpty, "configuration.json"),
     JSON.stringify({ "tappaas-nodes": [{ hostname: "legacy1" }] }),
@@ -709,7 +707,7 @@ function tmpZones(): string {
   );
   check(
     enumerateNodes(siteEmpty).join(",") === "legacy1",
-    "enumerateNodes falls back to configuration.json when site.json lists no nodes",
+    "enumerateNodes falls back to configuration.json when no node is registered",
   );
 
   // (b) nodeTarget shape mirrors the bash root@<host>.mgmt.internal:/root/tappaas/zones.json

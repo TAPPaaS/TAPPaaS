@@ -10,13 +10,12 @@
 // on; the op only fails as a whole if NOTHING could be pushed — matching the
 // bash's `[[ pushed -gt 0 ]]` return).
 //
-// Node enumeration: site.json's `hardware.nodes[].name` is canonical (ADR-007
-// P2); the legacy configuration.json `."tappaas-nodes"[].hostname` is the
-// fallback while both files coexist — the same canonical-then-legacy shape
-// update-tappaas uses for foundation module configs. Both are read directly
-// (no shelling out to a bash helper whose CONFIG_DIR/PATH we'd have to
-// reproduce), keeping distribute self-contained and unit-testable from
-// fixture files.
+// Node enumeration: the cluster's nodes are their pvehost instances (lib/ts
+// nodes.ts, ADR-036 D6); the legacy configuration.json
+// `."tappaas-nodes"[].hostname` is the fallback for a system that has none
+// yet. Both are read directly (no shelling out to a bash helper whose
+// CONFIG_DIR/PATH we'd have to reproduce), keeping distribute self-contained
+// and unit-testable from fixture files.
 //
 // Dependency-free TS (strict tsc, ambient lib/ts/src/env.d.ts); the scp spawn
 // + CONFIG_DIR env handling is the shared lib exec helpers.
@@ -24,6 +23,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { clusterNodeNames } from "../../../lib/ts/src/nodes";
 import { captureResult } from "../../../lib/ts/src/exec";
 
 // Where node-side tooling expects the file (mirrors the bash literal).
@@ -78,20 +78,13 @@ function nodeField(nodes: unknown, field: string): string[] {
   return out;
 }
 
-// Enumerate Proxmox node hostnames: site.json `.hardware.nodes[].name`
-// (canonical) first; legacy configuration.json `."tappaas-nodes"[].hostname`
-// as fallback while both files coexist. A missing/empty canonical list falls
-// through to legacy so a not-yet-migrated system keeps distributing. The
-// optional override is for tests.
+// Enumerate Proxmox node hostnames: the cluster's nodes (clusterNodeNames)
+// first; legacy configuration.json `."tappaas-nodes"[].hostname` as fallback.
+// No node records falls through to legacy so a not-yet-migrated system keeps
+// distributing. The optional override is for tests.
 export function enumerateNodes(cfgDir: string = defaultConfigDir()): string[] {
-  const site = readJsonObject(join(cfgDir, "site.json"));
-  if (site !== null) {
-    const hw = site["hardware"];
-    if (hw !== null && typeof hw === "object" && !Array.isArray(hw)) {
-      const names = nodeField((hw as Record<string, unknown>)["nodes"], "name");
-      if (names.length > 0) return names;
-    }
-  }
+  const names = clusterNodeNames(cfgDir);
+  if (names.length > 0) return names;
   const legacy = readJsonObject(join(cfgDir, "configuration.json"));
   return nodeField(legacy?.["tappaas-nodes"], "hostname");
 }

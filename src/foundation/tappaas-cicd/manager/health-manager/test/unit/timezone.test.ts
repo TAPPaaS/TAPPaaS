@@ -105,7 +105,6 @@ const mods = {
   const dir = configDir(site, {});
   check(checkPulse(c, dir).status === "skip", "pulse: no backup node — skip");
   writeFileSync(join(dir, "backup.json"), JSON.stringify({ node: "tappaas3" }));
-  writeFileSync(join(dir, "site.json"), JSON.stringify({ ...site, hardware: { nodes: [{ name: "tappaas3" }] } }));
   writeFileSync(join(dir, "tappaas3.json"), JSON.stringify({ kind: "machine", moduleSource: "/x/pvehost" }));
   check(checkPulse(c, dir).status === "skip", "pulse: the node does not answer — skip");
   c.pulseState = { timer: "inactive", targets: [] };

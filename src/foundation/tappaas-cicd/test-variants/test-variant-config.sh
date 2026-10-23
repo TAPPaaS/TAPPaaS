@@ -50,8 +50,7 @@ echo "test-variant-config: get_variant_config + resolve_provider_module (ADR-007
 mkdir -p "${CONFIG_DIR}/environments"
 cat > "${CONFIG_DIR}/site.json" <<'JSON'
 { "name": "foo-site1", "defaultEnvironment": "foo", "displayName": "Foo", "owner": "test2",
-  "email": "admin@foo.org",
-  "hardware": { "nodes": [ { "name": "tappaas1" } ] } }
+  "email": "admin@foo.org" }
 JSON
 cat > "${CONFIG_DIR}/environments/foo.json" <<'JSON'
 { "name": "foo", "displayName": "Default", "ownerOrg": "test2",

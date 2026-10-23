@@ -38,6 +38,7 @@ import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { WanAddress, readWanAddress, wanAddressFile } from "../../../lib/ts/src/wan-address";
 import { Faceplate, PositionsDoc, PositionsView, RecordedKind, cablesOf, placementsOf, recordedPorts, resolvePositions, roomOf } from "../../../lib/ts/src/positions";
 import { readLocations } from "../../../lib/ts/src/locations";
+import { clusterNodes } from "../../../lib/ts/src/nodes";
 
 // ── the sources, as their verbs print them ────────────────────────────
 
@@ -537,8 +538,8 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   const portsBySwitch = new Map<string, SwitchPortRow[]>();
   for (const sp of src.ports ?? []) portsBySwitch.set(sp.switch, sp.ports);
 
-  // Site nodes: site-manager's list, else site.json's, else whatever reported.
-  const siteNodes = (src.nodes ?? siteJsonNodes(src.site)).map((n) => ({ name: n.name, storagePools: n.storagePools ?? [] }));
+  // Site nodes: site-manager's list (the pvehost instances), else whatever reported.
+  const siteNodes = (src.nodes ?? []).map((n) => ({ name: n.name, storagePools: n.storagePools ?? [] }));
   for (const n of Object.keys(src.networks)) {
     if (!siteNodes.some((x) => x.name === n)) siteNodes.push({ name: n, storagePools: [] });
   }
@@ -1134,15 +1135,6 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   }
 }
 
-function siteJsonNodes(site: Record<string, unknown> | null): { name: string; storagePools?: string[] }[] {
-  const hw = (site?.hardware ?? {}) as Record<string, unknown>;
-  const list = Array.isArray(hw.nodes) ? hw.nodes : [];
-  return list
-    .map((n) => n as Record<string, unknown>)
-    .filter((n) => typeof n.name === "string")
-    .map((n) => ({ name: n.name as string, storagePools: Array.isArray(n.storagePools) ? (n.storagePools as string[]) : [] }));
-}
-
 // ── reading the sources ───────────────────────────────────────────────
 
 export const SOURCE_NAMES = [
@@ -1206,8 +1198,10 @@ export function collectSources(o: CollectOpts): TopoSources {
   };
 
   const site = file("site.json", join(o.configDir, "site.json"));
-  const nodes = json<{ name: string; storagePools?: string[] }[]>("site-manager node list", "site-manager", ["node", "list", "--json"]);
-  const names = (nodes ?? siteJsonNodes(site)).map((n) => n.name);
+  const nodeList = json<{ name: string; storagePools?: string[] }[]>("site-manager node list", "site-manager", ["node", "list", "--json"]);
+  // site-manager's node list, else the node records themselves (lib/ts nodes.ts).
+  const nodes = nodeList ?? clusterNodes(o.configDir).map((n) => ({ name: n.name, storagePools: n.storagePools }));
+  const names = nodes.map((n) => n.name);
   const networks: Record<string, NodeNetwork | null> = {};
   for (const n of names) {
     networks[n] = json<NodeNetwork>("site-manager node network show", "site-manager", ["node", "network", "show", n, "--json"]);

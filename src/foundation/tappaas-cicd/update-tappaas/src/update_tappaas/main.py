@@ -551,13 +551,36 @@ def module_vmid(module_name: str) -> int | None:
     return None
 
 
+def cluster_nodes(config_dir: Path = CONFIG_DIR) -> list[str]:
+    """The cluster's nodes: their pvehost instances (config/<node>.json whose
+    moduleSource is the pvehost module, not archived), by name with numbers
+    compared as numbers — the rules of lib/ts nodes.ts and lib/cluster-nodes.sh.
+    While site.json still has the retired hardware.nodes[] (migration 0022 has
+    not run), a node listed there is one too."""
+    names: set[str] = set()
+    for f in config_dir.glob("*.json"):
+        try:
+            doc = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(doc, dict) or doc.get("status") == "archived":
+            continue
+        src = doc.get("moduleSource") or doc.get("location") or ""
+        if isinstance(src, str) and re.search(r"(^|/)pvehost/*$", src):
+            names.add(f.stem)
+    try:
+        hw = json.loads((config_dir / "site.json").read_text()).get("hardware") or {}
+        names.update(n["name"] for n in hw.get("nodes", []) if isinstance(n, dict) and isinstance(n.get("name"), str) and n["name"])
+    except (OSError, ValueError, AttributeError):
+        pass
+    return sorted(names, key=lambda n: [(0, int(p), "") if p.isdigit() else (1, 0, p) for p in re.findall(r"\d+|\D+", n)])
+
+
 def cluster_vmids() -> set[int] | None:
     """The VMIDs of every guest on the cluster, or None when no node answers —
     then nothing is skipped for want of a guest (#832)."""
-    try:
-        nodes = [n.get("name") for n in json.loads(CONFIG_PATH.read_text())
-                 .get("hardware", {}).get("nodes", []) if n.get("name")]
-    except (OSError, ValueError, AttributeError):
+    nodes = cluster_nodes()
+    if not nodes:
         return None
     for node in nodes:
         try:
@@ -1307,14 +1330,14 @@ def main():
         log.info("Phase 0: Refresh the control plane (repositories, ~/bin, components)")
         control_plane = refresh_control_plane()
 
-    # Phase 0.5: capture cluster membership into site.json (node-provisioning
+    # Phase 0.5: register cluster members as pvehost instances (node-provisioning
     # design N1). A node joined via `install.sh --join` cannot register itself
-    # in this site.json; the HA fold / zone distribution read
-    # .hardware.nodes, so an uncaptured node is invisible to them. Non-fatal:
+    # with this mothership; the HA fold / zone distribution read the nodes'
+    # pvehost instances, so an unregistered node is invisible to them. Non-fatal:
     # a failure warns and the update proceeds with the known nodes.
     # Override for tests with SITE_MANAGER_CMD.
     site_manager_cmd = os.environ.get("SITE_MANAGER_CMD", "/home/tappaas/bin/site-manager")
-    log.info("Phase 0.5: reconcile cluster node inventory into site.json")
+    log.info("Phase 0.5: reconcile the cluster's nodes (their pvehost instances)")
     try:
         result = subprocess.run(
             [site_manager_cmd, "node", "reconcile", "--apply"], text=True,

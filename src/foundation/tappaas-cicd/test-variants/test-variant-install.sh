@@ -41,8 +41,7 @@ trap 'rm -rf "${OWORK}" "${OSRC}"' EXIT
 
 # A minimal site + a registered 'demo' environment. No configuration.json.
 cat > "${OWORK}/site.json" <<'JSON'
-{ "name": "base", "displayName": "Base", "owner": "test2",
-  "hardware": { "nodes": [ { "name": "tappaas1" } ] } }
+{ "name": "base", "displayName": "Base", "owner": "test2" }
 JSON
 echo '{}' > "${OWORK}/zones.json"
 mkdir -p "${OWORK}/environments"

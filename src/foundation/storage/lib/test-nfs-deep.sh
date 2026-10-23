@@ -82,7 +82,7 @@ nfs_find_share "${SHARE}" >/dev/null && { error "a share named ${SHARE} is alrea
 POOL="$(pool_on "${NODE}")"
 ZONE="$(jq -r 'to_entries[] | select(.value|type=="object") | select(.value.type=="Service" and .value.state=="Active") | .key' "${CFG}/zones.json" | head -1)"
 [[ -n "${ZONE}" ]] || { error "no Active Service zone to put the consumer in"; exit 1; }
-mapfile -t NODES < <(jq -r '.hardware.nodes[]?.name' "${CFG}/site.json")
+mapfile -t NODES < <(tappaas_cluster_nodes "${CFG}")
 CNODE="${NODE}"; NODE2=""
 for n in "${NODES[@]}"; do [[ "${n}" != "${NODE}" ]] && { CNODE="${n}"; break; }; done
 for n in "${NODES[@]}"; do [[ "${n}" != "${NODE}" && -f "${CFG}/${n}.json" ]] && { NODE2="${n}"; break; }; done

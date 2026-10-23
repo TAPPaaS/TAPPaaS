@@ -69,6 +69,7 @@ import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync, readFileSync } from "fs";
 import { spawnSync } from "child_process";
 import { stream } from "../../../lib/ts/src/exec";
+import { clusterNodeNames } from "../../../lib/ts/src/nodes";
 import { GN, CL, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { readJsonObject, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { ensureLocation, placeText as locationText, siteLocation } from "../../../lib/ts/src/locations";
@@ -920,8 +921,7 @@ function cmdPulse(opts: Opts): number {
   // A cluster node by name; a debianhost machine by its recorded address.
   let host = node.includes(".") ? node : `${node}.mgmt.internal`;
   try {
-    const site = JSON.parse(readFileSync(join(opts.configDir, "site.json"), "utf8")) as { hardware?: { nodes?: { name?: string }[] } };
-    const isNode = (site.hardware?.nodes ?? []).some((n) => n.name === node);
+    const isNode = clusterNodeNames(opts.configDir).includes(node);
     const m = JSON.parse(readFileSync(join(opts.configDir, `${node}.json`), "utf8")) as Record<string, unknown>;
     if (!isNode && typeof m.address === "string" && m.address) host = m.address;
   } catch { /* the name as it is */ }

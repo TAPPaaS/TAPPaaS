@@ -13,9 +13,9 @@ info() { :; }; warn() { :; }
 
 export PBS_CONFIG_DIR="${T}"
 cat > "${T}/site.json" <<'EOF'
-{ "name": "home", "email": "me@home.example", "hardware": { "nodes": [ { "name": "tappaas3" } ] } }
+{ "name": "home", "email": "me@home.example" }
 EOF
-echo '{"kind":"machine","moduleSource":"/x/pvehost"}' > "${T}/tappaas3.json"
+echo '{"kind":"machine","address":"10.0.0.12","moduleSource":"/x/pvehost"}' > "${T}/tappaas3.json"
 echo '{"kind":"machine","address":"10.0.0.50","moduleSource":"/x/debianhost"}' > "${T}/nas1.json"
 echo '{"name":"lars","type":"tappaas","remoteHost":"10.255.2.1","contact":"l@buddy.example"}' > "${T}/pull-lars.json"
 echo '{"name":"quiet","type":"tappaas","remoteHost":"10.255.2.5"}' > "${T}/pull-quiet.json"

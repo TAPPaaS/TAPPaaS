@@ -552,7 +552,6 @@
         "type": "string",
         "pattern": "^tank[A-Za-z0-9_-]*$"
       },
-      "uniqueItems": true,
       "requiredBy": [],
       "usedBy": [
         "general"

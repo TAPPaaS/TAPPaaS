@@ -62,8 +62,10 @@ function NodeActions() {
 // The site's record (site.json, site-fields.json), each part in its card:
 // Site — who and where it is, its WAN, and its settings; Updates — the
 // schedule, the channel and what an update may do. Each Modify is the schema's
-// form, limited to its card's fields. hardware.nodes is drawn by the Device and
-// Storage views, backup by the Backup page, the repositories just below. The
+// form, limited to its card's fields. The nodes (their pvehost records,
+// site-manager node list) are listed on the card, each with its pools; their
+// devices and disks are drawn by the Device and Storage views, backup by the
+// Backup page, the repositories just below. The
 // site's locations are site-manager location's: the primary one (where the
 // site is, its timezone the site's) on the card, every one in its Locations
 // section with the location forms.
@@ -108,6 +110,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
   const sched = s.updateSchedule;
   const last = d?.lastSweep;
   const repos = (d?.repositories ?? []) as Repo[];
+  const nodes = d?.nodes ?? [];
   const locations = Object.entries(s.locations ?? {}).map(([name, l]) => ({ ...l, name }));
   const primary = locations.find((l) => l.name === s.primaryLocation) ?? null;
   const others = locations.filter((l) => l !== primary).sort((a, b) => a.name.localeCompare(b.name));
@@ -144,6 +147,26 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
           )}
           <h3>Network</h3>
           <KV rows={[["ISP", val(s.network?.isp)], ["public IP", val(s.network?.publicIp)], ["WAN", pub]]} />
+          <h3>Nodes</h3>
+          {nodes.length ? (
+            <table className="table compact">
+              <thead>
+                <tr><th>node</th><th>address</th><th>storage pools</th><th>location</th></tr>
+              </thead>
+              <tbody>
+                {nodes.map((n) => (
+                  <tr key={n.name}>
+                    <td className="mono"><Link to={`/site/device?select=node:${encodeURIComponent(n.name)}`}>{n.name}</Link></td>
+                    <td className="mono">{n.address ?? ""}</td>
+                    <td className="mono">{(n.storagePools ?? []).join(", ") || <span className="muted">none</span>}</td>
+                    <td>{n.location ?? <span className="muted">{primary ? primary.name : "the primary"}</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="muted">No node is registered yet: Add node, or Register joined nodes.</p>
+          )}
           <h3>Settings</h3>
           <KV
             rows={[
@@ -198,7 +221,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
             </tbody>
           </table>
           <p className="muted small">
-            The nodes are the Device and Storage views', and the backup target the <Link to="/backup">Backup</Link> page's.
+            The nodes' connections and disks are the Device and Storage views', and the backup target the <Link to="/backup">Backup</Link> page's.
           </p>
         </Section>
       </div>

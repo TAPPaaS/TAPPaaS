@@ -7,7 +7,8 @@
 // It stores nothing.
 //
 // The sources, all read-only:
-//   site.json                 the nodes and their declared storagePools
+//   the node records          the nodes (their pvehost instances) and the
+//                             storagePools each declares (lib/ts nodes.ts)
 //   per node, one ssh probe   (lib/ts cluster.ts nodeStorageProbe) disks/list,
 //                             SMART per disk, zpool list/status, zfs list,
 //                             lsblk, replication state, exported pools, PBS
@@ -28,6 +29,7 @@ import {
   queryNodeStorage,
 } from "../../../lib/ts/src/cluster";
 import { ExecResult, captureResult } from "../../../lib/ts/src/exec";
+import { clusterNodes as listClusterNodes } from "../../../lib/ts/src/nodes";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 
 // ── the document ──────────────────────────────────────────────────────
@@ -127,7 +129,7 @@ export interface Scrub {
 
 export interface Pool {
   name: string;
-  declared: boolean; // in site.json's storagePools for this node
+  declared: boolean; // in the node's storagePools (its pvehost record)
   present: boolean; // imported on the node
   health: string; // ONLINE | DEGRADED | FAULTED | UNAVAIL | SUSPENDED | MISSING
   status: string | null; // zpool status' status/action text
@@ -476,7 +478,8 @@ export interface ModuleRow {
 }
 
 export interface InvSources {
-  site: Record<string, unknown> | null;
+  // The cluster's nodes and their declared pools (clusterNodes), in node order.
+  clusterNodes: { name: string; storagePools: string[] }[];
   only: string | null; // --node
   smart: boolean;
   nodes: Record<string, NodeSources>;
@@ -485,16 +488,6 @@ export interface InvSources {
   modules: ModuleRow[] | null;
   shares: Record<string, unknown> | null;
   errors: { source: string; error: string }[];
-}
-
-export function siteNodes(site: Record<string, unknown> | null): { name: string; storagePools: string[] }[] {
-  const hw = (site?.hardware ?? {}) as Record<string, unknown>;
-  const list = Array.isArray(hw.nodes) ? hw.nodes : [];
-  return list
-    .map((n) => n as Record<string, unknown>)
-    .filter((n) => typeof n.name === "string")
-    .map((n) => ({ name: n.name as string, storagePools: Array.isArray(n.storagePools) ? (n.storagePools as string[]) : [] }))
-    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 // ── the join (pure) ───────────────────────────────────────────────────
@@ -596,7 +589,7 @@ export function buildInventory(src: InvSources, now: Date = new Date()): Invento
   const shares = ((src.shares?.nfs as Record<string, unknown> | undefined)?.shares ?? {}) as Record<string, Record<string, unknown>>;
 
   const nodes: InvNode[] = [];
-  for (const sn of siteNodes(src.site)) {
+  for (const sn of src.clusterNodes) {
     if (src.only && sn.name !== src.only) continue;
     const ns = src.nodes[sn.name];
     const sec = ns?.sections ?? null;
@@ -642,7 +635,7 @@ export function buildInventory(src: InvSources, now: Date = new Date()): Invento
 
   const sources: Inventory["sources"] = [];
   const err = (name: string): string | null => src.errors.find((e) => e.source === name)?.error ?? null;
-  for (const name of ["site.json", "cluster resources", "cluster replication", "module-manager list", "shares.json"]) {
+  for (const name of ["node records", "cluster resources", "cluster replication", "module-manager list", "shares.json"]) {
     sources.push({ name, ok: err(name) === null, error: err(name) });
   }
   for (const n of nodes) sources.push({ name: `${n.name} storage`, ok: n.reachable, error: n.reachable ? null : "did not answer" });
@@ -868,7 +861,7 @@ function buildPool(
 
   const scrub = parseScan(st?.scan ?? null);
   const r: { s: State; t: string }[] = [];
-  if (!present) r.push({ s: "fail", t: declared ? "declared in site.json but not imported on the node" : "not imported" });
+  if (!present) r.push({ s: "fail", t: declared ? "declared in the node's storagePools but not imported on the node" : "not imported" });
   else if (["FAULTED", "UNAVAIL", "SUSPENDED"].includes(health)) r.push({ s: "fail", t: `${health}${st?.status ? `: ${firstSentence(st.status)}` : ""}` });
   else if (health !== "ONLINE") r.push({ s: "warn", t: `${health}${st?.status ? `: ${firstSentence(st.status)}` : ""}` });
   if (usable && usable.pct >= POOL_FAIL) r.push({ s: "fail", t: `${usable.pct.toFixed(0)}% used (fails at ${POOL_FAIL}%)` });
@@ -879,7 +872,7 @@ function buildPool(
   }
   for (const d of vdevs.flatMap((v) => v.disks)) if (d.state !== "ok") r.push({ s: "warn", t: `disk ${d.device} ${d.state}` });
   for (const m of vdevs.flatMap((v) => v.missing)) r.push({ s: "warn", t: `disk ${m.name} ${m.state}, not on the node` });
-  if (!declared && present && pn !== "rpool") r.push({ s: "warn", t: "not in site.json's storagePools for this node" });
+  if (!declared && present && pn !== "rpool") r.push({ s: "warn", t: "not in the node's storagePools (its pvehost record)" });
 
   return {
     name: pn,
@@ -971,18 +964,9 @@ export function collectSources(o: CollectOpts): InvSources {
   const reads = o.reads ?? liveReads;
   const run = o.run ?? captureResult;
   const errors: { source: string; error: string }[] = [];
-  const file = (source: string, path: string): Record<string, unknown> | null => {
-    try {
-      const v = readJsonObject(path);
-      if (!v) errors.push({ source, error: `${path} not found` });
-      return v;
-    } catch (e) {
-      errors.push({ source, error: (e as Error).message });
-      return null;
-    }
-  };
-  const site = file("site.json", join(o.configDir, "site.json"));
-  const names = siteNodes(site).map((n) => n.name);
+  const clusterNodes = listClusterNodes(o.configDir).map((n) => ({ name: n.name, storagePools: n.storagePools }));
+  if (clusterNodes.length === 0) errors.push({ source: "node records", error: `no cluster node is registered (no pvehost instance in ${o.configDir})` });
+  const names = clusterNodes.map((n) => n.name);
   const nodes: Record<string, NodeSources> = {};
   for (const n of names) {
     if (o.only && n !== o.only) continue;
@@ -1015,7 +999,7 @@ export function collectSources(o: CollectOpts): InvSources {
   } catch (e) {
     errors.push({ source: "shares.json", error: (e as Error).message });
   }
-  return { site, only: o.only ?? null, smart: o.smart, nodes, guests, replicationJobs, modules, shares, errors };
+  return { clusterNodes, only: o.only ?? null, smart: o.smart, nodes, guests, replicationJobs, modules, shares, errors };
 }
 
 // ── the text view ─────────────────────────────────────────────────────

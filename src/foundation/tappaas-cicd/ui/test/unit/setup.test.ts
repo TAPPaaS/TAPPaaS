@@ -86,7 +86,9 @@ async function main(): Promise<void> {
   const cfg = join(dir, "config");
   const state = join(dir, "state");
   mkdirSync(join(cfg, "environments"), { recursive: true });
-  writeFileSync(join(cfg, "site.json"), JSON.stringify({ name: "acme", defaultEnvironment: "acme", hardware: { nodes: [{ name: "tappaas1" }, { name: "tappaas2" }] } }));
+  writeFileSync(join(cfg, "site.json"), JSON.stringify({ name: "acme", defaultEnvironment: "acme" }));
+  // The nodes are their pvehost instances.
+  for (const n of ["tappaas1", "tappaas2"]) writeFileSync(join(cfg, `${n}.json`), JSON.stringify({ kind: "machine", moduleSource: "/x/pvehost", address: `${n}.mgmt.internal` }));
   writeFileSync(join(cfg, "environments", "acme.json"), JSON.stringify({ domains: { primary: "acme.example", dnsMode: "wildcard" } }));
   const ran: string[] = [];
   const run: Runner = async (bin, args) => {
@@ -100,7 +102,7 @@ async function main(): Promise<void> {
   check(!ran.some((r) => r.startsWith("module-manager test")), "…and no module test runs on a read");
   await runSetupTests({ configDir: cfg, stateDir: state, run });
   check(!ran.some((r) => r.startsWith("module-manager test")) && Object.keys(readSetupTests(state)).length === 0, "…nor on a refresh, for a module that is not installed");
-  check(inputs.siteNodes.join() === "tappaas1,tappaas2" && steps.find((s) => s.id === "nodes")!.detail.includes("tappaas2"), "site.json's nodes are what membership is checked against");
+  check(inputs.siteNodes.join() === "tappaas1,tappaas2" && steps.find((s) => s.id === "nodes")!.detail.includes("tappaas2"), "the registered nodes are what membership is checked against");
 
   // the install proceeds: records appear, the checklist follows (resumable for free)
   writeFileSync(join(cfg, "cert-refids.json"), JSON.stringify({ acme: "abc" }));

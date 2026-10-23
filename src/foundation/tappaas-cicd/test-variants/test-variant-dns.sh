@@ -132,8 +132,7 @@ assert_eq "$(proxy_split_horizon_target internal.example.org "${ZF}" 2>/dev/null
 # ── dnsMode surfaced by the environment files + cert-refids.json ─────
 mkdir -p "${WORK}/environments"
 cat > "${WORK}/site.json" <<'JSON'
-{ "name": "base", "displayName": "Base", "owner": "test2",
-  "hardware": { "nodes": [ { "name": "tappaas1" } ] } }
+{ "name": "base", "displayName": "Base", "owner": "test2" }
 JSON
 cat > "${WORK}/environments/base.json" <<'JSON'
 { "name": "base", "displayName": "Default", "ownerOrg": "test2",

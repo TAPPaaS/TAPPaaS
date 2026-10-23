@@ -26,12 +26,13 @@
 PULSE_SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../pulse" && pwd)"
 
 # Where the backup node is reached: a name with a dot as is, a machine by its
-# recorded address, a cluster node as <node>.mgmt.internal.
+# recorded address, a cluster node (its record is a pvehost instance) as
+# <node>.mgmt.internal.
 pulse_host_addr() {
     local host="$1" cfgdir="${PBS_CONFIG_DIR:-${CONFIG_DIR:-/home/tappaas/config}}" addr
     [[ "${host}" == *.* ]] && { printf '%s\n' "${host}"; return 0; }
     addr="$(jq -r 'if (.kind // "") == "machine" then (.address // "") else "" end' "${cfgdir}/${host}.json" 2>/dev/null)"
-    if [[ -n "${addr}" ]] && ! jq -e --arg n "${host}" '[.hardware.nodes[]?.name] | index($n) != null' "${cfgdir}/site.json" >/dev/null 2>&1; then
+    if [[ -n "${addr}" ]] && ! jq -e '(.moduleSource // "") | test("(^|/)pvehost/*$")' "${cfgdir}/${host}.json" >/dev/null 2>&1; then
         printf '%s\n' "${addr}"
     else
         printf '%s\n' "${host}.mgmt.internal"

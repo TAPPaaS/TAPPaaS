@@ -1558,7 +1558,7 @@ else
     # Create-TAPPaaS-VM.sh on the node can resolve the new test zones.
     nodes_pushed=0
     if command -v jq >/dev/null 2>&1; then
-        # Node hostnames from site.json (.hardware.nodes), fallback configuration.json.
+        # Node hostnames: the cluster's nodes (their pvehost instances).
         mapfile -t pve_nodes < <(get_all_node_hostnames 2>/dev/null)
         for node in "${pve_nodes[@]}"; do
             [[ -z "${node}" ]] && continue

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # pvehost-lib.sh — what every pvehost script needs: the instance's config, a
-# root shell on the node by the mothership's key, and the Site's own list of
-# cluster nodes. Sourced after common-install-routines.sh. pn_load sets
+# root shell on the node by the mothership's key, and whether it is one of the
+# Site's cluster nodes. Sourced after common-install-routines.sh. pn_load sets
 # INSTANCE and ADDRESS.
 
 # pn_load <instance> — load config/<instance>.json; the node is reached by its
@@ -25,10 +25,11 @@ pn_ssh() {
 
 pn_reachable() { pn_ssh true >/dev/null 2>&1; }
 
-# pn_site_member <name> [site.json] — rc 0 when site.json's hardware.nodes names
-# <name>: the Site's own record of its cluster, which a Proxmox host that is
-# merely reachable is not part of.
-pn_site_member() {
-    local site="${2:-${CONFIG_DIR:-/home/tappaas/config}/site.json}"
-    jq -e --arg n "$1" 'any(.hardware.nodes[]?; .name == $n)' "${site}" >/dev/null 2>&1
+# pn_cluster_member <name> — rc 0 when the node, by its own cluster status, is
+# a member of THIS Site's cluster (tappaas_cluster_member): a Proxmox host that
+# is merely reachable is not part of it.
+pn_cluster_member() {
+    local cfg="${CONFIG_DIR:-/home/tappaas/config}" status
+    status="$(pn_ssh 'pvesh get /cluster/status --output-format json' 2>/dev/null)" || return 1
+    tappaas_cluster_member "$1" "${status}" "$(jq -r '.name // ""' "${cfg}/site.json" 2>/dev/null)" "${cfg}"
 }

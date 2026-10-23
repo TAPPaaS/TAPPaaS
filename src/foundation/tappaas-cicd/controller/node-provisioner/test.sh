@@ -61,7 +61,7 @@ if [ "${TAPPAAS_TEST_DEEP:-0}" = "1" ]; then
             mkdir -p "${TAPPAAS_CONFIG}" "${TAPPAAS_PXE_DIR}"
             printf '#!ipxe\n' > "${TAPPAAS_PXE_DIR}/boot.ipxe"
             # serve renders answers against site.json — seed a minimal one.
-            printf '{"name":"zztest","hardware":{"nodes":[]},"repositories":[]}' > "${TAPPAAS_CONFIG}/site.json"
+            printf '{"name":"zztest","repositories":[]}' > "${TAPPAAS_CONFIG}/site.json"
             # --boot-disk is EXPLICIT here. Omitting it means "ask at the
             # console" (added a day after this block was written), and the
             # server then 409s an answer POST that carries no choice — which

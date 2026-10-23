@@ -103,7 +103,8 @@ class FakeIO implements SecurityIO {
 function site(): string {
   const dir = mkdtempSync(join(tmpdir(), "hm-sec-"));
   const w = (n: string, o: unknown): void => writeFileSync(join(dir, `${n}.json`), JSON.stringify(o));
-  w("site", { name: "rossen", hardware: { nodes: [{ name: "tappaas1" }] } });
+  w("site", { name: "rossen" });
+  w("tappaas1", { kind: "machine", moduleSource: "/x/pvehost", address: "tappaas1.mgmt.internal" });
   w("tappaas-cicd", { vmname: "tappaas-cicd", vmid: 130, node: "tappaas1", zone0: "mgmt", status: "Production" });
   w("identity", { vmname: "identity", vmid: 140, node: "tappaas1", zone0: "mgmt", status: "Development" });
   w("network", { vmname: "network", vmid: 110, node: "tappaas1", zone0: "mgmt", provides: ["proxy", "rules"] });

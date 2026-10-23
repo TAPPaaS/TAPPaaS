@@ -238,7 +238,6 @@ cp "${CFG2}/zones.json" "${CFG3}/zones.json"   # has acme + base zones
 cat > "${CFG3}/site.json" <<'JSON'
 { "name": "acme-site1", "defaultEnvironment": "acme", "displayName": "Acme Site", "owner": "test2",
   "location": { "country": "NL", "timezone": "Europe/Amsterdam" },
-  "hardware": { "nodes": [ { "name": "tappaas1" } ] },
   "repositories": [ { "name": "core", "url": "https://example/repo" } ] }
 JSON
 if run_bootstrap --config-dir "$CFG3"; then

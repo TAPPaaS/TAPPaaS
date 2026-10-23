@@ -52,11 +52,11 @@ fi
 
 if [[ "${DEEP}" -eq 1 ]]; then
     if [[ -z "${NODE}" ]]; then
-        for n in $(jq -r '.hardware.nodes[]?.name' "${CONFIG_DIR}/site.json"); do
+        for n in $(tappaas_cluster_nodes "${CONFIG_DIR}"); do
             ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@$(jq -r '.address // empty' "${CONFIG_DIR}/${n}.json")" \
                 "zpool list -H -o name tankb1" >/dev/null 2>&1 && { NODE="${n}"; break; }
         done
-        NODE="${NODE:-$(jq -r '.hardware.nodes[0].name' "${CONFIG_DIR}/site.json")}"
+        NODE="${NODE:-$(tappaas_cluster_nodes "${CONFIG_DIR}" | head -1)}"
     fi
     if "${HERE}/lib/test-nfs-deep.sh" "${NODE}"; then pass "NFS deep suite on ${NODE}"
     else fail "NFS deep suite on ${NODE} (above)"; fi

@@ -34,7 +34,7 @@ from pathlib import Path
 from .log import debug, warn
 from .util import provision_dir
 
-# Node-name pattern per schemas/site-fields.json hardware.nodes[].name
+# Node-name pattern: a cluster node's name (its pvehost instance, config/<name>.json)
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 # A boot disk is named by its SERIAL (preferred) or, legacy, a kernel name. The

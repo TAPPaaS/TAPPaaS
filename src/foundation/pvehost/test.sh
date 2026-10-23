@@ -3,7 +3,7 @@
 #
 #   1. root login by the mothership's key works
 #   2. it runs Proxmox VE, and calls itself by its instance name
-#   3. it is in site.json hardware.nodes, and the cluster it sees is quorate
+#   3. it is a member of this Site's cluster, and the cluster it sees is quorate
 #   4. its root filesystem is below 90% full
 #   5. its clock is synchronised (corosync depends on it)
 #   6. (info) a pending reboot — the cluster module's reboot pass takes it
@@ -39,7 +39,7 @@ pve="$(pn_ssh 'pveversion 2>/dev/null | head -1' 2>/dev/null)"
 [[ "${pve}" == pve-manager/* ]] && pass "runs ${pve}" || fail "runs no Proxmox VE"
 [[ "${host}" == "${INSTANCE}" ]] && pass "calls itself ${host}" || fail "calls itself '${host}', not '${INSTANCE}'"
 
-pn_site_member "${INSTANCE}" && pass "in site.json hardware.nodes" || fail "not in site.json hardware.nodes"
+pn_cluster_member "${INSTANCE}" && pass "a member of this Site's cluster" || fail "not a member of this Site's cluster"
 if pn_ssh "pvecm status 2>/dev/null | grep -cE '^Quorate:[[:space:]]+Yes' >/dev/null"; then pass "cluster quorate"
 else fail "the cluster ${INSTANCE} sees is not quorate (pvecm status)"; fi
 

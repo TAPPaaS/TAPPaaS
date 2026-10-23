@@ -1513,7 +1513,7 @@ else
 fi
 
 # ── Deep Test: storage nodes-list drift reconcile (node-prov. §7.3) ──
-# Induce drift on a REAL pool (drop the last site.json-declared node from
+# Induce drift on a REAL pool (drop the last node that declares it from
 # its storage.cfg nodes list), run reconcile-storage-nodes.sh, verify the
 # node is restored. Self-healing by construction: the reconcile itself is
 # the cleanup, and a trap restores the original list on abort.
@@ -1527,7 +1527,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
         _l="$(ssh -n -o BatchMode=yes root@"${_sd_node1}" \
             "sed -n '/^zfspool: ${_p}\$/,/^\$/s/^[[:space:]]*nodes //p' /etc/pve/storage.cfg" 2>/dev/null | head -1)"
         [[ "${_l}" == *,* ]] && { _sd_pool="${_p}"; _sd_orig="${_l}"; break; }
-    done < <(jq -r '[.hardware.nodes[].storagePools[]?] | unique | .[]' "${CONFIG_DIR}/site.json" 2>/dev/null)
+    done < <(tappaas_cluster_nodes_json "${CONFIG_DIR}" 2>/dev/null | jq -r '[.[].storagePools[]?] | unique | .[]')
     if [[ -z "${_sd_pool}" ]]; then
         skip "no multi-node pool with a nodes list found — drift test needs one"
     else

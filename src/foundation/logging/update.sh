@@ -111,8 +111,8 @@ install_guest_memory_sampler() {
 # Idempotent: scp overwrites the conf file; rsyslog restart is harmless.
 info "${BOLD}Configure Proxmox nodes' rsyslog forwarding${CL}"
 
-# Node hostnames from site.json (.hardware.nodes), falling back to
-# configuration.json (.tappaas-nodes) — via the shared helper.
+# Node hostnames: the cluster's nodes (their pvehost instances) — via the
+# shared helper.
 mapfile -t NODE_HOSTS < <(get_all_node_hostnames 2>/dev/null)
 NODE_COUNT="${#NODE_HOSTS[@]}"
 

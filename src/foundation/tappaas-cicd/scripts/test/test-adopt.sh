@@ -52,11 +52,27 @@ ck "debian + Proxmox VE → pvehost (#665)"           pvehost    "$(adopt_module
 ck "debian, no Proxmox → debianhost"                debianhost "$(adopt_module_for_os debian - 2>/dev/null || echo "(none)")"
 ck "Proxmox on something else → no module"          "(none)"   "$(adopt_module_for_os ubuntu pve 2>/dev/null || echo "(none)")"
 
-SITE="${TMP}/site.json"
-echo '{"hardware":{"nodes":[{"name":"tappaas1"},{"name":"tappaas2"}]}}' > "${SITE}"
-adopt_site_member tappaas2 "${SITE}" && ck "a node site.json lists is a member" ok ok || ck "a node site.json lists is a member" ok no
-adopt_site_member tappaas9 "${SITE}" && ck "a node it does not list is not" no yes || ck "a node it does not list is not" no no
-adopt_site_member tappaas1 "${TMP}/none.json" && ck "no site.json → not a member" no yes || ck "no site.json → not a member" no no
+# A Proxmox node is a member of the Site's cluster by its own cluster status
+# (tappaas_cluster_member, cluster-nodes.sh): its cluster lists another of the
+# site's nodes (their pvehost instances), or carries the site's name.
+# shellcheck source=/dev/null
+. "${CICD}/lib/cluster-nodes.sh"
+CFG="${TMP}/cfg"; mkdir -p "${CFG}"
+echo '{"name":"rossen"}' > "${CFG}/site.json"
+printf '{"kind":"machine","moduleSource":"/x/pvehost","address":"tappaas1.mgmt.internal"}\n' > "${CFG}/tappaas1.json"
+ST='[{"type":"cluster","name":"rossen"},{"type":"node","name":"tappaas1"},{"type":"node","name":"tappaas2"}]'
+OTHER='[{"type":"cluster","name":"elsewhere"},{"type":"node","name":"tappaas1"},{"type":"node","name":"tappaas2"}]'
+STRANGE='[{"type":"cluster","name":"elsewhere"},{"type":"node","name":"pve"},{"type":"node","name":"tappaas2"}]'
+mem() { tappaas_cluster_member "$1" "$2" "$3" "${4:-${CFG}}" && echo yes || echo no; }
+ck "a node in the site's cluster is a member"                     yes "$(mem tappaas2 "${ST}" rossen)"
+ck "…and in a cluster that lists a registered node, by any name" yes "$(mem tappaas2 "${OTHER}" rossen)"
+ck "the first node: a cluster named after the site"              yes "$(mem tappaas1 "${ST}" rossen "${TMP}/empty")"
+ck "a cluster with no node of the site and another name is not"  no  "$(mem tappaas2 "${STRANGE}" rossen)"
+ck "a node its own cluster does not list is not"                 no  "$(mem tappaas9 "${ST}" rossen)"
+ck "a registered node alone does not vouch for itself"           no  "$(mem tappaas1 "${OTHER}" rossen)"
+ck "no cluster status (standalone, unreachable) is not"          no  "$(mem tappaas2 "" rossen)"
+ck "zpools → the tank pools, sorted"   '["tanka1","tankb1"]' "$(adopt_pools_json rpool tankb1 tanka1 tanka1)"
+ck "no tank pool → []"                 '[]'                  "$(adopt_pools_json rpool)"
 ck "ubuntu → no module (no near match)"             "(none)"   "$(mod ubuntu)"
 ck "nixos → no module (not adopted)"                "(none)"   "$(mod nixos)"
 ck "an empty ID → no module"                        "(none)"   "$(mod "")"
