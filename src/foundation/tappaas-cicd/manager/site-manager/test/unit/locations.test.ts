@@ -117,6 +117,12 @@ check(findLocation(readLocations(SITE).locations, { country: "DK", city: "Rodovr
   check(locationNamers(d, "hareskov").join() === "remote-rasmus.json", "a peer naming a location is found — a module path is no name");
   throws(() => deleteLocation(clone(SITE), "hareskov", d), /named by remote-rasmus.json/, "a named location cannot be deleted");
   throws(() => deleteLocation(clone(SITE), "rodovre", d), /primary location/, "nor the primary one");
+  const sw = dir(SITE, {
+    "switch-configuration-desired.json": { switches: { "crs-a": { location: "hareskov" }, "crs-b": { location: "Rack 1" } }, accessPoints: { "Nano HD": { location: "hareskov" } } },
+    "satellite-hel.json": { kind: "machine", location: "hareskov" },
+  });
+  check(locationNamers(sw, "hareskov").join("|") === "satellite-hel.json|switch-configuration-desired.json switch crs-a|switch-configuration-desired.json access point Nano HD", "a machine, a switch and an access point naming a location are found — free text is no name");
+  throws(() => deleteLocation(clone(SITE), "hareskov", sw), /named by satellite-hel.json, switch-configuration-desired.json switch crs-a/, "…and keep it from being deleted");
   const empty = dir(SITE);
   const doc = deleteLocation(clone(SITE), "hareskov", empty);
   check(!("hareskov" in (doc.locations as Obj)), "an unnamed one can");

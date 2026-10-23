@@ -179,9 +179,10 @@ export function findLocation(locations: Record<string, Location>, place: { count
 // ── what names a location ──────────────────────────────────────────────
 
 /** Every record that names a location, as [what, location]: a config whose
- *  top-level `location` is a name (a backup peer; a machine or device later —
- *  a string with a '/' is the module directory field migration 0006 renamed,
- *  never a place), and a room or recorded device of racks.json/positions.json. */
+ *  top-level `location` is a name (a backup peer, a machine module — a string
+ *  with a '/' is the module directory field migration 0006 renamed, never a
+ *  place), a room or recorded device of racks.json/positions.json, and a switch
+ *  or access point of the switch configuration. */
 export function locationReferences(configDir: string): Array<[string, string]> {
   const out: Array<[string, string]> = [];
   if (!existsSync(configDir)) return out;
@@ -195,6 +196,14 @@ export function locationReferences(configDir: string): Array<[string, string]> {
     }
     if (!raw) continue;
     if (typeof raw.location === "string" && raw.location !== "" && !raw.location.includes("/")) out.push([f, raw.location]);
+    if (f === "switch-configuration-desired.json") {
+      for (const [part, what] of [["switches", "switch"], ["accessPoints", "access point"]]) {
+        for (const [n, v] of Object.entries(obj(raw[part]) ?? {})) {
+          const l = obj(v)?.location;
+          if (typeof l === "string" && l !== "" && LOCATION_NAME.test(l)) out.push([`${f} ${what} ${n}`, l]);
+        }
+      }
+    }
     if (f === "racks.json" || f === "positions.json") {
       for (const part of ["rooms", "devices"]) {
         for (const [n, v] of Object.entries(obj(raw[part]) ?? {})) {

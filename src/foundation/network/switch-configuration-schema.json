@@ -30,7 +30,7 @@
         "vendor": { "type": "string", "enum": ["unifi", "mikrotik", "cisco", "generic"] },
         "model": { "type": "string" },
         "managementIp": { "type": "string" },
-        "location": { "type": "string" },
+        "location": { "type": "string", "references": "locations", "description": "Where it is: the name of one of the site's locations (site.json locations, site-manager location list); absent, the primary location. Free text belongs in description." },
         "description": { "type": "string" },
         "ports": {
           "type": "object",
@@ -95,7 +95,8 @@
         "vendor": { "type": "string", "enum": ["unifi", "mikrotik", "generic"] },
         "model": { "type": "string" },
         "managementIp": { "type": "string" },
-        "location": { "type": "string" },
+        "location": { "type": "string", "references": "locations", "description": "Where it is: the name of one of the site's locations (site.json locations, site-manager location list); absent, the primary location. Free text belongs in description." },
+        "description": { "type": "string" },
         "uplinkSwitch": { "type": "string" },
         "uplinkPort": { "type": "string" },
         "ssids": {

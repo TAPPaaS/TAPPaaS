@@ -39,6 +39,9 @@ readonly SCRIPT_DIR
 # The controllers: the registry's, plus (tests) every PLUGIN_DIR/*.sh.
 # shellcheck source=../../lib/controller-lib.sh
 . "${SCRIPT_DIR}/../../lib/controller-lib.sh"
+# An AP's location is one of the site's (ADR-036 D2).
+# shellcheck source=../../lib/locations.sh
+. "${SCRIPT_DIR}/../../lib/locations.sh"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
@@ -50,10 +53,15 @@ usage() {
 Usage: ap-manager <command> [args]
 
 Inventory:
-  add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]
+  add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]
+  modify <name> [--location <name>] [--description <d>] [--model <m>] [--ip <ip>]
+        [--unset location,description]
+                          --location is one of the site's locations
+                          (site-manager location list); absent, the primary one
   remove <name>
   list [--json]
   show <name>
+  validate                every access point's location is one of the site's
 
 SSID configuration:
   ssid <ap> add <ssid> --zone <zone> --security <sec> [--vlan <n>] [--radius <srv>]
@@ -77,7 +85,9 @@ EOF
 
 # What each verb accepts (lib/cli-gate.sh; '=' marks an option with a value).
 readonly CLI_SPEC='
-add: --vendor= --ip= --model= --location=
+add: --vendor= --ip= --model= --location= --description=
+modify: --location= --description= --model= --ip= --unset=
+validate:
 remove:
 list: --json
 show:
@@ -119,13 +129,14 @@ jq_desired() {
 cmd_add() {
     local name="$1"; shift
     [[ -n "${name}" ]] || die "add requires a <name>"
-    local vendor="" ip="" model="" location=""
+    local vendor="" ip="" model="" location="" description="" why
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --vendor) vendor="$2"; shift 2 ;;
             --ip) ip="$2"; shift 2 ;;
             --model) model="$2"; shift 2 ;;
             --location) location="$2"; shift 2 ;;
+            --description) description="$2"; shift 2 ;;
             *) die "add: unknown option '$1'" ;;
         esac
     done
@@ -133,9 +144,60 @@ cmd_add() {
     if jq -e --arg n "${name}" '.accessPoints | has($n)' "${DESIRED}" >/dev/null; then
         die "AP '${name}' already exists"
     fi
-    jq_desired '.accessPoints[$n] = {vendor:$v, model:$m, managementIp:$ip, location:$loc, ssids:{}}' \
-        --arg n "${name}" --arg v "${vendor}" --arg m "${model}" --arg ip "${ip}" --arg loc "${location}"
-    info "${GN}✓${CL} added AP '${name}' (${vendor})"
+    if [[ -n "${location}" ]] && ! why="$(site_location_refusal "${location}")"; then die "add --location: ${why}"; fi
+    jq_desired '.accessPoints[$n] = ({vendor:$v, model:$m, managementIp:$ip, ssids:{}}
+                + (if $loc == "" then {} else {location:$loc} end) + (if $d == "" then {} else {description:$d} end))' \
+        --arg n "${name}" --arg v "${vendor}" --arg m "${model}" --arg ip "${ip}" --arg loc "${location}" --arg d "${description}"
+    info "${GN}✓${CL} added AP '${name}' (${vendor}${location:+, at ${location}})"
+}
+
+# modify <name> [--location <n>] [--description <d>] [--model <m>] [--ip <ip>]
+# [--unset location,description]: the AP's own record in desired.
+cmd_modify() {
+    local name="${1:-}"; shift || true
+    [[ -n "${name}" ]] || die "modify requires a <name>"
+    jq -e --arg n "${name}" '.accessPoints | has($n)' "${DESIRED}" >/dev/null || die "AP '${name}' not found"
+    local set='{}' unset='[]' f why
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --location)
+                why="$(site_location_refusal "$2")" || die "modify --location: ${why}"
+                set=$(jq -c --arg v "$2" '.location=$v' <<<"${set}"); shift 2 ;;
+            --description) set=$(jq -c --arg v "$2" '.description=$v' <<<"${set}"); shift 2 ;;
+            --model) set=$(jq -c --arg v "$2" '.model=$v' <<<"${set}"); shift 2 ;;
+            --ip) set=$(jq -c --arg v "$2" '.managementIp=$v' <<<"${set}"); shift 2 ;;
+            --unset)
+                for f in ${2//,/ }; do
+                    [[ "${f}" == location || "${f}" == description ]] || die "modify --unset: only location and description (got '${f}')"
+                    unset=$(jq -c --arg f "${f}" '. + [$f]' <<<"${unset}")
+                done
+                shift 2 ;;
+            *) die "modify: unknown option '$1'" ;;
+        esac
+    done
+    [[ "${set}" != '{}' || "${unset}" != '[]' ]] || die "modify: nothing to change (--location, --description, --model, --ip, --unset)"
+    jq_desired '.accessPoints[$n] |= ((. + $set) | delpaths([$unset[] | [.]]))' \
+        --arg n "${name}" --argjson set "${set}" --argjson unset "${unset}"
+    info "${GN}✓${CL} AP '${name}': $(jq -r '[to_entries[] | "\(.key)=\(.value)"] | join(", ")' <<<"${set}")$(jq -r 'if length > 0 then " unset " + join(",") else "" end' <<<"${unset}")"
+}
+
+# validate: every AP's location names one of the site's locations (ADR-036
+# D2); free text is reported with the command that fixes it (migration 0021
+# moves it into the description).
+cmd_validate() {
+    local errs=0 name loc why
+    while IFS=$'\t' read -r name loc; do
+        [[ -n "${loc}" ]] || continue
+        why="$(site_location_refusal "${loc}")" && continue
+        errs=$((errs + 1))
+        error "access point '${name}': location '${loc}': ${why} — ap-manager modify '${name}' --location <name> --description '${loc}'"
+    done < <(jq -r '.accessPoints // {} | to_entries[] | [.key, (.value.location // "")] | @tsv' "${DESIRED}")
+    if [[ "${errs}" -gt 0 ]]; then
+        error "validate: ${errs} location(s) name no location of the site"
+        return 1
+    fi
+    info "${GN}validate ok${CL} ($(jq -r '.accessPoints // {} | length' "${DESIRED}") access point(s))"
+    return 0
 }
 
 cmd_remove() {
@@ -157,7 +219,7 @@ cmd_list() {
     local count
     count=$(jq -r '.accessPoints // {} | length' "${DESIRED}")
     info "${BOLD}Access points (${count}):${CL}"
-    jq -r '.accessPoints // {} | to_entries[] | "  \(.key)  [\(.value.vendor)]  \(.value.managementIp // "-")  ssids=\(.value.ssids|length)  uplink=\(.value.uplinkSwitch // "-"):\(.value.uplinkPort // "-")"' "${DESIRED}"
+    jq -r '.accessPoints // {} | to_entries[] | "  \(.key)  [\(.value.vendor)]  \(.value.managementIp // "-")  ssids=\(.value.ssids|length)  uplink=\(.value.uplinkSwitch // "-"):\(.value.uplinkPort // "-")\(if (.value.location // "") != "" then "  at " + .value.location else "" end)"' "${DESIRED}"
     return 0
 }
 
@@ -494,6 +556,8 @@ main() {
 
     case "${cmd}" in
         add)            cmd_add "$@" ;;
+        modify)         cmd_modify "$@" ;;
+        validate)       cmd_validate ;;
         remove)         cmd_remove "${1:-}" ;;
         list)           cmd_list "${1:-}" ;;
         show)           cmd_show "${1:-}" ;;
