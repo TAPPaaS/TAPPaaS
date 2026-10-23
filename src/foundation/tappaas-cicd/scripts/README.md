@@ -280,7 +280,7 @@ Merge: 7 adopted, 30 pinned, 1 added, 0 kept (orphan), 0 possible rename(s)
 | `1` | source missing / IO failure |
 | `2` | bad arguments |
 
-After a merge that actually changed anything, push to OPNsense (renders `zones.effective.json` first, so `serves`-derived edges are kept):
+After a merge that actually changed anything, push to OPNsense (renders `zones.effective.json` first, so the edges the zones' environment links derive are kept):
 ```bash
 network-manager reconcile --only opnsense --apply
 ```

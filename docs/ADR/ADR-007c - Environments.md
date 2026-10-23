@@ -3,23 +3,24 @@
 | | |
 |---|---|
 | **Status** | Accepted — **implemented** (P3/S4 on the `ADR007` branch) |
-| **Version** | 1.6 |
+| **Version** | 1.7 |
 | **Date** | 2026-06-30 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Related** | #318 (rename "variant"→Environment); #299 (domain_groups — subsumed); #319 (zone deletion); #294 (zone-aligned VMID, out of scope); #313 (timezone→site); **manager:** `environment-manager`; **zones owned by** `network-manager` |
-| **Changelog** | v1.6 (2026-09-22) — as built: `mgmt` has no owning Organization. · v1.5 (2026-09-19, #349) — who names `zone0`: a released module only when it must live in a particular kind of zone; otherwise install resolves it (foundation → `mgmt`), and once deployed the merge keeps it. v1.4 — **as-built (2026-06-30):** (1) `network.zones[]` reverted to **`network.zone`** (singular) — the realized schema binds an Environment to **one** zone; (2) added **`domains.dnsMode`** (`per-service`\|`wildcard`); (3) the TLS **cert refid is runtime state**, NOT an authored field — `domains.tlsCertRefid` is **rejected** by the schema and lives in `config/cert-refids.json` keyed by environment; (4) **`mgmt` is an Environment** (omits `domains`); (5) the **default Environment = the Site/org name** (`<N>`), and `configuration.json` is **retired** (no `tappaas.domain` fallback). v1.3 — (superseded) `network.zone` → `network.zones[]`. v1.2 — "bucket" → "classification domain". v1.1 — Erik⟷Lars review: ownerOrg→Organization ref (CR-08); vlan→zones.json (CR-09); drop identityOrganization/tenant (CR-11); updateWindow/Channel → issues (CR-12/13); backup cross-level (CR-14). Deferred: firewallPosture (CR-10), legal→own ADR (CR-15) |
+| **Changelog** | v1.7 (2026-10-23, #865) — **the zone names the environment**: `network.zone` leaves the environment file; the environment's zone is the Service zone (for `mgmt`, the Management zone) in `zones.json` whose `environment` names it, exactly one per environment. A client or IoT zone names the environment it serves in the same field (ADR-014 v1.4). · v1.6 (2026-09-22) — as built: `mgmt` has no owning Organization. · v1.5 (2026-09-19, #349) — who names `zone0`: a released module only when it must live in a particular kind of zone; otherwise install resolves it (foundation → `mgmt`), and once deployed the merge keeps it. v1.4 — **as-built (2026-06-30):** (1) `network.zones[]` reverted to **`network.zone`** (singular) — the realized schema binds an Environment to **one** zone; (2) added **`domains.dnsMode`** (`per-service`\|`wildcard`); (3) the TLS **cert refid is runtime state**, NOT an authored field — `domains.tlsCertRefid` is **rejected** by the schema and lives in `config/cert-refids.json` keyed by environment; (4) **`mgmt` is an Environment** (omits `domains`); (5) the **default Environment = the Site/org name** (`<N>`), and `configuration.json` is **retired** (no `tappaas.domain` fallback). v1.3 — (superseded) `network.zone` → `network.zones[]`. v1.2 — "bucket" → "classification domain". v1.1 — Erik⟷Lars review: ownerOrg→Organization ref (CR-08); vlan→zones.json (CR-09); drop identityOrganization/tenant (CR-11); updateWindow/Channel → issues (CR-12/13); backup cross-level (CR-14). Deferred: firewallPosture (CR-10), legal→own ADR (CR-15) |
 
 The **🏠 Environments** classification domain. An Environment = **where apps run**: network zones, domain, update
 window, security posture. Owned by **exactly one Organization** (`ownerOrg`) — except **`mgmt`**, the control-plane Environment, which belongs to the Site itself and carries an empty `ownerOrg`.
 
 - An Environment carries (as built): `ownerOrg`, `domains` (`primary`, `aliases`, **`dnsMode`**),
-  `network.zone`, `backup` (retention/residency), and optionally `legal.processor`. (`vlan`/`firewallPosture`
+  `backup` (retention/residency), and optionally `legal.processor`. (`vlan`/`firewallPosture`
   live in `zones.json`; `updateWindow`/`updateChannel` and `authentikTenant` were deferred — see field notes.)
-- **An Environment binds to one zone** (`network.zone`, **singular** — the v1.3 `network.zones[]` set was
-  reverted in implementation). A tenant whose services genuinely need several network segments models that
-  in `zones.json` (a service zone may itself span/trunk VLANs); the Environment names the one zone its
-  modules deploy into.
+- **An Environment binds to one zone** (**singular** — the v1.3 `network.zones[]` set was reverted in
+  implementation). A tenant whose services genuinely need several network segments models that in
+  `zones.json` (a service zone may itself span/trunk VLANs). v1.7: the binding is written on the zone —
+  the one Service zone whose `environment` names the Environment is the zone its modules deploy into;
+  the Environment file names no zone.
 - **`mgmt` is itself an Environment** — the foundation/control-plane environment; it omits `domains` (no
   public domain). Foundation modules deploy here.
 - **The default Environment is named after the Site/org (`<N>`)** and is the zone a module lands in when
@@ -44,7 +45,7 @@ It **subsumes** two earlier mechanisms so there is no overlapping config:
 - **Who names `zone0` (amended 2026-09-19, #349).** A *released* module names `zone0` only when it
   must live in a particular kind of zone — a public service in `dmz` (coturn, vaultwarden), a
   device bridge in an IoT zone (deconz), the satellite in `edge`. Every other module names none:
-  install resolves it — the environment's `network.zone`, and for a foundation module `mgmt`,
+  install resolves it — the environment's zone (v1.7: the zone naming it), and for a foundation module `mgmt`,
   recorded by `copy-update-json.sh` so the bootstrap's configs carry it too. Once deployed,
   `zone0` is the **site's**: the update merge keeps it whatever the release does (a site field,
   `apply-json-merge.sh` rule 1b), so an update never moves an install; `module modify --set
@@ -57,7 +58,8 @@ It **subsumes** two earlier mechanisms so there is no overlapping config:
 
 ## Schema (`config/environments/{name}.json`)
 
-As built (`schemas/environment-fields.json`) — `network.zone` is **singular**, `domains` carries a
+As built (`schemas/environment-fields.json`) — `network.zone` is **singular** (v1.7: removed; the zone
+names the environment, see the note below the example), `domains` carries a
 **`dnsMode`**, and `tlsCertRefid` is **NOT** an authored field (it is reconciler-populated runtime state —
 see TLS note):
 
@@ -67,16 +69,22 @@ see TLS note):
   "displayName": "MyBusiness Production",
   "ownerOrg": "mybusiness-bv",
   "domains": { "primary": "mybusiness.nl", "aliases": ["mybusiness.com"], "dnsMode": "wildcard" },
-  "network": { "zone": "mybusiness" },
   "backup": { "retention": "7y", "residency": "eu-only" },
   "legal": { "processor": "MyBusiness BV" }
 }
 ```
 
-The **`mgmt`** Environment (foundation/control plane) omits `domains` entirely:
+and its zone, in `zones.json` (v1.7):
 
 ```json
-{ "name": "mgmt", "ownerOrg": "", "network": { "zone": "mgmt" } }
+"mybusiness": { "type": "Service", "environment": "mybusiness", "vlantag": 210, "ip": "10.2.10.0/24" }
+```
+
+The **`mgmt`** Environment (foundation/control plane) omits `domains` entirely; its zone is the
+Management zone `mgmt`, which carries `"environment": "mgmt"`:
+
+```json
+{ "name": "mgmt", "ownerOrg": "" }
 ```
 
 > **TLS / cert refid (as built).** `domains.dnsMode` decides the certificate strategy: `per-service`
@@ -163,5 +171,5 @@ ADR-005/#316 variant model. #294 / #319 / #313 are adjacent zone/field concerns 
 
 - [x] `ownerOrg` references a People Organization; `environment-manager` validates it (mgmt may be `""`).
 - [x] `--environment` is the front door (`--variant` kept as a deprecated alias); the chosen env is persisted on the deployed module.
-- [x] `Environment.network.zone` (singular) references a zone in `zones.json`; `network:proxy` derives `proxyDomain` from `domains.primary` + `dnsMode`.
+- [x] `Environment.network.zone` (singular) references a zone in `zones.json`; `network:proxy` derives `proxyDomain` from `domains.primary` + `dnsMode`. (v1.7: the zone's `environment` references the Environment instead; one Service zone per Environment.)
 - [x] `domain_groups` (#299) implemented **as** `Environment.domains` — no separate registry; cert refid is runtime (`cert-refids.json`).

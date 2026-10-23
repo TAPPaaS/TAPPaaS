@@ -78,31 +78,40 @@ removal.
 ## Config state
 
 - **`config/environments/<name>.json`** — the Environment document: `name`,
-  `displayName`, `ownerOrg`, `network.zone` (required), optional `domains`
+  `displayName`, `ownerOrg` (required), optional `domains`
   (`primary`, `aliases[]`, `aliasMode`, `dnsMode`), `dataResidency`, `backup`,
   `legal`. Schema `environment-fields.json` is `additionalProperties:false`. This
   is the single source of truth (the `configuration.json` `.tappaas.variants`
-  registry is retired, ADR-007 Phase D).
+  registry is retired, ADR-007 Phase D). It names no zone: the environment's zone
+  is the Service (for `mgmt`, Management) zone in `zones.json` whose `environment`
+  names it, read by `config.ts` `ownZones()` / `environmentZone()` and by
+  `NetworkClient.environmentZones()`.
 ### Zone materialization (ADR-014 D1)
 
-`computePlan` resolves `network.zone` into one of three outcomes:
+`computePlan` finds the zones naming the environment (`environmentZones`) and
+lands on one of four outcomes:
 
 | zones.json | outcome |
 |---|---|
-| absent | plan a **`create-service-zone`** action — authored via the network client *before* the network pass (order is load-bearing and unit-asserted) |
-| present, `type: Service` | nothing to do |
-| present, other type | a **hard error** on the plan; reconcile is refused in preview *and* apply |
+| one Service/Management zone names it | nothing to do |
+| none, and no zone of the environment's name | plan a **`create-service-zone`** action — authored naming the environment via the network client *before* the network pass (order is load-bearing and unit-asserted) |
+| none, but a zone of its name exists (another role, or unbound) | a **hard error**: binding by name would be a guess |
+| two or more | a **hard error**: an environment has one zone |
 
-The third case is the one ADR-014 calls out: an environment pointed at a
-client/IoT zone is a configuration mistake, and silently authoring a second zone
-underneath the operator would hide it. `Plan.errors` carries these (distinct from
-`warnings`, which reconcile proceeds through).
+Silently authoring a second zone underneath the operator would hide a mistake,
+so `Plan.errors` carries these (distinct from `warnings`, which reconcile
+proceeds through).
 
-`NetworkClient` grew `zoneType()` and `createServiceZone()` for this. Both stay
-on the shell-out seam — environment-manager never writes `zones.json`.
+`NetworkClient` has `zoneType()`, `environmentZones()`, `createServiceZone(zone,
+env)`, `bindZone()` and `unbindZone()` for this and for `add`/`modify`/`delete
+--zone`. Writes stay on the shell-out seam (`network-manager add --environment`,
+`network-manager bind`) — environment-manager never writes `zones.json`; it
+validates an add/modify against the refs as they will be (`withBinding`) before
+asking.
 
-- Cross-referenced state it validates against: `config/zones.json` (for
-  `network.zone`) and `config/identities/organizations/*.json` (for `ownerOrg`).
+- Cross-referenced state it validates against: `config/zones.json` (exactly one
+  Service/Management zone names each environment) and
+  `config/identities/organizations/*.json` (for `ownerOrg`).
 
 The `add` minimal-set bootstrap (`src/bootstrap.ts`) is the single owner of
 `mgmt.json` and the default `<N>.json`; downstream steps consume but do not
@@ -131,13 +140,15 @@ add` (the TS network owner; was `zone-controller add`).
 - **TS unit tests (`test/unit/`):** zero-dep, inline-assert harness compiled via
   `test/unit/tsconfig.json` and run under Node. `reconcile.test.ts` exercises the
   pure cascade engine with `FakeNetworkClient`/`FakeModuleClient` (shallow vs
-  `--deep`, unknown-zone warning, apply ordering). `config.test.ts` covers
-  load/write/serialize, `validateEnvironmentRefs` (valid, unknown zone/owner,
+  `--deep`, zone creation and the two-zone / wrong-role errors, apply ordering);
+  `main.test.ts` drives add/modify/delete `--zone` and asserts the bind/unbind
+  calls. `config.test.ts` covers
+  load/write/serialize, `validateEnvironmentRefs` (valid, no zone / unknown owner,
   `tlsCertRefid` reject), the bootstrap (name/owner derivation, idempotency), and
   `CliModuleClient` consumer discovery — all against a throwaway temp config tree.
 - **`test.sh`** follows the fast/deep convention. **Fast (default, temp fixtures,
   non-disruptive):** the `tlsCertRefid` drop + schema reject, reference checks
-  (`network.zone`, `ownerOrg`), bootstrap (`--name <N>` and derivation from
+  (the zone naming the environment, `ownerOrg`), bootstrap (`--name <N>` and derivation from
   `site.json '.name'`), idempotency, and `--force` overwrite. **Deep
   (`TAPPAAS_TEST_DEEP=1`):** additionally read-only-validates the live
   `config/environments` directory when present — never writes to live. Fixtures

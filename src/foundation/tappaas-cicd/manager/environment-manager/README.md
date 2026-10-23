@@ -1,8 +1,9 @@
 # environment-manager
 
 The **Environment** manager. An Environment is a per-tenant deployment context:
-public domain(s), DNS mode, a network-zone reference, data residency, backup
-retention, and legal processor. Environments live at
+public domain(s), DNS mode, data residency, backup retention, and legal
+processor. Its network zone is not in the environment file: the zone names the
+environment (see "Env ↔ service zone"). Environments live at
 `config/environments/<name>.json` and replace the legacy `configuration.json`
 `.tappaas.variants` construct.
 
@@ -10,8 +11,8 @@ retention, and legal processor. Environments live at
 
 `config/environments/*.json` (default
 `${TAPPAAS_CONFIG:-/home/tappaas/config}/environments/`), validated against
-`environment-fields.json`. Mandatory fields: `name`, `displayName`, `ownerOrg`,
-`network.zone`. `domains` is optional in the schema, though bootstrap seeds it
+`environment-fields.json`. Mandatory fields: `name`, `displayName`, `ownerOrg`.
+`domains` is optional in the schema, though bootstrap seeds it
 on `mgmt` and the default environment alike when a site domain is known;
 `domains.dnsMode` defaults to `per-service`. The schema is
 `additionalProperties:false`, so an authored `tlsCertRefid` is **rejected** — a
@@ -73,25 +74,38 @@ reports it as a *note*, not a warning. Services stay reachable at
 
 ### Reconcile cascade
 
-### Env ↔ service zone (ADR-014 D1)
+### Env ↔ service zone
 
-An Environment binds to **exactly one** service zone (`network.zone`, defaulting
-to the environment's own name). Making that binding real used to be two steps in
-a specific order, and getting it wrong failed quietly:
+An Environment has **exactly one** service zone, by default the zone named like
+the environment. The link is written on the zone, not in the environment file:
+the Service zone's `environment` field names the environment (for `mgmt`, the
+Management zone `mgmt` names it). `validate` refuses an environment that no
+Service or Management zone names, or that two name. network-manager writes
+`zones.json`; environment-manager asks it to:
 
-- **`add <env> --create-zone`** authors the Service zone *first* (if it does not
-  already exist), then writes the environment — one command yields a working
-  pair. Opt-in on purpose: default-on would let a typo'd `--zone` silently mint
-  a stray zone.
-- **`reconcile <env>`** no longer merely warns that `network.zone` is absent —
-  it **plans the zone's creation** and authors it before the network pass. An
-  environment naming a zone that never existed could previously never converge.
-- If the zone **exists but is not a Service zone** (the operator pointed the
-  environment at a client/IoT segment), that is a **hard error** in both preview
-  and apply. Reconcile will not paper over it by minting a second zone; re-point
-  the environment with `modify <env> --zone <serviceZone>`, or — if you meant the
-  client zone to *consume* the environment — bind it the other way round with
-  `network-manager bind <zone> --environment <env>`.
+- **`add <env> [--zone Z]`** writes the environment, then binds `Z` (default: a
+  zone named like the environment) to it with `network-manager bind Z
+  --environment <env>`. `Z` must be a Service zone that is no other environment's
+  zone. If the bind fails, the environment file is put back as it was.
+- **`add <env> --create-zone`** authors `Z` as a Service zone naming the
+  environment when it does not exist — one command yields a working pair.
+  Opt-in on purpose: default-on would let a typo'd `--zone` silently mint a
+  stray zone.
+- **`modify <env> --zone Z`** moves the environment: the old zone's link is
+  cleared and `Z` is bound to it.
+- **`delete <env>`** clears the link on every zone naming the environment: its
+  own zone stays as a zone, and the client and IoT zones that served it stop
+  reaching it.
+- **`reconcile <env>`** finds the zone naming the environment. When none does and
+  no zone of its name exists, it **plans the zone's creation** and authors it
+  before the network pass. When two zones name it, or a zone of its name exists
+  in another role (a client zone that serves it, say), that is a **hard error**
+  in both preview and apply; give the environment its zone with
+  `modify <env> --zone <serviceZone>`.
+
+A client, IoT or guest zone names the environment it *serves* in the same field
+(`network-manager bind <zone> --environment <env>`); that does not make it the
+environment's zone.
 
 ```bash
 environment-manager add acme --create-zone          # env + service zone 'acme'
@@ -171,7 +185,9 @@ never silently under-validate. Exit codes: 0 = valid (warnings allowed),
 
 Creates the two always-required environments: `mgmt.json` (zone `mgmt`, no
 domains) and the default tenant environment `<N>.json`, named after the TAPPaaS
-system name `<N>` (with `network.zone = <N>`). Idempotent (existing files are
+system name `<N>`. Neither names a zone: the shipped `zones.json` carries
+`environment: "mgmt"` on `mgmt`, and `network-manager init` names `<N>` on the
+zone it renames to `<N>`. Idempotent (existing files are
 left untouched without `--force`); never deletes operator files (a stale legacy
 `default.json` is noted, not removed).
 

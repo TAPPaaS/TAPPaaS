@@ -34,7 +34,7 @@ firewall reads:
     "access-to": ["internet"],         // zones it may reach, whole subnet, every port
     "pinhole-allowed-from": [],        // zones whose modules may open a pinhole into it
     "snat-allowed-from": [],           // zones whose traffic may be masqueraded into it
-    "serves": "warmelo"                // adds the environment's service zone (derived)
+    "environment": "warmelo"           // the environment it serves: adds its zone (derived)
 }
 ```
 
@@ -125,8 +125,7 @@ the backup buddy and Caddy ([below](#rules-written-by-other-modules)).
 flowchart TD
     subgraph CFG["Configuration you edit"]
         direction LR
-        Z["zones.json<br/>ip · access-to<br/>pinhole-allowed-from<br/>snat-allowed-from · serves"]
-        E["environments/ENV.json<br/>network.zone"]
+        Z["zones.json<br/>ip · access-to<br/>pinhole-allowed-from<br/>snat-allowed-from · environment"]
         S["site.json<br/>ipv6"]
         M["MODULE.json<br/>zone0 · ports · ingress · egress<br/>aliases · dependsOn<br/>network:nat · network:snat"]
         P["provider<br/>services/SERVICE/pinhole.json"]
@@ -150,12 +149,11 @@ flowchart TD
     FW[("OPNsense rule set<br/>first match wins, by sequence")]
 
     Z --> NM
-    E --> NM
     S --> MM
     M --> MM
     P --> MM
     A --> MM
-    NM -- "zones.effective.json<br/>serves derived · all expanded" --> ZM
+    NM -- "zones.effective.json<br/>environment edges derived · all expanded" --> ZM
     NM -. "effective zones" .-> RM
     MM -- "network:rules" --> RM
     MM -- "network:nat · network:snat" --> NAT
@@ -166,10 +164,11 @@ flowchart TD
     V6 --> FW
 ```
 
-1. **Effective zones.** `network-manager reconcile` adds the edges `serves` derives — a Client
-   or Guest zone that serves an environment reaches that environment's service zone; an IoT
-   zone accepts pinholes from it — and writes `config/zones.effective.json`. Only the zone that
-   declares `serves` changes ([ZONES.md](ZONES.md#linking-a-client-or-iot-zone-to-an-environment-serves)).
+1. **Effective zones.** `network-manager reconcile` adds the edges a zone's `environment`
+   derives — a Client or Guest zone that serves an environment reaches that environment's zone
+   (the Service zone naming it); an IoT zone accepts pinholes from it — and writes
+   `config/zones.effective.json`. Only the zone that names the environment changes
+   ([ZONES.md](ZONES.md#a-zone-and-its-environment-environment)).
 2. **`all`.** Where `mgmt` says `all`, it is read as `internet` plus every zone that is not
    `Disabled`, an `Overlay` or the `WAN` hand-off.
 3. **Zone rules.** `zone-manager` writes the rules of every `Active` or `Mandatory` zone,

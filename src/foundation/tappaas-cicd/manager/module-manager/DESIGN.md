@@ -278,8 +278,9 @@ all reusing the `dependsOn` machinery rather than forking it:
   Site-scoped ⇒ installed in `mgmt`, `source:official` (override `--allow-fork`),
   `--force` to delete; not single-instance (D4). The retired `tier` is read only
   when a config has no `stack`, for one release (#676).
-- **Environment:** `--environment` resolves the VM name and the zone from the
-  target environment's `network.zone` (`config/environments/<env>.json`); the
+- **Environment:** `--environment` resolves the VM name and the zone: the
+  target environment's zone, the Service zone in `config/zones.json` naming it
+  (`environment_zone` in `common-install-routines.sh`); the
   chosen environment is persisted on the module JSON so update/delete resolve the
   right source.
 

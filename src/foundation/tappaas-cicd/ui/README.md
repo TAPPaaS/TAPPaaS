@@ -100,8 +100,8 @@ from the field schema, its value configured or default, its change class; the fi
 to one `module-manager modify <m> --set a=b --set c=d` job (`GET /api/v1/modules/<m>/fields`:
 `module-manager fields` + `resolve` + `config/module-fields.json`). **Environments** — one card per
 environment (its name, display name, type, whether it is the default, its public domain, how many
-zones and modules), and inside it one box per zone it owns (its own zone and every zone that
-`serves` it; a zone its modules use but it does not own, like the DMZ, as a dashed shared box),
+zones and modules), and inside it one box per zone it owns (every zone naming it: its own Service
+zone and the client and IoT zones that serve it; a zone its modules use but it does not own, like the DMZ, as a dashed shared box),
 each with the modules installed there as their icons (`GET /api/v1/modules/<m>/icon`: the file the
 module's config declares as `icon`, else `icon.svg` or `icon.png` in its module directory; SVG and
 PNG only, nothing outside the config or module directory; none: a tile with the initial), each

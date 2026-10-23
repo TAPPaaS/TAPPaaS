@@ -1116,7 +1116,7 @@ cleanup_deep() {
             "${CONFIG_DIR}/zones.json" > "${tmp}" \
             && mv "${tmp}" "${CONFIG_DIR}/zones.json"
         # Via network-manager so zone-manager sees zones.effective.json; the
-        # authored file lacks the `serves` edges and the reaper would drop them.
+        # authored file lacks the environment-link edges and the reaper would drop them.
         network-manager reconcile --zones "${CONFIG_DIR}/zones.json" --only opnsense --apply \
             >/dev/null 2>&1 || warn "zone-manager teardown returned non-zero"
         tmp=$(mktemp)

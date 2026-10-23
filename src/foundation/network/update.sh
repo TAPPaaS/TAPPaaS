@@ -302,7 +302,7 @@ quiet_on_success() {
 # ── Apply zone configuration ────────────────────────────────────────
 
 info "Applying zone configuration..."
-# Via network-manager: it renders zones.effective.json (the `serves`-derived
+# Via network-manager: it renders zones.effective.json (the environment-link-derived
 # edges) and hands THAT to zone-manager. The authored zones.json lacks those
 # edges, so the stale-rule reaper would delete them on every update.
 _nm_log="$(mktemp "${TMPDIR:-/tmp}/network-reconcile.XXXXXX.log")"

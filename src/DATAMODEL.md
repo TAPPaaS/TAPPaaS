@@ -71,8 +71,7 @@ flowchart LR
   NODE -- "storagePools[]" --> POOL
   REPO -- "catalog" --> CATALOG
   ENV -- "ownerOrg" --> ORG
-  ENV -- "network.zone" --> ZONE
-  ZONE -- "serves[]" --> ENV
+  ZONE -- "environment" --> ENV
 
   %% people
   ORG -- "owner" --> USER
@@ -129,8 +128,8 @@ source tree, not under `~/config/`.
 | Object | File | Owner | Names (field → object) |
 |---|---|---|---|
 | Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner`, `organizations[]` → organization; `hardware.nodes[]` → the cluster's nodes, each with its `storagePools[]`; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `location` → the building every room is in |
-| Environment | `environments/<env>.json` | environment-manager | `ownerOrg` → organization; `network.zone` → its service zone; `domains` are its own (no file names them back) |
-| Zone | `zones.json` (one object per zone) | network-manager | `serves[]` → the environment(s) a client or IoT zone consumes; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `bridge` → an interface, not an object |
+| Environment | `environments/<env>.json` | environment-manager | `ownerOrg` → organization; `domains` are its own (no file names them back). It names no zone: its zone is the Service zone naming it |
+| Zone | `zones.json` (one object per zone) | network-manager | `environment` → the environment it belongs to: a Service zone's (and `mgmt`'s) own environment, exactly one per environment, or the one a client, IoT or guest zone serves; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `bridge` → an interface, not an object |
 | Switches and access points | `switch-configuration-desired.json` (`-actual.json` is the interrogated copy) | switch-manager, ap-manager, driven by network-manager | `switches{}.ports{}.zone` → zone (access and native VLAN); `ports{}.target` → the node, switch or AP on the other end; `accessPoints{}.uplinkSwitch` → switch; `ssids` → zones by VLAN |
 | Module (installed instance) | `<module>.json` | module-manager | `environment` → environment; `zone0`, `zone1` → zones; `node`, `config.cluster:ha.HANode` → nodes; `config.cluster:vm.storage` → a pool; `dependsOn[]`, `integratesWith[]` → `module:service` pairs another module `provides`; `config.network:proxy.proxyAllowedZones[]` → zones; `controllers[]`, `managers[]` → components the module contributes to the control plane; `moduleSource` → its source directory; `physicalLocation` → where a machine (not a guest) stands |
 | Module catalog | `src/module-catalog.json` in each repository | site-manager (`repository validate-catalog`) | `modules[].moduleJson` → the module's JSON in the source tree; `vmid`, `stack` must agree with it |
@@ -181,10 +180,11 @@ These are the places where one thing is said in two ways, or where a reference
 runs in both directions. They are the candidates for the next simplification;
 nothing here is a bug.
 
-1. **Environment ↔ zone is a two-way link.** An environment names its service
-   zone (`network.zone`), and a client or IoT zone names the environment(s) it
-   serves (`serves[]`). The console works out "the zones an environment owns"
-   from both; one direction would do.
+1. **Environment ↔ zone — resolved.** This was a two-way link: an environment
+   named its service zone and a client or IoT zone named the environments it
+   served. Now the zone names the environment in one field, `environment`, and
+   nothing points the other way. An environment's zone is the Service zone
+   naming it; the zones it owns are the zones naming it.
 2. **Location is recorded in four shapes.** `site.location` (country, city,
    building) is the building; `rooms` are rack-manager's; a machine module has
    `physicalLocation` (same shape as the site's); a switch or AP has a free-text

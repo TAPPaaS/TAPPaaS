@@ -28,7 +28,7 @@ Two pages complete it:
 | `snat-allowed-from` | Zones whose traffic may be masqueraded into this zone. |
 | `tier` | Trust rank 0–6 (0 = most trusted). Absent on `Overlay`/`WAN`. |
 | `isolated` | Inbound quarantine: no zone may reach it zone-wide. Default `false`. |
-| `serves` | For a Client, Guest or IoT zone: the environment whose service zone it uses. |
+| `environment` | The environment the zone belongs to: for a Service zone (and `mgmt`), the environment whose zone it is; for a Client, Guest, IoT or DMZ zone, the environment it serves ([below](#a-zone-and-its-environment-environment)). |
 | `DHCP-start` / `DHCP-end` | DHCP range offsets within the subnet (default 50–250). |
 | `SSID` | Optional WiFi network broadcast on this zone's VLAN ([below](#wifi-the-ssid-field)). |
 | `ipv6Subnet` | The zone's IPv6 network, 0–255: its `/64` within the site's prefix. Assigned by default; remove it to keep the zone IPv4-only ([IPV6.md](IPV6.md)). |
@@ -120,38 +120,53 @@ by the modules that need it.
 that is not `Disabled`, an `Overlay` or the `WAN` hand-off, so adding or deleting a zone
 never edits `mgmt`. Only `mgmt` may hold `all` (I2).
 
-### Linking a client or IoT zone to an environment: `serves`
+### A zone and its environment: `environment`
 
-A client zone reaches its services, and an IoT zone is reached by them. Naming the service
-zone literally breaks when `network-manager init` renames `srv` → `<defaultEnvironment>`,
-so `serves` names the **environment**, and the edge is derived from its current zone on
-every reconcile:
+A zone names the environment it belongs to; the environment's own file names no zone.
+
+- A **Service** zone names the environment whose zone it is: the segment that environment's
+  modules run in. Every environment is named by exactly one Service zone — the control plane's
+  is the **Management** zone `mgmt`, which names the `mgmt` environment.
+- A **Client** or **Guest** zone names the environment it serves, and gets that environment's
+  zone added to its `access-to`.
+- An **IoT** zone names the environment whose modules drive its devices, and gets that
+  environment's zone added to its `pinhole-allowed-from`, so an `isolated` zone never gains
+  inbound reach.
+- A **DMZ** zone may name the environment it fronts; that adds nothing.
+- **Overlay** and **WAN** zones name none.
+
+Naming the service zone literally would break when `network-manager init` renames
+`srv` → `<defaultEnvironment>`, so a client or IoT zone names the **environment**, and the edge
+is derived from its current zone on every reconcile:
 
 ```jsonc
+"warmelo": {
+    "type": "Service", "state": "Active", "ip": "10.2.0.0/24", "tier": 1,
+    "environment": "warmelo"      // this is the warmelo environment's zone
+},
 "home": {
     "type": "Client", "state": "Active", "ip": "10.3.10.0/24", "tier": 2,
-    "serves": "warmelo",          // the environment, not "srvHome"
+    "environment": "warmelo",     // home serves warmelo
     "access-to": ["internet"],    // the service-zone edge is derived, not listed
     "pinhole-allowed-from": []
 }
 ```
 
-A Client or Guest zone gets the environment's service zone added to its `access-to`; an IoT
-zone gets it added to its `pinhole-allowed-from`, so an `isolated` zone never gains inbound
-reach. The derived edges live in `config/zones.effective.json`, never in `zones.json`.
+The derived edges live in `config/zones.effective.json`, never in `zones.json`. A zone names
+**one** environment. A workstation zone that must also reach a development environment's zone
+lists that zone in its `access-to` (an IoT zone: in its `pinhole-allowed-from`); the derived
+edge is added to it, never replaces it.
 
-A zone may serve **several environments** — a workstation zone that reaches both a production
-and a development service zone: `"serves": ["warmelo", "lab"]`. Each environment's edge is
-derived, and the zone gets all of them. One environment stays a plain string.
-
-Set it with `network-manager bind` ([network-manager](README.md)):
+Set it with `network-manager bind` ([network-manager](README.md)), or for an environment's own
+zone with `environment-manager add|modify <env> --zone <zone>`:
 
 | Command | Effect |
 |---|---|
-| `bind <zone> --environment <env>` | the zone serves `<env>` — **replacing** any link it had |
-| `bind <zone> --environment <env> --add` | the zone serves `<env>` **as well** |
-| `bind <zone> --unbind --environment <env>` | the zone no longer serves `<env>`; other links stay |
-| `bind <zone> --unbind` | every link is cleared |
+| `bind <zone> --environment <env>` | the zone names `<env>`, **replacing** any link it had |
+| `bind <zone> --unbind` | the link is cleared |
+
+`network-manager validate` refuses a zone naming an environment that does not exist, an
+environment named by no Service zone or by two, and `environment` on an Overlay or WAN zone.
 
 ### Archetypes
 
@@ -231,7 +246,7 @@ and rewrites every reference to it; `home` and `guest` keep their names. Command
 On every update, `network-manager merge` reconciles the site's zones with the new template
 by a 3-way merge of `zones.json` (current), `zones.json.orig` (what it was last merged from)
 and `zones.rename.json` (the new template with the site's rename applied): a field the site
-never changed follows the release, a field it changed is kept; `state` and `serves` are
+never changed follows the release, a field it changed is kept; `state` and `environment` are
 always the site's. A zone new in the template is added; a zone the site has and the template
 dropped is kept with a warning, and removed only by `network-manager retire`, never while a
 module still runs in it.
@@ -253,6 +268,7 @@ Moving one means backing up, uninstalling and reinstalling it in the target zone
     "warmelo": {
         "type": "Service", "state": "Active", "typeId": "2", "subId": "0",
         "vlantag": 200, "ip": "10.2.0.0/24", "bridge": "lan", "tier": 1,
+        "environment": "warmelo",
         "access-to": ["internet", "iotCloud", "iotLocal"],
         "pinhole-allowed-from": ["dmz"],
         "description": "Service zone for the warmelo environment"
@@ -260,7 +276,7 @@ Moving one means backing up, uninstalling and reinstalling it in the target zone
     "home": {
         "type": "Client", "state": "Active", "typeId": "3", "subId": "10",
         "vlantag": 310, "ip": "10.3.10.0/24", "bridge": "lan", "tier": 2,
-        "serves": "warmelo",
+        "environment": "warmelo",
         "access-to": ["internet", "iotCloud", "iotLocal"],
         "pinhole-allowed-from": [],
         "description": "Trusted personal devices: laptops, phones, tablets"
@@ -269,7 +285,7 @@ Moving one means backing up, uninstalling and reinstalling it in the target zone
         "type": "IoT", "state": "Active", "typeId": "4", "subId": "30",
         "vlantag": 430, "ip": "10.4.30.0/24", "bridge": "lan", "tier": 6,
         "isolated": true,
-        "serves": "warmelo",
+        "environment": "warmelo",
         "access-to": [],
         "pinhole-allowed-from": [],
         "description": "Surveillance: cameras + NVR, fully isolated"
@@ -277,8 +293,8 @@ Moving one means backing up, uninstalling and reinstalling it in the target zone
 }
 ```
 
-`home` reaches `warmelo` through its `serves` link, and `iotCams` accepts pinholes from
-`warmelo` through its own — neither names the service zone. An NVR in `warmelo` reaches the
+`warmelo` is the warmelo environment's zone; `home` reaches it through its `environment` link,
+and `iotCams` accepts pinholes from it through its own — neither names the service zone. An NVR in `warmelo` reaches the
 cameras only through its module's pinhole, never zone-wide.
 
 ## WiFi: the `SSID` field

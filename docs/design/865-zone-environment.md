@@ -21,36 +21,27 @@ gets one field, `environment`:
 Service (or Management) zone naming it; the zones an environment owns are the zones
 naming it.
 
-## Open question — stop condition hit
+## Several environments per zone — decided
 
-The brief says: a zone serves one environment only; if hrossen or the docs rely on a
-zone serving several, say so and stop before breaking it.
+The brief said: a zone serves one environment only; if hrossen or the docs rely on a zone
+serving several, say so and stop before breaking it.
 
-- **hrossen:** does not. Every `serves` is a single string (`home`, `iotLocal`,
-  `iotCloud`, `iotCams` → `rossen`); no zone carries a list. Its three environments map
-  one-to-one: `mgmt`→`mgmt` (Management), `rossen`→`rossen`, `test`→`test` (Service).
-- **the docs do.** ADR-014 v1.3 D2 made `serves` "one environment or a list" (#576,
-  closed), with `bind --add` and `bind --unbind --environment`. ZONES.md "Linking a client
-  or IoT zone" documents the use case: a workstation zone that reaches both a production
-  and a development environment. network-manager carries it (`servesList`,
-  `servesValue`, the per-environment union in `resolveServes`, `bind --add`) and
-  network.test.ts tests it (#576 block, ~line 1490).
+- **hrossen** does not: every `serves` was a single string (`home`, `iotLocal`, `iotCloud`,
+  `iotCams` → `rossen`), and its three environments map one-to-one: `mgmt`→`mgmt`
+  (Management), `rossen`→`rossen`, `test`→`test` (Service).
+- **The docs** did: ADR-014 v1.3 D2 (`serves` as a list, `bind --add`) and ZONES.md (a
+  workstation zone reaching a production and a development environment).
 
-Steps 2–6 are held until the operator decides how that case is covered once a zone names
-one environment. The candidates:
+Decision (operator, 2026-10-23): one `environment` per zone. Every environment is named by
+exactly one zone of type Service or Management (`mgmt`'s zone is its Management zone); a
+Client, IoT, DMZ or Guest zone names at most one. A zone that must reach a second
+environment's zone gets an authored `access-to` (IoT: `pinhole-allowed-from`) entry, which
+the render keeps. Migration 0017 refuses a zone that would get two environments. ADR-014
+v1.4 withdraws the v1.3 list and ZONES.md describes the authored entry instead.
 
-1. **Drop it.** A zone names one environment; the second reach is an authored literal in
-   `access-to` (Client) or `pinhole-allowed-from` (IoT). The render only adds edges and
-   the back-fill drops only the literal equal to the derived one, so an authored second
-   literal survives reconcile. It is not rename-safe (#424), but a service zone's key is
-   renamed only by `zones init`, on a fresh install. ADR-014 D2 and ZONES.md lose the
-   several-environments text; the migration turns a list into its first entry plus
-   literals for the rest. It refuses a list only if there is no way to write the literal.
-2. **Keep the list on consumer zones only.** `environment` is a string on Service and
-   Management zones and a string or list on Client/IoT/Guest. That keeps #576, but it is
-   the list the decision set out to remove.
-3. **Refuse.** As the brief has it: the migration refuses a zone with two environments.
-   A site using #576 stops at `migrate` until a person rewrites that zone by hand.
+`environment` keeps the change class `serves` had, `manual` ("has a verb of its own"), not
+`in-place`: `modify --set` would bypass `bind`'s one-zone-per-environment guard, and the
+console's zone form already offers Bind for it.
 
 ## Readers and writers
 

@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Accepted** — implemented (see [ADR-014-implementation.md](../design/ADR-014-implementation.md); branch `feat/adr-014-zone-lifecycle`, packages P0–P8) |
-| **Version** | 1.3 |
-| **Date** | 2026-08-23 (v0.3: 2026-08-06) |
+| **Version** | 1.4 |
+| **Date** | 2026-10-23 (v1.0: 2026-08-23; v0.3: 2026-08-06) |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Refines** | [ADR-007c Environments](<ADR-007c - Environments.md>) (env↔zone binding), [ADR-007d Site](<ADR-007d - Site.md>) (`defaultEnvironment`, client-zone naming), [ADR-007f Realization](<ADR-007f - Realization.md>) (managers); ADR-001/002 (VLAN/zone model — the tier dimension) |
 | **Related** | **#258** (origin of the `tier_model` prose in `zones.json` — a documentation/isolation-invariant issue, never an ADR; this ADR is its first design record); #424 (client/IoT zones ↔ environments undefined); #425 (keep client-zone names — closed); #426 (decouple site.name — closed); ADR-002 (dynamic VLAN); ADR-008 (network infrastructure); **owner:** `network-manager` (zones), `environment-manager` (environments) |
-| **Changelog** | **v1.3 (2026-10-13)** — D10 (new): **mDNS discovery across zones** is a zone field, `mdns` (#257). D2: `serves` may name **several environments** (#576): a list, each environment's edge derived and the union taken; one environment stays a plain string. `bind --add` adds one, `bind --unbind --environment` removes one, and a plain `bind` says it replaces. · **v1.2 (2026-10-13)** — amended to the zone and rule model as built, after the G2.1 review (#816, #824): the `service` archetype seeds `internet` only (ADR-021 D3b had already dropped `dmz`); D6's per-module pinhole check is the single one rules-manager applies, and a cross-zone module rule is allowed by the source zone's `access-to` **or** the target zone's `pinhole-allowed-from`; new **D9** records what the firewall enforces for a zone and its modules — the protective rules every zone gets, what "internet" excludes, covered pinholes, and both address families (ADR-030). The operator-facing description is FIREWALL-RULES.md. · **v1.1 (2026-09-23)** — D5 states that `tier` is not an IEC 62443 Security Level and declines the mapping (#707): the scales run in opposite directions, they measure different things, and Tier 3's members would not share an SL. ADR-022's open question on renaming `tier` is answered by it. · **v1.0 — ACCEPTED, reconciled with the implementation.** Three drafting decisions were settled by the operator: **`home` is KEPT** (the `home → private` rename is struck, with it the re-domaining and the generic rename-map machinery — F1); **D6 enforcement is phased** — I1–I4 ship warn-only and no gate is wired to `--strict` in this work (F2); **retired zones are auto-removed when unoccupied** by a new `retire` verb (F3). Four things the draft got wrong or left implicit were corrected while building: **D2's derivation is LOCAL, not symmetric** (the symmetric form invented firewall rules — see D2); **D1 keys on the zone's PRESENCE**, since a missing zone has no type to inspect; **D7 profiles need `grants`** to express the one edge a zone set cannot; and **`wan` belongs in `core`** (the draft omitted it). Adds **D8** (authored vs. effective documents) — the derivation has to be rendered, not written back, or the 3-way merge pins it. The D2 open question (where the back-fill runs) is resolved: inside `merge`. v0.3 — **recast `tier` as a strict trust lattice** (D5): `access-to` flows downward only (R1: `tier(A) ≤ tier(B)`), all upward reach is a `pinhole`; **DMZ drops out of the service class** to Tier 4 (internet-exposed) and **service sits above trusted clients** (client→service becomes a pinhole, #258-aligned); **isolation becomes an orthogonal `isolated` flag** (R2). D6 checks reduce to R1 + R2 + egress + archetype-conformance. Header now cites **#258** as the tier model's provenance. v0.2 — add the **zone tier model as first-class state** (D5: `tier` authored field + archetypes), **tier-based security invariants** in zones-check (D6, promoting the `_README` PR checklist to machine gates), and the **fresh-install default zone set + template cleanup** (D7). D3's IoT `--class` is subsumed by the D5 archetypes. v0.1 — initial draft: env↔service-zone binding (default / override / auto-create); symbolic `serves` link for client & IoT zones (rename-safe, fixes #424); guided IoT creation; filtered zone listing + confirmation that enable/disable already exist. |
+| **Changelog** | **v1.4 (2026-10-23)** — **the zone names its environment** (#865): one `environment` field per zone replaces both `serves` and the environment's `network.zone`. A Service zone (and `mgmt`) names the environment whose zone it is — exactly one per environment; a Client, IoT, Guest or DMZ zone names at most one environment it serves. The v1.3 list goes: a second reach is an authored `access-to`/`pinhole-allowed-from` entry, as resolved choice #2 always said. `environment add|modify --zone` binds the zone through network-manager; migration 0017 rewrites every installation. · **v1.3 (2026-10-13)** — D10 (new): **mDNS discovery across zones** is a zone field, `mdns` (#257). D2: `serves` may name **several environments** (#576): a list, each environment's edge derived and the union taken; one environment stays a plain string. `bind --add` adds one, `bind --unbind --environment` removes one, and a plain `bind` says it replaces. · **v1.2 (2026-10-13)** — amended to the zone and rule model as built, after the G2.1 review (#816, #824): the `service` archetype seeds `internet` only (ADR-021 D3b had already dropped `dmz`); D6's per-module pinhole check is the single one rules-manager applies, and a cross-zone module rule is allowed by the source zone's `access-to` **or** the target zone's `pinhole-allowed-from`; new **D9** records what the firewall enforces for a zone and its modules — the protective rules every zone gets, what "internet" excludes, covered pinholes, and both address families (ADR-030). The operator-facing description is FIREWALL-RULES.md. · **v1.1 (2026-09-23)** — D5 states that `tier` is not an IEC 62443 Security Level and declines the mapping (#707): the scales run in opposite directions, they measure different things, and Tier 3's members would not share an SL. ADR-022's open question on renaming `tier` is answered by it. · **v1.0 — ACCEPTED, reconciled with the implementation.** Three drafting decisions were settled by the operator: **`home` is KEPT** (the `home → private` rename is struck, with it the re-domaining and the generic rename-map machinery — F1); **D6 enforcement is phased** — I1–I4 ship warn-only and no gate is wired to `--strict` in this work (F2); **retired zones are auto-removed when unoccupied** by a new `retire` verb (F3). Four things the draft got wrong or left implicit were corrected while building: **D2's derivation is LOCAL, not symmetric** (the symmetric form invented firewall rules — see D2); **D1 keys on the zone's PRESENCE**, since a missing zone has no type to inspect; **D7 profiles need `grants`** to express the one edge a zone set cannot; and **`wan` belongs in `core`** (the draft omitted it). Adds **D8** (authored vs. effective documents) — the derivation has to be rendered, not written back, or the 3-way merge pins it. The D2 open question (where the back-fill runs) is resolved: inside `merge`. v0.3 — **recast `tier` as a strict trust lattice** (D5): `access-to` flows downward only (R1: `tier(A) ≤ tier(B)`), all upward reach is a `pinhole`; **DMZ drops out of the service class** to Tier 4 (internet-exposed) and **service sits above trusted clients** (client→service becomes a pinhole, #258-aligned); **isolation becomes an orthogonal `isolated` flag** (R2). D6 checks reduce to R1 + R2 + egress + archetype-conformance. Header now cites **#258** as the tier model's provenance. v0.2 — add the **zone tier model as first-class state** (D5: `tier` authored field + archetypes), **tier-based security invariants** in zones-check (D6, promoting the `_README` PR checklist to machine gates), and the **fresh-install default zone set + template cleanup** (D7). D3's IoT `--class` is subsumed by the D5 archetypes. v0.1 — initial draft: env↔service-zone binding (default / override / auto-create); symbolic `serves` link for client & IoT zones (rename-safe, fixes #424); guided IoT creation; filtered zone listing + confirmation that enable/disable already exist. |
 
 ## Context
 
@@ -62,8 +62,17 @@ existing invariants machine-checkable.
 
 ### D1 — Env ↔ service zone: default, override, and auto-create
 
-The binding rule is unchanged (007c): an Environment names **one** service zone in `network.zone`,
-defaulting to the environment name. This ADR adds the **materialization** rule so it is one operator step:
+The binding rule is unchanged (007c): an Environment has **one** service zone, defaulting to the
+environment name. This ADR adds the **materialization** rule so it is one operator step:
+
+> **v1.4 — the zone names the environment (#865).** The environment file no longer names its zone
+> (`network.zone` is gone); the Service zone does, in its `environment` field (the Management zone for
+> `mgmt`). Every environment is named by exactly one Service or Management zone — `validate` in both
+> managers enforces it. `environment add|modify --zone <Z>` writes the environment and has
+> network-manager bind `<Z>` to it (`--create-zone` authors `<Z>` with `--environment` set); a move
+> clears the old zone's link. `reconcile` finds the zone by scanning `zones.json`: none naming the
+> environment and no zone of its name → create it; several, or a zone of its name with another role →
+> hard error. The table below is the v1.0 rule as it read with `network.zone`.
 
 - **Default (shared name).** `environment add <env>` with no `--zone` targets a service zone named
   `<env>`. If that zone already exists it is used as-is; the environment and its zone share a name and
@@ -106,11 +115,16 @@ defaulting to the environment name. This ADR adds the **materialization** rule s
 
 ### D2 — Client & IoT zones link to an environment by a symbolic `serves` field (fixes #424)
 
-> **v1.3 — several environments (#576).** `serves` is one environment or a list of them. Each
-> environment derives its edge as below, and the zone gets the union — a workstation zone that
-> reaches both a production and a development service zone. `network-manager bind <zone>
-> --environment <env>` replaces the link; `--add` adds one more; `--unbind --environment <env>`
-> removes one.
+> **v1.4 — `serves` becomes `environment`, one per zone (#865).** The link described below is now the
+> zone's `environment` field, the same field a Service zone uses to name the environment it is: one
+> direction, no lists. A Client/Guest zone naming an environment derives `access-to += <its zone>`, an
+> IoT zone `pinhole-allowed-from += <its zone>`, a DMZ zone nothing; the environment's zone is found in
+> `zones.json` itself, no longer in `environments/<env>.json`. Overlay and WAN zones name none.
+> `bind <zone> --environment <env>` replaces the link and `--unbind` clears it; `--add` is gone.
+>
+> **v1.3 — several environments (#576), withdrawn in v1.4.** `serves` could name a list. A zone that
+> reaches a second environment's service zone does so with an authored `access-to` (or, for IoT,
+> `pinhole-allowed-from`) entry; the render only adds edges, so it survives reconcile.
 
 The root cause of #424 is that a client/IoT zone's reachability is expressed as **literal service-zone
 names** that do not survive the install-time rename. Replace the literal with a **symbolic reference to
@@ -158,8 +172,8 @@ already relies on.
   A welcome consequence: **R2 becomes structural rather than conditional** — the IoT branch touches only
   `pinhole-allowed-from`, so an isolated zone cannot gain an inbound `access-to` by any code path.
 - **New verb to author the link without editing JSON:**
-  `network-manager bind <zone> --environment <env>` sets `serves` on a client/IoT zone (and
-  `--unbind` clears it). This is the "make it easy to create the relationship" the operator asked for.
+  `network-manager bind <zone> --environment <env>` sets the link on a zone (and
+  `--unbind` clears it; v1.4: the field is `environment`, on Service zones too). This is the "make it easy to create the relationship" the operator asked for.
 - **Isolation is unchanged, and now structurally so.** `serves` on an isolated IoT zone (`iotCams`,
   `iotUntrust`) never adds that zone to anyone's `access-to`; it only records which environment's
   modules may open **per-module pinholes** into it. Under the v1.0 locality rule this needs no special
@@ -191,7 +205,7 @@ mechanism covers client zones:
   - `iot-cloud` → Tier-3, egress internet;
   - `iot-cams` → Tier-4 isolated, egress none, pinhole-only;
   - `iot-untrust` → Tier-4 isolated, egress internet-only, pinhole-only.
-- `network-manager add <name> --archetype trusted-client [--serves <env>]` does the same for a new client
+- `network-manager add <name> --archetype trusted-client [--environment <env>]` does the same for a new client
   segment, wiring `access-to: ["internet"]` + the `serves` edge, so a second household/office segment is
   one command.
 - Both reuse the existing `--vlan`/auto-allocation machinery; this is a thin preset layer over `add`
@@ -575,7 +589,7 @@ joins the site's single discovery group. A module may still add to the group wit
 |---|---|---|
 | `environment add <env> [--zone Z] [--create-zone]` | **extend** (`--create-zone` new) | create env; optionally auto-author its service zone in one step (D1) |
 | `environment reconcile <env>` | **change** | materialize an **absent** zone as Service (was warn-only); hard-error when the named zone **exists** with a non-Service type (D1) |
-| `network-manager bind <zone> --environment <env>` / `--unbind` | **new** | set/clear a client/IoT zone's `serves` link (D2) |
+| `network-manager bind <zone> --environment <env>` / `--unbind` | **new** | set/clear a zone's `environment` link (D2; v1.4: on Service zones too, one per environment) |
 | `network-manager add <name> --archetype <A>` | **extend** | tier-correct zone creation from an archetype (D5); subsumes D3's `--class` |
 | `network-manager reconcile` | **change** | render `zones.effective.json` from `serves` each run and hand it to the planes (D2/D8) |
 | `network-manager validate [--effective]` | **extend** | tier invariants I1–I4 (R1 monotonic + R2 isolation), **warn-only** (F2); `--effective` audits the rendered graph (D8); `--strict` is an opt-in flag wired to no gate |
@@ -589,6 +603,8 @@ joins the site's single discovery group. A module may still add to the group wit
 
 - **`zones.json` — new optional `serves` field** on Client and IoT zones (string: an environment name).
   Absent `serves` = today's behaviour (literal `access-to` only). No change to Service/Management/Overlay.
+  > **v1.4.** Renamed `environment` and given to Service and Management zones as well (the environment
+  > whose zone it is); see D1/D2.
 - **`zones.json` — new `tier` field** (integer 0–6, the D5 lattice; absent for Overlay/non-VLAN zones).
   Authored, stamped by the archetype; R1/`access-to` is checked against it (D6). Tier 5 is reserved for
   the `internet` boundary token (not a real zone).
@@ -612,6 +628,7 @@ joins the site's single discovery group. A module may still add to the group wit
   site's mDNS discovery group.
 - **A new generated file, `config/zones.effective.json`** (D8). Never hand-edited, never merged.
 - **No environment schema change.** `network.zone` (singular) stays exactly as ADR-007c built it.
+  > **v1.4.** Superseded: `network` leaves `environment-fields.json`; the zone names the environment.
 - **No site schema change.** `defaultEnvironment` (007d/#426) already names the default env/zone.
 
 ## Consequences
@@ -646,7 +663,8 @@ These were weighed during drafting and are settled (kept here as the rationale t
 2. **`serves` is a single environment, named `serves`.** One environment per client/IoT zone, mirroring
    the singular `network.zone` (007c) and deliberately not reintroducing the multi-edge model 007c
    dropped. A zone that genuinely needs to reach two environments' service segments is modelled by
-   literal `access-to` entries, not `serves`.
+   literal `access-to` entries, not `serves`. (v1.3 allowed a list; v1.4 returns to this, and the field
+   is now `environment`.)
 3. **This is a standalone ADR-014**, refining 007c/007d/007f operationally rather than expanding the
    007 family — no renumbering of 007a–f. The tier model + archetypes + default set (D5–D7) are folded
    in here rather than a separate ADR-015 — one coherent zone-management story reviewed once.

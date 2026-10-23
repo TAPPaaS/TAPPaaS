@@ -44,7 +44,7 @@ from .snat_policy import (
 from .vlan_manager import VlanManager
 
 # Reuse rules_manager's resolver rather than writing a second one. It prefers
-# the DEPLOYED zones.json over the source tree, resolves `serves` links through
+# the DEPLOYED zones.json over the source tree, resolves the zones' environment links through
 # zones.effective.json, and carries a staleness guard for exactly the case that
 # broke this service's first deep run: network/test.sh --deep jq-merges its
 # probe zones straight into the deployed file, so a resolver that read the

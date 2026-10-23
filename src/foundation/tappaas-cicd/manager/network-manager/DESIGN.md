@@ -27,7 +27,8 @@ src/archetypes.ts    ADR-014 trust lattice + the zone archetype catalog + tier e
                      builder cannot see foundation/schemas/, and resolving it at
                      run time would make `validate` depend on a deployed file —
                      a unit test pins the two together so drift fails the build)
-src/serves.ts        ADR-014 `serves` resolution + the authored -> effective render
+src/serves.ts        ADR-014 zone→environment links: an environment's zone, the
+                     consumer edges, the authored -> effective render
                      + the one-time migration back-fill (run from merge)
 src/zonelifecycle.ts add/delete (always includes the switch plane)
 src/zonesinit.ts     init template transform (rename srv/home/guest to the system name)
@@ -42,14 +43,18 @@ src/reconcile.ts     the dependency-ordered 4-plane reconcile
 
 ## Authored vs. effective state (ADR-014 D-C4)
 
-`zones.json` holds only what the operator authored. A Client/IoT/Guest zone may
-name an environment via `serves`; the access-to / pinhole-allowed-from edge that
-implies is **derived**, and is rendered into `zones.effective.json` rather than
-written back. The reason is the 3-way merge: a derived value written into
-`zones.json` is indistinguishable from an operator edit, so the merge would pin
-it and clearing the `serves` link would strand its edges forever.
+`zones.json` holds only what the operator authored. Each zone may name one
+environment in `environment`: a Service zone (and `mgmt`) the environment whose
+zone it is — exactly one per environment, which is how every manager finds an
+environment's zone (`ownZonesOf`; the environment file names none) — and a
+Client/IoT/Guest zone the environment it serves. For those, the access-to /
+pinhole-allowed-from edge the link implies is **derived**, and is rendered into
+`zones.effective.json` rather than written back. The reason is the 3-way merge:
+a derived value written into `zones.json` is indistinguishable from an operator
+edit, so the merge would pin it and clearing the link would strand its edges
+forever. `environment` is operator-pinned in the merge, like `state`.
 
-The derivation obeys a **locality rule** — `serves` only ever modifies the zone
+The derivation obeys a **locality rule** — the link only ever modifies the zone
 that declares it (Client/Guest gain `access-to += <service zone>`; IoT gain
 `pinhole-allowed-from += <service zone>`). A symmetric derivation was tried
 first and rejected: it invented edges the authored document never had, including

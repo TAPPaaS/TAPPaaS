@@ -51,7 +51,7 @@ else
     readonly FIREWALL_JSON="${CONFIG_DIR}/firewall.json"
 fi
 # ADR-014 D-C4: prefer the EFFECTIVE zones document (zones.json with every
-# `serves` link resolved) so a zone reachable only via its environment link
+# environment link resolved) so a zone reachable only via its environment link
 # still resolves to a CIDR here. Falls back to the authored file on a system
 # that predates ADR-014 or has not rendered one yet.
 # STALENESS GUARD: only trust the render while it is at least as new as the

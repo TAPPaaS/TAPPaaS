@@ -36,7 +36,7 @@ Like `enable`/`disable`/`bind`, this **authors `zones.json` only** and prints th
 |---|---|---|
 | `vlantag`, `ip`, `type`, `typeId`, `subId`, `bridge` | `immutable` | The zone's identity. Changing a VLAN would strand every guest tagged into it — that is delete-and-re-add, with the guests moved deliberately. |
 | `state` | has a verb | `enable` / `disable` / `manual`, which guard the Mandatory transition. |
-| `serves` | has a verb | `bind --environment`, which resolves the environment first so a typo fails at the command. |
+| `environment` | has a verb | `bind --environment`, which checks the environment exists and keeps one zone per environment, so a typo fails at the command. |
 
 A `--set` naming any of those is refused **before anything is written**, and a
 mixed `--set` is rejected whole — `zones.json` and the planes never move apart.
@@ -74,7 +74,7 @@ equivalent. (`validate` keeps the alias `zones-check`.)
 ```bash
 network-manager list                 # name / state / vlan
 network-manager list --state Inactive       # which zones are defined-but-off
-network-manager list --type Client          # + tier and serves columns
+network-manager list --type Client          # + tier and environment columns
 network-manager list --tier 6               # the no-egress zones
 network-manager exists srvHome        # exit 0/1
 network-manager show srvHome          # print the zone object (alias: get)
@@ -82,8 +82,8 @@ network-manager show srvHome          # print the zone object (alias: get)
 
 `list` filters combine (`--state Active --type Service`); `--json` emits the
 matching names as an array. `--type Client|IoT|Guest` (and any `--tier` query)
-adds `tier`, `serves` and `isolated` columns — which is how you answer "which
-client zones exist, and which environment does each belong to?" (ADR-014 D4).
+adds `tier`, `environment` and `isolated` columns — which is how you answer
+"which client zones exist, and which environment does each serve?"
 
 `add <name>` authors a new zone **and reconciles all four planes** (so the
 VLAN reaches everything). Options:
@@ -95,8 +95,10 @@ VLAN reaches everything). Options:
   `guest`, `dmz`, `iot-local`, `iot-cloud`, `iot-cams`, `iot-untrust`.
   Cannot be combined with `--type`/`--typeId`/`--from-zone` (the archetype
   already defines them); the combination is refused rather than resolved.
-- `--serves <env>` — bind a new Client/IoT/Guest zone to an environment in the
-  same command (see `bind` below). Requires `--archetype`.
+- `--environment <env>` — the environment the new zone belongs to, in the same
+  command (see `bind` below): for a Service zone the environment whose zone it
+  is (refused when that environment already has one), for a Client/IoT/Guest/DMZ
+  zone the environment it serves. The environment must exist.
 - `--from-zone <src>` — inherit type/typeId/bridge/access-to/pinhole from `<src>`.
 - `--type <T>` — zone type (default `Service`).
 - `--typeId <N>` — numeric type band (default `2`).
@@ -122,36 +124,49 @@ A zone authored the low-level way (`--type`/`--from-zone`) is deliberately left
 **untiered** — `validate` notes it — rather than being given a guessed rank.
 
 ```bash
-network-manager add cams   --archetype iot-cams --serves warmelo
-network-manager add lab    --archetype service
+network-manager add cams   --archetype iot-cams --environment warmelo
+network-manager add lab    --archetype service --environment lab
 network-manager add labNet --from-zone srvHome --vlan 275   # low-level escape
 network-manager add labNet --check          # preview
 network-manager delete labNet
 ```
 
-### `bind` — link a client or IoT zone to an environment (ADR-014 D2)
+### `bind` — link a zone to its environment
 
-A client zone reaches its services, and an IoT zone is reached by them. Writing
-that as a **literal** service-zone name does not survive install: `init` renames
-`srv` → `<defaultEnvironment>`, and the literal is stranded. `bind` records the
-**environment** instead, and the edge is derived from that environment's current
-zone on every reconcile.
+A zone names its environment in one field, `environment`; the environment file
+names no zone.
+
+- A **Service** zone names the environment whose zone it is — the zone its
+  modules run in. Every environment has exactly one (the **Management** zone
+  `mgmt` is the `mgmt` environment's). `environment-manager add|modify --zone`
+  sets it for you.
+- A **Client**, **Guest** or **IoT** zone names the environment it serves. A
+  client zone reaches its services, and an IoT zone is reached by them; writing
+  that as a **literal** service-zone name does not survive install (`init`
+  renames `srv` → `<defaultEnvironment>`, and the literal is stranded), so the
+  edge is derived from the environment's current zone on every reconcile.
+- A **DMZ** zone may name the environment it fronts; that derives nothing.
+- **Overlay** and **WAN** zones name none.
 
 ```bash
-network-manager bind home    --environment warmelo   # sets serves: warmelo
-network-manager bind iotCams --environment warmelo
-network-manager bind iotCams --unbind                # clears it
+network-manager bind home    --environment warmelo   # home serves warmelo
+network-manager bind lab     --environment lab       # lab is the lab environment's zone
+network-manager bind iotCams --unbind                # clears the link
 ```
 
-Only Client, IoT and Guest zones may carry `serves` — a Service zone *is* an
-environment's zone. `bind` refuses an unknown environment up front and prints
-the edge the link derives. Like `enable`/`disable` it does not reconcile; apply
-with `network-manager reconcile --apply`.
+A zone names **one** environment. A client zone that must reach a second
+environment's service zone gets an authored `access-to` entry for it (an IoT
+zone: `pinhole-allowed-from`). `bind` refuses an unknown environment, a second
+Service zone for an environment, and taking a Service zone away from the
+environment it belongs to (move the environment with `environment-manager modify
+<env> --zone <zone>`), and prints the edge the link derives. Like
+`enable`/`disable` it does not reconcile; apply with `network-manager reconcile
+--apply`.
 
 ### Authored vs. effective — `zones.json` and `zones.effective.json`
 
-`zones.json` is **authored** state: what the operator wrote. Derived `serves`
-edges are never written back into it — if they were, the 3-way merge would treat
+`zones.json` is **authored** state: what the operator wrote. The edges an
+environment link derives are never written back into it — if they were, the 3-way merge would treat
 them as operator edits and pin them, so clearing a link would strand its edges.
 
 Instead, every authored write (and the start of every `reconcile`) renders
@@ -161,9 +176,11 @@ validation) and the Caddy access lists. It is generated — never hand-edit it.
 `distribute` still pushes the authored file, since the nodes need only
 `vlantag`/`ip`.
 
-An unresolvable `serves` link is **non-fatal** on a zone add (a missing
-environment file must not block authoring) but **fatal** to `reconcile` and an
-**error** in `validate`.
+An unresolvable environment link (an environment that does not exist, or one no
+Service zone names) is **non-fatal** on a zone add (a missing environment file
+must not block authoring) but **fatal** to `reconcile` and an **error** in
+`validate`, which also refuses an environment named by no Service or Management
+zone, or by two.
 
 ### `enable` / `disable` / `manual` — atomic zone state change
 
@@ -231,7 +248,7 @@ Properties, all unit-asserted:
   edited access lists survive. `--force` re-stamps *this profile's* zones from
   the template.
 - **`srv → <N>`** is the only rename, applied to keys, to every zone reference,
-  and to the `serves` placeholder. `home`/`guest` keep their names: the
+  and to the `environment` placeholder. `home`/`guest` keep their names: the
   zone key drives the client DNS domain `<zone>.internal`.
 
 A site with no smart-home devices simply never runs `init iot` and never carries
@@ -282,8 +299,8 @@ Exit `0` ok, `1` on dangling references / missing required fields / lost zones.
 
 ### `validate --effective` — audit the graph the planes actually receive
 
-`validate` audits the **authored** `zones.json` by default. A `serves` link
-contributes an edge that exists only in the rendered document, so an
+`validate` audits the **authored** `zones.json` by default. A client or IoT
+zone's environment link contributes an edge that exists only in the rendered document, so an
 authored-scope run cannot judge it — and says so in its output. Add
 `--effective` to render the links and check the real graph:
 

@@ -2713,7 +2713,7 @@ def _render_effective(authored: Path) -> bool:
     """Ask network-manager to re-render the effective zones next to `authored`.
 
     Offline (it touches no plane). False when network-manager is not there or
-    the render fails, e.g. on a `serves` link that does not resolve.
+    the render fails, e.g. on an environment link that does not resolve.
     """
     try:
         r = subprocess.run(
@@ -2728,10 +2728,10 @@ def _render_effective(authored: Path) -> bool:
 def _find_zones_file(explicit: str | None) -> Path:
     if explicit:
         return Path(explicit)
-    # ADR-014 D-C4: zones.json is the AUTHORED document; `serves` links are
+    # ADR-014 D-C4: zones.json is the AUTHORED document; environment links are
     # resolved into zones.effective.json by network-manager. Pinhole and egress
     # validation must see the RESOLVED graph, or an edge a client zone gets via
-    # its `serves` link would look absent here. Fall back to the authored file on
+    # its environment link would look absent here. Fall back to the authored file on
     # a system that predates ADR-014 (or before the first render).
     #
     # STALENESS GUARD: the effective document is only trustworthy while it is at
@@ -2740,7 +2740,7 @@ def _find_zones_file(explicit: str | None) -> Path:
     # network/test.sh --deep, which jq-merges its probe zones straight into
     # zones.json. Preferring a stale render there would validate module rules
     # against a zone graph that no longer exists. When it is older we use the
-    # authored file: its only loss is the `serves`-derived edges, which is far
+    # authored file: its only loss is the environment-derived edges, which is far
     # safer than a wholesale out-of-date view.
     for eff, authored in (
         (Path("/home/tappaas/config/zones.effective.json"), Path("/home/tappaas/config/zones.json")),
@@ -2749,7 +2749,7 @@ def _find_zones_file(explicit: str | None) -> Path:
         if eff.is_file() and authored.is_file():
             if eff.stat().st_mtime >= authored.stat().st_mtime:
                 return eff
-            # Stale: re-render it rather than lose the `serves`-derived edges —
+            # Stale: re-render it rather than lose the environment-derived edges —
             # without them a reconcile prunes the pinholes they allow. Only if
             # that fails is the authored file used (review D13).
             if _render_effective(authored) and eff.stat().st_mtime >= authored.stat().st_mtime:
