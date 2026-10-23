@@ -108,7 +108,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 9 | 11 |
 | 6 | G6.2 User interface & physical view | H | L | – | 4 | 1 |
-| 6 | G6.3 Data model | M | M | – | 2 | 7 |
+| 6 | G6.3 Data model | M | M | – | 3 | 6 |
 | 5 | G5.1 Satellite & off-site | H | M | – | 1 | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
@@ -279,7 +279,7 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 | ✅ #183 | TAPPaaS service catalog | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Folded into #839** (ADR-034 D6): the console's Modules page is the catalog — every registered repository's modules, installed or not, with Install |
 | ✅ #91 | Backstage as a component of tappaas-cicd | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Not adopted** (ADR-034 A3): a developer portal, not an operations console |
 
-### G6.3 Data model — Ease M · Risk M · done for 2.3: 2 · open: 7
+### G6.3 Data model — Ease M · Risk M · done for 2.3: 3 · open: 6
 
 The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/DATAMODEL.md) (2026-10-22: every JSON, which field names which object, and seven places where the model says one thing twice). The operator decided to fix the first four and park the rest (#866). Where a thing is becomes two things, a location and a placement, by ADR-036 (Accepted 2026-10-23). Linked to G6.2: the console's Physical view draws what this group models.
 
@@ -554,6 +554,16 @@ summary (`release/roadmap-cut.py`) and leaves this block empty again.
 **IPv6, opt-in per site.** A site turns it on with `site.json` `ipv6: true` (default `false`): each zone gets a `/64` from the WAN's prefix, every VM's name resolves to its IPv6 address too, the firewall rules cover both families, names published through Caddy answer over IPv6 inside the site, and Caddy is reachable from the internet over IPv6 — publish the address `ipv6-manager` reports as the AAAA; everything still works over IPv4, and switching it off withdraws IPv6 cleanly. **The first sweep after upgrading turns IPv6 off on the firewall** — inbound IPv6 dropped, DNS over IPv4 only — unless the site sets `site-manager site modify --ipv6 true` first. Existing zones are given an IPv6 number (migration 0016); it does nothing while `ipv6` is `false`. See *IPv6* and *Firewall Rules* on tappaas.org.
 
 **Firewall and DNS.** Unbound validates DNSSEC: **the first sweep turns it on** (`site.json` `dnssec`, default `true`; set it `false` to opt out); internal and published names are unaffected. A zone can share mDNS discovery with other zones (`"mdns": true`; discovery only, reach is still the zone rules). A client zone can serve several environments (`serves` as a list, `network-manager bind --add`). A module's `aliasType` can now be changed and is applied in place; `ports` on a module without `network:rules` is documentation and no longer warns. `rules-manager overlaps` reports shadowed, redundant and conflicting rules, and a pinhole a zone's `access-to` already covers is no longer written. Every zone with internet access now also blocks CGNAT, link-local and the firewall's own addresses, and a module's egress `to: internet` excludes the site.
+
+**The console.** A web console at `console.<domain>`, behind the Authentik sign-in and reachable from the management zone and the admin VPN only: the site's physical and logical views, its modules, updates and repositories, and every manager verb as a job that is previewed before it runs; a destructive verb asks for the object's name. Before identity is installed, a one-time setup token on the mothership opens it for the rest of the install.
+
+**Signed releases.** A checkout on a staging or production branch moves only to a release tag signed by a key that the last verified release lists, and never backwards; a fresh clone starts from a signed introduction. The health check reports every repository's signature state and keys about to expire.
+
+**Cluster.** A second corosync link; a QDevice gives a two-node cluster its third vote, and `node add` warns when a cluster has only two. USB network adapters can join the LAN bond, and `node network set --wan-port` chooses the WAN port. HA places a guest only on nodes that carry every bridge it uses and no longer moves a host-CPU guest live onto an older CPU. The sweep refuses an over-committed node, and guest disks grow automatically.
+
+**Modules.** New: Karakeep (bookmarks and read-later, tagged by the AI stack), Woodpecker CI beside Forgejo, lazysite (a Markdown website from a Forgejo repository) and Project N.O.M.A.D. (an offline knowledge library). Jellyfin moves to 12.2 with the maintained SSO plugin and is published without the identity gate so its apps can sign in; **its database is migrated on the first start and cannot go back** — the pre-update snapshot is the way back. CrowdSec on the firewall bans repeated failed logins and probing on published names. A route can be limited to paths, to zones and to a provider's source ranges. `module-manager` gains `suspend` and `resume`, `add-stack`, and migration by changing a module's `node`.
+
+**Security.** Images move to current releases (Karakeep 0.34.1, Meilisearch 1.55 — its index is converted on the first start — and lazysite 0.16.0), and the CVE scan now sees native libraries bundled inside Python packages. Two risks are documented in their install guides: the console believes the identity gate's headers from the firewall's address, so the management zone must hold only TAPPaaS's own machines; and NOMAD's Command Center has no sign-in and controls the VM's Docker. A guest moved live onto an older CPU may run without some CPU-side mitigations until it next reboots.
 
 <!-- /next-release summary -->
 
