@@ -136,8 +136,8 @@ export const BUDDY_KINDS: Record<BuddyKind, string> = {
 // --propagate and --force stay with the CLI. --config-only starts ticked:
 // onboarding prompts for a credential on a terminal, which a job has not.
 const BUDDY_OPTIONS: Record<BuddyKind, string[]> = {
-  pull: ["--host", "--contact", "--tunnel", "--endpoint", "--peer-key", "--tunnel-net", "--namespace", "--remote-namespace", "--store", "--port", "--schedule", "--country", "--city", "--building", "--mtu", "--config-only"],
-  remote: ["--contact", "--tunnel", "--listen-port", "--peer-key", "--tunnel-net", "--auth-id", "--namespace", "--country", "--city", "--building", "--mtu", "--config-only"],
+  pull: ["--host", "--contact", "--tunnel", "--endpoint", "--peer-key", "--tunnel-net", "--namespace", "--remote-namespace", "--store", "--port", "--schedule", "--location", "--country", "--city", "--building", "--mtu", "--config-only"],
+  remote: ["--contact", "--tunnel", "--listen-port", "--peer-key", "--tunnel-net", "--auth-id", "--namespace", "--location", "--country", "--city", "--building", "--mtu", "--config-only"],
 };
 
 // A buddy's name, as peer add accepts it.

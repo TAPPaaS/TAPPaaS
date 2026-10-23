@@ -24,6 +24,20 @@ import { Physical } from "./Physical";
 
 const sm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "site-manager", verb, ...extra });
 
+// A location as site-manager site show --json gives it (site-fields.json $defs.location).
+interface Loc {
+  displayName?: string;
+  kind?: string;
+  country?: string;
+  city?: string;
+  address?: string;
+  timezone?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
+const placeText = (l: Loc): string => [l.address, l.city, l.country?.toUpperCase()].filter(Boolean).join(", ") || "—";
+
 interface Repo {
   name: string;
   url?: string;
@@ -49,8 +63,11 @@ function NodeActions() {
 // Site — who and where it is, its WAN, and its settings; Updates — the
 // schedule, the channel and what an update may do. Each Modify is the schema's
 // form, limited to its card's fields. hardware.nodes is drawn by the Device and
-// Storage views, backup by the Backup page, the repositories just below.
-const SITE_FIELDS = ["name", "displayName", "version", "defaultEnvironment", "owner", "email", "location", "network"];
+// Storage views, backup by the Backup page, the repositories just below. The
+// site's locations are site-manager location's: the primary one (where the
+// site is, its timezone the site's) on the card, every one in its Locations
+// section with the location forms.
+const SITE_FIELDS = ["name", "displayName", "version", "defaultEnvironment", "owner", "email", "primaryLocation", "locale", "keyboard", "network"];
 const SETTINGS_FIELDS = ["ipv6", "dnssec", "branding", "dnsBlocklists", "diskAutoGrow", "requireSigned"];
 const UPDATE_FIELDS = ["updateSchedule", "channel", "automaticReboot", "snapshotRetention"];
 
@@ -83,14 +100,17 @@ const siteModify = (title: string, fields: string[], note: string) => () => [fie
 function SiteTop({ r }: { r: Read<SiteRead> }) {
   const d = r.env?.data;
   const s = (d?.site ?? {}) as Record<string, unknown> & {
-    location?: Record<string, unknown>;
+    locations?: Record<string, Loc>;
+    primaryLocation?: string;
     network?: { isp?: string | null; publicIp?: string };
     updateSchedule?: { frequency?: string; weekday?: string; hour?: number };
   };
   const sched = s.updateSchedule;
   const last = d?.lastSweep;
   const repos = (d?.repositories ?? []) as Repo[];
-  const loc = s.location;
+  const locations = Object.entries(s.locations ?? {}).map(([name, l]) => ({ ...l, name }));
+  const primary = locations.find((l) => l.name === s.primaryLocation) ?? null;
+  const others = locations.filter((l) => l !== primary).sort((a, b) => a.name.localeCompare(b.name));
   const pub = publicText(publicAddress({ network: { publicIp: s.network?.publicIp ?? null } }, d?.wan ?? null));
   return (
     <div className="site-records">
@@ -107,12 +127,21 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
               ["email", val(s.email)],
             ]}
           />
-          {loc ? (
-            <>
-              <h3>Location</h3>
-              <KV rows={[["country", val(loc.country)], ["city", val(loc.city)], ["building", val(loc.building)], ["timezone", val(loc.timezone)], ["locale", val(loc.locale)], ["keyboard", val(loc.keyboard)], ...(loc.latitude !== undefined || loc.longitude !== undefined ? [["coordinates", `${loc.latitude ?? "?"}, ${loc.longitude ?? "?"}`] as [string, ReactNode]] : [])]} />
-            </>
-          ) : null}
+          <h3>Location</h3>
+          {primary ? (
+            <KV
+              rows={[
+                ["primary location", primary.displayName && primary.displayName !== primary.name ? `${primary.displayName} (${primary.name})` : primary.name],
+                ["place", placeText(primary)],
+                ["timezone", val(primary.timezone, "not set — every node and guest falls back to UTC")],
+                ...(primary.latitude !== undefined || primary.longitude !== undefined ? [["coordinates", `${primary.latitude ?? "?"}, ${primary.longitude ?? "?"}`] as [string, ReactNode]] : []),
+                ["locale", val(s.locale)],
+                ["keyboard", val(s.keyboard)],
+              ]}
+            />
+          ) : (
+            <p className="muted">No primary location: add the site's own below, with its timezone.</p>
+          )}
           <h3>Network</h3>
           <KV rows={[["ISP", val(s.network?.isp)], ["public IP", val(s.network?.publicIp)], ["WAN", pub]]} />
           <h3>Settings</h3>
@@ -173,6 +202,51 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
           </p>
         </Section>
       </div>
+      <Locations primary={primary?.name ?? null} rows={primary ? [primary, ...others] : others} />
+    </div>
+  );
+}
+
+// Every place the site cares about (site-manager location): its own buildings,
+// a provider's data centre, a buddy's site. Add and Modify are the schema's
+// location form; Delete is refused by site-manager for the primary location and
+// for one a peer or device names, and needs the name typed.
+function Locations({ primary, rows }: { primary: string | null; rows: (Loc & { name: string })[] }) {
+  const loc = (verb: string, name: string | null, title: string, note: string): Step =>
+    fieldsStep({ title, bin: "site-manager", verb: `location ${verb}`, fixed: name ? [name] : [], kind: "location", name, mode: name ? "modify" : "add", keep: verb === "add" ? ["--primary"] : [], note });
+  return (
+    <div>
+      <Section
+        title="Locations"
+        aside={<OperateButton label="Add location…" title="Add a location" steps={() => [loc("add", null, "site-manager location add", "A place by name: the name is how peers, rooms and devices name it, and cannot change. --primary makes it the site's own, whose timezone every node and guest takes.")]} />}
+      >
+        {rows.length === 0 ? (
+          <p className="muted">No locations yet.</p>
+        ) : (
+          <table className="table compact">
+            <thead>
+              <tr><th>location</th><th>kind</th><th>place</th><th>timezone</th><th /></tr>
+            </thead>
+            <tbody>
+              {rows.map((l) => (
+                <tr key={l.name}>
+                  <td className="mono" title={l.displayName}>{l.name}{l.name === primary ? <span className="muted"> · primary</span> : null}</td>
+                  <td>{l.kind ?? "site"}</td>
+                  <td>{placeText(l)}</td>
+                  <td className="mono">{l.timezone ?? ""}</td>
+                  <td className="toolbar">
+                    <OperateButton label="Modify…" title={`Modify location ${l.name}`} steps={() => [loc("modify", l.name, `site-manager location modify ${l.name}`, l.name === primary ? "The primary location: its timezone is the site's, and the next update sets every node and guest to it." : "Its place: what an off-site copy kept there is compared with.")]} />
+                    {l.name !== primary ? (
+                      <OperateButton label="Delete…" kind="danger" title={`Delete location ${l.name}`} steps={[sm(`site-manager location delete ${l.name}`, "location delete", { fixed: [l.name], note: "Refused while a backup peer, room or device names it. Deleting needs its name typed after the preview." })]} />
+                    ) : null}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+        <p className="muted small">The primary location is where the site is; make another one primary in the Site card's Modify. A backup buddy's place is a location of kind remote.</p>
+      </Section>
     </div>
   );
 }

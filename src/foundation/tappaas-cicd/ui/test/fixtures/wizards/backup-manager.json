@@ -20,7 +20,7 @@
           "receive"
         ]
       ],
-      "usage": "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] [--port P] [--remote-namespace NS] [--max-depth N] [--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] [--country CC] [--city C] [--building B] [--contact EMAIL] [--tunnel serve|dial] [--tunnel-net CIDR] [--listen-port P] [--endpoint H:P] [--peer-key K] [--mtu N] [--force]",
+      "usage": "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] [--port P] [--remote-namespace NS] [--max-depth N] [--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] [--location NAME | --country CC [--city C] [--building B]] [--contact EMAIL] [--tunnel serve|dial] [--tunnel-net CIDR] [--listen-port P] [--endpoint H:P] [--peer-key K] [--mtu N] [--force]",
       "note": null,
       "details": null,
       "positionals": [
@@ -112,12 +112,20 @@
           "description": "peer add remote: let the read grant reach child namespaces. Off by default — on the root that would expose fs/ (config + secrets) and other peers' data."
         },
         {
+          "flag": "--location",
+          "takesValue": true,
+          "arg": "NAME",
+          "choices": null,
+          "repeatable": false,
+          "description": "peer add: the location the peer's PBS is at, one of the site's (site-manager location list) — the evidence its copy is off-site."
+        },
+        {
           "flag": "--country",
           "takesValue": true,
           "arg": "CC",
           "choices": null,
           "repeatable": false,
-          "description": "peer add: the country the peer's PBS is in (ISO code) — the evidence its copy is off-site (#609)."
+          "description": "peer add: instead of --location, the country it is in (ISO code): the site's location at that place is used, or a new one (kind remote) is added."
         },
         {
           "flag": "--city",
@@ -125,7 +133,7 @@
           "arg": "C",
           "choices": null,
           "repeatable": false,
-          "description": "peer add: its city — needed to tell it apart from a Site in the same country."
+          "description": "peer add: with --country, its city — needed to tell it apart from a Site in the same country."
         },
         {
           "flag": "--building",
@@ -133,7 +141,7 @@
           "arg": "B",
           "choices": null,
           "repeatable": false,
-          "description": "peer add: its building or data centre — needed when it shares the Site's city."
+          "description": "peer add: with --country, its building or data centre (the location's address) — needed when it shares the Site's city."
         },
         {
           "flag": "--contact",
@@ -224,7 +232,7 @@
           "arg": null,
           "choices": null,
           "repeatable": false,
-          "description": "Machine output (JSON) for list/show/resolve/placement/peers."
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
         },
         {
           "flag": "--pbs",
@@ -291,7 +299,7 @@
           "arg": null,
           "choices": null,
           "repeatable": false,
-          "description": "Machine output (JSON) for list/show/resolve/placement/peers."
+          "description": "Machine output (JSON) for list/show/resolve/placement/peers/restore list-all."
         },
         {
           "flag": "--pbs",

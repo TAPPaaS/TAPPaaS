@@ -1,7 +1,7 @@
 // fieldmanifest.ts — one field manifest for every add and modify form
 // (GET /api/v1/fields/<kind>[/<name>]). It is derived from the schema JSONs the
 // managers validate against — the composed module field schema, zones-fields,
-// environment-fields, the identity *-fields, site-fields, the module schema's
+// environment-fields, the identity *-fields, site-fields and its location, the module schema's
 // backup block, racks-fields' rack and mount — plus, where the object exists, its record. Per field: its
 // type, its choices (an enum, or the defined objects a `references` field names),
 // its default (a literal, or a template such as <vmname>.<domain> rendered with
@@ -10,7 +10,7 @@
 // change it, and how a change is passed to the manager's own verb (`--set` or
 // the verb's own flag). Pure: the reads that feed it are in reads.ts.
 
-export const FIELD_KINDS = ["module", "zone", "environment", "org", "group", "user", "role", "site", "backup", "rack", "mount", "room"] as const;
+export const FIELD_KINDS = ["module", "zone", "environment", "org", "group", "user", "role", "site", "location", "backup", "rack", "mount", "room"] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 export type FormMode = "add" | "modify";
 
@@ -88,6 +88,8 @@ export interface RefContext {
   racks: string[];
   rooms: string[];
   faceplates: string[];
+  // site.json's locations, by name
+  locations: string[];
 }
 
 type Obj = Record<string, unknown>;
@@ -107,8 +109,8 @@ export function typeOf(t: unknown): ManifestField["type"] {
   return "string";
 }
 
-const ONE: Record<string, string> = { zones: "a zone", environments: "an environment", nodes: "a node", storage: "a storage pool", organizations: "an organization", users: "a user", groups: "a group", roles: "a role", devices: "a device", racks: "a rack", rooms: "a room", faceplates: "a faceplate" };
-const MANY: Record<string, string> = { zones: "zones", environments: "environments", nodes: "nodes", storage: "storage pools", organizations: "organizations", users: "users", groups: "groups", roles: "roles", devices: "devices", racks: "racks", rooms: "rooms", faceplates: "faceplates" };
+const ONE: Record<string, string> = { zones: "a zone", environments: "an environment", nodes: "a node", storage: "a storage pool", organizations: "an organization", users: "a user", groups: "a group", roles: "a role", devices: "a device", racks: "a rack", rooms: "a room", faceplates: "a faceplate", locations: "a location" };
+const MANY: Record<string, string> = { zones: "zones", environments: "environments", nodes: "nodes", storage: "storage pools", organizations: "organizations", users: "users", groups: "groups", roles: "roles", devices: "devices", racks: "racks", rooms: "rooms", faceplates: "faceplates", locations: "locations" };
 
 export function typeTextOf(type: ManifestField["type"], references: string | null, enumValues: string[] | null): string {
   if (references) return type === "list" ? MANY[references] ?? references : ONE[references] ?? references;
@@ -199,6 +201,8 @@ export function choicesFor(references: string | null, refs: RefContext, record: 
       return refs.rooms;
     case "faceplates":
       return refs.faceplates;
+    case "locations":
+      return refs.locations;
     default:
       return null;
   }
@@ -320,6 +324,11 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
       "updateSchedule.frequency": "--updateFrequency", "updateSchedule.weekday": "--updateWeekday", "updateSchedule.hour": "--updateHour",
     },
   },
+  // site-manager location add/modify: one flag per field of site-fields' $defs.location.
+  location: {
+    add: { displayName: "--displayName", kind: "--kind", country: "--country", city: "--city", address: "--address", timezone: "--timezone", latitude: "--latitude", longitude: "--longitude" },
+    modify: { displayName: "--displayName", kind: "--kind", country: "--country", city: "--city", address: "--address", timezone: "--timezone", latitude: "--latitude", longitude: "--longitude" },
+  },
   backup: { modify: { enabled: "--enabled", retention: "--retention", exclude: "--exclude" } },
   zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", environment: "--environment", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
   rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", room: "--room", description: "--description" } },
@@ -329,7 +338,7 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
 
 // Fields a form never offers whatever the schema says: the object's name is
 // the verb's positional.
-const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], rack: ["name"], mount: ["device"], room: ["name"] };
+const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], rack: ["name"], mount: ["device"], room: ["name"], location: ["name"] };
 
 // The classes a --set refuses before anything is written, per kind whose modify
 // is `--set field=value` within each field's class (zones-fields, racks-fields).

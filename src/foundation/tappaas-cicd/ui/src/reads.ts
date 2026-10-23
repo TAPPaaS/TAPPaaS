@@ -300,8 +300,10 @@ export class Reads {
         faceplates: (f.value ?? []).map((x) => x.key).sort(),
       };
     }
+    const locations = Object.keys(((site.value?.site ?? {}) as { locations?: Record<string, unknown> }).locations ?? {}).sort();
     return {
       ...rackRefs,
+      locations,
       zones,
       environments: (envs.value ?? []).map((e) => e.name).sort(),
       nodes,
@@ -451,6 +453,17 @@ export class Reads {
       case "site": {
         defs = flattenSchema(this.schemaFile("site-fields.json"));
         record = ((await this.site.get()).value?.site ?? null) as Record<string, unknown> | null;
+        break;
+      }
+      case "location": {
+        // site-fields.json's $defs.location; the record from site.json's locations.
+        defs = flattenSchema(((this.schemaFile("site-fields.json").$defs ?? {}) as Record<string, unknown>).location);
+        if (name) {
+          const site = ((await this.site.get()).value?.site ?? {}) as { locations?: Record<string, Record<string, unknown>> };
+          record = site.locations?.[name] ?? null;
+          if (!record && mode === "modify") throw new Error(`no location '${name}'`);
+        }
+        if (mode === "add") defaults = { displayName: "<name>", kind: "site" };
         break;
       }
       case "rack":

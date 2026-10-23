@@ -164,13 +164,17 @@ function Overview({ p, runs }: { p: Record<string, unknown>[]; runs: Read<Backup
           <tbody>
             {p.map((x, i) => {
               const o = outside.find((y) => y.kind === "buddy" && y.name === x.name);
-              const loc = x.physicalLocation as { city?: string; country?: string } | undefined;
+              // The location the buddy names (site-manager's), its place as the title;
+              // a peer not yet migrated shows its own place.
+              const place = (x.place ?? x.physicalLocation) as { address?: string; city?: string; country?: string } | undefined;
+              const placeLine = [place?.address, place?.city, place?.country].filter(Boolean).join(", ");
+              const where = typeof x.location === "string" ? x.location : placeLine;
               return (
                 <tr key={i}>
                   <td><Tag level={o?.state === "down" ? "warn" : o?.state === "up" ? "pass" : "skip"} /></td>
                   <td className="mono" title={x.tunnel ? `tunnel ${String(x.tunnel)}` : undefined}>{String(x.name ?? "")}</td>
                   <td>{String(x.role ?? "")}</td>
-                  <td className="muted">{[loc?.city, loc?.country].filter(Boolean).join(", ") || String(x.remoteHost ?? "")}</td>
+                  <td className="muted" title={placeLine || undefined}>{where || String(x.remoteHost ?? "")}</td>
                   <td className="muted">{o?.state ?? "state unknown"}</td>
                 </tr>
               );

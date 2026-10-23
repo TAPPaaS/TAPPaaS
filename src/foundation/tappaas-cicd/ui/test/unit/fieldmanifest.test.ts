@@ -28,6 +28,7 @@ const refs: RefContext = {
   racks: ["rack1"],
   rooms: ["basement"],
   faceplates: ["generic/server-2u", "unifi/usw-pro-xg-10-poe"],
+  locations: ["hareskov", "rodovre"],
 };
 const field = (m: FieldManifest, n: string) => m.fields.find((f) => f.name === n);
 
@@ -121,6 +122,18 @@ check(/^immutable: Written once/.test(field(site, "version")?.why ?? "") && /^im
 check(field(site, "dnssec")?.arg === "--dnssec" && field(site, "dnssec")?.type === "boolean" && field(site, "dnsBlocklists.zones")?.type === "list" && field(site, "dnsBlocklists.zones")?.typeText === "zones", "…dnssec a boolean, the blocklist zones a list of zones");
 check(field(site, "diskAutoGrow.threshold")?.arg === "--diskAutoGrowThreshold" && field(site, "diskAutoGrow.threshold")?.default === "80" && field(site, "branding.logoDark")?.arg === "--brandingLogoDark", "…disk growth by key, with its defaults; branding's two files");
 check(/^manual: Has verbs of its own: site-manager location/.test(field(site, "locations")?.why ?? "") && /^manual: /.test(field(site, "hardware.nodes")?.why ?? ""), "…the locations and hardware are manual, with their reasons");
+
+check(field(site, "primaryLocation")?.typeText === "a location" && field(site, "primaryLocation")?.choices?.join() === "hareskov,rodovre", "…the primary location is one of the site's locations");
+
+// ── location: site-fields.json's $defs.location, by site-manager location ──
+const locDefsAll = flattenSchema((schema("site-fields.json").$defs as Record<string, unknown>).location);
+const locAdd = buildManifest({ kind: "location", name: null, mode: "add", defs: locDefsAll, record: null, defaults: { displayName: "<name>", kind: "site" }, refs, vars: {} });
+check(locAdd.nameField !== null && !locAdd.fields.some((f) => f.name === "name"), "location add: the name is the verb's positional");
+check(field(locAdd, "country")?.required === true && field(locAdd, "country")?.arg === "--country" && field(locAdd, "timezone")?.arg === "--timezone", "…country required, every field its flag");
+check(field(locAdd, "kind")?.choices?.join() === "site,remote" && field(locAdd, "kind")?.default === "site", "…kind one of site, remote, site by default");
+check(field(locAdd, "latitude")?.typeText === "number", "…a coordinate is labelled number");
+const locMod = buildManifest({ kind: "location", name: "rodovre", mode: "modify", defs: locDefsAll, record: { country: "DK", city: "Rodovre", timezone: "Europe/Copenhagen" }, refs, vars: {} });
+check(field(locMod, "city")?.value === "Rodovre" && field(locMod, "city")?.editable === true && field(locMod, "address")?.configured === false, "location modify: the record's values, each editable");
 
 // ── backup: the module's leaf of the cascade ────────────────────────────
 const bk = buildManifest({ kind: "backup", name: "vaultwarden", mode: "modify", defs: backupDefs(composed), record: {}, defaults: { enabled: true, retention: "7y", exclude: [], schedule: "daily" }, refs, vars: {} });

@@ -65,7 +65,7 @@ for (const kind of ["rack", "mount", "room"] as FieldKind[]) {
 
 // ── site-manager site modify: its options over site-fields.json ─────────
 const sm = readFileSync(join(MANAGERS, "site-manager", "src", "main.ts"), "utf8");
-const smBlock = sm.slice(sm.indexOf("options: [", sm.indexOf('name: "site modify')), sm.indexOf('{ usage: "node list'));
+const smBlock = sm.slice(sm.indexOf("options: [", sm.indexOf('name: "site modify')), sm.indexOf('{ usage: "location list'));
 const smOpts = [...smBlock.matchAll(/\["(--\w+)[ "]/g)].map((m) => m[1]).filter((f) => f !== "--force");
 const stable = FLAGS.site?.modify ?? {};
 const sdefs = flattenSchema(schema("site-fields.json"));
@@ -73,5 +73,16 @@ check(same(Object.values(stable), [...smOpts, "--channel"]) && smOpts.length > 3
 check(Object.keys(stable).every((f) => sdefs.some((d) => d.name === f && d.changeClass === "in-place")), "…each a field site-fields.json classes in-place");
 check(["dnssec", "dnsBlocklists.lists", "diskAutoGrow.threshold", "branding.logo"].every((f) => stable[f]), "…dnssec, the blocklists, disk growth and branding among them");
 check(["name", "version", "defaultEnvironment"].every((f) => !stable[f] && sdefs.find((d) => d.name === f)?.changeClass === "immutable"), "…name, version and defaultEnvironment immutable, with no flag");
+
+// ── site-manager location add/modify: its options over $defs.location ───
+const ldefs = flattenSchema((schema("site-fields.json").$defs as Record<string, unknown>).location).map((d) => d.name).filter((n) => n !== "name");
+for (const verb of ["add", "modify"] as const) {
+  const at = sm.indexOf(`{ usage: "location ${verb} `);
+  const block = sm.slice(sm.indexOf("options: [", at), sm.indexOf("] }", sm.indexOf("options: [", at)));
+  const opts = [...block.matchAll(/\["(--\w+)[ "]/g)].map((m) => m[1]).filter((f) => !["--check", "--primary", "--unset"].includes(f));
+  const table = FLAGS.location?.[verb] ?? {};
+  check(at > 0 && same(Object.values(table), opts), `location ${verb}: the table is site-manager location ${verb}'s options (${opts.join(" ")})`);
+  check(same(Object.keys(table), ldefs), `location ${verb}: every field of site-fields' location has its flag`);
+}
 
 done("flags");
