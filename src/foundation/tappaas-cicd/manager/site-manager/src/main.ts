@@ -363,7 +363,6 @@ function cmdSite(o: Opts): void {
       : "(unset)";
     const nodes = site.hardware?.nodes ?? [];
     const repos = site.repositories ?? [];
-    const orgs = site.organizations ?? [];
     const lbl = (k: string): string => `${GN}${(k + ":").padEnd(15)}${CL}`;
     info(`${lbl("Site")}${site.name}${site.displayName && site.displayName !== site.name ? ` (${site.displayName})` : ""}`);
     info(`${lbl("Owner")}${site.owner || "(unset)"}`);
@@ -396,7 +395,6 @@ function cmdSite(o: Opts): void {
     }
     info(`${lbl("Repositories")}${repos.length ? repos.map((r) => `${r.name}${r.branch ? "@" + r.branch : ""}${sigs[r.name] ? ` [${sigs[r.name]}]` : ""}`).join("  ") : "(none)"}` +
       (site.requireSigned ? "  — signed releases required" : ""));
-    info(`${lbl("Orgs")}${orgs.length ? orgs.join(", ") : "(none)"}`);
     info(`${lbl("Backup")}${site.backup ? JSON.stringify(site.backup) : "(none)"}`);
     return;
   }
@@ -412,10 +410,10 @@ function cmdSite(o: Opts): void {
     }
     let changed = 0;
     // The approved editable surface: scalar site-wide fields, mapped to schema
-    // paths. The discovery-derived hardware.nodes[] and the repositories/
-    // organizations lists are NOT modifiable here — each has its own CRUD
-    // (node …, repository …) or its own manager. (Environments are not a site
-    // field at all — they are the config/environments/*.json files.)
+    // paths. The discovery-derived hardware.nodes[] and the repositories list
+    // are NOT modifiable here — each has its own CRUD (node …, repository …).
+    // (Environments and organizations are not site fields at all — they are the
+    // config/environments/ and config/identities/organizations/ files.)
     const setStr = (flag: string, path: string[]): void => {
       const v = o.flags.get(flag);
       if (v === undefined) return;

@@ -66,9 +66,6 @@
       "catalog": "src/module-catalog.json"
     }
   ],
-  "organizations": [
-    "config/people/organizations/rossen.json"
-  ],
   "defaultEnvironment": "rossen",
   "channel": "unstable",
   "ipv6": true,

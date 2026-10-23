@@ -10,7 +10,7 @@
 # Covers:
 #   - create-site.sh --name testsite writes site.json (isolated config dir)
 #   - site.json .name == "testsite"; .defaultEnvironment defaults to --name (#426)
-#   - --organization decouples .defaultEnvironment/.owner/.organizations from .name
+#   - --organization decouples .defaultEnvironment/.owner from .name
 #   - site.json validates against site-fields.json (validate-site.sh)
 #   - NO configuration.json is created in the temp dir (site-native)
 #   - hardware.nodes[] non-empty when the cluster is reachable (else skip)
@@ -91,9 +91,9 @@ if run_validate "$SITE"; then ok "site.json validates against site-fields.json";
 [[ "$(jqv "$SITE" '.repositories[0].name')" == "TAPPaaS" ]] && ok "repositories[0].name = TAPPaaS" || bad "repositories not built"
 [[ "$(jqv "$SITE" '.repositories[0].branch')" == "stable" ]] && ok "repositories[0].branch = stable (default)" || bad "branch default wrong"
 
-# organizations reference the owner org file; environments are NOT a site field
+# environments and organizations are NOT site fields (their directories are the lists)
 [[ "$(jqv "$SITE" 'has("environments")')" == "false" ]] && ok "no .environments field" || bad ".environments should not be written"
-[[ "$(jqv "$SITE" '.organizations[0]')" == "config/identities/organizations/testsite.json" ]] && ok "organizations references the owner org file" || bad "organizations not keyed on owner (got '$(jqv "$SITE" '.organizations[0]')')"
+[[ "$(jqv "$SITE" 'has("organizations")')" == "false" ]] && ok "no .organizations field" || bad ".organizations should not be written"
 
 # hardware.nodes[] non-empty IFF cluster reachable, else skip
 NODE_COUNT="$(jqv "$SITE" '.hardware.nodes | length')"
@@ -137,7 +137,6 @@ if [[ -f "$S4" ]]; then ok "create-site --name + --organization writes site.json
 [[ "$(jqv "$S4" '.name')" == "warmelo1" ]]                                         && ok ".name == site code (warmelo1)"                 || bad ".name wrong (got '$(jqv "$S4" '.name')')"
 [[ "$(jqv "$S4" '.defaultEnvironment')" == "warmelo" ]]                            && ok ".defaultEnvironment == org (warmelo)"          || bad ".defaultEnvironment wrong (got '$(jqv "$S4" '.defaultEnvironment')')"
 [[ "$(jqv "$S4" '.owner')" == "warmelo" ]]                                         && ok ".owner == org (decoupled from .name)"          || bad ".owner wrong (got '$(jqv "$S4" '.owner')')"
-[[ "$(jqv "$S4" '.organizations[0]')" == "config/identities/organizations/warmelo.json" ]] && ok "organizations keyed on org, not site code" || bad "organizations wrong (got '$(jqv "$S4" '.organizations[0]')')"
 [[ "$(jqv "$S4" '.displayName')" == "warmelo1" ]]                                  && ok ".displayName from site code"                  || bad ".displayName wrong"
 run_validate "$S4" && ok "decoupled site.json validates against site-fields.json" || bad "decoupled site.json failed schema validation"
 
