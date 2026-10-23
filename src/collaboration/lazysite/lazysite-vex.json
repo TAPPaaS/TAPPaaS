@@ -1,0 +1,27 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "lazysite",
+      "description": "TAPPaaS module lazysite: triage of its own critical/high CVEs (#788). nginx on :8080, behind the firewall's Caddy, serves the site and hands pages to the lazysite FastCGI processor (Perl). Verified live on hrossen: libxslt is in the closure only because nginx is built with --with-http_xslt_module; the generated nginx.conf contains no xslt directive, only the nginx processes load libxslt, and nginx links libxml2 2.15.4."
+    }
+  },
+  "vulnerabilities": [
+    {
+      "id": "CVE-2025-7425",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "libxslt is only linked into nginx's built-in xslt filter, and the lazysite nginx.conf has no xslt_stylesheet directive, so no XSLT is ever run; the libxml2 it links (2.15.4) also carries the upstream mitigation (>= 2.14.5).",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/libxslt@1.1.45"
+        }
+      ]
+    }
+  ]
+}
