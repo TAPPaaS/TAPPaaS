@@ -108,7 +108,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 9 | 11 |
 | 6 | G6.2 User interface & physical view | H | L | – | 4 | 1 |
-| 6 | G6.3 Data model | M | M | – | 6 | 3 |
+| 6 | G6.3 Data model | M | M | – | 7 | 2 |
 | 5 | G5.1 Satellite & off-site | H | M | – | 1 | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
@@ -164,7 +164,7 @@ met gates are recorded in the releases that carried their waves.
 | VMID convention | #294 — only if it is adopted | Future Work |
 | Legal/processor | #359 | Wave 4 |
 | IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Accepted v1.0 2026-10-13**: built and on `main`; inbound verified from a phone over IPv6 via the public AAAA. Remaining outside it: public DNS that follows a dynamic WAN (#383) | #26 closable |
-| Locations and placement | [ADR-036](docs/ADR/ADR-036%20-%20Locations%20and%20Placement.md) **Accepted v1.0 2026-10-23**, not yet built: site-manager owns locations with a primary one, every device names its location, rack-manager becomes position-manager owning every placement, the nodes are `pvehost` machines and `site.hardware.nodes` goes; steps #869–#873 | G6.3 |
+| Locations and placement | [ADR-036](docs/ADR/ADR-036%20-%20Locations%20and%20Placement.md) **Accepted, built 2026-10-23** (#869–#873, migrations 0019–0022): site-manager owns locations with a primary one, every device names its location, rack-manager becomes position-manager owning every placement, the nodes are `pvehost` machines and `site.hardware.nodes` goes; steps #869–#873 | G6.3 |
 | User interface | #844 — [ADR-034](docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md) **Accepted v1.0 2026-10-18**, built: the console at `console.<domain>` | #844 closed |
 | Service exposure | #845 — [ADR-032](docs/ADR/ADR-032%20-%20Service%20Exposure.md) **Accepted v1.0, built** (2026-10-17): the gate authenticates machine callers (service accounts, client-credentials JWT); a module without `network:proxy` is unpublished by design, in the DMZ when it runs third-party code without user data (ADR-021 R1 amended); Jellyfin published without the gate for friends and family, hardened. all phases built (P0–P4); rate limiting is #851 | #845 closed |
 
@@ -279,7 +279,7 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 | ✅ #183 | TAPPaaS service catalog | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Folded into #839** (ADR-034 D6): the console's Modules page is the catalog — every registered repository's modules, installed or not, with Install |
 | ✅ #91 | Backstage as a component of tappaas-cicd | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Not adopted** (ADR-034 A3): a developer portal, not an operations console |
 
-### G6.3 Data model — Ease M · Risk M · done for 2.3: 6 · open: 3
+### G6.3 Data model — Ease M · Risk M · done for 2.3: 7 · open: 2
 
 The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/DATAMODEL.md) (2026-10-22: every JSON, which field names which object, and seven places where the model says one thing twice). The operator decided to fix the first four and park the rest (#866). Where a thing is becomes two things, a location and a placement, by ADR-036 (Accepted 2026-10-23). Linked to G6.2: the console's Physical view draws what this group models.
 
@@ -291,7 +291,7 @@ The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/
 | ✅ #870 | ADR-036 step 2: position-manager (was rack-manager), placements in rooms in a location | M | M | **Done 2026-10-23** (`ebe813f2`, on `main`): position-manager with `rack-manager` and the `mount` verbs as aliases for one release, `positions.json` (rooms and recorded devices carry a location, mounts are placements), `place`/`place modify`/`unplace`, `device record <switch:port>\|<mac>`; the topology gives every device `location`, `placement` and `source`, with seen devices from a port's `neighbors`; the rack view grouped by location → room → rack; migration 0020 (runs on hrossen at the next update). **Gap:** no switch controller reports `neighbors` yet (UniFi and MikroTik controllers live in Community), so seen devices are only ports up with nothing recorded |
 | ✅ #871 | ADR-036 step 3: every device record names its location | M | L | **Done 2026-10-23** (`9867f7b8`, on `main`): a machine module's `location` (replacing `physicalLocation`; `--location` on add and adopt), a switch's or AP's `location` a validated name (free text kept as `description`), the topology and the console reading them; migration 0021 |
 | ✅ #872 | ADR-036 step 4: the nodes are `pvehost` machines; `site.hardware.nodes` goes | M | H | **Done 2026-10-23** (`b4d4bfea`, on `main`): `storagePools` on the pvehost instance, `clusterNodes()` in lib/ts and `tappaas_cluster_nodes` in bash as the only node lists, `node add` writing the pvehost record first, cluster membership from the cluster's own status, every reader moved; migration 0022 refuses a node without its instance and names the adopt command; the Site page gains a Nodes table. Not run live: `reconcile-storage-nodes.sh`, `node add`, `module adopt` |
-| #873 | ADR-036 step 5: the console draws locations, rooms, racks | M | L | Physical view and Overview by location, the device panel's two lines, the Setup step; DATAMODEL findings 2 and 3 closed. After #869–#871 |
+| ✅ #873 | ADR-036 step 5: the console draws locations, rooms, racks | M | L | **Done 2026-10-23** (`03308e54`, on `main`): the Physical view and the Overview by location (rooms, racks, loose and unplaced devices; a remote location with its address), the device panel's location and placement links, a Day 2 Setup step for the physical site, the site's locations as a dropdown on every form that takes one; ADR-036 built, DATAMODEL findings 2 and 3 closed |
 | #868 | Faceplate catalog: a site adds plates for models the catalog lacks | L | L | from ADR-036 O2; the generic plates stay the fallback |
 | #866 | Data model: parked simplifications (backup cascade, module placement, `module:service`) | – | – | **Parked** (operator, 2026-10-23): findings 5–7 of `src/DATAMODEL.md`, recorded so they are not lost |
 
