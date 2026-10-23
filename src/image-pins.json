@@ -81,6 +81,24 @@
       "maintainer": "@larsrossen"
     },
     {
+      "module": "nomad",
+      "image": "docker.io/library/mysql",
+      "kind": "tag",
+      "file": "src/home/nomad/nomad.nix",
+      "match": "mysqlImage = \"mysql:([^\"]+)\";",
+      "tagPattern": "^8\\.0\\.[0-9]+$",
+      "maintainer": "@larsrossen"
+    },
+    {
+      "module": "nomad",
+      "image": "docker.io/library/redis",
+      "kind": "tag",
+      "file": "src/home/nomad/nomad.nix",
+      "match": "redisImage = \"redis:([^\"]+)\";",
+      "tagPattern": "^7\\.[0-9]+\\.[0-9]+-alpine$",
+      "maintainer": "@larsrossen"
+    },
+    {
       "module": "karakeep",
       "image": "ghcr.io/karakeep-app/karakeep",
       "kind": "tag",
