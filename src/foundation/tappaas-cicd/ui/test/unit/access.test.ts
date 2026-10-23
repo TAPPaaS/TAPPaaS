@@ -95,6 +95,9 @@ check(!d.ok && d.status === 401, "a wrong token: 401");
 d = decide("10.0.0.50", gate("Installer"), null, cfg, s);
 check(!d.ok, "headers from a mgmt laptop are not an identity");
 check(presentedToken({ authorization: "bearer  abc " }, null) === "abc", "Bearer is read without case");
+check(presentedToken({ cookie: "tappaas_setup=%E0" }, null) === "%E0", "a malformed cookie is read as it is, not thrown");
+d = decide("10.0.0.50", H({ cookie: "tappaas_setup=%E0" }), null, cfg, s);
+check(!d.ok && d.status === 401, "…and is a wrong token: 401");
 
 // ── identity installed: the token is refused, even with its file ─────
 writeFileSync(cfg.identityFile, "{}");

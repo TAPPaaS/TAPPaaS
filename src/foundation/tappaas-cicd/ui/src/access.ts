@@ -113,7 +113,14 @@ export function presentedToken(headers: Record<string, string | string[] | undef
   const cookie = header(headers, "cookie") ?? "";
   for (const part of cookie.split(";")) {
     const [k, ...v] = part.trim().split("=");
-    if (k === SETUP_COOKIE) return decodeURIComponent(v.join("="));
+    if (k === SETUP_COOKIE) {
+      // A malformed escape is a wrong token, not an error: it gets a 401.
+      try {
+        return decodeURIComponent(v.join("="));
+      } catch {
+        return v.join("=");
+      }
+    }
   }
   return query;
 }

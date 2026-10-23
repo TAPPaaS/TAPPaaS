@@ -154,6 +154,8 @@ async function main(): Promise<void> {
   check((r.json().data as { via: string }).via === "setup-token", "…which the API then accepts");
   r = await call("GET", "/", {}, "10.0.0.50");
   check(r.status === 401 && r.body.includes("Setup token"), "without it, a page asking for the token");
+  r = await call("GET", "/api/v1/me", { cookie: "tappaas_setup=%E0" }, "10.0.0.50");
+  check(r.status === 401, "a malformed cookie is a 401, not a crash");
   writeFileSync(access.identityFile, "{}");
   r = await call("GET", "/api/v1/me", { cookie: "tappaas_setup=tok-123" }, "10.0.0.50");
   check(r.status === 403 || r.status === 401, "once identity is installed the cookie no longer opens anything");

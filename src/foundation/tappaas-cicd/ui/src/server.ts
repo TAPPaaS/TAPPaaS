@@ -110,12 +110,15 @@ export class ConsoleServer {
 
   async handle(req: IncomingMessage, res: ServerResponse): Promise<void> {
     securityHeaders(res);
-    const url = new URL(req.url ?? "/", "http://console.invalid");
-    const path = url.pathname;
-    const peer = normalizeAddr(req.socket.remoteAddress);
-    const setup = setupState(this.cfg.access);
-    const d: Decision = decide(peer, req.headers, url.searchParams.get("token"), this.cfg.access, setup);
+    let path = req.url ?? "/";
+    // Everything a request can make throw is inside the try: an error that
+    // escapes handle() is an unhandled rejection, and that ends the process.
     try {
+      const url = new URL(req.url ?? "/", "http://console.invalid");
+      path = url.pathname;
+      const peer = normalizeAddr(req.socket.remoteAddress);
+      const setup = setupState(this.cfg.access);
+      const d: Decision = decide(peer, req.headers, url.searchParams.get("token"), this.cfg.access, setup);
       if (!d.ok) {
         if (path.startsWith("/api/")) return sendJson(res, d.status, { error: d.reason });
         res.statusCode = d.status;
