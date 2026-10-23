@@ -87,14 +87,14 @@ export interface Site {
   repositories: Repository[];
   // NOTE: environments are NOT a site field — they are enumerated from the
   // config/environments/*.json directory (SiteClient.listEnvironments), which is
-  // what the --deep reconcile cascade fans out over.
-  organizations?: string[];
+  // what the --deep reconcile cascade fans out over. Organizations are not a
+  // site field either: they are identity-manager's config/identities/organizations/.
 }
 
 // TODO(question): the editable surface of `site modify`. See PARKED Q1.
 // The fields a `site modify --<field> <value>` is allowed to set. Discovery-
 // derived fields (hardware.nodes via `node` CRUD) and lists managed by their
-// own CRUD (repositories, organizations) are EXCLUDED here. (Environments are
+// own CRUD (repositories) are EXCLUDED here. (Environments are
 // not a site field — they are the config/environments/*.json files.)
 export type SiteModifiableField =
   | "channel"
