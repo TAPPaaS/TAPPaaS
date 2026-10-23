@@ -8,7 +8,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CICD="$(cd "${HERE}/../.." && pwd)"
 REPO_SH="${CICD}/manager/site-manager/repository.sh"
-info(){ :; }; warn(){ :; }; error(){ :; }
+info(){ :; }; warn(){ :; }; error(){ :; }; debug(){ :; }
 # shellcheck source=../../lib/verify-repo.sh
 . "${CICD}/lib/verify-repo.sh"
 

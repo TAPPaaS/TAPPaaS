@@ -39,7 +39,7 @@ sha() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | awk '{pri
 
 # The functions under test, cut from the shipped scripts so this cannot drift.
 block() { sed -n "/^# >>> $2/,/^# <<< $2/p" "$1"; }
-STUBS='info() { echo "INFO $*"; }; warn() { echo "WARN $*"; }; error() { echo "ERROR $*"; }; die() { echo "DIE $*"; exit 1; }'
+STUBS='info() { echo "INFO $*"; }; warn() { echo "WARN $*"; }; error() { echo "ERROR $*"; }; die() { echo "DIE $*"; exit 1; }; debug() { :; }'
 
 printf 'a disk image\n' >"${T}/img.qcow2.zst"
 GOOD="$(sha "${T}/img.qcow2.zst")"
@@ -84,7 +84,7 @@ _pf_line="$(grep -n '^prefetch_image "' "${TUPDATE}" | cut -d: -f1)"
 _destroy_line="$(grep -n 'qm destroy' "${TUPDATE}" | head -1 | cut -d: -f1)"
 [[ -n "${_pf_line}" && -n "${_destroy_line}" && "${_pf_line}" -lt "${_destroy_line}" ]] \
     && ok "the image is checked before qm destroy" || bad "prefetch (${_pf_line:-none}) is not before qm destroy (${_destroy_line:-none})"
-if command -v sha256sum >/dev/null 2>&1 && sha256sum --status -c /dev/null 2>/dev/null <<<"" || sha256sum --help 2>&1 | grep -q -- '--status'; then
+if command -v sha256sum >/dev/null 2>&1 && sha256sum --status -c /dev/null 2>/dev/null <<<"" || sha256sum --help 2>&1 | grep -c -- '--status' >/dev/null; then
     prefetch() { ( eval "${STUBS}"; node_run() { bash -c "$*"; }; NODE=n1; NIX_JSON=x.json
                    IMAGE_PREFETCH_DIR="${T}/node"; eval "${PF}"; prefetch_image "$@" ) 2>&1; }
     out="$(prefetch "file://${T}/img.qcow2.zst" img.qcow2.zst "${GOOD}")"; rc=$?

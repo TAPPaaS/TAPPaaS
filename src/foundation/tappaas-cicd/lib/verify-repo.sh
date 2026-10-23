@@ -15,11 +15,12 @@
 #   signers-at:  <commit>       where the allowed_signers that authorized it lives
 #
 # Sourced, not executed. Needs git >= 2.34 (SSH signatures), ssh-keygen, jq, python3.
-# Callers define info()/warn()/error(); fallbacks below.
+# Callers define info()/warn()/error()/debug(); fallbacks below.
 
 command -v info  >/dev/null 2>&1 || info()  { echo "$*"; }
 command -v warn  >/dev/null 2>&1 || warn()  { echo "WARN: $*" >&2; }
 command -v error >/dev/null 2>&1 || error() { echo "ERROR: $*" >&2; }
+command -v debug >/dev/null 2>&1 || debug() { :; }
 
 VERIFY_SIGNERS_PATH=".tappaas/allowed_signers"
 # Keys that must never verify again, whatever date a tag claims: a stolen key

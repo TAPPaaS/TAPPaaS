@@ -13,7 +13,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CICD="${HERE}/../.."
 CHECK="${CICD}/manager/health-manager/check-repo-signatures.sh"
-info(){ :; }; warn(){ :; }; error(){ :; }
+info(){ :; }; warn(){ :; }; error(){ :; }; debug(){ :; }
 # shellcheck source=../../lib/verify-repo.sh
 . "${CICD}/lib/verify-repo.sh"
 

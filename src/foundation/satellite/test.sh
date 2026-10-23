@@ -484,7 +484,7 @@ grep -q 'sshAllow' <<< "${out}" && ok "check-config names sshAllow when the allo
   sat_gen_debian_configs "${tmp}/s2.json" "HPUB=" "${tmp}/so2" "" )
 if grep -q 'ip saddr { 198.51.100.7, 10.20.0.0/16 } tcp dport 2222 accept' "${tmp}/so/nftables.conf" \
    && grep -q 'SSH_PORT="2222"' "${tmp}/so/roles.env" && grep -q 'SSH_PORT=""' "${tmp}/ao/roles.env" \
-   && awk '/listen 2222;/{f=1} f' "${tmp}/so/nginx-stream.conf" | tr -d '\n ' | grep -q 'allow198.51.100.7;allow10.20.0.0/16;denyall;proxy_timeout12h;proxy_pass10.255.0.1:2222;' \
+   && awk '/listen 2222;/{f=1} f' "${tmp}/so/nginx-stream.conf" | tr -d '\n ' | grep -c 'allow198.51.100.7;allow10.20.0.0/16;denyall;proxy_timeout12h;proxy_pass10.255.0.1:2222;' >/dev/null \
    && grep -q 'listen 443;' "${tmp}/so/nginx-stream.conf" \
    && grep -q 'listen 2222;' "${tmp}/so2/nginx-stream.conf" && ! grep -q 'listen 443;' "${tmp}/so2/nginx-stream.conf" \
    && ! grep -q 'dport 2222\|ip saddr {' "${tmp}/ao/nftables.conf" && ! grep -q 'listen 2222\|deny all' "${tmp}/ao/nginx-stream.conf"; then

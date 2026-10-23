@@ -75,7 +75,7 @@ if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo ""
     echo "== DEEP: the installed console answers =="
     if systemctl is-active --quiet tappaas-console.service 2>/dev/null; then
-        if curl -fsS --max-time 10 "http://127.0.0.1:9097/api/v1/status" | grep -q '"version"'; then
+        if curl -fsS --max-time 10 "http://127.0.0.1:9097/api/v1/status" | grep -c '"version"' >/dev/null; then
             ok "tappaas-console answers /api/v1/status on loopback"
         else
             bad "tappaas-console is active but /api/v1/status does not answer"
