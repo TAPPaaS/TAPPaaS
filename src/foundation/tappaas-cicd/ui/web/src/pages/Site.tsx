@@ -49,8 +49,7 @@ function NodeActions() {
 // Site — who and where it is, its WAN, and its settings; Updates — the
 // schedule, the channel and what an update may do. Each Modify is the schema's
 // form, limited to its card's fields. hardware.nodes is drawn by the Device and
-// Storage views, backup by the Backup page, organizations by Identity, the
-// repositories just below.
+// Storage views, backup by the Backup page, the repositories just below.
 const SITE_FIELDS = ["name", "displayName", "version", "defaultEnvironment", "owner", "email", "location", "network"];
 const SETTINGS_FIELDS = ["ipv6", "dnssec", "branding", "dnsBlocklists", "diskAutoGrow", "requireSigned"];
 const UPDATE_FIELDS = ["updateSchedule", "channel", "automaticReboot", "snapshotRetention"];
@@ -170,7 +169,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
             </tbody>
           </table>
           <p className="muted small">
-            The nodes are the Device and Storage views', the backup target the <Link to="/backup">Backup</Link> page's, the organizations <Link to="/identity">Identity</Link>'s.
+            The nodes are the Device and Storage views', and the backup target the <Link to="/backup">Backup</Link> page's.
           </p>
         </Section>
       </div>

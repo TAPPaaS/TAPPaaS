@@ -438,16 +438,6 @@
       "default": false,
       "note": "Turn it on when the site must show that everything it runs comes from signed releases. Unstable branches are never signed and are not affected.",
       "changeClass": "in-place"
-    },
-    "organizations": {
-      "description": "Paths to organization JSON files (config/identities/organizations/*.json).",
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": [],
-      "changeClass": "manual",
-      "changeNote": "Each organization is identity-manager's."
     }
   }
 }

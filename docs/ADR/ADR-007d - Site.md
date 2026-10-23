@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | Accepted — **implemented** (P2/S3 on the `ADR007` branch) |
-| **Version** | 1.4a |
-| **Date** | 2026-06-30 |
+| **Version** | 1.5 |
+| **Date** | 2026-10-23 |
 | **Author** | Erik Daniel |
 | **Parent** | [ADR-007 Taxonomy (Overview)](<ADR-007 - TAPPaaS Taxonomy.md>) |
 | **Refined by** | [ADR-022a](<ADR-022a - Administrative Domain.md>) (Administrative Domain; amends the Site definition) · [ADR-022b](<ADR-022b - Location.md>) (Location) · [ADR-022c](<ADR-022c - Node and Host.md>) (Node and Host; amends `nodes`) — drafts |
 | **Related** | #313 (timezone→site.json); ADR-004 (config cascade); ADR-007b (Apps — `sourceMetadata` → Site `repositories`); **manager:** `site-manager`; **schema:** `schemas/site-fields.json` |
-| **Changelog** | v1.4a (2026-09-17) — header link to the ADR-022a/b/c drafts that refine this ADR; Version aligned with the changelog; no body change. v1.4 — **decouple site.name from org/environment naming (#426):** `site.json .name` is now a **neutral site code** = the Proxmox cluster name (aligned at creation, informational afterwards); a new **required `defaultEnvironment`** field names the default environment/organisation/zone; `create-site.sh` gains `--organization`; the install chain (`install.sh`/`install-platform.sh`/`tappaas-cicd/install.sh`) takes `--name` (site code) + `--organization`; `environment-manager` and `migrate-to-adr007.sh` derive the default env from `.defaultEnvironment` (not `.name`). Replaces the "one name threaded everywhere" rule. v1.3 — **as-built (2026-06-30):** replaced the schema with the realized `site.json` (`name/displayName/owner/email/version/location/network/hardware.nodes[]/backup/updateSchedule/automaticReboot/snapshotRetention/repositories/organizations`); **public domain + DNS moved to the Environment** (not site-wide); `hardware.nodes[]` is a list of **objects** (`{name, storagePools}`); `repositories[]` carry a **`branch`** (not `updateChannel`); **`configuration.json` is RETIRED** (deleted at cutover, not a 2-release deprecation); the Site holds **no `environments` list** — environments are the files in `config/environments/`. v1.2 — "bucket" → "classification domain". v1.1 — Erik⟷Lars review: drop `identityProvider.type` (CR-16); add `repositories`, `updateChannel` per-repo (CR-17) |
+| **Changelog** | v1.5 (2026-10-23) — **`organizations[]` dropped (#867):** the list of paths to organization files was never read; the organizations are the files in `config/identities/organizations/` (identity-manager), and migration 0017 removes the field from every `site.json`. v1.4a (2026-09-17) — header link to the ADR-022a/b/c drafts that refine this ADR; Version aligned with the changelog; no body change. v1.4 — **decouple site.name from org/environment naming (#426):** `site.json .name` is now a **neutral site code** = the Proxmox cluster name (aligned at creation, informational afterwards); a new **required `defaultEnvironment`** field names the default environment/organisation/zone; `create-site.sh` gains `--organization`; the install chain (`install.sh`/`install-platform.sh`/`tappaas-cicd/install.sh`) takes `--name` (site code) + `--organization`; `environment-manager` and `migrate-to-adr007.sh` derive the default env from `.defaultEnvironment` (not `.name`). Replaces the "one name threaded everywhere" rule. v1.3 — **as-built (2026-06-30):** replaced the schema with the realized `site.json` (`name/displayName/owner/email/version/location/network/hardware.nodes[]/backup/updateSchedule/automaticReboot/snapshotRetention/repositories/organizations`); **public domain + DNS moved to the Environment** (not site-wide); `hardware.nodes[]` is a list of **objects** (`{name, storagePools}`); `repositories[]` carry a **`branch`** (not `updateChannel`); **`configuration.json` is RETIRED** (deleted at cutover, not a 2-release deprecation); the Site holds **no `environments` list** — environments are the files in `config/environments/`. v1.2 — "bucket" → "classification domain". v1.1 — Erik⟷Lars review: drop `identityProvider.type` (CR-16); add `repositories`, `updateChannel` per-repo (CR-17) |
 
 The **🏢 Site** — the **container**, not a classification domain. One TAPPaaS = one Site: the physical + admin
 perimeter holding everything shared across all Environments inside it.
@@ -19,8 +19,9 @@ perimeter holding everything shared across all Environments inside it.
 - A Site owns: identity (`name`/`owner`/`email`/`version`), hardware (`nodes[]` with their
   `storagePools`), WAN/ISP (`network.isp`/`publicIp`), backup target, **module `repositories`** (each
   carrying its own **`branch`** — per-repo, not per-site), update policy (`updateSchedule`,
-  `automaticReboot`, `snapshotRetention`), location (country/timezone/locale), and **references to its
-  `organizations`**. The **public domain + DNS are NOT site-wide** — they are per-Environment (007c).
+  `automaticReboot`, `snapshotRetention`), location (country/timezone/locale), and its **`owner`**
+  organization by name. It keeps **no list of organizations**: they are the files in
+  `config/identities/organizations/`, owned by identity-manager (007a). The **public domain + DNS are NOT site-wide** — they are per-Environment (007c).
 - **`name` is a neutral site code** (e.g. `warmelo1` — place plus number). The Proxmox **cluster name is
   aligned to it at creation, informational afterwards** (nothing reads the cluster name back — `pvecm
   create` sets it once). The **default Environment / Organisation / zone name is a separate field,
@@ -39,7 +40,7 @@ perimeter holding everything shared across all Environments inside it.
 As built (`schemas/site-fields.json`) — `name` is the neutral site code (= cluster name) and
 `defaultEnvironment` names the default org/environment/zone (decoupled — #426); `hardware.nodes[]` is a list
 of objects, and there is **no** site-wide domain/DNS/identityProvider (those are per-Environment) and **no**
-`environments` list:
+`environments` or `organizations` list:
 
 ```json
 {
@@ -58,8 +59,7 @@ of objects, and there is **no** site-wide domain/DNS/identityProvider (those are
   "snapshotRetention": 5,
   "repositories": [
     { "name": "TAPPaaS", "url": "https://codeberg.org/TAPPaaS/TAPPaaS.git", "branch": "stable", "path": "/home/tappaas/TAPPaaS" }
-  ],
-  "organizations": []
+  ]
 }
 ```
 
@@ -68,7 +68,8 @@ of objects, and there is **no** site-wide domain/DNS/identityProvider (those are
 > block). **`repositories[]`** lists the module catalogs (where an App's `sourceMetadata` lives — ADR-007b
 > CR-05) and each carries its own **`branch`** (per-repo, not per-site — CR-17). The Site keeps **no list
 > of environments**: environments are simply whatever files exist under `config/environments/`
-> (enumerated from the directory). `email` is the admin/ACME contact (carried from the install).
+> (enumerated from the directory), and the same holds for organizations under
+> `config/identities/organizations/`. `email` is the admin/ACME contact (carried from the install).
 
 ## Config split (migration) — as built
 

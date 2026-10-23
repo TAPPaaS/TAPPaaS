@@ -39,10 +39,9 @@
 #                        preserving any existing operator-set repositories; the
 #                        TAPPaaS entry's trust from config/.trust/TAPPaaS.introduction.json
 #                        (bootstrap.sh, ADR-033 D5), verified against the checkout
-#   organizations     <- [config/identities/organizations/<org>.json]
-#                        (identity-manager may extend this later)
-#   (environments are NOT a site.json field — they are enumerated from
-#    config/environments/*.json; the site singleton keeps no list.)
+#   (environments and organizations are NOT site.json fields — they are the
+#    config/environments/*.json and config/identities/organizations/*.json
+#    files; the site singleton keeps no list of either.)
 #
 # NOTE on --domain: the PUBLIC domain is per-ENVIRONMENT in the ADR-007 model and
 # is NOT a site.json field. --domain is accepted (for parity with
@@ -579,7 +578,7 @@ build_and_write_site() {
     # a stray literal '}' (bash parses ${X:-{} + }) and breaks the jq input.
     local existing="${EXISTING_SITE:-}"
     [[ -n "$existing" ]] || existing='{}'
-    local automaticReboot ipv6 channel snapshotRetention owner displayName backup network location organizations defaultEnvironment
+    local automaticReboot ipv6 channel snapshotRetention owner displayName backup network location defaultEnvironment
     automaticReboot="$(jq -r 'if .automaticReboot != null then (.automaticReboot|tostring) else "true" end' <<<"$existing")"
     # #149: whether the site supports IPv6 — an operator's statement, kept; absent is false.
     ipv6="$(jq -r 'if .ipv6 == true then "true" else "false" end' <<<"$existing")"
@@ -588,7 +587,7 @@ build_and_write_site() {
     # Absent stays absent (the schema default is production).
     channel="$(jq -c '.channel // null' <<<"$existing")"
     snapshotRetention="$(jq -r 'if .snapshotRetention != null then (.snapshotRetention|tostring) else "5" end' <<<"$existing")"
-    # defaultEnvironment / owner / organizations all key on the ORG (the default
+    # defaultEnvironment / owner both key on the ORG (the default
     # organization/environment/zone), decoupled from the site code (#426). An
     # explicit --organization overrides; otherwise an existing value is preserved
     # (EMPTY treated as unset so a --force re-run heals a migrated site.json), and
@@ -600,7 +599,6 @@ build_and_write_site() {
     displayName="$(jq -r --arg n "$NAME" '.displayName // $n' <<<"$existing")"
     backup="$(jq -c '.backup // null' <<<"$existing")"
     network="$(jq -c '.network // {isp: null, publicIp: "auto"}' <<<"$existing")"
-    organizations="$(jq -c --arg p "config/identities/organizations/${owner}.json" 'if ((.organizations // []) | length) == 0 then [$p] else .organizations end' <<<"$existing")"
     # location: the operator's values win, and a fact the site never recorded is
     # filled from the master (#408) — so a --force re-run heals a site.json that
     # predates `keyboard` without overwriting anything deliberately set.
@@ -647,7 +645,6 @@ build_and_write_site() {
         --argjson channel "$channel" \
         --argjson snapshotRetention "$snapshotRetention" \
         --argjson repositories "$repos_json" \
-        --argjson organizations "$organizations" \
         '{
             name: $name,
             defaultEnvironment: $defaultEnvironment,
@@ -663,8 +660,7 @@ build_and_write_site() {
             automaticReboot: $automaticReboot,
             ipv6: $ipv6,
             snapshotRetention: $snapshotRetention,
-            repositories: $repositories,
-            organizations: $organizations
+            repositories: $repositories
          } + (if $channel == null then {} else {channel: $channel} end)' > "$TMP_SITE"
 
     jq empty "$TMP_SITE" >/dev/null 2>&1 || die "Generated site.json is invalid JSON."

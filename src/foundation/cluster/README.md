@@ -84,12 +84,14 @@ guests and needs almost no resources; the nodes must reach it on TCP 5403.
 
     site-manager node qdevice add <host>        # --user root if not the tappaas user
     site-manager node qdevice status
-    site-manager node qdevice remove
+    site-manager node qdevice remove            # --user as for add
 
 `add` installs `corosync-qnetd` on the host and `corosync-qdevice` on every node,
-lets the first node log in to the host as root once (to exchange certificates),
-and runs `pvecm qdevice setup`; `pvecm status` then lists the Qdevice and
-*Expected votes* is 3. It restarts corosync on every node, so run it in a quiet
+lets the first node log in to the host as root (to exchange certificates), runs
+`pvecm qdevice setup`, and then removes that login again; `pvecm status` then
+lists the Qdevice and *Expected votes* is 3. `remove`, and an `add` that finds the
+QDevice already there, remove that login as well, so a host set up by an earlier
+version loses it too. It restarts corosync on every node, so run it in a quiet
 moment.
 
 A third node does the same and adds capacity. A QDevice with three nodes is not

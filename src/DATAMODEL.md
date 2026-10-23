@@ -64,7 +64,6 @@ flowchart LR
   %% site and tenancy
   SITE -- "defaultEnvironment" --> ENV
   SITE -- "owner" --> ORG
-  SITE -- "organizations[] (paths)" --> ORG
   SITE -- "dnsBlocklists.zones[]" --> ZONE
   SITE -- "hardware.nodes[]" --> NODE
   SITE -- "backup.target / offsite" --> PEER
@@ -127,7 +126,7 @@ source tree, not under `~/config/`.
 
 | Object | File | Owner | Names (field → object) |
 |---|---|---|---|
-| Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner`, `organizations[]` → organization; `hardware.nodes[]` → the cluster's nodes, each with its `storagePools[]`; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `location` → the building every room is in |
+| Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner` → organization; `hardware.nodes[]` → the cluster's nodes, each with its `storagePools[]`; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `location` → the building every room is in |
 | Environment | `environments/<env>.json` | environment-manager | `ownerOrg` → organization; `domains` are its own (no file names them back). It names no zone: its zone is the Service zone naming it |
 | Zone | `zones.json` (one object per zone) | network-manager | `environment` → the environment it belongs to: a Service zone's (and `mgmt`'s) own environment, exactly one per environment, or the one a client, IoT or guest zone serves; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `bridge` → an interface, not an object |
 | Switches and access points | `switch-configuration-desired.json` (`-actual.json` is the interrogated copy) | switch-manager, ap-manager, driven by network-manager | `switches{}.ports{}.zone` → zone (access and native VLAN); `ports{}.target` → the node, switch or AP on the other end; `accessPoints{}.uplinkSwitch` → switch; `ssids` → zones by VLAN |
@@ -193,8 +192,9 @@ nothing here is a bug.
    and are only joined by name in the derived topology. A node's uplinks are on
    a fifth object (the `pvehost` instance). One device list with a `seenBy`
    would make mounts, cables and ports reference one thing.
-4. **Organizations are listed twice:** as files under `identities/organizations/`
-   and as `site.organizations[]` paths to the same files.
+4. **Resolved — organizations are listed once.** They are the files under
+   `identities/organizations/`, which identity-manager owns; `site.json` no
+   longer carries a list of paths to them.
 5. **Backup policy is a cascade across three objects** (module › environment ›
    site `backup` blocks) plus peers as module instances of three kinds. The
    console shows it; the model does not name the resolved policy anywhere.
