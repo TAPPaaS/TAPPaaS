@@ -25,10 +25,16 @@ remote "exit 0" || { fail "cannot reach tappaas@${TARGET}"; echo "Results: ${PAS
 [[ "$(remote "systemctl is-active docker")" == "active" ]] && pass "docker is active" || fail "docker is not active"
 [[ "$(remote "systemctl is-active karakeep")" == "active" ]] && pass "karakeep.service is active" \
     || fail "karakeep.service is not active (journalctl -u karakeep on the VM)"
-_running="$(remote "sudo docker ps --format '{{.Names}}'" | sort | paste -sd, -)"
+# `docker ps` also lists a container that is restarting in a loop: ask each
+# one's state.
 for c in karakeep_web karakeep_chrome karakeep_meilisearch; do
-    [[ ",${_running}," == *",${c},"* ]] && pass "container ${c} runs" || fail "container ${c} is not running"
+    _st="$(remote "sudo docker inspect -f '{{.State.Status}}' ${c}")"
+    [[ "${_st}" == "running" ]] && pass "container ${c} runs" || fail "container ${c} is not running (${_st:-absent})"
 done
+# Meilisearch refuses an index from another version and restarts in a loop;
+# Karakeep then answers but search does not.
+[[ "$(remote "sudo docker exec karakeep_meilisearch wget -qO- http://127.0.0.1:7700/health")" == *'"available"'* ]] \
+    && pass "Meilisearch is available" || fail "Meilisearch does not answer /health (docker logs karakeep_meilisearch on the VM)"
 
 # 2. It answers, on pinned images, and Meilisearch holds only its own key.
 [[ "$(remote "curl -s -o /dev/null -w '%{http_code}' --max-time 10 http://localhost:3000/api/health")" == "200" ]] \
