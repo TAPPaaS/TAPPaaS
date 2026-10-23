@@ -2,9 +2,9 @@
   "description": "lazysite — the site owner's public website: Markdown pages in a Forgejo repository, served as HTML, with no build step or database.",
   "displayName": "lazysite",
   "kind": "vm",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "stack": "collaboration",
-  "releaseDate": "2026-10-18",
+  "releaseDate": "2026-10-23",
   "maintainer": "@larsrossen",
   "status": "Development",
   "vmname": "lazysite",
@@ -22,7 +22,7 @@
     "logging:logs"
   ],
   "provides": [],
-  "appVersion": "0.15.9",
+  "appVersion": "0.16.0",
   "config": {
     "cluster:vm": {
       "cores": 1,

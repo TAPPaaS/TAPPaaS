@@ -1105,7 +1105,7 @@ FAKE_NOW=$(( 1790000000 + 3*86400 )) run patch staging "${_fix}" --why "service 
 ( . "${HERE}/../../lib/verify-repo.sh"
   verify_target "${TMP}/w" "${_fix}" "${_fix}" >/dev/null && [[ "${VERIFY_TAG}" == v2.1.1 ]] ) \
     && ok "v2.1.1 verifies: signed by a listed key, tree hash matches" || bad "v2.1.1 does not verify"
-git -C "${TMP}/w" ls-remote --tags "${TMP}/origin" | grep -q 'refs/tags/v2.1.1$' && ok "…and is published" || bad "v2.1.1 not pushed"
+git -C "${TMP}/w" ls-remote --tags "${TMP}/origin" | grep -c 'refs/tags/v2.1.1$' >/dev/null && ok "…and is published" || bad "v2.1.1 not pushed"
 git -C "${TMP}/w" config --unset user.signingkey
 
 echo "── summary: ${PASS} pass, ${FAIL} fail ──"

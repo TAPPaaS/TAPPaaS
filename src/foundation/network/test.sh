@@ -405,7 +405,7 @@ service crowdsec_firewall status >/dev/null 2>&1 && echo "bouncer=running" || ec
 grep -q online_client /usr/local/etc/crowdsec/config.yaml 2>/dev/null && echo "capi=configured" || echo "capi=off"
 [ -s /usr/local/etc/crowdsec/online_api_credentials.yaml ] && echo "capicreds=yes" || echo "capicreds=no"
 [ -f /usr/local/etc/crowdsec/acquis.d/tappaas-caddy.yaml ] && echo "acquis=yes" || echo "acquis=no"
-cscli scenarios list -o raw --error 2>/dev/null | grep -q '^tappaas/http-login-bf,' && echo "scenario=yes" || echo "scenario=no"
+cscli scenarios list -o raw --error 2>/dev/null | grep -c '^tappaas/http-login-bf,' >/dev/null && echo "scenario=yes" || echo "scenario=no"
 wl=/usr/local/etc/crowdsec/parsers/s02-enrich/tappaas-site-whitelist.yaml
 if [ ! -f "$wl" ]; then echo "whitelist=missing"
 elif grep -q 'cidr: \[\]' "$wl"; then echo "whitelist=nov6"

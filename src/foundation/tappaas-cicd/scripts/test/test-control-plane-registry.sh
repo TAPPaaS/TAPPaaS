@@ -22,7 +22,15 @@ ck() { if [[ "$2" == "$3" ]]; then pass "$1"; else fail "$1 — expected '$2', g
 
 echo "[1] every component directory is listed"
 listed="$(jq -r '.components[].path' "${C}" | sort)"
-dirs="$(cd "${CICD}" && for d in controller/*/ manager/*/; do [[ -d "${d}" ]] && echo "${d%/}"; done | sort)"
+# A directory counts when git tracks a file in it: a renamed component leaves its
+# ignored build output (__pycache__, a nix result link) behind under the old name.
+dirs="$(cd "${CICD}" && for d in controller/*/ manager/*/; do
+    [[ -d "${d}" ]] || continue
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        [[ -n "$(git ls-files -- "${d}" | head -1)" ]] || continue
+    fi
+    echo "${d%/}"
+done | sort)"
 missing="$(comm -13 <(echo "${listed}") <(echo "${dirs}") | paste -sd' ' -)"
 ck "no controller/ or manager/ directory missing from components.json" "" "${missing}"
 gone=""

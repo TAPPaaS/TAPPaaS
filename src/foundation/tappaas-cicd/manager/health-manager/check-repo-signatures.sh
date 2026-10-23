@@ -42,7 +42,7 @@ EXPIRY_DAYS="${EXPIRY_DAYS:-60}"
 NOW="${FAKE_NOW:-$(date +%s)}"
 NOTIFY="${TAPPAAS_SITE_NOTIFY:-${HERE}/../../scripts/site-notify.sh}"
 
-info() { echo "$*"; }; warn() { echo "WARN: $*" >&2; }; error() { echo "ERROR: $*" >&2; }
+info() { echo "$*"; }; warn() { echo "WARN: $*" >&2; }; error() { echo "ERROR: $*" >&2; }; debug() { :; }
 # shellcheck source=../../lib/channels-lib.sh
 . "${LIB}/channels-lib.sh"
 # shellcheck source=../../lib/verify-repo.sh
