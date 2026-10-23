@@ -141,7 +141,7 @@ export const HELP: HelpSpec = {
           "                iot-local, iot-cloud, iot-cams, iot-untrust.\n" +
           "                Stamps type/typeId/tier/isolated + the access-to seed."],
         ["--environment <env>", "the environment the new zone belongs to: a Service zone's own,\n" +
-          "                or the one a Client/IoT/Guest/DMZ zone serves"],
+          "                or the one(s) a Client/IoT/Guest/DMZ zone serves (a,b for several)"],
         ["--from-zone <src>", "inherit type/typeId/bridge/access-to/pinhole from <src>"],
         ["--type <T>", "zone type (default: Service)"],
         ["--typeId <N>", "numeric type band (default: 2)"],
@@ -685,10 +685,14 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
       );
     }
   }
-  if (opts.environment) {
+  // A zone that serves several environments takes them comma-separated.
+  const addEnvs = (opts.environment ?? "").split(",").map((e) => e.trim()).filter(Boolean);
+  if (addEnvs.length > 0) {
     const configDir = dirname(opts.zonesFile);
-    if (!environmentExists(configDir, opts.environment)) {
-      die(`add: environment '${opts.environment}' does not exist (no environments/${opts.environment}.json) — create it first`);
+    for (const env of addEnvs) {
+      if (!environmentExists(configDir, env)) {
+        die(`add: environment '${env}' does not exist (no environments/${env}.json) — create it first`);
+      }
     }
     const doc = loadZones(opts.zonesFile);
     const type = opts.archetype
@@ -697,12 +701,14 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
         ? String(getZone(doc, opts.fromZone)?.type ?? "")
         : opts.type ?? "Service";
     if (OWNER_TYPES.has(type)) {
-      const own = ownZonesOf(doc, opts.environment);
+      if (addEnvs.length > 1) die(`add: a ${type} zone is the zone of exactly one environment, not ${addEnvs.join(", ")}`);
+      const own = ownZonesOf(doc, addEnvs[0]);
       if (own.length > 0) {
-        die(`add: environment '${opts.environment}' already has its zone '${own[0]}' — an environment has one`);
+        die(`add: environment '${addEnvs[0]}' already has its zone '${own[0]}' — an environment has one`);
       }
     }
   }
+
 
   const dtag = opts.check ? " [dry-run]" : "";
   const via = opts.archetype
@@ -722,7 +728,7 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
     vlan: opts.vlan,
     variant: opts.variant,
     archetype: opts.archetype,
-    environment: opts.environment,
+    environment: environmentValue(addEnvs),
     tftpServerName: opts.tftpServerName,
     bootfileName: opts.bootfileName,
     dryRun: opts.check,

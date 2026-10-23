@@ -82,7 +82,7 @@ check(field(zone, "access-to")?.typeText === "zones" && field(zone, "access-to")
 check(field(zone, "vlantag")?.editable === false && /delete the zone/.test(field(zone, "vlantag")?.why ?? ""), "…vlantag cannot change in place");
 const zadd = buildManifest({ kind: "zone", name: null, mode: "add", defs: zdefs, record: null, refs, vars: {} });
 check(field(zadd, "type")?.arg === "--type" && field(zadd, "vlantag")?.arg === "--vlan" && field(zadd, "access-to")?.editable === false, "zone add: the add verb's own flags (--type, --vlan); the rest after the add");
-check(field(zadd, "environment")?.arg === "--environment" && field(zadd, "environment")?.choices?.includes("rossen") === true, "zone add: the environment it belongs to is an environment, passed as --environment");
+check(field(zadd, "environment")?.arg === "--environment" && field(zadd, "environment")?.choices?.includes("rossen") === true && field(zadd, "environment")?.typeText === "environments", "zone add: the environment(s) it belongs to, a list of environments, passed as --environment");
 check(field(zone, "environment")?.editable === false && /verb of its own/.test(field(zone, "environment")?.why ?? ""), "zone modify: the environment link has its verb (bind), not --set");
 
 // ── environment ─────────────────────────────────────────────────────────

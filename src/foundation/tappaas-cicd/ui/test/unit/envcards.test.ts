@@ -25,4 +25,12 @@ const r = card("rossen").boxes.find((b) => b.zone === "rossen")!;
 check(r.modules.some((m) => m.name === "immich") && card("rossen").boxes.find((b) => b.zone === "dmz")!.modules.map((m) => m.name).join() === "coturn,nomad,vaultwarden", "each module in its zone's box, in its own environment's card");
 check(cards.reduce((s, c) => s + c.modules, 0) === modules.length, "every module drawn once");
 check(card("rossen").boxes.find((b) => b.zone === "home")!.modules.length === 0, "an owned zone with nothing installed is still a box");
+// A zone serving several environments is owned in each of their cards.
+const multi = envCards(
+  [{ name: "acme" }, { name: "lab" }],
+  [{ name: "acme", type: "Service", environment: "acme" }, { name: "lab", type: "Service", environment: "lab" }, { name: "work", type: "Client", environment: ["acme", "lab"] }],
+  [], null,
+);
+check(multi.every((c) => c.boxes.some((b) => b.zone === "work" && b.own)) && multi.map((c) => c.zone).join() === "acme,lab",
+  "a zone serving two environments is an owned box in both cards; each card's own zone is its Service zone");
 done("envcards");

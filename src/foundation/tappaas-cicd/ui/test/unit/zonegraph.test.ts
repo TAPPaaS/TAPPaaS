@@ -31,6 +31,15 @@ check(toWan.join(" ") === "dmz guest home iotCloud iotUntrust mgmt rossen test w
 check(edges.some((e) => e.kind === "pinhole" && e.source === "wan" && e.target === "dmz"), "a pinhole from the internet comes from the WAN card");
 check(edges.some((e) => e.kind === "access" && e.source === "mgmt" && e.target === "all"), "mgmt still reaches every zone");
 
+// The edges a zone's environment link derives: one per environment it serves.
+check(edges.some((e) => e.kind === "access" && e.source === "home" && e.target === "rossen" && e.via === "rossen"), "home serves rossen: a line to rossen's zone");
+check(edges.some((e) => e.kind === "pinhole" && e.source === "rossen" && e.target === "iotCams" && e.via === "rossen"), "an IoT zone serving rossen: a pinhole line from rossen's zone");
+const multi = zoneEdges([
+  { name: "acme", type: "Service", environment: "acme" }, { name: "lab", type: "Service", environment: "lab" },
+  { name: "work", type: "Client", environment: ["acme", "lab"], "access-to": ["internet"] },
+]);
+check(multi.edges.filter((e) => e.source === "work" && e.via).map((e) => e.target).sort().join() === "acme,lab", "a zone serving two environments: a line to each one's zone");
+
 const both = zoneEdges([{ name: "wan", type: "WAN" }, { name: "home", type: "Client", "access-to": ["internet", "wan"] }]);
 check(both.edges.length === 1, "internet and wan in one access-to: one line");
 const none = zoneEdges([{ name: "home", type: "Client", "access-to": ["internet"] }]);

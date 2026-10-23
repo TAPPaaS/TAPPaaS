@@ -1,7 +1,7 @@
 // zonegraph.ts — what the zones graph draws, as plain data (Zones.tsx gives
 // each card its look): the trust column of every zone, the lines of
-// access-to and pinhole-allowed-from, and the cards for targets that are not
-// zones. The WAN zone's card stands for the internet as well: a line to or
+// access-to and pinhole-allowed-from (authored, and derived from the
+// environments a zone serves), and the cards for targets that are not zones. The WAN zone's card stands for the internet as well: a line to or
 // from `internet` ends on it.
 
 export interface ZoneLike {
@@ -11,7 +11,14 @@ export interface ZoneLike {
   vlantag?: number;
   "access-to"?: string[];
   "pinhole-allowed-from"?: string[];
+  // The environment(s) the zone names: a Service zone's own, or the ones a
+  // client or IoT zone serves.
+  environment?: string | string[];
 }
+
+// Every environment a zone names (one, or a list).
+export const environmentsOf = (z: { environment?: unknown }): string[] =>
+  (Array.isArray(z.environment) ? z.environment : [z.environment]).filter((e): e is string => typeof e === "string" && e.length > 0);
 
 // Words in access-to that are not zones.
 export const PSEUDO: Record<string, string> = { internet: "the internet", all: "every zone" };
@@ -43,6 +50,8 @@ export interface ZoneEdge {
   source: string;
   target: string;
   kind: "access" | "pinhole";
+  // Set on an edge the zone's environment link derives: the environment it serves.
+  via?: string;
 }
 
 // The lines and the cards for words that are not zones. `internet` becomes
@@ -64,6 +73,20 @@ export function zoneEdges(zones: ZoneLike[]): { edges: ZoneEdge[]; pseudo: strin
   for (const z of zones) {
     for (const t of z["access-to"] ?? []) add({ source: z.name, target: as(t), kind: "access" });
     for (const f of z["pinhole-allowed-from"] ?? []) add({ source: as(f), target: z.name, kind: "pinhole" });
+  }
+  // One edge per environment a client or IoT zone serves, to that environment's
+  // zone (the Service or Management zone naming it), as the render derives it.
+  const ownZone = new Map<string, string>();
+  for (const z of zones) {
+    if ((z.type === "Service" || z.type === "Management") && typeof z.environment === "string") ownZone.set(z.environment, z.name);
+  }
+  for (const z of zones) {
+    if (!["Client", "Guest", "IoT"].includes(z.type ?? "")) continue;
+    for (const env of environmentsOf(z)) {
+      const svc = ownZone.get(env);
+      if (!svc) continue;
+      add(z.type === "IoT" ? { source: svc, target: z.name, kind: "pinhole", via: env } : { source: z.name, target: svc, kind: "access", via: env });
+    }
   }
   return { edges, pseudo: [...pseudo] };
 }
