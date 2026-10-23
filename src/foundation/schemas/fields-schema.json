@@ -90,8 +90,8 @@
           "description": "Regex the value must match."
         },
         "references": {
-          "enum": ["zones", "environments", "nodes", "storage", "organizations", "users", "groups", "roles", "devices", "racks", "faceplates"],
-          "description": "The value names a defined object of this kind (for an array: each item does): a zone in zones.json, an environment, a cluster node, a storage pool of the module's node, an organization, a user, a group, a role, a device of the physical topology, a rack or a faceplate of the rack catalog. The console offers the defined ones to choose from; validation can check the name against the same list."
+          "enum": ["zones", "environments", "nodes", "storage", "organizations", "users", "groups", "roles", "devices", "racks", "rooms", "locations", "faceplates"],
+          "description": "The value names a defined object of this kind (for an array: each item does): a zone in zones.json, an environment, a cluster node, a storage pool of the module's node, an organization, a user, a group, a role, a device of the physical topology, a rack, a room, a location of the site or a faceplate of the catalog. The console offers the defined ones to choose from; validation can check the name against the same list."
         },
         "deprecated": {
           "type": "boolean",
@@ -247,8 +247,8 @@
           "description": "Regex the value must match."
         },
         "references": {
-          "enum": ["zones", "environments", "nodes", "storage", "organizations", "users", "groups", "roles", "devices", "racks", "faceplates"],
-          "description": "The value names a defined object of this kind (for an array: each item does): a zone in zones.json, an environment, a cluster node, a storage pool of the module's node, an organization, a user, a group, a role, a device of the physical topology, a rack or a faceplate of the rack catalog. The console offers the defined ones to choose from; validation can check the name against the same list."
+          "enum": ["zones", "environments", "nodes", "storage", "organizations", "users", "groups", "roles", "devices", "racks", "rooms", "locations", "faceplates"],
+          "description": "The value names a defined object of this kind (for an array: each item does): a zone in zones.json, an environment, a cluster node, a storage pool of the module's node, an organization, a user, a group, a role, a device of the physical topology, a rack, a room, a location of the site or a faceplate of the catalog. The console offers the defined ones to choose from; validation can check the name against the same list."
         },
         "deprecated": {
           "type": "boolean",

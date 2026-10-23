@@ -2,12 +2,12 @@
 // parses, the plates hrossen's devices are drawn with have the ports their
 // controllers name, and each device gets the plate it should.
 //
-// Run: RM_FIXTURE_DIR=<rack-manager>/test/fixtures RM_CATALOG_DIR=<rack-manager>/faceplates node catalog.test.js
+// Run: RM_FIXTURE_DIR=<position-manager>/test/fixtures RM_CATALOG_DIR=<position-manager>/faceplates node catalog.test.js
 
 import { readFileSync } from "fs";
 import { join } from "path";
 import { loadCatalog } from "../../src/store";
-import { TopoLike, platePorts, portId, renderPlate, resolvePlate, siteDevices, suggestFaceplate } from "../../../../lib/ts/src/racks";
+import { TopoLike, platePorts, portId, renderPlate, resolvePlate, siteDevices, suggestFaceplate } from "../../../../lib/ts/src/positions";
 
 let passed = 0;
 let failed = 0;
@@ -62,5 +62,5 @@ const crsPlate = resolvePlate(crs, devs.find((d) => d.name === "crs-a")!);
 check(platePorts(crsPlate).find((p) => p.id === "sfp-sfpplus1")!.lag === "tappaas1-lan", "crs-a's sfp-sfpplus1 carries tappaas1's LAG");
 check(renderPlate(resolvePlate(usw, null)).length === 1 + 2 + 2, "faceplates show: a head, two port rows, two labels");
 
-console.log(`\nrack-manager catalog: ${passed} passed, ${failed} failed`);
+console.log(`\nposition-manager catalog: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

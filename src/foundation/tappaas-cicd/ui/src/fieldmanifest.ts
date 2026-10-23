@@ -2,7 +2,7 @@
 // (GET /api/v1/fields/<kind>[/<name>]). It is derived from the schema JSONs the
 // managers validate against — the composed module field schema, zones-fields,
 // environment-fields, the identity *-fields, site-fields and its location, the module schema's
-// backup block, racks-fields' rack and mount — plus, where the object exists, its record. Per field: its
+// backup block, positions-fields' rack, room and placement — plus, where the object exists, its record. Per field: its
 // type, its choices (an enum, or the defined objects a `references` field names),
 // its default (a literal, or a template such as <vmname>.<domain> rendered with
 // the object's values when they are known), the configured value, whether it is
@@ -10,7 +10,7 @@
 // change it, and how a change is passed to the manager's own verb (`--set` or
 // the verb's own flag). Pure: the reads that feed it are in reads.ts.
 
-export const FIELD_KINDS = ["module", "zone", "environment", "org", "group", "user", "role", "site", "location", "backup", "rack", "mount", "room"] as const;
+export const FIELD_KINDS = ["module", "zone", "environment", "org", "group", "user", "role", "site", "location", "backup", "rack", "placement", "room"] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 export type FormMode = "add" | "modify";
 
@@ -82,7 +82,7 @@ export interface RefContext {
   users: string[];
   groups: string[];
   roles: string[];
-  // The racks' kinds (rack, mount): the topology's devices, the racks, the
+  // The racks' kinds (rack, room, placement): the topology's devices, the racks, the
   // faceplate catalog's keys. Empty for the other kinds.
   devices: string[];
   racks: string[];
@@ -239,7 +239,7 @@ export function environmentDefs(doc: unknown): FieldDef[] {
 }
 
 // A JSON-Schema document's properties as dotted leaves (environment-fields,
-// site-fields, the identity *-fields, a racks-fields $def): an object with
+// site-fields, the identity *-fields, a positions-fields $def): an object with
 // properties of its own is walked, every other property is a field. `required`
 // is per level; a property's changeClass is carried where the schema has one.
 export function flattenSchema(doc: unknown, prefix = "", requiredHere = true, inherited: { changeClass?: string; changeNote?: string } = {}): FieldDef[] {
@@ -332,25 +332,25 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
   backup: { modify: { enabled: "--enabled", retention: "--retention", exclude: "--exclude" } },
   zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", environment: "--environment", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
   rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", room: "--room", description: "--description" } },
-  room: { add: { displayName: "--display-name", description: "--description" } },
-  mount: { add: { rack: "--rack", u: "--u", room: "--room", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
+  room: { add: { displayName: "--display-name", description: "--description", location: "--location" } },
+  placement: { add: { rack: "--rack", u: "--u", room: "--room", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
 };
 
 // Fields a form never offers whatever the schema says: the object's name is
 // the verb's positional.
-const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], rack: ["name"], mount: ["device"], room: ["name"], location: ["name"] };
+const NAME_FIELDS: Partial<Record<FieldKind, string[]>> = { environment: ["name"], org: ["name"], group: ["name"], user: ["name"], role: ["name"], rack: ["name"], placement: ["device"], room: ["name"], location: ["name"] };
 
 // The classes a --set refuses before anything is written, per kind whose modify
-// is `--set field=value` within each field's class (zones-fields, racks-fields).
+// is `--set field=value` within each field's class (zones-fields, positions-fields).
 const SET_REFUSED: Partial<Record<FieldKind, Record<string, string>>> = {
   zone: {
     immutable: "cannot change in place: delete the zone and add it again",
     recreate: "only by deleting the zone and adding it again",
     manual: "has a verb of its own",
   },
-  rack: { immutable: "the rack's name is its key: add a rack under the new name and move the mounts" },
-  mount: { immutable: "the device is the mount's key: remove the mount and mount the other device" },
-  room: { immutable: "the room's name is how racks and mounts name it: add the new room, move them, delete this one" },
+  rack: { immutable: "the rack's name is its key: add a rack under the new name and move its devices" },
+  placement: { immutable: "the device is the placement's key: unplace it and place the other device" },
+  room: { immutable: "the room's name is how racks and placements name it: add the new room, move them, delete this one" },
 };
 
 // ── the manifest ───────────────────────────────────────────────────────

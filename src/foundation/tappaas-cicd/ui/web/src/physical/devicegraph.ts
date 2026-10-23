@@ -16,7 +16,8 @@ export interface DevNode {
   name: string;
   kind: DevKind;
   sel: Sel;
-  recorded?: RecordedKind; // a device rack-manager records
+  recorded?: RecordedKind; // a device position-manager records
+  seen?: true; // a device a switch port sees that nobody recorded
 }
 
 // One cable, as the topology resolves it or as recorded; the internet's and a
@@ -43,22 +44,22 @@ const KIND_RANK: DevLink["kind"][] = ["wan", "hand-off", "tunnel", "peer-link", 
 
 export function deviceGraph(t: Topology): { nodes: DevNode[]; links: DevLink[] } {
   const nodes = new Map<string, DevNode>();
-  const add = (id: string, kind: DevKind, sel: Sel, name = id, recorded?: RecordedKind): void => {
-    if (!nodes.has(id)) nodes.set(id, { id, name, kind, sel, ...(recorded ? { recorded } : {}) });
+  const add = (id: string, kind: DevKind, sel: Sel, name = id, recorded?: RecordedKind, seen?: boolean): void => {
+    if (!nodes.has(id)) nodes.set(id, { id, name, kind, sel, ...(recorded ? { recorded } : {}), ...(seen ? { seen: true as const } : {}) });
   };
   for (const s of t.switches) add(s.name, "switch", { kind: "switch", id: s.name });
   for (const n of t.nodes) add(n.name, "node", { kind: "node", id: n.name });
   for (const a of t.accessPoints) add(a.name, "ap", { kind: "ap", id: a.name });
-  for (const d of t.devices ?? []) add(d.name, d.kind === "machine" ? "machine" : "device", { kind: "mount", id: d.name }, d.name, d.recorded ? (d.kind as RecordedKind) : undefined);
-  for (const o of t.racks?.outside ?? []) add(o.device, "device", { kind: "mount", id: o.device });
-  // A mounted plate nothing else names (a patch panel, a PDU).
-  for (const m of t.racks?.racks.flatMap((r) => r.mounts) ?? []) add(m.device, m.kind === "machine" ? "machine" : "device", { kind: "mount", id: m.device });
+  for (const d of t.devices ?? []) add(d.name, d.kind === "machine" ? "machine" : "device", { kind: "mount", id: d.name }, d.source === "seen" && d.displayName ? d.displayName : d.name, d.recorded ? (d.kind as RecordedKind) : undefined, d.source === "seen");
+  for (const o of t.positions?.outside ?? []) add(o.device, "device", { kind: "mount", id: o.device });
+  // A placed plate nothing else names (a patch panel, a PDU).
+  for (const m of t.positions?.racks.flatMap((r) => r.placements) ?? []) add(m.device, m.kind === "machine" ? "machine" : "device", { kind: "mount", id: m.device });
 
   // The cables: the racks' list when the topology carries it (the topology's
   // own links and the recorded ones), else what the uplinks and the access
   // points say.
-  const cables: Cable[] = t.racks
-    ? t.racks.cables
+  const cables: Cable[] = t.positions
+    ? t.positions.cables
     : [
         ...t.nodes.flatMap((n) =>
           n.uplinks.flatMap((u) =>
@@ -120,7 +121,7 @@ export function deviceGraph(t: Topology): { nodes: DevNode[]; links: DevLink[] }
 
 // The free ports of the recorded patch panels: neither side cabled.
 export function freePanelPorts(t: Topology): string[] {
-  const used = new Set((t.racks?.cables ?? []).flatMap((c) => (c.segments?.length ? c.segments : [c]).flatMap((w) => [w.from, w.to])).map((e) => `${e.device}:${e.port}`));
+  const used = new Set((t.positions?.cables ?? []).flatMap((c) => (c.segments?.length ? c.segments : [c]).flatMap((w) => [w.from, w.to])).map((e) => `${e.device}:${e.port}`));
   return (t.devices ?? []).filter((d) => d.recorded && d.kind === "patch-panel").flatMap((d) => (d.ports ?? []).map((p) => `${d.name}:${p}`)).filter((x) => !used.has(x));
 }
 

@@ -12,12 +12,12 @@ export const KIND_NAME: Record<DevKind, string> = { node: "cluster node", switch
 // A recorded device's own kind: its icon and its word.
 export const RECORDED_ICON: Record<RecordedKind, string> = { modem: "⌁", ont: "⌁", ups: "ϟ", "patch-panel": "▦", other: "▭" };
 export const RECORDED_NAME: Record<RecordedKind, string> = { modem: "modem", ont: "fibre terminal (ONT)", ups: "UPS", "patch-panel": "patch panel", other: "device" };
-export const iconOf = (d: DevNode): string => (d.recorded ? RECORDED_ICON[d.recorded] : KIND_ICON[d.kind]);
-export const kindName = (d: DevNode): string => (d.recorded ? `${RECORDED_NAME[d.recorded]} (recorded)` : KIND_NAME[d.kind]);
+export const iconOf = (d: DevNode): string => (d.recorded ? RECORDED_ICON[d.recorded] : d.seen ? "?" : KIND_ICON[d.kind]);
+export const kindName = (d: DevNode): string => (d.recorded ? `${RECORDED_NAME[d.recorded]} (recorded)` : d.seen ? "device seen at a switch port, recorded nowhere" : KIND_NAME[d.kind]);
 
 export function DevLabel({ d, s }: { d: DevNode; s: DevState }) {
   return (
-    <div className="dev-card" title={`${d.name} · ${kindName(d)} · ${s.reasons.length ? `${s.state}: ${s.reasons.join("; ")}` : "ok"}`}>
+    <div className={`dev-card${d.seen ? " dev-seen" : ""}`} title={`${d.name} · ${kindName(d)} · ${s.reasons.length ? `${s.state}: ${s.reasons.join("; ")}` : "ok"}`}>
       <span className="dev-icon" aria-label={kindName(d)}>{iconOf(d)}</span>
       <span className="dev-name">{d.name}</span>
     </div>

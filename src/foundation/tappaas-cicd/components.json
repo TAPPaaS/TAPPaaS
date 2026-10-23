@@ -67,12 +67,15 @@
       "manifest": "help-json"
     },
     {
-      "name": "rack-manager",
+      "name": "position-manager",
       "kind": "manager",
-      "path": "manager/rack-manager",
+      "path": "manager/position-manager",
       "language": "typescript",
-      "package": "rack-manager",
-      "manifest": "help-json"
+      "package": "position-manager",
+      "manifest": "help-json",
+      "aliases": [
+        "rack-manager"
+      ]
     },
     {
       "name": "ap-manager",

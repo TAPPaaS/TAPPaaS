@@ -48,14 +48,14 @@ export const WIZARDS: WizardDef[] = [
   { name: "add-user", title: "the Add a user wizard", arg: null, path: () => DAY2, keys: null, values: "name and the user's fields (email, groups, …)", verbs: ["identity-manager user add"] },
   {
     name: "add-rack", title: "the Add a rack wizard", arg: null, path: () => DAY2, keys: null,
-    values: "name and the rack's fields (units, width, numbering, room, …)", verbs: ["rack-manager rack add"],
+    values: "name and the rack's fields (units, width, numbering, room, …)", verbs: ["position-manager rack add"],
   },
   {
     // The device is a value: a topology name may hold spaces ("USW Pro XG 10 PoE").
-    name: "mount-device", title: "the Mount a device wizard", arg: null, path: () => DAY2,
-    keys: ["device", "rack", "u", "height", "width", "slot", "face", "faceplate", "label", "description"],
-    values: "device (as the physical view names it), rack, u, height, width, slot, face, faceplate, label, description",
-    verbs: ["rack-manager mount add"],
+    name: "place-device", title: "the Place a device wizard", arg: null, path: () => DAY2,
+    keys: ["device", "rack", "u", "height", "width", "slot", "face", "room", "faceplate", "label", "description"],
+    values: "device (as the physical view names it), and rack, u, height, width, slot, face — or room, loose in it — faceplate, label, description",
+    verbs: ["position-manager place"],
   },
   {
     name: "modify-module", title: "Modify", arg: "module", path: (m) => `/modules/${encodeURIComponent(m)}`, keys: null,

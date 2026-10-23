@@ -210,23 +210,23 @@ check(moduleAddDefaults({ module: "x", own: { vmid: 700 }, defaultEnv: null, env
 const uadd = buildManifest({ kind: "user", name: null, mode: "add", defs: flattenSchema(schema("user-fields.json")), record: null, defaults: { displayName: "<name>" }, refs, vars: { name: null } });
 check(placeholderOf(field(uadd, "displayName")!, typedVars({ "@name": "anna" })) === "default anna" && field(uadd, "displayName")?.required === false && field(uadd, "primaryEmail")?.required === true, "user add: the display name defaults to the typed name; the e-mail is still required");
 
-// ── racks-fields: a rack and a mount ─────────────────────────────────────
-const rdefs = schema("racks-fields.json").$defs as Record<string, unknown>;
+// ── positions-fields: a rack and a placement ─────────────────────────────
+const rdefs = schema("positions-fields.json").$defs as Record<string, unknown>;
 const radd = buildManifest({ kind: "rack", name: null, mode: "add", defs: flattenSchema(rdefs.rack), record: null, refs, vars: {} });
 check(radd.nameField !== null && !field(radd, "name"), "rack add: the name is the verb's positional, not a field");
 check(field(radd, "units")?.arg === "--units" && field(radd, "units")?.default === "42" && field(radd, "displayName")?.arg === "--display-name", "rack add: each field through its flag, with the schema's default");
 check(field(radd, "numbering")?.choices?.join(",") === "bottom-up,top-down", "rack add: numbering is a choice");
 const room = buildManifest({ kind: "room", name: null, mode: "add", defs: flattenSchema(rdefs.room), record: null, refs, vars: {} });
-check(room.nameField !== null && !field(room, "name") && field(room, "displayName")?.arg === "--display-name" && field(room, "description")?.arg === "--description" && room.fields.length === 2, "room add: the name is the positional; display name and description, and no building (the site's)");
+check(room.nameField !== null && !field(room, "name") && field(room, "displayName")?.arg === "--display-name" && field(room, "description")?.arg === "--description" && field(room, "location")?.arg === "--location" && room.fields.length === 3, "room add: the name is the positional; display name, description and its location");
 const rmod = buildManifest({ kind: "rack", name: "rack1", mode: "modify", defs: flattenSchema(rdefs.rack), record: { units: 42, width: "19in", numbering: "bottom-up" }, refs, vars: {} });
 check(field(rmod, "units")?.arg === "--set" && field(rmod, "units")?.class === "in-place" && field(rmod, "units")?.value === 42, "rack modify: --set within the field's class, the value shown");
-const mnt = buildManifest({ kind: "mount", name: "tappaas2", mode: "add", defs: flattenSchema(rdefs.mount), record: null, defaults: { faceplate: "generic/server-2u, the catalog's suggestion" }, refs, vars: {} });
-check(mnt.nameField !== null && !field(mnt, "device"), "mount add: the device is the verb's positional");
-check(field(mnt, "rack")?.typeText === "a rack" && field(mnt, "rack")?.choices?.join(",") === "rack1", "mount add: the rack is one of the racks");
-check(field(mnt, "faceplate")?.typeText === "a faceplate" && field(mnt, "faceplate")?.choices?.includes("unifi/usw-pro-xg-10-poe") === true && field(mnt, "faceplate")?.default === "generic/server-2u, the catalog's suggestion", "mount add: the faceplate from the catalog, the suggestion as its default");
-check(field(mnt, "u")?.required !== true && field(mnt, "u")?.arg === "--u" && field(mnt, "room")?.typeText === "a room" && field(mnt, "room")?.choices?.join() === "basement" && field(mnt, "room")?.arg === "--room", "mount add: a rack and its u, or a room (one of the rooms): neither is required alone");
-const mmod = buildManifest({ kind: "mount", name: "tappaas1", mode: "modify", defs: flattenSchema(rdefs.mount), record: { rack: "rack1", u: 10, height: 2, width: "full", face: "front" }, refs, vars: {} });
-check(field(mmod, "u")?.arg === "--set" && field(mmod, "rack")?.arg === "--set", "mount modify: a move is --set rack and u");
-check(fieldChanges(mmod.fields, { u: "14" }).tokens.join(" ") === "--set u=14", "mount modify: a move is one --set");
+const mnt = buildManifest({ kind: "placement", name: "tappaas2", mode: "add", defs: flattenSchema(rdefs.placement), record: null, defaults: { faceplate: "generic/server-2u, the catalog's suggestion" }, refs, vars: {} });
+check(mnt.nameField !== null && !field(mnt, "device"), "place: the device is the verb's positional");
+check(field(mnt, "rack")?.typeText === "a rack" && field(mnt, "rack")?.choices?.join(",") === "rack1", "place: the rack is one of the racks");
+check(field(mnt, "faceplate")?.typeText === "a faceplate" && field(mnt, "faceplate")?.choices?.includes("unifi/usw-pro-xg-10-poe") === true && field(mnt, "faceplate")?.default === "generic/server-2u, the catalog's suggestion", "place: the faceplate from the catalog, the suggestion as its default");
+check(field(mnt, "u")?.required !== true && field(mnt, "u")?.arg === "--u" && field(mnt, "room")?.typeText === "a room" && field(mnt, "room")?.choices?.join() === "basement" && field(mnt, "room")?.arg === "--room", "place: a rack and its u, or a room (one of the rooms): neither is required alone");
+const mmod = buildManifest({ kind: "placement", name: "tappaas1", mode: "modify", defs: flattenSchema(rdefs.placement), record: { rack: "rack1", u: 10, height: 2, width: "full", face: "front" }, refs, vars: {} });
+check(field(mmod, "u")?.arg === "--set" && field(mmod, "rack")?.arg === "--set", "place modify: a move is --set rack and u");
+check(fieldChanges(mmod.fields, { u: "14" }).tokens.join(" ") === "--set u=14", "place modify: a move is one --set");
 
 done("fieldmanifest");

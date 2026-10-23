@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "racks-fields.json",
-  "title": "TAPPaaS Racks",
-  "description": "config/racks.json — where the site's hardware sits: the racks, what is mounted where, the devices and the cables nothing can see, and the rooms. Site state, written only by rack-manager. A mount is keyed by the device's name in the physical topology (a node, a switch, an access point, a machine or a device module); the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one.",
+  "$id": "positions-fields.json",
+  "title": "TAPPaaS Positions",
+  "description": "config/positions.json — where the site's hardware is inside its locations: the rooms (each in a location of site.json), the racks, every placement, the devices and the cables nothing can see. Site state, written only by position-manager. A placement is keyed by the device's name in the physical topology (a node, a switch, an access point, a machine, a device recorded here); the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -13,10 +13,10 @@
       "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,62}$" },
       "additionalProperties": { "$ref": "#/$defs/rack" }
     },
-    "mounts": {
-      "description": "What is mounted where, keyed by the device's name: in a rack at its units, or loose in a room (no rack, no unit). A passive device nothing records (a patch panel, a PDU) by its own name.",
+    "placements": {
+      "description": "Where each device stands, keyed by the device's name: in a rack at its units, or loose in a room (no rack, no unit). A device has at most one placement. A passive device nothing records (a PDU) by its own name.",
       "type": "object",
-      "additionalProperties": { "$ref": "#/$defs/mount" }
+      "additionalProperties": { "$ref": "#/$defs/placement" }
     },
     "cables": {
       "description": "Cables nothing can see: the ISP hand-off, a patch panel, a PDU; and the segments of a link split at a patch panel. A port carries at most one cable, a patch panel's port one on its front and one on its rear.",
@@ -24,13 +24,13 @@
       "items": { "$ref": "#/$defs/cable" }
     },
     "devices": {
-      "description": "The devices nothing can see (a modem, an ONT, a UPS, a patch panel), keyed by name: a device like the topology's, mountable and a cable end.",
+      "description": "The devices nothing manages (a modem, an ONT, a UPS, a patch panel, a device a switch port saw), keyed by name: a device like the topology's, placeable and a cable end.",
       "type": "object",
       "propertyNames": { "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$" },
       "additionalProperties": { "$ref": "#/$defs/device" }
     },
     "rooms": {
-      "description": "The rooms, keyed by name: where racks stand and devices stand loose. Their building is the site's primary location (site.json primaryLocation).",
+      "description": "The rooms, keyed by name: where racks stand and devices stand loose. Each is in a location of site.json.",
       "type": "object",
       "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,62}$" },
       "additionalProperties": { "$ref": "#/$defs/room" }
@@ -47,7 +47,7 @@
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]{0,62}$",
           "changeClass": "immutable",
-          "changeNote": "The mounts name the rack: add a rack under the new name, move the mounts, delete the old one."
+          "changeNote": "The placements name the rack: add a rack under the new name, move the devices, delete the old one."
         },
         "displayName": { "description": "The name shown on the rack's frame.", "type": "string", "changeClass": "in-place" },
         "units": {
@@ -57,7 +57,7 @@
           "maximum": 60,
           "default": 42,
           "changeClass": "in-place",
-          "changeNote": "Refused while a mount would no longer fit."
+          "changeNote": "Refused while a device would no longer fit."
         },
         "width": {
           "description": "The rack's width: a 19-inch rack, or a 10-inch one.",
@@ -72,10 +72,10 @@
           "enum": ["bottom-up", "top-down"],
           "default": "bottom-up",
           "changeClass": "in-place",
-          "changeNote": "Renumbers every mount's position as drawn; the recorded U of each mount stays."
+          "changeNote": "Renumbers every device's position as drawn; the recorded U of each placement stays."
         },
         "room": {
-          "description": "The room the rack stands in: a room record's name (rack-manager room add). Text naming no room yet is kept as it is, with a note.",
+          "description": "The room the rack stands in: a room record's name (position-manager room add). Text naming no room yet is kept as it is, with a note.",
           "type": "string",
           "references": "rooms",
           "changeClass": "in-place"
@@ -83,17 +83,16 @@
         "description": { "description": "What the rack is for, in a line.", "type": "string", "changeClass": "in-place" }
       }
     },
-    "mount": {
+    "placement": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["height", "width", "face"],
       "properties": {
         "device": {
-          "description": "The mounted device: its name in the physical topology. It is the record's key.",
+          "description": "The placed device: its name in the physical topology. It is the record's key.",
           "type": "string",
           "references": "devices",
           "changeClass": "immutable",
-          "changeNote": "A mount is one device's: remove it and mount the other device."
+          "changeNote": "A placement is one device's: unplace it and place the other device."
         },
         "rack": { "description": "The rack it is mounted in. A device loose in a room has none.", "type": "string", "references": "racks", "changeClass": "in-place" },
         "u": {
@@ -103,13 +102,13 @@
           "changeClass": "in-place"
         },
         "room": {
-          "description": "For a device in no rack: the room it stands loose in. A rack mount's room is its rack's.",
+          "description": "For a device in no rack: the room it stands loose in. A device in a rack is in its rack's room.",
           "type": "string",
           "references": "rooms",
           "changeClass": "in-place"
         },
         "height": {
-          "description": "How many rack units it occupies.",
+          "description": "In a rack: how many rack units it occupies.",
           "type": "integer",
           "minimum": 1,
           "maximum": 20,
@@ -117,7 +116,7 @@
           "changeClass": "in-place"
         },
         "width": {
-          "description": "How much of the rack's width it takes: all of it, a half or a third.",
+          "description": "In a rack: how much of its width it takes, all of it, a half or a third.",
           "type": "string",
           "enum": ["full", "half", "third"],
           "default": "full",
@@ -132,7 +131,7 @@
           "changeClass": "in-place"
         },
         "face": {
-          "description": "The side of the rack it faces.",
+          "description": "In a rack: the side it faces.",
           "type": "string",
           "enum": ["front", "rear"],
           "default": "front",
@@ -145,7 +144,7 @@
           "changeClass": "in-place"
         },
         "label": { "description": "The label on the device, drawn on its plate.", "type": "string", "changeClass": "in-place" },
-        "description": { "description": "A note on the mount.", "type": "string", "changeClass": "in-place" }
+        "description": { "description": "A note on where it stands.", "type": "string", "changeClass": "in-place" }
       }
     },
     "cableEnd": {
@@ -154,7 +153,7 @@
       "required": ["device", "port"],
       "properties": {
         "device": {
-          "description": "A device of the topology, a recorded device, a mounted device, or one this cable places (with its faceplate).",
+          "description": "A device of the topology, a recorded device, a placed device, or one this cable places (with its faceplate).",
           "type": "string",
           "references": "devices"
         },
@@ -196,10 +195,10 @@
       "required": ["kind"],
       "properties": {
         "name": {
-          "description": "The device's name: how mounts and cables name it. It is the record's key.",
+          "description": "The device's name: how its placement and cables name it. It is the record's key.",
           "type": "string",
           "changeClass": "immutable",
-          "changeNote": "Mounts and cables name it: record the new one, move them, remove this one."
+          "changeNote": "Its placement and cables name it: record the new one, move them, remove this one."
         },
         "kind": { "description": "What it is.", "type": "string", "enum": ["modem", "ont", "ups", "patch-panel", "other"], "changeClass": "in-place" },
         "model": {
@@ -210,7 +209,19 @@
         },
         "ports": { "description": "Its ports by name (a patch panel: 1 to N).", "type": "array", "items": { "type": "string" }, "changeClass": "in-place" },
         "displayName": { "description": "The name shown.", "type": "string", "changeClass": "in-place" },
-        "description": { "description": "What it is, where it comes from.", "type": "string", "changeClass": "in-place" }
+        "description": { "description": "What it is, where it comes from.", "type": "string", "changeClass": "in-place" },
+        "location": {
+          "description": "The location it is at: a location of site.json (site-manager location list). Unset: the primary location. Its placement's room must be at the same location.",
+          "type": "string",
+          "references": "locations",
+          "changeClass": "in-place"
+        },
+        "mac": {
+          "description": "The MAC address a switch port saw it by (device record): the topology knows it by it, and shows it as recorded rather than seen.",
+          "type": "string",
+          "pattern": "^[0-9a-f]{2}(:[0-9a-f]{2}){5}$",
+          "changeClass": "in-place"
+        }
       }
     },
     "room": {
@@ -218,14 +229,22 @@
       "additionalProperties": false,
       "properties": {
         "name": {
-          "description": "The room's name: how racks and mounts name it. It is the record's key.",
+          "description": "The room's name: how racks and placements name it. It is the record's key.",
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]{0,62}$",
           "changeClass": "immutable",
-          "changeNote": "Racks and mounts name it: add the new room, move them, delete this one."
+          "changeNote": "Racks and placements name it: add the new room, move them, delete this one."
         },
         "displayName": { "description": "The name shown.", "type": "string", "changeClass": "in-place" },
-        "description": { "description": "What it is.", "type": "string", "changeClass": "in-place" }
+        "description": { "description": "What it is.", "type": "string", "changeClass": "in-place" },
+        "location": {
+          "description": "The location the room is in: a location of site.json (site-manager location list). Unset: the primary location.",
+          "type": "string",
+          "references": "locations",
+          "default": "<computed: the primary location>",
+          "changeClass": "in-place",
+          "changeNote": "Refused while a device placed in the room records another location of its own."
+        }
       }
     }
   }

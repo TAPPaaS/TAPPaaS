@@ -71,8 +71,8 @@ export function buildArgv(step: ArgvStep, verb: ManifestVerb | null, values: Val
 // open verb without a field form any other key a "--key value" line of its
 // further options. Keys that fit none are left to a field form (fields.tsx),
 // or dropped. With a field form an option is set only when the form offers it
-// besides the fields (`keep`): where a field is the verb's own option (mount
-// add --rack), the field form passes it.
+// besides the fields (`keep`): where a field is the verb's own option (place
+// --rack), the field form passes it.
 export function prefillValues(step: ArgvStep, verb: ManifestVerb, raw: Values, fieldForm = false, keep: string[] = []): Values {
   const out: Values = {};
   const pos = verb.positionals.slice(step.fixed?.length ?? 0);

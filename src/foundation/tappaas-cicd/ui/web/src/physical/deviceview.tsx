@@ -146,7 +146,7 @@ function Inner({ t, sel, pick, onPane, labels }: { t: Topology; sel: Sel | null;
       nodeTypes={nodeTypes}
       edgeTypes={edgeTypes}
       onNodesChange={onNodesChange}
-      onEdgeClick={(_, e) => pick({ kind: "link", id: e.id })}
+      onEdgeClick={(_: unknown, e: Edge) => pick({ kind: "link", id: e.id })}
       onPaneClick={onPane}
       onInit={() => requestAnimationFrame(() => centre(pos.current))}
       minZoom={0.2}

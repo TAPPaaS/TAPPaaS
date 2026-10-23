@@ -777,7 +777,8 @@ cmd_list_ports() {
                        elif (($add|length)>0 or ($rem|length)>0 or ($d.mode=="trunk" and $d.nat != $anat) or ($d.mode=="access" and ($d.nat != $anat or ($src.mode // "access") != "access"))) then "drift"
                        else "in-sync" end),
                add: $add, remove: $rem, lag: ($p.lag // null), lagMembers: ($p.lagMembers // []), lagLead: $lead,
-               parked: (($p.parked // false) == true), link: ($p.link // null), disabled: (($p.disabled // false) == true)};
+               parked: (($p.parked // false) == true), link: ($p.link // null), disabled: (($p.disabled // false) == true),
+               neighbors: ($p.neighbors // [])};
         def ports_of($sw; $active; $zones):
             (.switches[$sw] | lag_leads | .ports // {}) as $ports
             | $ports | to_entries | sort_by(.key|natkey) | .[] | port_view($ports; $active; $zones);'

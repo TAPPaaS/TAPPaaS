@@ -1,0 +1,13 @@
+{
+  "name": "position-manager",
+  "version": "0.2.0",
+  "description": "where the site's hardware is — rooms in locations, racks, placements and cables in config/positions.json — TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "position-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

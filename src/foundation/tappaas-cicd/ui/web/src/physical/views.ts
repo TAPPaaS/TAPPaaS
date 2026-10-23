@@ -30,7 +30,8 @@ export const MOVED_PATHS: Record<string, string> = {
 export const viewLink = (v: PhysicalView, select?: string | null): string => `${VIEW_PATH[v]}${select ? `?select=${encodeURIComponent(select)}` : ""}`;
 
 // Where the site is, as the heading over its rooms: the address and the city
-// of its primary location (rooms and racks record none of their own yet); a
+// of its primary location (a room names its own location; the Overview sums
+// the site up under the primary one); a
 // site.json migration 0019 has not reached has them under location.
 type Place = { address?: unknown; building?: unknown; city?: unknown; country?: unknown };
 export function sitePlace(site: { locations?: Record<string, Place>; primaryLocation?: unknown; location?: Place } | null | undefined): string | null {

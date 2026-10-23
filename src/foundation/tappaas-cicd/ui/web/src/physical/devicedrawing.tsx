@@ -1,6 +1,6 @@
 // devicedrawing.tsx — the top of the side panel for a device: its faceplate
 // as the Physical view draws it (rack.tsx PlateSvg), from the rack catalog
-// when it is mounted or placed by a cable record, else a generic plate made
+// when it is placed or named by a cable record, else a generic plate made
 // from what the topology knows of its ports (a switch's ports, a node's
 // uplink NICs, an access point's uplink). The cabled ports are underlined,
 // the selected link's ports ringed; a click on a port selects it (a switch
@@ -40,11 +40,11 @@ function genericPlate(t: Topology, d: DevNode): ResolvedPlate | null {
   return { key: "generic", vendor: "Generic", model: d.kind === "node" ? "server" : d.kind === "ap" ? "access point" : "switch", kind: d.kind, units: rows.length > 1 ? 2 : 1, width: d.kind === "ap" ? "half" : "full", passive: false, rows, labels: [] };
 }
 
-// The plate a device has: its mount's, the cable record's, else generic.
+// The plate a device has: its placement's, the cable record's, else generic.
 export function plateOf(t: Topology, d: DevNode): { plate: ResolvedPlate | null; up: boolean | null; catalog: boolean } {
-  const m = t.racks?.racks.flatMap((r) => r.mounts).find((x) => x.device === d.name);
+  const m = t.positions?.racks.flatMap((r) => r.placements).find((x) => x.device === d.name);
   if (m?.plate) return { plate: m.plate, up: m.up, catalog: true };
-  const o = t.racks?.outside.find((x) => x.device === d.name);
+  const o = t.positions?.outside.find((x) => x.device === d.name);
   if (o?.plate) return { plate: o.plate, up: null, catalog: true };
   return { plate: genericPlate(t, d), up: null, catalog: false };
 }
@@ -53,7 +53,7 @@ export function DeviceDrawing({ t, d, cabled, ringed, onPort }: { t: Topology; d
   const { plate, up, catalog } = plateOf(t, d);
   if (!plate) return null;
   // A patch panel's ports: the front cabled ones underlined, the rear ones overlined.
-  const ends = (t.racks?.cables ?? []).flatMap((c) => [c.from, c.to]).filter((e) => e.device === d.name);
+  const ends = (t.positions?.cables ?? []).flatMap((c) => [c.from, c.to]).filter((e) => e.device === d.name);
   const rear = new Set(ends.filter((e) => e.side === "rear").map((e) => e.port));
   const front = new Set([...cabled].filter((x) => !rear.has(x) || ends.some((e) => e.port === x && e.side !== "rear")));
   const w = plate.width === "full" ? W : plate.width === "half" ? W / 2 : W / 3;

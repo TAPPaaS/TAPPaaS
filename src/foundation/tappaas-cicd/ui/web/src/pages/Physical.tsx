@@ -1,8 +1,8 @@
 // Physical — the site as it is built, in four views, each a tab of the Site
 // page (physical/views.ts). Overview: the other three summed up. Physical: the
-// racks with each device's faceplate at its units and the
-// cables port to port (physical/rack.tsx), the devices mounted nowhere in a
-// tray. Device (ADR-034 D5, mockup ui-02): every physical device as a card and
+// site's locations, their rooms and racks, each device's faceplate at its
+// units and the cables port to port (physical/rack.tsx), the devices placed
+// nowhere in a tray, by location. Device (ADR-034 D5, mockup ui-02): every physical device as a card and
 // its connections as lines, laid out automatically. Storage: the nodes, their
 // pools and disks. Click an object for its side card.
 
@@ -13,14 +13,14 @@ import { OperateButton } from "../operate";
 import { Sel } from "../physical/layout";
 import { DeviceGraph } from "../physical/deviceview";
 import { RackCanvas } from "../physical/rack";
-import { AddRoomButton, MountActions, PhysicalHowTo, RecordDeviceButton, rackAddSteps } from "../physical/rackops";
+import { AddRoomButton, PhysicalHowTo, PlaceActions, RecordDeviceButton, RecordSeenButton, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
-import { Health, RacksView, SiteRead, StorageInventory, Topology } from "../types";
+import { Health, PositionsView, StorageInventory, Topology } from "../types";
 import { StateLegend } from "../physical/state";
 import { storageNotes } from "../physical/storage";
 import { StorageGraph } from "../physical/storageview";
 import { PhysicalOverview } from "../physical/overview";
-import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH, sitePlace } from "../physical/views";
+import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
 import { ReadState, canOperate, navigate, since, useMe } from "../ui";
 
 function selFromUrl(): Sel | null {
@@ -39,33 +39,47 @@ function selFromUrl(): Sel | null {
 
 export type { PhysicalView } from "../physical/views";
 
-// The devices mounted nowhere, each with Mount… (the catalog's plate for it,
-// the first rack's highest free units).
-function Unplaced({ v, pick }: { v: RacksView; pick: (s: Sel) => void }) {
+// The devices placed nowhere, by location, each with Place… (the catalog's
+// plate for it, the first rack's highest free units) — or, for a device a
+// switch port only sees, Record….
+function Unplaced({ t, v, pick }: { t: Topology; v: PositionsView; pick: (s: Sel) => void }) {
   const operator = canOperate(useMe());
   const gone = v.findings.filter((f) => f.kind === "gone");
+  const locs = v.locations?.length ? v.locations : [{ name: "", displayName: null, unplaced: v.unplaced.map((u) => u.device) }];
   return (
     <aside className="rack-tray">
       <h3>Unplaced</h3>
-      {v.unplaced.length === 0 ? <p className="muted small">Every device is mounted.</p> : null}
-      <ul className="plain">
-        {v.unplaced.map((u) => (
-          <li key={u.device}>
-            <button className="linklike" onClick={() => pick(u.kind === "node" ? { kind: "node", id: u.device } : u.kind === "switch" ? { kind: "switch", id: u.device } : u.kind === "ap" ? { kind: "ap", id: u.device } : { kind: "mount", id: u.device })}>
-              {u.device}
-            </button>
-            <div className="muted small">
-              {u.kind}
-              {u.model ? ` · ${u.model}` : ""}
-              {u.suggestion ? ` · plate ${u.suggestion}` : ""}
-            </div>
-            {operator ? <MountActions device={u.device} v={v} /> : null}
-          </li>
+      {v.unplaced.length === 0 ? <p className="muted small">Every device is placed.</p> : null}
+      {locs
+        .filter((l) => l.unplaced.length)
+        .map((l) => (
+          <div key={l.name}>
+            {l.name ? <div className="tray-loc">{l.displayName ?? l.name}</div> : null}
+            <ul className="plain">
+              {v.unplaced
+                .filter((u) => l.unplaced.includes(u.device))
+                .map((u) => {
+                  const seen = u.seen ? t.devices?.find((d) => d.name === u.device) : undefined;
+                  return (
+                    <li key={u.device}>
+                      <button className="linklike" onClick={() => pick(u.kind === "node" ? { kind: "node", id: u.device } : u.kind === "switch" ? { kind: "switch", id: u.device } : u.kind === "ap" ? { kind: "ap", id: u.device } : { kind: "mount", id: u.device })}>
+                        {seen?.displayName ? `${seen.displayName} · ${u.device}` : u.device}
+                      </button>
+                      <div className="muted small">
+                        {seen?.seen ? `seen at ${seen.seen.switch} port ${seen.seen.port}, recorded nowhere` : u.kind}
+                        {u.model ? ` · ${u.model}` : ""}
+                        {u.suggestion ? ` · plate ${u.suggestion}` : ""}
+                      </div>
+                      {operator ? seen ? <RecordSeenButton d={seen} /> : <PlaceActions device={u.device} v={v} /> : null}
+                    </li>
+                  );
+                })}
+            </ul>
+          </div>
         ))}
-      </ul>
       {gone.length ? (
         <>
-          <h3>Mounted, but gone</h3>
+          <h3>Placed, but gone</h3>
           <ul className="plain small">
             {gone.map((g) => (
               <li key={g.device}>
@@ -75,8 +89,8 @@ function Unplaced({ v, pick }: { v: RacksView; pick: (s: Sel) => void }) {
           </ul>
         </>
       ) : null}
-      {v.racks.some((r) => r.mounts.some((m) => m.face === "rear")) ? (
-        <p className="muted small">Rear-facing mounts are not drawn: {v.racks.flatMap((r) => r.mounts.filter((m) => m.face === "rear").map((m) => m.device)).join(", ")}.</p>
+      {v.racks.some((r) => r.placements.some((m) => m.face === "rear")) ? (
+        <p className="muted small">Rear-facing devices are not drawn: {v.racks.flatMap((r) => r.placements.filter((m) => m.face === "rear").map((m) => m.device)).join(", ")}.</p>
       ) : null}
     </aside>
   );
@@ -88,14 +102,12 @@ function Unplaced({ v, pick }: { v: RacksView; pick: (s: Sel) => void }) {
 export function Physical({ embedded, view, aside, beforeFindings }: { embedded?: boolean; view?: PhysicalView; aside?: ReactNode; beforeFindings?: ReactNode }) {
   const topo = useRead<Topology>("topology");
   const health = useRead<Health>("health");
-  // The site's building and city: the heading over its rooms.
-  const place = sitePlace((useRead<SiteRead>("site").env?.data?.site ?? null) as Parameters<typeof sitePlace>[0]);
   const [sel, setSel] = useState<Sel | null>(selFromUrl);
   const [showLabels, setShowLabels] = useState(true);
   const [showCables, setShowCables] = useState(true);
   const operator = canOperate(useMe());
   const t = topo.env?.data ?? null;
-  const racks = t?.racks ?? null;
+  const racks = t?.positions ?? null;
   const shown: PhysicalView = view ?? "overview";
   // The storage inventory: read once a view shows it (SMART, ≈15 s the first time).
   const store = useRead<StorageInventory>(shown === "storage" || shown === "overview" || sel?.kind === "node" ? "storage" : null);
@@ -126,7 +138,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
           </div>
         )}
         <span className="muted">
-          {t && (shown === "rack" || shown === "device") ? `${VIEW_NAME[shown]} · ${t.site.name ?? "site"} ${shown === "rack" ? "as racked" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/racks.json" : "layout by force, around the selection"}` : shown === "storage" ? `Storage · storage-manager inventory ${since(inv?.generated)}` : ""}
+          {t && (shown === "rack" || shown === "device") ? `${VIEW_NAME[shown]} · ${t.site.name ?? "site"} ${shown === "rack" ? "by location, room and rack" : "as cabled"} · topology ${since(t.generated)} · ${shown === "rack" ? "positions from config/positions.json" : "layout by force, around the selection"}` : shown === "storage" ? `Storage · storage-manager inventory ${since(inv?.generated)}` : ""}
         </span>
         <span className="spacer" />
         {shown === "device" ? (
@@ -177,16 +189,15 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
         </>
       ) : shown === "rack" ? (
         <>
-        {place ? <h2 className="phys-place">{place}</h2> : null}
         <div className="physical physical-rack">
           {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} /> : operator ? <PhysicalHowTo /> : null}
           <div className="canvas">
-            {t && racks && racks.racks.length ? (
+            {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? (
               <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
             ) : t ? (
               <div className="rack-empty">
-                <p>{racks ? "No rack is recorded yet." : "The topology carries no racks (rack-manager did not answer)."}</p>
-                <p className="muted small">A rack is recorded with rack-manager: its height, width and numbering; then each device is mounted at its units, with the faceplate the catalog has for its model.</p>
+                <p>{racks ? "No room or rack is recorded yet." : "The topology carries no positions (position-manager did not answer)."}</p>
+                <p className="muted small">A room is recorded with position-manager at one of the site's locations, a rack in a room: its height, width and numbering; then each device is placed at its units in a rack, or loose in a room, with the faceplate the catalog has for its model.</p>
                 {operator && racks ? (
                   <span className="toolbar">
                     <AddRoomButton />
@@ -197,7 +208,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
               </div>
             ) : null}
           </div>
-          {racks && racks.racks.length ? <Unplaced v={racks} pick={pick} /> : null}
+          {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? <Unplaced t={t} v={racks} pick={pick} /> : null}
         </div>
         </>
       ) : (

@@ -1,5 +1,7 @@
-// store.ts — config/racks.json on disk: read, lock, write. One writer at a
+// store.ts — config/positions.json on disk: read, lock, write. One writer at a
 // time, every write atomic (temp file + rename), an absent file an empty one.
+// A site the migration has not reached yet still has config/racks.json: it is
+// read, and a write is refused until migration 0020 has renamed it.
 // Also the faceplate catalog (faceplates/<vendor>/<model>.json beside the
 // sources, or in the built package) and the topology the checks need.
 
@@ -7,30 +9,38 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmdirSync, statSync }
 import { join } from "path";
 import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { captureResult } from "../../../lib/ts/src/exec";
-import { Faceplate, RACKS_FILE, RacksDoc, SiteDevice, TopoLike, parseFaceplate, siteDevices } from "../../../lib/ts/src/racks";
+import { Faceplate, LEGACY_RACKS_FILE, POSITIONS_FILE, PositionsDoc, SiteDevice, TopoLike, parseFaceplate, siteDevices } from "../../../lib/ts/src/positions";
 
 export class Store {
   constructor(readonly configDir: string) {}
 
   get file(): string {
-    return join(this.configDir, RACKS_FILE);
+    return join(this.configDir, POSITIONS_FILE);
   }
 
-  load(): RacksDoc {
-    if (!existsSync(this.file)) return {};
-    const v: unknown = JSON.parse(readFileSync(this.file, "utf8"));
-    if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error(`${this.file} is not a JSON object`);
-    return v as RacksDoc;
+  // config/racks.json, when the migration has not renamed it yet.
+  get legacy(): string | null {
+    const f = join(this.configDir, LEGACY_RACKS_FILE);
+    return existsSync(f) ? f : null;
   }
 
-  save(doc: RacksDoc): void {
+  load(): PositionsDoc {
+    const file = existsSync(this.file) ? this.file : this.legacy;
+    if (!file) return {};
+    const v: unknown = JSON.parse(readFileSync(file, "utf8"));
+    if (!v || typeof v !== "object" || Array.isArray(v)) throw new Error(`${file} is not a JSON object`);
+    return v as PositionsDoc;
+  }
+
+  save(doc: PositionsDoc): void {
+    if (this.legacy) throw new Error(`${this.legacy} is still there: migration 0020 makes it positions.json (the next update, or scripts/run-migrations.sh) — nothing was changed`);
     writeJsonAtomic(this.file, doc);
   }
 
-  // withLock — one rack-manager writer at a time. A directory lock: created
+  // withLock — one position-manager writer at a time. A directory lock: created
   // atomically, removed after; a lock older than 10 minutes is a crashed run's.
   withLock<T>(fn: () => T): T {
-    const lock = join(this.configDir, ".racks.lock");
+    const lock = join(this.configDir, ".positions.lock");
     for (let i = 0; ; i++) {
       try {
         mkdirSync(lock);
@@ -44,7 +54,7 @@ export class Store {
         } catch {
           continue;
         }
-        if (i >= 60) throw new Error(`${lock} is held by another rack-manager run`);
+        if (i >= 60) throw new Error(`${lock} is held by another position-manager run`);
         const until = Date.now() + 1000;
         while (Date.now() < until) {
           /* wait a second — Atomics.wait would need a SharedArrayBuffer */
@@ -80,7 +90,7 @@ export function catalogDir(): string | null {
 export function loadCatalog(dir: string | null = catalogDir()): { catalog: Faceplate[]; errors: string[] } {
   const catalog: Faceplate[] = [];
   const errors: string[] = [];
-  if (!dir) return { catalog, errors: ["the faceplate catalog was not found (faceplates/ beside rack-manager, or $TAPPAAS_FACEPLATES)"] };
+  if (!dir) return { catalog, errors: ["the faceplate catalog was not found (faceplates/ beside position-manager, or $TAPPAAS_FACEPLATES)"] };
   for (const vendor of readdirSync(dir).filter((x) => !x.startsWith(".")).sort()) {
     const vd = join(dir, vendor);
     if (!statSync(vd).isDirectory()) continue;
@@ -106,7 +116,7 @@ export function readDevices(topologyFile: string | undefined): { devices: SiteDe
     let t: TopoLike;
     if (topologyFile) t = JSON.parse(readFileSync(topologyFile, "utf8")) as TopoLike;
     else {
-      const r = captureResult("network-manager", ["topology", "--json", "--no-health", "--no-racks"]);
+      const r = captureResult("network-manager", ["topology", "--json", "--no-health", "--no-positions"]);
       if (!r.ran) return { devices: null, topology: null, error: "network-manager not found" };
       t = JSON.parse(r.stdout) as TopoLike;
     }

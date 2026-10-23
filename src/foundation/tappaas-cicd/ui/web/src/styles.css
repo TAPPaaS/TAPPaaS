@@ -461,6 +461,8 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 
 /* The Device view: a device is its name on a card coloured by its state. */
 .dev-card { display: flex; align-items: center; gap: 7px; height: 100%; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.dev-card.dev-seen .dev-name { font-style: italic; }
+.dev-card.dev-seen .dev-icon { opacity: .7; }
 .dev-icon { font-size: 14px; color: var(--muted); width: 16px; text-align: center; flex: none; }
 .dev-name { overflow: hidden; text-overflow: ellipsis; }
 /* The side panel's device: its kind and state, its drawing. */
@@ -502,6 +504,10 @@ button.mod-tile:hover { background: var(--info-bg); }
 .env-page .sidepanel { position: sticky; top: 10px; max-height: calc(100vh - 120px); }
 .rack-room { cursor: pointer; }
 .rack-room-title { font-size: 15px; font-weight: 700; fill: #334155; }
+.rack-location-title { font-size: 17px; font-weight: 800; fill: #1e293b; }
+.rack-location-device { font-size: 13px; fill: #2563eb; cursor: pointer; }
+.rack-location-device:hover { text-decoration: underline; }
+.tray-loc { margin: 10px 0 2px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
 .ov-room { margin-bottom: 8px; }
 .ov-room-name { font-weight: 600; font-size: 13px; }
 .segments { margin: 3px 0 0; padding-left: 18px; color: var(--ink); }
