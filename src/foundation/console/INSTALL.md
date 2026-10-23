@@ -24,6 +24,25 @@ that token (and nothing else), and serves the **Setup** wizard: the rest of the 
 the records, step by step. Once identity is installed it refuses the token and deletes its file
 (after the identity step, and at start).
 
+## Security risk: the gate is trusted by its address
+
+Once identity is installed, the console takes the user and groups from the gate's headers
+(`X-Authentik-Username`, `X-Authentik-Groups`) on any request from the firewall's `mgmt` address.
+It does not check the signed token Authentik sends with them.
+
+- **The attack:** root on a machine in `mgmt` (a node, PBS, the logging VM, any guest placed in
+  `mgmt`) can take over the firewall's address on that network, either by ARP spoofing or by
+  setting the address itself. With it, a request can claim any user and any group, `installer`
+  included, and run every manager verb through the console.
+- **What it reaches:** the console runs as `tappaas`. On the mothership that account has sudo
+  and the SSH keys to the nodes, so this means the whole site.
+- **It does not depend on the module:** port 9097 is open on every mothership interface, and the
+  service runs whether the module is registered or not. The console's own peer filter (the
+  firewall, loopback and, before identity exists, the setup peers) is the only guard.
+
+Until the console checks the token, keep `mgmt` to TAPPaaS's own machines: no guests placed in
+`mgmt`, no other devices on `mgmt` switch ports, and the nodes and `mgmt` guests patched.
+
 ## The published face
 
 Register the module once identity is installed. It publishes `console.<domain>` through

@@ -8,6 +8,29 @@ Primary audience: TAPPaaS admin.
 - Disk for the libraries you want (see *Choosing content* below); the default 128 GB holds a
   local-language and the English Wikipedia.
 
+## Security risk: the Command Center has no sign-in
+
+Read this before you install NOMAD.
+
+- **Whoever reaches the Command Center controls the NOMAD VM.** It has no sign-in, and it runs
+  its apps through Docker's socket. So anyone who can open port 8080 can start any container
+  with any mount. In effect, that is root on the VM.
+- **Who can reach it:**
+  - every device on the home network, through the module's ingress rule;
+  - the other machines in the `dmz` zone (coturn, lazysite and vaultwarden, when installed). The
+    site firewall does not filter between machines in the same zone, and the ports Docker
+    publishes bypass the VM's own firewall.
+- **What a takeover reaches:** the internet, and the other machines in the `dmz`. It does not
+  reach the site's other zones. NOMAD keeps no user data.
+
+So install NOMAD only on a site where you trust every device on the home network. Pause it when
+nobody is using it:
+
+```bash
+module-manager module suspend nomad     # the VM stops and stays stopped
+module-manager module resume nomad
+```
+
 ## Install
 
 ```bash

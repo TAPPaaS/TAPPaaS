@@ -29,7 +29,9 @@ courses and tools, running on hardware you own and usable with no internet.
 - **In the DMZ.** NOMAD runs public containers it installs and updates on its own, and it keeps no
   user data. It lives in the `dmz` zone, so a compromised NOMAD reaches only the internet (for its
   downloads), never the site's other zones; the home network reaches it through the module's ingress
-  rules. The `<zone>` in its address is therefore `dmz`.
+  rules. The `<zone>` in its address is therefore `dmz`. Because the Command Center has no sign-in
+  and holds Docker's socket, whoever reaches it controls the VM: see the security risk in
+  [INSTALL.md](INSTALL.md).
 
 ## What is not included
 
