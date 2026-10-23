@@ -51,7 +51,7 @@ const zschema = {
   "access-to": { type: "array", default: [], changeClass: "in-place" },
   "pinhole-allowed-from": { type: "array", default: [], changeClass: "in-place" },
   mdns: { type: "boolean", default: false, changeClass: "in-place" },
-  serves: { type: ["string", "array"], changeClass: "manual" },
+  listish: { type: ["string", "array"], changeClass: "manual" },
   odd: { type: "string" },
 };
 const zrows = zoneFieldRows({ name: "home", vlantag: 310, state: "Active", "access-to": ["internet"] }, zschema);
@@ -61,7 +61,7 @@ check(!z("vlantag").settable && z("vlantag").class === "immutable" && z("vlantag
 check(!z("state").settable && z("state").reason === "use network-manager enable|disable|manual", "a manual field names its verb");
 check(z("access-to").settable && z("access-to").configured && initialText(z("access-to")) === "internet", "a configured list");
 check(!z("mdns").configured && z("mdns").value === "false" && z("mdns").default === false, "an unset field shows its default as the value in effect");
-check(z("serves").type === "array" && !z("odd").settable, "string-or-list is a list; no change class: not settable");
+check(z("listish").type === "array" && !z("odd").settable, "string-or-list is a list; no change class: not settable");
 const zset = setArgs(zrows, { "access-to": "internet\nmgmt", "pinhole-allowed-from": "dmz", mdns: "true", vlantag: "999" });
 check(zset.sets.join(" ") === 'access-to=["internet","mgmt"] pinhole-allowed-from=["dmz"] mdns=true', "several zone fields in one modify; the immutable one is not sent");
 

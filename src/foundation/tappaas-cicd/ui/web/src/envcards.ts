@@ -1,5 +1,6 @@
 // envcards.ts — the Environments page as data: one card per environment, in
-// it one box per zone it owns (its own zone, and every zone that `serves` it),
+// it one box per zone it owns (every zone naming it: its own Service zone, and
+// the client and IoT zones that serve it),
 // and in each box the modules installed there. A module sits in its own
 // environment's card, in the box of its zone; a zone the environment does not
 // own (the DMZ, mgmt) gets a box of its own marked shared, a module with no
@@ -9,7 +10,7 @@
 export interface EnvLike {
   name: string;
   displayName?: string;
-  network?: { zone?: string };
+  zone?: string | null; // the zone naming it, as the environments read joins it
   domains?: { primary?: string };
 }
 export interface ZoneLike {
@@ -17,7 +18,7 @@ export interface ZoneLike {
   type?: string;
   state?: string;
   vlantag?: number;
-  serves?: string | string[];
+  environment?: string;
 }
 export interface ModuleLike {
   name: string;
@@ -34,18 +35,22 @@ export interface ZoneBox<M extends ModuleLike> {
 
 export interface EnvCard<E extends EnvLike, M extends ModuleLike> {
   env: E;
+  zone: string | null; // its own zone
   type: string | null; // its own zone's type
   isDefault: boolean;
   boxes: ZoneBox<M>[];
   modules: number;
 }
 
-const servesOf = (z: ZoneLike): string[] => (Array.isArray(z.serves) ? z.serves : typeof z.serves === "string" && z.serves ? [z.serves] : []);
+// An environment's own zone: the Service (or Management) zone naming it.
+const OWN_TYPES = new Set(["Service", "Management"]);
+export const ownZoneOf = (zones: ZoneLike[], env: string): string | null =>
+  zones.find((z) => z.environment === env && OWN_TYPES.has(z.type ?? ""))?.name ?? null;
 
 export function envCards<E extends EnvLike, M extends ModuleLike>(envs: E[], zones: ZoneLike[], modules: M[], defaultEnv: string | null): EnvCard<E, M>[] {
   return envs.map((e) => {
-    const own = e.network?.zone ?? null;
-    const owned = [...(own ? [own] : []), ...zones.filter((z) => z.name !== own && servesOf(z).includes(e.name)).map((z) => z.name)];
+    const own = e.zone ?? ownZoneOf(zones, e.name);
+    const owned = [...(own ? [own] : []), ...zones.filter((z) => z.name !== own && z.environment === e.name).map((z) => z.name)];
     const boxes: ZoneBox<M>[] = owned.map((z) => ({ zone: z, record: zones.find((x) => x.name === z) ?? null, own: true, modules: [] }));
     const mine = modules.filter((m) => m.environment === e.name).sort((a, b) => a.name.localeCompare(b.name));
     for (const m of mine) {
@@ -60,6 +65,6 @@ export function envCards<E extends EnvLike, M extends ModuleLike>(envs: E[], zon
     const rank = (b: ZoneBox<M>) => (b.zone === own ? 0 : b.own ? 1 : b.zone ? 2 : 3);
     boxes.sort((a, b) => rank(a) - rank(b) || (a.zone ?? "").localeCompare(b.zone ?? ""));
     const z = zones.find((x) => x.name === own);
-    return { env: e, type: z?.type ?? null, isDefault: e.name === defaultEnv, boxes, modules: mine.length };
+    return { env: e, zone: own, type: z?.type ?? null, isDefault: e.name === defaultEnv, boxes, modules: mine.length };
   });
 }

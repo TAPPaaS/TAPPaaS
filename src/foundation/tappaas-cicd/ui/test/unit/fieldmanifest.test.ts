@@ -6,7 +6,7 @@
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { composeFields } from "../../../lib/ts/src/compose-fields";
-import { FieldManifest, RefContext, backupDefs, buildManifest, environmentDefaults, flattenSchema, moduleAddDefaults, moduleDefs, oneLine, renderDefault, zoneAddDefaults, zoneDefs } from "../../src/fieldmanifest";
+import { FieldManifest, RefContext, backupDefs, buildManifest, environmentDefaults, environmentDefs, flattenSchema, moduleAddDefaults, moduleDefs, oneLine, renderDefault, zoneAddDefaults, zoneDefs } from "../../src/fieldmanifest";
 import { classSummary, fieldChanges, fieldGroups, placeholderOf, typedVars } from "../../web/src/fieldlogic";
 import { formParts } from "../../web/src/argv";
 import { nameDescription } from "../../web/src/forms";
@@ -82,17 +82,20 @@ check(field(zone, "access-to")?.typeText === "zones" && field(zone, "access-to")
 check(field(zone, "vlantag")?.editable === false && /delete the zone/.test(field(zone, "vlantag")?.why ?? ""), "…vlantag cannot change in place");
 const zadd = buildManifest({ kind: "zone", name: null, mode: "add", defs: zdefs, record: null, refs, vars: {} });
 check(field(zadd, "type")?.arg === "--type" && field(zadd, "vlantag")?.arg === "--vlan" && field(zadd, "access-to")?.editable === false, "zone add: the add verb's own flags (--type, --vlan); the rest after the add");
+check(field(zadd, "environment")?.arg === "--environment" && field(zadd, "environment")?.choices?.includes("rossen") === true, "zone add: the environment it belongs to is an environment, passed as --environment");
+check(field(zone, "environment")?.editable === false && /verb of its own/.test(field(zone, "environment")?.why ?? ""), "zone modify: the environment link has its verb (bind), not --set");
 
 // ── environment ─────────────────────────────────────────────────────────
-const edefs = flattenSchema(schema("environment-fields.json"));
-const env = buildManifest({ kind: "environment", name: "rossen", mode: "modify", defs: edefs, record: { name: "rossen", displayName: "Rossen", ownerOrg: "rossen", network: { zone: "rossen" }, domains: { primary: "hrossen.dk", dnsMode: "per-service" } }, refs, vars: {} });
+const edefs = environmentDefs(schema("environment-fields.json"));
+check(!flattenSchema(schema("environment-fields.json")).some((f) => f.name.startsWith("network")), "environment-fields: an environment names no zone");
+const env = buildManifest({ kind: "environment", name: "rossen", mode: "modify", defs: edefs, record: { name: "rossen", displayName: "Rossen", ownerOrg: "rossen", zone: "rossen", domains: { primary: "hrossen.dk", dnsMode: "per-service" } }, refs, vars: {} });
 check(field(env, "name") === undefined, "environment modify: the name is the verb's positional, not a field");
 check(field(env, "ownerOrg")?.typeText === "an organization" && field(env, "ownerOrg")?.arg === "--owner" && field(env, "ownerOrg")?.value === "rossen", "…ownerOrg names an organization, passed as --owner");
-check(field(env, "network.zone")?.choices?.includes("rossen") === true && field(env, "network.zone")?.arg === "--zone" && field(env, "domains.dnsMode")?.typeText === "one of per-service, wildcard", "…network.zone a zone (--zone); dnsMode one of per-service, wildcard");
+check(field(env, "zone")?.choices?.includes("rossen") === true && field(env, "zone")?.arg === "--zone" && field(env, "zone")?.value === "rossen" && field(env, "domains.dnsMode")?.typeText === "one of per-service, wildcard", "…its zone a zone (--zone, the zone naming it); dnsMode one of per-service, wildcard");
 check(field(env, "displayName")?.required === true && field(env, "domains.primary")?.required === false, "…required as the schema says");
-const eadd = buildManifest({ kind: "environment", name: null, mode: "add", defs: edefs, record: null, defaults: { displayName: "<Name>", ownerOrg: "rossen", "network.zone": "<name>" }, refs, vars: { name: null } });
+const eadd = buildManifest({ kind: "environment", name: null, mode: "add", defs: edefs, record: null, defaults: { displayName: "<Name>", ownerOrg: "rossen", zone: "<name>" }, refs, vars: { name: null } });
 check(field(eadd, "ownerOrg")?.default === "rossen" && field(eadd, "displayName")?.defaultTemplate === true, "environment add: what the manager uses when a field is left empty");
-check(placeholderOf(field(eadd, "displayName")!, typedVars({ "@env": "acme" })) === "default Acme" && placeholderOf(field(eadd, "network.zone")!, typedVars({ "@env": "acme" })) === "default acme", "…filled from the name as it is typed: default Acme, default acme");
+check(placeholderOf(field(eadd, "displayName")!, typedVars({ "@env": "acme" })) === "default Acme" && placeholderOf(field(eadd, "zone")!, typedVars({ "@env": "acme" })) === "default acme", "…filled from the name as it is typed: default Acme, default acme");
 
 // ── identity ────────────────────────────────────────────────────────────
 const user = buildManifest({ kind: "user", name: "lars", mode: "modify", defs: flattenSchema(schema("user-fields.json")), record: { name: "lars", displayName: "lars", primaryEmail: "lars@hrossen.dk", state: "active", memberOf: ["users", "installer"], roles: ["admin"] }, refs, vars: {} });
@@ -136,7 +139,7 @@ check(placeholderOf(field(user, "displayName")!) === "no default", "an empty inp
 
 // ── the form's order: name, the fields as the schema orders them, Options, disruptions ──
 const eopen = eadd.fields.filter((f) => f.editable);
-check(JSON.stringify(fieldGroups(eopen)) === JSON.stringify([{ parent: "", fields: ["displayName", "ownerOrg"] }, { parent: "domains", fields: ["domains.primary", "domains.dnsMode"] }, { parent: "network", fields: ["network.zone"] }]), "environment add: the fields in the schema's order, a nested object's under its parent");
+check(JSON.stringify(fieldGroups(eopen)) === JSON.stringify([{ parent: "", fields: ["displayName", "ownerOrg", "zone"] }, { parent: "domains", fields: ["domains.primary", "domains.dnsMode"] }]), "environment add: the fields in the schema's order (its zone after its owner), a nested object's under its parent");
 check(JSON.stringify(fieldGroups([{ name: "a.x" }, { name: "b" }, { name: "a.y" }, { name: "c" }])) === JSON.stringify([{ parent: "a", fields: ["a.x", "a.y"] }, { parent: "", fields: ["b", "c"] }]), "…a parent's fields stay together where the schema interleaves them");
 const envAddVerb = {
   verb: "add", keys: [["add"]], positionals: [{ name: "env", optional: true, repeatable: false }],
@@ -157,11 +160,11 @@ check(org.nameField !== null && role.nameField !== null && group.nameField !== n
 // ── the defaults the managers compute, as the form shows them ────────────
 // environment-manager add: the typed name, the first organization, and no domain without --domain
 const eadd2 = buildManifest({ kind: "environment", name: null, mode: "add", defs: edefs, record: null, defaults: environmentDefaults("add", { firstOrg: "rossen", siteBackup: { target: "backup.mgmt.internal", defaultSchedule: "weekly" }, record: null }), refs, vars: { name: null } });
-check(placeholderOf(field(eadd2, "displayName")!) === "default the name, capitalised" && placeholderOf(field(eadd2, "network.zone")!) === "default the name", "environment add, nothing typed: the display name and zone say what they will be, never <Name>");
+check(placeholderOf(field(eadd2, "displayName")!) === "default the name, capitalised" && placeholderOf(field(eadd2, "zone")!) === "default the name", "environment add, nothing typed: the display name and zone say what they will be, never <Name>");
 check(placeholderOf(field(eadd2, "domains.primary")!) === "default no public domain (reached only from inside)" && placeholderOf(field(eadd2, "ownerOrg")!) === "default rossen", "…domains.primary: no public domain unless one is given (environment-manager writes no domains block); the owner is the first organization");
 check(field(eadd2, "domains.primary")?.required === false, "…so domains.primary is not required");
 check(placeholderOf(field(eadd2, "backup.schedule")!) === "default weekly, the site's" && placeholderOf(field(eadd2, "backup.retention")!) === "default 7y, the site's" && placeholderOf(field(eadd2, "backup.residency")!) === "default eu-only, the environment's data residency", "…the backup cascade's fields: the site's schedule and retention, the environment's residency");
-const emod = buildManifest({ kind: "environment", name: "test", mode: "modify", defs: edefs, record: { name: "test", displayName: "Test", ownerOrg: "rossen", network: { zone: "test" }, dataResidency: "global" }, defaults: environmentDefaults("modify", { firstOrg: "rossen", siteBackup: {}, record: { dataResidency: "global" } }), refs, vars: {} });
+const emod = buildManifest({ kind: "environment", name: "test", mode: "modify", defs: edefs, record: { name: "test", displayName: "Test", ownerOrg: "rossen", zone: "test", dataResidency: "global" }, defaults: environmentDefaults("modify", { firstOrg: "rossen", siteBackup: {}, record: { dataResidency: "global" } }), refs, vars: {} });
 check(placeholderOf(field(emod, "domains.primary")!) === "default no public domain (reached only from inside)" && placeholderOf(field(emod, "backup.residency")!) === "default global, the environment's data residency" && field(emod, "displayName")?.default === null, "environment modify, no domain: the same words; no add-time default for a field the record has");
 
 // network-manager add over hrossen's zones (fixture): band 2 has 200 and 299

@@ -934,7 +934,7 @@
    "tier": 0,
    "bridge": "lan",
    "ip": "10.0.0.0/24",
-   "serves": []
+   "environment": "mgmt"
   },
   {
    "name": "netbird",
@@ -944,7 +944,7 @@
    "tier": null,
    "bridge": "lan",
    "ip": "100.64.0.0/10",
-   "serves": []
+   "environment": null
   },
   {
    "name": "edge",
@@ -954,7 +954,7 @@
    "tier": null,
    "bridge": "lan",
    "ip": "10.255.0.0/31",
-   "serves": []
+   "environment": null
   },
   {
    "name": "admin",
@@ -964,7 +964,7 @@
    "tier": null,
    "bridge": "wireguard",
    "ip": "10.255.1.0/24",
-   "serves": []
+   "environment": null
   },
   {
    "name": "rossen",
@@ -974,7 +974,7 @@
    "tier": 1,
    "bridge": "lan",
    "ip": "10.2.0.0/24",
-   "serves": []
+   "environment": "rossen"
   },
   {
    "name": "work",
@@ -984,7 +984,7 @@
    "tier": null,
    "bridge": "lan",
    "ip": "10.3.20.0/24",
-   "serves": []
+   "environment": null
   },
   {
    "name": "iotLocal",
@@ -994,9 +994,7 @@
    "tier": 6,
    "bridge": "lan",
    "ip": "10.4.10.0/24",
-   "serves": [
-    "rossen"
-   ]
+   "environment": "rossen"
   },
   {
    "name": "iotCloud",
@@ -1006,9 +1004,7 @@
    "tier": 3,
    "bridge": "lan",
    "ip": "10.4.20.0/24",
-   "serves": [
-    "rossen"
-   ]
+   "environment": "rossen"
   },
   {
    "name": "iotCams",
@@ -1018,9 +1014,7 @@
    "tier": 6,
    "bridge": "lan",
    "ip": "10.4.30.0/24",
-   "serves": [
-    "rossen"
-   ]
+   "environment": "rossen"
   },
   {
    "name": "iotUntrust",
@@ -1030,7 +1024,7 @@
    "tier": 3,
    "bridge": "lan",
    "ip": "10.4.40.0/24",
-   "serves": []
+   "environment": null
   },
   {
    "name": "dmz",
@@ -1040,7 +1034,7 @@
    "tier": 4,
    "bridge": "lan",
    "ip": "10.6.0.0/24",
-   "serves": []
+   "environment": null
   },
   {
    "name": "home",
@@ -1050,9 +1044,7 @@
    "tier": 2,
    "bridge": "lan",
    "ip": "10.3.10.0/24",
-   "serves": [
-    "rossen"
-   ]
+   "environment": "rossen"
   },
   {
    "name": "guest",
@@ -1062,7 +1054,7 @@
    "tier": 3,
    "bridge": "lan",
    "ip": "10.5.10.0/24",
-   "serves": []
+   "environment": null
   },
   {
    "name": "wan",
@@ -1072,7 +1064,7 @@
    "tier": null,
    "bridge": "lan",
    "ip": "10.1.0.0/24",
-   "serves": []
+   "environment": null
   },
   {
    "name": "buddy",
@@ -1082,7 +1074,7 @@
    "tier": null,
    "bridge": "wireguard",
    "ip": "10.255.2.0/24",
-   "serves": []
+   "environment": null
   },
   {
    "name": "test",
@@ -1092,7 +1084,7 @@
    "tier": 1,
    "bridge": "lan",
    "ip": "10.2.99.0/24",
-   "serves": []
+   "environment": "test"
   }
  ],
  "outside": [

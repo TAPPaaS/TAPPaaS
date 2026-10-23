@@ -16,6 +16,7 @@ const card = (n: string) => cards.find((c) => c.env.name === n)!;
 const boxes = (n: string) => card(n).boxes.map((b) => `${b.zone ?? "-"}${b.own ? "" : "*"}`).join(" ");
 
 check(cards.map((c) => c.env.name).join(" ") === "mgmt rossen test", "one card per environment");
+check(card("rossen").zone === "rossen" && card("mgmt").zone === "mgmt" && card("test").zone === "test", "an environment's own zone is the zone naming it (the record names none)");
 check(card("rossen").isDefault && !card("mgmt").isDefault && card("rossen").type === "Service" && card("mgmt").type === "Management", "the default one marked; the type is its own zone's");
 check(boxes("rossen").startsWith("rossen home iotCams iotCloud iotLocal"), `rossen owns its zone and the zones that serve it (${boxes("rossen")})`);
 check(/dmz\*/.test(boxes("rossen")) && /mgmt\*/.test(boxes("rossen")), "a zone it uses but does not own (the DMZ, mgmt for unifi-os) is a shared box");

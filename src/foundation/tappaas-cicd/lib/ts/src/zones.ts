@@ -74,3 +74,11 @@ export function readZonesFile(file: string): { raw: Record<string, unknown>; ent
   const raw = parsed as Record<string, unknown>;
   return { raw, entries: zoneEntries(raw) };
 }
+
+// An environment's zone (#865): the one Service (or, for mgmt, Management) zone
+// whose `environment` names it — the zone names the environment, nothing points
+// the other way. null when none does, or more than one.
+export function environmentZoneIn(entries: Array<[string, Record<string, unknown>]>, env: string): string | null {
+  const own = entries.filter(([, z]) => z.environment === env && (z.type === "Service" || z.type === "Management"));
+  return own.length === 1 ? own[0][0] : null;
+}

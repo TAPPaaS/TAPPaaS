@@ -24,7 +24,7 @@ export interface ZoneRead {
   vlantag?: number;
   ip?: string;
   tier?: number;
-  serves?: string | string[];
+  environment?: string;
   description?: string;
   error?: string;
   "access-to"?: string[];
@@ -86,7 +86,7 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
             <span className="cf-roles">{z.vlantag ? `vlan ${z.vlantag}` : ""}</span>
           </div>
           <div className="cf-sub">{z.type ?? "?"} · {z.state ?? "?"}{z.tier !== undefined ? ` · tier ${z.tier}` : ""}</div>
-          <div className="cf-sub">{z.serves ? `serves ${Array.isArray(z.serves) ? z.serves.join(", ") : z.serves}` : z.ip ?? ""}</div>
+          <div className="cf-sub">{z.environment ? (z.type === "Service" || z.type === "Management" ? `${z.environment}'s zone` : `serves ${z.environment}`) : z.ip ?? ""}</div>
         </div>
       ),
   }));
@@ -224,7 +224,7 @@ export function ZonesPage() {
         title="Zones"
         aside={
           <span className="toolbar">
-            <OperateButton label="Add a zone…" title="Add a zone" steps={() => [fieldsStep({ title: "network-manager add <name>", bin: "network-manager", verb: "add", kind: "zone", name: null, mode: "add", keep: ["--archetype", "--serves", "--from-zone", "--no-activate"], hide: ["@options"], choices: { "--serves": envNames, "--from-zone": zoneNames, ...(archetypes.length ? { "--archetype": archetypes } : {}) } })]} />
+            <OperateButton label="Add a zone…" title="Add a zone" steps={() => [fieldsStep({ title: "network-manager add <name>", bin: "network-manager", verb: "add", kind: "zone", name: null, mode: "add", keep: ["--archetype", "--from-zone", "--no-activate"], hide: ["@options"], choices: { "--from-zone": zoneNames, ...(archetypes.length ? { "--archetype": archetypes } : {}) } })]} />
             <OperateButton label="Reconcile the network…" title="Reconcile the network" steps={[net("network-manager reconcile", "reconcile", { note: "The preview runs every plane dry (OPNsense, Proxmox, the switches, the APs); apply converges them all." })]} />
           </span>
         }

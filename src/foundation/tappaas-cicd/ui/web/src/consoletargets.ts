@@ -31,7 +31,7 @@ export const WIZARDS: WizardDef[] = [
   },
   {
     name: "add-environment", title: "the Add an environment wizard", arg: null, path: () => DAY2, keys: null,
-    values: "name and the environment's fields (displayName, network.zone, domains.primary, …)",
+    values: "name and the environment's fields (displayName, zone, domains.primary, …)",
     verbs: ["environment-manager add"],
   },
   { name: "add-stack", title: "the Add a stack wizard", arg: null, path: () => DAY2, keys: ["stack"], values: "stack", verbs: ["module-manager add-stack"] },

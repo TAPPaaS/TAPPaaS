@@ -3,6 +3,7 @@
     "name": "mgmt",
     "type": "Management",
     "state": "Manual",
+    "environment": "mgmt",
     "typeId": "0",
     "subId": "0",
     "vlantag": 0,
@@ -61,6 +62,7 @@
     "name": "rossen",
     "type": "Service",
     "state": "Active",
+    "environment": "rossen",
     "typeId": "2",
     "subId": "0",
     "vlantag": 200,
@@ -97,6 +99,7 @@
     "name": "iotLocal",
     "type": "IoT",
     "state": "Active",
+    "environment": "rossen",
     "typeId": "4",
     "subId": "10",
     "vlantag": 410,
@@ -107,13 +110,13 @@
     "pinhole-allowed-from": [],
     "description": "Local-only IoT: no internet, automation devices",
     "tier": 6,
-    "serves": "rossen",
     "ipv6Subnet": 65
   },
   {
     "name": "iotCloud",
     "type": "IoT",
     "state": "Active",
+    "environment": "rossen",
     "typeId": "4",
     "subId": "20",
     "vlantag": 420,
@@ -128,13 +131,13 @@
     ],
     "description": "Internet-dependent trusted IoT: smart appliances, media, monitoring",
     "tier": 3,
-    "serves": "rossen",
     "ipv6Subnet": 66
   },
   {
     "name": "iotCams",
     "type": "IoT",
     "state": "Active",
+    "environment": "rossen",
     "typeId": "4",
     "subId": "30",
     "vlantag": 430,
@@ -145,7 +148,6 @@
     "description": "Surveillance: cameras + NVR, fully isolated",
     "tier": 6,
     "isolated": true,
-    "serves": "rossen",
     "ipv6Subnet": 67
   },
   {
@@ -191,6 +193,7 @@
     "name": "home",
     "type": "Client",
     "state": "Active",
+    "environment": "rossen",
     "typeId": "3",
     "subId": "10",
     "vlantag": 310,
@@ -203,7 +206,6 @@
     "pinhole-allowed-from": [],
     "description": "Trusted personal devices: laptops, phones, tablets",
     "tier": 2,
-    "serves": "rossen",
     "ipv6Subnet": 49
   },
   {
@@ -259,6 +261,7 @@
     "ip": "10.2.99.0/24",
     "bridge": "lan",
     "state": "Active",
+    "environment": "test",
     "access-to": [
       "internet"
     ],

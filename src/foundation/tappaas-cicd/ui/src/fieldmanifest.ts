@@ -214,6 +214,26 @@ export function valueAt(record: Obj | null, path: string): unknown {
   return v;
 }
 
+// An environment's zone is not a field of its file (#865): the zone in
+// zones.json names the environment. The form still offers it, as the verbs do:
+// environment-manager add/modify --zone links the zone to the environment.
+export const ENVIRONMENT_ZONE_FIELD: FieldDef = {
+  name: "zone",
+  type: "string",
+  description: "The Service zone its modules run in: the zone in zones.json that names this environment. Setting it links that zone to the environment (network-manager bind) and clears the old zone's link.",
+  references: "zones",
+  required: false,
+  changeClass: "in-place",
+};
+
+// environment-fields' fields, with the environment's zone after its owner.
+export function environmentDefs(doc: unknown): FieldDef[] {
+  const defs = flattenSchema(doc);
+  const at = defs.findIndex((d) => d.name === "ownerOrg");
+  defs.splice(at < 0 ? defs.length : at + 1, 0, ENVIRONMENT_ZONE_FIELD);
+  return defs;
+}
+
 // A JSON-Schema document's properties as dotted leaves (environment-fields,
 // site-fields, the identity *-fields, a racks-fields $def): an object with
 // properties of its own is walked, every other property is a field. `required`
@@ -279,8 +299,8 @@ export function backupDefs(schemaDoc: unknown): FieldDef[] {
 // option lists.
 export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<string, string>>>>> = {
   environment: {
-    add: { displayName: "--display", ownerOrg: "--owner", "network.zone": "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode" },
-    modify: { displayName: "--display", ownerOrg: "--owner", "network.zone": "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode" },
+    add: { displayName: "--display", ownerOrg: "--owner", zone: "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode" },
+    modify: { displayName: "--display", ownerOrg: "--owner", zone: "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode" },
   },
   org: { add: { displayName: "--displayName", type: "--type", owner: "--owner", parentOrg: "--parentOrg" }, modify: { displayName: "--displayName", type: "--type", owner: "--owner", parentOrg: "--parentOrg" } },
   group: { add: { displayName: "--displayName", type: "--type", ownerOrg: "--ownerOrg", roles: "--roles" }, modify: { displayName: "--displayName", type: "--type", ownerOrg: "--ownerOrg", roles: "--roles" } },
@@ -303,7 +323,7 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
     },
   },
   backup: { modify: { enabled: "--enabled", retention: "--retention", exclude: "--exclude" } },
-  zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
+  zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", environment: "--environment", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
   rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", room: "--room", description: "--description" } },
   room: { add: { displayName: "--display-name", description: "--description" } },
   mount: { add: { rack: "--rack", u: "--u", room: "--room", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
@@ -501,7 +521,7 @@ export function environmentDefaults(mode: FormMode, o: { firstOrg: string | null
     "backup.schedule": `${typeof sb.defaultSchedule === "string" ? sb.defaultSchedule : "daily"}, the site's`,
     "backup.residency": `${typeof o.record?.dataResidency === "string" ? o.record.dataResidency : "eu-only"}, the environment's data residency`,
   };
-  if (mode === "add") Object.assign(out, { displayName: "<Name>", ownerOrg: o.firstOrg, "network.zone": "<name>" });
+  if (mode === "add") Object.assign(out, { displayName: "<Name>", ownerOrg: o.firstOrg, zone: "<name>" });
   return out;
 }
 

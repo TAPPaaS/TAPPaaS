@@ -180,7 +180,7 @@ function EnvPanel({ c, close }: { c: Card; close: () => void }) {
         {c.boxes.filter((b) => b.zone).map((b) => (
           <li key={b.zone}>
             <Link to={`/zones?zone=${encodeURIComponent(b.zone!)}`}>{b.zone}</Link>{" "}
-            <span className="muted">{[b.record?.type, b.record?.state, b.own ? (b.zone === e.network?.zone ? "its own zone" : "serves it") : "shared, not its own"].filter(Boolean).join(" · ")} · {b.modules.length} module{b.modules.length === 1 ? "" : "s"}</span>
+            <span className="muted">{[b.record?.type, b.record?.state, b.own ? (b.zone === c.zone ? "its own zone" : "serves it") : "shared, not its own"].filter(Boolean).join(" · ")} · {b.modules.length} module{b.modules.length === 1 ? "" : "s"}</span>
           </li>
         ))}
       </ul>

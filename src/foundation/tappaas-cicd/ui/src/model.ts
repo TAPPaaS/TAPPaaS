@@ -60,11 +60,12 @@ export interface BackupRow {
   retention?: string;
 }
 
-// environment-manager list --json
+// environment-manager list --json, with the environment's zone: the zone in
+// zones.json naming it (#865), joined here for every reader.
 export interface EnvironmentRow {
   name: string;
   displayName?: string;
-  network?: { zone?: string };
+  zone?: string | null;
   domains?: { primary?: string };
 }
 

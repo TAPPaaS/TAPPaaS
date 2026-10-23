@@ -131,7 +131,7 @@ export interface SiteRead {
 export interface EnvironmentRow {
   name: string;
   displayName?: string;
-  network?: { zone?: string };
+  zone?: string | null; // the zone naming it (#865)
   domains?: { primary?: string };
 }
 

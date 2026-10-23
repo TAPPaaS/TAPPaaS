@@ -11,13 +11,13 @@ import { existsSync, mkdirSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan-address";
-import { readZonesFile } from "../../lib/ts/src/zones";
+import { environmentZoneIn, readZonesFile } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { composeFields } from "../../lib/ts/src/compose-fields";
-import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, environmentDefaults, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
+import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, environmentDefaults, environmentDefs, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { ModuleIcon, moduleIcon } from "./icons";
@@ -164,7 +164,12 @@ export class Reads {
     this.zones = new Cached("zones", TTL.zones, () => this.loadZones(), now);
     // The access points and the SSIDs each maps to a zone (Setup's WiFi).
     this.aps = new Cached("aps", TTL.aps, () => j<Record<string, unknown>[]>("ap-manager", ["list", "--json"]), now);
-    this.environments = new Cached("environments", TTL.environments, () => j<EnvironmentRow[]>("environment-manager", ["list", "--json"]), now);
+    this.environments = new Cached("environments", TTL.environments, async () => {
+      // The environment names no zone; the zone naming it is its zone (#865).
+      const envs = await j<EnvironmentRow[]>("environment-manager", ["list", "--json"]);
+      const zones = this.zoneEntries();
+      return envs.map((e) => ({ ...e, zone: environmentZoneIn(zones, e.name) }));
+    }, now);
     this.site = new Cached("site", TTL.site, () => this.loadSite(), now);
     // No scan yet is an answer (null), not a failure.
     this.security = new Cached("security", TTL.security, async () => {
@@ -371,7 +376,7 @@ export class Reads {
             module: name,
             own,
             defaultEnv: ((site.value?.site as { defaultEnvironment?: string } | undefined)?.defaultEnvironment) ?? null,
-            envs: [{ name: "mgmt", zone: "mgmt" }, ...(envs.value ?? []).filter((e) => e.name !== "mgmt").map((e) => ({ name: e.name, zone: e.network?.zone ?? null }))],
+            envs: [{ name: "mgmt", zone: "mgmt" }, ...(envs.value ?? []).filter((e) => e.name !== "mgmt").map((e) => ({ name: e.name, zone: e.zone ?? null }))],
             firstNode: typeof nodes[0]?.name === "string" ? nodes[0].name : null,
             usedVmids: this.configVmids(`${name}.json`),
           });
@@ -417,9 +422,13 @@ export class Reads {
         break;
       }
       case "environment": {
-        defs = flattenSchema(this.schemaFile("environment-fields.json"));
-        // The record as environment-manager shows it, every field pre-filled.
-        if (name && mode === "modify") record = await runJson<Record<string, unknown>>(this.cfg.run, "environment-manager", ["show", name, "--json"]);
+        defs = environmentDefs(this.schemaFile("environment-fields.json"));
+        // The record as environment-manager shows it, every field pre-filled,
+        // and its zone: the zone naming it.
+        if (name && mode === "modify") {
+          record = await runJson<Record<string, unknown>>(this.cfg.run, "environment-manager", ["show", name, "--json"]);
+          record = { ...record, zone: environmentZoneIn(this.zoneEntries(), name) };
+        }
         const siteBackup = ((((await this.site.get()).value?.site ?? {}) as Record<string, unknown>).backup ?? {}) as Record<string, unknown>;
         defaults = environmentDefaults(name && mode === "modify" ? "modify" : "add", { firstOrg: refs.organizations[0] ?? null, siteBackup, record });
         break;
@@ -625,6 +634,15 @@ export class Reads {
 
   // Each zone as `network-manager show <name> --json` prints it, plus its name:
   // zones.json read once (lib/ts zones.ts, the manager's own parse and rule).
+  // zones.json's zones, or none when it cannot be read.
+  private zoneEntries(): Array<[string, Record<string, unknown>]> {
+    try {
+      return readZonesFile(join(this.cfg.configDir, "zones.json")).entries;
+    } catch {
+      return [];
+    }
+  }
+
   private async loadZones(): Promise<Record<string, unknown>[]> {
     const { entries } = readZonesFile(join(this.cfg.configDir, "zones.json"));
     return entries.map(([name, z]) => {
