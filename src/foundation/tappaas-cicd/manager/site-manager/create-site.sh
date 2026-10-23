@@ -21,9 +21,12 @@
 #                        org file may be created later by identity-manager)  [schema: owner]
 #   email             <- --email / Proxmox root@pam user / existing  [schema: email]
 #   version           <- git describe of /home/tappaas/TAPPaaS, else "1.0"
-#   location.country  <- derived from system timezone region (fallback NL)
-#   location.timezone <- system tz (timedatectl/zoneinfo, fallback Europe/Amsterdam)
-#   location.locale   <- system locale ($LANG/localectl, fallback en_US)
+#   locations{<name>} <- the primary location, named from the site code:
+#     .country        <- derived from system timezone region (fallback NL)
+#     .timezone       <- system tz (timedatectl/zoneinfo, fallback Europe/Amsterdam)
+#   primaryLocation   <- that name
+#   locale            <- system locale ($LANG/localectl, fallback en_US)
+#   keyboard          <- the first node's XKBLAYOUT, when it answers
 #   network.isp       <- null
 #   network.publicIp  <- "auto"
 #   hardware.nodes[]  <- discovered cluster nodes; each {name, storagePools:[...]}
@@ -51,8 +54,8 @@
 #
 # Idempotent: if site.json already exists, --force is required to overwrite. On a
 # --force re-run, operator-set fields are preserved (repositories, email,
-# automaticReboot, ipv6, channel, snapshotRetention, owner, displayName, location,
-# network, backup) — only discovery-derived and explicitly-passed fields are refreshed.
+# automaticReboot, ipv6, channel, snapshotRetention, owner, displayName, locations,
+# primaryLocation, locale, keyboard, network, backup) — only discovery-derived and explicitly-passed fields are refreshed.
 #
 # Usage: create-site.sh --name <N> [OPTIONS]
 #
@@ -282,6 +285,17 @@ detect_timezone() {
 master_timezone() { [[ -n "$NODE_TZ" ]] && { printf '%s' "$NODE_TZ"; return; }; detect_timezone; }
 master_locale()   { [[ -n "$NODE_LOCALE" ]] && { printf '%s' "$NODE_LOCALE"; return; }; detect_locale; }
 master_keyboard() { printf '%s' "$NODE_KEYBOARD"; }
+
+# A location's name from the site code (ADR-036 D1): lower-case, words joined
+# by '-', starting with a letter — the rule lib/ts locations.ts locationName
+# keeps (a site code is ASCII, so no letter needs transliterating).
+location_name() {
+    local n
+    n="$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//')"
+    [[ -n "$n" ]] || n="site"
+    [[ "$n" =~ ^[a-z] ]] || n="loc-${n}"
+    printf '%s' "${n:0:63}"
+}
 
 country_from_timezone() {
     case "$1" in
@@ -578,7 +592,8 @@ build_and_write_site() {
     # a stray literal '}' (bash parses ${X:-{} + }) and breaks the jq input.
     local existing="${EXISTING_SITE:-}"
     [[ -n "$existing" ]] || existing='{}'
-    local automaticReboot ipv6 channel snapshotRetention owner displayName backup network location defaultEnvironment
+    local automaticReboot ipv6 channel snapshotRetention owner displayName backup network defaultEnvironment
+    local locations primary locale_v keyboard_v
     automaticReboot="$(jq -r 'if .automaticReboot != null then (.automaticReboot|tostring) else "true" end' <<<"$existing")"
     # #149: whether the site supports IPv6 — an operator's statement, kept; absent is false.
     ipv6="$(jq -r 'if .ipv6 == true then "true" else "false" end' <<<"$existing")"
@@ -599,29 +614,34 @@ build_and_write_site() {
     displayName="$(jq -r --arg n "$NAME" '.displayName // $n' <<<"$existing")"
     backup="$(jq -c '.backup // null' <<<"$existing")"
     network="$(jq -c '.network // {isp: null, publicIp: "auto"}' <<<"$existing")"
-    # location: the operator's values win, and a fact the site never recorded is
-    # filled from the master (#408) — so a --force re-run heals a site.json that
-    # predates `keyboard` without overwriting anything deliberately set.
-    location="$(jq -c --arg c "$country" --arg t "$tz" --arg l "$locale" --arg k "$keyboard" \
-        '(.location // {}) as $l0
-         | {country: $c, timezone: $t, locale: $l}
-           + (if $k == "" then {} else {keyboard: $k} end)
-           + $l0' <<<"$existing")"
+    # The site's place (ADR-036 D1): the primary location holds the country and
+    # the timezone; locale and keyboard are site-wide. The operator's values win,
+    # and a fact the site never recorded is filled from the master (#408) — so a
+    # --force re-run heals a site.json that lacks one without overwriting anything
+    # deliberately set. A site.json with the retired location is migration 0019's.
+    if jq -e 'has("location") and (has("locations") | not)' <<<"$existing" >/dev/null 2>&1; then
+        die "site.json still has the retired location — run run-migrations.sh (migration 0019 moves it into locations), then re-run with --force."
+    fi
+    primary="$(jq -r '.primaryLocation // empty' <<<"$existing")"
+    [[ -n "$primary" ]] || primary="$(location_name "$NAME")"
+    locations="$(jq -c --arg n "$primary" --arg c "$country" --arg t "$tz" \
+        '(.locations // {}) as $all | $all + {($n): ({country: $c, timezone: $t} + ($all[$n] // {}))}' <<<"$existing")"
+    locale_v="$(jq -r --arg l "$locale" '.locale // $l' <<<"$existing")"
+    keyboard_v="$(jq -r --arg k "$keyboard" '.keyboard // $k' <<<"$existing")"
 
     # Recorded values are the operator's and are never overwritten — but a site
     # that disagrees with its own master is worth saying out loud, because every
     # node installed from site.json inherits what is recorded here (#408).
     if [[ -n "${NODE_TZ}${NODE_KEYBOARD}" ]]; then
-        local _have_tz _have_kb
-        _have_tz="$(jq -r '.timezone // ""' <<<"$location")"
-        _have_kb="$(jq -r '.keyboard // ""' <<<"$location")"
+        local _have_tz
+        _have_tz="$(jq -r --arg n "$primary" '.[$n].timezone // ""' <<<"$locations")"
         if [[ -n "$NODE_TZ" && -n "$_have_tz" && "$NODE_TZ" != "$_have_tz" ]]; then
             warn "  site.json says timezone ${_have_tz}, the master node says ${NODE_TZ}"
-            warn "    keep it, or adopt the master: site-manager site modify --locationTimezone ${NODE_TZ} --locationCountry $(country_from_timezone "$NODE_TZ")"
+            warn "    keep it, or adopt the master: site-manager location modify ${primary} --timezone ${NODE_TZ} --country $(country_from_timezone "$NODE_TZ")"
         fi
-        if [[ -n "$NODE_KEYBOARD" && -n "$_have_kb" && "$NODE_KEYBOARD" != "$_have_kb" ]]; then
-            warn "  site.json says keyboard ${_have_kb}, the master node says ${NODE_KEYBOARD}"
-            warn "    keep it, or adopt the master: site-manager site modify --locationKeyboard ${NODE_KEYBOARD}"
+        if [[ -n "$NODE_KEYBOARD" && -n "$keyboard_v" && "$NODE_KEYBOARD" != "$keyboard_v" ]]; then
+            warn "  site.json says keyboard ${keyboard_v}, the master node says ${NODE_KEYBOARD}"
+            warn "    keep it, or adopt the master: site-manager site modify --keyboard ${NODE_KEYBOARD}"
         fi
     fi
 
@@ -635,7 +655,10 @@ build_and_write_site() {
         --arg owner "$owner" \
         --arg email "$email" \
         --arg version "$version" \
-        --argjson location "$location" \
+        --argjson locations "$locations" \
+        --arg primary "$primary" \
+        --arg locale "$locale_v" \
+        --arg keyboard "$keyboard_v" \
         --argjson network "$network" \
         --argjson nodes "$nodes_json" \
         --argjson backup "$backup" \
@@ -652,7 +675,9 @@ build_and_write_site() {
             owner: $owner,
             email: $email,
             version: $version,
-            location: $location,
+            locations: $locations,
+            primaryLocation: $primary,
+            locale: $locale,
             network: $network,
             hardware: { nodes: $nodes },
             backup: $backup,
@@ -661,7 +686,8 @@ build_and_write_site() {
             ipv6: $ipv6,
             snapshotRetention: $snapshotRetention,
             repositories: $repositories
-         } + (if $channel == null then {} else {channel: $channel} end)' > "$TMP_SITE"
+         } + (if $keyboard == "" then {} else {keyboard: $keyboard} end)
+           + (if $channel == null then {} else {channel: $channel} end)' > "$TMP_SITE"
 
     jq empty "$TMP_SITE" >/dev/null 2>&1 || die "Generated site.json is invalid JSON."
 

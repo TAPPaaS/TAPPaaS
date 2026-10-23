@@ -31,9 +31,18 @@ site '{"location":{"country":"DK","timezone":"Europe/Copenhagen"}}'
 is "a site with no timezone recorded still answers UTC" "$(load 'site_locale_value timezone UTC')" "Europe/Copenhagen"
 is "no keyboard recorded is empty, not a guess"         "$(load 'site_locale_value keyboard')"     ""
 
+# The site's place is its primary location; locale and keyboard are site-wide
+# (ADR-036 D1). The retired shape above is read until migration 0019 has run.
+site '{"locations":{"far":{"country":"DE","timezone":"Europe/Berlin"},"home":{"country":"DK","timezone":"Europe/Copenhagen"}},"primaryLocation":"home","locale":"da_DK","keyboard":"dk"}'
+is "timezone comes from the primary location" "$(load 'site_locale_value timezone UTC')" "Europe/Copenhagen"
+is "…the country too"                         "$(load 'site_locale_value country')"      "DK"
+is "keyboard and locale are the site's"        "$(load 'site_locale_value keyboard')|$(load 'site_locale_value locale')" "dk|da_DK"
+site '{"locations":{"home":{"country":"DK"}},"primaryLocation":"home"}'
+is "a primary location with no timezone: the caller's default" "$(load 'site_locale_value timezone UTC')" "UTC"
+
 echo ""
 echo "== site-locale: the NixOS fragment =="
-site '{"location":{"country":"DK","timezone":"Europe/Copenhagen","locale":"en_US","keyboard":"dk"}}'
+site '{"locations":{"home":{"country":"DK","timezone":"Europe/Copenhagen"}},"primaryLocation":"home","locale":"en_US","keyboard":"dk"}'
 out="$(load 'render_site_nix ""')"
 has "$out" 'time.timeZone = "Europe/Copenhagen";'   "the timezone is the site's"
 has "$out" 'i18n.defaultLocale = "en_US.UTF-8";'    "the locale gains its charset (the site records en_US)"

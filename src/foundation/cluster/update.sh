@@ -324,10 +324,10 @@ done <<< "$NODES"
 [[ "${_pve_notify_done}" -eq 1 ]] || warn "  no node answered the notifications API — PVE's mails are unchanged"
 
 # Step 5e: every node runs the site's timezone (#837). Guests are converged to
-#   site.json `.location.timezone` on every OS update; the nodes were not, so a
+#   the site's timezone (site.json, its primary location's) on every OS update; the nodes were not, so a
 #   node installed with another answer kept it (and its logs and backup times
 #   with it). Only the timezone: a node's keyboard and locale are the console's.
-_site_tz="$(jq -r '.location.timezone // empty' "${CONFIG_DIR:-/home/tappaas/config}/site.json" 2>/dev/null || true)"
+_site_tz="$(jq -r '(.locations[.primaryLocation // ""] // .location // {}).timezone // empty' "${CONFIG_DIR:-/home/tappaas/config}/site.json" 2>/dev/null || true)"
 if [[ -n "${_site_tz}" ]]; then
     info "${BOLD}Step 5e: node timezone ${_site_tz} (site.json)${CL}"
     while read -r node; do

@@ -30,6 +30,7 @@ import { checkCveStatus } from "./security";
 import { checkSignatureStatus } from "./signatures";
 import { checkControlPlaneTrust } from "./controlplane";
 import { checkMlagPairs } from "./mlag";
+import { primaryLocation } from "../../../lib/ts/src/locations";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
 // does (defaulting zone0 to "mgmt"), for the gates that probe a guest over SSH.
@@ -803,20 +804,21 @@ export function checkLanUplink(client: ClusterClient): CheckResult {
 }
 
 // ── site-timezone gate (#837) ──────────────────────────────────────────
-// site.json `.location.timezone` is answered once, at the first install, and
+// The site's timezone (site.json, its primary location's) is answered once, at the first install, and
 // the guests are converged to it on every OS update. Nothing compares it with
 // what the nodes run, and a site created with the template's location keeps a
 // wrong one: either side may be the wrong one, so the row says how to fix each.
 // WARN, never FAIL: a clock in another zone is wrong logs, not an outage.
 export function checkSiteTimezone(client: ClusterClient, configDir: string, defaultNode: string): CheckResult {
-  const site = readModuleJson(join(configDir, "site.json"));
-  const loc = site?.location as Record<string, unknown> | undefined;
-  const want = typeof loc?.timezone === "string" ? loc.timezone : "";
+  // The site's timezone is its primary location's (ADR-036 D1).
+  const primary = primaryLocation(configDir);
+  const want = primary?.timezone ?? "";
+  const fix = `site-manager location modify ${primary?.name ?? "<primary>"} --timezone <tz>`;
   if (!want) {
     return {
       name: "site-timezone",
       status: "warn",
-      detail: "site.json has no location.timezone — guests fall back to UTC; set it: site-manager site modify --locationTimezone <tz>",
+      detail: `site.json records no timezone on its primary location — guests fall back to UTC; set it: ${fix}`,
     };
   }
   const rows: CheckRow[] = [];
@@ -844,7 +846,7 @@ export function checkSiteTimezone(client: ClusterClient, configDir: string, defa
   return {
     name: "site-timezone",
     status: "warn",
-    detail: `${rows.length} of ${probed} not on the site's ${want}; if the site's own is wrong: site-manager site modify --locationTimezone <tz>`,
+    detail: `${rows.length} of ${probed} not on the site's ${want}; if the site's own is wrong: ${fix}`,
     rows,
   };
 }

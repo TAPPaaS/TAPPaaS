@@ -1,7 +1,7 @@
 # site-manager
 
 The **Site** manager. The Site is the umbrella over a whole TAPPaaS installation:
-site-wide identity, location, hardware (Proxmox nodes + storage pools), backup,
+site-wide identity, its locations, hardware (Proxmox nodes + storage pools), backup,
 update schedule, repositories, and the default environment and owning
 organization by name. (Domain / DNS / identity are *per-environment*, owned by
 `environment-manager`, not here. The organizations themselves are the files in
@@ -19,7 +19,7 @@ them there while `site.json` has none.
 ## `site-manager`
 
 The `site-manager` bin is the front door. It owns the Site as a **singleton**
-and the `node` / `repository` sub-entities, following the same `<entity> <verb>`
+and the `location` / `node` / `repository` sub-entities, following the same `<entity> <verb>`
 shape as `network-manager`. The heavy git/cluster I/O stays in the still-live
 bash tools, invoked as thin delegations: `add` → `create-site.sh`,
 `repository add`/`delete` → `repository.sh`, `validate` → `validate-site.sh`.
@@ -31,6 +31,13 @@ The bin owns config CRUD (`site modify`, `node` CRUD, the `site.json` writes) +
 ```
 site (singleton)   site show [--json]
                    site modify --<field> <value> [...]
+location           location list [--json]
+                   location show <name> [--json]
+                   location add <name> --country <CC> [--displayName <s>] [--kind site|remote]
+                            [--city <c>] [--address <a>] [--timezone <tz>]
+                            [--latitude <deg>] [--longitude <deg>] [--primary] [--check]
+                   location modify <name> [--<field> <value>]... [--unset <f,g>] [--check]
+                   location delete <name> [--check]
 node               node list [--json]
                    node add <N> [--pxe] [--boot-disk <d>] [--mac <m>]
                             [--wan-port <if>|--no-wan] [--lan-ports <a,b>]
@@ -152,17 +159,17 @@ is written by the installer, from the fingerprints published in the root `INSTAL
 
 `site modify` editable fields (scalar, site-wide): `--channel`, `--displayName`, `--owner`,
 `--email`, `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
-`--backupOffsite`, `--locationCountry`, `--locationTimezone`,
-`--locationLocale`, `--locationKeyboard`, `--locationLatitude`,
-`--locationLongitude`, `--locationCity`, `--locationBuilding` (#609: what an off-site copy is compared
-with), `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`,
+`--backupOffsite`, `--primaryLocation`, `--locale`, `--keyboard`, `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`,
 `--brandingLogo`, `--brandingLogoDark`, `--dnsBlocklistsLists|Zones|Allow` (comma lists, `''`
 empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the
 update schedule. That is every field `site-fields.json` classes `in-place`. `name`, `version`
 and `defaultEnvironment` are `immutable`: `--name`, `--version` and `--defaultEnvironment` are
 refused, with the reason the schema gives, and nothing is written. The discovery-derived
-`hardware.nodes[]` (use `node …`) and the `repositories` list (own CRUD) are `manual`:
-**not** modifiable here.
+`hardware.nodes[]` (use `node …`), the `locations` (use `location …`) and the `repositories`
+list (own CRUD) are `manual`: **not** modifiable here. The older `--locationCountry`,
+`--locationTimezone`, `--locationCity`, `--locationBuilding`, `--locationLatitude` and
+`--locationLongitude` are still accepted for one release and change the primary location;
+`--locationLocale` and `--locationKeyboard` change `--locale` and `--keyboard`.
 
 ### `channel` — which release the site takes (ADR-028 D9, D11)
 
@@ -211,24 +218,56 @@ what it is doing when `--force` lifts it.
 Only the **TAPPaaS** repository is held to the train's branches: a community repository has no
 `staging` or `stable` to track, so its branch is whatever its publisher uses.
 
-#### `location` is the site's master data for time and locale (#408)
+### `location` — the site's places
+
+A **location** is a place with an address: the site's own building, a provider's data
+centre that runs one of its machines, a backup buddy's site. `site.json` keeps them in
+`locations`, by name, each with a `country` (required), and optionally a `displayName`,
+`city`, `address` (the street address, or the provider and data centre), `timezone`,
+`latitude` and `longitude`. `kind` says whose place it is: `site` (the default) for this
+site's own equipment, `remote` for another site's.
+
+```bash
+site-manager location list
+site-manager location add hetzner-fsn1 --country DE --city Falkenstein --address "Hetzner FSN1-DC14"
+site-manager location modify rodovre --timezone Europe/Copenhagen
+site-manager location show hareskov          # its place, and what names it
+```
+
+The **primary location** (`primaryLocation`) is where the site is. Its timezone is the
+site's: every node and guest is set to it at the next update, and the health check
+compares them with it. It is also what `backup-manager validate` compares an off-site copy
+with. The site's first own location becomes primary; `location add --primary` or
+`site modify --primaryLocation <name>` moves it, to a location that records a timezone.
+
+Anything else that is somewhere names a location — a backup peer today — and reads the
+address from here. A location's name is how they name it, so it never changes: add the new
+one, point them at it, delete the old one. `location delete` refuses the primary location
+and any location something names, and says what does. `--check` on `add`, `modify` and
+`delete` says what would change and writes nothing. `validate` reports a `primaryLocation`
+that names no location or has no timezone, and anything naming a location the site does
+not have.
+
+#### Time and locale are the site's master data
 
 Country, keyboard and timezone are answered by the operator **once**, on the first
 Proxmox install, and that node is the only place the answers exist. `site add` reads
 them back from it — `timedatectl`, `XKBLAYOUT`, `LANG` — rather than from the
 mothership, which is a NixOS template whose clock says nothing about where the site is.
 The country is the exception: the installer asks for it and stores it nowhere, so it
-stays derived from the timezone.
+stays derived from the timezone. Country and timezone go to the primary location, which
+`site add` names after the site code; `locale` and `keyboard` are site-wide fields, not
+part of any location.
 
 What is recorded here is what the rest of the estate is set from: the PXE answer file
 (`node add --pxe`), the USB installer's defaults (`make-install-media.sh`), and the
 per-OS convergence of guests and hosts. A value already in `site.json` is the operator's
-and is never overwritten — a `site add --force` re-run fills in what is *missing* (a
-site.json that predates `keyboard`) and warns when the recorded value and the master
-disagree, naming the `site modify` command that would adopt the master.
+and is never overwritten — a `site add --force` re-run fills in what is *missing* and
+warns when the recorded value and the master disagree, naming the command that would
+adopt the master.
 
 `latitude` / `longitude` are operator-set: no node knows where it is. They exist for
-modules that need a position rather than a country (#348).
+modules that need a position rather than a country.
 
 ### `node add` — standing up a follow-on node (design N3/N4)
 

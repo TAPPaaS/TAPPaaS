@@ -208,7 +208,8 @@ iso_check "$ISO" "$ISO_SHA256"
 # exists, and its location is offered as the default — a second node that
 # silently came up with another layout is exactly what #408 reported.
 SITE_JSON="${TAPPAAS_CONFIG:-/home/tappaas/config}/site.json"
-site_location() { [[ -f "$SITE_JSON" ]] && jq -r --arg k "$1" '.location[$k] // ""' "$SITE_JSON" 2>/dev/null || true; }
+# keyboard is site-wide, country and timezone the primary location's (or the retired .location's).
+site_location() { [[ -f "$SITE_JSON" ]] && jq -r --arg k "$1" 'if $k == "keyboard" then (.keyboard // .location.keyboard // "") else ((.locations[.primaryLocation // ""] // .location // {})[$k] // "") end' "$SITE_JSON" 2>/dev/null || true; }
 prompt() {
   local v d="${2:-}"
   if [[ -n "$d" ]]; then read -r -p "  $1 [$d]: " v; printf '%s' "${v:-$d}"

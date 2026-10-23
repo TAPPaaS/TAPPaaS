@@ -216,14 +216,17 @@ _fallback="$(PATH="${STUBDIR}:$PATH" TAPPAAS_STUB_UNREACHABLE=1 TAPPAAS_CREATE_S
     || bad "unreachable-node fallback wrong: got '${_fallback}'"
 
 # The merge rule: what the operator recorded wins; a fact never recorded is filled.
-_merged="$(jq -c --arg c DK --arg t Europe/Copenhagen --arg l en_US --arg k dk \
-    '(.location // {}) as $l0
-     | {country: $c, timezone: $t, locale: $l}
-       + (if $k == "" then {} else {keyboard: $k} end)
-       + $l0' <<<'{"location":{"country":"NL","timezone":"Europe/Amsterdam"}}')"
-[[ "$(jq -r '.country' <<<"$_merged")" == "NL" && "$(jq -r '.keyboard' <<<"$_merged")" == "dk" ]] \
-    && ok "merge keeps the operator's country and fills the missing keyboard" \
+# (create-site.sh's own expression, on the primary location.)
+_merged="$(jq -c --arg n home --arg c DK --arg t Europe/Copenhagen \
+    '(.locations // {}) as $all | $all + {($n): ({country: $c, timezone: $t} + ($all[$n] // {}))}' \
+    <<<'{"locations":{"home":{"country":"NL"},"far":{"country":"DE"}},"primaryLocation":"home"}')"
+[[ "$(jq -r '.home.country' <<<"$_merged")" == "NL" && "$(jq -r '.home.timezone' <<<"$_merged")" == "Europe/Copenhagen" && "$(jq -r '.far.country' <<<"$_merged")" == "DE" ]] \
+    && ok "merge keeps the operator's country, fills the missing timezone, keeps the other locations" \
     || bad "location merge wrong: ${_merged}"
+grep -qF -- "'(.locations // {}) as \$all | \$all + {(\$n): ({country: \$c, timezone: \$t} + (\$all[\$n] // {}))}'" "${_CS_LIB}" \
+    && ok "…and it is create-site.sh's" || bad "create-site.sh no longer merges the primary location this way"
+_ln="$(TAPPAAS_CREATE_SITE_LIB=1 bash -c '. '"${_CS_LIB}"'; printf "%s|%s|%s" "$(location_name Warmelo1)" "$(location_name 1st.site)" "$(location_name my_site)"' 2>/dev/null)"
+[[ "$_ln" == "warmelo1|loc-1st-site|my-site" ]] && ok "the primary location is named from the site code" || bad "location_name wrong: ${_ln}"
 
 if [[ "${TAPPAAS_TEST_DEEP:-0}" == "1" ]]; then
     echo "== DEEP: live node-inventory reconcile (read-only preview; N1 regression) =="

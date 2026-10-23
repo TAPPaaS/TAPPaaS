@@ -6,6 +6,7 @@
 //
 // Entity model (the entity is the first arg):
 //   site       (SINGLETON) → show | modify
+//   location               → list | show | add | modify | delete (ADR-036 D1)
 //   node                   → list | add | delete
 //   repository             → list | add | modify | delete | reconcile
 // Plus top-level lifecycle verbs:
@@ -26,6 +27,7 @@ import { DEFAULT_HOLD, describeHold, makeHold, parseUntil, readHolds, releaseHol
 import { UNIT, buildRequest, dropRequest, readResult, repoStatusLine, summaryLine, writeRequest } from "./unitrun";
 import { clusterScript, defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, refusedField, siteSchema, writeSite } from "./config";
 import { CliSiteClient } from "./client";
+import { cmdLocation } from "./location";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { evacuateNode, evacuateExitCode } from "./evacuate";
 import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, preflightGuard, warn } from "../../../lib/ts/src/cli";
@@ -36,7 +38,7 @@ import { runningVersion } from "./version";
 import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { dirname } from "path";
-import { locationErrors, readLocations } from "../../../lib/ts/src/locations";
+import { locationErrors, placeText, readLocations } from "../../../lib/ts/src/locations";
 
 const VERSION = "0.1.0";
 
@@ -90,6 +92,40 @@ export const HELP: HelpSpec = {
         ["--updateHour <0-23>", "hour of the update window"],
       ],
     },
+    { usage: "location list [--json]", note: "(the site's places; * marks the primary one)" },
+    { usage: "location show <name> [--json]", note: "(its place, and what names it)" },
+    { usage: "location add <name> --country <CC> [--displayName <s>] [--kind site|remote] [--city <c>] [--address <a>] [--timezone <tz>] [--latitude <deg>] [--longitude <deg>] [--primary] [--check]",
+      effect: { dryRun: "--check" },
+      options: [
+        ["<name>", "how devices, rooms and backup peers name it: lower-case letters, digits and '-'. It cannot change afterwards."],
+        ["--country <CC>", "ISO 3166-1 alpha-2 country code (required)."],
+        ["--displayName <s>", "the name shown (default: the name)."],
+        ["--kind site|remote", "site (default): a place of this site's own equipment — its building, a provider's data centre. remote: another site's, a backup buddy's."],
+        ["--city <c>", "the city — lets an off-site copy in the same country show it is elsewhere."],
+        ["--address <a>", "the street address, or the provider and data centre — for an off-site copy in the same city."],
+        ["--timezone <tz>", "IANA timezone; required for the primary location, whose timezone is the site's."],
+        ["--latitude <deg>", "decimal degrees, north positive (read by modules that need a position)."],
+        ["--longitude <deg>", "decimal degrees, east positive."],
+        ["--primary", "make it the primary location: the site is here, and every node and guest takes its timezone. The site's first own location is primary without it."],
+        ["--check", "say what would change; write nothing."],
+      ] },
+    { usage: "location modify <name> [--displayName <s>] [--kind site|remote] [--country <CC>] [--city <c>] [--address <a>] [--timezone <tz>] [--latitude <deg>] [--longitude <deg>] [--unset <f,g>] [--check]",
+      effect: { dryRun: "--check" },
+      options: [
+        ["--displayName <s>", "the name shown; '' (or --unset) clears this and the other optional fields."],
+        ["--kind site|remote", "site: this site's own equipment is there; remote: another site's place."],
+        ["--country <CC>", "ISO 3166-1 alpha-2 country code."],
+        ["--city <c>", "the city."],
+        ["--address <a>", "the street address, or the provider and data centre."],
+        ["--timezone <tz>", "IANA timezone; on the primary location it is the site's — every node and guest is set to it at the next update."],
+        ["--latitude <deg>", "decimal degrees, north positive."],
+        ["--longitude <deg>", "decimal degrees, east positive."],
+        ["--unset <f,g>", "clear these optional fields: displayName, kind, city, address, timezone, latitude, longitude. The country stays, and so does the primary location's timezone."],
+        ["--check", "say what would change; write nothing."],
+      ] },
+    { usage: "location delete <name> [--check]", effect: { dryRun: "--check" },
+      note: "(refused for the primary location and for one a peer, room or device names)",
+      options: [["--check", "say whether it can go; write nothing."]] },
     { usage: "node list [--json]" },
     { usage: "node add <N> [--pxe] [--boot-disk <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--pool <p>] [--ttl <s>] [--config-only] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it, adds it to the cluster and site.json" },
       hidden: ["--name <N>", "--provision"],
@@ -264,7 +300,7 @@ interface Opts {
 // Flags that take NO value (everything else with a value is captured generically).
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
   "--pxe", "--provision", "--config-only", "--yes", "--no-wan",
-  "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned"]);
+  "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned", "--primary", "--check"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -349,7 +385,7 @@ function cmdSite(o: Opts): void {
       return;
     }
     const site: Site = loadSite(siteFile);
-    const loc = site.location ?? ({} as Site["location"]);
+    const loc = site.primaryLocation ? site.locations[site.primaryLocation] ?? null : null;
     const net = site.network ?? {};
     // Either shape; daily/none carry no weekday (#447, ADR-017 D7).
     const sched = readSchedule(site.updateSchedule);
@@ -374,14 +410,15 @@ function cmdSite(o: Opts): void {
     const running = runningVersion(tp);
     info(`${lbl("TAPPaaS")}${running ?? "(no release tag in the checkout)"}${site.channel ? `  (${site.channel} channel)` : ""}`);
     info(`${lbl("Installed from")}${site.version || "(unset)"}`);
-    info(`${lbl("Location")}${[loc.country, loc.timezone, loc.locale, loc.keyboard].filter(Boolean).join(" / ") || "(unset)"}`);
-    // #609: where the site physically is — what an off-site copy is compared with.
-    if (loc.city || loc.building) {
-      info(`${lbl("Place")}${[loc.building, loc.city, loc.country].filter(Boolean).join(", ")}`);
-    }
-    if (loc.latitude !== undefined || loc.longitude !== undefined) {
+    // The primary location (ADR-036 D1): the site's time is set from it, and an
+    // off-site copy is compared with it (#609). The others by name.
+    info(`${lbl("Location")}${loc ? `${loc.name}${loc.displayName && loc.displayName !== loc.name ? ` (${loc.displayName})` : ""} — ${placeText(loc)}${loc.timezone ? ` · ${loc.timezone}` : ""}` : "(unset)"}`);
+    if (loc && (loc.latitude !== undefined || loc.longitude !== undefined)) {
       info(`${lbl("Position")}${[loc.latitude, loc.longitude].map((v) => (v === undefined ? "?" : String(v))).join(", ")}`);
     }
+    info(`${lbl("Locale")}${[site.locale, site.keyboard ? `keyboard ${site.keyboard}` : undefined].filter(Boolean).join(" · ") || "(unset)"}`);
+    const others = Object.values(site.locations).filter((l) => l.name !== site.primaryLocation);
+    if (others.length) info(`${lbl("Locations")}${others.map((l) => `${l.name}${l.kind === "remote" ? " (remote)" : ""}`).join("  ")}`);
     info(`${lbl("Network")}publicIp=${net.publicIp ?? "(unset)"}  isp=${net.isp ?? "(none)"}  ipv6=${site.ipv6 ? "yes" : "no"}`);
     info(`${lbl("Update")}${schedStr}  (auto-reboot: ${site.automaticReboot ? "yes" : "no"}, keep ${site.snapshotRetention ?? "?"})`);
     info(`${lbl("Nodes")}${nodes.length ? nodes.map((n) => `${n.name} [${n.storagePools.join(", ")}]`).join("  ") : "(none)"}`);
@@ -1372,6 +1409,9 @@ export function run(argv: string[], client: SiteClient): number {
     switch (cmd) {
       case "site":
         cmdSite(o);
+        return 0;
+      case "location":
+        cmdLocation(o, siteFileOf(o));
         return 0;
       case "node":
         cmdNode(o, client);

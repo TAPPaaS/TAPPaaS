@@ -24,7 +24,8 @@ function site(repos: Repository[]): Site {
     defaultEnvironment: "demo",
     displayName: "Demo",
     owner: "demo",
-    location: { country: "NL", timezone: "Europe/Amsterdam" },
+    locations: { home: { name: "home", country: "NL", timezone: "Europe/Amsterdam" } },
+    primaryLocation: "home",
     hardware: { nodes: [{ name: "tappaas1", storagePools: ["tanka1"] }] },
     repositories: repos,
   };

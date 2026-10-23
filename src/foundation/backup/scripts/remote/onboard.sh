@@ -115,6 +115,6 @@ if [[ "${trole}" == "serve" ]]; then
     info ""
     info "${BOLD}On a TAPPaaS system they run this (fill in the endpoint):${CL}"
     while IFS= read -r l; do info "  ${l}"; done < <(bt_dial_command "${sj}" "${store}" "${tnet}" "${ourkey}" "${tport}" "${tmtu}")
-    [[ "$(jq -r '.location.country // empty' "${sj}" 2>/dev/null)" != "" ]] \
-        || warn "  site.json records no location — set it (site-manager site modify --locationCountry …) so they need not type it"
+    [[ "$(jq -r '(.locations[.primaryLocation // ""] // .location // {}).country // empty' "${sj}" 2>/dev/null)" != "" ]] \
+        || warn "  site.json records no primary location — add it (site-manager location add <name> --country … --timezone … --primary) so they need not type it"
 fi

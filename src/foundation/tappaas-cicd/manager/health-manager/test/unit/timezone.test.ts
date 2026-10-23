@@ -22,7 +22,7 @@ function configDir(site: Record<string, unknown>, modules: Record<string, Record
   return dir;
 }
 
-const site = { name: "s", location: { country: "DK", timezone: "Europe/Copenhagen" } };
+const site = { name: "s", locations: { rodovre: { country: "DK", timezone: "Europe/Copenhagen" } }, primaryLocation: "rodovre" };
 const mods = {
   nextcloud: { vmid: 340, vmname: "nextcloud", zone0: "rossen" },
   gone: { vmid: 999, vmname: "gone", zone0: "rossen", status: "archived" },
@@ -39,7 +39,7 @@ const mods = {
   check(r.status === "warn", "a node on another zone warns");
   check(r.rows?.length === 1 && r.rows[0].text.includes("node tappaas3") && r.rows[0].text.includes("next cluster update sets Europe/Copenhagen"),
     `the node is named with the command that fixes it (got: ${r.rows?.map((x) => x.text).join(" | ")})`);
-  check(r.detail.includes("site modify --locationTimezone"), "…and the way to fix the site instead");
+  check(r.detail.includes("location modify rodovre --timezone"), "…and the way to fix the site instead: its primary location");
 }
 {
   const c = new FakeClusterClient();
@@ -59,7 +59,9 @@ const mods = {
 {
   const c = new FakeClusterClient();
   const r = checkSiteTimezone(c, configDir({ name: "s" }, mods), "tappaas1");
-  check(r.status === "warn" && r.detail.includes("no location.timezone"), "a site.json without a timezone warns");
+  check(r.status === "warn" && r.detail.includes("no timezone on its primary location"), "a site.json without a timezone warns");
+  const old = checkSiteTimezone(new FakeClusterClient(), configDir({ name: "s", location: { country: "DK", timezone: "UTC" } }, mods), "tappaas1");
+  check(old.status === "skip", "a site.json migration 0019 has not reached still has its timezone");
   const r2 = checkSiteTimezone(c, configDir(site, mods), "tappaas1");
   check(r2.status === "skip", "nothing answered: skip, never pass");
 }

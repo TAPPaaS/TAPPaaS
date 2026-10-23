@@ -57,9 +57,10 @@ Common options: `--config-dir`, `--json` (machine output for list/show),
 
 `site modify` editable fields are the **scalar site-wide** ones only:
 `displayName`, `owner`, `email`, `automaticReboot`, `snapshotRetention`,
-`backup.target`/`offsite`, `location.country`/`timezone`/`locale`,
-`network.isp`/`publicIp`. `hardware.nodes[]` (via `node …`) and the
-`repositories` list is excluded (own CRUD). Environments and organizations are
+`backup.target`/`offsite`, `primaryLocation`, `locale`, `keyboard`,
+`network.isp`/`publicIp`. `hardware.nodes[]` (via `node …`), `locations{}` (via
+`location …`, edited through `lib/ts/src/locations.ts`, which backup-manager's
+`peer add` uses too) and the `repositories` list are excluded (own CRUD). Environments and organizations are
 not site fields: they are the `config/environments/` and
 `config/identities/organizations/` files.
 
@@ -92,7 +93,8 @@ injected `SiteClient`; `CliSiteClient` performs the actual `spawnSync` calls.
 ## Config state
 
 - **`site.json`** — the canonical Site document: `name`, `displayName`, `owner`,
-  `email`, `version`, `location` (country/timezone/locale), `network`,
+  `email`, `version`, `locations{}` and `primaryLocation` (ADR-036 D1; the
+  primary location's timezone is the site's), `locale`, `keyboard`, `network`,
   `hardware.nodes[]` (each with `storagePools`), `backup`, `updateSchedule`,
   `automaticReboot`, `snapshotRetention`, `repositories[]`. Validated against `site-fields.json` (JSON Schema 2020-12).
 - **`configuration.json`** — the legacy predecessor (fields under `.tappaas` plus

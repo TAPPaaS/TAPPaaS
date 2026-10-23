@@ -17,6 +17,7 @@ import {
   defaultConfigDir,
   writeJsonAtomic,
 } from "../../../lib/ts/src/config-io";
+import { readLocations, siteLocale } from "../../../lib/ts/src/locations";
 import { Repository, Site, SiteNode } from "./types";
 
 export { defaultConfigDir };
@@ -69,7 +70,8 @@ export function loadSite(siteFile: string): Site {
   }
   const raw = JSON.parse(readFileSync(siteFile, "utf8")) as Record<string, unknown>;
 
-  const loc = (raw.location ?? {}) as Record<string, unknown>;
+  // The pre-0019 location reads as the primary location it becomes.
+  const { locations, primary } = readLocations(raw);
   const hw = (raw.hardware ?? {}) as Record<string, unknown>;
   const rawNodes = Array.isArray(hw.nodes) ? hw.nodes : [];
   const nodes: SiteNode[] = rawNodes.map((n) => {
@@ -95,16 +97,9 @@ export function loadSite(siteFile: string): Site {
     owner: asString(raw.owner),
     email: typeof raw.email === "string" ? raw.email : undefined,
     version: typeof raw.version === "string" ? raw.version : undefined,
-    location: {
-      country: asString(loc.country),
-      timezone: asString(loc.timezone),
-      locale: typeof loc.locale === "string" ? loc.locale : undefined,
-      keyboard: typeof loc.keyboard === "string" ? loc.keyboard : undefined,
-      city: typeof loc.city === "string" ? loc.city : undefined,
-      building: typeof loc.building === "string" ? loc.building : undefined,
-      latitude: typeof loc.latitude === "number" ? loc.latitude : undefined,
-      longitude: typeof loc.longitude === "number" ? loc.longitude : undefined,
-    },
+    locations,
+    primaryLocation: primary,
+    ...siteLocale(raw),
     network: (raw.network ?? undefined) as Site["network"],
     hardware: { nodes },
     backup: (raw.backup ?? null) as Site["backup"],

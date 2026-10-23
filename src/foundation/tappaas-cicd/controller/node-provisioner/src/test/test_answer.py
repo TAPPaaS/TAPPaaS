@@ -140,6 +140,17 @@ class TestAnswerSettingsFromSite(unittest.TestCase):
              "mailto": "admin@acme.example"},
         )
 
+    def test_the_primary_location_and_the_site_keyboard(self):
+        # ADR-036 D1: the place is the primary location's, the keyboard the site's.
+        site = {"email": "a@b.example", "keyboard": "dk", "primaryLocation": "home",
+                "locations": {"far": {"country": "DE", "timezone": "Europe/Berlin"},
+                              "home": {"country": "DK", "timezone": "Europe/Copenhagen"}}}
+        self.assertEqual(
+            answer_settings_from_site(site),
+            {"country": "DK", "keyboard": "dk", "tz": "Europe/Copenhagen",
+             "mailto": "a@b.example"},
+        )
+
     def test_keyboard_comes_from_the_site(self):
         # #408: before this, every PXE-installed node got DEFAULT_KEYBOARD while
         # the first node had the operator's layout — tappaas2/3 came up 'us'

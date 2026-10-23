@@ -161,12 +161,18 @@ def answer_settings_from_site(site: dict) -> dict:
     The keyboard comes from the site too (#408). It did not before, so every node
     installed this way came up with DEFAULT_KEYBOARD while the first node — where
     the operator actually answered the question — had their layout. A site.json
-    that predates `location.keyboard` still falls back to the default.
+    that predates the keyboard still falls back to the default.
+
+    The country and timezone are the primary location's, the keyboard is
+    site-wide (ADR-036 D1); a site.json migration 0019 has not reached keeps
+    all three under the retired `location`.
     """
-    location = site.get("location") or {}
+    legacy = site.get("location") if isinstance(site.get("location"), dict) else {}
+    locations = site.get("locations") if isinstance(site.get("locations"), dict) else {}
+    location = locations.get(site.get("primaryLocation") or "") or legacy
     return {
         "country": (location.get("country") or DEFAULT_COUNTRY),
-        "keyboard": (location.get("keyboard") or DEFAULT_KEYBOARD),
+        "keyboard": (site.get("keyboard") or legacy.get("keyboard") or DEFAULT_KEYBOARD),
         "tz": (location.get("timezone") or DEFAULT_TIMEZONE),
         "mailto": (site.get("email") or ""),
     }

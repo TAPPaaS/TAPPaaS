@@ -3,7 +3,8 @@
 # site-locale.sh — the site's time and locale, rendered for each OS family (#472, #87).
 #
 # Country, keyboard and timezone are answered once, on the first Proxmox install,
-# and recorded in site.json `.location` (#408). This library is the only place
+# and recorded in site.json: the timezone on its primary location, locale and
+# keyboard site-wide (#408, ADR-036). This library is the only place
 # that turns those facts into something a guest can apply, so the three consumers
 # — NixOS, Debian, and a Proxmox node — cannot drift into three interpretations.
 #
@@ -23,7 +24,7 @@
 # own upstream. A zone without internet access still gets the gateway alone.
 #
 # Sourceable only. Functions:
-#   site_locale_value <key> [default]   one field of .location
+#   site_locale_value <key> [default]   locale, keyboard, or a field of the primary location
 #   site_locale_ntp <zone>              the NTP server for that zone, or ""
 #   site_locale_ntp_servers <zone>      all of the zone's NTP servers, in order
 #   render_site_nix <zone>              the NixOS fragment, on stdout — with the
@@ -42,10 +43,15 @@ if ! declare -F nix_site_key_public >/dev/null 2>&1 \
 fi
 _SL_SITE="${_SL_CONFIG_DIR}/site.json"
 
-# One field of .location, or the default when the site has never recorded it.
+# One of the site's facts, or the default when the site has never recorded it:
+# locale and keyboard are site-wide fields, the rest (timezone, country, …) the
+# primary location's. A site.json migration 0019 has not reached keeps them all
+# under the retired .location, which is read until then.
 site_locale_value() {
     local key="$1" fallback="${2:-}" v=""
-    [[ -f "${_SL_SITE}" ]] && v="$(jq -r --arg k "${key}" '(.location[$k] // "") | tostring' "${_SL_SITE}" 2>/dev/null)"
+    [[ -f "${_SL_SITE}" ]] && v="$(jq -r --arg k "${key}" '
+        (if $k == "locale" or $k == "keyboard" then (.[$k] // .location[$k])
+         else ((.locations[.primaryLocation // ""] // .location // {})[$k]) end) // "" | tostring' "${_SL_SITE}" 2>/dev/null)"
     [[ -n "${v}" && "${v}" != "null" ]] || v="${fallback}"
     printf '%s' "${v}"
 }
@@ -121,7 +127,7 @@ render_site_nix() {
 #
 # The site's own answers for time and locale (#408, #472): they are recorded once
 # in config/site.json on the mothership and written here on every module update.
-# Change them with:  site-manager site modify --locationTimezone <tz> ...
+# Change them with:  site-manager location modify <primary> --timezone <tz>, site-manager site modify --keyboard <kb>
 { lib, ... }:
 {
   time.timeZone = "${tz}";

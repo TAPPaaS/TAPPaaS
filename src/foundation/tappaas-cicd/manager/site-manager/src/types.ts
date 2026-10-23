@@ -2,18 +2,9 @@
 // plus the client interfaces (the boundaries the engine depends on) and the
 // reconcile plan shapes. Mirrors identity-manager/src/types.ts.
 
-// ── Site config entities (site.json) ──────────────────────────────────
-export interface SiteLocation {
-  country: string;
-  timezone: string;
-  locale?: string;
-  keyboard?: string; // #408: the first node's XKBLAYOUT — what every OS family is set from
-  city?: string; // #609: where, finer than the country
-  building?: string;
-  latitude?: number; // #408/#348: operator-set; no node knows the position
-  longitude?: number;
-}
+import { Location } from "../../../lib/ts/src/locations";
 
+// ── Site config entities (site.json) ──────────────────────────────────
 export interface SiteNetwork {
   isp?: string | null;
   publicIp?: string;
@@ -66,7 +57,12 @@ export interface Site {
   owner: string;
   email?: string;
   version?: string;
-  location: SiteLocation;
+  // ADR-036 D1: the site's places by name, and the one it is at (its
+  // timezone is the site's); locale and keyboard are site-wide.
+  locations: Record<string, Location>;
+  primaryLocation: string | null;
+  locale?: string;
+  keyboard?: string; // #408: the first node's XKBLAYOUT — what every OS family is set from
   network?: SiteNetwork;
   hardware: { nodes: SiteNode[] };
   backup?: SiteBackup | null;

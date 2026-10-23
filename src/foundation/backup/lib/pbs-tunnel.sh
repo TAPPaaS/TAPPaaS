@@ -155,10 +155,11 @@ bt_dial_down() {  # <name>
 bt_dial_command() {  # <site.json> <store> <net/30> <our-pubkey> <listen-port> [mtu]
     local sj="$1" store="$2" net="$3" key="$4" port="$5" mtu="${6:-}" site loc
     site="$(jq -r '.name // empty' "${sj}" 2>/dev/null)"
-    loc="$(jq -r '.location // {} | [
+    # Where we are: the primary location (the retired .location before migration 0019).
+    loc="$(jq -r '(.locations[.primaryLocation // ""] // .location // {}) | [
         (if .country then "--country \(.country|@sh)" else "--country <CC>" end),
         (if .city then "--city \(.city|@sh)" else empty end),
-        (if .building then "--building \(.building|@sh)" else empty end)] | join(" ")' "${sj}" 2>/dev/null)"
+        (if (.address // .building) then "--building \((.address // .building)|@sh)" else empty end)] | join(" ")' "${sj}" 2>/dev/null)"
     printf 'backup-manager peer add pull %s --store %s %s \\\n' "${site:-<our-site>}" "${store}" "${loc:---country <CC>}"
     printf '    --tunnel dial --tunnel-net %s --endpoint <our public IP or satellite IP>:%s \\\n' "${net}" "${port}"
     printf '    --peer-key %s%s\n' "${key}" "${mtu:+ --mtu ${mtu}}"
