@@ -107,8 +107,11 @@ export interface Peer {
   role: PeerRole;
   remoteHost: string | null;
   namespace: string | null;
-  // Where it physically is (#609): site.json's location shape, or null.
-  physicalLocation: { country?: string; city?: string; building?: string } | null;
+  // Where it is (ADR-036 D5): the location it names, and that location's place
+  // from site.json. A peer migration 0019 has not reached names none; its
+  // physicalLocation is its place until then.
+  location: string | null;
+  place: { displayName?: string; country?: string; city?: string; address?: string } | null;
   // #796: "<serve|dial> <net/30>[ :port]" when the pull runs over a buddy tunnel.
   tunnel: string | null;
 }

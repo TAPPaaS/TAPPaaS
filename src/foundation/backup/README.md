@@ -137,7 +137,7 @@ every inter-PBS copy is a pull, which is what makes the compromise isolation
 structural rather than a matter of credential hygiene (§1.4.1).
 
 ```bash
-backup-manager peer add pull    <name> --host <their-pbs> --country CC [--city C] [--group-filter type:vm]
+backup-manager peer add pull    <name> --host <their-pbs> --location <loc> [--group-filter type:vm]
 backup-manager peer add remote  <name> --auth-id <them>@pbs --country CC [--city C] [--namespace NS]
 backup-manager peer add receive <name>
 backup-manager peer delete pull|remote|receive <name> [--purge]
@@ -164,12 +164,16 @@ once — a buddy is usually both a `pull` and a `remote`.
 — which is **never** written to the config (§2.5). `--config-only` writes the
 config and stops, for when the far PBS is not reachable yet.
 
-**Where it is (#609).** `--country` (and `--city`, `--building` when they share the Site's)
-records the peer's `physicalLocation`: an off-site copy is only worth having if it is
-somewhere else, and only data can show that. `backup-manager validate` compares every
-`pull`/`remote` peer and every satellite with `site.json`'s `location` — at the finest level
-both record — and warns about one it cannot show to be elsewhere, or that records nothing.
-Record the Site's own city with `site-manager site modify --locationCity <city>`.
+**Where it is.** A peer names a **location** of this site (`site-manager location list`):
+`--location <name>` names one the site has, or `--country` (with `--city`, and `--building`
+when it shares the Site's city) names the place, and `peer add` uses the location already at
+that place or adds one (`kind: remote`, named after the building or city). The peer's config
+records `location`. An off-site copy is only worth having if it is somewhere else, and only
+data can show that: `backup-manager validate` compares every `pull`/`remote` peer and every
+satellite with the site's **primary location** — at the finest level both record (country,
+city, address) — and warns about one it cannot show to be elsewhere, one that names the
+primary location itself, one naming a location the site does not have, and one that records
+nothing. Record the Site's own city with `site-manager location modify <primary> --city <city>`.
 
 ## The pulse — a dark site is reported from outside
 

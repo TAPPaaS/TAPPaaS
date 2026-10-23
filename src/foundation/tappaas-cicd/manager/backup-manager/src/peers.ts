@@ -81,8 +81,9 @@ export interface PeerSpec {
   groupFilter?: string; // pull: replicate only part of the source
   authId?: string; // remote: the login they pull with
   propagate?: boolean; // remote: let the grant reach child namespaces (default no)
-  // Where the peer physically is (#609) — the evidence its copy is off-site.
-  physicalLocation?: { country: string; city?: string; building?: string };
+  // Where the peer physically is: a location of this site (ADR-036 D5) — the
+  // evidence its copy is off-site.
+  location?: string;
   retention?: Record<string, number>;
   // #796: the WireGuard tunnel under this pull — pull dials it, remote serves it.
   tunnel?: Tunnel;
@@ -101,7 +102,7 @@ export function buildPeerConfig(
   siteName?: string,
 ): Record<string, unknown> {
   const ns = spec.namespace ?? defaultNamespace(kind, spec.name, siteName);
-  const place = spec.physicalLocation ? { physicalLocation: spec.physicalLocation } : {};
+  const place = spec.location ? { location: spec.location } : {};
   const tun = spec.tunnel ? { tunnel: spec.tunnel } : {};
   const who = spec.contact ? { contact: spec.contact } : {};
   if (kind === "pull") {

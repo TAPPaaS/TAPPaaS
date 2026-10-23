@@ -27,6 +27,7 @@ import { defaultConfigDir, readJsonObject as readJson } from "../../../lib/ts/sr
 import { declaresBackup, discoverModules } from "../../../lib/ts/src/module-discovery";
 import { BackupPolicy, Peer, PeerRole, Placement, PlacementKind, ScheduleBucket } from "./types";
 import { asPlace } from "./offsite";
+import { Location, readLocations } from "../../../lib/ts/src/locations";
 import { asTunnel } from "./tunnel";
 
 // The cascade reads the TARGET config root directly (it holds <module>.json,
@@ -288,6 +289,23 @@ function tunnelText(v: unknown): string | null {
   return t ? `${t.role} ${t.net}${t.listenPort ? ` :${t.listenPort}` : ""}` : null;
 }
 
+// A peer's place: the location it names, else (before migration 0019) its own
+// physicalLocation, building as the address.
+function peerPlace(j: Record<string, unknown>, locations: Record<string, Location>): Peer["place"] {
+  if (typeof j.location === "string" && j.location) {
+    const l = locations[j.location];
+    if (!l) return null;
+    const out: NonNullable<Peer["place"]> = { country: l.country };
+    if (l.displayName) out.displayName = l.displayName;
+    if (l.city) out.city = l.city;
+    if (l.address) out.address = l.address;
+    return out;
+  }
+  const p = asPlace(j.physicalLocation);
+  if (!p) return null;
+  return { country: p.country, ...(p.city ? { city: p.city } : {}), ...(p.building ? { address: p.building } : {}) };
+}
+
 export function listPeers(configDir: string): Peer[] {
   if (!existsSync(configDir)) return [];
   const prefixes: Array<[string, PeerRole]> = [
@@ -296,6 +314,13 @@ export function listPeers(configDir: string): Peer[] {
     ["receive-", "receive"],
   ];
   const out: Peer[] = [];
+  let site: Record<string, unknown> | null = null;
+  try {
+    site = readJson(join(configDir, "site.json"));
+  } catch {
+    site = null; // a broken site.json names no place; validate says so
+  }
+  const { locations } = readLocations(site);
   for (const f of readdirSync(configDir)) {
     if (!f.endsWith(".json")) continue;
     const b = f.slice(0, -".json".length);
@@ -307,7 +332,8 @@ export function listPeers(configDir: string): Peer[] {
         role,
         remoteHost: asString(j.remoteHost),
         namespace: asString(j.namespace),
-        physicalLocation: asPlace(j.physicalLocation),
+        location: typeof j.location === "string" && j.location ? j.location : null,
+        place: peerPlace(j, locations),
         tunnel: tunnelText(j.tunnel),
       });
       break;

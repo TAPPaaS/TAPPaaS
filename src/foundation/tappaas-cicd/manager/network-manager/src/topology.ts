@@ -159,6 +159,10 @@ export interface PeerRow {
   role: string;
   remoteHost?: string | null;
   namespace?: string | null;
+  // Where it is: the location it names and that location's place (ADR-036
+  // D5); a peer migration 0019 has not reached carries physicalLocation.
+  location?: string | null;
+  place?: { country?: string; city?: string } | null;
   physicalLocation?: { country?: string; city?: string } | null;
   tunnel?: string | null;
 }
@@ -878,7 +882,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       kind: "buddy",
       name: p.name,
       role: str(p.role),
-      location: [p.physicalLocation?.city, p.physicalLocation?.country].filter((x) => !!x).join(", ") || null,
+      location: [(p.place ?? p.physicalLocation)?.city, (p.place ?? p.physicalLocation)?.country].filter((x) => !!x).join(", ") || p.location || null,
       tunnel: str(p.tunnel),
       address: str(p.remoteHost),
       state: pulseState.get(p.name) ?? null,

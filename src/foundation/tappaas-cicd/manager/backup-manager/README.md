@@ -187,10 +187,19 @@ targeted at a non-EU offsite (`site.backup.offsiteResidency`), module
 `backup.enabled:false` is honoured, and there is no dangling target (enabled
 in-job modules require `site.backup.target`).
 
-It also **warns** — never fails — about an off-site target not shown to be off-site (#609,
-ADR-012 §1.5; `src/offsite.ts`): a satellite, `remote-` or `pull-` peer whose
-`physicalLocation` is missing, or equal to `site.json`'s `location` at every level both record
-(country, city, building). A peer that predates the field is not a broken configuration.
+It also **warns** — never fails — about an off-site target not shown to be off-site
+(`src/offsite.ts`): a `remote-` or `pull-` peer that names no location, names one
+`site.json` does not have, names the primary location itself, or names one equal to the
+primary location at every level both record (country, city, address); and a satellite whose
+`physicalLocation` is missing or equal in the same way. A peer's place is read through
+`site-manager`'s locations (`lib/ts/src/locations.ts`); a peer migration 0019 has not reached
+still carries its own `physicalLocation`, which is read until then.
+
+`peers` lists each peer with the location it names and that location's place
+(`--json`: `location` and `place`). `peer add` takes `--location <name>`, or
+`--country [--city] [--building]`, which use the site's location at that place or add one
+(`kind: remote`) to `site.json`; a `--force` re-add keeps the peer's location unless another
+is given.
 
 ## Testing
 

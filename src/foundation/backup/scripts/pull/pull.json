@@ -12,9 +12,9 @@
     "removeVanished": false,
     "encryptionRequired": true,
     "readAuthId": "",
-    "physicalLocation": { "country": "DE", "city": "Berlin" },
+    "location": "berlin",
     "_tunnel_note": "#796 (BUDDY.md): present when the pull runs over its own WireGuard tunnel, which we DIAL. remoteHost is then the tunnel's .1. Written by peer add pull --tunnel dial; e.g. {\"role\": \"dial\", \"net\": \"10.255.2.0/30\", \"endpoint\": \"203.0.113.7:51830\", \"peerKey\": \"…\", \"mtu\": 1340}",
-    "_physicalLocation_note": "Where THEIR PBS physically is (#609) — our copy of their data is their off-site; `backup-manager validate` compares it with site.json's location. EXAMPLE values.",
+    "_location_note": "Where THEIR PBS is: a location of this site (site-manager location list) — our copy of their data is their off-site; `backup-manager validate` compares it with the site's primary location. peer add --location names it, or --country/--city find or add it. EXAMPLE value.",
     "_groupFilter_note": "ADR-012 §3.6 subset (#389): pull only PART of the source. A PBS group-filter as a string or array of strings, e.g. \"type:vm\" or [\"group:vm/101\",\"group:vm/102\"]. Empty/absent pulls everything.",
     "groupFilter": "",
     "retention": {

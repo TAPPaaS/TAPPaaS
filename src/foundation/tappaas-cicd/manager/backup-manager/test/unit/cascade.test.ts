@@ -771,10 +771,10 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   const w = validate(tmp).warnings;
   eq(w.length, 3, "validate warns once per target not shown to be away");
   check(w.some((x) => x.includes("satellite 'pbshost'") && x.includes("records no physicalLocation")), "…the satellite that is the PBS Host included");
-  check(w.some((x) => x.includes("remote 'buddy'") && x.includes("records no physicalLocation")), "…naming the unrecorded one");
+  check(w.some((x) => x.includes("remote 'buddy'") && x.includes("names no location")), "…naming the unrecorded one");
   check(w.some((x) => x.includes("pull 'neighbour'") && x.includes("record the city")), "…and saying what would settle the other");
-  eq(validate(tmp).errors.filter((e) => e.includes("physicalLocation")).length, 0, "…as warnings, never errors");
-  eq(listPeers(tmp).find((p) => p.name === "neighbour")?.physicalLocation?.country ?? "", "DK", "peers carry their physicalLocation");
+  eq(validate(tmp).errors.filter((e) => e.includes("physicalLocation") || e.includes("location")).length, 0, "…as warnings, never errors");
+  eq(listPeers(tmp).find((p) => p.name === "neighbour")?.place?.country ?? "", "DK", "a peer migration 0019 has not reached shows its physicalLocation as its place");
 
   // ADR-010 §8.4.3: a PBS on a managed satellite warns until something home
   // cannot reach pulls it — a locked-down satellite (the vault) or a remote peer.
@@ -796,9 +796,67 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
     eq(pbsOnSatelliteWarnings(d).length, 0, "a PBS on a cluster node is not this case");
   }
 
-  eq(JSON.stringify(buildPeerConfig("remote", { name: "b", authId: "b@pbs", physicalLocation: { country: "DE", city: "Berlin" } }).physicalLocation),
-    '{"country":"DE","city":"Berlin"}', "peer add records the place it is given");
-  eq(buildPeerConfig("pull", { name: "b", host: "h" }).physicalLocation, undefined, "…and invents none");
+  eq(buildPeerConfig("remote", { name: "b", authId: "b@pbs", location: "berlin" }).location, "berlin", "peer add records the location it is given");
+  eq(buildPeerConfig("pull", { name: "b", host: "h" }).location, undefined, "…and invents none");
+}
+
+// ── ADR-036 D5: a peer names a location; the Site is its primary location ──
+{
+  const tmp = mkdtempSync(join(tmpdir(), "bm-locations-"));
+  writeFileSync(join(tmp, "site.json"), JSON.stringify({
+    name: "rossen", primaryLocation: "rodovre", keyboard: "dk",
+    locations: {
+      rodovre: { country: "DK", city: "Rodovre", address: "Hus 2", timezone: "Europe/Copenhagen" },
+      hareskov: { kind: "remote", displayName: "Rasmus", country: "DK", city: "Hareskov" },
+      nextdoor: { kind: "remote", country: "DK", city: "Rodovre", address: "Hus 4" },
+      sameplace: { kind: "remote", country: "DK", city: "Rodovre", address: "hus 2" },
+    },
+  }));
+  writeFileSync(join(tmp, "remote-rasmus.json"), JSON.stringify({ authId: "r@pbs", location: "hareskov" }));
+  writeFileSync(join(tmp, "pull-neighbour.json"), JSON.stringify({ remoteHost: "h", location: "nextdoor" }));
+  writeFileSync(join(tmp, "pull-home.json"), JSON.stringify({ remoteHost: "h2", location: "rodovre" }));
+  writeFileSync(join(tmp, "pull-twin.json"), JSON.stringify({ remoteHost: "h3", location: "sameplace" }));
+  writeFileSync(join(tmp, "pull-ghost.json"), JSON.stringify({ remoteHost: "h4", location: "atlantis" }));
+  const t = offsiteTargets(tmp);
+  eq(t.map((x) => `${x.name}:${x.location}:${x.separation}`).join(" "),
+    "ghost:atlantis:unrecorded home:rodovre:same neighbour:nextdoor:separate twin:sameplace:same rasmus:hareskov:separate",
+    "each peer is judged by the location it names against the primary one");
+  const w = validate(tmp).warnings;
+  check(w.some((x) => x.includes("pull 'home'") && x.includes("location 'rodovre'") && x.includes("the Site's own place")), "naming the primary location is not off-site");
+  check(w.some((x) => x.includes("pull 'twin'") && x.includes("the Site's own place")), "…nor is a location at the same address");
+  check(w.some((x) => x.includes("pull 'ghost'") && x.includes("which site.json does not have")), "a location site.json lacks is named");
+  check(!w.some((x) => x.includes("'rasmus'") || x.includes("'neighbour'")), "another city, or another address in the same city, is off-site");
+  const rasmus = listPeers(tmp).find((p) => p.name === "rasmus");
+  eq(JSON.stringify([rasmus?.location, rasmus?.place]), '["hareskov",{"country":"DK","displayName":"Rasmus","city":"Hareskov"}]', "peers list the location and its place");
+
+  // peer add: --location names one; --country finds or makes one; not both.
+  const out: string[] = [];
+  const call = (argv: string[]): number => {
+    const log = console.log;
+    const error = console.error;
+    console.log = (m: string) => void out.push(String(m));
+    console.error = (m: string) => void out.push(String(m));
+    try {
+      return run([...argv, "--config-dir", tmp, "--config-only"], new FakeClient());
+    } finally {
+      console.log = log;
+      console.error = error;
+    }
+  };
+  const cfg = (f: string) => JSON.parse(readFileSync(join(tmp, f), "utf8"));
+  eq(call(["peer", "add", "remote", "erik", "--auth-id", "e@pbs", "--location", "hareskov"]), 0, "peer add --location");
+  eq(cfg("remote-erik.json").location, "hareskov", "…the peer names it");
+  check(!("physicalLocation" in cfg("remote-erik.json")), "…and records no physicalLocation");
+  check(call(["peer", "add", "remote", "x", "--auth-id", "x@pbs", "--location", "atlantis"]) !== 0, "…a location the site lacks is refused");
+  check(call(["peer", "add", "remote", "x", "--auth-id", "x@pbs", "--location", "hareskov", "--country", "DK"]) !== 0, "…and so is --location with --country");
+  eq(call(["peer", "add", "pull", "bo", "--host", "h", "--country", "dk", "--city", "hareskov"]), 0, "peer add --country --city at a place the site has");
+  eq(cfg("pull-bo.json").location, "hareskov", "…names that location");
+  eq(call(["peer", "add", "pull", "cy", "--host", "h", "--country", "DE", "--city", "Berlin", "--building", "Haus 1"]), 0, "…at a new place");
+  eq(cfg("pull-cy.json").location, "haus-1", "…names a new location after its building");
+  eq(JSON.stringify(cfg("site.json").locations["haus-1"]), '{"displayName":"Haus 1","kind":"remote","country":"DE","city":"Berlin","address":"Haus 1"}', "…which site.json now has, kind remote");
+  eq(cfg("site.json").primaryLocation, "rodovre", "…and the primary is where it was");
+  eq(call(["peer", "add", "pull", "cy", "--host", "h", "--force"]), 0, "a --force re-add without a place");
+  eq(cfg("pull-cy.json").location, "haus-1", "…keeps the location it had");
 }
 
 // ── #607: placement reset — the one door out of `external` ───────────
@@ -1115,6 +1173,7 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(allocatePort([51830, 51831]), 51832, "next free listen port from 51830");
 
   const d = mkdtempSync(join(tmpdir(), "bm-tunnel-"));
+  writeFileSync(join(d, "site.json"), JSON.stringify({ name: "s", locations: { home: { country: "DK", timezone: "UTC" } }, primaryLocation: "home" }));
   eq(buddyPool(d), "10.255.2.0/24", "no zones.json: the default pool");
   writeFileSync(join(d, "zones.json"), JSON.stringify({
     mgmt: { ip: "10.0.0.0/24" }, buddy: { ip: "172.31.9.0/24" }, _profiles: {},

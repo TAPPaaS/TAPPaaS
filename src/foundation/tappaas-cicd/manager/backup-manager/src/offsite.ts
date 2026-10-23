@@ -1,29 +1,35 @@
 // offsite.ts — an off-site copy is recorded, not asserted (ADR-012 §1.5, #609).
 //
 // An off-site copy is worth having because a fire or a theft at the building
-// does not reach it — a PHYSICAL separation, which only data can show. Every
-// off-site target therefore records a `physicalLocation` shaped like the Site's
-// own `site.json` `location` (ISO country, optional city and building):
+// does not reach it — a PHYSICAL separation, which only data can show. The
+// Site's own place is its primary location (site.json, ADR-036 D1), and every
+// off-site target records where it is:
 //
 //   a satellite holding a copy     an instance of the satellite module
 //                                  (config/<instance>.json, or a pre-ADR-010
 //                                  §8.4 config/satellite-<name>.json) that
 //                                  carries the backup role — the pull vault — or
-//                                  is the Site's PBS Host (backup.json .node)
+//                                  is the Site's PBS Host (backup.json .node):
+//                                  its `physicalLocation`, or a `location` name
 //   config/remote-<name>.json      a peer that pulls OUR backups
 //   config/pull-<name>.json        a peer WE pull — our copy is THEIR off-site
+//                                  a peer names a location of the site
+//                                  (`location`, ADR-036 D5); before migration
+//                                  0019 it carried a `physicalLocation`
 //
 // (`receive-` peers push into us; where they are is their concern, not ours.)
 //
 // Separation is judged at the finest level BOTH sides record: a different
-// country, city or building at any level both declare is separate. Equal at
-// every level both declare is not shown to be separate — "same" when both
-// record all three, "unproven" when one of them stops short. Nothing here is
-// an error: an existing site's peers predate the field, and a peer in the same
-// city may still be a sound buddy. `validate` reports each as a warning.
+// country, city or building (a location's address) at any level both declare
+// is separate. Equal at every level both declare is not shown to be separate —
+// "same" when both record all three, or when a target names the primary
+// location itself, "unproven" when one of them stops short. Nothing here is an
+// error: a peer in the same city may still be a sound buddy. `validate`
+// reports each as a warning.
 
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
+import { Location, primaryLocation, siteLocation } from "../../../lib/ts/src/locations";
 
 export interface Place {
   country?: string;
@@ -74,6 +80,10 @@ export interface OffsiteTarget {
   file: string;
   place: Place | null;
   separation: Separation;
+  /** the location it names, when it names one */
+  location?: string;
+  /** it names a location site.json does not have */
+  missing?: boolean;
 }
 
 function readObj(f: string): Record<string, unknown> | null {
@@ -85,9 +95,25 @@ function readObj(f: string): Record<string, unknown> | null {
   }
 }
 
-/** The Site's own place: site.json `location`. */
+/** A location as a Place: its address is the building level. */
+export function locationPlace(l: Location | null): Place | null {
+  if (!l || !l.country) return null;
+  return asPlace({ country: l.country, city: l.city, building: l.address });
+}
+
+/** The Site's own place: its primary location. */
 export function sitePlace(configDir: string): Place | null {
-  return asPlace(readObj(join(configDir, "site.json"))?.location);
+  return locationPlace(primaryLocation(configDir));
+}
+
+// Where a target is: the location it names, else its own physicalLocation.
+function targetPlace(cfg: Record<string, unknown> | null, configDir: string, primary: string | null): { place: Place | null; location?: string; missing?: boolean; primary?: boolean } {
+  const name = cfg?.location;
+  if (typeof name === "string" && name !== "" && !name.includes("/")) {
+    const l = siteLocation(name, configDir);
+    return { place: locationPlace(l), location: name, missing: !l, primary: name === primary };
+  }
+  return { place: asPlace(cfg?.physicalLocation) };
 }
 
 const TARGET_PREFIXES: Array<[string, string]> = [
@@ -109,7 +135,10 @@ function isSatellite(file: string, cfg: Record<string, unknown>): boolean {
 export function offsiteTargets(configDir: string): OffsiteTarget[] {
   if (!existsSync(configDir)) return [];
   const site = sitePlace(configDir);
+  const primary = primaryLocation(configDir)?.name ?? null;
   const pbsHost = readObj(join(configDir, "backup.json"))?.node;
+  // Naming the primary location is being at the Site, whatever it records.
+  const judged = (t: ReturnType<typeof targetPlace>): Separation => (t.primary ? "same" : separation(site, t.place));
   // A locked-down satellite pulls through a `remote` peer of its own name
   // (ADR-010 §8.4.4): one copy, counted once — as the satellite.
   const satellites = new Set(
@@ -126,16 +155,16 @@ export function offsiteTargets(configDir: string): OffsiteTarget[] {
     const hit = TARGET_PREFIXES.find(([p]) => b.startsWith(p));
     if (hit) {
       if (hit[1] === "remote" && satellites.has(b.slice(hit[0].length))) continue;
-      const place = asPlace(readObj(file)?.physicalLocation);
-      out.push({ role: hit[1], name: b.slice(hit[0].length), file, place, separation: separation(site, place) });
+      const t = targetPlace(readObj(file), configDir, primary);
+      out.push({ role: hit[1], name: b.slice(hit[0].length), file, place: t.place, separation: judged(t), ...(t.location ? { location: t.location } : {}), ...(t.missing ? { missing: true } : {}) });
       continue;
     }
     const cfg = readObj(file);
     if (!cfg || !isSatellite(file, cfg)) continue;
     const roles = Array.isArray(cfg.roles) ? cfg.roles : [];
     if (!roles.includes("backup") && pbsHost !== b) continue;
-    const place = asPlace(cfg.physicalLocation);
-    out.push({ role: "satellite", name: b, file, place, separation: separation(site, place) });
+    const t = targetPlace(cfg, configDir, primary);
+    out.push({ role: "satellite", name: b, file, place: t.place, separation: judged(t), ...(t.location ? { location: t.location } : {}), ...(t.missing ? { missing: true } : {}) });
   }
   return out;
 }
@@ -146,17 +175,21 @@ export function offsiteWarnings(configDir: string): string[] {
   const warnings: string[] = [];
   for (const t of offsiteTargets(configDir)) {
     const what = `${t.role} '${t.name}'`;
-    if (t.separation === "unrecorded") {
+    const at = t.location ? `location '${t.location}'` : placeText(t.place);
+    if (t.missing) {
+      warnings.push(`${what} names location '${t.location}', which site.json does not have — nothing shows it is off-site: site-manager location add ${t.location} --country <CC> --kind remote`);
+    } else if (t.separation === "unrecorded") {
       warnings.push(
-        `${what} records no physicalLocation — nothing shows it is off-site. ` +
-          `Add "physicalLocation": {"country": "XX", "city": "…"} to ${t.file}`,
+        t.role === "satellite"
+          ? `${what} records no physicalLocation — nothing shows it is off-site. Add "physicalLocation": {"country": "XX", "city": "…"} to ${t.file}`
+          : `${what} names no location — nothing shows it is off-site. Add "location": "<name>" (one of site-manager location list) to ${t.file}`,
       );
     } else if (t.separation === "same") {
-      warnings.push(`${what} is at ${placeText(t.place)} — the Site's own place; it is not an off-site copy`);
+      warnings.push(`${what} is at ${t.location ? `${at} (${placeText(t.place)})` : at} — the Site's own place; it is not an off-site copy`);
     } else if (t.separation === "unproven") {
       warnings.push(
-        `${what} (${placeText(t.place)}) is not shown to be away from the Site (${placeText(site)}): ` +
-          `record the city, and if they share one the building, on both`,
+        `${what} (${at}${t.location ? `: ${placeText(t.place)}` : ""}) is not shown to be away from the Site (${placeText(site)}): ` +
+          `record the city, and if they share one the address, on both (site-manager location modify)`,
       );
     }
   }

@@ -116,6 +116,14 @@ check(!zoneNames.some((z) => z.startsWith("_")), "documentation blocks are not z
 const rasmus = t.outside.find((o) => o.name === "rasmus");
 check(rasmus?.kind === "buddy" && rasmus.role === "remote" && rasmus.location === "Hareskov, DK", "buddy rasmus, remote, Hareskov");
 check(rasmus?.state === "down", "…the pulse reports it down");
+{
+  // A peer that names a location: its place comes resolved from backup-manager peers.
+  const s = hrossen();
+  s.peers = [{ name: "rasmus", role: "remote", location: "hareskov", place: { country: "DK", city: "Hareskov" } }, { name: "far", role: "pull", location: "far" }];
+  const out = buildTopology(s).outside;
+  check(out.find((o) => o.name === "rasmus")?.location === "Hareskov, DK", "a buddy naming a location shows its place");
+  check(out.find((o) => o.name === "far")?.location === "far", "…and its name when site.json has no such place");
+}
 
 // ── findings on their objects ─────────────────────────────────────────
 const fOn = (kind: string, name: string) => t.findings.filter((f) => f.on.kind === kind && f.on.name === name);

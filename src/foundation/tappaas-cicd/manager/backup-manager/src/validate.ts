@@ -9,7 +9,7 @@
 //   4. module backup.enabled:false is honoured (resolves to disabled — reported)
 //   5. no dangling target: if any module has backup enabled AND is wired into
 //      the PBS job, site.backup.target must be set.
-//   6. every off-site target records a physicalLocation away from the Site's
+//   6. every off-site target records a place away from the Site's primary location (a peer: the location it names)
 //      (#609, ADR-012 §1.5) — WARNINGS: a peer that predates the field, or one
 //      in the same city, is not a broken configuration.
 //   7. every buddy tunnel (#796) is a /30 on its boundary, with the fields its

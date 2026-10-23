@@ -124,7 +124,7 @@ satellite.
 | its WireGuard public key, its public IP (or satellite IP) and UDP port | its WireGuard public key |
 | the `/30` it proposes | — |
 | the PBS login: auth-id and password; the TLS fingerprint; the datastore name | — |
-| its country and city (for `--country`/`--city`) | its country and city |
+| its country and city (for `--country`/`--city`, which find or add the location it is at) | its country and city |
 | its operator's e-mail (for `--contact`) | its operator's e-mail (for `--contact`) |
 
 Send the password over a channel you trust; public keys and fingerprints may go by email.

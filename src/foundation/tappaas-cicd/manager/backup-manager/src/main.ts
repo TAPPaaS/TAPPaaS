@@ -64,13 +64,14 @@ import {
 } from "./tunnel";
 import { basename, join } from "path";
 import { KeyTarget, keyTarget, keysUsb } from "./keys";
-import { placeText } from "./offsite";
 import { placementFinishReset, placementReset, placementUseExternal, ResetDeps } from "./placement-reset";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync, readFileSync } from "fs";
 import { spawnSync } from "child_process";
 import { stream } from "../../../lib/ts/src/exec";
 import { GN, CL, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { readJsonObject, writeJsonAtomic } from "../../../lib/ts/src/config-io";
+import { ensureLocation, placeText as locationText, siteLocation } from "../../../lib/ts/src/locations";
 import { BackupPolicyStatus, Client, JobStatus, ScheduleBucket } from "./types";
 
 const VERSION = "0.1.0";
@@ -179,7 +180,7 @@ export const HELP: HelpSpec = {
       usage: "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] "
         + "[--port P] [--remote-namespace NS] [--max-depth N] "
         + "[--schedule SPEC] [--group-filter F] [--auth-id ID] [--propagate] "
-        + "[--country CC] [--city C] [--building B] [--contact EMAIL] "
+        + "[--location NAME | --country CC [--city C] [--building B]] [--contact EMAIL] "
         + "[--tunnel serve|dial] [--tunnel-net CIDR] [--listen-port P] [--endpoint H:P] [--peer-key K] [--mtu N] [--force]", effect: { noPreview: "adds an off-site PBS relationship (a buddy, a remote, a receiver)" },
       name: "peer add",
       options: [
@@ -193,9 +194,10 @@ export const HELP: HelpSpec = {
         ["--group-filter F", "peer add pull: replicate only part of the source."],
         ["--auth-id ID", "peer add remote: the login they pull with (we create it)."],
         ["--propagate", "peer add remote: let the read grant reach child namespaces. Off by default — on the root that would expose fs/ (config + secrets) and other peers' data."],
-        ["--country CC", "peer add: the country the peer's PBS is in (ISO code) — the evidence its copy is off-site (#609)."],
-        ["--city C", "peer add: its city — needed to tell it apart from a Site in the same country."],
-        ["--building B", "peer add: its building or data centre — needed when it shares the Site's city."],
+        ["--location NAME", "peer add: the location the peer's PBS is at, one of the site's (site-manager location list) — the evidence its copy is off-site."],
+        ["--country CC", "peer add: instead of --location, the country it is in (ISO code): the site's location at that place is used, or a new one (kind remote) is added."],
+        ["--city C", "peer add: with --country, its city — needed to tell it apart from a Site in the same country."],
+        ["--building B", "peer add: with --country, its building or data centre (the location's address) — needed when it shares the Site's city."],
         ["--tunnel serve|dial", "peer add: carry this pull over its own WireGuard tunnel (#796, BUDDY.md). The pulled site serves (remote), the puller dials (pull)."],
         ["--tunnel-net CIDR", "peer add: the tunnel's /30. serve: default the next free /30 of zones.json buddy.ip (10.255.2.0/24). dial: the serving side's."],
         ["--listen-port P", "peer add remote --tunnel serve: UDP port to listen on (default the next free from 51830)."],
@@ -316,6 +318,7 @@ interface Opts {
   schedule?: string;
   groupFilter?: string;
   authId?: string;
+  location?: string;
   country?: string;
   city?: string;
   building?: string;
@@ -344,7 +347,7 @@ interface Opts {
 // single-line change here rather than another else-if arm.
 const PEER_VALUE_FLAGS = new Set([
   "--host", "--store", "--namespace", "--schedule", "--group-filter", "--auth-id",
-  "--country", "--city", "--building", "--peer", "--datastore", "--fingerprint",
+  "--location", "--country", "--city", "--building", "--peer", "--datastore", "--fingerprint",
   "--tunnel", "--tunnel-net", "--listen-port", "--endpoint", "--peer-key", "--mtu",
   "--port", "--remote-namespace", "--max-depth", "--contact",
 ]);
@@ -435,6 +438,7 @@ function parseOpts(args: string[]): Opts {
     schedule: peerFlags["--schedule"],
     groupFilter: peerFlags["--group-filter"],
     authId: peerFlags["--auth-id"],
+    location: peerFlags["--location"],
     country: peerFlags["--country"],
     city: peerFlags["--city"],
     building: peerFlags["--building"],
@@ -730,18 +734,45 @@ function cmdPeerAdd(opts: Opts): number {
   if (k !== "pull" && (opts.port || opts.remoteNamespace || opts.maxDepth)) {
     die(`peer add ${k}: --port, --remote-namespace and --max-depth describe a pull`);
   }
-  if (opts.country) {
+  // Where the peer is: a location of this site (ADR-036 D5), named, or found or
+  // made from --country/--city/--building. A --force re-add keeps the one the
+  // peer had unless another is given.
+  const siteFile = join(opts.configDir, "site.json");
+  let siteDoc: Record<string, unknown> | null = null;
+  let madeLocation = false;
+  if (opts.location !== undefined && (opts.country || opts.city || opts.building)) {
+    die("peer add: give --location, or --country [--city] [--building] — not both");
+  }
+  if (opts.location !== undefined) {
+    if (!siteLocation(opts.location, opts.configDir)) {
+      die(`peer add: '${opts.location}' is not one of the site's locations — site-manager location list, or add it: site-manager location add ${opts.location} --country <CC> --kind remote`);
+    }
+    spec.location = opts.location;
+  } else if (opts.country) {
     if (!/^[A-Za-z]{2}$/.test(opts.country)) die(`peer add: --country takes an ISO 3166-1 alpha-2 code (e.g. DE), not '${opts.country}'`);
-    spec.physicalLocation = { country: opts.country.toUpperCase() };
-    if (opts.city) spec.physicalLocation.city = opts.city;
-    if (opts.building) spec.physicalLocation.building = opts.building;
+    siteDoc = readJsonObject(siteFile) ?? die(`peer add: --country needs the site's site.json (${siteFile}) to record the location in`);
+    try {
+      const r = ensureLocation(siteDoc, { country: opts.country.toUpperCase(), city: opts.city, address: opts.building }, name);
+      spec.location = r.name;
+      madeLocation = r.created;
+    } catch (e) {
+      die(`peer add: ${(e as Error).message}`);
+    }
   } else if (opts.city || opts.building) {
     die("peer add: --city and --building need --country (the place is recorded from the country down)");
-  } else if (k !== "receive") {
-    warn(`no --country: nothing will show this ${k} peer is off-site (validate warns until physicalLocation is recorded, #609)`);
+  } else {
+    const prevLoc = opts.force ? readPeerConfig(opts.configDir, k, name)?.location : undefined;
+    if (typeof prevLoc === "string" && prevLoc) spec.location = prevLoc;
+    else if (k !== "receive") warn(`no --location: nothing will show this ${k} peer is off-site (validate warns until it names one)`);
   }
   const file = writePeerConfig(opts.configDir, k, spec, opts.force);
   info(`${GN}✓${CL} wrote ${file}`);
+  if (siteDoc && madeLocation) {
+    writeJsonAtomic(siteFile, siteDoc);
+    info(`${GN}✓${CL} added location '${spec.location}' to site.json (site-manager location show ${spec.location})`);
+  } else if (spec.location) {
+    info(`  at location '${spec.location}'`);
+  }
 
   if (opts.configOnly) {
     info(`  --config-only: not onboarded. Run 'backup-manager peer add ${kindArg} ${name}' again`);
@@ -1007,7 +1038,8 @@ function cmdPeers(opts: Opts): void {
   for (const p of peers) {
     info(
       pad(p.name, 20) + " " + pad(p.role, 9) + " " + pad(p.remoteHost ?? "-", 28) + " " +
-        pad(p.namespace ?? "-", 20) + " " + pad(p.tunnel ?? "-", 26) + " " + placeText(p.physicalLocation),
+        pad(p.namespace ?? "-", 20) + " " + pad(p.tunnel ?? "-", 26) + " " +
+        (p.location ? `${p.location} — ` : "") + (p.place ? locationText(p.place) : p.location ? "(not in site.json)" : "-"),
     );
   }
 }

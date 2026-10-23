@@ -160,7 +160,7 @@ export function primaryLocation(configDir: string = defaultConfigDir()): Locatio
 }
 
 /** A location's address as one line: address, city, COUNTRY. */
-export function placeText(l: Pick<Location, "address" | "city" | "country"> | null): string {
+export function placeText(l: { address?: string; city?: string; country?: string } | null): string {
   if (!l) return "-";
   return [l.address, l.city, l.country ? l.country.toUpperCase() : undefined].filter(Boolean).join(", ") || "-";
 }
