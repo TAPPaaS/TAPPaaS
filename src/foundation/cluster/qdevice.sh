@@ -113,7 +113,7 @@ EOF
                 || die "could not install corosync-qdevice on ${n}"
         done
         # The host's current key, not one an earlier machine at the address left.
-        node_ssh "${N1}" "ssh-keygen -R '${HOST}' >/dev/null 2>&1; ssh-keyscan -T 10 '${HOST}' >> /root/.ssh/known_hosts 2>/dev/null"
+        node_ssh "${N1}" "ssh-keygen -R '${HOST}' >/dev/null 2>&1; ssh-keyscan -q -T 10 '${HOST}' >> /root/.ssh/known_hosts 2>/dev/null"
         info "  pvecm qdevice setup ${HOST} (restarts corosync on every node)"
         _f=""; [[ "${FORCE}" == "1" ]] && _f="--force"
         _rc=0
