@@ -164,15 +164,16 @@ else
     fail "network-manager zone add ${VARIANT} failed"
     exit 1
 fi
-# Author the environment file (domains.primary + per-service dnsMode + zone). The
+# Author the environment file (domains.primary + per-service dnsMode) and bind the
+# zone to it — the zone names the environment. The
 # legacy variant registry is retired — environments are the source of truth.
 mkdir -p "$(dirname "${ENV_FILE}")"
 ENV_OWNER="$(jq -r '.owner // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)"
 [[ -n "${ENV_OWNER}" ]] || ENV_OWNER="$(ls "${CONFIG_DIR}/identities/organizations"/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
-if jq -n --arg n "${VARIANT}" --arg owner "${ENV_OWNER}" --arg d "${VARIANT_DOMAIN}" --arg z "${VARIANT}" '
+if jq -n --arg n "${VARIANT}" --arg owner "${ENV_OWNER}" --arg d "${VARIANT_DOMAIN}" '
         { name: $n, displayName: $n, ownerOrg: $owner,
-          domains: { primary: $d, dnsMode: "per-service" },
-          network: { zone: $z } }' > "${ENV_FILE}"; then
+          domains: { primary: $d, dnsMode: "per-service" } }' > "${ENV_FILE}" \
+   && /home/tappaas/bin/network-manager bind "${VARIANT}" --environment "${VARIANT}" >/dev/null; then
     pass "environment ${VARIANT} authored (${VARIANT_DOMAIN}, dnsMode per-service, zone ${VARIANT})"
 else
     fail "could not author environment file ${ENV_FILE}"

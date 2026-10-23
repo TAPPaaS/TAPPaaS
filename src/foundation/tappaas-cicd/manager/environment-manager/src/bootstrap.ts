@@ -4,15 +4,19 @@
 //
 // Every TAPPaaS system requires two environments:
 //   - mgmt          : the management environment (foundation modules).
-//                     network.zone = mgmt. Takes the site domain on the same
+//                     Its zone is mgmt. Takes the site domain on the same
 //                     terms as the default environment below, so an mgmt module
 //                     declaring `dependsOn network:proxy` can actually be
 //                     published; without it network:proxy skips the reconcile.
 //   - <N>           : the DEFAULT tenant environment, named after the default
 //                     org/environment <N> (= site.json.defaultEnvironment =
 //                     default-zone name; decoupled from site.json.name — #426).
-//                     network.zone = <N>. A domain is
+//                     Its zone is <N>. A domain is
 //                     added only when --domain is given.
+//
+// Neither file names its zone (#865): the zones do. The shipped zones.json
+// template carries `environment: "mgmt"` on mgmt and `environment: "srv"` on
+// srv, which `network-manager init` renames to <N> with the zone itself.
 //
 // This module is the SINGLE OWNER of these two files. Idempotent: an existing
 // file is left untouched unless force=true. A stale literal default.json from an
@@ -85,13 +89,11 @@ export function buildBootstrapEnvironments(
     name: "mgmt",
     displayName: "Management",
     ownerOrg: owner,
-    network: { zone: "mgmt" },
   };
   const def: Environment = {
     name,
     displayName: display,
     ownerOrg: owner,
-    network: { zone: name },
   };
   // mgmt gets the site domain on the same terms as the default environment.
   // Without it, get_variant_config resolves domain="" for every mgmt module and

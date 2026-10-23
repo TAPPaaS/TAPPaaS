@@ -136,13 +136,13 @@ fi
 mkdir -p "$(dirname "${ENV_FILE}")"
 _owner="$(jq -r '.owner // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)"
 [[ -n "${_owner}" ]] || _owner="$(ls "${CONFIG_DIR}/identities/organizations"/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
-if jq -n --arg n "${VAR}" --arg owner "${_owner}" --arg d "${DOMAIN}" --arg z "${VAR}" '
+if jq -n --arg n "${VAR}" --arg owner "${_owner}" --arg d "${DOMAIN}" '
         { name: $n, displayName: $n, ownerOrg: $owner,
-          domains: { primary: $d, dnsMode: "wildcard" },
-          network: { zone: $z } }' > "${ENV_FILE}"; then
-    pass "environment '${VAR}' authored (zone ${VAR}, ${DOMAIN})"
+          domains: { primary: $d, dnsMode: "wildcard" } }' > "${ENV_FILE}" \
+   && network-manager bind "${VAR}" --environment "${VAR}" >/dev/null; then
+    pass "environment '${VAR}' authored (zone ${VAR} names it, ${DOMAIN})"
 else
-    fail "could not author environment file ${ENV_FILE}"; exit 1
+    fail "could not author environment ${VAR} or bind zone ${VAR} to it"; exit 1
 fi
 VLAN="$(jq -r --arg z "${VAR}" '.[$z].vlantag // empty' "${ZONES_FILE}")"
 SUBNET="$(jq -r --arg z "${VAR}" '.[$z].ip // empty' "${ZONES_FILE}" | cut -d/ -f1 | cut -d. -f1-3)"
@@ -196,7 +196,7 @@ else
     INSTALL_LOG="${TAPPAAS_LOG_DIR:-/home/tappaas/logs}/zone-node-install-${VAR}.log"
     # --zone0 override: the tvbase fixture pins zone0=mgmt (other tests want it
     # there), and an explicit module-JSON zone0 WINS over the environment's
-    # network.zone (install-module precedence, ADR-007 P5). Without the
+    # zone (install-module precedence, ADR-007 P5). Without the
     # override the VM lands untagged on mgmt and can never lease ${SUBNET}.x —
     # the #574 Symptom-B failure was exactly this, not a DHCP-side bug.
     if ( cd "${FIX}" && /home/tappaas/bin/install-module.sh "${MODULE}" --environment "${VAR}" --zone0 "${VAR}" --node "${DEST_NODE}" --vmid "${VMID}" ) >"${INSTALL_LOG}" 2>&1; then

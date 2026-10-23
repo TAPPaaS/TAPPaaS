@@ -18,7 +18,6 @@
 // the NetworkClient / ModuleClient interfaces (injected) — pure planning, then
 // apply.
 
-import { CONTROL_PLANE_ZONE } from "../../../lib/ts/src/zones";
 import {
   Action,
   ApplyFailure,
@@ -55,6 +54,7 @@ export interface ReconcileOpts {
 // into computePlan's single plan.
 function planWildcardState(
   env: Environment,
+  zone: string,
   dt: DnsTlsClient | undefined,
   actions: Action[],
   warnings: string[],
@@ -123,7 +123,7 @@ function planWildcardState(
     );
     return;
   }
-  const st = dt.wildcardDnsState(domain, env.network.zone ?? "");
+  const st = dt.wildcardDnsState(domain, zone);
   if (st.unpublished) {
     // ADR-021 R3: a supported configuration, not an error. There is no public
     // record, so DNS-01 could not have issued a wildcard cert and there is
@@ -195,56 +195,42 @@ export function computePlan(
   // at a zone that never existed and never converge — the operator had to know
   // to run `network-manager add` first, an undocumented ordering trap.
   //
-  // The ADR says "create a missing Service zone, hard-error on a missing
-  // non-Service zone". A zone that is missing has no type to inspect, so the
-  // check that is actually implementable — and what the ADR's own parenthetical
-  // describes ("the operator pointed an environment at a client/IoT zone") — is:
-  //   - zone absent          → CREATE it as a Service zone (that is the intent);
-  //   - zone present, Service→ nothing to do;
-  //   - zone present, other  → HARD ERROR (an environment's zone must be a
-  //                            Service zone; pointing it at a client/IoT zone is
-  //                            a configuration mistake, not something to fix by
-  //                            silently minting a second zone).
-  const zone = env.network.zone;
-  if (!zone) {
-    warnings.push(`environment '${env.name}': no network.zone — nothing to reconcile`);
-  } else if (!net.zoneExists(zone)) {
+  // The zone names its environment (#865), so the environment's zone is the
+  // Service (for mgmt, Management) zone naming it:
+  //   - one zone names it      → nothing to do;
+  //   - several do             → HARD ERROR (an environment has one zone);
+  //   - none, and no zone has
+  //     the environment's name → CREATE it as a Service zone naming the
+  //                              environment (that is the intent);
+  //   - none, but a zone of
+  //     that name exists       → HARD ERROR: binding an existing zone by name
+  //                              would be a guess, so the operator says which.
+  const own = net.environmentZones(env.name);
+  let zone = own.length === 1 ? own[0] : "";
+  if (own.length > 1) {
+    errors.push(
+      `environment '${env.name}' is named by ${own.length} Service/Management zones (${own.join(", ")}) — ` +
+        `an environment has one zone. Unbind the others with \`network-manager bind <zone> --unbind\`.`,
+    );
+  } else if (own.length === 0 && !net.zoneExists(env.name)) {
+    zone = env.name;
     actions.push({
       kind: "create-service-zone",
       scope: "environment",
-      target: `service zone '${zone}' for environment '${env.name}' (absent from zones.json)`,
+      target: `service zone '${zone}' for environment '${env.name}' (no zone names it)`,
       value: zone,
     });
     notes.push(
-      `zone '${zone}' does not exist and will be authored as a Service zone ` +
-        `(ADR-014 D1). It converges in the network pass below.`,
+      `no zone names environment '${env.name}': zone '${zone}' will be authored as its ` +
+        `Service zone (ADR-014 D1). It converges in the network pass below.`,
     );
-  } else if (zone === CONTROL_PLANE_ZONE) {
-    // The control plane is the third case this gate was never written for. The
-    // rule exists because a Client/IoT zone CONSUMES a service segment, so
-    // pointing an environment at one is a mistake. mgmt consumes nothing — its
-    // modules (backup, cluster, identity, logging, network, tappaas-cicd,
-    // templates) live in the mgmt zone, so the environment IS its own segment.
-    // Without this the whole mgmt environment was inert: cmdReconcile die()s on
-    // any plan error in preview as well as apply, so neither its DNS nor its
-    // cert step ever ran, and `site-manager reconcile --deep` failed with it.
-    // Exempt by NAME, like I1/I2/I5 — there is one control plane per site, and
-    // a second `type: Management` zone backing an environment should still be
-    // reported.
-    notes.push(
-      `environment '${env.name}' is bound to the ${CONTROL_PLANE_ZONE} control plane ` +
-        `(a ${net.zoneType(zone) ?? "Management"} zone) — exempt from the Service-zone rule.`,
+  } else if (own.length === 0) {
+    const t = net.zoneType(env.name);
+    errors.push(
+      `environment '${env.name}' has no zone: no Service zone names it, and zone '${env.name}' ` +
+        `is a ${t ?? "zone"} that names ${t === "Service" ? "no environment" : "a different role"}. ` +
+        `Give the environment its zone with \`environment-manager modify ${env.name} --zone <serviceZone>\`.`,
     );
-  } else {
-    const t = net.zoneType(zone);
-    if (t !== undefined && t !== "Service") {
-      errors.push(
-        `environment '${env.name}': network.zone '${zone}' is a ${t} zone, not a Service zone. ` +
-          `An environment binds to a service segment; a client/IoT zone consumes one ` +
-          `(bind it with \`network-manager bind ${zone} --environment ${env.name}\`). ` +
-          `Re-point the environment with \`environment-manager modify ${env.name} --zone <serviceZone>\`.`,
-      );
-    }
   }
 
   if (opts.skipNetwork) {
@@ -303,7 +289,7 @@ export function computePlan(
   // is where materializing them belongs.
   //
   // Scope is always "environment": these touch exactly this env's domain.
-  planWildcardState(env, dt, actions, warnings, notes);
+  planWildcardState(env, zone, dt, actions, warnings, notes);
 
   if (opts.deep) {
     const modules = mod.modulesForEnvironment(env.name);
@@ -382,7 +368,7 @@ export function applyPlan(
         continue;
       }
       try {
-        net.createServiceZone(a.value);
+        net.createServiceZone(a.value, env.name);
         applied++;
       } catch (e) {
         if (e instanceof NetworkUnreachable) throw e;

@@ -54,10 +54,14 @@ cat > "${NEW}/site.json" <<'JSON'
 }
 JSON
 cat > "${NEW}/environments/acme.json" <<'JSON'
-{ "name": "acme", "displayName": "Acme Prod", "domains": { "primary": "acme.test", "dnsMode": "wildcard" }, "network": { "zone": "acme" } }
+{ "name": "acme", "displayName": "Acme Prod", "domains": { "primary": "acme.test", "dnsMode": "wildcard" } }
 JSON
 cat > "${NEW}/environments/staging.json" <<'JSON'
-{ "name": "staging", "displayName": "Acme Staging", "domains": { "primary": "stg.acme.test", "dnsMode": "per-service" }, "network": { "zone": "staging" } }
+{ "name": "staging", "displayName": "Acme Staging", "domains": { "primary": "stg.acme.test", "dnsMode": "per-service" } }
+JSON
+# The zones name their environments (#865); get_variant_config's zone is read here.
+cat > "${NEW}/zones.json" <<'JSON'
+{ "acme": { "type": "Service", "environment": "acme" }, "staging": { "type": "Service", "environment": "staging" } }
 JSON
 cat > "${NEW}/cert-refids.json" <<'JSON'
 { "acme": "refacme01", "staging": "refstg02" }

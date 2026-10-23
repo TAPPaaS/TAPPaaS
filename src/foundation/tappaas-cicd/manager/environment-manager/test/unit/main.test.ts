@@ -63,18 +63,18 @@ throwsDie(() => parseOpts(["-x"]), "unknown short flag -x is rejected");
     name: "makerfloss",
     displayName: "Maker Floss",
     ownerOrg: "acme",
-    network: { zone: "makerfloss" },
     domains: { primary: "mf.example.org", dnsMode: "per-service" },
   };
-  const out = formatEnvironmentHuman(env);
+  const out = formatEnvironmentHuman(env, "mfZone");
   check(
     !out.trimStart().startsWith("{") &&
       out.includes("makerfloss") &&
       out.includes("Maker Floss") &&
       out.includes("mf.example.org") &&
       out.includes("per-service") &&
-      out.includes("acme"),
-    "show human output is an aligned field summary, not JSON",
+      out.includes("acme") &&
+      out.includes("mfZone"),
+    "show human output is an aligned field summary, not JSON (zone from zones.json)",
   );
 }
 
@@ -127,7 +127,7 @@ throwsDie(() => parseOpts(["-x"]), "unknown short flag -x is rejected");
     mkdirSync(join(d, "environments"));
     for (const [n, dom] of Object.entries(envs)) {
       writeFileSync(join(d, "environments", `${n}.json`), JSON.stringify({
-        name: n, displayName: n, ownerOrg: "o", network: { zone: "srv" },
+        name: n, displayName: n, ownerOrg: "o",
         domains: { primary: dom, dnsMode: "wildcard" } }));
     }
     return d;
@@ -171,6 +171,73 @@ throwsDie(() => parseOpts(["-x"]), "unknown short flag -x is rejected");
   check(dt.issuedRefids.has("shared.example") && !dt.log.some((l) => l.startsWith("removeWildcard")),
     "a domain still used by another environment keeps its override and certificate");
   check(!dt.refids.has("tenant1"), "…but the deleted environment's own refid entry goes");
+}
+
+// ── #865: add / modify / delete link the zone through network-manager ──
+{
+  const { mkdtempSync, mkdirSync, writeFileSync, existsSync, readFileSync } = require("fs") as typeof import("fs");
+  const { join } = require("path") as typeof import("path");
+  const { tmpdir } = require("os") as typeof import("os");
+  const setup = (zones: Record<string, unknown>) => {
+    const d = mkdtempSync(join(tmpdir(), "envzone-"));
+    mkdirSync(join(d, "environments"));
+    mkdirSync(join(d, "identities", "organizations"), { recursive: true });
+    writeFileSync(join(d, "identities", "organizations", "o.json"), JSON.stringify({ name: "o" }));
+    writeFileSync(join(d, "zones.json"), JSON.stringify(zones));
+    return d;
+  };
+  const quiet = <T>(f: () => T): T => {
+    const l = console.log, e = console.error;
+    console.log = () => {}; console.error = () => {};
+    try { return f(); } finally { console.log = l; console.error = e; }
+  };
+  const go = (d: string, argv: string[]) => {
+    const net = new FakeNetworkClient();
+    const rc = quiet(() => run([...argv, "--config-dir", d], net, new FakeModuleClient(), new FakeDnsTlsClient()));
+    return { rc, log: net.log };
+  };
+
+  // add: the env file names no zone; the zone is linked to it
+  let d = setup({ acme: { type: "Service", state: "Active" }, home: { type: "Client", state: "Active" } });
+  let r = go(d, ["add", "acme", "--owner", "o"]);
+  const f = join(d, "environments", "acme.json");
+  check(r.rc === 0 && existsSync(f) && !("network" in JSON.parse(readFileSync(f, "utf8"))),
+    "#865 add: the environment file names no zone");
+  check(JSON.stringify(r.log) === JSON.stringify(["bind acme acme"]), "#865 add: the default zone (its own name) is bound to it");
+
+  // add --zone <a Client zone>: refused, nothing written
+  r = go(d, ["add", "lab", "--owner", "o", "--zone", "home"]);
+  check(r.rc === 1 && !existsSync(join(d, "environments", "lab.json")) && r.log.length === 0,
+    "#865 add: a Client zone is not an environment's zone — refused before anything is written");
+
+  // add --zone <missing>: refused without --create-zone, authored with it
+  r = go(d, ["add", "lab", "--owner", "o", "--zone", "labZone"]);
+  check(r.rc === 1 && !existsSync(join(d, "environments", "lab.json")), "#865 add: a missing zone needs --create-zone");
+  r = go(d, ["add", "lab", "--owner", "o", "--zone", "labZone", "--create-zone"]);
+  check(r.rc === 0 && JSON.stringify(r.log) === JSON.stringify(["create-service-zone labZone"]),
+    "#865 add --create-zone: the zone is authored naming the environment");
+
+  // add onto another environment's zone: refused
+  d = setup({ acme: { type: "Service", state: "Active", environment: "acme" } });
+  writeFileSync(join(d, "environments", "acme.json"), JSON.stringify({ name: "acme", displayName: "Acme", ownerOrg: "o" }));
+  r = go(d, ["add", "lab", "--owner", "o", "--zone", "acme"]);
+  check(r.rc === 1 && r.log.length === 0, "#865 add: another environment's zone is refused");
+
+  // modify --zone: the new zone is bound, the old one unbound — in that order
+  d = setup({ acme: { type: "Service", state: "Active", environment: "acme" }, acme2: { type: "Service", state: "Active" } });
+  writeFileSync(join(d, "environments", "acme.json"), JSON.stringify({ name: "acme", displayName: "Acme", ownerOrg: "o" }));
+  r = go(d, ["modify", "acme", "--zone", "acme2"]);
+  check(r.rc === 0 && JSON.stringify(r.log) === JSON.stringify(["unbind acme", "bind acme2 acme"]),
+    "#865 modify --zone: the old zone is unbound and the new one bound");
+  r = go(d, ["modify", "acme", "--zone", "acme"]);
+  check(r.rc === 0 && r.log.length === 0, "#865 modify --zone onto the zone it already has: no change");
+
+  // delete: every zone naming the environment loses the link
+  d = setup({ acme: { type: "Service", state: "Active", environment: "acme" }, home: { type: "Client", state: "Active", environment: "acme" }, guest: { type: "Guest", state: "Active" } });
+  writeFileSync(join(d, "environments", "acme.json"), JSON.stringify({ name: "acme", displayName: "Acme", ownerOrg: "o" }));
+  r = go(d, ["delete", "acme", "--force"]);
+  check(r.rc === 0 && JSON.stringify(r.log) === JSON.stringify(["unbind acme", "unbind home"]),
+    "#865 delete: the zones naming the environment are unbound");
 }
 
 console.log(`\n${passed} passed, ${failed} failed.`);

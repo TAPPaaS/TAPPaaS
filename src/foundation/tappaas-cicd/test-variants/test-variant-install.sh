@@ -48,8 +48,7 @@ echo '{}' > "${OWORK}/zones.json"
 mkdir -p "${OWORK}/environments"
 cat > "${OWORK}/environments/demo.json" <<'JSON'
 { "name": "demo", "displayName": "Demo", "ownerOrg": "test2",
-  "domains": { "primary": "demo.example.com", "dnsMode": "wildcard" },
-  "network": { "zone": "demoZone" } }
+  "domains": { "primary": "demo.example.com", "dnsMode": "wildcard" } }
 JSON
 cp "${FIX}/tvbase.json" "${OSRC}/tvbase.json"
 
@@ -117,8 +116,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
     [[ -n "${owner}" ]] || owner="$(ls /home/tappaas/config/identities/organizations/*.json 2>/dev/null | head -1 | xargs -r basename | sed 's/\.json$//')"
     if jq -n --arg n "${VAR}" --arg owner "${owner}" --arg d "${VAR}.test2.tapaas.org" '
             { name: $n, displayName: $n, ownerOrg: $owner,
-              domains: { primary: $d, dnsMode: "wildcard" },
-              network: { zone: "mgmt" } }' > "${ENV_FILE}"; then
+              domains: { primary: $d, dnsMode: "wildcard" } }' > "${ENV_FILE}"; then
         pass "deep: authored environment ${VAR}"
     else
         fail "deep: could not author environment ${VAR}"

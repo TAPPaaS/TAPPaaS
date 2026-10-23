@@ -91,14 +91,14 @@ JSON
 
 # env bar: override retention 5y, eu-only.
 cat > "${FIX}/environments/bar.json" <<'JSON'
-{ "name":"bar","displayName":"Bar","ownerOrg":"o","network":{"zone":"srv"},
+{ "name":"bar","displayName":"Bar","ownerOrg":"o",
   "dataResidency":"eu-only",
   "backup": {"retention":"5y","residency":"eu-only"} }
 JSON
 
 # env global-env: global residency.
 cat > "${FIX}/environments/globalenv.json" <<'JSON'
-{ "name":"globalenv","displayName":"G","ownerOrg":"o","network":{"zone":"srv"},
+{ "name":"globalenv","displayName":"G","ownerOrg":"o",
   "dataResidency":"global",
   "backup": {"residency":"global"} }
 JSON

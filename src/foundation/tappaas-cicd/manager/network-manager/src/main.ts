@@ -132,6 +132,7 @@ export const HELP: HelpSpec = {
     {
       usage: "add <name> [options]",
       name: "add",
+      hidden: ["--serves <env>"],
       options: [
         ["--archetype <A>", "a preset with the right tier for the zone's role — one of:\n" +
           "                control, service, trusted-client, guest, dmz,\n" +

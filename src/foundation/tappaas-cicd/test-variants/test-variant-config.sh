@@ -55,13 +55,15 @@ cat > "${CONFIG_DIR}/site.json" <<'JSON'
 JSON
 cat > "${CONFIG_DIR}/environments/foo.json" <<'JSON'
 { "name": "foo", "displayName": "Default", "ownerOrg": "test2",
-  "domains": { "primary": "foo.org", "dnsMode": "wildcard" },
-  "network": { "zone": "foo" } }
+  "domains": { "primary": "foo.org", "dnsMode": "wildcard" } }
 JSON
 cat > "${CONFIG_DIR}/environments/demo.json" <<'JSON'
 { "name": "demo", "displayName": "Demo env", "ownerOrg": "test2",
-  "domains": { "primary": "demo.foo.org", "dnsMode": "per-service" },
-  "network": { "zone": "demo" } }
+  "domains": { "primary": "demo.foo.org", "dnsMode": "per-service" } }
+JSON
+# The zones name their environments (#865).
+cat > "${CONFIG_DIR}/zones.json" <<'JSON'
+{ "foo": { "type": "Service", "environment": "foo" }, "demo": { "type": "Service", "environment": "demo" } }
 JSON
 cat > "${CONFIG_DIR}/cert-refids.json" <<'JSON'
 { "foo": "abc", "demo": "def" }

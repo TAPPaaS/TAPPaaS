@@ -10,11 +10,13 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync }
 import { join } from "path";
 import { tmpdir } from "os";
 import {
+  environmentZone,
   loadEnvironment,
   loadEnvironments,
   loadRefSources,
   serializeEnvironment,
   validateEnvironmentRefs,
+  withBinding,
   writeEnvironment,
 } from "../../src/config";
 import { bootstrap, firstOrg, resolveName } from "../../src/bootstrap";
@@ -48,7 +50,11 @@ jw(join(root, "people", "organizations", "acme.json"), { name: "acme" });
 jw(join(root, "people", "organizations", "zeta.json"), { name: "zeta" });
 // site code (.name) is decoupled from the default env/org (.defaultEnvironment) — #426.
 jw(join(root, "site.json"), { name: "warmelo1", defaultEnvironment: "demo" });
-jw(join(root, "zones.json"), { mgmt: {}, demo: {}, foo: {} });
+jw(join(root, "zones.json"), {
+  mgmt: { type: "Management", environment: "mgmt" },
+  demo: { type: "Service", environment: "demo" },
+  foo: { type: "Service", environment: "foo" },
+});
 // A deployed module config consuming the 'demo' environment.
 jw(join(root, "nextcloud.json"), { name: "nextcloud", environment: "demo" });
 jw(join(root, "gitea.json"), { name: "gitea", environment: "foo" });
@@ -78,7 +84,6 @@ try {
     name: "foo",
     displayName: "Foo",
     ownerOrg: "acme",
-    network: { zone: "foo" },
   };
   writeEnvironment(root, env);
   const refs = loadRefSources(root);
@@ -90,14 +95,17 @@ try {
     name: "bad",
     displayName: "Bad",
     ownerOrg: "nope",
-    network: { zone: "ghost" },
   };
   const badRes = validateEnvironmentRefs(bad, bad, refs);
   check(
-    badRes.errors.some((e) => e.includes("unknown zone")) &&
+    badRes.errors.some((e) => e.includes("no Service or Management zone names")) &&
       badRes.errors.some((e) => e.includes("unknown organization")),
-    "unknown zone + owner produce errors",
+    "no zone + unknown owner produce errors",
   );
+  // withBinding: the refs as they will be once a zone is the environment's own.
+  const after = withBinding(refs, "barZone", "bad");
+  check(environmentZone(after, "bad") === "barZone" && environmentZone(refs, "bad") === undefined,
+    "withBinding links the zone without touching the loaded refs");
 
   // authored tlsCertRefid → rejected.
   const tls = { ...env, tlsCertRefid: "x" } as unknown;

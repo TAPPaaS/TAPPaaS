@@ -128,8 +128,7 @@ cat > "${BADENV}/evil.json" <<'JSON'
   "name": "evil",
   "displayName": "Evil",
   "ownerOrg": "test2",
-  "domains": { "primary": "evil.example", "tlsCertRefid": "abc123" },
-  "network": { "zone": "home" }
+  "domains": { "primary": "evil.example", "tlsCertRefid": "abc123" }
 }
 JSON
 if run_validate "$CFG" "${BADENV}/evil.json"; then
@@ -144,8 +143,7 @@ cat > "${BADENV}/evil2.json" <<'JSON'
   "name": "evil2",
   "displayName": "Evil2",
   "ownerOrg": "test2",
-  "tlsCertRefid": "topbeef",
-  "network": { "zone": "home" }
+  "tlsCertRefid": "topbeef"
 }
 JSON
 if run_validate "$CFG" "${BADENV}/evil2.json"; then
@@ -155,19 +153,22 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 5. Reference checks catch dangling zone / ownerOrg
+# 5. Reference checks catch a missing zone / dangling ownerOrg
 # ---------------------------------------------------------------------------
 cat > "${BADENV}/badzone.json" <<'JSON'
-{ "name": "badzone", "displayName": "Bad Zone", "ownerOrg": "test2", "network": { "zone": "no-such-zone" } }
+{ "name": "badzone", "displayName": "Bad Zone", "ownerOrg": "test2" }
 JSON
 if run_validate "$CFG" "${BADENV}/badzone.json"; then
-    bad "should catch network.zone referencing an unknown zone"
+    bad "should catch an environment no zone names"
 else
-    ok "catches dangling network.zone reference"
+    ok "catches an environment no zone names"
 fi
 
+# badorg has its zone, so only the organization is wrong
+jq '. + {"badorgZone":{"type":"Service","vlantag":220,"bridge":"lan","environment":"badorg"}}' \
+    "${CFG}/zones.json" > "${CFG}/zones.json.tmp" && mv "${CFG}/zones.json.tmp" "${CFG}/zones.json"
 cat > "${BADENV}/badorg.json" <<'JSON'
-{ "name": "badorg", "displayName": "Bad Org", "ownerOrg": "no-such-org", "network": { "zone": "home" } }
+{ "name": "badorg", "displayName": "Bad Org", "ownerOrg": "no-such-org" }
 JSON
 if run_validate "$CFG" "${BADENV}/badorg.json"; then
     bad "should catch ownerOrg referencing an unknown organization"
@@ -182,8 +183,9 @@ CFG2="${WORK}/bootstrap"
 mkdir -p "${CFG2}/identities/organizations"
 cp "${FIX}/identities/organizations/test2.json" "${CFG2}/identities/organizations/test2.json"
 cp "${FIX}/zones.json" "${CFG2}/zones.json"
-# zones.json fixture has no 'acme' zone — add one so the default env validates.
-jq '. + {"acme":{"type":"Service","vlantag":210,"bridge":"lan","description":"acme (fixture)"}}' \
+# zones.json fixture has no 'acme' zone — add one naming the default env (as
+# `network-manager init` writes it) so the default env validates.
+jq '. + {"acme":{"type":"Service","vlantag":210,"bridge":"lan","environment":"acme","description":"acme (fixture)"}}' \
     "${CFG2}/zones.json" > "${CFG2}/zones.json.tmp" && mv "${CFG2}/zones.json.tmp" "${CFG2}/zones.json"
 if run_bootstrap --name acme --config-dir "$CFG2"; then
     ok "environment-manager add --name acme (bootstrap) runs"
@@ -197,7 +199,7 @@ DD="${CFG2}/environments/acme.json"
 [[ ! -f "${CFG2}/environments/default.json" ]] && ok "no literal default.json emitted" || bad "should not emit literal default.json"
 if [[ -f "$DD" ]]; then
     [[ "$(jq -r '.name' "$DD")" == "acme" ]]         && ok "acme.json name=acme" || bad "acme.json name"
-    [[ "$(jq -r '.network.zone' "$DD")" == "acme" ]] && ok "acme.json network.zone=acme" || bad "acme.json zone"
+    [[ "$(jq -r 'has("network")' "$DD")" == "false" ]] && ok "acme.json names no zone (the zone names it)" || bad "acme.json still names a zone"
     [[ "$(jq -r '.ownerOrg' "$DD")" == "test2" ]]    && ok "acme.json ownerOrg <- site owner (test2)" || bad "acme.json ownerOrg"
 fi
 # --domain sets the default env's domains.primary (the site-native install path:
@@ -209,7 +211,7 @@ else
     bad "add bootstrap --domain should set the default env domains.primary"
 fi
 if [[ -f "$M" ]]; then
-    [[ "$(jq -r '.network.zone' "$M")" == "mgmt" ]] && ok "mgmt.json network.zone=mgmt" || bad "mgmt.json zone"
+    [[ "$(jq -r 'has("network")' "$M")" == "false" ]] && ok "mgmt.json names no zone (the zone names it)" || bad "mgmt.json still names a zone"
     # mgmt takes the site domain on the same terms as the default environment:
     # without it every mgmt module resolves domain="" and network:proxy skips
     # the reverse-proxy reconcile, silently discarding a declared dependsOn
@@ -245,8 +247,8 @@ else
     bad "add bootstrap should derive name from site.json"
 fi
 [[ -f "${CFG3}/environments/acme.json" ]] && ok "derived default env acme.json from site.json.defaultEnvironment" || bad "expected acme.json derived from site.json"
-[[ "$(jq -r '.network.zone' "${CFG3}/environments/acme.json" 2>/dev/null)" == "acme" ]] \
-    && ok "derived acme.json network.zone=acme" || bad "derived acme.json zone"
+[[ "$(jq -r 'has("network")' "${CFG3}/environments/acme.json" 2>/dev/null)" == "false" ]] \
+    && ok "derived acme.json names no zone" || bad "derived acme.json zone"
 
 # 6c. idempotent re-run with --name does not clobber
 acme_before="$(cat "$DD" 2>/dev/null || true)"
@@ -274,16 +276,16 @@ for o in test2 foo-company bar-company myOrg; do
 { "name": "${o}", "type": "company", "displayName": "${o}", "owner": "lars" }
 JSON
 done
-jq '. + {"foo":{"type":"Service","vlantag":201,"bridge":"lan"},"bar":{"type":"Service","vlantag":202,"bridge":"lan"}}' \
+jq '. + {"foo":{"type":"Service","vlantag":201,"bridge":"lan","environment":"foo"},"bar":{"type":"Service","vlantag":202,"bridge":"lan"}}' \
     "${EX}/zones.json" > "${EX}/zones.json.tmp" && mv "${EX}/zones.json.tmp" "${EX}/zones.json"
 mkdir -p "${EX}/environments"
 cat > "${EX}/environments/mgmt.json" <<'JSON'
-{ "name": "mgmt", "displayName": "Management", "ownerOrg": "myOrg", "network": { "zone": "mgmt" } }
+{ "name": "mgmt", "displayName": "Management", "ownerOrg": "myOrg" }
 JSON
 cat > "${EX}/environments/foo.json" <<'JSON'
 { "name": "foo", "displayName": "Foo Company", "ownerOrg": "foo-company",
   "domains": { "primary": "foo-company.nl", "aliases": ["foocompany.com"], "aliasMode": "redirect" },
-  "network": { "zone": "foo" }, "dataResidency": "eu-only",
+  "dataResidency": "eu-only",
   "backup": { "retention": "7y" }, "legal": { "processor": "myOrg BV" } }
 JSON
 if run_validate "$EX"; then

@@ -26,15 +26,17 @@ function eqJson(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function env(name: string, zone: string): Environment {
-  return { name, displayName: name, ownerOrg: "acme", network: { zone } };
+// The second argument names the zone the test has in mind; the environment
+// itself names none (#865) — the seeded zone names the environment.
+function env(name: string, _zone?: string): Environment {
+  return { name, displayName: name, ownerOrg: "acme" };
 }
 
 // ── ownerOrg backfill ────────────────────────────────────────────────
 // An environment bootstrapped before any organization existed carries
 // ownerOrg:"" and fails the schema. Reconcile is the verb that repairs it.
-function envNoOwner(name: string, zone: string): Environment {
-  return { name, displayName: name, ownerOrg: "", network: { zone } };
+function envNoOwner(name: string, _zone?: string): Environment {
+  return { name, displayName: name, ownerOrg: "" };
 }
 
 // empty ownerOrg + a resolved candidate → a backfill action carrying the org.
@@ -230,12 +232,11 @@ function envNoOwner(name: string, zone: string): Environment {
   check((plan.errors ?? []).length === 0, "D1: a missing zone is not an error — it is materialized");
 }
 
-// ADR-014 D1 + control-plane exemption: the mgmt environment binds the mgmt
-// zone, which is `type: Management`. That is NOT the mistake the rule guards
-// against — a Client/IoT zone CONSUMES a service segment, whereas the control
-// plane IS its own. Before the exemption the whole mgmt environment was inert:
-// cmdReconcile die()s on any plan error in preview as well as apply, so neither
-// its DNS nor its cert step ran, and `site-manager reconcile --deep` failed too.
+// ADR-014 D1 / #865: the mgmt environment's zone is the mgmt zone, which is
+// `type: Management`. An environment's own zone is a Service or Management zone
+// naming it, so this is no error and no second zone is minted. (Before the
+// rule counted Management zones the whole mgmt environment was inert:
+// cmdReconcile die()s on any plan error in preview as well as apply.)
 {
   const net = new FakeNetworkClient();
   net.seedZone("mgmt", "Management");
@@ -249,36 +250,32 @@ function envNoOwner(name: string, zone: string): Environment {
     !plan.actions.some((a) => a.kind === "create-service-zone"),
     "control plane: …and no second zone is minted underneath it",
   );
-  check(
-    plan.notes.some((n) => n.includes("control plane")),
-    "control plane: the exemption is stated in the plan, not silent",
-  );
 }
 
-// …but the exemption is by NAME, not by type: a second Management zone backing
-// an environment is still the configuration mistake the rule is for.
+// #865: two Service zones naming one environment is a hard error.
 {
   const net = new FakeNetworkClient();
-  net.seedZone("mgmt2", "Management");
+  net.seedZone("foo");
+  net.seedZone("foo2", "Service", "foo");
   const mod = new FakeModuleClient();
-  const plan = computePlan(env("mgmt2", "mgmt2"), net, mod, { deep: false, skipNetwork: false });
+  const plan = computePlan(env("foo"), net, mod, { deep: false, skipNetwork: false });
   check(
-    (plan.errors ?? []).some((e) => e.includes("is a Management zone, not a Service zone")),
-    "control plane: a SECOND Management zone is still a hard ERROR (exempt by name, not type)",
+    (plan.errors ?? []).some((e) => e.includes("named by 2 Service/Management zones")),
+    "#865: an environment named by two Service zones is a hard ERROR",
   );
 }
 
-// ADR-014 D1: an environment pointed at a NON-Service zone is a hard error.
-// This is the case the ADR calls out — reconcile must not paper over it by
-// minting a second zone underneath the operator.
+// ADR-014 D1: an environment with no zone of its own while a zone of its name
+// exists as something else is a hard error. Reconcile must not paper over it
+// by minting a second zone underneath the operator, nor bind by name.
 {
   const net = new FakeNetworkClient();
-  net.seedZone("foo", "Client"); // the environment names a CLIENT zone
+  net.seedZone("foo", "Client"); // a CLIENT zone of the environment's name (serving it)
   const mod = new FakeModuleClient();
   const plan = computePlan(env("foo", "foo"), net, mod, { deep: false, skipNetwork: false });
   check(
-    (plan.errors ?? []).some((e) => e.includes("is a Client zone, not a Service zone")),
-    "D1: an environment bound to a Client zone is a hard ERROR",
+    (plan.errors ?? []).some((e) => e.includes("has no zone") && e.includes("Client")),
+    "D1: an environment whose only zone is a Client zone is a hard ERROR",
   );
   check(
     !plan.actions.some((a) => a.kind === "create-service-zone"),
@@ -471,12 +468,11 @@ function envNoOwner(name: string, zone: string): Environment {
 // A wildcard-mode environment created after site bootstrap must get its
 // split-horizon `*.<domain>` override and its cert refid from reconcile, not
 // only from the manual acme-setup.sh.
-function wildcardEnv(name: string, zone: string, domain: string): Environment {
+function wildcardEnv(name: string, _zone: string, domain: string): Environment {
   return {
     name,
     displayName: name,
     ownerOrg: "acme",
-    network: { zone },
     domains: { primary: domain, dnsMode: "wildcard" },
   };
 }

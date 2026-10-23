@@ -115,6 +115,24 @@ environment_file() {
     return 1
 }
 
+# Resolve an environment's zone: the one Service (or, for mgmt, Management) zone
+# in zones.json whose `environment` names it (#865 — the zone names the
+# environment, nothing points the other way). Echoes the zone; empty with
+# return 1 when zones.json is absent or no single zone names it.
+#   environment_zone <env-name> [zones_file]
+environment_zone() {
+    local env="$1"
+    local zones="${2:-${CONFIG_DIR}/zones.json}"
+    local found
+    [[ -f "$zones" ]] || return 1
+    found="$(jq -r --arg e "$env" '[to_entries[] | select((.key | startswith("_") | not)
+              and (.value | type) == "object" and .value.environment == $e
+              and ((.value.type // "") | IN("Service", "Management"))) | .key]
+              | if length == 1 then .[0] else empty end' "$zones" 2>/dev/null)" || found=""
+    [[ -n "$found" ]] || return 1
+    printf '%s\n' "$found"
+}
+
 # ── Node lookup helpers (read from site.json) ────────────────────────
 # These functions resolve node hostnames. site.json .hardware.nodes[].name is
 # authoritative; the FQDN is always <name>.mgmt.internal (dns-hostname/ip no
@@ -498,14 +516,14 @@ cert_refid_for_env() {
 # sourced from config/environments/<env>.json:
 #   domain      <- .domains.primary
 #   dnsMode     <- .domains.dnsMode (default "wildcard")
-#   zone        <- .network.zone
+#   zone        <- the zone naming the environment (environment_zone)
 #   description <- .displayName
 #   tlsCertRefid<- runtime cert-refids.json (cert_refid_for_env)
 # Returns 1 if the environment file does not exist.
 #   get_variant_config <env-name>   (use "" for the default environment)
 get_variant_config() {
     local variant="$1"
-    local env env_file refid
+    local env env_file refid zone
 
     # Resolve the environment name: explicit name, else the default env.
     if [[ -n "$variant" ]]; then
@@ -517,6 +535,7 @@ get_variant_config() {
     # Source: environment file + runtime cert-refids.json.
     if env_file="$(environment_file "$env")"; then
         refid="$(cert_refid_for_env "$env")"
+        zone="$(environment_zone "$env")" || zone=""
         # dnsMode defaults to per-service, matching environment-fields.json
         # ("default": "per-service"), environment-manager's config.ts and
         # INSTALL-ENVIRONMENT.md. The shell readers defaulted to "wildcard",
@@ -525,11 +544,11 @@ get_variant_config() {
         # capable provider to issue *.<domain>, and where the registrar cannot
         # do that, no cert and no split-horizon DNS are ever registered. The
         # services then look configured while resolving nowhere.
-        jq -c --arg refid "$refid" '
+        jq -c --arg refid "$refid" --arg zone "$zone" '
             { domain:       (.domains.primary // ""),
               tlsCertRefid: $refid,
               dnsMode:      (.domains.dnsMode // "per-service"),
-              zone:         (.network.zone // null),
+              zone:         (if $zone == "" then null else $zone end),
               description:  (.displayName // "") }' "$env_file"
         return 0
     fi

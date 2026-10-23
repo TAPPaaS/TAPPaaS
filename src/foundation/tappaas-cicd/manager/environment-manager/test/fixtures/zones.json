@@ -8,6 +8,7 @@
   },
   "mgmt": {
     "type": "Management",
+    "environment": "mgmt",
     "vlantag": 0,
     "bridge": "lan",
     "description": "Management zone (fixture)"

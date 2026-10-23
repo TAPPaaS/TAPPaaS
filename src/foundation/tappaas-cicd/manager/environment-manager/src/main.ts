@@ -27,19 +27,23 @@ import {
   environmentsDir,
   loadEnvironment,
   loadEnvironments,
+  environmentZone,
   loadRefSources,
+  OWN_ZONE_TYPES,
+  ownZones,
   parseEnvironment,
   validateEnvironmentRefs,
+  withBinding,
   writeEnvironment,
 } from "./config";
 import { bootstrap, firstOrg, resolveName } from "./bootstrap";
 import { CliDnsTlsClient, CliModuleClient, CliNetworkClient, NetworkUnreachable } from "./clients";
 import { applyPlan, computePlan } from "./reconcile";
 import { runValidate } from "./validate";
-import { DnsTlsClient, Environment, ModuleClient, NetworkClient } from "./types";
+import { DnsTlsClient, Environment, ModuleClient, NetworkClient, RefSources } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { RD, GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
-import { existsSync, readFileSync, readdirSync, unlinkSync } from "fs";
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
 
 // The two always-required bootstrap environments are protected from delete:
@@ -76,7 +80,8 @@ export const HELP: HelpSpec = {
         ["--name N", "Without <env>: the name of the site's default environment to seed (default: site.json .defaultEnvironment)."],
         ["--domain D", "The environment's public primary domain. Left out: no public domain (reached inside only)."],
         ["--owner ORG", "The organization that owns the environment (default: the first organization, by name)."],
-        ["--zone Z", "The network zone its modules run in (default: a zone named like the environment)."],
+        ["--zone Z", "The Service zone its modules run in (default: a zone named like the environment).\n" +
+          "                   The zone is linked to the environment (network-manager bind)."],
         ["--create-zone", "Create that zone as a Service zone first if it does not exist, so one\n" +
           "                   command yields the environment and its zone. Off unless asked, so a\n" +
           "                   mistyped --zone cannot create a stray zone."],
@@ -97,7 +102,8 @@ export const HELP: HelpSpec = {
       options: [
         ["--domain D", "The environment's public primary domain."],
         ["--owner ORG", "The organization that owns the environment."],
-        ["--zone Z", "The network zone its modules run in."],
+        ["--zone Z", "Move the environment to this Service zone: it is linked to the environment\n" +
+          "                   and the old zone's link is cleared (network-manager bind)."],
         ["--display D", "The name people see."],
         [
           "--dns-mode M",
@@ -269,17 +275,18 @@ function cmdList(opts: Opts): void {
     info(JSON.stringify(envs, null, 2));
     return;
   }
-  // Human output: one environment name per line (zone in brackets).
+  // Human output: one environment name per line (zone in brackets). The zone
+  // is the one naming the environment in zones.json (#865).
+  const refs = loadRefSources(opts.configDir);
   for (const n of names) {
-    const e = model.environments.get(n);
-    info(`${n}\t(zone ${e?.network.zone ?? "?"})`);
+    info(`${n}\t(zone ${environmentZone(refs, n) ?? "?"})`);
   }
 }
 
 // Human-readable single-environment summary (default `show` output). An aligned
 // label/value block, mirroring `list`'s human default; the raw JSON document is
 // available via `--json`. Optional fields are printed only when present.
-export function formatEnvironmentHuman(env: Environment): string {
+export function formatEnvironmentHuman(env: Environment, zone?: string): string {
   const lines: string[] = [];
   lines.push(
     env.displayName && env.displayName !== env.name
@@ -289,7 +296,7 @@ export function formatEnvironmentHuman(env: Environment): string {
   const row = (label: string, value: string): void =>
     void lines.push(`  ${label.padEnd(9)} ${value}`);
   row("owner", env.ownerOrg || "<unset>");
-  row("zone", env.network?.zone ?? "<unset>");
+  row("zone", zone ?? "<unset>");
   if (env.domains) {
     const d = env.domains;
     row("domain", (d.primary || "<unset>") + (d.dnsMode ? `  (dnsMode: ${d.dnsMode})` : ""));
@@ -321,7 +328,7 @@ function cmdShow(opts: Opts): void {
     return;
   }
   // Human output: an aligned field summary (raw JSON doc via --json).
-  info(formatEnvironmentHuman(env));
+  info(formatEnvironmentHuman(env, environmentZone(loadRefSources(opts.configDir), name)));
 }
 
 // ── validate ──────────────────────────────────────────────────────────
@@ -355,8 +362,7 @@ function cmdValidate(opts: Opts): void {
 }
 
 // Validate one in-memory env against the ref sources; die on errors.
-function assertValid(opts: Opts, env: Environment, raw: unknown): void {
-  const refs = loadRefSources(opts.configDir);
+function assertValid(env: Environment, raw: unknown, refs: RefSources): void {
   const res = validateEnvironmentRefs(env, raw, refs);
   for (const w of res.warnings) warn(`VALIDATION: ${w}`);
   if (res.errors.length > 0) {
@@ -365,8 +371,31 @@ function assertValid(opts: Opts, env: Environment, raw: unknown): void {
   }
 }
 
+// The zone an add/modify --zone links the environment to must exist (unless it
+// is about to be created), be a Service zone (the Management zone, for mgmt),
+// and not already be another environment's zone. Dies otherwise.
+function checkTargetZone(refs: RefSources, zone: string, env: string, creating: boolean): void {
+  const z = refs.zones.get(zone);
+  if (!z) {
+    if (creating) return;
+    die(
+      `zone '${zone}' does not exist — pass --create-zone to author it as the environment's ` +
+        `Service zone, or name an existing Service zone with --zone`,
+    );
+  }
+  if (!OWN_ZONE_TYPES.has(z.type ?? "")) {
+    die(
+      `zone '${zone}' is a ${z.type ?? "untyped"} zone, not a Service zone. An environment's zone is ` +
+        `a service segment; a client/IoT zone serves one (\`network-manager bind ${zone} --environment ${env}\`) — pick another --zone.`,
+    );
+  }
+  if (z.environment && z.environment !== env) {
+    die(`zone '${zone}' is already environment '${z.environment}''s zone — pick another --zone`);
+  }
+}
+
 // ── add ───────────────────────────────────────────────────────────────
-function cmdAdd(opts: Opts): void {
+function cmdAdd(opts: Opts, net: NetworkClient): void {
   const single = opts.rest[0];
   // No positional env ⇒ seed the minimal set (the create-minimal-environments.sh
   // bootstrap, now native — ADR-007 refactor Phase 8.1). --name passes the
@@ -403,8 +432,8 @@ function cmdAdd(opts: Opts): void {
     name,
     displayName: display,
     ownerOrg: owner,
-    network: { zone: opts.zone ?? name },
   };
+  const zone = opts.zone ?? name;
   if (opts.domain || opts.dnsMode) {
     env.domains = {
       primary: opts.domain ?? "",
@@ -412,42 +441,43 @@ function cmdAdd(opts: Opts): void {
     };
   }
 
-  // ── ADR-014 D1: --create-zone materializes the service zone FIRST ──
-  // The zone must exist before the environment is validated (validate checks
-  // network.zone against zones.json) and before it is written, so a single
-  // command yields a working environment + service zone. Opt-in by design
-  // (ADR-014 resolved choice #1): default-on would let a typo'd --zone silently
-  // mint a stray zone.
+  // ── The environment's zone (ADR-014 D1, #865) ──
+  // The zone names the environment, so the environment file is written first
+  // and network-manager then links the zone to it — with --create-zone, by
+  // authoring it as a Service zone (opt-in by design, ADR-014 resolved choice
+  // #1: default-on would let a typo'd --zone silently mint a stray zone). The
+  // checks run before anything is written, against the refs as they will be;
+  // if network-manager then fails, the environment file is put back.
   //
   // network-manager stays the sole writer of zones.json — this shells across
   // the existing clients.ts seam rather than editing zones directly.
-  if (opts.createZone) {
-    const zone = env.network.zone;
-    const net = new CliNetworkClient();
-    try {
-      if (net.zoneExists(zone)) {
-        const t = net.zoneType(zone);
-        if (t !== undefined && t !== "Service") {
-          die(
-            `--create-zone: zone '${zone}' already exists and is a ${t} zone, not a Service zone. ` +
-              `An environment binds to a service segment — pick another --zone.`,
-          );
-        }
-        info(`Zone '${zone}' already exists — left untouched.`);
-      } else {
-        net.createServiceZone(zone);
-        info(`${GN}Authored service zone '${zone}'${CL} (network-manager add --archetype service)`);
-      }
-    } catch (e) {
-      if (e instanceof NetworkUnreachable) die(`--create-zone: network-manager unreachable: ${e.message}`);
-      die(`--create-zone: could not author zone '${zone}': ${e instanceof Error ? e.message : String(e)}`);
-    }
+  const refs = loadRefSources(opts.configDir);
+  const creating = opts.createZone && refs.zonesAvailable && !refs.zones.has(zone);
+  if (refs.zonesAvailable) {
+    checkTargetZone(refs, zone, name, opts.createZone);
+    if (opts.createZone && !creating) info(`Zone '${zone}' already exists — left untouched.`);
   }
-
-  assertValid(opts, env, env);
+  assertValid(env, env, refs.zonesAvailable ? withBinding(refs, zone, name) : refs);
+  const before = existsSync(path) ? readFileSync(path, "utf8") : null;
   const written = writeEnvironment(opts.configDir, env);
   info(`${GN}Wrote ${written}${CL}`);
-  if (opts.createZone) {
+  if (refs.zonesAvailable && refs.zones.get(zone)?.environment !== name) {
+    try {
+      if (creating) {
+        net.createServiceZone(zone, name);
+        info(`${GN}Authored service zone '${zone}'${CL} (network-manager add --archetype service --environment ${name})`);
+      } else {
+        net.bindZone(zone, name);
+        info(`${GN}Zone '${zone}' is environment '${name}''s zone${CL} (network-manager bind)`);
+      }
+    } catch (e) {
+      if (before === null) unlinkSync(written);
+      else writeFileSync(written, before);
+      const why = e instanceof Error ? e.message : String(e);
+      die(`could not ${creating ? "author" : "link"} zone '${zone}': ${why} — ${written} ${before === null ? "removed" : "restored"}`);
+    }
+  }
+  if (creating) {
     info("");
     info("  To converge the new zone on the planes, run:");
     info("    network-manager reconcile --apply");
@@ -455,7 +485,7 @@ function cmdAdd(opts: Opts): void {
 }
 
 // ── modify ────────────────────────────────────────────────────────────
-function cmdModify(opts: Opts): void {
+function cmdModify(opts: Opts, net: NetworkClient): void {
   const name = opts.rest[0];
   if (!name) die("modify: expected <env>");
   const path = join(environmentsDir(opts.configDir), `${name}.json`);
@@ -465,7 +495,6 @@ function cmdModify(opts: Opts): void {
   const env = parseEnvironment(raw, name);
   if (opts.display) env.displayName = opts.display;
   if (opts.owner) env.ownerOrg = opts.owner;
-  if (opts.zone) env.network.zone = opts.zone;
   if (opts.domain || opts.dnsMode) {
     env.domains = {
       ...(env.domains ?? { primary: "" }),
@@ -473,9 +502,38 @@ function cmdModify(opts: Opts): void {
       ...(opts.dnsMode ? { dnsMode: opts.dnsMode } : {}),
     };
   }
-  assertValid(opts, env, env);
+  // --zone moves the environment to another Service zone (#865): the new zone
+  // names it and the old one no longer does — both written by network-manager.
+  const refs = loadRefSources(opts.configDir);
+  const zone = opts.zone;
+  const moving = zone !== undefined && refs.zones.get(zone)?.environment !== name;
+  if (zone !== undefined) {
+    if (!refs.zonesAvailable) die(`modify --zone: zones.json not available under ${opts.configDir}`);
+    checkTargetZone(refs, zone, name, false);
+  }
+  assertValid(env, env, zone !== undefined ? withBinding(refs, zone, name) : refs);
   const written = writeEnvironment(opts.configDir, env);
   info(`${GN}Updated ${written}${CL}`);
+  if (moving) {
+    const old = ownZones(refs.zones, name);
+    try {
+      for (const o of old) net.unbindZone(o);
+      net.bindZone(zone, name);
+    } catch (e) {
+      // Put the old link back so the environment is not left without a zone.
+      for (const o of old) {
+        try {
+          net.bindZone(o, name);
+        } catch {
+          /* reported below */
+        }
+      }
+      die(`could not move environment '${name}' to zone '${zone}': ${e instanceof Error ? e.message : String(e)}`);
+    }
+    info(`${GN}Zone '${zone}' is environment '${name}''s zone${CL}${old.length ? ` (was ${old.join(", ")})` : ""}`);
+    info("  To apply on the planes, run:");
+    info("    network-manager reconcile --apply");
+  }
 }
 
 // ── delete ────────────────────────────────────────────────────────────
@@ -483,7 +541,7 @@ function cmdModify(opts: Opts): void {
 // default <N> environment = site.json '.defaultEnvironment'), and refuse when deployed modules
 // still consume the env — UNLESS --force. The `add` minimal-set bootstrap is the
 // single owner of the bootstrap files, so they are never casually removed.
-function cmdDelete(opts: Opts, mod: ModuleClient, dt: DnsTlsClient): void {
+function cmdDelete(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: DnsTlsClient): void {
   const name = opts.rest[0];
   if (!name) die("delete: expected <env>");
   const path = join(environmentsDir(opts.configDir), `${name}.json`);
@@ -543,6 +601,19 @@ function cmdDelete(opts: Opts, mod: ModuleClient, dt: DnsTlsClient): void {
   if (dry) info(`delete '${name}' [check] — nothing is changed`);
   if (!dry) unlinkSync(path);
   say(`remove ${path}`);
+
+  // The zones naming the environment lose that link (#865): its own zone stays
+  // as a zone, and the zones that served it stop reaching it.
+  const refs = loadRefSources(opts.configDir);
+  for (const [z, l] of refs.zones) {
+    if (l.environment !== name) continue;
+    try {
+      if (!dry) net.unbindZone(z);
+      say(`clear zone '${z}''s link to '${name}'`);
+    } catch (e) {
+      leftover.push(`zone '${z}' still names '${name}' (network-manager bind ${z} --unbind): ${(e as Error).message}`);
+    }
+  }
 
   if (domain && !ownsDomain) {
     info(`  ${domain} is also used by ${sharedWith.join(", ")} — its DNS override and certificate stay`);
@@ -617,14 +688,14 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: Dns
 
   const planErrors = plan.errors ?? [];
   info(
-    `Reconcile environment '${name}' (zone '${env.network.zone}'${opts.deep ? ", --deep" : ""}): ` +
+    `Reconcile environment '${name}' (zone '${net.environmentZones(name).join(", ") || "none"}'${opts.deep ? ", --deep" : ""}): ` +
       `${plan.actions.length} action(s), ${plan.warnings.length} warning(s)` +
       (planErrors.length > 0 ? `, ${RD}${planErrors.length} error(s)${CL}` : ""),
   );
   for (const w of plan.warnings) warn(w);
   // ADR-014 D1: a hard fault in the plan is refused in BOTH preview and apply —
-  // an environment bound to a Client/IoT zone must be re-pointed by the
-  // operator, never "fixed" by minting a second zone underneath it.
+  // an environment with two zones, or none and a name clash, is the operator's
+  // to fix, never "fixed" by minting a zone underneath it.
   if (planErrors.length > 0) {
     for (const e of planErrors) warn(e);
     die(
@@ -693,13 +764,13 @@ export function run(argv: string[], net: NetworkClient, mod: ModuleClient, dt: D
         cmdValidate(opts);
         return 0;
       case "add":
-        cmdAdd(opts);
+        cmdAdd(opts, net);
         return 0;
       case "modify":
-        cmdModify(opts);
+        cmdModify(opts, net);
         return 0;
       case "delete":
-        cmdDelete(opts, mod, dt);
+        cmdDelete(opts, net, mod, dt);
         return 0;
       case "reconcile":
         return cmdReconcile(opts, net, mod, dt);
@@ -724,7 +795,7 @@ if (require.main === module) {
       if (gate !== undefined) return gate;
       // Resolve config-dir early for the module client's discovery root.
       const opts = parseOpts(argv.slice(1));
-      const net = new CliNetworkClient();
+      const net = new CliNetworkClient(opts.configDir);
       const mod = new CliModuleClient(opts.configDir);
       const dt = new CliDnsTlsClient(opts.configDir);
       return run(argv, net, mod, dt);

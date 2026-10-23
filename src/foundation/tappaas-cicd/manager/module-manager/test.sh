@@ -49,8 +49,14 @@ done
 # LOGIC only — no cluster, no VM provisioning.
 # ---------------------------------------------------------------------------
 FNFILE="${WORK}/resolve.fn.sh"
-# Extract exactly the resolve_default_zone function body from install-module.sh.
-awk '/^resolve_default_zone\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INSTALL" > "$FNFILE"
+# Extract exactly the resolve_default_zone function body from install-module.sh,
+# with the environment_zone helper it calls (common-install-routines.sh, #865).
+CIR="${HERE}/../../lib/common-install-routines.sh"
+{
+  awk '/^environment_zone\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$CIR"
+  echo
+  awk '/^resolve_default_zone\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INSTALL"
+} > "$FNFILE"
 if [[ -s "$FNFILE" ]]; then
     ok "extracted resolve_default_zone from install-module.sh"
 else
@@ -75,8 +81,8 @@ run_resolve() {
 mk_zones() {
     cat > "$1/zones.json" <<'JSON'
 {
-  "acme": { "type": "Service", "vlantag": 200, "bridge": "lan", "state": "Active" },
-  "mgmt": { "type": "Management", "vlantag": 0, "bridge": "lan", "state": "Manual" },
+  "acme": { "type": "Service", "vlantag": 200, "bridge": "lan", "state": "Active", "environment": "acme" },
+  "mgmt": { "type": "Management", "vlantag": 0, "bridge": "lan", "state": "Manual", "environment": "mgmt" },
   "home": { "type": "Client", "vlantag": 100, "bridge": "lan", "state": "Active" }
 }
 JSON
@@ -101,13 +107,13 @@ got="$(run_resolve "$C2b")"
 [[ "$got" == "mgmt" ]] && ok "(2b) site.json.name not in zones.json → falls back to mgmt (got: ${got})" \
                        || bad "(2b) expected 'mgmt', got '${got}'"
 
-# (3) no site.json, exactly one non-mgmt environment → its network.zone
+# (3) no site.json, exactly one non-mgmt environment → the zone naming it
 C3="${WORK}/c3"; mkdir -p "$C3/environments"; mk_zones "$C3"
 cat > "${C3}/environments/mgmt.json" <<'JSON'
-{ "name": "mgmt", "displayName": "Management", "ownerOrg": "o", "network": { "zone": "mgmt" } }
+{ "name": "mgmt", "displayName": "Management", "ownerOrg": "o" }
 JSON
 cat > "${C3}/environments/acme.json" <<'JSON'
-{ "name": "acme", "displayName": "Acme", "ownerOrg": "o", "network": { "zone": "acme" } }
+{ "name": "acme", "displayName": "Acme", "ownerOrg": "o" }
 JSON
 got="$(run_resolve "$C3")"
 [[ "$got" == "acme" ]] && ok "(3) single non-mgmt env → its zone 'acme' (got: ${got})" \
@@ -116,10 +122,10 @@ got="$(run_resolve "$C3")"
 # (3b) two non-mgmt environments → ambiguous → falls back to mgmt
 C3b="${WORK}/c3b"; mkdir -p "$C3b/environments"; mk_zones "$C3b"
 cat > "${C3b}/environments/acme.json" <<'JSON'
-{ "name": "acme", "displayName": "Acme", "ownerOrg": "o", "network": { "zone": "acme" } }
+{ "name": "acme", "displayName": "Acme", "ownerOrg": "o" }
 JSON
 cat > "${C3b}/environments/home.json" <<'JSON'
-{ "name": "home", "displayName": "Home", "ownerOrg": "o", "network": { "zone": "home" } }
+{ "name": "home", "displayName": "Home", "ownerOrg": "o" }
 JSON
 got="$(run_resolve "$C3b")"
 [[ "$got" == "mgmt" ]] && ok "(3b) two non-mgmt envs → ambiguous → mgmt (got: ${got})" \
@@ -200,6 +206,8 @@ run_lint "$be"  && ok "lint: a bogus tier no longer fails — tier is retired, o
 # isolation against fixture CONFIG_DIRs (no cluster, no provisioning).
 P5FN="${WORK}/p5.fn.sh"
 {
+  awk '/^environment_zone\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$CIR"
+  echo
   awk '/^resolve_default_environment\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INSTALL"
   echo
   awk '/^resolve_zone_for_environment\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INSTALL"
@@ -235,13 +243,18 @@ cat > "${EWORK}/site.json" <<'JSON'
 { "name": "acme", "displayName": "Acme", "owner": "acme-org" }
 JSON
 cat > "${EWORK}/environments/mgmt.json" <<'JSON'
-{ "name": "mgmt", "displayName": "Management", "ownerOrg": "o", "network": { "zone": "mgmt" } }
+{ "name": "mgmt", "displayName": "Management", "ownerOrg": "o" }
 JSON
 cat > "${EWORK}/environments/acme.json" <<'JSON'
-{ "name": "acme", "displayName": "Acme", "ownerOrg": "o", "network": { "zone": "acme" } }
+{ "name": "acme", "displayName": "Acme", "ownerOrg": "o" }
 JSON
 cat > "${EWORK}/environments/foo.json" <<'JSON'
-{ "name": "foo", "displayName": "Foo", "ownerOrg": "o", "network": { "zone": "fooZone" } }
+{ "name": "foo", "displayName": "Foo", "ownerOrg": "o" }
+JSON
+cat > "${EWORK}/zones.json" <<'JSON'
+{ "mgmt": { "type": "Management", "environment": "mgmt" },
+  "acme": { "type": "Service", "environment": "acme" },
+  "fooZone": { "type": "Service", "environment": "foo" } }
 JSON
 
 # default environment resolves to the site name 'acme'
@@ -249,9 +262,9 @@ def_env="$(run_p5 "$EWORK" resolve_default_environment)"
 [[ "$def_env" == "acme" ]] && ok "default environment resolves to site name 'acme' (got: ${def_env})" \
                            || bad "expected default env 'acme', got '${def_env}'"
 
-# --environment foo → zone fooZone (from fixture environments/foo.json)
+# --environment foo → zone fooZone (the fixture zone naming foo)
 zfoo="$(run_p5 "$EWORK" resolve_zone_for_environment foo)"
-[[ "$zfoo" == "fooZone" ]] && ok "--environment foo resolves zone 'fooZone' from env file (got: ${zfoo})" \
+[[ "$zfoo" == "fooZone" ]] && ok "--environment foo resolves zone 'fooZone', the zone naming it (got: ${zfoo})" \
                            || bad "expected zone 'fooZone', got '${zfoo}'"
 
 # --environment foo → vmname m-foo (non-default env)
@@ -381,7 +394,7 @@ cat > "${MDIR}/foundmod.json" <<'JSON'
 JSON
 FCFG="${WORK}/fcfg"; mkdir -p "${FCFG}/environments"
 cat > "${FCFG}/environments/foo.json" <<'JSON'
-{ "name": "foo", "ownerOrg": "o", "network": { "zone": "fooZone" } }
+{ "name": "foo", "ownerOrg": "o" }
 JSON
 
 rej_out="$( cd "$MDIR" && CONFIG_DIR="$FCFG" bash "$SINSTALL" foundmod --environment foo 2>&1 )"; rej_rc=$?

@@ -368,8 +368,8 @@ proxy_fetch() {        # $1 = fqdn, $2 = attempts (default 12 -> ~60s)
             # to the target environment's zone), so the hardcoded name stopped
             # resolving and the env-delivery check could never pass.
             _oz="$(jq -r '.zone0 // empty' "${CONFIG_DIR}/test-idoidc.json" 2>/dev/null)"
-            [[ -n "${_oz}" ]] || _oz="$(jq -r '.network.zone // empty' \
-                "${CONFIG_DIR}/environments/$(jq -r '.defaultEnvironment // .name' "${CONFIG_DIR}/site.json" 2>/dev/null).json" 2>/dev/null)"
+            [[ -n "${_oz}" ]] || _oz="$(environment_zone \
+                "$(jq -r '.defaultEnvironment // .name' "${CONFIG_DIR}/site.json" 2>/dev/null)")" || _oz=""
             _ohost="test-idoidc.${_oz:-mgmt}.internal"
             info "  OIDC VM internal FQDN: ${_ohost}"
             ver="$(ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10 "tappaas@${_ohost}" 'cat /var/lib/test-idoidc/oidc-verified 2>/dev/null' 2>/dev/null)"

@@ -7,11 +7,17 @@ export class FakeNetworkClient implements NetworkClient {
   zones = new Set<string>();
   // zone name → type, for the ADR-014 D1 "is it a Service zone?" check.
   types = new Map<string, string>();
+  // zone name → the environment it names (#865).
+  envs = new Map<string, string>();
   log: string[] = [];
 
-  seedZone(name: string, type = "Service"): void {
+  // A seeded zone names the environment of its own name unless told otherwise
+  // (`environment: null` for none) — the common shape of a site's zones.
+  seedZone(name: string, type = "Service", environment: string | null = name): void {
     this.zones.add(name);
     this.types.set(name, type);
+    if (environment !== null) this.envs.set(name, environment);
+    else this.envs.delete(name);
   }
 
   zoneExists(zone: string): boolean {
@@ -20,10 +26,24 @@ export class FakeNetworkClient implements NetworkClient {
   zoneType(zone: string): string | undefined {
     return this.zones.has(zone) ? this.types.get(zone) : undefined;
   }
-  createServiceZone(zone: string): void {
+  environmentZones(env: string): string[] {
+    return [...this.zones]
+      .filter((z) => ["Service", "Management"].includes(this.types.get(z) ?? "") && this.envs.get(z) === env)
+      .sort();
+  }
+  createServiceZone(zone: string, env: string): void {
     this.log.push(`create-service-zone ${zone}`);
     this.zones.add(zone);
     this.types.set(zone, "Service");
+    this.envs.set(zone, env);
+  }
+  bindZone(zone: string, env: string): void {
+    this.log.push(`bind ${zone} ${env}`);
+    this.envs.set(zone, env);
+  }
+  unbindZone(zone: string): void {
+    this.log.push(`unbind ${zone}`);
+    this.envs.delete(zone);
   }
   reconcileNetwork(apply: boolean): void {
     this.log.push(`reconcile-network ${apply ? "apply" : "preview"}`);

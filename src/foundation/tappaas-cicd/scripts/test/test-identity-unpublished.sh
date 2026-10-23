@@ -44,14 +44,12 @@ mkdir -p "${TMP}/environments"
 # An internal-only environment, exactly as makerfloss has it: schema-valid,
 # with no `domains` object at all.
 cat > "${TMP}/environments/mgmt.json" <<'EOF'
-{ "name": "mgmt", "displayName": "Management", "ownerOrg": "test",
-  "network": { "zone": "mgmt" } }
+{ "name": "mgmt", "displayName": "Management", "ownerOrg": "test" }
 EOF
 # A published environment, as hrossen and every app environment have it.
 cat > "${TMP}/environments/pub.json" <<'EOF'
 { "name": "pub", "displayName": "Published", "ownerOrg": "test",
-  "domains": { "primary": "example.test", "dnsMode": "per-service" },
-  "network": { "zone": "srvHome" } }
+  "domains": { "primary": "example.test", "dnsMode": "per-service" } }
 EOF
 
 # The module never hardcodes proxyDomain — the case that matters, because that

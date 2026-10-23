@@ -11,6 +11,7 @@ import { basename, join } from "path";
 import { captureResult, stream } from "../../../lib/ts/src/exec";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { DnsTlsClient, ModuleClient, NetworkClient, NetworkUnreachable, WildcardDnsState } from "./types";
+import { ownZones, readZoneLinks } from "./config";
 
 // Re-exported: NetworkUnreachable now lives in types.ts (the client boundary
 // contract) so the pure reconcile engine can distinguish "binary missing" from
@@ -76,16 +77,24 @@ function run(bin: string, args: string[]): string {
 }
 
 export class CliNetworkClient implements NetworkClient {
+  // The config root whose zones.json this client reads and has network-manager
+  // write — the same root the environment files live under.
+  constructor(private readonly configDir: string = defaultConfigDir()) {}
+
+  private get zonesArgs(): string[] {
+    return ["--zones-file", join(this.configDir, "zones.json")];
+  }
+
   zoneExists(zone: string): boolean {
     // network-manager exists <name> — exit 0 if present, non-zero otherwise.
-    const r = captureResult(NETWORK_MANAGER_BIN(), ["exists", zone]);
+    const r = captureResult(NETWORK_MANAGER_BIN(), ["exists", zone, ...this.zonesArgs]);
     if (!r.ran) throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN()} exists: ${r.stderr}`);
     return r.rc === 0;
   }
 
   zoneType(zone: string): string | undefined {
     // network-manager show <zone> --json — the zone object, or non-zero if absent.
-    const r = captureResult(NETWORK_MANAGER_BIN(), ["show", zone, "--json"]);
+    const r = captureResult(NETWORK_MANAGER_BIN(), ["show", zone, "--json", ...this.zonesArgs]);
     if (!r.ran) throw new NetworkUnreachable(`${NETWORK_MANAGER_BIN()} show: ${r.stderr}`);
     if (r.rc !== 0) return undefined;
     try {
@@ -96,13 +105,28 @@ export class CliNetworkClient implements NetworkClient {
     }
   }
 
-  createServiceZone(zone: string): void {
+  environmentZones(env: string): string[] {
+    // Read-only: zones.json is network-manager's to write, anyone's to read.
+    const f = join(this.configDir, "zones.json");
+    if (!existsSync(f)) return [];
+    return ownZones(readZoneLinks(f), env);
+  }
+
+  createServiceZone(zone: string, env: string): void {
     // ADR-014 D1/D5: author via the `service` archetype so the new zone lands
     // tier-correct (type/typeId/tier + access-to seed) rather than with bare
-    // defaults. --no-activate keeps zone authoring separate from plane
-    // convergence: the caller's own reconcile pass converges it, so we do not
-    // trigger a second whole-system pass here (#461).
-    run(NETWORK_MANAGER_BIN(), ["add", zone, "--archetype", "service", "--no-activate"]);
+    // defaults, naming its environment (#865). --no-activate keeps zone
+    // authoring separate from plane convergence: the caller's own reconcile
+    // pass converges it, so we do not trigger a second whole-system pass (#461).
+    run(NETWORK_MANAGER_BIN(), ["add", zone, "--archetype", "service", "--environment", env, "--no-activate", ...this.zonesArgs]);
+  }
+
+  bindZone(zone: string, env: string): void {
+    run(NETWORK_MANAGER_BIN(), ["bind", zone, "--environment", env, ...this.zonesArgs]);
+  }
+
+  unbindZone(zone: string): void {
+    run(NETWORK_MANAGER_BIN(), ["bind", zone, "--unbind", ...this.zonesArgs]);
   }
 
   reconcileNetwork(apply: boolean): void {

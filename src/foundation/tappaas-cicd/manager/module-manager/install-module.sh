@@ -81,8 +81,8 @@ Arguments:
 Options:
     --environment <name>     Target environment (ADR-007 P5). Drives the VM name
                              (<module> in the default env, else <module>-<env>)
-                             and zone0 (from config/environments/<env>.json →
-                             network.zone). Site-scoped modules (the foundation
+                             and zone0 (the zone in zones.json naming that
+                             environment). Site-scoped modules (the foundation
                              stack, ADR-022e) may ONLY be installed into 'mgmt'.
     --variant <name>         DEPRECATED alias for --environment (compat period).
                              --environment wins if both are given.
@@ -100,8 +100,8 @@ Environment / zone resolution (ADR-007 P5):
     * else scope:site (the foundation stack) → 'mgmt'.
     * else                         → the default environment (single non-mgmt
                                       env / site name); else today's behaviour.
-    zone0: explicit .zone0 in the JSON wins; else the environment's network.zone
-    (when the env file exists); else resolve_default_zone() (back-compat).
+    zone0: explicit .zone0 in the JSON wins; else the environment's zone (the
+    Service zone naming it in zones.json); else resolve_default_zone() (back-compat).
 
 Examples:
     ${SCRIPT_NAME} vaultwarden
@@ -122,7 +122,7 @@ EOF
 #   1. explicit .zone0 in the module JSON          (handled by the caller — wins)
 #   2. site.json '.defaultEnvironment' (pre-#426: '.name')  (when site.json exists
 #                                                    AND that zone exists in zones.json)
-#   3. the single non-mgmt environment's network.zone
+#   3. the single non-mgmt environment's zone (the zone naming it)
 #                                                  (when exactly one such env exists)
 #   4. fall back to "mgmt" (today's behaviour)     (pre-cutover: no site.json /
 #                                                    environments yet) — with a warn
@@ -146,19 +146,18 @@ resolve_default_zone() {
         fi
     fi
 
-    # (3) exactly one non-mgmt environment → its network.zone.
+    # (3) exactly one non-mgmt environment → its zone (the zone naming it, #865).
     if [[ -d "$env_dir" ]]; then
         local f base zone count=0 only_zone=""
         for f in "$env_dir"/*.json; do
             [[ -e "$f" ]] || continue
             base="$(basename "$f" .json)"
             [[ "$base" == "mgmt" ]] && continue
-            zone="$(jq -r '.network.zone // empty' "$f" 2>/dev/null)"
-            [[ -n "$zone" ]] || continue
+            zone="$(environment_zone "$base" "$zones_file")" || zone=""
             count=$((count + 1))
             only_zone="$zone"
         done
-        if [[ "$count" -eq 1 ]]; then
+        if [[ "$count" -eq 1 && -n "$only_zone" ]]; then
             printf '%s\n' "$only_zone"
             return 0
         fi
@@ -218,16 +217,20 @@ resolve_default_environment() {
     return 0
 }
 
-# Echo the zone for a given environment name, by reading
-# environments/<env>.json → .network.zone. Echoes empty if the file is absent
-# or declares no zone (caller falls back to resolve_default_zone for back-compat).
+# Echo the zone for a given environment name: the zone in zones.json naming it
+# (environment_zone, #865). Echoes empty if the environment file is absent or no
+# single zone names it (caller falls back to resolve_default_zone for back-compat).
 resolve_zone_for_environment() {
     local env="$1"
     local env_file="${CONFIG_DIR}/environments/${env}.json"
+    local zone=""
     # mgmt is the control plane: its zone is mgmt, file or not — the bootstrap
     # installs foundation modules before environment-manager has written it (#349).
-    [[ -f "$env_file" ]] || { [[ "${env}" == mgmt ]] && printf 'mgmt\n' || printf '%s\n' ""; return 0; }
-    jq -r '.network.zone // empty' "$env_file" 2>/dev/null
+    if [[ -f "$env_file" ]]; then
+        zone="$(environment_zone "$env")" || zone=""
+    fi
+    [[ -z "$zone" && "${env}" == mgmt ]] && zone="mgmt"
+    printf '%s\n' "$zone"
 }
 
 # True when the module (in the current directory) declares a `kind` that is NOT
@@ -664,7 +667,7 @@ main() {
 
     # zone0 resolution (ADR-007 P5, reconciled with S6 N6): precedence is
     #   1. explicit .zone0 in the module JSON / --zone0 override  (always wins)
-    #   2. the target environment's network.zone                 (env file exists)
+    #   2. the target environment's zone (naming it in zones.json) (env file exists)
     #   3. resolve_default_zone()                                (back-compat)
     # The resolved value is written back into the module JSON so every downstream
     # consumer (the module's own install.sh, network provisioning) sees it.

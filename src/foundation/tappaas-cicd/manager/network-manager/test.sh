@@ -163,6 +163,49 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         else
             ok "zones-check CLI exits non-zero on a dangling access-to reference"
         fi
+        # ── bind / add --environment (#865, offline, the temp config only) ──
+        # A zone names one environment, and an environment has one zone of its own.
+        NMB="TAPPAAS_CONFIG='${ZC_DIR}' NM_NO_DISTRIBUTE=1 NM_OPNSENSE_FIREWALL_BIN=/bin/false node '${DIST_TEST}/manager/network-manager/src/main.js'"
+        ZCZ="--zones-file '${ZC_DIR}/zones.json'"
+        zenv() { run_ts "node -e 'const z=require(\"${ZC_DIR}/zones.json\"); process.stdout.write(String((z[\"$1\"]||{}).environment))'" 2>/dev/null; }
+        printf '{"name":"lab","displayName":"Lab","ownerOrg":"o"}\n' > "${ZC_DIR}/environments/lab.json"
+        if run_ts "${NMB} add lab2 --archetype service --environment acme --no-activate ${ZCZ}" >/dev/null 2>&1; then
+            bad "add --environment: a second Service zone for acme was NOT refused"
+        else
+            ok "add --environment: a second Service zone for an environment is refused"
+        fi
+        if run_ts "${NMB} add labZone --archetype service --environment lab --no-activate ${ZCZ}" >/dev/null 2>&1 \
+            && [[ "$(zenv labZone)" == "lab" ]]; then
+            ok "add --archetype service --environment lab: the new zone is lab's zone"
+        else
+            bad "add --environment did not author labZone naming lab"
+        fi
+        if run_ts "${NMB} bind guest --environment lab ${ZCZ}" >/dev/null 2>&1 && [[ "$(zenv guest)" == "lab" ]]; then
+            ok "bind: a Guest zone serves lab"
+        else
+            bad "bind guest --environment lab failed"
+        fi
+        if run_ts "${NMB} bind home --environment lab --add ${ZCZ}" >/dev/null 2>&1; then
+            bad "bind --add was accepted (a zone names one environment)"
+        else
+            ok "bind --add is refused: a zone names one environment"
+        fi
+        if run_ts "${NMB} bind acme --environment lab ${ZCZ}" >/dev/null 2>&1 || [[ "$(zenv acme)" != "acme" ]]; then
+            bad "bind moved acme's own zone to lab"
+        else
+            ok "bind: another environment's Service zone is not taken over"
+        fi
+        if run_ts "${NMB} bind wan --environment lab ${ZCZ}" >/dev/null 2>&1; then
+            bad "bind accepted an environment on a WAN zone"
+        else
+            ok "bind: a WAN zone names no environment"
+        fi
+        if run_ts "${NMB} bind labZone --unbind ${ZCZ}" >/dev/null 2>&1 && [[ "$(zenv labZone)" == "undefined" ]] \
+            && ! run_ts "${NMB} zones-check --zones '${ZC_DIR}/zones.json' --config-dir '${ZC_DIR}'" >/dev/null 2>&1; then
+            ok "bind --unbind clears the link, and validate then fails: lab has no zone"
+        else
+            bad "unbinding lab's zone should leave a config validate refuses"
+        fi
         rm -rf -- "${ZC_DIR}" "${ZC_BAD_DIR}"
 
         # ── distribute CLI smoke (offline; NO real scp) ─────────────

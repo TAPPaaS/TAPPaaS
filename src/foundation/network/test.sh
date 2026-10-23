@@ -1454,8 +1454,7 @@ else
     SNAT_ENV=$(jq -r '.defaultEnvironment // empty' "${CONFIG_DIR}/site.json" 2>/dev/null)
     SNAT_SRC_ZONE=""
     if [[ -n "${SNAT_ENV}" && -f "${CONFIG_DIR}/environments/${SNAT_ENV}.json" ]]; then
-        SNAT_SRC_ZONE=$(jq -r '.network.zone // empty' \
-            "${CONFIG_DIR}/environments/${SNAT_ENV}.json" 2>/dev/null)
+        SNAT_SRC_ZONE="$(environment_zone "${SNAT_ENV}")" || SNAT_SRC_ZONE=""
     fi
     TFW_IOT_FQDN="test-fw-iot.${TFW_IOT_ZONE}.internal"
     TFW_A_FQDN="test-fw-a.${TFW_A_ZONE}.internal"
@@ -2217,7 +2216,7 @@ EVIDENCE
     _snat_provided=$(jq -r '[.provides[]?] | index("snat") // empty' \
         "${CONFIG_DIR}/network.json" 2>/dev/null)
     if [[ -z "${SNAT_SRC_ZONE}" ]]; then
-        skip "source NAT (no defaultEnvironment/.network.zone in site.json)"
+        skip "source NAT (site.json names no defaultEnvironment, or no zone names it)"
     elif ! command -v snat-manager >/dev/null 2>&1; then
         skip "source NAT (snat-manager CLI not installed — rebuild tappaas-cicd)"
     elif [[ -z "${_snat_provided}" ]]; then

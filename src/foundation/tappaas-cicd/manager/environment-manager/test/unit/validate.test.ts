@@ -30,12 +30,17 @@ const envDir = join(root, "environments");
 mkdirSync(envDir, { recursive: true });
 mkdirSync(join(root, "people", "organizations"), { recursive: true });
 writeFileSync(join(root, "people", "organizations", "test2.json"), `{ "name": "test2" }\n`);
-writeFileSync(join(root, "zones.json"), JSON.stringify({ mgmt: {}, home: {} }));
+// Each environment's zone names it (#865): vFile adds a Service zone for the
+// document's name, unless told the environment has none.
+const zones: Record<string, unknown> = { mgmt: { type: "Management", environment: "mgmt" }, home: { type: "Client" } };
+writeFileSync(join(root, "zones.json"), JSON.stringify(zones));
 
 const schemaDir = resolveSchemaDir();
 
 // Write an environment doc and validate ONLY that file (isolated per test).
-function vFile(name: string, doc: unknown): ValidateReport {
+function vFile(name: string, doc: unknown, zoned = true): ValidateReport {
+  if (zoned && name !== "mgmt") zones[`${name}Zone`] = { type: "Service", environment: name };
+  writeFileSync(join(root, "zones.json"), JSON.stringify(zones));
   const p = join(envDir, `${name}.json`);
   writeFileSync(p, typeof doc === "string" ? doc : JSON.stringify(doc, null, 2));
   return runValidate({ configDir: root, target: p, schemaDir });
@@ -52,7 +57,6 @@ try {
     name: "mgmt",
     displayName: "Management",
     ownerOrg: "test2",
-    network: { zone: "mgmt" },
   });
   check(minimal.errors.length === 0 && minimal.warnings.length === 0, "minimal (mgmt-style) env is valid");
 
@@ -66,7 +70,6 @@ try {
       aliasMode: "redirect",
       dnsMode: "wildcard",
     },
-    network: { zone: "home" },
     dataResidency: "eu-only",
     backup: { retention: "7y", residency: "eu-only", schedule: null },
     legal: { processor: "Acme BV" },
@@ -77,14 +80,13 @@ try {
     name: "nulls",
     displayName: "Nulls",
     ownerOrg: "test2",
-    network: { zone: "home" },
     backup: null,
     legal: null,
   });
   check(nulls.errors.length === 0, "backup:null / legal:null accepted (union types)");
 
   // ── schema conformance errors ───────────────────────────────────────
-  const miss = vFile("miss", { name: "miss", ownerOrg: "test2", network: { zone: "home" } });
+  const miss = vFile("miss", { name: "miss", ownerOrg: "test2" });
   check(hasErr(miss, "'displayName' is a required property"), "missing required field reported");
   check(hasErr(miss, "(root):"), "required-field error is located at (root)");
 
@@ -93,7 +95,6 @@ try {
     displayName: "Evil",
     ownerOrg: "test2",
     domains: { primary: "evil.example", tlsCertRefid: "abc123" },
-    network: { zone: "home" },
   });
   check(
     hasErr(evil, "Additional properties are not allowed ('tlsCertRefid' was unexpected)"),
@@ -109,7 +110,6 @@ try {
     displayName: "Evil2",
     ownerOrg: "test2",
     tlsCertRefid: "topbeef",
-    network: { zone: "home" },
   });
   check(
     hasErr(evil2, "'tlsCertRefid' was unexpected") && hasErr(evil2, "authored 'tlsCertRefid'"),
@@ -120,7 +120,6 @@ try {
     name: "bad name!",
     displayName: "Bad",
     ownerOrg: "test2",
-    network: { zone: "home" },
   });
   check(hasErr(badname, "does not match"), "name pattern violation reported");
 
@@ -128,7 +127,6 @@ try {
     name: "short",
     displayName: "",
     ownerOrg: "test2",
-    network: { zone: "home" },
   });
   check(hasErr(short, "is too short"), "displayName minLength violation reported");
 
@@ -137,7 +135,6 @@ try {
     displayName: "Bad Enum",
     ownerOrg: "test2",
     domains: { primary: "x.example", aliasMode: "banana" },
-    network: { zone: "home" },
   });
   check(hasErr(badenum, "is not one of ['redirect', 'mirror']"), "enum violation reported");
   check(hasErr(badenum, "domains/aliasMode:"), "enum error carries the instance path");
@@ -146,7 +143,6 @@ try {
     name: "badtype",
     displayName: "Bad Type",
     ownerOrg: "test2",
-    network: { zone: "home" },
     backup: "often",
   });
   check(hasErr(badtype, "is not of type 'object', 'null'"), "union type violation reported");
@@ -156,7 +152,6 @@ try {
     displayName: "Dup",
     ownerOrg: "test2",
     domains: { primary: "d.example", aliases: ["a.example", "a.example"] },
-    network: { zone: "home" },
   });
   check(hasErr(dup, "has non-unique elements"), "duplicate aliases (uniqueItems) reported");
 
@@ -168,15 +163,21 @@ try {
     name: "badzone",
     displayName: "Bad Zone",
     ownerOrg: "test2",
-    network: { zone: "no-such-zone" },
-  });
-  check(hasErr(badzone, "references unknown zone 'no-such-zone'"), "dangling network.zone reported");
+  }, false);
+  check(hasErr(badzone, "no Service or Management zone names environment 'badzone'"), "an environment no zone names is reported");
+
+  zones["twinA"] = { type: "Service", environment: "twin" };
+  zones["twinB"] = { type: "Service", environment: "twin" };
+  const twin = vFile("twin", { name: "twin", displayName: "Twin", ownerOrg: "test2" }, false);
+  check(hasErr(twin, "named by 2 Service/Management zones"), "an environment named by two Service zones is reported");
+
+  const legacy = vFile("legacy", { name: "legacy", displayName: "Legacy", ownerOrg: "test2", network: { zone: "home" } });
+  check(hasErr(legacy, "'network' was unexpected"), "an environment that still names a zone is refused by the schema");
 
   const badorg = vFile("badorg", {
     name: "badorg",
     displayName: "Bad Org",
     ownerOrg: "no-such-org",
-    network: { zone: "home" },
   });
   check(hasErr(badorg, "references unknown organization 'no-such-org'"), "dangling ownerOrg reported");
 
@@ -190,7 +191,7 @@ try {
   writeFileSync(join(root2, "people", "organizations", "test2.json"), `{ "name": "test2" }\n`);
   writeFileSync(
     join(root2, "environments", "solo.json"),
-    JSON.stringify({ name: "solo", displayName: "Solo", ownerOrg: "test2", network: { zone: "home" } }),
+    JSON.stringify({ name: "solo", displayName: "Solo", ownerOrg: "test2" }),
   );
   const noZones = runValidate({ configDir: root2, schemaDir });
   check(

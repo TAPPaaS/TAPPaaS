@@ -137,13 +137,11 @@ cat > "${WORK}/site.json" <<'JSON'
 JSON
 cat > "${WORK}/environments/base.json" <<'JSON'
 { "name": "base", "displayName": "Default", "ownerOrg": "test2",
-  "domains": { "primary": "base.org", "dnsMode": "wildcard" },
-  "network": { "zone": "base" } }
+  "domains": { "primary": "base.org", "dnsMode": "wildcard" } }
 JSON
 cat > "${WORK}/environments/tenant.json" <<'JSON'
 { "name": "tenant", "displayName": "Tenant", "ownerOrg": "test2",
-  "domains": { "primary": "tenant.example.com", "dnsMode": "per-service" },
-  "network": { "zone": "tenant" } }
+  "domains": { "primary": "tenant.example.com", "dnsMode": "per-service" } }
 JSON
 # Runtime cert-refids: the default (wildcard) env has a refid; the per-service
 # tenant env has none.
@@ -157,18 +155,20 @@ assert_eq "$(get_variant_config tenant   | jq -r '.tlsCertRefid')" ""       "per
 
 # ── ADR-021 D2: the wildcard target does NOT depend on the environment ───────
 # acme-setup.sh used to derive the wildcard target as
-# zone_gateway_ip(env's .network.zone) — the #504 interim rule, and one of the
+# zone_gateway_ip(the env's service zone) — the #504 interim rule, and one of the
 # three disagreeing transcriptions of #577. It now asks
 # `network-manager split-horizon-target`, which answers the DMZ gateway for every
 # domain. The environment still exposes its service zone (modules land there);
 # what changed is that the DNS answer no longer reads it.
 cat > "${WORK}/environments/wild.json" <<'JSON'
 { "name": "wild", "displayName": "Wild", "ownerOrg": "t",
-  "domains": { "primary": "wild.example", "dnsMode": "wildcard" },
-  "network": { "zone": "work" } }
+  "domains": { "primary": "wild.example", "dnsMode": "wildcard" } }
 JSON
+# Its service zone names it (#865).
+jq '. + { "wildZone": { "type": "Service", "ip": "10.3.20.0/24", "environment": "wild" } }' \
+    "${WORK}/zones.json" > "${WORK}/zones.json.tmp" && mv "${WORK}/zones.json.tmp" "${WORK}/zones.json"
 WILD_ZONE="$(get_variant_config wild | jq -r '.zone')"
-assert_eq "${WILD_ZONE}" "work" "wildcard env still exposes its service zone (modules land there)"
+assert_eq "${WILD_ZONE}" "wildZone" "wildcard env still exposes its service zone (modules land there)"
 mk_stub "10.6.0.1" 0
 assert_eq "$(proxy_split_horizon_target wild.example "${ZF}" 2>/dev/null)" "10.6.0.1" \
     "wildcard split-horizon -> the DMZ gateway, NOT the env service zone (ADR-021 D2)"
