@@ -354,41 +354,78 @@ function mlagSite(): TopoSources {
   check(compactPorts(["sfp-sfpplus15", "sfp-sfpplus16"]) === "sfp-sfpplus15+16" && compactPorts(["11", "12"]) === "11+12", "port lists compact");
 }
 
-// ── the racks (rack-manager export) ─────────────────────────────────
-check(t.racks === null && !t.sources.some((s) => s.name === "rack-manager export"), "no racks read: racks is null and not a source");
+// ── the positions (position-manager export) ───────────────────────────
+check(t.positions === null && !t.sources.some((s) => s.name === "position-manager export"), "no positions read: positions is null and not a source");
+check(t.nodes.every((n) => n.source === "cluster" && n.location === "rodovre" && n.placement === null), "every node: from the cluster, at the primary location, placed nowhere");
+check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPoints.every((a) => a.source === "switch-configuration" && a.location === "rodovre"), "switches and access points: from the switch configuration, at the primary location");
 {
   const plate = (key: string, units: number, generic?: "nics" | "ports") => ({ key, vendor: "Generic", model: key, kind: "server" as const, units, width: "full" as const, rows: [], ...(generic ? { generic } : {}) });
   const catalog = [plate("generic/server-2u", 2, "nics"), { ...plate("generic/switch-1u", 1, "ports"), kind: "switch" as const }];
   const doc = {
     version: 1 as const,
-    racks: { rack1: { units: 42, width: "19in" as const, numbering: "bottom-up" as const } },
-    mounts: {
+    rooms: { basement: {}, shed: { location: "hareskov" } },
+    racks: { rack1: { units: 42, width: "19in" as const, numbering: "bottom-up" as const, room: "basement" } },
+    placements: {
       tappaas1: { rack: "rack1", u: 10, height: 2, width: "full" as const, face: "front" as const, faceplate: "generic/server-2u" },
       [SW]: { rack: "rack1", u: 20, height: 1, width: "full" as const, face: "front" as const },
       tappaas7: { rack: "rack1", u: 30, height: 1, width: "full" as const, face: "front" as const },
     },
   };
-  const x = buildTopology({ ...hrossen(), racks: { doc, catalog } });
-  const r = x.racks!;
-  check(r.racks.length === 1 && r.racks[0].mounts.length === 3, "the rack with its mounts");
-  const m = r.racks[0].mounts.find((y) => y.device === SW)!;
+  const site = { ...hrossen().site, location: undefined, locations: { rodovre: { country: "DK", city: "Rodovre", timezone: "Europe/Copenhagen" }, hareskov: { kind: "remote", country: "DK", city: "Hareskov" } }, primaryLocation: "rodovre" };
+  const x = buildTopology({ ...hrossen(), site, positions: { doc, catalog } });
+  const r = x.positions!;
+  check(r.racks.length === 1 && r.racks[0].placements.length === 3 && r.racks[0].location === "rodovre", "the rack with its placements, at its room's location");
+  check(r.locations.map((l) => `${l.name}:${l.primary}:${l.rooms.join("+")}`).join(",") === "rodovre:true:basement,hareskov:false:shed", "the locations, the primary first, each with its rooms");
+  check(r.rooms.find((y) => y.name === "basement")?.location === "rodovre" && r.rooms.find((y) => y.name === "shed")?.location === "hareskov", "a room without a location is at the primary one");
+  const m = r.racks[0].placements.find((y) => y.device === SW)!;
   check(m.faceplate === "generic/switch-1u" && m.suggested && m.plate!.rows.length === 2, "an unrecorded plate: the generic switch, odd over even");
+  check(x.nodes.find((n) => n.name === "tappaas1")?.placement?.rack === "rack1" && x.nodes.find((n) => n.name === "tappaas1")?.placement?.room === "basement" && x.nodes.find((n) => n.name === "tappaas1")?.placement?.u === 10, "a node's placement: its rack, its room and its unit");
   check(r.cables.some((c) => c.to.device === "tappaas1" && c.from.port === "11" && c.lag !== null), "tappaas1's LAG legs are cables on the switch's ports");
-  check(x.findings.some((f) => f.gate === "topology" && f.on.kind === "rack" && f.on.name === "rack1" && /tappaas7/.test(f.text)), "a mount whose device is gone: a finding on the rack");
+  check(x.findings.some((f) => f.gate === "topology" && f.on.kind === "rack" && f.on.name === "rack1" && /tappaas7/.test(f.text)), "a placement whose device is gone: a finding on the rack");
   check(x.findings.some((f) => f.gate === "topology" && f.on.kind === "node" && f.on.name === "tappaas2" && /placed nowhere/.test(f.text)), "a node placed nowhere: a finding on it");
-  check(x.findings.some((f) => f.on.kind === "ap" && f.on.name === "Nano HD"), "an access point mounted nowhere: a finding on it");
-  check(renderTopology(x).some((l) => /^ {4}U20 front {2}USW Pro XG 10 PoE {2}generic\/switch-1u \(suggested\)/.test(l)), "the text view lists the mounts");
-  // A device rack-manager records is a device of the topology, with its kind and ports.
-  const rec = buildTopology({ ...hrossen(), racks: { doc: { ...doc, devices: { "ISP modem": { kind: "modem" as const, ports: ["WAN", "LAN 1"], displayName: "Provider modem" } } }, catalog } });
+  check(x.findings.some((f) => f.on.kind === "ap" && f.on.name === "Nano HD"), "an access point placed nowhere: a finding on it");
+  check(r.locations[0].unplaced.includes("tappaas2") && r.unplaced.find((u) => u.device === "tappaas2")?.location === "rodovre", "…listed under its location");
+  check(renderTopology(x).some((l) => /^ {8}U20 front {2}USW Pro XG 10 PoE {2}generic\/switch-1u \(suggested\)/.test(l)) && renderTopology(x).some((l) => /^ {2}rodovre \(primary\)/.test(l)), "the text view lists the placements by location, room and rack");
+  // A device position-manager records is a device of the topology, with its kind and ports.
+  const rec = buildTopology({ ...hrossen(), site, positions: { doc: { ...doc, devices: { "ISP modem": { kind: "modem" as const, ports: ["WAN", "LAN 1"], displayName: "Provider modem" }, ont: { kind: "ont" as const, ports: ["1"], location: "hareskov" } } }, catalog } });
   const modem = rec.devices.find((y) => y.name === "ISP modem");
-  check(modem?.kind === "modem" && modem.recorded === true && modem.ports?.join() === "WAN,LAN 1" && modem.displayName === "Provider modem", "a recorded device: in devices, with its kind, ports and name");
-  check(rec.racks!.unplaced.some((u) => u.device === "ISP modem" && u.recorded === "modem"), "…and mounted nowhere, until it is mounted");
+  check(modem?.kind === "modem" && modem.recorded === true && modem.ports?.join() === "WAN,LAN 1" && modem.displayName === "Provider modem" && modem.source === "recorded" && modem.location === "rodovre", "a recorded device: in devices, with its kind, ports, name, source and location");
+  check(rec.positions!.unplaced.some((u) => u.device === "ISP modem" && u.recorded === "modem"), "…and placed nowhere, until it is placed");
+  check(rec.devices.find((y) => y.name === "ont")?.location === "hareskov" && rec.positions!.locations[1].unplaced.includes("ont"), "a recorded device at another location is listed there");
+  const far = buildTopology({ ...hrossen(), site, positions: { doc: { ...doc, rooms: { basement: {} }, devices: { ont: { kind: "ont" as const, ports: ["1"], location: "hareskov" } } }, catalog } });
+  check(!far.findings.some((f) => /ont is placed nowhere/.test(f.text)) && far.positions!.locations.find((l) => l.name === "hareskov")?.unplaced.includes("ont") === true, "a device at a location with no room: somewhere there, no finding");
   // A link split at a patch panel: one link still, with its two wires.
-  const split = buildTopology({ ...hrossen(), racks: { doc: { ...doc, devices: { patch1: { kind: "patch-panel" as const, ports: ["1", "2"] } }, cables: [{ from: { device: SW, port: "3" }, to: { device: "patch1", port: "1", side: "front" as const }, kind: "patch" as const, origin: "seen" as const }, { from: { device: "patch1", port: "1", side: "rear" as const }, to: { device: "tappaas3", port: "eno1" }, kind: "patch" as const, origin: "seen" as const }] }, catalog } });
-  const thru = split.racks!.cables.filter((c) => [c.from.device, c.to.device].includes("tappaas3") && [c.from.port, c.to.port].includes("eno1"));
+  const split = buildTopology({ ...hrossen(), positions: { doc: { ...doc, devices: { patch1: { kind: "patch-panel" as const, ports: ["1", "2"] } }, cables: [{ from: { device: SW, port: "3" }, to: { device: "patch1", port: "1", side: "front" as const }, kind: "patch" as const, origin: "seen" as const }, { from: { device: "patch1", port: "1", side: "rear" as const }, to: { device: "tappaas3", port: "eno1" }, kind: "patch" as const, origin: "seen" as const }] }, catalog } });
+  const thru = split.positions!.cables.filter((c) => [c.from.device, c.to.device].includes("tappaas3") && [c.from.port, c.to.port].includes("eno1"));
   check(thru.length === 1 && thru[0].source === "topology" && thru[0].segments?.length === 2 && thru[0].via?.[0].device === "patch1", "a split link: one cable with its segments and the panel port");
-  const none = buildTopology({ ...hrossen(), racks: { doc: {}, catalog } });
-  check(none.racks!.racks.length === 0 && !none.findings.some((f) => f.gate === "topology"), "an empty racks.json: no rack, no finding");
+  const none = buildTopology({ ...hrossen(), positions: { doc: {}, catalog } });
+  check(none.positions!.racks.length === 0 && !none.findings.some((f) => f.gate === "topology"), "an empty positions.json: no rack, no finding");
+  // A racks.json the migration has not renamed: its mounts read as placements.
+  const legacy = buildTopology({ ...hrossen(), positions: { doc: { racks: doc.racks, rooms: doc.rooms, mounts: doc.placements } as never, catalog } });
+  check(legacy.positions!.racks[0].placements.length === 3, "an unmigrated document's mounts are its placements");
+
+  // Seen: what a switch port reports and no record names.
+  const seenSite = (): TopoSources => {
+    const src = hrossen();
+    const ports = JSON.parse(JSON.stringify(src.ports)) as SwitchPorts[];
+    const usw = ports.find((p) => p.switch === SW)!;
+    const p8 = usw.ports.find((p) => p.port === "8")!;
+    p8.link = "up";
+    p8.neighbors = [{ mac: "AA:BB:CC:00:11:22", lldp: { name: "printer-1", port: "eth0" }, lease: { hostname: "printer", address: "10.4.0.20" } }];
+    const p10 = usw.ports.find((p) => p.port === "10")!;
+    p10.link = "up";
+    return { ...src, site, ports };
+  };
+  const seen = buildTopology({ ...seenSite(), positions: { doc, catalog } });
+  const printer = seen.devices.find((d) => d.name === "aa:bb:cc:00:11:22");
+  check(printer?.source === "seen" && printer.seen?.port === "8" && printer.seen.lldp?.name === "printer-1" && printer.seen.lease?.address === "10.4.0.20" && printer.displayName === "printer-1" && printer.location === "rodovre" && printer.placement === null, "a MAC behind a port: a seen device, named by its MAC, shown by LLDP's name, at the switch's location, unplaced");
+  check(seen.devices.some((d) => d.name === `${SW}:10` && d.source === "seen" && d.seen?.mac === null), "a port that is up with nothing reported or recorded: a seen device named by its port");
+  check(seen.positions!.cables.some((c) => c.from.device === SW && c.from.port === "8" && c.to.device === "aa:bb:cc:00:11:22" && c.to.port === "eth0"), "…its link drawn to it");
+  check(!seen.findings.some((f) => /aa:bb:cc:00:11:22/.test(f.text)), "a seen device is not a finding until it is recorded");
+  check(!seen.devices.some((d) => d.source === "seen" && ["2", "3", "5", "9", "11"].includes(d.seen?.port ?? "")), "the ports of nodes, the AP, the uplinks and the ISP see nothing");
+  check(renderTopology(seen).some((l) => /8 {2}aa:bb:cc:00:11:22 {2}printer-1 {2}— position-manager device record/.test(l)), "the text view lists what is seen and the verb that records it");
+  const after = buildTopology({ ...seenSite(), positions: { doc: { ...doc, devices: { printer: { kind: "other" as const, ports: ["eth0"], mac: "aa:bb:cc:00:11:22" } }, cables: [{ from: { device: SW, port: "8" }, to: { device: "printer", port: "eth0" }, kind: "patch" as const }] }, catalog } });
+  check(!after.devices.some((d) => d.source === "seen" && d.seen?.port === "8") && after.devices.find((d) => d.name === "printer")?.source === "recorded", "once recorded (its MAC, its cable), the device is recorded and no longer seen");
 }
 {
   const runs: string[] = [];
@@ -396,11 +433,11 @@ check(t.racks === null && !t.sources.some((s) => s.name === "rack-manager export
     runs.push(`${bin} ${args.join(" ")}`);
     return { rc: -1, stdout: "", stderr: "", ran: false };
   };
-  const skip = collectSources({ configDir: FIX, zonesFile: join(FIX, "zones.json"), health: null, wanAddressFile: join(FIX, "none.json"), run: fake, racks: false });
-  check(!runs.some((r) => r.startsWith("rack-manager")) && skip.racks === undefined, "--no-racks: rack-manager is not run");
+  const skip = collectSources({ configDir: FIX, zonesFile: join(FIX, "zones.json"), health: null, wanAddressFile: join(FIX, "none.json"), run: fake, positions: false });
+  check(!runs.some((r) => r.startsWith("position-manager")) && skip.positions === undefined, "--no-positions: position-manager is not run");
   const asked = collectSources({ configDir: FIX, zonesFile: join(FIX, "zones.json"), health: null, wanAddressFile: join(FIX, "none.json"), run: fake });
-  check(runs.includes("rack-manager export --json") && asked.racks === null, "racks read through rack-manager export");
-  check(buildTopology(asked).sources.some((s) => s.name === "rack-manager export" && !s.ok), "no rack-manager: the source is named");
+  check(runs.includes("position-manager export --json") && asked.positions === null, "positions read through position-manager export");
+  check(buildTopology(asked).sources.some((s) => s.name === "position-manager export" && !s.ok), "no position-manager: the source is named");
 }
 
 console.log(`\ntopology: ${passed} passed, ${failed} failed`);

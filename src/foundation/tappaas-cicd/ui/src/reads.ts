@@ -23,17 +23,17 @@ import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { ModuleIcon, moduleIcon } from "./icons";
 import { BackupRow, BackupRunsDoc, EnvironmentRow, HealthDoc, ModuleList, StorageDoc, TopologyDoc } from "./model";
 
-// The racks the topology carries (network-manager topology .racks), the parts read here.
-interface RacksRead {
+// The positions the topology carries (network-manager topology .positions), the parts read here.
+interface PositionsRead {
   racks: {
     name: string; displayName: string | null; units: number; width: string; numbering: string; room: string | null; description: string | null;
-    mounts: { device: string; rack: string; u: number; height: number; width: string; slot: number; face: string; faceplate: string | null; suggested: boolean; label: string | null; description: string | null }[];
+    placements: { device: string; rack: string; u: number; height: number; width: string; slot: number; face: string; faceplate: string | null; suggested: boolean; label: string | null; description: string | null }[];
   }[];
   unplaced: { device: string; suggestion: string | null }[];
-  rooms?: { name: string; displayName: string | null; description: string | null; location?: string | null; recorded: boolean }[];
+  rooms?: { name: string; displayName: string | null; description: string | null; location?: string | null; recorded: boolean; loose?: (PositionsRead["racks"][number]["placements"][number] & { room?: string | null })[] }[];
 }
 
-// Every device the topology names: what a mount may name.
+// Every device the topology names: what a placement may name.
 export function topologyDevices(t: Record<string, unknown> | null): string[] {
   const names = (k: string) => (Array.isArray(t?.[k]) ? (t![k] as { name?: unknown }[]) : []).map((x) => x.name).filter((n): n is string => typeof n === "string");
   return [...new Set([...names("nodes"), ...names("switches"), ...names("accessPoints"), ...names("devices")])].sort((a, b) => a.localeCompare(b, "en", { numeric: true }));
@@ -203,8 +203,8 @@ export class Reads {
       const instances = (mods.value?.modules ?? []).map((m) => ({ name: m.name, source: moduleSourceOf(cfg.configDir, m.name) }));
       return (Array.isArray(repos) ? repos : []).map((r) => repositoryCatalog(r, instances));
     }, now);
-    // The faceplate catalog: the keys a mount's faceplate may name.
-    this.faceplates = new Cached("faceplates", TTL.faceplates, () => j<{ key: string; kind: string; units: number; width: string }[]>("rack-manager", ["faceplates", "list", "--json"]), now);
+    // The faceplate catalog: the keys a placement's faceplate may name.
+    this.faceplates = new Cached("faceplates", TTL.faceplates, () => j<{ key: string; kind: string; units: number; width: string }[]>("position-manager", ["faceplates", "list", "--json"]), now);
     // The disks and pools of every node, with SMART (≈15 s on three nodes): no
     // timer of its own, read when a page asks and the answer is older than
     // its TTL.
@@ -292,7 +292,7 @@ export class Reads {
     let rackRefs = { devices: [] as string[], racks: [] as string[], rooms: [] as string[], faceplates: [] as string[] };
     if (racks) {
       const [t, f] = await Promise.all([this.topology.get(), this.faceplates.get()]);
-      const view = (t.value?.racks ?? null) as { racks?: { name: string }[]; rooms?: { name: string; recorded: boolean }[] } | null;
+      const view = (t.value?.positions ?? null) as { racks?: { name: string }[]; rooms?: { name: string; recorded: boolean }[] } | null;
       rackRefs = {
         devices: topologyDevices(t.value ?? null),
         racks: (view?.racks ?? []).map((r) => r.name).sort(),
@@ -323,7 +323,7 @@ export class Reads {
   }
 
   async fieldManifest(kind: FieldKind, name: string | null, mode: FormMode): Promise<FieldManifest> {
-    const refs = await this.refContext(kind === "rack" || kind === "mount");
+    const refs = await this.refContext(kind === "rack" || kind === "placement" || kind === "room");
     const vars: Record<string, string | null> = { name };
     let defs: FieldDef[] = [];
     let record: Record<string, unknown> | null = null;
@@ -467,12 +467,12 @@ export class Reads {
         break;
       }
       case "rack":
-      case "mount":
+      case "placement":
       case "room": {
         // positions-fields.json's $defs; the record as the topology resolves it.
         const $defs = (this.schemaFile("positions-fields.json").$defs ?? {}) as Record<string, unknown>;
-        defs = flattenSchema($defs[kind === "mount" ? "placement" : kind]);
-        const view = ((await this.topology.get()).value?.racks ?? null) as RacksRead | null;
+        defs = flattenSchema($defs[kind]);
+        const view = ((await this.topology.get()).value?.positions ?? null) as PositionsRead | null;
         if (kind === "rack" && name) {
           const r = (view?.racks ?? []).find((x) => x.name === name);
           if (!r && mode === "modify") throw new Error(`no rack '${name}'`);
@@ -483,10 +483,14 @@ export class Reads {
           if (!r && mode === "modify") throw new Error(`no room '${name}'`);
           if (r) record = Object.fromEntries(Object.entries({ displayName: r.displayName, description: r.description, location: r.location }).filter(([, v]) => v !== null && v !== undefined));
         }
-        if (kind === "mount" && name) {
-          const m = (view?.racks ?? []).flatMap((r) => r.mounts).find((x) => x.device === name);
-          if (!m && mode === "modify") throw new Error(`${name} is not mounted`);
-          if (m) {
+        if (kind === "placement" && name) {
+          const m = (view?.racks ?? []).flatMap((r) => r.placements).find((x) => x.device === name);
+          const loose = (view?.rooms ?? []).flatMap((r) => r.loose ?? []).find((x) => x.device === name);
+          if (!m && !loose && mode === "modify") throw new Error(`${name} is placed nowhere`);
+          if (loose) {
+            record = Object.fromEntries(Object.entries({ room: loose.room, faceplate: loose.suggested ? null : loose.faceplate, label: loose.label, description: loose.description }).filter(([, v]) => v !== null && v !== undefined));
+            if (loose.suggested && loose.faceplate) defaults = { faceplate: `${loose.faceplate}, the catalog's suggestion` };
+          } else if (m) {
             record = Object.fromEntries(Object.entries({ rack: m.rack, u: m.u, height: m.height, width: m.width, slot: m.width === "full" ? null : m.slot, face: m.face, faceplate: m.suggested ? null : m.faceplate, label: m.label, description: m.description }).filter(([, v]) => v !== null && v !== undefined));
             if (m.suggested && m.faceplate) defaults = { faceplate: `${m.faceplate}, the catalog's suggestion` };
           } else {

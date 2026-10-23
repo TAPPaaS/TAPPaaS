@@ -50,7 +50,28 @@
         "connectedTo": { "$ref": "#/$defs/connectedTo" },
         "source": { "type": "string", "enum": ["zones", "manual", "discovered"] },
         "description": { "type": "string" },
-        "poe": { "type": "boolean" }
+        "poe": { "type": "boolean" },
+        "neighbors": {
+          "description": "What the controller reports behind the port, read at interrogate: each MAC it learned there, with what LLDP and the DHCP lease it saw say about it. A device no record names is listed by network-manager topology as seen at this port.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/neighbor" }
+        }
+      }
+    },
+    "neighbor": {
+      "type": "object",
+      "required": ["mac"],
+      "additionalProperties": true,
+      "properties": {
+        "mac": { "type": "string" },
+        "lldp": {
+          "type": ["object", "null"],
+          "properties": { "name": { "type": ["string", "null"] }, "port": { "type": ["string", "null"] } }
+        },
+        "lease": {
+          "type": ["object", "null"],
+          "properties": { "hostname": { "type": ["string", "null"] }, "address": { "type": ["string", "null"] } }
+        }
       }
     },
     "connectedTo": {

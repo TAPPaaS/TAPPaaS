@@ -142,11 +142,11 @@ check(seen.find((c) => has(c.from.device, c.from.port, c.to.device, c.to.port) &
 check(seen.find((c) => c.to.port === "nic2")!.lag === "tappaas1-lan", "an LACP leg names its LAG");
 
 const view = resolvePositions(d, catalog, t);
-check(view.racks.length === 1 && view.racks[0].mounts.length === 2, "one rack with its two mounts");
-const t1 = view.racks[0].mounts.find((m) => m.device === "tappaas1")!;
+check(view.racks.length === 1 && view.racks[0].placements.length === 2, "one rack with its two mounts");
+const t1 = view.racks[0].placements.find((m) => m.device === "tappaas1")!;
 check(t1.plate!.rows.length === 1 && t1.plate!.rows[0].map((p) => p!.id).join(",") === "nic2,nic3,nic4", "a generic server plate shows the node's NICs");
 check(t1.up === true && t1.plate!.rows[0][0]!.lag === "lanbond", "live state: up, the bond on its LACP NICs");
-const t3 = view.racks[0].mounts.find((m) => m.device === "tappaas3")!;
+const t3 = view.racks[0].placements.find((m) => m.device === "tappaas3")!;
 check(t3.faceplate === "generic/server-2u" && t3.suggested, "an unrecorded plate is the catalog's suggestion, marked so");
 check(view.unplaced.map((u) => u.device).join(",") === `tappaas2,${USW},crs-a,crs-b,Nano HD`, "the devices mounted nowhere");
 check(view.findings.filter((f) => f.kind === "unplaced").length === 5, "a finding for each, since a rack exists");
@@ -157,7 +157,7 @@ check(gone.findings.some((f) => f.kind === "gone" && f.device === "tappaas9"), "
 check(resolvePositions({}, catalog, t).findings.length === 0, "no rack: no unplaced findings");
 const withSw = placeDevice(d, USW, { rack: "rack1", u: 20, faceplate: "unifi/usw-pro-xg-10-poe" }, catalog) as { doc: PositionsDoc };
 const sw = resolvePositions(withSw.doc, catalog, t);
-const plate = sw.racks[0].mounts.find((m) => m.device === USW)!.plate!;
+const plate = sw.racks[0].placements.find((m) => m.device === USW)!.plate!;
 check(plate.rows[0][2]!.id === "5" && plate.rows[0][2]!.zones.includes("wan") && plate.rows[1][5]!.lag === "crs-uplink", "the UniFi plate's ports carry the switch's live state");
 check(unitAtRow({ units: 42, numbering: "bottom-up" }, 0) === 42 && unitAtRow({ units: 42, numbering: "top-down" }, 0) === 1, "the top row is U42 bottom-up, U1 top-down");
 

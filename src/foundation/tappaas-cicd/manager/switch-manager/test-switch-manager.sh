@@ -118,6 +118,7 @@ ck "list-ports --json: node port 4 in sync" "in-sync" "$(jq -r '.[0].ports[] | s
 ck "list-ports --json: ap port 11 drift adds" "200,310,410,610" "$(jq -r '.[0].ports[] | select(.port=="11") | .add | join(",")' <<<"${lj}")"
 ck "list-ports --json: device port wants its zone" "310" "$(jq -r '.[0].ports[] | select(.port=="10") | .desired.nativeVlan' <<<"${lj}")"
 ck "list-ports --json: one line per port as the text" "$(grep -c '^  port ' <<<"${lp}")" "$(jq '.[0].ports | length' <<<"${lj}")"
+ck "list-ports --json: neighbors, empty when none reported" "0" "$(jq -r '.[0].ports[] | select(.port=="4") | .neighbors | length' <<<"${lj}")"
 ck "list-ports --json before the switch (rc)" "0" "$(rc_of "${SM}" list-ports --json core)"
 
 # ── controller inventory + graceful interrogate skip (no plugin hook) ─

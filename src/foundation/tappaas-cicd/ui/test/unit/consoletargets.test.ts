@@ -33,8 +33,8 @@ check(wizardForVerb("site-manager", "node add")?.name === "add-node" && wizardFo
 check(ok("rack-view")?.path === "/site/physical" && ok("rack-view")?.kind === "page" && ["/site/overview", "/site/device", "/site/storage"].every((p) => ok(p)?.path === p), "rack-view is the physical view; the Site's four views are pages");
 check(ok("modify-zone home")?.path === "/zones?zone=home" && ok("/zones")?.kind === "page" && ok("/environments")?.kind === "page", "the zones have their own page; modify-zone opens it");
 check(ok("/site/physical/rack")?.path === "/site/physical" && ok("/site/physical/cabling")?.path === "/site/device" && ok("/site/physical/storage/")?.path === "/site/storage" && ok("/site/physical/overview")?.path === "/site/overview", "the views' earlier addresses open where they are now");
-check(ok("add-rack", { name: "rack1", units: 42 })?.path === "/setup/day2" && wizardForVerb("rack-manager", "rack add")?.name === "add-rack", "add-rack: Day 2, the rack's fields as values");
-check(JSON.stringify(ok("mount-device", { device: "USW Pro XG 10 PoE", u: 20 })?.values) === '{"device":"USW Pro XG 10 PoE","u":"20"}' && /mount-device has no frob/.test(why("mount-device", { frob: 1 })), "mount-device: the device as a value, a name with spaces too");
+check(ok("add-rack", { name: "rack1", units: 42 })?.path === "/setup/day2" && wizardForVerb("position-manager", "rack add")?.name === "add-rack", "add-rack: Day 2, the rack's fields as values");
+check(JSON.stringify(ok("place-device", { device: "USW Pro XG 10 PoE", u: 20 })?.values) === '{"device":"USW Pro XG 10 PoE","u":"20"}' && /place-device has no frob/.test(why("place-device", { frob: 1 })), "place-device: the device as a value, a name with spaces too");
 check(new Set(WIZARDS.map((w) => w.name)).size === WIZARDS.length && PAGES.every((p) => p.path.startsWith("/")), "names are unique, pages are paths");
 
 // Every wizard has a button on the front end that takes its request.
@@ -52,6 +52,6 @@ const envAdd = verb({ positionals: [{ name: "env", optional: false, repeatable: 
 check(JSON.stringify(prefillValues({ bin: "environment-manager" }, envAdd, { name: "lab", "create-zone": "true", displayName: "Lab" })) === '{"@env":"lab","--create-zone":true,"@extra":["--displayName Lab"]}', "the one positional as `name`; an open verb's other keys as further options");
 check(JSON.stringify(prefillValues({ bin: "environment-manager" }, envAdd, { displayName: "Lab" }, true)) === "{}", "…left to the field form when there is one");
 const mountAdd = verb({ positionals: [{ name: "device", optional: false, repeatable: false }], options: [opt("--rack", true), opt("--u", true), opt("--topology", true)] });
-check(JSON.stringify(prefillValues({ bin: "rack-manager", fixed: ["tappaas2"] }, mountAdd, { rack: "rack1", u: "12", topology: "/t.json" }, true, ["--topology"])) === '{"--topology":"/t.json"}', "…a field that is the verb's own option too is the field form's alone; an option it keeps is set");
+check(JSON.stringify(prefillValues({ bin: "position-manager", fixed: ["tappaas2"] }, mountAdd, { rack: "rack1", u: "12", topology: "/t.json" }, true, ["--topology"])) === '{"--topology":"/t.json"}', "…a field that is the verb's own option too is the field form's alone; an option it keeps is set");
 
 done("consoletargets");

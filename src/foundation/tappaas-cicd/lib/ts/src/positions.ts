@@ -284,7 +284,8 @@ export type DeviceKind = "node" | "switch" | "ap" | "machine" | "device";
 export interface SiteDevice {
   name: string;
   kind: DeviceKind;
-  recorded?: RecordedKind; // recorded in racks.json, not seen
+  recorded?: RecordedKind; // recorded in positions.json, not managed
+  seen?: true; // seen at a switch port, recorded nowhere
   vendor: string | null;
   model: string | null;
   ports: { id: string; up: boolean | null; lag: string | null; zones: string[]; disabled: boolean }[];
@@ -328,6 +329,7 @@ export function siteDevices(t: TopoLike): SiteDevice[] {
       name: d.name,
       kind: d.kind === "machine" ? "machine" : "device",
       ...(d.recorded && RECORDED_KINDS.includes(d.kind as RecordedKind) ? { recorded: d.kind as RecordedKind } : {}),
+      ...(d.source === "seen" ? { seen: true as const } : {}),
       vendor: d.vendor ?? null,
       model: d.model ?? null,
       ports: (d.ports ?? []).map((id) => ({ id, up: null, lag: null, zones: [], disabled: false })),
@@ -658,7 +660,7 @@ export const endText = (e: CableEnd): string => `${e.device}:${e.port}${e.side ?
 
 // ── the view the topology carries ──────────────────────────────────────
 
-export interface RackMountView {
+export interface PlacementView {
   device: string;
   kind: DeviceKind | "passive";
   recorded?: RecordedKind;
@@ -684,7 +686,8 @@ export interface RackView {
   numbering: Numbering;
   room: string | null;
   description: string | null;
-  mounts: RackMountView[];
+  location: string | null; // its room's
+  placements: PlacementView[];
 }
 export interface CableView {
   from: { device: string; port: string; side?: Side };
@@ -704,9 +707,11 @@ export interface UnplacedView {
   device: string;
   kind: DeviceKind;
   recorded?: RecordedKind;
+  seen?: true;
   vendor: string | null;
   model: string | null;
   suggestion: string | null;
+  location: string | null;
 }
 export interface OutsideView {
   device: string; // placed by a cable record only
@@ -719,18 +724,39 @@ export interface RoomView {
   name: string;
   displayName: string | null;
   description: string | null;
+  location: string | null; // its own, else the primary
   recorded: boolean;
   racks: string[];
-  loose: RackMountView[];
+  loose: PlacementView[];
 }
-export interface RacksView {
+// A location of the site, as far as positions go: its place, its rooms, and
+// the devices there that stand in no room (somewhere at it, unplaced).
+export interface LocationView {
+  name: string;
+  displayName: string | null;
+  kind: "site" | "remote";
+  primary: boolean;
+  place: { country: string | null; city: string | null; address: string | null } | null;
+  rooms: string[];
+  unplaced: string[];
+}
+export interface PositionsView {
+  locations: LocationView[];
   racks: RackView[];
   rooms: RoomView[];
   unplaced: UnplacedView[];
   cables: CableView[];
   outside: OutsideView[];
-  // device: a mount whose device is gone; unplaced: a device mounted nowhere
+  // gone: a placement whose device is gone; unplaced: a device placed nowhere
+  // at a location that has a room
   findings: { text: string; device: string; kind: "gone" | "unplaced"; rack: string | null }[];
+}
+
+// The site's locations as the view needs them (site.json, through
+// lib/ts locations.ts readLocations): by name, and the primary.
+export interface SitePlaces {
+  locations: Record<string, { displayName?: string; kind?: "site" | "remote"; country?: string; city?: string; address?: string }>;
+  primary: string | null;
 }
 
 const ROLE_KIND: Record<string, string> = { "node-lan": "lan", "node-wan": "wan", switch: "uplink", uplink: "uplink", ap: "ap", device: "device", "peer-link": "peer-link" };
@@ -765,6 +791,21 @@ export function seenCables(t: TopoLike): CableView[] {
       });
     }
   }
+  // A device a switch port sees: the port to it.
+  for (const d of t.devices ?? []) {
+    if (d.source !== "seen" || !d.seen) continue;
+    const sp = (t.switches ?? []).find((s) => s.name === d.seen!.switch)?.ports?.find((p) => p.port === d.seen!.port);
+    add({
+      from: { device: d.seen.switch, port: d.seen.port },
+      to: { device: d.name, port: d.ports?.[0] ?? "1" },
+      kind: "device",
+      source: "topology",
+      zones: sp?.zones ?? [],
+      lag: null,
+      up: sp?.link === "up" ? true : sp?.link === "down" ? false : null,
+      label: null,
+    });
+  }
   for (const n of t.nodes ?? []) {
     for (const u of n.uplinks ?? []) {
       for (const l of u.legs ?? []) {
@@ -789,12 +830,24 @@ export function seenCables(t: TopoLike): CableView[] {
 // resolvePositions — racks.json against the site: each mount on its device with
 // its plate, the cables the topology sees plus the recorded ones, the devices
 // mounted nowhere, and what does not reconcile.
-export function resolvePositions(doc: PositionsDoc, catalog: Faceplate[], t: TopoLike): RacksView {
+// The location a device is at: the one the topology gives it, else a recorded
+// device's own, else the primary.
+export function deviceLocation(t: TopoLike, doc: PositionsDoc, name: string, primary: string | null): string | null {
+  return t.devices?.find((d) => d.name === name)?.location ?? devicesOf(doc)[name]?.location ?? primary;
+}
+
+// resolvePositions — positions.json against the site: the locations with
+// their rooms, each placement on its device with its plate, the cables the
+// topology sees plus the recorded ones, the devices placed nowhere (by
+// location), and what does not reconcile. locationOf: each device's location
+// (the topology's, which knows every record); unset, deviceLocation.
+export function resolvePositions(doc: PositionsDoc, catalog: Faceplate[], t: TopoLike, sites: SitePlaces = { locations: {}, primary: null }, locationOf?: (device: string) => string | null): PositionsView {
   const devices = withRecorded(siteDevices(t), doc, catalog);
   const recorded = devicesOf(doc);
   const mounts = placementsOf(doc);
   const byKey = (k: string | null | undefined) => (k ? catalog.find((f) => f.key === k) ?? null : null);
-  const findings: RacksView["findings"] = [];
+  const findings: PositionsView["findings"] = [];
+  const where = locationOf ?? ((d: string) => deviceLocation(t, doc, d, sites.primary));
   const racks: RackView[] = Object.entries(racksOf(doc))
     .sort(([a], [b]) => portCompare(a, b))
     .map(([name, r]) => ({
@@ -805,20 +858,22 @@ export function resolvePositions(doc: PositionsDoc, catalog: Faceplate[], t: Top
       numbering: r.numbering,
       room: r.room ?? null,
       description: r.description ?? null,
-      mounts: [],
+      location: null as string | null,
+      placements: [] as PlacementView[],
     }));
   const roomDocs = roomsOf(doc);
   const rooms: RoomView[] = Object.entries(roomDocs)
     .sort(([a], [b]) => portCompare(a, b))
-    .map(([name, r]) => ({ name, displayName: r.displayName ?? null, description: r.description ?? null, recorded: true, racks: [], loose: [] }));
+    .map(([name, r]): RoomView => ({ name, displayName: r.displayName ?? null, description: r.description ?? null, location: r.location ?? sites.primary, recorded: true, racks: [], loose: [] }));
   for (const r of racks) {
     if (!r.room) continue;
     let room = rooms.find((x) => x.name === r.room);
     if (!room) {
-      room = { name: r.room, displayName: null, description: null, recorded: false, racks: [], loose: [] };
+      room = { name: r.room, displayName: null, description: null, location: sites.primary, recorded: false, racks: [], loose: [] };
       rooms.push(room);
     }
     room.racks.push(r.name);
+    r.location = room.location;
   }
   for (const [device, m] of Object.entries(mounts)) {
     const rack = m.rack ? racks.find((r) => r.name === m.rack) : undefined;
@@ -832,7 +887,7 @@ export function resolvePositions(doc: PositionsDoc, catalog: Faceplate[], t: Top
     if (!rack && !room) continue;
     const plate = fp ? resolvePlate(fp, dev) : null;
     const states = dev?.ports.map((p) => p.up).filter((x): x is boolean => x !== null) ?? [];
-    (rack ? rack.mounts : room!.loose).push({
+    (rack ? rack.placements : room!.loose).push({
       device,
       kind: dev ? dev.kind : "passive",
       ...(dev?.recorded ? { recorded: dev.recorded } : {}),
@@ -852,12 +907,47 @@ export function resolvePositions(doc: PositionsDoc, catalog: Faceplate[], t: Top
       up: states.length ? states.some((x) => x) : null,
     });
   }
-  for (const r of racks) r.mounts.sort((a, b) => b.u - a.u || a.slot - b.slot);
+  for (const r of racks) r.placements.sort((a, b) => b.u - a.u || a.slot - b.slot);
   const hasRack = racks.length > 0;
   const unplaced: UnplacedView[] = devices
     .filter((d) => !mounts[d.name])
-    .map((d) => ({ device: d.name, kind: d.kind, vendor: d.vendor, model: d.model, suggestion: d.recorded ? recorded[d.name]?.model ?? null : suggestFaceplate(catalog, d), ...(d.recorded ? { recorded: d.recorded } : {}) }));
-  if (hasRack) for (const u of unplaced) findings.push({ text: `${u.device} is placed nowhere: in no rack and in no room`, device: u.device, kind: "unplaced", rack: null });
+    .map((d) => ({
+      device: d.name,
+      kind: d.kind,
+      vendor: d.vendor,
+      model: d.model,
+      suggestion: d.recorded ? recorded[d.name]?.model ?? null : suggestFaceplate(catalog, d),
+      location: where(d.name),
+      ...(d.recorded ? { recorded: d.recorded } : {}),
+      ...(d.seen ? { seen: true as const } : {}),
+    }));
+  // The locations: the site's, the primary first, and any a room or device
+  // names that the site lacks (validate reports it).
+  const roomed = new Set(rooms.map((r) => r.location));
+  const names = [...new Set([sites.primary, ...Object.keys(sites.locations), ...rooms.map((r) => r.location), ...unplaced.map((u) => u.location)].filter((x): x is string => !!x))];
+  const locations: LocationView[] = names
+    .sort((a, b) => Number(b === sites.primary) - Number(a === sites.primary) || a.localeCompare(b))
+    .map((name) => {
+      const l = sites.locations[name];
+      return {
+        name,
+        displayName: l?.displayName ?? null,
+        kind: l?.kind ?? "site",
+        primary: name === sites.primary,
+        place: l ? { country: l.country ?? null, city: l.city ?? null, address: l.address ?? null } : null,
+        rooms: rooms.filter((r) => r.location === name).map((r) => r.name),
+        unplaced: unplaced.filter((u) => u.location === name).map((u) => u.device),
+      };
+    });
+  // A device placed nowhere is a finding where it could stand in a room; at a
+  // location with none it is somewhere there. A device a port only sees is
+  // not one until it is recorded.
+  if (hasRack) {
+    for (const u of unplaced) {
+      if (u.seen || (u.location !== null && !roomed.has(u.location) && sites.primary !== null)) continue;
+      findings.push({ text: `${u.device} is placed nowhere: in no rack and in no room`, device: u.device, kind: "unplaced", rack: null });
+    }
+  }
 
   const cables = seenCables(t);
   const outside: OutsideView[] = [];
@@ -871,7 +961,7 @@ export function resolvePositions(doc: PositionsDoc, catalog: Faceplate[], t: Top
     }
   }
   for (const r of rooms) r.loose.sort((a, b) => a.device.localeCompare(b.device));
-  return { racks, rooms, unplaced, cables: chainSegments(doc, cables), outside, findings };
+  return { locations, racks, rooms, unplaced, cables: chainSegments(doc, cables), outside, findings };
 }
 
 // The segments of links split at patch panels, each chain from a device port

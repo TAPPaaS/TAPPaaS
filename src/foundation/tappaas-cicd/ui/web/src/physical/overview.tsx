@@ -39,8 +39,8 @@ function topoPlace(t: Topology, f: TopoFinding): Place {
     case "lag":
       return { view: "device", select: on.switch ? `lag:${on.switch}:${on.name}` : null, what: `LAG ${on.name}` };
     case "ap":
-      // An access point mounted nowhere is the Rack view's business.
-      return t.racks?.unplaced.some((u) => u.device === on.name) ? { view: "rack", select: `ap:${on.name}`, what: on.name } : { view: "device", select: `ap:${on.name}`, what: on.name };
+      // An access point placed nowhere is the Rack view's business.
+      return t.positions?.unplaced.some((u) => u.device === on.name) ? { view: "rack", select: `ap:${on.name}`, what: on.name } : { view: "device", select: `ap:${on.name}`, what: on.name };
     case "peer":
       return { view: "device", select: `outside:${on.name}`, what: on.name };
     case "site":
@@ -95,17 +95,17 @@ function Stat({ n, label }: { n: ReactNode; label: string }) {
   );
 }
 
-// A rack as its units: each mount a block at its height, nothing else.
+// A rack as its units: each placed device a block at its height, nothing else.
 function RackThumb({ r }: { r: RackInfo }) {
   const px = 5;
   const w = 64;
-  const used = r.mounts.filter((m) => m.face === "front").reduce((n, m) => n + (m.width === "full" ? m.height : m.height / (m.width === "half" ? 2 : 3)), 0);
+  const used = r.placements.filter((m) => m.face === "front").reduce((n, m) => n + (m.width === "full" ? m.height : m.height / (m.width === "half" ? 2 : 3)), 0);
   const top = (u: number, h: number) => (r.numbering === "bottom-up" ? (r.units - (u + h - 1)) * px : (u - 1) * px);
   return (
-    <button className="ov-rack" onClick={() => navigate(viewLink("rack", `rack:${r.name}`))} title={`${r.displayName ?? r.name}: ${r.mounts.map((m) => `U${m.u} ${m.device}`).join(", ")}`}>
+    <button className="ov-rack" onClick={() => navigate(viewLink("rack", `rack:${r.name}`))} title={`${r.displayName ?? r.name}: ${r.placements.map((m) => `U${m.u} ${m.device}`).join(", ")}`}>
       <svg width={w + 8} height={r.units * px + 8} role="img" aria-label={`rack ${r.name}`}>
         <rect x={0.5} y={0.5} width={w + 7} height={r.units * px + 7} rx={3} fill="#f1f3f6" stroke="#94a3b8" />
-        {r.mounts
+        {r.placements
           .filter((m) => m.face === "front")
           .map((m) => {
             const mw = m.width === "full" ? w : m.width === "half" ? w / 2 : w / 3;
@@ -119,8 +119,8 @@ function RackThumb({ r }: { r: RackInfo }) {
 }
 
 export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFindings }: { t: Topology | null; inv: StorageInventory | null; notes: Map<string, StorageNote[]>; storageError: string | null; aside?: ReactNode; beforeFindings?: ReactNode }) {
-  const racks = t?.racks?.racks ?? [];
-  const rooms = t?.racks?.rooms ?? [];
+  const racks = t?.positions?.racks ?? [];
+  const rooms = t?.positions?.rooms ?? [];
   const place = sitePlace((useRead<SiteRead>("site").env?.data?.site ?? null) as Parameters<typeof sitePlace>[0]);
   const disks = inv ? inv.nodes.reduce((s, n) => s + n.boot.length + n.otherDisks.length + n.pools.reduce((a, p) => a + p.vdevs.reduce((b, v) => b + v.disks.length, 0), 0), 0) : null;
   const pools = inv ? inv.nodes.reduce((s, n) => s + n.pools.length, 0) : null;
@@ -128,7 +128,7 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFin
   const rows = physicalFindings(t, inv);
   const onDevices = rows.filter((r) => r.place.view !== "storage" && DEVICE_KINDS.has(r.on));
   const ports = t ? t.switches.flatMap((s) => s.ports) : [];
-  const cables = t?.racks?.cables ?? [];
+  const cables = t?.positions?.cables ?? [];
   return (
     <div className="ov">
       <div className="ov-line">
@@ -146,7 +146,7 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFin
         <section className="section">
           <header className="section-head">
             <h2><button className="linklike" onClick={() => navigate(viewLink("rack"))}>Physical</button></h2>
-            <span className="section-aside">{t?.racks ? `${t.racks.unplaced.length} device(s) mounted nowhere` : ""}</span>
+            <span className="section-aside">{t?.positions ? `${t.positions.unplaced.length} device(s) placed nowhere` : ""}</span>
           </header>
           {racks.length || rooms.length ? (
             <>

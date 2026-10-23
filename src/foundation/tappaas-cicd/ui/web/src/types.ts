@@ -174,7 +174,26 @@ export interface TopoGuest {
   maturity: string | null;
   state: string;
 }
-export interface TopoNode {
+// Where a device is: the location it is at and its placement (a rack and unit,
+// or loose in a room; null: placed nowhere), and the record it comes from.
+export interface TopoPlacement {
+  room: string | null;
+  rack: string | null;
+  u: number | null;
+}
+export type DeviceSource = "cluster" | "module" | "switch-configuration" | "recorded" | "seen";
+export interface TopoPlace {
+  location?: string | null;
+  placement?: TopoPlacement | null;
+  source?: DeviceSource;
+}
+// What a controller reports behind a switch port.
+export interface PortNeighbor {
+  mac: string;
+  lldp?: { name?: string | null; port?: string | null } | null;
+  lease?: { hostname?: string | null; address?: string | null } | null;
+}
+export interface TopoNode extends TopoPlace {
   name: string;
   storagePools: string[];
   roles: string[];
@@ -202,8 +221,9 @@ export interface TopoPort {
   add: number[];
   remove: number[];
   seen: { node: string; nic: string } | null;
+  neighbors?: PortNeighbor[];
 }
-export interface TopoSwitch {
+export interface TopoSwitch extends TopoPlace {
   name: string;
   lldpName: string | null;
   vendor: string | null;
@@ -215,7 +235,7 @@ export interface TopoSwitch {
   ports: TopoPort[];
   lags: { name: string; ports: string[]; formed: boolean; live: string[]; node: string | null; bond: string | null }[];
 }
-export interface TopoAp {
+export interface TopoAp extends TopoPlace {
   name: string;
   vendor: string | null;
   model: string | null;
@@ -267,17 +287,37 @@ export interface Topology {
   accessPoints: TopoAp[];
   zones: TopoZone[];
   outside: TopoOutside[];
-  // The machines, the devices a switch port names, and the devices rack-manager
-  // records (recorded: a modem, an ONT, a UPS, a patch panel; with their ports).
-  devices?: { name: string; kind: "machine" | "device" | RecordedKind; vendor: string | null; model: string | null; recorded?: true; ports?: string[]; displayName?: string | null; description?: string | null }[];
-  // Where the hardware sits (rack-manager), resolved against the site; null or
-  // absent when the racks were not read.
-  racks?: RacksView | null;
+  // The machines, the devices a switch port names, the devices position-manager
+  // records (recorded: a modem, an ONT, a UPS, a patch panel; with their ports)
+  // and the ones a switch port sees that nobody recorded (source seen).
+  devices?: TopoDevice[];
+  // Where the hardware is (position-manager), resolved against the site; null
+  // or absent when it was not read.
+  positions?: PositionsView | null;
   findings: TopoFinding[];
   sources: { name: string; ok: boolean; error?: string }[];
 }
 
-// ── the racks the topology carries (lib/ts racks.ts RacksView) ────────
+export interface SeenAt {
+  switch: string;
+  port: string;
+  mac: string | null;
+  lldp: { name: string; port: string | null } | null;
+  lease: { hostname: string | null; address: string | null } | null;
+}
+export interface TopoDevice extends TopoPlace {
+  name: string;
+  kind: "machine" | "device" | RecordedKind;
+  vendor: string | null;
+  model: string | null;
+  recorded?: true;
+  ports?: string[];
+  displayName?: string | null;
+  description?: string | null;
+  seen?: SeenAt | null;
+}
+
+// ── the positions the topology carries (lib/ts positions.ts PositionsView) ──
 export type PortKind = "rj45" | "sfp+" | "sfp28" | "poe" | "console" | "power";
 export type RecordedKind = "modem" | "ont" | "ups" | "patch-panel" | "other";
 export interface PlatePort {
@@ -300,7 +340,7 @@ export interface ResolvedPlate {
   rows: (PlatePort | null)[][];
   labels: { text: string; at?: "left" | "right" }[];
 }
-export interface RackMount {
+export interface PlacementInfo {
   device: string;
   kind: "node" | "switch" | "ap" | "machine" | "device" | "passive";
   recorded?: RecordedKind;
@@ -326,7 +366,8 @@ export interface RackInfo {
   numbering: "bottom-up" | "top-down";
   room: string | null;
   description: string | null;
-  mounts: RackMount[];
+  location?: string | null; // its room's
+  placements: PlacementInfo[];
 }
 export interface RackCable {
   from: { device: string; port: string; side?: "front" | "rear" }; // side: a patch panel's port
@@ -347,14 +388,26 @@ export interface RoomInfo {
   name: string;
   displayName: string | null;
   description: string | null;
+  location?: string | null; // its own, else the primary
   recorded: boolean;
   racks: string[];
-  loose: RackMount[];
+  loose: PlacementInfo[];
 }
-export interface RacksView {
+// A location of the site: its place, its rooms, the devices at it placed nowhere.
+export interface LocationInfo {
+  name: string;
+  displayName: string | null;
+  kind: "site" | "remote";
+  primary: boolean;
+  place: { country: string | null; city: string | null; address: string | null } | null;
+  rooms: string[];
+  unplaced: string[];
+}
+export interface PositionsView {
+  locations?: LocationInfo[];
   racks: RackInfo[];
   rooms?: RoomInfo[];
-  unplaced: { device: string; kind: "node" | "switch" | "ap" | "machine" | "device"; recorded?: RecordedKind; vendor: string | null; model: string | null; suggestion: string | null }[];
+  unplaced: { device: string; kind: "node" | "switch" | "ap" | "machine" | "device"; recorded?: RecordedKind; seen?: true; vendor: string | null; model: string | null; suggestion: string | null; location?: string | null }[];
   cables: RackCable[];
   outside: { device: string; faceplate: string | null; plate: ResolvedPlate | null }[];
   findings: { text: string; device: string; kind: "gone" | "unplaced"; rack: string | null }[];

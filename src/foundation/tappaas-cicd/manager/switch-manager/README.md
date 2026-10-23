@@ -45,7 +45,7 @@ switch-manager <command> [args]
 | `mlag-pair list [--json]` | Each pair, each peer's live MLAG state (`mlag-status` of its controller) and the LAGs across it, with what is wrong (no member on a peer, another mlag-id on the switch). `health-manager validate` checks the same offline (`mlag-pairs`). |
 | `lag list [<switch>] [--json]` | The declared aggregates, and whether the switch has formed them. |
 | `list [--json]` | List controllers and switches. |
-| `list-ports [<switch>] [--json]` | One line per port: actual config and drift vs `zones.json`; `--json` adds what `zones.json` wants on it (`desired`), `drift` (`in-sync`, `drift`, `unmanaged`), `parked`, `link`, `disabled` and `lagLead`. |
+| `list-ports [<switch>] [--json]` | One line per port: actual config and drift vs `zones.json`; `--json` adds what `zones.json` wants on it (`desired`), `drift` (`in-sync`, `drift`, `unmanaged`), `parked`, `link`, `disabled`, `lagLead` and `neighbors` (what the controller reports behind the port: MAC, LLDP, lease; empty when it reports none). |
 | `show <controller\|switch>` | Show one inventory entry. |
 
 **A member follows its lead.** The switch takes an aggregate's VLANs from its

@@ -107,7 +107,7 @@ let pp: PositionsDoc = doc(addRack({}, "rack1", {}));
 pp = doc(addDevice(pp, "patch1", { kind: "patch-panel", ports: 24 }, catalog, seen));
 pp = doc(addDevice(pp, "patch2", { kind: "patch-panel", model: "generic/patch-panel-24" }, catalog, seen));
 pp = doc(placeDevice(pp, "patch1", { rack: "rack1", u: 30 }, catalog));
-const pv = resolvePositions(pp, catalog, t).racks[0].mounts.find((m) => m.device === "patch1")!;
+const pv = resolvePositions(pp, catalog, t).racks[0].placements.find((m) => m.device === "patch1")!;
 check(pv.recorded === "patch-panel" && pv.plate!.kind === "patch-panel" && pv.plate!.passive && pv.plate!.rows[0].length === 24, "a recorded panel by port count: a generic 24-port panel plate");
 check(recordedPlate("patch2", pp.devices!.patch2, catalog).key === "generic/patch-panel-24", "a panel by model: the catalog's plate");
 const front = doc(addCable(pp, { device: "tappaas2", port: "enp97s0" }, { device: "patch1", port: "1", side: "front" }, "patch"));

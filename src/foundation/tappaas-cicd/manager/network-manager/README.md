@@ -55,7 +55,7 @@ network-manager delete <name>       [--check]
 network-manager enable|disable|manual <name> [--force]
 network-manager bind <zone>         --environment <env> | --unbind
 network-manager reconcile           [--apply] [--only opnsense|proxmox|switch|ap]
-network-manager topology            [--json] [--health <file> | --no-health] [--no-racks]
+network-manager topology            [--json] [--health <file> | --no-health] [--no-positions]
 network-manager init  [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
 network-manager retire      [--apply]
 network-manager validate    [--zones <file>] [--config-dir <dir>] [--strict]
@@ -356,14 +356,27 @@ ports read `peer-link`, and a LAG across the pair is drawn once, under the pair 
 otherwise it says how many members are active and why. A disabled port reads `disabled`. The
 pair's live state is `switch-manager mlag-pair list`.
 
-The racks come from `rack-manager export` (config/racks.json and the faceplate catalog):
-`racks` in `--json` holds each rack with its mounts resolved to their devices and faceplates
-(live port state on every plate port), the devices mounted nowhere, and the cables — every
-link the switches and LLDP see, mapped to faceplate ports, plus the ones rack-manager records
-(the ISP's modem, a patch panel). `devices` lists the machines and the devices switch ports
-name, which a rack may mount besides nodes, switches and access points. A mount whose device
-is gone, and once the site has a rack a device mounted nowhere, are `topology` findings.
-`--no-racks` leaves them out (what rack-manager itself reads, to check device names).
+The positions come from `position-manager export` (config/positions.json and the faceplate
+catalog): `positions` in `--json` holds the site's locations (the primary first, each with its
+place, its rooms and the devices at it placed nowhere), the rooms with their location, each
+rack with its placements resolved to their devices and faceplates (live port state on every
+plate port), the devices placed nowhere, and the cables — every link the switches and LLDP
+see, mapped to faceplate ports, plus the ones position-manager records (the ISP's modem, a
+patch panel). `devices` lists the machines, the devices switch ports name, the devices
+position-manager records and the devices a switch port sees that no record names.
+
+Every device — node, switch, access point, device — carries `location` (a name of
+`site.json` `locations`: a recorded device's own, a switch's or an access point's when its
+location text names one, else the primary), `placement` (`{room, rack, u}`, or `null`) and
+`source`: `cluster`, `module`, `switch-configuration`, `recorded` or `seen`. A **seen** device
+comes from a switch port: each MAC its controller reports behind the port (`neighbors` in
+`switch-manager list-ports --json`, with what LLDP and the lease say), or a port that is up with
+nothing reported or recorded on it; a port of a node, an access point, a switch or the ISP, a
+port a recorded cable lands on and a MAC a recorded device or a node's NIC has are accounted
+for. It is named by its MAC (else `<switch>:<port>`), at the switch's location, placed nowhere,
+and `position-manager device record` records it. A placement whose device is gone, and once the
+site has a rack a device placed nowhere at a location that has a room, are `topology` findings.
+`--no-positions` leaves them out (what position-manager itself reads, to check device names).
 
 ### `wgvpn` — the admin VPN (ADR-010 §6, §8.4.6)
 

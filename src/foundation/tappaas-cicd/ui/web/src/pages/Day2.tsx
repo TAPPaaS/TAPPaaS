@@ -8,7 +8,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { useRead } from "../api";
 import { Operate, OperateButton } from "../operate";
 import { useOpenedBy } from "../opener";
-import { mountSteps, rackAddSteps } from "../physical/rackops";
+import { placeSteps, rackAddSteps } from "../physical/rackops";
 import { canOperate, useMe } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
@@ -42,16 +42,16 @@ function Group({ id, title, children }: { id?: string; title: string; children: 
   );
 }
 
-// Mount a device: one of the devices mounted nowhere, then its mount form —
-// the rack, the units, the plate the catalog has for its model.
-function MountDeviceCard() {
+// Place a device: one of the devices placed nowhere, then its Place form — a
+// rack and its units, or a room — with the plate the catalog has for its model.
+function PlaceDeviceCard() {
   const t = useRead<Topology>("topology").env?.data ?? null;
-  const v = t?.racks ?? null;
+  const v = t?.positions ?? null;
   const [device, setDevice] = useState("");
   const [open, setOpen] = useState<{ device: string; prefill: Record<string, string | boolean | string[]> } | null>(null);
   const operator = canOperate(useMe());
-  // open_console mount-device {device, rack, u, …}: the form for that device.
-  useOpenedBy("mount-device", undefined, (values) => {
+  // open_console place-device {device, rack, u, …}: the form for that device.
+  useOpenedBy("place-device", undefined, (values) => {
     const d = typeof values.device === "string" ? values.device : "";
     const { device: _d, ...rest } = values;
     if (d) setOpen({ device: d, prefill: rest });
@@ -60,7 +60,7 @@ function MountDeviceCard() {
   const pick = device || choices[0]?.device || "";
   return (
     <WizardCard
-      title="Mount a device"
+      title="Place a device"
       action={
         operator ? (
           <span className="toolbar">
@@ -69,13 +69,13 @@ function MountDeviceCard() {
                 <option key={u.device} value={u.device}>{u.device}</option>
               ))}
             </select>
-            <button className="btn" disabled={!pick || !v?.racks.length} onClick={() => setOpen({ device: pick, prefill: {} })}>
-              Mount…
+            <button className="btn" disabled={!pick || (!v?.racks.length && !(v?.rooms ?? []).some((r) => r.recorded))} onClick={() => setOpen({ device: pick, prefill: {} })}>
+              Place…
             </button>
             {open ? (
               <Operate
-                title={`Mount ${open.device}`}
-                steps={mountSteps(open.device, v).map((s) => ({ ...s, prefill: { ...s.prefill, ...open.prefill } }))}
+                title={`Place ${open.device}`}
+                steps={placeSteps(open.device, v).map((s) => ({ ...s, prefill: { ...s.prefill, ...open.prefill } }))}
                 onClose={() => setOpen(null)}
               />
             ) : null}
@@ -84,12 +84,12 @@ function MountDeviceCard() {
       }
     >
       {v === null
-        ? "The topology carries no racks yet."
-        : !v.racks.length
-          ? "Add a rack first: a device is mounted at its units in a rack."
+        ? "The topology carries no positions yet."
+        : !v.racks.length && !(v.rooms ?? []).some((r) => r.recorded)
+          ? "Add a room or a rack first: a device stands in a rack at its units, or loose in a room."
           : choices.length
-            ? <>Where a device sits: its rack, units and faceplate, for the Physical view. {choices.length} device{choices.length === 1 ? "" : "s"} mounted nowhere.</>
-            : "Every device is mounted."}
+            ? <>Where a device stands: a rack and its units, or a room, for the Physical view. {choices.length} device{choices.length === 1 ? "" : "s"} placed nowhere.</>
+            : "Every device is placed."}
     </WizardCard>
   );
 }
@@ -121,11 +121,11 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
           A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
         </WizardCard>
       </Group>
-      <Group title="Racks">
+      <Group title="Positions">
         <WizardCard title="Add a rack" action={<OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} opens={{ wizard: "add-rack" }} />}>
-          A rack the site's hardware sits in: its height in units, its width, how its units are numbered, its room (the building is the site's).
+          A rack the site's hardware stands in: its height in units, its width, how its units are numbered, and its room (in one of the site's locations).
         </WizardCard>
-        <MountDeviceCard />
+        <PlaceDeviceCard />
       </Group>
       <Group title="Environments, people and stacks">
         <WizardCard title="Add an environment" action={<OperateButton label="Add an environment…" title="Add an environment" steps={addEnvironmentSteps()} opens={{ wizard: "add-environment" }} />}>

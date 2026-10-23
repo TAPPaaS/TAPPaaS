@@ -3,20 +3,21 @@
 // the day-2 changes it offers (a switch port's zone, spike mockup 3: the port's
 // record with switch-manager update-port, then reconcile previewed and
 // applied; a node's uplinks: site-manager node network show / set), and where
-// to open it. Where the hardware sits (rack-manager): the mount of a node, a
-// switch or an access point with Mount…, Move to… and Unmount…, a rack's own
-// record, and a passive or outside device's mount and recorded cables. From
+// to open it. Where the hardware is (position-manager): every device's location
+// and placement, each a link to its object, with Place…, Move to… and
+// Unplace…; a room's location, a rack's own record, a passive or outside
+// device's placement and recorded cables, and a device a switch port sees with
+// what the port says of it and Record…. From
 // the storage inventory: a disk, a pool with what it holds, a node's storage.
 
 import { ReactNode, useMemo } from "react";
 import { useRead } from "../api";
 import { zoneColor } from "../colors";
-import { Health, RackCable, SiteRead, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
-import { sitePlace } from "./views";
+import { Health, RackCable, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
 import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
-import { MountActions, RecordDeviceButton, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackModifySteps } from "./rackops";
+import { PlaceActions, RecordDeviceButton, RecordSeenButton, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackModifySteps } from "./rackops";
 import { publicAddress } from "../zonegraph";
 import { StorageNote } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
@@ -57,17 +58,54 @@ function Zones({ t, vlans }: { t: Topology; vlans: number[] }) {
 
 const refIs = (r: TopoRef, kind: string, name: string, sw?: string) => r.kind === kind && r.name === name && (sw === undefined || r.switch === undefined || r.switch === sw);
 
-// Where a device sits, as a row of its card.
-function mountedAt(t: Topology, device: string): string | null {
-  for (const r of t.racks?.racks ?? []) {
-    const m = r.mounts.find((x) => x.device === device);
-    if (m) return `${r.displayName ?? r.name} · U${m.u}${m.height > 1 ? `-U${m.u + m.height - 1}` : ""} · ${m.face}${m.width === "full" ? "" : ` · ${m.width} width, slot ${m.slot}`} · ${m.faceplate ?? "no plate"}${m.suggested ? " (suggested)" : ""}`;
+// The location a device is at: the topology's word on it, else the view's.
+function locationOf(t: Topology, device: string): string | null {
+  const all = [...t.nodes, ...t.switches, ...t.accessPoints, ...(t.devices ?? [])];
+  return all.find((x) => x.name === device)?.location ?? t.positions?.unplaced.find((u) => u.device === device)?.location ?? null;
+}
+
+// Where a device is, as two rows of its card: its location (with its place),
+// and its placement — a rack and its units, loose in a room, or nowhere — each
+// a link to its object.
+function placeRows(t: Topology, device: string, pick: (s: Sel) => void): [string, ReactNode][] {
+  const v = t.positions;
+  if (!v) return [];
+  const name = locationOf(t, device);
+  const loc = v.locations?.find((l) => l.name === name);
+  const placeText = loc?.place ? [loc.place.address, loc.place.city, loc.place.country].filter(Boolean).join(", ") : "";
+  const location: ReactNode = name ? (
+    <>
+      {loc?.displayName ?? name}
+      {placeText ? <span className="muted"> · {placeText}</span> : null}
+      {loc?.primary ? <span className="muted"> · primary</span> : null}
+    </>
+  ) : null;
+  const room = (r: string) => {
+    const x = v.rooms?.find((y) => y.name === r);
+    return <button className="linklike" onClick={() => pick({ kind: "room", id: r })}>{x?.displayName ?? r}</button>;
+  };
+  let placement: ReactNode = loc && !loc.rooms.length ? <span className="muted">somewhere at this location (it has no room)</span> : <span className="muted">placed nowhere</span>;
+  for (const r of v.racks) {
+    const m = r.placements.find((x) => x.device === device);
+    if (m) {
+      placement = (
+        <>
+          <button className="linklike" onClick={() => pick({ kind: "rack", id: r.name })}>{r.displayName ?? r.name}</button> U{m.u}{m.height > 1 ? `-U${m.u + m.height - 1}` : ""} · {m.face}
+          {m.width === "full" ? "" : ` · ${m.width} width, slot ${m.slot}`}
+          {r.room ? <> · in {room(r.room)}</> : null} · {m.faceplate ?? "no plate"}
+          {m.suggested ? " (suggested)" : ""}
+        </>
+      );
+    }
   }
-  for (const r of t.racks?.rooms ?? []) {
+  for (const r of v.rooms ?? []) {
     const m = r.loose.find((x) => x.device === device);
-    if (m) return `loose in room ${r.displayName ?? r.name} · ${m.faceplate ?? "no plate"}`;
+    if (m) placement = <>loose in {room(r.name)} · {m.faceplate ?? "no plate"}</>;
   }
-  return t.racks ? "mounted in no rack, in no room" : null;
+  return [
+    ["location", location],
+    ["placement", placement],
+  ];
 }
 
 // The ports of a device that a cable joins, and the link each is on.
@@ -83,7 +121,6 @@ const farEnd = (l: DevLink, device: string) => (l.a === device ? l.b : l.a);
 export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null }) {
   const operator = canOperate(useMe());
   const health = useRead<Health>("health");
-  const place = sitePlace((useRead<SiteRead>("site").env?.data?.site ?? null) as Parameters<typeof sitePlace>[0]);
   const g = useMemo(() => deviceGraph(t), [t]);
   const devOf = (id: string): DevNode | undefined => g.nodes.find((n) => n.id === id);
   // A port clicked in a drawing: a switch's port is selected, any other's link.
@@ -116,7 +153,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       </>
     );
   };
-  const racks = t.racks ?? null;
+  const racks = t.positions ?? null;
   const about = (kind: string, name: string, sw?: string) => t.findings.filter((f) => refIs(f.on, kind, name, sw) || f.refs.some((r) => refIs(r, kind, name, sw)));
   let title: ReactNode = sel.id;
   let body: ReactNode = null;
@@ -196,7 +233,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["LLDP name", s.lldpName],
               ["ports", `${s.ports.length} · ${s.ports.filter((p) => p.parked).length} parked · ${s.ports.filter((p) => p.role === "unmanaged").length} unmanaged · ${s.ports.filter((p) => p.drift === "drift").length} drifting`],
               ["LAGs", s.lags.map((l) => `${l.name} (${l.ports.join("+")})`).join(", ")],
-              ["mounted", mountedAt(t, s.name)],
+              ...placeRows(t, s.name, pick),
             ]}
           />
           <h3>Ports</h3>
@@ -217,7 +254,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         </>
       );
       open = <OpenIn kind="switch" id={s.name} />;
-      actions = <MountActions device={s.name} v={racks} />;
+      actions = <PlaceActions device={s.name} v={racks} />;
       break;
     }
     case "lag": {
@@ -249,7 +286,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["HA", n.ha ? `lrm ${n.ha.lrm}` : null],
               ["corosync", n.corosync ? `${n.corosync.links} link(s), ${n.corosync.disconnected} disconnected` : null],
               ["lldpd", n.lldpd],
-              ["mounted", mountedAt(t, n.name)],
+              ...placeRows(t, n.name, pick),
             ]}
           />
           <h3>Uplinks</h3>
@@ -289,7 +326,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       actions = (
         <>
           <NodeNetwork node={n.name} />
-          <MountActions device={n.name} v={racks} />
+          <PlaceActions device={n.name} v={racks} />
         </>
       );
       break;
@@ -328,7 +365,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       title = `${a.name} · access point`;
       body = (
         <>
-          <KV rows={[["vendor / model", `${a.vendor ?? "?"} · ${a.model ?? "?"}`], ["address", a.address], ["uplink", a.uplink ? `${a.uplink.switch} port ${a.uplink.port}` : null], ["mounted", mountedAt(t, a.name)]]} />
+          <KV rows={[["vendor / model", `${a.vendor ?? "?"} · ${a.model ?? "?"}`], ["address", a.address], ["uplink", a.uplink ? `${a.uplink.switch} port ${a.uplink.port}` : null], ...placeRows(t, a.name, pick)]} />
           <h3>SSIDs</h3>
           {a.ssids.length === 0 ? <p className="muted small">No SSID mapped to a zone (ap-manager ssid … add).</p> : null}
           <ul className="plain">
@@ -342,7 +379,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         </>
       );
       open = <OpenIn kind="ap" id={a.name} />;
-      actions = <MountActions device={a.name} v={racks} />;
+      actions = <PlaceActions device={a.name} v={racks} />;
       break;
     }
     case "outside": {
@@ -415,22 +452,22 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       const r = racks?.racks.find((x) => x.name === sel.id);
       if (!r) break;
       title = `${r.displayName ?? r.name} · rack`;
-      const used = r.mounts.reduce((n, m) => n + (m.width === "full" ? m.height : 0), 0);
+      const used = r.placements.reduce((n, m) => n + (m.width === "full" ? m.height : 0), 0);
       body = (
         <>
           <KV
             rows={[
               ["name", r.name],
               ["height", `${r.units}U, ${r.width}, numbered ${r.numbering === "bottom-up" ? "from the bottom" : "from the top"}`],
-              ["building", place ? `${place} (the site's)` : null],
-              ["room", r.room],
+              ["location", r.location ? racks?.locations?.find((l) => l.name === r.location)?.displayName ?? r.location : null],
+              ["room", r.room ? <button className="linklike" onClick={() => pick({ kind: "room", id: r.room! })}>{r.room}</button> : null],
               ["description", r.description],
-              ["mounts", `${r.mounts.length} · ${used} of ${r.units} units at full width`],
+              ["placed", `${r.placements.length} device(s) · ${used} of ${r.units} units at full width`],
             ]}
           />
-          <h3>Mounted</h3>
+          <h3>Placed in it</h3>
           <ul className="plain">
-            {r.mounts.map((m) => (
+            {r.placements.map((m) => (
               <li key={m.device} className="small">
                 U{m.u}
                 {m.height > 1 ? `-${m.u + m.height - 1}` : ""} {m.face} · {m.device}
@@ -445,11 +482,11 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       actions = (
         <>
           <OperateButton label="Change…" title={`Rack ${r.name}`} steps={() => rackModifySteps(r.name)} />
-          {r.mounts.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete rack ${r.name}`} steps={() => rackDeleteSteps(r.name)} /> : null}
+          {r.placements.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete rack ${r.name}`} steps={() => rackDeleteSteps(r.name)} /> : null}
           <RecordDeviceButton />
         </>
       );
-      open = <p className="muted small">A rack is a record of config/racks.json only.</p>;
+      open = <p className="muted small">A rack is a record of config/positions.json only.</p>;
       break;
     }
     case "link": {
@@ -529,7 +566,18 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       title = `${room.displayName ?? room.name} · room`;
       body = (
         <>
-          <KV rows={[["name", room.name], ["building", place ? `${place} (the site's)` : "the site's location names none"], ["description", room.description], ["recorded", room.recorded ? "yes" : "no — only a rack's text names it (rack-manager room add)"]]} />
+          <KV
+            rows={[
+              ["name", room.name],
+              ["location", (() => {
+                const l = racks?.locations?.find((x) => x.name === room.location);
+                const p = l?.place ? [l.place.address, l.place.city, l.place.country].filter(Boolean).join(", ") : "";
+                return room.location ? `${l?.displayName ?? room.location}${p ? ` · ${p}` : ""}${l?.primary ? " · primary" : ""}` : null;
+              })()],
+              ["description", room.description],
+              ["recorded", room.recorded ? "yes" : "no — only a rack's text names it (position-manager room add)"],
+            ]}
+          />
           <h3>Racks</h3>
           <ul className="plain small">
             {room.racks.map((r) => (
@@ -546,44 +594,68 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           </ul>
         </>
       );
-      const rmStep = (verb: string, t: string, extra: Partial<Step> = {}): Step => ({ title: t, bin: "rack-manager", verb, fixed: [room.name], ...extra });
+      const rmStep = (verb: string, t: string, extra: Partial<Step> = {}): Step => ({ title: t, bin: "position-manager", verb, fixed: [room.name], ...extra });
       actions = room.recorded ? (
         <>
-          <OperateButton label="Change…" title={`Room ${room.name}`} steps={[rmStep("room modify", `rack-manager room modify ${room.name}`, { note: "Its display name or description (its building is the site's); --check previews." })]} />
-          {room.racks.length === 0 && room.loose.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete room ${room.name}`} steps={[rmStep("room delete", `rack-manager room delete ${room.name}`)]} /> : null}
+          <OperateButton label="Change…" title={`Room ${room.name}`} steps={[rmStep("room modify", `position-manager room modify ${room.name}`, { note: "Its display name, description or location (one of the site's: site-manager location list); --check previews." })]} />
+          {room.racks.length === 0 && room.loose.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete room ${room.name}`} steps={[rmStep("room delete", `position-manager room delete ${room.name}`)]} /> : null}
           <RecordDeviceButton />
         </>
       ) : /^[a-z][a-z0-9-]{0,62}$/.test(room.name) ? (
-        <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `rack-manager room add ${room.name}`)]} />
+        <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `position-manager room add ${room.name}`)]} />
       ) : (
         // A room name is lower case: record it under one, then point the racks at it.
         <p className="muted small">
           '{room.name}' is no room name (lower case letters, digits, dashes): record it as{" "}
-          <span className="mono">rack-manager room add {room.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-")} --display-name '{room.name}'</span>, then set each rack's room to it ({room.racks.map((r) => `rack modify ${r} --set room=…`).join(", ")}).
+          <span className="mono">position-manager room add {room.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-")} --display-name '{room.name}'</span>, then set each rack's room to it ({room.racks.map((r) => `rack modify ${r} --set room=…`).join(", ")}).
         </p>
       );
-      open = <p className="muted small">A room is a record of config/racks.json only.</p>;
+      open = <p className="muted small">A room is a record of config/positions.json only.</p>;
       break;
     }
     case "mount": {
       // A device a node, switch or access point card does not cover: a machine,
       // a device module, a passive plate (patch panel, PDU) or a device a cable
       // record places (the ISP's modem).
-      const m = [...(racks?.racks.flatMap((r) => r.mounts) ?? []), ...(racks?.rooms?.flatMap((r) => r.loose) ?? [])].find((x) => x.device === sel.id);
+      const m = [...(racks?.racks.flatMap((r) => r.placements) ?? []), ...(racks?.rooms?.flatMap((r) => r.loose) ?? [])].find((x) => x.device === sel.id);
       const out = racks?.outside.find((x) => x.device === sel.id);
       const un = racks?.unplaced.find((x) => x.device === sel.id);
       if (!m && !out && !un) break;
       const cables = (racks?.cables ?? []).filter((c) => c.from.device === sel.id || c.to.device === sel.id);
       const rec = t.devices?.find((x) => x.name === sel.id && x.recorded);
-      title = rec?.displayName ? `${rec.displayName} · ${sel.id}` : sel.id;
+      // A device a switch port sees and nobody recorded: what the port says of it.
+      const seen = t.devices?.find((x) => x.name === sel.id && x.source === "seen" && x.seen);
+      if (seen?.seen) {
+        const s = seen.seen;
+        title = seen.displayName ? `${seen.displayName} · seen` : `${sel.id} · seen`;
+        body = (
+          <>
+            <p className="small">A switch port sees this device, and no record names it: nothing manages it and position-manager does not record it yet.</p>
+            <KV
+              rows={[
+                ["seen at", <button className="linklike" onClick={() => pick({ kind: "port", id: s.port, switch: s.switch })}>{s.switch} port {s.port}</button>],
+                ["MAC", s.mac ? <span className="mono">{s.mac}</span> : <span className="muted">not reported — the port is up, nothing is recorded on it</span>],
+                ["LLDP", s.lldp ? `${s.lldp.name}${s.lldp.port ? ` · port ${s.lldp.port}` : ""}` : null],
+                ["lease", s.lease ? [s.lease.hostname, s.lease.address].filter(Boolean).join(" · ") : null],
+                ...placeRows(t, sel.id, pick),
+              ]}
+            />
+            <p className="muted small">Record… keeps its MAC and records the port's link as its cable; then Place… it in a rack or a room.</p>
+          </>
+        );
+        actions = <RecordSeenButton d={seen} />;
+        open = <p className="muted small">Seen by {s.switch}'s controller at port {s.port}; position-manager device record turns it into a recorded device.</p>;
+        break;
+      }
+      title = rec?.displayName && rec.displayName !== sel.id ? `${rec.displayName} · ${sel.id}` : sel.id;
       body = (
         <>
           <KV
             rows={[
-              ["kind", rec ? `${rec.kind} (recorded: nothing can see it)` : m ? (m.kind === "passive" ? `passive (${m.plate?.kind ?? "plate"})` : m.kind) : out ? "placed by a cable record" : un?.kind ?? null],
+              ["kind", rec ? `${rec.kind} (recorded: nothing manages it)` : m ? (m.kind === "passive" ? `passive (${m.plate?.kind ?? "plate"})` : m.kind) : out ? "placed by a cable record" : un?.kind ?? null],
               ["model", rec?.model ?? null],
               ["ports", rec?.ports?.length ? rec.ports.join(", ") : null],
-              ["mounted", m ? mountedAt(t, sel.id) : out ? "outside the racks" : "mounted in no rack"],
+              ...(out ? ([["placement", "outside the racks: only a cable record names it"]] as [string, ReactNode][]) : placeRows(t, sel.id, pick)),
               ["faceplate", m?.plate ? `${m.plate.vendor} ${m.plate.model} (${m.faceplate})` : out?.faceplate ?? un?.suggestion ?? null],
               ["label", m?.label ?? null],
               ["description", m?.description ?? rec?.description ?? null],
@@ -591,7 +663,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           />
           {rec?.kind === "patch-panel" ? (
             <>
-              <p className="small howto-line">To use it: mount it in a rack, then select a wire and Attach to patch panel….</p>
+              <p className="small howto-line">To use it: place it in a rack, then select a wire and Attach to patch panel….</p>
               <h3>Ports</h3>
               <table className="table compact small">
                 <thead>
@@ -630,10 +702,10 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={t.findings.filter((f) => f.text.includes(sel.id))} />
         </>
       );
-      const recActs = rec ? <DeviceRecordActions name={sel.id} cabled={cables.some((c) => c.source === "recorded")} mounted={!!m} /> : null;
+      const recActs = rec ? <DeviceRecordActions name={sel.id} cabled={cables.some((c) => c.source === "recorded")} placed={!!m} /> : null;
       actions = m ? (
         <>
-          <MountActions device={sel.id} v={racks} />
+          <PlaceActions device={sel.id} v={racks} />
           {recActs}
         </>
       ) : out ? (
@@ -644,11 +716,11 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         </>
       ) : (
         <>
-          <MountActions device={sel.id} v={racks} />
+          <PlaceActions device={sel.id} v={racks} />
           {recActs}
         </>
       );
-      open = <p className="muted small">{rec ? "Nothing reports on it: rack-manager records it." : out ? "Nothing reports on it: it is known only by the cable that names it — record it (rack-manager device add) to mount it." : "Its own records are on the module's page."}</p>;
+      open = <p className="muted small">{rec ? "Nothing manages it: position-manager records it." : out ? "Nothing reports on it: it is known only by the cable that names it — record it (position-manager device add) to place it." : "Its own records are on the module's page."}</p>;
       break;
     }
   }
@@ -749,17 +821,17 @@ function NodeNetwork({ node }: { node: string }) {
 }
 
 // A recorded device's own record: change it, or remove it once nothing names it.
-function DeviceRecordActions({ name, cabled, mounted }: { name: string; cabled: boolean; mounted: boolean }) {
-  const rm = (verb: string, title: string, extra: Partial<Step> = {}): Step => ({ title, bin: "rack-manager", verb, fixed: [name], ...extra });
+function DeviceRecordActions({ name, cabled, placed }: { name: string; cabled: boolean; placed: boolean }) {
+  const rm = (verb: string, title: string, extra: Partial<Step> = {}): Step => ({ title, bin: "position-manager", verb, fixed: [name], ...extra });
   return (
     <>
-      <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("device modify", `rack-manager device modify '${name}'`, { note: "Its kind, model, ports (a count or a list), display name or description; --check previews." })]} />
-      {!mounted && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("device remove", `rack-manager device remove '${name}'`)]} /> : null}
+      <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("device modify", `position-manager device modify '${name}'`, { note: "Its kind, model, ports (a count or a list), display name or description; --check previews." })]} />
+      {!placed && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("device remove", `position-manager device remove '${name}'`)]} /> : null}
     </>
   );
 }
 
-// A wire through a patch panel: rack-manager cable split, its --check the preview.
+// A wire through a patch panel: position-manager cable split, its --check the preview.
 function PanelSplit({ t, c, many }: { t: Topology; c: RackCable; many: boolean }) {
   const free = freePanelPorts(t);
   if (!free.length) return null;
@@ -768,12 +840,12 @@ function PanelSplit({ t, c, many }: { t: Topology; c: RackCable; many: boolean }
     <OperateButton
       label={many ? `Attach ${c.from.port} ↔ ${c.to.port} to a patch panel…` : "Attach to patch panel…"}
       title={`${end} — ${c.to.device}:${c.to.port} through a patch panel`}
-      steps={[{ title: `rack-manager cable split '${end}' --via <panel:port>`, bin: "rack-manager", verb: "cable split", fixed: [end], only: ["--via"], choices: { "--via": free }, note: "The link becomes two recorded wires: this port to the panel port's front, its rear to the far end. The Device view keeps one link; the racks draw the two wires. Preview: rack-manager's --check." }]}
+      steps={[{ title: `position-manager cable split '${end}' --via <panel:port>`, bin: "position-manager", verb: "cable split", fixed: [end], only: ["--via"], choices: { "--via": free }, note: "The link becomes two recorded wires: this port to the panel port's front, its rear to the far end. The Device view keeps one link; the racks draw the two wires. Preview: position-manager's --check." }]}
     />
   );
 }
 
-// Undo it: rack-manager cable join at the panel port.
+// Undo it: position-manager cable join at the panel port.
 function PanelJoin({ c }: { c: RackCable }) {
   const v = c.via?.[0];
   if (!v) return null;
@@ -781,7 +853,7 @@ function PanelJoin({ c }: { c: RackCable }) {
     <OperateButton
       label="Remove patch panel"
       title={`${c.from.device}:${c.from.port} — ${c.to.device}:${c.to.port} without ${v.device}`}
-      steps={[{ title: `rack-manager cable join '${v.device}:${v.port}'`, bin: "rack-manager", verb: "cable join", fixed: [`${v.device}:${v.port}`], note: "The two wires through the panel port are one link again: the topology's own, or one recorded cable when it was recorded. Preview: rack-manager's --check." }]}
+      steps={[{ title: `position-manager cable join '${v.device}:${v.port}'`, bin: "position-manager", verb: "cable join", fixed: [`${v.device}:${v.port}`], note: "The two wires through the panel port are one link again: the topology's own, or one recorded cable when it was recorded. Preview: position-manager's --check." }]}
     />
   );
 }

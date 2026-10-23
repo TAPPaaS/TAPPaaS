@@ -116,7 +116,7 @@ export function readDevices(topologyFile: string | undefined): { devices: SiteDe
     let t: TopoLike;
     if (topologyFile) t = JSON.parse(readFileSync(topologyFile, "utf8")) as TopoLike;
     else {
-      const r = captureResult("network-manager", ["topology", "--json", "--no-health", "--no-racks"]);
+      const r = captureResult("network-manager", ["topology", "--json", "--no-health", "--no-positions"]);
       if (!r.ran) return { devices: null, topology: null, error: "network-manager not found" };
       t = JSON.parse(r.stdout) as TopoLike;
     }

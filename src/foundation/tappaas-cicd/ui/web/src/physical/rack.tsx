@@ -1,22 +1,25 @@
-// rack.tsx — the Site page's Physical view: each rack drawn as a frame with its
-// unit rows numbered as the rack numbers them, each mount as its faceplate at
+// rack.tsx — the Site page's Physical view: the site's locations, each with its
+// rooms, each room with its racks and the devices loose in it; each rack drawn
+// as a frame with its unit rows numbered as the rack numbers them, each placed
+// device as its faceplate at
 // its units and width with its port grid, the ports' live state from the
 // topology (link up or down, LAG), and the cables port to port in the zone
 // colours of the Device view, labelled on hover, a click opening the cable's
 // link in the side panel (the same panel the Device view opens). A device
-// only a cable record places (the ISP's modem) stands left of the racks.
-// Everything comes from `network-manager topology` .racks; nothing is placed
-// by hand here.
+// only a cable record places (the ISP's modem) stands left of the racks; a
+// location with no room lists the devices that are somewhere there.
+// Everything comes from `network-manager topology` .positions; nothing is
+// placed by hand here.
 
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { zoneColor } from "../colors";
-import { PlatePort, RackCable, RackInfo, RackMount, RacksView, ResolvedPlate, Topology } from "../types";
+import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, ResolvedPlate, Topology } from "../types";
 import { Sel } from "./layout";
 import { linkId } from "./devicegraph";
 
 // Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
 // interior (wider than true scale, so a 12-port plate stays legible).
-export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 80, margin: 24, outsideW: 230, bottom: 40, roomPad: 18, looseGap: 18 };
+export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 116, margin: 24, outsideW: 230, bottom: 40, roomPad: 18, looseGap: 18, locPad: 14, roomY: 40, nowhereW: 240 };
 
 const inner = (r: RackInfo) => (r.width === "10in" ? R.w10 : R.w19);
 const COLS: Record<string, number> = { full: 1, half: 2, third: 3 };
@@ -37,7 +40,7 @@ export interface Box {
 }
 export interface Placed {
   device: string;
-  kind: RackMount["kind"] | "outside";
+  kind: PlacementInfo["kind"] | "outside";
   plate: ResolvedPlate | null;
   box: Box;
   up: boolean | null;
@@ -49,7 +52,9 @@ export interface RackLayout {
   width: number;
   height: number;
   racks: { r: RackInfo; x: number }[];
-  // Each room an area: its racks and the devices loose in it.
+  // Each location an area around its rooms (or, with none, the devices
+  // somewhere there); each room an area: its racks and the devices loose in it.
+  locations: { name: string; title: string; sub: string; primary: boolean; x: number; y: number; w: number; h: number; nowhere: { device: string; kind: Placed["kind"] }[] }[];
   rooms: { name: string; title: string; sub: string; recorded: boolean; x: number; y: number; w: number; h: number }[];
   placed: Placed[];
   ports: Map<string, { x: number; y: number; rackRight: number; rack: string | null }>;
@@ -80,7 +85,7 @@ export function portCells(p: Placed): { port: PlatePort; box: Box }[] {
   return out;
 }
 
-export function layoutRacks(v: RacksView): RackLayout {
+export function layoutRacks(v: PositionsView): RackLayout {
   const placed: Placed[] = [];
   const ports: RackLayout["ports"] = new Map();
   let x = R.margin;
@@ -100,7 +105,7 @@ export function layoutRacks(v: RacksView): RackLayout {
   const drawRack = (r: RackInfo) => {
     racks.push({ r, x });
     const iw = inner(r);
-    for (const m of r.mounts) {
+    for (const m of r.placements) {
       if (m.face !== "front") continue;
       const [a, b] = span(m);
       const top = rowOf(r, m.u + m.height - 1);
@@ -119,7 +124,7 @@ export function layoutRacks(v: RacksView): RackLayout {
     x += iw + 2 * R.rail + R.gap;
   };
   // The devices loose in a room: a column of faceplates beside its racks.
-  const drawLoose = (ms: RackMount[]) => {
+  const drawLoose = (ms: PlacementInfo[]) => {
     if (!ms.length) return;
     let y = R.top;
     const colW = Math.max(...ms.map((m) => (m.width === "full" ? 320 : m.width === "half" ? 180 : 130)));
@@ -132,18 +137,45 @@ export function layoutRacks(v: RacksView): RackLayout {
     maxH = Math.max(maxH, y - R.top);
     x += colW + R.gap;
   };
-  // Room by room (a rack in no room after them, in no area).
+  // Location by location (the primary first), room by room (a rack in no
+  // room after them, in no area).
+  const locations: RackLayout["locations"] = [];
   const roomed = new Set((v.rooms ?? []).flatMap((r) => r.racks));
-  for (const room of v.rooms ?? []) {
-    const x0 = x;
-    for (const name of room.racks) {
-      const r = v.racks.find((y) => y.name === name);
-      if (r) drawRack(r);
+  const kindOf = (device: string): Placed["kind"] => v.unplaced.find((u) => u.device === device)?.kind ?? "device";
+  const groups = v.locations?.length ? v.locations : [{ name: "", displayName: null, kind: "site" as const, primary: true, place: null, rooms: (v.rooms ?? []).map((r) => r.name), unplaced: [] }];
+  for (const loc of groups) {
+    const inLoc = (v.rooms ?? []).filter((r) => loc.rooms.includes(r.name));
+    if (!inLoc.length && !loc.unplaced.length) continue;
+    const lx0 = x;
+    for (const room of inLoc) {
+      const x0 = x;
+      for (const name of room.racks) {
+        const r = v.racks.find((y) => y.name === name);
+        if (r) drawRack(r);
+      }
+      drawLoose(room.loose);
+      if (x === x0) x += 200; // an empty room still shows
+      rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: room.recorded ? "" : "not recorded", recorded: room.recorded, x: x0 - R.roomPad, y: R.roomY, w: x - R.gap - x0 + 2 * R.roomPad, h: 0 });
+      x += 30;
     }
-    drawLoose(room.loose);
-    if (x === x0) x += 200; // an empty room still shows
-    rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: room.recorded ? "" : "not recorded", recorded: room.recorded, x: x0 - R.roomPad, y: 8, w: x - R.gap - x0 + 2 * R.roomPad, h: 0 });
-    x += 30;
+    // No room here: the devices that are somewhere at this location.
+    const nowhere = inLoc.length ? [] : loc.unplaced.map((device) => ({ device, kind: kindOf(device) }));
+    if (!inLoc.length) x += R.nowhereW + R.gap;
+    if (loc.name) {
+      const place = [loc.place?.address, loc.place?.city, loc.place?.country].filter(Boolean).join(", ");
+      locations.push({
+        name: loc.name,
+        title: loc.displayName ?? loc.name,
+        sub: [place, loc.primary ? "the primary location" : loc.kind === "remote" ? "another site's" : ""].filter(Boolean).join(" · "),
+        primary: loc.primary,
+        x: lx0 - R.roomPad - R.locPad,
+        y: 2,
+        w: x - R.gap - lx0 + 2 * (R.roomPad + R.locPad) - (inLoc.length ? 30 : 0),
+        h: 0,
+        nowhere,
+      });
+    }
+    x += 40;
   }
   for (const r of v.racks) if (!roomed.has(r.name)) drawRack(r);
   for (const p of placed) {
@@ -151,9 +183,11 @@ export function layoutRacks(v: RacksView): RackLayout {
     for (const c of portCells(p)) ports.set(key(p.device, c.port.id), { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2, rackRight, rack: p.rack });
   }
   const outsideH = placed.filter((p) => p.kind === "outside").reduce((h, p) => Math.max(h, p.box.y + p.box.h), 0);
-  const height = Math.max(R.top + maxH + R.bottom, outsideH + R.bottom);
-  for (const room of rooms) room.h = height - room.y - 10;
-  return { width: Math.max(x - R.gap + R.margin + 60, 400), height, racks, rooms, placed, ports };
+  const nowhereH = Math.max(0, ...locations.map((l) => R.roomY + 30 + l.nowhere.length * 20));
+  const height = Math.max(R.top + maxH + R.bottom, outsideH + R.bottom, nowhereH + R.bottom);
+  for (const room of rooms) room.h = height - room.y - 16;
+  for (const l of locations) l.h = height - l.y - 4;
+  return { width: Math.max(x - R.gap + R.margin + 60, 400), height, locations, racks, rooms, placed, ports };
 }
 
 // A cable's colour and dash, as the Device view draws links: a wan link
@@ -229,7 +263,7 @@ function Port({ c, selected, cabled, rear, onClick }: { c: { port: PlatePort; bo
 }
 
 // What a click on a plate or a port selects: the device's own side card (a
-// node, a switch or one of its ports, an access point), else the mount's.
+// node, a switch or one of its ports, an access point), else the placed device's.
 export function selOf(kind: Placed["kind"], device: string, port?: string): Sel {
   if (kind === "switch") return port ? { kind: "port", id: port, switch: device } : { kind: "switch", id: device };
   if (kind === "node") return { kind: "node", id: device };
@@ -242,7 +276,7 @@ const isSel = (s: Sel | null, kind: Placed["kind"], device: string): boolean =>
 
 // One faceplate: its name and model on the left, its LED, its port grid with
 // each port's live state, the cabled ones underlined, the selected one ringed.
-// The rack draws every mount with it; the side panel draws the selected one.
+// The rack draws every placed device with it; the side panel draws the selected one.
 export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: Placed; on: boolean; portOn: (id: string) => boolean; cabled?: Set<string>; rear?: Set<string>; onPlate: () => void; onPort: (id: string) => void }) {
   const cells = portCells(p);
   const led = p.up === true ? "#2f9e44" : p.up === false ? "#d64545" : "#9aa4b2";
@@ -277,7 +311,7 @@ export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: 
   );
 }
 
-export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v: RacksView; sel: Sel | null; pick: (s: Sel) => void; cables: boolean; onPane: () => void }) {
+export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v: PositionsView; sel: Sel | null; pick: (s: Sel) => void; cables: boolean; onPane: () => void }) {
   const L = useMemo(() => layoutRacks(v), [v]);
   const wrap = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState<number | null>(null);
@@ -340,6 +374,23 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
         <button className="btn" onClick={() => zoom(1.2)} aria-label="zoom in">+</button>
       </div>
       <svg width={L.width * k} height={L.height * k} viewBox={`0 0 ${L.width} ${L.height}`} role="img" aria-label="the racks">
+        {L.locations.map((l) => (
+          <g key={`loc:${l.name}`} className="rack-location">
+            <rect x={l.x} y={l.y} width={l.w} height={l.h} rx={14} fill="none" stroke="#64748b" strokeWidth={l.primary ? 1.6 : 1.2} strokeDasharray={l.primary ? undefined : "10 5"} />
+            <text x={l.x + 14} y={l.y + 20} className="rack-location-title">{l.title}</text>
+            {l.sub ? <text x={l.x + 14 + l.title.length * 9.5 + 10} y={l.y + 20} className="rack-where">{l.sub}</text> : null}
+            {l.nowhere.length ? (
+              <>
+                <text x={l.x + R.locPad + R.roomPad} y={R.roomY + 12} className="rack-where">no room here — somewhere at this location:</text>
+                {l.nowhere.map((n, i) => (
+                  <text key={n.device} x={l.x + R.locPad + R.roomPad} y={R.roomY + 34 + i * 20} className="rack-location-device" onClick={(e) => (e.stopPropagation(), pick(selOf(n.kind, n.device)))}>
+                    {n.device}
+                  </text>
+                ))}
+              </>
+            ) : null}
+          </g>
+        ))}
         {L.rooms.map((room) => (
           <g key={room.name} className="rack-room" onClick={(e) => (e.stopPropagation(), pick({ kind: "room", id: room.name }))}>
             <rect x={room.x} y={room.y} width={room.w} height={room.h} rx={10} fill="#f8fafc" stroke="#94a3b8" strokeDasharray={room.recorded ? undefined : "6 4"} />

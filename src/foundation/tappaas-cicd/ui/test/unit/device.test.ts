@@ -1,5 +1,5 @@
 // device.test.ts — the Device view as data (web/src/physical/devicegraph.ts)
-// over hrossen's topology with its racks (test/fixtures/topology-racks.json,
+// over hrossen's topology with its positions (test/fixtures/topology-positions.json,
 // 2026-10-22): one node per physical device, one link per pair of devices a
 // cable joins, the states from the findings.
 
@@ -10,7 +10,7 @@ import { ISP, depths, deviceGraph, deviceState, forceLayout, freePanelPorts, lin
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
-const t = JSON.parse(readFileSync(join(FIX, "topology-racks.json"), "utf8")) as Topology;
+const t = JSON.parse(readFileSync(join(FIX, "topology-positions.json"), "utf8")) as Topology;
 const g = deviceGraph(t);
 const ids = g.nodes.map((n) => n.id).sort();
 const link = (a: string, b: string) => g.links.find((l) => l.id === linkId(a, b));
@@ -32,7 +32,7 @@ check(st("Nano HD").state === "warn" && /mounted in no rack/.test(st("Nano HD").
 check(st("buddy rasmus").state === "warn" && st("tappaas2").state === "ok", "a buddy down is amber; a node without a finding is green");
 check(selectedDevice(g, { kind: "port", id: "5", switch: "USW Pro XG 10 PoE" }) === "USW Pro XG 10 PoE" && selectedDevice(g, { kind: "outside", id: "rasmus" }) === "buddy rasmus" && selectedDevice(g, null) === null, "a selection names its device");
 
-// A device rack-manager records: a device like the others, its kind kept.
+// A device position-manager records: a device like the others, its kind kept.
 {
   const t2 = { ...t, devices: [...(t.devices ?? []), { name: "ISP modem", kind: "modem" as const, vendor: null, model: "generic/isp-modem", recorded: true as const, ports: ["WAN", "LAN 1"] }, { name: "ups1", kind: "ups" as const, vendor: null, model: null, recorded: true as const, ports: ["1", "2"] }] };
   const g2 = deviceGraph(t2);
@@ -41,13 +41,27 @@ check(selectedDevice(g, { kind: "port", id: "5", switch: "USW Pro XG 10 PoE" }) 
   check(g2.links.some((l) => l.id === linkId(ISP, "ISP modem") && l.kind === "hand-off") && g2.links.some((l) => l.id === linkId("ISP modem", "USW Pro XG 10 PoE")), "the recorded modem keeps its hand-off and its cable");
 }
 
+// A device a switch port sees and nobody recorded: a device of the graph,
+// shown by what LLDP calls it, on its port's link.
+{
+  const USW = "USW Pro XG 10 PoE";
+  const mac = "aa:bb:cc:00:11:22";
+  const seenDev = { name: mac, kind: "device" as const, vendor: null, model: null, ports: ["eth0"], displayName: "printer-1", source: "seen" as const, location: "knudanchersvej95", placement: null, seen: { switch: USW, port: "8", mac, lldp: { name: "printer-1", port: "eth0" }, lease: null } };
+  const wire = { from: { device: USW, port: "8" }, to: { device: mac, port: "eth0" }, kind: "device", source: "topology" as const, zones: [], lag: null, up: true, label: null };
+  const t4 = { ...t, devices: [...(t.devices ?? []), seenDev], positions: { ...t.positions!, cables: [...t.positions!.cables, wire] } };
+  const g4 = deviceGraph(t4);
+  const n = g4.nodes.find((x) => x.id === mac);
+  check(n?.seen === true && n.name === "printer-1" && n.sel.kind === "mount" && !n.recorded, "a seen device: a node of the graph, named as LLDP calls it, marked seen");
+  check(g4.links.some((l) => l.id === linkId(USW, mac)), "…on the link from its switch port");
+}
+
 // A link split at a patch panel: one link in the graph, its two wires listed;
 // the panel's other ports are free to split another.
 {
   const USW = "USW Pro XG 10 PoE";
   const seg = { from: { device: USW, port: "2" }, to: { device: "tappaas2", port: "enp97s0" }, kind: "lan", source: "topology" as const, zones: [], lag: null, up: true, label: null, segments: [{ from: { device: USW, port: "2" }, to: { device: "patch1", port: "1", side: "front" as const } }, { from: { device: "patch1", port: "1", side: "rear" as const }, to: { device: "tappaas2", port: "enp97s0" } }], via: [{ device: "patch1", port: "1" }] };
-  const cables = t.racks!.cables.filter((c) => !(c.to.device === "tappaas2" && c.to.port === "enp97s0"));
-  const t3 = { ...t, devices: [...(t.devices ?? []), { name: "patch1", kind: "patch-panel" as const, vendor: null, model: null, recorded: true as const, ports: ["1", "2", "3"] }], racks: { ...t.racks!, cables: [...cables, seg] } };
+  const cables = t.positions!.cables.filter((c) => !(c.to.device === "tappaas2" && c.to.port === "enp97s0"));
+  const t3 = { ...t, devices: [...(t.devices ?? []), { name: "patch1", kind: "patch-panel" as const, vendor: null, model: null, recorded: true as const, ports: ["1", "2", "3"] }], positions: { ...t.positions!, cables: [...cables, seg] } };
   const g3 = deviceGraph(t3);
   const l = g3.links.find((x) => x.id === linkId(USW, "tappaas2"))!;
   check(l.cables.length === 1 && l.cables[0].segments?.length === 2 && !g3.links.some((x) => x.a === "patch1" || x.b === "patch1"), "a split link: one link between the two devices, its segments with it, no link to the panel");
