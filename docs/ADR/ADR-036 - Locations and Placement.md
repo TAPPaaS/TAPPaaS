@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-10-23 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | Findings 2 and 3 of [`src/DATAMODEL.md`](../../src/DATAMODEL.md) (location recorded in four shapes; devices in three files). Related: #865 (the zone names its environment), ADR-012 §1.5 (a machine's physical location), ADR-026 (machines), ADR-010 §8.4 (the satellite), ADR-034 (the console's Physical view), ADR-035 (a manager's rename and aliases). |
-| **Changelog** | v0.1 (2026-10-23) — first draft, from the operator's direction of 2026-10-23: a device has a location and a placement; site-manager owns locations with a primary one; rack-manager becomes position-manager and owns every placement; devices carry no room or rack field. |
+| **Changelog** | v0.2 (2026-10-23) — **D5** a backup buddy's place is a location of this site, named by the peer record (operator, 2026-10-23); the console decision is D6. · v0.1 (2026-10-23) — first draft, from the operator's direction of 2026-10-23: a device has a location and a placement; site-manager owns locations with a primary one; rack-manager becomes position-manager and owns every placement; devices carry no room or rack field. |
 
 Where a thing is has two parts: the **location** it is at (a place with an address: the site's
 building, a provider's data centre, a second house) and its **placement** inside that location (a
@@ -108,7 +108,17 @@ location and unplaced; `position-manager device record <port-or-mac> --name <n> 
 into a recorded device in one step, keeping the port's cable. There is no fifth file: each kind
 stays with the manager that knows what it is, and the topology is where they meet.
 
-### D5 — The console draws locations, then rooms, then racks
+### D5 — A backup buddy's place is a location too
+
+A backup peer (`remote-<peer>.json`, `pull-`, `receive-`; `backup-manager peer add --country
+--city`) records where the other site is so that `backup-manager validate` can tell an off-site copy
+from an on-site one. That place becomes a location of this site (`kind: remote`, no rooms of its
+own needed), and the peer record names it by `location` instead of carrying `country` and `city`;
+`peer add` takes `--location <name>` and still accepts `--country`/`--city`, which then create the
+location. Every place this site cares about is then one list in site-manager: its own buildings, its
+machines' data centres, its buddies.
+
+### D6 — The console draws locations, then rooms, then racks
 
 The Physical view groups by location (the primary first), each location by its rooms, each room by
 its racks and loose devices; a device with a location and no room is listed under the location. The
@@ -120,9 +130,9 @@ site-manager. The device panel shows location and placement as two lines, each a
 - One answer to "where is it": the `location` name on the device, resolved by site-manager, and the
   placement in position-manager. The console, `backup-manager validate` and the topology read the
   same two things.
-- Four fields go: `site.location` (into `locations`), a machine's `physicalLocation`, a switch's or
-  AP's free-text `location` (becomes a name), rack-manager's building-less rooms (rooms get a
-  location). One manager is renamed; its verbs keep working for a release.
+- Five fields go: `site.location` (into `locations`), a machine's `physicalLocation`, a switch's or
+  AP's free-text `location` (becomes a name), a backup peer's `country` and `city` (become a
+  location), rack-manager's building-less rooms (rooms get a location). One manager is renamed; its verbs keep working for a release.
 - Every installation is migrated: `site.location` → `locations{primary}`, `racks.json` →
   `positions.json` with `mounts{}` → `placements{}` and rooms given the primary location, machine
   modules' `physicalLocation` → a location added to the site (named from its city) and referenced,
@@ -159,8 +169,8 @@ site-manager. The device panel shows location and placement as two lines, each a
 ## Implementation plan
 
 1. **Schema and site-manager:** `locations{}`, `primaryLocation`, the `location` verbs, the
-   `site.location` migration; `backup-manager validate` reads the machine's location through
-   site-manager.
+   `site.location` migration; `backup-manager validate` reads a machine's and a peer's location
+   through site-manager, and the peers' `country`/`city` migrate into locations.
 2. **position-manager:** the rename with aliases, `positions.json`, rooms with a location,
    `placements{}` and the `place`/`unplace` verbs, `device record` from a seen device, the
    `racks.json` migration; the topology's `location`, `placement` and `source` on every device.
