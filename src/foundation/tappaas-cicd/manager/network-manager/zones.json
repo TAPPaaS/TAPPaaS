@@ -29,7 +29,7 @@
       "STILL HUMAN: every zone has both _comment and description; operational instructions live in _comment only.",
       "Prefer `network-manager add <name> --archetype <A>` over copying a block: it stamps a tier-correct type/tier/isolated/access-to seed and auto-allocates the VLAN/IP."
     ],
-    "authored_vs_effective": "THIS FILE IS AUTHORED STATE. A Client/IoT/Guest zone may carry 'serves: <environment>' (ADR-014 D2); the resulting access-to / pinhole-allowed-from edge is DERIVED on every reconcile into zones.effective.json, which is what zone-manager, rules_manager and the Caddy access lists actually read. Never hand-edit zones.effective.json, and never expect a derived edge to appear here - keeping it out is what lets a `serves` link be cleared without stranding its edges."
+    "authored_vs_effective": "THIS FILE IS AUTHORED STATE. A zone names its environment: a Service zone (and mgmt) the environment whose zone it is, a Client/IoT/Guest/DMZ zone the environment it serves. For a Client/Guest/IoT zone the resulting access-to / pinhole-allowed-from edge is DERIVED on every reconcile into zones.effective.json, which is what zone-manager, rules_manager and the Caddy access lists actually read. Never hand-edit zones.effective.json, and never expect a derived edge to appear here - keeping it out is what lets an environment link be cleared without stranding its edges."
   },
   "_profiles": {
     "_comment": "ADR-014 D7. Composable, additive, idempotent zone bundles applied by `network-manager init <profile> --name <N>`. A profile ADDS its own zones, and may ADD access-to entries to zones from another profile via `grants` (an iot install has to give the service and client zones reach to the devices — the one edge the zones alone cannot express). A profile never removes or deactivates anything. `grants` keys are subject to the srv -> <N> rename like any other zone reference. This block is INSTALL-TIME metadata read from the shipped template; it is deliberately not copied into a live zones.json.",
@@ -77,6 +77,7 @@
   "mgmt": {
     "type": "Management",
     "state": "Manual",
+    "environment": "mgmt",
     "typeId": "0",
     "subId": "0",
     "vlantag": 0,
@@ -161,6 +162,7 @@
   "srv": {
     "type": "Service",
     "state": "Inactive",
+    "environment": "srv",
     "typeId": "2",
     "subId": "0",
     "vlantag": 200,
@@ -192,7 +194,7 @@
     ],
     "pinhole-allowed-from": [],
     "tier": 2,
-    "serves": "srv",
+    "environment": "srv",
     "_comment": "Trusted personal devices on the home network. Reaches srvHome and iotLocal/iotCloud zone-wide for consumer app compatibility (Hue, Shelly, Sonos). Does not reach srvWork — use the work zone for managed corporate access.",
     "description": "Trusted personal devices: laptops, phones, tablets"
   },
@@ -209,7 +211,7 @@
     "access-to": [],
     "pinhole-allowed-from": [],
     "tier": 6,
-    "serves": "srv",
+    "environment": "srv",
     "_comment": "Local automation devices: no internet, no LAN egress. Zigbee/Hue/KNX/Shelly. srvHome and home reach zone-wide via access-to; srvHome modules may create VM-specific pinholes via pinhole-allowed-from. mgmt via its access-to. (= The Hook Up's 'NoT'.)",
     "description": "Local-only IoT: no internet, automation devices"
   },
@@ -230,7 +232,7 @@
       "home"
     ],
     "tier": 3,
-    "serves": "srv",
+    "environment": "srv",
     "_comment": "Cloud-connected trusted devices: smart appliances, media (Sonos, Chromecast), HVAC/solar monitoring. srvHome and home reach zone-wide via access-to. mDNS across zones: \"mdns\": true here and on the discovering zone; Sonos/SSDP needs a UDP relay of port 1900 (see _README.mdns_policy).",
     "description": "Internet-dependent trusted IoT: smart appliances, media, monitoring"
   },
@@ -247,7 +249,7 @@
     "pinhole-allowed-from": [],
     "tier": 6,
     "isolated": true,
-    "serves": "srv",
+    "environment": "srv",
     "_comment": "Cameras and NVR. No internet, no LAN egress. NVR module in srvHome or srvWork reaches via explicit pinhole only — never zone-wide access-to (GDPR: access is purpose-limited). Usually wired PoE; no SSID.",
     "description": "Surveillance: cameras + NVR, fully isolated"
   },

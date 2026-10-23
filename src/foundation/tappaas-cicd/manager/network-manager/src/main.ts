@@ -50,12 +50,14 @@ import { RETIRED_ZONES, retireZones, saveRetired } from "./retire";
 import { zonesCheck, occupiedZones } from "./zonescheck";
 import { archetypeByName, archetypeNames, zoneTier } from "./archetypes";
 import {
-  SERVES_ALLOWED_TYPES,
+  ENVIRONMENT_TYPES,
+  OWNER_TYPES,
   effectiveFileFor,
-  environmentZone,
+  environmentExists,
+  hasEnvironments,
+  ownZonesOf,
   refreshEffective,
-  servesList,
-  servesValue,
+  zoneEnvironment,
 } from "./serves";
 import { distributeZones, shouldAutoDistribute } from "./distribute";
 import { isPubliclyResolvableSync, resolveSplitHorizonTarget } from "./splithorizon";
@@ -97,7 +99,7 @@ export const HELP: HelpSpec = {
         ["--json", "emit the matching zone names as a JSON array"],
       ],
       note:
-        "`--type Client|IoT` adds tier + serves columns. Enabling/disabling a zone\n" +
+        "`--type Client|IoT` adds tier + environment columns. Enabling/disabling a zone\n" +
         "is `enable|disable|manual <name>` — `list --state Inactive` is how you find\n" +
         "the candidates.",
     },
@@ -135,7 +137,8 @@ export const HELP: HelpSpec = {
           "                control, service, trusted-client, guest, dmz,\n" +
           "                iot-local, iot-cloud, iot-cams, iot-untrust.\n" +
           "                Stamps type/typeId/tier/isolated + the access-to seed."],
-        ["--serves <env>", "bind the new Client/IoT/Guest zone to an environment"],
+        ["--environment <env>", "the environment the new zone belongs to: a Service zone's own,\n" +
+          "                or the one a Client/IoT/Guest/DMZ zone serves"],
         ["--from-zone <src>", "inherit type/typeId/bridge/access-to/pinhole from <src>"],
         ["--type <T>", "zone type (default: Service)"],
         ["--typeId <N>", "numeric type band (default: 2)"],
@@ -180,20 +183,19 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "bind <zone> --environment <env> | --unbind", effect: { noPreview: "links the zone to an environment in zones.json" },
-      name: "bind (link a Client/IoT/Guest zone to an environment)",
+      name: "bind (link a zone to its environment)",
       hidden: ["--env <env>"],
       options: [
-        ["--environment <env>", "the environment whose service zone this zone consumes;\n" +
-          "                      replaces any link the zone has"],
-        ["--add", "with --environment: add the environment to the zone's links\n" +
-          "                      instead of replacing them (a zone may serve several)"],
-        ["--unbind", "clear every link; with --environment, remove only that one"],
+        ["--environment <env>", "a Service zone: the environment whose zone it is (one per environment);\n" +
+          "                      a Client/IoT/Guest/DMZ zone: the environment it serves.\n" +
+          "                      Replaces any link the zone has."],
+        ["--unbind", "clear the link; with --environment, only when it names that one"],
       ],
       note:
-        "Sets the zone's `serves` field — one environment, or several with --add.\n" +
-        "The access-to / pinhole-allowed-from edges\n" +
-        "are DERIVED from it on every reconcile (into zones.effective.json), so they\n" +
-        "survive the install-time srv→<environment> rename.\n" +
+        "Sets the zone's `environment` field. A zone names one environment.\n" +
+        "For a Client/Guest/IoT zone the access-to / pinhole-allowed-from edge\n" +
+        "is DERIVED from it on every reconcile (into zones.effective.json), so it\n" +
+        "survives the install-time srv→<environment> rename.\n" +
         "zones.json itself stays purely authored.",
     },
     {
@@ -225,7 +227,7 @@ export const HELP: HelpSpec = {
     {
       usage: "render [--zones <file>]",
       name: "render",
-      note: "write zones.effective.json from zones.json (the serves-derived edges); offline, touches no plane",
+      note: "write zones.effective.json from zones.json (the edges the environment links derive); offline, touches no plane",
       options: [["--zones <file>", "the authored zones.json (default: the site's config/zones.json)"]],
     },
     {
@@ -293,7 +295,7 @@ export const HELP: HelpSpec = {
         ["--zones <file>", "zones.json to check (default $TAPPAAS_CONFIG/zones.json)"],
         ["--config-dir <dir>", "installed module configs to cross-check (default $TAPPAAS_CONFIG)"],
         ["--strict", "promote warnings to errors"],
-        ["--effective", "audit the RENDERED graph (serves links resolved) — the\n                      document the planes actually receive, not the authored file"],
+        ["--effective", "audit the RENDERED graph (environment links resolved) — the\n                      document the planes actually receive, not the authored file"],
       ],
     },
     {
@@ -391,10 +393,9 @@ interface Opts {
   // bind
   environment?: string;
   unbind: boolean;
-  // add --archetype / --serves (ADR-014 D5 / D2)
+  // add --archetype (ADR-014 D5); add --environment shares `environment`
   archetype?: string;
-  serves?: string;
-  add?: boolean; // bind --add: one more environment (#576)
+  add?: boolean; // bind --add: refused (a zone names one environment, #865)
   // add --tftp-server-name / --bootfile-name (DHCP options 66/67, #546)
   tftpServerName?: string;
   bootfileName?: string;
@@ -512,8 +513,8 @@ function parseOpts(args: string[]): Opts {
       case "--archetype":
         o.archetype = next();
         break;
-      case "--serves":
-        o.serves = next();
+      case "--serves": // the field's name before #865
+        o.environment = next();
         break;
       case "--tftp-server-name":
         o.tftpServerName = next();
@@ -597,7 +598,7 @@ function cmdZone(sub: string, opts: Opts): void {
       return;
     }
     // Client/IoT rows answer "which environment does this belong to?", so show
-    // tier + serves for them (ADR-014 D4). Also shown whenever --tier was used.
+    // tier + environment for them (ADR-014 D4). Also shown whenever --tier was used.
     const showTrust =
       opts.tier !== undefined || (opts.type !== undefined && ["Client", "IoT", "Guest"].includes(opts.type));
     for (const n of names) {
@@ -609,7 +610,7 @@ function cmdZone(sub: string, opts: Opts): void {
         const t = zoneTier(z?.tier);
         const iso = z?.isolated === true ? " isolated" : "";
         line += ` ${(t === undefined ? "tier -" : `tier ${t}`).padEnd(7)}` +
-          ` ${(servesList(z).length ? `serves ${servesList(z).join(",")}` : "").padEnd(18)}${iso}`;
+          ` ${(zoneEnvironment(z) ? `environment ${zoneEnvironment(z)}` : "").padEnd(24)}${iso}`;
       }
       info(line.trimEnd());
     }
@@ -671,19 +672,29 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
           `already defines type/typeId/tier/isolated. Drop the archetype to author by hand.`,
       );
     }
-    if (opts.serves && !SERVES_ALLOWED_TYPES.has((a as { type: string }).type)) {
+    if (opts.environment && !ENVIRONMENT_TYPES.has((a as { type: string }).type)) {
       die(
-        `add: --serves is only meaningful for a Client, IoT or Guest zone; ` +
+        `add: --environment is for Service, Management, Client, IoT, Guest and DMZ zones; ` +
           `archetype '${opts.archetype}' creates a ${(a as { type: string }).type} zone.`,
       );
     }
-  } else if (opts.serves) {
-    die("add: --serves requires --archetype (or bind the zone afterwards with `bind`)");
   }
-  if (opts.serves) {
-    const svc = environmentZone(dirname(opts.zonesFile), opts.serves);
-    if (svc === undefined) {
-      die(`add: environment '${opts.serves}' has no readable environments/${opts.serves}.json with a '.network.zone'`);
+  if (opts.environment) {
+    const configDir = dirname(opts.zonesFile);
+    if (!environmentExists(configDir, opts.environment)) {
+      die(`add: environment '${opts.environment}' does not exist (no environments/${opts.environment}.json) — create it first`);
+    }
+    const doc = loadZones(opts.zonesFile);
+    const type = opts.archetype
+      ? (archetypeByName(opts.archetype) as { type: string }).type
+      : opts.fromZone
+        ? String(getZone(doc, opts.fromZone)?.type ?? "")
+        : opts.type ?? "Service";
+    if (OWNER_TYPES.has(type)) {
+      const own = ownZonesOf(doc, opts.environment);
+      if (own.length > 0) {
+        die(`add: environment '${opts.environment}' already has its zone '${own[0]}' — an environment has one`);
+      }
     }
   }
 
@@ -705,7 +716,7 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
     vlan: opts.vlan,
     variant: opts.variant,
     archetype: opts.archetype,
-    serves: opts.serves,
+    environment: opts.environment,
     tftpServerName: opts.tftpServerName,
     bootfileName: opts.bootfileName,
     dryRun: opts.check,
@@ -867,81 +878,84 @@ function loadZoneFieldSchema(): ZonesFieldsSchema {
   return {};
 }
 
-// ── bind / unbind (ADR-014 D2) ─────────────────────────────────────────
-// Authors the `serves` link on a Client/IoT/Guest zone. Deliberately does NOT
-// reconcile: like enable/disable, it mutates zones.json and tells the operator
-// how to apply. The effective document IS re-rendered so `show`/`validate` and
-// any module install see the new resolution immediately.
+// ── bind / unbind (ADR-014 D2, #865) ───────────────────────────────────
+// Authors a zone's `environment` link. Deliberately does NOT reconcile: like
+// enable/disable, it mutates zones.json and tells the operator how to apply.
+// The effective document IS re-rendered so `show`/`validate` and any module
+// install see the new resolution immediately.
 function cmdBind(opts: Opts): void {
   const name = opts.rest[0];
   if (!name) die("bind: expected <zone> --environment <env> | --unbind");
   if (!opts.unbind && !opts.environment) {
     die("bind: expected --environment <env> (or --unbind to clear the link)");
   }
-  if (opts.add && (opts.unbind || !opts.environment)) {
-    die("bind: --add goes with --environment <env> (and not with --unbind)");
+  if (opts.add) {
+    die("bind: a zone names one environment — there is no --add. Reach a second environment's zone with access-to (or pinhole-allowed-from for an IoT zone).");
   }
 
   const doc = loadZones(opts.zonesFile);
   const z = getZone(doc, name);
   if (!z) die(`bind: zone '${name}' not found in ${opts.zonesFile}`);
   const type = typeof z.type === "string" ? z.type : "";
-  if (!SERVES_ALLOWED_TYPES.has(type)) {
+  if (!ENVIRONMENT_TYPES.has(type)) {
     die(
-      `bind: zone '${name}' is type ${type || "(unset)"} — only Client, IoT and Guest ` +
-        `zones consume an environment. A Service zone IS an environment's zone; ` +
-        `bind its clients to the environment instead.`,
+      `bind: zone '${name}' is type ${type || "(unset)"} — only Service, Management, Client, ` +
+        `IoT, Guest and DMZ zones name an environment.`,
     );
   }
 
   const configDir = dirname(opts.zonesFile);
-  const before = servesList(z);
-  const shown = (envs: string[]) => (envs.length ? envs.map((e) => `'${e}'`).join(", ") : "(none)");
-  let after: string[];
+  const before = zoneEnvironment(z);
+  const shown = (e: string | undefined) => (e ? `'${e}'` : "(none)");
+  let after: string | undefined;
 
   if (opts.unbind) {
-    // --unbind clears every link; --unbind --environment E removes only E.
-    after = opts.environment ? before.filter((e) => e !== opts.environment) : [];
-    if (after.length === before.length) {
-      info(`${name}: ${opts.environment ? `does not serve '${opts.environment}'` : "no 'serves' link"} — no change`);
+    // --unbind clears the link; --unbind --environment E only when it is E.
+    if (before === undefined || (opts.environment && before !== opts.environment)) {
+      info(`${name}: ${opts.environment ? `does not name '${opts.environment}'` : "names no environment"} — no change`);
       return;
     }
+    after = undefined;
   } else {
     const env = opts.environment as string;
     // Resolve up front so a typo is caught here, not three commands later.
-    const svc = environmentZone(configDir, env);
-    if (svc === undefined) {
+    if (hasEnvironments(configDir) && !environmentExists(configDir, env)) {
       die(
-        `bind: environment '${env}' has no readable ${join(configDir, "environments", `${env}.json`)} ` +
-          `with a '.network.zone' — create it first (\`environment-manager add ${env}\`).`,
+        `bind: environment '${env}' does not exist (no ${join(configDir, "environments", `${env}.json`)}) ` +
+          `— create it first (\`environment-manager add ${env}\`).`,
       );
     }
-    if (!zoneExists(doc, svc)) {
-      die(`bind: environment '${env}' names service zone '${svc}', which is not defined in zones.json`);
-    }
-    // Without --add the link REPLACES what the zone had — said out loud, so a
-    // second bind never drops an edge silently (#576).
-    after = opts.add ? [...before, env] : [env];
-    if (JSON.stringify(servesValue(after)) === JSON.stringify(servesValue(before))) {
-      info(`${name}: already serves ${shown(before)} — no change`);
+    if (before === env) {
+      info(`${name}: already names ${shown(env)} — no change`);
       return;
     }
-    if (!opts.add && before.length && !before.every((e) => e === env)) {
-      info(`${name}: replacing ${shown(before)} — use --add to keep them and add '${env}'`);
+    if (OWNER_TYPES.has(type)) {
+      // One zone per environment: refuse a second, and refuse taking a zone
+      // away from the environment it already is.
+      const own = ownZonesOf(doc, env).filter((n) => n !== name);
+      if (own.length > 0) {
+        die(`bind: environment '${env}' already has its zone '${own[0]}' — unbind that first, or move the environment with \`environment-manager modify ${env} --zone ${name}\``);
+      }
+      if (before !== undefined) {
+        die(`bind: zone '${name}' is environment '${before}''s zone — move that environment first (\`environment-manager modify ${before} --zone <other>\`)`);
+      }
+    } else if (ownZonesOf(doc, env).length === 0) {
+      die(`bind: environment '${env}' has no zone of its own yet — bind its Service zone first`);
     }
+    if (before !== undefined) info(`${name}: replacing ${shown(before)}`);
+    after = env;
   }
 
-  const value = servesValue(after);
   const rawZone = doc.raw[name] as Record<string, unknown>;
-  if (value === undefined) {
-    delete z.serves;
-    delete rawZone.serves;
+  if (after === undefined) {
+    delete z.environment;
+    delete rawZone.environment;
   } else {
-    z.serves = value;
-    rawZone.serves = value;
+    z.environment = after;
+    rawZone.environment = after;
   }
   saveZones(opts.zonesFile, doc);
-  info(`${name}: serves ${shown(before)} → ${GN}${shown(servesList({ serves: value }))}${CL}`);
+  info(`${name}: environment ${shown(before)} → ${GN}${shown(after)}${CL}`);
 
   // Re-render and show what the link derives, so the operator sees the effect
   // rather than having to reason about it.
@@ -960,32 +974,32 @@ function cmdBind(opts: Opts): void {
 // `render` — zones.effective.json from zones.json, and nothing else. Lets a
 // reader that finds the effective document older than the authored one (e.g.
 // rules-manager after a hand edit) bring it up to date without converging any
-// plane. An unresolvable `serves` link fails it, as it fails reconcile.
+// plane. An unresolvable environment link fails it, as it fails reconcile.
 function cmdRender(opts: Opts): void {
   loadZones(opts.zonesFile);
   const eff = refreshEffective(opts.zonesFile);
   if (eff.errors.length > 0) {
     for (const e of eff.errors) warn(e);
-    die(`unresolved 'serves' link(s): ${eff.errors.length} — fix the binding(s) and re-run`);
+    die(`unresolved environment link(s): ${eff.errors.length} — fix the binding(s) and re-run`);
   }
-  info(`rendered ${effectiveFileFor(opts.zonesFile)} (${eff.edges.length} serves link(s))`);
+  info(`rendered ${effectiveFileFor(opts.zonesFile)} (${eff.edges.length} derived link(s))`);
 }
 
 function cmdReconcile(opts: Opts, client: PlaneClient = new CliPlaneClient()): void {
   // Validate zones.json is readable before touching any plane.
   loadZones(opts.zonesFile);
 
-  // ADR-014 D-C4: resolve every `serves` link into zones.effective.json and hand
+  // ADR-014 D-C4: resolve every environment link into zones.effective.json and hand
   // THAT to the planes. zones.json stays purely authored. A broken link is fatal
   // here (unlike on a zone add) — reconcile is the verb that converges the
   // firewall, so a link that cannot resolve would silently drop an edge.
   const eff = refreshEffective(opts.zonesFile);
   if (eff.errors.length > 0) {
     for (const e of eff.errors) warn(e);
-    die(`unresolved 'serves' link(s): ${eff.errors.length} — fix the binding(s) and re-run`);
+    die(`unresolved environment link(s): ${eff.errors.length} — fix the binding(s) and re-run`);
   }
   for (const e of eff.edges) {
-    info(`serves: ${e.zone} → environment '${e.environment}' (zone '${e.serviceZone}')`);
+    info(`environment: ${e.zone} serves '${e.environment}' (zone '${e.serviceZone}')`);
     for (const a of e.added) info(`  ${a}`);
   }
 
@@ -1129,7 +1143,7 @@ function cmdZonesInit(opts: Opts): void {
   writeJsonAtomic(origFile, fullRenamed);
   info(`  ${GN}✓${CL} init: seeded '${renameFile}' (renamed source) and '${origFile}' (merge baseline)`);
 
-  // Render the effective document so a `serves`-bound shipped zone resolves
+  // Render the effective document so an environment-bound shipped zone resolves
   // immediately. Non-fatal: on the install path the environments do not exist
   // yet (install.sh runs `init` BEFORE `environment-manager add`), so the links
   // legitimately do not resolve for another few seconds.

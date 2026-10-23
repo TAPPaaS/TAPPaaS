@@ -20,15 +20,15 @@
 // The rename map is `srv -> <N>` and nothing else (#425: home/guest are
 // site-local client-role zones whose key drives the client DNS domain
 // `<zone>.internal`; renaming one re-domains every device). It is applied to
-// zone KEYS, to every zone-name reference, to a `serves` value, and to the
-// `grants` keys — one map, one place.
+// zone KEYS, to every zone-name reference, to an `environment` value, and to
+// the `grants` keys — one map, one place.
 //
-// `serves: "srv"` in the template is a deliberate placeholder: after the rename
-// it reads `serves: "<N>"`, the DEFAULT ENVIRONMENT, which shares its name with
-// the default service zone by construction (site.defaultEnvironment drives both
-// — ADR-007d/#426). That is how a shipped client/IoT zone comes out of `init`
-// already bound to the environment, with no literal service-zone reference to
-// go stale (#424).
+// `environment: "srv"` in the template is a deliberate placeholder: after the
+// rename it reads `environment: "<N>"`, the DEFAULT ENVIRONMENT, which shares
+// its name with the default service zone by construction (site.defaultEnvironment
+// drives both — ADR-007d/#426). That is how the service zone comes out of `init`
+// as the default environment's zone, and a shipped client/IoT zone already
+// serving it, with no literal service-zone reference to go stale (#424).
 //
 // WHAT CHANGED FROM THE PRE-D7 VERSION: there is no longer a hardcoded
 // INACTIVATE list (the five srv* zones it inactivated are no longer shipped —
@@ -170,7 +170,7 @@ export function zonesInit(
   const defZone = out[name];
   if (isZoneObject(defZone)) defZone.state = "Active";
 
-  // GLOBAL referential integrity: rewrite refs (and `serves`) to renamed keys.
+  // GLOBAL referential integrity: rewrite refs (and `environment`) to renamed keys.
   for (const [key, val] of Object.entries(out)) {
     if (isDocKey(key)) continue;
     if (isZoneObject(val)) rewriteZoneRefs(val, renames);

@@ -25,7 +25,7 @@ export interface ReconcileOpts {
   only?: Plane; // run a single plane
   zonesFile: string;
   // The document the PLANES consume (ADR-014 D-C4). zones.json is the AUTHORED
-  // source; `serves` links are resolved into zones.effective.json, and that is
+  // source; environment links are resolved into zones.effective.json, and that is
   // what zone-manager must see or the derived edges would never reach the
   // firewall. Defaults to zonesFile when a caller renders nothing.
   effectiveFile?: string;

@@ -44,7 +44,7 @@ function maybeDistribute(zonesFile: string, noDistribute: boolean): void {
 
 // Re-render zones.effective.json after an authored write, so the planes (and
 // any module install that reads it) see the CURRENT resolution of every
-// `serves` link. Non-fatal by design: a missing environment file must not
+// environment link. Non-fatal by design: a missing environment file must not
 // break a zone add — `reconcile`/`validate` are what report that.
 function refreshEffectiveQuietly(zonesFile: string): string {
   try {

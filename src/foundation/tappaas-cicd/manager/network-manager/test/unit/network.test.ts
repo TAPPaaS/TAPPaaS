@@ -47,7 +47,7 @@ import { reconcileAll } from "../../src/reconcile";
 import { addZone, deleteZone } from "../../src/zonelifecycle";
 import { runChecks } from "../../src/zonescheck";
 import { ARCHETYPES, TIER_EXEMPT_TYPES, archetypeNames } from "../../src/archetypes";
-import { backfillServes, renderEffective, servesList, servesValue } from "../../src/serves";
+import { backfillServes, environmentZoneIn, renderEffective, zoneEnvironment } from "../../src/serves";
 import {
   ZonesFieldsSchema,
   applyZoneSet,
@@ -358,15 +358,20 @@ function tmpZones(): string {
       "guest zone is byte-identical to the template (untouched)",
     );
 
-    // `serves` is a PLACEHOLDER in the template and must follow the rename: the
-    // default environment shares its name with the default service zone
-    // (ADR-007d/#426), so `serves: "srv"` becomes `serves: "<N>"`. This is how a
-    // shipped client/IoT zone comes out of init already bound — no literal
+    // `environment` is a PLACEHOLDER in the template and must follow the rename:
+    // the default environment shares its name with the default service zone
+    // (ADR-007d/#426), so `environment: "srv"` becomes `environment: "<N>"`. This
+    // is how the service zone comes out of init as the default environment's
+    // zone, and a shipped client/IoT zone already bound — no literal
     // service-zone reference left to go stale (#424).
-    check((raw["home"] as Record<string, unknown>)["serves"] === "acme",
-      "home.serves follows the rename: srv → <N> (the default environment)");
-    check((raw["iotCams"] as Record<string, unknown>)["serves"] === "acme",
-      "iotCams.serves follows the rename too");
+    check((raw["acme"] as Record<string, unknown>)["environment"] === "acme",
+      "the renamed service zone names the default environment (srv → <N>)");
+    check((raw["mgmt"] as Record<string, unknown>)["environment"] === "mgmt",
+      "the mgmt zone names the mgmt environment");
+    check((raw["home"] as Record<string, unknown>)["environment"] === "acme",
+      "home.environment follows the rename: srv → <N> (the default environment)");
+    check((raw["iotCams"] as Record<string, unknown>)["environment"] === "acme",
+      "iotCams.environment follows the rename too");
 
     // referential integrity: NO zone still references the bare srv key.
     let refOk = true;
@@ -1067,8 +1072,8 @@ function tmpZones(): string {
     check(!m.added.includes("lab"), "added vs preserved are disjoint by origin");
 
     // an existing zone is never re-stamped from the template without --force.
-    check((m.raw["home"] as Record<string, unknown>)["serves"] === undefined,
-      "an existing zone is NOT re-stamped from the template (no serves injected)");
+    check((m.raw["home"] as Record<string, unknown>)["environment"] === undefined,
+      "an existing zone is NOT re-stamped from the template (no environment injected)");
 
     // doc block survives; install-time metadata does not leak into the live file.
     check(m.raw["_README"] === "keep me", "_README doc block preserved through init");
@@ -1157,11 +1162,11 @@ function tmpZones(): string {
   }
 }
 
-// ── 16. ADR-014 P1: tier / isolated / serves are carried, not mangled ──
+// ── 16. ADR-014 P1: tier / isolated / environment are carried, not mangled
 // P1 is a PURE schema addition: nothing reads the three new fields yet, so the
 // only thing to prove is that they survive every existing code path untouched —
 // load→save round-trip, the 3-way merge, and the rename transform — and that
-// `serves` is operator-pinned like `state`.
+// `environment` is operator-pinned like `state`.
 {
   const d = mkdtempSync(join(tmpdir(), "nm-adr014-"));
 
@@ -1175,17 +1180,17 @@ function tmpZones(): string {
     },
     acme: {
       type: "Service", state: "Active", typeId: "2", subId: "0", vlantag: 200,
-      ip: "10.2.0.0/24", bridge: "lan", tier: 1,
+      ip: "10.2.0.0/24", bridge: "lan", tier: 1, environment: "acme",
       "access-to": ["internet", "dmz"], "pinhole-allowed-from": ["dmz"],
     },
     home: {
       type: "Client", state: "Active", typeId: "3", subId: "10", vlantag: 310,
-      ip: "10.3.10.0/24", bridge: "lan", tier: 2, serves: "acme",
+      ip: "10.3.10.0/24", bridge: "lan", tier: 2, environment: "acme",
       "access-to": ["internet"], "pinhole-allowed-from": [],
     },
     iotCams: {
       type: "IoT", state: "Active", typeId: "4", subId: "30", vlantag: 430,
-      ip: "10.4.30.0/24", bridge: "lan", tier: 6, isolated: true, serves: "acme",
+      ip: "10.4.30.0/24", bridge: "lan", tier: 6, isolated: true, environment: "acme",
       "access-to": [], "pinhole-allowed-from": [],
     },
     dmz: {
@@ -1201,37 +1206,37 @@ function tmpZones(): string {
   const doc = loadZones(f);
   const home = getZone(doc, "home");
   const cams = getZone(doc, "iotCams");
-  check(home?.tier === 2 && home?.serves === "acme", "P1: loadZones surfaces tier + serves on a Client zone");
-  check(cams?.tier === 6 && cams?.isolated === true && cams?.serves === "acme", "P1: loadZones surfaces tier + isolated + serves on an IoT zone");
+  check(home?.tier === 2 && home?.environment === "acme", "P1: loadZones surfaces tier + environment on a Client zone");
+  check(cams?.tier === 6 && cams?.isolated === true && cams?.environment === "acme", "P1: loadZones surfaces tier + isolated + environment on an IoT zone");
   check(getZone(doc, "acme")?.isolated === undefined, "P1: absent `isolated` stays absent (not defaulted on load)");
 
   const g = join(d, "roundtrip.json");
   saveZones(g, doc);
   check(
     JSON.stringify(JSON.parse(readFileSync(g, "utf8"))) === JSON.stringify(authored),
-    "P1: load→save round-trips a tier/isolated/serves doc byte-for-byte (by value)",
+    "P1: load→save round-trips a tier/isolated/environment doc byte-for-byte (by value)",
   );
 
   // (b) the new fields do not disturb the existing checks — a conforming doc
   //     still passes zones-check with no errors (P1 adds no new gate).
-  //     The doc declares `serves: "acme"`, so the environment must exist: an
-  //     unresolvable link is an ERROR by design (P3 checkServes).
+  //     The doc names environment "acme", so it must exist: an unresolvable
+  //     link is an ERROR by design (P3 checkServes).
   mkdirSync(join(d, "environments"), { recursive: true });
   writeFileSync(join(d, "environments", "acme.json"),
-    JSON.stringify({ name: "acme", network: { zone: "acme" } }), "utf8");
+    JSON.stringify({ name: "acme" }), "utf8");
   const res = runChecks(loadZones(f), d, false);
   check(res.errors === 0, "P1: zones-check still reports 0 errors on an ADR-014-annotated doc");
 
-  // (c) 3-way merge: `serves` is operator-pinned; `tier` is adoptable.
+  // (c) 3-way merge: `environment` is operator-pinned; `tier` is adoptable.
   //     current has the operator's binding + an old tier; source (a later
-  //     release) drops serves and corrects the tier; baseline == source for tier
-  //     so the correction is adoptable, while serves must survive regardless.
-  const current = { home: { state: "Active", tier: 9, serves: "acme", "access-to": ["internet"] } };
+  //     release) drops the link and corrects the tier; baseline == source for
+  //     tier so the correction is adoptable, while the link must survive.
+  const current = { home: { state: "Active", tier: 9, environment: "acme", "access-to": ["internet"] } };
   const baseline = { home: { state: "Active", tier: 9, "access-to": ["internet"] } };
   const source = { home: { state: "Inactive", tier: 2, "access-to": ["internet"] } };
   const m = mergeZones(current, baseline, source);
   const merged = m.merged["home"] as Record<string, unknown>;
-  check(merged["serves"] === "acme", "P1: merge PINS `serves` — a release without it cannot clear the operator's binding");
+  check(merged["environment"] === "acme", "P1: merge PINS `environment` — a release without it cannot clear the operator's binding");
   check(merged["state"] === "Active", "P1: merge still pins `state` (unchanged #209 behaviour)");
   check(merged["tier"] === 2, "P1: merge ADOPTS a corrected `tier` when the operator has not edited it");
 
@@ -1260,12 +1265,10 @@ function tmpZones(): string {
       "#832: with a backfilled baseline only the VLAN clash holds a zone back");
   }
 
-  // (d) the rename transform carries the new fields through untouched, and does
-  //     NOT rewrite a `serves` value (it names an environment, not a zone — a
-  //     zone named the same as the renamed key must not drag it along).
+  // (d) the rename transform carries the new fields through untouched.
   const tpl = {
     srv: { type: "Service", state: "Inactive", typeId: "2", vlantag: 200, tier: 1, "access-to": ["internet"], "pinhole-allowed-from": [] },
-    home: { type: "Client", state: "Active", typeId: "3", vlantag: 310, tier: 2, serves: "srv", "access-to": ["internet", "srv"], "pinhole-allowed-from": [] },
+    home: { type: "Client", state: "Active", typeId: "3", vlantag: 310, tier: 2, environment: "srv", "access-to": ["internet", "srv"], "pinhole-allowed-from": [] },
     guest: { type: "Guest", state: "Active", typeId: "5", vlantag: 510, tier: 3, "access-to": ["internet"], "pinhole-allowed-from": [] },
   };
   const r = zonesInit(tpl, "acme", false);
@@ -1444,21 +1447,21 @@ function tmpZones(): string {
   }
 }
 
-// ── 19. ADR-014 P3: `serves` resolution, rendering, and back-fill ─────
+// ── 19. ADR-014 P3 / #865: environment links, rendering, and back-fill ─
 {
   const d = mkdtempSync(join(tmpdir(), "nm-p3-"));
   mkdirSync(join(d, "environments"), { recursive: true });
   writeFileSync(join(d, "environments", "warmelo.json"),
-    JSON.stringify({ name: "warmelo", network: { zone: "warmelo" } }), "utf8");
+    JSON.stringify({ name: "warmelo" }), "utf8");
   writeFileSync(join(d, "environments", "mgmt.json"),
-    JSON.stringify({ name: "mgmt", network: { zone: "mgmt" } }), "utf8");
+    JSON.stringify({ name: "mgmt" }), "utf8");
 
   const base = () => ({
-    mgmt: { type: "Management", state: "Manual", typeId: "0", subId: "0", vlantag: 0, ip: "10.0.0.0/24", tier: 0, "access-to": ["internet"], "pinhole-allowed-from": [] },
-    warmelo: { type: "Service", state: "Active", typeId: "2", subId: "0", vlantag: 200, ip: "10.2.0.0/24", tier: 1, "access-to": ["internet"], "pinhole-allowed-from": [] },
-    home: { type: "Client", state: "Active", typeId: "3", subId: "10", vlantag: 310, ip: "10.3.10.0/24", tier: 2, serves: "warmelo", "access-to": ["internet"], "pinhole-allowed-from": [] },
-    iotLocal: { type: "IoT", state: "Active", typeId: "4", subId: "10", vlantag: 410, ip: "10.4.10.0/24", tier: 6, serves: "warmelo", "access-to": [], "pinhole-allowed-from": [] },
-    iotCams: { type: "IoT", state: "Active", typeId: "4", subId: "30", vlantag: 430, ip: "10.4.30.0/24", tier: 6, isolated: true, serves: "warmelo", "access-to": [], "pinhole-allowed-from": [] },
+    mgmt: { type: "Management", state: "Manual", typeId: "0", subId: "0", vlantag: 0, ip: "10.0.0.0/24", tier: 0, environment: "mgmt", "access-to": ["internet"], "pinhole-allowed-from": [] },
+    warmelo: { type: "Service", state: "Active", typeId: "2", subId: "0", vlantag: 200, ip: "10.2.0.0/24", tier: 1, environment: "warmelo", "access-to": ["internet"], "pinhole-allowed-from": [] },
+    home: { type: "Client", state: "Active", typeId: "3", subId: "10", vlantag: 310, ip: "10.3.10.0/24", tier: 2, environment: "warmelo", "access-to": ["internet"], "pinhole-allowed-from": [] },
+    iotLocal: { type: "IoT", state: "Active", typeId: "4", subId: "10", vlantag: 410, ip: "10.4.10.0/24", tier: 6, environment: "warmelo", "access-to": [], "pinhole-allowed-from": [] },
+    iotCams: { type: "IoT", state: "Active", typeId: "4", subId: "30", vlantag: 430, ip: "10.4.30.0/24", tier: 6, isolated: true, environment: "warmelo", "access-to": [], "pinhole-allowed-from": [] },
   });
   const write = (o: Record<string, unknown>, n = "zones.json") => {
     const f = join(d, n);
@@ -1470,45 +1473,44 @@ function tmpZones(): string {
   {
     const eff = renderEffective(loadZones(write(base())), d);
     const z = (k: string) => eff.raw[k] as Record<string, unknown>;
-    check((z("home")["access-to"] as string[]).includes("warmelo"), "P3: Client `serves` derives home.access-to += <service zone>");
-    check((z("iotLocal")["pinhole-allowed-from"] as string[]).includes("warmelo"), "P3: IoT `serves` derives iotLocal.pinhole-allowed-from += <service zone>");
-    // THE LOCALITY RULE: `serves` only ever modifies the zone that declares it.
+    check((z("home")["access-to"] as string[]).includes("warmelo"), "P3: a Client zone's environment derives home.access-to += <service zone>");
+    check((z("iotLocal")["pinhole-allowed-from"] as string[]).includes("warmelo"), "P3: an IoT zone's environment derives iotLocal.pinhole-allowed-from += <service zone>");
+    // THE LOCALITY RULE: the link only ever modifies the zone that declares it.
     // A symmetric derivation invented edges the authored doc never had — caught
     // against the live reference config, see the serves.ts header.
-    check(!(z("warmelo")["pinhole-allowed-from"] as string[]).includes("home"), "P3: `serves` does NOT invent an entry on the service zone (locality rule)");
-    check(!(z("warmelo")["access-to"] as string[]).includes("iotLocal"), "P3: `serves` does NOT invent zone-wide service→IoT reach (locality rule)");
+    check(!(z("warmelo")["pinhole-allowed-from"] as string[]).includes("home"), "P3: the link does NOT invent an entry on the service zone (locality rule)");
+    check(!(z("warmelo")["access-to"] as string[]).includes("iotLocal"), "P3: the link does NOT invent zone-wide service→IoT reach (locality rule)");
     // R2 is now structural: the IoT branch never touches access-to at all.
     check((z("iotCams")["pinhole-allowed-from"] as string[]).includes("warmelo"), "P3 R2: an isolated IoT zone still records who may pinhole into it");
     check(!(z("warmelo")["access-to"] as string[]).includes("iotCams"), "P3 R2: an isolated IoT zone is added to NOBODY's access-to");
-    check(eff.errors.length === 0, "P3: a well-formed serves graph resolves without errors");
+    check(eff.errors.length === 0, "P3: a well-formed environment graph resolves without errors");
   }
 
-  // (a2) #576: a zone may serve several environments — the union of each one's
-  //      edges; one environment as a plain string is the one-element case.
+  // (a2) #865: a zone names one environment. A list is an error, an environment
+  //      named by two Service zones is an error, and one named by none fails
+  //      the zones that serve it. A DMZ zone may name one and derives nothing.
   {
-    writeFileSync(join(d, "environments", "lab.json"),
-      JSON.stringify({ name: "lab", network: { zone: "lab" } }), "utf8");
     const b = base() as Record<string, Record<string, unknown>>;
-    b.lab = { type: "Service", state: "Active", typeId: "2", subId: "1", vlantag: 299, ip: "10.2.99.0/24", tier: 1, "access-to": ["internet"], "pinhole-allowed-from": [] };
-    b.home.serves = ["warmelo", "lab"];
-    b.iotLocal.serves = ["warmelo", "lab"];
-    const eff = renderEffective(loadZones(write(b, "zones-multi.json")), d);
-    const z = (k: string) => eff.raw[k] as Record<string, unknown>;
-    const at = z("home")["access-to"] as string[];
-    check(at.includes("warmelo") && at.includes("lab"), "#576: a client serving two environments reaches both service zones");
-    const paf = z("iotLocal")["pinhole-allowed-from"] as string[];
-    check(paf.includes("warmelo") && paf.includes("lab"), "#576: an IoT zone serving two environments accepts pinholes from both");
-    check(eff.edges.filter((e) => e.zone === "home").length === 2, "#576: one derived edge per environment");
-    check(eff.errors.length === 0, "#576: a list of valid environments resolves without errors");
-    b.home.serves = ["warmelo", "ghost"];
-    const bad = renderEffective(loadZones(write(b, "zones-multi.json")), d);
-    check(bad.errors.length === 1 && bad.errors[0].includes("'ghost'"), "#576: an unknown environment in the list is one error, naming it");
-    check(((bad.raw["home"] as Record<string, unknown>)["access-to"] as string[]).includes("warmelo"),
-      "#576: the valid environments in the list still derive their edges");
-    check(JSON.stringify(servesValue(["a"])) === '"a"' && JSON.stringify(servesValue(["a", "b", "a"])) === '["a","b"]'
-      && servesValue([]) === undefined, "#576: one environment is written as a string, several as a list");
-    check(servesList({ serves: "a" }).length === 1 && servesList({ serves: ["a", "b"] }).length === 2
-      && servesList({}).length === 0, "#576: servesList reads both forms");
+    b.home.environment = ["warmelo", "lab"];
+    const e1 = renderEffective(loadZones(write(b, "zones-multi.json")), d);
+    check(e1.errors.some((x) => x.includes("'home'") && x.includes("one environment")), "#865: a list of environments is an error");
+    const b2 = base() as Record<string, Record<string, unknown>>;
+    b2.lab = { type: "Service", state: "Active", typeId: "2", subId: "1", vlantag: 299, ip: "10.2.99.0/24", tier: 1, environment: "warmelo", "access-to": ["internet"], "pinhole-allowed-from": [] };
+    const e2 = renderEffective(loadZones(write(b2, "zones-two.json")), d);
+    check(e2.errors.some((x) => x.includes("named by 2")), "#865: an environment named by two Service zones is an error");
+    const b3 = base() as Record<string, Record<string, unknown>>;
+    delete b3.warmelo.environment;
+    const e3 = renderEffective(loadZones(write(b3, "zones-orphan.json")), d);
+    check(e3.errors.some((x) => x.includes("'home'") && x.includes("no Service zone")), "#865: serving an environment with no zone is an error");
+    const b4 = base() as Record<string, Record<string, unknown>>;
+    b4.dmz = { type: "DMZ", state: "Mandatory", typeId: "6", subId: "10", vlantag: 610, ip: "10.6.0.0/24", tier: 4, environment: "warmelo", "access-to": ["internet"], "pinhole-allowed-from": ["internet"] };
+    const e4 = renderEffective(loadZones(write(b4, "zones-dmz.json")), d);
+    check(e4.errors.length === 0 && JSON.stringify((e4.raw["dmz"] as Record<string, unknown>)["access-to"]) === '["internet"]',
+      "#865: a DMZ zone may name an environment and derives no edge");
+    check(environmentZoneIn(loadZones(write(base(), "zones-own.json")), "warmelo") === "warmelo"
+      && environmentZoneIn(loadZones(write(base(), "zones-own.json")), "mgmt") === "mgmt",
+      "#865: an environment's zone is the Service/Management zone naming it");
+    check(zoneEnvironment({ environment: "a" }) === "a" && zoneEnvironment({}) === undefined, "#865: zoneEnvironment reads the field");
   }
 
   // (b) the authored document is never mutated by rendering.
@@ -1522,26 +1524,26 @@ function tmpZones(): string {
   // (c) clearing a link drops its derived edges — the whole reason for D-C4.
   {
     const b = base();
-    delete (b.home as Record<string, unknown>).serves;
+    delete (b.home as Record<string, unknown>).environment;
     const eff = renderEffective(loadZones(write(b)), d);
-    check(!((eff.raw["home"] as Record<string, unknown>)["access-to"] as string[]).includes("warmelo"), "P3 D-C4: clearing `serves` cleanly drops the derived access-to edge");
+    check(!((eff.raw["home"] as Record<string, unknown>)["access-to"] as string[]).includes("warmelo"), "P3 D-C4: clearing the link cleanly drops the derived access-to edge");
     const b2 = base() as Record<string, any>;
-    delete b2.iotLocal.serves;
+    delete b2.iotLocal.environment;
     const eff2 = renderEffective(loadZones(write(b2, "unbound-iot.json")), d);
-    check(!((eff2.raw["iotLocal"] as Record<string, unknown>)["pinhole-allowed-from"] as string[]).includes("warmelo"), "P3 D-C4: clearing `serves` on an IoT zone drops its derived pinhole entry");
+    check(!((eff2.raw["iotLocal"] as Record<string, unknown>)["pinhole-allowed-from"] as string[]).includes("warmelo"), "P3 D-C4: clearing the link on an IoT zone drops its derived pinhole entry");
   }
 
-  // (d) error cases: unknown environment, and `serves` on a Service zone.
+  // (d) error cases: unknown environment, and a link on an Overlay zone.
   {
     const b = base() as Record<string, any>;
-    b.home.serves = "nope";
+    b.home.environment = "nope";
     const e1 = renderEffective(loadZones(write(b)), d);
-    check(e1.errors.length === 1 && e1.errors[0].includes("nope"), "P3: `serves` naming an unknown environment is an error");
+    check(e1.errors.length === 1 && e1.errors[0].includes("nope"), "P3: a link naming an unknown environment is an error");
 
     const b2 = base() as Record<string, any>;
-    b2.warmelo.serves = "warmelo";
+    b2.edge = { type: "Overlay", state: "Manual", typeId: "0", subId: "0", vlantag: 0, ip: "10.9.0.0/24", environment: "warmelo", "access-to": [], "pinhole-allowed-from": [] };
     const e2 = renderEffective(loadZones(write(b2)), d);
-    check(e2.errors.some((x) => x.includes("must not carry 'serves'")), "P3: `serves` on a Service zone is an error");
+    check(e2.errors.some((x) => x.includes("must not name an environment")), "P3: a link on an Overlay zone is an error");
   }
 
   // (e) rendering is idempotent — no duplicated refs on a second pass.
@@ -1557,13 +1559,13 @@ function tmpZones(): string {
   //     leaves the EFFECTIVE doc byte-identical. This is what makes the
   //     migration safe to run against a live firewall.
   {
-    // A pre-ADR-014 doc: literal service-zone references, no `serves` anywhere.
+    // A pre-ADR-014 doc: literal service-zone references, no consumer links.
     const legacy: Record<string, any> = base();
-    for (const k of ["home", "iotLocal", "iotCams"]) delete legacy[k].serves;
+    for (const k of ["home", "iotLocal", "iotCams"]) delete legacy[k].environment;
     legacy.home["access-to"] = ["internet", "warmelo"];
     legacy.iotLocal["pinhole-allowed-from"] = ["warmelo"];
     legacy.iotCams["pinhole-allowed-from"] = ["warmelo"];
-    // Authored service-zone state that NO `serves` link reproduces. The
+    // Authored service-zone state that NO link reproduces. The
     // back-fill must leave it exactly as it is — narrowing it would be a
     // silent firewall change.
     legacy.warmelo["access-to"] = ["internet", "iotLocal"];
@@ -1576,9 +1578,9 @@ function tmpZones(): string {
     const effAfter = renderEffective(loadZones(write(authored, "backfilled.json")), d);
 
     check(bf.changes.length === 3, `P3 back-fill: linked all three zones (got ${bf.changes.length})`);
-    check((authored["home"] as any).serves === "warmelo", "P3 back-fill: home gains serves='warmelo'");
+    check((authored["home"] as any).environment === "warmelo", "P3 back-fill: home gains environment='warmelo'");
     check(!((authored["home"] as any)["access-to"] as string[]).includes("warmelo"), "P3 back-fill: the now-derived literal is dropped from the authored doc");
-    check((authored["iotCams"] as any).serves === "warmelo", "P3 back-fill: an isolated IoT zone is linked from its pinhole literal");
+    check((authored["iotCams"] as any).environment === "warmelo", "P3 back-fill: an isolated IoT zone is linked from its pinhole literal");
     check(
       JSON.stringify((authored["warmelo"] as any)["access-to"]) === JSON.stringify(["internet", "iotLocal"]) &&
       JSON.stringify((authored["warmelo"] as any)["pinhole-allowed-from"]) === JSON.stringify(["home"]),
@@ -1589,7 +1591,7 @@ function tmpZones(): string {
       Object.entries(o).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => {
         if (v === null || typeof v !== "object" || Array.isArray(v)) return [k, v];
         const z = { ...(v as Record<string, unknown>) };
-        delete z.serves; // authored-only field, absent before the back-fill
+        if (["home", "iotLocal", "iotCams"].includes(k)) delete z.environment; // authored-only, absent before the back-fill
         for (const f of ["access-to", "pinhole-allowed-from"]) {
           if (Array.isArray(z[f])) z[f] = (z[f] as string[]).slice().sort();
         }
@@ -1603,7 +1605,7 @@ function tmpZones(): string {
 
     // a literal naming a NON-environment zone is left alone (that is `retire`'s job).
     const stale: Record<string, any> = base();
-    delete stale.home.serves;
+    delete stale.home.environment;
     stale.home["access-to"] = ["internet", "srvHome"];
     const bf2 = backfillServes(stale, d);
     check(!bf2.changes.some((c) => c.zone === "home"), "P3 back-fill: a stale literal that is no environment's zone is NOT converted");
@@ -1618,12 +1620,12 @@ function tmpZones(): string {
   const d = mkdtempSync(join(tmpdir(), "nm-p4-"));
   mkdirSync(join(d, "environments"), { recursive: true });
   writeFileSync(join(d, "environments", "warmelo.json"),
-    JSON.stringify({ name: "warmelo", network: { zone: "warmelo" } }), "utf8");
+    JSON.stringify({ name: "warmelo" }), "utf8");
 
   // A minimal but conforming starting document.
   const seed = {
     mgmt: { type: "Management", state: "Manual", typeId: "0", subId: "0", vlantag: 0, ip: "10.0.0.0/24", tier: 0, "access-to": ["internet"], "pinhole-allowed-from": [] },
-    warmelo: { type: "Service", state: "Active", typeId: "2", subId: "0", vlantag: 200, ip: "10.2.0.0/24", tier: 1, "access-to": ["internet"], "pinhole-allowed-from": [] },
+    warmelo: { type: "Service", state: "Active", typeId: "2", subId: "0", vlantag: 200, ip: "10.2.0.0/24", tier: 1, environment: "warmelo", "access-to": ["internet"], "pinhole-allowed-from": [] },
     // the `service` archetype seeds access-to: [internet, dmz], so dmz must exist
     dmz: { type: "DMZ", state: "Mandatory", typeId: "6", subId: "10", vlantag: 610, ip: "10.6.0.0/24", tier: 4, "access-to": ["internet"], "pinhole-allowed-from": ["internet"] },
   };
@@ -1641,7 +1643,7 @@ function tmpZones(): string {
     try {
       const z = authorZone(doc, zn, {
         archetype: a.name,
-        serves: a.type === "Client" || a.type === "IoT" || a.type === "Guest" ? "warmelo" : undefined,
+        environment: a.type === "Client" || a.type === "IoT" || a.type === "Guest" ? "warmelo" : undefined,
       });
       created.push(zn);
       const good =
@@ -1678,11 +1680,11 @@ function tmpZones(): string {
   check(i2OnControl === 1, "P4: a SECOND control-plane zone trips I2 (the 'all' wildcard is mgmt-only)");
   check(res.warnings === 1, `P4: no archetype other than the control singleton trips an invariant (got ${res.warnings} warning(s))`);
 
-  // --serves composes with --archetype, and R2 still holds for the isolated ones.
+  // --environment composes with --archetype, and R2 still holds for the isolated ones.
   {
     const eff = renderEffective(loadZones(f), d);
     const cams = eff.raw["zIotCams"] as Record<string, unknown>;
-    check((cams["pinhole-allowed-from"] as string[]).includes("warmelo"), "P4: --archetype + --serves binds the new zone in one command");
+    check((cams["pinhole-allowed-from"] as string[]).includes("warmelo"), "P4: --archetype + --environment binds the new zone in one command");
     const svc = eff.raw["warmelo"] as Record<string, unknown>;
     check(!(svc["access-to"] as string[]).includes("zIotCams"), "P4 R2: an isolated archetype zone is in nobody's access-to");
   }
@@ -1929,7 +1931,7 @@ function tmpZones(): string {
 // Two kinds of refusal, deliberately worded differently:
 //   - `immutable` (vlantag, ip, type, bridge): a zone's identity. Changing it
 //     would strand every guest tagged into it, so it is delete-and-re-add.
-//   - `manual` (state, serves): these HAVE a verb, and that verb carries guards
+//   - `manual` (state, environment): these HAVE a verb, and that verb carries guards
 //     a generic --set would bypass — leaving Mandatory needs --force, binding
 //     resolves the environment first. The refusal names the verb.
 {
@@ -1992,8 +1994,8 @@ function tmpZones(): string {
   // Refusals that point at the verb that does carry the guards.
   const state = gate("state=Inactive");
   check(!state.ok && why(state, "enable|disable|manual"), "state is refused, naming the verb that has the guards");
-  const serves = gate("serves=acme");
-  check(!serves.ok && why(serves, "bind"), "serves is refused, naming bind");
+  const envLink = gate("environment=acme");
+  check(!envLink.ok && why(envLink, "bind"), "environment is refused, naming bind");
 
   // Reject the WHOLE command, so zones.json and the planes never move apart.
   const mixed = gate("description=fine", "vlantag=250");

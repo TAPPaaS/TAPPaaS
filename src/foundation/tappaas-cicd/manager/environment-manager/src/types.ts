@@ -4,9 +4,10 @@
 // plan shapes.
 //
 // An Environment is a per-tenant deployment context (ADR-007c): it owns the
-// public domain(s), DNS mode, network-zone reference, data-residency, backup
-// retention and legal processor for a set of services. ownerOrg references a
-// People Organization by name; network.zone references a zone in zones.json.
+// public domain(s), DNS mode, data-residency, backup retention and legal
+// processor for a set of services. ownerOrg references a People Organization by
+// name. The environment names no zone (#865): its zone is the Service (for mgmt,
+// Management) zone in zones.json whose `environment` names it.
 
 // ── Environment config entity ────────────────────────────────────────
 export type DnsMode = "per-service" | "wildcard";
@@ -18,11 +19,6 @@ export interface Domains {
   aliases?: string[];
   aliasMode?: AliasMode;
   dnsMode?: DnsMode;
-}
-
-export interface NetworkRef {
-  // Reference to a zone key in zones.json (validated).
-  zone: string;
 }
 
 export interface BackupPolicy {
@@ -39,7 +35,6 @@ export interface Environment {
   name: string;
   displayName: string;
   ownerOrg: string;
-  network: NetworkRef;
   domains?: Domains;
   dataResidency?: DataResidency;
   backup?: BackupPolicy | null;
@@ -52,12 +47,19 @@ export interface EnvironmentModel {
 }
 
 // ── External references the validator checks against ──────────────────
-// A read view of zones.json (zone key → anything) and of the People
-// organizations on disk — both injected so the validator/reconcile engines stay
-// pure and testable.
+// A read view of zones.json (zone key → its type and environment) and of the
+// People organizations on disk — both injected so the validator/reconcile
+// engines stay pure and testable.
+export interface ZoneLink {
+  type?: string;
+  environment?: string;
+}
+
 export interface RefSources {
   // The set of zone keys present in zones.json (empty set ⇒ zones.json absent).
   zoneNames: Set<string>;
+  // Each zone's type and the environment it names (#865).
+  zones: Map<string, ZoneLink>;
   // Whether zones.json was available at all (distinguishes "no zones" from
   // "couldn't read zones.json" → warning vs error, mirroring the bash script).
   zonesAvailable: boolean;
@@ -85,11 +87,18 @@ export interface NetworkClient {
   // missing, materialize it" from "the environment points at a client/IoT zone,
   // which is a configuration mistake".
   zoneType(zone: string): string | undefined;
-  // Author a Service zone (ADR-014 D1). Idempotent: a zone that already exists
-  // is left untouched. environment-manager NEVER writes zones.json itself — this
-  // shells out to `network-manager add <Z> --archetype service`, keeping
+  // The Service/Management zones naming this environment (#865): its own zone,
+  // one on a well-formed site.
+  environmentZones(env: string): string[];
+  // Author a Service zone that is environment `env`'s zone (ADR-014 D1).
+  // environment-manager NEVER writes zones.json itself — this shells out to
+  // `network-manager add <Z> --archetype service --environment <env>`, keeping
   // network-manager the sole writer (the ownership boundary ADR-014 restates).
-  createServiceZone(zone: string): void;
+  createServiceZone(zone: string, env: string): void;
+  // Link an existing zone to an environment, or clear its link
+  // (`network-manager bind`).
+  bindZone(zone: string, env: string): void;
+  unbindZone(zone: string): void;
   // Converge the network planes. apply=false ⇒ dry-run/preview (the default).
   //
   // SYSTEM-WIDE (#461): network-manager reconcile takes no zone or environment
@@ -255,8 +264,8 @@ export interface Plan {
   // really covers, why one was skipped. Printed plain, not as a yellow warning.
   notes: string[];
   // HARD faults in the plan itself (ADR-014 D1): a configuration mistake that
-  // reconcile must not paper over, e.g. an environment whose network.zone names
-  // a Client/IoT zone. A plan with errors is reported and REFUSED — unlike a
+  // reconcile must not paper over, e.g. an environment named by two Service
+  // zones. A plan with errors is reported and REFUSED — unlike a
   // warning, which reconcile proceeds through. Absent on plans built before
   // D1 introduced the concept, so treat undefined as empty.
   errors?: string[];

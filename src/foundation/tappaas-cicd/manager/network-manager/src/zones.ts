@@ -10,7 +10,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { defaultConfigDir, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { isDocKey, readZonesFile } from "../../../lib/ts/src/zones";
-import { Zone, ZonesDoc } from "./types";
+import { ENVIRONMENT_TYPES, Zone, ZonesDoc } from "./types";
 import { archetypeByName, archetypeNames } from "./archetypes";
 import { MOVE_ADVICE, Occupancy, collisionOf } from "./occupancy";
 
@@ -174,9 +174,9 @@ export interface AddZoneOpts {
   // named archetype instead of copy-pasting a template block. Subsumes D3's
   // `--class` for IoT.
   archetype?: string;
-  // ADR-014 D2: bind the new Client/IoT/Guest zone to an environment in the
-  // same command.
-  serves?: string | string[];
+  // ADR-014 D2 / #865: the environment the new zone belongs to (a Service
+  // zone's own environment, or the one a Client/IoT/Guest/DMZ zone serves).
+  environment?: string;
   // #546: DHCP boot options 66/67. On --from-zone these are inherited from the
   // source zone; these flags override (or set) them on the new zone. Both-or-
   // neither — validate rejects a half-configured pair.
@@ -306,7 +306,12 @@ export function authorZone(doc: ZonesDoc, name: string, opts: AddZoneOpts): Zone
   // ADR-030 D4: every zone gets an IPv6 subnet number unless its type never
   // carries IPv6; `modify --unset ipv6Subnet` opts it out.
   if (!NO_IPV6_TYPES.has(type)) zone.ipv6Subnet = allocateIpv6Subnet(doc, vt);
-  if (opts.serves) zone.serves = opts.serves;
+  if (opts.environment) {
+    if (!ENVIRONMENT_TYPES.has(type)) {
+      throw new Error(`a ${type} zone does not name an environment (--environment is for Service, Management, Client, IoT, Guest and DMZ zones)`);
+    }
+    zone.environment = opts.environment;
+  }
   if (parent) zone.parent = parent;
   if (variant) zone.variant = variant;
 

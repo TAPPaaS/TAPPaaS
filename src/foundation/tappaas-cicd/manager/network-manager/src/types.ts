@@ -25,13 +25,14 @@ export interface Zone {
   //   tier     — trust rank in the strict lattice (0 = most trusted). `access-to`
   //              may only run downward (R1); everything upward is a pinhole.
   //   isolated — inbound quarantine: accepts NO zone-wide access-to (R2).
-  //   serves   — for Client/IoT zones, the ENVIRONMENT whose service zone this
-  //              zone consumes. Symbolic, so it survives the srv→<env> rename
-  //              that strands literal service-zone names (#424).
-  // All three are optional: a zones.json predating ADR-014 keeps working.
+  // Both are optional: a zones.json predating ADR-014 keeps working.
   tier?: number;
   isolated?: boolean;
-  serves?: string | string[];   // one environment, or several (#576)
+  // #865: the environment this zone belongs to. A Service zone (the Management
+  // zone, for mgmt) names the environment whose zone it IS; a Client, IoT,
+  // Guest or DMZ zone names the environment it serves. Symbolic, so it survives
+  // the srv→<env> rename that strands literal service-zone names (#424).
+  environment?: string;
   description?: string;
   parent?: string;
   variant?: string;
@@ -50,6 +51,15 @@ export interface Zone {
   // Preserve any unknown fields so a load→edit→save round-trips losslessly.
   [k: string]: unknown;
 }
+
+// The zone types whose `environment` names the environment the zone IS: a
+// Service zone, and the Management zone for the mgmt environment.
+export const OWNER_TYPES: ReadonlySet<string> = new Set(["Service", "Management"]);
+// The zone types whose `environment` names the environment they serve. Client,
+// IoT and Guest derive an edge; DMZ only records the link.
+export const CONSUMER_TYPES: ReadonlySet<string> = new Set(["Client", "IoT", "Guest", "DMZ"]);
+// Every zone type that may carry `environment`. Overlay and WAN zones may not.
+export const ENVIRONMENT_TYPES: ReadonlySet<string> = new Set([...OWNER_TYPES, ...CONSUMER_TYPES]);
 
 // The loaded zones document: the raw JSON object (incl. "_*" doc blocks) plus
 // an indexed view of the real zones. We keep `raw` so writes preserve doc

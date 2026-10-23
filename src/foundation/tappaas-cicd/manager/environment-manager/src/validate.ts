@@ -19,7 +19,8 @@
 // the LAST object visited.)
 //
 // Reference-integrity checks (ported 1:1 from the bash):
-//   - network.zone must exist in zones.json (warning when zones.json absent)
+//   - exactly one Service or Management zone in zones.json names the
+//     environment (#865; warning when zones.json absent)
 //   - ownerOrg (when present) must reference an existing Organization
 //     (config/identities/organizations/<ownerOrg>.json)
 //   - an authored tlsCertRefid ANYWHERE is REJECTED — it is runtime state, not
@@ -31,7 +32,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from "fs";
 import { basename, dirname, join } from "path";
-import { hasTlsCertRefid } from "./config";
+import { hasTlsCertRefid, readZoneLinks, zoneLinkErrors } from "./config";
 import { identityDir } from "../../../lib/ts/src/config-io";
 
 // ── schema interpreter (draft-2020-12 subset) ─────────────────────────
@@ -284,28 +285,14 @@ function validateReferences(
       ? (instance as Record<string, unknown>)
       : {};
 
-  // network.zone must exist in zones.json (when zones.json is available).
-  const net =
-    typeof obj.network === "object" && obj.network !== null && !Array.isArray(obj.network)
-      ? (obj.network as Record<string, unknown>)
-      : {};
-  const zone = typeof net.zone === "string" ? net.zone : "";
-  if (zone) {
+  // Exactly one Service (or Management) zone names the environment (#865).
+  const name = typeof obj.name === "string" ? obj.name : "";
+  if (name) {
     if (existsSync(zonesFile)) {
-      let known = false;
       try {
-        const zones = JSON.parse(readFileSync(zonesFile, "utf8")) as unknown;
-        known =
-          typeof zones === "object" &&
-          zones !== null &&
-          Object.prototype.hasOwnProperty.call(zones, zone);
+        for (const e of zoneLinkErrors(readZoneLinks(zonesFile), name)) errors.push(`${base}: ${e}`);
       } catch {
-        known = false; // malformed zones.json — same outcome as the jq check
-      }
-      if (!known) {
-        errors.push(
-          `${base}: network.zone references unknown zone '${zone}' (not in ${zonesFile})`,
-        );
+        errors.push(`${base}: ${zonesFile} is not valid JSON — cannot find the environment's zone`);
       }
     } else {
       warnings.push(`${base}: zones.json not found at ${zonesFile} — skipping zone reference check`);

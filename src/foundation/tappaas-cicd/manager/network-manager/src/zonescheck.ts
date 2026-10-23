@@ -36,7 +36,7 @@ import { join } from "path";
 import { CL, GN, RD, YW } from "../../../lib/ts/src/cli";
 import { Zone, ZonesDoc } from "./types";
 import { NO_IPV6_TYPES, loadZones } from "./zones";
-import { renderEffective, resolveServes, servesList } from "./serves";
+import { CONSUMER_TYPES, environmentsWithoutZone, hasEnvironments, renderEffective, resolveServes, zoneEnvironment } from "./serves";
 import {
   CONTROL_PLANE_ZONE,
   TIER_INTERNET,
@@ -546,16 +546,23 @@ function indexRendered(raw: Record<string, unknown>): Map<string, Zone> {
   return zones;
 }
 
-// ── 7. `serves` link resolution (ADR-014 D2) ─────────────────────────
+// ── 7. environment links (ADR-014 D2, #865) ──────────────────────────
 // A link that cannot resolve is a hard ERROR, not a warning: the derived edge
 // simply would not exist, so the operator's declared reachability is silently
-// absent. Same for `serves` on a zone type that must not carry it.
+// absent. So is `environment` on a zone type that must not carry it, an
+// environment named by two Service zones, and — when the site has environments
+// — an environment that no Service or Management zone names.
 function checkServes(doc: ZonesDoc, configDir: string, rep: Reporter): void {
-  const linked = Array.from(doc.zones.values()).filter(
-    (z) => servesList(z).length > 0,
-  );
+  const linked = Array.from(doc.zones.values()).filter((z) => zoneEnvironment(z) !== undefined);
+  const orphans = hasEnvironments(configDir) ? environmentsWithoutZone(doc, configDir) : [];
+  for (const e of orphans) {
+    rep.err(
+      `environment: '${e}' is named by no Service or Management zone — ` +
+        `\`network-manager bind <zone> --environment ${e}\``,
+    );
+  }
   if (linked.length === 0) {
-    rep.note("serves: no zone declares a 'serves' link (pre-ADR-014, or all links are literal)");
+    if (orphans.length === 0) rep.note("environment: no zone names an environment");
     return;
   }
   const scratch: Record<string, unknown> = {};
@@ -567,11 +574,11 @@ function checkServes(doc: ZonesDoc, configDir: string, rep: Reporter): void {
     }
   }
   const r = resolveServes(doc, scratch, configDir);
-  for (const e of r.errors) rep.err(`serves: ${e}`);
-  if (r.errors.length === 0) {
+  for (const e of r.errors) rep.err(`environment: ${e}`);
+  if (r.errors.length === 0 && orphans.length === 0) {
     rep.ok(
-      `serves: ${r.edges.length} link(s) resolve — ` +
-        r.edges.map((e) => `${e.zone}→${e.environment}(${e.serviceZone})`).join(", "),
+      `environment: ${linked.length} zone(s) name an environment` +
+        (r.edges.length ? ` — served: ${r.edges.map((e) => `${e.zone}→${e.environment}(${e.serviceZone})`).join(", ")}` : ""),
     );
   }
 }
@@ -580,7 +587,7 @@ export interface ZonesCheckOpts {
   zonesFile: string;
   configDir: string;
   strict: boolean;
-  // Audit the EFFECTIVE document (zones.json with every `serves` link resolved)
+  // Audit the EFFECTIVE document (zones.json with every environment link resolved)
   // instead of the authored one. Without this the tier checks cannot see a
   // DERIVED edge — and since ADR-014 moves the client→service edge out of the
   // authored file and into the render, a plain `validate` would report a clean
@@ -662,7 +669,7 @@ export function zonesCheck(
   if (opts.effective) {
     const eff = renderEffective(doc, opts.configDir);
     for (const e of eff.errors) {
-      log(`  ${RD}✗${CL} serves: ${e}`);
+      log(`  ${RD}✗${CL} environment: ${e}`);
     }
     if (eff.errors.length > 0) {
       log(`zones-check: cannot render the effective document (${eff.errors.length} unresolved link(s))`);
@@ -677,16 +684,16 @@ export function zonesCheck(
   for (const line of result.lines) log(line);
 
   const okCount = result.lines.filter((l) => l.includes("✓")).length;
-  // A `serves` link contributes an edge that exists ONLY in the rendered graph,
+  // A consumer zone's link contributes an edge that exists ONLY in the rendered graph,
   // so an authored-scope run cannot have judged it. Say so rather than let the
   // clean result read as a verdict on the whole firewall.
   if (!opts.effective) {
     const linked = Array.from(doc.zones.values()).filter(
-      (z) => servesList(z).length > 0,
+      (z) => zoneEnvironment(z) !== undefined && CONSUMER_TYPES.has(String(z.type ?? "")) && z.type !== "DMZ",
     ).length;
     if (linked > 0) {
       log(
-        `  ${YW}·${CL} scope: ${linked} zone(s) carry a 'serves' link whose derived edge is NOT ` +
+        `  ${YW}·${CL} scope: ${linked} zone(s) serve an environment, and the edge that derives is NOT ` +
           `part of this authored-scope check — re-run with --effective to audit the graph the ` +
           `planes actually receive`,
       );

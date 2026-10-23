@@ -2,14 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "environment-fields.json",
   "title": "TAPPaaS Environment",
-  "description": "An Environment is a per-tenant deployment context (ADR-007c). It owns the public domain(s), DNS mode, network zone reference, data-residency, backup retention, and legal processor for a set of services. It replaces the configuration.json '.tappaas.variants' construct. ownerOrg references a People Organization by name; network.zone references a zone in zones.json; neither is a free string. NOTE: tlsCertRefid is NOT an authored field here — whether a cert ref exists is decided by domains.dnsMode and the refid (if any) is reconciler-populated runtime state owned by the network/cert layer, so it is REJECTED by this schema. mgmt-type environments may omit 'domains'. See ADR-007 P3.",
+  "description": "An Environment is a per-tenant deployment context (ADR-007c). It owns the public domain(s), DNS mode, data-residency, backup retention, and legal processor for a set of services. It replaces the configuration.json '.tappaas.variants' construct. ownerOrg references a People Organization by name, not a free string. The environment names no zone: its zone is the Service (or, for mgmt, Management) zone in zones.json whose 'environment' names it. NOTE: tlsCertRefid is NOT an authored field here — whether a cert ref exists is decided by domains.dnsMode and the refid (if any) is reconciler-populated runtime state owned by the network/cert layer, so it is REJECTED by this schema. mgmt-type environments may omit 'domains'. See ADR-007 P3.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "name",
     "displayName",
-    "ownerOrg",
-    "network"
+    "ownerOrg"
   ],
   "properties": {
     "name": {
@@ -67,22 +66,6 @@
             "wildcard"
           ],
           "default": "per-service"
-        }
-      }
-    },
-    "network": {
-      "description": "Network placement. NO vlan here — vlan lives in zones.json (CR-09).",
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "zone"
-      ],
-      "properties": {
-        "zone": {
-          "description": "Reference to a zone key in zones.json (validated).",
-          "references": "zones",
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]+$"
         }
       }
     },

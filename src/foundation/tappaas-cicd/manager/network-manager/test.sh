@@ -89,11 +89,11 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         # ADR-014 D7: `init core` emits exactly the core set — renamed srv -> acme
         # (Active), home/guest kept, dmz Mandatory — and ships NO IoT or test zones
         # and none of the retired srv* zones. home's service edge is DERIVED from
-        # `serves`, so the authored access-to must NOT list acme.
+        # its `environment`, so the authored access-to must NOT list acme.
         if run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init core --name acme --from '${HERE}/zones.json' --out '${ZINIT_OUT}' --config-dir '${ZINIT_CFG}'" >/dev/null 2>&1 \
             && [[ -f "${ZINIT_OUT}" ]] \
-            && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); const gone=[\"srv\",\"srvHome\",\"srvWork\",\"srvCust\",\"srvDev\",\"srvTest\",\"work\",\"iot\",\"test\",\"testAllowA\",\"testAllowB\",\"testPinhole\",\"iotLocal\",\"iotCloud\",\"iotCams\",\"iotUntrust\"]; const ok = z.acme&&z.home&&z.guest&&z.dmz&&z.mgmt&&z.acme.state===\"Active\"&&z.home.serves===\"acme\"&&!z.home[\"access-to\"].includes(\"acme\")&&gone.every(k=>!(k in z))&&!(\"_profiles\" in z); process.exit(ok?0:1)'" >/dev/null 2>&1; then
-            ok "init core CLI: exact core set, srv->acme Active, serves-bound home, no iot/test/legacy zones"
+            && run_ts "node -e 'const z=require(\"${ZINIT_OUT}\"); const gone=[\"srv\",\"srvHome\",\"srvWork\",\"srvCust\",\"srvDev\",\"srvTest\",\"work\",\"iot\",\"test\",\"testAllowA\",\"testAllowB\",\"testPinhole\",\"iotLocal\",\"iotCloud\",\"iotCams\",\"iotUntrust\"]; const ok = z.acme&&z.home&&z.guest&&z.dmz&&z.mgmt&&z.acme.state===\"Active\"&&z.acme.environment===\"acme\"&&z.mgmt.environment===\"mgmt\"&&z.home.environment===\"acme\"&&!z.home[\"access-to\"].includes(\"acme\")&&gone.every(k=>!(k in z))&&!(\"_profiles\" in z); process.exit(ok?0:1)'" >/dev/null 2>&1; then
+            ok "init core CLI: exact core set, srv->acme Active and acme's zone, home serves acme, no iot/test/legacy zones"
         else
             bad "init CLI smoke FAILED"
         fi
@@ -141,12 +141,14 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         # a fixture with a dangling access-to ref exits non-zero. The temp
         # config-dir holds only zones.json so the installation check is a no-op.
         # The raw template is NOT a valid live config: `srv` is pre-rename and its
-        # `serves` placeholders name an environment that only exists after init.
-        # Build a real one — init core, plus the environment its zones are bound to.
+        # `environment` placeholders name an environment that only exists after
+        # init. Build a real one — init core, plus the environments its zones name.
         ZC_DIR="$(mktemp -d)"
         mkdir -p "${ZC_DIR}/environments"
-        printf '{"name":"acme","displayName":"Acme","ownerOrg":"o","network":{"zone":"acme"}}\n' \
+        printf '{"name":"acme","displayName":"Acme","ownerOrg":"o"}\n' \
             > "${ZC_DIR}/environments/acme.json"
+        printf '{"name":"mgmt","displayName":"Management","ownerOrg":"o"}\n' \
+            > "${ZC_DIR}/environments/mgmt.json"
         run_ts "NM_TEMPLATE='${HERE}/zones.json' node '${DIST_TEST}/manager/network-manager/src/main.js' init core --name acme --from '${HERE}/zones.json' --out '${ZC_DIR}/zones.json' --config-dir '${ZC_DIR}'" >/dev/null 2>&1
         if run_ts "node '${DIST_TEST}/manager/network-manager/src/main.js' zones-check --zones '${ZC_DIR}/zones.json' --config-dir '${ZC_DIR}'" >/dev/null 2>&1; then
             ok "zones-check CLI exits 0 on a well-formed zones.json"

@@ -1,6 +1,7 @@
 {
   "mgmt": {
     "type": "Management",
+    "environment": "mgmt",
     "vlantag": 0,
     "state": "Manual",
     "tier": 0,
@@ -30,6 +31,7 @@
   },
   "rossen": {
     "type": "Service",
+    "environment": "rossen",
     "vlantag": 200,
     "state": "Active",
     "tier": 1,
@@ -51,7 +53,7 @@
     "tier": 6,
     "bridge": "lan",
     "ip": "10.4.10.0/24",
-    "serves": "rossen",
+    "environment": "rossen",
     "SSID": "<IOT_LOCAL_SSID>"
   },
   "iotCloud": {
@@ -61,7 +63,7 @@
     "tier": 3,
     "bridge": "lan",
     "ip": "10.4.20.0/24",
-    "serves": "rossen",
+    "environment": "rossen",
     "SSID": "<IOT_CLOUD_SSID>"
   },
   "iotCams": {
@@ -71,7 +73,7 @@
     "tier": 6,
     "bridge": "lan",
     "ip": "10.4.30.0/24",
-    "serves": "rossen"
+    "environment": "rossen"
   },
   "iotUntrust": {
     "type": "IoT",
@@ -97,7 +99,7 @@
     "tier": 2,
     "bridge": "lan",
     "ip": "10.3.10.0/24",
-    "serves": "rossen",
+    "environment": "rossen",
     "SSID": "<HOME_SSID>"
   },
   "guest": {

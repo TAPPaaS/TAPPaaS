@@ -328,7 +328,7 @@ export interface TopoZone {
   tier: number | null;
   bridge: string | null;
   ip: string | null;
-  serves: string[];
+  environment: string | null; // the environment the zone names (#865)
 }
 export interface TopoOutside {
   kind: "buddy" | "satellite";
@@ -468,7 +468,6 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   for (const [name, raw] of Object.entries(src.zones ?? {})) {
     if (name.startsWith("_") || !raw || typeof raw !== "object") continue;
     const z = raw as Record<string, unknown>;
-    const serves = Array.isArray(z.serves) ? z.serves.filter((x): x is string => typeof x === "string") : str(z.serves) ? [z.serves as string] : [];
     zones.push({
       name,
       vlan: num(z.vlantag),
@@ -477,7 +476,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       tier: num(z.tier),
       bridge: str(z.bridge),
       ip: str(z.ip),
-      serves,
+      environment: str(z.environment),
     });
   }
   const zoneByVlan = new Map<number, string>();
