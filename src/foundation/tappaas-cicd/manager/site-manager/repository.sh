@@ -127,8 +127,9 @@ Commands:
 
     modify <name> [--url <new-url>] [--branch <new-branch>] [--force]
         Modify a repository's URL and/or branch. If only changing
-        branch, fetches and checks out the new branch in place.
-        For the TAPPaaS repository it warns when the new branch
+        branch, fetches and checks out the new branch in place; a
+        staging or production branch only at a verified release
+        (ADR-033 D6), as a sweep would. For the TAPPaaS repository it warns when the new branch
         disagrees with the site's channel (ADR-028 D9: unstable=main,
         staging=staging, production=stable), and REFUSES a branch whose
         newest migration is older than the newest this site has applied
@@ -885,14 +886,16 @@ cmd_modify() {
             warn "  --force given: switching anyway. Restore config/.migrations/backup/ if it goes wrong."
         fi
 
+        # The move goes through the same gate as a sweep: a staging or production
+        # branch is checked out only at a verified release (ADR-033 D6).
         info "  Checking out branch '${new_branch}'..."
-        if ! (cd "${current_path}" && git checkout "${new_branch}" 2>&1 | sed 's/^/  /'); then
-            die "Failed to checkout branch '${new_branch}'"
-        fi
-
-        info "  Pulling latest changes..."
-        if ! (cd "${current_path}" && git pull origin "${new_branch}" 2>&1 | sed 's/^/  /'); then
-            warn "  Failed to pull — branch may be checked out but not up-to-date"
+        local allow_discard=0 rc=0
+        if [[ "${force}" == "true" ]]; then allow_discard=1; fi
+        reconcile_repo_checkout "${current_path}" "${current_url}" "${new_branch}" "${allow_discard}" "${name}" || rc=$?
+        if [[ ${rc} -eq 3 ]]; then
+            die "Refused: the tip of '${new_branch}' is not a verified release (ADR-033, listed above). The checkout is unchanged."
+        elif [[ ${rc} -ne 0 ]]; then
+            die "Failed to switch ${current_path} to '${new_branch}'"
         fi
 
         # Update config
