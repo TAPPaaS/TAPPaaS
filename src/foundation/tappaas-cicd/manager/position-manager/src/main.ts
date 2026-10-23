@@ -1,5 +1,6 @@
 // position-manager — where the site's hardware is (ADR-036 D3). Owns
-// config/positions.json: the rooms, the racks, what is mounted where (keyed by the device's topology name; the
+// config/positions.json: the rooms (each in a location of the site), the racks,
+// where each device is placed (keyed by the device's topology name; the
 // device's own record is never touched), the devices the topology cannot see
 // (a modem, an ONT, a UPS, a patch panel) and the cables nothing can see. The
 // faceplate catalog (faceplates/<vendor>/<model>.json) says what each device
@@ -28,7 +29,9 @@ import {
   SiteLocs,
   checkPositions,
   faceOf,
+  findSeen,
   heightOf,
+  seenDevices,
   widthOf,
   cablesOf,
   devicesOf,
@@ -46,7 +49,7 @@ import {
   suggestFaceplate,
 } from "../../../lib/ts/src/positions";
 import { Store, loadCatalog, readDevices } from "./store";
-import { Result, addCable, addDevice, addMount, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyMount, modifyRack, modifyRoom, removeCable, removeDevice, removeMount, splitCable } from "./verbs";
+import { Result, addCable, addDevice, recordSeen, placeDevice, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyPlacement, modifyRack, modifyRoom, removeCable, removeDevice, unplaceDevice, splitCable } from "./verbs";
 
 const VERSION = "0.2.0";
 
@@ -57,11 +60,11 @@ const JSON_OUT: [string, string] = ["--json", "As JSON."];
 export const HELP: HelpSpec = {
   name: "position-manager",
   version: VERSION,
-  tagline: "where the site's hardware sits — racks, mounts and the cables nothing can see, in config/positions.json",
+  tagline: "where the site's hardware is — rooms in the site's locations, racks, placements and the cables nothing can see, in config/positions.json",
   verbs: [
-    { usage: "validate [--topology <file>] [--json]", options: [TOPO, ["--json", "The findings as JSON."]], note: "(config/positions.json against the topology and the catalog)" },
+    { usage: "validate [--topology <file>] [--json]", options: [TOPO, ["--json", "The findings as JSON."]], note: "(config/positions.json against the topology, the site's locations and the catalog)" },
     { usage: "rack list [--json]", options: [JSON_OUT] },
-    { usage: "rack show <rack> [--json]", options: [JSON_OUT], note: "(the rack and its mounts)" },
+    { usage: "rack show <rack> [--json]", options: [JSON_OUT], note: "(the rack and what is placed in it)" },
     {
       usage: "rack add <rack> [--units <n>] [--width 19in|10in] [--numbering bottom-up|top-down] [--display-name <text>] [--room <text>] [--description <text>] [--check]",
       options: [
@@ -91,31 +94,35 @@ export const HELP: HelpSpec = {
       object: { positional: "room" },
     },
     { usage: "room delete <room> [--check]", options: [CHECK], note: "(an empty room only)", object: { positional: "room" } },
-    { usage: "mount list [--rack <rack>] [--json]", options: [["--rack R", "Only this rack's."], JSON_OUT] },
-    { usage: "mount show <device> [--json]", options: [JSON_OUT] },
+    { usage: "place list [--rack <rack>] [--json]", options: [["--rack R", "Only this rack's."], JSON_OUT], aliases: ["mount list"] },
+    { usage: "place show <device> [--json]", options: [JSON_OUT], aliases: ["mount show"] },
     {
       usage:
-        "mount add <device> (--rack <rack> --u <n> | --room <room>) [--height <n>] [--width full|half|third] [--slot <n>] [--face front|rear] [--faceplate <vendor/model>] [--label <text>] [--description <text>] [--topology <file>] [--check]",
+        "place <device> (--rack <rack> --u <n> | --room <room>) [--height <n>] [--width full|half|third] [--slot <n>] [--face front|rear] [--faceplate <vendor/model>] [--label <text>] [--description <text>] [--topology <file>] [--check]",
       options: [
-        ["--rack R", "The rack."],
+        ["--rack R", "In this rack."],
         ["--u N", "The lowest rack unit it takes, as the rack numbers them."],
-        ["--room R", "Loose in this room, in no rack (no --rack, no --u)."],
-        ["--height N", "Rack units it takes (default: its faceplate's, else 1)."],
-        ["--width W", "full (default), half or third of the rack's width."],
+        ["--room R", "Loose in this room, in no rack (no --rack, no --u): its plate gives its size."],
+        ["--height N", "In a rack: the units it takes (default: its faceplate's, else 1)."],
+        ["--width W", "In a rack: full (default), half or third of its width."],
         ["--slot N", "A half or third: its column, 0 at the left."],
-        ["--face F", "front (default) or rear."],
+        ["--face F", "In a rack: front (default) or rear."],
         ["--faceplate K", "The catalog's plate (faceplates list); unset, the catalog's suggestion for its model."],
         ["--label T", "The label on the device."],
-        ["--description T", "A note on the mount."],
+        ["--description T", "A note on where it stands."],
         TOPO,
         CHECK,
       ],
+      aliases: ["mount add"],
+      object: { positional: "device" },
     },
     {
-      usage: "mount modify <device> [--set <field>=<value>]... [--unset <field>]... [--topology <file>] [--check]",
+      usage: "place modify <device> [--set <field>=<value>]... [--unset <field>]... [--topology <file>] [--check]",
       options: [["--set F=V", "rack, u, room, height, width, slot, face, faceplate, label, description (repeatable). A move is rack and u, or room (loose in it)."], ["--unset F", "Clear faceplate (back to the catalog's suggestion), label or description (repeatable)."], TOPO, CHECK],
+      aliases: ["mount modify"],
+      object: { positional: "device" },
     },
-    { usage: "mount remove <device> [--check]", options: [CHECK], note: "(the device leaves the rack; nothing else changes)" },
+    { usage: "unplace <device> [--check]", options: [CHECK], note: "(the device leaves its rack or room; nothing else changes)", aliases: ["mount remove"], destructive: true, object: { positional: "device" } },
     { usage: "cable list [--json]", options: [JSON_OUT], note: "(the recorded cables; the topology adds the ones it sees)" },
     {
       usage: "cable add --from <device:port> --to <device:port> [--kind patch|uplink|power] [--label <text>] [--from-faceplate <vendor/model>] [--to-faceplate <vendor/model>] [--from-side front|rear] [--to-side front|rear] [--topology <file>] [--check]",
@@ -154,7 +161,23 @@ export const HELP: HelpSpec = {
       options: [["--set F=V", "kind, model, ports (a count or a comma-separated list), displayName, description, location, mac (repeatable)."], ["--unset F", "Clear model, ports, displayName, description, location (back to the primary) or mac (repeatable)."], CHECK],
       object: { positional: "device" },
     },
-    { usage: "device remove <device> [--check]", options: [CHECK], note: "(only once it is unmounted and no recorded cable names it)", object: { positional: "device" } },
+    { usage: "device remove <device> [--check]", options: [CHECK], note: "(only once it is unplaced and no recorded cable names it)", object: { positional: "device" } },
+    {
+      usage: "device record <port-or-mac> --name <device> --kind modem|ont|ups|patch-panel|other [--port <name>] [--model <vendor/model>] [--location <location>] [--display-name <text>] [--description <text>] [--topology <file>] [--check]",
+      options: [
+        ["--name N", "The name it is recorded under."],
+        ["--kind K", "modem, ont, ups, patch-panel or other."],
+        ["--port P", "Its port the cable reaches (default: what LLDP says, else its model's first, else 1)."],
+        ["--model K", "Its plate in the catalog (faceplates list)."],
+        ["--location L", "The location it is at (default: the switch's)."],
+        ["--display-name T", "The name shown (default: what LLDP or the lease calls it)."],
+        ["--description T", "What it is."],
+        TOPO,
+        CHECK,
+      ],
+      object: { positional: "port-or-mac" },
+      note: "(<switch>:<port> or the MAC it is seen by: a device a switch port sees and nobody recorded, recorded with the port's cable)",
+    },
     {
       usage: "cable split <device:port> --via <panel:port> [--topology <file>] [--check]",
       options: [["--via P:N", "The patch panel port the link runs through: the device's port to its front, its rear to the far end."], TOPO, CHECK],
@@ -170,9 +193,10 @@ export const HELP: HelpSpec = {
     { usage: "export --json", effect: "read", options: [["--json", "The document and the whole catalog, for network-manager topology."]] },
   ],
   notes: [
-    "A mount names a device as `network-manager topology` does. A cable the switches or LLDP see is drawn from the topology and never recorded; record only what nothing can see — the ISP's modem, a patch panel, a PDU.",
+    "A placement names a device as `network-manager topology` does. A cable the switches or LLDP see is drawn from the topology and never recorded; record only what nothing can see — the ISP's modem, a patch panel, a PDU.",
     "rack-manager is the old name of position-manager and answers the same verbs for one release; config/racks.json becomes config/positions.json by migration.",
-    "A device nothing can see is recorded (device add), then mounted in a rack or loose in a room (mount add --room). A link through a patch panel is split there (cable split): the topology still shows one link, the racks its two wires.",
+    "A device nothing manages is recorded (device add, or device record for one a switch port sees), then placed in a rack or loose in a room (place). A link through a patch panel is split there (cable split): the topology still shows one link, the racks its two wires.",
+    "mount add, mount modify and mount remove are the old names of place, place modify and unplace, answering for one release.",
   ],
 };
 
@@ -194,7 +218,7 @@ function opts(args: string[], name: string): string[] {
 const VALUED = [
   "--units", "--width", "--numbering", "--display-name", "--room", "--description", "--set", "--rack", "--u", "--height", "--slot",
   "--face", "--faceplate", "--label", "--topology", "--from", "--to", "--kind", "--from-faceplate", "--to-faceplate", "--device", "--unset",
-  "--model", "--ports", "--port", "--from-side", "--to-side", "--side", "--via", "--location",
+  "--model", "--ports", "--port", "--from-side", "--to-side", "--side", "--via", "--location", "--name",
 ];
 function positional(args: string[], skip: number): string[] {
   const out: string[] = [];
@@ -290,11 +314,11 @@ function rackRows(doc: PositionsDoc) {
   return Object.entries(racksOf(doc)).map(([name, r]) => ({
     name,
     ...r,
-    mounts: Object.entries(placementsOf(doc)).filter(([, m]) => m.rack === name).length,
+    placements: Object.entries(placementsOf(doc)).filter(([, m]) => m.rack === name).length,
   }));
 }
 
-function mountRows(doc: PositionsDoc, rack?: string) {
+function placementRows(doc: PositionsDoc, rack?: string) {
   return Object.entries(placementsOf(doc))
     .filter(([, m]) => !rack || m.rack === rack)
     // rack by rack, highest first; the loose ones last, by room
@@ -305,8 +329,18 @@ function mountRows(doc: PositionsDoc, rack?: string) {
 const where = (m: Placement) =>
   m.rack ? `${placeWhere(m)} ${faceOf(m)}${widthOf(m) === "full" ? "" : ` ${widthOf(m)} slot ${m.slot ?? 0}`}` : placeWhere(m);
 
+// The old verbs, answering for one release: mount add/modify/remove/list/show.
+const OLD_VERBS: Record<string, string[]> = {
+  "mount add": ["place"],
+  "mount modify": ["place", "modify"],
+  "mount remove": ["unplace"],
+  "mount list": ["place", "list"],
+  "mount show": ["place", "show"],
+};
+
 export function run(argv: string[]): number {
-  const args = argv;
+  const old = OLD_VERBS[argv.slice(0, 2).join(" ")];
+  const args = old ? [...old, ...argv.slice(2)] : argv;
   if (args.length === 0 || args[0] === "help" || ((args[0] === "--help" || args[0] === "-h") && !args.includes("--json"))) {
     info(renderHelp(HELP));
     return 0;
@@ -321,7 +355,9 @@ export function run(argv: string[]): number {
   const check = args.includes("--check");
   const json = args.includes("--json");
   quiet = json;
-  const verb = args.slice(0, 2).join(" ");
+  // place <device> and unplace <device> are one word; every other verb two.
+  const one = (args[0] === "place" && !["list", "show", "modify"].includes(args[1] ?? "")) || args[0] === "unplace";
+  const verb = one ? args[0] : args.slice(0, 2).join(" ");
 
   if (args[0] === "validate") {
     const catalog = readCatalog();
@@ -332,7 +368,7 @@ export function run(argv: string[]): number {
     }
     if (report(findings)) return 1;
     const d = store.load();
-    info(`${GN}✓${CL} config/positions.json valid (${Object.keys(racksOf(d)).length} rack(s), ${Object.keys(placementsOf(d)).length} mount(s), ${cablesOf(d).length} recorded cable(s))`);
+    info(`${GN}✓${CL} config/positions.json valid (${Object.keys(racksOf(d)).length} rack(s), ${Object.keys(placementsOf(d)).length} placement(s), ${cablesOf(d).length} recorded cable(s))`);
     return 0;
   }
   if (args[0] === "export") {
@@ -345,7 +381,7 @@ export function run(argv: string[]): number {
     const rows = rackRows(store.load());
     if (json) return out(rows);
     if (!rows.length) info("no racks (rack add <name>)");
-    for (const r of rows) info(`${GN}${r.name}${CL}  ${r.units}U ${r.width} ${r.numbering}  ${r.room ?? "-"}  ${r.mounts} mount(s)${r.displayName ? `  "${r.displayName}"` : ""}`);
+    for (const r of rows) info(`${GN}${r.name}${CL}  ${r.units}U ${r.width} ${r.numbering}  ${r.room ?? "-"}  ${r.placements} device(s)${r.displayName ? `  "${r.displayName}"` : ""}`);
     return 0;
   }
   if (verb === "rack show") {
@@ -353,25 +389,25 @@ export function run(argv: string[]): number {
     if (!name) die("rack show <rack>");
     const d = store.load();
     const r = racksOf(d)[name] ?? die(`rack ${name} does not exist`);
-    const mounts = mountRows(d, name);
-    if (json) return out({ name, ...r, mounts });
+    const mounts = placementRows(d, name);
+    if (json) return out({ name, ...r, placements: mounts });
     info(`${GN}${name}${CL}${r.displayName ? ` "${r.displayName}"` : ""}  ${r.units}U ${r.width}, numbered ${r.numbering}${r.room ? `  in ${r.room}` : ""}`);
     if (r.description) info(`  ${r.description}`);
     for (const m of mounts) info(`  U${String(m.u).padStart(2)}${heightOf(m) > 1 ? `-${(m.u ?? 0) + heightOf(m) - 1}` : "   "}  ${m.device.padEnd(24)} ${faceOf(m)}${widthOf(m) === "full" ? "" : ` ${widthOf(m)}/${m.slot ?? 0}`}  ${m.faceplate ?? "(suggested plate)"}${m.label ? `  "${m.label}"` : ""}`);
     if (!mounts.length) info("  (empty)");
     return 0;
   }
-  if (verb === "mount list") {
-    const rows = mountRows(store.load(), opt(args, "--rack"));
+  if (verb === "place list") {
+    const rows = placementRows(store.load(), opt(args, "--rack"));
     if (json) return out(rows);
-    if (!rows.length) info("nothing mounted (mount add <device> --rack <rack> --u <n>)");
+    if (!rows.length) info("nothing placed (place <device> --rack <rack> --u <n> | --room <room>)");
     for (const m of rows) info(`${m.device.padEnd(24)} ${where(m)}  ${m.faceplate ?? "-"}${m.description ? `  ${YW}${m.description}${CL}` : ""}`);
     return 0;
   }
-  if (verb === "mount show") {
+  if (verb === "place show") {
     const [device] = positional(args, 2);
-    if (!device) die("mount show <device>");
-    const m = placementsOf(store.load())[device] ?? die(`${device} is not mounted`);
+    if (!device) die("place show <device>");
+    const m = placementsOf(store.load())[device] ?? die(`${device} is placed nowhere`);
     if (json) return out({ device, ...m });
     info(`${GN}${device}${CL}  ${where(m)}${m.rack ? `  ${heightOf(m)}U` : ""}${m.faceplate ? `  faceplate ${m.faceplate}` : ""}${m.label ? `  label "${m.label}"` : ""}`);
     if (m.description) info(`  ${m.description}`);
@@ -415,7 +451,7 @@ export function run(argv: string[]): number {
       ...r,
       ports: recordedPorts(r, catalog),
       plate: recordedPlate(name, r, catalog).key,
-      mounted: placementsOf(d)[name] ? where(placementsOf(d)[name]) : null,
+      placed: placementsOf(d)[name] ? where(placementsOf(d)[name]) : null,
       cables: cablesOf(d).filter((c) => c.from.device === name || c.to.device === name).length,
     }));
     if (verb === "device show") {
@@ -425,13 +461,13 @@ export function run(argv: string[]): number {
       if (json) return out(r);
       info(`${GN}${r.name}${CL}  ${r.kind}${r.model ? `  ${r.model}` : ""}${r.displayName ? `  "${r.displayName}"` : ""}`);
       info(`  ports: ${r.ports.join(", ") || "-"}`);
-      info(`  mounted: ${r.mounted ?? "nowhere"} · ${r.cables} recorded cable(s)`);
+      info(`  placed: ${r.placed ?? "nowhere"} · location ${r.location ?? "the primary"}${r.mac ? ` · mac ${r.mac}` : ""} · ${r.cables} recorded cable(s)`);
       if (r.description) info(`  ${r.description}`);
       return 0;
     }
     if (json) return out(rows);
     if (!rows.length) info("no recorded devices (device add <name> --kind …)");
-    for (const r of rows) info(`${r.name.padEnd(24)} ${r.kind.padEnd(12)} ${String(r.ports.length).padStart(2)} port(s)  ${r.mounted ?? "mounted nowhere"}${r.model ? `  ${r.model}` : ""}`);
+    for (const r of rows) info(`${r.name.padEnd(24)} ${r.kind.padEnd(12)} ${String(r.ports.length).padStart(2)} port(s)  ${r.placed ?? "placed nowhere"}${r.model ? `  ${r.model}` : ""}`);
     return 0;
   }
   if (verb === "faceplates list") {
@@ -527,21 +563,44 @@ export function run(argv: string[]): number {
     const catalog = readCatalog();
     return change(store, check, catalog, undefined, (d) => modifyDevice(d, name, s, catalog));
   }
+  if (verb === "device record") {
+    const [target] = positional(args, 2);
+    if (!target) die("device record <switch>:<port>|<mac> --name <device> --kind …");
+    const name = opt(args, "--name") ?? die("--name <device> is required: the name it is recorded under");
+    const catalog = readCatalog();
+    const read = readDevices(opt(args, "--topology"));
+    if (!read.topology) die(`the topology could not be read (${read.error}): it is what says what a port sees`);
+    const hit = findSeen(seenDevices(read.topology), target);
+    if ("refused" in hit) die(hit.refused);
+    const taken = (read.devices ?? []).filter((x) => !x.recorded).map((x) => x.name);
+    const primary = siteLocs(store.configDir)?.primary ?? null;
+    return change(store, check, catalog, read.devices, (d) =>
+      recordSeen(d, hit, {
+        name,
+        kind: opt(args, "--kind"),
+        port: opt(args, "--port"),
+        model: opt(args, "--model"),
+        location: opt(args, "--location"),
+        displayName: opt(args, "--display-name"),
+        description: opt(args, "--description"),
+      }, catalog, taken, primary),
+    );
+  }
   if (verb === "device remove") {
     const [name] = positional(args, 2);
     if (!name) die("device remove <device>");
     return change(store, check, readCatalog(), undefined, (d) => removeDevice(d, name));
   }
-  if (verb === "mount add") {
-    const [device] = positional(args, 2);
-    if (!device) die("mount add <device> --rack <rack> --u <n> | --room <room>");
+  if (verb === "place") {
+    const [device] = positional(args, 1);
+    if (!device) die("place <device> --rack <rack> --u <n> | --room <room>");
     const room = opt(args, "--room");
     const rack = opt(args, "--rack") ?? (room ? undefined : die("--rack (with --u), or --room, is required"));
     const u = intOpt(args, "--u") ?? (room ? undefined : die("--u is required"));
     const catalog = readCatalog();
     const rec = devicesOf(store.load())[device];
     return change(store, check, catalog, devicesFor(args), (d) =>
-      addMount(d, device, {
+      placeDevice(d, device, {
         rack,
         u,
         room,
@@ -556,21 +615,21 @@ export function run(argv: string[]): number {
       }, catalog),
     );
   }
-  if (verb === "mount modify") {
+  if (verb === "place modify") {
     const [device] = positional(args, 2);
-    if (!device) die("mount modify <device> --set <field>=<value>... --unset <field>...");
+    if (!device) die("place modify <device> --set <field>=<value>... --unset <field>...");
     const s = sets(args);
     const catalog = readCatalog();
-    return change(store, check, catalog, devicesFor(args), (d) => modifyMount(d, device, s, catalog));
+    return change(store, check, catalog, devicesFor(args), (d) => modifyPlacement(d, device, s, catalog));
   }
-  if (verb === "mount remove") {
-    const [device] = positional(args, 2);
-    if (!device) die("mount remove <device>");
+  if (verb === "unplace") {
+    const [device] = positional(args, 1);
+    if (!device) die("unplace <device>");
     const catalog = readCatalog();
     const m = placementsOf(store.load())[device];
     // A recorded device keeps its cables; a passive plate nothing records takes them along.
     const passive = !!m?.faceplate && catalog.find((f) => f.key === m.faceplate)?.passive === true && !devicesOf(store.load())[device];
-    return change(store, check, catalog, undefined, (d) => removeMount(d, device, passive));
+    return change(store, check, catalog, undefined, (d) => unplaceDevice(d, device, passive));
   }
   if (verb === "cable add") {
     const from = parseEnd(opt(args, "--from") ?? die("--from <device:port> is required")) ?? die("--from is <device>:<port>");

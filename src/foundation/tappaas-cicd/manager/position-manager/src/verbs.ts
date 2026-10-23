@@ -35,6 +35,9 @@ import {
   endText,
   placementsOf,
   heightOf,
+  recordedPorts,
+  SeenDevice,
+  MAC_RE,
   racksOf,
 } from "../../../lib/ts/src/positions";
 
@@ -131,13 +134,13 @@ export function modifyRack(doc: PositionsDoc, name: string, sets: Array<[string,
 export function deleteRack(doc: PositionsDoc, name: string): Result {
   if (!racksOf(doc)[name]) return { refused: `rack ${name} does not exist` };
   const held = Object.entries(placementsOf(doc)).filter(([, m]) => m.rack === name).map(([d]) => d);
-  if (held.length) return { refused: `rack ${name} still holds ${held.join(", ")} — move them (mount modify <device> --set rack=…) or remove them first` };
+  if (held.length) return { refused: `rack ${name} still holds ${held.join(", ")} — move them (place modify <device> --set rack=…) or unplace them first` };
   return { doc: withDoc(doc, (d) => void delete d.racks[name]), summary: `rack ${name} deleted` };
 }
 
 // ── mounts ────────────────────────────────────────────────────────────
 
-export interface MountSpec {
+export interface PlaceSpec {
   rack?: string;
   u?: number;
   room?: string; // loose in this room: no rack, no unit
@@ -150,11 +153,11 @@ export interface MountSpec {
   description?: string;
 }
 
-// mount add — a device into a rack at its units, or loose into a room. The
+// place — a device into a rack at its units, or loose into a room. The
 // height defaults to its faceplate's.
-export function addMount(doc: PositionsDoc, device: string, spec: MountSpec, catalog: Faceplate[]): Result {
-  if (!device.trim()) return { refused: "mount add <device>: the device's topology name" };
-  if (placementsOf(doc)[device]) return { refused: `${device} is already mounted in ${placeWhere(placementsOf(doc)[device])} — mount modify ${device} to move it` };
+export function placeDevice(doc: PositionsDoc, device: string, spec: PlaceSpec, catalog: Faceplate[]): Result {
+  if (!device.trim()) return { refused: "place <device>: the device's topology name" };
+  if (placementsOf(doc)[device]) return { refused: `${device} is already placed in ${placeWhere(placementsOf(doc)[device])} — place modify ${device} to move it` };
   if (spec.room !== undefined) {
     if (spec.rack !== undefined || spec.u !== undefined) return { refused: "--room places a device loose in a room: no --rack, no --u (a rack names its own room)" };
     if (!roomsOf(doc)[spec.room]) return { refused: `room ${spec.room} does not exist (room add ${spec.room})` };
@@ -165,7 +168,7 @@ export function addMount(doc: PositionsDoc, device: string, spec: MountSpec, cat
     for (const k of ["faceplate", "label", "description"] as const) if (spec[k]) m[k] = spec[k];
     return { doc: withDoc(doc, (d) => void (d.placements[device] = m)), summary: `${device} stands loose in room ${spec.room}` };
   }
-  if (spec.rack === undefined || spec.u === undefined) return { refused: "mount add <device> --rack <rack> --u <n>, or --room <room> for a device loose in a room" };
+  if (spec.rack === undefined || spec.u === undefined) return { refused: "place <device> --rack <rack> --u <n>, or --room <room> for a device loose in a room" };
   if (!racksOf(doc)[spec.rack]) return { refused: `rack ${spec.rack} does not exist (rack add ${spec.rack})` };
   const width = (spec.width ?? "full") as MountWidth;
   if (!MOUNT_WIDTHS.includes(width)) return { refused: `--width is one of ${MOUNT_WIDTHS.join(", ")}` };
@@ -182,18 +185,18 @@ export function addMount(doc: PositionsDoc, device: string, spec: MountSpec, cat
   };
 }
 
-const MOUNT_FIELDS = ["rack", "u", "room", "height", "width", "slot", "face", "faceplate", "label", "description"];
+const PLACEMENT_FIELDS = ["rack", "u", "room", "height", "width", "slot", "face", "faceplate", "label", "description"];
 
-// mount modify — a move (rack, u, slot, face) or its plate and label. The
+// place modify — a move (rack, u, slot, face, or room) or its plate and label. The
 // device is the key: another device is another mount.
-export function modifyMount(doc: PositionsDoc, device: string, sets: Array<[string, string]>, catalog: Faceplate[]): Result {
-  if (!placementsOf(doc)[device]) return { refused: `${device} is not mounted` };
+export function modifyPlacement(doc: PositionsDoc, device: string, sets: Array<[string, string]>, catalog: Faceplate[]): Result {
+  if (!placementsOf(doc)[device]) return { refused: `${device} is placed nowhere (place ${device} …)` };
   let refused: string | null = null;
   const next = withDoc(doc, (d) => {
     const m = d.placements[device];
     for (const [k, v] of sets) {
-      if (k === "device") refused = "the device is the mount's key: remove this mount and mount the other device";
-      else if (!MOUNT_FIELDS.includes(k)) refused = `mount field '${k}' is not one of ${MOUNT_FIELDS.join(", ")}`;
+      if (k === "device") refused = "the device is the placement's key: unplace it and place the other device";
+      else if (!PLACEMENT_FIELDS.includes(k)) refused = `placement field '${k}' is not one of ${PLACEMENT_FIELDS.join(", ")}`;
       else if (k === "rack") {
         if (!d.racks[v]) refused = `rack ${v} does not exist`;
         else {
@@ -244,21 +247,21 @@ export function modifyMount(doc: PositionsDoc, device: string, sets: Array<[stri
   const nm = next.placements![device];
   if (nm.rack && nm.u === undefined) return { refused: `into rack ${nm.rack}: give its unit too (--set u=<n>)` };
   if (!nm.rack && (["u", "height", "width", "slot", "face"] as const).some((x) => nm[x] !== undefined)) return { refused: "a device loose in a room has no unit, height, width, slot or face: move it into a rack first (--set rack=<rack> --set u=<n>)" };
-  return { doc: next, summary: `mount ${device}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
+  return { doc: next, summary: `placement ${device}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
 }
 
-// mount remove — the device leaves the rack (the device itself is untouched).
+// unplace — the device leaves its rack or room (the device itself is untouched).
 // The recorded cables that name it go with it only when it is passive
 // (nothing else knows it); a topology device keeps its recorded cables.
-export function removeMount(doc: PositionsDoc, device: string, passive: boolean): Result {
-  if (!placementsOf(doc)[device]) return { refused: `${device} is not mounted` };
+export function unplaceDevice(doc: PositionsDoc, device: string, passive: boolean): Result {
+  if (!placementsOf(doc)[device]) return { refused: `${device} is placed nowhere` };
   const dropped = passive ? cablesOf(doc).filter((c) => c.from.device === device || c.to.device === device).length : 0;
   return {
     doc: withDoc(doc, (d) => {
       delete d.placements[device];
       if (passive) d.cables = d.cables.filter((c) => c.from.device !== device && c.to.device !== device);
     }),
-    summary: `${device} unmounted${dropped ? ` (and its ${dropped} recorded cable(s))` : ""}`,
+    summary: `${device} unplaced${dropped ? ` (and its ${dropped} recorded cable(s))` : ""}`,
   };
 }
 
@@ -336,7 +339,6 @@ function recordedPortsCount(d: RecordedDevice, catalog: Faceplate[]): number {
 }
 
 const DEVICE_FIELDS = ["kind", "model", "ports", "displayName", "description", "location", "mac"];
-export const MAC_RE = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/;
 
 // device modify — its kind, model, ports (a list, comma separated, or a
 // count), display name or description. A port a cable uses stays.
@@ -374,11 +376,50 @@ export function modifyDevice(doc: PositionsDoc, name: string, sets: Array<[strin
   return { doc: next, summary: `device ${name}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
 }
 
+export interface RecordSpec {
+  name: string;
+  kind?: string;
+  port?: string; // its port the cable reaches
+  model?: string;
+  location?: string;
+  displayName?: string;
+  description?: string;
+}
+
+// device record — a device a switch port sees and nobody recorded becomes a
+// recorded one: its MAC kept (so the topology knows it as recorded), at the
+// switch's location unless told, and the port's link recorded as its cable
+// (nothing else sees that link). taken: the topology's device names.
+export function recordSeen(doc: PositionsDoc, seen: SeenDevice, spec: RecordSpec, catalog: Faceplate[], taken: string[] | null, primary: string | null): Result {
+  const busy = cablesOf(doc).find((c) => [c.from, c.to].some((e) => e.device === seen.switch && e.port === seen.port));
+  if (busy) return { refused: `${seen.switch}:${seen.port} already has the recorded cable ${endText(busy.from)} — ${endText(busy.to)}` };
+  if (seen.mac && Object.entries(devicesOf(doc)).some(([, d]) => d.mac === seen.mac)) return { refused: `${seen.mac} is recorded already` };
+  const fp = spec.model ? catalog.find((f) => f.key === spec.model) : undefined;
+  const modelPorts = fp ? recordedPorts({ kind: "other", model: fp.key }, catalog) : [];
+  const port = spec.port ?? (seen.lldp?.port && (!fp || modelPorts.includes(seen.lldp.port)) ? seen.lldp.port : modelPorts[0] ?? "1");
+  const location = spec.location ?? (seen.location && seen.location !== primary ? seen.location : undefined);
+  const added = addDevice(doc, spec.name, {
+    kind: spec.kind,
+    model: spec.model,
+    ...(fp && modelPorts.includes(port) ? {} : { port: [port] }),
+    displayName: spec.displayName ?? seen.lldp?.name ?? seen.lease?.hostname ?? undefined,
+    description: spec.description,
+    location,
+    mac: seen.mac ?? undefined,
+  }, catalog, taken?.filter((n) => n !== seen.name) ?? null);
+  if ("refused" in added) return added;
+  const cable: Cable = { from: { device: seen.switch, port: seen.port }, to: { device: spec.name, port }, kind: "patch" };
+  return {
+    doc: withDoc(added.doc, (d) => void d.cables.push(cable)),
+    summary: `${spec.name} recorded (${spec.kind}${seen.mac ? `, ${seen.mac}` : ""}) on ${seen.switch}:${seen.port}, its cable to port ${port} kept`,
+  };
+}
+
 // device remove — only a device nothing names: unmount it and remove its
 // cables first.
 export function removeDevice(doc: PositionsDoc, name: string): Result {
   if (!devicesOf(doc)[name]) return { refused: `device ${name} is not recorded` };
-  if (placementsOf(doc)[name]) return { refused: `${name} is mounted — mount remove ${name} first` };
+  if (placementsOf(doc)[name]) return { refused: `${name} is placed — unplace ${name} first` };
   const cables = cablesOf(doc).filter((c) => c.from.device === name || c.to.device === name);
   const e = cables[0]?.from.device === name ? cables[0].from : cables[0]?.to;
   if (cables.length) return { refused: `${name} is an end of ${cables.length} recorded cable(s) — cable remove '${e.device}:${e.port}' first` };

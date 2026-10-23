@@ -20,14 +20,16 @@ function check(cond: boolean, msg: string): void {
 const m = renderManifest(HELP);
 const v = (name: string) => m.verbs.find((x) => x.verb === name)!;
 check(undocumentedOptions(HELP).length === 0, `every option is described (${undocumentedOptions(HELP).join(", ")})`);
-for (const r of ["validate", "rack list", "rack show", "mount list", "mount show", "cable list", "faceplates list", "faceplates show", "export"]) check(v(r)?.effect === "read", `${r} reads`);
-for (const w of ["rack add", "rack modify", "rack delete", "mount add", "mount modify", "mount remove", "cable add", "cable remove"]) {
+for (const r of ["validate", "rack list", "rack show", "place list", "place show", "cable list", "faceplates list", "faceplates show", "export"]) check(v(r)?.effect === "read", `${r} reads`);
+for (const w of ["rack add", "rack modify", "rack delete", "place", "place modify", "unplace", "device record", "cable add", "cable remove"]) {
   check(v(w)?.effect === "write" && v(w).preview.kind === "dry-run-flag", `${w} writes, previewed with --check`);
 }
-for (const x of ["rack delete", "mount remove", "cable remove"]) check(v(x).destructive, `${x} is destructive`);
-for (const x of ["rack add", "rack modify", "mount add", "mount modify", "cable add"]) check(!v(x).destructive, `${x} is not destructive`);
+for (const x of ["rack delete", "unplace", "cable remove"]) check(v(x).destructive, `${x} is destructive`);
+for (const x of ["rack add", "rack modify", "place", "place modify", "device record", "cable add"]) check(!v(x).destructive, `${x} is not destructive`);
 check(v("cable remove").object?.positional === "device:port", "cable remove names its port as the object");
-check(v("mount add").positionals[0]?.name === "device", "mount add's positional is the device");
+check(v("place").positionals[0]?.name === "device", "place's positional is the device");
+check(v("device record").positionals[0]?.name === "port-or-mac" && v("device record").object?.positional === "port-or-mac", "device record names the port it records from");
+check(v("place").keys.some((k) => k.join(" ") === "mount add") && v("place modify").keys.some((k) => k.join(" ") === "mount modify") && v("unplace").keys.some((k) => k.join(" ") === "mount remove"), "mount add, modify and remove answer as aliases");
 
 console.log(`\nposition-manager help: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

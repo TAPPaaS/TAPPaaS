@@ -8,7 +8,7 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { addCable, addMount, addRack, deleteRack, modifyMount, modifyRack, removeCable, removeMount } from "../../src/verbs";
+import { addCable, placeDevice, addRack, deleteRack, modifyPlacement, modifyRack, removeCable, unplaceDevice } from "../../src/verbs";
 import { CatalogPort, Faceplate, PositionsDoc, TopoLike, checkPositions, columnSpan, parseEnd, resolvePositions, seenCables, siteDevices, suggestFaceplate, unitAtRow } from "../../../../lib/ts/src/positions";
 
 let passed = 0;
@@ -70,36 +70,36 @@ check(ok(rm) && rm.doc.racks!.rack1.room === "Utility" && rm.doc.racks!.rack1.un
 check(ok(modifyRack(d, "rack1", [["description", ""]])), "rack modify: an empty text clears it");
 
 console.log("— mount verbs");
-const m1 = addMount(d, "tappaas1", { rack: "rack1", u: 10, faceplate: "generic/server-2u", description: "placeholder position, set by the operator" }, catalog);
+const m1 = placeDevice(d, "tappaas1", { rack: "rack1", u: 10, faceplate: "generic/server-2u", description: "placeholder position, set by the operator" }, catalog);
 check(ok(m1) && m1.doc.placements!.tappaas1.height === 2, "mount add: the height is the faceplate's");
 if (ok(m1)) d = m1.doc;
-check(refused(addMount(d, "tappaas1", { rack: "rack1", u: 20 }, catalog), "already mounted"), "mount add: a mounted device refused (modify moves it)");
-check(refused(addMount(d, "tappaas2", { rack: "nope", u: 20 }, catalog), "does not exist"), "mount add: an unknown rack refused");
-check(refused(addMount(d, "tappaas2", { rack: "rack1", u: 20, faceplate: "acme/x" }, catalog), "not in the catalog"), "mount add: an unknown faceplate refused");
-const half = addMount(d, "tappaas3", { rack: "rack1", u: 5, width: "half", slot: 1 }, catalog);
+check(refused(placeDevice(d, "tappaas1", { rack: "rack1", u: 20 }, catalog), "already placed"), "place: a placed device refused (modify moves it)");
+check(refused(placeDevice(d, "tappaas2", { rack: "nope", u: 20 }, catalog), "does not exist"), "mount add: an unknown rack refused");
+check(refused(placeDevice(d, "tappaas2", { rack: "rack1", u: 20, faceplate: "acme/x" }, catalog), "not in the catalog"), "mount add: an unknown faceplate refused");
+const half = placeDevice(d, "tappaas3", { rack: "rack1", u: 5, width: "half", slot: 1 }, catalog);
 check(ok(half) && half.doc.placements!.tappaas3.slot === 1 && half.doc.placements!.tappaas3.height === 1, "mount add: a half-width device in slot 1, 1U without a plate");
 if (ok(half)) d = half.doc;
-const mv = modifyMount(d, "tappaas3", [["rack", "rack1"], ["u", "12"], ["width", "full"]], catalog);
+const mv = modifyPlacement(d, "tappaas3", [["rack", "rack1"], ["u", "12"], ["width", "full"]], catalog);
 check(ok(mv) && mv.doc.placements!.tappaas3.u === 12 && mv.doc.placements!.tappaas3.slot === undefined, "mount modify: a move to full width drops the slot");
-check(refused(modifyMount(d, "tappaas3", [["device", "x"]], catalog), "key"), "mount modify: the device refused");
-check(refused(modifyMount(d, "tappaas3", [["face", "side"]], catalog), "front or rear"), "mount modify: an unknown face refused");
+check(refused(modifyPlacement(d, "tappaas3", [["device", "x"]], catalog), "key"), "mount modify: the device refused");
+check(refused(modifyPlacement(d, "tappaas3", [["face", "side"]], catalog), "front or rear"), "mount modify: an unknown face refused");
 check(refused(deleteRack(d, "rack1"), "still holds"), "rack delete: refused while it holds mounts");
 
 console.log("— checkPositions");
 check(errs(checkPositions(d, catalog, devices)).length === 0, "the document so far is valid");
-const over = addMount(d, "tappaas2", { rack: "rack1", u: 11, faceplate: "generic/server-2u" }, catalog);
+const over = placeDevice(d, "tappaas2", { rack: "rack1", u: 11, faceplate: "generic/server-2u" }, catalog);
 check(ok(over) && errs(checkPositions(over.doc, catalog, devices)).some((m) => m.includes("overlap")), "two mounts in the same units overlap");
-const rearOk = addMount(d, "tappaas2", { rack: "rack1", u: 11, face: "rear", faceplate: "generic/server-2u" }, catalog);
+const rearOk = placeDevice(d, "tappaas2", { rack: "rack1", u: 11, face: "rear", faceplate: "generic/server-2u" }, catalog);
 check(ok(rearOk) && errs(checkPositions(rearOk.doc, catalog, devices)).length === 0, "the same units at the rear do not overlap the front");
-const sideBySide = addMount(d, "Nano HD", { rack: "rack1", u: 5, width: "half", slot: 0 }, catalog);
+const sideBySide = placeDevice(d, "Nano HD", { rack: "rack1", u: 5, width: "half", slot: 0 }, catalog);
 check(ok(sideBySide) && errs(checkPositions(sideBySide.doc, catalog, devices)).length === 0, "two halves side by side do not overlap");
 check(columnSpan({ width: "third", slot: 2 })[0] === 4 && columnSpan({ width: "half", slot: 1 })[0] === 3, "column spans in sixths");
-const top = addMount(d, "tappaas2", { rack: "rack1", u: 42, faceplate: "generic/server-2u" }, catalog);
+const top = placeDevice(d, "tappaas2", { rack: "rack1", u: 42, faceplate: "generic/server-2u" }, catalog);
 check(ok(top) && errs(checkPositions(top.doc, catalog, devices)).some((m) => m.includes("does not fit")), "U42-U43 does not fit 42U");
-const ghost = addMount(d, "tappaas9", { rack: "rack1", u: 30 }, catalog);
+const ghost = placeDevice(d, "tappaas9", { rack: "rack1", u: 30 }, catalog);
 check(ok(ghost) && errs(checkPositions(ghost.doc, catalog, devices)).some((m) => m.includes("no device 'tappaas9'")), "a device the topology lacks is refused");
 check(ok(ghost) && errs(checkPositions(ghost.doc, catalog, null)).length === 0, "without the topology the device is not checked");
-const pp = addMount(d, "patch panel A", { rack: "rack1", u: 30, faceplate: "generic/patch-panel-24" }, catalog);
+const pp = placeDevice(d, "patch panel A", { rack: "rack1", u: 30, faceplate: "generic/patch-panel-24" }, catalog);
 check(ok(pp) && errs(checkPositions(pp.doc, catalog, devices)).length === 0, "a passive plate's device needs no topology device");
 const badPlate: PositionsDoc = { ...d, placements: { ...d.placements, tappaas2: { rack: "rack1", u: 20, height: 1, width: "full", face: "front", faceplate: "acme/x" } } };
 check(errs(checkPositions(badPlate, catalog, devices)).some((m) => m.includes("acme/x is not in the catalog")), "a faceplate key the catalog lacks");
@@ -122,11 +122,11 @@ if (ok(pp)) {
   const withPatch = addCable(pp.doc, { device: "patch panel A", port: "1" }, { device: USW, port: "1" }, "patch");
   check(ok(withPatch) && errs(checkPositions(withPatch.doc, catalog, devices)).length === 0, "a patch panel's port to a switch port");
   if (ok(withPatch)) {
-    const gone = removeMount(withPatch.doc, "patch panel A", true);
+    const gone = unplaceDevice(withPatch.doc, "patch panel A", true);
     check(ok(gone) && gone.doc.cables === undefined, "mount remove of a passive device drops its recorded cables");
   }
 }
-const keep = removeMount(d, "tappaas1", false);
+const keep = unplaceDevice(d, "tappaas1", false);
 check(ok(keep) && (keep.doc.cables ?? []).length === 1, "mount remove of a topology device keeps the recorded cables");
 
 console.log("— the view the topology carries");
@@ -155,7 +155,7 @@ check(view.cables.some((c) => c.source === "recorded" && c.to.device === "ISP mo
 const gone = resolvePositions({ ...d, placements: { ...d.placements, tappaas9: { rack: "rack1", u: 30, height: 1, width: "full", face: "front" } } }, catalog, t);
 check(gone.findings.some((f) => f.kind === "gone" && f.device === "tappaas9"), "a mount whose device is gone is a finding");
 check(resolvePositions({}, catalog, t).findings.length === 0, "no rack: no unplaced findings");
-const withSw = addMount(d, USW, { rack: "rack1", u: 20, faceplate: "unifi/usw-pro-xg-10-poe" }, catalog) as { doc: PositionsDoc };
+const withSw = placeDevice(d, USW, { rack: "rack1", u: 20, faceplate: "unifi/usw-pro-xg-10-poe" }, catalog) as { doc: PositionsDoc };
 const sw = resolvePositions(withSw.doc, catalog, t);
 const plate = sw.racks[0].mounts.find((m) => m.device === USW)!.plate!;
 check(plate.rows[0][2]!.id === "5" && plate.rows[0][2]!.zones.includes("wan") && plate.rows[1][5]!.lag === "crs-uplink", "the UniFi plate's ports carry the switch's live state");

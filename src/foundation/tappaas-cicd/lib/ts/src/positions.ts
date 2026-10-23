@@ -240,7 +240,44 @@ export interface TopoLike {
     ports?: { port: string; role?: string; link?: string | null; disabled?: boolean; lag?: string | null; zones?: string[]; target?: { kind: string; name: string | null; port: string | null } | null }[];
   }[];
   accessPoints?: { name: string; vendor?: string | null; model?: string | null; uplink?: { switch: string; port: string } | null }[];
-  devices?: { name: string; kind: string; vendor?: string | null; model?: string | null; ports?: string[]; recorded?: boolean }[];
+  devices?: { name: string; kind: string; vendor?: string | null; model?: string | null; ports?: string[]; recorded?: boolean; source?: string; location?: string | null; seen?: SeenAt | null }[];
+}
+
+// What a switch port reports of a device nobody recorded: the port, and what
+// its controller says is behind it — a MAC, LLDP's name and port, a lease.
+export interface SeenAt {
+  switch: string;
+  port: string;
+  mac: string | null;
+  lldp: { name: string; port: string | null } | null;
+  lease: { hostname: string | null; address: string | null } | null;
+}
+export const MAC_RE = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/;
+
+// A device the topology lists as seen at a switch port (source "seen").
+export interface SeenDevice extends SeenAt {
+  name: string;
+  location: string | null;
+}
+export function seenDevices(t: TopoLike): SeenDevice[] {
+  return (t.devices ?? [])
+    .filter((d) => d.source === "seen" && d.seen)
+    .map((d) => ({ ...d.seen!, name: d.name, location: d.location ?? null }));
+}
+
+// The seen device a `device record` names: <switch>:<port>, or its MAC.
+export function findSeen(seen: SeenDevice[], target: string): SeenDevice | { refused: string } {
+  const mac = target.toLowerCase();
+  if (MAC_RE.test(mac)) {
+    const hit = seen.filter((x) => x.mac === mac);
+    return hit.length === 1 ? hit[0] : { refused: hit.length ? `${mac} is seen on ${hit.length} ports: give <switch>:<port>` : `no switch port sees ${mac}` };
+  }
+  const end = parseEnd(target);
+  if (!end) return { refused: "device record <switch>:<port> or <mac>" };
+  const hit = seen.filter((x) => x.switch === end.device && x.port === end.port);
+  if (hit.length === 1) return hit[0];
+  if (hit.length > 1) return { refused: `${target} sees ${hit.length} devices (${hit.map((x) => x.mac ?? "?").join(", ")}): give the MAC` };
+  return { refused: `${target} sees no device nobody recorded (network-manager topology lists what each port sees)` };
 }
 
 export type DeviceKind = "node" | "switch" | "ap" | "machine" | "device";
