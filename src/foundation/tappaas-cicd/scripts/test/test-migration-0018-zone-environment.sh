@@ -73,6 +73,17 @@ after="$(snapshot)"; out="$(run)"
 ck "a second run changes nothing"                      "${after}" "$(snapshot)"
 ck "…and says so"                                      yes "$(has "${out}" "nothing to migrate")"
 
+# A zone serving two environments keeps both, as a list, and a rerun is a no-op.
+site '.home.serves = ["rossen", "test"] | .iotCams.serves = ["test", "rossen", "test"]'
+out="$(run)"; rc=$?
+ck "a serves list migrates"                            0 "${rc}"
+ck "…the client zone names both, in order"             '["rossen","test"]' "$(jq -c '.home.environment' "${CFG}/zones.json")"
+ck "…a repeated name is kept once"                     '["test","rossen"]' "$(jq -c '.iotCams.environment' "${CFG}/zones.json")"
+ck "…and it is reported"                               yes "$(has "${out}" "gave zone home environment rossen, test (it serves rossen, test)")"
+after="$(snapshot)"; out="$(run)"
+ck "…a rerun changes nothing"                          "${after}" "$(snapshot)"
+ck "…and says so"                                      yes "$(has "${out}" "nothing to migrate")"
+
 # A half-done run (zones written, an environment file still naming its zone)
 # converges rather than stopping.
 site '.rossen.environment = "rossen"'
@@ -96,9 +107,8 @@ refuse() {  # <label> <expected fragment> <zones edit> [env edit]
     ck "…naming why"                                   yes "$(has "${o}" "$2")"
     ck "…with nothing changed"                         "${b}" "$(snapshot)"
 }
-refuse "a zone serving two environments"        "zone home would name 2 environments (rossen, test)" '.home.serves = ["rossen", "test"]'
-refuse "serves disagreeing with the zone's own"  "zone test would name 2 environments (rossen, test)" '.test.serves = "rossen" | .test.type = "Client"'
-refuse "two environments naming one zone"        "zone rossen would name 2 environments (rossen, test)" '.' \
+refuse "serves disagreeing with the zone's own"  "zone test is environment test's zone but serves rossen" '.test.serves = "rossen" | .test.type = "Client"'
+refuse "two environments naming one zone"        "zone rossen is named as their zone by 2 environments (rossen, test)" '.' \
        'jq ".network.zone = \"rossen\"" test.json > t && mv t test.json'
 refuse "an environment naming a missing zone"    "names zone ghost, which is not in zones.json" '.' \
        'jq ".network.zone = \"ghost\"" test.json > t && mv t test.json'
@@ -108,7 +118,7 @@ refuse "serves on a Service zone"                "zone test is a Service zone an
 refuse "serves that is not a name"               "zone home: serves is not an environment name" '.home.serves = 7'
 refuse "a file whose name disagrees"             "says name \"other\"" '.' \
        'jq ".name = \"other\"" test.json > t && mv t test.json'
-refuse "an existing link that disagrees"         "zone rossen would name 2 environments" '.rossen.environment = "test"'
+refuse "an existing link that disagrees"         "zone rossen is environment rossen's zone but already names test" '.rossen.environment = "test"'
 
 # No zones.json: nothing to do.
 rm -rf "${CFG}"; mkdir -p "${CFG}"
