@@ -21,6 +21,7 @@ import { storageNotes } from "../physical/storage";
 import { StorageGraph } from "../physical/storageview";
 import { PhysicalOverview } from "../physical/overview";
 import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
+import { LocationLink } from "../locations";
 import { ReadState, canOperate, navigate, since, useMe } from "../ui";
 
 function selFromUrl(): Sel | null {
@@ -54,7 +55,7 @@ function Unplaced({ t, v, pick }: { t: Topology; v: PositionsView; pick: (s: Sel
         .filter((l) => l.unplaced.length)
         .map((l) => (
           <div key={l.name}>
-            {l.name ? <div className="tray-loc">{l.displayName ?? l.name}</div> : null}
+            {l.name ? <div className="tray-loc"><LocationLink name={l.name}>{l.displayName ?? l.name}</LocationLink></div> : null}
             <ul className="plain">
               {v.unplaced
                 .filter((u) => l.unplaced.includes(u.device))

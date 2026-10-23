@@ -506,6 +506,8 @@ button.mod-tile:hover { background: var(--info-bg); }
 .rack-room { cursor: pointer; }
 .rack-room-title { font-size: 15px; font-weight: 700; fill: #334155; }
 .rack-location-title { font-size: 17px; font-weight: 800; fill: #1e293b; }
+.rack-location-link { cursor: pointer; }
+.rack-location-link:hover { text-decoration: underline; fill: #2563eb; }
 .rack-location-device { font-size: 13px; fill: #2563eb; cursor: pointer; }
 .rack-location-device:hover { text-decoration: underline; }
 .tray-loc { margin: 10px 0 2px; font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
@@ -515,6 +517,10 @@ button.mod-tile:hover { background: var(--info-bg); }
 .kv-inline { display: inline-flex; flex-wrap: wrap; gap: 2px 12px; }
 .phys-place { font-size: 0.95rem; margin: 2px 0 8px; color: #334155; }
 .ov-place { font-size: 12.5px; font-weight: 600; color: #334155; margin-bottom: 4px; }
+.ov-loc { margin-bottom: 12px; }
+.ov-loc + .ov-loc { border-top: 1px solid var(--line); padding-top: 8px; }
+.ov-loc-head { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin-bottom: 4px; }
+.ov-loc-head a { font-weight: 700; font-size: 13.5px; }
 .howto ol { padding-left: 18px; margin: 6px 0 10px; }
 .howto li { margin-bottom: 6px; }
 .howto-line { background: var(--info-bg); border-radius: 6px; padding: 6px 8px; }

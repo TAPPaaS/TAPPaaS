@@ -31,8 +31,10 @@ export function useSiteLocations(): SiteLocation[] {
 // The Site page's row for a location: /site#location-<name>.
 export const locationAnchor = (name: string): string => `location-${name}`;
 
+export const locationHref = (name: string): string => `/site#${locationAnchor(name)}`;
+
 export function LocationLink({ name, children }: { name: string; children?: ReactNode }) {
-  return <Link to={`/site#${locationAnchor(name)}`}>{children ?? name}</Link>;
+  return <Link to={locationHref(name)}>{children ?? name}</Link>;
 }
 
 // A location by name, linked, with its place: "Hareskov · Hareskov, DK".

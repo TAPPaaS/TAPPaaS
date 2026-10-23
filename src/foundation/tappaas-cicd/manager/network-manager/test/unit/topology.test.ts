@@ -123,6 +123,9 @@ check(rasmus?.state === "down", "…the pulse reports it down");
   const out = buildTopology(s).outside;
   check(out.find((o) => o.name === "rasmus")?.location === "Hareskov, DK", "a buddy naming a location shows its place");
   check(out.find((o) => o.name === "far")?.location === "far", "…and its name when site.json has no such place");
+  check(out.find((o) => o.name === "far")?.at === null, "…and names no location the site lacks");
+  s.site = { ...(s.site as Record<string, unknown>), locations: { ...(((s.site as Record<string, unknown>).locations ?? {}) as Record<string, unknown>), hareskov: { kind: "remote", country: "DK", city: "Hareskov" } } } as typeof s.site;
+  check(buildTopology(s).outside.find((o) => o.name === "rasmus")?.at === "hareskov", "a buddy is at the location it names");
 }
 
 // ── findings on their objects ─────────────────────────────────────────

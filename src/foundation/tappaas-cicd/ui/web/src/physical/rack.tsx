@@ -6,14 +6,19 @@
 // topology (link up or down, LAG), and the cables port to port in the zone
 // colours of the Device view, labelled on hover, a click opening the cable's
 // link in the side panel (the same panel the Device view opens). A device
-// only a cable record places (the ISP's modem) stands left of the racks; a
-// location with no room lists the devices that are somewhere there.
+// only a cable record places (the ISP's modem) stands left of the racks.
+// Every location of the site is drawn, the primary first, its heading a link
+// to its record on the Site page with its address: after its rooms, the
+// devices that are at it and placed nowhere (with no room, somewhere there),
+// and a backup buddy or a satellite that is there.
 // Everything comes from `network-manager topology` .positions; nothing is
 // placed by hand here.
 
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { zoneColor } from "../colors";
-import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, ResolvedPlate, Topology } from "../types";
+import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, ResolvedPlate, TopoOutside, Topology } from "../types";
+import { navigate } from "../ui";
+import { locationHref } from "../locations";
 import { Sel } from "./layout";
 import { linkId } from "./devicegraph";
 
@@ -52,9 +57,10 @@ export interface RackLayout {
   width: number;
   height: number;
   racks: { r: RackInfo; x: number }[];
-  // Each location an area around its rooms (or, with none, the devices
-  // somewhere there); each room an area: its racks and the devices loose in it.
-  locations: { name: string; title: string; sub: string; primary: boolean; x: number; y: number; w: number; h: number; nowhere: { device: string; kind: Placed["kind"] }[] }[];
+  // Each location an area around its rooms and, in a column after them, what
+  // is at it placed nowhere (with no room: somewhere there); each room an
+  // area: its racks and the devices loose in it.
+  locations: { name: string; title: string; sub: string; primary: boolean; x: number; y: number; w: number; h: number; roomless: boolean; nowhereX: number; nowhere: { device: string; label: string; sel: Sel }[] }[];
   rooms: { name: string; title: string; sub: string; recorded: boolean; x: number; y: number; w: number; h: number }[];
   placed: Placed[];
   ports: Map<string, { x: number; y: number; rackRight: number; rack: string | null }>;
@@ -85,7 +91,17 @@ export function portCells(p: Placed): { port: PlatePort; box: Box }[] {
   return out;
 }
 
-export function layoutRacks(v: PositionsView): RackLayout {
+// What stands at a location placed nowhere: its unplaced devices, then the
+// backup buddies and satellites the topology has there (a satellite is also a
+// machine of the site, so it is listed once).
+function nowhereAt(v: PositionsView, loc: { name: string; unplaced: string[] }, outside: TopoOutside[]): RackLayout["locations"][number]["nowhere"] {
+  const kindOf = (device: string): Placed["kind"] => v.unplaced.find((u) => u.device === device)?.kind ?? "device";
+  const out = loc.unplaced.map((device) => ({ device, label: device, sel: selOf(kindOf(device), device) }));
+  for (const o of outside) if (o.at === loc.name && !loc.unplaced.includes(o.name)) out.push({ device: o.name, label: `${o.name} (${o.kind === "buddy" ? "backup buddy" : "satellite"})`, sel: { kind: "outside", id: o.name } });
+  return out;
+}
+
+export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): RackLayout {
   const placed: Placed[] = [];
   const ports: RackLayout["ports"] = new Map();
   let x = R.margin;
@@ -141,11 +157,11 @@ export function layoutRacks(v: PositionsView): RackLayout {
   // room after them, in no area).
   const locations: RackLayout["locations"] = [];
   const roomed = new Set((v.rooms ?? []).flatMap((r) => r.racks));
-  const kindOf = (device: string): Placed["kind"] => v.unplaced.find((u) => u.device === device)?.kind ?? "device";
   const groups = v.locations?.length ? v.locations : [{ name: "", displayName: null, kind: "site" as const, primary: true, place: null, rooms: (v.rooms ?? []).map((r) => r.name), unplaced: [] }];
   for (const loc of groups) {
     const inLoc = (v.rooms ?? []).filter((r) => loc.rooms.includes(r.name));
-    if (!inLoc.length && !loc.unplaced.length) continue;
+    const nowhere = loc.name ? nowhereAt(v, loc, outside) : [];
+    if (!loc.name && !inLoc.length) continue;
     const lx0 = x;
     for (const room of inLoc) {
       const x0 = x;
@@ -158,20 +174,31 @@ export function layoutRacks(v: PositionsView): RackLayout {
       rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: room.recorded ? "" : "not recorded", recorded: room.recorded, x: x0 - R.roomPad, y: R.roomY, w: x - R.gap - x0 + 2 * R.roomPad, h: 0 });
       x += 30;
     }
-    // No room here: the devices that are somewhere at this location.
-    const nowhere = inLoc.length ? [] : loc.unplaced.map((device) => ({ device, kind: kindOf(device) }));
-    if (!inLoc.length) x += R.nowhereW + R.gap;
+    // After the rooms (or in their place): what is here placed nowhere.
+    const nowhereX = inLoc.length ? x - 30 - R.gap / 2 : x;
+    if (!inLoc.length || nowhere.length) x = nowhereX + R.nowhereW + R.gap;
     if (loc.name) {
       const place = [loc.place?.address, loc.place?.city, loc.place?.country].filter(Boolean).join(", ");
+      const title = loc.displayName ?? loc.name;
+      const sub = [place, loc.primary ? "the primary location" : loc.kind === "remote" ? "another site's" : ""].filter(Boolean).join(" · ");
+      // As wide as its heading at least: the title, then its address.
+      const head = 28 + title.length * 9.5 + 10 + sub.length * 5.6;
+      let w = x - (inLoc.length && !nowhere.length ? R.gap + 30 : R.gap) - lx0 + 2 * (R.roomPad + R.locPad);
+      if (head > w) {
+        x += head - w;
+        w = head;
+      }
       locations.push({
         name: loc.name,
-        title: loc.displayName ?? loc.name,
-        sub: [place, loc.primary ? "the primary location" : loc.kind === "remote" ? "another site's" : ""].filter(Boolean).join(" · "),
+        title,
+        sub,
         primary: loc.primary,
         x: lx0 - R.roomPad - R.locPad,
         y: 2,
-        w: x - R.gap - lx0 + 2 * (R.roomPad + R.locPad) - (inLoc.length ? 30 : 0),
+        w,
         h: 0,
+        roomless: !inLoc.length,
+        nowhereX,
         nowhere,
       });
     }
@@ -183,11 +210,11 @@ export function layoutRacks(v: PositionsView): RackLayout {
     for (const c of portCells(p)) ports.set(key(p.device, c.port.id), { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2, rackRight, rack: p.rack });
   }
   const outsideH = placed.filter((p) => p.kind === "outside").reduce((h, p) => Math.max(h, p.box.y + p.box.h), 0);
-  const nowhereH = Math.max(0, ...locations.map((l) => R.roomY + 30 + l.nowhere.length * 20));
+  const nowhereH = Math.max(0, ...locations.map((l) => R.roomY + 40 + l.nowhere.length * 20));
   const height = Math.max(R.top + maxH + R.bottom, outsideH + R.bottom, nowhereH + R.bottom);
   for (const room of rooms) room.h = height - room.y - 16;
   for (const l of locations) l.h = height - l.y - 4;
-  return { width: Math.max(x - R.gap + R.margin + 60, 400), height, locations, racks, rooms, placed, ports };
+  return { width: Math.max(x - R.gap + R.margin + 160, 400), height, locations, racks, rooms, placed, ports };
 }
 
 // A cable's colour and dash, as the Device view draws links: a wan link
@@ -312,7 +339,7 @@ export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: 
 }
 
 export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v: PositionsView; sel: Sel | null; pick: (s: Sel) => void; cables: boolean; onPane: () => void }) {
-  const L = useMemo(() => layoutRacks(v), [v]);
+  const L = useMemo(() => layoutRacks(v, t.outside), [v, t.outside]);
   const wrap = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState<number | null>(null);
   // Fitted until the operator zooms: the canvas has its size only after layout.
@@ -377,18 +404,21 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
         {L.locations.map((l) => (
           <g key={`loc:${l.name}`} className="rack-location">
             <rect x={l.x} y={l.y} width={l.w} height={l.h} rx={14} fill="none" stroke="#64748b" strokeWidth={l.primary ? 1.6 : 1.2} strokeDasharray={l.primary ? undefined : "10 5"} />
-            <text x={l.x + 14} y={l.y + 20} className="rack-location-title">{l.title}</text>
+            <text x={l.x + 14} y={l.y + 20} className="rack-location-title rack-location-link" onClick={(e) => (e.stopPropagation(), navigate(locationHref(l.name)))}>
+              <title>{`${l.title}: its record on the Site page`}</title>
+              {l.title}
+            </text>
             {l.sub ? <text x={l.x + 14 + l.title.length * 9.5 + 10} y={l.y + 20} className="rack-where">{l.sub}</text> : null}
-            {l.nowhere.length ? (
-              <>
-                <text x={l.x + R.locPad + R.roomPad} y={R.roomY + 12} className="rack-where">no room here — somewhere at this location:</text>
-                {l.nowhere.map((n, i) => (
-                  <text key={n.device} x={l.x + R.locPad + R.roomPad} y={R.roomY + 34 + i * 20} className="rack-location-device" onClick={(e) => (e.stopPropagation(), pick(selOf(n.kind, n.device)))}>
-                    {n.device}
-                  </text>
-                ))}
-              </>
+            {l.roomless || l.nowhere.length ? (
+              <text x={l.nowhereX} y={R.roomY + 12} className="rack-where">
+                {!l.roomless ? "placed nowhere here:" : l.nowhere.length ? "no room here — somewhere at this location:" : "no room here, and nothing recorded at it"}
+              </text>
             ) : null}
+            {l.nowhere.map((n, i) => (
+              <text key={n.device} x={l.nowhereX} y={R.roomY + 34 + i * 20} className="rack-location-device" onClick={(e) => (e.stopPropagation(), pick(n.sel))}>
+                {n.label}
+              </text>
+            ))}
           </g>
         ))}
         {L.rooms.map((room) => (

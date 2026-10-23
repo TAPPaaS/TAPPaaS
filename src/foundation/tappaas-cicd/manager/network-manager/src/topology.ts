@@ -371,7 +371,7 @@ export interface TopoOutside {
   name: string;
   role: string | null;
   location: string | null; // its place, as text
-  at?: string | null; // the location it names (a satellite), when it names one
+  at?: string | null; // the location it names (a satellite, a buddy), when it names one
   tunnel: string | null;
   address: string | null;
   state: "up" | "down" | null; // from the pulse
@@ -929,6 +929,8 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       name: p.name,
       role: str(p.role),
       location: [(p.place ?? p.physicalLocation)?.city, (p.place ?? p.physicalLocation)?.country].filter((x) => !!x).join(", ") || p.location || null,
+      // The location it names (ADR-036 D5), when the site has it.
+      at: p.location && readLocations(src.site).locations[p.location] ? p.location : null,
       tunnel: str(p.tunnel),
       address: str(p.remoteHost),
       state: pulseState.get(p.name) ?? null,

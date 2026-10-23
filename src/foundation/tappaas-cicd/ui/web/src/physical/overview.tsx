@@ -1,17 +1,18 @@
 // overview.tsx — Physical › Overview: the other three views summed up on one
-// page. The site in one line; each rack as a thumbnail of its units (a click
-// opens the Rack view); the Device view as counts and the findings on devices;
+// page. The site in one line; its locations (the primary first, each a link
+// to its record) with their rooms, each rack a thumbnail of its units (a
+// click opens the Physical view), and what is at each placed nowhere; the Device view as counts and the findings on devices;
 // the Storage view as each node's pools with their fill and the disks with a
 // problem; and every finding of the topology and the inventory, each linked to
 // the view and the object it is on.
 
 import { ReactNode } from "react";
-import { RackInfo, SiteRead, StorageInventory, TopoFinding, Topology } from "../types";
+import { LocationInfo, RackInfo, RoomInfo, StorageInventory, TopoFinding, Topology } from "../types";
 import { Tag, navigate } from "../ui";
 import { publicAddress, publicText } from "../zonegraph";
 import { STATE_COLOR, StateLegend } from "./state";
-import { VIEW_NAME, sitePlace, viewLink } from "./views";
-import { useRead } from "../api";
+import { VIEW_NAME, viewLink } from "./views";
+import { LocationLink } from "../locations";
 import { StorageNote, bytes, nodeKey, poolKey, poolPct, stateWith } from "./storage";
 
 type View = "rack" | "device" | "storage";
@@ -109,7 +110,7 @@ function RackThumb({ r }: { r: RackInfo }) {
           .filter((m) => m.face === "front")
           .map((m) => {
             const mw = m.width === "full" ? w : m.width === "half" ? w / 2 : w / 3;
-            return <rect key={m.device} x={4 + (m.width === "full" ? 0 : (m.slot - 1) * mw)} y={4 + top(m.u, m.height)} width={mw - 1} height={m.height * px - 1} rx={1} fill={m.kind === "node" ? "#3b6fd4" : m.kind === "switch" ? "#475569" : "#8a94a6"} />;
+            return <rect key={m.device} x={4 + (m.width === "full" ? 0 : m.slot * mw)} y={4 + top(m.u, m.height)} width={mw - 1} height={m.height * px - 1} rx={1} fill={m.kind === "node" ? "#3b6fd4" : m.kind === "switch" ? "#475569" : "#8a94a6"} />;
           })}
       </svg>
       <span className="ov-rack-name">{r.displayName ?? r.name}</span>
@@ -118,14 +119,31 @@ function RackThumb({ r }: { r: RackInfo }) {
   );
 }
 
+function RoomThumbs({ room, racks }: { room: RoomInfo; racks: RackInfo[] }) {
+  return (
+    <div className="ov-room">
+      <button className="linklike ov-room-name" onClick={() => navigate(viewLink("rack", `room:${room.name}`))}>{room.displayName ?? room.name}</button>
+      <div className="ov-racks">
+        {room.racks.map((n) => racks.find((r) => r.name === n)).filter((r): r is RackInfo => !!r).map((r) => <RackThumb key={r.name} r={r} />)}
+      </div>
+      {room.loose.length ? <div className="muted small">loose: {room.loose.map((m) => m.device).join(", ")}</div> : null}
+    </div>
+  );
+}
+
 export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFindings }: { t: Topology | null; inv: StorageInventory | null; notes: Map<string, StorageNote[]>; storageError: string | null; aside?: ReactNode; beforeFindings?: ReactNode }) {
   const racks = t?.positions?.racks ?? [];
   const rooms = t?.positions?.rooms ?? [];
-  const place = sitePlace((useRead<SiteRead>("site").env?.data?.site ?? null) as Parameters<typeof sitePlace>[0]);
   const disks = inv ? inv.nodes.reduce((s, n) => s + n.boot.length + n.otherDisks.length + n.pools.reduce((a, p) => a + p.vdevs.reduce((b, v) => b + v.disks.length, 0), 0), 0) : null;
   const pools = inv ? inv.nodes.reduce((s, n) => s + n.pools.length, 0) : null;
   const wan = t ? publicText(publicAddress({ network: { publicIp: t.site.wan.publicIp } }, t.site.wan.discovered), true) : "";
   const rows = physicalFindings(t, inv);
+  // The locations with something at them, the primary first: a buddy or a
+  // satellite counts.
+  const outsideAt = (name: string) => (t?.outside ?? []).filter((o) => o.at === name);
+  const locs: Pick<LocationInfo, "name" | "displayName" | "primary" | "place" | "rooms" | "unplaced">[] = t?.positions?.locations?.length
+    ? t.positions.locations.filter((l) => l.rooms.length || l.unplaced.length || outsideAt(l.name).length)
+    : [{ name: "", displayName: null, primary: true, place: null, rooms: rooms.map((r) => r.name), unplaced: [] }];
   const onDevices = rows.filter((r) => r.place.view !== "storage" && DEVICE_KINDS.has(r.on));
   const ports = t ? t.switches.flatMap((s) => s.ports) : [];
   const cables = t?.positions?.cables ?? [];
@@ -150,14 +168,21 @@ export function PhysicalOverview({ t, inv, notes, storageError, aside, beforeFin
           </header>
           {racks.length || rooms.length ? (
             <>
-              {place ? <div className="ov-place">{place}</div> : null}
-              {rooms.map((room) => (
-                <div key={room.name} className="ov-room">
-                  <button className="linklike ov-room-name" onClick={() => navigate(viewLink("rack", `room:${room.name}`))}>{room.displayName ?? room.name}</button>
-                  <div className="ov-racks">
-                    {room.racks.map((n) => racks.find((r) => r.name === n)).filter((r): r is RackInfo => !!r).map((r) => <RackThumb key={r.name} r={r} />)}
-                  </div>
-                  {room.loose.length ? <div className="muted small">loose: {room.loose.map((m) => m.device).join(", ")}</div> : null}
+              {locs.map((l) => (
+                <div key={l.name} className="ov-loc">
+                  {l.name ? (
+                    <div className="ov-loc-head">
+                      <LocationLink name={l.name}>{l.displayName ?? l.name}</LocationLink>
+                      <span className="muted small">{[l.place ? [l.place.address, l.place.city, l.place.country].filter(Boolean).join(", ") : "", l.primary ? "the primary location" : ""].filter(Boolean).join(" · ")}</span>
+                    </div>
+                  ) : null}
+                  {rooms.filter((r) => l.rooms.includes(r.name)).map((room) => <RoomThumbs key={room.name} room={room} racks={racks} />)}
+                  {l.unplaced.length ? <div className="muted small">{l.rooms.length ? "placed nowhere" : "no room; somewhere here"}: {l.unplaced.join(", ")}</div> : null}
+                  {outsideAt(l.name).filter((o) => !l.unplaced.includes(o.name)).map((o) => (
+                    <div key={o.name} className="muted small">
+                      <button className="linklike" onClick={() => navigate(viewLink("rack", `outside:${o.name}`))}>{o.name}</button> · {o.kind === "buddy" ? "backup buddy" : "satellite"}
+                    </div>
+                  ))}
                 </div>
               ))}
               {racks.some((r) => !rooms.some((x) => x.racks.includes(r.name))) ? (
