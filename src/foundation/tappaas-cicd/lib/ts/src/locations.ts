@@ -217,7 +217,7 @@ export function locationErrors(site: Obj, configDir: string): string[] {
   const errs: string[] = [];
   if ("location" in site) errs.push("site.json still carries location, which is retired: migration 0019 moves it into locations (it runs with the next update)");
   const { locations, primary } = readLocations({ ...site, location: undefined });
-  if (Object.keys(locations).length === 0) {
+  if (Object.keys(locations).length === 0 && !("location" in site)) {
     errs.push("site.json records no locations: add the site's own with site-manager location add <name> --country <CC> --timezone <tz> --primary");
   }
   for (const [n, l] of Object.entries(locations)) {
