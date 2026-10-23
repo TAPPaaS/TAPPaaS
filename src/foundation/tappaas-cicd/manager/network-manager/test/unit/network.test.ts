@@ -1486,14 +1486,21 @@ function tmpZones(): string {
     check(eff.errors.length === 0, "P3: a well-formed environment graph resolves without errors");
   }
 
-  // (a2) #865: a zone names one environment. A list is an error, an environment
-  //      named by two Service zones is an error, and one named by none fails
-  //      the zones that serve it. A DMZ zone may name one and derives nothing.
+  // (a2) #865: a Service or Management zone names exactly one environment, as a
+  //      string; a consumer zone one or a list of distinct ones. An environment
+  //      named by two Service zones is an error, and one named by none fails the
+  //      zones that serve it. A DMZ zone may name one and derives nothing.
   {
     const b = base() as Record<string, Record<string, unknown>>;
-    b.home.environment = ["warmelo", "lab"];
+    b.warmelo.environment = ["warmelo"];
     const e1 = renderEffective(loadZones(write(b, "zones-multi.json")), d);
-    check(e1.errors.some((x) => x.includes("'home'") && x.includes("one environment")), "#865: a list of environments is an error");
+    check(e1.errors.some((x) => x.includes("'warmelo'") && x.includes("exactly one environment")), "#865: a list on a Service zone is an error");
+    for (const [label, v] of [["an empty list", []], ["a repeated name", ["warmelo", "warmelo"]], ["a non-name", [7]]] as [string, unknown][]) {
+      const bl = base() as Record<string, Record<string, unknown>>;
+      bl.home.environment = v;
+      const el = renderEffective(loadZones(write(bl, "zones-bad-list.json")), d);
+      check(el.errors.some((x) => x.includes("'home'") && x.includes("list of distinct names")), `#865: ${label} on a client zone is an error`);
+    }
     const b2 = base() as Record<string, Record<string, unknown>>;
     b2.lab = { type: "Service", state: "Active", typeId: "2", subId: "1", vlantag: 299, ip: "10.2.99.0/24", tier: 1, environment: "warmelo", "access-to": ["internet"], "pinhole-allowed-from": [] };
     const e2 = renderEffective(loadZones(write(b2, "zones-two.json")), d);

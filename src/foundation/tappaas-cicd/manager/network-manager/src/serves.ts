@@ -101,9 +101,26 @@ export interface ResolveResult {
 }
 
 // The environment a zone names, or undefined.
+// The single environment a zone names, or undefined — the "is the service zone
+// of" case: a Service or Management zone names exactly one, as a string.
 export function zoneEnvironment(z: { environment?: unknown } | undefined): string | undefined {
   const v = z?.environment;
   return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+// Every environment a zone names — the "serves" case: a Client, IoT, Guest or
+// DMZ zone may name one (a string) or several (a list). Non-strings are dropped;
+// linkErrors reports them.
+export function zoneEnvironments(z: { environment?: unknown } | undefined): string[] {
+  const v = z?.environment;
+  const list = Array.isArray(v) ? v : v === undefined || v === null ? [] : [v];
+  return [...new Set(list.filter((e): e is string => typeof e === "string" && e.length > 0))];
+}
+
+// The written form of a zone's environments: absent, one string, or a list.
+export function environmentValue(envs: string[]): string | string[] | undefined {
+  const uniq = [...new Set(envs)];
+  return uniq.length === 0 ? undefined : uniq.length === 1 ? uniq[0] : uniq;
 }
 
 // The zones that are `env`'s own zone: Service or Management zones naming it.
@@ -177,14 +194,21 @@ export function linkErrors(doc: ZonesDoc, configDir: string): { errors: string[]
   const checkFiles = hasEnvironments(configDir);
   const owners = new Map<string, string[]>();
   for (const [name, z] of doc.zones) {
-    const env = zoneEnvironment(z);
-    if (z.environment !== undefined && env === undefined) {
-      errors.push(`zone '${name}' has environment ${JSON.stringify(z.environment)} — one environment name`);
+    const raw = z.environment;
+    if (raw === undefined) continue;
+    const type = typeof z.type === "string" ? z.type : "";
+    const isList = Array.isArray(raw);
+    const envs = zoneEnvironments(z);
+    const wellFormed = isList
+      ? raw.length > 0 && raw.every((e) => typeof e === "string" && e.length > 0) && envs.length === raw.length
+      : typeof raw === "string" && raw.length > 0;
+    if (!wellFormed) {
+      errors.push(
+        `zone '${name}' has environment ${JSON.stringify(raw)} — an environment name, or a list of distinct names`,
+      );
       bad.add(name);
       continue;
     }
-    if (env === undefined) continue;
-    const type = typeof z.type === "string" ? z.type : "";
     if (!ENVIRONMENT_TYPES.has(type)) {
       errors.push(
         `zone '${name}' is type ${type || "(unset)"} and must not name an environment ` +
@@ -194,15 +218,24 @@ export function linkErrors(doc: ZonesDoc, configDir: string): { errors: string[]
       bad.add(name);
       continue;
     }
-    if (checkFiles && !environmentExists(configDir, env)) {
+    if (OWNER_TYPES.has(type) && isList) {
       errors.push(
-        `zone '${name}' names environment '${env}', which does not exist ` +
-          `(no ${join(configDir, "environments", `${env}.json`)}). Create the environment, or re-bind the zone.`,
+        `zone '${name}' is a ${type} zone and names ${JSON.stringify(raw)} — a ${type} zone is the zone of exactly one environment, named as a string`,
       );
       bad.add(name);
       continue;
     }
-    if (OWNER_TYPES.has(type)) owners.set(env, [...(owners.get(env) ?? []), name]);
+    // An environment that does not exist is reported once per name; the zone's
+    // other environments still resolve (resolveServes skips the missing one).
+    for (const env of envs) {
+      if (checkFiles && !environmentExists(configDir, env)) {
+        errors.push(
+          `zone '${name}' names environment '${env}', which does not exist ` +
+            `(no ${join(configDir, "environments", `${env}.json`)}). Create the environment, or re-bind the zone.`,
+        );
+      }
+    }
+    if (OWNER_TYPES.has(type)) owners.set(envs[0], [...(owners.get(envs[0]) ?? []), name]);
   }
   for (const [env, zs] of owners) {
     if (zs.length > 1) {
@@ -236,6 +269,7 @@ export function resolveServes(
     const type = typeof z.type === "string" ? z.type : "";
     if (env === undefined || !CONSUMER_TYPES.has(type) || bad.has(name)) continue;
 
+    if (hasEnvironments(configDir) && !environmentExists(configDir, env)) continue; // reported by linkErrors
     const own = ownZonesOf(doc, env);
     if (own.length === 0) {
       errors.push(
