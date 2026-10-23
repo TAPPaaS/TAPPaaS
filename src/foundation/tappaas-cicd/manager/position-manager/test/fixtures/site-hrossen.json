@@ -1,0 +1,21 @@
+{
+  "name": "rossen",
+  "locations": {
+    "knudanchersvej95": {
+      "displayName": "KnudAnchersVej95",
+      "country": "DK",
+      "city": "Rodovre",
+      "address": "KnudAnchersVej95",
+      "timezone": "Europe/Copenhagen"
+    },
+    "hareskov": {
+      "displayName": "Hareskov",
+      "kind": "remote",
+      "country": "DK",
+      "city": "Hareskov"
+    }
+  },
+  "primaryLocation": "knudanchersvej95",
+  "locale": "en_US",
+  "keyboard": "dk"
+}

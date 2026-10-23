@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "racks": {
+    "rack1": {
+      "units": 37,
+      "width": "19in",
+      "numbering": "bottom-up",
+      "description": "primary TAPPaaS rack",
+      "room": "basement"
+    }
+  },
+  "mounts": {
+    "tappaas1": {
+      "rack": "rack1",
+      "u": 1,
+      "height": 11,
+      "width": "half",
+      "face": "front",
+      "faceplate": "generic/server-2u",
+      "description": "placeholder position, set by the operator",
+      "slot": 0
+    },
+    "tappaas2": {
+      "rack": "rack1",
+      "u": 13,
+      "height": 6,
+      "width": "third",
+      "face": "front",
+      "faceplate": "generic/server-2u",
+      "description": "placeholder position, set by the operator",
+      "slot": 0
+    },
+    "tappaas3": {
+      "rack": "rack1",
+      "u": 13,
+      "height": 6,
+      "width": "third",
+      "face": "front",
+      "faceplate": "generic/server-2u",
+      "description": "placeholder position, set by the operator",
+      "slot": 2
+    },
+    "USW Pro XG 10 PoE": {
+      "rack": "rack1",
+      "u": 23,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "unifi/usw-pro-xg-10-poe",
+      "description": "placeholder position, set by the operator"
+    },
+    "crs-a": {
+      "rack": "rack1",
+      "u": 24,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "mikrotik/crs317-1g-16s",
+      "description": "placeholder position, set by the operator"
+    },
+    "crs-b": {
+      "rack": "rack1",
+      "u": 25,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "mikrotik/crs317-1g-16s",
+      "description": "placeholder position, set by the operator"
+    },
+    "ISP modem": {
+      "room": "basement",
+      "height": 1,
+      "width": "third",
+      "face": "front"
+    },
+    "Nano HD": {
+      "room": "stue",
+      "height": 1,
+      "width": "third",
+      "face": "front"
+    }
+  },
+  "cables": [
+    {
+      "from": {
+        "device": "USW Pro XG 10 PoE",
+        "port": "5"
+      },
+      "to": {
+        "device": "ISP modem",
+        "port": "LAN 1",
+        "faceplate": "generic/isp-modem"
+      },
+      "kind": "uplink",
+      "label": "ISP hand-off"
+    }
+  ],
+  "devices": {
+    "ISP modem": {
+      "kind": "modem",
+      "model": "generic/isp-modem"
+    },
+    "patchpanel1": {
+      "kind": "patch-panel",
+      "ports": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "21",
+        "22",
+        "23",
+        "24"
+      ]
+    }
+  },
+  "rooms": {
+    "basement": {
+      "displayName": "Basement"
+    },
+    "stue": {
+      "displayName": "Stue"
+    }
+  }
+}
