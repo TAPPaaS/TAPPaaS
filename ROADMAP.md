@@ -107,7 +107,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 7 | G7.1 DevOps stack | H | M | – | 1 | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 9 | 11 |
-| 6 | G6.2 User interface & physical view | H | L | – | 1 | 4 |
+| 6 | G6.2 User interface & physical view | H | L | – | 4 | 1 |
+| 6 | G6.3 Data model | M | M | – | – | 8 |
 | 5 | G5.1 Satellite & off-site | H | M | – | 1 | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
@@ -163,6 +164,8 @@ met gates are recorded in the releases that carried their waves.
 | VMID convention | #294 — only if it is adopted | Future Work |
 | Legal/processor | #359 | Wave 4 |
 | IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Accepted v1.0 2026-10-13**: built and on `main`; inbound verified from a phone over IPv6 via the public AAAA. Remaining outside it: public DNS that follows a dynamic WAN (#383) | #26 closable |
+| Locations and placement | [ADR-036](docs/ADR/ADR-036%20-%20Locations%20and%20Placement.md) **Accepted v1.0 2026-10-23**, not yet built: site-manager owns locations with a primary one, every device names its location, rack-manager becomes position-manager owning every placement, the nodes are `pvehost` machines and `site.hardware.nodes` goes; steps #869–#873 | G6.3 |
+| User interface | #844 — [ADR-034](docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md) **Accepted v1.0 2026-10-18**, built: the console at `console.<domain>` | #844 closed |
 | Service exposure | #845 — [ADR-032](docs/ADR/ADR-032%20-%20Service%20Exposure.md) **Accepted v1.0, built** (2026-10-17): the gate authenticates machine callers (service accounts, client-credentials JWT); a module without `network:proxy` is unpublished by design, in the DMZ when it runs third-party code without user data (ADR-021 R1 amended); Jellyfin published without the gate for friends and family, hardened. all phases built (P0–P4); rate limiting is #851 | #845 closed |
 
 ### Housekeeping
@@ -264,17 +267,33 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 | ✅ #851 | CrowdSec on the firewall: rate limiting and bans for published names | M | M | **Closed 2026-10-18.** Opened 2026-10-17 from ADR-032 O1: os-caddy takes extra config only globally, so Caddy's built-in `rate_limit` cannot be scoped to one site. CrowdSec (`os-crowdsec`) reads Caddy's log and bans by pf on the WAN; scenarios for Jellyfin's and Authentik's logins and probing; then Jellyfin's per-account lockout can be relaxed (today a known username can be locked out). Complements #843. **Built 2026-10-17** (`5bb4b7be`, `ab38382f`), live on hrossen: local only (no central API — operator), bans by pf on the sign-in scenario `tappaas/http-login-bf` (6 × 400/401 in ~3 min at Jellyfin's login/Quick Connect or Authentik's token endpoint), `http-cve` and bad user agents; generic probing left out (Jellyfin's missing-image 404s); the site's IPv6 /64s whitelisted; Caddy writes one access log per name; ~140 MiB. Tested: replay into the scenario, whitelist, a real ban into pf. Jellyfin's accounts turned out to have no lockout (-1), so nothing to relax. Verified 2026-10-18: the network update converges it (`--check` clean after); its first day banned 56 cloud-hosted port scanners, no site user |
 
-### G6.2 User interface & physical view — Ease H · Risk L · done for 2.3: 1 · open: 4
+### G6.2 User interface & physical view — Ease H · Risk L · done for 2.3: 4 · open: 1
 
 A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point), designed first in a spike and an ADR (#844). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #844 | Spike and ADR: design the TAPPaaS user interface | M | L | **Spike done 2026-10-17** (`docs/design/ui-spike.md`, seven mockups from hrossen's records; `ef11be1e`): homelable is a library and an inspiration, not the product; the UI is TAPPaaS's own. **ADR-034 drafted** (`6195dd87`, v0.3; v0.4 with the install findings): a TypeScript backend on the mothership behind Caddy and the Authentik gate at `console.<domain>`, every change a job over a manager verb with its own dry run, the physical view derived from `network-manager topology`. Closes when the ADR is Accepted |
+| ✅ #844 | Spike and ADR: design the TAPPaaS user interface | M | L | **Closed 2026-10-18**: ADR-034 Accepted v1.0 by the operator with the console in use on hrossen. **Spike done 2026-10-17** (`docs/design/ui-spike.md`, seven mockups from hrossen's records; `ef11be1e`): homelable is a library and an inspiration, not the product; the UI is TAPPaaS's own. **ADR-034 drafted** (`6195dd87`, v0.3; v0.4 with the install findings): a TypeScript backend on the mothership behind Caddy and the Authentik gate at `console.<domain>`, every change a job over a manager verb with its own dry run, the physical view derived from `network-manager topology` |
 | ✅ #855 | console: a destructive verb's typed confirmation names the object, not the switch | L | L | **Closed 2026-10-18** (`11439bf0`): the verb manifest names the positional that identifies the object; `remove-port` asks for the port |
-| #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **P1–P3 built and live on hrossen 2026-10-18** (`839-console-p1/p2/p3`, the review fixes and the operator's UX review, on `main` as `1d9c897a`): the `console` — see, operate (jobs with preview and apply, the Setup wizard, the owner's route) and ask (the assistant through LiteLLM, proposing and never applying) — installed at `console.hrossen.dk` behind the gate, with `network-manager topology`, `health-manager validate --json` and the verb manifests (`--help --json`) in the managers. **Open:** P4 (agents through the gate, #142; the SIEM surface after #843; the end-user badges), the `status.<domain>` route (needs gated `proxyRoutes`), the install fixes and the schema-driven field forms from the first inspection (in progress) |
-| #183 | TAPPaaS service catalog | H | L | **Folded into #839** (ADR-034 D6): the console's Modules page is the catalog — every registered repository's modules, installed or not, with Install. To close with the ADR |
-| #91 | Backstage as a component of tappaas-cicd | H | L | **Not adopted** (ADR-034 A3): a developer portal, not an operations console. To close with the ADR |
+| #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **P1–P3 built and live on hrossen 2026-10-18** (`839-console-p1/p2/p3`, the review fixes and the operator's UX review, on `main` as `1d9c897a`): the `console` — see, operate (jobs with preview and apply, the Setup wizard, the owner's route) and ask (the assistant through LiteLLM, proposing and never applying) — installed at `console.hrossen.dk` behind the gate, with `network-manager topology`, `health-manager validate --json` and the verb manifests (`--help --json`) in the managers. **2026-10-19 to 10-23, all live on hrossen:** the schema-driven forms and the install fixes; the Site page as Overview (the whole site record, updates and repositories), Physical (racks, rooms, recorded devices, patch panels and cable segments from the new rack-manager), Device (plain cards, a force layout around the selection, a panel opening on the device's faceplate) and Storage (nodes → pools → disks from `storage-manager inventory`, with SMART states and the pool pie); Zones as its own menu; Environments as cards with zone boxes and module icons; the Backup page's overview with last backup and verify. **Open:** P4 (agents through the gate, #142; the SIEM surface after #843; the end-user badges) and the `status.<domain>` route (needs gated `proxyRoutes`); the model behind the Physical view moves with G6.3 |
+| ✅ #183 | TAPPaaS service catalog | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Folded into #839** (ADR-034 D6): the console's Modules page is the catalog — every registered repository's modules, installed or not, with Install |
+| ✅ #91 | Backstage as a component of tappaas-cicd | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Not adopted** (ADR-034 A3): a developer portal, not an operations console |
+
+### G6.3 Data model — Ease M · Risk M · open: 8
+
+The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/DATAMODEL.md) (2026-10-22: every JSON, which field names which object, and seven places where the model says one thing twice). The operator decided to fix the first four and park the rest (#866). Where a thing is becomes two things, a location and a placement, by ADR-036 (Accepted 2026-10-23). Linked to G6.2: the console's Physical view draws what this group models.
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #865 | The zone names its environment; `environment.network.zone` and `zone.serves[]` go | M | M | **In progress 2026-10-23** (branch `865-zone-environment`): survey of every reader first, then schema, readers, a config migration on every installation, the console and the docs. One direction, no lists |
+| #867 | Drop `site.organizations`: the identities/organizations directory is the list | L | L | **In progress 2026-10-23** (branch `867-site-organizations`): nothing reads the field; schema, site-manager, a migration, docs |
+| #869 | ADR-036 step 1: site-manager owns locations, with a primary one; a backup buddy's place is a location | M | M | `site.locations{}`, `primaryLocation`, `location` verbs; `site.location` migrated; peers name a location |
+| #870 | ADR-036 step 2: position-manager (was rack-manager), placements in rooms in a location | M | M | rename with aliases, `positions.json`, `place`/`unplace`, `device record` from a seen device, the topology's location, placement and source. After #869 |
+| #871 | ADR-036 step 3: every device record names its location | M | L | machine modules (replacing `physicalLocation`), switches and APs (the free text becomes a name), recorded devices. After #869 |
+| #872 | ADR-036 step 4: the nodes are `pvehost` machines; `site.hardware.nodes` goes | M | H | `storagePools` on the instance, node verbs over `module add pvehost`, ~30 readers moved to one helper, a migration. After #865's migration |
+| #873 | ADR-036 step 5: the console draws locations, rooms, racks | M | L | Physical view and Overview by location, the device panel's two lines, the Setup step; DATAMODEL findings 2 and 3 closed. After #869–#871 |
+| #868 | Faceplate catalog: a site adds plates for models the catalog lacks | L | L | from ADR-036 O2; the generic plates stay the fallback |
+| #866 | Data model: parked simplifications (backup cascade, module placement, `module:service`) | – | – | **Parked** (operator, 2026-10-23): findings 5–7 of `src/DATAMODEL.md`, recorded so they are not lost |
 
 ## Wave 5 — live verification
 
