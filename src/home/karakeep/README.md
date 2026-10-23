@@ -53,7 +53,7 @@ Karakeep's own ([environment variables](https://docs.karakeep.app/configuration/
 ## What is not included
 
 - **Local accounts.** With Authentik configured there are none; before it is (a fresh install
-  whose identity step has not run), Karakeep keeps its own and the first account is the
+  whose identity step has not run), nobody can sign up. The first Authentik sign-in is the
   administrator.
 - **Email.** Karakeep sends none here; nothing in it needs it with Authentik sign-in.
 - **Full-page screenshots** — only the visible part of a page is kept (they grow the disk quickly);

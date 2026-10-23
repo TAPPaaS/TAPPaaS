@@ -43,7 +43,9 @@ _images="$(remote "sudo docker ps --format '{{.Image}}'" | grep -E 'karakeep|mei
 PUB="$(remote "jq -r 'select(.proxyPublished != false) | .proxyDomain // empty' /etc/nixos/karakeep.json")"
 FW4="$(getent ahostsv4 firewall.mgmt.internal | awk '{print $1; exit}')"
 if [[ "$(remote "test -s /etc/secrets/karakeep.env && echo yes")" != "yes" ]]; then
-    skipt "no sign-in configuration (/etc/secrets/karakeep.env) — identity:identity has not run"
+    [[ "$(remote "sudo grep -c '^DISABLE_SIGNUPS=true' /run/karakeep/env")" == "1" ]] \
+        && pass "no Authentik sign-in yet, and nobody can sign up (identity:identity has not run)" \
+        || fail "no Authentik sign-in and sign-ups are open: the first account to register is the administrator"
 else
     [[ "$(remote "sudo grep -c '^DISABLE_PASSWORD_AUTH=true' /run/karakeep/env")" == "1" ]] \
         && pass "Karakeep signs in with Authentik only (no local passwords)" || fail "the Authentik sign-in is not in Karakeep's environment"

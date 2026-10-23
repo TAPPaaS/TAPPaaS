@@ -19,6 +19,7 @@
 #   - secrets generated once on the VM (/var/lib/karakeep/secrets.env);
 #   - sign-in with Authentik: identity:identity writes /etc/secrets/karakeep.env,
 #     and then Karakeep offers only "Sign in with Authentik" (no local passwords);
+#     until then sign-ups are closed;
 #   - AI tagging through LiteLLM when the site has the AI stack: litellm:models
 #     writes /etc/secrets/litellm-svckey.env;
 #   - either file appearing or changing restarts the stack (karakeep-secrets.path).
@@ -119,8 +120,10 @@ let
       echo "DISABLE_NEW_RELEASE_CHECK=true"
       echo "CRAWLER_STORE_SCREENSHOT=true"
 
-      # Sign in with Authentik (identity:identity). Without it Karakeep keeps its
-      # own accounts; the first one made is the administrator.
+      # Sign in with Authentik (identity:identity). Until it is set up nobody
+      # can sign up: Karakeep is published to the internet, and its first
+      # account is the administrator. DISABLE_SIGNUPS would also refuse a first
+      # Authentik sign-in, so with Authentik only password sign-in is off.
       oidc=/etc/secrets/karakeep.env
       cid="$(readvar "$oidc" OIDC_CLIENT_ID)"; cse="$(readvar "$oidc" OIDC_CLIENT_SECRET)"; dis="$(readvar "$oidc" OIDC_DISCOVERY_URI)"
       if [ -n "$cid" ] && [ -n "$cse" ] && [ -n "$dis" ]; then
@@ -131,6 +134,8 @@ let
         echo "OAUTH_SCOPE=openid email profile"
         echo "DISABLE_PASSWORD_AUTH=true"
         echo "OAUTH_AUTO_REDIRECT=true"
+      else
+        echo "DISABLE_SIGNUPS=true"
       fi
 
       # AI tagging through LiteLLM (litellm:models). The model is the first one
