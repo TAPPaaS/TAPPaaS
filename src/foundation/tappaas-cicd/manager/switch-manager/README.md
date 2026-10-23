@@ -31,7 +31,8 @@ switch-manager <command> [args]
 |---------|---------|
 | `add-controller <name> --vendor <v> --ip <ip> [--managed auto]` | Register a controller (e.g. a UniFi controller). |
 | `remove-controller <name>` | Remove a controller. |
-| `add-switch <name> --vendor <v> --managed auto\|manual [--controller <c>] [--ip <ip>] [--model <m>] [--location <l>] [--description <d>]` | Register a switch. |
+| `add-switch <name> --vendor <v> --managed auto\|manual [--controller <c>] [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]` | Register a switch. `--location` is one of the site's locations (`site-manager location list`); unset, the primary one. Free text — "rack 1, top" — goes in `--description`. |
+| `modify-switch <name> [--location <name>] [--description <d>] [--model <m>] [--ip <ip>] [--unset location,description]` | Change the switch's own record, in `actual.json` and `desired.json`; nothing on the switch changes. |
 | `remove-switch <name>` | Remove a switch. |
 | `add-port <switch> <port> --type node\|switch\|ap\|device\|uplink [--target <t>] [--target-port <tp>] [--mode trunk\|access] [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>]` | Register a port and what it connects to. |
 | `update-port <switch> <port> [ ...same flags... ]` | Change a port's settings. Giving a parked port a `--type` takes it into use (`add-port` may too). |
@@ -102,11 +103,12 @@ gets an address, so the port is seen to work, and can do no harm. Its record is
 
 | Command | Purpose |
 |---------|---------|
-| `interrogate [--park-zone <zone>] [--no-park]` | Pull live config from controller/auto switches into `actual.json` (via the vendor plugin), stamp each switch read with `lastRead`, and record a port with no record and no link as parked (`--no-park`: read only, as after a sweep). A controller or switch that cannot be read is left unchanged, the plugin's reason is shown, and the command exits 1. |
+| `interrogate [--park-zone <zone>] [--no-park]` | Pull live config from controller/auto switches into `actual.json` (via the vendor plugin), stamp each switch read with `lastRead` (a switch's `location` and `description` are yours: what a controller reports never overwrites them), and record a port with no record and no link as parked (`--no-park`: read only, as after a sweep). A controller or switch that cannot be read is left unchanged, the plugin's reason is shown, and the command exits 1. |
 | `update-desired` | Compute `desired.json` from the actual topology + `zones.json`. |
 | `delta` | Show the desired-vs-actual VLAN differences per port. |
 | `apply` | Push the delta via the vendor plugin; the manual plugin prints the steps to apply by hand. |
 | `confirm` | Record the applied VLAN config back into `actual.json`. |
+| `validate` | Every switch's and access point's `location` is one of the site's locations; text that names none is reported with the `modify-switch` / `ap-manager modify` that fixes it. |
 | `reconcile [--apply]` | Run all five in order. Without `--apply` it stops at `delta` (dry-run); with `--apply` it pushes and confirms. If any device could not be read, the delta is shown but **nothing is applied** (exit 1). |
 
 ### Examples

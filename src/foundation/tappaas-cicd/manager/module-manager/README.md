@@ -37,11 +37,11 @@ later retire phase).
 | `module resolve <m>` | `src/resolve.ts` | **desired state**: the config *plus* the schema defaults it does not declare (`--json`) |
 | `module fields <m>` | `src/converge.ts` | every field the module may `modify --set`, its owning service and ADR-020 change class, or why it is refused (`--json`) |
 | `module drift <m>` | `src/converge.ts` | that desired state **vs the live guest**, per service. `--service cluster:vm --json` prints the record a converge applies |
-| `module validate [<m>]` | scope/source lint | all modules, or one; `--allow-fork` |
+| `module validate [<m>]` | scope/source lint | all modules, or one; `--allow-fork`. Also that a machine's `location` is one of the site's locations |
 | `module validate --blueprint [<m>\|<dir>]...` | the ADR-027 blueprint check on module **source** directories | every registered repository's modules, the named ones, or `--repo PATH` (what the release boundary runs) |
-| `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4) |
+| `module add <m>` | `install-module.sh` | create + provision; `--instance NAME` names the instance (ADR-026 D6.4). A machine takes `--location <name>` (below) |
 | `add-stack <stack>` | `module add`, per module | **a whole stack**: its modules from the catalogue, in the order its INSTALL.md shows (`dependsOn`, then `integratesWith`). Installed ones are skipped; a dependency outside the stack must be installed first, or nothing is; the first failure stops the run, and running it again resumes. `--dry-run` prints the plan, `--environment` installs into an environment. foundation, template and test are not stacks to install |
-| `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); its SSH becomes key-only unless `--set sshKeyOnly=false` (#756) — nothing else on it is changed. `--set field=value` writes any field before the install |
+| `module adopt <address>` | `adopt-module.sh` | a machine that already runs becomes a module (ADR-026 D8.1); its SSH becomes key-only unless `--set sshKeyOnly=false` (#756) — nothing else on it is changed. `--set field=value` writes any field before the install; `--location <name>` or `--country/--city/--building` say where it is (below) |
 | `module update <m>` | `update-module.sh` | **release update** (snapshot + test + 3-way merge) — what the sweep runs (#655) |
 | `module modify <m>` | `update-module.sh` | **change the config, then converge**: `--set field=value` (ADR-020) or `--unset field` (#648). Bare, it is the deprecated spelling of `update`. `--set instance=<new>` renames the instance instead (#566); `--lockdown` runs the module's own `lockdown.sh` (a satellite → the off-site vault) |
 | `module delete <m>` | `delete-module.sh` | `--archive` (default) / `--remove`; `--decommission` (a machine) |
@@ -256,6 +256,26 @@ lists, since it runs the site and is reached from mgmt and the admin VPN only.
 exists; `set-module-field.sh` runs it before the first write, and a refusal is exit 3,
 nothing written. `modify --set … --dry-run` asks the writer the same with `--check`, which
 runs every gate and writes nothing.
+
+### Where a machine is: `location`
+
+A machine (a cluster node's `pvehost` instance, a satellite, an adopted Debian host) names
+the location it is at with `location`: one of the site's locations (`site-manager location
+list`). Unset, it is at the primary location. A guest has none: it is where its node is.
+
+- `module add <machine> --location <name>` and `module adopt <address> --location <name>`
+  record it; the name must be one of the site's.
+- `--country <CC> [--city <city>] [--building <b>]` instead use the site's location at that
+  place, or add one of kind `remote` (named after the building, else the city) and record
+  that — a satellite at a provider's data centre: `--country FI --city Helsinki`.
+- `module modify <m> --set location=<name>` moves it (in-place: nothing on the machine
+  changes); `--unset location` puts it back at the primary location.
+- `module validate` reports a machine naming a location the site does not have, and a
+  `physicalLocation` left from before locations (the next update's migration moves it).
+
+Where it is decides what `backup-manager validate` compares an off-site copy on it with, and
+where the topology and the console's Physical and Device views draw it. A `location` with a
+`/` is the old name of `moduleSource` and is never read as a place.
 
 ### Removing a stale field: `modify --unset` (#648)
 

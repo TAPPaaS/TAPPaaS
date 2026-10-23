@@ -130,3 +130,18 @@ pvehost with no place; the switch configuration with null and empty locations) p
 synthetic satellite with `physicalLocation {FI, Helsinki}`, one at the primary's place, a
 switch with the text "Rack 1" and one naming `hareskov`. Run, run again (no change), `--check`
 writes nothing.
+
+## As built
+
+- The bash managers read the site's locations through `lib/locations.sh`
+  (`site_location_refusal`), the TypeScript ones through `lib/ts/src/locations.ts`;
+  module-manager's own rules are `src/location.ts`.
+- `module-manager fields` probes every field with no value: a machine's `location` is then
+  settable without a name being checked, a guest's is refused (not a machine).
+- `ap-manager list` / `switch-manager list` show `at <location>` when one is named.
+- The console's verb manifest for the bash managers (`ui/manifest/bash-verbs.json`) gained
+  `modify-switch`, `validate`, `ap-manager modify` and `ap-manager validate`.
+- The topology's Outside row for a satellite carries `at` (the location's name) beside its
+  place text, so the device panel can link it.
+- 0021 matches against the site's locations as they are before it adds any; two machines at
+  one new place share the location it adds; a name another place holds gets `-2`.
