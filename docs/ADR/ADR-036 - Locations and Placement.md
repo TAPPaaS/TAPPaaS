@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-10-23 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | Findings 2 and 3 of [`src/DATAMODEL.md`](../../src/DATAMODEL.md) (location recorded in four shapes; devices in three files). Related: #865 (the zone names its environment), ADR-012 §1.5 (a machine's physical location), ADR-026 (machines), ADR-010 §8.4 (the satellite), ADR-034 (the console's Physical view), ADR-035 (a manager's rename and aliases). |
-| **Changelog** | v0.2 (2026-10-23) — **D5** a backup buddy's place is a location of this site, named by the peer record (operator, 2026-10-23); the console decision is D6. · v0.1 (2026-10-23) — first draft, from the operator's direction of 2026-10-23: a device has a location and a placement; site-manager owns locations with a primary one; rack-manager becomes position-manager and owns every placement; devices carry no room or rack field. |
+| **Changelog** | v0.3 (2026-10-23) — **D6** the cluster's nodes are their `pvehost` machine instances and `site.hardware.nodes[]` goes, `storagePools` moving to the instance (operator, 2026-10-23); O1 closed; the console decision is D7. · v0.2 (2026-10-23) — **D5** a backup buddy's place is a location of this site, named by the peer record (operator, 2026-10-23); the console decision is D6. · v0.1 (2026-10-23) — first draft, from the operator's direction of 2026-10-23: a device has a location and a placement; site-manager owns locations with a primary one; rack-manager becomes position-manager and owns every placement; devices carry no room or rack field. |
 
 Where a thing is has two parts: the **location** it is at (a place with an address: the site's
 building, a provider's data centre, a second house) and its **placement** inside that location (a
@@ -68,7 +68,7 @@ the device is at the primary location. The field lives on the record that owns t
 
 | Kind | Record | Field |
 |---|---|---|
-| cluster node | `site.hardware.nodes[]` | `location` |
+| cluster node | its `pvehost` instance, `<node>.json` (D6) | `location` |
 | machine module | `<instance>.json` | `location` (replaces `physicalLocation`; the retired `location` field that once meant the module directory is gone from every installation by migration 0006, so the name is free) |
 | switch, access point | `switch-configuration-desired.json` | `location` (was free text; now a location name, validated) |
 | recorded device | position-manager's `devices{}` | `location` |
@@ -118,7 +118,21 @@ own needed), and the peer record names it by `location` instead of carrying `cou
 location. Every place this site cares about is then one list in site-manager: its own buildings, its
 machines' data centres, its buddies.
 
-### D6 — The console draws locations, then rooms, then racks
+### D6 — The cluster's nodes are machines; `site.hardware.nodes[]` goes
+
+Every cluster node is already a module instance of kind machine (`pvehost`: `tappaas1.json` with
+its `address`, `uplinks`, `zone0`, `management`). The node list in `site.json` repeats their names
+and adds one thing of its own, each node's `storagePools[]`. The list goes: a node is a machine like
+any other in the list of installed modules, its `location` is the module's (D2), and `storagePools`
+moves to the `pvehost` instance as a field of that module. `site-manager node add/delete` become the
+operator's words for `module add pvehost` / `module delete`, so the install flow (`create-site`,
+then the first node before any module exists) still reads the same; the pvehost record is written
+first, and site.json no longer lists hardware. Readers of `hardware.nodes` (site-manager's
+provisioning and reconcile, storage-manager's inventory, health-manager, backup placement, the
+cluster's storage reconcile, the topology, the console's Setup) read the pvehost instances instead,
+through one helper in `lib/ts`.
+
+### D7 — The console draws locations, then rooms, then racks
 
 The Physical view groups by location (the primary first), each location by its rooms, each room by
 its racks and loose devices; a device with a location and no room is listed under the location. The
@@ -130,6 +144,7 @@ site-manager. The device panel shows location and placement as two lines, each a
 - One answer to "where is it": the `location` name on the device, resolved by site-manager, and the
   placement in position-manager. The console, `backup-manager validate` and the topology read the
   same two things.
+- `site.hardware` goes with its node list; a node's `storagePools` live on its `pvehost` instance.
 - Five fields go: `site.location` (into `locations`), a machine's `physicalLocation`, a switch's or
   AP's free-text `location` (becomes a name), a backup peer's `country` and `city` (become a
   location), rack-manager's building-less rooms (rooms get a location). One manager is renamed; its verbs keep working for a release.
@@ -158,9 +173,8 @@ site-manager. The device panel shows location and placement as two lines, each a
 
 ## Open questions
 
-- **O1** Is a cluster node a "machine" in the module sense? Today a node is in `site.hardware` and
-  may also have a `pvehost` module instance for its uplinks; this ADR gives the node record the
-  `location` and leaves the merge of the two to a later decision.
+- **O1** *(closed by D6, 2026-10-23)* A cluster node is a machine: its `pvehost` instance is the
+  record, and `site.hardware.nodes[]` goes.
 - **O2** The faceplate catalog is in the source tree; a site cannot add a plate for a device model
   the catalog lacks. Out of scope here; the generic plates cover it.
 - **O3** Whether `locale` and `keyboard` should move with the location (a second house in another
@@ -174,7 +188,8 @@ site-manager. The device panel shows location and placement as two lines, each a
 2. **position-manager:** the rename with aliases, `positions.json`, rooms with a location,
    `placements{}` and the `place`/`unplace` verbs, `device record` from a seen device, the
    `racks.json` migration; the topology's `location`, `placement` and `source` on every device.
-3. **Device records:** `location` on nodes, machine modules (migrating `physicalLocation`), switches
+3. **Device records:** `storagePools` on the `pvehost` instance and `site.hardware` removed by
+   migration, every reader moved to the instances; `location` on nodes, machine modules (migrating `physicalLocation`), switches
    and APs; validation that the name exists.
 4. **Console:** the Physical view and Overview by location, the device panel's two lines, the Setup
    wizard's step, the forms.
