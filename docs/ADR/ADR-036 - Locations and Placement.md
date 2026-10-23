@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** |
-| **Version** | 0.3 |
+| **Status** | **Accepted** (operator, 2026-10-23) |
+| **Version** | 1.0 |
 | **Date** | 2026-10-23 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | Findings 2 and 3 of [`src/DATAMODEL.md`](../../src/DATAMODEL.md) (location recorded in four shapes; devices in three files). Related: #865 (the zone names its environment), ADR-012 §1.5 (a machine's physical location), ADR-026 (machines), ADR-010 §8.4 (the satellite), ADR-034 (the console's Physical view), ADR-035 (a manager's rename and aliases). |
-| **Changelog** | v0.3 (2026-10-23) — **D6** the cluster's nodes are their `pvehost` machine instances and `site.hardware.nodes[]` goes, `storagePools` moving to the instance (operator, 2026-10-23); O1 closed; the console decision is D7. · v0.2 (2026-10-23) — **D5** a backup buddy's place is a location of this site, named by the peer record (operator, 2026-10-23); the console decision is D6. · v0.1 (2026-10-23) — first draft, from the operator's direction of 2026-10-23: a device has a location and a placement; site-manager owns locations with a primary one; rack-manager becomes position-manager and owns every placement; devices carry no room or rack field. |
+| **Changelog** | v1.0 (2026-10-23) — **Accepted** by the operator; O2 becomes #868 (a site-local faceplate catalog), O3 closed: `locale` and `keyboard` stay site-wide. · v0.3 (2026-10-23) — **D6** the cluster's nodes are their `pvehost` machine instances and `site.hardware.nodes[]` goes, `storagePools` moving to the instance (operator, 2026-10-23); O1 closed; the console decision is D7. · v0.2 (2026-10-23) — **D5** a backup buddy's place is a location of this site, named by the peer record (operator, 2026-10-23); the console decision is D6. · v0.1 (2026-10-23) — first draft, from the operator's direction of 2026-10-23: a device has a location and a placement; site-manager owns locations with a primary one; rack-manager becomes position-manager and owns every placement; devices carry no room or rack field. |
 
 Where a thing is has two parts: the **location** it is at (a place with an address: the site's
 building, a provider's data centre, a second house) and its **placement** inside that location (a
@@ -175,10 +175,10 @@ site-manager. The device panel shows location and placement as two lines, each a
 
 - **O1** *(closed by D6, 2026-10-23)* A cluster node is a machine: its `pvehost` instance is the
   record, and `site.hardware.nodes[]` goes.
-- **O2** The faceplate catalog is in the source tree; a site cannot add a plate for a device model
-  the catalog lacks. Out of scope here; the generic plates cover it.
-- **O3** Whether `locale` and `keyboard` should move with the location (a second house in another
-  country) or stay site-wide as proposed.
+- **O2** *(→ #868)* The faceplate catalog is in the source tree; a site cannot add a plate for a
+  device model the catalog lacks. Out of scope here; the generic plates cover it.
+- **O3** *(closed 2026-10-23)* `locale` and `keyboard` stay site-wide; they do not move with a
+  location.
 
 ## Implementation plan
 
