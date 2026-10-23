@@ -6,7 +6,7 @@
     "component": {
       "type": "application",
       "name": "karakeep",
-      "description": "TAPPaaS module karakeep: triage of the critical/high CVEs in its images (#842). Karakeep 0.34.0 runs as three containers on the karakeep VM: the web app with its background workers (port 3000, the only one published, behind the firewall's Caddy and Authentik sign-in), a headless Chromium and Meilisearch, both reachable only on the compose network. Verified live on hrossen: the web container runs only node server.js and node dist/index.js under s6. Debian base-image findings (ffmpeg, util-linux, perl, curl, ...) are left open for upstream image rebuilds."
+      "description": "TAPPaaS module karakeep: triage of the critical/high CVEs in its images (#842). Karakeep 0.34.1 runs as three containers on the karakeep VM: the web app with its background workers (port 3000, the only one published, behind the firewall's Caddy and Authentik sign-in), a headless Chromium and Meilisearch, both reachable only on the compose network. Verified live on hrossen: the web container runs only node server.js and node dist/index.js under s6. Debian base-image findings (ffmpeg, util-linux, perl, curl, ...) are left open for upstream image rebuilds."
     }
   },
   "vulnerabilities": [

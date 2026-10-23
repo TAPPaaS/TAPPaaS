@@ -29,9 +29,11 @@
 
 let
   # Pinned images (src/image-pins.json tracks them, #750). Immutable tags.
-  karakeepImage = "ghcr.io/karakeep-app/karakeep:0.34.0";
-  chromeImage = "ghcr.io/karakeep-app/karakeep-chrome:154.0.8037.57-r1";
-  meiliImage = "getmeili/meilisearch:v1.41.0";
+  karakeepImage = "ghcr.io/karakeep-app/karakeep:0.34.1";
+  chromeImage = "ghcr.io/karakeep-app/karakeep-chrome:156.0.8078.47-r1";
+  # Meilisearch ahead of Karakeep's own compose (v1.41.0): its Alpine base
+  # carried OpenSSL, curl and musl fixes only in later releases.
+  meiliImage = "getmeili/meilisearch:v1.55.0";
 
   state = "/var/lib/karakeep";
 
@@ -89,6 +91,9 @@ let
           - /run/karakeep/meili.env
         environment:
           - MEILI_NO_ANALYTICS=true
+          # A new Meilisearch converts the previous version's index on its
+          # first start; without it, a version bump refuses to open the index.
+          - MEILI_UPGRADE_DB=true
         volumes:
           - ${state}/meili:/meili_data
   '';
