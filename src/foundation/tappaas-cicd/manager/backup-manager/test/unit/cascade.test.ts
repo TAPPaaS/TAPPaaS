@@ -770,7 +770,7 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
     "satellites holding a copy, remote and pull peers are off-site targets; a relay satellite, a non-satellite and receive peers are not");
   const w = validate(tmp).warnings;
   eq(w.length, 3, "validate warns once per target not shown to be away");
-  check(w.some((x) => x.includes("satellite 'pbshost'") && x.includes("records no physicalLocation")), "…the satellite that is the PBS Host included");
+  check(w.some((x) => x.includes("satellite 'pbshost'") && x.includes("names no location") && x.includes("module modify pbshost --set location=")), "…the satellite that is the PBS Host included, with the fix");
   check(w.some((x) => x.includes("remote 'buddy'") && x.includes("names no location")), "…naming the unrecorded one");
   check(w.some((x) => x.includes("pull 'neighbour'") && x.includes("record the city")), "…and saying what would settle the other");
   eq(validate(tmp).errors.filter((e) => e.includes("physicalLocation") || e.includes("location")).length, 0, "…as warnings, never errors");
@@ -857,6 +857,20 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(cfg("site.json").primaryLocation, "rodovre", "…and the primary is where it was");
   eq(call(["peer", "add", "pull", "cy", "--host", "h", "--force"]), 0, "a --force re-add without a place");
   eq(cfg("pull-cy.json").location, "haus-1", "…keeps the location it had");
+
+  // ADR-036 D2: a satellite names its location the way a peer does.
+  const SAT = "/repo/src/foundation/satellite";
+  writeFileSync(join(tmp, "vault.json"), JSON.stringify({ kind: "machine", moduleSource: SAT, roles: ["backup"], location: "haus-1" }));
+  writeFileSync(join(tmp, "homevault.json"), JSON.stringify({ kind: "machine", moduleSource: SAT, roles: ["backup"], location: "rodovre" }));
+  writeFileSync(join(tmp, "lostvault.json"), JSON.stringify({ kind: "machine", moduleSource: SAT, roles: ["backup"], location: "atlantis" }));
+  writeFileSync(join(tmp, "oldvault.json"), JSON.stringify({ kind: "machine", location: `${SAT}`, roles: ["backup"] }));
+  const sats = offsiteTargets(tmp).filter((x) => x.role === "satellite").map((x) => `${x.name}:${x.location ?? "-"}:${x.separation}`).join(" ");
+  eq(sats, "homevault:rodovre:same lostvault:atlantis:unrecorded oldvault:-:unrecorded vault:haus-1:separate",
+    "a satellite is judged by the location it names; a location with a '/' is the old directory field (it still makes the config a satellite)");
+  const sw = validate(tmp).warnings;
+  check(sw.some((x) => x.includes("satellite 'homevault'") && x.includes("the Site's own place")), "…the primary location is not off-site");
+  check(sw.some((x) => x.includes("satellite 'lostvault'") && x.includes("which site.json does not have")), "…a location the site lacks is named");
+  check(!sw.some((x) => x.includes("satellite 'vault'")), "…another country is off-site");
 }
 
 // ── #607: placement reset — the one door out of `external` ───────────

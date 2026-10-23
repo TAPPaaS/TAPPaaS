@@ -150,6 +150,40 @@ ck "re-interrogate keeps port type"  "node"   "$(jq -r '.switches.StubSw.ports["
 ck "re-interrogate keeps target"     "tappaas3" "$(jq -r '.switches.StubSw.ports["3"].target' "${ACT}")"
 "${SM}" update-desired >/dev/null 2>&1
 ck "annotated port → active VLANs"   "200,310,410,610" "$(jq -rc '.switches.StubSw.ports["3"].taggedVlans|join(",")' "${DES}")"
+# ── where a switch is (ADR-036 D2): a location of the site, kept by interrogate ──
+cat > "${TMP}/site.json" <<'JSON'
+{ "primaryLocation": "home", "locations": { "home": { "country": "DK", "timezone": "Europe/Copenhagen" }, "cabin": { "kind": "remote", "country": "SE" } } }
+JSON
+ck "add-switch --location naming no location (rc)" "1" "$(rc_of "${SM}" add-switch s3 --vendor x --managed manual --location "Rack 1")"
+ck "…says where free text goes" "yes" "$(has "$("${SM}" add-switch s3 --vendor x --managed manual --location "Rack 1" 2>&1)" "free text goes in --description")"
+"${SM}" add-switch s3 --vendor x --managed manual --location cabin --description "top of rack 1" >/dev/null 2>&1
+ck "add-switch --location --description" "cabin|top of rack 1" "$(jq -r '.switches.s3 | "\(.location)|\(.description)"' "${ACT}")"
+"${SM}" add-switch s4 --vendor x --managed manual >/dev/null 2>&1
+ck "add-switch without a place writes none" "false|false" "$(jq -r '.switches.s4 | "\(has("location"))|\(has("description"))"' "${ACT}")"
+"${SM}" modify-switch StubSw --location cabin --description "shed" >/dev/null 2>&1
+"${SM}" update-desired >/dev/null 2>&1
+ck "modify-switch: actual and desired" "cabin|shed|cabin" "$(jq -r '.switches.StubSw | "\(.location)|\(.description)"' "${ACT}")|$(jq -r '.switches.StubSw.location' "${DES}")"
+cat > "${STUBDIR}/stub.sh" <<'SH'
+plugin_supports() { [[ "$1" == "stub" ]]; }
+plugin_arch() { echo controller; }
+plugin_controller_interrogate() { echo '{"switches":{"StubSw":{"vendor":"stub","model":"S1","managementIp":"1.2.3.4","location":null,"description":"from the controller","ports":{"1":{"mode":"trunk","taggedVlans":[],"source":"discovered"},"3":{"mode":"trunk","taggedVlans":[],"source":"discovered"}}}},"aps":{}}'; }
+SH
+PLUGIN_DIR="${STUBDIR}" "${SM}" interrogate >/dev/null 2>&1
+ck "a re-interrogate keeps the location and description" "cabin|shed" "$(jq -r '.switches.StubSw | "\(.location)|\(.description)"' "${ACT}")"
+ck "modify-switch --location naming no location (rc)" "1" "$(rc_of "${SM}" modify-switch StubSw --location atlantis)"
+ck "modify-switch of no switch (rc)" "1" "$(rc_of "${SM}" modify-switch nope --location cabin)"
+ck "modify-switch with nothing to change (rc)" "1" "$(rc_of "${SM}" modify-switch StubSw)"
+"${SM}" modify-switch StubSw --unset location >/dev/null 2>&1
+ck "modify-switch --unset location: at the primary again" "false|shed" "$(jq -r '.switches.StubSw | "\(has("location"))|\(.description)"' "${DES}")"
+ck "validate: every location is the site's (rc)" "0" "$(rc_of "${SM}" validate)"
+jq '.switches.s3.location = "Rack 1" | .accessPoints = {"ap1": {"vendor": "unifi", "location": "Loft", "ssids": {}}}' "${DES}" > "${TMP}/d" && mv "${TMP}/d" "${DES}"
+out="$("${SM}" validate 2>&1)"; rc=$?
+ck "validate: free text is refused (rc)" "1" "${rc}"
+ck "…naming the switch and the fix" "yes" "$(has "${out}" "switch 's3': location 'Rack 1'.*modify-switch 's3' --location <name> --description 'Rack 1'")"
+ck "…and the access point" "yes" "$(has "${out}" "access point 'ap1': location 'Loft'.*ap-manager modify 'ap1'")"
+jq '.switches.s3.location = "cabin" | .accessPoints = {}' "${DES}" > "${TMP}/d" && mv "${TMP}/d" "${DES}"
+"${SM}" remove-switch s3 >/dev/null 2>&1; "${SM}" remove-switch s4 >/dev/null 2>&1
+rm -f "${TMP}/site.json"
 ck "un-annotated port stays bare"    ""       "$(jq -rc '.switches.StubSw.ports["1"].type // ""' "${DES}")"
 # A non-JSON controller response (e.g. HTTP 429): leave actual as-is, and SAY so
 # with rc 1 — a read that failed used to exit 0 (#733).

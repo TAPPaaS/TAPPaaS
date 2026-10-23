@@ -32,5 +32,5 @@
     "_note": "operatorSshKeys is recorded at install from your forwarded agent (or TAPPAAS_OPERATOR_KEY): your out-of-band access, never the mothership's key."
   },
 
-  "_address_note": "`address` — the satellite's public IPv4 — is given at add (--address). `physicalLocation` — where it physically is (#609) — should be: `backup-manager validate` compares it with site.json's location."
+  "_address_note": "`address` — the satellite's public IPv4 — is given at add (--address). `location` — where it physically is, one of the site's locations (--location <name>, or --country/--city, which find or add one) — should be: `backup-manager validate` compares it with the site's primary location."
 }

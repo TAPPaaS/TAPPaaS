@@ -30,10 +30,15 @@ if [[ -n "${INST}" ]]; then
 
     [[ -n "${ADDRESS}" ]] && pass "address ${ADDRESS}" || fail "no address recorded"
     if [[ -n "${SAT_ROLES}" ]]; then pass "roles ${SAT_ROLES}"; else fail "no roles"; fi
-    if jq -e '(.physicalLocation.country // "") | test("^[A-Za-z]{2}$")' "${SAT_CFG}" >/dev/null 2>&1; then
-        pass "physicalLocation $(jq -c .physicalLocation "${SAT_CFG}")"
+    at="$(jq -r 'if (.location | type) == "string" and (.location | contains("/") | not) then .location else empty end' "${SAT_CFG}")"
+    if [[ -n "${at}" ]] && jq -e --arg l "${at}" '.locations[$l] != null' "${CONFIG_DIR}/site.json" >/dev/null 2>&1; then
+        pass "location ${at} ($(jq -r --arg l "${at}" '.locations[$l] | [.address, .city, .country] | map(select(. != null)) | join(", ")' "${CONFIG_DIR}/site.json"))"
+    elif [[ -n "${at}" ]]; then
+        fail "location '${at}' is not one of the site's (site-manager location list)"
+    elif jq -e '(.physicalLocation.country // "") | test("^[A-Za-z]{2}$")' "${SAT_CFG}" >/dev/null 2>&1; then
+        info "  ${YW}⊘${CL} physicalLocation $(jq -c .physicalLocation "${SAT_CFG}") — migration 0021 makes it a location with the next update"
     else
-        info "  ${YW}⊘${CL} no physicalLocation — nothing shows it is off-site (#609)"
+        info "  ${YW}⊘${CL} no location — nothing shows it is off-site: module-manager module modify ${INSTANCE} --set location=<name>"
     fi
     [[ -n "$(sat_opnsense_uuid server)" ]] && pass "OPNsense tunnel server tappaas-edge-${SAT_NAME}" \
         || fail "OPNsense has no tunnel server tappaas-edge-${SAT_NAME}"
@@ -155,7 +160,7 @@ if jq empty "${T}" 2>/dev/null; then
     jq -e '.kind == "machine" and .os == "debian" and .management == "managed" and .zone0 == "edge"
            and (.roles | sort) == ["admin-vpn","reverse-proxy"] and .rebootOk == false' "${T}" >/dev/null \
         && ok "template: managed Debian machine in edge, roles reverse-proxy + admin-vpn" || no "template shape"
-    jq -e '(has("address") or has("physicalLocation") or has("vault") or has("backup")
+    jq -e '(has("address") or has("location") or has("physicalLocation") or has("vault") or has("backup")
             or ((.host // {}) | has("publicIp") or has("operatorSshKeys"))) | not' "${T}" >/dev/null \
         && ok "template: no address, key, location or vault pre-filled" || no "template carries operator values"
     jq -e 'has("tunnel") or has("reverseProxy") or has("adminVpn") or has("update") | not' "${T}" >/dev/null \
@@ -344,10 +349,10 @@ grep -q "already locked down" <<< "${out}" && ok "lockdown refused when already 
 #     the password the vault is handed; the vault is rendered locked down; the
 #     three scripts run in order, set-management last; then it is recorded.
 LOG="${tmp}/lockdown.log"; : > "${LOG}"
-lkrun() {  # <still-reachable-after:0|1>
-    local still="$1"
+lkrun() {  # <still-reachable-after:0|1> [where the vault is, as JSON members]
+    local still="$1" where="${2:-\"location\":\"hetzner-hel1\"}"
     printf '%s' '{"placementState":"node","node":"tappaas3","pbsStorageName":"tappaas_backup"}' > "${L}/backup.json"
-    printf '%s' "${V},\"physicalLocation\":{\"country\":\"FI\",\"city\":\"Helsinki\"}}" > "${L}/v1.json"
+    printf '%s' "${V},${where}}" > "${L}/v1.json"
     echo "ssh-ed25519 CICDKEY tappaas@cicd" > "${tmp}/cicd.pub"
     # shellcheck disable=SC2034  # read by sat_lockdown
     ( lib; CONFIG_DIR="${L}"; SAT_CICD_PUB="${tmp}/cicd.pub"; sat_load v1
@@ -371,14 +376,14 @@ lkrun() {  # <still-reachable-after:0|1>
 }
 rc="$(lkrun 0)"
 pw_bm="$(sed -n 's/^BM .* PW=//p' "${LOG}")"; pw_sat="$(sed -n 's/^TOKEN //p' "${LOG}")"
-if [[ "${rc}" == 0 ]] && grep -q '^BM peer add remote v1 --auth-id v1@pbs --country FI --city Helsinki --force' "${LOG}" \
+if [[ "${rc}" == 0 ]] && grep -q '^BM peer add remote v1 --auth-id v1@pbs --location hetzner-hel1 --force' "${LOG}" \
    && [[ -n "${pw_bm}" && "${pw_bm}" == "${pw_sat}" ]] \
    && grep -q 'DEPLOY provision-debian.sh provision-backup.sh set-management.sh' "${LOG}" \
    && grep -q 'RENDER unmanaged+backup' "${LOG}" && grep -q 'RENDER cicd-key' "${LOG}" \
    && grep -q 'RENDER backup.env' "${LOG}" && grep -q 'RENDER allowedips' "${LOG}" && grep -q 'addRule' "${LOG}" \
    && jq -e '.management == "unmanaged" and (.roles | index("backup")) and .vault.pull.homePbsHost == "10.0.0.23"
              and .vault.pull.fingerprint == "aa:bb"' "${L}/v1.json" >/dev/null; then
-    ok "lockdown: read-only grant with the vault's own password, vault rendered locked down, set-management last, recorded unmanaged"
+    ok "lockdown: read-only grant at the vault's location with its own password, vault rendered locked down, set-management last, recorded unmanaged"
 else
     no "lockdown happy path (rc=${rc}): $(tr '\n' '|' < "${LOG}")"
 fi
@@ -386,6 +391,10 @@ fi
 rc="$(lkrun 1)"
 [[ "${rc}" != 0 ]] && jq -e '.management != "unmanaged"' "${L}/v1.json" >/dev/null \
     && ok "lockdown: when the mothership can still log in afterwards, it fails and stays managed" || no "lockdown stale key (rc=${rc})"
+: > "${LOG}"
+rc="$(lkrun 0 '"physicalLocation":{"country":"FI","city":"Helsinki"}')"
+[[ "${rc}" == 0 ]] && grep -q '^BM peer add remote v1 --auth-id v1@pbs --country FI --city Helsinki --force' "${LOG}" \
+    && ok "lockdown: a vault migration 0021 has not reached gives its physicalLocation as the place" || no "lockdown physicalLocation (rc=${rc}): $(tr '\n' '|' < "${LOG}")"
 
 # 14. the satellite as the Site's PBS Host (ADR-010 §8.4.3)
 #   rendering: the nodes' subnet joins the AllowedIPs and may reach :8007 — on

@@ -143,6 +143,28 @@
      "disruptions": []
     },
     {
+     "verb": "validate",
+     "keys": [
+      [
+       "validate"
+      ]
+     ],
+     "usage": "validate",
+     "note": null,
+     "details": null,
+     "positionals": [],
+     "options": [],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
      "verb": "delta",
      "keys": [
       [
@@ -227,7 +249,7 @@
        "add-switch"
       ]
      ],
-     "usage": "add-switch <name> --vendor <v> --managed auto|manual [--controller <c>] [--ip <ip>] [--model <m>] [--location <l>] [--description <d>]",
+     "usage": "add-switch <name> --vendor <v> --managed auto|manual [--controller <c>] [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]",
      "note": null,
      "details": null,
      "positionals": [
@@ -284,10 +306,10 @@
       {
        "flag": "--location",
        "takesValue": true,
-       "arg": "<l>",
+       "arg": "<name>",
        "choices": null,
        "repeatable": false,
-       "description": "Where it is."
+       "description": "Where it is: one of the site's locations (site-manager location list); absent, the primary one."
       },
       {
        "flag": "--description",
@@ -295,7 +317,7 @@
        "arg": "<d>",
        "choices": null,
        "repeatable": false,
-       "description": "A note."
+       "description": "A note: free text, such as where in the room it stands."
       }
      ],
      "open": false,
@@ -303,6 +325,76 @@
      "preview": {
       "kind": "none",
       "touches": "records the switch in switch-configuration-actual.json"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "modify-switch",
+     "keys": [
+      [
+       "modify-switch"
+      ]
+     ],
+     "usage": "modify-switch <name> [--location <name>] [--description <d>] [--model <m>] [--ip <ip>] [--unset location,description]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "name",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--location",
+       "takesValue": true,
+       "arg": "<name>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Where it is: one of the site's locations (site-manager location list); absent, the primary one."
+      },
+      {
+       "flag": "--description",
+       "takesValue": true,
+       "arg": "<d>",
+       "choices": null,
+       "repeatable": false,
+       "description": "A note: free text, such as where in the room it stands."
+      },
+      {
+       "flag": "--model",
+       "takesValue": true,
+       "arg": "<m>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Model."
+      },
+      {
+       "flag": "--ip",
+       "takesValue": true,
+       "arg": "<ip>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Management address."
+      },
+      {
+       "flag": "--unset",
+       "takesValue": true,
+       "arg": "location,description",
+       "choices": null,
+       "repeatable": false,
+       "description": "Remove these fields: no location is the primary one."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "changes the switch's record in switch-configuration-actual.json and -desired.json; nothing on the switch"
      },
      "destructive": false,
      "destructiveWhen": [],
@@ -1021,6 +1113,98 @@
        "repeatable": false
       }
      ],
+     "options": [],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "modify",
+     "keys": [
+      [
+       "modify"
+      ]
+     ],
+     "usage": "modify <name> [--location <name>] [--description <d>] [--model <m>] [--ip <ip>] [--unset location,description]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "name",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--location",
+       "takesValue": true,
+       "arg": "<name>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Where it is: one of the site's locations (site-manager location list); absent, the primary one."
+      },
+      {
+       "flag": "--description",
+       "takesValue": true,
+       "arg": "<d>",
+       "choices": null,
+       "repeatable": false,
+       "description": "A note: free text, such as where in the room it stands."
+      },
+      {
+       "flag": "--model",
+       "takesValue": true,
+       "arg": "<m>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Model."
+      },
+      {
+       "flag": "--ip",
+       "takesValue": true,
+       "arg": "<ip>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Management address."
+      },
+      {
+       "flag": "--unset",
+       "takesValue": true,
+       "arg": "location,description",
+       "choices": null,
+       "repeatable": false,
+       "description": "Remove these fields: no location is the primary one."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "changes the access point's record in switch-configuration-desired.json; nothing on the access point"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "validate",
+     "keys": [
+      [
+       "validate"
+      ]
+     ],
+     "usage": "validate",
+     "note": null,
+     "details": null,
+     "positionals": [],
      "options": [],
      "open": false,
      "effect": "read",

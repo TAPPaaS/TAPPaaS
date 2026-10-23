@@ -26,7 +26,9 @@ ap-manager <command> [args]
 
 | Command | Purpose |
 |---------|---------|
-| `add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]` | Register an AP. |
+| `add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]` | Register an AP. `--location` is one of the site's locations (`site-manager location list`); unset, the primary one. Free text goes in `--description`. |
+| `modify <name> [--location <name>] [--description <d>] [--model <m>] [--ip <ip>] [--unset location,description]` | Change the AP's own record in `desired.json`; nothing on the AP changes. |
+| `validate` | Every AP's `location` is one of the site's locations. |
 | `remove <name>` | Remove an AP. |
 | `list [--json]` | List access points, with their uplink port and SSIDs. |
 | `show <name>` | Show one AP. |

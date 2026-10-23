@@ -397,6 +397,7 @@ main() {
     # Automatically set moduleSource, installTime, and releaseDate (if missing).
     # .location is its name before #609; a source JSON that still authors it
     # (or a re-install over an unmigrated config) must not leave both behind.
+    # A .location without a '/' is where a machine is (a location name), kept.
     local tmp_file install_time release_date
     install_time=$(date +'%Y%m%d-%H:%M:%S')
     release_date=$(date +'%Y-%m-%d')
@@ -404,7 +405,7 @@ main() {
     if ! jq --arg loc "${module_dir}" \
             --arg t "${install_time}" \
             --arg rd "${release_date}" \
-            '.moduleSource = $loc | del(.location) | .installTime = $t | if .releaseDate == null or .releaseDate == "" then .releaseDate = $rd else . end' \
+            '.moduleSource = $loc | (if (.location | type == "string" and contains("/")) then del(.location) else . end) | .installTime = $t | if .releaseDate == null or .releaseDate == "" then .releaseDate = $rd else . end' \
             "${dest_json}" > "${tmp_file}"; then
         rm -f "${tmp_file}"
         die "Failed to set auto-populated fields"

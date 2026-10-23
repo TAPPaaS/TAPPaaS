@@ -14,8 +14,9 @@ import { Read, useRead } from "../api";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { SiteRead } from "../types";
-import { ReactNode } from "react";
-import { KV, Link, ReadState, Section, navigate, since } from "../ui";
+import { ReactNode, useEffect } from "react";
+import { KV, Link, ReadState, Section, navigate, since, useHash } from "../ui";
+import { locationAnchor } from "../locations";
 import { publicAddress, publicText } from "../zonegraph";
 import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
 import { AddNodeButton } from "./AddNode";
@@ -235,6 +236,15 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
 // location form; Delete is refused by site-manager for the primary location and
 // for one a peer or device names, and needs the name typed.
 function Locations({ primary, rows }: { primary: string | null; rows: (Loc & { name: string })[] }) {
+  // /site#location-<name> (a device's location line): that row, once it is there.
+  const hash = useHash();
+  const there = rows.some((l) => locationAnchor(l.name) === hash);
+  useEffect(() => {
+    // Down to the row only: in a narrow window the table is wider than the
+    // page, and scrollIntoView would also scroll it sideways off the menu.
+    const el = there ? document.getElementById(hash) : null;
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - window.innerHeight / 2, behavior: "smooth" });
+  }, [there, hash]);
   const loc = (verb: string, name: string | null, title: string, note: string): Step =>
     fieldsStep({ title, bin: "site-manager", verb: `location ${verb}`, fixed: name ? [name] : [], kind: "location", name, mode: name ? "modify" : "add", keep: verb === "add" ? ["--primary"] : [], note });
   return (
@@ -252,7 +262,7 @@ function Locations({ primary, rows }: { primary: string | null; rows: (Loc & { n
             </thead>
             <tbody>
               {rows.map((l) => (
-                <tr key={l.name}>
+                <tr key={l.name} id={locationAnchor(l.name)} className={hash === locationAnchor(l.name) ? "row-target" : undefined}>
                   <td className="mono" title={l.displayName}>{l.name}{l.name === primary ? <span className="muted"> · primary</span> : null}</td>
                   <td>{l.kind ?? "site"}</td>
                   <td>{placeText(l)}</td>

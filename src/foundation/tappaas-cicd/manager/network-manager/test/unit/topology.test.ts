@@ -426,6 +426,25 @@ check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPo
   check(renderTopology(seen).some((l) => /8 {2}aa:bb:cc:00:11:22 {2}printer-1 {2}— position-manager device record/.test(l)), "the text view lists what is seen and the verb that records it");
   const after = buildTopology({ ...seenSite(), positions: { doc: { ...doc, devices: { printer: { kind: "other" as const, ports: ["eth0"], mac: "aa:bb:cc:00:11:22" } }, cables: [{ from: { device: SW, port: "8" }, to: { device: "printer", port: "eth0" }, kind: "patch" as const }] }, catalog } });
   check(!after.devices.some((d) => d.source === "seen" && d.seen?.port === "8") && after.devices.find((d) => d.name === "printer")?.source === "recorded", "once recorded (its MAC, its cable), the device is recorded and no longer seen");
+
+  // ADR-036 D2: a machine module, a switch and an access point name where they are.
+  const at = seenSite();
+  const named = buildTopology({
+    ...at,
+    positions: { doc, catalog },
+    machineLocations: { tappaas3: "hareskov", tappaas2: "atlantis" },
+    satellites: [{ name: "sat1", address: "203.0.113.7", location: "hareskov" }, { name: "sat2", address: null, location: null }],
+    switches: { ...at.switches!, switches: at.switches!.switches.map((x) => ({ ...x, location: "hareskov" })) },
+    accessPoints: at.accessPoints!.map((a) => ({ ...a, location: "Loft by the stairs" })),
+  });
+  check(named.nodes.find((n) => n.name === "tappaas3")?.location === "hareskov" && named.nodes.find((n) => n.name === "tappaas1")?.location === "rodovre", "a node is where its pvehost instance says, else at the primary location");
+  check(named.nodes.find((n) => n.name === "tappaas2")?.location === "rodovre", "…a location the site lacks reads as the primary (validate names it)");
+  check(named.switches.find((x) => x.name === SW)?.location === "hareskov" && named.devices.find((d) => d.name === "aa:bb:cc:00:11:22")?.location === "hareskov", "a switch names its location, and a device seen at its port is there too");
+  check(named.accessPoints.every((a) => a.location === "rodovre"), "an AP whose location is text that names no location is at the primary");
+  const outs = named.outside.filter((o) => o.kind === "satellite").map((o) => `${o.name}:${o.location}`).join(" ");
+  check(outs === "sat1:Hareskov, DK sat2:null", "a satellite on the Outside lane shows its location's place");
+  const machines = buildTopology({ ...at, positions: { doc, catalog }, modules: [...at.modules!, { name: "dh1", kind: "machine", vmname: null, vmid: null, node: null, zone0: "srv", stack: "foundation", status: null, environment: "mgmt", running: "-", actualNode: null }], machineLocations: { dh1: "hareskov" } });
+  check(machines.devices.find((d) => d.name === "dh1")?.source === "module" && machines.devices.find((d) => d.name === "dh1")?.location === "hareskov", "an adopted machine is at the location it names");
 }
 {
   const runs: string[] = [];

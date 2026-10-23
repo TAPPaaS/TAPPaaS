@@ -167,6 +167,7 @@ export interface SatellitePlan {
   address: string; // its public IPv4
   environment: string;
   roles: string[];
+  location?: string; // one of the site's locations; else country and city find or add one
   country: string; // ISO code: the evidence a backup copy on it is off-site
   city: string;
   instance: string; // empty: "satellite"; a second one needs its own name
@@ -192,10 +193,13 @@ export function satelliteProblems(p: SatellitePlan): Record<string, string> {
 // fields INSTALL.md gives (an open verb's further options, one per line).
 export function satelliteSpec(p: SatellitePlan): StepSpec {
   const extra = [`--address ${p.address}`, `--roles ${JSON.stringify(p.roles)}`];
-  const loc: Record<string, string> = {};
-  if (p.country) loc.country = p.country;
-  if (p.city) loc.city = p.city;
-  if (Object.keys(loc).length) extra.push(`--physicalLocation ${JSON.stringify(loc)}`);
+  // Where it is: a location of the site by name, or the place, which module
+  // add finds among the site's locations or adds as one of kind remote.
+  if (p.location) extra.push(`--location ${p.location}`);
+  else if (p.country) {
+    extra.push(`--country ${p.country}`);
+    if (p.city) extra.push(`--city ${p.city}`);
+  }
   const initial: Values = { "--environment": p.environment, "@extra": extra };
   if (p.instance) initial["--instance"] = p.instance;
   return { bin: "module-manager", verb: "add", fixed: ["satellite"], initial };

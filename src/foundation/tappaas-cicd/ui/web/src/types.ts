@@ -255,7 +255,8 @@ export interface TopoOutside {
   kind: "buddy" | "satellite";
   name: string;
   role: string | null;
-  location: string | null;
+  location: string | null; // its place, as text
+  at?: string | null; // the location it names (a satellite)
   tunnel: string | null;
   address: string | null;
   state: "up" | "down" | null;

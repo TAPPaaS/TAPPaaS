@@ -316,15 +316,15 @@
       "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides. Named `location` before #609; migration 0006 renames it."
     },
     "location": {
-      "description": "RETIRED — renamed to 'moduleSource' (#609); never write this field. Retained so a config migration 0006 has not reached is classified rather than reported unknown, and still read as the module directory until then.",
-      "deprecated": true,
+      "description": "Where a machine is: the name of one of the site's locations (site.json locations{}, site-manager location list). Absent, it is at the primary location. A satellite or any machine away from the site names a location of its own, which is how backup-manager validate tells an off-site copy from an on-site one. Before #609 this field held the module's source directory (now moduleSource): a value with a '/' is that old field, never a place.",
       "type": "string",
+      "references": "locations",
       "requiredBy": [],
       "usedBy": [
         "general"
       ],
-      "example": "/home/tappaas/TAPPaaS/src/collaboration/nextcloud",
-      "note": "Automatically set by copy-update-json.sh based on the directory where the module JSON resides"
+      "example": "hetzner-hel1",
+      "note": "Given at add or adopt with --location <name>, or with --country/--city/--building, which find the location at that place or add one of kind remote."
     },
     "dependsOn": {
       "description": "List of services this module depends on. Each entry is a 'module:service' pair identifying which module delivers the service.",
@@ -491,7 +491,8 @@
       "note": "Only used if bridge1 is defined. Hyphens are NOT allowed — use underscores."
     },
     "physicalLocation": {
-      "description": "Where a machine physically is (#609, ADR-012 §1.5): the same shape as site.json's `location` — ISO country, optional city and building. Recorded on an off-site machine such as a satellite, so the separation its backup copy depends on can be checked (`backup-manager validate`). Not `moduleSource`, which is where the module's code lives.",
+      "description": "RETIRED — a machine names its location instead (`location`, a name of the site's locations). Migration 0021 makes each physicalLocation a location of the site and the machine's `location`; read until it has run.",
+      "deprecated": true,
       "type": "object",
       "requiredBy": [],
       "usedBy": [
@@ -508,13 +509,9 @@
         "building": {
           "type": "string"
         }
-      },
-      "example": {
-        "country": "FI",
-        "city": "Helsinki"
-      },
-      "note": "Recorded, not enforced: nothing checks it against the machine itself."
+      }
     },
+
     "uplinks": {
       "description": "A cluster node's network uplinks (#40, pvehost instances): which physical ports carry its `lan` bridge — one port, or two or more bonded as `lanbond` — and its `wan` bridge. Ports by MAC address, the permanent one, because kernel interface names move. `lan.mode` is `single`, `active-backup` (one leg carries traffic, `primary` when it is up; any switches, any mix of speeds) or `lacp` (802.3ad: equal speeds, and the switch side one LAG). `lan.mtu` when not 1500.",
       "type": "object",

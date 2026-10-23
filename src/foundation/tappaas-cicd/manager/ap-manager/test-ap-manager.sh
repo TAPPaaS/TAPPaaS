@@ -50,6 +50,26 @@ echo "test-ap-manager:"
 "${AM}" add ap-living --vendor unifi --ip 10.0.0.30 >/dev/null 2>&1
 ck "AP-01 add creates AP"            "unifi"  "$(jq -r '.accessPoints["ap-living"].vendor' "${DES}")"
 ck "add duplicate rejected (rc)"     "1"      "$(rc_of "${AM}" add ap-living --vendor unifi)"
+# Where an AP is (ADR-036 D2): one of the site's locations; text goes in its description.
+cat > "${TMP}/site.json" <<'JSON'
+{ "primaryLocation": "home", "locations": { "home": { "country": "DK", "timezone": "Europe/Copenhagen" }, "cabin": { "kind": "remote", "country": "SE" } } }
+JSON
+ck "add --location naming no location (rc)"  "1"  "$(rc_of "${AM}" add ap-loft --vendor unifi --location "Loft by the stairs")"
+"${AM}" add ap-loft --vendor unifi --location cabin --description "loft by the stairs" >/dev/null 2>&1
+ck "add --location --description"             "cabin|loft by the stairs" "$(jq -r '.accessPoints["ap-loft"] | "\(.location)|\(.description)"' "${DES}")"
+ck "add without a place writes none"          "false" "$(jq -r '.accessPoints["ap-living"] | has("location")' "${DES}")"
+"${AM}" modify ap-living --location cabin >/dev/null 2>&1
+ck "modify --location"                        "cabin" "$(jq -r '.accessPoints["ap-living"].location' "${DES}")"
+ck "modify --location naming no location (rc)" "1" "$(rc_of "${AM}" modify ap-living --location atlantis)"
+ck "modify of no AP (rc)"                     "1" "$(rc_of "${AM}" modify nope --location cabin)"
+"${AM}" modify ap-living --unset location >/dev/null 2>&1
+ck "modify --unset location"                  "false" "$(jq -r '.accessPoints["ap-living"] | has("location")' "${DES}")"
+ck "validate (rc)"                            "0" "$(rc_of "${AM}" validate)"
+jq '.accessPoints["ap-loft"].location = "Loft"' "${DES}" > "${TMP}/d" && mv "${TMP}/d" "${DES}"
+ck "validate: free text is refused (rc)"      "1" "$(rc_of "${AM}" validate)"
+ck "…with the fix"                            "yes" "$(has "$("${AM}" validate 2>&1)" "ap-manager modify 'ap-loft' --location <name> --description 'Loft'")"
+"${AM}" remove ap-loft >/dev/null 2>&1
+rm -f "${TMP}/site.json"
 
 # AP-02: ssid add validates zone exists; VLAN auto-derived from zone
 "${AM}" ssid ap-living add TAPPaaS-Home --zone home --security wpa3-personal >/dev/null 2>&1

@@ -33,6 +33,12 @@ vault: it patches itself and admits no login from home (ADR-010 §7.3, §8.4.4).
 Roles are chosen at add (`--roles`); one machine may carry both relay roles, and a Site may
 run several satellites (`--instance`).
 
+Where it runs is a location of the site, named by the satellite's `location`: `--location
+<name>` at add, or `--country/--city`, which use the site's location at that place or add one
+of kind `remote`. A backup copy on it counts as off-site only when that location is somewhere
+else than the primary one (`backup-manager validate`); the console shows the satellite there.
+Move it with `module-manager module modify <instance> --set location=<name>`.
+
 ## What is not included
 
 - **Not a Proxmox VM the cluster hosts** — it is its own machine (`kind: machine`,

@@ -25,6 +25,7 @@ import { DevLink, DevNode, deviceGraph, deviceState, freePanelPorts, selectedDev
 import { iconOf, kindName } from "./devicecard";
 import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
+import { DeviceLocationButton, LocationLink } from "../locations";
 
 function Findings({ list }: { list: TopoFinding[] }) {
   if (list.length === 0) return <p className="muted small">No finding on it.</p>;
@@ -75,7 +76,7 @@ function placeRows(t: Topology, device: string, pick: (s: Sel) => void): [string
   const placeText = loc?.place ? [loc.place.address, loc.place.city, loc.place.country].filter(Boolean).join(", ") : "";
   const location: ReactNode = name ? (
     <>
-      {loc?.displayName ?? name}
+      <LocationLink name={name}>{loc?.displayName ?? name}</LocationLink>
       {placeText ? <span className="muted"> · {placeText}</span> : null}
       {loc?.primary ? <span className="muted"> · primary</span> : null}
     </>
@@ -254,7 +255,12 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         </>
       );
       open = <OpenIn kind="switch" id={s.name} />;
-      actions = <PlaceActions device={s.name} v={racks} />;
+      actions = (
+        <>
+          <PlaceActions device={s.name} v={racks} />
+          <DeviceLocationButton kind="switch" name={s.name} current={s.location ?? null} />
+        </>
+      );
       break;
     }
     case "lag": {
@@ -379,7 +385,12 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         </>
       );
       open = <OpenIn kind="ap" id={a.name} />;
-      actions = <PlaceActions device={a.name} v={racks} />;
+      actions = (
+        <>
+          <PlaceActions device={a.name} v={racks} />
+          <DeviceLocationButton kind="ap" name={a.name} current={a.location ?? null} />
+        </>
+      );
       break;
     }
     case "outside": {
@@ -388,7 +399,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       title = `${o.kind} ${o.name}`;
       body = (
         <>
-          <KV rows={[["role", o.role], ["location", o.location], ["tunnel", o.tunnel], ["address", o.address], ["pulse", o.state]]} />
+          <KV rows={[["role", o.role], ["location", o.at ? <><LocationLink name={o.at} />{o.location ? <span className="muted"> · {o.location}</span> : null}</> : o.location], ["tunnel", o.tunnel], ["address", o.address], ["pulse", o.state]]} />
           <h3>Findings</h3>
           <Findings list={about("peer", o.name)} />
         </>

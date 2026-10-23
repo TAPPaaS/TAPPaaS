@@ -22,6 +22,21 @@ export function usePath(): string {
   return path;
 }
 
+// The address's #fragment, followed as the path is (a link to a row of a page).
+export function useHash(): string {
+  const [hash, setHash] = useState(window.location.hash.slice(1));
+  useEffect(() => {
+    const on = () => setHash(window.location.hash.slice(1));
+    window.addEventListener("popstate", on);
+    window.addEventListener("hashchange", on);
+    return () => {
+      window.removeEventListener("popstate", on);
+      window.removeEventListener("hashchange", on);
+    };
+  }, []);
+  return hash;
+}
+
 export function navigate(to: string): void {
   if (to === window.location.pathname + window.location.search) return;
   window.history.pushState(null, "", to);

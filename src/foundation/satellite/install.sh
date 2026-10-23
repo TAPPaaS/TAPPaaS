@@ -3,7 +3,7 @@
 # TAPPaaS satellite module install (ADR-010 §8.4.1)
 #
 # Called by `module-manager module add satellite [--instance <name>] --address
-# <public-ip> [--roles '[...]'] [--physicalLocation '{...}']`, after that wrote
+# <public-ip> [--roles '[...]'] [--location <name> | --country CC --city C]`, after that wrote
 # config/<instance>.json. Provisions the machine (Debian by default) over the
 # operator's forwarded key, wires the tunnel on OPNsense, and — for a managed
 # satellite, the default — authorizes the mothership's key so the sweep patches

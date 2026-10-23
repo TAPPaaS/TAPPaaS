@@ -1030,14 +1030,14 @@ cmd_modify() {
             local mod_config="${CONFIG_DIR}/${mod}.json"
             if [[ -f "${mod_config}" ]]; then
                 local old_location
-                old_location=$(jq -r '.moduleSource // .location // empty' "${mod_config}")
+                old_location=$(jq -r '.moduleSource // (.location | select(type == "string" and contains("/"))) // empty' "${mod_config}")
                 if [[ -n "${old_location}" ]]; then
                     # Replace old repo path prefix with new repo path
                     local relative_path="${old_location#"${current_path}"}"
                     local new_location="${new_path}${relative_path}"
                     local tmp_file
                     tmp_file=$(mktemp)
-                    if jq --arg loc "${new_location}" '.moduleSource = $loc | del(.location)' "${mod_config}" > "${tmp_file}" 2>/dev/null; then
+                    if jq --arg loc "${new_location}" '.moduleSource = $loc | if (.location | type == "string" and contains("/")) then del(.location) else . end' "${mod_config}" > "${tmp_file}" 2>/dev/null; then
                         mv "${tmp_file}" "${mod_config}"
                         info "  ${GN}✓${CL} Updated location for '${mod}'"
                     else

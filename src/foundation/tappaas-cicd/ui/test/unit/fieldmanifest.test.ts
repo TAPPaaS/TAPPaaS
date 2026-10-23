@@ -206,6 +206,14 @@ check(mph("vmid") === `default ${Number(vw.vmid) + 2}, the next free (${vw.vmid}
 check(mph("node") === "default tappaas1, the site's first node", "…no node of its own: the site's first node");
 check(moduleAddDefaults({ module: "x", own: { vmid: 700 }, defaultEnv: null, envs: [], firstNode: null, usedVmids: [] }).defaults.vmid === undefined, "…a free VM id stays the module's own");
 
+// module-manager add of a machine: where it is, one of the site's locations (ADR-036 D2)
+const sat = { kind: "machine", os: "debian", roles: ["reverse-proxy", "admin-vpn"], zone0: "edge", dependsOn: [] };
+const scomp = moduleAddDefaults({ module: "satellite", own: sat, defaultEnv: "rossen", envs: [], firstNode: "tappaas1", usedVmids: [], primaryLocation: "rodovre" });
+const sadd = buildManifest({ kind: "module", name: "satellite", mode: "add", defs: moduleDefs(composed), record: null, defaults: { ...sat, ...scomp.defaults }, defaultBy: scomp.by, moduleClasses, services: [], refs, vars: { name: "satellite" } });
+const sloc = field(sadd, "location");
+check(sloc?.arg === "--location" && JSON.stringify(sloc.choices) === '["hareskov","rodovre"]' && sloc.default === "rodovre, the primary location" && sloc.editable, "machine add: --location, a dropdown of the site's locations, the primary by default");
+check(field(madd, "location") === undefined, "…a guest's add has no location");
+
 // identity-manager <kind> add: the display name is the name
 const uadd = buildManifest({ kind: "user", name: null, mode: "add", defs: flattenSchema(schema("user-fields.json")), record: null, defaults: { displayName: "<name>" }, refs, vars: { name: null } });
 check(placeholderOf(field(uadd, "displayName")!, typedVars({ "@name": "anna" })) === "default anna" && field(uadd, "displayName")?.required === false && field(uadd, "primaryEmail")?.required === true, "user add: the display name defaults to the typed name; the e-mail is still required");

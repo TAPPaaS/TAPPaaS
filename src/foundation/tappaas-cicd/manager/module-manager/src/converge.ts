@@ -42,6 +42,7 @@ import { parseDependency } from "./services";
 import { resolveModuleFromConfig } from "./resolve";
 import { runServiceReporter } from "./report";
 import { moduleOfLocation, moduleSourceOf } from "../../../lib/ts/src/instance";
+import { locationRefusal } from "./location";
 
 // Everything that can stop a drift computation, kept apart because the caller
 // says something different about each. In particular "this provider has no
@@ -312,6 +313,23 @@ export function classifySet(
   };
 
   for (const req of requests) {
+    // A machine's location names one of the site's (ADR-036 D2).
+    if (req.field === "location") {
+      let kind: unknown;
+      try {
+        kind = (JSON.parse(readFileSync(join(configDir, `${module}.json`), "utf8")) as { kind?: unknown }).kind;
+      } catch {
+        kind = undefined;
+      }
+      // `fields` asks with no value: whether it may be set, not to what.
+      const why = kind !== undefined && kind !== "machine"
+        ? `'${module}' is a ${String(kind)}, not a machine — a guest is where its node is`
+        : req.value === "" ? null : locationRefusal(configDir, req.value);
+      if (why) {
+        rejections.push({ field: req.field, reason: why });
+        continue;
+      }
+    }
     const spec = schema[req.field];
     if (!spec) {
       rejections.push({

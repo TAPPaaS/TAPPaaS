@@ -55,6 +55,9 @@ readonly SCRIPT_DIR
 # The controllers: the registry's, plus (tests) every PLUGIN_DIR/*.sh.
 # shellcheck source=../../lib/controller-lib.sh
 . "${SCRIPT_DIR}/../../lib/controller-lib.sh"
+# A switch's location is one of the site's (ADR-036 D2).
+# shellcheck source=../../lib/locations.sh
+. "${SCRIPT_DIR}/../../lib/locations.sh"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
@@ -79,7 +82,11 @@ Inventory (recorded in switch-configuration-actual.json):
   add-controller <name> --vendor <v> --ip <ip> [--managed auto]
   remove-controller <name>
   add-switch <name> --vendor <v> --managed auto|manual [--controller <c>]
-        [--ip <ip>] [--model <m>] [--location <l>] [--description <d>]
+        [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]
+  modify-switch <name> [--location <name>] [--description <d>] [--model <m>]
+        [--ip <ip>] [--unset location,description]
+                          --location is one of the site's locations
+                          (site-manager location list); absent, the primary one
   remove-switch <name>
   add-port <switch> <port> --type node|switch|ap|device|uplink
         [--target <t>] [--target-port <tp>] [--mode trunk|access]
@@ -107,6 +114,8 @@ Inventory (recorded in switch-configuration-actual.json):
   list-ports [<switch>] [--json]
                           one line per port: actual config + drift vs zones.json
   show <controller|switch>
+  validate                every switch's and access point's location is one of
+                          the site's (free text belongs in its description)
 
 --json on list, list-ports, lag list and mlag-pair list prints the same facts as JSON.
 
@@ -139,6 +148,7 @@ readonly CLI_SPEC="
 add-controller: --vendor= --ip= --managed=
 remove-controller:
 add-switch: --vendor= --ip= --managed= --controller= --model= --location= --description=
+modify-switch: --location= --description= --model= --ip= --unset=
 remove-switch:
 add-port: ${PORT_OPTS}
 update-port: ${PORT_OPTS} --park --park-zone=
@@ -148,6 +158,7 @@ mlag-pair: --peer-port= --json
 list: --json
 list-ports: --json
 show:
+validate:
 interrogate: --park-zone= --no-park
 update-desired:
 delta:
@@ -264,15 +275,77 @@ cmd_add_switch() {
         || die "controller '${controller}' not found (add-controller first)"
     jq -e --arg n "${name}" '.switches | has($n)' "${ACTUAL}" >/dev/null \
         && die "Switch '${name}' already exists (remove-switch first to recreate)"
-    jq_actual '.switches[$n] = {vendor:$v, managed:$mg, controller:(if $c=="" then null else $c end), managementIp:$ip, model:$m, location:$loc, description:$d, ports:{}}' \
+    local why
+    if [[ -n "${location}" ]] && ! why="$(site_location_refusal "${location}")"; then die "add-switch --location: ${why}"; fi
+    jq_actual '.switches[$n] = ({vendor:$v, managed:$mg, controller:(if $c=="" then null else $c end), managementIp:$ip, model:$m, ports:{}}
+                + (if $loc == "" then {} else {location:$loc} end) + (if $d == "" then {} else {description:$d} end))' \
         --arg n "${name}" --arg v "${vendor}" --arg mg "${managed}" --arg c "${controller}" \
         --arg ip "${ip}" --arg m "${model}" --arg loc "${location}" --arg d "${description}"
-    info "${GN}✓${CL} added switch '${name}' (${vendor}, ${managed}${controller:+, controller=${controller}}${ip:+, ${ip}})"
+    info "${GN}✓${CL} added switch '${name}' (${vendor}, ${managed}${controller:+, controller=${controller}}${ip:+, ${ip}}${location:+, at ${location}})"
     if [[ "${managed}" == "manual" ]]; then
         info "  add its uplink ports:  switch-manager add-port ${name} <port> --type node --target tappaasN --target-port ethX"
     elif [[ -z "${controller}" ]]; then
         info "  run 'switch-manager interrogate' to upload its ports"
     fi
+    return 0
+}
+
+# modify-switch <name> [--location <n>] [--description <d>] [--model <m>]
+# [--ip <ip>] [--unset location,description]: the switch's own record, in
+# actual and in desired (which update-desired regenerates from actual).
+cmd_modify_switch() {
+    local name="${1:-}"; shift || true
+    [[ -n "${name}" ]] || die "modify-switch requires a <name>"
+    jq -e --arg n "${name}" '.switches | has($n)' "${ACTUAL}" >/dev/null || die "Switch '${name}' not found"
+    local set='{}' unset='[]' f why
+    while [[ $# -gt 0 ]]; do case "$1" in
+        --location)
+            why="$(site_location_refusal "$2")" || die "modify-switch --location: ${why}"
+            set=$(jq -c --arg v "$2" '.location=$v' <<<"${set}"); shift 2 ;;
+        --description) set=$(jq -c --arg v "$2" '.description=$v' <<<"${set}"); shift 2 ;;
+        --model) set=$(jq -c --arg v "$2" '.model=$v' <<<"${set}"); shift 2 ;;
+        --ip) set=$(jq -c --arg v "$2" '.managementIp=$v' <<<"${set}"); shift 2 ;;
+        --unset)
+            for f in ${2//,/ }; do
+                [[ "${f}" == location || "${f}" == description ]] || die "modify-switch --unset: only location and description (got '${f}')"
+                unset=$(jq -c --arg f "${f}" '. + [$f]' <<<"${unset}")
+            done
+            shift 2 ;;
+        *) die "modify-switch: unknown option '$1'" ;;
+    esac; done
+    [[ "${set}" != '{}' || "${unset}" != '[]' ]] || die "modify-switch: nothing to change (--location, --description, --model, --ip, --unset)"
+    local edit='.switches[$n] |= ((. + $set) | delpaths([$unset[] | [.]]))'
+    jq_actual "${edit}" --arg n "${name}" --argjson set "${set}" --argjson unset "${unset}"
+    local tmp; tmp="$(mktemp)"
+    if jq --arg n "${name}" --argjson set "${set}" --argjson unset "${unset}" \
+           "if (.switches // {}) | has(\$n) then ${edit} else . end" "${DESIRED}" > "${tmp}"; then mv "${tmp}" "${DESIRED}"
+    else rm -f "${tmp}"; die "Failed to update ${DESIRED}"; fi
+    info "${GN}✓${CL} switch '${name}': $(jq -r '[to_entries[] | "\(.key)=\(.value)"] | join(", ")' <<<"${set}")$(jq -r 'if length > 0 then " unset " + join(",") else "" end' <<<"${unset}")"
+    return 0
+}
+
+# validate: every switch's and AP's location names one of the site's
+# locations (ADR-036 D2). Free text — a location from before locations were
+# the site's — is reported with the command that fixes it; migration 0021
+# moves it into the description.
+cmd_validate() {
+    local errs=0 kind name loc why
+    while IFS=$'\t' read -r kind name loc; do
+        [[ -n "${loc}" ]] || continue
+        why="$(site_location_refusal "${loc}")" && continue
+        errs=$((errs + 1))
+        if [[ "${kind}" == switch ]]; then
+            error "switch '${name}': location '${loc}': ${why} — switch-manager modify-switch '${name}' --location <name> --description '${loc}'"
+        else
+            error "access point '${name}': location '${loc}': ${why} — ap-manager modify '${name}' --location <name> --description '${loc}'"
+        fi
+    done < <(jq -r '(.switches // {} | to_entries[] | ["switch", .key, (.value.location // "")]),
+                    (.accessPoints // {} | to_entries[] | ["ap", .key, (.value.location // "")]) | @tsv' "${DESIRED}")
+    if [[ "${errs}" -gt 0 ]]; then
+        error "validate: ${errs} location(s) name no location of the site"
+        return 1
+    fi
+    info "${GN}validate ok${CL} ($(jq -r '(.switches // {} | length)' "${DESIRED}") switch(es), $(jq -r '(.accessPoints // {} | length)' "${DESIRED}") access point(s))"
     return 0
 }
 
@@ -723,7 +796,7 @@ cmd_list() {
     info "${BOLD}Controllers (${cc}):${CL}"
     jq -r '.controllers // {} | to_entries[] | "  \(.key)  [\(.value.vendor)]  \(.value.managementIp)"' "${ACTUAL}"
     info "${BOLD}Switches (${sc}):${CL}"
-    jq -r '.switches // {} | to_entries[] | "  \(.key)  [\(.value.vendor)]  \(.value.managed)\(if .value.controller then " via "+.value.controller else "" end)  ports=\(.value.ports|length)"' "${ACTUAL}"
+    jq -r '.switches // {} | to_entries[] | "  \(.key)  [\(.value.vendor)]  \(.value.managed)\(if .value.controller then " via "+.value.controller else "" end)  ports=\(.value.ports|length)\(if (.value.location // "") != "" then "  at " + .value.location else "" end)"' "${ACTUAL}"
     local apc; apc=$(jq -r '.accessPoints // {} | length' "${ACTUAL}")
     [[ "${apc}" -gt 0 ]] && info "${BOLD}Access points (${apc}):${CL} (manage with ap-manager)"
     return 0
@@ -852,8 +925,11 @@ cmd_interrogate() {
         # config overlaid on operator annotations); and mark each AP's wired uplink
         # switch port as an AP trunk so update-desired carries the WiFi VLANs.
         jq --arg c "${name}" --argjson st "${state}" '
+            # Where a switch is and what it is called are the operator'"'"'s
+            # (ADR-036 D2): a controller'"'"'s location or description never
+            # overwrites them.
             reduce ($st.switches // {} | to_entries[]) as $s (.;
-              .switches[$s.key] = ((.switches[$s.key] // {}) * $s.value
+              .switches[$s.key] = ((.switches[$s.key] // {}) * ($s.value | del(.location, .description))
                 | .controller = $c | .managed = "auto"))
             | reduce ($st.aps // {} | to_entries[]) as $a (.;
                 ($a.value.uplinkSwitch) as $usw | ($a.value.uplinkPort) as $up
@@ -894,7 +970,7 @@ cmd_interrogate() {
         [[ "${state}" != "{}" ]] || continue
         tmp="$(mktemp)"
         jq --arg n "${name}" --argjson s "${state}" '
-            .switches[$n] = ((.switches[$n] // {}) * $s)' \
+            .switches[$n] = ((.switches[$n] // {}) * ($s | del(.location, .description)))' \
             "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
         seen=$(jq -c --arg n "${name}" '. + [$n]' <<<"${seen}")
         info "  switch ${name}: uploaded $(echo "${state}" | jq -r '.ports // {} | length') port(s)"
@@ -1187,6 +1263,8 @@ main() {
         add-controller)    cmd_add_controller "$@" ;;
         remove-controller) cmd_remove_controller "${1:-}" ;;
         add-switch)        cmd_add_switch "$@" ;;
+        modify-switch)     cmd_modify_switch "$@" ;;
+        validate)          cmd_validate ;;
         remove-switch)     cmd_remove_switch "${1:-}" ;;
         add-port)          cmd_add_port "$@" ;;
         update-port)       cmd_update_port "$@" ;;
