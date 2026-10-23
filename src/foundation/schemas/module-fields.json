@@ -60,6 +60,7 @@
     "address",
     "physicalLocation",
     "uplinks",
+    "storagePools",
     "trunks1",
     "firewallType",
     "aliasType",
@@ -543,6 +544,24 @@
         "wan": {"ports": ["3c:ec:ef:01:02:b0"]}
       },
       "note": "Written by `site-manager node network set` (and, for a node that has none, recorded from the live layout by the cluster update and by `node add`). Changed with that verb, not with `module modify --set`: converging it drains the node and re-carries its lan bridge under a rollback (`node network set <node> --apply`). `health-manager validate` reports a live layout that differs from it (lan-uplink)."
+    },
+    "storagePools": {
+      "description": "The storage pools a cluster node carries (pvehost instances): the `tankXY` zpools on it that hold guest disks, by name. The cluster update's storage reconcile adds the node to each named pool's storage list (`pvesm`), so guests can be placed on it there.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^tank[A-Za-z0-9_-]*$"
+      },
+      "uniqueItems": true,
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": [
+        "tanka1",
+        "tankb1"
+      ],
+      "note": "Recorded from the node's zpools when it is registered (`site-manager node add`, `module adopt`), or named with `node add --storage-pools`; a node registered with none gets them filled by `site-manager node reconcile`. Read by the storage reconcile, storage-manager's inventory and the topology."
     },
     "stack": {
       "description": "The one stack a module belongs to (#463): what a catalogue lists it under, and the directory it lives in: src/<stack>/<module> for the purpose stacks and misc, src/foundation/<module> for foundation (#421). An enumerated field, and this schema is the list's owner: every module carries exactly one of the values below, as a field in its own module JSON. Three of them say what a module IS rather than what it is for — `foundation`, `template` and `test`; the rest group application modules by what they are for. `foundation` also decides a module's scope (ADR-022e v1.1): a foundation-stack module is site-scoped — it belongs to the Site, serves every Environment, installs in mgmt, must come from an official source (or --allow-fork) and needs --force to delete; every other module is environment-scoped. A module becomes site-scoped by moving into the foundation stack, and in no other way.",

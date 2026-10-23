@@ -135,21 +135,30 @@ environment_zone() {
     printf '%s\n' "$found"
 }
 
-# ── Node lookup helpers (read from site.json) ────────────────────────
-# These functions resolve node hostnames. site.json .hardware.nodes[].name is
-# authoritative; the FQDN is always <name>.mgmt.internal (dns-hostname/ip no
-# longer exist — name only). Falls back to "tappaas1" when site.json is absent
-# (e.g. during initial bootstrap).
+# ── Node lookup helpers (the pvehost instances) ──────────────────────
+# These functions resolve node hostnames. The nodes are their pvehost
+# instances, listed by tappaas_cluster_nodes (cluster-nodes.sh, re-exported
+# below) in node order; the FQDN is always <name>.mgmt.internal. Falls back to
+# "tappaas1" when there are none yet (e.g. during initial bootstrap).
+
+# The cluster's nodes (tappaas_cluster_nodes, tappaas_cluster_nodes_json) live
+# in their own side-effect-free lib, so scripts that do not load these routines
+# list them the same way. Re-exported here.
+for _cnl in "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/cluster-nodes.sh" \
+            /home/tappaas/bin/cluster-nodes.sh; do
+    [[ -r "${_cnl}" ]] || continue
+    # shellcheck source=/dev/null
+    . "${_cnl}"
+    declare -F tappaas_cluster_nodes >/dev/null 2>&1 && break
+done
+unset _cnl
 
 # Get the actual system hostname of the Nth node (0-indexed).
 # Arguments: [index] (default: 0)
 get_node_hostname() {
     local index="${1:-0}"
-    local site name=""
-    site="$(_site_json_path)"
-    if [[ -f "$site" ]]; then
-        name=$(jq -r --argjson i "$index" '.hardware.nodes[$i].name // empty' "$site" 2>/dev/null) || name=""
-    fi
+    local name=""
+    [[ "$index" =~ ^[0-9]+$ ]] && name="$(tappaas_cluster_nodes "${CONFIG_DIR}" 2>/dev/null | sed -n "$((index + 1))p")"
     [[ -n "$name" ]] || name="tappaas1"
     printf '%s\n' "$name"
 }
@@ -168,13 +177,10 @@ get_primary_node_fqdn() {
     printf '%s.mgmt.internal\n' "$(get_node_hostname 0)"
 }
 
-# Get all node hostnames, one per line, from site.json.
+# Get all node hostnames, one per line, in node order.
 get_all_node_hostnames() {
-    local site out=""
-    site="$(_site_json_path)"
-    if [[ -f "$site" ]]; then
-        out=$(jq -r '.hardware.nodes[].name // empty' "$site" 2>/dev/null) || out=""
-    fi
+    local out=""
+    out="$(tappaas_cluster_nodes "${CONFIG_DIR}" 2>/dev/null)" || out=""
     [[ -n "$out" ]] || out="tappaas1"
     printf '%s\n' "$out"
 }
@@ -268,8 +274,8 @@ snapshot_retention() {
 }
 
 # Get the first node whose hostname differs from the given primary node.
-# Used to resolve a default HANode when none is explicitly set. Reads from
-# site.json (.hardware.nodes).
+# Used to resolve a default HANode when none is explicitly set. Reads the
+# cluster's nodes (tappaas_cluster_nodes).
 # Arguments: [primary-node-hostname] (default: first node)
 #
 # On a SINGLE-NODE cluster there is no other node, so `grep -vx` matches nothing
@@ -2376,7 +2382,7 @@ wait_for_vm_unlock() {
 vm_node_holding() {
     local vmid="$1" n
     [[ -n "${vmid}" ]] || return 0
-    for n in $(jq -r '.hardware.nodes[]?.name // empty' "${CONFIG_DIR}/site.json" 2>/dev/null); do
+    for n in $(tappaas_cluster_nodes "${CONFIG_DIR}" 2>/dev/null); do
         if ssh -o BatchMode=yes -o ConnectTimeout=8 "root@${n}.${MGMT:-mgmt}.internal" \
                 "qm config ${vmid} >/dev/null 2>&1"; then
             printf '%s' "${n}"; return 0

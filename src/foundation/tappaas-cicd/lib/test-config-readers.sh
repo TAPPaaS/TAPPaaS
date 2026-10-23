@@ -6,8 +6,8 @@
 #
 # Exercises the central config-reader helpers against TEMP fixtures only — never
 # the live config, never the cluster. Verifies:
-#   - The readers use their NEW source ONLY: node helpers from site.json
-#     (.hardware.nodes[].name); site-wide scalars from site.json; get_variant_config
+#   - The readers use their NEW source ONLY: node helpers from the pvehost
+#     instances (tappaas_cluster_nodes); site-wide scalars from site.json; get_variant_config
 #     from config/environments/<env>.json; tlsCertRefid from cert-refids.json.
 #   - A configuration.json on disk no longer changes ANY result (its presence or
 #     absence is a no-op) — so deleting it is safe.
@@ -45,14 +45,13 @@ cat > "${NEW}/site.json" <<'JSON'
   "version": "site-v2",
   "snapshotRetention": 9,
   "automaticReboot": false,
-  "hardware": { "nodes": [
-    { "name": "tappaas1", "storagePools": [] },
-    { "name": "tappaas2", "storagePools": [] },
-    { "name": "tappaas3", "storagePools": [] }
-  ] },
   "repositories": [ { "name": "TAPPaaS", "path": "/opt/tappaas" } ]
 }
 JSON
+# The nodes are their pvehost instances (ADR-036 D6).
+for _n in tappaas3 tappaas1 tappaas2; do
+    printf '{"kind":"machine","moduleSource":"/home/tappaas/TAPPaaS/src/foundation/pvehost","address":"%s.mgmt.internal","storagePools":[]}\n' "${_n}" > "${NEW}/${_n}.json"
+done
 cat > "${NEW}/environments/acme.json" <<'JSON'
 { "name": "acme", "displayName": "Acme Prod", "domains": { "primary": "acme.test", "dnsMode": "wildcard" } }
 JSON
@@ -79,10 +78,10 @@ JSON
 # Run all the assertions twice: once WITH the stray configuration.json present,
 # once after DELETING it. Identical results prove configuration.json is a no-op.
 assert_new_sources() {
-    eq "$(get_node_hostname 0)" "tappaas1" "node0 from site.json"
-    eq "$(get_node_hostname 2)" "tappaas3" "node2 from site.json"
+    eq "$(get_node_hostname 0)" "tappaas1" "node0 from the pvehost instances"
+    eq "$(get_node_hostname 2)" "tappaas3" "node2 from the pvehost instances"
     eq "$(get_primary_node_fqdn)" "tappaas1.mgmt.internal" "primary fqdn"
-    eq "$(get_all_node_hostnames | paste -sd, -)" "tappaas1,tappaas2,tappaas3" "all nodes from site.json"
+    eq "$(get_all_node_hostnames | paste -sd, -)" "tappaas1,tappaas2,tappaas3" "all nodes from the pvehost instances"
     eq "$(get_default_ha_node tappaas1)" "tappaas2" "default ha node"
     eq "$(snapshot_retention)" "9" "snapshotRetention from site.json"
     if automatic_reboot_enabled; then bad "automaticReboot should be false (site.json)"; else ok "automaticReboot=false from site.json"; fi
@@ -167,6 +166,34 @@ eq "$(get_node_hostname 0)" "tappaas1" "node0 bootstrap default"
 eq "$(get_all_node_hostnames)" "tappaas1" "all nodes bootstrap default"
 eq "$(snapshot_retention)" "5" "snapshotRetention default"
 if automatic_reboot_enabled; then ok "automaticReboot default enabled"; else bad "default should be enabled"; fi
+
+# ── Fixture 5: the cluster's nodes (cluster-nodes.sh) ─────────────────────────
+# The pvehost instances only (not another machine, not an archived node), by
+# name with numbers as numbers; while site.json still has the retired
+# hardware.nodes[] (migration 0022 not run), it fills what the instances lack.
+NODES="${WORK}/nodes"
+mkdir -p "${NODES}"
+_pve='"kind":"machine","moduleSource":"/home/tappaas/TAPPaaS/src/foundation/pvehost"'
+printf '{%s,"address":"tappaas1.mgmt.internal","storagePools":["tanka1","tankb1"]}\n' "${_pve}" > "${NODES}/tappaas1.json"
+printf '{%s,"address":"10.0.0.11"}\n' "${_pve}" > "${NODES}/tappaas2.json"
+printf '{%s,"address":"tappaas10.mgmt.internal","storagePools":[]}\n' "${_pve}" > "${NODES}/tappaas10.json"
+printf '{%s,"address":"tappaas4.mgmt.internal","status":"archived"}\n' "${_pve}" > "${NODES}/tappaas4.json"
+printf '{"kind":"machine","moduleSource":"/home/tappaas/TAPPaaS/src/foundation/debianhost","address":"10.0.0.90"}\n' > "${NODES}/nas.json"
+printf '{%s}\n' "${_pve}" > "${NODES}/tappaas1.json.orig"
+echo '{"name":"acme"}' > "${NODES}/site.json"
+echo "== the cluster's nodes are the pvehost instances =="
+eq "$(tappaas_cluster_nodes "${NODES}" | paste -sd, -)" "tappaas1,tappaas2,tappaas10" "pvehost instances in node order (archived, debianhost, .orig left out)"
+eq "$(tappaas_cluster_nodes_json "${NODES}" | jq -c '.[0]')" '{"name":"tappaas1","address":"tappaas1.mgmt.internal","storagePools":["tanka1","tankb1"]}' "a node's address and pools"
+eq "$(tappaas_cluster_nodes_json "${NODES}" | jq -c '.[1].storagePools')" '[]' "an instance without storagePools has none"
+CONFIG_DIR="${NODES}"
+eq "$(get_node_hostname 1)" "tappaas2" "get_node_hostname reads the instances"
+eq "$(get_default_ha_node tappaas1)" "tappaas2" "default HA node is the next node"
+echo '{"name":"acme","hardware":{"nodes":[{"name":"tappaas1","storagePools":["x"]},{"name":"tappaas2","storagePools":["tanka1"]},{"name":"tappaas3","storagePools":["tankc1"]}]}}' > "${NODES}/site.json"
+echo "== before migration 0022: the retired list fills what the instances lack =="
+eq "$(tappaas_cluster_nodes "${NODES}" | paste -sd, -)" "tappaas1,tappaas2,tappaas3,tappaas10" "a listed node with no instance yet is a node"
+eq "$(tappaas_cluster_nodes_json "${NODES}" | jq -c '[.[] | .storagePools]')" '[["tanka1","tankb1"],["tanka1"],["tankc1"],[]]' "an instance's own pools win; one without the field takes the list's"
+eq "$(tappaas_cluster_nodes_json "${NODES}" | jq -r '.[2].address')" "tappaas3.mgmt.internal" "a listed node is reached at <name>.mgmt.internal"
+eq "$(tappaas_cluster_nodes_json "${WORK}/absent")" "[]" "no config directory: no nodes"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

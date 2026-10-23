@@ -145,6 +145,11 @@
       "apply": "none",
       "changeNote": "A node's lan/wan ports (#40). Writing it changes nothing on the node; converging it re-carries the lan bridge, which drains the node first — `site-manager node network set <node> --apply` does both, one node at a time, under a rollback. Until then health-manager reports the drift."
     },
+    "storagePools": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "The pools a node carries. Writing it changes nothing on the node; the next cluster update adds the node to each named pool's storage list. A pool taken out is only reported: the storage list keeps the node until the operator removes it (pvesm set <pool> --nodes)."
+    },
     "stack": {
       "class": "immutable",
       "apply": "none",
