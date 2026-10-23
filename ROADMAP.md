@@ -108,7 +108,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 9 | 11 |
 | 6 | G6.2 User interface & physical view | H | L | – | 4 | 1 |
-| 6 | G6.3 Data model | M | M | – | 1 | 7 |
+| 6 | G6.3 Data model | M | M | – | 2 | 6 |
 | 5 | G5.1 Satellite & off-site | H | M | – | 1 | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | ✅ G4.1 Alerting & cluster resilience | M | M | 7 | 4 | – |
@@ -279,13 +279,13 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 | ✅ #183 | TAPPaaS service catalog | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Folded into #839** (ADR-034 D6): the console's Modules page is the catalog — every registered repository's modules, installed or not, with Install |
 | ✅ #91 | Backstage as a component of tappaas-cicd | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Not adopted** (ADR-034 A3): a developer portal, not an operations console |
 
-### G6.3 Data model — Ease M · Risk M · done for 2.3: 1 · open: 7
+### G6.3 Data model — Ease M · Risk M · done for 2.3: 2 · open: 6
 
 The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/DATAMODEL.md) (2026-10-22: every JSON, which field names which object, and seven places where the model says one thing twice). The operator decided to fix the first four and park the rest (#866). Where a thing is becomes two things, a location and a placement, by ADR-036 (Accepted 2026-10-23). Linked to G6.2: the console's Physical view draws what this group models.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #865 | The zone names its environment; `environment.network.zone` and `zone.serves[]` go | M | M | **In progress 2026-10-23** (branch `865-zone-environment`): survey of every reader first, then schema, readers, a config migration on every installation, the console and the docs. One direction, no lists |
+| ✅ #865 | The zone names its environment; `environment.network.zone` and `zone.serves[]` go | M | M | **Done 2026-10-23** (`586c2d19`, on `main`): a zone's one `environment` field (class manual, set through `bind`); validate wants exactly one Service or Management zone per environment and at most one environment per Client, IoT, Guest or DMZ zone, so a zone serving several environments is no longer possible (ADR-014 v1.4; reach a second one by `access-to`). Migration 0018 writes the field from both old fields and refuses, changing nothing, a zone that would get two; the derived firewall graph of hrossen's config is unchanged by it. Survey in `docs/design/865-zone-environment.md` |
 | ✅ #867 | Drop `site.organizations`: the identities/organizations directory is the list | L | L | **Done 2026-10-23** (`9495f551`, on `main`): nothing read the field; gone from the schema, site-manager and the console; migration 0017 removes it from every site.json; DATAMODEL finding 4 closed |
 | #869 | ADR-036 step 1: site-manager owns locations, with a primary one; a backup buddy's place is a location | M | M | `site.locations{}`, `primaryLocation`, `location` verbs; `site.location` migrated; peers name a location |
 | #870 | ADR-036 step 2: position-manager (was rack-manager), placements in rooms in a location | M | M | rename with aliases, `positions.json`, `place`/`unplace`, `device record` from a seen device, the topology's location, placement and source. After #869 |
