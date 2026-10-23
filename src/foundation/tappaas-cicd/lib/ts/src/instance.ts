@@ -10,13 +10,13 @@ import { basename, join } from "path";
 /**
  * A deployed config's source directory: `.moduleSource`, or `.location` — its
  * name until #609, still read for a config migration 0006 has not reached.
- * "" when neither is a non-empty string (a site-style `location` object never
- * counts: that is a physical place, not a directory).
+ * "" when neither is a directory (a site-style `location` object, or a
+ * location's name, never counts: that is a physical place).
  */
 export function moduleSourceOf(raw: Record<string, unknown> | null | undefined): string {
-  for (const v of [raw?.moduleSource, raw?.location]) {
-    if (typeof v === "string" && v !== "") return v;
-  }
+  if (typeof raw?.moduleSource === "string" && raw.moduleSource !== "") return raw.moduleSource;
+  // A `location` without a '/' is a location's name (ADR-036 D2), not a directory.
+  if (typeof raw?.location === "string" && raw.location.includes("/")) return raw.location;
   return "";
 }
 

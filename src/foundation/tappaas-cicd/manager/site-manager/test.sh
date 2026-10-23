@@ -112,7 +112,7 @@ echo ""
 
 # --- Case 3: a deliberately-bad site.json fails validate-site.sh ---
 BAD="${WORK}/bad-site.json"
-# missing required 'owner', 'location', 'hardware', 'repositories'
+# missing required 'owner', 'locations', 'primaryLocation', 'hardware', 'repositories'
 cat > "$BAD" <<'JSON'
 { "name": "broken", "displayName": "Broken" }
 JSON
@@ -147,7 +147,7 @@ BAD2="${WORK}/bad-site2.json"
 cat > "$BAD2" <<'JSON'
 {
   "name": "x", "displayName": "X", "owner": "o",
-  "location": { "country": "NL", "timezone": "Europe/Amsterdam" },
+  "locations": { "home": { "country": "NL", "timezone": "Europe/Amsterdam" } }, "primaryLocation": "home",
   "hardware": { "nodes": [] },
   "repositories": [],
   "bogusExtraField": true
@@ -160,27 +160,31 @@ if run_validate "$BAD2"; then bad "site.json with extra field wrongly passed"; e
 # ---------------------------------------------------------------------------
 echo "== site master data (#408) =="
 
-_loc_site() {   # a minimal valid site.json carrying the given location object
-    printf '{"name":"s","displayName":"S","owner":"o","defaultEnvironment":"o","location":%s,"hardware":{"nodes":[]},"repositories":[]}' "$1"
+_loc_site() {   # a minimal valid site.json: the given primary location, and the given top-level extras
+    printf '{"name":"s","displayName":"S","owner":"o","defaultEnvironment":"o","locations":{"home":%s},"primaryLocation":"home"%s,"hardware":{"nodes":[]},"repositories":[]}' "$1" "${2:-}"
 }
 
 GOODLOC="${WORK}/loc-good.json"
-_loc_site '{"country":"DK","timezone":"Europe/Copenhagen","locale":"en_US","keyboard":"dk","latitude":55.6761,"longitude":12.5683}' > "$GOODLOC"
-if run_validate "$GOODLOC"; then ok "location accepts keyboard + latitude/longitude"; else bad "location with keyboard/lat/lon wrongly rejected"; fi
+_loc_site '{"country":"DK","timezone":"Europe/Copenhagen","latitude":55.6761,"longitude":12.5683}' ',"locale":"en_US","keyboard":"dk"' > "$GOODLOC"
+if run_validate "$GOODLOC"; then ok "a location accepts latitude/longitude, the site keyboard + locale"; else bad "location with lat/lon, site keyboard wrongly rejected"; fi
 
 # A pattern and a numeric bound are only enforced by the real JSON-Schema
 # validator; the jq-only fallback checks required fields and types, so these two
 # say so rather than failing on a machine without python jsonschema.
 if python3 -c "import jsonschema" >/dev/null 2>&1; then
     BADKB="${WORK}/loc-badkb.json"
-    _loc_site '{"country":"DK","timezone":"Europe/Copenhagen","keyboard":"not a layout!"}' > "$BADKB"
+    _loc_site '{"country":"DK","timezone":"Europe/Copenhagen"}' ',"keyboard":"not a layout!"' > "$BADKB"
     if run_validate "$BADKB"; then bad "a keyboard with spaces/punctuation wrongly passed"; else ok "keyboard must look like a layout"; fi
 
     BADLAT="${WORK}/loc-badlat.json"
     _loc_site '{"country":"DK","timezone":"Europe/Copenhagen","latitude":355.0}' > "$BADLAT"
     if run_validate "$BADLAT"; then bad "latitude 355 wrongly passed"; else ok "latitude is bounded to +/-90"; fi
+
+    BADNAME="${WORK}/loc-badname.json"
+    printf '{"name":"s","displayName":"S","owner":"o","defaultEnvironment":"o","locations":{"Home Office":{"country":"DK","timezone":"UTC"}},"primaryLocation":"home","hardware":{"nodes":[]},"repositories":[]}' > "$BADNAME"
+    if run_validate "$BADNAME"; then bad "a location name with capitals and a space wrongly passed"; else ok "a location's name is lower-case, no spaces"; fi
 else
-    echo "  skip: keyboard pattern + latitude bound (no python jsonschema here; the jq fallback checks neither)"
+    echo "  skip: keyboard pattern, latitude bound, location name (no python jsonschema here; the jq fallback checks none)"
 fi
 
 # The helpers, with ssh stubbed: the node's answers win over this machine's, and

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "site-fields.json",
   "title": "TAPPaaS Site",
-  "description": "The Site is the top-level umbrella for a TAPPaaS installation (ADR-007d). It holds site-wide identity, location, hardware (Proxmox nodes + their storage pools), backup target, update schedule, module catalog repositories, and references to the organization config files. Environments are NOT listed here — they are simply whatever is present under config/environments/*.json (enumerated from the directory, not from site.json). Domain, DNS, and identity are per-environment (NOT site-wide) and live in config/environments/*.json. site.json replaces configuration.json at cutover; during the phased migration both files may coexist. See ADR-007 P2.",
+  "description": "The Site is the top-level umbrella for a TAPPaaS installation (ADR-007d). It holds site-wide identity, its locations (the primary one is where it is), hardware (Proxmox nodes + their storage pools), backup target, update schedule, module catalog repositories, and references to the organization config files. Environments are NOT listed here — they are simply whatever is present under config/environments/*.json (enumerated from the directory, not from site.json). Domain, DNS, and identity are per-environment (NOT site-wide) and live in config/environments/*.json. site.json replaces configuration.json at cutover; during the phased migration both files may coexist. See ADR-007 P2.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -10,10 +10,79 @@
     "defaultEnvironment",
     "displayName",
     "owner",
-    "location",
+    "locations",
+    "primaryLocation",
     "hardware",
     "repositories"
   ],
+  "$defs": {
+    "location": {
+      "description": "A place: where devices stand, or where another site is.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "country"
+      ],
+      "properties": {
+        "name": {
+          "description": "The location's name: how devices, rooms and backup peers name it. It is the record's key.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,62}$",
+          "changeClass": "immutable",
+          "changeNote": "Devices, rooms and backup peers name it: add the new location, point them at it, delete this one."
+        },
+        "displayName": {
+          "description": "The name shown (default: the name).",
+          "type": "string",
+          "minLength": 1,
+          "changeClass": "in-place"
+        },
+        "kind": {
+          "description": "site: a place of this site's own equipment — its building, a provider's data centre. remote: another site's place, a backup buddy's.",
+          "type": "string",
+          "enum": ["site", "remote"],
+          "default": "site",
+          "changeClass": "in-place"
+        },
+        "country": {
+          "description": "ISO 3166-1 alpha-2 country code (e.g. DK).",
+          "type": "string",
+          "pattern": "^[A-Za-z]{2}$",
+          "changeClass": "in-place"
+        },
+        "city": {
+          "description": "The city — lets an off-site copy in the same country show it is elsewhere.",
+          "type": "string",
+          "changeClass": "in-place"
+        },
+        "address": {
+          "description": "The street address, or the provider and data centre — for an off-site copy in the same city.",
+          "type": "string",
+          "changeClass": "in-place"
+        },
+        "timezone": {
+          "description": "IANA timezone (e.g. Europe/Copenhagen). Required on the primary location: it is the site's.",
+          "type": "string",
+          "minLength": 1,
+          "changeClass": "in-place"
+        },
+        "latitude": {
+          "description": "Decimal degrees, north positive. Set by the operator — no node knows it. Read by modules that need a position rather than a country (Home Assistant's core config).",
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90,
+          "changeClass": "in-place"
+        },
+        "longitude": {
+          "description": "Decimal degrees, east positive. Set by the operator — no node knows it.",
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180,
+          "changeClass": "in-place"
+        }
+      }
+    }
+  },
   "properties": {
     "name": {
       "description": "Neutral site code (e.g. warmelo1 — place plus number). Aligned with the Proxmox cluster name at creation, informational afterwards (ADR-007d #426). Not used to name any environment, organization, or zone — those key on defaultEnvironment.",
@@ -54,57 +123,43 @@
       "changeClass": "immutable",
       "changeNote": "Written once when the site was created: the release it was installed from. The release it runs is read from the checkout."
     },
-    "location": {
-      "description": "Physical/legal location of the site, and the master data every module reads for time and locale (#408). The operator answers country/keyboard/timezone once, on the first Proxmox install; that node is the source these are derived from, not the mothership's own clock — a NixOS template, which is how a Danish site came to record NL/Europe/Amsterdam.",
+    "locations": {
+      "description": "Every place the site's devices can be, and every place this site cares about, by name: its own building, a provider's data centre, a backup buddy's site. The site's own is primaryLocation. A device, room or backup peer names one; the address is read from here.",
       "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "country",
-        "timezone"
-      ],
-      "properties": {
-        "country": {
-          "description": "ISO 3166-1 alpha-2 country code (e.g. DK). Derived from the timezone: the installer uses it but no Proxmox node stores it, so the timezone is what it is read back from.",
-          "type": "string",
-          "pattern": "^[A-Za-z]{2}$"
-        },
-        "timezone": {
-          "description": "IANA timezone (e.g. Europe/Copenhagen), as set on the first node.",
-          "type": "string",
-          "minLength": 1
-        },
-        "locale": {
-          "description": "POSIX locale (e.g. en_US), as set on the first node.",
-          "type": "string",
-          "default": "en_US"
-        },
-        "keyboard": {
-          "description": "Console keyboard layout (e.g. dk), as set on the first node — its XKBLAYOUT. The PXE answer file and every OS family read it from here (#408); before this field the provisioner used a built-in default, which is why a node added later came up with 'us'.",
-          "type": "string",
-          "pattern": "^[A-Za-z0-9_-]{2,16}$"
-        },
-        "city": {
-          "description": "City the Site is in — lets an off-site copy in the same country show it is elsewhere (#609, ADR-012 §1.5).",
-          "type": "string"
-        },
-        "building": {
-          "description": "Building or data centre — for an off-site copy in the same city (#609).",
-          "type": "string"
-        },
-        "latitude": {
-          "description": "Decimal degrees, north positive. Set by the operator — no node knows it. Read by locale-aware modules that need a position rather than a country (#348: Home Assistant's core config).",
-          "type": "number",
-          "minimum": -90,
-          "maximum": 90
-        },
-        "longitude": {
-          "description": "Decimal degrees, east positive. Set by the operator — no node knows it. Read by locale-aware modules that need a position rather than a country (#348: Home Assistant's core config).",
-          "type": "number",
-          "minimum": -180,
-          "maximum": 180
-        }
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9-]{0,62}$"
       },
+      "additionalProperties": {
+        "$ref": "#/$defs/location"
+      },
+      "changeClass": "manual",
+      "changeNote": "Has verbs of its own: site-manager location add, modify, delete."
+    },
+    "primaryLocation": {
+      "description": "The location the site is at, and the one a device is at when it names none. Its timezone is the site's: every node and guest is set to it.",
+      "type": "string",
+      "references": "locations",
+      "pattern": "^[a-z][a-z0-9-]{0,62}$",
       "changeClass": "in-place"
+    },
+    "locale": {
+      "description": "POSIX locale (e.g. en_US), as set on the first node. Site-wide: it does not move with a location.",
+      "type": "string",
+      "default": "en_US",
+      "changeClass": "in-place"
+    },
+    "keyboard": {
+      "description": "Console keyboard layout (e.g. dk), as set on the first node — its XKBLAYOUT. The PXE answer file and every OS family read it from here. Site-wide: it does not move with a location.",
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]{2,16}$",
+      "changeClass": "in-place"
+    },
+    "location": {
+      "description": "RETIRED — replaced by locations, primaryLocation, locale and keyboard; never write this field. Retained so a site.json migration 0019 has not reached is classified rather than reported unknown; site-manager validate refuses it, and readers still read it until the migration has run.",
+      "deprecated": true,
+      "type": "object",
+      "changeClass": "manual",
+      "changeNote": "Retired: migration 0019 moves it into locations."
     },
     "network": {
       "description": "Site WAN configuration. No rootDomain — domains are per-environment.",

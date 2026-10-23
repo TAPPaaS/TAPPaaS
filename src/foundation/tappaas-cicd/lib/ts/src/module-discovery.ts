@@ -60,7 +60,7 @@ export function isModuleConfig(raw: Record<string, unknown>): boolean {
     Array.isArray(raw.integratesWith) ||
     Array.isArray(raw.provides) ||
     typeof raw.moduleSource === "string" ||
-    typeof raw.location === "string" // its name before #609 (migration 0006)
+    (typeof raw.location === "string" && raw.location.includes("/")) // its name before migration 0006; without a '/' a location's name
   );
 }
 

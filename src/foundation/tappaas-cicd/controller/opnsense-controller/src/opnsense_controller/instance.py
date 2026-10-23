@@ -20,12 +20,15 @@ from __future__ import annotations
 def module_source_of(data: dict | None) -> str:
     """The module's source directory: ``moduleSource``, else a string ``location``.
 
-    "" when neither is a non-empty string.
+    "" when neither is a directory.
     """
     if not isinstance(data, dict):
         return ""
-    for key in ("moduleSource", "location"):
-        value = data.get(key)
-        if isinstance(value, str) and value:
-            return value
+    value = data.get("moduleSource")
+    if isinstance(value, str) and value:
+        return value
+    # A location without a '/' is a location's name (ADR-036), not a directory.
+    value = data.get("location")
+    if isinstance(value, str) and "/" in value:
+        return value
     return ""

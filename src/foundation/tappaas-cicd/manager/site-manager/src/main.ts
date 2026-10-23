@@ -35,6 +35,8 @@ import { Site, SiteClient, SiteNode } from "./types";
 import { runningVersion } from "./version";
 import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
+import { dirname } from "path";
+import { locationErrors, readLocations } from "../../../lib/ts/src/locations";
 
 const VERSION = "0.1.0";
 
@@ -47,8 +49,12 @@ export const HELP: HelpSpec = {
     {
       usage: "site modify <field options>", effect: { noPreview: "writes the fields given into site.json" },
       name: "site modify (fields; at least one)",
-      // Accepted so the refusal can say why (the schema's change class).
-      hidden: ["--name <s>", "--version <s>", "--defaultEnvironment <s>"],
+      // Accepted so the refusal can say why (the schema's change class); the
+      // --location* spellings are the retired location's, for one release:
+      // locale and keyboard go to the site, the others to the primary location.
+      hidden: ["--name <s>", "--version <s>", "--defaultEnvironment <s>",
+        "--locationCountry <cc>", "--locationTimezone <tz>", "--locationLocale <l>", "--locationKeyboard <kb>",
+        "--locationLatitude <deg>", "--locationLongitude <deg>", "--locationCity <c>", "--locationBuilding <f>"],
       options: [
         ["--channel <c>", "release channel: unstable | staging | production. Checks EVERY registered repository against the branch it declares for that channel in its channels.json, warns where they disagree or where none is declared, and proposes the fix; moving towards production needs --force."],
         ["--force", "authorize a channel move towards production — older code, and migrations do not run backwards."],
@@ -63,10 +69,9 @@ export const HELP: HelpSpec = {
         ["--backupOffsite <s>", "backup.offsite"],
         ["--backupDefaultSchedule <s>", "backup.defaultSchedule: daily | weekly | monthly | HH:MM"],
         ["--backupDefaultRetention <s>", "backup.defaultRetention, e.g. 90d"],
-        ["--locationCountry <cc>", "location.country"],
-        ["--locationTimezone <tz>", "location.timezone"],
-        ["--locationLocale <l>", "location.locale"],
-        ["--locationKeyboard <kb>", "location.keyboard — the console layout every OS family is set from"],
+        ["--primaryLocation <name>", "the location the site is at: one of the site's locations (location list), with a timezone — the site's"],
+        ["--locale <l>", "the site's POSIX locale, e.g. en_US"],
+        ["--keyboard <kb>", "the console keyboard layout every OS family is set from, e.g. dk"],
         ["--brandingLogo <path>", "branding.logo — the sign-in page's logo (svg, png, jpg, webp), relative to the config dir; applied by the identity update"],
         ["--brandingLogoDark <path>", "branding.logoDark — its dark-theme variant, same file type"],
         ["--dnssec true|false", "the firewall's resolver validates DNSSEC (default true); applied by the next network update"],
@@ -78,10 +83,6 @@ export const HELP: HelpSpec = {
         ["--diskAutoGrowGrowPercent <pct>", "diskAutoGrow.growPercent — grow by this % of the disk (default 50)"],
         ["--diskAutoGrowMinGrowGB <gb>", "diskAutoGrow.minGrowGB — and by at least this many GB (default 5)"],
         ["--diskAutoGrowPoolCeiling <pct>", "diskAutoGrow.poolCeiling — only while the pool stays at or under this % used (default 80)"],
-        ["--locationLatitude <deg>", "location.latitude, decimal degrees"],
-        ["--locationLongitude <deg>", "location.longitude, decimal degrees"],
-        ["--locationCity <c>", "location.city — lets an off-site copy in the same country show it is elsewhere"],
-        ["--locationBuilding <f>", "location.building — the building or data centre"],
         ["--networkIsp <s>", "network.isp"],
         ["--networkPublicIp <ip>", "network.publicIp (or auto)"],
         ["--updateFrequency <f>", "daily | weekly | monthly | none"],
@@ -568,10 +569,25 @@ function cmdSite(o: Opts): void {
     // cascade. daily | weekly | monthly | HH:MM; nothing sub-daily.
     setStr("--backupDefaultSchedule", ["backup", "defaultSchedule"]);
     setStr("--backupDefaultRetention", ["backup", "defaultRetention"]);
-    setStr("--locationCountry", ["location", "country"]);
-    setStr("--locationTimezone", ["location", "timezone"]);
-    setStr("--locationLocale", ["location", "locale"]);
-    setStr("--locationKeyboard", ["location", "keyboard"]);
+    // The place fields are a location's (site-manager location modify); the
+    // retired --location* spellings still reach the primary one — or, on a
+    // site.json migration 0019 has not reached, the retired location itself.
+    const { primary, legacy } = readLocations(raw);
+    const placeAt = (field: string): string[] => (legacy || !primary ? ["location", field] : ["locations", primary, field]);
+    const primaryFlag = o.flags.get("--primaryLocation");
+    if (primaryFlag !== undefined) {
+      const { locations } = readLocations(raw);
+      if (legacy) die("site modify: --primaryLocation needs the locations migration 0019 makes first (it runs with the next update)");
+      if (!locations[primaryFlag]) die(`site modify: --primaryLocation '${primaryFlag}' is not one of the site's locations (site-manager location list)`);
+      if (!locations[primaryFlag].timezone) die(`site modify: '${primaryFlag}' records no timezone, and the primary location's is the site's: site-manager location modify ${primaryFlag} --timezone <tz>`);
+    }
+    setStr("--primaryLocation", ["primaryLocation"]);
+    setStr("--locale", legacy ? ["location", "locale"] : ["locale"]);
+    setStr("--keyboard", legacy ? ["location", "keyboard"] : ["keyboard"]);
+    setStr("--locationLocale", legacy ? ["location", "locale"] : ["locale"]);
+    setStr("--locationKeyboard", legacy ? ["location", "keyboard"] : ["keyboard"]);
+    setStr("--locationCountry", placeAt("country"));
+    setStr("--locationTimezone", placeAt("timezone"));
     setStr("--brandingLogo", ["branding", "logo"]);
     setStr("--brandingLogoDark", ["branding", "logoDark"]);
     setBool("--dnssec", ["dnssec"]);
@@ -583,10 +599,10 @@ function cmdSite(o: Opts): void {
     setRange("--diskAutoGrowGrowPercent", ["diskAutoGrow", "growPercent"], 1, Infinity);
     setRange("--diskAutoGrowMinGrowGB", ["diskAutoGrow", "minGrowGB"], 1, Infinity);
     setRange("--diskAutoGrowPoolCeiling", ["diskAutoGrow", "poolCeiling"], 1, 100);
-    setNum("--locationLatitude", ["location", "latitude"], -90, 90);
-    setNum("--locationLongitude", ["location", "longitude"], -180, 180);
-    setStr("--locationCity", ["location", "city"]);
-    setStr("--locationBuilding", ["location", "building"]);
+    setNum("--locationLatitude", placeAt("latitude"), -90, 90);
+    setNum("--locationLongitude", placeAt("longitude"), -180, 180);
+    setStr("--locationCity", placeAt("city"));
+    setStr("--locationBuilding", placeAt(legacy ? "building" : "address"));
     setStr("--networkIsp", ["network", "isp"]);
     setStr("--networkPublicIp", ["network", "publicIp"]);
 
@@ -1160,6 +1176,16 @@ function cmdEvacuate(o: Opts, client: SiteClient): number {
 function cmdValidate(o: Opts, client: SiteClient): void {
   const siteFile = o.rest[0] ?? siteFileOf(o);
   const errs = client.validateSite(siteFile);
+  // What the schema cannot say (ADR-036 D1): the primary location exists and
+  // has the site's timezone, and every location something names exists. The
+  // names are looked for beside the site.json validated.
+  if (existsSync(siteFile)) {
+    try {
+      errs.push(...locationErrors(loadRaw(siteFile), dirname(siteFile)));
+    } catch {
+      // not JSON: validate-site.sh has said so
+    }
+  }
   if (errs.length === 0) {
     info(`${GN}✓${CL} site.json valid: ${siteFile}`);
     return;

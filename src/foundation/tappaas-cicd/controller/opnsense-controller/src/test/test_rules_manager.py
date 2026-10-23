@@ -1666,6 +1666,8 @@ class TestModuleSourceField(unittest.TestCase):
     def test_a_place_is_not_a_path(self):
         # site.json's `location` is a physical place (ADR-026 D6.2).
         self.assertEqual(module_source_of({"location": {"country": "DK"}}), "")
+        # …and nor is a location's name, which a peer or device records.
+        self.assertEqual(module_source_of({"location": "hareskov"}), "")
 
     def test_neither_is_empty(self):
         for data in ({}, {"location": ""}, {"moduleSource": ""}, None, []):

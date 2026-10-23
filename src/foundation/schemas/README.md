@@ -22,7 +22,7 @@ This directory holds the JSON-Schema (draft 2020-12) field definitions for every
 
 | Object | Schema (`schemas/`) | Live location (`~/config/`) | Owning manager — CRUD verbs |
 |--------|---------------------|------------------------------|------------------------------|
-| **Site** (singleton) | `site-fields.json` | `site.json` | **site-manager** — `site show`/`modify`; `node list`/`add`/`delete`; `repository list`/`add`/`delete`/`reconcile`; `validate`; `reconcile [--deep]` |
+| **Site** (singleton) | `site-fields.json` | `site.json` | **site-manager** — `site show`/`modify`; `location list`/`show`/`add`/`modify`/`delete`; `node list`/`add`/`delete`; `repository list`/`add`/`delete`/`reconcile`; `validate`; `reconcile [--deep]` |
 | **Environment** | `environment-fields.json` | `environments/<env>.json` | **environment-manager** — `add`/`modify`/`delete`/`list`/`show`/`validate`; `reconcile [--deep]` (env + its zone via network; `--deep` → consuming modules). `--dns-mode per-service\|wildcard` |
 | **Organization** | `organization-fields.json` | `identities/organizations/<name>.json` | **identity-manager** — `org add`/`modify`/`delete`/`list`/`show` |
 | **Group** | `group-fields.json` | `people/groups/<name>.json` | **identity-manager** — `group add`/`modify`/`delete`/`list`/`show` |

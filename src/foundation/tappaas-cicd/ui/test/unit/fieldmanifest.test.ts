@@ -109,16 +109,18 @@ const role = buildManifest({ kind: "role", name: "admin", mode: "modify", defs: 
 check(role.fields.map((f) => f.arg).join() === "--displayName,--description", "role: displayName and description");
 
 // ── site ────────────────────────────────────────────────────────────────
-const site = buildManifest({ kind: "site", name: null, mode: "modify", defs: flattenSchema(schema("site-fields.json")), record: { name: "rossen", defaultEnvironment: "rossen", channel: "unstable", location: { country: "DK" }, updateSchedule: { frequency: "weekly", weekday: "Thursday", hour: 2 } }, refs, vars: {} });
+const site = buildManifest({ kind: "site", name: null, mode: "modify", defs: flattenSchema(schema("site-fields.json")), record: { name: "rossen", defaultEnvironment: "rossen", channel: "unstable", primaryLocation: "rodovre", keyboard: "dk", updateSchedule: { frequency: "weekly", weekday: "Thursday", hour: 2 } }, refs, vars: {} });
 check(field(site, "defaultEnvironment")?.typeText === "an environment" && field(site, "defaultEnvironment")?.editable === false, "site: defaultEnvironment names an environment; site modify has no option for it");
 check(field(site, "updateSchedule.frequency")?.arg === "--updateFrequency" && field(site, "updateSchedule.hour")?.type === "integer" && field(site, "updateSchedule.weekday")?.choices?.length === 7, "…the schedule's three fields, with their flags");
-check(field(site, "location.latitude")?.typeText === "number" && field(site, "updateSchedule.hour")?.typeText === "integer", "…a decimal is labelled number, an integer integer");
-check(field(site, "location.country")?.arg === "--locationCountry" && field(site, "location.country")?.value === "DK", "…a nested field by its path, passed as its flag");
+const locDefs = flattenSchema((schema("site-fields.json").$defs as Record<string, unknown>).location);
+check(locDefs.find((d) => d.name === "latitude")?.type === "number" && field(site, "updateSchedule.hour")?.typeText === "integer", "…a decimal is a number, an integer integer");
+check(field(site, "primaryLocation")?.arg === "--primaryLocation" && field(site, "primaryLocation")?.value === "rodovre" && field(site, "keyboard")?.arg === "--keyboard", "…the primary location and the keyboard, passed as their flags");
+check(field(site, "diskAutoGrow.threshold")?.class === "in-place", "…a leaf takes its object's class");
 check(field(site, "name")?.editable === false && /^immutable: The site's code/.test(field(site, "name")?.why ?? "") && field(site, "name")?.value === "rossen", "…name shown, refused with the schema's reason");
 check(/^immutable: Written once/.test(field(site, "version")?.why ?? "") && /^immutable: /.test(field(site, "defaultEnvironment")?.why ?? ""), "…version and defaultEnvironment too");
 check(field(site, "dnssec")?.arg === "--dnssec" && field(site, "dnssec")?.type === "boolean" && field(site, "dnsBlocklists.zones")?.type === "list" && field(site, "dnsBlocklists.zones")?.typeText === "zones", "…dnssec a boolean, the blocklist zones a list of zones");
 check(field(site, "diskAutoGrow.threshold")?.arg === "--diskAutoGrowThreshold" && field(site, "diskAutoGrow.threshold")?.default === "80" && field(site, "branding.logoDark")?.arg === "--brandingLogoDark", "…disk growth by key, with its defaults; branding's two files");
-check(field(site, "location.city")?.class === "in-place" && /^manual: /.test(field(site, "hardware.nodes")?.why ?? ""), "…a leaf takes its object's class; hardware is manual, with its reason");
+check(/^manual: Has verbs of its own: site-manager location/.test(field(site, "locations")?.why ?? "") && /^manual: /.test(field(site, "hardware.nodes")?.why ?? ""), "…the locations and hardware are manual, with their reasons");
 
 // ── backup: the module's leaf of the cascade ────────────────────────────
 const bk = buildManifest({ kind: "backup", name: "vaultwarden", mode: "modify", defs: backupDefs(composed), record: {}, defaults: { enabled: true, retention: "7y", exclude: [], schedule: "daily" }, refs, vars: {} });

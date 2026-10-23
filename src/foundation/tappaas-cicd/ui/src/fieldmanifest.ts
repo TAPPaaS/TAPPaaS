@@ -246,7 +246,7 @@ export function flattenSchema(doc: unknown, prefix = "", requiredHere = true, in
     const p = obj(raw);
     const name = prefix ? `${prefix}.${k}` : k;
     const isReq = requiredHere && required.has(k);
-    // A leaf takes its object's class (site.json: location in-place, so location.city).
+    // A leaf takes its object's class (site.json: diskAutoGrow in-place, so diskAutoGrow.threshold).
     const cls = typeof p.changeClass === "string" ? { changeClass: p.changeClass, ...(typeof p.changeNote === "string" ? { changeNote: p.changeNote } : {}) } : inherited;
     if (Object.keys(obj(p.properties)).length > 0) {
       out.push(...flattenSchema(p, name, isReq, cls));
@@ -313,9 +313,7 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
     modify: {
       displayName: "--displayName", owner: "--owner", email: "--email", channel: "--channel", automaticReboot: "--automaticReboot", ipv6: "--ipv6", requireSigned: "--requireSigned",
       snapshotRetention: "--snapshotRetention", "backup.target": "--backupTarget", "backup.offsite": "--backupOffsite", "backup.defaultSchedule": "--backupDefaultSchedule",
-      "backup.defaultRetention": "--backupDefaultRetention", "location.country": "--locationCountry", "location.timezone": "--locationTimezone", "location.locale": "--locationLocale",
-      "location.keyboard": "--locationKeyboard", "location.latitude": "--locationLatitude", "location.longitude": "--locationLongitude", "location.city": "--locationCity",
-      "location.building": "--locationBuilding", "branding.logo": "--brandingLogo", "branding.logoDark": "--brandingLogoDark", "network.isp": "--networkIsp", "network.publicIp": "--networkPublicIp",
+      "backup.defaultRetention": "--backupDefaultRetention", primaryLocation: "--primaryLocation", locale: "--locale", keyboard: "--keyboard", "branding.logo": "--brandingLogo", "branding.logoDark": "--brandingLogoDark", "network.isp": "--networkIsp", "network.publicIp": "--networkPublicIp",
       dnssec: "--dnssec", "dnsBlocklists.lists": "--dnsBlocklistsLists", "dnsBlocklists.zones": "--dnsBlocklistsZones", "dnsBlocklists.allow": "--dnsBlocklistsAllow",
       "diskAutoGrow.enabled": "--diskAutoGrowEnabled", "diskAutoGrow.threshold": "--diskAutoGrowThreshold", "diskAutoGrow.growPercent": "--diskAutoGrowGrowPercent",
       "diskAutoGrow.minGrowGB": "--diskAutoGrowMinGrowGB", "diskAutoGrow.poolCeiling": "--diskAutoGrowPoolCeiling",
