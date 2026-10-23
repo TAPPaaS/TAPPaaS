@@ -17,7 +17,7 @@ import { Health, RackCable, StorageInventory, TopoFinding, TopoRef, Topology } f
 import { OperateButton, Step } from "../operate";
 import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
 import { Sel, portLabel } from "./layout";
-import { PlaceActions, RecordDeviceButton, RecordSeenButton, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackModifySteps } from "./rackops";
+import { PlaceActions, RecordDeviceButton, RecordSeenButton, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackModifySteps, roomModifySteps } from "./rackops";
 import { publicAddress } from "../zonegraph";
 import { StorageNote } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
@@ -25,7 +25,7 @@ import { DevLink, DevNode, deviceGraph, deviceState, freePanelPorts, selectedDev
 import { iconOf, kindName } from "./devicecard";
 import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
-import { DeviceLocationButton, LocationLink, PlacementLine } from "../locations";
+import { DeviceLocationButton, LocationLink, PlacementLine, locationOption, useSiteLocations } from "../locations";
 
 function Findings({ list }: { list: TopoFinding[] }) {
   if (list.length === 0) return <p className="muted small">No finding on it.</p>;
@@ -100,6 +100,7 @@ const farEnd = (l: DevLink, device: string) => (l.a === device ? l.b : l.a);
 export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null }) {
   const operator = canOperate(useMe());
   const health = useRead<Health>("health");
+  const locations = useSiteLocations();
   const g = useMemo(() => deviceGraph(t), [t]);
   const devOf = (id: string): DevNode | undefined => g.nodes.find((n) => n.id === id);
   // A port clicked in a drawing: a switch's port is selected, any other's link.
@@ -586,12 +587,12 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       const rmStep = (verb: string, t: string, extra: Partial<Step> = {}): Step => ({ title: t, bin: "position-manager", verb, fixed: [room.name], ...extra });
       actions = room.recorded ? (
         <>
-          <OperateButton label="Change…" title={`Room ${room.name}`} steps={[rmStep("room modify", `position-manager room modify ${room.name}`, { note: "Its display name, description or location (one of the site's: site-manager location list); --check previews." })]} />
+          <OperateButton label="Change…" title={`Room ${room.name}`} steps={() => roomModifySteps(room.name)} />
           {room.racks.length === 0 && room.loose.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete room ${room.name}`} steps={[rmStep("room delete", `position-manager room delete ${room.name}`)]} /> : null}
           <RecordDeviceButton />
         </>
       ) : /^[a-z][a-z0-9-]{0,62}$/.test(room.name) ? (
-        <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `position-manager room add ${room.name}`)]} />
+        <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `position-manager room add ${room.name}`, locationOption(locations))]} />
       ) : (
         // A room name is lower case: record it under one, then point the racks at it.
         <p className="muted small">

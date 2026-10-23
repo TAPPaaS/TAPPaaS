@@ -9,6 +9,7 @@ import { Step, StepView } from "../operate";
 import { TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
 import { canOperate, useMe } from "../ui";
+import { locationOption, useSiteLocations } from "../locations";
 import { BUDDY_KINDS, BuddyKind, buddyNameProblem, buddySpecs } from "../wizards";
 import { StepRow } from "./Setup";
 
@@ -37,14 +38,19 @@ export function BuddyWizard({ onClose, prefill }: { onClose: () => void; prefill
   const [chosen, setChosen] = useState<{ kind: BuddyKind; name: string } | null>(null);
   const [added, setAdded] = useState(false);
   const problem = buddyNameProblem(name.trim());
+  // A buddy is another site: one of the site's remote locations, or a place
+  // (--country, --city) peer add records as one — never the primary preselected.
+  const locations = useSiteLocations();
   const steps = useMemo(() => {
     if (!chosen) return null;
     const s = buddySpecs(chosen.kind, chosen.name);
+    const at = locationOption(locations, null, false);
     const add: Step = {
       ...s.add,
       title: `backup-manager peer add ${chosen.kind} ${chosen.name}`,
       labels: LABELS,
-      choices: { "--tunnel": ["serve", "dial"] },
+      choices: { "--tunnel": ["serve", "dial"], ...at.choices },
+      asides: at.asides,
       placeholders: chosen.kind === "pull" ? { "--host": "its PBS through the tunnel, e.g. 10.255.2.1", "--endpoint": "e.g. buddy.example.org:51830", "--namespace": "where the copy lands here, e.g. buddy/<their site>" } : { "--namespace": "what they may read — empty: the root (this site's VM backups)" },
       note:
         chosen.kind === "pull" ? (
@@ -55,7 +61,7 @@ export function BuddyWizard({ onClose, prefill }: { onClose: () => void; prefill
     };
     const check: Step = { ...s.check, title: `backup-manager peer check ${chosen.kind} ${chosen.name}`, note: "The tunnel's live state: the WireGuard instance, the keys, the last handshake, and whether the PBS answers through it. Until the buddy has its side in place the handshake is missing." };
     return { add, check };
-  }, [chosen]);
+  }, [chosen, locations]);
 
   const stages = [
     { id: "who", title: "1 · Which side, and the buddy's name", required: true, done: chosen !== null, detail: "Who keeps the copy decides who serves the tunnel." },

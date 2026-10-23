@@ -16,6 +16,7 @@ import { ManifestVerb } from "./types";
 import { ClassTag } from "./fieldsform";
 import { FieldManifest, ManifestField, classSummary, fieldChanges, fieldGroups, initialFieldText, listItems, placeholderOf, typedVars } from "./fieldlogic";
 import { PrefillContext, Step, Values } from "./operate";
+import { AddLocationHint } from "./locations";
 
 export function fieldsPath(kind: string, name: string | null, mode: "add" | "modify"): string {
   return `fields/${kind}${name ? `/${encodeURIComponent(name)}` : ""}${mode === "add" && name ? "?mode=add" : ""}`;
@@ -106,6 +107,8 @@ export function FieldsForm({ m: all, only, values, set }: { m: FieldManifest; on
         </label>
         <Input f={f} text={edits[f.name] ?? ""} set={(t) => edit(f.name, t)} vars={vars} inputs={inputs} />
         {f.description ? <small className="muted">{f.description}</small> : null}
+        {/* A location the site lacks is added on the Site page first. */}
+        {f.references === "locations" ? <small><AddLocationHint /></small> : null}
         {errors[f.name] ? <small className="ff-error">{errors[f.name]}</small> : null}
       </div>
     );

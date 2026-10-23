@@ -1,7 +1,9 @@
 // locations.tsx — where a device is (ADR-036 D2): the site's locations by
 // name, a link to one (the Site page's Locations card), a device's placement
 // as a link to its room or rack in the Physical view, and the form that moves
-// a switch or an access point to another.
+// a switch or an access point to another. Every form that takes a location
+// offers the site's as a dropdown, the primary preselected, with a link to the
+// Site page's Locations section for one the site does not have yet.
 
 import { ReactNode } from "react";
 import { useRead } from "./api";
@@ -55,6 +57,29 @@ export function LocationLine({ name, locations }: { name: string | null; locatio
   );
 }
 
+// The Site page's Locations section, where a location is added.
+export const LOCATIONS_HREF = "/site#locations";
+
+export function AddLocationHint() {
+  return (
+    <span className="muted">
+      Not listed? <Link to={LOCATIONS_HREF}>Add the location</Link> in the Site page's Locations, then come back.
+    </span>
+  );
+}
+
+// The parts of a Step whose --location takes one of the site's locations:
+// the dropdown, the value it starts at (the current one, else the primary,
+// unless `preselect` is false), and the link to add one.
+export function locationOption(locations: SiteLocation[], current?: string | null, preselect = true): Pick<Step, "choices" | "initial" | "asides"> {
+  const start = current ?? (preselect ? locations.find((l) => l.primary)?.name : undefined);
+  return {
+    choices: locations.length ? { "--location": locations.map((l) => l.name) } : {},
+    initial: start ? { "--location": start } : {},
+    asides: { "--location": <AddLocationHint /> },
+  };
+}
+
 // A device's placement (position-manager's): a rack and its units, or loose
 // in a room, each a link to it in the Physical view; else placed nowhere —
 // somewhere at its location when that has no room.
@@ -84,7 +109,7 @@ export function PlacementLine({ v, device, location }: { v: PositionsView | null
 // switch-manager modify-switch / ap-manager modify --location: the location
 // it is at, one of the site's.
 export function locationSteps(kind: "switch" | "ap", name: string, current: string | null, locations: SiteLocation[]): Step[] {
-  const names = locations.map((l) => l.name);
+  const at = locationOption(locations, current);
   return [
     kind === "switch"
       ? {
@@ -92,8 +117,7 @@ export function locationSteps(kind: "switch" | "ap", name: string, current: stri
           bin: "switch-manager",
           verb: "modify-switch",
           fixed: [name],
-          initial: { "--location": current ?? "" },
-          choices: { "--location": names },
+          ...at,
           note: "Writes where the switch is (switch-configuration-actual.json and -desired.json); nothing on the switch changes. A location is one of the site's (the Site page's Locations); free text goes in --description.",
         }
       : {
@@ -101,8 +125,7 @@ export function locationSteps(kind: "switch" | "ap", name: string, current: stri
           bin: "ap-manager",
           verb: "modify",
           fixed: [name],
-          initial: { "--location": current ?? "" },
-          choices: { "--location": names },
+          ...at,
           note: "Writes where the access point is (switch-configuration-desired.json); nothing on it changes. A location is one of the site's (the Site page's Locations); free text goes in --description.",
         },
   ];

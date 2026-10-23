@@ -9,6 +9,7 @@ import { useRead } from "../api";
 import { fieldsStep } from "../fields";
 import { OperateButton, Step, Values } from "../operate";
 import { ManifestVerb, PositionsView, RackInfo, TopoDevice } from "../types";
+import { SiteLocation, locationOption, useSiteLocations } from "../locations";
 
 const RM = "position-manager";
 
@@ -135,16 +136,19 @@ export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "other"];
 
 // Record a device nothing manages: its kind, its model from the faceplate
 // catalog (or typed), its ports (a count, or names), its location, how it is shown.
-export function deviceAddSteps(models: string[], locations: string[]): Step[] {
+export function deviceAddSteps(models: string[], locations: SiteLocation[]): Step[] {
+  const at = locationOption(locations);
   return [
     {
       title: "position-manager device add <name>",
       bin: RM,
       verb: "device add",
       only: ["--kind", "--model", "--ports", "--port", "--location", "--display-name", "--description"],
-      choices: { "--kind": RECORDED_KINDS, ...(locations.length ? { "--location": locations } : {}) },
+      choices: { "--kind": RECORDED_KINDS, ...at.choices },
+      initial: at.initial,
+      asides: at.asides,
       suggest: { "--model": models },
-      placeholders: { "--ports": "a count: 24", "--port": "a port's name: WAN, LAN 1, …", "--location": "the primary location" },
+      placeholders: { "--ports": "a count: 24", "--port": "a port's name: WAN, LAN 1, …" },
       note: "A device nothing manages — a modem, an ONT, a UPS, a patch panel — recorded with its kind and its ports (from its model, a count, or by name), at the primary location unless you choose another. It then stands unplaced under its location: Place… it in a rack or a room. A patch panel: place it in a rack, then select a wire and Attach to patch panel…. --check previews.",
     },
   ];
@@ -158,9 +162,11 @@ export function seenName(d: TopoDevice): string {
 }
 
 // Record…: a device a switch port sees becomes a recorded one, with the port's cable.
-export function deviceRecordSteps(d: TopoDevice, models: string[], locations: string[]): Step[] {
+export function deviceRecordSteps(d: TopoDevice, models: string[], locations: SiteLocation[]): Step[] {
   const s = d.seen!;
   const target = s.mac ?? `${s.switch}:${s.port}`;
+  // It is where the switch that sees it is, unless you choose another.
+  const at = locationOption(locations, d.location);
   return [
     {
       title: `position-manager device record '${target}'`,
@@ -168,10 +174,11 @@ export function deviceRecordSteps(d: TopoDevice, models: string[], locations: st
       verb: "device record",
       fixed: [target],
       only: ["--name", "--kind", "--port", "--model", "--location", "--display-name", "--description"],
-      initial: { "--name": seenName(d), "--kind": "other" },
-      choices: { "--kind": RECORDED_KINDS, ...(locations.length ? { "--location": locations } : {}) },
+      initial: { "--name": seenName(d), "--kind": "other", ...at.initial },
+      choices: { "--kind": RECORDED_KINDS, ...at.choices },
+      asides: at.asides,
       suggest: { "--model": models },
-      placeholders: { "--port": s.lldp?.port ?? "1", "--location": d.location ?? "the switch's location" },
+      placeholders: { "--port": s.lldp?.port ?? "1" },
       note: `Records the device ${s.switch} port ${s.port} sees${s.mac ? ` (${s.mac})` : ""}: its MAC is kept so it is no longer listed as seen, and the port's link is recorded as its cable. It then stands unplaced under its location: Place… it.`,
     },
   ];
@@ -179,6 +186,11 @@ export function deviceRecordSteps(d: TopoDevice, models: string[], locations: st
 
 export function rackAddSteps(): Step[] {
   return [fieldsStep({ title: "position-manager rack add", bin: RM, verb: "rack add", kind: "rack", name: null, mode: "add", note: "A rack in config/positions.json: its height in units, its width, how its units are numbered and the room it stands in. Devices are placed in it afterwards." })];
+}
+
+// A room's display name, description or location (a dropdown of the site's).
+export function roomModifySteps(room: string): Step[] {
+  return [fieldsStep({ title: `position-manager room modify ${room}`, bin: RM, verb: "room modify", fixed: [room], kind: "room", name: room, mode: "modify", note: "Its display name, description or location. The check refuses another location while a device placed in it records a location of its own." })];
 }
 
 export function rackModifySteps(rack: string): Step[] {
@@ -237,10 +249,9 @@ export function AddRoomButton({ kind }: { kind?: "primary" }) {
 }
 
 // The catalog's models and the site's locations, for the record forms.
-function useRecordChoices(): { models: string[]; locations: string[] } {
+function useRecordChoices(): { models: string[]; locations: SiteLocation[] } {
   const fp = useRead<{ key: string }[]>("faceplates", 600_000);
-  const site = useRead<{ site?: { locations?: Record<string, unknown> } }>("site");
-  return { models: (fp.env?.data ?? []).map((f) => f.key), locations: Object.keys(site.env?.data?.site?.locations ?? {}).sort() };
+  return { models: (fp.env?.data ?? []).map((f) => f.key), locations: useSiteLocations() };
 }
 
 // Record a device…: the catalog's models as the model's suggestions.

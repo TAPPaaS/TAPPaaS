@@ -236,19 +236,20 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
 // location form; Delete is refused by site-manager for the primary location and
 // for one a peer or device names, and needs the name typed.
 function Locations({ primary, rows }: { primary: string | null; rows: (Loc & { name: string })[] }) {
-  // /site#location-<name> (a device's location line): that row, once it is there.
+  // /site#location-<name> (a device's location line): that row, once it is
+  // there; /site#locations (a form's "add the location"): the section.
   const hash = useHash();
-  const there = rows.some((l) => locationAnchor(l.name) === hash);
+  const there = hash === "locations" || rows.some((l) => locationAnchor(l.name) === hash);
   useEffect(() => {
     // Down to the row only: in a narrow window the table is wider than the
     // page, and scrollIntoView would also scroll it sideways off the menu.
     const el = there ? document.getElementById(hash) : null;
-    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - window.innerHeight / 2, behavior: "smooth" });
+    if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - (hash === "locations" ? 80 : window.innerHeight / 2), behavior: "smooth" });
   }, [there, hash]);
   const loc = (verb: string, name: string | null, title: string, note: string): Step =>
     fieldsStep({ title, bin: "site-manager", verb: `location ${verb}`, fixed: name ? [name] : [], kind: "location", name, mode: name ? "modify" : "add", keep: verb === "add" ? ["--primary"] : [], note });
   return (
-    <div>
+    <div id="locations">
       <Section
         title="Locations"
         aside={<OperateButton label="Add location…" title="Add a location" steps={() => [loc("add", null, "site-manager location add", "A place by name: the name is how peers, rooms and devices name it, and cannot change. --primary makes it the site's own, whose timezone every node and guest takes.")]} />}
