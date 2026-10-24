@@ -10,6 +10,7 @@
 //   - memory-commitment (#569: physical RAM vs what running guests are entitled to)
 //   - guest-memory      (per guest: declared vs allocated vs used)
 //   - backup-status    (was check-backup-status.sh; reads `backup-manager list --json`)
+//   - backup-keys      (#874: does a key stick hold the escrow's keys as they are — WARN)
 //   - service-liveness (guest-agent ping / running-state — see TODO)
 //   - pending-reboot   (#730: guests whose update is waiting for a reboot)
 //   - cve-status       (ADR-011: the last security scan — WARN, never FAIL)
@@ -594,6 +595,49 @@ export function checkStorageDisks(configDir: string): CheckResult {
   }
 }
 
+// ── backup-keys gate (#874) ───────────────────────────────────────────
+// A key that changes after the last USB key stick was written is in no copy off
+// the machine, and the warning printed when it changed scrolled past in a sweep.
+// `backup-manager key status --json` compares the escrow's fingerprint with the
+// one recorded when a stick was last written (or read back); this gate repeats
+// the warning until they match. WARN, never FAIL: the backups themselves are fine.
+interface KeyStatusDoc {
+  escrowed?: number;
+  fingerprint?: string | null;
+  stick?: { fingerprint?: string; written?: string; label?: string } | null;
+  current?: boolean;
+}
+
+export function backupKeysResult(doc: unknown): CheckResult {
+  const d = (doc ?? {}) as KeyStatusDoc;
+  if (typeof d.escrowed !== "number" || typeof d.current !== "boolean") {
+    return { name: "backup-keys", status: "skip", detail: "backup-manager key status gave no document" };
+  }
+  if (d.escrowed === 0) return { name: "backup-keys", status: "skip", detail: "no backup keys escrowed" };
+  const day = (d.stick?.written ?? "").slice(0, 10);
+  if (d.current) {
+    return { name: "backup-keys", status: "pass", detail: `the key stick of ${day || "?"} holds all ${d.escrowed} key(s)` };
+  }
+  const text = d.stick
+    ? `the keys changed after the key stick of ${day || "?"} was written — write it again: backup-manager key export --usb`
+    : "no key stick has been written — a full-site restore has nothing to decrypt with: backup-manager key export --usb";
+  return { name: "backup-keys", status: "warn", detail: text, findings: [{ status: "warn", text, subject: mod("backup") }] };
+}
+
+export function checkBackupKeys(configDir: string): CheckResult {
+  const bin = process.env.BACKUP_MANAGER_BIN ?? "backup-manager";
+  const r = spawnSync(bin, ["key", "status", "--config-dir", configDir, "--json"], {
+    encoding: "utf8",
+    timeout: 60_000,
+  });
+  if (r.error || r.status !== 0) return { name: "backup-keys", status: "skip", detail: "backup tooling unavailable" };
+  try {
+    return backupKeysResult(JSON.parse(r.stdout ?? ""));
+  } catch {
+    return { name: "backup-keys", status: "skip", detail: "backup-manager key status --json not parseable" };
+  }
+}
+
 // ── cpu-impact report (#827) ──────────────────────────────────────────
 // What an HA guest gives up when haCpu common puts it on the CPU level its two
 // nodes share. Measured, not guessed, for the instructions that can be: the
@@ -969,6 +1013,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkCpuImpact(client, opts.configDir, opts.defaultNode),
     checkGuestMemory(client),
     checkBackupStatus(opts.configDir),
+    checkBackupKeys(opts.configDir),
     checkPendingReboot(client, opts.configDir, opts.defaultNode),
     checkSiteTimezone(client, opts.configDir, opts.defaultNode),
     checkQuorum(client),

@@ -540,6 +540,25 @@ over = m.check_update_capacity()
 assert over and over["dependency"] == "node-memory" and "107%" in over["detail"], f"over-committed: refused, named: {over}"
 os.environ["HEALTH_MANAGER_CMD"] = os.path.join(d, "missing")
 assert m.check_update_capacity() is None, "a health-manager that cannot run never blocks the sweep"
+
+# #874: does a key stick hold the backup keys as they are — asked on every run.
+bm = os.path.join(d, "bm")
+def bstub(rc, out):
+    with open(bm, "w") as f:
+        f.write(f"#!/bin/sh\n[ \"$1 $2 $3\" = 'key status --json' ] || exit 2\nprintf '%s\\n' '{out}'\nexit {rc}\n")
+    os.chmod(bm, 0o755)
+os.environ["BACKUP_MANAGER_CMD"] = bm
+bstub(0, '{"escrowed":4,"fingerprint":"ab","stick":{"fingerprint":"cd","written":"2026-10-20T10:00:00+02:00"},"current":false}')
+bk = m.backup_key_status()
+assert bk == {"current": False, "escrowed": 4, "stick_written": "2026-10-20T10:00:00+02:00"}, f"stale stick: {bk}"
+bstub(0, '{"escrowed":4,"fingerprint":"ab","stick":null,"current":false}')
+assert m.backup_key_status()["stick_written"] is None, "no stick ever written"
+bstub(0, '{"escrowed":4,"fingerprint":null,"stick":null,"current":null}')
+assert m.backup_key_status() is None, "a key that could not be read is not knowing — no claim either way"
+bstub(1, "")
+assert m.backup_key_status() is None, "a backup-manager that fails says nothing"
+os.environ["BACKUP_MANAGER_CMD"] = os.path.join(d, "missing")
+assert m.backup_key_status() is None, "a missing backup-manager never derails the summary"
 PY
     then
         passed=$((passed + 1))

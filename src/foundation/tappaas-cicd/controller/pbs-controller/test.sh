@@ -221,6 +221,75 @@ else
     bad "re-import OVERWROTE an escrowed key — backups made with the old one would be unreadable"
 fi
 
+# #874: a key that changes after the last key stick was written is in no stick.
+# `key status` compares the escrow's fingerprint with the one the stick's writer
+# recorded, every time it is asked — not once, when the key changed.
+echo ""
+echo "== key status: the last key stick against the escrow as it is now =="
+_ks() { TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" --json key status 2>/dev/null | jq -r "$1"; }
+if [[ "$(_ks '.current, .stick')" == $'false\nnull' ]]; then
+    ok "no stick recorded: status is not current"
+else
+    bad "with no stick recorded, key status said: $(_ks -c .)"
+fi
+if TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key status 2>&1 | grep -q "NO key stick"; then
+    ok "key status says no key stick has been written"
+else
+    bad "key status does not warn that no key stick was written"
+fi
+_ke_stick="$(mktemp -d)"
+TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key export "${_ke_stick}" >/dev/null 2>&1
+if TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key stamp --dir "${_ke_stick}" --label "test stick" >/dev/null 2>&1 \
+   && [[ "$(_ks '.current, .stick.label, .stick.keys')" == $'true\ntest stick\n1' ]]; then
+    ok "a stamp from the keys the stick holds makes the status current"
+else
+    bad "after key stamp, key status said: $(_ks -c .)"
+fi
+if [[ "$(_ks .fingerprint)" =~ ^[0-9a-f]{64}$ ]] && ! sudo grep -rq "FAKE-KEY-CONTENT" "${_ke_src}/usb-copy.json"; then
+    ok "the fingerprint is a sha256, and the stamp carries no key"
+else
+    bad "the fingerprint is not a sha256, or the stamp holds key material"
+fi
+if TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key list 2>&1 | grep -q "holds these keys"; then
+    ok "key list says the last stick holds the keys"
+else
+    bad "key list does not report the stick"
+fi
+# A rotation keeps the old key beside the new one: the set changed, so the stick
+# that predates it lacks a key.
+printf 'ROTATED\n' | sudo tee "${_ke_src}/demo.superseded-20261024.key" >/dev/null
+if [[ "$(_ks .current)" == "false" ]] \
+   && TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key status 2>&1 | grep -q "changed after the last key stick"; then
+    ok "a key added after the stick: status is not current, and says so"
+else
+    bad "a key added after the stick went unnoticed: $(_ks -c .)"
+fi
+sudo rm -f "${_ke_src}/demo.superseded-20261024.key"
+printf 'CHANGED\n' | sudo tee "${_ke_src}/demo.key" >/dev/null
+if [[ "$(_ks .current)" == "false" ]]; then
+    ok "a key whose content changed: status is not current"
+else
+    bad "a changed key under the same name went unnoticed"
+fi
+printf 'FAKE-KEY-CONTENT\n' | sudo tee "${_ke_src}/demo.key" >/dev/null
+if [[ "$(_ks .current)" == "true" ]]; then
+    ok "the key set back as the stick holds it: current again"
+else
+    bad "the fingerprint is not stable for the same key set"
+fi
+_ke_none="$(mktemp -d)"
+if [[ "$(TAPPAAS_KEY_ESCROW="${_ke_none}" "${BC}" --json key status 2>/dev/null | jq -c '[.escrowed, .current]')" == "[0,true]" ]]; then
+    ok "no keys escrowed: nothing for a stick to hold"
+else
+    bad "an empty escrow is reported as needing a stick"
+fi
+if TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key stamp --dir "${_ke_none}" >/dev/null 2>&1; then
+    bad "key stamp of a directory with no keys was accepted"
+else
+    ok "key stamp refuses a directory with no keys"
+fi
+rm -rf "${_ke_none}" "${_ke_stick}"
+
 if "${BC}" key bogus >/dev/null 2>&1; then
     bad "an unknown key subcommand is accepted"
 else

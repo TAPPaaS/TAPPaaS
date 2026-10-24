@@ -112,6 +112,7 @@ function Overview({ p, runs }: { p: Record<string, unknown>[]; runs: Read<Backup
   const gates = health.env?.data?.gates ?? [];
   const status = gates.find((g) => g.name === "backup-status");
   const pulse = gates.find((g) => g.name === "pulse");
+  const keys = gates.find((g) => g.name === "backup-keys");
   const outside = topo.env?.data?.outside ?? [];
   const sats = outside.filter((o) => o.kind === "satellite");
   return (
@@ -143,6 +144,11 @@ function Overview({ p, runs }: { p: Record<string, unknown>[]; runs: Read<Backup
               </li>
             ))}
           </ul>
+        ) : null}
+        {keys ? (
+          <p>
+            <Tag level={level(keys.status)} /> <b>backup-keys</b> {keys.detail}
+          </p>
         ) : null}
         {pulse ? (
           <>

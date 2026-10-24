@@ -96,6 +96,7 @@ backup-manager backup <module>... [--config-dir DIR]
         taken — an unreachable cluster included. Calls pbs-controller backup.
 
 backup-manager key list
+backup-manager key status [--json]
 backup-manager key export --usb [--node N] [--format] | --file DIR
 backup-manager key import --usb [--node N] | --file DIR
         The backup encryption keys (ADR-012 §2.5.1). --usb: a USB stick in a
@@ -107,6 +108,12 @@ backup-manager key import --usb [--node N] | --file DIR
         key back on the cluster. Runs the backup module's scripts/keys-to-usb.sh /
         keys-from-usb.sh, interactively (ssh -t). --file: a directory, the keys
         UNENCRYPTED (a bare directory still means --file). Keep two sticks.
+        Writing a stick (and reading one back with import --usb) records the
+        fingerprint of the keys it holds; `key status` says whether that is the
+        escrow as it is now (--json: escrowed, fingerprint, stick, current). The
+        sweep summary and health-manager's backup-keys gate repeat it until a
+        stick holds every key. `key stamp --dir DIR [--label TEXT]` records a
+        stick; the USB scripts call it. --file records nothing.
 
 backup-manager reconcile [--apply] [--config-dir DIR]
         Converge resolved policies → PBS (whole-cluster; PREVIEW by default,

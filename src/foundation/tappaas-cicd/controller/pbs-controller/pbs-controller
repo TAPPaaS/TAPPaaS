@@ -42,6 +42,13 @@
 #                           backup cannot be decrypted by anyone.
 #   key import <src>        Load keys from that media onto a rebuilt mothership.
 #                           Do this before restoring anything that must decrypt.
+#   key status [--json]     Whether a USB key stick holds the escrow's keys as
+#                           they are now: the escrow's fingerprint against the
+#                           one recorded when a stick was last written or read
+#   key stamp --dir <dir> [--label <text>]
+#                           Record that a stick holds the keys in <dir> (what
+#                           keys-to-usb.sh read back, or keys-from-usb.sh
+#                           decrypted). The USB scripts call this.
 #   apply-schedule <spec>   Set the schedule of the backup job that <spec> maps
 #                           to: daily | weekly | monthly, or a bare HH:MM meaning
 #                           daily at that time. Nothing more often than daily.
@@ -113,6 +120,8 @@ apply-schedule:
 key list:
 key export:
 key import:
+key status: --json
+key stamp: --dir= --label=
 '
 
 # True if the PBS reuse libs loaded (functions present).
@@ -584,11 +593,120 @@ cmd_key() {
         list)   _key_list ;;
         export) _key_export "$@" ;;
         import) _key_import "$@" ;;
-        *) error "key: expected 'list' | 'export <dest>' | 'import <src>'"; return 2 ;;
+        status) _key_status "$@" ;;
+        stamp)  _key_stamp "$@" ;;
+        *) error "key: expected 'list' | 'export <dest>' | 'import <src>' | 'status' | 'stamp --dir <dir>'"; return 2 ;;
     esac
 }
 
-_key_names() { sudo find "${KEY_ESCROW_DIR}" -maxdepth 1 -name '*.key' -printf '%f\n' 2>/dev/null | sort; }
+# sudo only where it is needed: update-tappaas.service asks for `key status`
+# under NoNewPrivileges, where sudo cannot work, and the escrow is the sweep's
+# own (tappaas, 0700) there.
+_key_sudo() { [[ -r "${1:-${KEY_ESCROW_DIR}}" && -x "${1:-${KEY_ESCROW_DIR}}" ]] || printf 'sudo '; }
+
+_key_names() { $(_key_sudo) find "${KEY_ESCROW_DIR}" -maxdepth 1 -name '*.key' -printf '%f\n' 2>/dev/null | sort; }
+
+# ── The stick's stamp ────────────────────────────────────────────────
+#
+# A key that changes after the last stick was written is a key no stick holds,
+# and the warning printed when it changed scrolls past in a scheduled sweep. So
+# the stick's writer records the FINGERPRINT of the key set it wrote, and `key
+# status` compares it with the escrow's as it is now, every time it is asked.
+#
+# The fingerprint is a sha256 over each key's name and sha256 — it says whether
+# two key sets are the same, and nothing about the keys. Superseded keys count:
+# a rotation adds one, and the stick must carry it for the older backups.
+KEY_STAMP_FILE="${KEY_ESCROW_DIR}/usb-copy.json"
+
+# _key_fingerprint_of <dir> [sudo] — the fingerprint of the *.key files in <dir>;
+# empty when it holds none.
+_key_fingerprint_of() {
+    local dir="$1" s n sum names lines=""
+    s="$(_key_sudo "${dir}")"
+    names="$(${s}find "${dir}" -maxdepth 1 -name '*.key' -printf '%f\n' 2>/dev/null | LC_ALL=C sort)"
+    [[ -n "${names}" ]] || return 0
+    while IFS= read -r n; do
+        # A key this user cannot read is a fingerprint nobody can vouch for:
+        # fail, rather than fingerprint a set with a hole in it.
+        if [[ -r "${dir}/${n}" ]]; then sum="$(sha256sum < "${dir}/${n}")" || return 1
+        else sum="$(sudo -n sha256sum -- "${dir}/${n}" 2>/dev/null)" || return 1; fi
+        lines+="${sum%% *} ${n}"$'\n'
+    done <<< "${names}"
+    printf '%s' "${lines}" | sha256sum | cut -d' ' -f1
+}
+
+_key_stamp() {
+    local dir="" label=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dir)   dir="${2:-}"; shift 2 ;;
+            --label) label="${2:-}"; shift 2 ;;
+            *) error "key stamp: unexpected '$1'"; return 2 ;;
+        esac
+    done
+    [[ -n "${dir}" && -d "${dir}" ]] || { error "key stamp: --dir <dir> required (the keys the stick holds)"; return 2; }
+    [[ -d "${dir%/}/tappaas-backup-keys" ]] && dir="${dir%/}/tappaas-backup-keys"
+    local fp n
+    fp="$(_key_fingerprint_of "${dir}")" || { error "key stamp: could not read the keys in ${dir}"; return 1; }
+    [[ -n "${fp}" ]] || { error "key stamp: no keys in ${dir}"; return 1; }
+    n="$(find "${dir}" -maxdepth 1 -name '*.key' | wc -l | tr -d ' ')"
+    # Beside the keys, as they are written: the escrow is the sweep's (tappaas,
+    # 0700) on a mothership; sudo only for one this user cannot write.
+    local s="sudo "
+    [[ -d "${KEY_ESCROW_DIR}" && -w "${KEY_ESCROW_DIR}" ]] && s=""
+    jq -n --arg fp "${fp}" --argjson n "${n}" --arg at "$(date -Iseconds)" --arg label "${label}" \
+        '{fingerprint: $fp, keys: $n, written: $at, label: $label}' \
+        | ( umask 077; ${s}tee "${KEY_STAMP_FILE}" >/dev/null ) \
+        || { error "key stamp: could not write ${KEY_STAMP_FILE}"; return 1; }
+    ${s}chmod 600 "${KEY_STAMP_FILE}"
+    info "  recorded: the key stick holds these ${n} key(s)"
+    return 0
+}
+
+# _key_status_doc — {escrowed, fingerprint, stick, current}. stick is the stamp
+# (null when no stick was ever recorded); current is true when the stick holds
+# the escrow's keys as they are now, or when there are no keys to hold — and
+# null when a key could not be read, which is not knowing, not "fine".
+_key_status_doc() {
+    local fp n stamp ok=1
+    fp="$(_key_fingerprint_of "${KEY_ESCROW_DIR}")" || { fp=""; ok=0; }
+    n="$(_key_names | grep -c . || true)"
+    stamp="$($(_key_sudo) cat "${KEY_STAMP_FILE}" 2>/dev/null | jq -c 'select(type == "object")' 2>/dev/null)" || stamp=""
+    jq -n --arg fp "${fp}" --argjson n "${n:-0}" --argjson stick "${stamp:-null}" --argjson ok "${ok}" '{
+        escrowed: $n,
+        fingerprint: (if $fp == "" then null else $fp end),
+        stick: $stick,
+        current: (if $ok == 0 then null
+                  else ($n == 0 or ($stick != null and $stick.fingerprint == $fp)) end)
+    }'
+}
+
+# _key_status_say <doc> — the one line a person reads; warn when no stick holds
+# the keys as they are now.
+_key_status_say() {
+    local doc="$1"
+    if [[ "$(jq -r .current <<<"${doc}")" == "null" ]]; then
+        warn "  could not read every escrowed key — whether a key stick holds them is unknown"
+    elif [[ "$(jq -r .escrowed <<<"${doc}")" == "0" ]]; then
+        info "  no keys escrowed — nothing for a stick to hold"
+    elif [[ "$(jq -r .current <<<"${doc}")" == "true" ]]; then
+        info "  ${GN}✓${CL} the last key stick holds these keys ($(jq -r '(.stick.written // "")[0:10] + (if (.stick.label // "") != "" then ", " + .stick.label else "" end)' <<<"${doc}"))"
+    elif [[ "$(jq -r '.stick == null' <<<"${doc}")" == "true" ]]; then
+        warn "  NO key stick has been written: a full-site restore has nothing to decrypt with."
+        warn "  Write one now: backup-manager key export --usb"
+    else
+        warn "  The keys changed after the last key stick was written ($(jq -r '(.stick.written // "?")[0:10]' <<<"${doc}")): it does not hold them all."
+        warn "  Write the sticks again: backup-manager key export --usb"
+    fi
+}
+
+_key_status() {
+    [[ "${1:-}" == "--json" ]] && JSON_OUT=1
+    local doc; doc="$(_key_status_doc)"
+    if [[ "$JSON_OUT" -eq 1 ]]; then printf '%s\n' "${doc}"; return 0; fi
+    info "Backup encryption keys (${KEY_ESCROW_DIR}):"
+    _key_status_say "${doc}"
+}
 
 _key_list() {
     local n count=0
@@ -605,7 +723,7 @@ _key_list() {
     if [[ "${count}" -eq 0 ]]; then
         warn "  none — no client-side encrypted backups are configured yet"
     else
-        warn "  Hold an OUT-OF-BAND copy: backup-manager key export --usb"
+        _key_status_say "$(_key_status_doc)"
     fi
 }
 

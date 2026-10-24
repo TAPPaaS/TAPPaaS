@@ -260,6 +260,8 @@ export interface Client {
   keyList(): void;
   keyExport(dest: string): void;
   keyImport(src: string): void;
+  keyStatus(json: boolean): void;
+  keyStamp(dir: string, label: string | null): void;
 }
 
 // ── Reconcile plan ────────────────────────────────────────────────────

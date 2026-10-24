@@ -38,7 +38,7 @@ import {
 import { addToBackupJob, modifyBackup, removeFromBackupJob } from "../../src/modify";
 import { FakeClient } from "./fake-client";
 import { HELP, run } from "../../src/main";
-import { keyTarget, keysUsb } from "../../src/keys";
+import { keyStampArgs, keyTarget, keysUsb } from "../../src/keys";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { allocateNet, allocatePort, buddyPool, nextServe, slash30Error, tunnelErrors, tunnelHosts } from "../../src/tunnel";
 
@@ -1032,6 +1032,23 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(run(["key", "import", "/media/k", "--config-dir", FIX], c), 0, "key import <dir> still runs");
   eq(c.log.filter((l) => l.startsWith("key")).join(" | "), "key export /media/k | key import /media/k",
     "…both through the controller, to that directory");
+}
+
+// ── #874: key status, and the stamp the USB scripts record ───────────────
+{
+  const c = new FakeClient();
+  eq(run(["key", "status", "--json", "--config-dir", FIX], c), 0, "key status --json runs");
+  eq(run(["key", "stamp", "--dir", "/tmp/k", "--label", "tappaas1: SanDisk", "--config-dir", FIX], c), 0, "key stamp runs");
+  eq(c.log.filter((l) => l.startsWith("key")).join(" | "), "key status --json | key stamp /tmp/k tappaas1: SanDisk",
+    "…both through the controller");
+  const sa = (a: string[]): string => {
+    const r = keyStampArgs(a);
+    return "error" in r ? `ERROR ${r.error}` : `${r.dir}|${r.label}`;
+  };
+  eq(sa(["--dir", "/k"]), "/k|null", "stamp: the label is optional");
+  check(sa([]).startsWith("ERROR key stamp: --dir"), "stamp: --dir is required");
+  check(sa(["--dir", "--label", "x"]).startsWith("ERROR key stamp --dir: a value"), "stamp: --dir needs a value");
+  check(sa(["--dir", "/k", "extra"]).startsWith("ERROR key stamp: unexpected"), "stamp: a stray word is refused");
 }
 
 // ── #759: backup <module>... — take it now, through the controller ───────

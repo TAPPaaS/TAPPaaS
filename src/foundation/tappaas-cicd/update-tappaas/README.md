@@ -197,7 +197,9 @@ site-manager validate                          # checks the schedule, prints the
   (disruptive changes held back for want of `rebootOk`, ADR-020 D8 — including a NixOS guest
   whose reboot `update-os.sh` did not take: `automaticReboot` off, a backup lock, or the
   controller itself, #730; `health-manager validate` shows which are still waiting) and `test_warnings`
-  (checks that were already failing before a module's update, #635). A run that stopped in
+  (checks that were already failing before a module's update, #635), and `backup_keys`:
+  whether the last USB key stick holds the backup keys as they are now (#874; the summary
+  warns on every run until it does). A run that stopped in
   `ExecStartPre` records the `stage` instead.
 - **`config/update-tappaas.failures`** — one line per failed run, and per failure notice
   sent or not sent.

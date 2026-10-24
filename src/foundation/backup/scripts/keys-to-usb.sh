@@ -197,6 +197,11 @@ done
 usbk_on "mv -f ${qm}/${USBK_BLOB}.new ${qm}/${USBK_BLOB} && (cd ${qm} && sha256sum ${USBK_BLOB} > ${USBK_BLOB}.sha256)" \
     || usbk_die "could not put the new keys in place of the old ones"
 usbk_say "  ✓ all ${NKEYS} key(s) read back from the stick, identical to the escrow"
+# Record what the stick holds, so `backup-manager key status` (and the health
+# check) can tell when a key changes after it. From the copy READ BACK: that is
+# what the stick holds, not what was meant to go on it.
+backup-manager key stamp --dir "${VERIFY}/${USBK_KEYDIR}" --label "${USBK_NODE}: ${desc:-$(basename "${DISK}")}" >/dev/null \
+    || usbk_warn "the stick is good, but could not be recorded — backup-manager key status will still ask for one"
 usbk_on_stdin "cat > ${qm}/keys-from-usb.sh" < "${HERE}/keys-from-usb.sh"
 usbk_on_stdin "cat > ${qm}/README.txt" <<README
 TAPPaaS backup encryption keys — written $(date '+%Y-%m-%d %H:%M') from $(hostname -s)

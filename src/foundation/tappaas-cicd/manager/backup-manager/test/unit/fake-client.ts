@@ -93,6 +93,12 @@ export class FakeClient implements Client {
   keyExport(dest: string): void {
     this.log.push(`key export ${dest}`);
   }
+  keyStatus(json: boolean): void {
+    this.log.push(`key status${json ? " --json" : ""}`);
+  }
+  keyStamp(dir: string, label: string | null): void {
+    this.log.push(`key stamp ${dir}${label ? ` ${label}` : ""}`);
+  }
   keyImport(src: string): void {
     this.log.push(`key import ${src}`);
   }

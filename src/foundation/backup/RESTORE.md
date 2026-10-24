@@ -36,7 +36,21 @@ asks for a password twice (12+ characters — keep it apart from the stick), wri
 keys encrypted with it (AES-256, PBKDF2), reads them back and compares every key, and
 ejects. The stick also carries its restore script (`keys-from-usb.sh`) and a README in
 plain text, for when the mothership is the thing that is gone. Write a
-new stick whenever a key changes; the update tells you when.
+new stick whenever a key changes.
+
+**Knowing when a stick is out of date.** Writing a stick records a fingerprint of the key
+set it holds (a hash; it reveals nothing about the keys). `backup-manager key status`
+compares it with the escrow as it is now:
+
+```bash
+backup-manager key status   # does the last stick hold the keys as they are?
+```
+
+A key added or replaced after the stick was written — a new host, a reinstalled one, a
+rotated storage key — makes it out of date, and it stays out of date until you write the
+stick again. The end of every update says so, and so does the `backup-keys` check of
+`health-manager validate`, on every run until then. Reading a stick back with
+`key import --usb` records it the same way.
 
 **Rewriting a stick keeps everything else on it.** A stick written before (its FAT
 partition is labelled `TAPPAASKEYS` and holds `tappaas-keys.tar.enc`) is not erased: the

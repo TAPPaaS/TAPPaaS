@@ -245,6 +245,10 @@ main() {
         usbk_say "Insert the key stick into ${USBK_NODE}."
         usbk_restore_to "${dest}"
         backup-manager key import --file "${dest}/${USBK_KEYDIR}"
+        # The stick holds these keys: record it, as writing a stick does — or a
+        # rebuilt mothership asks for a stick that it was just restored from.
+        backup-manager key stamp --dir "${dest}/${USBK_KEYDIR}" --label "${USBK_NODE}: read back" >/dev/null \
+            || usbk_warn "the keys are imported, but the stick could not be recorded (backup-manager key status)"
         printf 'Put the storage key back on the cluster now (module-manager module update backup)? [y/N] ' >&2
         local a; IFS= read -r a || a=""
         [[ "${a}" == [yY]* ]] && module-manager module update backup

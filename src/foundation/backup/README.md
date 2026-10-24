@@ -225,7 +225,7 @@ backup-manager peer delete pull|remote|receive <name> [--purge]
 backup-manager placement use-external <url>          # consume a PBS this site did not provision (#456)
 
 # Keys — the out-of-band copy is mandatory (ADR-012 §2.5.1)
-backup-manager key list | key export <dest> | key import <src>
+backup-manager key list | key status | key export <dest> | key import <src>
 ```
 
 **Restoring anything is [RESTORE.md](./RESTORE.md).** PBS GUI:

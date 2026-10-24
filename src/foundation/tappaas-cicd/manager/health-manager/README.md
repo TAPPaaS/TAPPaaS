@@ -89,6 +89,7 @@ fails**:
 | `cpu-impact` | `config/cluster-cpu.json` + one SSH probe per HA guest | never — **WARN** when an HA guest's processes use AVX-512 that its shared CPU level (`haCpu: common`) drops (see below) |
 | `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a module **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose allocated memory exceeds its declared limit |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
+| `backup-keys` | `backup-manager key status --json` | never — **WARN** when the backup encryption keys changed after the last USB key stick was written, or no stick has been written; it stays until `backup-manager key export --usb` writes one |
 | `pending-reboot` | one SSH probe per guest | never — **WARN** when a guest is waiting for a reboot (see below) |
 | `site-timezone` | `site.json` + one SSH probe per node and guest | never — **WARN** when a node or guest runs another timezone than the site's, which is its primary location's (the next update of the guest, or the next cluster update for a node, sets it), or when the site has none |
 | `pulse` | the backup node's pulse (a cluster node, or a `debianhost` machine by its address) | never — **WARN** when the pulse is not running on the backup node, or reports something down (a backup buddy, the uplink, the firewall, the mothership, the PBS); `backup-manager pulse` shows it |

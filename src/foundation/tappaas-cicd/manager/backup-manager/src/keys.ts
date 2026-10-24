@@ -58,6 +58,25 @@ export function keyTarget(verb: "export" | "import", args: string[]): KeyTarget 
   return usb ? { kind: "usb", node, format } : { kind: "file", dir: file as string };
 }
 
+// keyStampArgs — `key stamp --dir DIR [--label TEXT]`: the USB scripts record
+// the keys a stick was just found to hold. Pure.
+export function keyStampArgs(args: string[]): { dir: string; label: string | null } | { error: string } {
+  let dir: string | null = null;
+  let label: string | null = null;
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    const v = args[i + 1];
+    if (a === "--dir" || a === "--label") {
+      if (v === undefined || v.startsWith("--")) return { error: `key stamp ${a}: a value is required` };
+      if (a === "--dir") dir = v;
+      else label = v;
+      i++;
+    } else return { error: `key stamp: unexpected '${a}'` };
+  }
+  if (dir === null) return { error: "key stamp: --dir DIR is required (the keys the stick holds)" };
+  return { dir, label };
+}
+
 // keysUsb — run the module's USB script, on this terminal. Returns its exit code.
 export function keysUsb(
   verb: "export" | "import", node: string | null, configDir?: string,

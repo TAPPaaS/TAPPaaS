@@ -63,7 +63,7 @@ import {
   zoneNets,
 } from "./tunnel";
 import { basename, join } from "path";
-import { KeyTarget, keyTarget, keysUsb } from "./keys";
+import { KeyTarget, keyStampArgs, keyTarget, keysUsb } from "./keys";
 import { placementFinishReset, placementReset, placementUseExternal, ResetDeps } from "./placement-reset";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync, readFileSync } from "fs";
@@ -164,7 +164,7 @@ export const HELP: HelpSpec = {
       options: [["--yes", "placement finish-reset: do not ask for confirmation."]],
     },
     {
-      usage: "key list | export|import --usb [--node N] | export|import --file DIR", effect: { noPreview: "exports or imports the PBS encryption keys" }, readWhen: ["list"], destructive: ["import"],
+      usage: "key list | status [--json] | export|import --usb [--node N] | export|import --file DIR", effect: { noPreview: "exports or imports the PBS encryption keys" }, readWhen: ["list", "status"], destructive: ["import"],
       verb: "key",
       name: "key",
       note: "(the backup encryption keys, and the copy you keep off the machine)",
@@ -173,6 +173,9 @@ export const HELP: HelpSpec = {
         ["--node N", "key export|import --usb: the node holding the stick (default tappaas1)."],
         ["--format", "key export --usb: erase the stick even if it is a key stick written before (default: rewrite only its keys, keep everything else on it)."],
         ["--file DIR", "key export|import: a directory — the keys UNENCRYPTED; guard what holds them."],
+        ["--json", "key status: machine-readable — the escrow's fingerprint, the last stick's, and whether they match."],
+        ["--dir DIR", "key stamp: the keys a stick was just found to hold. The USB export and import call this."],
+        ["--label TEXT", "key stamp: what the stick is (node, vendor, serial)."],
       ],
     },
     { usage: "coverage <module> [--json]", name: "coverage", note: "(every backup job covering the module's VM — TAPPaaS's own and any other, #554)" },
@@ -294,6 +297,8 @@ export const HELP: HelpSpec = {
               password you choose, reads them back to check, and ejects it — make two
               sticks, kept apart. 'key import --usb' brings them back onto a rebuilt
               mothership. --file <dir> is the same, unencrypted, to a directory.
+              'key status' says whether the last stick holds the keys as they are
+              now; a key that changed after it is in no stick until you write again.
 
 Recovering a system is documented per scenario in the backup module's RESTORE.md.`,
   ],
@@ -1257,8 +1262,19 @@ export function run(argv: string[], client: Client): number {
           client.keyList();
           return 0;
         }
+        if (sub === "status") {
+          client.keyStatus(opts.json);
+          return 0;
+        }
+        if (sub === "stamp") {
+          const st = keyStampArgs(opts.rest.slice(1));
+          if ("error" in st) die(st.error);
+          const s = st as { dir: string; label: string | null };
+          client.keyStamp(s.dir, s.label);
+          return 0;
+        }
         if (sub !== "export" && sub !== "import") {
-          die(`key: expected 'list' | 'export --usb|--file DIR' | 'import --usb|--file DIR', got '${sub}'`);
+          die(`key: expected 'list' | 'status' | 'export --usb|--file DIR' | 'import --usb|--file DIR', got '${sub}'`);
         }
         const target = keyTarget(sub as "export" | "import", opts.rest.slice(1));
         if ("error" in target) die(target.error);

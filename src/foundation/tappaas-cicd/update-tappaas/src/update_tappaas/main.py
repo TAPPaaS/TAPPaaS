@@ -897,6 +897,25 @@ def _opnsense_reachable(retries: int = 1) -> bool:
 CAPACITY_THRESHOLD = 95
 
 
+def backup_key_status() -> dict | None:
+    """Whether the last USB key stick holds the backup keys as they are now
+    (#874): `backup-manager key status --json`. A key that changed in this
+    sweep, or any earlier one, is in no stick until one is written again, so the
+    summary says so on every run until it is. None when it cannot be asked."""
+    cmd = os.environ.get("BACKUP_MANAGER_CMD", "/home/tappaas/bin/backup-manager")
+    try:
+        r = subprocess.run([cmd, "key", "status", "--json"], text=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=120)
+        doc = json.loads(r.stdout) if r.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+    if not isinstance(doc, dict) or not isinstance(doc.get("current"), bool):
+        return None
+    stick = doc.get("stick") if isinstance(doc.get("stick"), dict) else None
+    return {"current": doc["current"], "escrowed": doc.get("escrowed"),
+            "stick_written": stick.get("written") if stick else None}
+
+
 def check_update_capacity() -> dict | None:
     """The sweep's capacity pre-flight (#833): `health-manager capacity` projects
     what each node commits once every guest is at its configured memory. A node
@@ -1463,6 +1482,15 @@ def main():
         )
         for w in TEST_WARNINGS:
             log.warning("  %s", w)
+    backup_keys = backup_key_status()
+    if backup_keys and not backup_keys["current"]:
+        if backup_keys["stick_written"]:
+            log.warning("The backup keys changed after the key stick of %s was written: "
+                        "it does not hold them all.", backup_keys["stick_written"][:10])
+        else:
+            log.warning("No key stick holds the backup keys: a full-site restore has "
+                        "nothing to decrypt with.")
+        log.warning("Write the sticks again: backup-manager key export --usb")
     log.info(
         "update-tappaas completed: %s | control_plane=%s total=%d succeeded=%d "
         "failed=%d not_attempted=%d skipped=%d reboot=%s collation=%s",
@@ -1500,6 +1528,9 @@ def main():
         "deferred_changes": DEFERRED_CHANGES,
         # Recorded, not failed (#635): the update did not introduce them.
         "test_warnings": TEST_WARNINGS,
+        # Whether a key stick holds the backup keys as they are (#874); recorded,
+        # not failed: every backup is fine, a full-site restore is what is at risk.
+        "backup_keys": backup_keys,
         "ok": (not failed_modules and not dep["down"] and reboot_ok
                and control_plane in ("refreshed", "skipped")),
     }

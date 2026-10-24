@@ -79,6 +79,12 @@ ck "cleanup finds the stick's mounts from the disk, not from MNT" yes \
    "$(grep -q 'lsblk -nrpo MOUNTPOINT' "${TO}" && echo yes || echo no)"
 ck "key export runs quietly (its PLAIN-copy advice is not for this script)" yes \
    "$(grep -q '_exp="$(backup-manager key export' "${TO}" && echo yes || echo no)"
+ck "the stick's keys are recorded from the copy read back from it" yes \
+   "$(grep -q 'backup-manager key stamp --dir "${VERIFY}/${USBK_KEYDIR}"' "${TO}" && echo yes || echo no)"
+ck "…only after every key on it compared equal" yes \
+   "$(awk '/differs from the escrow — do not rely on it/ {c=NR} /backup-manager key stamp/ {s=NR} END {print (c && s > c) ? "yes" : "no"}' "${TO}")"
+ck "an import from a stick records it too" yes \
+   "$(grep -q 'backup-manager key stamp --dir "${dest}/${USBK_KEYDIR}"' "${FROM}" && echo yes || echo no)"
 ck "the restore script travels on the stick" yes "$(grep -q 'cat > ${qm}/keys-from-usb.sh' "${TO}" && echo yes || echo no)"
 
 echo "── round trip with openssl (the restore's own command) ──"

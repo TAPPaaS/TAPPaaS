@@ -193,4 +193,10 @@ export class CliClient implements Client {
   keyImport(src: string): void {
     process.stdout.write(run([...this.ep(), "key", "import", src]));
   }
+  keyStatus(json: boolean): void {
+    process.stdout.write(run([...this.ep(), ...(json ? ["--json"] : []), "key", "status"]));
+  }
+  keyStamp(dir: string, label: string | null): void {
+    process.stdout.write(run([...this.ep(), "key", "stamp", "--dir", dir, ...(label ? ["--label", label] : [])]));
+  }
 }
