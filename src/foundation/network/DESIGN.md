@@ -459,6 +459,102 @@ without anything being wrong.
 On OPNsense 25.x Unbound was built against Python 3.11 while dnspython existed only for
 3.13, so every regenerated config failed to load; since 26.1 both are 3.13.
 
+## The WAN's IPv6 router
+
+With a dynamic IPv6 WAN (DHCPv6 with a delegated prefix) the firewall's IPv6 default route
+comes from router advertisements, not from DHCPv6: DHCPv6 carries the addresses and the
+prefix, never a router. This section is how OPNsense follows that router, how it can lose
+it, and what TAPPaaS does about it. The operator's side is in network-manager's
+[IPV6.md](../tappaas-cicd/manager/network-manager/IPV6.md) (*When the ISP replaces its
+router*).
+
+### How OPNsense learns it
+
+- **rtsold** is started when the WAN is configured (`interfaces.inc`,
+  `interface_dhcpv6_configure`, which kills any running one first) as
+  `rtsold -d -aiu … -A rtsold_script.sh`. It sends router solicitations and, for the
+  advertisement that answers, runs its `-A` script with the interface and the sender.
+- **rtsold_script.sh** records the sender (`ifctl -i <wan> -6rd -a <router>`, the file
+  `/tmp/<wan>_routerv6`) and starts dhcp6c, or reloads it with `SIGHUP` when it runs. A
+  reload makes dhcp6c release its lease and solicit a new one.
+- **rc.newwanipv6** (`configctl interface newipv6 <wan> <reason>`) runs the IPv6 WAN event:
+  `system_routing_configure` sets the IPv6 default route to the recorded router, and the
+  `WAN_DHCP6` gateway reads the same file. Without a reason it only refreshes the resolver
+  configuration and returns before routing.
+- **dhcp6c's hook** (`/var/etc/dhcp6c_wan_script.sh`) runs on every RENEW and REBIND. When the
+  prefix is unchanged, `ifctl -6pu` reports no change, so the hook calls
+  `configctl interface newipv6 <wan>` *without* a reason. Lease renewals therefore never touch
+  the route and never re-learn the router.
+- **The gateway monitor** (dpinger) does not watch `WAN_DHCP6` unless monitoring is switched
+  on for it; on a default install its status is `none`, and nothing marks the gateway down or
+  acts on it.
+
+So the router is learned once per WAN configure. The logs of a running firewall showed
+`rtsold_script` running only when the WAN was configured, ten days apart, and never in
+between.
+
+### How it was lost
+
+When an ISP replaced its router (seen first as the IPv4 gateway's MAC address moving on the
+WAN), the new router answered router solicitations — router lifetime 3600 s, the *managed*
+flag set, no source link-layer option — but sent no advertisements of its own: a 90-second
+capture saw none. rtsold had long finished soliciting, so its script never ran again, and
+DHCPv6 kept renewing the old prefix from the new router without a word about routers.
+
+The default route itself was the kernel's, not OPNsense's. At the WAN configure ten days
+earlier the kernel had installed a default route from the old router's advertisement
+before OPNsense's routing ran, and OPNsense logged `ROUTING: keeping inet6 default route`
+rather than `setting`. A route the kernel learns from advertisements lives as long as the
+router keeps advertising; with the old router gone it expired, and the firewall had no IPv6
+default route at all. IPv4 carried everything else, so only names with an AAAA record
+failed from inside the site.
+
+### Why a manual solicitation lasted about 40 seconds
+
+`rtsol <wan>` by hand brought a default route back, and it was gone again between 30 and
+40 seconds later. It was not OPNsense: every route OPNsense sets or removes is logged as a
+`ROUTING:` line, and none was logged; rtsold's script does not run for `rtsol` (no `-A`),
+and no dhcp6c renewal ran in that window. It was the kernel's own handling of
+the advertisement. On this firewall (forwarding on, `rfc6204w3` on) the kernel takes the
+advertised on-link prefix, but keeps no default-router entry: right after a solicited
+advertisement `ndp -r` lists none and `ndp -p` shows the prefix with *No advertising
+router*. Exactly which kernel path removed the route was not pinned down; it does not
+change the remedy. The one IPv6 default route that lasts on OPNsense is its own static route
+to the recorded router (`UGS` in `netstat -rn -f inet6`), so the fix has to change what
+OPNsense records, not solicit again.
+
+### What TAPPaaS does
+
+- **Detects it.** health-manager's `ipv6-egress` gate warns when the site runs IPv6 and the
+  firewall has no IPv6 default route, its router does not answer on the WAN, the recorded
+  router, the route and `WAN_DHCP6` disagree, rtsold is not running, or no public IPv6
+  address answers from inside the site.
+- **Re-learns it** with `network-manager wan ipv6-relearn --apply` (the opnsense controller's
+  `ipv6-manager relearn`): one solicitation (`rtsol`) to find the router that answers, then
+  OPNsense's own steps in the order its scripts use — record it (`ifctl -6rd`), re-run the
+  IPv6 WAN event with a reason (`configctl interface newipv6 <wan> force`), which sets the
+  static default route and the gateway — and finally the network module's IPv6 converge. It
+  starts rtsold only when rtsold is not running.
+- **Avoids the lease renewal.** `configctl interface reconfigure wan` re-learns the router as
+  well, and so does restarting rtsold: both run rtsold's script, whose `SIGHUP` makes dhcp6c
+  release the lease and solicit again. The ISP then may hand out a different prefix — the
+  reconfigure that repaired the lost router above also moved the site from one /56 to another,
+  every zone renumbered, and guests kept their old addresses until those expired, about an
+  hour. The IPv6 WAN event alone changes only the route and the gateway.
+
+### Does rtsold need a watchdog?
+
+No. rtsold's processes (the daemon and its three helpers) were alive and well throughout;
+it did what it is built to do — solicit when the interface comes up, then wait for
+advertisements — and the router never advertised. A watchdog that restarts a *dead* rtsold
+would not have helped. One that restarts it on a timer would re-learn the router, but every
+restart reloads dhcp6c, which releases the lease and can renumber the whole site; that is a
+worse failure than the one it guards against. Detection belongs in the health gate (which
+also warns when rtsold is not running), the repair in an operator's `ipv6-relearn`, which
+keeps the lease. Should an ISP's router turn out to change often, the next step would be the
+gate running `ipv6-relearn --check` and naming the router that answers — still without
+touching the lease.
+
 ## Resilience & ingress without a public IP
 
 **Public ingress with no public IP.** The default ingress path terminates at Caddy on the OPNsense
