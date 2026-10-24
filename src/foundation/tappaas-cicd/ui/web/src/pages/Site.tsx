@@ -135,7 +135,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
           {primary ? (
             <KV
               rows={[
-                ["primary location", primary.displayName && primary.displayName !== primary.name ? `${primary.displayName} (${primary.name})` : primary.name],
+                ["primary location", primary.displayName && primary.displayName.toLowerCase() !== primary.name.toLowerCase() ? `${primary.displayName} (${primary.name})` : (primary.displayName ?? primary.name)],
                 ["place", placeText(primary)],
                 ["timezone", val(primary.timezone, "not set — every node and guest falls back to UTC")],
                 ...(primary.latitude !== undefined || primary.longitude !== undefined ? [["coordinates", `${primary.latitude ?? "?"}, ${primary.longitude ?? "?"}`] as [string, ReactNode]] : []),
