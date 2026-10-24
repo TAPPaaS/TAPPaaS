@@ -190,6 +190,8 @@ syslog-manager reconfigure
 ipv6-manager apply [--check-mode] [--config-dir <dir>]   # converge to site.json + zones.json
 ipv6-manager status                                      # does the firewall allow IPv6
 ipv6-manager gateway <zone>                              # the firewall's IPv6 address in a zone (exit 3: none)
+ipv6-manager wan [--json]                                # the WAN's IPv6 router, route, gateway, prefix (read-only)
+ipv6-manager relearn [--check-mode] [--config-dir <dir>] # re-learn the WAN's IPv6 router, then apply
 ```
 
 `apply` is what the `network` module's update runs: *Allow IPv6* from `site.json` `ipv6`, the
@@ -198,6 +200,16 @@ advertisements and AAAA names; then the AAAA records of published names and the 
 in Caddy's access lists, from what the interfaces hold. Switching off withdraws each zone's
 IPv6 route before removing it. What it all means for an operator:
 [IPV6.md](../../manager/network-manager/IPV6.md).
+
+`wan` reads over SSH alone (no API): the router OPNsense records, the default route and
+whether its router answers on the WAN, the `WAN_DHCP6` gateway, the delegated prefix and
+whether rtsold runs. health-manager's `ipv6-egress` gate reads it. `relearn` (what
+`network-manager wan ipv6-relearn` runs) sends one router solicitation on the WAN; when the
+router that answers is not the one recorded, or the route or `WAN_DHCP6` name another, it
+records it as rtsold's script does (`ifctl -6rd`), re-runs the IPv6 WAN event
+(`configctl interface newipv6 <wan> force`), starts rtsold if it is not running, and then runs
+`apply`. It does not reconfigure the WAN, so the DHCPv6 lease and the delegated prefix stay;
+the order and why are in `wan6.py`.
 
 ### `mdns-manager` — mDNS discovery across zones
 

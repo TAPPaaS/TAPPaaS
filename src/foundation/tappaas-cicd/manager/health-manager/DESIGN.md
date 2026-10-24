@@ -58,7 +58,7 @@ cluster-wide. The disk gate is **read-only**: the 50%-auto-grow that
 `check-disk-threshold.sh` performs is a *mutation* and stays in the script — it
 is not part of the health assertion. The gate order is service-liveness →
 disk-threshold → memory-commitment → guest-memory → backup-status →
-pending-reboot → site-timezone → quorum → lan-uplink → switch-ports → pulse →
+pending-reboot → site-timezone → quorum → lan-uplink → ipv6-egress → switch-ports → pulse →
 cve-status; `validate`
 returns 0 only when zero gates FAIL (SKIP does not fail the assertion).
 

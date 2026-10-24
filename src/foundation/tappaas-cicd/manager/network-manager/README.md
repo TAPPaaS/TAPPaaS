@@ -63,6 +63,7 @@ network-manager validate    [--zones <file>] [--config-dir <dir>] [--strict]
 network-manager merge       [--diff] [--config-dir <dir>] [--template <tpl>]
 network-manager distribute  [--zones <file>] [--dry-run]
 network-manager wgvpn       <setup|add-peer|remove-peer|list|config> [options]
+network-manager wan ipv6-relearn [--check | --apply]
 network-manager -h | --help
 ```
 
@@ -377,6 +378,34 @@ for. It is named by its MAC (else `<switch>:<port>`), at the switch's location, 
 and `position-manager device record` records it. A placement whose device is gone, and once the
 site has a rack a device placed nowhere at a location that has a room, are `topology` findings.
 `--no-positions` leaves them out (what position-manager itself reads, to check device names).
+
+### `wan ipv6-relearn` — re-learn the WAN's IPv6 router
+
+```bash
+network-manager wan ipv6-relearn            # = --check
+network-manager wan ipv6-relearn --apply
+```
+
+For the day the ISP replaces its router: the firewall keeps routing IPv6 to the old one and
+health-manager's `ipv6-egress` gate warns, naming this verb. `--check` sends one router
+solicitation on the WAN and prints what the firewall records (the router, the default route
+and whether its router answers, the `WAN_DHCP6` gateway, the delegated prefix, whether rtsold
+runs), the router answering now, and what `--apply` would do. `--apply`, through the opnsense
+controller (`ipv6-manager relearn`), in this order:
+
+1. records the router that answers, as rtsold's own script does (`ifctl -6rd`);
+2. re-runs the firewall's IPv6 WAN event (`configctl interface newipv6 <wan> force`): the
+   default route and the `WAN_DHCP6` gateway move to it, the filter is reloaded;
+3. starts rtsold only if it is not running;
+4. runs the network module's IPv6 converge (`ipv6-manager apply`), so the zones follow a
+   changed prefix.
+
+Why not `configctl interface reconfigure wan`, which re-learns the router too, or a restart of
+rtsold: both make rtsold's script reload dhcp6c, which releases the DHCPv6 lease and solicits
+a new one, and a new lease can bring a new delegated prefix: every zone renumbers and devices
+keep the old addresses for an hour. The IPv6 WAN event alone changes only the route
+and the gateway, and the lease stays. The network module's DESIGN.md (*The WAN's IPv6 router*)
+has the reasoning from OPNsense's scripts.
 
 ### `wgvpn` — the admin VPN (ADR-010 §6, §8.4.6)
 

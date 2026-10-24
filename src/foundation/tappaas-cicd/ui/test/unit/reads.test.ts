@@ -80,6 +80,7 @@ async function main(): Promise<void> {
   check(att[0].level === "fail", "Attention lists the FAILs first");
   check(att.some((r) => r.gate === "guest-memory" && r.subject?.name === "immich" && r.level === "fail"), "immich's memory FAIL is in Attention");
   check(att.some((r) => r.gate === "lan-uplink" && r.subject?.name === "tappaas1"), "tappaas1's lan-uplink WARN is in Attention");
+  check(att.some((r) => r.gate === "ipv6-egress" && r.subject?.kind === "module" && r.subject.name === "network"), "the ipv6-egress WARN is in Attention, on the firewall's module");
 
   // ── the topology gets the cached health ───────────────────────────────
   const t = await reads.topology.get();

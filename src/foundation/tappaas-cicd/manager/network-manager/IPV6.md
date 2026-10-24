@@ -174,6 +174,35 @@ IPv4 is used wherever IPv6 does not work, without anyone having to notice:
   after about a quarter of a second.
 - A service that does not listen on IPv6 is reached over IPv4, as above.
 
+## When the ISP replaces its router
+
+The firewall learns its IPv6 router from the WAN once, when the WAN is configured: it asks
+for a router advertisement and routes IPv6 to the router that answers. If the ISP later
+replaces that router, and the new one does not advertise on its own, the firewall keeps
+sending IPv6 to the old one, which is gone. IPv4 keeps working, so the site looks healthy:
+only names with an AAAA record stall or fail from inside it.
+
+`health-manager validate` reports it in its `ipv6-egress` gate: no IPv6 default route, or a
+router that does not answer, and no public IPv6 address answering from inside the site.
+Re-learn the router:
+
+```bash
+network-manager wan ipv6-relearn --check     # what the firewall records, and who answers now
+network-manager wan ipv6-relearn --apply
+```
+
+`--check` sends one router solicitation on the WAN and reports the router the firewall
+records, the router answering now, the default route, the gateway and the delegated prefix,
+and what `--apply` would change. `--apply` records the router that answers, has the firewall
+set its IPv6 default route and gateway to it, and then runs the network update's IPv6 step,
+so the zones follow if the prefix has changed as well.
+
+`--apply` keeps the WAN's DHCPv6 lease. Reconfiguring the WAN on the firewall re-learns the
+router too, but it renews the IPv4 and IPv6 leases, and a fresh IPv6 lease can bring a new
+delegated prefix: every zone's addresses then change, and devices keep the old ones until
+they expire (about an hour). The network module's [DESIGN.md](../../../network/DESIGN.md)
+(*The WAN's IPv6 router*) has the details.
+
 ## Turning it off
 
 Set `"ipv6": false` in `site.json` (or remove one zone's `ipv6Subnet`) and update the `network`
@@ -204,6 +233,8 @@ run by hand:
 | `ipv6-manager apply --check-mode` | Shows what the network update would change: the WAN, each zone, the AAAA records of published names, the access lists. |
 | `ipv6-manager apply` | Makes those changes. |
 | `ipv6-manager status` | Whether the firewall allows IPv6. |
+| `ipv6-manager wan` | The WAN's IPv6 router as the firewall records it, its default route and whether the router answers, the gateway, the delegated prefix. Changes nothing. |
+| `network-manager wan ipv6-relearn --check` / `--apply` | Re-learns the WAN's IPv6 router (above). |
 | `ipv6-manager gateway <zone>` | The firewall's IPv6 address in a zone — the source of Caddy's requests to services there. Exit code 3 when the zone has no IPv6. |
 
 On a converged site `ipv6-manager apply --check-mode` ends with:

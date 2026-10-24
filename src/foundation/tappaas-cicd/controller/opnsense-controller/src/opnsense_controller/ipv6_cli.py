@@ -15,6 +15,13 @@ Allowing IPv6 gives no zone an IPv6 address; that is #26, behind its own ADR.
 Commands:
   ipv6-manager status
   ipv6-manager apply [--allow true|false] [--config-dir DIR] [--check-mode]
+  ipv6-manager wan [--json]
+  ipv6-manager relearn [--config-dir DIR] [--check-mode]
+
+`wan` reads the WAN's IPv6 router, default route, gateway and prefix (ssh only,
+no change) — what the ipv6-egress health gate reads. `relearn` solicits the WAN's router, records it the way rtsold's
+script does, re-runs OPNsense's IPv6 WAN event and then `apply` (wan6 has the
+order and why); with --check-mode it sends the solicitation and changes nothing.
 
 `apply` converges the whole of ADR-030 from config/site.json and the zones: the
 switch, the WAN's IPv6, the site prefix, each zone's IPv6 and its router
@@ -44,6 +51,7 @@ from .dual_stack import derived_v6, read_interfaces, v6_on_network
 from .ipv6_plan import STATIC_GATEWAY_NAME, ZONE_V6_KEYS, Action, desired_state, plan
 from .service_health import _firewall_ssh, check_unbound_dns, filter_reload, unbound_restart
 from .vlan_manager import VlanManager
+from .wan6 import GATEWAY_NAME, Advert, WanState, apply_script, parse_adverts, parse_wan, READ_SH, SOLICIT_SH, relearn_plan
 
 
 def _client(args):
@@ -500,6 +508,78 @@ def converge_published(mgr, config: Config, host: str, check_mode: bool,
     return True
 
 
+def read_wan(host: str) -> WanState:
+    """The WAN's IPv6 router, route, gateway and prefix, read-only."""
+    return parse_wan(_fw(host, READ_SH, timeout=60.0))
+
+
+def solicit(host: str, wanif: str) -> list[Advert]:
+    """Send one router solicitation on the WAN; the routers that answer."""
+    return parse_adverts(_fw(host, SOLICIT_SH % wanif, timeout=60.0))
+
+
+def _wan_lines(s: WanState, adverts: list[Advert] | None = None) -> list[str]:
+    def nb(addr: str) -> str:
+        n = s.neighbour(addr)
+        if not addr:
+            return ""
+        if n is None:
+            return " (not probed)"
+        return " (answers)" if n.answers else " (does not answer: not a neighbour)"
+    lines = [
+        f"WAN interface:     {s.wanif or '(none)'}",
+        f"recorded router:   {s.recorded or '(none)'}{nb(s.recorded)}",
+        f"default route:     {('via ' + s.route) if s.route else '(none)'}{nb(s.route)}",
+        f"{GATEWAY_NAME} gateway: {s.gateway or '(none)'}",
+        f"delegated prefix:  {s.prefix or '(none)'}",
+        f"WAN address:       {s.address or '(none)'}",
+        f"rtsold:            {'running' if s.rtsold else 'NOT running'}",
+    ]
+    if adverts is not None:
+        lines.append("advertising now:   " + (", ".join(
+            f"{a.router} (lifetime {a.lifetime}s{', managed' if a.managed else ''})" for a in adverts)
+            or "(no answer to a solicitation)"))
+    return lines
+
+
+def relearn(host: str, check_mode: bool, after: Callable[[], bool], settle_seconds: float = 20.0) -> bool:
+    """Re-learn the WAN's IPv6 router (wan6 has the steps and why). True on success."""
+    s = read_wan(host)
+    adverts = solicit(host, s.wanif) if s.wanif else []
+    for line in _wan_lines(s, adverts):
+        print(f"ipv6: {line}")
+    p = relearn_plan(s, adverts)
+    for pr in p.problems:
+        print(f"ipv6: {pr}")
+    if p.problems:
+        return False
+    if not p.steps:
+        print(f"ipv6: the recorded router, the default route and {GATEWAY_NAME} all name {p.router} — nothing to re-learn")
+    for line in p.describe(s):
+        print(f"ipv6: {'would ' if check_mode else ''}{line}")
+    if check_mode:
+        print("ipv6: then (not in check mode): ipv6-manager apply — the zones, their advertisements "
+              "and the published names follow the prefix")
+        return True
+    if p.steps:
+        _fw(host, apply_script(s, p), timeout=180.0)
+        deadline = time.monotonic() + settle_seconds
+        while True:
+            now = read_wan(host)
+            ok = now.route == p.router and now.gateway == p.router and now.recorded == p.router
+            if ok or time.monotonic() > deadline:
+                break
+            time.sleep(2)
+        for line in _wan_lines(now):
+            print(f"ipv6: now {line}")
+        if not ok:
+            print(f"ERROR: the firewall does not name {p.router} everywhere after the re-learn — "
+                  "configctl interface reconfigure wan re-learns it with a lease renewal", file=sys.stderr)
+            return False
+        print(f"ipv6: the WAN's IPv6 router is {p.router}")
+    return after()
+
+
 def main():
     # Global options work on either side of the subcommand (#379); see cli_globals.py.
     gp = make_global_parent()
@@ -528,6 +608,13 @@ Examples:
     p_gw.add_argument("zone", help="zone name from zones.json")
     p_gw.add_argument("--config-dir", default=os.environ.get("CONFIG_DIR", "/home/tappaas/config"),
                       help="where zones.json is (default: /home/tappaas/config)")
+    p_wan = sub.add_parser("wan", parents=[gp],
+                           help="The WAN's IPv6 router, default route, gateway and prefix (read-only)")
+    p_wan.add_argument("--json", action="store_true", help="print the state as JSON")
+    p_rl = sub.add_parser("relearn", parents=[gp],
+                          help="Re-learn the WAN's IPv6 router from a solicitation, then converge (apply)")
+    p_rl.add_argument("--config-dir", default=os.environ.get("CONFIG_DIR", "/home/tappaas/config"),
+                      help="where site.json and zones.json are (default: /home/tappaas/config)")
     p_apply = sub.add_parser("apply", parents=[gp], help="Set 'Allow IPv6' to the site's value")
     p_apply.add_argument("--allow", type=_parse_bool, default=None,
                          help="override site.json ipv6 for the switch (default: read site.json)")
@@ -543,9 +630,31 @@ Examples:
         parser.print_help()
         sys.exit(1)
 
+    host = _probe_ip(args.firewall)
+    try:
+        # Over ssh only: the health gate reads this, and must answer when the API does not.
+        if args.command == "wan":
+            s = read_wan(host)
+            if args.json:
+                print(json.dumps(s.to_json(), indent=2))
+            else:
+                for line in _wan_lines(s):
+                    print(line)
+            sys.exit(0)
+        if args.command == "relearn" and args.check_mode:
+            sys.exit(0 if relearn(host, True, after=lambda: True) else 1)
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERROR: {exc}", file=sys.stderr)
+        if args.debug:
+            raise
+        sys.exit(1)
+
     try:
         with _client(args) as mgr:
-            if args.command == "status":
+            if args.command == "relearn":
+                ok = relearn(host, False, after=lambda: converge_site(
+                    mgr, mgr.config, host, Path(args.config_dir), False))
+            elif args.command == "status":
                 print(f"ipv6: firewall allows IPv6: {_yn(read_allowed(mgr))}")
                 ok = True
             elif args.command == "gateway":

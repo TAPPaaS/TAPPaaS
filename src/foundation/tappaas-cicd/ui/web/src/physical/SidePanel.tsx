@@ -389,6 +389,8 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
     case "isp": {
       const w = t.site.wan;
       const pa = publicAddress({ network: { publicIp: w.publicIp } }, w.discovered);
+      // The ipv6-egress gate: the firewall's IPv6 router and a public address answering.
+      const egress = w.ipv6 ? health.env?.data?.gates.find((x) => x.name === "ipv6-egress") : undefined;
       title = "Internet · ISP";
       body = (
         <>
@@ -397,6 +399,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["public IP", pa.address ? `${pa.address}${pa.auto ? " (auto: what the WAN held)" : ""}` : pa.wan ? `the router's in front of the WAN (the WAN holds ${pa.wan})` : w.publicIp],
               ["WAN read", pa.observed],
               ["IPv6", w.ipv6 ? "on" : "off"],
+              ["IPv6 egress", egress ? <><Tag level={egress.status} /> {egress.detail}</> : null],
               ["ISP", w.isp],
               ["WAN zone", w.zone ? `${w.zone} · vlan ${w.vlan ?? "?"}` : null],
               ["hand-off", w.handoff ? `${w.handoff.switch} port ${w.handoff.port}${w.handoff.description ? ` — ${w.handoff.description}` : ""}` : null],

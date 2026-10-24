@@ -96,6 +96,7 @@ fails**:
 | `quorum` | `pvecm status` | never — **WARN** when the cluster has two votes and no QDevice: one node down and the other is fenced (see the cluster README, *Two-node clusters*) |
 | `switch-ports` | `switch-manager list-ports --json` | never — **WARN** when a switch port has no record and is not parked (an access port in iotLocal), or the switch sets a port otherwise than its record — parked or in use (read from the switch as last interrogated — after every sweep by `tappaas-switch-read`, #860; `switch-manager reconcile` reads it again and previews the change); also **WARN** when a switch was last read more than 26 h ago, or never |
 | `mlag-pairs` | `config/switch-configuration-actual.json` (switch-manager's MLAG pairs and the switches' last read) | never — **WARN** when a LAG across an MLAG pair has no member on one of its switches, or a switch has another mlag-id on a member than its record (`switch-manager mlag-pair list` reads the pairs live) |
+| `ipv6-egress` | `ipv6-manager wan --json` (SSH to the firewall), then an HTTP HEAD over IPv6 from the cicd VM when it holds a global address, else a ping from a guest in a Service zone with IPv6 | never — **WARN** when the site runs IPv6 (`site.json` `ipv6`) and the firewall has no IPv6 default route, its router does not answer on the WAN, the router OPNsense records or the `WAN_DHCP6` gateway names another one, rtsold is not running, there is no delegated prefix, or no public IPv6 address answers from inside the site; **SKIP** when IPv6 is off (see below) |
 | `lan-uplink` | the cluster module's `lan-uplink.sh show --json`, one SSH probe per node | never — **WARN** when a node with HA's watchdog armed has its `lan` on one port, a bonded leg is down, active-backup runs on its backup, LACP has no partner or a leg outside the aggregator, both legs reach the same switch (LLDP), MTUs differ, or the live layout differs from the declaration (see the cluster README, *Redundant LAN uplink*) |
 | `cve-status` | `config/sbom/cve-status.json` (the last `scan security`) | never — **WARN** on a failed scan, a fixable Critical/High CVE, or a scan older than 8 days (see below) |
 | `signature-status` | `config/sbom/signatures.json` (written by `check-repo-signatures.sh` after every repository sync, ADR-033) | **FAIL** when a staging/production checkout runs something that is not a verified release, or a repository signs nothing and `site.json` sets `requireSigned`; **WARN** when it signs nothing, runs past its last verified release or has uncommitted changes, a signing key expires within 60 days, or the check is older than 3 days |
@@ -141,6 +142,31 @@ had actually been promised 60G.
 
 PVE **templates are excluded**: a template is the image a module is cloned from,
 holds no memory, and listing it as a stopped guest is noise.
+
+### `ipv6-egress` — the site reaches the internet over IPv6
+
+When a site runs IPv6 every guest prefers it, and a broken IPv6 path hides behind
+IPv4: names with an AAAA record stall or fail, everything else works. The gate
+checks both ends:
+
+- **The firewall.** OPNsense learns its IPv6 router once, from the advertisement
+  that answers its own router solicitation, and sets a static default route to
+  it. When the ISP replaces its router and the new one does not advertise on its
+  own, the route keeps pointing at an address nobody answers. The gate reads the
+  route, pings its router on the WAN (link-local, which the firewall may reach),
+  and compares it with the router OPNsense records and the `WAN_DHCP6` gateway.
+  The finding names the fix: `network-manager wan ipv6-relearn --check`, then
+  `--apply` (it keeps the WAN's DHCPv6 lease).
+- **The egress.** A public IPv6 address (`2606:4700:4700::1111`,
+  `2001:4860:4860::8888`) must answer from inside the site: an HTTP HEAD from the
+  cicd VM when it has a global IPv6 address, else a ping from the first of up to
+  three guests in a Service zone with an `ipv6Subnet` that answers SSH. The
+  firewall's own ping is no test: its filter lets the firewall itself reach
+  link-local addresses only. A guest without a global address is reported as
+  such: its zone's advertisements are missing, not the uplink.
+
+Firewall findings sit on the `network` module, the egress finding on the site's
+uplink (the ISP in the console's physical view).
 
 ### `pending-reboot` — guests whose update is waiting for a reboot
 

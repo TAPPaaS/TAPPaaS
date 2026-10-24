@@ -3,7 +3,7 @@
  "generated": "2026-10-17T18:35:36.476Z",
  "status": "fail",
  "failed": 1,
- "warned": 4,
+ "warned": 5,
  "gates": [
   {
    "name": "service-liveness",
@@ -411,6 +411,29 @@
      "subject": {
       "kind": "node",
       "name": "tappaas1"
+     }
+    }
+   ]
+  },
+  {
+   "name": "ipv6-egress",
+   "status": "warn",
+   "detail": "IPv6 egress fails: the IPv6 default route's router fe80::ff:fe91:2291 does not answer on vtnet1; no public IPv6 address answered from immich (2606:4700:4700::1111, 2001:4860:4860::8888)",
+   "findings": [
+    {
+     "status": "warn",
+     "text": "the IPv6 default route's router fe80::ff:fe91:2291 does not answer on vtnet1",
+     "subject": {
+      "kind": "module",
+      "name": "network"
+     }
+    },
+    {
+     "status": "warn",
+     "text": "no public IPv6 address answered from immich (2606:4700:4700::1111, 2001:4860:4860::8888)",
+     "subject": {
+      "kind": "site",
+      "name": "uplink"
      }
     }
    ]
