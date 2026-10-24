@@ -154,8 +154,8 @@ checks both ends:
   own, the route keeps pointing at an address nobody answers. The gate reads the
   route, pings its router on the WAN (link-local, which the firewall may reach),
   and compares it with the router OPNsense records and the `WAN_DHCP6` gateway.
-  The finding names the fix: `configctl interface reconfigure wan` on the
-  firewall, then the network module's update.
+  The finding names the fix: `network-manager wan ipv6-relearn --check`, then
+  `--apply` (it keeps the WAN's DHCPv6 lease).
 - **The egress.** A public IPv6 address (`2606:4700:4700::1111`,
   `2001:4860:4860::8888`) must answer from inside the site: an HTTP HEAD from the
   cicd VM when it has a global IPv6 address, else a ping from the first of up to

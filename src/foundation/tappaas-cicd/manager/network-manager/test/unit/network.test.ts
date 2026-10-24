@@ -17,7 +17,7 @@ import { opnsenseDryRunResult, proxmoxNeedsRecheck, proxmoxStatus } from "../../
 import { gatewayIpOf, resolveSplitHorizonTarget } from "../../src/splithorizon";
 import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "fs";
 import { HELP, run } from "../../src/main";
-import { undocumentedOptions } from "../../../../lib/ts/src/help";
+import { renderManifest, undocumentedOptions } from "../../../../lib/ts/src/help";
 import { dirname, join } from "path";
 import { tmpdir } from "os";
 import { PLANE_ORDER } from "../../src/types";
@@ -2410,6 +2410,31 @@ function tmpZones(): string {
   process.env.NM_OPNSENSE_FIREWALL_BIN = join(stubDir, "no-such-bin");
   check(run(["add", "lab6", "--zones", f, "--check"]) === 0, "a firewall that cannot be asked is said, and add goes on (zones.json only)");
   if (prevBin === undefined) delete process.env.NM_OPNSENSE_FIREWALL_BIN; else process.env.NM_OPNSENSE_FIREWALL_BIN = prevBin;
+}
+
+// ── wan ipv6-relearn (#875): --check is the controller's check mode, --apply is not ──
+{
+  const dir = mkdtempSync(join(tmpdir(), "nm-wan-"));
+  const log = join(dir, "args");
+  const stub = join(dir, "ipv6-manager");
+  writeFileSync(stub, `#!/bin/sh\necho "$@" >> '${log}'\n`);
+  chmodSync(stub, 0o755);
+  const prev = process.env.NM_IPV6_BIN;
+  process.env.NM_IPV6_BIN = stub;
+  check(run(["wan", "ipv6-relearn", "--check", "--config-dir", dir]) === 0, "wan ipv6-relearn --check runs the controller");
+  check(run(["wan", "ipv6-relearn", "--config-dir", dir]) === 0, "…and so does no flag");
+  check(run(["wan", "ipv6-relearn", "--apply", "--config-dir", dir]) === 0, "wan ipv6-relearn --apply runs it");
+  const calls = readFileSync(log, "utf8").trim().split("\n");
+  check(calls.length === 3 && calls[0] === `relearn --config-dir ${dir} --no-ssl-verify --check-mode` && calls[1] === calls[0],
+    `--check and no flag are ipv6-manager relearn --check-mode (${calls[0]})`);
+  check(calls[2] === `relearn --config-dir ${dir} --no-ssl-verify`, "--apply drops --check-mode");
+  check(run(["wan", "ipv6-relearn", "--check", "--apply"]) !== 0, "--check and --apply together are refused");
+  check(run(["wan", "ipv6-relearn", "--force"]) !== 0, "an option the verb does not take is refused");
+  check(readFileSync(log, "utf8").trim().split("\n").length === 3, "…and neither ran the controller");
+  if (prev === undefined) delete process.env.NM_IPV6_BIN; else process.env.NM_IPV6_BIN = prev;
+  const v = renderManifest(HELP).verbs.find((x) => x.verb === "wan ipv6-relearn");
+  check(!!v && v.effect === "write" && v.preview.kind === "apply-flag" && "flag" in v.preview && v.preview.flag === "--apply",
+    "help --json: wan ipv6-relearn previews without --apply");
 }
 
 console.log("");

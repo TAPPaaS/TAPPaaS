@@ -56,7 +56,7 @@ export interface EgressInput {
 
 // Two well-run anycast resolvers: one answering is egress.
 export const PUBLIC_V6 = ["2606:4700:4700::1111", "2001:4860:4860::8888"];
-export const RELEARN = "configctl interface reconfigure wan on the firewall, then the network module's update";
+export const RELEARN = "network-manager wan ipv6-relearn --check";
 
 const FIREWALL: CheckSubject = { kind: "module", name: "network" };
 const UPLINK: CheckSubject = { kind: "site", name: "uplink" };

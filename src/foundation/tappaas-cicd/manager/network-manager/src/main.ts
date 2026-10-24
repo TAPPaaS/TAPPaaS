@@ -22,6 +22,7 @@
 //   network-manager retire [--apply]
 //   network-manager merge [--diff] [--config-dir <dir>] [--template <tpl>]
 //   network-manager distribute [--zones <file>] [--dry-run]
+//   network-manager wan ipv6-relearn [--check | --apply]
 //
 // Exit codes: ok=0, error/drift-after-apply=1.
 
@@ -78,6 +79,7 @@ import {
   preGateZoneUnset,
 } from "./zonemodify";
 import { cmdSnat } from "./snat";
+import { cmdWan } from "./wan";
 import { HealthDoc, buildTopology, collectSources, renderTopology } from "./topology";
 import { stream } from "../../../lib/ts/src/exec";
 
@@ -232,6 +234,21 @@ export const HELP: HelpSpec = {
         "declaration, so use `module-manager module add|modify|delete`. There is\n" +
         "no `mode --set` either — the mode is DERIVED, and applying a module's\n" +
         "snatFrom moves it to 'hybrid' when it is not already enforcing.",
+    },
+    {
+      usage: "wan ipv6-relearn [--check | --apply]", effect: { apply: "--apply" },
+      verb: "wan ipv6-relearn",
+      name: "wan ipv6-relearn (re-learn the WAN's IPv6 router)",
+      options: [
+        ["--check", "report the recorded router, the one advertising now, the route and the prefix, and what --apply would do (the default)"],
+        ["--apply", "record the advertising router, re-run the firewall's IPv6 WAN event, then the network module's IPv6 converge"],
+        ["--config-dir <dir>", "where site.json and zones.json are (default: the site's config)"],
+      ],
+      details:
+        "For a WAN whose ISP replaced its router: OPNsense keeps routing IPv6 to the old one, which\n" +
+        "no longer answers (health-manager's ipv6-egress gate names this verb). Both send one router\n" +
+        "solicitation on the WAN. --apply keeps the DHCPv6 lease: it does not reconfigure the WAN.\n" +
+        "See IPV6.md, *When the ISP replaces its router*.",
     },
     {
       usage: "render [--zones <file>]",
@@ -1451,6 +1468,8 @@ export function run(argv: string[], client?: PlaneClient): number {
         return cmdTopology(opts);
       case "snat": // ADR-016 D3: read-only here — no add/delete, no mode --set
         return cmdSnat(opts.rest, opts.json === true);
+      case "wan": // #875: the WAN's IPv6 router, through the opnsense controller
+        return cmdWan(opts.rest, opts);
       case "split-horizon-target": // ADR-021 D5: the ONE resolver, for all writers
         return cmdSplitHorizonTarget(opts);
       default:

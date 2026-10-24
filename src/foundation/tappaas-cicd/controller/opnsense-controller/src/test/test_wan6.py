@@ -10,8 +10,11 @@ Run with:
 
 from __future__ import annotations
 
+import io
 import json
 import unittest
+from contextlib import redirect_stdout
+from unittest.mock import MagicMock, patch
 
 from opnsense_controller.wan6 import (
     Advert, apply_script, parse_adverts, parse_wan, relearn_plan,
@@ -119,6 +122,47 @@ class TestPlan(unittest.TestCase):
         p = relearn_plan(parse_wan(STALE), [Advert(NEW, 0)])
         self.assertEqual(p.steps, [])
         self.assertIn("no router answered", p.problems[0])
+
+
+class TestRelearn(unittest.TestCase):
+    """ipv6-manager relearn: --check-mode changes nothing; --apply runs the plan, then apply."""
+
+    def run_relearn(self, states, check_mode):
+        from opnsense_controller import ipv6_cli
+        fw = MagicMock(return_value="")
+        after = MagicMock(return_value=True)
+        reads = iter(states)
+        with patch.object(ipv6_cli, "read_wan", side_effect=lambda h: next(reads)), \
+             patch.object(ipv6_cli, "solicit", return_value=[Advert(NEW, 3600)]), \
+             patch.object(ipv6_cli, "_fw", fw), redirect_stdout(io.StringIO()) as out:
+            ok = ipv6_cli.relearn("10.0.0.1", check_mode, after=after, settle_seconds=0)
+        return ok, fw, after, out.getvalue()
+
+    def test_check_mode_changes_nothing(self):
+        ok, fw, after, out = self.run_relearn([parse_wan(STALE)], True)
+        self.assertTrue(ok)
+        fw.assert_not_called()
+        after.assert_not_called()
+        self.assertIn(f"would record the advertising router: ifctl -i vtnet1 -6rd -a {NEW}", out)
+        self.assertIn(f"recorded router:   {OLD} (does not answer", out)
+
+    def test_apply_then_converge(self):
+        ok, fw, after, out = self.run_relearn([parse_wan(STALE), parse_wan(HEALTHY)], False)
+        self.assertTrue(ok)
+        self.assertIn("interface newipv6 vtnet1 force", fw.call_args[0][1])
+        after.assert_called_once()
+        self.assertIn(f"the WAN's IPv6 router is {NEW}", out)
+
+    def test_apply_that_does_not_take_fails(self):
+        ok, _, after, _ = self.run_relearn([parse_wan(STALE), parse_wan(STALE)], False)
+        self.assertFalse(ok)
+        after.assert_not_called()
+
+    def test_nothing_to_do_still_converges(self):
+        ok, fw, after, _ = self.run_relearn([parse_wan(HEALTHY)], False)
+        self.assertTrue(ok)
+        fw.assert_not_called()
+        after.assert_called_once()
 
 
 if __name__ == "__main__":
