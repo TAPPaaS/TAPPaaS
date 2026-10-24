@@ -8,7 +8,9 @@ themselves: that is what `src/foundation/schemas/*-fields.json` is for, and
 `schemas/README.md` maps each object to its schema, its file and its manager.
 
 Read the arrows as "this field names that object". A reference is resolved by
-name at read or reconcile time; nothing is embedded twice.
+name at read or reconcile time; nothing is embedded twice. Current as of
+2026-10-24, after ADR-036 (locations and placement) and the zone, device and
+organization simplifications below.
 
 ## The diagram
 
@@ -195,39 +197,18 @@ draws the site that way: location by location (the primary first), each with
 its rooms, each room with its racks and loose devices, then what is at the
 location placed nowhere; a device's panel shows the two lines, each a link.
 
-## Where the model is harder than it needs to be
+## What was simplified, and what is parked
 
-These are the places where one thing is said in two ways, or where a reference
-runs in both directions. They are the candidates for the next simplification;
-nothing here is a bug.
+The first survey of this model (2026-10-22) found seven places where one thing
+was said in two ways or a reference ran both ways. Four are resolved; three are
+parked in #866. Every installation was moved by a numbered config migration.
 
-1. **Environment ↔ zone — resolved.** This was a two-way link: an environment
-   named its service zone and a client or IoT zone named the environments it
-   served. Now the zone names the environment in one field, `environment` (a
-   client or IoT zone may list several), and nothing points the other way. An environment's zone is the Service zone
-   naming it; the zones it owns are the zones naming it.
-2. **Location — resolved.** The site's places are one list, `site.json`
-   `locations{}`, with `primaryLocation` naming the site's own. Everything that is
-   somewhere names one by `location`, unset meaning the primary: a backup peer, a
-   machine module, a switch and an access point, a room and a recorded device.
-3. **Devices — resolved.** Each kind of device has one record and one owner:
-   a node or machine its module instance (a node is its `pvehost` instance, with
-   its uplinks and storage pools), a switch or access point the switch
-   configuration, anything else `positions.json`'s `devices{}`; a device a port
-   only sees has no record until it is recorded. No device is written twice. The
-   topology is the one list of them, derived, giving each its location, its
-   placement and the record it came from; placements, cables and the console
-   name a device by that one name.
-4. **Resolved — organizations are listed once.** They are the files under
-   `identities/organizations/`, which identity-manager owns; `site.json` no
-   longer carries a list of paths to them.
-5. **Backup policy is a cascade across three objects** (module › environment ›
-   site `backup` blocks) plus peers as module instances of three kinds. The
-   console shows it; the model does not name the resolved policy anywhere.
-6. **A module's placement is spread over its record** (`node`, `zone0`,
-   `config.cluster:vm.storage`, `config.cluster:ha.HANode`), partly under the
-   `<module>:<service>` nesting and partly flat, so "where does this module
-   run" is four lookups with two conventions.
-7. **`module:service` pairs** (`dependsOn`, `integratesWith`, `provides`) are
-   the one reference that is not a file name: the module half resolves to a
-   module JSON, the service half to that module's `provides[]`.
+| # | Finding | State |
+|---|---|---|
+| 1 | Environment ↔ zone was a two-way link (`environment.network.zone` and `zone.serves[]`) | **Resolved** (#865, migration 0018): the zone names its environment in one field, `environment`; a client, IoT or guest zone may list several; nothing points the other way. An environment's zone is the Service zone naming it |
+| 2 | Location was recorded in four shapes (the site's, rooms, a machine's `physicalLocation`, free text on switches and APs) | **Resolved** (ADR-036, #869 and #871, migrations 0019 and 0021): one list, `site.locations{}` with a primary; everything that is somewhere names one by `location` |
+| 3 | Devices lived in three files, joined only by name | **Resolved** (ADR-036, #870 and #872, migrations 0020 and 0022): each kind has one record and one owner (a node is its `pvehost` instance), placements are position-manager's, the topology is the one derived list with each device's location, placement and source |
+| 4 | Organizations were listed twice (`site.organizations[]` and the identities directory) | **Resolved** (#867, migration 0017): the directory is the list |
+| 5 | Backup policy is a cascade across three objects (module › environment › site `backup` blocks) plus peers as module instances of three kinds; the resolved policy is named nowhere | **Parked** (#866) |
+| 6 | A module's placement is spread over its record (`node`, `zone0`, `config.cluster:vm.storage`, `config.cluster:ha.HANode`), partly nested and partly flat | **Parked** (#866) |
+| 7 | `module:service` pairs (`dependsOn`, `integratesWith`, `provides`) are the one reference that is not a file name | **Parked** (#866) |
