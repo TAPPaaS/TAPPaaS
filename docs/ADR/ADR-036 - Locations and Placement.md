@@ -175,8 +175,10 @@ site-manager. The device panel shows location and placement as two lines, each a
 
 - **O1** *(closed by D6, 2026-10-23)* A cluster node is a machine: its `pvehost` instance is the
   record, and `site.hardware.nodes[]` goes.
-- **O2** *(→ #868)* The faceplate catalog is in the source tree; a site cannot add a plate for a
-  device model the catalog lacks. Out of scope here; the generic plates cover it.
+- **O2** *(→ #868, built)* The faceplate catalog is in the source tree; a site cannot add a plate for a
+  device model the catalog lacks. Out of scope here; the generic plates cover it. #868: a site's
+  own plates in `positions.json` `faceplates{}`, merged over the shipped catalog
+  (`position-manager faceplate add/modify/delete`, ports as a port spec).
 - **O3** *(closed 2026-10-23)* `locale` and `keyboard` stay site-wide; they do not move with a
   location.
 

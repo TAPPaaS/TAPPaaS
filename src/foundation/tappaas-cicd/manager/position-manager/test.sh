@@ -116,6 +116,22 @@ RMC() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="
 [[ "$(RMC faceplates show mikrotik/crs317-1g-16s 2>/dev/null | grep -c 'sfp-sfpplus')" == "2" ]] && ok "faceplates show: the CRS317's two SFP+ rows" || bad "faceplates show mikrotik/crs317-1g-16s"
 [[ "$(RMC faceplates show unifi/usw-pro-xg-10-poe --device "${USW}" --topology "${TOPO}" --json 2>/dev/null | jq -r '.rows[0][2].zones[0]')" == "wan" ]] \
     && ok "faceplates show --device: port 5 carries the wan zone" || bad "faceplates show --device on the UniFi plate"
+# The site's own faceplates: added, listed as the site's, placed, changed, deleted.
+RMC faceplate add acme/nas-4 --units 2 --ports "4xrj45, 2xsfp+" --kind server --display-name "NAS 4" --check >/dev/null 2>&1 && [[ "$(jq -r '.faceplates // "none"' "${DOC}")" == "none" ]] \
+    && ok "faceplate add --check: nothing written" || bad "faceplate add --check"
+RMC faceplate add acme/nas-4 --units 2 --ports "4xrj45, 2xsfp+" --kind server --display-name "NAS 4" --match NAS-4X >/dev/null 2>&1 \
+    && [[ "$(jq -r '.faceplates["acme/nas-4"] | "\(.units) \(.ports) \(.match[0])"' "${DOC}")" == "2 4xrj45, 2xsfp+ NAS-4X" ]] && ok "faceplate add: in positions.json" || bad "faceplate add"
+RMC faceplate add acme/bad --units 1 --ports "4xwhat" >/dev/null 2>&1 && bad "faceplate add: a broken spec refused" || ok "faceplate add: a broken spec refused"
+[[ "$(RMC faceplates list --json 2>/dev/null | jq -r '.[0] | "\(.key) \(.site) \(.ports) \(.spec)"')" == "acme/nas-4 true 6 4xrj45, 2xsfp+" ]] && ok "faceplates list --json: the site's first, marked site" || bad "faceplates list: the site's plate"
+RMC faceplates list 2>/dev/null | grep 'acme/nas-4' | grep -q site && ok "faceplates list: marked site" || bad "faceplates list: the mark"
+[[ "$(RMC faceplates show acme/nas-4 --file 2>/dev/null | jq -r '"\(.vendor) \(.model) \(.ports)"')" == "acme NAS 4 4xrj45, 2xsfp+" ]] && ok "faceplates show --file: the plate as a catalog file" || bad "faceplates show --file"
+[[ "$(RMC export --json 2>/dev/null | jq -r '[.catalog[] | select(.site) | .key] | join(",")')" == "acme/nas-4" ]] && ok "export: the site's plate in the catalog" || bad "export: the site's plate"
+RMC faceplate add generic/patch-panel-24 --units 1 --ports "24xrj45[2-98]" --kind patch-panel --passive >/dev/null 2>&1 && ok "faceplate add: a shipped key" || bad "faceplate add: a shipped key"
+RMC validate 2>&1 | grep -q "overrides the shipped one" && ok "validate: the override pointed out" || bad "validate: the override"
+RMC faceplate delete generic/patch-panel-24 >/dev/null 2>&1 && ok "faceplate delete: the override goes" || bad "faceplate delete: the override"
+RMC faceplate modify acme/nas-4 --set "ports=4xrj45/4xrj45" --set description="the backup NAS" >/dev/null 2>&1 \
+    && [[ "$(jq -r '.faceplates["acme/nas-4"] | "\(.ports) \(.description)"' "${DOC}")" == "4xrj45/4xrj45 the backup NAS" ]] && ok "faceplate modify" || bad "faceplate modify"
+RMC faceplate delete acme/nas-4 >/dev/null 2>&1 && [[ "$(jq -r '.faceplates // "none"' "${DOC}")" == "none" ]] && ok "faceplate delete" || bad "faceplate delete"
 # The old verbs answer for one release.
 RM rack add rack1 --units 42 >/dev/null 2>&1 || bad "rack add (for the old verbs)"
 RM mount add tappaas3 --rack rack1 --u 2 --faceplate generic/server-2u --topology "${TOPO}" --check >/dev/null 2>&1 && ok "mount add: the old verb answers (place)" || bad "mount add alias"

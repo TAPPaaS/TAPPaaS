@@ -106,6 +106,23 @@ export interface PositionsDoc {
   mounts?: Record<string, Placement>;
   cables?: Cable[];
   devices?: Record<string, RecordedDevice>;
+  // The site's own faceplates, keyed <vendor>/<model>: merged over the
+  // shipped catalog (an entry of the same key replaces the shipped one).
+  faceplates?: Record<string, SiteFaceplate>;
+}
+
+// A faceplate the site adds (faceplate add): its ports as a port spec
+// (parsePortSpec), the rest as a catalog entry's.
+export interface SiteFaceplate {
+  kind?: PlateKind; // absent: other
+  units: number;
+  width?: MountWidth; // absent: full
+  ports: string;
+  passive?: boolean;
+  match?: string[];
+  vendor?: string; // absent: the key's vendor
+  displayName?: string; // the model as drawn; absent: the key's model
+  description?: string;
 }
 
 // A rack's height, width and face, and what a loose placement draws with.
@@ -132,6 +149,7 @@ export const racksOf = (d: PositionsDoc): Record<string, Rack> => d.racks ?? {};
 export const placementsOf = (d: PositionsDoc): Record<string, Placement> => d.placements ?? legacyPlacements(d.mounts);
 export const cablesOf = (d: PositionsDoc): Cable[] => d.cables ?? [];
 export const devicesOf = (d: PositionsDoc): Record<string, RecordedDevice> => d.devices ?? {};
+export const faceplatesOf = (d: PositionsDoc): Record<string, SiteFaceplate> => d.faceplates ?? {};
 export const roomsOf = (d: PositionsDoc): Record<string, Room> => d.rooms ?? {};
 export const ROOM_NAME_RE = /^[a-z][a-z0-9-]{0,62}$/;
 // Where a mount is, in words: "rack1 U20" or "room basement (loose)".
@@ -164,10 +182,184 @@ export interface Faceplate {
   // A generic plate is filled from the device: its NICs (a server), or its
   // ports (a switch). rows then holds what is fixed (a console, power).
   generic?: "nics" | "ports";
-  // Port rows, top to bottom; null is a gap.
+  // Port rows, top to bottom; null is a gap. A plate written as a port spec
+  // has them from its blocks, a gap between two blocks.
   rows: (CatalogPort | null)[][];
+  // Where its ports are on the plate (a plate written as a port spec): blocks
+  // side by side, each over its share of the plate's width.
+  blocks?: PlateBlock[];
+  ports?: string; // the port spec it was written as
   labels?: { text: string; at?: "left" | "right" }[];
   description?: string;
+  site?: true; // the site's own (config/positions.json faceplates)
+  overrides?: true; // the site's, in place of a shipped plate of its key
+}
+
+// A block of ports: its rows, top to bottom, spread evenly over [from, to) of
+// the plate's width (0 its left edge, 1 its right), a column per port.
+export interface PlateBlock<P = CatalogPort> {
+  from: number;
+  to: number;
+  rows: (P | null)[][];
+}
+
+// ── the port spec ─────────────────────────────────────────────────────
+//
+// How a site writes a plate's ports (faceplate add --ports), and how the
+// catalog writes a plate whose ports have a layout:
+//
+//   groups  side by side, a comma between them, a gap between them on the plate
+//   rows    within a group, top to bottom, a slash between them
+//   items   within a row, a plus between them: [<n>x]<kind>[@<rows>][:<name>]
+//
+// A kind is rj45, sfp+, sfp28, poe, console, power, or gap (an empty place).
+// A port is named by the number {n} counts per name, from 1 (no name: 1, 2,
+// …); a name without {n} given to several ports gets the number after it.
+// <n>x<kind>@<k> alone in its group lays its ports in k rows, odd over even
+// (stacked cages). A group may end in its place on the plate in percent of its
+// width, [<from>-<to>]: every group, or none (then they stand right of the
+// plate's name, packed to its right edge). Examples:
+//   24xrj45                         24 ports in one row, 1-24
+//   8xrj45, 2xsfp+                  eight RJ45, a gap, two SFP+ (9, 10)
+//   8xsfp+/8xsfp+                   two rows of eight, 1-8 over 9-16
+//   16xsfp+@2:sfp-sfpplus{n}[3-66]  sixteen cages, odd over even, in the left two thirds
+//   rj45:WAN+gap+4xrj45:LAN {n}     WAN, a gap, LAN 1-4
+// A kind ending in + (sfp+) takes its own + before the next item: 2xsfp++rj45.
+
+export const SPEC_KINDS = [...PORT_KINDS, "gap"] as const;
+// Where groups without a place stand: right of the plate's name, ports at
+// most a twentieth of the plate apart.
+export const SPEC_AREA: [number, number] = [0.3, 0.97];
+const SPEC_MAX_PITCH = 0.05;
+const SPEC_MAX_PORTS = 192;
+const SPEC_MAX_ROWS = 6;
+const ITEM_RE = /\s*(?:(\d+)\s*x\s*)?(sfp28|sfp\+|rj45|poe|console|power|gap)(?:@(\d+))?(?::([^+]*))?\s*(?:\+|$)/y;
+const SPAN_RE = /\[\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*\]\s*$/;
+
+// A port spec, read: its blocks, or what is wrong with it.
+export function parsePortSpec(spec: string): { blocks: PlateBlock[] } | { error: string } {
+  const text = (spec ?? "").trim();
+  if (!text) return { error: "the port spec is empty" };
+  const counters = new Map<string, number>();
+  const names = new Set<string>();
+  let total = 0;
+  const groups: { span: [number, number] | null; rows: (CatalogPort | null)[][] }[] = [];
+  for (const raw of text.split(",")) {
+    let g = raw.trim();
+    if (!g) return { error: "an empty group: two commas, or one at an end" };
+    let span: [number, number] | null = null;
+    const sm = SPAN_RE.exec(g);
+    if (sm) {
+      span = [Number(sm[1]) / 100, Number(sm[2]) / 100];
+      if (!(span[0] >= 0 && span[0] < span[1] && span[1] <= 1)) return { error: `${sm[0].trim()}: a place is [<from>-<to>] in percent, from less than to, at most 100` };
+      g = g.slice(0, sm.index).trim();
+    }
+    if (!g) return { error: "a group with a place and no ports" };
+    const rows: (CatalogPort | null)[][] = [];
+    const rowTexts = g.split("/");
+    for (const rt of rowTexts) {
+      if (!rt.trim()) return { error: `'${g}': an empty row: two slashes, or one at an end` };
+      const items: { n: number; kind: string; stack: number; name: string | null }[] = [];
+      ITEM_RE.lastIndex = 0;
+      const s = rt.trim();
+      while (ITEM_RE.lastIndex < s.length) {
+        const at = ITEM_RE.lastIndex;
+        const m = ITEM_RE.exec(s);
+        if (!m || m.index !== at) return { error: `'${s.slice(at)}': not [<n>x]<kind>[@<rows>][:<name>] — a kind is ${SPEC_KINDS.join(", ")}` };
+        const n = m[1] === undefined ? 1 : Number(m[1]);
+        if (n < 1 || n > 96) return { error: `${m[0].trim()}: a count is 1 to 96` };
+        items.push({ n, kind: m[2], stack: m[3] === undefined ? 1 : Number(m[3]), name: m[4] === undefined ? null : m[4].trim() });
+        if (m[0].length === 0) break;
+      }
+      const row: (CatalogPort | null)[] = [];
+      for (const it of items) {
+        if (it.kind === "gap") {
+          if (it.name !== null) return { error: "a gap has no name" };
+          for (let i = 0; i < it.n; i++) row.push(null);
+          continue;
+        }
+        if (it.stack !== 1 && (items.length > 1 || rowTexts.length > 1)) return { error: `@${it.stack}: rows of its own only for a group that is that one item` };
+        if (it.stack < 1 || it.stack > SPEC_MAX_ROWS) return { error: `@${it.stack}: 1 to ${SPEC_MAX_ROWS} rows` };
+        if (it.name === "") return { error: "a name after : is empty" };
+        let tpl = it.name ?? "{n}";
+        if (it.n > 1 && !tpl.includes("{n}")) tpl += "{n}";
+        const ports: CatalogPort[] = [];
+        for (let i = 0; i < it.n; i++) {
+          let name = tpl;
+          if (tpl.includes("{n}")) {
+            const k = (counters.get(tpl) ?? 0) + 1;
+            counters.set(tpl, k);
+            name = tpl.split("{n}").join(String(k));
+          }
+          if (names.has(name)) return { error: `port ${name} appears twice` };
+          names.add(name);
+          ports.push({ name, kind: it.kind as PortKind });
+        }
+        total += ports.length;
+        if (it.stack > 1) {
+          // Stacked: port 1 over 2, 3 over 4, … — each its own row.
+          for (let r = 0; r < it.stack; r++) rows.push(ports.filter((_, i) => i % it.stack === r));
+        } else row.push(...ports);
+      }
+      if (items.every((it) => it.stack === 1)) rows.push(row);
+    }
+    if (rows.length > SPEC_MAX_ROWS) return { error: `'${g}': at most ${SPEC_MAX_ROWS} rows` };
+    groups.push({ span, rows });
+  }
+  if (total === 0) return { error: "the port spec has no ports" };
+  if (total > SPEC_MAX_PORTS) return { error: `${total} ports: at most ${SPEC_MAX_PORTS}` };
+  const placed = groups.filter((g) => g.span).length;
+  if (placed && placed !== groups.length) return { error: "give every group its place [<from>-<to>], or none" };
+  const cols = groups.map((g) => Math.max(1, ...g.rows.map((r) => r.length)));
+  if (placed) {
+    const spans = groups.map((g) => g.span!).sort((a, b) => a[0] - b[0]);
+    for (let i = 1; i < spans.length; i++) if (spans[i][0] < spans[i - 1][1]) return { error: "two groups' places overlap" };
+    return { blocks: groups.map((g) => ({ from: g.span![0], to: g.span![1], rows: g.rows })) };
+  }
+  // Packed to the right of the plate's name: a column's place between groups.
+  const slots = cols.reduce((a, b) => a + b, 0) + groups.length - 1;
+  const pitch = Math.min(SPEC_MAX_PITCH, (SPEC_AREA[1] - SPEC_AREA[0]) / slots);
+  let x = SPEC_AREA[1] - slots * pitch;
+  return {
+    blocks: groups.map((g, i) => {
+      const b = { from: round(x), to: round(x + cols[i] * pitch), rows: g.rows };
+      x += (cols[i] + 1) * pitch;
+      return b;
+    }),
+  };
+}
+const round = (x: number): number => Math.round(x * 10000) / 10000;
+
+// A plate's rows from its blocks: row by row, the blocks' ports side by side,
+// a gap between two blocks.
+export function blockRows<P>(blocks: PlateBlock<P>[]): (P | null)[][] {
+  const n = Math.max(0, ...blocks.map((b) => b.rows.length));
+  const rows: (P | null)[][] = [];
+  for (let i = 0; i < n; i++) {
+    const row: (P | null)[] = [];
+    for (const b of blocks) {
+      const r = b.rows[i];
+      if (!r?.length) continue;
+      if (row.length) row.push(null);
+      row.push(...r);
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+// Where a block's port is: the centre of its column, as a share of the
+// plate's width.
+export const blockX = (b: Pick<PlateBlock<unknown>, "from" | "to" | "rows">, col: number): number => {
+  const cols = Math.max(1, ...b.rows.map((r) => r.length));
+  return b.from + ((col + 0.5) * (b.to - b.from)) / cols;
+};
+
+// Every port's x on a plate with blocks, by its id: what the drawing places.
+export function portXs(blocks: PlateBlock<CatalogPort>[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const b of blocks) for (const r of b.rows) r.forEach((p, i) => p && (out[portId(p)] = round(blockX(b, i))));
+  return out;
 }
 
 // A port's topology id: its id, else the number of "Port N", else its name.
@@ -190,10 +382,18 @@ export function parseFaceplate(key: string, raw: unknown): Faceplate | { error: 
   if (!Number.isInteger(o.units) || (o.units as number) < 1) return { error: `${key}: units is a whole number of rack units` };
   if (!MOUNT_WIDTHS.includes((o.width ?? "full") as MountWidth)) return { error: `${key}: width is one of ${MOUNT_WIDTHS.join(", ")}` };
   if (o.generic !== undefined && o.generic !== "nics" && o.generic !== "ports") return { error: `${key}: generic is nics or ports` };
-  if (!Array.isArray(o.rows)) return { error: `${key}: rows is a list of port rows` };
+  let blocks: PlateBlock[] | undefined;
+  if (o.ports !== undefined) {
+    if (o.rows !== undefined) return { error: `${key}: its ports are rows or a port spec (ports), not both` };
+    if (o.generic !== undefined) return { error: `${key}: a generic plate takes its ports from the device` };
+    if (typeof o.ports !== "string") return { error: `${key}: ports is a port spec` };
+    const spec = parsePortSpec(o.ports);
+    if ("error" in spec) return { error: `${key}: ports: ${spec.error}` };
+    blocks = spec.blocks;
+  } else if (!Array.isArray(o.rows)) return { error: `${key}: rows is a list of port rows, or ports a port spec` };
   const rows: (CatalogPort | null)[][] = [];
   const ids = new Set<string>();
-  for (const [i, r] of (o.rows as unknown[]).entries()) {
+  for (const [i, r] of ((blocks ? blockRows(blocks) : o.rows) as unknown[]).entries()) {
     if (!Array.isArray(r)) return { error: `${key}: row ${i + 1} is not a list` };
     const row: (CatalogPort | null)[] = [];
     for (const c of r) {
@@ -222,8 +422,69 @@ export function parseFaceplate(key: string, raw: unknown): Faceplate | { error: 
     ...(o.passive === true ? { passive: true } : {}),
     ...(o.generic ? { generic: o.generic as "nics" | "ports" } : {}),
     rows,
+    ...(blocks ? { blocks, ports: (o.ports as string).trim() } : {}),
     ...(Array.isArray(o.labels) ? { labels: o.labels.map(obj).filter((l) => isStr(l.text)).map((l) => ({ text: l.text as string, ...(l.at === "left" || l.at === "right" ? { at: l.at } : {}) })) } : {}),
     ...(isStr(o.description) ? { description: o.description } : {}),
+  };
+}
+
+// The site's entry as a catalog entry: its key's vendor and model unless it
+// names them, kind other unless given.
+export function siteFaceplate(key: string, s: SiteFaceplate): Faceplate | { error: string } {
+  const [vendor, model] = key.split("/");
+  const raw = {
+    vendor: s?.vendor ?? vendor,
+    model: s?.displayName ?? model,
+    kind: s?.kind ?? "other",
+    units: s?.units,
+    width: s?.width ?? "full",
+    ports: s?.ports,
+    ...(s?.passive === true ? { passive: true } : {}),
+    ...(Array.isArray(s?.match) ? { match: s.match } : {}),
+    ...(s?.description ? { description: s.description } : {}),
+  };
+  const p = parseFaceplate(key, raw);
+  return "error" in p ? p : { ...p, site: true };
+}
+
+// The catalog with the site's faceplates merged over it: a site entry of a
+// shipped key replaces the shipped plate (and says so); a broken one is an
+// error and not merged. The site's entries of `catalog` are dropped first, so
+// a catalog already merged merges again to the same.
+export function withSiteFaceplates(catalog: Faceplate[], doc: PositionsDoc): { catalog: Faceplate[]; findings: PositionFinding[] } {
+  const out = catalog.filter((f) => !f.site);
+  const findings: PositionFinding[] = [];
+  for (const [key, s] of Object.entries(faceplatesOf(doc))) {
+    const p = siteFaceplate(key, s);
+    if ("error" in p) {
+      findings.push({ severity: "error", message: `faceplate ${p.error}` });
+      continue;
+    }
+    const i = out.findIndex((f) => f.key === key);
+    if (i < 0) out.push(p);
+    else {
+      findings.push({ severity: "warn", message: `faceplate ${key}: the site's entry overrides the shipped one (faceplate delete ${key} goes back to it)` });
+      out[i] = { ...p, overrides: true };
+    }
+  }
+  return { catalog: out, findings };
+}
+
+// A plate as its catalog file (faceplates/<vendor>/<model>.json): how a
+// site's plate goes upstream.
+export function faceplateFile(f: Faceplate): Record<string, unknown> {
+  return {
+    vendor: f.vendor,
+    model: f.model,
+    ...(f.match?.length ? { match: f.match } : {}),
+    kind: f.kind,
+    units: f.units,
+    width: f.width,
+    ...(f.passive ? { passive: true } : {}),
+    ...(f.generic ? { generic: f.generic } : {}),
+    ...(f.description ? { description: f.description } : {}),
+    ...(f.ports ? { ports: f.ports } : { rows: f.rows }),
+    ...(f.labels?.length ? { labels: f.labels } : {}),
   };
 }
 
@@ -410,7 +671,10 @@ export interface ResolvedPlate {
   width: MountWidth;
   passive: boolean;
   rows: (PlatePort | null)[][];
+  // Where its ports are (a plate with blocks); absent: a grid right of its name.
+  blocks?: PlateBlock<PlatePort>[];
   labels: { text: string; at?: "left" | "right" }[];
+  site?: true; // the site's own faceplate
 }
 
 // What kind of port a topology id is, when a generic plate has to guess.
@@ -444,7 +708,8 @@ export function resolvePlate(f: Faceplate, dev: SiteDevice | null): ResolvedPlat
       rows = [top, bottom, ...fixed].filter((r) => r.length > 0);
     }
   }
-  return { key: f.key, vendor: f.vendor, model: f.model, kind: f.kind, units: f.units, width: f.width, passive: f.passive === true, rows, labels: f.labels ?? [] };
+  const blocks = f.blocks && !f.generic ? f.blocks.map((b) => ({ from: b.from, to: b.to, rows: b.rows.map((r) => r.map((c) => (c ? port(portId(c), c.name, c.kind) : null))) })) : undefined;
+  return { key: f.key, vendor: f.vendor, model: f.model, kind: f.kind, units: f.units, width: f.width, passive: f.passive === true, rows, ...(blocks ? { blocks } : {}), labels: f.labels ?? [], ...(f.site ? { site: true as const } : {}) };
 }
 
 export const platePorts = (p: ResolvedPlate): PlatePort[] => p.rows.flat().filter((x): x is PlatePort => !!x);
@@ -504,11 +769,16 @@ export interface SiteLocs {
 // fits its rack, every faceplate key is in the catalog, every cable end names
 // a port the topology or the catalog has; every location a room or a device
 // names is the site's, a device stands in a room at its own location, and a
-// device at a location without a room is pointed out. seen null: the topology
+// device at a location without a room is pointed out; the site's faceplates
+// (merged over the shipped catalog given) are checked as shipped ones are, and
+// one that replaces a shipped plate is pointed out. seen null: the topology
 // could not be read, and the device checks are skipped with a warning; sites
 // null: site.json could not be read, and the location checks are skipped.
-export function checkPositions(doc: PositionsDoc, catalog: Faceplate[], seen: SiteDevice[] | null, sites: SiteLocs | null = null): PositionFinding[] {
-  const out: PositionFinding[] = [];
+export function checkPositions(doc: PositionsDoc, shipped: Faceplate[], seen: SiteDevice[] | null, sites: SiteLocs | null = null): PositionFinding[] {
+  // The site's faceplates over the shipped catalog: each checked as a shipped one is.
+  const merged = withSiteFaceplates(shipped, doc);
+  const catalog = merged.catalog;
+  const out: PositionFinding[] = [...merged.findings];
   const err = (message: string) => out.push({ severity: "error", message });
   const warn = (message: string) => out.push({ severity: "warn", message });
   const racks = racksOf(doc);
@@ -840,8 +1110,10 @@ export function deviceLocation(t: TopoLike, doc: PositionsDoc, name: string, pri
 // their rooms, each placement on its device with its plate, the cables the
 // topology sees plus the recorded ones, the devices placed nowhere (by
 // location), and what does not reconcile. locationOf: each device's location
-// (the topology's, which knows every record); unset, deviceLocation.
-export function resolvePositions(doc: PositionsDoc, catalog: Faceplate[], t: TopoLike, sites: SitePlaces = { locations: {}, primary: null }, locationOf?: (device: string) => string | null): PositionsView {
+// (the topology's, which knows every record); unset, deviceLocation. The
+// site's faceplates are merged over the catalog given.
+export function resolvePositions(doc: PositionsDoc, shipped: Faceplate[], t: TopoLike, sites: SitePlaces = { locations: {}, primary: null }, locationOf?: (device: string) => string | null): PositionsView {
+  const catalog = withSiteFaceplates(shipped, doc).catalog;
   const devices = withRecorded(siteDevices(t), doc, catalog);
   const recorded = devicesOf(doc);
   const mounts = placementsOf(doc);

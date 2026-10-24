@@ -42,7 +42,11 @@ everything else comes from where it already is.
    plate port and a topology port meet by name. A node's NICs and an unknown
    switch's ports are not in any catalog: the generic plates are filled from the
    device. The suggestion (model or name against `match`) is what the view draws
-   until the operator records a plate.
+   until the operator records a plate. A site adds plates for its own models in
+   positions.json (`faceplates`), merged over the shipped catalog by key; the
+   check and the topology merge them, so nothing else tells them apart. A
+   plate's ports are a grid, or a port spec whose groups stand at their share
+   of the plate's width, so a plate can look like the unit's front.
 6. **Positions are the operator's.** Nothing can discover where a device stands;
    a placement is a statement, checked only for fitting, not overlapping (per
    face, per column: a half and a half side by side are fine) and being at the

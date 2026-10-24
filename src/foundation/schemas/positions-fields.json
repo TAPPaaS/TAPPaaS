@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "positions-fields.json",
   "title": "TAPPaaS Positions",
-  "description": "config/positions.json — where the site's hardware is inside its locations: the rooms (each in a location of site.json), the racks, every placement, the devices and the cables nothing can see. Site state, written only by position-manager. A placement is keyed by the device's name in the physical topology (a node, a switch, an access point, a machine, a device recorded here); the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one.",
+  "description": "config/positions.json — where the site's hardware is inside its locations: the rooms (each in a location of site.json), the racks, every placement, the devices and the cables nothing can see, and the faceplates the site adds to the catalog. Site state, written only by position-manager. A placement is keyed by the device's name in the physical topology (a node, a switch, an access point, a machine, a device recorded here); the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -34,6 +34,12 @@
       "type": "object",
       "propertyNames": { "pattern": "^[a-z][a-z0-9-]{0,62}$" },
       "additionalProperties": { "$ref": "#/$defs/room" }
+    },
+    "faceplates": {
+      "description": "The site's own faceplates, keyed <vendor>/<model>: plates for models the shipped catalog lacks, merged over it. An entry of a shipped key replaces the shipped plate (validate says so).",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9.+-]*$" },
+      "additionalProperties": { "$ref": "#/$defs/faceplate" }
     }
   },
   "$defs": {
@@ -245,6 +251,26 @@
           "changeClass": "in-place",
           "changeNote": "Refused while a device placed in the room records another location of its own."
         }
+      }
+    },
+    "faceplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["units", "ports"],
+      "properties": {
+        "units": { "description": "Its height in rack units.", "type": "integer", "minimum": 1, "maximum": 10 },
+        "width": { "description": "Its share of the rack's width. Unset: full.", "enum": ["full", "half", "third"] },
+        "ports": {
+          "description": "Its ports as a port spec: groups side by side (a comma between), rows within a group (a slash between), items within a row (a plus between), each [<n>x]<kind>[@<rows>][:<name>]; a group may end in its place in percent of the plate's width, [<from>-<to>]. 24xrj45 · 8xrj45, 2xsfp+ · 8xsfp+/8xsfp+.",
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": { "description": "What it is. Unset: other.", "enum": ["server", "switch", "ap", "patch-panel", "pdu", "modem", "other"] },
+        "passive": { "description": "Nothing sees it (a patch panel, a PDU): placed without a topology device.", "type": "boolean" },
+        "match": { "description": "The models and names an inventory reports it by: the plate is suggested for them.", "type": "array", "items": { "type": "string" } },
+        "vendor": { "description": "The vendor as drawn. Unset: the key's.", "type": "string" },
+        "displayName": { "description": "The model as drawn. Unset: the key's.", "type": "string" },
+        "description": { "description": "What it is.", "type": "string" }
       }
     }
   }
