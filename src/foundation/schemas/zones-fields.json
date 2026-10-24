@@ -212,7 +212,7 @@
       "changeNote": "Inbound quarantine. Turning it on withdraws every zone-wide pass INTO this zone at the next reconcile \u2014 disruptive to traffic, but not to any guest, and instantly reversible."
     },
     "environment": {
-      "description": "The environment(s) this zone belongs to. A Service zone names the environment whose zone it is, and the Management zone names mgmt — one name, as a string: every environment is named by exactly one Service or Management zone. A Client, IoT, Guest or DMZ zone may name the environment it serves, or a list of distinct environments when it serves several. Overlay and WAN zones name none. A symbolic reference, so it survives the install-time 'srv' -> '<defaultEnvironment>' rename that strands literal service-zone names.",
+      "description": "The environment(s) this zone belongs to. A Service zone names the environment whose zone it is, and the Management zone names mgmt — one name, as a string: every environment has exactly one such zone of its own. A Service zone that lists environments (a list, even of one) is a shared service zone: a place to install the modules of each environment it lists, the own zone of none. A Client, IoT, Guest or DMZ zone may name the environment it serves, or a list of distinct environments when it serves several. Overlay and WAN zones name none. A symbolic reference, so it survives the install-time 'srv' -> '<defaultEnvironment>' rename that strands literal service-zone names.",
       "type": [
         "string",
         "array"
@@ -233,9 +233,9 @@
         "DMZ"
       ],
       "example": "warmelo",
-      "note": "Authored via 'network-manager bind <zone> --environment <env>' (environment-manager add/modify --zone does it for a Service zone). For a Client or Guest zone each environment's zone is added to its effective 'access-to'; for an IoT zone each environment's zone is added to its effective 'pinhole-allowed-from'; a DMZ zone derives nothing. A zone serving several environments gets the union. The derived edges are rendered into zones.effective.json and are NEVER written back into zones.json, which stays purely authored.",
+      "note": "Authored via 'network-manager bind <zone> --environment <env>' (environment-manager add/modify --zone does it for a Service zone). For a Client or Guest zone each environment's zone is added to its effective 'access-to'; for an IoT zone each environment's zone is added to its effective 'pinhole-allowed-from'; a DMZ zone and a shared service zone derive nothing. A zone serving several environments gets the union. The derived edges are rendered into zones.effective.json and are NEVER written back into zones.json, which stays purely authored.",
       "changeClass": "manual",
-      "changeNote": "Has its own verb: `network-manager bind <zone> --environment <env>` replaces the link, `--add` adds one more environment to a Client, IoT, Guest or DMZ zone, `--unbind` clears it (with `--environment`, only that one). bind checks the environment exists and that it keeps exactly one zone of its own, so a typo fails at the command rather than three reconciles later. A Client, Guest or IoT zone's derived edge follows at the next reconcile."
+      "changeNote": "Has its own verb: `network-manager bind <zone> --environment <env>` replaces the link, `--add` adds one more environment (on a Service zone, making it a shared service zone), `--unbind` clears it (with `--environment`, only that one; a shared zone's last one stays a list of one unless `--own` makes it that environment's own zone). bind checks the environment exists and that it keeps exactly one zone of its own, so a typo fails at the command rather than three reconciles later. A Client, Guest or IoT zone's derived edge follows at the next reconcile."
     },
     "DHCP-start": {
       "description": "Starting offset for DHCP range within the subnet",

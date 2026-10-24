@@ -56,6 +56,8 @@ export interface ZoneLink {
   environment?: string;
   // ... and every environment it names (a client or IoT zone may serve several).
   environments: string[];
+  // A Service zone naming a list: a shared service zone, the own zone of none (#876).
+  shared?: boolean;
 }
 
 export interface RefSources {

@@ -36,7 +36,7 @@ import { join } from "path";
 import { CL, GN, RD, YW } from "../../../lib/ts/src/cli";
 import { Zone, ZonesDoc } from "./types";
 import { NO_IPV6_TYPES, loadZones } from "./zones";
-import { CONSUMER_TYPES, environmentsWithoutZone, hasEnvironments, renderEffective, resolveServes, zoneEnvironments } from "./serves";
+import { CONSUMER_TYPES, environmentsWithoutZone, hasEnvironments, isSharedServiceZone, renderEffective, resolveServes, zoneEnvironments } from "./serves";
 import {
   CONTROL_PLANE_ZONE,
   TIER_INTERNET,
@@ -580,6 +580,11 @@ function checkServes(doc: ZonesDoc, configDir: string, rep: Reporter): void {
       `environment: ${linked.length} zone(s) name an environment` +
         (r.edges.length ? ` — served: ${r.edges.map((e) => `${e.zone}→${e.environment}(${e.serviceZone})`).join(", ")}` : ""),
     );
+  }
+  // Shared service zones (#876) derive nothing; say which environments each serves.
+  const shared = Array.from(doc.zones.entries()).filter(([, z]) => isSharedServiceZone(z));
+  if (shared.length > 0) {
+    rep.note(`environment: shared service zone(s): ${shared.map(([n, z]) => `${n}→${zoneEnvironments(z).join(",")}`).join(", ")}`);
   }
 }
 

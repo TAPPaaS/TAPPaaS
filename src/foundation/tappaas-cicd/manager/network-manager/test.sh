@@ -195,10 +195,18 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
         else
             bad "unbinding lab from home left $(zenv home)"
         fi
-        if run_ts "${NMB} bind labZone --environment acme --add ${ZCZ}" >/dev/null 2>&1; then
-            bad "bind --add was accepted on a Service zone"
+        if run_ts "${NMB} bind labZone --environment acme --add ${ZCZ}" >/dev/null 2>&1 && [[ "$(zenv labZone)" == "lab,acme" ]] \
+            && run_ts "${NMB} bind labZone --unbind --environment acme --own ${ZCZ}" >/dev/null 2>&1 && [[ "$(zenv labZone)" == "lab" ]]; then
+            ok "bind --add makes a Service zone shared; --unbind --environment … --own makes it lab's own again"
         else
-            ok "bind --add is refused on a Service zone: it is the zone of one environment"
+            bad "bind --add / --unbind --own on a Service zone left $(zenv labZone)"
+        fi
+        if run_ts "${NMB} add srvShared --archetype service --environment acme,lab --no-activate ${ZCZ}" >/dev/null 2>&1 \
+            && [[ "$(zenv srvShared)" == "acme,lab" ]] \
+            && run_ts "${NMB} zones-check --zones '${ZC_DIR}/zones.json' --config-dir '${ZC_DIR}'" >/dev/null 2>&1; then
+            ok "add --archetype service --environment acme,lab: a shared service zone, and validate passes"
+        else
+            bad "add --environment acme,lab did not author a valid shared service zone"
         fi
         if run_ts "${NMB} bind acme --environment lab ${ZCZ}" >/dev/null 2>&1 || [[ "$(zenv acme)" != "acme" ]]; then
             bad "bind moved acme's own zone to lab"

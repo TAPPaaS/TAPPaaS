@@ -47,7 +47,7 @@ import { reconcileAll } from "../../src/reconcile";
 import { addZone, deleteZone } from "../../src/zonelifecycle";
 import { runChecks } from "../../src/zonescheck";
 import { ARCHETYPES, TIER_EXEMPT_TYPES, archetypeNames } from "../../src/archetypes";
-import { backfillServes, environmentValue, environmentZoneIn, renderEffective, zoneEnvironment, zoneEnvironments } from "../../src/serves";
+import { backfillServes, environmentValue, environmentZoneIn, isSharedServiceZone, renderEffective, sharedZonesOf, zoneEnvironment, zoneEnvironments } from "../../src/serves";
 import {
   ZonesFieldsSchema,
   applyZoneSet,
@@ -1490,9 +1490,9 @@ function tmpZones(): string {
   //      zones that serve it. A DMZ zone may name one and derives nothing.
   {
     const b = base() as Record<string, Record<string, unknown>>;
-    b.warmelo.environment = ["warmelo"];
+    b.mgmt.environment = ["mgmt"];
     const e1 = renderEffective(loadZones(write(b, "zones-multi.json")), d);
-    check(e1.errors.some((x) => x.includes("'warmelo'") && x.includes("exactly one environment")), "#865: a list on a Service zone is an error");
+    check(e1.errors.some((x) => x.includes("'mgmt'") && x.includes("exactly one environment")), "#865: a list on the Management zone is an error");
     for (const [label, v] of [["an empty list", []], ["a repeated name", ["warmelo", "warmelo"]], ["a non-name", [7]]] as [string, unknown][]) {
       const bl = base() as Record<string, Record<string, unknown>>;
       bl.home.environment = v;
@@ -2435,6 +2435,111 @@ function tmpZones(): string {
   const v = renderManifest(HELP).verbs.find((x) => x.verb === "wan ipv6-relearn");
   check(!!v && v.effect === "write" && v.preview.kind === "apply-flag" && "flag" in v.preview && v.preview.flag === "--apply",
     "help --json: wan ipv6-relearn previews without --apply");
+}
+
+// ── #876: a shared service zone, over Erik's shape ────────────────────
+// Environments gridtefy and acmeco each have a Service zone of their own;
+// srvWork lists both (shared), and the client zone work serves both.
+{
+  const src = join(FIXTURE_DIR, "shared-service-zone");
+  const fresh = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), "nm-876-"));
+    mkdirSync(join(dir, "environments"));
+    for (const f of readdirSync(join(src, "environments"))) copyFileSync(join(src, "environments", f), join(dir, "environments", f));
+    copyFileSync(join(src, "zones.json"), join(dir, "zones.json"));
+    return dir;
+  };
+  const prevDist = process.env.NM_NO_DISTRIBUTE;
+  process.env.NM_NO_DISTRIBUTE = "1";
+  const quiet = <T>(fn: () => T): T => {
+    const [log, err] = [console.log, console.error];
+    console.log = () => {};
+    console.error = () => {};
+    try {
+      return fn();
+    } finally {
+      [console.log, console.error] = [log, err];
+    }
+  };
+  const nm = (argv: string[]): number => quiet(() => run(argv));
+  const zenv = (dir: string, z: string): unknown => (JSON.parse(readFileSync(join(dir, "zones.json"), "utf8")) as Record<string, Record<string, unknown>>)[z]?.environment;
+  const validate = (dir: string): number => nm(["validate", "--zones", join(dir, "zones.json"), "--config-dir", dir]);
+
+  // The case that failed on Erik's site: own zone gridtefy plus srvWork listing gridtefy.
+  const d = fresh();
+  const doc = loadZones(join(d, "zones.json"));
+  const eff = renderEffective(doc, d);
+  check(eff.errors.length === 0, `#876: own zone gridtefy + shared srvWork resolve without errors (${eff.errors.join("; ")})`);
+  check(validate(d) === 0, "#876: validate passes on the Erik-shaped config");
+  check(environmentZoneIn(doc, "gridtefy") === "gridtefy" && environmentZoneIn(doc, "acmeco") === "acmeco",
+    "#876: each environment's zone is its own zone, not the shared one");
+  check(JSON.stringify(sharedZonesOf(doc, "gridtefy")) === '["srvWork"]' && sharedZonesOf(doc, "erik").length === 0,
+    "#876: the shared service zones of an environment are listed separately");
+  check(isSharedServiceZone({ type: "Service", environment: ["a"] }) && !isSharedServiceZone({ type: "Service", environment: "a" })
+    && !isSharedServiceZone({ type: "Client", environment: ["a", "b"] }), "#876: a Service zone's list, even of one, is the shared form");
+
+  // The derived firewall graph is the same with or without the shared zone's link.
+  {
+    const unlinked = JSON.parse(readFileSync(join(d, "zones.json"), "utf8")) as Record<string, Record<string, unknown>>;
+    delete unlinked.srvWork.environment;
+    writeFileSync(join(d, "zones-unlinked.json"), JSON.stringify(unlinked), "utf8");
+    const base = renderEffective(loadZones(join(d, "zones-unlinked.json")), d);
+    const strip = (raw: Record<string, unknown>) => {
+      const c = JSON.parse(JSON.stringify(raw)) as Record<string, Record<string, unknown>>;
+      delete c.srvWork.environment;
+      return JSON.stringify(c);
+    };
+    check(base.errors.length === 0 && strip(eff.raw) === strip(base.raw), "#876: the shared zone changes nothing in the derived firewall graph");
+    const w = eff.raw["work"] as Record<string, unknown>;
+    check(JSON.stringify(w["access-to"]) === '["internet","gridtefy","acmeco"]' && !(w["access-to"] as string[]).includes("srvWork"),
+      "#876: a client serving both environments reaches their own zones, not the shared one");
+    check(eff.edges.every((e) => e.zone !== "srvWork" && e.serviceZone !== "srvWork"), "#876: the shared zone derives no edge and is no edge's target");
+  }
+
+  // Errors: a shared zone naming an environment that does not exist; a shared
+  // zone listing an environment that has no zone of its own.
+  {
+    const bad = JSON.parse(readFileSync(join(d, "zones.json"), "utf8")) as Record<string, Record<string, unknown>>;
+    bad.srvWork.environment = ["gridtefy", "nosuch"];
+    writeFileSync(join(d, "zones-bad.json"), JSON.stringify(bad), "utf8");
+    const e = renderEffective(loadZones(join(d, "zones-bad.json")), d);
+    check(e.errors.some((x) => x.includes("'srvWork'") && x.includes("'nosuch'")), "#876: each name a shared zone lists must exist");
+    const orphan = JSON.parse(readFileSync(join(d, "zones.json"), "utf8")) as Record<string, Record<string, unknown>>;
+    delete orphan.acmeco.environment;
+    const od = fresh();
+    writeFileSync(join(od, "zones.json"), JSON.stringify(orphan), "utf8");
+    check(validate(od) !== 0, "#876: an environment served only by a shared zone has no zone of its own — validate fails");
+  }
+
+  // bind: --add on a Service zone makes it shared; a plain bind on a shared zone
+  // is refused; --unbind back to one leaves a list of one; --own turns it into
+  // that environment's own zone.
+  {
+    const b = fresh();
+    const zf = ["--zones-file", join(b, "zones.json")];
+    check(nm(["bind", "srvWork", "--environment", "erik", "--add", ...zf]) === 0 && JSON.stringify(zenv(b, "srvWork")) === '["gridtefy","acmeco","erik"]',
+      "#876: bind --add adds an environment to a shared service zone");
+    check(nm(["bind", "srvWork", "--environment", "erik", ...zf]) !== 0, "#876: a plain bind on a shared service zone is refused");
+    check(nm(["bind", "srvWork", "--unbind", "--environment", "erik", ...zf]) === 0
+      && nm(["bind", "srvWork", "--unbind", "--environment", "acmeco", ...zf]) === 0
+      && JSON.stringify(zenv(b, "srvWork")) === '["gridtefy"]' && validate(b) === 0,
+      "#876: --unbind back to the last one leaves a list of one, still shared, and validate passes");
+    check(nm(["bind", "srvWork", "--unbind", "--environment", "gridtefy", "--own", ...zf]) !== 0
+      && JSON.stringify(zenv(b, "srvWork")) === '["gridtefy"]', "#876: --own is refused when there is none left to own");
+    check(nm(["bind", "srvWork", "--environment", "acmeco", "--add", ...zf]) === 0
+      && nm(["bind", "srvWork", "--unbind", "--environment", "gridtefy", "--own", ...zf]) !== 0,
+      "#876: --own is refused while the last environment already has its own zone");
+    check(nm(["bind", "acmeco", "--unbind", ...zf]) === 0
+      && nm(["bind", "srvWork", "--unbind", "--environment", "gridtefy", "--own", ...zf]) === 0
+      && zenv(b, "srvWork") === "acmeco" && validate(b) === 0,
+      "#876: --unbind --environment … --own makes the shared zone the last environment's own zone");
+    check(nm(["bind", "gridtefy", "--environment", "erik", "--add", ...zf]) === 0
+      && JSON.stringify(zenv(b, "gridtefy")) === '["gridtefy","erik"]' && validate(b) !== 0,
+      "#876: bind --add on an own zone makes it shared (string → list), and its environment then needs another");
+    check(nm(["bind", "erik", "--environment", "erik", "--add", ...zf]) !== 0, "#876: --add of the zone's own environment is refused");
+    check(nm(["bind", "mgmt", "--environment", "erik", "--add", ...zf]) !== 0, "#876: the Management zone is never shared");
+  }
+  if (prevDist === undefined) delete process.env.NM_NO_DISTRIBUTE; else process.env.NM_NO_DISTRIBUTE = prevDist;
 }
 
 console.log("");

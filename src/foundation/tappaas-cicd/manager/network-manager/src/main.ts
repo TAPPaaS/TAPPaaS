@@ -59,6 +59,7 @@ import {
   ownZonesOf,
   refreshEffective,
   environmentValue,
+  isSharedServiceZone,
   zoneEnvironment,
   zoneEnvironments,
 } from "./serves";
@@ -146,7 +147,8 @@ export const HELP: HelpSpec = {
           "                iot-local, iot-cloud, iot-cams, iot-untrust.\n" +
           "                Stamps type/typeId/tier/isolated + the access-to seed."],
         ["--environment <env>", "the environment the new zone belongs to: a Service zone's own,\n" +
-          "                or the one(s) a Client/IoT/Guest/DMZ zone serves (a,b for several)"],
+          "                or the one(s) a Client/IoT/Guest/DMZ zone serves (a,b for several);\n" +
+          "                a,b on a Service zone makes it a shared service zone"],
         ["--from-zone <src>", "inherit type/typeId/bridge/access-to/pinhole from <src>"],
         ["--type <T>", "zone type (default: Service)"],
         ["--typeId <N>", "numeric type band (default: 2)"],
@@ -190,20 +192,27 @@ export const HELP: HelpSpec = {
         "reconcile that makes the change live on the firewall and the switches.",
     },
     {
-      usage: "bind <zone> --environment <env> | --unbind", effect: { noPreview: "links the zone to an environment in zones.json" },
+      usage: "bind <zone> --environment <env> [--add] | --unbind [--environment <env> [--own]]", effect: { noPreview: "links the zone to an environment in zones.json" },
       name: "bind (link a zone to its environment)",
       hidden: ["--env <env>"],
       options: [
         ["--environment <env>", "a Service zone: the environment whose zone it is (one per environment);\n" +
           "                      a Client/IoT/Guest/DMZ zone: the environment it serves.\n" +
           "                      Replaces any link the zone has."],
-        ["--add", "with --environment: add it to a Client/IoT/Guest/DMZ zone's environments\n" +
-          "                      instead of replacing them (such a zone may serve several)"],
+        ["--add", "with --environment: add it to the zone's environments instead of\n" +
+          "                      replacing them. On a Service zone this makes it a shared\n" +
+          "                      service zone: it serves the environments it lists and is\n" +
+          "                      the own zone of none"],
         ["--unbind", "clear the link; with --environment, remove only that one"],
+        ["--own", "with --unbind --environment: when one environment is left on a\n" +
+          "                      shared service zone, make the zone that environment's own"],
       ],
       note:
-        "Sets the zone's `environment` field: one environment for a Service zone,\n" +
-        "one or several for a zone that serves them.\n" +
+        "Sets the zone's `environment` field. A Service zone takes two forms:\n" +
+        "  \"environment\": \"<env>\"        the environment's own zone (one per environment)\n" +
+        "  \"environment\": [\"<a>\", ...]  a shared service zone serving those environments;\n" +
+        "                                  a list of one stays shared until --own\n" +
+        "A Client/IoT/Guest/DMZ zone names one environment or several it serves.\n" +
         "For a Client/Guest/IoT zone the access-to / pinhole-allowed-from edge\n" +
         "is DERIVED from it on every reconcile (into zones.effective.json), so it\n" +
         "survives the install-time srv→<environment> rename.\n" +
@@ -422,6 +431,7 @@ interface Opts {
   // add --archetype (ADR-014 D5); add --environment shares `environment`
   archetype?: string;
   add?: boolean; // bind --add: one more environment for a zone that serves several
+  own?: boolean; // bind --unbind --environment E --own: a shared zone's last one becomes its own (#876)
   // add --tftp-server-name / --bootfile-name (DHCP options 66/67, #546)
   tftpServerName?: string;
   bootfileName?: string;
@@ -536,6 +546,9 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--add":
         o.add = true;
+        break;
+      case "--own":
+        o.own = true;
         break;
       case "--archetype":
         o.archetype = next();
@@ -721,7 +734,12 @@ function cmdZoneAdd(opts: Opts, client: PlaneClient = new CliPlaneClient()): voi
       : opts.fromZone
         ? String(getZone(doc, opts.fromZone)?.type ?? "")
         : opts.type ?? "Service";
-    if (OWNER_TYPES.has(type)) {
+    if (type === "Service" && addEnvs.length > 1) {
+      // A shared service zone (#876): it serves each, and each has its own zone.
+      for (const env of addEnvs) {
+        if (ownZonesOf(doc, env).length === 0) die(`add: environment '${env}' has no zone of its own yet — bind its Service zone first`);
+      }
+    } else if (OWNER_TYPES.has(type)) {
       if (addEnvs.length > 1) die(`add: a ${type} zone is the zone of exactly one environment, not ${addEnvs.join(", ")}`);
       const own = ownZonesOf(doc, addEnvs[0]);
       if (own.length > 0) {
@@ -925,6 +943,9 @@ function cmdBind(opts: Opts): void {
   if (opts.add && (opts.unbind || !opts.environment)) {
     die("bind: --add goes with --environment <env> (and not with --unbind)");
   }
+  if (opts.own && !(opts.unbind && opts.environment)) {
+    die("bind: --own goes with --unbind --environment <env> (it makes a shared zone's last environment its own)");
+  }
 
   const doc = loadZones(opts.zonesFile);
   const z = getZone(doc, name);
@@ -937,12 +958,15 @@ function cmdBind(opts: Opts): void {
     );
   }
   const owner = OWNER_TYPES.has(type);
-  if (owner && opts.add) {
-    die(`bind: zone '${name}' is a ${type} zone — the zone of exactly one environment; --add is for a zone that serves several`);
+  if (type === "Management" && opts.add) {
+    die(`bind: zone '${name}' is the Management zone — the zone of exactly one environment; --add is for a zone that serves several`);
   }
 
   const configDir = dirname(opts.zonesFile);
   const before = zoneEnvironments(z);
+  // A shared service zone (#876) keeps the list form, even of one environment.
+  const wasShared = isSharedServiceZone(z);
+  let shared = wasShared;
   const shown = (envs: string[]) => (envs.length ? envs.map((e) => `'${e}'`).join(", ") : "(none)");
   let after: string[];
 
@@ -953,6 +977,16 @@ function cmdBind(opts: Opts): void {
       info(`${name}: ${opts.environment ? `does not name '${opts.environment}'` : "names no environment"} — no change`);
       return;
     }
+    if (opts.own) {
+      if (!wasShared || after.length !== 1) {
+        die(`bind: --own makes a shared service zone's last environment its own; '${name}' would be left naming ${shown(after)}`);
+      }
+      const own = ownZonesOf(doc, after[0]);
+      if (own.length > 0) {
+        die(`bind: environment '${after[0]}' already has its zone '${own[0]}' — '${name}' stays shared`);
+      }
+      shared = false;
+    }
   } else {
     const env = opts.environment as string;
     // Resolve up front so a typo is caught here, not three commands later.
@@ -962,22 +996,33 @@ function cmdBind(opts: Opts): void {
           `— create it first (\`environment-manager add ${env}\`).`,
       );
     }
-    after = opts.add ? [...before, env] : [env];
-    if (JSON.stringify(environmentValue(after)) === JSON.stringify(environmentValue(before))) {
+    if (wasShared && !opts.add) {
+      die(
+        `bind: zone '${name}' is a shared service zone (serves ${shown(before)}) — ` +
+          `\`--add\` adds an environment, \`--unbind --environment <env>\` removes one, ` +
+          `and \`--own\` with the last makes it that environment's own zone`,
+      );
+    }
+    if (owner && opts.add && zoneEnvironment(z) === env) {
+      die(`bind: zone '${name}' is environment '${env}''s own zone — --add another environment to make it a shared service zone`);
+    }
+    after = opts.add ? [...new Set([...before, env])] : [env];
+    if (owner && opts.add) shared = true;
+    if (after.length === before.length && shared === wasShared && after.every((e, i) => e === before[i])) {
       info(`${name}: already names ${shown(before)} — no change`);
       return;
     }
-    if (owner) {
+    if (owner && !shared) {
       // One zone per environment: refuse a second, and refuse taking a zone
       // away from the environment it already is.
       const own = ownZonesOf(doc, env).filter((n) => n !== name);
       if (own.length > 0) {
-        die(`bind: environment '${env}' already has its zone '${own[0]}' — unbind that first, or move the environment with \`environment-manager modify ${env} --zone ${name}\``);
+        die(`bind: environment '${env}' already has its zone '${own[0]}' — unbind that first, move the environment with \`environment-manager modify ${env} --zone ${name}\`, or make '${name}' a shared service zone with --add`);
       }
       if (zoneEnvironment(z) !== undefined) {
         die(`bind: zone '${name}' is environment '${zoneEnvironment(z)}''s zone — move that environment first (\`environment-manager modify ${zoneEnvironment(z)} --zone <other>\`)`);
       }
-    } else if (ownZonesOf(doc, env).length === 0) {
+    } else if (ownZonesOf(doc, env).filter((n) => n !== name).length === 0) {
       die(`bind: environment '${env}' has no zone of its own yet — bind its Service zone first`);
     }
     // Without --add the link REPLACES what the zone had — said out loud, so a
@@ -985,9 +1030,17 @@ function cmdBind(opts: Opts): void {
     if (!opts.add && before.length && !before.every((e) => e === env)) {
       info(`${name}: replacing ${shown(before)}${owner ? "" : ` — use --add to keep them and add '${env}'`}`);
     }
+    // --add on an environment's own zone makes it shared: that environment
+    // then needs another zone of its own.
+    if (shared && !wasShared && zoneEnvironment(z) !== undefined) {
+      warn(
+        `${name}: now a shared service zone — environment '${zoneEnvironment(z)}' no longer has a zone of its own; ` +
+          `give it one with \`environment-manager modify ${zoneEnvironment(z)} --zone <zone>\``,
+      );
+    }
   }
 
-  const value = environmentValue(after);
+  const value = after.length === 0 ? undefined : shared ? after : owner ? after[0] : environmentValue(after);
   const rawZone = doc.raw[name] as Record<string, unknown>;
   if (value === undefined) {
     delete z.environment;

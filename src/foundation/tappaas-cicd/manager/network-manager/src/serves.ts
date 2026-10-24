@@ -8,6 +8,14 @@
 // serves. An environment's zone is the Service/Management zone naming it —
 // exactly one per environment.
 //
+// ── Shared service zones (#876) ───────────────────────────────────────
+// The field's shape says which role a Service zone has. `environment` as a
+// string: the zone IS that environment's own zone (its default install place;
+// one per environment). As a list, even of one: a SHARED service zone that
+// serves the environments it lists and is the own zone of none — a valid
+// zone0 for a module of any of them. It derives no edge: consumer zones reach
+// an environment's own zone only. A Management zone is always a string.
+//
 // ── The problem (#424) ────────────────────────────────────────────────
 // A client zone reaches its services, and an IoT zone is reached by them.
 // Writing that as a LITERAL service-zone name does not survive install: `init`
@@ -133,6 +141,20 @@ export function ownZonesOf(doc: ZonesDoc, env: string): string[] {
   return out;
 }
 
+// A shared service zone (#876): a Service zone whose `environment` is a list.
+export function isSharedServiceZone(z: { type?: unknown; environment?: unknown } | undefined): boolean {
+  return z?.type === "Service" && Array.isArray(z.environment);
+}
+
+// The shared service zones that serve `env` (list it), sorted.
+export function sharedZonesOf(doc: ZonesDoc, env: string): string[] {
+  const out: string[] = [];
+  for (const [name, z] of doc.zones) {
+    if (isSharedServiceZone(z) && zoneEnvironments(z).includes(env)) out.push(name);
+  }
+  return out.sort();
+}
+
 // The environment's zone, when exactly one zone is its own.
 export function environmentZoneIn(doc: ZonesDoc, env: string): string | undefined {
   const own = ownZonesOf(doc, env);
@@ -186,7 +208,8 @@ function addRef(z: Record<string, unknown>, f: string, v: string): boolean {
 
 // The link problems of `doc` that do not depend on the derivation: a zone type
 // that may not carry `environment`, an environment that does not exist, two
-// zones that are one environment's own. Shared by resolve and validate. `bad`
+// zones that are one environment's own. A Service zone's list is a shared
+// service zone (#876): its names must exist, and it counts as nobody's own. Shared by resolve and validate. `bad`
 // holds the zones whose own link is broken, which resolve then skips.
 export function linkErrors(doc: ZonesDoc, configDir: string): { errors: string[]; bad: Set<string> } {
   const errors: string[] = [];
@@ -218,9 +241,9 @@ export function linkErrors(doc: ZonesDoc, configDir: string): { errors: string[]
       bad.add(name);
       continue;
     }
-    if (OWNER_TYPES.has(type) && isList) {
+    if (type === "Management" && isList) {
       errors.push(
-        `zone '${name}' is a ${type} zone and names ${JSON.stringify(raw)} — a ${type} zone is the zone of exactly one environment, named as a string`,
+        `zone '${name}' is a Management zone and names ${JSON.stringify(raw)} — it is the zone of exactly one environment, named as a string`,
       );
       bad.add(name);
       continue;
@@ -235,13 +258,14 @@ export function linkErrors(doc: ZonesDoc, configDir: string): { errors: string[]
         );
       }
     }
-    if (OWNER_TYPES.has(type)) owners.set(envs[0], [...(owners.get(envs[0]) ?? []), name]);
+    if (OWNER_TYPES.has(type) && !isList) owners.set(envs[0], [...(owners.get(envs[0]) ?? []), name]);
   }
   for (const [env, zs] of owners) {
     if (zs.length > 1) {
       errors.push(
         `environment '${env}' is named by ${zs.length} Service/Management zones (${zs.join(", ")}) — ` +
-          `an environment has one zone of its own; unbind all but one`,
+          `an environment has one zone of its own; unbind all but one, or make the others shared ` +
+          `(\`network-manager bind <zone> --environment <other> --add\`)`,
       );
     }
   }

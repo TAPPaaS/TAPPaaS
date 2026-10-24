@@ -122,6 +122,7 @@ export function readZoneLinks(zonesFile: string): Map<string, ZoneLink> {
       type: typeof o.type === "string" ? o.type : undefined,
       environment: typeof o.environment === "string" && o.environment ? o.environment : undefined,
       environments: list.filter((e): e is string => typeof e === "string" && e.length > 0),
+      ...(o.type === "Service" && Array.isArray(o.environment) ? { shared: true } : {}),
     });
   }
   return out;
@@ -134,6 +135,12 @@ export const OWN_ZONE_TYPES: ReadonlySet<string> = new Set(["Service", "Manageme
 // The zones that are environment `env`'s own: Service/Management zones naming it.
 export function ownZones(zones: Map<string, ZoneLink>, env: string): string[] {
   return [...zones].filter(([, z]) => OWN_ZONE_TYPES.has(z.type ?? "") && z.environment === env).map(([n]) => n).sort();
+}
+
+// The shared service zones serving environment `env` (#876): Service zones
+// whose `environment` is a list naming it. Never its own zone.
+export function sharedZones(zones: Map<string, ZoneLink>, env: string): string[] {
+  return [...zones].filter(([, z]) => z.shared === true && z.environments.includes(env)).map(([n]) => n).sort();
 }
 
 // The environment's zone, when exactly one zone is its own.
@@ -197,9 +204,11 @@ export function zoneLinkErrors(zones: Map<string, ZoneLink>, env: string): strin
   const own = ownZones(zones, env);
   if (own.length === 1) return [];
   if (own.length === 0) {
+    const shared = sharedZones(zones, env);
     return [
-      `no Service or Management zone names environment '${env}' — give it one with ` +
-        `\`environment-manager modify ${env} --zone <zone>\``,
+      `no Service or Management zone names environment '${env}' as its own` +
+        (shared.length ? ` (shared service zone ${shared.join(", ")} serves it, and is the own zone of none)` : "") +
+        ` — give it one with \`environment-manager modify ${env} --zone <zone>\``,
     ];
   }
   return [
