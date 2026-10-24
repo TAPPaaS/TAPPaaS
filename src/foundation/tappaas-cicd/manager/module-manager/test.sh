@@ -208,6 +208,10 @@ P5FN="${WORK}/p5.fn.sh"
 {
   awk '/^environment_zone\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$CIR"
   echo
+  awk '/^environment_shared_zones\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$CIR"
+  echo
+  awk '/^validate_zone_environment\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$CIR"
+  echo
   awk '/^resolve_default_environment\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INSTALL"
   echo
   awk '/^resolve_zone_for_environment\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$INSTALL"
@@ -216,14 +220,15 @@ P5FN="${WORK}/p5.fn.sh"
                  || bad "could not extract P5 resolver functions"
 
 run_p5() {
-    # $1=cfg dir, $2=function, $3=arg(optional)
-    local cfg="$1" fn="$2" arg="${3:-}"
+    # $1=cfg dir, $2=function, then its arguments
+    local cfg="$1" fn="$2"
+    shift 2
     CONFIG_DIR="$cfg" bash -c '
         set -uo pipefail
-        warn(){ :; }; info(){ :; }
-        . "'"$P5FN"'"
-        '"$fn"' "'"$arg"'" 2>/dev/null
-    '
+        warn(){ :; }; info(){ :; }; error(){ :; }
+        . "$0"
+        "$@" 2>/dev/null
+    ' "$P5FN" "$fn" "$@"
 }
 
 # vmname computation, mirroring install-module.sh's rule.
@@ -254,7 +259,8 @@ JSON
 cat > "${EWORK}/zones.json" <<'JSON'
 { "mgmt": { "type": "Management", "environment": "mgmt" },
   "acme": { "type": "Service", "environment": "acme" },
-  "fooZone": { "type": "Service", "environment": "foo" } }
+  "fooZone": { "type": "Service", "environment": "foo" },
+  "srvWork": { "type": "Service", "environment": ["acme", "foo"] } }
 JSON
 
 # default environment resolves to the site name 'acme'
@@ -266,6 +272,21 @@ def_env="$(run_p5 "$EWORK" resolve_default_environment)"
 zfoo="$(run_p5 "$EWORK" resolve_zone_for_environment foo)"
 [[ "$zfoo" == "fooZone" ]] && ok "--environment foo resolves zone 'fooZone', the zone naming it (got: ${zfoo})" \
                            || bad "expected zone 'fooZone', got '${zfoo}'"
+
+# #876: srvWork (shared, lists acme and foo) is no environment's own zone
+zfw="$(run_p5 "$EWORK" environment_shared_zones foo)"
+[[ "$zfoo" == "fooZone" && "$zfw" == "srvWork" ]] && ok "#876: foo's zone is its own; srvWork is listed as a shared service zone serving it" \
+                                                || bad "#876: expected own fooZone and shared srvWork, got '${zfoo}' / '${zfw}'"
+if run_p5 "$EWORK" validate_zone_environment srvWork foo && run_p5 "$EWORK" validate_zone_environment fooZone foo; then
+    ok "#876: --zone0 srvWork is accepted for a module of foo (it lists foo)"
+else
+    bad "#876: a shared service zone listing the environment should be accepted as zone0"
+fi
+if run_p5 "$EWORK" validate_zone_environment srvWork mgmt; then
+    bad "#876: --zone0 srvWork was accepted for a module of mgmt, which it does not list"
+else
+    ok "#876: --zone0 srvWork is refused for a module of an environment it does not list"
+fi
 
 # --environment foo → vmname m-foo (non-default env)
 vfoo="$(compute_vmname m foo "$def_env")"

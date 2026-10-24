@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan-address";
-import { environmentZoneIn, readZonesFile } from "../../lib/ts/src/zones";
+import { environmentZoneIn, readZonesFile, sharedZonesIn } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
@@ -188,9 +188,10 @@ export class Reads {
     this.aps = new Cached("aps", TTL.aps, () => j<Record<string, unknown>[]>("ap-manager", ["list", "--json"]), now);
     this.environments = new Cached("environments", TTL.environments, async () => {
       // The environment names no zone; the zone naming it is its zone (#865).
+      // A shared service zone listing it is not its zone, and is listed apart (#876).
       const envs = await j<EnvironmentRow[]>("environment-manager", ["list", "--json"]);
       const zones = this.zoneEntries();
-      return envs.map((e) => ({ ...e, zone: environmentZoneIn(zones, e.name) }));
+      return envs.map((e) => ({ ...e, zone: environmentZoneIn(zones, e.name), sharedZones: sharedZonesIn(zones, e.name) }));
     }, now);
     this.site = new Cached("site", TTL.site, () => this.loadSite(), now);
     // No scan yet is an answer (null), not a failure.

@@ -238,6 +238,41 @@ throwsDie(() => parseOpts(["-x"]), "unknown short flag -x is rejected");
   r = go(d, ["delete", "acme", "--force"]);
   check(r.rc === 0 && JSON.stringify(r.log) === JSON.stringify(["unbind acme", "unbind home", "unbind work acme"]),
     "#865 delete: the zones naming the environment are unbound; one serving several keeps the others");
+
+  // #876: a shared service zone is never an environment's own zone, and is shown apart
+  const erik = () => {
+    const e = setup({
+      gridtefy: { type: "Service", state: "Active", environment: "gridtefy" },
+      acmeco: { type: "Service", state: "Active", environment: "acmeco" },
+      srvWork: { type: "Service", state: "Active", environment: ["gridtefy", "acmeco"] },
+      spare: { type: "Service", state: "Active" },
+    });
+    for (const n of ["gridtefy", "acmeco"]) {
+      writeFileSync(join(e, "environments", `${n}.json`), JSON.stringify({ name: n, displayName: n, ownerOrg: "o" }));
+    }
+    return e;
+  };
+  d = erik();
+  r = go(d, ["modify", "gridtefy", "--zone", "srvWork"]);
+  check(r.rc === 1 && r.log.length === 0, "#876 modify --zone: a shared service zone is refused as an environment's own zone");
+  r = go(d, ["add", "lab", "--owner", "o", "--zone", "srvWork"]);
+  check(r.rc === 1 && !existsSync(join(d, "environments", "lab.json")), "#876 add --zone: a shared service zone is refused");
+  const said: string[] = [];
+  const keep = console.log;
+  console.log = (...a: unknown[]) => void said.push(a.join(" "));
+  try {
+    run(["show", "gridtefy", "--config-dir", d], new FakeNetworkClient(), new FakeModuleClient(), new FakeDnsTlsClient());
+    run(["list", "--config-dir", d], new FakeNetworkClient(), new FakeModuleClient(), new FakeDnsTlsClient());
+  } finally {
+    console.log = keep;
+  }
+  const out = said.join("\n");
+  check(/zone\s+gridtefy\n/.test(out) && /shared\s+srvWork/.test(out), "#876 show: the own zone, and the shared service zone on its own row");
+  check(out.includes("gridtefy\t(zone gridtefy; shared srvWork)") && out.includes("acmeco\t(zone acmeco; shared srvWork)"),
+    "#876 list: each environment's own zone, then its shared ones");
+  r = go(d, ["delete", "gridtefy", "--force"]);
+  check(r.rc === 0 && JSON.stringify(r.log) === JSON.stringify(["unbind gridtefy", "unbind srvWork gridtefy"]),
+    "#876 delete: the shared service zone keeps its other environments");
 }
 
 console.log(`\n${passed} passed, ${failed} failed.`);
