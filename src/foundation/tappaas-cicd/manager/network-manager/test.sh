@@ -78,6 +78,12 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
             bad "TypeScript topology unit tests FAILED"
         fi
 
+        # The CLI checks below are offline: init asks the live firewall which VLAN
+        # tags and subnets it already carries, and on a site that runs these zones
+        # that answer changes what init writes. A firewall that cannot be asked
+        # leaves the check to zones.json, as on a fresh install.
+        export NM_OPNSENSE_FIREWALL_BIN=/bin/false
+
         # ── init CLI smoke (offline; temp --out, never live config) ──
         # The unit tsconfig compiles src/ into dist-test/manager/network-manager/src
         # (rootDir is the tappaas-cicd root, shared lib/ts included); run the real CLI
@@ -271,6 +277,7 @@ JSON
             bad "wgvpn: rc=${rc} args='$(cat "${WG_DIR}/args" 2>/dev/null)'"
         fi
         rm -rf -- "${WG_DIR}"
+        unset NM_OPNSENSE_FIREWALL_BIN
     else
         bad "TypeScript unit tests failed to compile"
     fi

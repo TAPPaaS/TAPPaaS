@@ -232,7 +232,7 @@ if [[ "$(_ks '.current, .stick')" == $'false\nnull' ]]; then
 else
     bad "with no stick recorded, key status said: $(_ks -c .)"
 fi
-if TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key status 2>&1 | grep -q "NO key stick"; then
+if TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key status 2>&1 | grep -c "NO key stick" >/dev/null; then
     ok "key status says no key stick has been written"
 else
     bad "key status does not warn that no key stick was written"
@@ -250,7 +250,7 @@ if [[ "$(_ks .fingerprint)" =~ ^[0-9a-f]{64}$ ]] && ! sudo grep -rq "FAKE-KEY-CO
 else
     bad "the fingerprint is not a sha256, or the stamp holds key material"
 fi
-if TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key list 2>&1 | grep -q "holds these keys"; then
+if TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key list 2>&1 | grep -c "holds these keys" >/dev/null; then
     ok "key list says the last stick holds the keys"
 else
     bad "key list does not report the stick"
@@ -259,7 +259,7 @@ fi
 # that predates it lacks a key.
 printf 'ROTATED\n' | sudo tee "${_ke_src}/demo.superseded-20261024.key" >/dev/null
 if [[ "$(_ks .current)" == "false" ]] \
-   && TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key status 2>&1 | grep -q "changed after the last key stick"; then
+   && TAPPAAS_KEY_ESCROW="${_ke_src}" "${BC}" key status 2>&1 | grep -c "changed after the last key stick" >/dev/null; then
     ok "a key added after the stick: status is not current, and says so"
 else
     bad "a key added after the stick went unnoticed: $(_ks -c .)"
