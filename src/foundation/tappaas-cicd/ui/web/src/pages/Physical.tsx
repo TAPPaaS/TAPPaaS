@@ -12,7 +12,7 @@ import { zoneColor } from "../colors";
 import { OperateButton } from "../operate";
 import { Sel } from "../physical/layout";
 import { DeviceGraph } from "../physical/deviceview";
-import { RackCanvas } from "../physical/rack";
+import { CABLE_KINDS, RackCanvas } from "../physical/rack";
 import { faceplateAddSteps } from "../physical/faceplateform";
 import { AddRoomButton, PhysicalHowTo, PlaceActions, RecordDeviceButton, RecordSeenButton, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
@@ -235,8 +235,17 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
               </span>
             ))}
           <span className="muted">
-            {shown === "rack" ? "— trunk · - - wan · ··· recorded · red: no link · purple ring: LAG member · green port: link up" : "— trunk · - - wan and the internet · ··· tunnel · red: a cable down · thick: several cables or a LAG"}
+            {shown === "rack" ? "Trunks:" : "— trunk · - - wan and the internet · ··· tunnel · red: a cable down · thick: several cables or a LAG"}
           </span>
+          {shown === "rack"
+            ? CABLE_KINDS.map((k) => (
+                <span key={k.kind} className="zone">
+                  <i style={{ background: k.stroke }} />
+                  {k.label}
+                </span>
+              ))
+            : null}
+          {shown === "rack" ? <span className="muted">- - wan · ··· recorded · red: no link · cables run in the gutters beside the rack, a patch panel's rear wire leaves upward · purple ring: LAG member · green port: link up</span> : null}
           {shown === "device" ? <StateLegend /> : null}
           <span className="muted">
             Data: {(t.sources ?? []).filter((s) => s.ok).map((s) => s.name).join(" · ")}

@@ -528,4 +528,6 @@ button.mod-tile:hover { background: var(--info-bg); }
 .kv-with-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .faceplate-preview { margin: 6px 0 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #f8fafc; }
 .faceplate-preview svg { display: block; max-width: 560px; }
-.faceplate-examples { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.faceplate-examples { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; }
+.faceplate-examples .btn { white-space: nowrap; }
+@media (max-width: 640px) { .faceplate-examples { grid-column: 1; } }
