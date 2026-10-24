@@ -25,6 +25,7 @@ export interface Step extends ArgvStep {
   only?: string[]; // offer only these options (and the disruptions)
   choices?: Record<string, string[]>; // offered values, by "@name" or flag
   suggest?: Record<string, string[]>; // values offered beside free text, by "@name" or flag
+  suggestNotes?: Record<string, Record<string, string>>; // a suggested value's note, by "@name" or flag, then value
   labels?: Record<string, string>;
   placeholders?: Record<string, string>; // an example in place of the help's <arg>, by "@name" or flag
   asides?: Record<string, ReactNode>; // shown under an option's input, by "@name" or flag (a link to add what the dropdown lacks)
@@ -87,7 +88,7 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
           <input type="text" list={id} placeholder={arg ? `${arg} — choose or type` : "choose or type"} value={typeof v === "string" ? v : ""} onChange={(e) => set({ ...values, [key]: e.target.value })} />
           <datalist id={id}>
             {hints.map((h) => (
-              <option key={h} value={h} />
+              <option key={h} value={h} label={step.suggestNotes?.[key]?.[h]} />
             ))}
           </datalist>
         </>

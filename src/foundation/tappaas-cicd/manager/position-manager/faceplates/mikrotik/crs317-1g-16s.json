@@ -8,87 +8,8 @@
   "kind": "switch",
   "units": 1,
   "width": "full",
-  "description": "1U, sixteen SFP+ cages (sfp-sfpplus1-16, odd on top), the ether1 management port and a serial console.",
-  "rows": [
-    [
-      {
-        "name": "ether1",
-        "kind": "rj45"
-      },
-      null,
-      {
-        "name": "sfp-sfpplus1",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus3",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus5",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus7",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus9",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus11",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus13",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus15",
-        "kind": "sfp+"
-      }
-    ],
-    [
-      {
-        "name": "console",
-        "kind": "console"
-      },
-      null,
-      {
-        "name": "sfp-sfpplus2",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus4",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus6",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus8",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus10",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus12",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus14",
-        "kind": "sfp+"
-      },
-      {
-        "name": "sfp-sfpplus16",
-        "kind": "sfp+"
-      }
-    ]
-  ],
+  "description": "1U, sixteen SFP+ cages stacked in two rows of eight (sfp-sfpplus1-16, odd on top) in the left two thirds; the ether1 management port over the serial console at the start of the right third, which is otherwise blank.",
+  "ports": "16xsfp+@2:sfp-sfpplus{n}[2-66], rj45:ether1/console:console[69-73]",
   "labels": [
     {
       "text": "MikroTik",

@@ -16,15 +16,18 @@
 
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { zoneColor } from "../colors";
-import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, ResolvedPlate, TopoOutside, Topology } from "../types";
+import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, TopoOutside, Topology } from "../types";
 import { navigate } from "../ui";
 import { locationHref } from "../locations";
 import { Sel } from "./layout";
 import { linkId } from "./devicegraph";
+import { Box, Placed, nameArea, portCells } from "./platelayout";
+import { PortAt, routeCables } from "./cableroute";
 
 // Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
-// interior (wider than true scale, so a 12-port plate stays legible).
-export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 116, margin: 24, outsideW: 230, bottom: 40, roomPad: 18, looseGap: 18, locPad: 14, roomY: 40, nowhereW: 240 };
+// interior (wider than true scale, so a 12-port plate stays legible). The
+// cables run in gutters beside each rack (cableroute.ts).
+export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 116, margin: 80, outsideW: 230, bottom: 40, roomPad: 46, looseGap: 18, locPad: 14, roomY: 40, nowhereW: 240 };
 
 const inner = (r: RackInfo) => (r.width === "10in" ? R.w10 : R.w19);
 const COLS: Record<string, number> = { full: 1, half: 2, third: 3 };
@@ -37,22 +40,8 @@ const span = (m: { width: string; slot: number }): [number, number] => {
 const rowOf = (r: RackInfo, unit: number) => (r.numbering === "top-down" ? unit - 1 : r.units - unit);
 const unitAt = (r: RackInfo, row: number) => (r.numbering === "top-down" ? row + 1 : r.units - row);
 
-export interface Box {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-export interface Placed {
-  device: string;
-  kind: PlacementInfo["kind"] | "outside";
-  plate: ResolvedPlate | null;
-  box: Box;
-  up: boolean | null;
-  title: string;
-  sub: string;
-  rack: string | null;
-}
+export type { Box, Placed } from "./platelayout";
+
 export interface RackLayout {
   width: number;
   height: number;
@@ -63,33 +52,10 @@ export interface RackLayout {
   locations: { name: string; title: string; sub: string; primary: boolean; x: number; y: number; w: number; h: number; roomless: boolean; nowhereX: number; nowhere: { device: string; label: string; sel: Sel }[] }[];
   rooms: { name: string; title: string; sub: string; recorded: boolean; x: number; y: number; w: number; h: number }[];
   placed: Placed[];
-  ports: Map<string, { x: number; y: number; rackRight: number; rack: string | null }>;
+  ports: Map<string, PortAt>;
 }
 
 const key = (device: string, port: string) => `${device}\u0000${port}`;
-
-// Where every port of every plate is drawn: one cell per port of the plate's
-// grid, right-aligned, the label on the left.
-export function portCells(p: Placed): { port: PlatePort; box: Box }[] {
-  const rows = p.plate?.rows ?? [];
-  if (!rows.length) return [];
-  const cols = Math.max(...rows.map((r) => r.length), 1);
-  const labelW = Math.min(124, p.box.w * 0.34);
-  const avail = p.box.w - labelW - 12;
-  const cw = Math.max(9, Math.min(22, avail / cols));
-  const ch = Math.max(7, Math.min(13, (p.box.h - 8) / rows.length - 3));
-  const gridW = cols * cw;
-  const gridH = rows.length * (ch + 3);
-  const x0 = p.box.x + p.box.w - 8 - gridW;
-  const y0 = p.box.y + (p.box.h - gridH) / 2 + 1.5;
-  const out: { port: PlatePort; box: Box }[] = [];
-  rows.forEach((row, ri) =>
-    row.forEach((c, ci) => {
-      if (c) out.push({ port: c, box: { x: x0 + ci * cw + 1, y: y0 + ri * (ch + 3), w: cw - 3, h: ch } });
-    }),
-  );
-  return out;
-}
 
 // What stands at a location placed nowhere: its unplaced devices, then the
 // backup buddies and satellites the topology has there (a satellite is also a
@@ -206,8 +172,10 @@ export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): Rack
   }
   for (const r of v.racks) if (!roomed.has(r.name)) drawRack(r);
   for (const p of placed) {
-    const rackRight = p.rack ? (racks.find((x) => x.r.name === p.rack)!.x + inner(racks.find((x) => x.r.name === p.rack)!.r) + 2 * R.rail) : p.box.x + p.box.w;
-    for (const c of portCells(p)) ports.set(key(p.device, c.port.id), { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2, rackRight, rack: p.rack });
+    // A port's rack frame: its gutters run beside it. A device in no rack: its plate.
+    const rk = p.rack ? racks.find((x) => x.r.name === p.rack)! : null;
+    const [rackLeft, rackRight] = rk ? [rk.x, rk.x + inner(rk.r) + 2 * R.rail] : [p.box.x, p.box.x + p.box.w];
+    for (const c of portCells(p)) ports.set(key(p.device, c.port.id), { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2, h: c.box.h, plateY: p.box.y, plateH: p.box.h, rack: p.rack, rackLeft, rackRight });
   }
   const outsideH = placed.filter((p) => p.kind === "outside").reduce((h, p) => Math.max(h, p.box.y + p.box.h), 0);
   const nowhereH = Math.max(0, ...locations.map((l) => R.roomY + 40 + l.nowhere.length * 20));
@@ -217,9 +185,19 @@ export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): Rack
   return { width: Math.max(x - R.gap + R.margin + 160, 400), height, locations, racks, rooms, placed, ports };
 }
 
+// A trunk's colour by what it joins (CABLE_KINDS below is the legend's).
+export const CABLE_KINDS: { kind: string; stroke: string; label: string }[] = [
+  { kind: "lan", stroke: "#334155", label: "node trunk" },
+  { kind: "uplink", stroke: "#0f766e", label: "switch uplink" },
+  { kind: "peer-link", stroke: "#4338ca", label: "peer link" },
+  { kind: "ap", stroke: "#0369a1", label: "access point" },
+  { kind: "device", stroke: "#a16207", label: "device" },
+  { kind: "patch", stroke: "#64748b", label: "patch" },
+];
+
 // A cable's colour and dash, as the Device view draws links: a wan link
-// dashed in the wan colour, an access link in its zone's colour, a trunk
-// slate, a link that is down red and dotted.
+// dashed in the wan colour, an access link in its zone's colour, a trunk in
+// its kind's colour, a link that is down red and dotted.
 export function cableStyle(c: RackCable, t: Topology): { stroke: string; width: number; dash?: string } {
   const width = c.lag ? 3.5 : 2.5;
   if (c.up === false) return { stroke: "#d64545", width, dash: "3 3" };
@@ -229,32 +207,12 @@ export function cableStyle(c: RackCable, t: Topology): { stroke: string; width: 
     return { stroke: zoneColor(z ?? { name: c.zones[0] }), width, dash: c.source === "recorded" ? "2 3" : undefined };
   }
   if (c.kind === "power") return { stroke: "#b91c1c", width: 2, dash: "1 3" };
-  return { stroke: "#334155", width, dash: c.source === "recorded" ? "2 3" : undefined };
+  return { stroke: CABLE_KINDS.find((k) => k.kind === c.kind)?.stroke ?? "#334155", width, dash: c.source === "recorded" ? "2 3" : undefined };
 }
 
 export function cableText(c: RackCable): string {
   const st = c.up === true ? "up" : c.up === false ? "down" : "state unknown";
   return `${c.from.device}:${c.from.port} — ${c.to.device}:${c.to.port} · ${c.kind}${c.lag ? ` · LAG ${c.lag}` : ""} · ${st}${c.zones.length ? ` · ${c.zones.join(", ")}` : ""}${c.source === "recorded" ? " · recorded" : ""}${c.via?.length ? ` · via ${c.via.map((v) => `${v.device}:${v.port}`).join(", ")}` : ""}${c.label ? ` · ${c.label}` : ""}`;
-}
-
-// The cable's path: out of the rack's side between two ports of one rack
-// (where the cable management runs); from a device outside the racks over the
-// rack's top and down its side; a droop between racks.
-type End = { x: number; y: number; rackRight: number; rack: string | null };
-function cablePath(a0: End, b0: End): string {
-  const [a, b] = !a0.rack && b0.rack ? [a0, b0] : !b0.rack && a0.rack ? [b0, a0] : [a0, b0];
-  if (!a.rack && b.rack) {
-    const top = R.top - 6;
-    const side = b.rackRight + 16;
-    return `M ${a.x} ${a.y} C ${a.x + 30} ${a.y}, ${a.x + 30} ${top}, ${a.x + 70} ${top} L ${side - 14} ${top} C ${side} ${top}, ${side} ${b.y}, ${b.x} ${b.y}`;
-  }
-  if (a.rack && a.rack === b.rack) {
-    const bend = a.rackRight - Math.min(a.x, b.x) + 18 + Math.abs(a.y - b.y) * 0.12;
-    return `M ${a.x} ${a.y} C ${a.x + bend} ${a.y}, ${b.x + bend} ${b.y}, ${b.x} ${b.y}`;
-  }
-  const mid = (a.x + b.x) / 2;
-  const droop = Math.max(a.y, b.y) + 40;
-  return `M ${a.x} ${a.y} C ${mid} ${a.y}, ${mid} ${droop}, ${b.x} ${b.y}`;
 }
 
 function portFill(p: PlatePort): string {
@@ -307,8 +265,13 @@ const isSel = (s: Sel | null, kind: Placed["kind"], device: string): boolean =>
 export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: Placed; on: boolean; portOn: (id: string) => boolean; cabled?: Set<string>; rear?: Set<string>; onPlate: () => void; onPort: (id: string) => void }) {
   const cells = portCells(p);
   const led = p.up === true ? "#2f9e44" : p.up === false ? "#d64545" : "#9aa4b2";
-  const labelW = Math.min(124, p.box.w * 0.34);
-  const tight = p.box.h < 34;
+  const na = nameArea(p.plate);
+  const onTop = na.at === "top";
+  // The name's place: left of the ports, right of them, or a strip along the top.
+  const nx = p.box.x + p.box.w * na.from;
+  const labelW = na.at === "left" && !p.plate?.blocks?.length ? Math.min(124, p.box.w * 0.34) : onTop ? p.box.w - 40 : p.box.w * (na.to - na.from) - 24;
+  const tight = p.box.h < 34 || onTop;
+  const dark = p.kind === "outside" || p.plate?.passive;
   return (
     <g className="rack-plate" onClick={(e) => (e.stopPropagation(), onPlate())}>
       <title>{`${p.title} — ${p.sub}`}</title>
@@ -320,14 +283,14 @@ export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: 
           <circle cx={p.box.x + p.box.w + R.rail / 2 - 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="#94a3b8" />
         </>
       ) : null}
-      <circle cx={p.box.x + 8} cy={p.box.y + 8} r={3.4} fill={led}>
+      <circle cx={nx + (onTop ? 6 : 8)} cy={p.box.y + (onTop ? 6 : 8)} r={onTop ? 2.6 : 3.4} fill={led}>
         <title>{p.up === true ? "up: a port has link" : p.up === false ? "no port has link" : "no live state known"}</title>
       </circle>
-      <text x={p.box.x + 15} y={p.box.y + (tight ? p.box.h / 2 + 4 : 13)} className={p.kind === "outside" || p.plate?.passive ? "rack-name rack-name-dark" : "rack-name"}>
-        {p.title.length * 6.4 > labelW + 30 && cells.length ? `${p.title.slice(0, Math.max(6, Math.floor((labelW + 30) / 6.4) - 1))}…` : p.title}
+      <text x={nx + (onTop ? 12 : 15)} y={p.box.y + (onTop ? 9 : tight ? p.box.h / 2 + 4 : 13)} className={`${dark ? "rack-name rack-name-dark" : "rack-name"}${onTop ? " rack-name-top" : ""}`}>
+        {onTop ? `${p.title}${p.plate ? ` · ${p.plate.vendor} ${p.plate.model}` : ""}`.slice(0, Math.max(8, Math.floor(labelW / 5.2))) : p.title.length * 6.4 > labelW + 30 && cells.length ? `${p.title.slice(0, Math.max(6, Math.floor((labelW + 30) / 6.4) - 1))}…` : p.title}
       </text>
       {!tight ? (
-        <text x={p.box.x + 15} y={p.box.y + 25} className={p.kind === "outside" || p.plate?.passive ? "rack-sub rack-sub-dark" : "rack-sub"}>
+        <text x={nx + 15} y={p.box.y + 25} className={dark ? "rack-sub rack-sub-dark" : "rack-sub"}>
           {p.sub.length * 5.4 > labelW + 20 && cells.length ? `${p.sub.slice(0, Math.max(6, Math.floor((labelW + 20) / 5.4) - 1))}…` : p.sub}
         </text>
       ) : null}
@@ -368,9 +331,14 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
   // One wire per cable, or per segment of a link split at a patch panel (each
   // segment carries its link: its style, its selection).
   const wires = v.cables.flatMap((c) => (c.segments?.length ? c.segments.map((s) => ({ c, from: s.from, to: s.to })) : [{ c, from: c.from, to: c.to }]));
-  const drawn = wires
-    .map((w, i) => ({ c: w.c, w, i, a: L.ports.get(key(w.from.device, w.from.port)), b: L.ports.get(key(w.to.device, w.to.port)) }))
-    .filter((x) => x.a && x.b);
+  const drawn = useMemo(() => {
+    const ok = wires
+      .map((w, i) => ({ c: w.c, w, i, a: L.ports.get(key(w.from.device, w.from.port)), b: L.ports.get(key(w.to.device, w.to.port)) }))
+      .filter((x): x is typeof x & { a: PortAt; b: PortAt } => !!x.a && !!x.b);
+    // Each its own route: stubs out of the ports, bends in the gutters, a lane each.
+    const routes = routeCables(ok.map((x) => ({ a: x.a, b: x.b, rearA: x.w.from.side === "rear", rearB: x.w.to.side === "rear", device: [x.w.from.device, x.w.to.device] })));
+    return ok.map((x, k) => ({ ...x, d: routes[k].d }));
+  }, [v, L]);
   const hovered = drawn.find((d) => d.i === hover);
 
   // The cabled ports of each device: a patch panel's front (underlined) and rear (overlined) apart.
@@ -453,13 +421,16 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
         })}
         {L.placed.map(plate)}
         {cables
-          ? drawn.map(({ c, i, a, b }) => {
+          ? drawn.map(({ c, i, d }) => {
               const st = cableStyle(c, t);
-              const d = cablePath(a!, b!);
+              const on = sel?.kind === "link" && sel.id === linkId(c.from.device, c.to.device);
+              const lit = hover === i || on;
               return (
                 <g key={i} className="rack-cable" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((h) => (h === i ? null : h))} onClick={(e) => (e.stopPropagation(), pick({ kind: "link", id: linkId(c.from.device, c.to.device), port: `${c.from.device}:${c.from.port}` }))}>
                   <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
-                  <path d={d} fill="none" stroke={sel?.kind === "link" && sel.id === linkId(c.from.device, c.to.device) ? "#f59e0b" : st.stroke} strokeWidth={hover === i || (sel?.kind === "link" && sel.id === linkId(c.from.device, c.to.device)) ? st.width + 1.5 : st.width} strokeDasharray={st.dash} opacity={hover === null || hover === i ? 0.9 : 0.35} strokeLinecap="round" />
+                  {/* a pale casing: where two cables cross, each stays whole */}
+                  <path d={d} fill="none" stroke="#f8fafc" strokeWidth={st.width + 2.4} opacity={hover === null || lit ? 0.9 : 0.3} strokeLinejoin="round" strokeLinecap="round" />
+                  <path d={d} fill="none" stroke={on ? "#f59e0b" : st.stroke} strokeWidth={lit ? st.width + 1.5 : st.width} strokeDasharray={st.dash} opacity={hover === null || lit ? 0.95 : 0.3} strokeLinejoin="round" strokeLinecap="round" />
                 </g>
               );
             })

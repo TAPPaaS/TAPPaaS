@@ -40,9 +40,9 @@ function genericPlate(t: Topology, d: DevNode): ResolvedPlate | null {
   return { key: "generic", vendor: "Generic", model: d.kind === "node" ? "server" : d.kind === "ap" ? "access point" : "switch", kind: d.kind, units: rows.length > 1 ? 2 : 1, width: d.kind === "ap" ? "half" : "full", passive: false, rows, labels: [] };
 }
 
-// The plate a device has: its placement's, the cable record's, else generic.
+// The plate a device has: its placement's (in a rack or loose), the cable record's, else generic.
 export function plateOf(t: Topology, d: DevNode): { plate: ResolvedPlate | null; up: boolean | null; catalog: boolean } {
-  const m = t.positions?.racks.flatMap((r) => r.placements).find((x) => x.device === d.name);
+  const m = [...(t.positions?.racks.flatMap((r) => r.placements) ?? []), ...(t.positions?.rooms ?? []).flatMap((r) => r.loose)].find((x) => x.device === d.name);
   if (m?.plate) return { plate: m.plate, up: m.up, catalog: true };
   const o = t.positions?.outside.find((x) => x.device === d.name);
   if (o?.plate) return { plate: o.plate, up: null, catalog: true };

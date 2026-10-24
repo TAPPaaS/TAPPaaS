@@ -4,7 +4,8 @@
 // device's own record is never touched), the devices the topology cannot see
 // (a modem, an ONT, a UPS, a patch panel) and the cables nothing can see. The
 // faceplate catalog (faceplates/<vendor>/<model>.json) says what each device
-// looks like. network-manager's topology carries the result: the racks with
+// looks like; a site adds plates for the models it lacks (faceplate add),
+// kept in positions.json and merged over it. network-manager's topology carries the result: the racks with
 // their mounts resolved and every link mapped to faceplate ports.
 //
 // Every changing verb: lock → change → validate the WHOLE resulting file →
@@ -47,9 +48,11 @@ import {
   resolvePlate,
   seenCables,
   suggestFaceplate,
+  faceplateFile,
+  withSiteFaceplates,
 } from "../../../lib/ts/src/positions";
 import { Store, loadCatalog, readDevices } from "./store";
-import { Result, addCable, addDevice, recordSeen, placeDevice, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyPlacement, modifyRack, modifyRoom, removeCable, removeDevice, unplaceDevice, splitCable } from "./verbs";
+import { Result, addFaceplate, deleteFaceplate, modifyFaceplate, addCable, addDevice, recordSeen, placeDevice, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyPlacement, modifyRack, modifyRoom, removeCable, removeDevice, unplaceDevice, splitCable } from "./verbs";
 
 const VERSION = "0.2.0";
 
@@ -185,11 +188,32 @@ export const HELP: HelpSpec = {
       note: "(the link on that port, seen or recorded, becomes two recorded segments)",
     },
     { usage: "cable join <device:port> [--check]", options: [CHECK], object: { positional: "device:port" }, note: "(undo a split: a panel port, or a device end of one of its segments)" },
-    { usage: "faceplates list [--json]", options: [JSON_OUT] },
+    { usage: "faceplates list [--json]", options: [JSON_OUT], note: "(the shipped catalog and the site's own plates, marked site)" },
     {
-      usage: "faceplates show <vendor/model> [--device <name>] [--topology <file>] [--json]",
-      options: [["--device N", "Fill a generic plate from this device's ports, with their live state."], TOPO, JSON_OUT],
+      usage: "faceplates show <vendor/model> [--device <name>] [--topology <file>] [--file] [--json]",
+      options: [["--device N", "Fill a generic plate from this device's ports, with their live state."], TOPO, ["--file", "The plate as a catalog file, faceplates/<vendor>/<model>.json: how a site's plate goes upstream."], JSON_OUT],
     },
+    {
+      usage: "faceplate add <vendor/model> --units <n> --ports <spec> [--width full|half|third] [--kind server|switch|ap|patch-panel|pdu|modem|other] [--passive] [--match <model>]... [--vendor <text>] [--display-name <text>] [--description <text>] [--check]",
+      options: [
+        ["--units N", "Its height in rack units."],
+        ["--ports S", "Its ports: groups side by side (a comma between, a gap on the plate), rows within a group (a slash between), items within a row (a plus between): [<n>x]<kind>[@<rows>][:<name>], a kind rj45, sfp+, sfp28, poe, console, power or gap. 24xrj45 · 8xrj45, 2xsfp+ · 8xsfp+/8xsfp+ · 16xsfp+@2 (odd over even) · rj45:WAN+gap+4xrj45:LAN {n}. A group may end in its place in percent of the width: [3-66]."],
+        ["--width W", "full (default), half or third of the rack's width."],
+        ["--kind K", "What it is (default other): server, switch, ap, patch-panel, pdu, modem, other."],
+        ["--passive", "Nothing sees it (a patch panel, a PDU): placed without a topology device."],
+        ["--match M", "A model or name an inventory reports it by: the plate is then suggested for it (repeatable)."],
+        ["--vendor T", "The vendor as drawn (default: the key's)."],
+        ["--display-name T", "The model as drawn (default: the key's)."],
+        ["--description T", "What it is."],
+        CHECK,
+      ],
+      note: "(a plate the shipped catalog lacks, in config/positions.json; a shipped key is replaced by the site's plate)",
+    },
+    {
+      usage: "faceplate modify <vendor/model> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      options: [["--set F=V", "units, width, ports, kind, passive, match (a comma list), vendor, displayName, description (repeatable)."], ["--unset F", "Clear match, vendor, displayName or description (repeatable)."], CHECK],
+    },
+    { usage: "faceplate delete <vendor/model> [--check]", options: [CHECK], note: "(a site plate nothing uses; one that replaced a shipped plate gives way to it)" },
     { usage: "export --json", effect: "read", options: [["--json", "The document and the whole catalog, for network-manager topology."]] },
   ],
   notes: [
@@ -218,7 +242,7 @@ function opts(args: string[], name: string): string[] {
 const VALUED = [
   "--units", "--width", "--numbering", "--display-name", "--room", "--description", "--set", "--rack", "--u", "--height", "--slot",
   "--face", "--faceplate", "--label", "--topology", "--from", "--to", "--kind", "--from-faceplate", "--to-faceplate", "--device", "--unset",
-  "--model", "--ports", "--port", "--from-side", "--to-side", "--side", "--via", "--location", "--name",
+  "--model", "--ports", "--port", "--from-side", "--to-side", "--side", "--via", "--location", "--name", "--match", "--vendor",
 ];
 function positional(args: string[], skip: number): string[] {
   const out: string[] = [];
@@ -264,20 +288,27 @@ function report(findings: PositionFinding[]): number {
 let quiet = false;
 const note = (m: string): void => (quiet ? console.error(`[Warning] ${m}`) : warn(m));
 
-function readCatalog(): Faceplate[] {
+// The shipped catalog: what the checks merge the site's plates over.
+let shipped: Faceplate[] | null = null;
+function readShipped(): Faceplate[] {
+  if (shipped) return shipped;
   const { catalog, errors } = loadCatalog();
   for (const e of errors) note(`faceplate catalog: ${e}`);
-  return catalog;
+  return (shipped = catalog);
+}
+// The catalog a verb names plates from: the shipped one with the site's own.
+function readCatalog(store: Store): Faceplate[] {
+  return withSiteFaceplates(readShipped(), store.load()).catalog;
 }
 
 // change — the shared sequence of every changing verb. Devices are read only
 // for a verb that names one (a mount, a cable); a rack's own fields need none.
-function change(store: Store, check: boolean, catalog: Faceplate[], devices: SiteDevice[] | null | undefined, fn: (doc: PositionsDoc) => Result): number {
+function change(store: Store, check: boolean, devices: SiteDevice[] | null | undefined, fn: (doc: PositionsDoc) => Result): number {
   if (!check && store.legacy) die(`${store.legacy} is still there: migration 0020 makes it config/positions.json (the next update, or scripts/run-migrations.sh) — nothing was changed`);
   return store.withLock(() => {
     const r = fn(store.load());
     if ("refused" in r) die(r.refused);
-    const findings = checkPositions(r.doc, catalog, devices ?? null, siteLocs(store.configDir)).filter((f) => devices !== undefined || !f.message.startsWith("the topology could not be read"));
+    const findings = checkPositions(r.doc, readShipped(), devices ?? null, siteLocs(store.configDir)).filter((f) => devices !== undefined || !f.message.startsWith("the topology could not be read"));
     const errors = report(findings.filter((f) => f.severity === "error" || !check));
     if (errors) die("config/positions.json would not be valid — nothing was changed");
     if (check) {
@@ -360,8 +391,7 @@ export function run(argv: string[]): number {
   const verb = one ? args[0] : args.slice(0, 2).join(" ");
 
   if (args[0] === "validate") {
-    const catalog = readCatalog();
-    const findings = checkPositions(store.load(), catalog, devicesFor(args), siteLocs(store.configDir));
+    const findings = checkPositions(store.load(), readShipped(), devicesFor(args), siteLocs(store.configDir));
     if (json) {
       console.log(JSON.stringify({ valid: !findings.some((f) => f.severity === "error"), findings }, null, 2));
       return findings.some((f) => f.severity === "error") ? 1 : 0;
@@ -372,8 +402,11 @@ export function run(argv: string[]): number {
     return 0;
   }
   if (args[0] === "export") {
+    // The catalog with the site's plates: what the topology draws with.
     const { catalog, errors } = loadCatalog();
-    console.log(JSON.stringify({ doc: store.load(), catalog, catalogErrors: errors }, null, 2));
+    const doc = store.load();
+    const merged = withSiteFaceplates(catalog, doc);
+    console.log(JSON.stringify({ doc, catalog: merged.catalog, catalogErrors: [...errors, ...merged.findings.filter((f) => f.severity === "error").map((f) => f.message)] }, null, 2));
     return 0;
   }
 
@@ -445,7 +478,7 @@ export function run(argv: string[]): number {
   }
   if (verb === "device list" || verb === "device show") {
     const d = store.load();
-    const { catalog } = loadCatalog();
+    const catalog = readCatalog(store);
     const rows = Object.entries(devicesOf(d)).map(([name, r]) => ({
       name,
       ...r,
@@ -471,17 +504,23 @@ export function run(argv: string[]): number {
     return 0;
   }
   if (verb === "faceplates list") {
-    const { catalog, errors } = loadCatalog();
-    if (json) return out(catalog.map((f) => ({ key: f.key, vendor: f.vendor, model: f.model, kind: f.kind, units: f.units, width: f.width, passive: f.passive === true, generic: f.generic ?? null, match: f.match ?? [], ports: f.rows.flat().filter(Boolean).length })));
+    const { catalog: base, errors } = loadCatalog();
+    const merged = withSiteFaceplates(base, store.load());
+    // The site's own first: they are what a site adds for its own models.
+    const catalog = [...merged.catalog.filter((f) => f.site), ...merged.catalog.filter((f) => !f.site)];
+    if (json)
+      return out(catalog.map((f) => ({ key: f.key, vendor: f.vendor, model: f.model, kind: f.kind, units: f.units, width: f.width, passive: f.passive === true, generic: f.generic ?? null, match: f.match ?? [], ports: f.rows.flat().filter(Boolean).length, site: f.site === true, overrides: f.overrides === true, spec: f.ports ?? null, description: f.description ?? null })));
     for (const e of errors) note(e);
-    for (const f of catalog) info(`${f.key.padEnd(34)} ${f.kind.padEnd(12)} ${f.units}U ${f.width.padEnd(6)} ${f.generic ? `filled from the device's ${f.generic}` : `${f.rows.flat().filter(Boolean).length} port(s)`}${f.passive ? "  passive" : ""}`);
+    for (const f of merged.findings) (f.severity === "error" ? note : info)(f.message);
+    for (const f of catalog) info(`${f.key.padEnd(34)} ${f.kind.padEnd(12)} ${f.units}U ${f.width.padEnd(6)} ${f.generic ? `filled from the device's ${f.generic}` : `${f.rows.flat().filter(Boolean).length} port(s)`}${f.passive ? "  passive" : ""}${f.site ? `  ${GN}site${CL}${f.overrides ? " (replaces the shipped plate)" : ""}` : ""}`);
     return 0;
   }
   if (verb === "faceplates show") {
     const [key] = positional(args, 2);
     if (!key) die("faceplates show <vendor/model>");
-    const { catalog } = loadCatalog();
+    const catalog = readCatalog(store);
     const f = catalog.find((x) => x.key === key) ?? die(`faceplate ${key} is not in the catalog (faceplates list)`);
+    if (args.includes("--file")) return out(faceplateFile(f));
     const name = opt(args, "--device");
     let dev: SiteDevice | null = null;
     if (name) {
@@ -491,16 +530,46 @@ export function run(argv: string[]): number {
     const plate = resolvePlate(f, dev);
     if (json) return out(plate);
     for (const l of renderPlate(plate)) info(l);
+    if (f.ports) info(`  ports: ${f.ports}${f.site ? `  (the site's own${f.overrides ? ", in place of the shipped plate" : ""})` : ""}`);
     if (dev) info(`  (the catalog suggests ${suggestFaceplate(catalog, dev) ?? "no plate"} for ${dev.name})`);
     return 0;
   }
 
   requireOperator();
+  if (verb === "faceplate add") {
+    const [key] = positional(args, 2);
+    if (!key) die("faceplate add <vendor/model> --units <n> --ports <spec>");
+    const catalog = readCatalog(store);
+    return change(store, check, undefined, (d) =>
+      addFaceplate(d, key, {
+        units: intOpt(args, "--units"),
+        ports: opt(args, "--ports"),
+        width: opt(args, "--width"),
+        kind: opt(args, "--kind"),
+        passive: args.includes("--passive"),
+        match: opts(args, "--match"),
+        vendor: opt(args, "--vendor"),
+        displayName: opt(args, "--display-name"),
+        description: opt(args, "--description"),
+      }, catalog),
+    );
+  }
+  if (verb === "faceplate modify") {
+    const [key] = positional(args, 2);
+    if (!key) die("faceplate modify <vendor/model> --set <field>=<value>...");
+    const s = sets(args);
+    return change(store, check, undefined, (d) => modifyFaceplate(d, key, s));
+  }
+  if (verb === "faceplate delete") {
+    const [key] = positional(args, 2);
+    if (!key) die("faceplate delete <vendor/model>");
+    const catalog = readShipped();
+    return change(store, check, undefined, (d) => deleteFaceplate(d, key, catalog));
+  }
   if (verb === "rack add") {
     const [name] = positional(args, 2);
     if (!name) die("rack add <rack>");
-    const catalog = readCatalog();
-    return change(store, check, catalog, undefined, (d) =>
+    return change(store, check, undefined, (d) =>
       addRack(d, name, {
         units: intOpt(args, "--units"),
         width: opt(args, "--width"),
@@ -515,36 +584,36 @@ export function run(argv: string[]): number {
     const [name] = positional(args, 2);
     if (!name) die("rack modify <rack> --set <field>=<value>... --unset <field>...");
     const s = sets(args);
-    return change(store, check, readCatalog(), undefined, (d) => modifyRack(d, name, s));
+    return change(store, check, undefined, (d) => modifyRack(d, name, s));
   }
   if (verb === "rack delete") {
     const [name] = positional(args, 2);
     if (!name) die("rack delete <rack>");
-    return change(store, check, readCatalog(), undefined, (d) => deleteRack(d, name));
+    return change(store, check, undefined, (d) => deleteRack(d, name));
   }
   if (verb === "room add") {
     const [name] = positional(args, 2);
     if (!name) die("room add <room>");
-    return change(store, check, readCatalog(), undefined, (d) => addRoom(d, name, { location: opt(args, "--location"), displayName: opt(args, "--display-name"), description: opt(args, "--description") }));
+    return change(store, check, undefined, (d) => addRoom(d, name, { location: opt(args, "--location"), displayName: opt(args, "--display-name"), description: opt(args, "--description") }));
   }
   if (verb === "room modify") {
     const [name] = positional(args, 2);
     if (!name) die("room modify <room> --set <field>=<value>...");
     const s = sets(args);
-    return change(store, check, readCatalog(), undefined, (d) => modifyRoom(d, name, s));
+    return change(store, check, undefined, (d) => modifyRoom(d, name, s));
   }
   if (verb === "room delete") {
     const [name] = positional(args, 2);
     if (!name) die("room delete <room>");
-    return change(store, check, readCatalog(), undefined, (d) => deleteRoom(d, name));
+    return change(store, check, undefined, (d) => deleteRoom(d, name));
   }
   if (verb === "device add") {
     const [name] = positional(args, 2);
     if (!name) die("device add <device> --kind …");
-    const catalog = readCatalog();
+    const catalog = readCatalog(store);
     const devices = devicesFor(args);
     const seen = devices ? devices.filter((x) => !x.recorded).map((x) => x.name) : null;
-    return change(store, check, catalog, devices, (d) =>
+    return change(store, check, devices, (d) =>
       addDevice(d, name, {
         kind: opt(args, "--kind"),
         model: opt(args, "--model"),
@@ -560,21 +629,21 @@ export function run(argv: string[]): number {
     const [name] = positional(args, 2);
     if (!name) die("device modify <device> --set <field>=<value>...");
     const s = sets(args);
-    const catalog = readCatalog();
-    return change(store, check, catalog, undefined, (d) => modifyDevice(d, name, s, catalog));
+    const catalog = readCatalog(store);
+    return change(store, check, undefined, (d) => modifyDevice(d, name, s, catalog));
   }
   if (verb === "device record") {
     const [target] = positional(args, 2);
     if (!target) die("device record <switch>:<port>|<mac> --name <device> --kind …");
     const name = opt(args, "--name") ?? die("--name <device> is required: the name it is recorded under");
-    const catalog = readCatalog();
+    const catalog = readCatalog(store);
     const read = readDevices(opt(args, "--topology"));
     if (!read.topology) die(`the topology could not be read (${read.error}): it is what says what a port sees`);
     const hit = findSeen(seenDevices(read.topology), target);
     if ("refused" in hit) die(hit.refused);
     const taken = (read.devices ?? []).filter((x) => !x.recorded).map((x) => x.name);
     const primary = siteLocs(store.configDir)?.primary ?? null;
-    return change(store, check, catalog, read.devices, (d) =>
+    return change(store, check, read.devices, (d) =>
       recordSeen(d, hit, {
         name,
         kind: opt(args, "--kind"),
@@ -589,7 +658,7 @@ export function run(argv: string[]): number {
   if (verb === "device remove") {
     const [name] = positional(args, 2);
     if (!name) die("device remove <device>");
-    return change(store, check, readCatalog(), undefined, (d) => removeDevice(d, name));
+    return change(store, check, undefined, (d) => removeDevice(d, name));
   }
   if (verb === "place") {
     const [device] = positional(args, 1);
@@ -597,9 +666,9 @@ export function run(argv: string[]): number {
     const room = opt(args, "--room");
     const rack = opt(args, "--rack") ?? (room ? undefined : die("--rack (with --u), or --room, is required"));
     const u = intOpt(args, "--u") ?? (room ? undefined : die("--u is required"));
-    const catalog = readCatalog();
+    const catalog = readCatalog(store);
     const rec = devicesOf(store.load())[device];
-    return change(store, check, catalog, devicesFor(args), (d) =>
+    return change(store, check, devicesFor(args), (d) =>
       placeDevice(d, device, {
         rack,
         u,
@@ -619,17 +688,17 @@ export function run(argv: string[]): number {
     const [device] = positional(args, 2);
     if (!device) die("place modify <device> --set <field>=<value>... --unset <field>...");
     const s = sets(args);
-    const catalog = readCatalog();
-    return change(store, check, catalog, devicesFor(args), (d) => modifyPlacement(d, device, s, catalog));
+    const catalog = readCatalog(store);
+    return change(store, check, devicesFor(args), (d) => modifyPlacement(d, device, s, catalog));
   }
   if (verb === "unplace") {
     const [device] = positional(args, 1);
     if (!device) die("unplace <device>");
-    const catalog = readCatalog();
+    const catalog = readCatalog(store);
     const m = placementsOf(store.load())[device];
     // A recorded device keeps its cables; a passive plate nothing records takes them along.
     const passive = !!m?.faceplate && catalog.find((f) => f.key === m.faceplate)?.passive === true && !devicesOf(store.load())[device];
-    return change(store, check, catalog, undefined, (d) => unplaceDevice(d, device, passive));
+    return change(store, check, undefined, (d) => unplaceDevice(d, device, passive));
   }
   if (verb === "cable add") {
     const from = parseEnd(opt(args, "--from") ?? die("--from <device:port> is required")) ?? die("--from is <device>:<port>");
@@ -645,8 +714,7 @@ export function run(argv: string[]): number {
       if (sd !== "front" && sd !== "rear") die("a side is front or rear");
       e.side = sd;
     }
-    const catalog = readCatalog();
-    return change(store, check, catalog, devicesFor(args), (d) => addCable(d, from, to, opt(args, "--kind") ?? "patch", opt(args, "--label")));
+    return change(store, check, devicesFor(args), (d) => addCable(d, from, to, opt(args, "--kind") ?? "patch", opt(args, "--label")));
   }
   if (verb === "cable split") {
     const [e] = positional(args, 2);
@@ -655,12 +723,12 @@ export function run(argv: string[]): number {
     const read = readDevices(opt(args, "--topology"));
     if (read.error) note(`the topology could not be read (${read.error}): only a recorded cable can be split`);
     const seen = read.topology ? seenCables(read.topology) : null;
-    return change(store, check, readCatalog(), read.devices, (d) => splitCable(d, end, via, seen));
+    return change(store, check, read.devices, (d) => splitCable(d, end, via, seen));
   }
   if (verb === "cable join") {
     const [e] = positional(args, 2);
     const end = parseEnd(e ?? "") ?? die("cable join <device>:<port>");
-    return change(store, check, readCatalog(), undefined, (d) => joinCable(d, end));
+    return change(store, check, undefined, (d) => joinCable(d, end));
   }
   if (verb === "cable remove") {
     const [e] = positional(args, 2);
@@ -668,7 +736,7 @@ export function run(argv: string[]): number {
     const side = opt(args, "--side");
     if (side !== undefined && side !== "front" && side !== "rear") die("--side is front or rear");
     if (side) end.side = side;
-    return change(store, check, readCatalog(), undefined, (d) => removeCable(d, end));
+    return change(store, check, undefined, (d) => removeCable(d, end));
   }
   die(`unknown verb 'position-manager ${args.slice(0, 2).join(" ")}' — see 'position-manager --help'`);
 }

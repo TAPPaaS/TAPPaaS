@@ -55,7 +55,7 @@ flowchart LR
     PLACE["placements"]:::record
     CABLE["cables and segments"]:::record
     RDEV["devices (recorded:<br/>modem, ONT, UPS, patch panel)"]:::record
-    PLATE["faceplate catalog<br/>(in the source tree)"]:::catalog
+    PLATE["faceplate catalog<br/>(in the source tree,<br/>with the site's own plates)"]:::catalog
   end
 
   subgraph hardware["Hardware the cluster sees"]
@@ -159,7 +159,7 @@ source tree, not under `~/config/`.
 | Placement | `positions.json` → `placements{}` (keyed by device) | position-manager | `device` → a physical device; `rack` → rack (with its unit), or `room` → room when loose; `faceplate` → the catalog; the room is at the device's own location |
 | Recorded device | `positions.json` → `devices{}` | position-manager | `model` → the faceplate catalog; `location` → a location (unset: the primary); its `ports` are its own; `mac` when a switch port saw it; it is a physical device like a node, switch or AP |
 | Cable | `positions.json` → `cables[]` | position-manager | `from.device`, `to.device` → physical devices and their ports; a split link is two segments whose `origin` names the link they came from |
-| Faceplate catalog | `position-manager`'s catalog in the source tree | position-manager | names nothing |
+| Faceplate catalog | `position-manager`'s catalog in the source tree, and the site's own plates in `positions.json` → `faceplates{}` (keyed `<vendor>/<model>`, merged over it; a site plate of a shipped key replaces it) | position-manager | names nothing |
 
 ### Runtime and derived files (no references into them)
 

@@ -39,12 +39,18 @@ import {
   SeenDevice,
   MAC_RE,
   racksOf,
+  FACEPLATE_KEY_RE,
+  PLATE_KINDS,
+  PlateKind,
+  SiteFaceplate,
+  faceplatesOf,
+  parsePortSpec,
 } from "../../../lib/ts/src/positions";
 
 export type Result = { doc: PositionsDoc; summary: string } | { refused: string };
 
 const clone = (d: PositionsDoc): PositionsDoc => JSON.parse(JSON.stringify(d ?? {}));
-type Doc = Required<Pick<PositionsDoc, "racks" | "placements" | "cables" | "devices" | "rooms">>;
+type Doc = Required<Pick<PositionsDoc, "racks" | "placements" | "cables" | "devices" | "rooms" | "faceplates">>;
 function withDoc(doc: PositionsDoc, fn: (d: Doc) => void): PositionsDoc {
   const d = clone(doc);
   d.version = 1;
@@ -55,18 +61,20 @@ function withDoc(doc: PositionsDoc, fn: (d: Doc) => void): PositionsDoc {
   d.cables = d.cables ?? [];
   d.devices = d.devices ?? {};
   d.rooms = d.rooms ?? {};
+  d.faceplates = d.faceplates ?? {};
   // A building is the site's now (its primary location): one recorded on a rack
   // or a room before goes, silently, at the next write.
   for (const x of [...Object.values(d.racks), ...Object.values(d.rooms)] as Record<string, unknown>[]) delete x.building;
   fn(d as Doc);
   // The keys in the order the schema lists them.
-  const order = ["version", "rooms", "racks", "placements", "devices", "cables"] as const;
+  const order = ["version", "rooms", "racks", "placements", "devices", "cables", "faceplates"] as const;
   const out: PositionsDoc = {};
   for (const k of order) if (d[k] !== undefined) (out as Record<string, unknown>)[k] = d[k];
   for (const [k, v] of Object.entries(d)) if (!(k in out)) (out as Record<string, unknown>)[k] = v;
   if (Object.keys(out.rooms ?? {}).length === 0) delete out.rooms;
   if ((out.cables ?? []).length === 0) delete out.cables;
   if (Object.keys(out.devices ?? {}).length === 0) delete out.devices;
+  if (Object.keys(out.faceplates ?? {}).length === 0) delete out.faceplates;
   return out;
 }
 
@@ -527,4 +535,97 @@ export function joinCable(doc: PositionsDoc, end: CableEnd): Result {
     }),
     summary: `${endText(x)} — ${endText(y)} no longer runs through ${panelEnd.device} port ${panelEnd.port}${keep ? " (recorded as one cable)" : " (the topology's link again)"}`,
   };
+}
+
+// ── the site's faceplates ─────────────────────────────────────────────
+
+export interface FaceplateSpec {
+  units?: number;
+  width?: string;
+  ports?: string;
+  kind?: string;
+  passive?: boolean;
+  match?: string[];
+  vendor?: string;
+  displayName?: string;
+  description?: string;
+}
+const FACEPLATE_FIELDS = ["units", "width", "ports", "kind", "passive", "match", "vendor", "displayName", "description"];
+
+// What is wrong with a site faceplate's fields, before the whole check.
+function faceplateProblem(f: SiteFaceplate): string | null {
+  if (!Number.isInteger(f.units) || f.units < 1 || f.units > 10) return "units is 1 to 10 rack units";
+  if (f.width !== undefined && !MOUNT_WIDTHS.includes(f.width)) return `width is one of ${MOUNT_WIDTHS.join(", ")}`;
+  if (f.kind !== undefined && !PLATE_KINDS.includes(f.kind)) return `kind is one of ${PLATE_KINDS.join(", ")}`;
+  const spec = parsePortSpec(f.ports ?? "");
+  if ("error" in spec) return `--ports: ${spec.error}`;
+  const rows = Math.max(...spec.blocks.map((b) => b.rows.length));
+  if (rows > 3 * f.units) return `${rows} rows of ports do not fit ${f.units}U: at most ${3 * f.units}`;
+  return null;
+}
+
+// faceplate add <vendor/model> — a plate the site adds to the catalog. A key
+// the shipped catalog has is the site's own plate from then on (validate says so).
+export function addFaceplate(doc: PositionsDoc, key: string, spec: FaceplateSpec, catalog: Faceplate[]): Result {
+  if (!FACEPLATE_KEY_RE.test(key)) return { refused: `a faceplate is <vendor>/<model>, lower case letters, digits and dashes (the model also . and +): '${key}'` };
+  if (faceplatesOf(doc)[key]) return { refused: `the site already has faceplate ${key} (faceplate modify ${key})` };
+  if (spec.ports === undefined) return { refused: "--ports <spec> is required: e.g. 24xrj45, or 8xrj45, 2xsfp+" };
+  if (spec.units === undefined) return { refused: "--units <n> is required" };
+  const f: SiteFaceplate = { kind: (spec.kind ?? "other") as PlateKind, units: spec.units, width: (spec.width ?? "full") as MountWidth, ports: spec.ports.trim() };
+  if (spec.passive) f.passive = true;
+  if (spec.match?.length) f.match = spec.match;
+  for (const k of ["vendor", "displayName", "description"] as const) if (spec[k]) f[k] = spec[k];
+  const bad = faceplateProblem(f);
+  if (bad) return { refused: `faceplate ${key}: ${bad}` };
+  const shipped = catalog.some((x) => x.key === key && !x.site);
+  return { doc: withDoc(doc, (d) => void (d.faceplates[key] = f)), summary: `faceplate ${key} added to the site's catalog${shipped ? " — it replaces the shipped plate of that key" : ""}` };
+}
+
+export function modifyFaceplate(doc: PositionsDoc, key: string, sets: Array<[string, string]>): Result {
+  if (!faceplatesOf(doc)[key]) return { refused: `the site has no faceplate ${key} (faceplate add ${key} …; a shipped plate is changed by adding the site's own of its key)` };
+  let refused: string | null = null;
+  const next = withDoc(doc, (d) => {
+    const f = d.faceplates[key] as SiteFaceplate & Record<string, unknown>;
+    for (const [k, v] of sets) {
+      if (!FACEPLATE_FIELDS.includes(k)) refused = `faceplate field '${k}' is not one of ${FACEPLATE_FIELDS.join(", ")}`;
+      else if (k === "units") {
+        const n = int(v);
+        if (n === null) refused = "units is a whole number";
+        else f.units = n;
+      } else if (k === "passive") {
+        if (v === "true") f.passive = true;
+        else if (v === "false" || v === "") delete f.passive;
+        else refused = "passive is true or false";
+      } else if (k === "match") {
+        const m = v.split(",").map((x) => x.trim()).filter(Boolean);
+        if (m.length) f.match = m;
+        else delete f.match;
+      } else if (k === "ports") {
+        if (text(v) === undefined) refused = "ports cannot be cleared";
+        else f.ports = v.trim();
+      } else if (text(v) === undefined) delete f[k];
+      else f[k] = v;
+      if (refused) return;
+    }
+    const bad = faceplateProblem(f);
+    if (bad) refused = `faceplate ${key}: ${bad}`;
+  });
+  if (refused) return { refused };
+  return { doc: next, summary: `faceplate ${key}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
+}
+
+// faceplate delete — only a plate nothing uses; one that replaced a shipped
+// plate gives way to it, so nothing that names it is left without one.
+export function deleteFaceplate(doc: PositionsDoc, key: string, catalog: Faceplate[]): Result {
+  if (!faceplatesOf(doc)[key]) return { refused: `the site has no faceplate ${key}${catalog.some((f) => f.key === key) ? " — a shipped plate is not deleted" : ""}` };
+  const shipped = catalog.some((f) => f.key === key && !f.site) || catalog.some((f) => f.key === key && f.overrides);
+  if (!shipped) {
+    const users = [
+      ...Object.entries(placementsOf(doc)).filter(([, m]) => m.faceplate === key).map(([n]) => `placement ${n}`),
+      ...Object.entries(devicesOf(doc)).filter(([, x]) => x.model === key).map(([n]) => `device ${n}`),
+      ...cablesOf(doc).flatMap((c) => [c.from, c.to]).filter((e) => e.faceplate === key).map((e) => `the cable end ${e.device}:${e.port}`),
+    ];
+    if (users.length) return { refused: `faceplate ${key} is used by ${users.join(", ")} — give them another plate first` };
+  }
+  return { doc: withDoc(doc, (d) => void delete d.faceplates[key]), summary: `faceplate ${key} deleted from the site's catalog${shipped ? " — the shipped plate of that key is drawn again" : ""}` };
 }

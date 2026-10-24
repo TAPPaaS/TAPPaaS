@@ -63,15 +63,20 @@ buddy or satellite that is there; each room of
 position-manager's `config/positions.json` as an area with its racks and, beside them, the devices
 standing loose in it; each rack as a frame with its units numbered as the rack numbers them, each placed device as its
 faceplate at its units and width with its ports' live state (link, LAG), the cabled ports
-underlined (a patch panel's rear-cabled ports overlined), the cables port to port in
-the zone colours below with a label on hover — a link through a patch panel as its two wires —, a
+underlined (a patch panel's rear-cabled ports overlined), the cables port to port — a short stub out
+of each port (up from a plate's upper row and a panel's rear), straight runs that bend in a gutter beside
+the rack, a lane each, a loose device reached from the gutter on its side — an access link in its zone's
+colour, a trunk in its kind's (node trunk, switch uplink, peer link, access point, device, patch), highlighted
+with a label on hover — a link through a patch panel as its two wires —, a
 device only a cable record places beside the rack, and an Unplaced tray of the devices placed
 nowhere, by location, each with Place… (one form: a rack and its units, or loose in a room;
 `position-manager place`) — or, for a device a switch port sees and nobody recorded, Record…
 (`position-manager device record`: its MAC kept, the port's link recorded as its cable); the header's
 Add a room… (`position-manager room add`, at one of the site's locations), Add a
-rack… and Record a device… (`position-manager device add`: kind, a catalog model or free text, ports, location), the last
-also in a rack's and a room's card, and a How to card while nothing is selected; a click on a cable opens its link, whose panel
+rack…, Record a device… (`position-manager device add`: kind, a catalog model or free text, ports, location; the
+site's own plates first in the model list), the last also in a rack's and a room's card, and Add a faceplate…
+(`position-manager faceplate add`: a plate for a model the catalog lacks — its key, units, width, kind and ports as a
+port spec the form explains, drawn as the rack will draw it while the fields change), and a How to card while nothing is selected; a click on a cable opens its link, whose panel
 lists the wires and offers Attach to patch panel… (`position-manager cable split`, its `--check` the
 preview, the free panel ports to choose from) or Remove patch panel (`cable join`); a click on a plate or a port
 opens the side card to the left of the racks, with the device's location and placement as two

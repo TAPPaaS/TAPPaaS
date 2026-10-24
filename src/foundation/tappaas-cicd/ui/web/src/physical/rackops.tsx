@@ -136,7 +136,7 @@ export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "other"];
 
 // Record a device nothing manages: its kind, its model from the faceplate
 // catalog (or typed), its ports (a count, or names), its location, how it is shown.
-export function deviceAddSteps(models: string[], locations: SiteLocation[]): Step[] {
+export function deviceAddSteps(models: string[], locations: SiteLocation[], notes: Record<string, string> = {}): Step[] {
   const at = locationOption(locations);
   return [
     {
@@ -148,6 +148,7 @@ export function deviceAddSteps(models: string[], locations: SiteLocation[]): Ste
       initial: at.initial,
       asides: at.asides,
       suggest: { "--model": models },
+      suggestNotes: { "--model": notes },
       placeholders: { "--ports": "a count: 24", "--port": "a port's name: WAN, LAN 1, …" },
       note: "A device nothing manages — a modem, an ONT, a UPS, a patch panel — recorded with its kind and its ports (from its model, a count, or by name), at the primary location unless you choose another. It then stands unplaced under its location: Place… it in a rack or a room. A patch panel: place it in a rack, then select a wire and Attach to patch panel…. --check previews.",
     },
@@ -162,7 +163,7 @@ export function seenName(d: TopoDevice): string {
 }
 
 // Record…: a device a switch port sees becomes a recorded one, with the port's cable.
-export function deviceRecordSteps(d: TopoDevice, models: string[], locations: SiteLocation[]): Step[] {
+export function deviceRecordSteps(d: TopoDevice, models: string[], locations: SiteLocation[], notes: Record<string, string> = {}): Step[] {
   const s = d.seen!;
   const target = s.mac ?? `${s.switch}:${s.port}`;
   // It is where the switch that sees it is, unless you choose another.
@@ -178,6 +179,7 @@ export function deviceRecordSteps(d: TopoDevice, models: string[], locations: Si
       choices: { "--kind": RECORDED_KINDS, ...at.choices },
       asides: at.asides,
       suggest: { "--model": models },
+      suggestNotes: { "--model": notes },
       placeholders: { "--port": s.lldp?.port ?? "1" },
       note: `Records the device ${s.switch} port ${s.port} sees${s.mac ? ` (${s.mac})` : ""}: its MAC is kept so it is no longer listed as seen, and the port's link is recorded as its cable. It then stands unplaced under its location: Place… it.`,
     },
@@ -248,22 +250,26 @@ export function AddRoomButton({ kind }: { kind?: "primary" }) {
   return <OperateButton label="Add a room…" kind={kind} title="Add a room" steps={() => roomAddSteps()} />;
 }
 
-// The catalog's models and the site's locations, for the record forms.
-function useRecordChoices(): { models: string[]; locations: SiteLocation[] } {
-  const fp = useRead<{ key: string }[]>("faceplates", 600_000);
-  return { models: (fp.env?.data ?? []).map((f) => f.key), locations: useSiteLocations() };
+// The catalog's models (the site's own plates first, marked so) and the
+// site's locations, for the record forms.
+function useRecordChoices(): { models: string[]; notes: Record<string, string>; locations: SiteLocation[] } {
+  const fp = useRead<{ key: string; site?: boolean; overrides?: boolean }[]>("faceplates", 600_000);
+  const list = fp.env?.data ?? [];
+  const models = [...list.filter((f) => f.site), ...list.filter((f) => !f.site)].map((f) => f.key);
+  const notes = Object.fromEntries(list.filter((f) => f.site).map((f) => [f.key, f.overrides ? "the site's own, in place of the shipped plate" : "the site's own"]));
+  return { models, notes, locations: useSiteLocations() };
 }
 
 // Record a device…: the catalog's models as the model's suggestions.
 export function RecordDeviceButton() {
-  const { models, locations } = useRecordChoices();
-  return <OperateButton label="Record a device…" title="Record a device nothing manages" steps={() => deviceAddSteps(models, locations)} />;
+  const { models, notes, locations } = useRecordChoices();
+  return <OperateButton label="Record a device…" title="Record a device nothing manages" steps={() => deviceAddSteps(models, locations, notes)} />;
 }
 
 // Record… on a seen device's card.
 export function RecordSeenButton({ d }: { d: TopoDevice }) {
-  const { models, locations } = useRecordChoices();
-  return <OperateButton label="Record…" kind="primary" title={`Record the device ${d.seen?.switch} port ${d.seen?.port} sees`} steps={() => deviceRecordSteps(d, models, locations)} />;
+  const { models, notes, locations } = useRecordChoices();
+  return <OperateButton label="Record…" kind="primary" title={`Record the device ${d.seen?.switch} port ${d.seen?.port} sees`} steps={() => deviceRecordSteps(d, models, locations, notes)} />;
 }
 
 // The Physical view with nothing selected: what to do, in order.
@@ -279,6 +285,7 @@ export function PhysicalHowTo() {
         <li><b>Place</b> the devices the topology sees — nodes, switches, access points — from Unplaced: in a rack, or loose in a room.</li>
         <li><b>Record a device</b> nothing manages — a modem, an ONT, a UPS, a patch panel — then place it. A device a switch port sees is listed under its location: open it and Record… it.</li>
         <li><b>Record a cable</b> nothing sees: select a port, then Record a cable….</li>
+        <li><b>Add a faceplate</b> for a device model the catalog lacks: its units, width and ports; it is then offered by Place… and Record a device….</li>
         <li><b>Split a wire at a patch panel</b>: select the wire, then Attach to patch panel….</li>
       </ol>
       <p className="muted small">A click on a location, a room, a rack, a device or a wire opens its card here.</p>

@@ -109,8 +109,11 @@ which carries the positions resolved against the site.
 | `cable remove <device:port> [--side front\|rear]` | The recorded cable on that port (on a panel, that side's). |
 | `cable split <device:port> --via <panel:port>` | The link on that port — seen or recorded — through a patch panel port: two recorded segments, the port to the panel port's front, its rear to the far end. The panel port must be free on both sides. |
 | `cable join <device:port>` | Undo a split, given the panel port or a device end of a segment: the link is the topology's again, or one recorded cable when it was one. |
-| `faceplates list [--json]` | The catalog. |
-| `faceplates show <vendor/model> [--device <name>] [--json]` | One plate as text, one line per port row; `--device` fills a generic plate from that device's ports, with their live state. |
+| `faceplates list [--json]` | The catalog: the site's own plates first, marked `site`, then the shipped ones. |
+| `faceplates show <vendor/model> [--device <name>] [--file] [--json]` | One plate as text, one line per port row; `--device` fills a generic plate from that device's ports, with their live state; `--file` prints it as a catalog file. |
+| `faceplate add <vendor/model> --units <n> --ports <spec> [--width full\|half\|third] [--kind] [--passive] [--match <model>]... [--vendor] [--display-name] [--description]` | A plate the site adds for a model the catalog lacks (see [The site's own plates](#the-sites-own-plates)). |
+| `faceplate modify <vendor/model> --set <field>=<value>... --unset <field>...` | A site plate's units, width, ports, kind, passive, match, vendor, displayName or description. |
+| `faceplate delete <vendor/model>` | A site plate nothing places or records; one that replaced a shipped plate gives way to it. |
 | `export --json` | The document and the whole catalog: what `network-manager topology` reads. |
 
 `mount add`, `mount modify`, `mount remove`, `mount list` and `mount show` are the old
@@ -123,7 +126,7 @@ writes nothing. The verbs that name a device read the topology (`network-manager
 --json --no-health --no-positions`) unless `--topology <file>` hands one in; when it cannot be
 read, device names are not checked and a warning says so. The location checks read
 `config/site.json`. `rack delete`, `room delete`, `device remove`, `unplace` and `cable
-remove` are destructive (the console asks for the name).
+remove` and `faceplate delete` are destructive (the console asks for the name).
 
 A site whose `config/racks.json` the update has not renamed yet is read as it is; a
 change is refused until it has been.
@@ -156,15 +159,23 @@ position-manager place printer --room office
 {
   "vendor": "UniFi", "model": "USW Pro XG 10 PoE", "match": ["USWED77"],
   "kind": "switch", "units": 1, "width": "full",
-  "rows": [
-    [{ "name": "Port 1", "kind": "poe" }, …, { "name": "Port 11", "kind": "sfp+" }],
-    [{ "name": "Port 2", "kind": "poe" }, …, { "name": "Port 12", "kind": "sfp+" }]
-  ],
+  "ports": "10xpoe:Port {n}+gap+2xsfp+:Port {n}[2-98]",
   "labels": [{ "text": "UniFi", "at": "left" }]
 }
 ```
 
-- **rows** are the port rows top to bottom (`null` is a gap). A port's **name** is the
+or, a grid right of the plate's name:
+
+```json
+{
+  "vendor": "UniFi", "model": "Nano HD", "kind": "ap", "units": 1, "width": "third",
+  "rows": [[{ "name": "Port 1", "id": "uplink", "kind": "poe" }]]
+}
+```
+
+- **rows** are the port rows top to bottom (`null` is a gap), drawn right of the plate's
+  name. A plate whose ports have a layout gives **ports**, a port spec, instead (below):
+  its ports in groups, each over its share of the plate's width. A port's **name** is the
   controller's ("Port 11", "sfp-sfpplus1"); its **id**, the topology's, is the number of
   "Port N", else the name, unless given. **kind** is `rj45`, `sfp+`, `sfp28`, `poe`,
   `console` or `power`.
@@ -176,6 +187,49 @@ position-manager place printer --room office
 - **passive** marks a device nothing can see (patch panel, PDU, modem).
 
 A new model is a new file; `faceplates show <key>` checks it without the console.
+
+### The port spec
+
+How `faceplate add --ports` and a catalog file's **ports** write a plate's ports:
+
+- **groups** stand side by side, a comma between them and a gap between them on the plate;
+- **rows** within a group, top to bottom, a slash between them;
+- **items** within a row, a plus between them: `[<n>x]<kind>[@<rows>][:<name>]`, a kind
+  `rj45`, `sfp+`, `sfp28`, `poe`, `console`, `power`, or `gap` (an empty place). A kind
+  ending in `+` takes its own `+` before the next item: `2xsfp++rj45`.
+
+Ports are numbered 1, 2, … unless named; `{n}` in a name is the number that name counts
+from 1, and a name without it given to several ports gets the number after it.
+`<n>x<kind>@<k>`, alone in its group, lays its ports in k rows, odd over even, as stacked
+cages are. A group may end in its place on the plate, `[<from>-<to>]` in percent of its
+width — every group, or none: then they stand right of the plate's name, packed to its
+right edge.
+
+| Spec | The plate |
+|---|---|
+| `24xrj45` | 24 ports in one row, 1-24 |
+| `8xrj45, 2xsfp+` | eight RJ45, a gap, two SFP+ (9, 10) |
+| `8xsfp+/8xsfp+` | two rows of eight, 1-8 over 9-16 |
+| `16xsfp+@2:sfp-sfpplus{n}[3-66]` | sixteen cages odd over even, in the left two thirds |
+| `rj45:WAN+gap+4xrj45:LAN {n}` | WAN, a gap, LAN 1-4 |
+
+### The site's own plates
+
+A site adds a plate for a model the catalog lacks; it is kept in `config/positions.json`
+under `faceplates`, keyed `<vendor>/<model>`, and merged over the shipped catalog, so a
+placement, a recorded device's model and a cable end name it as they name a shipped one:
+
+```
+position-manager faceplate add acme/nas-4 --units 2 --ports "4xrj45, 2xsfp+" --kind server --match NAS-4X --check
+position-manager faceplate add acme/nas-4 --units 2 --ports "4xrj45, 2xsfp+" --kind server --match NAS-4X
+position-manager place nas --rack rack1 --u 6 --faceplate acme/nas-4
+```
+
+It is checked as a shipped plate is: a broken one is an error and is not drawn. A site
+plate of a shipped key replaces the shipped plate for the site, and `validate` says so;
+deleting it brings the shipped plate back. The generic plates stay the fallback for a model
+neither has. To contribute a plate upstream, `faceplates show <key> --file` prints it as
+`faceplates/<vendor>/<model>.json`.
 
 ## Lifecycle
 

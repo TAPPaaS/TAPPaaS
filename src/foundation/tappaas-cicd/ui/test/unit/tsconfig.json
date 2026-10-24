@@ -22,6 +22,9 @@
     "../../web/src/envcards.ts",
     "../../web/src/physical/devicegraph.ts",
     "../../web/src/physical/states.ts",
-    "../../web/src/physical/layout.ts"
+    "../../web/src/physical/layout.ts",
+    "../../web/src/physical/portspec.ts",
+    "../../web/src/physical/platelayout.ts",
+    "../../web/src/physical/cableroute.ts"
   ]
 }

@@ -166,7 +166,7 @@ export class Reads {
   readonly schemas: CachedMap<Record<string, unknown>>;
   readonly nodeProgress: CachedMap<NodeProgress>;
   readonly catalogs: Cached<RepositoryCatalog[]>;
-  readonly faceplates: Cached<{ key: string; kind: string; units: number; width: string }[]>;
+  readonly faceplates: Cached<{ key: string; kind: string; units: number; width: string; site?: boolean }[]>;
   readonly storage: Cached<StorageDoc>;
   readonly backupRuns: Cached<BackupRunsDoc>;
   readonly moduleIcons: CachedMap<ModuleIcon | null>;
@@ -225,8 +225,8 @@ export class Reads {
       const instances = (mods.value?.modules ?? []).map((m) => ({ name: m.name, source: moduleSourceOf(cfg.configDir, m.name) }));
       return (Array.isArray(repos) ? repos : []).map((r) => repositoryCatalog(r, instances));
     }, now);
-    // The faceplate catalog: the keys a placement's faceplate may name.
-    this.faceplates = new Cached("faceplates", TTL.faceplates, () => j<{ key: string; kind: string; units: number; width: string }[]>("position-manager", ["faceplates", "list", "--json"]), now);
+    // The faceplate catalog: the keys a placement's faceplate may name, the site's own first.
+    this.faceplates = new Cached("faceplates", TTL.faceplates, () => j<{ key: string; kind: string; units: number; width: string; site?: boolean }[]>("position-manager", ["faceplates", "list", "--json"]), now);
     // The disks and pools of every node, with SMART (≈15 s on three nodes): no
     // timer of its own, read when a page asks and the answer is older than
     // its TTL.
@@ -319,7 +319,8 @@ export class Reads {
         devices: topologyDevices(t.value ?? null),
         racks: (view?.racks ?? []).map((r) => r.name).sort(),
         rooms: (view?.rooms ?? []).filter((r) => r.recorded).map((r) => r.name).sort(),
-        faceplates: (f.value ?? []).map((x) => x.key).sort(),
+        // The site's own plates first, as the list gives them, then the shipped ones.
+        faceplates: [...(f.value ?? []).filter((x) => x.site).map((x) => x.key).sort(), ...(f.value ?? []).filter((x) => !x.site).map((x) => x.key).sort()],
       };
     }
     const locations = Object.keys(((site.value?.site ?? {}) as { locations?: Record<string, unknown> }).locations ?? {}).sort();
@@ -655,7 +656,9 @@ export class Reads {
     const identity = this.identity.refresh().then(() => (this.identityRecords.peek().at !== null ? this.identityRecords.refresh() : undefined));
     // The catalogues mark what is installed: after the module list.
     const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
-    return Promise.all([identity, modules, ...[...setup, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    // A faceplate added or changed: the forms' plates follow.
+    const plates = this.faceplates.peek().at !== null ? [this.faceplates] : [];
+    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
   }
 
   private async loadStorage(): Promise<StorageDoc> {
