@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | – | 1 | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | – | 3 | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 9 | 11 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | – | 10 | 11 |
 | 6 | G6.2 User interface & physical view | H | L | – | 4 | 1 |
 | 6 | G6.3 Data model | M | M | – | 8 | 1 |
 | 5 | G5.1 Satellite & off-site | H | M | – | 1 | 6 |
@@ -240,7 +240,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 9 · open: 11
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · done for 2.3: 10 · open: 11
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -254,6 +254,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | ✅ #854 | switch-controller: a LAG member follows its lead port | M | L | **Closed 2026-10-18** (`af42829a`): UniFi takes an aggregate's VLANs from its lead port, so a non-lead member no longer reports or receives VLAN drift (hrossen's port 12 was "applied" on every reconcile without effect) |
 | ✅ #860 | switch-controller: read the switches after every sweep, so `switch-ports` is not judged on a stale read | M | L | **Closed 2026-10-19** (`659a71be`): `interrogate --no-park` reads and parks nothing, every read stamps `lastRead`; `tappaas-switch-read` runs after each real sweep (OnSuccess/OnFailure of update-tappaas, like the security scan), runs the `switch-ports` gate and mails only a finding that is new since the last read; the gate shows the read's age and warns past 26 h. On hrossen: a read in 36 s that changed nothing but `lastRead`, `--if-new-sweep` skipping without a sweep, the mail dry-run sent once and not repeated. The unit arrives with the next self-rebuild |
 | ✅ #856 | admin VPN: the peer config carries the site's DNS and routes to the DMZ gateway | M | L | **Closed 2026-10-18** (`cddd049c`): `wgvpn config` v2 adds `DNS = <mgmt gateway>` and host routes to the DMZ gateway (IPv4 and IPv6), so a published name with `admin` in its zone list is reached over the tunnel; `wgvpn list` names peers still on v1. Needed by the console (#839) |
+| ✅ #875 | IPv6 egress: a health gate, and re-learning the WAN router after an ISP change | M | M | **Done 2026-10-24** (`5a72ac01`, on `main`): found on hrossen when the ISP swapped its router and prefix and no gate noticed for a day. `ipv6-egress` gate (route, router answering, recorded router and WAN_DHCP6 in step, rtsold and prefix, a public address answering from a Service-zone guest; on the console's ISP panel); `network-manager wan ipv6-relearn --check\|--apply` (`--apply` keeps the DHCPv6 lease: no rtsold restart, no WAN reconfigure, unit-tested only); network/DESIGN.md explains why the router was lost. Fixed by hand on 10-24 with `configctl interface reconfigure wan` + the network module update |
 | #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
 | #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open). Moved from G2.1 2026-10-13: it needs #668's attachment record first |
