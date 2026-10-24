@@ -53,7 +53,7 @@ network-manager show <name>         (alias: get)
 network-manager add <name>          [options]
 network-manager delete <name>       [--check]
 network-manager enable|disable|manual <name> [--force]
-network-manager bind <zone>         --environment <env> | --unbind
+network-manager bind <zone>         --environment <env> [--add] | --unbind [--environment <env> [--own]]
 network-manager reconcile           [--apply] [--only opnsense|proxmox|switch|ap]
 network-manager topology            [--json] [--health <file> | --no-health] [--no-positions]
 network-manager init  [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
@@ -137,10 +137,14 @@ network-manager delete labNet
 A zone names its environment in one field, `environment`; the environment file
 names no zone.
 
-- A **Service** zone names the environment whose zone it is — the zone its
-  modules run in. Every environment has exactly one (the **Management** zone
-  `mgmt` is the `mgmt` environment's). `environment-manager add|modify --zone`
-  sets it for you.
+- A **Service** zone names the environment whose zone it is, as a string — its
+  **own zone**, where its modules run by default. Every environment has exactly
+  one (the **Management** zone `mgmt` is the `mgmt` environment's).
+  `environment-manager add|modify --zone` sets it for you.
+- A Service zone naming a **list** of environments (even of one) is a **shared
+  service zone**: it serves each, owns none, and derives no edge. A module of
+  any environment it lists may be installed there (`--zone0 <zone>`); see
+  [ZONES.md](ZONES.md#shared-service-zones).
 - A **Client**, **Guest** or **IoT** zone names the environment it serves, or a
   list of them when it serves several (it gets the edges of each). A
   client zone reaches its services, and an IoT zone is reached by them; writing
@@ -155,11 +159,17 @@ network-manager bind home    --environment warmelo        # home serves warmelo
 network-manager bind home    --environment lab --add      # ... and lab as well
 network-manager bind home    --unbind --environment lab   # ... no longer lab
 network-manager bind lab     --environment lab            # lab is the lab environment's zone
+network-manager bind srvWork --environment custB --add    # srvWork is shared: it serves custB too
+network-manager bind srvWork --unbind --environment custB # ... no longer custB (a list of one stays shared)
+network-manager bind srvWork --unbind --environment custA --own  # ... the last one left owns it
 network-manager bind iotCams --unbind                     # clears the link
 ```
 
-A Service zone names **one** environment; `--add` is for a zone that serves
-several. `bind` refuses an unknown environment, a second Service zone for an
+A Service zone's own environment is **one** name; `--add` makes it a shared
+service zone (the environment it was the own zone of then needs another), and a
+plain `bind` on a shared zone is refused. `--own` turns a shared zone left with
+one environment into that environment's own zone, unless it already has one.
+The Management zone is never shared. `bind` refuses an unknown environment, a second Service zone for an
 environment, and taking a Service zone away from the
 environment it belongs to (move the environment with `environment-manager modify
 <env> --zone <zone>`), and prints the edge the link derives. Like

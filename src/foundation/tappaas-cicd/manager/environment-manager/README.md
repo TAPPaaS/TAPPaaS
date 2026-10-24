@@ -41,9 +41,9 @@ environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
 
 | Verb | Behaviour |
 |------|-----------|
-| `list` | Enumerate environments. `--json` emits the full objects as a JSON array; default prints `name (zone …)` per line. |
+| `list` | Enumerate environments. `--json` emits the full objects as a JSON array; default prints `name (zone …; shared …)` per line — its own zone, then any shared service zones serving it. |
 | `show <env>` | One environment in detail (canonical pretty JSON; `--json` = compact). |
-| `validate [<file/dir>]` | The canonical schema + reference gate, implemented natively (src/validate.ts interprets `environment-fields.json` in-process — the former `validate-environment.sh` is retired). Checks full schema conformance (`additionalProperties:false`, `pattern`/`enum`/`minLength`, the `tlsCertRefid` rejection) **and** reference integrity (`network.zone` in `zones.json`, `ownerOrg` in the organizations). See "The `validate` gate" below. |
+| `validate [<file/dir>]` | The canonical schema + reference gate, implemented natively (src/validate.ts interprets `environment-fields.json` in-process — the former `validate-environment.sh` is retired). Checks full schema conformance (`additionalProperties:false`, `pattern`/`enum`/`minLength`, the `tlsCertRefid` rejection) **and** reference integrity (exactly one own zone in `zones.json`, `ownerOrg` in the organizations). See "The `validate` gate" below. |
 | `add` | Create an environment (writes validated config). With **no** positional `<env>` it **seeds the minimal set** (`mgmt` + the default `<N>`) — the bootstrap that replaced the retired `create-minimal-environments.sh`; `--name <N>` gives the system name explicitly, else it derives from `site.json '.name'` (see "The minimal-set bootstrap" below). With a positional `<env>` it creates that single env. `--owner` defaults to the first org under `identities/organizations/`; `--zone` defaults to `<env>`. |
 | `modify <env>` | Change an existing environment (preserves un-flagged fields; writes validated config). |
 
@@ -106,6 +106,14 @@ Service or Management zone names, or that two name. network-manager writes
 A client, IoT or guest zone names the environment it *serves* in the same field
 — or a list, when it serves several (`network-manager bind <zone> --environment
 <env> [--add]`); that does not make it the environment's zone.
+
+A **Service** zone naming a *list* of environments is a **shared service zone**:
+it serves each environment it lists and is the own zone of none. `show` names it
+on a `shared` row under the own `zone`, and `list` after the own zone; a module
+of the environment may be installed there with `--zone0 <zone>`, but `add` and
+`modify --zone` refuse it as the environment's zone. `validate` counts only the
+own zone, so an environment served by a shared zone alone has no zone and is
+refused. See network-manager's [ZONES.md](../network-manager/ZONES.md#shared-service-zones).
 
 ```bash
 environment-manager add acme --create-zone          # env + service zone 'acme'

@@ -28,7 +28,7 @@ Two pages complete it:
 | `snat-allowed-from` | Zones whose traffic may be masqueraded into this zone. |
 | `tier` | Trust rank 0–6 (0 = most trusted). Absent on `Overlay`/`WAN`. |
 | `isolated` | Inbound quarantine: no zone may reach it zone-wide. Default `false`. |
-| `environment` | The environment the zone belongs to: for a Service zone (and `mgmt`), the environment whose zone it is; for a Client, Guest, IoT or DMZ zone, the environment it serves ([below](#a-zone-and-its-environment-environment)). |
+| `environment` | The environment the zone belongs to: for a Service zone (and `mgmt`), the environment whose zone it is, or — as a list — the environments a shared service zone serves; for a Client, Guest, IoT or DMZ zone, the environment it serves ([below](#a-zone-and-its-environment-environment)). |
 | `DHCP-start` / `DHCP-end` | DHCP range offsets within the subnet (default 50–250). |
 | `SSID` | Optional WiFi network broadcast on this zone's VLAN ([below](#wifi-the-ssid-field)). |
 | `ipv6Subnet` | The zone's IPv6 network, 0–255: its `/64` within the site's prefix. Assigned by default; remove it to keep the zone IPv4-only ([IPV6.md](IPV6.md)). |
@@ -124,9 +124,12 @@ never edits `mgmt`. Only `mgmt` may hold `all` (I2).
 
 A zone names the environment it belongs to; the environment's own file names no zone.
 
-- A **Service** zone names the environment whose zone it is: the segment that environment's
-  modules run in. Every environment is named by exactly one Service zone — the control plane's
-  is the **Management** zone `mgmt`, which names the `mgmt` environment.
+- A **Service** zone names the environment whose zone it is, as a string: that environment's
+  **own zone**, the segment its modules run in by default. Every environment has exactly one own
+  zone — the control plane's is the **Management** zone `mgmt`, which names the `mgmt` environment.
+- A Service zone that names a **list** of environments — even a list of one — is a **shared
+  service zone**: it serves each environment it lists and is the own zone of none (see
+  [below](#shared-service-zones)).
 - A **Client** or **Guest** zone names the environment it serves — or a list, when it serves
   several — and gets each one's zone added to its `access-to`.
 - An **IoT** zone names the environment(s) whose modules drive its devices, and gets each one's
@@ -154,8 +157,8 @@ is derived from its current zone on every reconcile:
 The derived edges live in `config/zones.effective.json`, never in `zones.json`. A client zone
 that reaches several environments — a business's office zone reaching each customer's work
 environment, say — lists them: `"environment": ["custA", "custB"]`, and gets the union of their
-edges. A Service zone always names exactly one, as a string. An authored `access-to` entry is
-kept alongside: the derived edges are added to it, never replace it.
+edges. An authored `access-to` entry is kept alongside: the derived edges are added to it, never
+replace it.
 
 Set it with `network-manager bind` ([network-manager](README.md)), or for an environment's own
 zone with `environment-manager add|modify <env> --zone <zone>`:
@@ -163,13 +166,51 @@ zone with `environment-manager add|modify <env> --zone <zone>`:
 | Command | Effect |
 |---|---|
 | `bind <zone> --environment <env>` | the zone names `<env>`, **replacing** any link it had |
-| `bind <zone> --environment <env> --add` | a client, IoT, guest or DMZ zone names `<env>` **as well** |
-| `bind <zone> --unbind --environment <env>` | the zone no longer names `<env>`; the others stay |
+| `bind <zone> --environment <env> --add` | the zone names `<env>` **as well**; on a Service zone this makes it a shared service zone |
+| `bind <zone> --unbind --environment <env>` | the zone no longer names `<env>`; the others stay (a shared service zone keeps a list, even of one) |
+| `bind <zone> --unbind --environment <env> --own` | a shared service zone left with one environment becomes that environment's own zone |
 | `bind <zone> --unbind` | every link is cleared |
 
 `network-manager validate` refuses a zone naming an environment that does not exist, an
-environment named by no Service zone or by two, a list on a Service or Management zone, a list
-that is empty or repeats a name, and `environment` on an Overlay or WAN zone.
+environment with no own zone or with two, a list on the Management zone, a list that is empty or
+repeats a name, and `environment` on an Overlay or WAN zone.
+
+#### Shared service zones
+
+Some sites run several environments that each have a Service zone of their own and also share
+one: a business with a work environment per customer, each in its own zone, plus a zone of work
+services every customer environment uses. The shared zone lists them:
+
+```jsonc
+"custA":   { "type": "Service", "environment": "custA" },             // custA's own zone
+"custB":   { "type": "Service", "environment": "custB" },             // custB's own zone
+"srvWork": { "type": "Service", "environment": ["custA", "custB"] }   // shared by both
+```
+
+The form of `environment` says which role a Service zone has:
+
+| `environment` on a Service zone | the zone is | |
+|---|---|---|
+| `"custA"` | custA's own zone: its default install place and its domain | exactly one per environment |
+| `["custA", "custB"]` | a shared service zone serving custA and custB | the own zone of neither |
+| `["custA"]` | a shared service zone serving custA alone | custA still has its own zone |
+
+A shared service zone:
+
+- is a valid `--zone0` for a module of any environment it lists (`module-manager add <module>
+  --environment custA --zone0 srvWork`); its modules are named `<module>.srvWork.internal`.
+  `module-manager validate` and the install refuse it for a module of an environment it does not
+  list;
+- is never an environment's own zone: `environment-manager show` and `list` give the own zone and
+  name the shared ones apart, the default install place stays the own zone, and
+  `environment-manager add|modify --zone` refuses a shared zone;
+- derives no edge. A client zone serving custA reaches custA's own zone, not the shared one; the
+  shared zone's own `access-to` and `pinhole-allowed-from` are authored like any zone's. Adding or
+  removing a shared zone changes nothing else in the firewall graph.
+
+`bind srvWork --environment custC --add` adds an environment to it. `bind custA --environment custB
+--add` turns custA's own zone into a shared one — custA then needs another own zone
+(`environment-manager modify custA --zone <zone>`), and `validate` says so until it has one.
 
 ### Archetypes
 
