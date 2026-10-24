@@ -15,7 +15,7 @@ import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
 import { Dot, ReadState, Section, since } from "../ui";
 import { EnvironmentRow, SiteRead } from "../types";
-import { COLUMN_TITLES, PSEUDO, PublicAddress, environmentsOf, publicAddress, publicText, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
+import { COLUMN_TITLES, PSEUDO, PublicAddress, environmentsOf, isSharedService, publicAddress, publicText, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
 
 export interface ZoneRead {
   name: string;
@@ -55,8 +55,8 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
   const { edges: lines, pseudo } = zoneEdges(zones);
   const edges: GEdge[] = lines.map((e) =>
     e.kind === "access"
-      ? { source: e.source, target: e.target, color: color.get(e.source), arrow: true, ...(e.via ? { label: `serves ${e.via}` } : {}) }
-      : { source: e.source, target: e.target, color: "#f08c3a", dashed: true, arrow: true, label: e.via ? `pinhole · ${e.via}` : "pinhole" },
+      ? { source: e.source, target: e.target, color: color.get(e.source), arrow: true, ...(e.via ? { label: `serves ${e.via}` } : e.shared ? { label: `shared · ${e.shared.join(", ")}` } : {}) }
+      : { source: e.source, target: e.target, color: "#f08c3a", dashed: true, arrow: true, label: e.via ? `pinhole · ${e.via}` : e.shared ? `pinhole · shared · ${e.shared.join(", ")}` : "pinhole" },
   );
   const nodes: GNode[] = zones.map((z) => ({
     id: z.name,
@@ -88,7 +88,7 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
             <span className="cf-roles">{z.vlantag ? `vlan ${z.vlantag}` : ""}</span>
           </div>
           <div className="cf-sub">{z.type ?? "?"} · {z.state ?? "?"}{z.tier !== undefined ? ` · tier ${z.tier}` : ""}</div>
-          <div className="cf-sub">{environmentsOf(z).length ? (z.type === "Service" || z.type === "Management" ? `${environmentsOf(z)[0]}'s zone` : `serves ${environmentsOf(z).join(", ")}`) : z.ip ?? ""}</div>
+          <div className="cf-sub">{environmentsOf(z).length ? (isSharedService(z) ? `shared · serves ${environmentsOf(z).join(", ")}` : z.type === "Service" || z.type === "Management" ? `${environmentsOf(z)[0]}'s zone` : `serves ${environmentsOf(z).join(", ")}`) : z.ip ?? ""}</div>
         </div>
       ),
   }));

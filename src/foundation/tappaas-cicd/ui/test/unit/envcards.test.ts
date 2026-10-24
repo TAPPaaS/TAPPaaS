@@ -33,4 +33,30 @@ const multi = envCards(
 );
 check(multi.every((c) => c.boxes.some((b) => b.zone === "work" && b.own)) && multi.map((c) => c.zone).join() === "acme,lab",
   "a zone serving two environments is an owned box in both cards; each card's own zone is its Service zone");
+// #876: a shared service zone is a box in each card it lists, after the own
+// zone, marked with the others; it is no card's own zone, and the modules
+// installed there sit in their own environment's card.
+{
+  const erik = envCards(
+    [{ name: "gridtefy" }, { name: "acmeco" }, { name: "erik" }],
+    [
+      { name: "erik", type: "Service", environment: "erik" },
+      { name: "gridtefy", type: "Service", environment: "gridtefy" },
+      { name: "acmeco", type: "Service", environment: "acmeco" },
+      { name: "srvWork", type: "Service", environment: ["gridtefy", "acmeco"] },
+      { name: "work", type: "Client", environment: ["gridtefy", "acmeco"] },
+    ],
+    [{ name: "git-gridtefy", zone0: "srvWork", environment: "gridtefy" }, { name: "crm-acmeco", zone0: "acmeco", environment: "acmeco" }],
+    null,
+  );
+  const g = erik.find((c) => c.env.name === "gridtefy")!;
+  const a = erik.find((c) => c.env.name === "acmeco")!;
+  const tags = (c: typeof g) => c.boxes.map((b) => `${b.zone}${b.sharedWith ? `(shared with ${b.sharedWith.join(",")})` : b.own ? "" : "*"}`).join(" ");
+  check(tags(g) === "gridtefy srvWork(shared with acmeco) work" && tags(a) === "acmeco srvWork(shared with gridtefy) work",
+    `#876: own zone first, then the shared service zone marked with the others (${tags(g)} / ${tags(a)})`);
+  check(g.zone === "gridtefy" && a.zone === "acmeco" && g.boxes.find((b) => b.zone === "srvWork")!.own === false, "#876: the shared zone is neither card's own zone");
+  check(g.boxes.find((b) => b.zone === "srvWork")!.modules.map((m) => m.name).join() === "git-gridtefy" && a.boxes.find((b) => b.zone === "srvWork")!.modules.length === 0,
+    "#876: a module in the shared zone sits in its own environment's card");
+  check(!erik.find((c) => c.env.name === "erik")!.boxes.some((b) => b.zone === "srvWork"), "#876: an environment the shared zone does not list gets no box for it");
+}
 done("envcards");

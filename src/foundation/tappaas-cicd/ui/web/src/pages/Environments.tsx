@@ -127,7 +127,7 @@ function EnvCardView({ c, on, pick }: { c: Card; on: boolean; pick: () => void }
               <b>{b.zone ?? "no zone"}</b>
               <span className="muted small">
                 {b.record ? [b.record.vlantag !== undefined ? `vlan ${b.record.vlantag}` : null, b.record.type, b.record.state].filter(Boolean).join(" · ") : b.zone ? "" : "modules without a zone"}
-                {b.own ? "" : b.zone ? " · shared" : ""}
+                {b.sharedWith ? ` · ${b.sharedWith.length ? `shared with ${b.sharedWith.join(", ")}` : "shared service zone"}` : b.own ? "" : b.zone ? " · shared" : ""}
               </span>
             </div>
             <div className="zone-mods">
@@ -180,7 +180,7 @@ function EnvPanel({ c, close }: { c: Card; close: () => void }) {
         {c.boxes.filter((b) => b.zone).map((b) => (
           <li key={b.zone}>
             <Link to={`/zones?zone=${encodeURIComponent(b.zone!)}`}>{b.zone}</Link>{" "}
-            <span className="muted">{[b.record?.type, b.record?.state, b.own ? (b.zone === c.zone ? "its own zone" : "serves it") : "shared, not its own"].filter(Boolean).join(" · ")} · {b.modules.length} module{b.modules.length === 1 ? "" : "s"}</span>
+            <span className="muted">{[b.record?.type, b.record?.state, b.sharedWith ? `shared service zone${b.sharedWith.length ? `, with ${b.sharedWith.join(", ")}` : ""}` : b.own ? (b.zone === c.zone ? "its own zone" : "serves it") : "shared, not its own"].filter(Boolean).join(" · ")} · {b.modules.length} module{b.modules.length === 1 ? "" : "s"}</span>
           </li>
         ))}
       </ul>

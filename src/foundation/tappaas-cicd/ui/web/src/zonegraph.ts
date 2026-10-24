@@ -12,13 +12,17 @@ export interface ZoneLike {
   "access-to"?: string[];
   "pinhole-allowed-from"?: string[];
   // The environment(s) the zone names: a Service zone's own, or the ones a
-  // client or IoT zone serves.
+  // shared service zone or a client or IoT zone serves.
   environment?: string | string[];
 }
 
 // Every environment a zone names (one, or a list).
 export const environmentsOf = (z: { environment?: unknown }): string[] =>
   (Array.isArray(z.environment) ? z.environment : [z.environment]).filter((e): e is string => typeof e === "string" && e.length > 0);
+
+// A shared service zone: a Service zone whose `environment` is a list — it
+// serves those environments and is the own zone of none.
+export const isSharedService = (z: { type?: string; environment?: unknown }): boolean => z.type === "Service" && Array.isArray(z.environment);
 
 // Words in access-to that are not zones.
 export const PSEUDO: Record<string, string> = { internet: "the internet", all: "every zone" };
@@ -52,6 +56,8 @@ export interface ZoneEdge {
   kind: "access" | "pinhole";
   // Set on an edge the zone's environment link derives: the environment it serves.
   via?: string;
+  // Set on an edge of a shared service zone: the environments that zone serves.
+  shared?: string[];
 }
 
 // The lines and the cards for words that are not zones. `internet` becomes
@@ -87,6 +93,13 @@ export function zoneEdges(zones: ZoneLike[]): { edges: ZoneEdge[]; pseudo: strin
       if (!svc) continue;
       add(z.type === "IoT" ? { source: svc, target: z.name, kind: "pinhole", via: env } : { source: z.name, target: svc, kind: "access", via: env });
     }
+  }
+  // A shared service zone's edges carry the environments it serves, so the
+  // graph says whose they are (it derives none of its own).
+  const shared = new Map(zones.filter(isSharedService).map((z) => [z.name, environmentsOf(z)]));
+  for (const e of edges) {
+    const s = shared.get(e.source) ?? shared.get(e.target);
+    if (s) e.shared = s;
   }
   return { edges, pseudo: [...pseudo] };
 }
