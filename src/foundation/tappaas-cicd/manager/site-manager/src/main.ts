@@ -31,7 +31,7 @@ import { CliSiteClient } from "./client";
 import { cmdLocation } from "./location";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { evacuateNode, evacuateExitCode } from "./evacuate";
-import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, preflightGuard, warn } from "../../../lib/ts/src/cli";
+import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, preflightGuard, refused, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
 import { Site, SiteClient } from "./types";
@@ -52,7 +52,7 @@ export const HELP: HelpSpec = {
   verbs: [
     { usage: "site show [--json]" },
     {
-      usage: "site modify <field options>", effect: { noPreview: "writes the fields given into site.json" },
+      usage: "site modify <field options> [--check [--json]]", effect: { dryRun: "--check" },
       name: "site modify (fields; at least one)",
       // Accepted so the refusal can say why (the schema's change class); the
       // --location* spellings are the retired location's, for one release:
@@ -93,6 +93,8 @@ export const HELP: HelpSpec = {
         ["--updateFrequency <f>", "daily | weekly | monthly | none"],
         ["--updateWeekday <Day>", "Monday … Sunday (weekly/monthly only)"],
         ["--updateHour <0-23>", "hour of the update window"],
+        ["--check", "say what would change, in one line; write nothing."],
+        ["--json", "with --check: the whole resulting site.json, for machines."],
       ],
     },
     { usage: "location list [--json]", note: "(the site's places; * marks the primary one)" },
@@ -110,7 +112,8 @@ export const HELP: HelpSpec = {
         ["--latitude <deg>", "decimal degrees, north positive (read by modules that need a position)."],
         ["--longitude <deg>", "decimal degrees, east positive."],
         ["--primary", "make it the primary location: the site is here, and every node and guest takes its timezone. The site's first own location is primary without it."],
-        ["--check", "say what would change; write nothing."],
+        ["--check", "say what would change, in one line; write nothing."],
+        ["--json", "with --check: the whole resulting site.json, for machines."],
       ] },
     { usage: "location modify <name> [--displayName <s>] [--kind site|remote] [--country <CC>] [--city <c>] [--address <a>] [--timezone <tz>] [--latitude <deg>] [--longitude <deg>] [--unset <f,g>] [--check]",
       effect: { dryRun: "--check" },
@@ -124,11 +127,12 @@ export const HELP: HelpSpec = {
         ["--latitude <deg>", "decimal degrees, north positive."],
         ["--longitude <deg>", "decimal degrees, east positive."],
         ["--unset <f,g>", "clear these optional fields: displayName, kind, city, address, timezone, latitude, longitude. The country stays, and so does the primary location's timezone."],
-        ["--check", "say what would change; write nothing."],
+        ["--check", "say what would change, in one line; write nothing."],
+        ["--json", "with --check: the whole resulting site.json, for machines."],
       ] },
     { usage: "location delete <name> [--check]", effect: { dryRun: "--check" },
       note: "(refused for the primary location and for one a peer, room or device names)",
-      options: [["--check", "say whether it can go; write nothing."]] },
+      options: [["--check", "say whether it can go, in one line; write nothing."], ["--json", "with --check: the whole resulting site.json, for machines."]] },
     { usage: "node list [--json]", note: "(the cluster's nodes: their pvehost instances, with their storage pools)" },
     { usage: "node add <N> [--pxe] [--boot-disk <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--storage-pools <a,b>] [--ttl <s>] [--config-only] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it, adds it to the cluster and registers it as a pvehost instance" },
       hidden: ["--name <N>", "--provision", "--pool <p>"],
@@ -461,13 +465,22 @@ function cmdSite(o: Opts): void {
   if (sub === "modify") {
     const raw = loadRaw(siteFile);
     if (Object.keys(raw).length === 0) die(`site.json not found: ${siteFile}`);
+    // --check: the change in one line, or "[refused] <why>" (cli.ts refused).
+    const check = o.boolFlags.has("--check");
+    const no = check ? refused : die;
     // A field whose change class is not in-place is refused before anything
     // is written, with the schema's reason.
     for (const field of ["name", "version", "defaultEnvironment"]) {
       if (!o.flags.has(`--${field}`) && !o.boolFlags.has(`--${field}`)) continue;
-      die(`site modify: --${field} is refused — ${refusedField(siteSchema(o.schemaDir), field) ?? "not changed by site modify"}`);
+      no(`site modify: --${field} is refused — ${refusedField(siteSchema(o.schemaDir), field) ?? "not changed by site modify"}`);
     }
     let changed = 0;
+    const changes: string[] = []; // "<path>=<value>", in the order given
+    const put = (path: string[], v: unknown): void => {
+      setDeep(raw, path, v);
+      changes.push(`${path.join(".")}=${typeof v === "string" ? v : JSON.stringify(v)}`);
+      changed++;
+    };
     // The approved editable surface: scalar site-wide fields, mapped to schema
     // paths. The repositories list is NOT modifiable here — it has its own
     // CRUD (repository …); the nodes are their pvehost instances (node …).
@@ -476,48 +489,42 @@ function cmdSite(o: Opts): void {
     const setStr = (flag: string, path: string[]): void => {
       const v = o.flags.get(flag);
       if (v === undefined) return;
-      setDeep(raw, path, v);
-      changed++;
+      put(path, v);
     };
     const setBool = (flag: string, path: string[]): void => {
       const v = o.flags.get(flag);
       if (v === undefined) return;
-      if (v !== "true" && v !== "false") die(`${flag} must be true|false`);
-      setDeep(raw, path, v === "true");
-      changed++;
+      if (v !== "true" && v !== "false") no(`${flag} must be true|false`);
+      put(path, v === "true");
     };
     const setInt = (flag: string, path: string[]): void => {
       const v = o.flags.get(flag);
       if (v === undefined) return;
       const n = parseInt(v, 10);
-      if (!Number.isInteger(n)) die(`${flag} must be an integer`);
-      setDeep(raw, path, n);
-      changed++;
+      if (!Number.isInteger(n)) no(`${flag} must be an integer`);
+      put(path, n);
     };
     // A coordinate is not an integer: 55.6761 is the point of it (#408).
     const setNum = (flag: string, path: string[], min: number, max: number): void => {
       const v = o.flags.get(flag);
       if (v === undefined) return;
       const n = Number(v);
-      if (!Number.isFinite(n)) die(`${flag} must be a number, in decimal degrees`);
-      if (n < min || n > max) die(`${flag} must be between ${min} and ${max}`);
-      setDeep(raw, path, n);
-      changed++;
+      if (!Number.isFinite(n)) no(`${flag} must be a number, in decimal degrees`);
+      if (n < min || n > max) no(`${flag} must be between ${min} and ${max}`);
+      put(path, n);
     };
 
     // A comma list; '' is the empty list.
     const setList = (flag: string, path: string[]): void => {
       const v = o.flags.get(flag) ?? (o.boolFlags.has(flag) ? "" : undefined);
       if (v === undefined) return;
-      setDeep(raw, path, v.split(",").map((x) => x.trim()).filter(Boolean));
-      changed++;
+      put(path, v.split(",").map((x) => x.trim()).filter(Boolean));
     };
     const setRange = (flag: string, path: string[], min: number, max: number): void => {
       const v = o.flags.get(flag);
       if (v === undefined) return;
-      if (!/^\d+$/.test(v) || Number(v) < min || Number(v) > max) die(`${flag} must be an integer ${max === Infinity ? `of ${min} or more` : `${min}-${max}`}`);
-      setDeep(raw, path, Number(v));
-      changed++;
+      if (!/^\d+$/.test(v) || Number(v) < min || Number(v) > max) no(`${flag} must be an integer ${max === Infinity ? `of ${min} or more` : `${min}-${max}`}`);
+      put(path, Number(v));
     };
 
     // ── channel (ADR-028 D9) ───────────────────────────────────────────
@@ -556,7 +563,7 @@ function cmdSite(o: Opts): void {
       const v = o.flags.get("--channel");
       if (v === undefined) return;
       if (!CHANNELS.includes(v as typeof CHANNELS[number])) {
-        die(`--channel must be one of: ${CHANNELS.join(" | ")}`);
+        no(`--channel must be one of: ${CHANNELS.join(" | ")}`);
       }
       const from = typeof raw.channel === "string" ? raw.channel : undefined;
       // "Towards production" means towards OLDER code. ADR-025 migrations are
@@ -569,13 +576,12 @@ function cmdSite(o: Opts): void {
           + `Config migrations (ADR-025) do not run backwards, so a migration this site has `
           + `already applied cannot be undone by switching channel.`;
         if (!forced) {
-          die(`${msg}\n       Re-run with --force if that is what you mean.`);
+          no(`${msg}\n       Re-run with --force if that is what you mean.`);
         }
         warn(msg);
         warn(`--force given: setting the channel anyway.`);
       }
-      setDeep(raw, ["channel"], v);
-      changed++;
+      put(["channel"], v);
       // The branch is not changed here — repository modify owns it — but a
       // disagreement is worth saying at the moment it is created.
       // EVERY registered repository, not just TAPPaaS (ADR-028 D11): the channel
@@ -635,9 +641,9 @@ function cmdSite(o: Opts): void {
     const primaryFlag = o.flags.get("--primaryLocation");
     if (primaryFlag !== undefined) {
       const { locations } = readLocations(raw);
-      if (legacy) die("site modify: --primaryLocation needs the locations migration 0019 makes first (it runs with the next update)");
-      if (!locations[primaryFlag]) die(`site modify: --primaryLocation '${primaryFlag}' is not one of the site's locations (site-manager location list)`);
-      if (!locations[primaryFlag].timezone) die(`site modify: '${primaryFlag}' records no timezone, and the primary location's is the site's: site-manager location modify ${primaryFlag} --timezone <tz>`);
+      if (legacy) no("site modify: --primaryLocation needs the locations migration 0019 makes first (it runs with the next update)");
+      if (!locations[primaryFlag]) no(`site modify: --primaryLocation '${primaryFlag}' is not one of the site's locations (site-manager location list)`);
+      if (!locations[primaryFlag].timezone) no(`site modify: '${primaryFlag}' records no timezone, and the primary location's is the site's: site-manager location modify ${primaryFlag} --timezone <tz>`);
     }
     setStr("--primaryLocation", ["primaryLocation"]);
     setStr("--locale", legacy ? ["location", "locale"] : ["locale"]);
@@ -677,31 +683,35 @@ function cmdSite(o: Opts): void {
       let h: number | undefined = cur.hour ?? 2;
       if (freq !== undefined) {
         const FREQS = ["daily", "weekly", "monthly", "none"];
-        if (!FREQS.includes(freq)) die(`--updateFrequency must be one of: ${FREQS.join(", ")}`);
+        if (!FREQS.includes(freq)) no(`--updateFrequency must be one of: ${FREQS.join(", ")}`);
         f = freq;
       }
       if (wday !== undefined) {
         const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
-        if (!DAYS.includes(wday)) die(`--updateWeekday must be one of: ${DAYS.join(", ")}`);
+        if (!DAYS.includes(wday)) no(`--updateWeekday must be one of: ${DAYS.join(", ")}`);
         d = wday;
       }
       if (hour !== undefined) {
         const n = parseInt(hour, 10);
-        if (!Number.isInteger(n) || n < 0 || n > 23) die("--updateHour must be an integer 0-23");
+        if (!Number.isInteger(n) || n < 0 || n > 23) no("--updateHour must be an integer 0-23");
         h = n;
       }
       // daily/none run every day / never — a weekday would be meaningless.
       if (f === "daily" || f === "none") d = null;
-      else if (d == null || d === "") die(`--updateWeekday is required for a '${f}' schedule`);
+      else if (d == null || d === "") no(`--updateWeekday is required for a '${f}' schedule`);
       // Written in the object form, always: a modify that put the triple back
       // on a migrated site would undo 0003, which the ledger says is done.
-      setDeep(raw, ["updateSchedule"], writeSchedule(f, d, h));
-      changed++;
+      put(["updateSchedule"], writeSchedule(f, d, h));
     }
 
-    if (changed === 0) die("site modify: no recognised --<field> given (see --help)");
+    if (changed === 0) no("site modify: no recognised --<field> given (see --help)");
+    const what = `site: ${changes.join(", ")}; site.json otherwise unchanged`;
+    if (check) {
+      info(o.json ? JSON.stringify(raw, null, 2) : `[check] would modify ${what}`);
+      return;
+    }
     writeSite(siteFile, raw);
-    info(`${GN}✓${CL} site.json updated (${changed} field(s)) — run 'validate' to confirm`);
+    info(`${GN}✓${CL} modified ${what} — run 'validate' to confirm`);
     // ADR-017 D2: a new schedule takes effect now — re-render the timer. Only
     // for the site's own config, never for a --config-dir copy.
     if ((freq !== undefined || wday !== undefined || hour !== undefined) && o.configDir === defaultConfigDir()) {

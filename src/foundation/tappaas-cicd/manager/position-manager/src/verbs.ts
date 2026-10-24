@@ -47,7 +47,23 @@ import {
   parsePortSpec,
 } from "../../../lib/ts/src/positions";
 
-export type Result = { doc: PositionsDoc; summary: string } | { refused: string };
+// A change: the new document and what it does in one line, as an act and its
+// object ("add", "room 'stue' at hareskov"): the dry run says "would add …",
+// the apply "added …" (changeLine).
+export type Act = "add" | "modify" | "delete" | "remove" | "place" | "record" | "split" | "join";
+export type Change = { doc: PositionsDoc; act: Act; what: string };
+export type Result = Change | { refused: string };
+
+const PAST: Record<Act, string> = { add: "added", modify: "modified", delete: "deleted", remove: "removed", place: "placed", record: "recorded", split: "split", join: "joined" };
+
+export function changeLine(c: { act: Act; what: string }, check: boolean): string {
+  return check ? `would ${c.act} ${c.what}` : `${PAST[c.act]} ${c.what}`;
+}
+
+// The fields a modify sets, and that nothing else in the file moves.
+const setText = (sets: Array<[string, string]>): string => `${sets.map(([k, v]) => (v === "" ? `${k} unset` : `${k}=${v}`)).join(", ")}; positions.json otherwise unchanged`;
+// Where a room is: its location, else the site's primary one.
+const roomAt = (doc: PositionsDoc, room: string, primary: string | null | undefined): string | null => roomsOf(doc)[room]?.location ?? primary ?? null;
 
 const clone = (d: PositionsDoc): PositionsDoc => JSON.parse(JSON.stringify(d ?? {}));
 type Doc = Required<Pick<PositionsDoc, "racks" | "placements" | "cables" | "devices" | "rooms" | "faceplates">>;
@@ -102,7 +118,7 @@ export function addRack(doc: PositionsDoc, name: string, spec: RackSpec): Result
   if (!NUMBERINGS.includes(numbering)) return { refused: `--numbering is one of ${NUMBERINGS.join(", ")}` };
   const rack: Rack = { units: spec.units ?? 42, width, numbering };
   for (const k of ["displayName", "room", "description"] as const) if (spec[k]) rack[k] = spec[k];
-  return { doc: withDoc(doc, (d) => void (d.racks[name] = rack)), summary: `rack ${name} added (${rack.units}U, ${width}, numbered ${numbering})` };
+  return { doc: withDoc(doc, (d) => void (d.racks[name] = rack)), act: "add", what: `rack '${name}' (${rack.units}U, ${width}, numbered ${numbering}${rack.room ? `, in room ${rack.room}` : ""})` };
 }
 
 const RACK_FIELDS = ["displayName", "units", "width", "numbering", "room", "description"];
@@ -135,7 +151,7 @@ export function modifyRack(doc: PositionsDoc, name: string, sets: Array<[string,
     }
   });
   if (refused) return { refused };
-  return { doc: next, summary: `rack ${name}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
+  return { doc: next, act: "modify", what: `rack '${name}': ${setText(sets)}` };
 }
 
 // rack delete — only an empty rack: its devices are moved or unplaced first.
@@ -143,7 +159,7 @@ export function deleteRack(doc: PositionsDoc, name: string): Result {
   if (!racksOf(doc)[name]) return { refused: `rack ${name} does not exist` };
   const held = Object.entries(placementsOf(doc)).filter(([, m]) => m.rack === name).map(([d]) => d);
   if (held.length) return { refused: `rack ${name} still holds ${held.join(", ")} — move them (place modify <device> --set rack=…) or unplace them first` };
-  return { doc: withDoc(doc, (d) => void delete d.racks[name]), summary: `rack ${name} deleted` };
+  return { doc: withDoc(doc, (d) => void delete d.racks[name]), act: "delete", what: `rack '${name}'` };
 }
 
 // ── mounts ────────────────────────────────────────────────────────────
@@ -163,7 +179,7 @@ export interface PlaceSpec {
 
 // place — a device into a rack at its units, or loose into a room. The
 // height defaults to its faceplate's.
-export function placeDevice(doc: PositionsDoc, device: string, spec: PlaceSpec, catalog: Faceplate[]): Result {
+export function placeDevice(doc: PositionsDoc, device: string, spec: PlaceSpec, catalog: Faceplate[], primary?: string | null): Result {
   if (!device.trim()) return { refused: "place <device>: the device's topology name" };
   if (placementsOf(doc)[device]) return { refused: `${device} is already placed in ${placeWhere(placementsOf(doc)[device])} — place modify ${device} to move it` };
   if (spec.room !== undefined) {
@@ -174,7 +190,7 @@ export function placeDevice(doc: PositionsDoc, device: string, spec: PlaceSpec, 
     if (spec.faceplate && !fp) return { refused: `faceplate ${spec.faceplate} is not in the catalog (faceplates list)` };
     const m: Placement = { room: spec.room };
     for (const k of ["faceplate", "label", "description"] as const) if (spec[k]) m[k] = spec[k];
-    return { doc: withDoc(doc, (d) => void (d.placements[device] = m)), summary: `${device} stands loose in room ${spec.room}` };
+    return { doc: withDoc(doc, (d) => void (d.placements[device] = m)), act: "place", what: `'${device}' loose in room ${spec.room}${roomAt(doc, spec.room, primary) ? ` (location ${roomAt(doc, spec.room, primary)})` : ""}` };
   }
   if (spec.rack === undefined || spec.u === undefined) return { refused: "place <device> --rack <rack> --u <n>, or --room <room> for a device loose in a room" };
   if (!racksOf(doc)[spec.rack]) return { refused: `rack ${spec.rack} does not exist (rack add ${spec.rack})` };
@@ -189,7 +205,8 @@ export function placeDevice(doc: PositionsDoc, device: string, spec: PlaceSpec, 
   for (const k of ["faceplate", "label", "description"] as const) if (spec[k]) m[k] = spec[k];
   return {
     doc: withDoc(doc, (d) => void (d.placements[device] = m)),
-    summary: `${device} mounted in ${m.rack} at U${m.u}${heightOf(m) > 1 ? `-U${(m.u ?? 0) + heightOf(m) - 1}` : ""}, ${m.face}${width === "full" ? "" : `, ${width} width slot ${m.slot}`}`,
+    act: "place",
+    what: `'${device}' in ${m.rack} at U${m.u}${heightOf(m) > 1 ? `-U${(m.u ?? 0) + heightOf(m) - 1}` : ""}, ${m.face}${width === "full" ? "" : `, ${width} width slot ${m.slot}`}`,
   };
 }
 
@@ -255,21 +272,23 @@ export function modifyPlacement(doc: PositionsDoc, device: string, sets: Array<[
   const nm = next.placements![device];
   if (nm.rack && nm.u === undefined) return { refused: `into rack ${nm.rack}: give its unit too (--set u=<n>)` };
   if (!nm.rack && (["u", "height", "width", "slot", "face"] as const).some((x) => nm[x] !== undefined)) return { refused: "a device loose in a room has no unit, height, width, slot or face: move it into a rack first (--set rack=<rack> --set u=<n>)" };
-  return { doc: next, summary: `placement ${device}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
+  return { doc: next, act: "modify", what: `placement of '${device}': ${setText(sets)}` };
 }
 
 // unplace — the device leaves its rack or room (the device itself is untouched).
 // The recorded cables that name it go with it only when it is passive
 // (nothing else knows it); a topology device keeps its recorded cables.
 export function unplaceDevice(doc: PositionsDoc, device: string, passive: boolean): Result {
-  if (!placementsOf(doc)[device]) return { refused: `${device} is placed nowhere` };
+  const was = placementsOf(doc)[device];
+  if (!was) return { refused: `${device} is placed nowhere` };
   const dropped = passive ? cablesOf(doc).filter((c) => c.from.device === device || c.to.device === device).length : 0;
   return {
     doc: withDoc(doc, (d) => {
       delete d.placements[device];
       if (passive) d.cables = d.cables.filter((c) => c.from.device !== device && c.to.device !== device);
     }),
-    summary: `${device} unplaced${dropped ? ` (and its ${dropped} recorded cable(s))` : ""}`,
+    act: "remove",
+    what: `placement of '${device}' from ${was.rack ? `${was.rack} U${was.u}` : `room ${was.room}`}${dropped ? ` (and its ${dropped} recorded cable(s))` : ""}`,
   };
 }
 
@@ -282,7 +301,7 @@ export function addCable(doc: PositionsDoc, from: CableEnd, to: CableEnd, kind: 
   const taken = cablesOf(doc).find((c) => [c.from, c.to].some((e) => [from, to].some((x) => same(e, x))));
   if (taken) return { refused: `${endText(taken.from)} — ${endText(taken.to)} already uses one of these ports: remove it first` };
   const c: Cable = { from, to, kind: kind as CableKind, ...(label ? { label } : {}) };
-  return { doc: withDoc(doc, (d) => void d.cables.push(c)), summary: `cable ${endText(from)} — ${endText(to)} (${kind}) recorded` };
+  return { doc: withDoc(doc, (d) => void d.cables.push(c)), act: "record", what: `cable ${endText(from)} — ${endText(to)} (${kind})` };
 }
 
 // cable remove <device:port> — the recorded cable on that port (a patch
@@ -291,7 +310,7 @@ export function removeCable(doc: PositionsDoc, end: CableEnd): Result {
   const on = (e: CableEnd) => e.device === end.device && e.port === end.port && (!isPanel(doc, e.device) || (e.side ?? "front") === (end.side ?? "front"));
   const c = cablesOf(doc).find((x) => on(x.from) || on(x.to));
   if (!c) return { refused: `no recorded cable on ${endText(end)} (a cable the topology sees is not recorded here)` };
-  return { doc: withDoc(doc, (d) => void (d.cables = d.cables.filter((x) => x !== d.cables.find((y) => on(y.from) || on(y.to))))), summary: `cable ${endText(c.from)} — ${endText(c.to)} removed` };
+  return { doc: withDoc(doc, (d) => void (d.cables = d.cables.filter((x) => x !== d.cables.find((y) => on(y.from) || on(y.to))))), act: "remove", what: `cable ${endText(c.from)} — ${endText(c.to)}` };
 }
 
 // ── recorded devices ──────────────────────────────────────────────────
@@ -337,7 +356,7 @@ export function addDevice(doc: PositionsDoc, name: string, spec: DeviceSpec, cat
   if (spec.location) d.location = spec.location;
   if (spec.mac) d.mac = spec.mac;
   const n = recordedPortsCount(d, catalog);
-  return { doc: withDoc(doc, (x) => void (x.devices[name] = d)), summary: `device ${name} recorded (${d.kind}${d.model ? `, ${d.model}` : ""}, ${n} port(s))` };
+  return { doc: withDoc(doc, (x) => void (x.devices[name] = d)), act: "add", what: `device '${name}' (${d.kind}${d.model ? `, ${d.model}` : ""}, ${n} port(s)${d.location ? `, at ${d.location}` : ""})` };
 }
 
 function recordedPortsCount(d: RecordedDevice, catalog: Faceplate[]): number {
@@ -381,7 +400,7 @@ export function modifyDevice(doc: PositionsDoc, name: string, sets: Array<[strin
     }
   });
   if (refused) return { refused };
-  return { doc: next, summary: `device ${name}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
+  return { doc: next, act: "modify", what: `device '${name}': ${setText(sets)}` };
 }
 
 export interface RecordSpec {
@@ -419,7 +438,8 @@ export function recordSeen(doc: PositionsDoc, seen: SeenDevice, spec: RecordSpec
   const cable: Cable = { from: { device: seen.switch, port: seen.port }, to: { device: spec.name, port }, kind: "patch" };
   return {
     doc: withDoc(added.doc, (d) => void d.cables.push(cable)),
-    summary: `${spec.name} recorded (${spec.kind}${seen.mac ? `, ${seen.mac}` : ""}) on ${seen.switch}:${seen.port}, its cable to port ${port} kept`,
+    act: "record",
+    what: `device '${spec.name}' (${spec.kind}${seen.mac ? `, ${seen.mac}` : ""}) seen on ${seen.switch}:${seen.port}, with its cable to port ${port}`,
   };
 }
 
@@ -431,20 +451,20 @@ export function removeDevice(doc: PositionsDoc, name: string): Result {
   const cables = cablesOf(doc).filter((c) => c.from.device === name || c.to.device === name);
   const e = cables[0]?.from.device === name ? cables[0].from : cables[0]?.to;
   if (cables.length) return { refused: `${name} is an end of ${cables.length} recorded cable(s) — cable remove '${e.device}:${e.port}' first` };
-  return { doc: withDoc(doc, (d) => void delete d.devices[name]), summary: `device ${name} removed` };
+  return { doc: withDoc(doc, (d) => void delete d.devices[name]), act: "remove", what: `device '${name}'` };
 }
 
 // ── rooms ─────────────────────────────────────────────────────────────
 
 const ROOM_FIELDS = ["displayName", "description", "location"];
 
-export function addRoom(doc: PositionsDoc, name: string, spec: Room): Result {
+export function addRoom(doc: PositionsDoc, name: string, spec: Room, primary?: string | null): Result {
   if (!ROOM_NAME_RE.test(name)) return { refused: `room name '${name}' must match ${ROOM_NAME_RE.source}` };
   if (roomsOf(doc)[name]) return { refused: `room ${name} already exists` };
   const r: Room = {};
   for (const k of ROOM_FIELDS as (keyof Room)[]) if (spec[k]) r[k] = spec[k];
   const named = Object.entries(racksOf(doc)).filter(([, x]) => x.room === name).map(([n]) => n);
-  return { doc: withDoc(doc, (d) => void (d.rooms[name] = r)), summary: `room ${name} recorded${named.length ? ` (it holds ${named.join(", ")}, which named it already)` : ""}` };
+  return { doc: withDoc(doc, (d) => void (d.rooms[name] = r)), act: "add", what: `room '${name}'${r.location ?? primary ? ` at ${r.location ?? primary}` : ""}${named.length ? ` (it holds ${named.join(", ")}, which named it already)` : ""}` };
 }
 
 export function modifyRoom(doc: PositionsDoc, name: string, sets: Array<[string, string]>): Result {
@@ -460,7 +480,7 @@ export function modifyRoom(doc: PositionsDoc, name: string, sets: Array<[string,
     }
   });
   if (refused) return { refused };
-  return { doc: next, summary: `room ${name}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
+  return { doc: next, act: "modify", what: `room '${name}': ${setText(sets)}` };
 }
 
 // room delete — only an empty room: no rack names it, nothing stands loose in it.
@@ -469,7 +489,7 @@ export function deleteRoom(doc: PositionsDoc, name: string): Result {
   const racks = Object.entries(racksOf(doc)).filter(([, r]) => r.room === name).map(([n]) => n);
   const loose = Object.entries(placementsOf(doc)).filter(([, m]) => !m.rack && m.room === name).map(([n]) => n);
   if (racks.length || loose.length) return { refused: `room ${name} still holds ${[...racks.map((r) => `rack ${r}`), ...loose].join(", ")} — move them first` };
-  return { doc: withDoc(doc, (d) => void delete d.rooms[name]), summary: `room ${name} deleted` };
+  return { doc: withDoc(doc, (d) => void delete d.rooms[name]), act: "delete", what: `room '${name}'` };
 }
 
 // ── segments: a link split at a patch panel ───────────────────────────
@@ -503,7 +523,8 @@ export function splitCable(doc: PositionsDoc, end: CableEnd, via: CableEnd, seen
       if (rec) d.cables = d.cables.filter((c) => !(sameEnd(c.from, rec.from) && sameEnd(c.to, rec.to)));
       d.cables.push(a, b);
     }),
-    summary: `${end.device}:${end.port} — ${far.device}:${far.port} now runs through ${via.device} port ${via.port} (front ← ${end.device}, rear → ${far.device})`,
+    act: "split",
+    what: `${end.device}:${end.port} — ${far.device}:${far.port} at ${via.device} port ${via.port} (front ← ${end.device}, rear → ${far.device})`,
   };
 }
 
@@ -533,7 +554,8 @@ export function joinCable(doc: PositionsDoc, end: CableEnd): Result {
       d.cables = d.cables.filter((c) => c !== d.cables.find((z) => z.from.device === f.from.device && z.from.port === f.from.port && z.to.device === f.to.device && z.to.port === f.to.port) && c !== d.cables.find((z) => z.from.device === r.from.device && z.from.port === r.from.port && z.to.device === r.to.device && z.to.port === r.to.port));
       if (keep) d.cables.push(joined);
     }),
-    summary: `${endText(x)} — ${endText(y)} no longer runs through ${panelEnd.device} port ${panelEnd.port}${keep ? " (recorded as one cable)" : " (the topology's link again)"}`,
+    act: "join",
+    what: `${endText(x)} — ${endText(y)} at ${panelEnd.device} port ${panelEnd.port}${keep ? " (recorded as one cable)" : " (the topology's link again)"}`,
   };
 }
 
@@ -578,7 +600,7 @@ export function addFaceplate(doc: PositionsDoc, key: string, spec: FaceplateSpec
   const bad = faceplateProblem(f);
   if (bad) return { refused: `faceplate ${key}: ${bad}` };
   const shipped = catalog.some((x) => x.key === key && !x.site);
-  return { doc: withDoc(doc, (d) => void (d.faceplates[key] = f)), summary: `faceplate ${key} added to the site's catalog${shipped ? " — it replaces the shipped plate of that key" : ""}` };
+  return { doc: withDoc(doc, (d) => void (d.faceplates[key] = f)), act: "add", what: `faceplate '${key}' to the site's catalog (${f.units}U ${f.width}, ${f.ports})${shipped ? ", in place of the shipped plate of that key" : ""}` };
 }
 
 export function modifyFaceplate(doc: PositionsDoc, key: string, sets: Array<[string, string]>): Result {
@@ -611,7 +633,7 @@ export function modifyFaceplate(doc: PositionsDoc, key: string, sets: Array<[str
     if (bad) refused = `faceplate ${key}: ${bad}`;
   });
   if (refused) return { refused };
-  return { doc: next, summary: `faceplate ${key}: ${sets.map(([k, v]) => `${k}=${v}`).join(", ")}` };
+  return { doc: next, act: "modify", what: `faceplate '${key}': ${setText(sets)}` };
 }
 
 // faceplate delete — only a plate nothing uses; one that replaced a shipped
@@ -627,5 +649,5 @@ export function deleteFaceplate(doc: PositionsDoc, key: string, catalog: Facepla
     ];
     if (users.length) return { refused: `faceplate ${key} is used by ${users.join(", ")} — give them another plate first` };
   }
-  return { doc: withDoc(doc, (d) => void delete d.faceplates[key]), summary: `faceplate ${key} deleted from the site's catalog${shipped ? " — the shipped plate of that key is drawn again" : ""}` };
+  return { doc: withDoc(doc, (d) => void delete d.faceplates[key]), act: "delete", what: `faceplate '${key}' from the site's catalog${shipped ? " (the shipped plate of that key is drawn again)" : ""}` };
 }

@@ -8,7 +8,7 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { addCable, placeDevice, addRack, deleteRack, modifyPlacement, modifyRack, removeCable, unplaceDevice } from "../../src/verbs";
+import { Change, addCable, addDevice, addRoom, changeLine, deleteRoom, placeDevice, addRack, deleteRack, modifyPlacement, modifyRack, modifyRoom, removeCable, unplaceDevice } from "../../src/verbs";
 import { CatalogPort, Faceplate, PositionsDoc, TopoLike, checkPositions, columnSpan, parseEnd, resolvePositions, seenCables, siteDevices, suggestFaceplate, unitAtRow } from "../../../../lib/ts/src/positions";
 
 let passed = 0;
@@ -160,6 +160,31 @@ const sw = resolvePositions(withSw.doc, catalog, t);
 const plate = sw.racks[0].placements.find((m) => m.device === USW)!.plate!;
 check(plate.rows[0][2]!.id === "5" && plate.rows[0][2]!.zones.includes("wan") && plate.rows[1][5]!.lag === "crs-uplink", "the UniFi plate's ports carry the switch's live state");
 check(unitAtRow({ units: 42, numbering: "bottom-up" }, 0) === 42 && unitAtRow({ units: 42, numbering: "top-down" }, 0) === 1, "the top row is U42 bottom-up, U1 top-down");
+
+console.log("— the one line a change is said in (--check, and the apply's report)");
+{
+  const said = (r: unknown, check: boolean): string => (ok(r) ? changeLine(r as Change, check) : `refused: ${(r as { refused: string }).refused}`);
+  const room = addRoom({}, "stue", { location: "knudanchersvej95" });
+  check(said(room, true) === "would add room 'stue' at knudanchersvej95", "room add: would add room 'stue' at <location>");
+  check(said(room, false) === "added room 'stue' at knudanchersvej95", "…and the apply says it done, the same line");
+  check(said(addRoom({}, "basement", {}, "hareskov"), true) === "would add room 'basement' at hareskov", "a room with no location of its own is at the primary");
+  let p: PositionsDoc = (addRoom({}, "basement", { location: "knudanchersvej95" }) as Change).doc;
+  p = (addDevice(p, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, null) as Change).doc;
+  const loose = placeDevice(p, "ISP modem", { room: "basement" }, catalog, "hareskov");
+  check(said(loose, true) === "would place 'ISP modem' loose in room basement (location knudanchersvej95)", "place loose: the room and its location");
+  p = (addRack(p, "rack1", { room: "basement" }) as Change).doc;
+  const racked = placeDevice(p, "crs-b", { rack: "rack1", u: 25 }, catalog);
+  check(said(racked, true) === "would place 'crs-b' in rack1 at U25, front", "place in a rack: the rack and its unit");
+  p = (racked as Change).doc;
+  check(said(unplaceDevice(p, "crs-b", false), true) === "would remove placement of 'crs-b' from rack1 U25", "unplace: would remove placement of 'crs-b' from rack1 U25");
+  check(said(unplaceDevice(p, "crs-b", false), false) === "removed placement of 'crs-b' from rack1 U25", "…and removed it, when applied");
+  check(said(modifyRoom(p, "basement", [["displayName", "Kælder"], ["description", ""]]), true) === "would modify room 'basement': displayName=Kælder, description unset; positions.json otherwise unchanged", "a modify names the fields it sets and unsets, nothing else");
+  check(said(modifyRack(p, "rack1", [["units", "24"]]), false) === "modified rack 'rack1': units=24; positions.json otherwise unchanged", "rack modify, applied");
+  check(said(deleteRoom(p, "basement"), true) === "refused: room basement still holds rack rack1 — move them first", "a refusal says why, in one line");
+  check(said(addCable(p, { device: "crs-b", port: "1" }, { device: "ISP modem", port: "WAN" }, "uplink"), true) === "would record cable crs-b:1 — ISP modem:WAN (uplink)", "cable add: would record cable …");
+  check(said(removeCable({ ...p, cables: [{ from: { device: "crs-b", port: "1" }, to: { device: "ISP modem", port: "WAN" }, kind: "patch" }] }, { device: "crs-b", port: "1" }), true) === "would remove cable crs-b:1 — ISP modem:WAN", "cable remove: would remove cable …");
+  check(!said(loose, true).includes("{") && said(loose, true).split("\n").length === 1, "never the document: one line");
+}
 
 console.log(`\nposition-manager verbs: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

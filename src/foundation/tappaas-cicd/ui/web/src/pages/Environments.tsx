@@ -199,7 +199,7 @@ function EnvPanel({ c, close }: { c: Card; close: () => void }) {
           <div className="toolbar">
             <OperateButton label="Modify…" title={`Modify ${e.name}`} steps={() => [fieldsStep({ title: `The fields of ${e.name}`, bin: "environment-manager", verb: "modify", fixed: [e.name], kind: "environment", name: e.name, mode: "modify", note: "Writes the record only; the reconcile below makes it live." }), env(`environment-manager reconcile ${e.name}`, "reconcile", { fixed: [e.name] })]} />
             <OperateButton label="Reconcile" title={`Reconcile ${e.name}`} steps={[env(`environment-manager reconcile ${e.name}`, "reconcile", { fixed: [e.name] })]} />
-            <OperateButton label="Delete…" kind="danger" title={`Delete ${e.name}`} steps={[env(`environment-manager delete ${e.name}`, "delete", { fixed: [e.name], note: "Deleting needs its name typed after the preview." })]} />
+            <OperateButton label="Delete…" kind="danger" title={`Delete ${e.name}`} steps={[env(`environment-manager delete ${e.name}`, "delete", { fixed: [e.name], note: "Deleting needs its name typed before Apply." })]} />
           </div>
         </>
       ) : null}

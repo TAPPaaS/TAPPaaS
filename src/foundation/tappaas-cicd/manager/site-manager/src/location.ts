@@ -2,9 +2,12 @@
 //
 // The site's places, in site.json `locations{}`. The edits are lib/ts
 // locations.ts's, which backup-manager's `peer add` uses too; this file is the
-// verbs around them: reading the flags, the --check preview, the output.
+// verbs around them: reading the flags, the --check preview, the output. The
+// preview and the apply say the change in the same one line ("would modify
+// location 'hareskov': …" / "modified location 'hareskov': …"); a refusal is
+// one "[refused] …" line; --check --json prints the whole resulting site.json.
 
-import { GN, CL, die, info } from "../../../lib/ts/src/cli";
+import { GN, CL, DieError, die, info, refused } from "../../../lib/ts/src/cli";
 import {
   Location, LocationFields, LocationKind, addLocation, deleteLocation, locationNamers, modifyLocation,
   placeText, readLocations,
@@ -24,7 +27,7 @@ const TEXT_FLAGS: Array<[string, keyof LocationFields]> = [
 ];
 
 // The fields given, and (modify) the ones given as '' or by --unset.
-function fieldsOf(o: LocationOpts): { set: LocationFields; unset: string[] } {
+function fieldsOf(o: LocationOpts, no: (m: string) => never): { set: LocationFields; unset: string[] } {
   const set: LocationFields = {};
   const unset = (o.flags.get("--unset") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
   for (const [flag, key] of TEXT_FLAGS) {
@@ -44,7 +47,7 @@ function fieldsOf(o: LocationOpts): { set: LocationFields; unset: string[] } {
       continue;
     }
     const n = Number(v);
-    if (!Number.isFinite(n)) die(`${flag} must be a number, in decimal degrees`);
+    if (!Number.isFinite(n)) no(`${flag} must be a number, in decimal degrees`);
     set[key] = n;
   }
   return { set, unset };
@@ -103,31 +106,55 @@ export function cmdLocation(o: LocationOpts, siteFile: string): void {
   }
 
   const check = o.boolFlags.has("--check");
+  const no = check ? refused : die;
   const doc = JSON.parse(JSON.stringify(raw)) as Record<string, unknown>;
-  let what: string;
-  try {
+  const said = locationChange(sub, name, () => {
     if (sub === "add") {
-      const { set } = fieldsOf(o);
+      const { set } = fieldsOf(o, no);
       addLocation(doc, name, set, o.boolFlags.has("--primary"));
-      what = `add location '${name}' (${placeText({ ...set, country: set.country ?? "" })})${doc.primaryLocation === name && primary !== name ? " as the primary location" : ""}`;
-    } else if (sub === "modify") {
-      const { set, unset } = fieldsOf(o);
-      if (Object.keys(set).length === 0 && unset.length === 0) die("location modify: give at least one field (see --help)");
-      modifyLocation(doc, name, set, unset);
-      what = `modify location '${name}': ${[...Object.entries(set).map(([k, v]) => `${k}=${String(v)}`), ...unset.map((u) => `${u} unset`)].join(", ")}`;
-    } else if (sub === "delete") {
-      deleteLocation(doc, name, o.configDir);
-      what = `delete location '${name}'`;
-    } else {
-      die(`location ${sub}: unknown subcommand (expected list | show | add | modify | delete)`);
+      return { set, primary: doc.primaryLocation === name && primary !== name };
     }
-  } catch (e) {
-    die(`location ${sub}: ${(e as Error).message}`);
-  }
+    if (sub === "modify") {
+      const { set, unset } = fieldsOf(o, no);
+      if (Object.keys(set).length === 0 && unset.length === 0) no("location modify: give at least one field (see --help)");
+      modifyLocation(doc, name, set, unset);
+      return { set, unset };
+    }
+    if (sub === "delete") {
+      deleteLocation(doc, name, o.configDir);
+      return {};
+    }
+    return die(`location ${sub}: unknown subcommand (expected list | show | add | modify | delete)`);
+  }, no);
   if (check) {
-    info(`[check] would ${what}; site.json is unchanged`);
+    info(o.json ? JSON.stringify(doc, null, 2) : `[check] ${said.check}`);
     return;
   }
   writeSite(siteFile, doc);
-  info(`${GN}✓${CL} site.json: ${what} — run 'validate' to confirm`);
+  info(`${GN}✓${CL} ${said.done} — run 'validate' to confirm`);
+}
+
+// What a location verb does, in one line for the dry run and one for the
+// apply. edit makes the change on a copy of site.json; its refusal (a
+// thrown Error) is "location <sub>: <why>".
+export function locationChange(
+  sub: string,
+  name: string,
+  edit: () => { set?: LocationFields; unset?: string[]; primary?: boolean },
+  no: (m: string) => never,
+): { check: string; done: string } {
+  let r: ReturnType<typeof edit>;
+  try {
+    r = edit();
+  } catch (e) {
+    if (e instanceof DieError) throw e;
+    return no(`location ${sub}: ${(e as Error).message}`);
+  }
+  const fields = [...Object.entries(r.set ?? {}).map(([k, v]) => `${k}=${String(v)}`), ...(r.unset ?? []).map((u) => `${u} unset`)].join(", ");
+  const what =
+    sub === "add" ? `location '${name}' (${placeText({ ...(r.set ?? {}), country: r.set?.country ?? "" })})${r.primary ? " as the primary location" : ""}`
+    : sub === "modify" ? `location '${name}': ${fields}; site.json otherwise unchanged`
+    : `location '${name}'`;
+  const past: Record<string, string> = { add: "added", modify: "modified", delete: "deleted" };
+  return { check: `would ${sub} ${what}`, done: `${past[sub] ?? sub} ${what}` };
 }

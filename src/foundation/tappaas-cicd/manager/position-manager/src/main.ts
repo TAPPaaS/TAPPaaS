@@ -10,7 +10,9 @@
 //
 // Every changing verb: lock → change → validate the WHOLE resulting file →
 // write atomically. A verb that fails validation writes nothing. --check
-// prints the result instead. Nothing here touches a device.
+// says in one line what the verb would change ("[check] would add room 'stue'
+// at hareskov"), or "[refused] <why>" and exit 1; --check --json prints the
+// whole resulting document instead. Nothing here touches a device.
 //
 // rack-manager is its old name: the package links it beside position-manager
 // for one release (ADR-035 P2), and it answers the same verbs.
@@ -52,11 +54,12 @@ import {
   withSiteFaceplates,
 } from "../../../lib/ts/src/positions";
 import { Store, loadCatalog, readDevices } from "./store";
-import { Result, addFaceplate, deleteFaceplate, modifyFaceplate, addCable, addDevice, recordSeen, placeDevice, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyPlacement, modifyRack, modifyRoom, removeCable, removeDevice, unplaceDevice, splitCable } from "./verbs";
+import { Result, changeLine, addFaceplate, deleteFaceplate, modifyFaceplate, addCable, addDevice, recordSeen, placeDevice, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyPlacement, modifyRack, modifyRoom, removeCable, removeDevice, unplaceDevice, splitCable } from "./verbs";
 
 const VERSION = "0.2.0";
 
-const CHECK: [string, string] = ["--check", "Show the result; change nothing."];
+const CHECK: [string, string] = ["--check", "Say what would change, in one line; change nothing."];
+const CHECK_JSON: [string, string] = ["--json", "With --check: the whole resulting positions.json, for machines."];
 const TOPO: [string, string] = ["--topology F", "A `network-manager topology --json` document to check against, instead of running it."];
 const JSON_OUT: [string, string] = ["--json", "As JSON."];
 
@@ -77,26 +80,26 @@ export const HELP: HelpSpec = {
         ["--display-name T", "The name shown on its frame."],
         ["--room T", "The room it stands in (a room record's name; text until the room is recorded)."],
         ["--description T", "What it is for."],
-        CHECK,
+        CHECK, CHECK_JSON,
       ],
     },
     {
       usage: "rack modify <rack> [--set <field>=<value>]... [--unset <field>]... [--check]",
-      options: [["--set F=V", "displayName, units, width, numbering, room, description (repeatable)."], ["--unset F", "Clear a text field: displayName, room, description (repeatable)."], CHECK],
+      options: [["--set F=V", "displayName, units, width, numbering, room, description (repeatable)."], ["--unset F", "Clear a text field: displayName, room, description (repeatable)."], CHECK, CHECK_JSON],
     },
-    { usage: "rack delete <rack> [--check]", options: [CHECK], note: "(an empty rack only)" },
+    { usage: "rack delete <rack> [--check]", options: [CHECK, CHECK_JSON], note: "(an empty rack only)" },
     { usage: "room list [--json]", options: [JSON_OUT], note: "(the rooms, their racks and the devices loose in them)" },
     { usage: "room show <room> [--json]", options: [JSON_OUT], object: { positional: "room" } },
     {
       usage: "room add <room> [--location <location>] [--display-name <text>] [--description <text>] [--check]",
-      options: [["--location L", "The location it is in (site-manager location list); unset, the primary location."], ["--display-name T", "The name shown."], ["--description T", "What it is."], CHECK],
+      options: [["--location L", "The location it is in (site-manager location list); unset, the primary location."], ["--display-name T", "The name shown."], ["--description T", "What it is."], CHECK, CHECK_JSON],
     },
     {
       usage: "room modify <room> [--set <field>=<value>]... [--unset <field>]... [--check]",
-      options: [["--set F=V", "displayName, description, location (repeatable)."], ["--unset F", "Clear one of them; location back to the primary (repeatable)."], CHECK],
+      options: [["--set F=V", "displayName, description, location (repeatable)."], ["--unset F", "Clear one of them; location back to the primary (repeatable)."], CHECK, CHECK_JSON],
       object: { positional: "room" },
     },
-    { usage: "room delete <room> [--check]", options: [CHECK], note: "(an empty room only)", object: { positional: "room" } },
+    { usage: "room delete <room> [--check]", options: [CHECK, CHECK_JSON], note: "(an empty room only)", object: { positional: "room" } },
     { usage: "place list [--rack <rack>] [--json]", options: [["--rack R", "Only this rack's."], JSON_OUT], aliases: ["mount list"] },
     { usage: "place show <device> [--json]", options: [JSON_OUT], aliases: ["mount show"] },
     {
@@ -114,18 +117,18 @@ export const HELP: HelpSpec = {
         ["--label T", "The label on the device."],
         ["--description T", "A note on where it stands."],
         TOPO,
-        CHECK,
+        CHECK, CHECK_JSON,
       ],
       aliases: ["mount add"],
       object: { positional: "device" },
     },
     {
       usage: "place modify <device> [--set <field>=<value>]... [--unset <field>]... [--topology <file>] [--check]",
-      options: [["--set F=V", "rack, u, room, height, width, slot, face, faceplate, label, description (repeatable). A move is rack and u, or room (loose in it)."], ["--unset F", "Clear faceplate (back to the catalog's suggestion), label or description (repeatable)."], TOPO, CHECK],
+      options: [["--set F=V", "rack, u, room, height, width, slot, face, faceplate, label, description (repeatable). A move is rack and u, or room (loose in it)."], ["--unset F", "Clear faceplate (back to the catalog's suggestion), label or description (repeatable)."], TOPO, CHECK, CHECK_JSON],
       aliases: ["mount modify"],
       object: { positional: "device" },
     },
-    { usage: "unplace <device> [--check]", options: [CHECK], note: "(the device leaves its rack or room; nothing else changes)", aliases: ["mount remove"], destructive: true, object: { positional: "device" } },
+    { usage: "unplace <device> [--check]", options: [CHECK, CHECK_JSON], note: "(the device leaves its rack or room; nothing else changes)", aliases: ["mount remove"], destructive: true, object: { positional: "device" } },
     { usage: "cable list [--json]", options: [JSON_OUT], note: "(the recorded cables; the topology adds the ones it sees)" },
     {
       usage: "cable add --from <device:port> --to <device:port> [--kind patch|uplink|power] [--label <text>] [--from-faceplate <vendor/model>] [--to-faceplate <vendor/model>] [--from-side front|rear] [--to-side front|rear] [--topology <file>] [--check]",
@@ -139,10 +142,10 @@ export const HELP: HelpSpec = {
         ["--from-side S", "A patch panel's port: front (default) or rear."],
         ["--to-side S", "The same, for the other end."],
         TOPO,
-        CHECK,
+        CHECK, CHECK_JSON,
       ],
     },
-    { usage: "cable remove <device:port> [--side front|rear] [--check]", options: [["--side S", "On a patch panel's port: the front (default) or the rear cable."], CHECK], object: { positional: "device:port" } },
+    { usage: "cable remove <device:port> [--side front|rear] [--check]", options: [["--side S", "On a patch panel's port: the front (default) or the rear cable."], CHECK, CHECK_JSON], object: { positional: "device:port" } },
     { usage: "device list [--json]", options: [JSON_OUT], note: "(the recorded devices: what the topology cannot see)" },
     { usage: "device show <device> [--json]", options: [JSON_OUT], object: { positional: "device" } },
     {
@@ -156,15 +159,15 @@ export const HELP: HelpSpec = {
         ["--display-name T", "The name shown."],
         ["--description T", "What it is, where it comes from."],
         TOPO,
-        CHECK,
+        CHECK, CHECK_JSON,
       ],
     },
     {
       usage: "device modify <device> [--set <field>=<value>]... [--unset <field>]... [--check]",
-      options: [["--set F=V", "kind, model, ports (a count or a comma-separated list), displayName, description, location, mac (repeatable)."], ["--unset F", "Clear model, ports, displayName, description, location (back to the primary) or mac (repeatable)."], CHECK],
+      options: [["--set F=V", "kind, model, ports (a count or a comma-separated list), displayName, description, location, mac (repeatable)."], ["--unset F", "Clear model, ports, displayName, description, location (back to the primary) or mac (repeatable)."], CHECK, CHECK_JSON],
       object: { positional: "device" },
     },
-    { usage: "device remove <device> [--check]", options: [CHECK], note: "(only once it is unplaced and no recorded cable names it)", object: { positional: "device" } },
+    { usage: "device remove <device> [--check]", options: [CHECK, CHECK_JSON], note: "(only once it is unplaced and no recorded cable names it)", object: { positional: "device" } },
     {
       usage: "device record <port-or-mac> --name <device> --kind modem|ont|ups|patch-panel|other [--port <name>] [--model <vendor/model>] [--location <location>] [--display-name <text>] [--description <text>] [--topology <file>] [--check]",
       options: [
@@ -176,18 +179,18 @@ export const HELP: HelpSpec = {
         ["--display-name T", "The name shown (default: what LLDP or the lease calls it)."],
         ["--description T", "What it is."],
         TOPO,
-        CHECK,
+        CHECK, CHECK_JSON,
       ],
       object: { positional: "port-or-mac" },
       note: "(<switch>:<port> or the MAC it is seen by: a device a switch port sees and nobody recorded, recorded with the port's cable)",
     },
     {
       usage: "cable split <device:port> --via <panel:port> [--topology <file>] [--check]",
-      options: [["--via P:N", "The patch panel port the link runs through: the device's port to its front, its rear to the far end."], TOPO, CHECK],
+      options: [["--via P:N", "The patch panel port the link runs through: the device's port to its front, its rear to the far end."], TOPO, CHECK, CHECK_JSON],
       object: { positional: "device:port" },
       note: "(the link on that port, seen or recorded, becomes two recorded segments)",
     },
-    { usage: "cable join <device:port> [--check]", options: [CHECK], object: { positional: "device:port" }, note: "(undo a split: a panel port, or a device end of one of its segments)" },
+    { usage: "cable join <device:port> [--check]", options: [CHECK, CHECK_JSON], object: { positional: "device:port" }, note: "(undo a split: a panel port, or a device end of one of its segments)" },
     { usage: "faceplates list [--json]", options: [JSON_OUT], note: "(the shipped catalog and the site's own plates, marked site)" },
     {
       usage: "faceplates show <vendor/model> [--device <name>] [--topology <file>] [--file] [--json]",
@@ -205,15 +208,15 @@ export const HELP: HelpSpec = {
         ["--vendor T", "The vendor as drawn (default: the key's)."],
         ["--display-name T", "The model as drawn (default: the key's)."],
         ["--description T", "What it is."],
-        CHECK,
+        CHECK, CHECK_JSON,
       ],
       note: "(a plate the shipped catalog lacks, in config/positions.json; a shipped key is replaced by the site's plate)",
     },
     {
       usage: "faceplate modify <vendor/model> [--set <field>=<value>]... [--unset <field>]... [--check]",
-      options: [["--set F=V", "units, width, ports, kind, passive, match (a comma list), vendor, displayName, description (repeatable)."], ["--unset F", "Clear match, vendor, displayName or description (repeatable)."], CHECK],
+      options: [["--set F=V", "units, width, ports, kind, passive, match (a comma list), vendor, displayName, description (repeatable)."], ["--unset F", "Clear match, vendor, displayName or description (repeatable)."], CHECK, CHECK_JSON],
     },
-    { usage: "faceplate delete <vendor/model> [--check]", options: [CHECK], note: "(a site plate nothing uses; one that replaced a shipped plate gives way to it)" },
+    { usage: "faceplate delete <vendor/model> [--check]", options: [CHECK, CHECK_JSON], note: "(a site plate nothing uses; one that replaced a shipped plate gives way to it)" },
     { usage: "export --json", effect: "read", options: [["--json", "The document and the whole catalog, for network-manager topology."]] },
   ],
   notes: [
@@ -307,19 +310,28 @@ function change(store: Store, check: boolean, devices: SiteDevice[] | null | und
   if (!check && store.legacy) die(`${store.legacy} is still there: migration 0020 makes it config/positions.json (the next update, or scripts/run-migrations.sh) — nothing was changed`);
   return store.withLock(() => {
     const r = fn(store.load());
-    if ("refused" in r) die(r.refused);
+    if ("refused" in r) return check ? refuse(r.refused) : die(r.refused);
     const findings = checkPositions(r.doc, readShipped(), devices ?? null, siteLocs(store.configDir)).filter((f) => devices !== undefined || !f.message.startsWith("the topology could not be read"));
-    const errors = report(findings.filter((f) => f.severity === "error" || !check));
-    if (errors) die("config/positions.json would not be valid — nothing was changed");
     if (check) {
-      info(`[check] ${r.summary}`);
-      info(JSON.stringify(r.doc, null, 2));
+      // One line: what it would do, or why not (the file's errors, not its warnings).
+      const errors = findings.filter((f) => f.severity === "error");
+      if (errors.length) return refuse(`config/positions.json would not be valid: ${errors.map((f) => f.message).join("; ")}`);
+      if (quiet) return out(r.doc);
+      info(`[check] ${changeLine(r, true)}`);
       return 0;
     }
+    if (report(findings)) die("config/positions.json would not be valid — nothing was changed");
     store.save(r.doc);
-    info(`${GN}✓${CL} ${r.summary}`);
+    info(`${GN}✓${CL} ${changeLine(r, false)}`);
     return 0;
   });
+}
+
+// A dry run's refusal: one line (under --json, {refused}), exit 1.
+function refuse(why: string): number {
+  if (quiet) console.log(JSON.stringify({ refused: why }, null, 2));
+  else info(`[refused] ${why}`);
+  return 1;
 }
 
 // The site's locations (site.json): what a room's or a device's location may
@@ -594,7 +606,8 @@ export function run(argv: string[]): number {
   if (verb === "room add") {
     const [name] = positional(args, 2);
     if (!name) die("room add <room>");
-    return change(store, check, undefined, (d) => addRoom(d, name, { location: opt(args, "--location"), displayName: opt(args, "--display-name"), description: opt(args, "--description") }));
+    const primary = siteLocs(store.configDir)?.primary ?? null;
+    return change(store, check, undefined, (d) => addRoom(d, name, { location: opt(args, "--location"), displayName: opt(args, "--display-name"), description: opt(args, "--description") }, primary));
   }
   if (verb === "room modify") {
     const [name] = positional(args, 2);
@@ -668,6 +681,7 @@ export function run(argv: string[]): number {
     const u = intOpt(args, "--u") ?? (room ? undefined : die("--u is required"));
     const catalog = readCatalog(store);
     const rec = devicesOf(store.load())[device];
+    const primary = siteLocs(store.configDir)?.primary ?? null;
     return change(store, check, devicesFor(args), (d) =>
       placeDevice(d, device, {
         rack,
@@ -681,7 +695,7 @@ export function run(argv: string[]): number {
         faceplate: opt(args, "--faceplate"),
         label: opt(args, "--label"),
         description: opt(args, "--description"),
-      }, catalog),
+      }, catalog, primary),
     );
   }
   if (verb === "place modify") {

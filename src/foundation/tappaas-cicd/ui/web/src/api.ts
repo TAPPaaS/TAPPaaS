@@ -133,6 +133,8 @@ export interface CardRef {
 }
 export const previewJob = (argv: string[], from?: CardRef) => post<Job>("jobs", { argv, preview: true, ...(from ? { assistant: from } : {}) });
 export const readJob = (argv: string[], from?: CardRef) => post<Job>("jobs", { argv, ...(from ? { assistant: from } : {}) });
+// Apply without a preview click: one job that runs the dry run, then the apply on a clean one.
+export const applyNowJob = (argv: string[], confirm?: string) => post<Job>("jobs", { argv, apply: true, ...(confirm ? { confirm } : {}) });
 export const applyJob = (previewId: string, confirm?: string) => post<Job>(`jobs/${encodeURIComponent(previewId)}/apply`, confirm ? { confirm } : {});
 
 // A job as it runs: its output streamed (server-sent events), then its end.

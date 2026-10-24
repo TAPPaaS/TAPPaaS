@@ -10,6 +10,8 @@
 //            the modify pre-gate); a verb with no dry run gets a preview that
 //            runs nothing and says what the verb touches
 //   apply    only from a finished preview of the same argv, within the hour;
+//            or straight from the form (createApply): the job runs the dry run
+//            first and goes on to apply only on a clean one, both in its record;
 //            a destructive call needs the object's name typed and Installer
 //   read     a verb that changes nothing (module test, node network show):
 //            runs at once, beside the queue
@@ -61,6 +63,10 @@ export interface Job {
   output: string;
   truncated: boolean;
   refused: string | null;
+  // An apply asked without a preview of its own (createApply): the dry run it
+  // ran first, the length of the output that is the dry run's, and why it
+  // stopped there when it did (the apply then never ran). Absent otherwise.
+  previewPhase?: { ran: string[]; exit: number | null; durationMs: number | null; outputLength: number; stopped: string | null };
   // The console stopped (a restart) while this job ran or waited: cut off, no
   // exit code. Set when the records are read back; absent otherwise.
   interrupted?: boolean;
@@ -119,6 +125,8 @@ export interface JobsConfig {
 export interface CreateRequest {
   argv: unknown;
   preview?: unknown;
+  apply?: unknown; // true: the dry run, then the apply on a clean one (createApply)
+  confirm?: unknown; // with apply: the typed name of a destructive call
   assistant?: unknown; // {conversation, proposal}: the card this came from
 }
 
@@ -431,8 +439,9 @@ export class Jobs {
       });
       return { status: 201, job };
     }
+    if (req.apply === true) return this.createApply(me, setup, v, card, req.confirm);
     if (req.preview !== true) {
-      return { status: 409, error: "a change is previewed first (ADR-034 T3): POST /jobs {argv, preview: true}, then POST /jobs/<id>/apply" };
+      return { status: 409, error: "a change is previewed first (ADR-034 T3): POST /jobs {argv, preview: true}, then POST /jobs/<id>/apply; or {argv, apply: true}, which runs the preview first" };
     }
     const job = this.newJob(me, v, "preview", previewArgv(v), null, card);
     this.add(job);
@@ -489,6 +498,27 @@ export class Jobs {
       return { status: 400, error: `a destructive verb: type '${v.object}' to confirm${v.objectLabel !== v.object ? ` (${v.objectLabel})` : ""}` };
     }
     const job = this.newJob(me, v, "apply", applyArgv(v), p.id, p.assistant ?? null);
+    this.add(job);
+    const s = await this.refuseForSweep(job);
+    if (s) return { status: 409, job, error: job.refused ?? "", sweep: s };
+    this.enqueue(job);
+    return { status: 201, job };
+  }
+
+  // POST /jobs {argv, apply: true}: Apply without a separate preview click. The
+  // job runs the verb's dry run first and, when it exits clean and reports no
+  // refusal, the apply in the same job (one hold of the runner: nothing runs
+  // between them). A verb with no dry run applies at once, as after its
+  // preview. The typed name and Installer are checked before anything runs.
+  private async createApply(me: Me, setup: SetupState, v: Validated, card: Job["assistant"], confirm: unknown): Promise<CreateResult> {
+    const w = mayWrite(me, setup, v.destructive);
+    if (!w.ok) return { status: w.status, error: w.reason };
+    if (v.destructive && confirm !== v.object && confirm !== v.objectLabel) {
+      return { status: 400, error: `a destructive verb: type '${v.object}' to confirm${v.objectLabel !== v.object ? ` (${v.objectLabel})` : ""}` };
+    }
+    const job = this.newJob(me, v, "apply", applyArgv(v), null, card);
+    const pre = previewArgv(v);
+    if (pre) job.previewPhase = { ran: pre, exit: null, durationMs: null, outputLength: 0, stopped: null };
     this.add(job);
     const s = await this.refuseForSweep(job);
     if (s) return { status: 409, job, error: job.refused ?? "", sweep: s };
@@ -567,25 +597,35 @@ export class Jobs {
   }
 
   private async execute(job: JobSummary): Promise<void> {
-    const argv = job.ran ?? [];
     const t0 = this.now();
     job.state = "running";
     job.started = new Date(t0).toISOString();
     this.record(job); // the running record: a job the console stops on is visible as cut off
     this.emit(job, { type: "state", job: summary(job) });
+    const out = { written: 0, tail: "" }; // the output so far (capped) and its end, for onDone
+    const pp = job.previewPhase;
+    if (pp) {
+      this.cfg.log?.(`job ${job.id} preview by ${job.who.user ?? "?"} (${job.who.via}): ${pp.ran.join(" ")}`);
+      const r = await this.stream(job, pp.ran, out);
+      const t = this.now();
+      pp.exit = r.rc;
+      pp.durationMs = t - t0;
+      pp.outputLength = out.written;
+      pp.stopped = previewStop(r.ran, r.rc, out.tail);
+      if (pp.stopped) {
+        Object.assign(job, { state: "done", exit: r.rc, ended: new Date(t).toISOString(), durationMs: t - t0 });
+        this.record(job);
+        this.emit(job, { type: "end", job: summary(job) });
+        this.cfg.onDone?.(job, r.ran ? out.tail.replace(/\s+$/, "") : "");
+        return;
+      }
+      this.record(job);
+      this.emit(job, { type: "state", job: summary(job) });
+      out.tail = "";
+    }
+    const argv = job.ran ?? [];
     this.cfg.log?.(`job ${job.id} ${job.kind} by ${job.who.user ?? "?"} (${job.who.via}): ${argv.join(" ")}`);
-    let written = 0;
-    let tail = ""; // the end of the output, for onDone
-    const r = await this.cfg.stream(argv[0], argv.slice(1), (chunk) => {
-      tail = (tail + chunk).slice(-4096);
-      if (written < MAX_OUTPUT) {
-        const part = chunk.slice(0, MAX_OUTPUT - written);
-        written += part.length;
-        this.appendOutput(job.id, part);
-        this.emit(job, { type: "output", chunk: part });
-      } else job.truncated = true;
-    });
-    if (!r.ran) this.appendOutput(job.id, `\n[console] could not run ${argv[0]}: ${r.error ?? "not found"}\n`);
+    const r = await this.stream(job, argv, out);
     const t1 = this.now();
     job.state = "done";
     job.exit = r.rc;
@@ -594,8 +634,37 @@ export class Jobs {
     this.record(job);
     this.emit(job, { type: "end", job: summary(job) });
     if (job.kind === "apply") this.cfg.onWriteDone?.(job);
-    this.cfg.onDone?.(job, r.ran ? tail.replace(/\s+$/, "") : "");
+    this.cfg.onDone?.(job, r.ran ? out.tail.replace(/\s+$/, "") : "");
   }
+
+  // One command of a job, its output appended to the job's log (capped at
+  // MAX_OUTPUT over the whole job).
+  private async stream(job: JobSummary, argv: string[], out: { written: number; tail: string }): Promise<{ rc: number; ran: boolean }> {
+    const r = await this.cfg.stream(argv[0], argv.slice(1), (chunk) => {
+      out.tail = (out.tail + chunk).slice(-4096);
+      if (out.written < MAX_OUTPUT) {
+        const part = chunk.slice(0, MAX_OUTPUT - out.written);
+        out.written += part.length;
+        this.appendOutput(job.id, part);
+        this.emit(job, { type: "output", chunk: part });
+      } else job.truncated = true;
+    });
+    if (!r.ran) {
+      const note = `\n[console] could not run ${argv[0]}: ${r.error ?? "not found"}\n`;
+      out.written += note.length;
+      this.appendOutput(job.id, note);
+    }
+    return { rc: r.rc, ran: r.ran };
+  }
+}
+
+// Why a dry run stops the apply that follows it: it did not run, it failed,
+// or it refused the change (a "[refused] …" line, even with exit 0). null: go on.
+export function previewStop(ran: boolean, rc: number, output: string): string | null {
+  if (!ran) return "the dry run could not run";
+  if (rc !== 0) return `the dry run refuses this change (exit ${rc}): nothing applied`;
+  const m = /^\[refused\]\s*(.*)$/m.exec(output);
+  return m ? `the dry run refuses this change${m[1] ? `: ${m[1]}` : ""}: nothing applied` : null;
 }
 
 function alive(pid: number): boolean {

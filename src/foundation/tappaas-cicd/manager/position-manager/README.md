@@ -120,7 +120,9 @@ which carries the positions resolved against the site.
 names of `place`, `place modify`, `unplace`, `place list` and `place show`; they answer
 for one release.
 
-Every changing verb takes `--check` (show the result, change nothing), locks, checks the
+Every changing verb takes `--check` (one line of what it would change — `[check] would add
+room 'stue' at hareskov` — or `[refused] <why>` and exit 1; `--check --json` prints the whole
+resulting document; the apply reports the same line, done), locks, checks the
 whole resulting document and writes it atomically; a change that would leave it invalid
 writes nothing. The verbs that name a device read the topology (`network-manager topology
 --json --no-health --no-positions`) unless `--topology <file>` hands one in; when it cannot be

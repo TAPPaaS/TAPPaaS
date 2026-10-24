@@ -271,7 +271,7 @@ function Locations({ primary, rows }: { primary: string | null; rows: (Loc & { n
                   <td className="toolbar">
                     <OperateButton label="Modify…" title={`Modify location ${l.name}`} steps={() => [loc("modify", l.name, `site-manager location modify ${l.name}`, l.name === primary ? "The primary location: its timezone is the site's, and the next update sets every node and guest to it." : "Its place: what an off-site copy kept there is compared with.")]} />
                     {l.name !== primary ? (
-                      <OperateButton label="Delete…" kind="danger" title={`Delete location ${l.name}`} steps={[sm(`site-manager location delete ${l.name}`, "location delete", { fixed: [l.name], note: "Refused while a backup peer, room or device names it. Deleting needs its name typed after the preview." })]} />
+                      <OperateButton label="Delete…" kind="danger" title={`Delete location ${l.name}`} steps={[sm(`site-manager location delete ${l.name}`, "location delete", { fixed: [l.name], note: "Refused while a backup peer, room or device names it. Deleting needs its name typed before Apply." })]} />
                     ) : null}
                   </td>
                 </tr>

@@ -244,7 +244,10 @@ Anything else that is somewhere names a location — a backup peer today — and
 address from here. A location's name is how they name it, so it never changes: add the new
 one, point them at it, delete the old one. `location delete` refuses the primary location
 and any location something names, and says what does. `--check` on `add`, `modify` and
-`delete` says what would change and writes nothing. `validate` reports a `primaryLocation`
+`delete` (and on `site modify`) says in one line what would change and writes nothing —
+`[check] would modify location 'hareskov': displayName=Rasmus; site.json otherwise
+unchanged` — or `[refused] <why>` with exit 1; `--check --json` prints the whole resulting
+site.json. The apply reports the same line, done ("modified location 'hareskov': …"). `validate` reports a `primaryLocation`
 that names no location or has no timezone, and anything naming a location the site does
 not have.
 

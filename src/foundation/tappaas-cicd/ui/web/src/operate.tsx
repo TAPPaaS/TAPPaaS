@@ -1,17 +1,19 @@
 // operate.tsx — the one way the console changes the site (ADR-034 D4, spike
 // §5.4): Change → Preview → Apply → Result. The form is built from the verb's
 // manifest (its positionals and declared options), the command block is exactly
-// what will run and can be copied, the preview is the manager's own dry run,
-// Apply is enabled by the preview, a disruption (--force, --allow-disruption,
+// what will run and can be copied, the preview is the manager's own dry run.
+// Apply needs no preview click: it runs the dry run first in the same job and
+// goes on only on a clean one (a refusal stops it there, its output shown as a
+// preview's); after a preview of its own, Apply applies that. A disruption (--force, --allow-disruption,
 // --yes) is a checkbox that names its consequence, and a destructive verb needs
 // the object's name typed and the Installer role. A flow of several steps
 // (update-port, then reconcile) runs them in order.
 
 import { ReactNode, createContext, useEffect, useMemo, useState } from "react";
-import { applyJob, previewJob, readJob, reloadAll, useJob, useRead, useVerb } from "./api";
-import { ArgvStep, Values, buildArgv, formParts, prefillValues } from "./argv";
+import { applyJob, applyNowJob, previewJob, readJob, reloadAll, useJob, useRead, useVerb } from "./api";
+import { ArgvStep, Values, buildArgv, confirmObject, formParts, prefillValues } from "./argv";
 import { useOpenedBy } from "./opener";
-import { Command, Output, jobResult } from "./jobs";
+import { Command, Output, jobResult, phaseOutputs } from "./jobs";
 import { Job, ManifestVerb, Me } from "./types";
 import { Link, Tag, canOperate, useMe } from "./ui";
 
@@ -158,16 +160,39 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
 function JobView({ id, label }: { id: string; label: string }) {
   const job = useJob(id);
   if (!job) return <p className="muted">starting {label}…</p>;
+  return <JobPart job={job} label={label} state={jobResult(job)} level={job.state === "refused" ? "fail" : job.state !== "done" ? "skip" : job.exit === 0 ? "pass" : "warn"} ms={job.durationMs} text={job.output} live={job.state === "running" || job.state === "queued"} />;
+}
+
+function JobPart({ job, label, state, level, ms, text, live }: { job: Job; label: string; state: string; level: string; ms: number | null; text: string; live: boolean }) {
   return (
     <div className="jobview">
       <p>
-        <Tag level={job.state === "refused" ? "fail" : job.state !== "done" ? "skip" : job.exit === 0 ? "pass" : "warn"} /> {label}: {jobResult(job)}
-        {job.durationMs !== null ? <span className="muted"> · {Math.round(job.durationMs / 100) / 10} s</span> : null}
+        <Tag level={level} /> {label}: {state}
+        {ms !== null ? <span className="muted"> · {Math.round(ms / 100) / 10} s</span> : null}
         <span className="muted"> · job {job.id}</span>
       </p>
       {job.refused ? <p className="readstate readstate-fail">{job.refused}</p> : null}
-      <Output text={job.output} live={job.state === "running" || job.state === "queued"} />
+      <Output text={text} live={live} />
     </div>
+  );
+}
+
+// An Apply that ran its own dry run first: the dry run shown as a preview is,
+// then (when it was clean) the apply.
+function TwoPhaseView({ job }: { job: Job }) {
+  const pp = job.previewPhase!;
+  const out = phaseOutputs(job);
+  const inPreview = pp.exit === null;
+  const pState = job.state === "queued" ? "queued" : job.state === "refused" ? "refused" : inPreview ? "running…" : pp.exit === 0 && !pp.stopped ? "ok" : pp.stopped && pp.exit === 0 ? "refused" : `exit ${pp.exit}`;
+  const pLevel = job.state === "refused" ? "fail" : inPreview ? "skip" : pp.stopped ? "warn" : "pass";
+  return (
+    <>
+      <JobPart job={job} label="preview" state={pState} level={pLevel} ms={pp.durationMs} text={out.preview ?? ""} live={inPreview && job.state !== "refused" && job.state !== "done"} />
+      {pp.stopped ? <p className="readstate readstate-warn">{pp.stopped[0].toUpperCase() + pp.stopped.slice(1)}.</p> : null}
+      {!inPreview && !pp.stopped ? (
+        <JobPart job={{ ...job, refused: null }} label="apply" state={jobResult(job)} level={job.state !== "done" ? "skip" : job.exit === 0 ? "pass" : "warn"} ms={job.durationMs !== null && pp.durationMs !== null ? job.durationMs - pp.durationMs : null} text={out.apply} live={job.state === "running"} />
+      ) : null}
+    </>
   );
 }
 
@@ -184,10 +209,22 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
   const previewJob_ = useJob(preview?.id ?? null);
   const appliedJob = useJob(applied);
   const stale = preview !== null && preview.argv !== JSON.stringify(argv);
+  // An Apply whose own dry run refused the change: nothing was applied, the
+  // form is open again as after a refusing preview.
+  const stopped = !!appliedJob?.previewPhase?.stopped;
+  const inApply = appliedJob !== null && (!appliedJob.previewPhase || (appliedJob.previewPhase.exit !== null && !stopped));
 
   useEffect(() => {
-    if (appliedJob && appliedJob.state === "done") onDone(appliedJob.exit === 0);
+    if (appliedJob && appliedJob.state === "done") onDone(appliedJob.exit === 0 && !stopped);
   }, [appliedJob?.state, appliedJob?.exit]);
+  // The apply has started (past its dry run, when it ran one).
+  const [told, setTold] = useState<string | null>(null);
+  useEffect(() => {
+    if (applied && inApply && told !== applied) {
+      setTold(applied);
+      onApplied?.(applied);
+    }
+  }, [applied, inApply]);
 
   // The assistant's values, once the manifest says which are positionals and options.
   const [prefilled, setPrefilled] = useState(false);
@@ -205,12 +242,15 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
   const destructive = !isRead && (verb.destructive || verb.destructiveWhen.some((w) => argv.includes(w)));
   const pj: Job | null = previewJob_;
   const previewDone = pj !== null && pj.state === "done" && !stale;
+  const previewRunning = pj !== null && !stale && (pj.state === "running" || pj.state === "queued");
   const refusedByDryRun = previewDone && previewKind === "dry-run-flag" && pj!.exit !== 0;
-  const object = pj?.object ?? "";
-  const label = pj?.objectLabel ?? object;
+  const named = confirmObject(step, verb, values, argv);
+  const object = named.object;
+  const label = named.label;
   const confirmed = confirm !== "" && (confirm === object || confirm === label);
-  const canApply = previewDone && !refusedByDryRun && !applied && (!destructive || (confirmed && me?.role === "installer"));
-  const phase = applied ? 4 : previewDone ? 3 : preview ? 2 : 1;
+  const busy = applied !== null && !stopped; // an Apply runs or ran: the form is done
+  const canApply = !busy && !previewRunning && !refusedByDryRun && (!destructive || (confirmed && me?.role === "installer"));
+  const phase = busy ? (inApply ? (appliedJob?.state === "done" ? 4 : 3) : 2) : stopped ? 2 : previewDone ? 3 : preview ? 2 : 1;
 
   const doPreview = async () => {
     setError(null);
@@ -220,13 +260,15 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
     if (r.error) setError(r.error);
     setPreview({ id: r.data.id, argv: JSON.stringify(argv) });
   };
+  // After a clean preview of this very change, Apply applies that preview;
+  // otherwise it is one job that runs the dry run first.
   const doApply = async () => {
-    if (!preview) return;
     setError(null);
-    const r = await applyJob(preview.id, destructive ? confirm : undefined);
+    const fresh = previewDone && pj !== null && pj.kind === "preview";
+    const r = fresh ? await applyJob(preview!.id, destructive ? confirm : undefined) : await applyNowJob(argv, destructive ? confirm : undefined);
     if (!r.data || r.status >= 400) return setError(r.error ?? `HTTP ${r.status}`);
+    if (!fresh) setPreview(null);
     setApplied(r.data.id);
-    onApplied?.(r.data.id);
   };
 
   return (
@@ -249,9 +291,15 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
         <VerbForm step={step} verb={verb} values={values} set={setValues} />
       )}
       <Command argv={isRead ? argv : applyForm(verb, argv)} label={isRead ? "runs" : "apply runs"} />
-      {destructive ? <p className="readstate readstate-fail">Destructive: this cannot be undone from the console. It needs the Installer role{me ? ` (you are ${me.role})` : ""} and the object's name typed after the preview.</p> : null}
+      {destructive ? <p className="readstate readstate-fail">Destructive: this cannot be undone from the console. It needs the Installer role{me ? ` (you are ${me.role})` : ""} and the object's name typed before Apply.</p> : null}
+      {destructive && !busy ? (
+        <label className="form-row confirm">
+          <span>Type <b className="mono">{object}</b> to confirm{label !== object ? <> — <span className="mono">{label}</span></> : null}</span>
+          <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        </label>
+      ) : null}
       <div className="actions">
-        <button className="btn" disabled={applied !== null} onClick={() => void doPreview()}>
+        <button className="btn" disabled={busy} onClick={() => void doPreview()}>
           {isRead ? "Run" : preview && !stale ? "Preview again" : previewKind === "none" ? "Preview (no dry run)" : "Preview"}
         </button>
         {!isRead ? (
@@ -259,21 +307,15 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
             {destructive ? `${verb.verb} ${label || "…"}` : "Apply"}
           </button>
         ) : null}
-        {stale ? <span className="muted small">the change differs from the preview: preview again</span> : null}
+        {stale ? <span className="muted small">the change differs from the preview: Apply previews it again</span> : null}
       </div>
       {error ? <p className="readstate readstate-fail">{error}</p> : null}
       {writeMark ? <p className="readstate readstate-warn">{writeMark.flag} makes this a change: it {writeMark.touches}. It is previewed and queued like any change, never beside the sweep.</p> : null}
       {preview && step.previewNote ? <div className="note preview-head">{step.previewNote(values)}</div> : null}
       {preview ? <JobView id={preview.id} label={isRead ? "result" : previewKind === "none" ? "preview (no dry run)" : "preview"} /> : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to apply.</p> : null}
-      {destructive && previewDone && !applied ? (
-        <label className="form-row confirm">
-          <span>Type <b className="mono">{object}</b> to confirm{label !== object ? <> — <span className="mono">{label}</span></> : null}</span>
-          <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        </label>
-      ) : null}
-      {applied ? <JobView id={applied} label="apply" /> : null}
-      {applied && appliedJob?.state === "done" ? (
+      {appliedJob?.previewPhase ? <TwoPhaseView job={appliedJob} /> : applied ? <JobView id={applied} label="apply" /> : null}
+      {applied && appliedJob?.state === "done" && !stopped ? (
         <>
           {step.after ? step.after(appliedJob) : null}
           <p className="muted small">Recorded in <Link to="/activity">Activity</Link> with the preview and this output.</p>
