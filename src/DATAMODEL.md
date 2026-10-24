@@ -74,7 +74,7 @@ flowchart LR
   NODE -- "storagePools[]" --> POOL
   REPO -- "catalog" --> CATALOG
   ENV -- "ownerOrg" --> ORG
-  ZONE -- "environment (one or several)" --> ENV
+  ZONE -- "environment (own: one; shared or serving: several)" --> ENV
 
   %% people
   ORG -- "owner" --> USER
@@ -141,8 +141,8 @@ source tree, not under `~/config/`.
 |---|---|---|---|
 | Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner` → organization; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `locations{}` → its places; `primaryLocation` → the one it is at, whose timezone is the site's and where a device or room that names none is; `locale`, `keyboard` are site-wide |
 | Location | `site.json` → `locations{}` | site-manager | names nothing: a place with a country, city, address and timezone, of kind `site` (this site's own equipment) or `remote` (another site's). A backup peer, a machine module, a switch, an access point, a room and a recorded device name one; the primary one and one that is named cannot be deleted |
-| Environment | `environments/<env>.json` | environment-manager | `ownerOrg` → organization; `domains` are its own (no file names them back). It names no zone: its zone is the Service zone naming it |
-| Zone | `zones.json` (one object per zone) | network-manager | `environment` → the environment it belongs to: a Service zone's (and `mgmt`'s) own environment, exactly one per environment, or the one or several a client, IoT or guest zone serves; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `bridge` → an interface, not an object |
+| Environment | `environments/<env>.json` | environment-manager | `ownerOrg` → organization; `domains` are its own (no file names them back). It names no zone: its own zone is the Service zone naming it as a string; shared service zones listing it serve it too |
+| Zone | `zones.json` (one object per zone) | network-manager | `environment` → the environment it belongs to: as a string on a Service zone (and `mgmt`), the environment whose own zone it is, exactly one per environment; as a list on a Service zone, the environments a shared service zone serves (the own zone of none); on a client, IoT or guest zone, the one or several it serves; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `bridge` → an interface, not an object |
 | Switches and access points | `switch-configuration-desired.json` (`-actual.json` is the interrogated copy) | switch-manager, ap-manager, driven by network-manager | `switches{}.ports{}.zone` → zone (access and native VLAN); `ports{}.target` → the node, switch or AP on the other end; `accessPoints{}.uplinkSwitch` → switch; `ssids` → zones by VLAN; `switches{}.location`, `accessPoints{}.location` → a location (unset: the primary; free text goes in `description`) |
 | Module (installed instance) | `<module>.json` | module-manager | `environment` → environment; `zone0`, `zone1` → zones; `node`, `config.cluster:ha.HANode` → nodes; `config.cluster:vm.storage` → a pool; `dependsOn[]`, `integratesWith[]` → `module:service` pairs another module `provides`; `config.network:proxy.proxyAllowedZones[]` → zones; `controllers[]`, `managers[]` → components the module contributes to the control plane; `moduleSource` → its source directory; `location` → the location a machine (not a guest) is at, unset the primary |
 | Module catalog | `src/module-catalog.json` in each repository | site-manager (`repository validate-catalog`) | `modules[].moduleJson` → the module's JSON in the source tree; `vmid`, `stack` must agree with it |
@@ -205,7 +205,7 @@ parked in #866. Every installation was moved by a numbered config migration.
 
 | # | Finding | State |
 |---|---|---|
-| 1 | Environment ↔ zone was a two-way link (`environment.network.zone` and `zone.serves[]`) | **Resolved** (#865, migration 0018): the zone names its environment in one field, `environment`; a client, IoT or guest zone may list several; nothing points the other way. An environment's zone is the Service zone naming it |
+| 1 | Environment ↔ zone was a two-way link (`environment.network.zone` and `zone.serves[]`) | **Resolved** (#865, migration 0018): the zone names its environment in one field, `environment`; a client, IoT or guest zone may list several, and so may a shared service zone (#876); nothing points the other way. An environment's own zone is the Service zone naming it as a string |
 | 2 | Location was recorded in four shapes (the site's, rooms, a machine's `physicalLocation`, free text on switches and APs) | **Resolved** (ADR-036, #869 and #871, migrations 0019 and 0021): one list, `site.locations{}` with a primary; everything that is somewhere names one by `location` |
 | 3 | Devices lived in three files, joined only by name | **Resolved** (ADR-036, #870 and #872, migrations 0020 and 0022): each kind has one record and one owner (a node is its `pvehost` instance), placements are position-manager's, the topology is the one derived list with each device's location, placement and source |
 | 4 | Organizations were listed twice (`site.organizations[]` and the identities directory) | **Resolved** (#867, migration 0017): the directory is the list |

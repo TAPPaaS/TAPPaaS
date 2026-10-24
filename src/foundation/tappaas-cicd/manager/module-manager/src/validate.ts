@@ -17,6 +17,7 @@
 //
 // Pure: depends only on the loaded ModuleConfig(s).
 
+import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import {
   ManifestFinding,
@@ -137,6 +138,8 @@ export function validateModule(
     const f = locationFindings(opts.configDir, m.raw);
     for (const e of f.errors) err(e);
     for (const w of f.warnings) warn(w);
+    const z = zoneEnvironmentRefusal(opts.configDir, m);
+    if (z) err(z);
   }
 
   // #683 — a declared field whose consumer is not wired. Needs the schema's
@@ -146,6 +149,34 @@ export function validateModule(
   // TODO(question): the bash stub also intended a SCHEMA check (every field
   // against module-fields.json). PARKED — see main.ts. The reference-integrity
   // half of that TODO is now implemented above.
+}
+
+// A shared service zone (#876) — a Service zone whose `environment` is a list —
+// is a place for the modules of the environments it lists, and only theirs.
+// Why `m`'s zone0 refuses its environment, or null. The environment's own zone
+// and every other zone pass here; install-module.sh checks the rest.
+export function zoneEnvironmentRefusal(configDir: string, m: ModuleConfig): string | null {
+  const zone = m.zone0;
+  const env = m.environment;
+  if (!zone || !env) return null;
+  const f = join(configDir, "zones.json");
+  if (!existsSync(f)) return null;
+  let z: Record<string, unknown> | undefined;
+  try {
+    const doc = JSON.parse(readFileSync(f, "utf8")) as Record<string, unknown>;
+    const v = doc[zone];
+    z = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
+  } catch {
+    return null;
+  }
+  if (!z || z.type !== "Service" || !Array.isArray(z.environment)) return null;
+  const serves = (z.environment as unknown[]).filter((e): e is string => typeof e === "string");
+  if (serves.includes(env)) return null;
+  return (
+    `zone0 '${zone}' is a shared service zone serving ${serves.join(", ") || "no environment"} — not ` +
+    `environment '${env}'. Install into the environment's own zone, or add it: ` +
+    `network-manager bind ${zone} --environment ${env} --add`
+  );
 }
 
 // A module's source REF, derived rather than stored.

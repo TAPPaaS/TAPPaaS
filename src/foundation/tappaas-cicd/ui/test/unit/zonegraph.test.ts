@@ -4,7 +4,7 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { COLUMN_TITLES, ZoneLike, pseudoPlace, publicAddress, publicText, wanZone, zoneColumn, zoneEdges } from "../../web/src/zonegraph";
+import { COLUMN_TITLES, ZoneLike, isSharedService, pseudoPlace, publicAddress, publicText, wanZone, zoneColumn, zoneEdges } from "../../web/src/zonegraph";
 import { check, done } from "./check";
 
 const FIX = process.env.CONSOLE_FIXTURES ?? "test/fixtures";
@@ -67,5 +67,25 @@ check(/router's in front of the WAN/.test(publicText(behind)), "…the router in
 check(publicAddress({ network: { publicIp: "203.0.113.9" } }, held).address === "203.0.113.9", "a recorded address wins over what the WAN held");
 check(publicAddress(auto, null).address === null && publicText(publicAddress(auto, null), true) === "public address auto", "auto, nothing read yet: says auto");
 check(publicAddress({}, held).address === null, "no publicIp at all: the WAN's address is not shown as public");
+
+// #876: a shared service zone's edges say whose they are; a client serving
+// two environments reaches their own zones, never the shared one.
+{
+  const erik: ZoneLike[] = [
+    { name: "wan", type: "WAN" },
+    { name: "dmz", type: "DMZ", "access-to": ["internet"] },
+    { name: "gridtefy", type: "Service", environment: "gridtefy", "access-to": ["internet"] },
+    { name: "acmeco", type: "Service", environment: "acmeco", "access-to": ["internet"] },
+    { name: "srvWork", type: "Service", environment: ["gridtefy", "acmeco"], "access-to": ["internet"], "pinhole-allowed-from": ["dmz"] },
+    { name: "work", type: "Client", environment: ["gridtefy", "acmeco"], "access-to": ["internet"] },
+  ];
+  const { edges } = zoneEdges(erik);
+  const of = (s: string, t: string) => edges.find((e) => e.source === s && e.target === t);
+  check(of("srvWork", "wan")?.shared?.join() === "gridtefy,acmeco" && of("dmz", "srvWork")?.shared?.join() === "gridtefy,acmeco",
+    "#876: a shared service zone's edges carry the environments it serves");
+  check(of("work", "gridtefy")?.via === "gridtefy" && of("work", "acmeco")?.via === "acmeco" && !of("work", "srvWork"),
+    "#876: a client serving both reaches their own zones, not the shared one");
+  check(of("gridtefy", "wan")?.shared === undefined && isSharedService(erik[4]) && !isSharedService(erik[2]), "#876: an own zone's edges are not marked shared");
+}
 
 done("zonegraph");

@@ -54,7 +54,8 @@ export interface Zone {
 }
 
 // The zone types whose `environment` names the environment the zone IS: a
-// Service zone, and the Management zone for the mgmt environment.
+// Service zone, and the Management zone for the mgmt environment. A Service
+// zone listing environments is shared and the zone of none (#876).
 export const OWNER_TYPES: ReadonlySet<string> = new Set(["Service", "Management"]);
 // The zone types whose `environment` names the environment they serve. Client,
 // IoT and Guest derive an edge; DMZ only records the link.

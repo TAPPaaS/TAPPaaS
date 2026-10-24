@@ -100,8 +100,10 @@ Environment / zone resolution (ADR-007 P5):
     * else scope:site (the foundation stack) → 'mgmt'.
     * else                         → the default environment (single non-mgmt
                                       env / site name); else today's behaviour.
-    zone0: explicit .zone0 in the JSON wins; else the environment's zone (the
-    Service zone naming it in zones.json); else resolve_default_zone() (back-compat).
+    zone0: explicit .zone0 in the JSON wins; else the environment's own zone
+    (the Service zone naming it in zones.json); else resolve_default_zone()
+    (back-compat). An explicit zone0 may be a shared service zone that lists the
+    environment (--zone0 srvWork); one that does not list it is refused.
 
 Examples:
     ${SCRIPT_NAME} vaultwarden
@@ -217,9 +219,10 @@ resolve_default_environment() {
     return 0
 }
 
-# Echo the zone for a given environment name: the zone in zones.json naming it
-# (environment_zone, #865). Echoes empty if the environment file is absent or no
-# single zone names it (caller falls back to resolve_default_zone for back-compat).
+# Echo the zone for a given environment name: its own zone, the one in
+# zones.json naming it as a string (environment_zone, #865) — never a shared
+# service zone listing it (#876). Echoes empty if the environment file is absent
+# or no single zone names it (caller falls back to resolve_default_zone).
 resolve_zone_for_environment() {
     local env="$1"
     local env_file="${CONFIG_DIR}/environments/${env}.json"
@@ -712,6 +715,10 @@ main() {
     fi
     if [[ -n "$zone0" ]]; then
         validate_zone_active "$zone0" || die "Zone validation failed — install aborted before any resources were created"
+        # A shared service zone is a place for the modules of the environments
+        # it lists (#876), and only theirs.
+        validate_zone_environment "$zone0" "${environment}" \
+            || die "Zone validation failed — install aborted before any resources were created"
     fi
     # #419: zone0 is not the only zone reference a module makes. Validate
     # proxyAllowedZones and egress[].to here too — BEFORE any resource exists —

@@ -28,6 +28,7 @@ import {
   loadEnvironment,
   loadEnvironments,
   environmentZone,
+  sharedZones,
   loadRefSources,
   OWN_ZONE_TYPES,
   ownZones,
@@ -279,14 +280,15 @@ function cmdList(opts: Opts): void {
   // is the one naming the environment in zones.json (#865).
   const refs = loadRefSources(opts.configDir);
   for (const n of names) {
-    info(`${n}\t(zone ${environmentZone(refs, n) ?? "?"})`);
+    const shared = sharedZones(refs.zones, n);
+    info(`${n}\t(zone ${environmentZone(refs, n) ?? "?"}${shared.length ? `; shared ${shared.join(", ")}` : ""})`);
   }
 }
 
 // Human-readable single-environment summary (default `show` output). An aligned
 // label/value block, mirroring `list`'s human default; the raw JSON document is
 // available via `--json`. Optional fields are printed only when present.
-export function formatEnvironmentHuman(env: Environment, zone?: string): string {
+export function formatEnvironmentHuman(env: Environment, zone?: string, shared: string[] = []): string {
   const lines: string[] = [];
   lines.push(
     env.displayName && env.displayName !== env.name
@@ -297,6 +299,8 @@ export function formatEnvironmentHuman(env: Environment, zone?: string): string 
     void lines.push(`  ${label.padEnd(9)} ${value}`);
   row("owner", env.ownerOrg || "<unset>");
   row("zone", zone ?? "<unset>");
+  // Shared service zones (#876): also a place for its modules, its own zone none.
+  if (shared.length) row("shared", shared.join(", "));
   if (env.domains) {
     const d = env.domains;
     row("domain", (d.primary || "<unset>") + (d.dnsMode ? `  (dnsMode: ${d.dnsMode})` : ""));
@@ -328,7 +332,8 @@ function cmdShow(opts: Opts): void {
     return;
   }
   // Human output: an aligned field summary (raw JSON doc via --json).
-  info(formatEnvironmentHuman(env, environmentZone(loadRefSources(opts.configDir), name)));
+  const refs = loadRefSources(opts.configDir);
+  info(formatEnvironmentHuman(env, environmentZone(refs, name), sharedZones(refs.zones, name)));
 }
 
 // ── validate ──────────────────────────────────────────────────────────
@@ -391,6 +396,13 @@ function checkTargetZone(refs: RefSources, zone: string, env: string, creating: 
   }
   if (z.environment && z.environment !== env) {
     die(`zone '${zone}' is already environment '${z.environment}''s zone — pick another --zone`);
+  }
+  if (z.shared) {
+    die(
+      `zone '${zone}' is a shared service zone (serves ${z.environments.join(", ") || "none"}) — the own zone of ` +
+        `no environment; pick another --zone (\`network-manager bind ${zone} --unbind --environment <env> --own\` ` +
+        `makes a shared zone with one environment left that environment's own)`,
+    );
   }
 }
 

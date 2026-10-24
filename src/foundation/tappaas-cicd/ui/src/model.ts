@@ -61,11 +61,13 @@ export interface BackupRow {
 }
 
 // environment-manager list --json, with the environment's zone: the zone in
-// zones.json naming it (#865), joined here for every reader.
+// zones.json naming it (#865), joined here for every reader, and the shared
+// service zones that serve it besides (#876).
 export interface EnvironmentRow {
   name: string;
   displayName?: string;
   zone?: string | null;
+  sharedZones?: string[];
   domains?: { primary?: string };
 }
 

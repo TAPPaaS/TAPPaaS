@@ -135,6 +135,40 @@ environment_zone() {
     printf '%s\n' "$found"
 }
 
+# The shared service zones serving an environment (#876): Service zones whose
+# `environment` is a list naming it. Such a zone is a valid zone0 for a module
+# of each environment it lists, and the own zone of none — environment_zone
+# never returns it. Echoes one zone per line, sorted; nothing when there is none.
+#   environment_shared_zones <env-name> [zones_file]
+environment_shared_zones() {
+    local env="$1"
+    local zones="${2:-${CONFIG_DIR}/zones.json}"
+    [[ -f "$zones" ]] || return 0
+    jq -r --arg e "$env" '[to_entries[] | select((.key | startswith("_") | not)
+              and (.value | type) == "object" and (.value.type // "") == "Service"
+              and (.value.environment | type) == "array" and (.value.environment | index($e)) != null)
+              | .key] | sort | .[]' "$zones" 2>/dev/null || true
+}
+
+# Refuse a zone0 that is a shared service zone not serving the module's
+# environment (#876). The environment's own zone, a shared service zone that
+# lists it, and every other zone pass here (validate_zone_active checks those).
+#   validate_zone_environment <zone> <env-name> [zones_file]
+validate_zone_environment() {
+    local zone="$1" env="$2"
+    local zones="${3:-${CONFIG_DIR}/zones.json}"
+    [[ -n "$zone" && -n "$env" && -f "$zones" ]] || return 0
+    local serves
+    serves="$(jq -r --arg z "$zone" '.[$z] | select((.type // "") == "Service" and (.environment | type) == "array")
+              | .environment | join(", ")' "$zones" 2>/dev/null)" || serves=""
+    [[ -n "$serves" ]] || return 0
+    if jq -e --arg z "$zone" --arg e "$env" '.[$z].environment | index($e) != null' "$zones" >/dev/null 2>&1; then
+        return 0
+    fi
+    error "  zone '${zone}' is a shared service zone serving ${serves} — not environment '${env}'. Install into the environment's own zone, or add it: network-manager bind ${zone} --environment ${env} --add"
+    return 1
+}
+
 # ── Node lookup helpers (the pvehost instances) ──────────────────────
 # These functions resolve node hostnames. The nodes are their pvehost
 # instances, listed by tappaas_cluster_nodes (cluster-nodes.sh, re-exported

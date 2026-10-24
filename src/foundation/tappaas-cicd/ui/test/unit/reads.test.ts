@@ -134,6 +134,24 @@ async function main(): Promise<void> {
   }
   check(threw, "refreshing an unknown read is refused");
 
+  // ── #876: an environment's own zone, and the shared service zones apart ──
+  {
+    const cfg = mkdtempSync(join(tmpdir(), "sharedzone-"));
+    writeFileSync(join(cfg, "zones.json"), JSON.stringify({
+      mgmt: { type: "Management", state: "Manual", vlantag: 0, environment: "mgmt" },
+      rossen: { type: "Service", state: "Active", vlantag: 200, environment: "rossen" },
+      test: { type: "Service", state: "Active", vlantag: 201, environment: "test" },
+      srvWork: { type: "Service", state: "Active", vlantag: 210, environment: ["rossen", "test"] },
+    }));
+    const r = new Reads({ configDir: cfg, stateDir: join(cfg, "s"), run: fakeSite().run, journalDays: 7 });
+    const rows = (await r.environments.get()).value ?? [];
+    const row = (n: string) => rows.find((e) => e.name === n);
+    check(row("rossen")?.zone === "rossen" && row("test")?.zone === "test" && row("mgmt")?.zone === "mgmt",
+      "#876: the environments read gives each environment its own zone, never the shared one");
+    check(JSON.stringify(row("rossen")?.sharedZones) === '["srvWork"]' && JSON.stringify(row("mgmt")?.sharedZones) === "[]",
+      "#876: …and the shared service zones serving it, listed apart");
+  }
+
   // ── a node being added (the Site page's Add node) ──────────────────────
   {
     const site = fakeSite();

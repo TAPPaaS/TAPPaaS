@@ -216,6 +216,25 @@ try {
   }
   check(threw, "missing target throws (maps to exit 1)");
 
+  // ── #876: a shared service zone is nobody's own zone ────────────────
+  // Erik's shape: gridtefy and acmeco each have a Service zone of their own,
+  // and srvWork lists both. The exact case that failed: gridtefy's own zone
+  // plus srvWork listing gridtefy.
+  zones.srvWork = { type: "Service", environment: ["gridtefy", "acmeco"] };
+  zones.work = { type: "Client", environment: ["gridtefy", "acmeco"] };
+  const grid = vFile("gridtefy", { name: "gridtefy", displayName: "Gridtefy", ownerOrg: "test2" });
+  const acme = vFile("acmeco", { name: "acmeco", displayName: "Acmeco", ownerOrg: "test2" });
+  check(grid.errors.length === 0 && acme.errors.length === 0,
+    `#876: own zone plus a shared service zone listing the environment is valid (${[...grid.errors, ...acme.errors].join("; ")})`);
+  delete zones.acmecoZone;
+  const onlyShared = vFile("acmeco", { name: "acmeco", displayName: "Acmeco", ownerOrg: "test2" }, false);
+  check(hasErr(onlyShared, "no Service or Management zone names environment 'acmeco' as its own (shared service zone srvWork serves it"),
+    "#876: an environment served only by a shared service zone has no zone of its own");
+  delete zones.srvWork;
+  delete zones.work;
+  rmSync(join(envDir, "gridtefy.json"));
+  rmSync(join(envDir, "acmeco.json"));
+
   // ── the no-silent-under-validation guarantee ────────────────────────
   // A schema using a keyword outside the implemented subset must FAIL LOUDLY,
   // not be silently skipped.

@@ -82,3 +82,12 @@ export function environmentZoneIn(entries: Array<[string, Record<string, unknown
   const own = entries.filter(([, z]) => z.environment === env && (z.type === "Service" || z.type === "Management"));
   return own.length === 1 ? own[0][0] : null;
 }
+
+// The shared service zones serving an environment (#876): Service zones whose
+// `environment` is a list naming it — a place for its modules, never its own
+// zone. In file order.
+export function sharedZonesIn(entries: Array<[string, Record<string, unknown>]>, env: string): string[] {
+  return entries
+    .filter(([, z]) => z.type === "Service" && Array.isArray(z.environment) && (z.environment as unknown[]).includes(env))
+    .map(([n]) => n);
+}

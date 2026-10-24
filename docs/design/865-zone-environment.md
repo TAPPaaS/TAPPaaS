@@ -171,3 +171,40 @@ plans) record what was done at the time and are left as they are.
 
 hrossen's expected result: `mgmt`→mgmt, `rossen`→rossen, `test`→test,
 `home`/`iotLocal`/`iotCloud`/`iotCams`→rossen.
+
+## Appendix — shared service zones (#876, ADR-014 v1.6)
+
+Found on a site update on 2026-10-24: a business runs one work environment per customer, each with
+a Service zone of its own (`gridtefy`, …), and a Service zone `srvWork` that all of them use. Before
+#865 `srvWork` carried `serves: [gridtefy, …]`; the #865 rule "every environment is named by exactly
+one Service or Management zone" then refused the site (`srvWork` was counted as a second zone of
+`gridtefy`), the network module rolled back and every module needing pinholes drifted.
+
+Decision: the shape of a Service zone's `environment` says its role.
+
+| `environment` on a Service zone | role |
+|---|---|
+| a string | the environment's **own** zone: its default install place, its domain; exactly one per environment (Service or Management) |
+| a list, even of one | a **shared service zone**: serves the environments it lists, owns none, a valid `zone0` for a module of any of them, derives no edge |
+
+What changed, per reader and writer of the survey above:
+
+| where | becomes |
+|---|---|
+| network-manager `linkErrors` (validate, render) | a list on a Service zone is shared: each name must exist; only single-string Service/Management zones count as own; a list on the Management zone stays an error |
+| network-manager `resolveServes` | unchanged: consumer zones reach the own zone; a shared zone derives nothing, so the effective graph is the same with or without it (unit-tested over the fixture `test/fixtures/shared-service-zone`) |
+| network-manager `bind` | `--add` on a Service zone makes it shared (string → list); a plain `bind` on a shared zone is refused; `--unbind --environment` back to one leaves a list of one, `--own` turns it into that environment's own zone; `add --environment a,b` on a Service zone authors a shared one |
+| network-manager `serves.ts` | `isSharedServiceZone`, `sharedZonesOf`; `zoneEnvironment` (the single string) already excluded lists |
+| environment-manager `config.ts` | `ZoneLink.shared`, `sharedZones()`; `zoneLinkErrors` names a shared zone that serves an environment without an own zone |
+| environment-manager `list` / `show` | own zone, then the shared zones; `add|modify --zone` refuse a shared zone |
+| `lib/common-install-routines.sh` | `environment_zone` unchanged (own only); new `environment_shared_zones`, `validate_zone_environment` |
+| `install-module.sh` | an explicit `zone0` that is a shared zone not listing the module's environment is refused |
+| module-manager `validate` | the same check, `zoneEnvironmentRefusal` |
+| console `reads.ts`, `envcards.ts`, `Environments.tsx`, `Zones.tsx`, `zonegraph.ts` | `sharedZones` on the environments read; a card shows its own zone, then each shared zone marked "shared with <others>"; the graph labels a shared zone's edges `shared · <envs>` |
+| `schemas/zones-fields.json` | `environment` description and change note |
+| migration 0018 | a Service zone no environment names as its own that carries `serves` becomes a shared zone, its list kept even of one (it was refused, and an already-migrated list of one would have been collapsed into a second own zone); the fixture test gains the shape |
+
+Validate on the fixture, before: `✗ environment: zone 'srvWork' is a Service zone and names
+["gridtefy","acmeco"] — a Service zone is the zone of exactly one environment, named as a string`
+(rc 1). After: `✓ environment: 8 zone(s) name an environment …` and `· environment: shared service
+zone(s): srvWork→gridtefy,acmeco` (rc 0); environment-manager validate passes both times.

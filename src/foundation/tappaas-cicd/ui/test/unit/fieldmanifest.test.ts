@@ -85,6 +85,8 @@ const zadd = buildManifest({ kind: "zone", name: null, mode: "add", defs: zdefs,
 check(field(zadd, "type")?.arg === "--type" && field(zadd, "vlantag")?.arg === "--vlan" && field(zadd, "access-to")?.editable === false, "zone add: the add verb's own flags (--type, --vlan); the rest after the add");
 check(field(zadd, "environment")?.arg === "--environment" && field(zadd, "environment")?.choices?.includes("rossen") === true && field(zadd, "environment")?.typeText === "environments", "zone add: the environment(s) it belongs to, a list of environments, passed as --environment");
 check(field(zone, "environment")?.editable === false && /verb of its own/.test(field(zone, "environment")?.why ?? ""), "zone modify: the environment link has its verb (bind), not --set");
+check(/shared service zone/.test(field(zadd, "environment")?.description ?? "") && field(zadd, "environment")?.type === "list",
+  "#876 zone add: a Service zone may take the list too — the form says it is then a shared service zone");
 
 // ── environment ─────────────────────────────────────────────────────────
 const edefs = environmentDefs(schema("environment-fields.json"));

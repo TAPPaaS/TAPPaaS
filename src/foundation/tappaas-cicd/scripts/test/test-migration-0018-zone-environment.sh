@@ -2,7 +2,8 @@
 # test-migration-0018-zone-environment.sh — the fixture test for migration 0018 (#865).
 #
 # before → after on a site shaped like the reference system (an environment per
-# Service zone, mgmt on the Management zone, client and IoT zones serving one),
+# Service zone, mgmt on the Management zone, client and IoT zones serving one)
+# and on one with a shared service zone (#876),
 # --check writes nothing, applying twice is a no-op, the backup holds the
 # pre-image, and every shape it does not trust stops it with nothing changed.
 # Test 9z sweeps this directory.
@@ -83,6 +84,49 @@ ck "…and it is reported"                               yes "$(has "${out}" "ga
 after="$(snapshot)"; out="$(run)"
 ck "…a rerun changes nothing"                          "${after}" "$(snapshot)"
 ck "…and says so"                                      yes "$(has "${out}" "nothing to migrate")"
+
+# Erik's shape (#876): environments gridtefy and acmeco each name a Service zone
+# of their own, and the Service zone srvWork serves both — a shared service
+# zone. Its list is carried over as a list; each own zone gets a string.
+erik() {
+    rm -rf "${CFG}"; mkdir -p "${CFG}/environments"
+    jq "${1:-.}" <<'J' > "${CFG}/zones.json"
+{
+  "mgmt":     {"type": "Management", "state": "Manual"},
+  "gridtefy": {"type": "Service",    "state": "Active"},
+  "acmeco":   {"type": "Service",    "state": "Active"},
+  "srvWork":  {"type": "Service",    "state": "Active", "serves": ["gridtefy", "acmeco"]},
+  "work":     {"type": "Client",     "state": "Active", "serves": ["gridtefy", "acmeco"]},
+  "guest":    {"type": "Guest",      "state": "Active"}
+}
+J
+    for e in mgmt gridtefy acmeco; do
+        jq -n --arg e "${e}" '{name: $e, displayName: $e, ownerOrg: "o", network: {zone: $e}}' > "${CFG}/environments/${e}.json"
+    done
+}
+erik
+out="$(run)"; rc=$?
+ck "Erik's shape migrates"                             0 "${rc}"
+ck "…each own zone names its environment as a string"  '"gridtefy" "acmeco"' "$(jq -c '.gridtefy.environment, .acmeco.environment' "${CFG}/zones.json" | paste -sd' ' -)"
+ck "…the shared service zone keeps the list"           '["gridtefy","acmeco"]' "$(jq -c '.srvWork.environment' "${CFG}/zones.json")"
+ck "…the client zone serves both"                      '["gridtefy","acmeco"]' "$(jq -c '.work.environment' "${CFG}/zones.json")"
+ck "…and the shared zone is said as such"              yes "$(has "${out}" "gave zone srvWork environment gridtefy, acmeco (a shared service zone: it serves gridtefy, acmeco)")"
+after="$(snapshot)"; out="$(run)"
+ck "…a rerun changes nothing"                          "${after}" "$(snapshot)"
+ck "…and says so"                                      yes "$(has "${out}" "nothing to migrate")"
+# A shared zone serving one environment stays a list of one, before and after.
+erik '.srvWork.serves = ["gridtefy"]'
+run >/dev/null; rc=$?
+ck "a shared zone serving one environment migrates"   0 "${rc}"
+ck "…as a list of one, not that environment's own"     '["gridtefy"]' "$(jq -c '.srvWork.environment' "${CFG}/zones.json")"
+after="$(snapshot)"; out="$(run)"
+ck "…a rerun leaves the list of one"                   "${after}" "$(snapshot)"
+# A Service zone carrying serves while an environment names it as its own still stops it.
+erik '.gridtefy.serves = ["gridtefy", "acmeco"]'
+b="$(snapshot)"; o="$(run)"; r=$?
+ck "an own zone that also serves another stops it"     1 "${r}"
+ck "…naming why"                                       yes "$(has "${o}" "zone gridtefy is environment gridtefy's zone but serves gridtefy, acmeco")"
+ck "…with nothing changed"                             "${b}" "$(snapshot)"
 
 # A half-done run (zones written, an environment file still naming its zone)
 # converges rather than stopping.

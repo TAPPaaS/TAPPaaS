@@ -1,0 +1,201 @@
+{
+  "mgmt": {
+    "type": "Management",
+    "state": "Manual",
+    "environment": "mgmt",
+    "typeId": "0",
+    "subId": "0",
+    "vlantag": 0,
+    "ip": "10.0.0.0/24",
+    "bridge": "lan",
+    "access-to": [
+      "internet",
+      "all"
+    ],
+    "pinhole-allowed-from": [],
+    "tier": 0,
+    "description": "Control plane: hypervisors, backup, firewall, identity, cicd"
+  },
+  "wan": {
+    "type": "WAN",
+    "state": "Manual",
+    "typeId": "1",
+    "subId": "0",
+    "vlantag": 100,
+    "ip": "10.1.0.0/24",
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "description": "ISP hand-off L2 segment (modem + node WAN NICs); switch-only, no interface, no DHCP"
+  },
+  "erik": {
+    "type": "Service",
+    "state": "Active",
+    "environment": "erik",
+    "typeId": "2",
+    "subId": "0",
+    "vlantag": 200,
+    "ip": "10.2.0.0/24",
+    "ipv6Subnet": 32,
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "dmz"
+    ],
+    "tier": 1,
+    "description": "Erik's own services"
+  },
+  "gridtefy": {
+    "type": "Service",
+    "state": "Active",
+    "environment": "gridtefy",
+    "typeId": "2",
+    "subId": "1",
+    "vlantag": 201,
+    "ip": "10.2.1.0/24",
+    "ipv6Subnet": 33,
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "dmz"
+    ],
+    "tier": 1,
+    "description": "Service zone of the gridtefy client environment"
+  },
+  "acmeco": {
+    "type": "Service",
+    "state": "Active",
+    "environment": "acmeco",
+    "typeId": "2",
+    "subId": "2",
+    "vlantag": 202,
+    "ip": "10.2.2.0/24",
+    "ipv6Subnet": 34,
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "dmz"
+    ],
+    "tier": 1,
+    "description": "Service zone of the acmeco client environment"
+  },
+  "srvWork": {
+    "type": "Service",
+    "state": "Active",
+    "environment": [
+      "gridtefy",
+      "acmeco"
+    ],
+    "typeId": "2",
+    "subId": "10",
+    "vlantag": 210,
+    "ip": "10.2.10.0/24",
+    "ipv6Subnet": 42,
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "dmz"
+    ],
+    "tier": 1,
+    "description": "Work services shared by the client environments"
+  },
+  "home": {
+    "type": "Client",
+    "state": "Active",
+    "typeId": "3",
+    "subId": "10",
+    "vlantag": 310,
+    "SSID": "HOME_SSID",
+    "ip": "10.3.10.0/24",
+    "ipv6Subnet": 49,
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "tier": 2,
+    "environment": "erik",
+    "description": "Trusted personal devices: laptops, phones, tablets"
+  },
+  "work": {
+    "type": "Client",
+    "state": "Active",
+    "typeId": "3",
+    "subId": "20",
+    "vlantag": 320,
+    "SSID": "WORK_SSID",
+    "ip": "10.3.20.0/24",
+    "ipv6Subnet": 50,
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "tier": 2,
+    "environment": [
+      "gridtefy",
+      "acmeco"
+    ],
+    "description": "Work laptops: reach every client environment"
+  },
+  "iotLocal": {
+    "type": "IoT",
+    "state": "Active",
+    "typeId": "4",
+    "subId": "10",
+    "vlantag": 410,
+    "SSID": "IOTLOCAL_SSID",
+    "ip": "10.4.10.0/24",
+    "ipv6Subnet": 65,
+    "bridge": "lan",
+    "access-to": [],
+    "pinhole-allowed-from": [],
+    "tier": 6,
+    "environment": "erik",
+    "description": "Local-only IoT: no internet, automation devices"
+  },
+  "guest": {
+    "type": "Guest",
+    "state": "Active",
+    "typeId": "5",
+    "subId": "10",
+    "vlantag": 510,
+    "SSID": "GUEST_SSID",
+    "ip": "10.5.10.0/24",
+    "ipv6Subnet": 81,
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [],
+    "tier": 3,
+    "description": "Visitors: internet only, fully isolated"
+  },
+  "dmz": {
+    "type": "DMZ",
+    "state": "Mandatory",
+    "typeId": "6",
+    "subId": "10",
+    "vlantag": 610,
+    "ip": "10.6.0.0/24",
+    "ipv6Subnet": 97,
+    "bridge": "lan",
+    "access-to": [
+      "internet"
+    ],
+    "pinhole-allowed-from": [
+      "internet",
+      "home"
+    ],
+    "tier": 4,
+    "description": "Public-facing: reverse proxy (Caddy), internet-exposed services"
+  }
+}
