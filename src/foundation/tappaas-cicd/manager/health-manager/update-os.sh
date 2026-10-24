@@ -350,6 +350,30 @@ nixos_rebuild_exit_meaning() {
     esac
 }
 
+# activation_settled <ip> <system-before>
+# An activation exit (2, 4, 6) says a unit failed to reload or start while the
+# new generation was being activated. When that generation is active and,
+# after a short settle, systemd lists no failed unit, the failure did not last
+# (a fresh guest's first switch restarts hostnamed's socket while its service
+# is still stopping): the system the update asked for is running. 0 then; 1 when
+# the system did not move, a unit stays failed, or the guest cannot be asked.
+activation_settled() {
+    local ip="$1" before="$2" now out i
+    [[ -n "${before}" ]] || return 1
+    now="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "tappaas@${ip}" \
+        "readlink -f /run/current-system" 2>/dev/null || true)"
+    [[ -n "${now}" && "${now}" != "${before}" ]] || return 1
+    for i in 1 2 3; do
+        # The end marker tells an empty list from a guest that did not answer.
+        out="$(ssh -o BatchMode=yes -o ConnectTimeout=15 "tappaas@${ip}" \
+            "systemctl --failed --no-legend --plain 2>/dev/null | awk '{print \$1}'; echo __end__" 2>/dev/null || true)"
+        [[ "${out}" == *__end__* ]] || return 1
+        [[ "${out}" == __end__ ]] && return 0
+        (( i < 3 )) && sleep "${ACTIVATION_SETTLE_SECONDS:-10}"
+    done
+    return 1
+}
+
 # Which units failed and why — the information that names the real cause.
 # Best effort: must never mask the original failure.
 report_failed_units() {
@@ -954,6 +978,11 @@ update_nixos() {
                 info "      ${_sys_before##*-nixos-system-} -> ${_sys_now##*-nixos-system-}"
                 rebuilt=1; break
             fi
+        fi
+        if [[ "$rc" -eq 2 || "$rc" -eq 4 || "$rc" -eq 6 ]] && activation_settled "${vm_ip}" "${_sys_before}"; then
+            warn "nixos-rebuild on ${vm_ip} exited ${rc} — $(nixos_rebuild_exit_meaning "${rc}")"
+            warn "  …but the new generation is active and no unit has failed: carrying on (see the saved rebuild log)"
+            rebuilt=1; break
         fi
         if [[ "$rc" -ne 255 ]]; then
             error "nixos-rebuild on ${vm_ip} failed with exit ${rc} — $(nixos_rebuild_exit_meaning "${rc}")."
