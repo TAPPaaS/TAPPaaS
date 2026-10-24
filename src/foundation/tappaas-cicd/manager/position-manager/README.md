@@ -159,11 +159,17 @@ position-manager place printer --room office
 {
   "vendor": "UniFi", "model": "USW Pro XG 10 PoE", "match": ["USWED77"],
   "kind": "switch", "units": 1, "width": "full",
-  "rows": [
-    [{ "name": "Port 1", "kind": "poe" }, …, { "name": "Port 11", "kind": "sfp+" }],
-    [{ "name": "Port 2", "kind": "poe" }, …, { "name": "Port 12", "kind": "sfp+" }]
-  ],
+  "ports": "10xpoe:Port {n}+gap+2xsfp+:Port {n}[2-98]",
   "labels": [{ "text": "UniFi", "at": "left" }]
+}
+```
+
+or, a grid right of the plate's name:
+
+```json
+{
+  "vendor": "UniFi", "model": "Nano HD", "kind": "ap", "units": 1, "width": "third",
+  "rows": [[{ "name": "Port 1", "id": "uplink", "kind": "poe" }]]
 }
 ```
 

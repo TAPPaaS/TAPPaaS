@@ -608,26 +608,34 @@ export function recordedPorts(d: RecordedDevice, catalog: Faceplate[]): string[]
   return f ? f.rows.flat().filter((p): p is CatalogPort => !!p).map(portId) : [];
 }
 
+// A patch panel's ports: across the plate, edge to edge.
+export const PANEL_SPAN: [number, number] = [0.02, 0.98];
+
 const PLATE_OF_KIND: Record<RecordedKind, PlateKind> = { modem: "modem", ont: "modem", ups: "pdu", "patch-panel": "patch-panel", other: "other" };
 
 // A recorded device's plate: its model's from the catalog, else one made from
-// its ports (a patch panel 24 to a row, a modem or an ONT half width).
+// its ports (a patch panel across the plate, one row up to 24 and two above;
+// a modem or an ONT half width).
 export function recordedPlate(name: string, d: RecordedDevice, catalog: Faceplate[]): Faceplate {
   const f = d.model ? catalog.find((x) => x.key === d.model) : undefined;
   if (f && !d.ports?.length) return f;
   const ports = recordedPorts(d, catalog).map((n): CatalogPort => ({ name: n, kind: d.kind === "ups" ? "power" : "rj45" }));
   const rows: CatalogPort[][] = [];
-  for (let i = 0; i < ports.length; i += 24) rows.push(ports.slice(i, i + 24));
+  // A patch panel: its ports across the whole plate, one row up to 24, two above.
+  const panel = d.kind === "patch-panel";
+  const per = panel && ports.length > 24 ? Math.ceil(ports.length / 2) : 24;
+  for (let i = 0; i < ports.length; i += per) rows.push(ports.slice(i, i + per));
   const small = d.kind === "modem" || d.kind === "ont";
   return {
     key: f?.key ?? `recorded/${d.kind}`,
     vendor: f?.vendor ?? "Generic",
     model: f?.model ?? (d.kind === "patch-panel" ? `${ports.length}-port patch panel` : d.kind === "ups" ? "UPS" : d.kind === "ont" ? "ONT" : d.kind === "modem" ? "modem" : name),
     kind: PLATE_OF_KIND[d.kind] ?? "other",
-    units: f?.units ?? (rows.length > 2 ? 2 : 1),
+    units: f?.units ?? (rows.length > 2 || ports.length > 48 ? 2 : 1),
     width: f?.width ?? (small ? "half" : "full"),
     passive: true,
     rows,
+    ...(panel && rows.length ? { blocks: [{ from: PANEL_SPAN[0], to: PANEL_SPAN[1], rows }] } : {}),
   };
 }
 
