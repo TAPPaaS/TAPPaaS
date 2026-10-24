@@ -12,7 +12,9 @@
 # the environment and nothing points the other way: one `environment` field per
 # zone — on a Service zone (or mgmt) the environment whose zone it is, on a
 # Client/IoT/Guest zone the environment it serves, or the list of them when it
-# serves several (a `serves` list is carried over as it is).
+# serves several (a `serves` list is carried over as it is). A Service zone no
+# environment names as its own and that serves environments is a shared
+# service zone: its `serves` becomes the list, kept a list even of one.
 #
 # What it writes: `environment` on every zone an environment names as its
 # `network.zone`, and on every zone carrying `serves`; then it removes
@@ -27,8 +29,8 @@
 #     — the person decides which environment the zone is;
 #   - an environment whose `network.zone` is not in zones.json, or is not a
 #     Service or Management zone;
-#   - `serves` on a zone that is not Client, IoT or Guest, or that is not a name
-#     or a list of names;
+#   - `serves` on a zone that is not Client, IoT, Guest or a shared Service
+#     zone, or that is not a name or a list of names;
 #   - an environment file whose `name` differs from its file name, or that is
 #     not JSON.
 #
@@ -85,11 +87,15 @@ plan="$(jq --argjson E "${envs}" '
         | (if ($own | length) > 0 then ($own + $cur)
            else (($sv // []) + $cur) end
            | reduce .[] as $x ([]; if index($x) then . else . + [$x] end)) as $envs
+        # a Service zone no environment names as its own, that serves or lists
+        # environments, is a shared service zone: its value stays a list
+        | (($z.value.type // "") == "Service" and ($own | length) == 0
+           and (($z.value | has("serves")) or (($z.value.environment | type) == "array"))) as $shared
         | { zone: $z.key, type: ($z.value.type // ""), own: $own, serves: $sv,
-            hadServes: ($z.value | has("serves")),
+            hadServes: ($z.value | has("serves")), shared: $shared,
             current: ($z.value.environment // null),
             envs: $envs,
-            value: (if ($envs | length) == 0 then null elif ($envs | length) == 1 then $envs[0] else $envs end) } ] as $P
+            value: (if ($envs | length) == 0 then null elif $shared or ($envs | length) > 1 then $envs else $envs[0] end) } ] as $P
     | { zones: $P,
         problems: (
           [ $E[] | select(.self != null and .self != .name)
@@ -102,15 +108,15 @@ plan="$(jq --argjson E "${envs}" '
                  | "environment \(.own | join(", ")) names zone \(.zone) as its zone, but that is a \(if .type == "" then "untyped" else .type end) zone" ]
         + [ $P[] | select(.hadServes and .serves == null)
                  | "zone \(.zone): serves is not an environment name or a list of them" ]
-        + [ $P[] | select((.serves // []) | length > 0) | select(.type | IN("Client", "IoT", "Guest") | not)
-                 | "zone \(.zone) is a \(if .type == "" then "untyped" else .type end) zone and carries serves (only Client, IoT and Guest zones serve an environment)" ]
+        + [ $P[] | select((.serves // []) | length > 0) | select(.type | IN("Client", "IoT", "Guest") | not) | select(.shared | not)
+                 | "zone \(.zone) is a \(if .type == "" then "untyped" else .type end) zone and carries serves (only Client, IoT and Guest zones, and a Service zone no environment names as its own, serve an environment)" ]
         + [ $P[] | select((.own | length) > 1)
                  | "zone \(.zone) is named as their zone by \(.own | length) environments (\(.own | join(", "))) — a zone is the zone of one environment" ]
         + [ $P[] | select((.own | length) == 1 and (.serves // []) != [] and (.serves // []) != .own)
                  | "zone \(.zone) is environment \(.own[0])'"'"'s zone but serves \(.serves | join(", "))" ]
         + [ $P[] | select((.own | length) == 1 and (.envs | length) > 1)
                  | "zone \(.zone) is environment \(.own[0])'"'"'s zone but already names \(.envs - .own | join(", "))" ]
-        + ( [ $P[] | select(.type | IN("Service", "Management")) | select((.envs | length) == 1) | {e: .envs[0], z: .zone} ]
+        + ( [ $P[] | select(.type | IN("Service", "Management")) | select((.envs | length) == 1 and (.shared | not)) | {e: .envs[0], z: .zone} ]
             | group_by(.e) | map(select(length > 1))
             | map("environment \(.[0].e) would be named by \(length) Service/Management zones (\(map(.z) | join(", ")))") )
         ) }' "${ZONES}")"
@@ -124,7 +130,7 @@ fi
 # What changes: zones that gain (or keep) a link, zones that lose `serves`,
 # environment files that lose `network`.
 links="$(jq -r '.zones[] | select(.value != null and .current != .value)
-                | "\(.zone) \(.envs | join(",")) \(if (.own | length) > 0 then "own" else "serves" end)"' <<<"${plan}")"
+                | "\(.zone) \(.envs | join(",")) \(if (.own | length) > 0 then "own" elif .shared then "shared" else "serves" end)"' <<<"${plan}")"
 drop_serves="$(jq -r '.zones[] | select(.hadServes) | .zone' <<<"${plan}")"
 drop_net="$(jq -r '.[] | select(.hasNet) | .file' <<<"${envs}")"
 
@@ -138,6 +144,7 @@ describe() {
     while read -r z e how; do
         [[ -n "${z}" ]] || continue
         if [[ "${how}" == own ]]; then say "${verb} zone ${z} environment ${e} (its zone)"
+        elif [[ "${how}" == shared ]]; then say "${verb} zone ${z} environment ${e//,/, } (a shared service zone: it serves ${e//,/, })"
         else say "${verb} zone ${z} environment ${e//,/, } (it serves ${e//,/, })"; fi
     done <<<"${links}"
 }
