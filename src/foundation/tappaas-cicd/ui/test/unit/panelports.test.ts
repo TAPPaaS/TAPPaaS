@@ -7,7 +7,7 @@
 // panel's ports must be read from the segments.
 
 import { CableView, PositionsDoc, chainSegments } from "../../../lib/ts/src/positions";
-import { freePanelPorts, panelPortUse } from "../../web/src/physical/devicegraph";
+import { freePanelPorts, linkId, panelPortSel, panelPortUse, splittable } from "../../web/src/physical/devicegraph";
 import { RackCable, Topology } from "../../web/src/types";
 import { check, done } from "./check";
 
@@ -48,4 +48,10 @@ check(use.get("12")?.front?.device === "crs-a" && !use.get("12")?.rear, "port 12
 check([...use.keys()].sort().join() === "12,6,9", "no other port is cabled");
 const free = freePanelPorts(t);
 check(free.length === 21 && !free.includes(`${PP}:9`) && !free.includes(`${PP}:6`) && !free.includes(`${PP}:12`) && free.includes(`${PP}:1`), `the free ports (Attach to patch panel…): 21, not 6, 9 or the half-used 12 (${free.length})`);
+const s9 = panelPortSel(t, PP, "9");
+check(s9.kind === "link" && s9.id === linkId(USW, "tappaas2") && s9.port === `${PP}:9`, "a click on port 9 selects the USW ↔ tappaas2 link through it");
+const s1 = panelPortSel(t, PP, "1");
+check(s1.kind === "panelport" && s1.id === "1" && s1.panel === PP, "a click on a free port selects the port");
+const sp = splittable(t).map((x) => x.end);
+check(sp.includes(`${USW}:5`) && !sp.includes(`${USW}:2`) && !sp.some((e) => e.startsWith("crs-a")), `a free port offers the links not yet through a panel (${sp.join(", ")})`);
 done("panelports");

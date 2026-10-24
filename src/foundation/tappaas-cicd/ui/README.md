@@ -78,7 +78,7 @@ rack…, Record a device… (`position-manager device add`: kind, a catalog mode
 site's own plates first in the model list), the last also in a rack's and a room's card, and Add a faceplate…
 (`position-manager faceplate add`: a plate for a model the catalog lacks — its key, units, width, kind and ports as a
 port spec the form explains, drawn as the rack will draw it while the fields change), and a How to card while nothing is selected; a click on a cable opens its link, whose panel
-lists the wires and offers Attach to patch panel… (`position-manager cable split`, its `--check` the
+lists the wires and offers Attach to patch panel…; a click on a patch panel's port (on its plate or in its port table) opens the link through it, a free one its port with Attach a wire here… (the links that could run through it), (`position-manager cable split`, its `--check` the
 preview, the free panel ports to choose from) or Remove patch panel (`cable join`); a click on a plate or a port
 opens the side card to the left of the racks, with the device's location and placement as two
 lines — the location a link to its row on the Site page, the placement to its rack or room in the

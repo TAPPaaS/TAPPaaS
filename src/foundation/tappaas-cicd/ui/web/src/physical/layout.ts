@@ -16,6 +16,7 @@ export type Sel =
   | { kind: "rack"; id: string }
   | { kind: "room"; id: string }
   | { kind: "mount"; id: string }
+  | { kind: "panelport"; id: string; panel: string } // a free patch panel port
   | { kind: "disk"; id: string; node: string } // id: the device
   | { kind: "pool"; id: string; node: string }
   | { kind: "link"; id: string; port?: string }; // id: devicegraph.ts linkId; port: the end clicked, "<device>:<port>"

@@ -21,7 +21,7 @@ import { PlaceActions, RecordDeviceButton, RecordSeenButton, cableAddSteps, cabl
 import { publicAddress } from "../zonegraph";
 import { StorageNote } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
-import { DevLink, DevNode, deviceGraph, deviceState, freePanelPorts, panelPortUse, selectedDevice } from "./devicegraph";
+import { DevLink, DevNode, deviceGraph, deviceState, freePanelPorts, isPatchPanel, panelPortSel, panelPortUse, selectedDevice, splittable } from "./devicegraph";
 import { iconOf, kindName } from "./devicecard";
 import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
@@ -103,9 +103,11 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
   const locations = useSiteLocations();
   const g = useMemo(() => deviceGraph(t), [t]);
   const devOf = (id: string): DevNode | undefined => g.nodes.find((n) => n.id === id);
-  // A port clicked in a drawing: a switch's port is selected, any other's link.
+  // A port clicked in a drawing: a switch's port is selected, a patch panel's
+  // the link through it (else the free port), any other's link.
   const portClick = (d: DevNode) => (port: string) => {
     if (d.kind === "switch") return pick({ kind: "port", id: port, switch: d.name });
+    if (isPatchPanel(t, d.name)) return pick(panelPortSel(t, d.name, port));
     const l = portsOf(g.links, d.name).get(port);
     if (l) pick({ kind: "link", id: l.id, port: `${d.name}:${port}` });
   };
@@ -505,7 +507,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
             <table className="table compact small">
               <tbody>
                 {l.cables.map((c, i) => (
-                  <tr key={i} className={sel.port && (sel.port === `${c.from.device}:${c.from.port}` || sel.port === `${c.to.device}:${c.to.port}`) ? "row-on" : undefined}>
+                  <tr key={i} className={sel.port && (sel.port === `${c.from.device}:${c.from.port}` || sel.port === `${c.to.device}:${c.to.port}` || c.via?.some((v) => sel.port === `${v.device}:${v.port}`)) ? "row-on" : undefined}>
                     <td className="mono">{c.from.device}:{c.from.port}</td>
                     <td className="mono">{c.to.device}:{c.to.port}</td>
                     <td className="muted">
@@ -606,6 +608,27 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       open = <p className="muted small">A room is a record of config/positions.json only.</p>;
       break;
     }
+    case "panelport": {
+      // A patch panel's port nothing is cabled to: the links that could run through it.
+      const use = panelPortUse(racks?.cables ?? [], sel.panel).get(sel.id);
+      title = `${sel.panel} · port ${sel.id}`;
+      const links = splittable(t);
+      body = (
+        <>
+          <KV
+            rows={[
+              ["patch panel", <button className="linklike" onClick={() => pick({ kind: "mount", id: sel.panel })}>{sel.panel}</button>],
+              ["front", use?.front ? `${use.front.device}:${use.front.port}` : <span className="muted">free</span>],
+              ["rear", use?.rear ? `${use.rear.device}:${use.rear.port}` : <span className="muted">free</span>],
+            ]}
+          />
+          <p className="small">{links.length ? "A link through this port: its device's port to the front, the rear to the far end. Attach a wire here… offers the links that could run through it." : "No link could run through it: every link is through a panel already, or has none."}</p>
+        </>
+      );
+      actions = links.length && !use?.front && !use?.rear ? <PanelAttach panelPort={`${sel.panel}:${sel.id}`} links={links} /> : null;
+      open = <p className="muted small">A patch panel is a record of config/positions.json only.</p>;
+      break;
+    }
     case "mount": {
       // A device a node, switch or access point card does not cover: a machine,
       // a device module, a passive plate (patch panel, PDU) or a device a cable
@@ -655,7 +678,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["description", m?.description ?? rec?.description ?? null],
             ]}
           />
-          {rec?.kind === "patch-panel" ? <PanelPorts t={t} panel={sel.id} ports={rec.ports ?? []} /> : null}
+          {rec?.kind === "patch-panel" ? <PanelPorts t={t} panel={sel.id} ports={rec.ports ?? []} pick={pick} /> : null}
           <h3>Cables</h3>
           {cables.length === 0 ? <p className="muted small">No cable on it.</p> : null}
           <ul className="plain">
@@ -695,7 +718,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
   // A device's panel: its drawing on top, its neighbours below its records.
   const dev = sel.kind === "link" || sel.kind === "disk" || sel.kind === "pool" || sel.kind === "rack" ? undefined : devOf(selectedDevice(g, sel) ?? "");
   const st = dev ? deviceState(t, dev) : null;
-  const ringed = new Set(sel.kind === "port" ? [sel.id] : sel.kind === "lag" ? t.switches.find((x) => x.name === sel.switch)?.lags.find((x) => x.name === sel.id)?.ports ?? [] : []);
+  const ringed = new Set(sel.kind === "port" || sel.kind === "panelport" ? [sel.id] : sel.kind === "lag" ? t.switches.find((x) => x.name === sel.switch)?.lags.find((x) => x.name === sel.id)?.ports ?? [] : []);
   return (
     <aside className="sidepanel">
       <header>
@@ -708,7 +731,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       </header>
       {dev ? drawing(dev, ringed) : null}
       {body ?? <p className="muted">Not in the current topology.</p>}
-      {dev && sel.kind !== "port" && sel.kind !== "lag" ? neighbours(dev) : null}
+      {dev && sel.kind !== "port" && sel.kind !== "lag" && sel.kind !== "panelport" ? neighbours(dev) : null}
       {actions && operator ? (
         <>
           <h3>Change</h3>
@@ -825,8 +848,9 @@ function PanelJoin({ c }: { c: RackCable }) {
   );
 }
 
-// A patch panel's ports: each side's far end, a port cabled on one side only half used.
-function PanelPorts({ t, panel, ports }: { t: Topology; panel: string; ports: string[] }) {
+// A patch panel's ports: each side's far end, a port cabled on one side only
+// half used; a port's row selects what a click on it on the plate does.
+function PanelPorts({ t, panel, ports, pick }: { t: Topology; panel: string; ports: string[]; pick: (s: Sel) => void }) {
   const use = panelPortUse(t.positions?.cables ?? [], panel);
   const free = ports.filter((p) => !use.get(p)?.front && !use.get(p)?.rear).length;
   const half = ports.filter((p) => !use.get(p)?.front !== !use.get(p)?.rear).length;
@@ -834,7 +858,7 @@ function PanelPorts({ t, panel, ports }: { t: Topology; panel: string; ports: st
   return (
     <>
       <p className="small howto-line">
-        {free} of {ports.length} ports free{half ? `, ${half} cabled on one side only` : ""}. To use one: select a wire and Attach to patch panel….
+        {free} of {ports.length} ports free{half ? `, ${half} cabled on one side only` : ""}. To use one: select a wire and Attach to patch panel…, or click a free port.
       </p>
       <h3>Ports</h3>
       <table className="table compact small">
@@ -847,7 +871,7 @@ function PanelPorts({ t, panel, ports }: { t: Topology; panel: string; ports: st
             const state = u?.front && u?.rear ? "used" : u?.front || u?.rear ? "half used" : "";
             return (
               <tr key={p} className={state ? "row-used" : undefined}>
-                <td className="mono">{p}</td>
+                <td><button className="linklike mono" onClick={() => pick(panelPortSel(t, panel, p))}>{p}</button></td>
                 <td>{side(u?.front)}</td>
                 <td>{side(u?.rear)}</td>
                 <td className="muted">{state}</td>
@@ -860,3 +884,23 @@ function PanelPorts({ t, panel, ports }: { t: Topology; panel: string; ports: st
   );
 }
 
+// Attach a wire here…: a link, chosen by the end it starts from, split through this panel port.
+function PanelAttach({ panelPort, links }: { panelPort: string; links: { end: string; text: string }[] }) {
+  return (
+    <OperateButton
+      label="Attach a wire here…"
+      title={`A link through ${panelPort}`}
+      steps={[
+        {
+          title: `position-manager cable split <device:port> --via '${panelPort}'`,
+          bin: "position-manager",
+          verb: "cable split",
+          only: [],
+          initial: { "--via": panelPort },
+          choices: { "@device:port": links.map((l) => l.end) },
+          note: <>The link on the port you choose becomes two recorded wires: that port to {panelPort}'s front, its rear to the far end. The links: {links.map((l) => l.text).join("; ")}. Preview: position-manager's --check.</>,
+        },
+      ]}
+    />
+  );
+}

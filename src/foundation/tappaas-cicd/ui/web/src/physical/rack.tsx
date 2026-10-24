@@ -20,7 +20,7 @@ import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, TopoOutsi
 import { navigate } from "../ui";
 import { locationHref } from "../locations";
 import { Sel } from "./layout";
-import { linkId } from "./devicegraph";
+import { isPatchPanel, linkId, panelPortSel } from "./devicegraph";
 import { Box, Placed, nameArea, portCells } from "./platelayout";
 import { PortAt, routeCables } from "./cableroute";
 
@@ -209,7 +209,7 @@ export function cableStyle(c: RackCable, t: Topology): { stroke: string; width: 
 }
 
 // The cable a click on <device>:<port> selected.
-const tagged = (c: RackCable, port: string): boolean => [c.from, c.to].some((e) => `${e.device}:${e.port}` === port);
+const tagged = (c: RackCable, port: string): boolean => [c.from, c.to, ...(c.via ?? [])].some((e) => `${e.device}:${e.port}` === port);
 
 // A selected cable's label, halfway along it: what it is and its two ports.
 export function cableTag(c: RackCable, w: { from: { device: string; port: string }; to: { device: string; port: string } }): string {
@@ -264,7 +264,7 @@ export function selOf(kind: Placed["kind"], device: string, port?: string): Sel 
 }
 
 const isSel = (s: Sel | null, kind: Placed["kind"], device: string): boolean =>
-  !!s && (((s.kind === "node" || s.kind === "switch" || s.kind === "ap" || s.kind === "mount") && s.id === device) || (s.kind === "port" && s.switch === device && kind === "switch"));
+  !!s && (((s.kind === "node" || s.kind === "switch" || s.kind === "ap" || s.kind === "mount") && s.id === device) || (s.kind === "port" && s.switch === device && kind === "switch") || (s.kind === "panelport" && s.panel === device));
 
 // One faceplate: its name and model on the left, its LED, its port grid with
 // each port's live state, the cabled ones underlined, the selected one ringed.
@@ -362,9 +362,9 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
       cabled={cabledOf.get(p.device)}
       rear={rearOf.get(p.device)}
       on={isSel(sel, p.kind, p.device)}
-      portOn={(id) => (sel?.kind === "port" && sel.switch === p.device && sel.id === id) || (sel?.kind === "link" && v.cables.some((c) => linkId(c.from.device, c.to.device) === sel.id && (c.segments?.length ? c.segments : [c]).some((w) => [w.from, w.to].some((e) => e.device === p.device && e.port === id))))}
+      portOn={(id) => (sel?.kind === "port" && sel.switch === p.device && sel.id === id) || (sel?.kind === "panelport" && sel.panel === p.device && sel.id === id) || (sel?.kind === "link" && v.cables.some((c) => linkId(c.from.device, c.to.device) === sel.id && (c.segments?.length ? c.segments : [c]).some((w) => [w.from, w.to].some((e) => e.device === p.device && e.port === id))))}
       onPlate={() => pick(selOf(p.kind, p.device))}
-      onPort={(id) => pick(selOf(p.kind, p.device, id))}
+      onPort={(id) => pick(isPatchPanel(t, p.device) ? panelPortSel(t, p.device, id) : selOf(p.kind, p.device, id))}
     />
   );
 

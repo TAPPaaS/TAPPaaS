@@ -163,6 +163,22 @@ export function freePanelPorts(t: Topology): string[] {
     });
 }
 
+// What a click on a patch panel's port selects: the link a wire on it belongs
+// to (both its wires, through the port), else the free port itself.
+export function panelPortSel(t: Topology, panel: string, port: string): Sel {
+  const u = panelPortUse(t.positions?.cables ?? [], panel).get(port);
+  const c = (u?.front ?? u?.rear)?.cable;
+  return c ? { kind: "link", id: linkId(c.from.device, c.to.device), port: `${panel}:${port}` } : { kind: "panelport", id: port, panel };
+}
+
+// The links a free panel port could carry: each cable of its own (not split
+// already, no panel at an end, no power), by the end the split starts from.
+export function splittable(t: Topology): { end: string; text: string }[] {
+  return (t.positions?.cables ?? [])
+    .filter((c) => !c.segments?.length && c.kind !== "power" && !isPatchPanel(t, c.from.device) && !isPatchPanel(t, c.to.device))
+    .map((c) => ({ end: `${c.from.device}:${c.from.port}`, text: `${c.from.device}:${c.from.port} — ${c.to.device}:${c.to.port}` }));
+}
+
 // ── state ─────────────────────────────────────────────────────────────
 export interface DevState {
   state: CardState;
@@ -213,6 +229,7 @@ export function selectedDevice(g: { nodes: DevNode[] }, s: Sel | null): string |
   if (!s) return null;
   if (s.kind === "port" || s.kind === "lag") return s.switch;
   if (s.kind === "link") return null;
+  if (s.kind === "panelport") return s.panel;
   const n = g.nodes.find((x) => x.sel.kind === s.kind && x.sel.id === s.id);
   return n?.id ?? null;
 }
