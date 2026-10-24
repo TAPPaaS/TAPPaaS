@@ -75,37 +75,161 @@ site's backup keys — one kept onsite, one offsite. The emergency key goes on t
 Rewriting that stick later replaces only the backup keys; `kingdom/` stays (`--format` would erase
 it).
 
-**Making the emergency key** (once per owner, on a laptop, Wi-Fi off if you can):
+The command blocks below have no comments in them: pasted at an interactive zsh prompt (the
+macOS default), a `#` comment is an error rather than ignored.
 
-```bash
-ssh-keygen -t ed25519 -C <you>-emergency -f tappaas-emergency-<you>     # a strong passphrase
-```
+### Setting up a Mac (once)
 
-Write the passphrase on paper and keep it apart from the stick — and not only in your vault: this
-key is for the day the vault is gone. Copy `tappaas-emergency-<you>` and its `.pub` into `kingdom/`
-on the offsite stick, check they are there, and delete the private key from the laptop. Its
-public key goes into `allowed_signers` as `recovery@tappaas.org namespaces="git" … <you>-emergency`.
+The Bitwarden desktop app runs the SSH agent; Terminal has to be told to use it instead of macOS's
+own agent.
 
-### Enrolling a key (once a year)
+1. **Turn the agent on.** Open Bitwarden, unlock it, and open *Bitwarden → Settings…* (⌘,). Tick
+   **Enable SSH agent**, and set the authorization prompt for SSH agent use to **Always**.
+2. **Find the agent's socket.** It depends on where Bitwarden came from:
 
-1. In the Bitwarden desktop app: *New → SSH key*, type ed25519, name it `tappaas-release-<year>`.
-   In *Settings*, turn on the SSH agent and set it to ask for approval on every use.
-2. Copy the public key into `.tappaas/allowed_signers` as a new line with your principal and
-   `valid-before` one year out, add or update your row in `.tappaas/SIGNERS.md` (fingerprint:
-   `ssh-keygen -lf <file with the public key>`), and land it on `main` like any other change.
-3. It counts from the release after the one that carries it. Enrol the next year's key while the
+   ```bash
+   ls -la ~/Library/Containers/com.bitwarden.desktop/Data/.bitwarden-ssh-agent.sock ~/.bitwarden-ssh-agent.sock
+   ```
+
+   The one listed with an `s` at the start of its permissions is the socket — the
+   `Library/Containers/…` path for the Mac App Store version, `~/.bitwarden-ssh-agent.sock` for the
+   one downloaded from bitwarden.com. Neither listed: the agent is not on yet (step 1), or
+   Bitwarden is not running.
+3. **Make Terminal use it, permanently.** Open `~/.zshrc` (`open -e ~/.zshrc`; `touch ~/.zshrc`
+   first if it does not exist), paste these lines at the end, and save. They work for both
+   versions, and change nothing while Bitwarden is not running:
+
+   ```bash
+   # Bitwarden SSH agent (TAPPaaS release signing)
+   _bw_sock="$HOME/Library/Containers/com.bitwarden.desktop/Data/.bitwarden-ssh-agent.sock"
+   [ -S "$_bw_sock" ] || _bw_sock="$HOME/.bitwarden-ssh-agent.sock"
+   [ -S "$_bw_sock" ] && export SSH_AUTH_SOCK="$_bw_sock"
+   unset _bw_sock
+   ```
+
+   It has to be `SSH_AUTH_SOCK`, not an `IdentityAgent` line in `~/.ssh/config`: git signs
+   through `ssh-keygen`, which reads only `SSH_AUTH_SOCK`, and `ssh -A` forwards whatever it
+   names.
+4. **Open a new Terminal window** — a window opened before the change keeps the old agent — and
+   check:
+
+   ```bash
+   echo $SSH_AUTH_SOCK
+   ```
+
+   It must end in `.bitwarden-ssh-agent.sock`. If it still shows `/var/run/com.apple.launchd…`,
+   the window is an old one (`source ~/.zshrc`, or ⌘N), or `~/.zshrc` was not saved.
+
+`ssh` still finds the keys in `~/.ssh` by file. A key there with a passphrase that macOS's agent
+used to remember will now ask for it; import that key into Bitwarden (*New → SSH key → Import*),
+or add `UseKeychain yes` under `Host *` in `~/.ssh/config`.
+
+### Enrolling a release key (once a year)
+
+1. **Create it.** In Bitwarden: *New → SSH key*, type **ed25519**, named
+   `TAPPaaS release key <year> – <your name>`. Save.
+2. **Check the agent offers it**, in a new Terminal window:
+
+   ```bash
+   ssh-add -l
+   ```
+
+   It must list the new key by name. Another key listed instead means the window is not using
+   Bitwarden's agent (Setting up a Mac, step 4).
+3. **Save its public key** — copy the public key in the Bitwarden item, then:
+
+   ```bash
+   pbpaste > ~/release.pub
+   ```
+
+4. **Compare the fingerprints:**
+
+   ```bash
+   ssh-keygen -lf ~/release.pub
+   ```
+
+   The `SHA256:…` must be the one `ssh-add -l` showed and the one Bitwarden shows.
+5. **Test that signing asks for approval:**
+
+   ```bash
+   echo test > /tmp/t && ssh-keygen -Y sign -f ~/release.pub -n test /tmp/t
+   ```
+
+   Bitwarden asks; approve, and it prints `Signing file /tmp/t`. Then `rm /tmp/t /tmp/t.sig`.
+   `No private key found` means Terminal is not using Bitwarden's agent; `Couldn't load public
+   key` means the file name is wrong.
+6. **Enrol it.** Add the public key to `.tappaas/allowed_signers` as a new line with your
+   principal and `valid-before` one year out, add or update your row in `.tappaas/SIGNERS.md` with
+   the fingerprint, and land it on `main` like any other change (or send both to the other signer).
+7. It counts from the release after the one that carries it. Enrol the next year's key while the
    current one still works, then give the old line a `valid-before` — never delete it, or the
    releases it signed stop verifying.
+
+### Making the emergency key (once per owner)
+
+On a laptop, Wi-Fi off if you can, with your offsite *Keys to the Mothership* stick at hand —
+written by `backup-manager key export --usb` first, so it carries the `TAPPAASKEYS` label.
+
+1. **Create it**, with a strong passphrase:
+
+   ```bash
+   cd ~ && ssh-keygen -t ed25519 -C <you>-emergency -f tappaas-emergency-<you>
+   ```
+
+   The two files land in your home folder, not in `~/.ssh`. Write the passphrase on paper and keep
+   it apart from the stick — and not only in your vault: this key is for the day the vault is gone.
+2. **Note its fingerprint:**
+
+   ```bash
+   ssh-keygen -lf ~/tappaas-emergency-<you>.pub
+   ```
+
+3. **Copy both files onto the offsite stick.** Plugged into a Mac it mounts as
+   `/Volumes/TAPPAASKEYS`:
+
+   ```bash
+   mkdir -p /Volumes/TAPPAASKEYS/kingdom && cp ~/tappaas-emergency-<you> ~/tappaas-emergency-<you>.pub /Volumes/TAPPAASKEYS/kingdom/ && ls -la /Volumes/TAPPAASKEYS/kingdom
+   ```
+
+   Both files must be listed. Mind the folder's spelling: `kingdom`.
+4. **Eject it, and delete the private key from the laptop** — keep the `.pub`:
+
+   ```bash
+   diskutil eject /Volumes/TAPPAASKEYS
+   ```
+
+   ```bash
+   rm ~/tappaas-emergency-<you>
+   ```
+
+5. **Enrol it.** Its public key goes into `allowed_signers` as
+   `recovery@tappaas.org namespaces="git" … <you>-emergency`, with no expiry, and its fingerprint
+   into `.tappaas/SIGNERS.md`.
+
+macOS adds `.Spotlight-V100` and `.fseventsd` to any stick it mounts; they are harmless, and a
+later `key export --usb` lists them among what it leaves in place.
 
 ### Signing a boundary or an urgent fix
 
 The train runs on the mothership; the key stays in your vault. Forward your agent and tell git
 which key to ask it for:
 
+With Bitwarden open and unlocked on your laptop:
+
 ```bash
-ssh -A tappaas@<mothership>                                   # Bitwarden agent running on your laptop
-git -C ~/TAPPaaS config user.signingkey "key::<your public key>"   # once
-tappaas-train.sh boundary                                     # approve the signature when asked
+ssh -A tappaas@<mothership>
+```
+
+Once, on the mothership — your release key's public key, as in `~/release.pub`:
+
+```bash
+git -C ~/TAPPaaS config user.signingkey "key::ssh-ed25519 AAAA…"
+```
+
+Then run the boundary; Bitwarden on your laptop asks you to approve the signature:
+
+```bash
+tappaas-train.sh boundary
 ```
 
 `tappaas-train.sh boundary` and `patch` check for a signing key **before** any branch moves, and
@@ -118,11 +242,13 @@ The image workflows publish `SHA256SUMS` with each release. CI cannot sign it, s
 build, with the agent running:
 
 ```bash
-release/sign-image-release.sh nixos-template-v1.5   # checks SHA256SUMS, signs, uploads SHA256SUMS.sig
-release/bump-version.sh --nixos 1.5                 # checks the signature, writes URL and SHA-256
+release/sign-image-release.sh nixos-template-v1.5
+release/bump-version.sh --nixos 1.5
 ```
 
-`sign-image-release.sh` refuses a `SHA256SUMS` that does not list every artefact with the digest
+The first checks `SHA256SUMS`, signs it and uploads `SHA256SUMS.sig`; the second checks that
+signature and writes the image's URL and SHA-256 into the image pointers. `sign-image-release.sh`
+refuses a `SHA256SUMS` that does not list every artefact with the digest
 the release page recorded, and checks the signature against `allowed_signers` (namespace
 `tappaas-image`) before uploading. `--dry-run` signs without uploading. Once `allowed_signers`
 lists a key, `bump-version.sh` refuses an unsigned `SHA256SUMS`. Anyone can check a download by
@@ -165,8 +291,10 @@ retired or revoked), merged to `main`; then, with the offsite stick in your lapt
 git -C ~/TAPPaaS config user.signingkey /path/to/stick/kingdom/tappaas-emergency-<you>
 tappaas-train.sh patch staging <commit> --why "security: signer recovery"
 tappaas-train.sh patch production <commit> --why "security: signer recovery"
-git -C ~/TAPPaaS config --unset user.signingkey      # and put the stick back offsite
+git -C ~/TAPPaaS config --unset user.signingkey
 ```
+
+Then put the stick back offsite.
 
 (The train runs on the mothership: copy the key there for the two commands and delete it after,
 or run them from a TAPPaaS checkout on your laptop.) The next boundary is signed with the new
