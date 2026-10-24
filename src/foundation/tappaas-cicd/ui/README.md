@@ -63,11 +63,12 @@ buddy or satellite that is there; each room of
 position-manager's `config/positions.json` as an area with its racks and, beside them, the devices
 standing loose in it; each rack as a frame with its units numbered as the rack numbers them, each placed device as its
 faceplate at its units and width with its ports' live state (link, LAG), the cabled ports
-underlined (a patch panel's rear-cabled ports overlined), the cables port to port — a short stub out
-of each port (up from a plate's upper row and a panel's rear), straight runs that bend in a gutter beside
-the rack, a lane each, a loose device reached from the gutter on its side — an access link in its zone's
-colour, a trunk in its kind's (node trunk, switch uplink, peer link, access point, device, patch), highlighted
-with a label on hover — a link through a patch panel as its two wires —, a
+underlined (a patch panel's rear-cabled ports overlined), the cables port to port — each one thin curve
+leaving its ports vertically (up from a plate's upper row and a panel's rear, down from a lower row), a
+bundle between two devices fanning out, a dot at each end, one long curve to another rack or a loose device —
+an access link in its zone's colour, a trunk in its kind's (node trunk, switch uplink, peer link, access point,
+device, patch), highlighted with a label on hover, a selected cable labelled midway with its ports — a link
+through a patch panel as its two wires —, a
 device only a cable record places beside the rack, and an Unplaced tray of the devices placed
 nowhere, by location, each with Place… (one form: a rack and its units, or loose in a room;
 `position-manager place`) — or, for a device a switch port sees and nobody recorded, Record…

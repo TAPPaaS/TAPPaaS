@@ -25,9 +25,8 @@ import { Box, Placed, nameArea, portCells } from "./platelayout";
 import { PortAt, routeCables } from "./cableroute";
 
 // Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
-// interior (wider than true scale, so a 12-port plate stays legible). The
-// cables run in gutters beside each rack (cableroute.ts).
-export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 116, margin: 80, outsideW: 230, bottom: 40, roomPad: 46, looseGap: 18, locPad: 14, roomY: 40, nowhereW: 240 };
+// interior (wider than true scale, so a 12-port plate stays legible).
+export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, top: 116, margin: 24, outsideW: 230, bottom: 40, roomPad: 18, looseGap: 18, locPad: 14, roomY: 40, nowhereW: 240 };
 
 const inner = (r: RackInfo) => (r.width === "10in" ? R.w10 : R.w19);
 const COLS: Record<string, number> = { full: 1, half: 2, third: 3 };
@@ -172,10 +171,7 @@ export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): Rack
   }
   for (const r of v.racks) if (!roomed.has(r.name)) drawRack(r);
   for (const p of placed) {
-    // A port's rack frame: its gutters run beside it. A device in no rack: its plate.
-    const rk = p.rack ? racks.find((x) => x.r.name === p.rack)! : null;
-    const [rackLeft, rackRight] = rk ? [rk.x, rk.x + inner(rk.r) + 2 * R.rail] : [p.box.x, p.box.x + p.box.w];
-    for (const c of portCells(p)) ports.set(key(p.device, c.port.id), { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2, h: c.box.h, plateY: p.box.y, plateH: p.box.h, rack: p.rack, rackLeft, rackRight });
+    for (const c of portCells(p)) ports.set(key(p.device, c.port.id), { x: c.box.x + c.box.w / 2, y: c.box.y + c.box.h / 2, h: c.box.h, plateY: p.box.y, plateH: p.box.h, rack: p.rack });
   }
   const outsideH = placed.filter((p) => p.kind === "outside").reduce((h, p) => Math.max(h, p.box.y + p.box.h), 0);
   const nowhereH = Math.max(0, ...locations.map((l) => R.roomY + 40 + l.nowhere.length * 20));
@@ -185,29 +181,40 @@ export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): Rack
   return { width: Math.max(x - R.gap + R.margin + 160, 400), height, locations, racks, rooms, placed, ports };
 }
 
-// A trunk's colour by what it joins (CABLE_KINDS below is the legend's).
+// A trunk's colour by what it joins, bright enough to tell apart on the
+// light canvas (CABLE_KINDS is also the legend's).
 export const CABLE_KINDS: { kind: string; stroke: string; label: string }[] = [
-  { kind: "lan", stroke: "#334155", label: "node trunk" },
-  { kind: "uplink", stroke: "#0f766e", label: "switch uplink" },
-  { kind: "peer-link", stroke: "#4338ca", label: "peer link" },
-  { kind: "ap", stroke: "#0369a1", label: "access point" },
-  { kind: "device", stroke: "#a16207", label: "device" },
-  { kind: "patch", stroke: "#64748b", label: "patch" },
+  { kind: "lan", stroke: "#16a34a", label: "node trunk" },
+  { kind: "uplink", stroke: "#f97316", label: "switch uplink" },
+  { kind: "peer-link", stroke: "#2563eb", label: "peer link" },
+  { kind: "ap", stroke: "#a21caf", label: "access point" },
+  { kind: "device", stroke: "#e11d48", label: "device" },
+  { kind: "patch", stroke: "#0891b2", label: "patch" },
 ];
+export const CABLE_DOWN = "#dc2626";
 
-// A cable's colour and dash, as the Device view draws links: a wan link
-// dashed in the wan colour, an access link in its zone's colour, a trunk in
-// its kind's colour, a link that is down red and dotted.
+// A cable's colour and dash: a wan link dashed in the wan colour, an access
+// link in its zone's colour, a trunk in its kind's colour, a link that is
+// down red and dotted; thin, a LAG member a little thicker.
 export function cableStyle(c: RackCable, t: Topology): { stroke: string; width: number; dash?: string } {
-  const width = c.lag ? 3.5 : 2.5;
-  if (c.up === false) return { stroke: "#d64545", width, dash: "3 3" };
+  const width = c.lag ? 2.6 : 2;
+  if (c.up === false) return { stroke: CABLE_DOWN, width, dash: "2 3" };
   if (c.kind === "wan" || (c.zones.length === 1 && c.zones[0] === t.site.wan.zone)) return { stroke: zoneColor({ name: "wan" }), width, dash: "6 4" };
   if (c.zones.length === 1) {
     const z = t.zones.find((x) => x.name === c.zones[0]);
     return { stroke: zoneColor(z ?? { name: c.zones[0] }), width, dash: c.source === "recorded" ? "2 3" : undefined };
   }
   if (c.kind === "power") return { stroke: "#b91c1c", width: 2, dash: "1 3" };
-  return { stroke: CABLE_KINDS.find((k) => k.kind === c.kind)?.stroke ?? "#334155", width, dash: c.source === "recorded" ? "2 3" : undefined };
+  return { stroke: CABLE_KINDS.find((k) => k.kind === c.kind)?.stroke ?? "#475569", width, dash: c.source === "recorded" ? "2 3" : undefined };
+}
+
+// The cable a click on <device>:<port> selected.
+const tagged = (c: RackCable, port: string): boolean => [c.from, c.to].some((e) => `${e.device}:${e.port}` === port);
+
+// A selected cable's label, halfway along it: what it is and its two ports.
+export function cableTag(c: RackCable, w: { from: { device: string; port: string }; to: { device: string; port: string } }): string {
+  const what = c.zones.length === 1 && c.kind !== "wan" ? c.zones[0] : CABLE_KINDS.find((k) => k.kind === c.kind)?.label ?? c.kind;
+  return `${what}${c.lag ? " (LAG)" : ""} ${w.from.device}:${w.from.port} ↔ ${w.to.device}:${w.to.port}`;
 }
 
 export function cableText(c: RackCable): string {
@@ -335,9 +342,9 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
     const ok = wires
       .map((w, i) => ({ c: w.c, w, i, a: L.ports.get(key(w.from.device, w.from.port)), b: L.ports.get(key(w.to.device, w.to.port)) }))
       .filter((x): x is typeof x & { a: PortAt; b: PortAt } => !!x.a && !!x.b);
-    // Each its own route: stubs out of the ports, bends in the gutters, a lane each.
+    // Each one curve, port to port; a bundle between two devices fans out.
     const routes = routeCables(ok.map((x) => ({ a: x.a, b: x.b, rearA: x.w.from.side === "rear", rearB: x.w.to.side === "rear", device: [x.w.from.device, x.w.to.device] })));
-    return ok.map((x, k) => ({ ...x, d: routes[k].d }));
+    return ok.map((x, k) => ({ ...x, d: routes[k].d, mid: routes[k].mid }));
   }, [v, L]);
   const hovered = drawn.find((d) => d.i === hover);
 
@@ -421,19 +428,41 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
         })}
         {L.placed.map(plate)}
         {cables
-          ? drawn.map(({ c, i, d }) => {
+          ? drawn.map(({ c, i, d, a, b }) => {
               const st = cableStyle(c, t);
               const on = sel?.kind === "link" && sel.id === linkId(c.from.device, c.to.device);
               const lit = hover === i || on;
+              const op = (hover === null && !(sel?.kind === "link")) || lit ? 1 : 0.25;
               return (
-                <g key={i} className="rack-cable" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((h) => (h === i ? null : h))} onClick={(e) => (e.stopPropagation(), pick({ kind: "link", id: linkId(c.from.device, c.to.device), port: `${c.from.device}:${c.from.port}` }))}>
+                <g key={i} className="rack-cable" opacity={op} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover((h) => (h === i ? null : h))} onClick={(e) => (e.stopPropagation(), pick({ kind: "link", id: linkId(c.from.device, c.to.device), port: `${c.from.device}:${c.from.port}` }))}>
                   <path d={d} fill="none" stroke="transparent" strokeWidth={10} />
-                  {/* a pale casing: where two cables cross, each stays whole */}
-                  <path d={d} fill="none" stroke="#f8fafc" strokeWidth={st.width + 2.4} opacity={hover === null || lit ? 0.9 : 0.3} strokeLinejoin="round" strokeLinecap="round" />
-                  <path d={d} fill="none" stroke={on ? "#f59e0b" : st.stroke} strokeWidth={lit ? st.width + 1.5 : st.width} strokeDasharray={st.dash} opacity={hover === null || lit ? 0.95 : 0.3} strokeLinejoin="round" strokeLinecap="round" />
+                  <path d={d} fill="none" stroke={st.stroke} strokeWidth={lit ? st.width + 1.4 : st.width} strokeDasharray={st.dash} strokeLinecap="round" />
+                  {/* a dot where it meets each port */}
+                  <circle cx={a.x} cy={a.y} r={lit ? 3.2 : 2.4} fill={st.stroke} stroke="#ffffff" strokeWidth={0.8} />
+                  <circle cx={b.x} cy={b.y} r={lit ? 3.2 : 2.4} fill={st.stroke} stroke="#ffffff" strokeWidth={0.8} />
                 </g>
               );
             })
+          : null}
+        {cables
+          ? drawn
+              // The selected cable — the one clicked, both wires of a split one —
+              // else every cable of the selected link.
+              .filter(({ c }) => sel?.kind === "link" && sel.id === linkId(c.from.device, c.to.device))
+              .filter(({ c }, _, all) => !(sel?.kind === "link" && sel.port) || !all.some((x) => tagged(x.c, sel.port!)) || tagged(c, sel.port))
+              .map(({ c, w, i, mid }, k) => {
+                // Its label halfway along each wire, just above the curve's
+                // middle so a short cable stays in sight; several stacked.
+                const tx = cableTag(c, w);
+                const tw = tx.length * 5.3 + 10;
+                const y = mid[1] - 22 - k * 17;
+                return (
+                  <g key={`tag:${i}`} className="rack-cable-tag" pointerEvents="none">
+                    <rect x={mid[0] - tw / 2} y={y} width={tw} height={15} rx={3} fill="#ffffff" stroke={cableStyle(c, t).stroke} strokeWidth={1.2} />
+                    <text x={mid[0]} y={y + 11} textAnchor="middle" className="rack-cable-tag-text">{tx}</text>
+                  </g>
+                );
+              })
           : null}
         {hovered && cables ? (
           <g className="rack-cable-label" pointerEvents="none">

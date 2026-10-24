@@ -245,7 +245,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
                 </span>
               ))
             : null}
-          {shown === "rack" ? <span className="muted">- - wan · ··· recorded · red: no link · cables run in the gutters beside the rack, a patch panel's rear wire leaves upward · purple ring: LAG member · green port: link up</span> : null}
+          {shown === "rack" ? <span className="muted">a single-zone link in its zone's colour · - - wan · ··· recorded · red dotted: no link · a patch panel's rear wire leaves upward · select a cable for its ports · purple ring: LAG member · green port: link up</span> : null}
           {shown === "device" ? <StateLegend /> : null}
           <span className="muted">
             Data: {(t.sources ?? []).filter((s) => s.ok).map((s) => s.name).join(" · ")}
