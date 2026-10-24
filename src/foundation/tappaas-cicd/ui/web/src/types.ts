@@ -340,7 +340,16 @@ export interface ResolvedPlate {
   width: "full" | "half" | "third";
   passive: boolean;
   rows: (PlatePort | null)[][];
+  // Where its ports are: blocks side by side, each over [from, to) of the
+  // plate's width; absent, a grid right of its name.
+  blocks?: PlateBlock<PlatePort>[];
   labels: { text: string; at?: "left" | "right" }[];
+  site?: true; // the site's own faceplate
+}
+export interface PlateBlock<P> {
+  from: number;
+  to: number;
+  rows: (P | null)[][];
 }
 export interface PlacementInfo {
   device: string;

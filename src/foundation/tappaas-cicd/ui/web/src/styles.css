@@ -391,6 +391,7 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .rack-unit { font-size: 9.5px; fill: #64748b; text-anchor: middle; font-family: ui-monospace, monospace; }
 .rack-name { font-size: 11px; font-weight: 600; fill: #f1f5f9; }
 .rack-name-dark { fill: var(--ink); }
+.rack-name-top { font-size: 8.5px; font-weight: 600; }
 .rack-sub { font-size: 9px; fill: #94a3b8; }
 .rack-sub-dark { fill: var(--muted); }
 .rack-plate, .rack-port { cursor: pointer; }
@@ -525,3 +526,6 @@ button.mod-tile:hover { background: var(--info-bg); }
 .howto li { margin-bottom: 6px; }
 .howto-line { background: var(--info-bg); border-radius: 6px; padding: 6px 8px; }
 .kv-with-actions { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.faceplate-preview { margin: 6px 0 10px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #f8fafc; }
+.faceplate-preview svg { display: block; max-width: 560px; }
+.faceplate-examples { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }

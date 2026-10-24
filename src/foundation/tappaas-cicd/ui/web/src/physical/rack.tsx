@@ -16,11 +16,12 @@
 
 import { ReactNode, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { zoneColor } from "../colors";
-import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, ResolvedPlate, TopoOutside, Topology } from "../types";
+import { PlatePort, RackCable, RackInfo, PlacementInfo, PositionsView, TopoOutside, Topology } from "../types";
 import { navigate } from "../ui";
 import { locationHref } from "../locations";
 import { Sel } from "./layout";
 import { linkId } from "./devicegraph";
+import { Box, Placed, nameArea, portCells } from "./platelayout";
 
 // Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
 // interior (wider than true scale, so a 12-port plate stays legible).
@@ -37,22 +38,8 @@ const span = (m: { width: string; slot: number }): [number, number] => {
 const rowOf = (r: RackInfo, unit: number) => (r.numbering === "top-down" ? unit - 1 : r.units - unit);
 const unitAt = (r: RackInfo, row: number) => (r.numbering === "top-down" ? row + 1 : r.units - row);
 
-export interface Box {
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-export interface Placed {
-  device: string;
-  kind: PlacementInfo["kind"] | "outside";
-  plate: ResolvedPlate | null;
-  box: Box;
-  up: boolean | null;
-  title: string;
-  sub: string;
-  rack: string | null;
-}
+export type { Box, Placed } from "./platelayout";
+
 export interface RackLayout {
   width: number;
   height: number;
@@ -67,29 +54,6 @@ export interface RackLayout {
 }
 
 const key = (device: string, port: string) => `${device}\u0000${port}`;
-
-// Where every port of every plate is drawn: one cell per port of the plate's
-// grid, right-aligned, the label on the left.
-export function portCells(p: Placed): { port: PlatePort; box: Box }[] {
-  const rows = p.plate?.rows ?? [];
-  if (!rows.length) return [];
-  const cols = Math.max(...rows.map((r) => r.length), 1);
-  const labelW = Math.min(124, p.box.w * 0.34);
-  const avail = p.box.w - labelW - 12;
-  const cw = Math.max(9, Math.min(22, avail / cols));
-  const ch = Math.max(7, Math.min(13, (p.box.h - 8) / rows.length - 3));
-  const gridW = cols * cw;
-  const gridH = rows.length * (ch + 3);
-  const x0 = p.box.x + p.box.w - 8 - gridW;
-  const y0 = p.box.y + (p.box.h - gridH) / 2 + 1.5;
-  const out: { port: PlatePort; box: Box }[] = [];
-  rows.forEach((row, ri) =>
-    row.forEach((c, ci) => {
-      if (c) out.push({ port: c, box: { x: x0 + ci * cw + 1, y: y0 + ri * (ch + 3), w: cw - 3, h: ch } });
-    }),
-  );
-  return out;
-}
 
 // What stands at a location placed nowhere: its unplaced devices, then the
 // backup buddies and satellites the topology has there (a satellite is also a
@@ -307,8 +271,13 @@ const isSel = (s: Sel | null, kind: Placed["kind"], device: string): boolean =>
 export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: Placed; on: boolean; portOn: (id: string) => boolean; cabled?: Set<string>; rear?: Set<string>; onPlate: () => void; onPort: (id: string) => void }) {
   const cells = portCells(p);
   const led = p.up === true ? "#2f9e44" : p.up === false ? "#d64545" : "#9aa4b2";
-  const labelW = Math.min(124, p.box.w * 0.34);
-  const tight = p.box.h < 34;
+  const na = nameArea(p.plate);
+  const onTop = na.at === "top";
+  // The name's place: left of the ports, right of them, or a strip along the top.
+  const nx = p.box.x + p.box.w * na.from;
+  const labelW = na.at === "left" && !p.plate?.blocks?.length ? Math.min(124, p.box.w * 0.34) : onTop ? p.box.w - 40 : p.box.w * (na.to - na.from) - 24;
+  const tight = p.box.h < 34 || onTop;
+  const dark = p.kind === "outside" || p.plate?.passive;
   return (
     <g className="rack-plate" onClick={(e) => (e.stopPropagation(), onPlate())}>
       <title>{`${p.title} — ${p.sub}`}</title>
@@ -320,14 +289,14 @@ export function PlateSvg({ p, on, portOn, cabled, rear, onPlate, onPort }: { p: 
           <circle cx={p.box.x + p.box.w + R.rail / 2 - 1} cy={p.box.y + R.u / 2 - 1} r={2.2} fill="#94a3b8" />
         </>
       ) : null}
-      <circle cx={p.box.x + 8} cy={p.box.y + 8} r={3.4} fill={led}>
+      <circle cx={nx + (onTop ? 6 : 8)} cy={p.box.y + (onTop ? 6 : 8)} r={onTop ? 2.6 : 3.4} fill={led}>
         <title>{p.up === true ? "up: a port has link" : p.up === false ? "no port has link" : "no live state known"}</title>
       </circle>
-      <text x={p.box.x + 15} y={p.box.y + (tight ? p.box.h / 2 + 4 : 13)} className={p.kind === "outside" || p.plate?.passive ? "rack-name rack-name-dark" : "rack-name"}>
-        {p.title.length * 6.4 > labelW + 30 && cells.length ? `${p.title.slice(0, Math.max(6, Math.floor((labelW + 30) / 6.4) - 1))}…` : p.title}
+      <text x={nx + (onTop ? 12 : 15)} y={p.box.y + (onTop ? 9 : tight ? p.box.h / 2 + 4 : 13)} className={`${dark ? "rack-name rack-name-dark" : "rack-name"}${onTop ? " rack-name-top" : ""}`}>
+        {onTop ? `${p.title}${p.plate ? ` · ${p.plate.vendor} ${p.plate.model}` : ""}`.slice(0, Math.max(8, Math.floor(labelW / 5.2))) : p.title.length * 6.4 > labelW + 30 && cells.length ? `${p.title.slice(0, Math.max(6, Math.floor((labelW + 30) / 6.4) - 1))}…` : p.title}
       </text>
       {!tight ? (
-        <text x={p.box.x + 15} y={p.box.y + 25} className={p.kind === "outside" || p.plate?.passive ? "rack-sub rack-sub-dark" : "rack-sub"}>
+        <text x={nx + 15} y={p.box.y + 25} className={dark ? "rack-sub rack-sub-dark" : "rack-sub"}>
           {p.sub.length * 5.4 > labelW + 20 && cells.length ? `${p.sub.slice(0, Math.max(6, Math.floor((labelW + 20) / 5.4) - 1))}…` : p.sub}
         </text>
       ) : null}

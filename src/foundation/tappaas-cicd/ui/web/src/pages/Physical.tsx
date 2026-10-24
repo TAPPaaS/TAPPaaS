@@ -13,6 +13,7 @@ import { OperateButton } from "../operate";
 import { Sel } from "../physical/layout";
 import { DeviceGraph } from "../physical/deviceview";
 import { RackCanvas } from "../physical/rack";
+import { faceplateAddSteps } from "../physical/faceplateform";
 import { AddRoomButton, PhysicalHowTo, PlaceActions, RecordDeviceButton, RecordSeenButton, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
 import { Health, PositionsView, StorageInventory, Topology } from "../types";
@@ -158,6 +159,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
                 <AddRoomButton />
                 <OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} />
                 <RecordDeviceButton />
+                <OperateButton label="Add a faceplate…" title="Add a faceplate" steps={faceplateAddSteps} hint="A plate for a device model the catalog lacks" />
               </>
             ) : null}
           </>
