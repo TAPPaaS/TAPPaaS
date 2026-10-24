@@ -190,6 +190,7 @@ syslog-manager reconfigure
 ipv6-manager apply [--check-mode] [--config-dir <dir>]   # converge to site.json + zones.json
 ipv6-manager status                                      # does the firewall allow IPv6
 ipv6-manager gateway <zone>                              # the firewall's IPv6 address in a zone (exit 3: none)
+ipv6-manager wan [--json]                                # the WAN's IPv6 router, route, gateway, prefix (read-only)
 ```
 
 `apply` is what the `network` module's update runs: *Allow IPv6* from `site.json` `ipv6`, the
@@ -198,6 +199,10 @@ advertisements and AAAA names; then the AAAA records of published names and the 
 in Caddy's access lists, from what the interfaces hold. Switching off withdraws each zone's
 IPv6 route before removing it. What it all means for an operator:
 [IPV6.md](../../manager/network-manager/IPV6.md).
+
+`wan` reads over SSH alone (no API): the router OPNsense records, the default route and
+whether its router answers on the WAN, the `WAN_DHCP6` gateway, the delegated prefix and
+whether rtsold runs. health-manager's `ipv6-egress` gate reads it.
 
 ### `mdns-manager` — mDNS discovery across zones
 

@@ -15,6 +15,10 @@ Allowing IPv6 gives no zone an IPv6 address; that is #26, behind its own ADR.
 Commands:
   ipv6-manager status
   ipv6-manager apply [--allow true|false] [--config-dir DIR] [--check-mode]
+  ipv6-manager wan [--json]
+
+`wan` reads the WAN's IPv6 router, default route, gateway and prefix (ssh only,
+no change) — what the ipv6-egress health gate reads.
 
 `apply` converges the whole of ADR-030 from config/site.json and the zones: the
 switch, the WAN's IPv6, the site prefix, each zone's IPv6 and its router
@@ -44,6 +48,7 @@ from .dual_stack import derived_v6, read_interfaces, v6_on_network
 from .ipv6_plan import STATIC_GATEWAY_NAME, ZONE_V6_KEYS, Action, desired_state, plan
 from .service_health import _firewall_ssh, check_unbound_dns, filter_reload, unbound_restart
 from .vlan_manager import VlanManager
+from .wan6 import GATEWAY_NAME, Advert, WanState, parse_adverts, parse_wan, READ_SH, SOLICIT_SH
 
 
 def _client(args):
@@ -500,6 +505,40 @@ def converge_published(mgr, config: Config, host: str, check_mode: bool,
     return True
 
 
+def read_wan(host: str) -> WanState:
+    """The WAN's IPv6 router, route, gateway and prefix, read-only."""
+    return parse_wan(_fw(host, READ_SH, timeout=60.0))
+
+
+def solicit(host: str, wanif: str) -> list[Advert]:
+    """Send one router solicitation on the WAN; the routers that answer."""
+    return parse_adverts(_fw(host, SOLICIT_SH % wanif, timeout=60.0))
+
+
+def _wan_lines(s: WanState, adverts: list[Advert] | None = None) -> list[str]:
+    def nb(addr: str) -> str:
+        n = s.neighbour(addr)
+        if not addr:
+            return ""
+        if n is None:
+            return " (not probed)"
+        return " (answers)" if n.answers else " (does not answer: not a neighbour)"
+    lines = [
+        f"WAN interface:     {s.wanif or '(none)'}",
+        f"recorded router:   {s.recorded or '(none)'}{nb(s.recorded)}",
+        f"default route:     {('via ' + s.route) if s.route else '(none)'}{nb(s.route)}",
+        f"{GATEWAY_NAME} gateway: {s.gateway or '(none)'}",
+        f"delegated prefix:  {s.prefix or '(none)'}",
+        f"WAN address:       {s.address or '(none)'}",
+        f"rtsold:            {'running' if s.rtsold else 'NOT running'}",
+    ]
+    if adverts is not None:
+        lines.append("advertising now:   " + (", ".join(
+            f"{a.router} (lifetime {a.lifetime}s{', managed' if a.managed else ''})" for a in adverts)
+            or "(no answer to a solicitation)"))
+    return lines
+
+
 def main():
     # Global options work on either side of the subcommand (#379); see cli_globals.py.
     gp = make_global_parent()
@@ -528,6 +567,9 @@ Examples:
     p_gw.add_argument("zone", help="zone name from zones.json")
     p_gw.add_argument("--config-dir", default=os.environ.get("CONFIG_DIR", "/home/tappaas/config"),
                       help="where zones.json is (default: /home/tappaas/config)")
+    p_wan = sub.add_parser("wan", parents=[gp],
+                           help="The WAN's IPv6 router, default route, gateway and prefix (read-only)")
+    p_wan.add_argument("--json", action="store_true", help="print the state as JSON")
     p_apply = sub.add_parser("apply", parents=[gp], help="Set 'Allow IPv6' to the site's value")
     p_apply.add_argument("--allow", type=_parse_bool, default=None,
                          help="override site.json ipv6 for the switch (default: read site.json)")
@@ -541,6 +583,23 @@ Examples:
     })
     if not args.command:
         parser.print_help()
+        sys.exit(1)
+
+    host = _probe_ip(args.firewall)
+    try:
+        # Over ssh only: the health gate reads this, and must answer when the API does not.
+        if args.command == "wan":
+            s = read_wan(host)
+            if args.json:
+                print(json.dumps(s.to_json(), indent=2))
+            else:
+                for line in _wan_lines(s):
+                    print(line)
+            sys.exit(0)
+    except Exception as exc:  # noqa: BLE001
+        print(f"ERROR: {exc}", file=sys.stderr)
+        if args.debug:
+            raise
         sys.exit(1)
 
     try:

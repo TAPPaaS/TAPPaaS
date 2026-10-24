@@ -20,6 +20,8 @@
 //                       peer and the mlag-id its record has — WARN)
 //   - control-plane-trust (ADR-035 D7: a module's controller from an unverified
 //                       repository in a foundation manager — WARN)
+//   - ipv6-egress       (#875: the firewall's IPv6 router and a public IPv6
+//                       address answering from inside the site — WARN)
 
 import { spawnSync } from "child_process";
 import { join } from "path";
@@ -30,6 +32,7 @@ import { checkCveStatus } from "./security";
 import { checkSignatureStatus } from "./signatures";
 import { checkControlPlaneTrust } from "./controlplane";
 import { checkMlagPairs } from "./mlag";
+import { checkIpv6Egress } from "./ipv6egress";
 import { primaryLocation } from "../../../lib/ts/src/locations";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
@@ -973,6 +976,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkSiteTimezone(client, opts.configDir, opts.defaultNode),
     checkQuorum(client),
     checkLanUplink(client),
+    checkIpv6Egress(opts.configDir, opts.defaultNode),
     checkSwitchPorts(opts.configDir),
     checkMlagPairs(opts.configDir),
     checkPulse(client, opts.configDir),
