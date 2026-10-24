@@ -58,6 +58,7 @@ async function main(): Promise<void> {
   const stream: Streamer = async (bin, args, onOutput) => {
     ran.push([bin, ...args].join(" "));
     onOutput(`ran ${args[0]}\n`);
+    if (args.includes("refuseme") && args.includes("--dry-run")) onOutput("[refused] memory=1 is below the module's floor\n");
     if (args.includes("hold")) await new Promise<void>((r) => (release = r));
     return { rc: args.includes("--dry-run") && args.includes("vmid=1") ? 1 : 0, ran: true, error: null };
   };
@@ -161,6 +162,47 @@ async function main(): Promise<void> {
   check(r.status === 201 && deep.kind === "preview" && deep.ran === null && deep.preview.kind === "none" && /runs the deep suite: creates and removes zztest guests/.test(jobs.get(deep.id)!.output), "…its preview runs nothing and says it creates and removes guests");
   r = await jobs.applyPreview(me(), closed, deep.id, {});
   check(r.status === 201 && r.job?.kind === "apply" && r.job.ran?.join(" ") === "module-manager test immich --deep", "…and its apply queues the deep suite as a change");
+  await settle();
+
+  // ── Apply straight from the form: the dry run, then the apply, one job ──
+  let n0 = ran.length; // before the create: its runner may start at once
+  r = await jobs.create(me(), closed, { argv: ["module-manager", "modify", "deconz-test", "--set", "memory=4096"], apply: true });
+  const two = r.job!;
+  check(r.status === 201 && two.kind === "apply" && two.previewPhase?.ran.join(" ") === "module-manager modify deconz-test --set memory=4096 --dry-run" && two.ran?.join(" ") === "module-manager modify deconz-test --set memory=4096", "Apply without a preview: one apply job that carries its dry run");
+  await settle();
+  check(two.state === "done" && two.exit === 0 && two.previewPhase?.exit === 0 && two.previewPhase.stopped === null, "a clean dry run goes straight on to the apply");
+  check(ran.slice(n0).join("|") === "module-manager modify deconz-test --set memory=4096 --dry-run|module-manager modify deconz-test --set memory=4096", `…the dry run ran first, then the apply, nothing between (${ran.slice(n0).join("|")})`);
+  const twoOut = jobs.get(two.id)!.output;
+  check(twoOut === "ran modify\nran modify\n" && two.previewPhase!.outputLength === "ran modify\n".length, "…both outputs in the job's log, the dry run's length recorded");
+  check(done_.at(-1)?.id === two.id, "…and the reads are refreshed after it");
+  const twoRec = readFileSync(jobs.file, "utf8").trim().split("\n").map((l) => JSON.parse(l) as JobSummary).filter((l) => l.id === two.id).at(-1)!;
+  check(twoRec.previewPhase?.exit === 0 && twoRec.exit === 0, "Activity's record holds both phases");
+
+  n0 = ran.length;
+  r = await jobs.create(me(), closed, { argv: ["module-manager", "modify", "deconz-test", "--set", "vmid=1"], apply: true });
+  const failed = r.job!;
+  await settle();
+  check(failed.state === "done" && failed.exit === 1 && /exit 1/.test(failed.previewPhase?.stopped ?? "") && ran.length === n0 + 1, "a failing dry run stops the job: the apply never runs");
+  check(jobs.get(failed.id)!.output === "ran modify\n" && done_.at(-1)?.id !== failed.id, "…its output is the dry run's alone, and nothing was written");
+
+  n0 = ran.length;
+  r = await jobs.create(me(), closed, { argv: ["module-manager", "modify", "refuseme", "--set", "memory=1"], apply: true });
+  const ref_ = r.job!;
+  await settle();
+  check(ref_.exit === 0 && /refuses this change: memory=1 is below/.test(ref_.previewPhase?.stopped ?? "") && ran.length === n0 + 1, "a dry run that reports a refusal stops the job, even on exit 0");
+
+  n0 = ran.length;
+  r = await jobs.create(me(), closed, { argv: ["module-manager", "suspend", "deconz-test"], apply: true });
+  const nodry = r.job!;
+  await settle();
+  check(nodry.previewPhase === undefined && nodry.exit === 0 && ran.slice(n0).join("|") === "module-manager suspend deconz-test", "a verb with no dry run applies at once, as after its preview");
+
+  r = await jobs.create(me(), closed, { argv: ["module-manager", "delete", "deconz-test", "--remove"], apply: true, confirm: "deconz-test" });
+  check(r.status === 403 && !r.job, "a destructive Apply is the Installer's");
+  r = await jobs.create(me({ role: "installer" }), closed, { argv: ["module-manager", "delete", "deconz-test", "--remove"], apply: true });
+  check(r.status === 400 && /type 'deconz-test'/.test(r.error ?? "") && !r.job, "…with the name typed before anything runs");
+  r = await jobs.create(me({ role: "installer" }), closed, { argv: ["module-manager", "delete", "deconz-test", "--remove"], apply: true, confirm: "deconz-test" });
+  check(r.status === 201 && r.job?.ran?.join(" ") === "module-manager delete deconz-test --remove", "…and then applied");
   await settle();
 
   // ── the sweep (D4) ──────────────────────────────────────────────────

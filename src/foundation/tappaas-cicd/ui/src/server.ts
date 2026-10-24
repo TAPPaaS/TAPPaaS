@@ -367,6 +367,7 @@ export class ConsoleServer {
   // ── jobs (ADR-034 D4) ─────────────────────────────────────────────
   //   GET  /jobs                 every job, newest first, and the queue
   //   POST /jobs {argv, preview}  a preview (or a read); a write never starts here
+  //   POST /jobs {argv, apply, confirm?}  the dry run, then the apply on a clean one (one job)
   //   POST /jobs/<id>/apply {confirm?}  the preview's argv with its applying flag
   //   GET  /jobs/<id>            the job with its output; as text/event-stream,
   //                              the output as it comes (server-sent events)
@@ -397,7 +398,7 @@ export class ConsoleServer {
     }
     const setup = setupState(this.cfg.access);
     let r;
-    if (!id) r = await jobs.create(me, setup, { argv: body.argv, preview: body.preview, assistant: body.assistant });
+    if (!id) r = await jobs.create(me, setup, { argv: body.argv, preview: body.preview, apply: body.apply, confirm: body.confirm, assistant: body.assistant });
     else if (sub === "apply") r = await jobs.applyPreview(me, setup, id, { confirm: body.confirm });
     else return sendJson(res, 404, { error: `jobs/${id}/${sub ?? ""}` });
     if (r.job) this.cfg.log(`job ${r.job.id} ${r.job.kind} ${r.job.state}${r.job.refused ? ` (${r.job.refused})` : ""}: ${r.job.argv.join(" ")}`);

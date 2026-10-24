@@ -154,8 +154,10 @@ result. Security is a later phase.
 
 Every change is the operate dialog (`web/src/operate.tsx`, spike §5.4): a form built from the
 verb's manifest, the exact command (copyable), Preview (the verb's own dry run, streamed), Apply
-(enabled by the preview; disruptions are labelled checkboxes; a destructive verb needs the
-object's name typed and Installer), Result; a flow of several steps runs them in order.
+(with no preview of its own, one job runs the dry run first and goes on only on a clean one —
+a refusal stops it there, shown as the preview; disruptions are labelled checkboxes; a
+destructive verb needs the object's name typed before Apply and Installer), Result; a flow of
+several steps runs them in order. Activity shows such a job's two phases.
 
 ## The owner's view — `status.<domain>`
 

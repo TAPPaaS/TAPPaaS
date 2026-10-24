@@ -7,7 +7,7 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { buildArgv } from "../../web/src/argv";
+import { buildArgv, confirmObject } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
 import { ApIn, BUDDY_KINDS, SatellitePlan, StepSpec, buddyNameProblem, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, defaultAp, defaultSsid, isPlaceholderSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
@@ -97,5 +97,12 @@ const fields = ["--displayName", "Ann Rossen", "--email", "ann@rossen.dk", "--st
 check(JSON.stringify(buildArgv(user.change, idAdd, { ...user.change.initial, "@name": "ann", "@fields": fields })) === JSON.stringify(["identity-manager", "user", "add", "ann", "--no-reconcile", ...fields]), "user add <name> --no-reconcile, then the field form's flags");
 check(JSON.stringify(buildArgv(user.reconcile, idRec, {})) === JSON.stringify(["identity-manager", "reconcile"]), "…then reconcile: its preview is the plan against Authentik");
 check(JSON.stringify(identitySpecs("group", "modify", "users").change.fixed) === '["users"]', "a modify names its object");
+
+// The typed name of a destructive Apply, known before any job (the console's rule).
+const delVerb = { verb: "delete", keys: [["delete"]], positionals: [{ name: "module", optional: false, repeatable: false }], readWhen: [], destructiveWhen: [] } as unknown as ManifestVerb;
+check(confirmObject({ bin: "module-manager" }, delVerb, { "@module": " deconz " }, ["module-manager", "delete", "deconz"]).object === "deconz", "a destructive Apply names its first positional");
+const rpVerb = { verb: "remove-port", keys: [["remove-port"]], positionals: [{ name: "switch", optional: false, repeatable: false }, { name: "port", optional: false, repeatable: false }], readWhen: [], destructiveWhen: [], object: { positional: "port", within: ["switch"] } } as unknown as ManifestVerb;
+const rp = confirmObject({ bin: "switch-manager", fixed: ["crs-a"] }, rpVerb, { "@port": "7" }, ["switch-manager", "remove-port", "crs-a", "7"]);
+check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its verb declares, within its container");
 
 done("wizards");

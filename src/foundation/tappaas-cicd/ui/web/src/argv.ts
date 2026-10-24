@@ -88,3 +88,32 @@ export function prefillValues(step: ArgvStep, verb: ManifestVerb, raw: Values, f
   if (extra.length) out["@extra"] = extra;
   return out;
 }
+
+// What a destructive call's typed confirmation names, before any job exists
+// (the console's own rule, manifest.ts): the first positional that is not a
+// marker word, else --name's value, else the verb; a verb that declares its
+// object (remove-port) is confirmed by that positional, or shown within its
+// container ("<switch>:<port>").
+export function confirmObject(step: ArgvStep, verb: ManifestVerb, values: Values, argv: string[]): { object: string; label: string } {
+  const positionals = [...(step.fixed ?? [])];
+  for (const p of verb.positionals.slice(step.fixed?.length ?? 0)) {
+    const v = values[`@${p.name}`];
+    if (typeof v === "string" && v.trim()) positionals.push(v.trim());
+  }
+  const marks = new Set([...verb.readWhen, ...verb.destructiveWhen]);
+  const n = argv.indexOf("--name");
+  let object = positionals.find((p) => !marks.has(p)) ?? (n >= 0 ? argv[n + 1] : undefined) ?? verb.verb;
+  let label = object;
+  if (verb.object) {
+    const at = (name: string): string | undefined => {
+      const i = verb.positionals.findIndex((p) => p.name === name);
+      return i >= 0 ? positionals[i] : undefined;
+    };
+    const own = at(verb.object.positional);
+    if (own !== undefined) {
+      object = own;
+      label = [...verb.object.within.map(at).filter((x): x is string => x !== undefined), own].join(":");
+    }
+  }
+  return { object, label };
+}

@@ -573,6 +573,9 @@ export interface JobSummary {
   truncated: boolean;
   refused: string | null;
   interrupted?: boolean; // the console stopped while it ran: cut off, no exit code
+  // An apply asked without a preview of its own: the dry run it ran first, how
+  // much of the output is the dry run's, and why it stopped there (no apply ran).
+  previewPhase?: { ran: string[]; exit: number | null; durationMs: number | null; outputLength: number; stopped: string | null };
 }
 export interface Job extends JobSummary {
   output: string;
@@ -609,6 +612,7 @@ export interface ManifestVerb {
   readWhen: string[];
   writeWhen: { flag: string; touches: string }[]; // a read verb's options that make a call a write with no dry run (test --deep)
   disruptions: { flag: string; consequence: string }[];
+  object?: { positional: string; within: string[] }; // the positional a typed confirmation names
 }
 export interface Manifest {
   name: string;
