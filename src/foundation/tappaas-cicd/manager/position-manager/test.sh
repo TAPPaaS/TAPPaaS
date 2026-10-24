@@ -113,7 +113,7 @@ RM rack delete rack1 >/dev/null 2>&1 && ok "rack delete: once empty" || bad "rac
 RMC() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="${HERE}/faceplates" \
     run_ts "node '${DIST}/manager/position-manager/src/main.js' $(printf "'%s' " "$@")"; }
 [[ "$(RMC faceplates list --json 2>/dev/null | jq 'length')" -ge 11 ]] && ok "faceplates list: the shipped catalog" || bad "faceplates list"
-[[ "$(RMC faceplates show mikrotik/crs317-1g-16s 2>/dev/null | grep -c '\[sfp-sfpplus')" == "2" ]] && ok "faceplates show: the CRS317's two SFP+ rows" || bad "faceplates show mikrotik/crs317-1g-16s"
+[[ "$(RMC faceplates show mikrotik/crs317-1g-16s 2>/dev/null | grep -c '\[sfp-sfpplus')" == "1" ]] && ok "faceplates show: the CRS317's one row of cages" || bad "faceplates show mikrotik/crs317-1g-16s"
 [[ "$(RMC faceplates show unifi/usw-pro-xg-10-poe --device "${USW}" --topology "${TOPO}" --json 2>/dev/null | jq -r '[.rows[][] | select(. != null and .id == "5")][0].zones[0]')" == "wan" ]] \
     && ok "faceplates show --device: port 5 carries the wan zone" || bad "faceplates show --device on the UniFi plate"
 # The site's own faceplates: added, listed as the site's, placed, changed, deleted.

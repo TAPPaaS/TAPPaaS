@@ -8,8 +8,8 @@
   "kind": "switch",
   "units": 1,
   "width": "full",
-  "description": "1U, sixteen SFP+ cages stacked in two rows of eight (sfp-sfpplus1-16, odd on top) in the left two thirds; the ether1 management port over the serial console at the start of the right third, which is otherwise blank.",
-  "ports": "16xsfp+@2:sfp-sfpplus{n}[2-66], rj45:ether1/console:console[69-73]",
+  "description": "1U, sixteen SFP+ cages in one row (sfp-sfpplus1-16) over the left two thirds of the plate, the ether1 management port and the serial console at the right end of that row; the right third is otherwise blank.",
+  "ports": "16xsfp+:sfp-sfpplus{n}[2-60], rj45:ether1+console:console[61-67]",
   "labels": [
     {
       "text": "MikroTik",

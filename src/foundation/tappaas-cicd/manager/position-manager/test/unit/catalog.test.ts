@@ -84,21 +84,20 @@ const r48 = [rowXs(rec48.blocks!, 0, 0), rowXs(rec48.blocks!, 0, 1)];
 check(rec48.units === 1 && r48[0].length === 24 && r48[1].length === 24 && near(r48[1][0], 0.04) && near(r48[1][23], 0.96) && evenly(r48[1]), "a recorded 48-port panel: two rows of 24, edge to edge, 1U");
 const rec30 = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 30 }, (_, i) => String(i + 1)) }, catalog);
 check(rec30.rows.length === 2 && rec30.rows[0].length === 15, "a recorded 30-port panel: two rows of 15");
-// The UniFi switch: one row, thirteen places across the plate (a gap before the SFP+).
+// The UniFi switch: one row of twelve, evenly over the right half (the left half its display).
 const ux = portXs(usw.blocks!);
-const pitch = 0.96 / 13;
-check(usw.blocks!.length === 1 && near(ux["1"], 0.02 + pitch / 2) && near(ux["10"], 0.02 + 9.5 * pitch) && near(ux["11"], 0.02 + 11.5 * pitch) && near(ux["12"], 0.98 - pitch / 2), `UniFi: 1 at ${ux["1"]}, 10 at ${ux["10"]}, 11 at ${ux["11"]}, 12 at ${ux["12"]}`);
-check(evenly(Array.from({ length: 10 }, (_, i) => ux[String(i + 1)])), "UniFi: 1-10 evenly apart");
-// The CRS317: the cages two rows of eight in the left two thirds, ether1 over
-// the console just right of them, the rest of the right third blank.
+const pitch = 0.47 / 12;
+const uRow = Array.from({ length: 12 }, (_, i) => ux[String(i + 1)]);
+check(usw.blocks!.length === 1 && near(ux["1"], 0.51 + pitch / 2) && near(ux["12"], 0.98 - pitch / 2) && evenly(uRow), `UniFi: 1-12 evenly from ${ux["1"]} to ${ux["12"]}`);
+check(Math.min(...uRow) > 0.5, "UniFi: the left half blank");
+// The CRS317: the sixteen cages in one row over the left two thirds, ether1
+// and the console at its right end, the rest of the right third blank.
 const cx = portXs(crs.blocks!);
-const top = rowXs(crs.blocks!, 0, 0);
-const bottom = rowXs(crs.blocks!, 0, 1);
-check(crs.blocks![0].rows[0].map((p) => p!.name).join() === "sfp-sfpplus1,sfp-sfpplus3,sfp-sfpplus5,sfp-sfpplus7,sfp-sfpplus9,sfp-sfpplus11,sfp-sfpplus13,sfp-sfpplus15", "CRS317: odd cages on top");
-check(near(top[0], 0.06) && near(top[7], 0.62) && evenly(top) && JSON.stringify(top) === JSON.stringify(bottom), `CRS317: cages from 0.06 to 0.62, the rows aligned (${top.join(",")})`);
-check(Math.max(...Object.entries(cx).filter(([k]) => k.startsWith("sfp")).map(([, x]) => x)) < 2 / 3, "CRS317: every cage in the left two thirds");
-check(near(cx["ether1"], 0.71) && near(cx["console"], 0.71) && crs.blocks![1].rows.length === 2, "CRS317: ether1 over the console at 0.71");
-check(Math.max(...Object.values(cx)) < 0.75, "CRS317: right of 0.75 blank, its name's place");
+const cages = rowXs(crs.blocks!, 0, 0);
+check(crs.rows.length === 1 && crs.blocks![0].rows.length === 1 && cages.length === 16 && crs.blocks![0].rows[0].map((p) => p!.name).join() === Array.from({ length: 16 }, (_, i) => `sfp-sfpplus${i + 1}`).join(), "CRS317: one row, sfp-sfpplus1-16 left to right");
+check(near(cages[0], 0.02 + 0.58 / 32) && near(cages[15], 0.6 - 0.58 / 32) && evenly(cages), `CRS317: cages evenly from ${cages[0]} to ${cages[15]}`);
+check(near(cx["ether1"], 0.625) && near(cx["console"], 0.655) && cx["ether1"] > cages[15], "CRS317: ether1 and the console at the row's right end");
+check(Math.max(...Object.values(cx)) < 2 / 3, "CRS317: the right third blank, its name's place");
 
 console.log(`\nposition-manager catalog: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

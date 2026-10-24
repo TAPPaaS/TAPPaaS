@@ -1,7 +1,8 @@
 // platelayout.test.ts — where the rack view draws the shipped plates' ports
 // (web/src/physical/platelayout.ts), each plate as its catalog file says, at
 // the rack's 19in width (440 px): the patch panel across the whole plate, the
-// UniFi switch in one row across it, the CRS317's cages in its left two thirds.
+// UniFi switch in one row over its right half, the CRS317's cages in one row
+// over its left two thirds.
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -34,21 +35,20 @@ check(ys(pp).length === 1 && nameArea(pp).at === "top", "patch panel: one row, i
 const rec = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 24 }, (_, i) => String(i + 1)) }, []) ;
 check(JSON.stringify(xs(resolvePlate(rec, null) as ResolvedPlate)) === JSON.stringify(ppx), "a recorded 24-port panel: the same places");
 
-// The UniFi switch: thirteen places of 32.5 px across 8.8-431.2, 1-10, a gap, 11-12.
+// The UniFi switch: twelve places of 17.2 px over the right half, 224.4-431.2, its name left of them.
 const usw = plateOf("unifi/usw-pro-xg-10-poe");
 const ux = xs(usw);
-const p = (W * 0.96) / 13;
-check(near(ux["1"], 8.8 + p / 2) && near(ux["10"], 8.8 + 9.5 * p) && near(ux["11"], 8.8 + 11.5 * p) && near(ux["12"], 431.2 - p / 2), `UniFi: 1 at ${ux["1"]}, 10 at ${ux["10"]}, 11 at ${ux["11"]}, 12 at ${ux["12"]}`);
-check(evenly(Array.from({ length: 10 }, (_, i) => ux[String(i + 1)])) && ys(usw).length === 1, "UniFi: one row, 1-10 evenly apart");
+const uRow = Array.from({ length: 12 }, (_, i) => ux[String(i + 1)]);
+check(near(uRow[0], 233) && near(uRow[11], 422.6) && evenly(uRow) && ys(usw).length === 1, `UniFi: one row, 1-12 evenly from ${uRow[0]} to ${uRow[11]} px`);
+check(Math.min(...uRow) > W / 2 && nameArea(usw).at === "left", "UniFi: the left half blank but for its name");
 
-// The CRS317: cages 26.4-272.8 px in two aligned rows, ether1 over the console at 312.4, the name right of them.
+// The CRS317: sixteen cages in one row, 16.8-256 px, ether1 and the console at 275 and 288.2, the name right of them.
 const crs = plateOf("mikrotik/crs317-1g-16s");
 const cx = xs(crs);
-const topRow = [1, 3, 5, 7, 9, 11, 13, 15].map((n) => cx[`sfp-sfpplus${n}`]);
-const bottomRow = [2, 4, 6, 8, 10, 12, 14, 16].map((n) => cx[`sfp-sfpplus${n}`]);
-check(near(topRow[0], 26.4) && near(topRow[7], 272.8) && evenly(topRow) && JSON.stringify(topRow) === JSON.stringify(bottomRow), `CRS317: cages from 26.4 to 272.8 px, odd over even (${topRow.join(",")})`);
-check(Math.max(...topRow) < (W * 2) / 3 && near(cx["ether1"], 312.4) && near(cx["console"], 312.4), "CRS317: the cages in the left two thirds, ether1 and the console at 312.4");
-check(ys(crs).length === 2 && nameArea(crs).at === "right" && nameArea(crs).from === 0.73, "CRS317: two rows, its name in the right third");
+const cages = Array.from({ length: 16 }, (_, i) => cx[`sfp-sfpplus${i + 1}`]);
+check(near(cages[0], 16.8) && near(cages[15], 256) && evenly(cages) && ys(crs).length === 1, `CRS317: one row of cages from ${cages[0]} to ${cages[15]} px`);
+check(near(cx["ether1"], 275) && near(cx["console"], 288.2) && Math.max(...Object.values(cx)) < (W * 2) / 3, "CRS317: ether1 and the console at the row's right end, all in the left two thirds");
+check(nameArea(crs).at === "right" && nameArea(crs).from === 0.67, "CRS317: its name in the right third");
 
 // A plate without blocks keeps its grid right of its name.
 const grid: ResolvedPlate = { key: "g", vendor: "G", model: "g", kind: "switch", units: 1, width: "full", passive: false, labels: [], rows: [[{ id: "1", name: "1", kind: "rj45", up: null, disabled: false, lag: null, zones: [] }]] };

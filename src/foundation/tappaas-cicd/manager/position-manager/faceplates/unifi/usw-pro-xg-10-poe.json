@@ -8,8 +8,8 @@
   "kind": "switch",
   "units": 1,
   "width": "full",
-  "description": "1U, ten 10 GbE RJ45 ports with PoE++ (1-10) and two 10G SFP+ cages (11-12), in one row across the plate, the SFP+ cages after a gap.",
-  "ports": "10xpoe:Port {n}+gap+2xsfp+:Port {n}[2-98]",
+  "description": "1U, ten 10 GbE RJ45 ports with PoE++ (1-10) and two 10G SFP+ cages (11-12), in one row evenly over the right half of the plate; the left half is the display and logo.",
+  "ports": "10xpoe:Port {n}+2xsfp+:Port {n}[51-98]",
   "labels": [
     {
       "text": "UniFi",
