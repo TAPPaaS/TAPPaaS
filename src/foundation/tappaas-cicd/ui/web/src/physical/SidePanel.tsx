@@ -21,7 +21,7 @@ import { PlaceActions, RecordDeviceButton, RecordSeenButton, cableAddSteps, cabl
 import { publicAddress } from "../zonegraph";
 import { StorageNote } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
-import { DevLink, DevNode, deviceGraph, deviceState, freePanelPorts, selectedDevice } from "./devicegraph";
+import { DevLink, DevNode, deviceGraph, deviceState, freePanelPorts, panelPortUse, selectedDevice } from "./devicegraph";
 import { iconOf, kindName } from "./devicecard";
 import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
@@ -614,7 +614,8 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       const out = racks?.outside.find((x) => x.device === sel.id);
       const un = racks?.unplaced.find((x) => x.device === sel.id);
       if (!m && !out && !un) break;
-      const cables = (racks?.cables ?? []).filter((c) => c.from.device === sel.id || c.to.device === sel.id);
+      // Its cables: those it ends, and the links split through it (a patch panel's).
+      const cables = (racks?.cables ?? []).filter((c) => c.from.device === sel.id || c.to.device === sel.id || c.via?.some((v) => v.device === sel.id));
       const rec = t.devices?.find((x) => x.name === sel.id && x.recorded);
       // A device a switch port sees and nobody recorded: what the port says of it.
       const seen = t.devices?.find((x) => x.name === sel.id && x.source === "seen" && x.seen);
@@ -654,40 +655,13 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["description", m?.description ?? rec?.description ?? null],
             ]}
           />
-          {rec?.kind === "patch-panel" ? (
-            <>
-              <p className="small howto-line">To use it: place it in a rack, then select a wire and Attach to patch panel….</p>
-              <h3>Ports</h3>
-              <table className="table compact small">
-                <thead>
-                  <tr><th>port</th><th>front</th><th>rear</th></tr>
-                </thead>
-                <tbody>
-                  {(rec.ports ?? []).map((p) => {
-                    const at = (side: "front" | "rear") => {
-                      const c = cables.find((x) => [x.from, x.to].some((e) => e.device === sel.id && e.port === p && (e.side ?? "front") === side));
-                      if (!c) return <span className="muted">free</span>;
-                      const far = c.from.device === sel.id && c.from.port === p ? c.to : c.from;
-                      return `${far.device}:${far.port}`;
-                    };
-                    return (
-                      <tr key={p}>
-                        <td className="mono">{p}</td>
-                        <td>{at("front")}</td>
-                        <td>{at("rear")}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </>
-          ) : null}
+          {rec?.kind === "patch-panel" ? <PanelPorts t={t} panel={sel.id} ports={rec.ports ?? []} /> : null}
           <h3>Cables</h3>
           {cables.length === 0 ? <p className="muted small">No cable on it.</p> : null}
           <ul className="plain">
             {cables.map((c, i) => (
               <li key={i} className="small mono">
-                {c.from.device}:{c.from.port} — {c.to.device}:{c.to.port} <span className="muted">{c.kind}{c.source === "recorded" ? " · recorded" : ""}</span>
+                {c.from.device}:{c.from.port} — {c.to.device}:{c.to.port} <span className="muted">{c.kind}{c.source === "recorded" ? " · recorded" : ""}{c.via?.some((v) => v.device === sel.id) ? ` · through ${c.via.filter((v) => v.device === sel.id).map((v) => `port ${v.port}`).join(", ")}` : ""}</span>
               </li>
             ))}
           </ul>
@@ -850,3 +824,39 @@ function PanelJoin({ c }: { c: RackCable }) {
     />
   );
 }
+
+// A patch panel's ports: each side's far end, a port cabled on one side only half used.
+function PanelPorts({ t, panel, ports }: { t: Topology; panel: string; ports: string[] }) {
+  const use = panelPortUse(t.positions?.cables ?? [], panel);
+  const free = ports.filter((p) => !use.get(p)?.front && !use.get(p)?.rear).length;
+  const half = ports.filter((p) => !use.get(p)?.front !== !use.get(p)?.rear).length;
+  const side = (u: { device: string; port: string } | undefined) => (u ? <span className="mono">{u.device}:{u.port}</span> : <span className="muted">free</span>);
+  return (
+    <>
+      <p className="small howto-line">
+        {free} of {ports.length} ports free{half ? `, ${half} cabled on one side only` : ""}. To use one: select a wire and Attach to patch panel….
+      </p>
+      <h3>Ports</h3>
+      <table className="table compact small">
+        <thead>
+          <tr><th>port</th><th>front</th><th>rear</th><th></th></tr>
+        </thead>
+        <tbody>
+          {ports.map((p) => {
+            const u = use.get(p);
+            const state = u?.front && u?.rear ? "used" : u?.front || u?.rear ? "half used" : "";
+            return (
+              <tr key={p} className={state ? "row-used" : undefined}>
+                <td className="mono">{p}</td>
+                <td>{side(u?.front)}</td>
+                <td>{side(u?.rear)}</td>
+                <td className="muted">{state}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
+  );
+}
+

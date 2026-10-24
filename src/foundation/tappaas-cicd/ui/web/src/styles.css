@@ -532,3 +532,4 @@ button.mod-tile:hover { background: var(--info-bg); }
 .faceplate-examples { grid-column: 2; display: flex; flex-wrap: wrap; gap: 4px; }
 .faceplate-examples .btn { white-space: nowrap; }
 @media (max-width: 640px) { .faceplate-examples { grid-column: 1; } }
+.table tr.row-used td:first-child, .table tr.row-used td:first-child button { font-weight: 700; }

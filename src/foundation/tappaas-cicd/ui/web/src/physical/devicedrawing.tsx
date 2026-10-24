@@ -53,9 +53,9 @@ export function DeviceDrawing({ t, d, cabled, ringed, onPort }: { t: Topology; d
   const { plate, up, catalog } = plateOf(t, d);
   if (!plate) return null;
   // A patch panel's ports: the front cabled ones underlined, the rear ones overlined.
-  const ends = (t.positions?.cables ?? []).flatMap((c) => [c.from, c.to]).filter((e) => e.device === d.name);
+  const ends = (t.positions?.cables ?? []).flatMap((c) => (c.segments?.length ? c.segments : [c]).flatMap((w) => [w.from, w.to])).filter((e) => e.device === d.name);
   const rear = new Set(ends.filter((e) => e.side === "rear").map((e) => e.port));
-  const front = new Set([...cabled].filter((x) => !rear.has(x) || ends.some((e) => e.port === x && e.side !== "rear")));
+  const front = new Set([...[...cabled].filter((x) => !rear.has(x)), ...ends.filter((e) => e.side !== "rear").map((e) => e.port)]);
   const w = plate.width === "full" ? W : plate.width === "half" ? W / 2 : W / 3;
   const h = Math.max(1, plate.units) * R.u * 1.4;
   const p: Placed = {

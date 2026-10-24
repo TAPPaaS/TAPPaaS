@@ -119,10 +119,48 @@ export function deviceGraph(t: Topology): { nodes: DevNode[]; links: DevLink[] }
   return { nodes: [...nodes.values()], links: [...links.values()] };
 }
 
-// The free ports of the recorded patch panels: neither side cabled.
+// ── patch panels ──────────────────────────────────────────────────────
+
+// What is on one side of a patch panel's port: the far end of its wire, and
+// the cable that wire belongs to (a link split at the panel is one cable, its
+// wires its segments).
+export interface PanelSide {
+  device: string;
+  port: string;
+  cable: RackCable;
+}
+export type PanelPortUse = { front?: PanelSide; rear?: PanelSide };
+
+// A recorded patch panel's ports, as cabled: every wire whose end is one of
+// its ports — a segment of a split link as much as a cable of its own — on
+// that end's side (front unless it says rear).
+export function panelPortUse(cables: RackCable[], panel: string): Map<string, PanelPortUse> {
+  const out = new Map<string, PanelPortUse>();
+  for (const c of cables) {
+    for (const w of c.segments?.length ? c.segments : [c]) {
+      for (const [e, far] of [[w.from, w.to], [w.to, w.from]] as const) {
+        if (e.device !== panel) continue;
+        const u = out.get(e.port) ?? {};
+        u[e.side === "rear" ? "rear" : "front"] = { device: far.device, port: far.port, cable: c };
+        out.set(e.port, u);
+      }
+    }
+  }
+  return out;
+}
+
+export const isPatchPanel = (t: Topology, device: string): boolean => (t.devices ?? []).some((d) => d.name === device && d.recorded && d.kind === "patch-panel");
+
+// The free ports of the recorded patch panels: neither side cabled (a split
+// takes a port's front and its rear).
 export function freePanelPorts(t: Topology): string[] {
-  const used = new Set((t.positions?.cables ?? []).flatMap((c) => (c.segments?.length ? c.segments : [c]).flatMap((w) => [w.from, w.to])).map((e) => `${e.device}:${e.port}`));
-  return (t.devices ?? []).filter((d) => d.recorded && d.kind === "patch-panel").flatMap((d) => (d.ports ?? []).map((p) => `${d.name}:${p}`)).filter((x) => !used.has(x));
+  const cables = t.positions?.cables ?? [];
+  return (t.devices ?? [])
+    .filter((d) => d.recorded && d.kind === "patch-panel")
+    .flatMap((d) => {
+      const use = panelPortUse(cables, d.name);
+      return (d.ports ?? []).filter((p) => !use.get(p)?.front && !use.get(p)?.rear).map((p) => `${d.name}:${p}`);
+    });
 }
 
 // ── state ─────────────────────────────────────────────────────────────
