@@ -45,9 +45,15 @@ DOC="${FIX}/cfg/positions.json"
 
 RM rack add rack1 --units 42 --check >/dev/null 2>&1
 [[ ! -f "${DOC}" ]] && ok "rack add --check writes nothing" || bad "rack add --check wrote positions.json"
+_o="$(RM rack add rack1 --units 42 --check 2>&1 | grep -v Warning)"  # the fixture catalog's broken plate warns
+[[ "${_o}" == "[check] would add rack 'rack1' (42U, 19in, numbered bottom-up)" ]] && ok "rack add --check: one line, what it would add" || bad "rack add --check said: ${_o}"
+_o="$(RM rack add rack1 --units 42 --check --json 2>/dev/null)"
+[[ "$(jq -r '.racks.rack1.units' <<<"${_o}" 2>/dev/null)" == "42" ]] && ok "--check --json: the whole resulting document" || bad "--check --json: ${_o:0:200}"
 RM rack add rack1 --units 42 >/dev/null 2>&1 && ok "rack add" || bad "rack add"
 [[ "$(jq -r '.racks.rack1.numbering' "${DOC}")" == "bottom-up" ]] && ok "rack add: numbered from the bottom" || bad "rack add: numbering"
 RM rack add rack1 >/dev/null 2>&1 && bad "rack add: a duplicate refused" || ok "rack add: a duplicate refused"
+_o="$(RM rack add rack1 --check 2>&1)"; _rc=$?; _o="$(grep -v Warning <<<"${_o}")"
+[[ "${_rc}" == 1 && "${_o}" == "[refused] rack rack1 already exists" ]] && ok "a refused --check: one [refused] line, exit 1" || bad "refused --check (rc ${_rc}): ${_o}"
 RM place tappaas1 --rack rack1 --u 10 --faceplate generic/server-2u --description "placeholder position, set by the operator" --topology "${TOPO}" >/dev/null 2>&1 \
     && ok "place: a node" || bad "place: a node"
 [[ "$(jq -r '.placements.tappaas1.height' "${DOC}")" == "2" ]] && ok "place: its faceplate's height" || bad "place: height"
