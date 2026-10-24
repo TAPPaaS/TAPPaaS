@@ -8,7 +8,7 @@ import {
   addLocation, deleteLocation, ensureLocation, findLocation, locationErrors, locationName, locationNamers,
   modifyLocation, primaryLocation, readLocations, siteLocale, siteLocation,
 } from "../../../../lib/ts/src/locations";
-import { mkdtempSync, writeFileSync } from "fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 
@@ -163,6 +163,43 @@ check(findLocation(readLocations(SITE).locations, { country: "DK", city: "Rodovr
     console.error = e;
   }
   check(rc !== 0 && errOut.some((l) => l.includes("primaryLocation 'nowhere'")), `validate fails on a dangling primary (rc ${rc}: ${errOut.join(" | ")})`);
+}
+
+// ── the dry run and the apply say the change in one line ───────────────
+{
+  const say = (args: string[]): { rc: number; out: string[]; err: string[] } => {
+    const out: string[] = [];
+    const err: string[] = [];
+    const [l, e] = [console.log, console.error];
+    console.log = (m: string) => void out.push(String(m));
+    console.error = (m: string) => void err.push(String(m));
+    try {
+      return { rc: run(args, new FakeSiteClient()), out, err };
+    } finally {
+      [console.log, console.error] = [l, e];
+    }
+  };
+  const d = dir(SITE);
+  const before = readFileSync(join(d, "site.json"), "utf8");
+  let r = say(["location", "modify", "hareskov", "--displayName", "Rasmus", "--check", "--config-dir", d]);
+  check(r.rc === 0 && r.out.join("\n") === "[check] would modify location 'hareskov': displayName=Rasmus; site.json otherwise unchanged", `location modify --check: one line (${r.out.join(" | ")})`);
+  check(readFileSync(join(d, "site.json"), "utf8") === before, "…and writes nothing");
+  r = say(["location", "modify", "hareskov", "--displayName", "Rasmus", "--check", "--json", "--config-dir", d]);
+  check(r.rc === 0 && ((JSON.parse(r.out.join("\n")) as { locations: Record<string, Obj> }).locations.hareskov.displayName === "Rasmus"), "--check --json: the whole resulting site.json");
+  r = say(["location", "add", "stue", "--country", "dk", "--city", "Lyngby", "--check", "--config-dir", d]);
+  check(r.rc === 0 && r.out.length === 1 && /^\[check\] would add location 'stue' \(.*Lyngby.*\)$/.test(r.out[0]), `location add --check: one line (${r.out.join(" | ")})`);
+  r = say(["location", "delete", "rodovre", "--check", "--config-dir", d]);
+  check(r.rc === 1 && r.out.length === 1 && /^\[refused\] location delete: .*primary/.test(r.out[0]) && r.err.length === 0, `a refusal is one [refused] line, exit 1 (${r.out.join(" | ")} / ${r.err.join(" | ")})`);
+  r = say(["location", "delete", "rodovre", "--config-dir", d]);
+  check(r.rc === 1 && r.err.some((l) => l.includes("[Error]")), "…without --check, the [Error] it always was");
+  r = say(["location", "modify", "hareskov", "--displayName", "Rasmus", "--config-dir", d]);
+  check(r.rc === 0 && r.out[0].includes("modified location 'hareskov': displayName=Rasmus; site.json otherwise unchanged") && !r.out[0].includes("[check]"), `the apply reports the same line, done (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--displayName", "Rossen", "--updateFrequency", "daily", "--updateHour", "3", "--check", "--config-dir", d]);
+  check(r.rc === 0 && r.out.length === 1 && /^\[check\] would modify site: displayName=Rossen, updateSchedule=\{.*"hour":3.*\}; site.json otherwise unchanged$/.test(r.out[0]), `site modify --check: one line (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--primaryLocation", "hareskov", "--check", "--config-dir", d]);
+  check(r.rc === 1 && r.out.length === 1 && /^\[refused\] site modify: 'hareskov' records no timezone/.test(r.out[0]), `site modify --check refusal: one line (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--displayName", "Rossen", "--config-dir", d]);
+  check(r.rc === 0 && /modified site: displayName=Rossen; site.json otherwise unchanged/.test(r.out.join("\n")), `site modify reports the same line (${r.out.join(" | ")})`);
 }
 
 console.log(`locations.test: ${passed} passed, ${failed} failed`);

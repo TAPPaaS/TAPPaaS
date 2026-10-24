@@ -67,7 +67,8 @@ for (const kind of ["rack", "placement", "room"] as FieldKind[]) {
 // ── site-manager site modify: its options over site-fields.json ─────────
 const sm = readFileSync(join(MANAGERS, "site-manager", "src", "main.ts"), "utf8");
 const smBlock = sm.slice(sm.indexOf("options: [", sm.indexOf('name: "site modify')), sm.indexOf('{ usage: "location list'));
-const smOpts = [...smBlock.matchAll(/\["(--\w+)[ "]/g)].map((m) => m[1]).filter((f) => f !== "--force");
+// --check and --json are the job's (the dry run), never a field.
+const smOpts = [...smBlock.matchAll(/\["(--\w+)[ "]/g)].map((m) => m[1]).filter((f) => !["--force", "--check", "--json"].includes(f));
 const stable = FLAGS.site?.modify ?? {};
 const sdefs = flattenSchema(schema("site-fields.json"));
 check(same(Object.values(stable), [...smOpts, "--channel"]) && smOpts.length > 30, `site modify: the table is site-manager site modify's options, flag for flag (${smOpts.filter((f) => !Object.values(stable).includes(f)).join(" ")})`);
@@ -80,7 +81,7 @@ const ldefs = flattenSchema((schema("site-fields.json").$defs as Record<string, 
 for (const verb of ["add", "modify"] as const) {
   const at = sm.indexOf(`{ usage: "location ${verb} `);
   const block = sm.slice(sm.indexOf("options: [", at), sm.indexOf("] }", sm.indexOf("options: [", at)));
-  const opts = [...block.matchAll(/\["(--\w+)[ "]/g)].map((m) => m[1]).filter((f) => !["--check", "--primary", "--unset"].includes(f));
+  const opts = [...block.matchAll(/\["(--\w+)[ "]/g)].map((m) => m[1]).filter((f) => !["--check", "--json", "--primary", "--unset"].includes(f));
   const table = FLAGS.location?.[verb] ?? {};
   check(at > 0 && same(Object.values(table), opts), `location ${verb}: the table is site-manager location ${verb}'s options (${opts.join(" ")})`);
   check(same(Object.keys(table), ldefs), `location ${verb}: every field of site-fields' location has its flag`);

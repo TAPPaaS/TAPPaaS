@@ -40,6 +40,13 @@ export function die(msg: string): never {
   throw new DieError(msg);
 }
 
+// A dry run's refusal (--check): one "[refused] <why>" line on stdout, where
+// the preview is read, then exit 1 as die() does.
+export function refused(msg: string): never {
+  console.log(`[refused] ${msg}`);
+  throw new DieError(msg);
+}
+
 // The standard dispatch guard: wrap a manager's run() switch in guarded() so
 // every manager maps errors the same way — DieError → 1 (already printed);
 // any other Error (config/controller failures: malformed JSON, unreachable
