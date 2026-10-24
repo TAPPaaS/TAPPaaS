@@ -916,6 +916,19 @@ def backup_key_status() -> dict | None:
             "stick_written": stick.get("written") if stick else None}
 
 
+def backup_key_warnings(bk: dict | None) -> list[str]:
+    """The summary's lines for backup_key_status(): none when a stick holds
+    the keys as they are (or nobody could tell)."""
+    if not bk or bk["current"]:
+        return []
+    if bk["stick_written"]:
+        return [f"The backup keys changed after the key stick of {bk['stick_written'][:10]} "
+                "was written: it does not hold them all.",
+                "Write the sticks again: backup-manager key export --usb"]
+    return ["No key stick holds the backup keys: a full-site restore has nothing to decrypt with.",
+            "Write one now: backup-manager key export --usb"]
+
+
 def check_update_capacity() -> dict | None:
     """The sweep's capacity pre-flight (#833): `health-manager capacity` projects
     what each node commits once every guest is at its configured memory. A node
@@ -1483,14 +1496,8 @@ def main():
         for w in TEST_WARNINGS:
             log.warning("  %s", w)
     backup_keys = backup_key_status()
-    if backup_keys and not backup_keys["current"]:
-        if backup_keys["stick_written"]:
-            log.warning("The backup keys changed after the key stick of %s was written: "
-                        "it does not hold them all.", backup_keys["stick_written"][:10])
-        else:
-            log.warning("No key stick holds the backup keys: a full-site restore has "
-                        "nothing to decrypt with.")
-        log.warning("Write the sticks again: backup-manager key export --usb")
+    for line in backup_key_warnings(backup_keys):
+        log.warning("%s", line)
     log.info(
         "update-tappaas completed: %s | control_plane=%s total=%d succeeded=%d "
         "failed=%d not_attempted=%d skipped=%d reboot=%s collation=%s",

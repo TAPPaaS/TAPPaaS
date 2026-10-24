@@ -559,6 +559,12 @@ bstub(1, "")
 assert m.backup_key_status() is None, "a backup-manager that fails says nothing"
 os.environ["BACKUP_MANAGER_CMD"] = os.path.join(d, "missing")
 assert m.backup_key_status() is None, "a missing backup-manager never derails the summary"
+w = m.backup_key_warnings({"current": False, "escrowed": 4, "stick_written": None})
+assert w and w[-1].startswith("Write one now"), f"no stick ever: write one, not 'again': {w}"
+w = m.backup_key_warnings({"current": False, "escrowed": 4, "stick_written": "2026-10-20T10:00:00+02:00"})
+assert "2026-10-20" in w[0] and w[-1].startswith("Write the sticks again"), f"stale stick: {w}"
+assert m.backup_key_warnings({"current": True, "escrowed": 4, "stick_written": "x"}) == [], "current: silent"
+assert m.backup_key_warnings(None) == [], "unknown: silent"
 PY
     then
         passed=$((passed + 1))
