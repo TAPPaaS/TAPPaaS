@@ -9,6 +9,7 @@ import { join } from "path";
 import { AccessConfig, Me, addrMatches, decide, mayWrite, peerAllowed, presentedToken, roleOf, routeHost, setupState, splitGroups } from "../../src/access";
 import { zoneGateway } from "../../src/main";
 import { check, done } from "./check";
+import { NOW, TEST_KEY, claimsFor, gateHeaders, signToken, testGate } from "./gate-fixture";
 
 const dir = mkdtempSync(join(tmpdir(), "console-access-"));
 const cfg: AccessConfig = {
@@ -18,9 +19,10 @@ const cfg: AccessConfig = {
   tokenFile: join(dir, "console-setup-token"),
   identityFile: join(dir, "identity.json"),
   trustLocalHeaders: false,
+  gate: testGate(),
 };
 const H = (h: Record<string, string>): Record<string, string> => ({ host: "console.hrossen.dk", ...h });
-const gate = (groups: string, host = "console.hrossen.dk") => H({ host, "x-authentik-username": "lars", "x-authentik-groups": groups });
+const gate = (groups: string, host = "console.hrossen.dk") => H(gateHeaders("lars", groups, host));
 
 // ── addresses ─────────────────────────────────────────────────────────
 check(addrMatches("10.0.0.50", "10.0.0.0/24") && !addrMatches("10.0.1.50", "10.0.0.0/24"), "a.b.c.d/n matches its network only");
@@ -56,6 +58,7 @@ const caddy = (fwdHost: string, groups = "Installer") => ({
   "x-forwarded-for": "10.2.0.20",
   "x-authentik-username": "lars",
   "x-authentik-groups": groups,
+  "x-authentik-jwt": gateHeaders("lars", groups)["x-authentik-jwt"],
 });
 d = decide("10.0.0.1", caddy("status.hrossen.dk"), null, cfg, s);
 check(d.ok && d.me.route === "status" && d.me.role === "read", "through Caddy, X-Forwarded-Host names the route: status caps at read");
@@ -63,7 +66,7 @@ d = decide("10.0.0.1", caddy("console.hrossen.dk"), null, cfg, s);
 check(d.ok && d.me.route === "console" && d.me.role === "installer", "…and console.<domain> operates");
 d = decide("10.0.0.1", caddy("status.hrossen.dk, other.example"), null, cfg, s);
 check(d.ok && d.me.route === "status", "a forwarded list: the first host is the client's");
-d = decide("10.0.0.1", { ...caddy("console.hrossen.dk"), "x-forwarded-host": "" }, null, cfg, s);
+d = decide("10.0.0.1", { ...caddy("console.hrossen.dk"), host: "console.hrossen.dk", "x-forwarded-host": "" }, null, cfg, s);
 check(d.ok && d.me.route === "console" && routeHost({ host: "status.x", "x-forwarded-host": " " }, true) === "status.x", "an empty X-Forwarded-Host falls back to Host");
 check(routeHost({ host: "console.hrossen.dk", "x-forwarded-host": "status.hrossen.dk" }, false) === "console.hrossen.dk", "from a peer whose headers are not believed, X-Forwarded-Host is ignored");
 d = decide("127.0.0.1", gate("Installer"), null, cfg, s);
@@ -76,6 +79,31 @@ d = decide("127.0.0.1", caddy("status.hrossen.dk"), null, { ...cfg, trustLocalHe
 check(d.ok && d.me.via === "gate" && d.me.route === "status", "…unless the developer asks for it (the gate proxy of a dev run)");
 check(splitGroups("a| b |") .join(",") === "a,b" && roleOf(["ADMIN"]) === "admin", "groups are pipe-separated, compared without case");
 
+// ── the gate's token: the firewall's address is not proof on its own ──
+const forged = H({ "x-authentik-username": "lars", "x-authentik-groups": "installer" });
+d = decide("10.0.0.1", forged, null, cfg, s);
+check(!d.ok && d.status === 401 && /X-Authentik-Jwt/.test(d.reason), "from the firewall's address, the groups header without a token: 401");
+const withJwt = (jwt: string) => H({ "x-authentik-username": "lars", "x-authentik-groups": "installer", "x-authentik-jwt": jwt });
+d = decide("10.0.0.1", withJwt(signToken(claimsFor("lars", ["users"]))), null, cfg, s);
+check(d.ok && d.me.role === "read" && d.me.groups.join() === "users", "the token's groups count, not the header's (header installer, token users: read)");
+d = decide("10.0.0.1", withJwt(signToken(claimsFor("lars", ["installer"]), "another-secret")), null, cfg, s);
+check(!d.ok && d.status === 401 && /signature/.test(d.reason) && d.forget === "console.hrossen.dk", "a token signed with another key: 401, and the cached key is fetched again");
+d = decide("10.0.0.1", withJwt(signToken(claimsFor("lars", ["installer"]), TEST_KEY.secret, "none")), null, cfg, s);
+check(!d.ok && /not HS256/.test(d.reason), "alg none (or anything but HS256): 401");
+d = decide("10.0.0.1", withJwt(signToken(claimsFor("lars", ["installer"], { exp: NOW - 3600 }))), null, cfg, s);
+check(!d.ok && /expired/.test(d.reason), "an expired token: 401");
+d = decide("10.0.0.1", withJwt(signToken(claimsFor("lars", ["installer"], { aud: "woodpecker-client-id" }))), null, cfg, s);
+check(!d.ok && /another application/.test(d.reason), "another provider's audience: 401");
+d = decide("10.0.0.1", withJwt(signToken(claimsFor("lars", ["installer"], { iss: "https://identity.hrossen.dk/application/o/woodpecker/" }))), null, cfg, s);
+check(!d.ok && /issuer/.test(d.reason), "another application's issuer: 401");
+d = decide("10.0.0.1", H({ ...gateHeaders("eve", "installer"), "x-authentik-username": "lars" }), null, cfg, s);
+check(!d.ok && /not the token's user/.test(d.reason), "a username header that is not the token's: 401");
+d = decide("10.0.0.1", withJwt("not.a-jwt"), null, cfg, s);
+check(!d.ok && d.status === 401, "garbage in X-Authentik-Jwt: 401");
+d = decide("10.0.0.1", gate("installer", "woodpecker.hrossen.dk"), null, cfg, s);
+check(!d.ok && d.status === 503, "a route that is not the console's has no key here: refused");
+d = decide("10.0.0.1", gate("installer"), null, { ...cfg, gate: undefined }, s);
+check(!d.ok && d.status === 503, "no key cache at all: the firewall is refused, not believed");
 // ── the setup token before identity (D10, T6) ─────────────────────────
 writeFileSync(cfg.tokenFile, "s3cret-token\n");
 s = setupState(cfg);

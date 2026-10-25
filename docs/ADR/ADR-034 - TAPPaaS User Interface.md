@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-18) — built: P1–P3 live on hrossen |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Date** | 2026-10-18 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#844** (the UI design spike and this ADR). Related: #839 (the UI, physical view first), #183 (service catalog), #91 (Backstage), #142 (agent access to `tappaas-cicd`), #843 (SIEM); caused #853, #854, #855 (switch-controller and console gaps) and #856 (the admin tunnel). Builds on ADR-007 (taxonomy, 007e Health, 007f managers and controllers), ADR-020 (declared-field changes), ADR-021 / ADR-023 / ADR-032 (reachability, routes, exposure), ADR-031 (pulse). |
-| **Changelog** | v1.0 (2026-10-18) — **Accepted** by the operator with the console installed and in use on hrossen; #183 is folded into the Modules page (D6) and #91 is not adopted (A3), both closed with this acceptance. · v0.4 (2026-10-18) — **D2** says what a source outside the route's zones gets as installed on hrossen: Caddy runs the gate before the access list, so an anonymous request is redirected to the login and a signed-in one gets 403; the console is never reached; was "403 to the internet". · v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
+| **Changelog** | v1.1 (2026-10-25) — **D2:** the backend verifies the gate's signed token (`X-Authentik-Jwt`) and takes the user and groups from it; the firewall's address alone is no longer believed. · v1.0 (2026-10-18) — **Accepted** by the operator with the console installed and in use on hrossen; #183 is folded into the Modules page (D6) and #91 is not adopted (A3), both closed with this acceptance. · v0.4 (2026-10-18) — **D2** says what a source outside the route's zones gets as installed on hrossen: Caddy runs the gate before the access list, so an anonymous request is redirected to the login and a signed-in one gets 403; the console is never reached; was "403 to the internet". · v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
 
 One web UI for a TAPPaaS site: it shows the site and its health, draws the site as it is cabled,
 operates it through the managers and nothing else, and carries an assistant one can talk to.
@@ -134,9 +134,13 @@ Caddy and the Authentik gate. The `console` module has two routes (ADR-023, ADR-
   declared once a further route can be gated (ADR-032 D1, `proxyAuth` per route).
 
 The backend listens on the mothership's `mgmt` address and loopback and **accepts connections
-only from the firewall's address** (the gateway of `mgmt` in `zones.json`) and loopback, so the
-`X-Authentik-*` headers cannot be presented by anything else on `mgmt`. A request from the
-firewall without them came through an ungated route and is refused. Loopback without the headers
+only from the firewall's address** (the gateway of `mgmt` in `zones.json`) and loopback. The
+address is not proof on its own (a host on `mgmt` can take it), so a request from the firewall
+must carry the gate's signed token, `X-Authentik-Jwt`, which the backend verifies against the
+route's proxy provider (HS256 with its client secret; audience, issuer, expiry); the user and
+groups are the token's, not the plain headers'. A request from the firewall without a valid token
+is refused (401). The hop from Caddy is plain HTTP on `mgmt`, so a host that intercepts it can
+replay a token until it expires (one hour by default). Loopback without the headers
 reads only (`tappaas ask`, a development forward). Before identity exists, `mgmt` and the admin VPN
 are accepted with the setup token (D10). The backend treats the `status` route as read-only
 whatever the caller's group: the route caps the role, defence in depth over the group mapping
@@ -151,7 +155,7 @@ never embeds these in an iframe and never re-implements them.
 ### D3. Authentication by the gate, authorization by Authentik group, capped by the route
 
 Authentication is `identity:accessControl`: Authentik forward-auth at Caddy, one provider per
-hostname, the groups in `X-Authentik-Groups`. The UI has no login code of its own.
+hostname, the user and groups from its signed token (`X-Authentik-Jwt`, D2). The UI has no login code of its own.
 
 Authorization is a role table in the backend, keyed by group by its TAPPaaS name
 (`identity/USERS.md`), compared without case:

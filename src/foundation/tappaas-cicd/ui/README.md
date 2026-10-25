@@ -288,7 +288,7 @@ destructive, and which options make a read verb's call a write (`writeWhen`: `--
 
 | From | Accepted | Identity |
 |---|---|---|
-| the firewall (Caddy + the Authentik gate) | always | `X-Authentik-Username` / `-Groups`; a request without them is 401 (a route without the gate) |
+| the firewall (Caddy + the Authentik gate) | always | the gate's token `X-Authentik-Jwt`, verified (below): its user and groups; without it 401 (a route without the gate, or not the gate at all) |
 | loopback (and `--allow`) | always | none: role `read`, for reads only (a dev port-forward arrives as loopback) |
 | mgmt and the admin VPN | only while setup is open (below), with the token | `setup`, role `installer` |
 | anything else | refused on connect | — |
@@ -304,8 +304,18 @@ the one the outpost answered with (`modules/caddyhttp/reverseproxy/forwardauth/c
 reads (username, groups, name, email), which Authentik always sends; only a header the
 outpost omits would pass through. Nothing is added in the handler for it.
 
-The headers are believed only from the firewall's address, which is why nothing else on
-mgmt may connect. The firewall's address is the gateway of mgmt's network in `zones.json`
+The firewall's address alone is not proof: a host on mgmt can take it (ARP, or the address
+itself). So from the firewall the console verifies the token the outpost sends with every
+request (`src/gate.ts`): HS256 with the route's proxy provider's client secret (the provider has
+no signing key, so this is how Authentik signs it), the provider's client id as audience, the
+issuer ending in `/application/o/<app>/`, and the expiry (a minute's leeway). The user and the
+groups are the token's; a `X-Authentik-Username` that differs from it is refused. The key is
+read from Authentik's API with the controllers' credentials (`~/.authentik-credentials.txt`,
+`CONSOLE_AUTHENTIK_CREDENTIALS`) by the route's external host, for `console.<domain>` and
+`status.<domain>` only, and cached; a token the cached key refuses marks it for a refetch, at
+most every 30 s, while the key stays in use. No key (Authentik unreachable): 503.
+
+Only the firewall may connect at all, besides loopback. The firewall's address is the gateway of mgmt's network in `zones.json`
 (its `ip`, first address: `10.0.0.0/24` → `10.0.0.1`); only when that is unreadable does the
 console ask DNS for `firewall.<mgmt domain>` (`CONSOLE_FIREWALL` overrides both).
 

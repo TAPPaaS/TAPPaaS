@@ -9,6 +9,7 @@ import { IncomingMessage, ServerResponse } from "http";
 import { AccessConfig } from "../../src/access";
 import { Reads } from "../../src/reads";
 import { ConsoleServer } from "../../src/server";
+import { gateHeaders, testGate } from "./gate-fixture";
 import { check, done } from "./check";
 import { fakeSite } from "./fake-site";
 
@@ -32,6 +33,7 @@ async function main(): Promise<void> {
     tokenFile: join(dir, "console-setup-token"),
     identityFile: join(dir, "identity.json"),
     trustLocalHeaders: false,
+    gate: testGate(),
   };
   const site = fakeSite();
   const reads = new Reads({ configDir: dir, stateDir: join(dir, "state"), run: site.run, journalDays: 7 });
@@ -55,7 +57,7 @@ async function main(): Promise<void> {
     await srv.handle(req as unknown as IncomingMessage, res as unknown as ServerResponse);
     return { status: res.statusCode, headers: h, body, json: () => JSON.parse(body) };
   };
-  const gate = (groups: string, host = "console.hrossen.dk") => ({ host, "x-authentik-username": "lars", "x-authentik-groups": groups });
+  const gate = (groups: string, host = "console.hrossen.dk") => gateHeaders("lars", groups, host);
 
   let r = await call("GET", "/api/v1/me");
   check(r.status === 200 && (r.json().data as { via: string }).via === "local", "/api/v1/me from loopback");

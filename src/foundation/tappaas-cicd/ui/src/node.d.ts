@@ -103,6 +103,7 @@ declare module "crypto" {
   export function timingSafeEqual(a: NodeBuffer, b: NodeBuffer): boolean;
   export function randomBytes(n: number): NodeBuffer;
   export function createHash(alg: string): { update(s: string): { digest(enc: "hex"): string } };
+  export function createHmac(alg: string, key: string): { update(s: string): { digest(): NodeBuffer } };
 }
 
 declare module "os" {

@@ -24,24 +24,25 @@ that token (and nothing else), and serves the **Setup** wizard: the rest of the 
 the records, step by step. Once identity is installed it refuses the token and deletes its file
 (after the identity step, and at start).
 
-## Security risk: the gate is trusted by its address
+## How the console knows who is calling
 
-Once identity is installed, the console takes the user and groups from the gate's headers
-(`X-Authentik-Username`, `X-Authentik-Groups`) on any request from the firewall's `mgmt` address.
-It does not check the signed token Authentik sends with them.
+Once identity is installed, every request through the route carries the gate's signed token
+(`X-Authentik-Jwt`), next to the `X-Authentik-Username` and `X-Authentik-Groups` headers. The
+console verifies the token against the route's Authentik proxy provider: an HS256 signature with
+the provider's client secret, the provider's client id as audience, the application's issuer,
+and an expiry no more than a minute past. The user and the groups are the token's; a request
+from the firewall's address without a valid token is refused (401). The console reads the
+provider's key from Authentik with the controllers' credentials
+(`~/.authentik-credentials.txt`) and keeps it in memory; only the console's own routes
+(`console.<domain>`, `status.<domain>`) are looked up, so a token from another gated app does
+not open the console. When Authentik cannot be reached and no key is cached, requests get 503
+until it can.
 
-- **The attack:** root on a machine in `mgmt` (a node, PBS, the logging VM, any guest placed in
-  `mgmt`) can take over the firewall's address on that network, either by ARP spoofing or by
-  setting the address itself. With it, a request can claim any user and any group, `installer`
-  included, and run every manager verb through the console.
-- **What it reaches:** the console runs as `tappaas`. On the mothership that account has sudo
-  and the SSH keys to the nodes, so this means the whole site.
-- **It does not depend on the module:** port 9097 is open on every mothership interface, and the
-  service runs whether the module is registered or not. The console's own peer filter (the
-  firewall, loopback and, before identity exists, the setup peers) is the only guard.
-
-Until the console checks the token, keep `mgmt` to TAPPaaS's own machines: no guests placed in
-`mgmt`, no other devices on `mgmt` switch ports, and the nodes and `mgmt` guests patched.
+**Remaining risk.** Caddy reaches the console over plain HTTP on `mgmt`. Root on a machine in
+`mgmt` that can intercept that traffic (ARP spoofing the firewall's address) can copy a user's
+token and replay it until it expires: the provider's token validity, one hour by default. Keep
+`mgmt` to TAPPaaS's own machines: no guests placed in `mgmt`, no other devices on `mgmt` switch
+ports, and the nodes and `mgmt` guests patched.
 
 ## The published face
 

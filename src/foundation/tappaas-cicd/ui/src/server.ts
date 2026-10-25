@@ -7,7 +7,7 @@
 import { createServer, IncomingMessage, Server, ServerResponse } from "http";
 import { existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
-import { AccessConfig, Decision, Me, SETUP_COOKIE, decide, mayWrite, normalizeAddr, peerAllowed, setupState } from "./access";
+import { AccessConfig, Decision, Me, SETUP_COOKIE, addrMatches, decide, mayWrite, normalizeAddr, peerAllowed, routeHost, setupState } from "./access";
 import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries } from "./badges";
 import { Entry, envelope } from "./cache";
@@ -118,8 +118,11 @@ export class ConsoleServer {
       path = url.pathname;
       const peer = normalizeAddr(req.socket.remoteAddress);
       const setup = setupState(this.cfg.access);
+      const gate = this.cfg.access.gate;
+      if (gate && this.cfg.access.firewall.some((f) => addrMatches(peer, f))) await gate.ensure(routeHost(req.headers, true) ?? "");
       const d: Decision = decide(peer, req.headers, url.searchParams.get("token"), this.cfg.access, setup);
       if (!d.ok) {
+        if (d.forget) gate?.forget(d.forget);
         if (path.startsWith("/api/")) return sendJson(res, d.status, { error: d.reason });
         res.statusCode = d.status;
         res.setHeader("Content-Type", TYPES.html);

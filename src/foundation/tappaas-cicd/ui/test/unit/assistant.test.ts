@@ -22,6 +22,7 @@ import { Runner, Streamer } from "../../src/run";
 import { ConsoleServer } from "../../src/server";
 import { openedText, proposalText, sseEvents } from "../../src/ask";
 import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
+import { gateHeaders, testGate } from "./gate-fixture";
 import { check, done } from "./check";
 import { FIX, fakeSite } from "./fake-site";
 
@@ -355,7 +356,7 @@ async function main(): Promise<void> {
   check(small.get("eve", ids[2]) === null && small.get("lars", "../../etc/passwd") === null, "another user's id, or a path, finds nothing");
 
   // ── the routes ──────────────────────────────────────────────────────
-  const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: [], tokenFile: join(dir, "no-token"), identityFile: join(dir, "identity.json"), trustLocalHeaders: false };
+  const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: [], tokenFile: join(dir, "no-token"), identityFile: join(dir, "identity.json"), trustLocalHeaders: false, gate: testGate() };
   const srv = new ConsoleServer({ access, webDir: null, mgmtDomain: "mgmt.internal", version: "test", log: () => undefined, litellm: llm, assistant }, reads, jobs);
   const call = async (method: string, url: string, headers: Record<string, string> = {}, peer = "127.0.0.1"): Promise<{ status: number; json: () => { data?: unknown; error?: string } }> => {
     let body = "";
@@ -364,7 +365,7 @@ async function main(): Promise<void> {
     await srv.handle(req as unknown as IncomingMessage, res as unknown as ServerResponse);
     return { status: res.statusCode, json: () => JSON.parse(body) };
   };
-  const gate = (host = "console.hrossen.dk") => ({ host, "x-authentik-username": "lars", "x-authentik-groups": "installer" });
+  const gate = (host = "console.hrossen.dk") => gateHeaders("lars", "installer", host);
   let c = await call("GET", "/api/v1/assistant/status");
   check(c.status === 200 && (c.json().data as { available: boolean }).available === true, "GET /assistant/status: available");
   c = await call("GET", "/api/v1/assistant/status", gate("status.hrossen.dk"), "10.0.0.1");

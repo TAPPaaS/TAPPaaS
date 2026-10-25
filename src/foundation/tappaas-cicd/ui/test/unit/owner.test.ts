@@ -13,6 +13,7 @@ import { HealthDoc, ModuleList } from "../../src/model";
 import { ownerSummary } from "../../src/owner";
 import { Reads } from "../../src/reads";
 import { ConsoleServer } from "../../src/server";
+import { gateHeaders, testGate } from "./gate-fixture";
 import { check, done } from "./check";
 import { FIX, fakeSite } from "./fake-site";
 
@@ -43,7 +44,7 @@ async function main(): Promise<void> {
   // ── the route cap (T1) ──────────────────────────────────────────────
   const dir = mkdtempSync(join(tmpdir(), "console-owner-"));
   writeFileSync(join(dir, "identity.json"), "{}");
-  const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: [], tokenFile: join(dir, "tok"), identityFile: join(dir, "identity.json"), trustLocalHeaders: false };
+  const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: [], tokenFile: join(dir, "tok"), identityFile: join(dir, "identity.json"), trustLocalHeaders: false, gate: testGate() };
   const site = fakeSite();
   const reads = new Reads({ configDir: dir, stateDir: join(dir, "state"), run: site.run, journalDays: 7 });
   const jobs = new Jobs({ stateDir: join(dir, "state"), configDir: dir, manifests: () => ({ byBin: new Map(), errors: [], loadedAt: "" }), stream: async () => ({ rc: 0, ran: true, error: null }), run: site.run });
@@ -54,7 +55,7 @@ async function main(): Promise<void> {
     const req = {
       method,
       url,
-      headers: { host: "status.hrossen.dk", "x-authentik-username": "owner", "x-authentik-groups": groups, "content-type": "application/json" },
+      headers: { ...gateHeaders("owner", groups, "status.hrossen.dk"), "content-type": "application/json" },
       socket: { remoteAddress: "10.0.0.1", destroy: () => undefined },
       on: (ev: string, cb: () => void) => (ev === "end" ? cb() : undefined, req),
     };

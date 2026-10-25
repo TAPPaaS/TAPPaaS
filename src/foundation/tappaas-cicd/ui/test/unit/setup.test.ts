@@ -13,6 +13,7 @@ import { Jobs } from "../../src/jobs";
 import { Runner, Streamer } from "../../src/run";
 import { parseKv, secretStatus, writeSecret } from "../../src/secrets";
 import { SetupInputs, TESTS_FILE, physicalStep, readPhysical, WifiInputs, clientZonesWithoutWifi, closeSetupToken, gatherSetup, parseApList, parseSwitches, parseWgvpnPeers, readSetupTests, readWifiZones, recordSetupTest, runSetupTests, setupComplete, setupSteps, wifiStep } from "../../src/setup";
+import { testGate } from "./gate-fixture";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -199,7 +200,7 @@ async function main(): Promise<void> {
   check(created.job?.kind === "read" && setupSteps(await gather()).find((s) => s.id === "logging")!.done === true, "a Test job run through the job runner marks the logging step done");
 
   // ── the setup token closes itself (T6) ──────────────────────────────
-  const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: ["10.0.0.0/24"], tokenFile: join(cfg, "console-setup-token"), identityFile: join(dir, "no-identity.json"), trustLocalHeaders: false };
+  const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: ["10.0.0.0/24"], tokenFile: join(cfg, "console-setup-token"), identityFile: join(dir, "no-identity.json"), trustLocalHeaders: false, gate: testGate() };
   writeFileSync(access.tokenFile, "t0k3n\n");
   check(!closeSetupToken(access) && existsSync(access.tokenFile), "before identity: the token stays");
   check(decide("10.0.0.50", { host: "console.acme.example", authorization: "Bearer t0k3n" }, null, access, setupState(access)).ok, "…and is accepted from mgmt");

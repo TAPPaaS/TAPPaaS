@@ -15,6 +15,7 @@ import { Manifests } from "../../src/manifest";
 import { Reads } from "../../src/reads";
 import { Runner, Streamer } from "../../src/run";
 import { ConsoleServer } from "../../src/server";
+import { gateHeaders, testGate } from "./gate-fixture";
 import { check, done } from "./check";
 import { fakeSite } from "./fake-site";
 
@@ -280,7 +281,7 @@ async function main(): Promise<void> {
   rmSync(rdir, { recursive: true, force: true });
 
   // ── the HTTP routes ─────────────────────────────────────────────────
-  const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: [], tokenFile: join(dir, "tok"), identityFile: join(dir, "identity.json"), trustLocalHeaders: false };
+  const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: [], tokenFile: join(dir, "tok"), identityFile: join(dir, "identity.json"), trustLocalHeaders: false, gate: testGate() };
   writeFileSync(access.identityFile, "{}");
   const site = fakeSite();
   const reads = new Reads({ configDir: dir, stateDir: join(dir, "state"), run: site.run, journalDays: 7 });
@@ -311,7 +312,7 @@ async function main(): Promise<void> {
     await p;
     return { status: res.statusCode, body: out, headers: h };
   };
-  const gateH = (groups: string, host = "console.hrossen.dk") => ({ host, "x-authentik-username": "lars", "x-authentik-groups": groups, "content-type": "application/json" });
+  const gateH = (groups: string, host = "console.hrossen.dk") => ({ ...gateHeaders("lars", groups, host), "content-type": "application/json" });
   let h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich"], preview: true }, { ...gateH("admin"), "content-type": "text/plain" });
   check(h.status === 415, "a job posted as anything but JSON is refused (no cross-site form)");
   h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich"], preview: true }, { "content-type": "application/json" }, "127.0.0.1");

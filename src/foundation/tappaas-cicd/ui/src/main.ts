@@ -19,6 +19,7 @@ import { lookup } from "dns";
 import { networkInterfaces } from "os";
 import { join } from "path";
 import { AccessConfig, addrMatches, setupState } from "./access";
+import { GateKeys, authentikKeyFetch } from "./gate";
 import { Jobs, takeRestartMarker } from "./jobs";
 import { KEY_FILE, LiteLLM } from "./litellm";
 import { Assistant } from "./assistant";
@@ -66,6 +67,8 @@ export const HELP: HelpSpec = {
       "credential files go; default $HOME), CONSOLE_MANIFEST_FILE\n" +
       "(default <config>/console-setup-token), CONSOLE_JOURNAL_DAYS (default 7),\n" +
       "CONSOLE_LITELLM_KEY_FILE (the assistant's LiteLLM key; default /etc/secrets/litellm-svckey.env),\n" +
+      "CONSOLE_AUTHENTIK_CREDENTIALS (where the gate's provider keys are read; default\n" +
+      "$HOME/.authentik-credentials.txt),\n" +
       "CONSOLE_LOKI_URL, CONSOLE_LOKI_PASSWORD_FILE (its logs tool), CONSOLE_REPO (the managers' READMEs;\n" +
       "default /home/tappaas/TAPPaaS), TAPPAAS_WAN_ADDRESS_FILE (what the WAN held at the last\n" +
       "network update; default /var/lib/tappaas/wan-address.json).",
@@ -188,6 +191,11 @@ async function serve(o: ServeOpts): Promise<number> {
     tokenFile: process.env.CONSOLE_SETUP_TOKEN_FILE ?? join(o.configDir, "console-setup-token"),
     identityFile: join(o.configDir, "identity.json"),
     trustLocalHeaders: o.trustLocalHeaders,
+    // The controllers' Authentik credentials (authentik-controller's default file).
+    gate: new GateKeys(
+      authentikKeyFetch(process.env.CONSOLE_AUTHENTIK_CREDENTIALS ?? join(process.env.HOME ?? "/home/tappaas", ".authentik-credentials.txt")),
+      (m) => console.log(`[console] ${m}`),
+    ),
   };
   const webDir = o.webDir ?? join(__dirname, "..", "..", "..", "web", "dist");
   const reads = new Reads({

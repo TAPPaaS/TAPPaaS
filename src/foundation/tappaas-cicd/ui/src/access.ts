@@ -1,10 +1,11 @@
 // access.ts — who may talk to the console, and as whom (ADR-034 D2, D3, D10).
 //
 //   - The backend accepts connections only from the firewall (Caddy and the
-//     Authentik gate run there) and from loopback. The `X-Authentik-*` headers
-//     are believed only from the firewall: anything else on mgmt could forge them.
-//   - From the firewall a request must carry X-Authentik-Username; one that does
-//     not came through a route without the gate and is refused.
+//     Authentik gate run there) and from loopback. The firewall's address is not
+//     proof on its own (a host on mgmt can take it): from it a request must
+//     carry the gate's X-Authentik-Jwt, verified against the route's provider
+//     (gate.ts), and the user and groups are the token's. One without the gate's
+//     headers came through a route without the gate and is refused.
 //   - The role comes from the Authentik groups (installer, admin, users); the
 //     `status.<domain>` route caps it at read whatever the groups say.
 //   - Before identity exists (D10) there is no gate. While config/identity.json is
@@ -19,6 +20,7 @@
 
 import { existsSync, readFileSync } from "fs";
 import { createHash, timingSafeEqual } from "crypto";
+import { GateKeys, verifyGateToken } from "./gate";
 
 export type Role = "installer" | "admin" | "read";
 
@@ -29,6 +31,8 @@ export interface AccessConfig {
   tokenFile: string;
   identityFile: string; // config/identity.json: identity is installed once it exists
   trustLocalHeaders: boolean; // dev only: believe X-Authentik-* from `allow` peers too
+  gate?: GateKeys; // the routes' provider keys (gate.ts); without it the firewall is refused
+  now?: () => number; // seconds; tests set it
 }
 
 export interface Me {
@@ -41,7 +45,8 @@ export interface Me {
   route: "console" | "status";
 }
 
-export type Decision = { ok: true; me: Me } | { ok: false; status: number; reason: string };
+// `forget`: the cached gate key for that host refused the token — fetch it again soon.
+export type Decision = { ok: true; me: Me } | { ok: false; status: number; reason: string; forget?: string };
 
 // ── addresses ─────────────────────────────────────────────────────────
 
@@ -187,23 +192,26 @@ export function decide(
   const cap = (r: Role): Role => (route === "status" ? "read" : r);
 
   if (fromFirewall || (local && cfg.trustLocalHeaders && header(headers, "x-authentik-username"))) {
-    const user = header(headers, "x-authentik-username");
-    if (!user) return { ok: false, status: 401, reason: "no X-Authentik-Username: this route is not behind the identity gate" };
-    const groups = splitGroups(header(headers, "x-authentik-groups"));
+    const hdrUser = header(headers, "x-authentik-username");
+    const jwt = header(headers, "x-authentik-jwt");
+    if (!hdrUser && !jwt) return { ok: false, status: 401, reason: "no X-Authentik-Username: this route is not behind the identity gate" };
+    let user = hdrUser ?? "";
+    let groups = splitGroups(header(headers, "x-authentik-groups"));
+    let name = header(headers, "x-authentik-name") ?? null;
+    let email = header(headers, "x-authentik-email") ?? null;
+    if (fromFirewall) {
+      // The headers say who; the token proves it. Only the token's word counts.
+      const host = (routeHost(headers, true) ?? "").toLowerCase();
+      const key = cfg.gate?.get(host) ?? null;
+      if (!key) return { ok: false, status: 503, reason: `the identity gate's key for ${host || "this route"} is not known (Authentik unreachable, or no proxy provider for it): try again shortly` };
+      const v = verifyGateToken(jwt, key, (cfg.now ?? (() => Date.now() / 1000))());
+      if (!v.ok) return { ok: false, status: 401, reason: v.reason, forget: v.reason.includes("signature") ? host : undefined };
+      if (hdrUser && hdrUser !== v.claims.user) return { ok: false, status: 401, reason: "X-Authentik-Username is not the token's user" };
+      ({ user, groups, name, email } = v.claims);
+    }
     const role = roleOf(groups);
     if (!role) return { ok: false, status: 403, reason: `${user} is in none of the groups installer, admin, users` };
-    return {
-      ok: true,
-      me: {
-        user,
-        name: header(headers, "x-authentik-name") ?? null,
-        email: header(headers, "x-authentik-email") ?? null,
-        groups,
-        role: cap(role),
-        via: "gate",
-        route,
-      },
-    };
+    return { ok: true, me: { user, name, email, groups, role: cap(role), via: "gate", route } };
   }
 
   const token = presentedToken(headers, queryToken);
