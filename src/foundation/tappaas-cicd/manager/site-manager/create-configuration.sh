@@ -63,7 +63,7 @@ Named Arguments (all optional, defaults apply):
     --branch NAME         Git branch to track (default: stable)
     --domain DOMAIN       Primary domain for TAPPaaS (default: from existing config or CHANGE-domain.tld)
     --email EMAIL         Admin email address (default: from Proxmox root@pam user or existing config)
-    --schedule FREQ       Update frequency: monthly, weekly, daily, none (default: weekly)
+    --schedule FREQ       Update frequency: monthly, weekly, daily, none (default: daily)
     --weekday DAY         Day of week for updates (default: Tuesday)
     --hour H              Hour of day 0-23 for updates (default: 2)
     --primary-node FQDN   Primary node FQDN for cluster discovery (default: auto-detect from config)
@@ -159,7 +159,7 @@ parse_args() {
         BRANCH="stable"
         DOMAIN="CHANGE-domain.tld"
         EMAIL="${DISCOVERED_EMAIL:-CHANGE-admin@domain.tld}"
-        UPDATE_SCHEDULE="weekly"
+        UPDATE_SCHEDULE="daily"
         UPDATE_WEEKDAY="Tuesday"
         UPDATE_HOUR="2"
 

@@ -248,8 +248,8 @@ export const HELP: HelpSpec = {
         ["--upstream-git <url>", "Module-catalog git repo (default: codeberg.org/TAPPaaS/TAPPaaS)."],
         ["--email <addr>", "Admin email (default: Proxmox root@pam / existing)."],
         ["--primary-node <fqdn>", "Node to discover the cluster from (default: tappaas1)."],
-        ["--schedule <f>", "Update frequency: monthly|weekly|daily|none (default: weekly)."],
-        ["--weekday <Day>", "Weekday for updates (default: Tuesday)."],
+        ["--schedule <f>", "Update frequency: monthly|weekly|daily|none (default: daily)."],
+        ["--weekday <Day>", "Weekday for weekly/monthly updates (default: Tuesday)."],
         ["--hour <H>", "Hour of day 0-23 (default: 2)."],
         ["--force", "Overwrite an existing site.json."],
       ] },
@@ -684,7 +684,8 @@ function cmdSite(o: Opts): void {
     const hour = o.flags.get("--updateHour");
     if (freq !== undefined || wday !== undefined || hour !== undefined) {
       const cur = readSchedule(raw.updateSchedule);
-      let f: string = cur.frequency ?? "weekly";
+      // No frequency recorded reads as daily, as the timer renders it (#801).
+      let f: string = cur.frequency ?? "daily";
       let d: string | null = cur.weekday ?? null;
       let h: number | undefined = cur.hour ?? 2;
       if (freq !== undefined) {

@@ -278,7 +278,7 @@
           "description": "How often the sweep runs.",
           "type": "string",
           "enum": ["none", "daily", "weekly", "monthly"],
-          "default": "weekly"
+          "default": "daily"
         },
         "weekday": {
           "description": "The day it runs on, under weekly and monthly.",
@@ -295,8 +295,7 @@
         }
       },
       "default": {
-        "frequency": "weekly",
-        "weekday": "Thursday",
+        "frequency": "daily",
         "hour": 2
       },
       "changeClass": "in-place"
