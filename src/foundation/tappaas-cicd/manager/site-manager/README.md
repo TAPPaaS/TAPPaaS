@@ -69,7 +69,7 @@ top-level          add --name <site-code> [--organization <org>] [create-site op
                    (validate also checks updateSchedule and prints the OnCalendar it renders)
                    reconcile [--apply] [--deep]
                    update [--dry-run] [--force] [--no-git-pull]   (starts update-tappaas.service)
-                   test [--deep]                                  (= module-manager test each)
+                   test [--deep] [--verbose]                      (= module-manager test each; one line per module, output in ~/logs/site-test-<time>/)
 ```
 
 `update` runs the whole-site update **now** by starting `update-tappaas.service`

@@ -81,6 +81,9 @@ const clean = () => { try { unlinkSync(join(cfg, ".update-request.json")); } cat
 }
 
 // ── test: iterate every LIVE module, forward --deep, continue-on-failure ──
+// One line per module; each module's output goes to a run directory here.
+const logRoot = mkdtempSync(join(tmpdir(), "site-test-"));
+process.env.TAPPAAS_LOG_DIR = logRoot;
 const live = (name: string): { name: string; status: string } => ({ name, status: "Production" });
 {
   const c = new FakeSiteClient();
@@ -88,8 +91,8 @@ const live = (name: string): { name: string; status: string } => ({ name, status
   const rc = run(["test"], c);
   check(rc === 0, "test all-pass → exit 0");
   check(
-    c.log.includes("test nextcloud") && c.log.includes("test litellm"),
-    "test iterates every module the list returns",
+    c.log.includes("test nextcloud >log") && c.log.includes("test litellm >log"),
+    "test iterates every module the list returns, each into its own log",
   );
 }
 {
@@ -97,7 +100,7 @@ const live = (name: string): { name: string; status: string } => ({ name, status
   c.deployedModules = [live("a"), live("b")];
   run(["test", "--deep"], c);
   check(
-    c.log.includes("test a --deep") && c.log.includes("test b --deep"),
+    c.log.includes("test a --deep >log") && c.log.includes("test b --deep >log"),
     "test --deep forwards --deep to each module",
   );
 }
@@ -107,7 +110,7 @@ const live = (name: string): { name: string; status: string } => ({ name, status
   c.testRc.set("b", 1);
   const rc = run(["test"], c);
   check(rc === 1, "test with a failing module → exit 1");
-  check(c.log.includes("test c"), "…and it CONTINUES past the failure (c still tested)");
+  check(c.log.includes("test c >log"), "…and it CONTINUES past the failure (c still tested)");
 }
 {
   // archived / external modules have no live VM — they are SKIPPED, never run,
@@ -121,11 +124,12 @@ const live = (name: string): { name: string; status: string } => ({ name, status
   ];
   const rc = run(["test"], c);
   check(rc === 0, "test skips archived/external → the live module passes, exit 0");
+  const tested = (m: string): boolean => c.log.some((l) => l === `test ${m}` || l.startsWith(`test ${m} `));
   check(
-    !c.log.includes("test portainer-lab1") && !c.log.includes("test ext1"),
+    !tested("portainer-lab1") && !tested("ext1"),
     "…and never invokes the test for a decommissioned module",
   );
-  check(c.log.includes("test a"), "…but the live module IS tested");
+  check(tested("a"), "…but the live module IS tested");
 }
 {
   const c = new FakeSiteClient();
@@ -220,6 +224,40 @@ function captured(argv: string[], c: FakeSiteClient): { rc: number; out: string;
   check(r.out.includes("2 commit(s) behind origin") && r.out.includes("repository sync TAPPaaS"),
     "reconcile reports a checkout behind origin and the sync that closes it");
   check(!r.out.includes("Converged"), "a checkout behind origin is not reported as Converged");
+}
+
+// ── test, in short: one line per module, the failures named, the output in a log ──
+{
+  const c = new FakeSiteClient();
+  c.deployedModules = [live("storage"), live("tappaas-cicd")];
+  c.testOutput.set("storage", "[Info]   ✓ share mounted\n[Info] All tests passed for module 'storage'\n");
+  c.testOutput.set("tappaas-cicd",
+    "[Info]   ✓ 0 packages seen → SCAN FAILED, never clean\n" +
+    "  ok: liveness FAILS when a module is down\n" +
+    "\x1b[0;31m[Error]\x1b[0m   ✗ test-pipefail-grep-q.sh failed — rerun: scripts/test/test-pipefail-grep-q.sh\n" +
+    "        FAIL: foundation/x/test.sh:12: grep -q under pipefail\n" +
+    "[FAIL] the console answers\n" +
+    "        FAIL: foundation/x/test.sh:12: grep -q under pipefail\n");
+  c.testRc.set("tappaas-cicd", 1);
+  const r = captured(["test", "--deep"], c);
+  check(r.rc === 1, "short form: a failing module → exit 1");
+  check(/✓.* storage /.test(r.out) && !r.out.includes("share mounted"), "a passing module is one line; its checks stay in its log");
+  check(/✗ tappaas-cicd.*\(exit 1\)/.test(r.out), "a failing module says so, with its exit code");
+  check(r.out.includes("✗ test-pipefail-grep-q.sh failed") && r.out.includes("[FAIL] the console answers"),
+    "…and names its failed checks");
+  check((r.out.match(/FAIL: foundation\/x\/test.sh:12/g) ?? []).length === 1, "…once each");
+  check(!r.out.includes("SCAN FAILED") && !r.out.includes("liveness FAILS"), "…not passing checks that mention a failure");
+  const m = /each module's output: (\S+)\/<module>\.log/.exec(r.out);
+  check(m !== null && m[1].startsWith(logRoot), "the run directory is named up front");
+  check(m !== null && readFileSync(join(m[1], "tappaas-cicd.log"), "utf8").includes("SCAN FAILED"),
+    "…and holds each module's whole output");
+}
+{
+  const c = new FakeSiteClient();
+  c.deployedModules = [live("a")];
+  const r = captured(["test", "--verbose"], c);
+  check(c.log.includes("test a") && !c.log.includes("test a >log") && r.out.includes("== test a =="),
+    "--verbose streams each module test as before, with no log file");
 }
 
 console.log(`fleet.test: ${passed} passed, ${failed} failed`);

@@ -37,8 +37,10 @@ import { adoptNode, provisionNode } from "./provision";
 import { Site, SiteClient } from "./types";
 import { runningVersion } from "./version";
 import { spawnSync } from "child_process";
-import { existsSync, readFileSync } from "fs";
-import { dirname } from "path";
+import { existsSync, mkdirSync, readFileSync } from "fs";
+import { homedir } from "os";
+import { dirname, join } from "path";
+import { duration, failingLines, runDirName } from "./testrun";
 import { locationErrors, placeText, readLocations } from "../../../lib/ts/src/locations";
 import { clusterNode, clusterNodes, nodeErrors } from "../../../lib/ts/src/nodes";
 import { mgmtDomain } from "../../../lib/ts/src/cluster";
@@ -266,10 +268,11 @@ export const HELP: HelpSpec = {
         ["--allow-disruption", "Open the downtime window for this run: a module with rebootOk may be rebooted or migrated offline, the others keep their disruptive changes deferred. Never overrides rebootOk:false — that is `module-manager module update <m> --allow-disruption`."],
         ["--no-git-pull", "Update whatever is checked out; skip pulling each repository (test local, not-yet-pushed changes)."],
       ] },
-    { usage: "test [--deep]",
-      note: "(run every deployed module's tests, from every repository)",
+    { usage: "test [--deep] [--verbose]",
+      note: "(run every deployed module's tests, from every repository; one line per module, each module's output in ~/logs/site-test-<time>/)",
       options: [
         ["--deep", "Forward --deep to each module test (heavy / regression suite; creates real VMs)."],
+        ["--verbose", "Print every module test's whole output as it runs, instead of one line per module."],
       ] },
   ],
   common: [
@@ -307,7 +310,8 @@ interface Opts {
 // Flags that take NO value (everything else with a value is captured generically).
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
   "--pxe", "--provision", "--config-only", "--yes", "--no-wan",
-  "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned", "--primary", "--check"]);
+  "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned", "--primary", "--check",
+  "--verbose"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -1385,16 +1389,44 @@ function cmdTest(o: Opts, client: SiteClient): number {
     return 0;
   }
   const deep = o.deep === true;
+  const verbose = o.boolFlags.has("--verbose");
   info(`Testing ${names.length} module(s)${deep ? " (deep)" : ""}: ${names.join(", ")}`);
+  // Each module's output in a file of its own: a deep run prints far more than
+  // a terminal keeps, and a failure that scrolled away cannot be read later.
+  let dir = "";
+  if (!verbose) {
+    dir = join(process.env.TAPPAAS_LOG_DIR ?? join(homedir(), "logs"), runDirName(new Date()));
+    mkdirSync(dir, { recursive: true });
+    info(`  each module's output: ${dir}/<module>.log`);
+  }
   const failed: string[] = [];
   for (const name of names) {
-    info("");
-    info(`${GN}== test ${name}${deep ? " --deep" : ""} ==${CL}`);
-    if (client.testModule(name, deep) !== 0) failed.push(name);
+    if (verbose) {
+      info("");
+      info(`${GN}== test ${name}${deep ? " --deep" : ""} ==${CL}`);
+      if (client.testModule(name, deep) !== 0) failed.push(name);
+      continue;
+    }
+    const log = join(dir, `${name}.log`);
+    const t0 = Date.now();
+    const rc = client.testModule(name, deep, log);
+    const took = duration(Date.now() - t0);
+    if (rc === 0) {
+      info(`  ${GN}✓${CL} ${name}  ${took}`);
+      continue;
+    }
+    failed.push(name);
+    warn(`  ${RD}✗ ${name}${CL}  ${took}  (exit ${rc}) — ${log}`);
+    let text = "";
+    try { text = readFileSync(log, "utf8"); } catch { /* the verdict stands without it */ }
+    const lines = failingLines(text);
+    if (lines.length === 0) warn("      no failed check named in its output — read the log");
+    for (const l of lines) warn(`      ${l}`);
   }
   info("");
   if (failed.length > 0) {
     warn(`${RD}${failed.length}/${names.length} module test(s) FAILED: ${failed.join(", ")}${CL}`);
+    if (dir) warn(`  logs: ${dir}`);
     return 1;
   }
   info(`${GN}✓ All ${names.length} module test(s) passed.${CL}`);

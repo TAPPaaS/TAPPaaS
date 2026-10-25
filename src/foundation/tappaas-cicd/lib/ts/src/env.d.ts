@@ -64,6 +64,10 @@ declare module "fs" {
   // first two bytes of a script without decoding a possibly-binary file.
   export function readFileSync(path: string): NodeBuffer;
   export function writeFileSync(path: string, data: string, encoding?: "utf8"): void;
+  export function appendFileSync(path: string, data: string, encoding?: "utf8"): void;
+  // A file descriptor for a child's stdio (exec.ts streamToFile).
+  export function openSync(path: string, flags: string): number;
+  export function closeSync(fd: number): void;
   export function renameSync(oldPath: string, newPath: string): void;
   export function mkdtempSync(prefix: string): string;
   export function readdirSync(path: string): string[];
@@ -109,6 +113,7 @@ declare module "path" {
 declare module "os" {
   export function tmpdir(): string;
   export function hostname(): string;
+  export function homedir(): string;
 }
 
 // ── node:child_process (the manager → controller/bash FFI boundary) ────

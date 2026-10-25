@@ -270,5 +270,6 @@ export interface SiteClient {
   // failure.
   listDeployedModules(): Array<{ name: string; status: string }> | null;
   // Test ONE module via `module-manager test <m> [--deep]`. Returns its exit code.
-  testModule(module: string, deep: boolean): number;
+  // With logFile, the module test's whole output goes there, not to the terminal.
+  testModule(module: string, deep: boolean, logFile?: string): number;
 }

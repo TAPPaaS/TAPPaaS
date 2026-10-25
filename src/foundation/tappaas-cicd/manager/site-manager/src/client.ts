@@ -18,7 +18,7 @@ import {
   queryNodeTankPools,
   reachableNodes, queryClusterGuests} from "../../../lib/ts/src/cluster";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
-import { capture as run, captureResult, stream as runStreaming } from "../../../lib/ts/src/exec";
+import { capture as run, captureResult, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
 import { setNodeStoragePools } from "../../../lib/ts/src/nodes";
 import { RepositoryTrust, SiteClient } from "./types";
 import { UNIT } from "./unitrun";
@@ -309,9 +309,9 @@ export class CliSiteClient implements SiteClient {
     }
   }
 
-  testModule(module: string, deep: boolean): number {
+  testModule(module: string, deep: boolean, logFile?: string): number {
     const args = ["test", module];
     if (deep) args.push("--deep");
-    return runStreaming(MODULE_BIN(), args);
+    return logFile ? streamToFile(MODULE_BIN(), args, logFile) : runStreaming(MODULE_BIN(), args);
   }
 }

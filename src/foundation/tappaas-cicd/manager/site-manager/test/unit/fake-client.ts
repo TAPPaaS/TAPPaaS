@@ -4,6 +4,7 @@
 // second reconcile against the resulting state proves idempotency. Mirrors
 // identity-manager/test/unit/fake-client.ts.
 
+import { appendFileSync } from "fs";
 import { RepositoryTrust, SiteClient } from "../../src/types";
 
 export class FakeSiteClient implements SiteClient {
@@ -131,6 +132,8 @@ export class FakeSiteClient implements SiteClient {
   // (absent ⇒ 0).
   deployedModules: Array<{ name: string; status: string }> | null = [];
   testRc = new Map<string, number>();
+  // What each module test prints (written to the log file when one is given).
+  testOutput = new Map<string, string>();
   // update-tappaas.service stand-ins (ADR-017 D4)
   unitStateValue = "inactive";
   startOk = true;
@@ -162,8 +165,9 @@ export class FakeSiteClient implements SiteClient {
   listDeployedModules(): Array<{ name: string; status: string }> | null {
     return this.deployedModules === null ? null : this.deployedModules.map((m) => ({ ...m }));
   }
-  testModule(module: string, deep: boolean): number {
-    this.log.push(`test ${module}${deep ? " --deep" : ""}`);
+  testModule(module: string, deep: boolean, logFile?: string): number {
+    this.log.push(`test ${module}${deep ? " --deep" : ""}${logFile ? " >log" : ""}`);
+    if (logFile) appendFileSync(logFile, this.testOutput.get(module) ?? `${module}: tests ran\n`);
     return this.testRc.get(module) ?? 0;
   }
 }

@@ -5,6 +5,7 @@
 // (TAPPAAS_CONFIG) agree on where the live config lives.
 
 import { spawnSync } from "child_process";
+import { closeSync, openSync } from "fs";
 import { defaultConfigDir } from "./config-io";
 
 // Capped, generous buffer for captured child output (the historical value
@@ -81,4 +82,27 @@ export function stream(
   });
   if (r.error) throw new Error(`${bin} ${args[0] ?? ""}: ${r.error.message}`);
   return r.status ?? -1;
+}
+
+// Run with the child's output — stdout and stderr, interleaved as it writes
+// them — appended to <file> instead of the terminal: for a long run whose full
+// output belongs in a log, while the caller prints a short verdict. Returns the
+// exit code; throws only when the binary cannot be spawned.
+export function streamToFile(
+  bin: string,
+  args: string[],
+  file: string,
+  opts?: { env?: Record<string, string | undefined> },
+): number {
+  const fd = openSync(file, "a");
+  try {
+    const r = spawnSync(bin, args, {
+      stdio: ["ignore", fd, fd],
+      env: { ...configEnv(), ...(opts?.env ?? {}) },
+    });
+    if (r.error) throw new Error(`${bin} ${args[0] ?? ""}: ${r.error.message}`);
+    return r.status ?? -1;
+  } finally {
+    closeSync(fd);
+  }
 }
