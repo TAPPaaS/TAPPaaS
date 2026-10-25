@@ -159,81 +159,76 @@ repo_sync_verify_gate() {
     esac
 }
 
-# repo_sync_introduce <path> <branch> <name> <tag> <commit> <fingerprints> <unsigned>
-# ADR-033 D5: first trust for a FRESH clone, checked out on <branch>. With an
-# introduction (<tag> + <fingerprints>; <commit> may be empty, it is then read
-# from the tag) the clone must verify against it, and what it verified is
-# recorded in REPO_SYNC_TRUST_DIR so later updates take the normal base rule.
+# repo_sync_introduce <path> <branch> <name> <fingerprints> <unsigned>
+# ADR-033 D5: first trust for a clone, checked out on <branch>, on its owners'
+# word: <fingerprints> (space-separated SHA256:...) are the keys they publish.
 #
-#   staging/production   the checked-out tip must be a release the introduction
-#                        leads to. Without an introduction: refused, unless
+#   staging/production   the checked-out tip must be a release signed by one of
+#                        them, which its own allowed_signers lists; it is then
+#                        recorded in REPO_SYNC_TRUST_DIR, so later updates take
+#                        the normal base rule. No fingerprints: refused, unless
 #                        <unsigned> is 1 (D9) — trust then starts from the clone.
-#   unstable             nothing is signed there (D1); a given introduction is
-#                        still checked (the tag, its signer, that the tip
-#                        descends from it), so it holds once the branch changes.
+#   unstable             nothing is signed there (D1); given fingerprints must
+#                        be among the keys the checkout lists, so they hold once
+#                        the branch changes.
 #
-# Sets REPO_SYNC_INTRO_TAG / _COMMIT / _SIGNER (the fingerprint that signed the
-# introduction) when there is one, for the caller to write to site.json.
-# Returns 0 trusted (or not needed), 3 refused, 1 bad arguments.
+# Sets REPO_SYNC_INTRO_SIGNERS (the fingerprints, checked) for the caller to
+# write to site.json. Returns 0 trusted (or not needed), 3 refused, 1 bad
+# arguments.
 repo_sync_introduce() {
-    local path="$1" branch="$2" name="$3" tag="$4" commit="$5" fps="$6" unsigned="${7:-0}"
-    local channel target head
-    REPO_SYNC_INTRO_TAG="" REPO_SYNC_INTRO_COMMIT="" REPO_SYNC_INTRO_SIGNER=""
+    local path="$1" branch="$2" name="$3" fps="$4" unsigned="${5:-0}"
+    local channel head fp
+    REPO_SYNC_INTRO_SIGNERS=""
     channel="$(branch_channel "${path}" "${branch}")"
     head="$(git -C "${path}" rev-parse -q --verify HEAD 2>/dev/null || true)"
     [ -n "${head}" ] || { error "  repo-sync: ${name}: ${path} has no checked-out commit"; return 1; }
+    for fp in ${fps}; do
+        verify_fingerprint_ok "${fp}" || { error "  repo-sync: ${name}: '${fp}' is not a key fingerprint (SHA256:<43 characters>, as ssh-keygen -l prints it)"; return 1; }
+    done
 
-    if [[ -n "${tag}" && -z "${fps}" ]] || [[ -z "${tag}" && -n "${fps}" ]]; then
-        error "  repo-sync: ${name}: an introduction needs both the tag and the signer's fingerprint"
-        return 1
-    fi
-    if [[ -z "${tag}" ]]; then
-        case "${channel}" in
-            staging|production) ;;
-            *) return 0 ;;
-        esac
+    case "${channel}" in
+        staging|production) ;;
+        *)
+            [[ -n "${fps}" ]] || return 0
+            local listed signers; signers="$(mktemp)"
+            verify_signers_at "${path}" "${head}" "${signers}" || true
+            listed="$(verify_signers_fingerprints "${signers}")"; rm -f "${signers}"
+            for fp in ${fps}; do
+                if grep -qxF "${fp}" <<<"${listed}"; then
+                    REPO_SYNC_INTRO_SIGNERS="${fps}"
+                    info "  repo-sync: ${name}: ${fp} is among the keys ${name} lists; '${branch}' is unstable, so nothing more is checked until it is a staging or production branch"
+                    return 0
+                fi
+            done
+            error "  repo-sync: ${name}: REFUSED — none of the given fingerprints is a key ${name} lists in ${VERIFY_SIGNERS_PATH}"
+            return 3 ;;
+    esac
+
+    if [[ -z "${fps}" ]]; then
         if [[ "${unsigned}" == "1" ]]; then
             if verify_repo_signs "${path}" "${head}"; then
-                warn "  repo-sync: ${name}: added without an introduction (--unsigned) — later releases are checked against the signers of the revision cloned now"
+                warn "  repo-sync: ${name}: added without its signers' fingerprints (--unsigned) — later releases are checked against the signers of the revision cloned now"
             fi
             return 0
         fi
         if verify_repo_signs "${path}" "${head}"; then
-            error "  repo-sync: ${name}: REFUSED — '${branch}' is a ${channel} branch and ${name} signs its releases, but no introduction was given"
-            error "    ask its owner for the release tag to start from and the signing key's fingerprint (--introduction <tag> --signer SHA256:...)"
+            error "  repo-sync: ${name}: REFUSED — '${branch}' is a ${channel} branch and ${name} signs its releases, but no signer fingerprint was given"
+            error "    ask its owners for the fingerprints of the keys they sign with: --signer SHA256:... (once per key)"
         else
             error "  repo-sync: ${name}: REFUSED — '${branch}' is a ${channel} branch, and ${name} signs no releases (no keys in ${VERIFY_SIGNERS_PATH})"
             error "    to track it unverified, add it with --unsigned (ADR-033 D9)"
         fi
         return 3
     fi
-
-    local fp
-    for fp in ${fps}; do
-        verify_fingerprint_ok "${fp}" || { error "  repo-sync: ${name}: '${fp}' is not a key fingerprint (SHA256:<43 characters>)"; return 1; }
-    done
-    if [[ -z "${commit}" ]]; then
-        commit="$(git -C "${path}" rev-parse -q --verify "refs/tags/${tag}^{commit}" 2>/dev/null || true)"
-        [ -n "${commit}" ] || { error "  repo-sync: ${name}: REFUSED — no tag ${tag} in ${path}"; return 3; }
-    fi
-    case "${channel}" in
-        staging|production) target="${head}" ;;
-        *) target="${commit}" ;;
-    esac
-    if ! verify_introduce "${path}" "${REPO_SYNC_TRUST_DIR}" "${name}" "${tag}" "${commit}" "${fps}" "${target}"; then
-        error "  repo-sync: ${name}: REFUSED — the clone does not verify against its introduction"
+    if ! verify_introduce "${path}" "${REPO_SYNC_TRUST_DIR}" "${name}" "${fps}" "${head}"; then
+        error "  repo-sync: ${name}: REFUSED — the current release on '${branch}' is not signed by one of the given keys"
         error "    ${VERIFY_REASON}"
+        error "    if its owners' keys have changed, ask them for the current fingerprints"
         return 3
     fi
-    if [[ "${target}" != "${head}" ]] && ! verify_moves_forward "${path}" "${commit}" "${head}"; then
-        error "  repo-sync: ${name}: REFUSED — '${branch}' does not descend from the introduction ${tag}"
-        return 3
-    fi
-    # shellcheck disable=SC2034  # REPO_SYNC_INTRO_* are this function's results
-    REPO_SYNC_INTRO_TAG="${tag}" REPO_SYNC_INTRO_COMMIT="$(git -C "${path}" rev-parse "${commit}^{commit}")"
-    # shellcheck disable=SC2034
-    REPO_SYNC_INTRO_SIGNER="${VERIFY_INTRO_SIGNER##* }"
-    info "  repo-sync: ${name}: introduced at ${tag} (signed by ${VERIFY_INTRO_SIGNER}); ${VERIFY_TAG:-${tag}} verified"
+    # shellcheck disable=SC2034  # REPO_SYNC_INTRO_SIGNERS is this function's result
+    REPO_SYNC_INTRO_SIGNERS="${fps}"
+    info "  repo-sync: ${name}: ${VERIFY_TAG} verified — signed by ${VERIFY_INTRO_SIGNER}"
     return 0
 }
 

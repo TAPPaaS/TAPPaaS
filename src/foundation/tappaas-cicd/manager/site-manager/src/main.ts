@@ -199,20 +199,18 @@ export const HELP: HelpSpec = {
     { usage: "node reconcile [--apply]",
       options: [["--apply", "Register nodes that joined the cluster (default is preview)."]] },
     { usage: "repository list [--json]", note: "(alias: repo)" },
-    { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>] [--introduction <tag> --signer <fp> | --unsigned]", effect: { noPreview: "clones the repository into ~/<name> and registers it in site.json" },
+    { usage: "repository add <url> [--branch <b>] [--managed full|tracked] [--catalog <p>] [--signer <fp>]... [--unsigned]", effect: { noPreview: "clones the repository into ~/<name> and registers it in site.json" },
       options: [
         ["--branch <b>", "Branch to check out (default stable)."],
         ["--managed full|tracked", "full: carries modules, its catalog is validated; tracked: registered without catalog requirements. The sweep pulls both."],
         ["--catalog <p>", "Path of the module catalog inside the repository."],
-        ["--introduction <tag>", "ADR-033 D5: the release tag trust starts from, from the repository's owner. With --signer, required on a staging/production branch; the clone must verify against it, and it is recorded as the entry's trust."],
-        ["--signer SHA256:<fp>", "Fingerprint of the key that signed the introduction (ssh-keygen -l), obtained from the owner out of band."],
-        ["--unsigned", "Add a staging/production branch without an introduction: a repository that signs nothing, or one trusted from the revision cloned now (D9)."],
+        ["--signer SHA256:<fp>", "ADR-033 D5: the fingerprint of a key the repository's owners sign releases with (ssh-keygen -l), from them, out of band. Once per key. Required on a staging/production branch: its current release must be signed by one of them. Recorded as the entry's trust."],
+        ["--unsigned", "Add a staging/production branch without signer fingerprints: a repository that signs nothing, or one trusted from the revision cloned now (D9)."],
       ] },
-    { usage: "repository introduce <name> [--introduction <tag> --signer <fp>]",
-      note: "(ADR-033 D5: check the checkout against its trust anchor and record it)",
+    { usage: "repository introduce <name> [--signer <fp>]...",
+      note: "(ADR-033 D5: check the checkout against its signers' fingerprints and record it)",
       options: [
-        ["--introduction <tag>", "Give an existing repository an anchor: the release tag to trust first. Written to site.json once the checkout verifies against it."],
-        ["--signer SHA256:<fp>", "Fingerprint of the key that signed that tag, from the repository's owner."],
+        ["--signer SHA256:<fp>", "A key the owners sign with, from them (once per key). The current release must be signed by one of them; written to site.json once it holds. Without it: the fingerprints already in site.json."],
       ] },
     { usage: "repository modify <name> [--url <u>] [--branch <b>]", effect: { noPreview: "changes the repository's URL or branch in site.json (a new URL re-clones it)" },
       options: [["--url <u>", "Re-point the repo at a new forge/URL in place (e.g. github.com→codeberg.org)."],
@@ -300,6 +298,8 @@ interface Opts {
   json: boolean;
   // generic --key value capture for `site modify` / `node add` / `repository add`.
   flags: Map<string, string>;
+  // every value of a repeated --key (flags keeps the last): --signer.
+  flagLists: Map<string, string[]>;
   boolFlags: Set<string>;
   rest: string[];
 }
@@ -318,6 +318,7 @@ function parseOpts(args: string[]): Opts {
     force: false,
     json: false,
     flags: new Map(),
+    flagLists: new Map(),
     boolFlags: new Set(),
     rest: [],
   };
@@ -349,6 +350,7 @@ function parseOpts(args: string[]): Opts {
       } else {
         // allow repeated --pool: store last; node add reads rest for pools.
         o.flags.set(a, next);
+        o.flagLists.set(a, [...(o.flagLists.get(a) ?? []), next]);
         i++;
       }
     } else {
@@ -1021,6 +1023,8 @@ function cmdRepository(o: Opts, client: SiteClient): void {
   // Rebuild "--key value" pairs from parsed flags for the bash delegations
   // (parseOpts captures valued flags into o.flags, so o.rest holds positionals
   // only — forwarding o.rest alone would silently drop --url/--branch/etc.).
+  // --signer may be given once per key: forward every one.
+  const fwdSigners = (): string[] => (o.flagLists.get("--signer") ?? []).flatMap((v) => ["--signer", v]);
   const fwdFlags = (keys: string[]): string[] => {
     const out: string[] = [];
     for (const k of keys) {
@@ -1065,7 +1069,7 @@ function cmdRepository(o: Opts, client: SiteClient): void {
     // the site.json .repositories entry. Forward <url> + its valued flags.
     const url = o.rest[1];
     if (!url) die("repository add: expected <url>");
-    const args = [url, ...fwdFlags(["--branch", "--managed", "--catalog", "--introduction", "--signer"])];
+    const args = [url, ...fwdFlags(["--branch", "--managed", "--catalog"]), ...fwdSigners()];
     if (o.boolFlags.has("--unsigned")) args.push("--unsigned");
     const rc = client.repositoryAdd(args);
     if (rc !== 0) throw new DieError(`repository.sh add exited ${rc}`);
@@ -1074,8 +1078,8 @@ function cmdRepository(o: Opts, client: SiteClient): void {
 
   if (sub === "introduce") {
     const name = o.rest[1];
-    if (!name) die("repository introduce: expected <name> [--introduction <tag> --signer SHA256:<fp>]");
-    const rc = client.repositoryIntroduce([name, ...fwdFlags(["--introduction", "--signer"])]);
+    if (!name) die("repository introduce: expected <name> [--signer SHA256:<fp>]...");
+    const rc = client.repositoryIntroduce([name, ...fwdSigners()]);
     if (rc !== 0) throw new DieError(`repository introduce ${name}: not verified (repository.sh exited ${rc})`);
     return;
   }

@@ -144,21 +144,21 @@ else
 fi
 
 # ADR-033 D5, the full check now the rebuild has brought jq and python3: the
-# introduction verifies (tag, signer, tree-sha256), the trust record that later
-# updates start from is written, and the anchor create-site.sh puts in
-# site.json beside it.
+# release verifies against the published fingerprints (signer, tree-sha256), the
+# trust record that later updates start from is written, and the fingerprints
+# go where create-site.sh puts them in site.json.
 if [[ -n "${INTRO_TAG}" ]]; then
   # shellcheck source=lib/repo-sync.sh
   . /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/repo-sync.sh
   REPO_SYNC_TRUST_DIR="${TRUST_DIR}"
-  if ! repo_sync_introduce /home/tappaas/TAPPaaS "$BRANCH" TAPPaaS "$INTRO_TAG" "" "$INTRO_FP" 0 >>"$BOOTSTRAP_LOG" 2>&1; then
-    echo "ERROR: TAPPaaS ${INTRO_TAG} does not verify against its introduction — tail of ${BOOTSTRAP_LOG}:" >&2
+  if ! repo_sync_introduce /home/tappaas/TAPPaaS "$BRANCH" TAPPaaS "$SIGNERS" 0 >>"$BOOTSTRAP_LOG" 2>&1; then
+    echo "ERROR: TAPPaaS ${INTRO_TAG} does not verify against the published signers — tail of ${BOOTSTRAP_LOG}:" >&2
     tail -n 5 "$BOOTSTRAP_LOG" >&2
     exit 1
   fi
-  jq -n --arg t "$REPO_SYNC_INTRO_TAG" --arg c "$REPO_SYNC_INTRO_COMMIT" --arg s "$REPO_SYNC_INTRO_SIGNER" \
-    '{introduction: $t, introductionCommit: $c, signer: $s}' >"${TRUST_DIR}/TAPPaaS.introduction.json"
-  msg_ok "TAPPaaS ${INTRO_TAG} verified; trust anchor in ${TRUST_DIR}/TAPPaaS.introduction.json"
+  jq -n --arg s "$REPO_SYNC_INTRO_SIGNERS" '{signers: ($s | split(" ") | map(select(. != "")))}' \
+    >"${TRUST_DIR}/TAPPaaS.signers.json"
+  msg_ok "TAPPaaS ${INTRO_TAG} verified; signer fingerprints in ${TRUST_DIR}/TAPPaaS.signers.json"
 fi
 
 # create ssh keys for the tappaas user (idempotent: keep an existing keypair).

@@ -423,29 +423,21 @@
             "default": "stable"
           },
           "trust": {
-            "description": "The repository's first trusted release (ADR-033 D5): a fresh clone has no running revision to take its signers from, so its first release is checked against this. The introduction tag must point at introductionCommit and be signed by the key with this fingerprint; the checkout must descend from it. After that the site verifies each update against the signers of the release it last verified (config/.trust/<name>.json). Written by the installer for the TAPPaaS repository and by `repository add --introduction --signer` for others. Absent: the repository has no anchor — a staging/production clone was added with --unsigned, or predates ADR-033 and verifies from the revision it runs.",
+            "description": "The fingerprints of the keys the repository's owners sign its releases with (ADR-033 D5) — from them, out of band, never from the repository. A fresh clone runs nothing to take its signers from, so the current release on a staging or production branch must be signed by one of these keys, which that release's own .tappaas/allowed_signers lists; from then on the site verifies each update against the signers of the release it last verified (config/.trust/<name>.json). `repository introduce` checks the checkout against them again at any time. Written by the installer for the TAPPaaS repository and by `repository add --signer` for others. Absent: the repository was added with --unsigned, or predates ADR-033 and verifies from the revision it runs. When the owners' keys change, put their new fingerprints here.",
             "type": "object",
             "additionalProperties": false,
             "required": [
-              "introduction",
-              "introductionCommit",
-              "signer"
+              "signers"
             ],
             "properties": {
-              "introduction": {
-                "description": "The release tag trust starts from (e.g. v2.4).",
-                "type": "string",
-                "pattern": "^v[0-9]+\\.[0-9]+(\\.[0-9]+)?$"
-              },
-              "introductionCommit": {
-                "description": "The full commit id the introduction tag points at.",
-                "type": "string",
-                "pattern": "^[0-9a-f]{40}([0-9a-f]{24})?$"
-              },
-              "signer": {
-                "description": "SHA-256 fingerprint of the key that signed the introduction tag, as ssh-keygen -l prints it (SHA256:...). Obtained from the repository's owner out of band; for TAPPaaS it is published in INSTALL.md.",
-                "type": "string",
-                "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+              "signers": {
+                "description": "SHA-256 fingerprints, as ssh-keygen -l prints them (SHA256:...). Any one of them may have signed the current release. For TAPPaaS they are published in INSTALL.md.",
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "pattern": "^SHA256:[A-Za-z0-9+/]{43}$"
+                }
               }
             }
           }

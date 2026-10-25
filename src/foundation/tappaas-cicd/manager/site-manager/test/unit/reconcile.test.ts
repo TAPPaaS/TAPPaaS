@@ -48,15 +48,15 @@ const TAPPAAS: Repository = {
 }
 
 // 1b. ADR-033 D5: a repository with a trust anchor is cloned WITH it, so the
-//     client verifies the fresh clone against its introduction.
+//     client verifies the fresh clone against its signers' fingerprints.
 {
   const c = new FakeSiteClient();
   const anchored: Repository = {
     ...TAPPAAS,
-    trust: { introduction: "v2.4", introductionCommit: "a".repeat(40), signer: "SHA256:" + "x".repeat(43) },
+    trust: { signers: ["SHA256:" + "x".repeat(43)] },
   };
   applyPlan(c, computePlan(site([anchored]), c, { deep: false, apply: true, siteFile: "x" }));
-  check(c.log.some((l) => l.startsWith("clone ") && l.endsWith("trust=TAPPaaS@v2.4")), "anchored clone passes its introduction");
+  check(c.log.some((l) => l.startsWith("clone ") && l.endsWith(`trust=TAPPaaS@SHA256:${"x".repeat(43)}`)), "a clone with signers is checked against them");
   c.log.length = 0;
   const d = new FakeSiteClient();
   applyPlan(d, computePlan(site([TAPPAAS]), d, { deep: false, apply: true, siteFile: "x" }));

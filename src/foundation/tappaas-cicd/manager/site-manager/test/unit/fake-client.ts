@@ -30,7 +30,7 @@ export class FakeSiteClient implements SiteClient {
     return this.clones.has(path);
   }
   cloneRepo(url: string, path: string, branch: string, name?: string, trust?: RepositoryTrust): void {
-    this.log.push(`clone ${url} ${path} ${branch}${trust ? ` trust=${name}@${trust.introduction}` : ""}`);
+    this.log.push(`clone ${url} ${path} ${branch}${trust ? ` trust=${name}@${trust.signers.join(",")}` : ""}`);
     this.clones.add(path);
     this.branches.set(path, branch);
   }

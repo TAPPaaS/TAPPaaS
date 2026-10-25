@@ -37,12 +37,11 @@ export interface Repository {
   [k: string]: unknown;
 }
 
-// ADR-033 D5: a repository's introduction — the release tag trust starts from,
-// the commit it names, and the fingerprint of the key that signed it.
+// ADR-033 D5: the fingerprints of the keys a repository's owners sign releases
+// with — from them, not from the repository. A fresh clone's current release must
+// be signed by one of them.
 export interface RepositoryTrust {
-  introduction: string;
-  introductionCommit: string;
-  signer: string;
+  signers: string[];
 }
 
 // The canonical Site document (singleton).
@@ -170,8 +169,8 @@ export interface SiteClient {
   // Whether a repository's clone exists on disk at `path`.
   repoCloneExists(path: string): boolean;
   // Clone <url> into <path> (git clone https://<url> <path>). With <trust>
-  // the clone is checked against its introduction (ADR-033 D5) and removed
-  // again when it does not verify; the error says why.
+  // the clone is checked against its signers' fingerprints (ADR-033 D5) and
+  // removed again when it does not verify; the error says why.
   cloneRepo(url: string, path: string, branch: string, name?: string, trust?: RepositoryTrust): void;
   // The branch currently checked out at <path>, or null if unknown.
   currentBranch(path: string): string | null;
@@ -242,7 +241,7 @@ export interface SiteClient {
   repositoryRemove(name: string, force: boolean): number;
   //   repository validate-catalog → repository.sh validate-catalog [<name>] [--strict]
   repositoryValidateCatalog(args: string[]): number;
-  //   repository introduce → repository.sh introduce <name> [--introduction t --signer fp] (ADR-033 D5)
+  //   repository introduce → repository.sh introduce <name> [--signer fp]... (ADR-033 D5)
   repositoryIntroduce(args: string[]): number;
   //   repository stash  → repository.sh stash [list|show|restore|discard] … (#681)
   repositoryStash(args: string[]): number;

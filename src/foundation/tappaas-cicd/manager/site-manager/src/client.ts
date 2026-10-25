@@ -62,7 +62,7 @@ export class CliSiteClient implements SiteClient {
       const rc = runStreaming(REPOSITORY_SH(), ["introduce", name]);
       if (rc !== 0) {
         rmSync(path, { recursive: true, force: true });
-        throw new Error(`repository ${name}: the clone does not verify against its introduction ${trust.introduction} — removed again`);
+        throw new Error(`repository ${name}: the clone does not verify against its signers ${trust.signers.join(" ")} — removed again`);
       }
     }
   }
@@ -185,7 +185,7 @@ export class CliSiteClient implements SiteClient {
   }
 
   repositoryIntroduce(args: string[]): number {
-    // ADR-033 D5: repository.sh introduce <name> [--introduction <t> --signer <fp>].
+    // ADR-033 D5: repository.sh introduce <name> [--signer <fp>]...
     return runStreaming(REPOSITORY_SH(), ["introduce", ...args]);
   }
 

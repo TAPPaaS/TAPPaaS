@@ -18,8 +18,8 @@
 #   - --force re-run is idempotent (succeeds, still valid)
 #   - --name is required (no --name -> error)
 #   - --force keeps an operator-set channel (ADR-028 D9) and ipv6 (#149)
-#   - the TAPPaaS trust anchor bootstrap.sh left is written and verified (ADR-033
-#     D5); one that does not hold refuses and leaves site.json unchanged
+#   - the TAPPaaS signer fingerprints bootstrap.sh left are written and checked
+#     (ADR-033 D5); ones that do not hold refuse and leave site.json unchanged
 #
 # Prints "Results: N passed, M failed, K skipped"; exits 1 on any failure.
 #
@@ -153,9 +153,9 @@ fi
 [[ "$(jqv "$SITE" '.ipv6')" == "true" ]]       && ok ".ipv6 preserved across --force"    || bad ".ipv6 dropped by --force (got '$(jqv "$SITE" '.ipv6')')"
 run_validate "$SITE" && ok "site.json with channel validates" || bad "site.json with channel failed schema validation"
 
-# --- Case 7: the TAPPaaS trust anchor (ADR-033 D5) ---
+# --- Case 7: the TAPPaaS signer fingerprints (ADR-033 D5) ---
 # A throwaway signed repository stands in for /home/tappaas/TAPPaaS: the
-# TAPPaaS entry's path is pointed at it, and bootstrap.sh's anchor file is
+# TAPPaaS entry's path is pointed at it, and bootstrap.sh's fingerprint file is
 # written beside the trust record, as bootstrap does.
 (
     export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
@@ -172,24 +172,25 @@ run_validate "$SITE" && ok "site.json with channel validates" || bad "site.json 
 read -r ACOMMIT AFP < "${WORK}/anchor.out"
 jq --arg p "${WORK}/tappaas-repo" '.repositories[0].path = $p | del(.repositories[0].trust)' "$SITE" > "$SITE.tmp" && mv "$SITE.tmp" "$SITE"
 mkdir -p "$C1/.trust"
-jq -n --arg c "$ACOMMIT" --arg s "$AFP" '{introduction: "v1.0", introductionCommit: $c, signer: $s}' > "$C1/.trust/TAPPaaS.introduction.json"
+OTHERFP="SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+jq -n --arg a "$OTHERFP" --arg s "$AFP" '{signers: [$a, $s]}' > "$C1/.trust/TAPPaaS.signers.json"
 if "$CREATE" --name testsite --config-dir "$C1" --force >/dev/null 2>&1; then
-    ok "--force with a TAPPaaS anchor exits 0"
+    ok "--force with TAPPaaS signer fingerprints exits 0"
 else
-    bad "--force with a good TAPPaaS anchor failed"
+    bad "--force with good TAPPaaS signer fingerprints failed"
 fi
-[[ "$(jqv "$SITE" '.repositories[0].trust.introduction + " " + .repositories[0].trust.signer')" == "v1.0 ${AFP}" ]] \
-    && ok "TAPPaaS entry carries the anchor" || bad "anchor not written (got '$(jqv "$SITE" '.repositories[0].trust')')"
-run_validate "$SITE" && ok "site.json with a trust anchor validates" || bad "site.json with a trust anchor failed schema validation"
+[[ "$(jqv "$SITE" '.repositories[0].trust.signers | join(" ")')" == "${OTHERFP} ${AFP}" ]] \
+    && ok "TAPPaaS entry carries the fingerprints" || bad "fingerprints not written (got '$(jqv "$SITE" '.repositories[0].trust')')"
+run_validate "$SITE" && ok "site.json with signer fingerprints validates" || bad "site.json with signer fingerprints failed schema validation"
 cp "$SITE" "$SITE.before"
-jq '.repositories[0].trust.signer = "SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"' "$SITE" > "$SITE.tmp" && mv "$SITE.tmp" "$SITE"
+jq --arg a "$OTHERFP" '.repositories[0].trust.signers = [$a]' "$SITE" > "$SITE.tmp" && mv "$SITE.tmp" "$SITE"
 cp "$SITE" "$SITE.bad"
 if "$CREATE" --name testsite --config-dir "$C1" --force >/dev/null 2>&1; then
-    bad "an anchor with the wrong signer was accepted"
+    bad "fingerprints the checkout does not list were accepted"
 else
-    ok "an anchor with the wrong signer refuses"
+    ok "fingerprints the checkout does not list refuse"
 fi
-cmp -s "$SITE" "$SITE.bad" && ok "…and site.json is left as it was" || bad "site.json changed on a refused anchor"
+cmp -s "$SITE" "$SITE.bad" && ok "…and site.json is left as it was" || bad "site.json changed on refused fingerprints"
 
 echo ""
 echo "Results:${PASS} passed, ${FAIL} failed, ${SKIP} skipped"

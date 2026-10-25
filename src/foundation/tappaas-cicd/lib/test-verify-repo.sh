@@ -19,9 +19,11 @@
 #                    an unsigned tip is refused and nothing moves; an old signed
 #                    release is refused; unstable moves unverified; an unsigned
 #                    repository moves unless requireSigned.
-#   the introduction: a fresh clone verifies against tag + fingerprint (D5);
-#                    wrong key, tag, commit or an unreleased tip refused; the
-#                    record it leaves makes the next update take the base rule.
+#   first trust: a fresh clone's current release verifies against the owners'
+#   fingerprints (D5), no release number; the chain: a key enrolled in a release
+#   the site skipped counts, one an unknown key signed never does;
+#   a wrong key or an unreleased tip refused; the
+#   record it leaves makes the next update take the base rule.
 #
 # Usage: test-verify-repo.sh   (prints "Results: N passed, M failed"; exit 1 on fail)
 set -uo pipefail
@@ -253,87 +255,105 @@ check "unsigned repository moves by default" "${rc}/$(git -C "${US}" rev-parse H
 # ── the introduction: first trust for a fresh clone (D5) ───────────────
 fp() { ssh-keygen -lf "${W}/$1.pub" | awk '{print $2}'; }
 FPA="$(fp alice)" FPB="$(fp bob)" FPE="$(fp eve)"
-V21="$(git -C "${D}" rev-parse 'v2.1^{commit}')"
 # the forge's staging back at the newest signed release (13 forced it back)
 git -C "${D}" push -q -f origin "v2.2^{commit}:refs/heads/staging"
 fresh() { rm -rf "$1" "${REPO_SYNC_TRUST_DIR}"; git clone -q -b "${2:-staging}" "${F}" "$1" 2>/dev/null; }
 
-# 16. verify_introduction on its own
+# 16. verify_introduction on its own: the current release, signed by one of the
+#     given fingerprints — no release number
 C="${W}/c1"; fresh "${C}"
-verify_introduction "${C}" v2.1 "${V21}" "${FPA}" HEAD; rc=$?
-check "introduction leads to the tip" "${rc}/${VERIFY_TAG}/${VERIFY_INTRO_SIGNER%% *}" "0/v2.2/alice@x"
-verify_introduction "${C}" v2.1 "${V21}" "${FPB} ${FPA}" HEAD; rc=$?
-check "any listed fingerprint will do" "${rc}" "0"
-verify_introduction "${C}" v2.1 "${V21}" "${FPE}" HEAD; rc=$?
+verify_introduction "${C}" "${FPA}" HEAD; rc=$?
+check "the current release, signed by a given key" "${rc}/${VERIFY_TAG}/${VERIFY_INTRO_SIGNER%% *}" "0/v2.2/alice@x"
+verify_introduction "${C}" "${FPB} ${FPA}" HEAD; rc=$?
+check "any of several fingerprints will do" "${rc}" "0"
+verify_introduction "${C}" "${FPE}" HEAD; rc=$?
 check "wrong fingerprint refused" "${rc}" "1"
-case "${VERIFY_REASON}" in *"not by ${FPE}"*) ok ;; *) no "reason names the expected key (${VERIFY_REASON})" ;; esac
-verify_introduction "${C}" v2.1 "${V22}" "${FPA}" HEAD; rc=$?
-check "tag not at introductionCommit refused" "${rc}" "1"
-verify_introduction "${C}" v2.1 "${V21:0:12}" "${FPA}" HEAD; rc=$?
-check "short introductionCommit refused" "${rc}" "1"
-verify_introduction "${C}" v7.0 "${V21}" "${FPA}" HEAD; rc=$?
-check "missing introduction tag refused" "${rc}" "1"
-verify_introduction "${C}" v2.2 "${V22}" "${FPA}" "${V21}"; rc=$?
-check "target before the introduction refused" "${rc}" "1"
-verify_introduction "${C}" v2.2 "${V22}" "${FPA}" "${V22}"; rc=$?
-check "introduction is the target" "${rc}/${VERIFY_STATUS}/${VERIFY_TAG}" "0/verified/v2.2"
+case "${VERIFY_REASON}" in *"not one of the given fingerprints"*) ok ;; *) no "reason says so (${VERIFY_REASON})" ;; esac
+verify_introduction "${C}" "" HEAD; rc=$?
+check "no fingerprint refused" "${rc}" "1"
 
-# 17. an introduction signed by a key its own commit does not list (eve signs
-#     a release whose allowed_signers names only alice)
+# 17. a release signed by a key its own allowed_signers does not list (eve signs
+#     a release that names only alice) — even with eve's fingerprint given
 EV="${W}/c2"; rm -rf "${EV}"; git clone -q "${D}" "${EV}" 2>/dev/null
 git -C "${EV}" checkout -q "${V22}"; git -C "${EV}" tag -d v2.2 >/dev/null; stag "${EV}" eve v2.2
-verify_introduction "${EV}" v2.2 "${V22}" "${FPE}" "${V22}"; rc=$?
-check "introduction by an unlisted key refused" "${rc}" "1"
+verify_introduction "${EV}" "${FPE}" "${V22}"; rc=$?
+check "a key the release does not list refused" "${rc}" "1"
 
-# 18. repo_sync_introduce: staging needs an introduction, or --unsigned
+# 18. repo_sync_introduce: staging needs fingerprints, or --unsigned
 C="${W}/c3"; fresh "${C}"
-repo_sync_introduce "${C}" staging c3 "" "" "" 0 >/dev/null 2>&1; rc=$?
-check "staging clone without introduction refused" "${rc}" "3"
-repo_sync_introduce "${C}" staging c3 "" "" "" 1 >/dev/null 2>&1; rc=$?
+repo_sync_introduce "${C}" staging c3 "" 0 >/dev/null 2>&1; rc=$?
+check "staging clone without fingerprints refused" "${rc}" "3"
+repo_sync_introduce "${C}" staging c3 "" 1 >/dev/null 2>&1; rc=$?
 check "staging clone --unsigned allowed" "${rc}/$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c3)" "0/"
-repo_sync_introduce "${C}" staging c3 v2.1 "" "" 0 >/dev/null 2>&1; rc=$?
-check "tag without fingerprint is an error" "${rc}" "1"
-repo_sync_introduce "${C}" staging c3 v2.1 "" "SHA256:short" 0 >/dev/null 2>&1; rc=$?
+repo_sync_introduce "${C}" staging c3 "SHA256:short" 0 >/dev/null 2>&1; rc=$?
 check "malformed fingerprint is an error" "${rc}" "1"
-repo_sync_introduce "${C}" staging c3 v2.1 "" "${FPA}" 0 >/dev/null 2>&1; rc=$?
-check "introduced clone verifies" "${rc}/${REPO_SYNC_INTRO_COMMIT}/${REPO_SYNC_INTRO_SIGNER}" "0/${V21}/${FPA}"
-check "introduced clone is recorded" "$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c3)" "${V22}"
-repo_sync_introduce "${C}" staging c3 v2.1 "" "${FPE}" 0 >/dev/null 2>&1; rc=$?
-check "introduction with the wrong key refused" "${rc}" "3"
+repo_sync_introduce "${C}" staging c3 "${FPE} ${FPA}" 0 >/dev/null 2>&1; rc=$?
+check "clone verifies against its signers" "${rc}/${REPO_SYNC_INTRO_SIGNERS}" "0/${FPE} ${FPA}"
+check "…and is recorded" "$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c3)" "${V22}"
+repo_sync_introduce "${C}" staging c3 "${FPE}" 0 >/dev/null 2>&1; rc=$?
+check "clone with the wrong key refused" "${rc}" "3"
 
 # 19. ... and from the record, the next update takes the normal base rule:
 #     bob is added in v2.3 (signed by alice) and signs v2.4
 C="${W}/c4"; fresh "${C}"
-repo_sync_introduce "${C}" staging c4 v2.1 "" "${FPA}" 0 >/dev/null 2>&1
+repo_sync_introduce "${C}" staging c4 "${FPA}" 0 >/dev/null 2>&1
 signer_line bob@x bob >> "${D}/.tappaas/allowed_signers"; commit "${D}" "signers: + bob"
 stag "${D}" alice v2.3; git -C "${D}" push -q origin main:staging --tags
 reconcile_repo_checkout "${C}" "file://${F}" staging 0 c4 >/dev/null 2>&1; rc=$?
-check "update after the introduction" "${rc}/$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c4)" "0/$(git -C "${D}" rev-parse HEAD)"
+check "update after the first trust" "${rc}/$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c4)" "0/$(git -C "${D}" rev-parse HEAD)"
 commit "${D}" r24; stag "${D}" bob v2.4; git -C "${D}" push -q origin main:staging --tags
 reconcile_repo_checkout "${C}" "file://${F}" staging 0 c4 >/dev/null 2>&1; rc=$?
 check "bob signs the release after the one adding him" "${rc}/$(git -C "${C}" rev-parse HEAD)" "0/$(git -C "${D}" rev-parse HEAD)"
+V24="$(git -C "${D}" rev-parse HEAD)"
+
+# 19b. the chain: a site that never stopped at the release adding a key still
+#      accepts a release that key signs. carol is added in v2.5 (signed by
+#      alice) and signs v2.6; the site goes from v2.4 straight to v2.6.
+signer_line carol@x carol >> "${D}/.tappaas/allowed_signers"; commit "${D}" "signers: + carol"
+stag "${D}" alice v2.5
+commit "${D}" r26; stag "${D}" carol v2.6; git -C "${D}" push -q origin main:staging --tags
+reconcile_repo_checkout "${C}" "file://${F}" staging 0 c4 >/dev/null 2>&1; rc=$?
+check "a key enrolled in a skipped release counts (the chain)" "${rc}/$(git -C "${C}" rev-parse HEAD)" "0/$(git -C "${D}" rev-parse HEAD)"
+verify_target "${D}" v2.6 "${V24}"; rc=$?
+check "…verified against the release in between" "${rc}/$(git -C "${D}" rev-parse --short "${VERIFY_BASE}")" "0/$(git -C "${D}" rev-parse --short 'v2.5^{commit}')"
+#      a release in between signed by an unknown key is passed over, not
+#      trusted: eve adds herself in v2.7 (signed by eve) and signs v2.8
+V26="$(git -C "${D}" rev-parse HEAD)"
+signer_line eve@x eve >> "${D}/.tappaas/allowed_signers"; commit "${D}" "signers: + eve"
+stag "${D}" eve v2.7
+commit "${D}" r28; stag "${D}" eve v2.8; git -C "${D}" push -q origin main:staging --tags
+reconcile_repo_checkout "${C}" "file://${F}" staging 0 c4 >/dev/null 2>&1; rc=$?
+check "the chain never trusts a release an unknown key signed" "${rc}/$(git -C "${C}" rev-parse HEAD)" "3/${V26}"
+#      a first trust older than a key change is not needed: the fingerprint of
+#      the key that signed the current release is enough
+git -C "${D}" tag -d v2.7 v2.8 >/dev/null; git -C "${D}" reset -q --hard "${V26}"
+git -C "${D}" push -q -f origin main:staging main:main; git -C "${D}" push -q -f origin --tags 2>/dev/null
+C="${W}/c8"; fresh "${C}"
+FPC="$(fp carol)"
+repo_sync_introduce "${C}" staging c8 "${FPC}" 0 >/dev/null 2>&1; rc=$?
+check "the current signer's fingerprint alone starts trust" "${rc}/$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c8)" "0/${V26}"
 
 # 20. a tip that is not a release, on a fresh staging clone, is refused even
-#     with a good introduction
+#     with the right fingerprint
 commit "${D}" unreleased; git -C "${D}" push -q origin main:staging
 C="${W}/c5"; fresh "${C}"
-repo_sync_introduce "${C}" staging c5 v2.1 "" "${FPA}" 0 >/dev/null 2>&1; rc=$?
-check "unreleased tip refused on introduction" "${rc}/$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c5)" "3/"
+repo_sync_introduce "${C}" staging c5 "${FPA}" 0 >/dev/null 2>&1; rc=$?
+check "unreleased tip refused" "${rc}/$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c5)" "3/"
 
-# 21. unstable: no introduction needed; a given one is still checked
+# 21. unstable: no fingerprints needed; given ones must be keys the checkout lists
 C="${W}/c6"; fresh "${C}" main
-repo_sync_introduce "${C}" main c6 "" "" "" 0 >/dev/null 2>&1; rc=$?
-check "unstable clone needs no introduction" "${rc}" "0"
-repo_sync_introduce "${C}" main c6 v2.1 "" "${FPA}" 0 >/dev/null 2>&1; rc=$?
-check "unstable clone, introduction checked" "${rc}/$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c6)" "0/${V21}"
-repo_sync_introduce "${C}" main c6 v2.1 "" "${FPE}" 0 >/dev/null 2>&1; rc=$?
-check "unstable clone, wrong key still refused" "${rc}" "3"
+repo_sync_introduce "${C}" main c6 "" 0 >/dev/null 2>&1; rc=$?
+check "unstable clone needs no fingerprints" "${rc}" "0"
+repo_sync_introduce "${C}" main c6 "${FPA}" 0 >/dev/null 2>&1; rc=$?
+check "unstable clone, a listed key" "${rc}/${REPO_SYNC_INTRO_SIGNERS}/$(verify_state_commit "${REPO_SYNC_TRUST_DIR}" c6)" "0/${FPA}/"
+repo_sync_introduce "${C}" main c6 "${FPE}" 0 >/dev/null 2>&1; rc=$?
+check "unstable clone, a key it does not list refused" "${rc}" "3"
 
 # 22. a repository that signs nothing: refused on staging unless --unsigned
 C="${W}/c7"; rm -rf "${C}"; git clone -q -b staging "${U}" "${C}" 2>/dev/null
-repo_sync_introduce "${C}" staging c7 "" "" "" 0 >/dev/null 2>&1; rc=$?
+repo_sync_introduce "${C}" staging c7 "" 0 >/dev/null 2>&1; rc=$?
 check "unsigned repository needs --unsigned" "${rc}" "3"
-repo_sync_introduce "${C}" staging c7 "" "" "" 1 >/dev/null 2>&1; rc=$?
+repo_sync_introduce "${C}" staging c7 "" 1 >/dev/null 2>&1; rc=$?
 check "unsigned repository with --unsigned" "${rc}" "0"
 
 # 23. bootstrap.sh's pre-rebuild check (git and ssh-keygen only)

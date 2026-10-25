@@ -81,7 +81,13 @@ export function loadSite(siteFile: string): Site {
     const t = o.trust as Record<string, unknown> | undefined;
     const trust =
       t && typeof t === "object"
-        ? { introduction: asString(t.introduction), introductionCommit: asString(t.introductionCommit), signer: asString(t.signer) }
+        ? {
+            // An entry written before the introduction became fingerprint-only
+            // carried one `signer`; it reads as a list of one.
+            signers: Array.isArray(t.signers)
+              ? t.signers.map(asString).filter((x) => x !== "")
+              : typeof t.signer === "string" && t.signer ? [t.signer] : [],
+          }
         : undefined;
     return { ...o, name: asString(o.name), url: asString(o.url), ...(trust ? { trust } : {}) };
   });

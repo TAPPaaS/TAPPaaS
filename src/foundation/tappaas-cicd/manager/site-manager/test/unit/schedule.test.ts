@@ -143,21 +143,30 @@ check(opts.includes("--updateFrequency") && opts.includes("--updateWeekday") && 
 }
 
 
-// ── repository trust (ADR-033 D5): add forwards the introduction; introduce exists ──
+// ── repository trust (ADR-033 D5): add forwards every --signer; introduce exists ──
 {
   const fp = "SHA256:" + "A".repeat(43);
+  const fp2 = "SHA256:" + "B".repeat(43);
   c.log.length = 0;
-  run(["repository", "add", "codeberg.org/x/y", "--branch", "stable", "--introduction", "v1.2", "--signer", fp, "--config-dir", dir], c);
-  check(c.log.includes(`repository.sh add codeberg.org/x/y --branch stable --introduction v1.2 --signer ${fp}`),
-    "repository add forwards --introduction and --signer");
+  run(["repository", "add", "codeberg.org/x/y", "--branch", "stable", "--signer", fp, "--signer", fp2, "--config-dir", dir], c);
+  check(c.log.includes(`repository.sh add codeberg.org/x/y --branch stable --signer ${fp} --signer ${fp2}`),
+    "repository add forwards each --signer");
+  c.log.length = 0;
+  check(run(["repository", "add", "codeberg.org/x/y", "--introduction", "v1.2", "--config-dir", dir], c) !== 0,
+    "…and --introduction no longer exists");
   c.log.length = 0;
   run(["repository", "add", "codeberg.org/x/y", "--unsigned", "--config-dir", dir], c);
   check(c.log.includes("repository.sh add codeberg.org/x/y --unsigned"), "…and --unsigned, as a flag");
   c.log.length = 0;
   run(["repository", "introduce", "y", "--config-dir", dir], c);
   check(c.log.includes("repository.sh introduce y"), "repository introduce delegates to repository.sh");
+  c.log.length = 0;
+  run(["repository", "introduce", "y", "--signer", fp, "--signer", fp2, "--config-dir", dir], c);
+  check(c.log.includes(`repository.sh introduce y --signer ${fp} --signer ${fp2}`), "…with each --signer");
+  writeFileSync(siteFile, JSON.stringify({ name: "s", repositories: [{ name: "y", url: "u", trust: { signers: [fp, fp2] } }] }));
+  check(loadSite(siteFile).repositories[0].trust?.signers.join(" ") === `${fp} ${fp2}`, "loadSite reads repositories[].trust.signers");
   writeFileSync(siteFile, JSON.stringify({ name: "s", repositories: [{ name: "y", url: "u", trust: { introduction: "v1.2", introductionCommit: "b".repeat(40), signer: fp } }] }));
-  check(loadSite(siteFile).repositories[0].trust?.introduction === "v1.2", "loadSite reads repositories[].trust");
+  check(loadSite(siteFile).repositories[0].trust?.signers.join(" ") === fp, "…and an older entry's single signer as a list of one");
 }
 
 console.log(`schedule: ${passed} passed, ${failed} failed`);

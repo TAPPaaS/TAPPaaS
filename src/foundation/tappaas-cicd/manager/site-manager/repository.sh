@@ -14,10 +14,10 @@
 # Usage: repository.sh <command> [options]
 #
 # Commands:
-#   add <url> [--branch <branch>] [--introduction <tag> --signer <fp> | --unsigned]
+#   add <url> [--branch <branch>] [--signer <fp>]... [--unsigned]
 #                                      Add a new module repository
-#   introduce <name> [--introduction <tag> --signer <fp>]
-#                                      Check a checkout against its trust anchor (ADR-033 D5)
+#   introduce <name> [--signer <fp>]...
+#                                      Check a checkout against its signers' fingerprints (ADR-033 D5)
 #   remove <name> [--force]            Remove a module repository
 #   modify <name> [--url <url>] [--branch <branch>] [--force]  Modify a repository
 #   sync <name> [--dry-run]            Bring one repository to its branch tip (#814)
@@ -106,20 +106,23 @@ Commands:
                            path (default: src/module-catalog.json, legacy
                            src/modules.json accepted).
         --managed tracked  register the repo without catalog requirements.
-        --introduction <tag> --signer SHA256:<fp>
-                           ADR-033 D5: the release tag trust starts from and the
-                           fingerprint of the key that signed it, both from the
-                           repository's owner. Required on a staging or
-                           production branch; recorded as the entry's trust.
+        --signer SHA256:<fp>
+                           ADR-033 D5: the fingerprint of a key the repository's
+                           owners sign releases with, from them, not from the
+                           repository. Give it once per key. Required on a
+                           staging or production branch: the branch's current
+                           release must be signed by one of them. Recorded as
+                           the entry's trust.
         --unsigned         add a staging/production branch without them: a
                            repository that signs nothing, or one taken on trust
                            from the revision cloned now (D9).
 
-    introduce <name> [--introduction <tag> --signer SHA256:<fp>]
-        Check <name>'s checkout against its trust anchor in site.json and
-        record it as the last verified release (ADR-033 D5) — after a clone
-        (site-manager repository reconcile does this), or to give an existing
-        repository an anchor (the flags, written to site.json once verified).
+    introduce <name> [--signer SHA256:<fp>]...
+        Check <name>'s checkout against its signers' fingerprints and record
+        it as the last verified release (ADR-033 D5) — the ones in site.json,
+        or the ones given here, written to site.json once they hold. After a
+        clone (site-manager repository reconcile does this), or to confirm the
+        keys an existing repository trusts are its owners'.
 
     remove <name> [--force]
         Remove a module repository. Blocked if installed modules
@@ -361,7 +364,7 @@ cmd_add() {
     local branch_explicit=0       # was --branch passed, or is 'stable' the default?
     local managed="full"          # ADR-004: full | tracked
     local catalog=""              # ADR-004: catalog path; defaults per managed type
-    local introduction="" signer="" unsigned=0   # ADR-033 D5
+    local signers="" unsigned=0   # ADR-033 D5
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
@@ -391,12 +394,9 @@ cmd_add() {
                 catalog="$2"
                 shift 2
                 ;;
-            --introduction)
-                [[ -n "${2:-}" ]] || die "Option --introduction requires a release tag"
-                introduction="$2"; shift 2 ;;
             --signer)
                 [[ -n "${2:-}" ]] || die "Option --signer requires a key fingerprint (SHA256:...)"
-                signer="$2"; shift 2 ;;
+                signers="${signers:+${signers} }$2"; shift 2 ;;
             --unsigned)
                 unsigned=1; shift ;;
             --*)
@@ -413,7 +413,7 @@ cmd_add() {
     done
 
     if [[ -z "${url}" ]]; then
-        die "Repository URL is required. Usage: ${SCRIPT_NAME} add <url> [--branch <branch>] [--managed full|tracked] [--catalog <path>] [--introduction <tag> --signer <fp> | --unsigned]"
+        die "Repository URL is required. Usage: ${SCRIPT_NAME} add <url> [--branch <branch>] [--managed full|tracked] [--catalog <path>] [--signer <fp>]... [--unsigned]"
     fi
 
     # ADR-004 defaults: a 'full' repo carries a catalog (default src/module-catalog.json);
@@ -424,10 +424,12 @@ cmd_add() {
     if [[ "${managed}" == "tracked" && -n "${catalog}" ]]; then
         die "--catalog is not valid with --managed tracked (tracked repos have no catalog)"
     fi
-    if [[ -n "${introduction}" || -n "${signer}" ]]; then
-        [[ -n "${introduction}" && -n "${signer}" ]] || die "--introduction and --signer go together (ADR-033 D5)"
-        [[ "${unsigned}" -eq 0 ]] || die "--unsigned contradicts --introduction/--signer"
-        verify_fingerprint_ok "${signer}" || die "--signer '${signer}' is not a key fingerprint (SHA256:<43 characters>, as ssh-keygen -l prints it)"
+    if [[ -n "${signers}" ]]; then
+        [[ "${unsigned}" -eq 0 ]] || die "--unsigned contradicts --signer"
+        local _fp
+        for _fp in ${signers}; do
+            verify_fingerprint_ok "${_fp}" || die "--signer '${_fp}' is not a key fingerprint (SHA256:<43 characters>, as ssh-keygen -l prints it)"
+        done
     fi
 
     local name
@@ -496,20 +498,19 @@ cmd_add() {
     info "  ${GN}✓${CL} Repository cloned successfully (branch '${branch}')"
 
     # ── Step 3b: First trust (ADR-033 D5) ────────────────────────────
-    info "\n${BOLD}Step 3b: Verify the introduction${CL}"
-    if [[ -n "${introduction}" ]]; then
-        info "  Introduction: ${BL}${introduction}${CL}  ($(git -C "${repo_path}" rev-parse -q --verify "refs/tags/${introduction}^{commit}" 2>/dev/null || echo "no such tag"))"
-        info "  Signer:       ${BL}${signer}${CL}"
-        info "  Compare both with what the repository's owner published, out of band."
+    info "\n${BOLD}Step 3b: Verify against the signers' fingerprints${CL}"
+    if [[ -n "${signers}" ]]; then
+        info "  Signers: ${BL}${signers}${CL}"
+        info "  Compare them with what the repository's owners published, out of band."
     fi
-    if ! repo_sync_introduce "${repo_path}" "${branch}" "${name}" "${introduction}" "" "${signer}" "${unsigned}"; then
+    if ! repo_sync_introduce "${repo_path}" "${branch}" "${name}" "${signers}" "${unsigned}"; then
         rm -rf "${repo_path}"
         die "Repository not added: it does not verify (ADR-033 D5)"
     fi
-    if [[ -n "${REPO_SYNC_INTRO_TAG}" ]]; then
-        info "  ${GN}✓${CL} Verified from ${REPO_SYNC_INTRO_TAG} (${REPO_SYNC_INTRO_COMMIT})"
+    if [[ -n "${REPO_SYNC_INTRO_SIGNERS}" ]]; then
+        info "  ${GN}✓${CL} Verified against its signers' fingerprints"
     elif [[ "${unsigned}" -eq 1 ]]; then
-        warn "  Added without an introduction (--unsigned)"
+        warn "  Added without signer fingerprints (--unsigned)"
     else
         info "  ${GN}✓${CL} '${branch}' is not a staging/production branch — releases are not verified there"
     fi
@@ -623,12 +624,11 @@ cmd_add() {
     tmp_file=$(mktemp)
     if jq --arg name "${name}" --arg url "${url}" --arg branch "${branch}" \
           --arg path "${repo_path}" --arg managed "${managed}" --arg catalog "${catalog}" \
-          --arg itag "${REPO_SYNC_INTRO_TAG:-}" --arg icommit "${REPO_SYNC_INTRO_COMMIT:-}" \
-          --arg isigner "${REPO_SYNC_INTRO_SIGNER:-}" \
+          --arg isigners "${REPO_SYNC_INTRO_SIGNERS:-}" \
         '.repositories = (.repositories // []) + [
             ({"name": $name, "url": $url, "branch": $branch, "path": $path, "managed": $managed})
             + (if $managed == "full" then {"catalog": $catalog} else {} end)
-            + (if $itag != "" then {"trust": {"introduction": $itag, "introductionCommit": $icommit, "signer": $isigner}} else {} end)
+            + (if $isigners != "" then {"trust": {"signers": ($isigners | split(" ") | map(select(. != "")))}} else {} end)
          ]' \
         "${SITE_FILE}" > "${tmp_file}" 2>/dev/null; then
         mv "${tmp_file}" "${SITE_FILE}"
@@ -1501,21 +1501,19 @@ cmd_validate_catalog() {
     return "${rc}"
 }
 
-# Check a checkout against its site.json trust anchor and record it (ADR-033 D5).
-# With --introduction/--signer the anchor is given here, and written to
-# site.json once the checkout verifies against it.
+# Check a checkout against its signers' fingerprints and record it (ADR-033 D5):
+# the ones in site.json, or the ones given with --signer, written to site.json
+# once the checkout verifies against them.
 cmd_introduce() {
-    local name="" tag="" signer="" entry path branch commit=""
+    local name="" signers="" entry path branch
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            --introduction) [[ -n "${2:-}" ]] || die "Option --introduction requires a release tag"; tag="$2"; shift 2 ;;
-            --signer)       [[ -n "${2:-}" ]] || die "Option --signer requires a key fingerprint"; signer="$2"; shift 2 ;;
+            --signer) [[ -n "${2:-}" ]] || die "Option --signer requires a key fingerprint"; signers="${signers:+${signers} }$2"; shift 2 ;;
             --*) die "Unknown option: $1" ;;
             *) [[ -z "${name}" ]] || die "Unexpected argument: $1"; name="$1"; shift ;;
         esac
     done
-    [[ -n "${name}" ]] || die "usage: ${SCRIPT_NAME} introduce <name> [--introduction <tag> --signer SHA256:<fp>]"
-    [[ -z "${tag}${signer}" || ( -n "${tag}" && -n "${signer}" ) ]] || die "--introduction and --signer go together"
+    [[ -n "${name}" ]] || die "usage: ${SCRIPT_NAME} introduce <name> [--signer SHA256:<fp>]..."
     validate_config
     entry="$(get_repo_by_name "${name}")"
     [[ "${entry}" != "null" ]] || die "No repository '${name}' in site.json"
@@ -1523,26 +1521,23 @@ cmd_introduce() {
     branch="$(jq -r '.branch // "stable"' <<<"${entry}")"
     [[ -d "${path}/.git" ]] || die "${name}'s checkout is missing: ${path}"
     local given=0
-    if [[ -n "${tag}" ]]; then
+    if [[ -n "${signers}" ]]; then
         given=1
     else
-        tag="$(jq -r '.trust.introduction // empty' <<<"${entry}")"
-        commit="$(jq -r '.trust.introductionCommit // empty' <<<"${entry}")"
-        signer="$(jq -r '.trust.signer // empty' <<<"${entry}")"
-        [[ -n "${tag}" ]] || die "${name} has no trust anchor in site.json — give one with --introduction <tag> --signer SHA256:<fp>"
+        signers="$(jq -r '(.trust.signers // [.trust.signer // empty]) | join(" ")' <<<"${entry}")"
+        [[ -n "${signers}" ]] || die "${name} has no signer fingerprints in site.json — give them with --signer SHA256:<fp> (once per key)"
     fi
-    info "  Introduction: ${BL}${tag}${CL}${commit:+  (${commit})}"
-    info "  Signer:       ${BL}${signer}${CL}"
-    repo_sync_introduce "${path}" "${branch}" "${name}" "${tag}" "${commit}" "${signer}" 0 \
-        || die "${name} does not verify against its introduction (ADR-033 D5)"
+    info "  Signers: ${BL}${signers}${CL}"
+    repo_sync_introduce "${path}" "${branch}" "${name}" "${signers}" 0 \
+        || die "${name} does not verify against these signers (ADR-033 D5)"
     if [[ "${given}" -eq 1 ]]; then
         local tmp; tmp="$(mktemp)"
-        jq --arg n "${name}" --arg t "${REPO_SYNC_INTRO_TAG}" --arg c "${REPO_SYNC_INTRO_COMMIT}" --arg s "${REPO_SYNC_INTRO_SIGNER}" \
-            '.repositories |= map(if .name == $n then .trust = {introduction: $t, introductionCommit: $c, signer: $s} else . end)' \
+        jq --arg n "${name}" --arg s "${REPO_SYNC_INTRO_SIGNERS}" \
+            '.repositories |= map(if .name == $n then .trust = {signers: ($s | split(" ") | map(select(. != "")))} else . end)' \
             "${SITE_FILE}" >"${tmp}" && mv "${tmp}" "${SITE_FILE}" || { rm -f "${tmp}"; die "Failed to update site.json"; }
-        info "  ${GN}✓${CL} Trust anchor written to site.json"
+        info "  ${GN}✓${CL} Signer fingerprints written to site.json"
     fi
-    info "  ${GN}✓${CL} ${name} verified from ${REPO_SYNC_INTRO_TAG}"
+    info "  ${GN}✓${CL} ${name} verified against its signers"
 }
 
 main() {

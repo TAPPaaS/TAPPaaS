@@ -38,7 +38,7 @@
 #   snapshotRetention <- preserved from existing site.json, else 5
 #   repositories[]    <- built from --upstream-git/--branch (default TAPPaaS repo),
 #                        preserving any existing operator-set repositories; the
-#                        TAPPaaS entry's trust from config/.trust/TAPPaaS.introduction.json
+#                        TAPPaaS entry's trust from config/.trust/TAPPaaS.signers.json
 #                        (bootstrap.sh, ADR-033 D5), verified against the checkout
 #   (the cluster's nodes are NOT a site.json field — they are their pvehost
 #    instances, config/<node>.json, registered by the cluster update and
@@ -514,16 +514,16 @@ build_repos_json() {
 }
 
 # ---------------------------------------------------------------------------
-# ADR-033 D5: the TAPPaaS repository's trust anchor. bootstrap.sh verified the
-# release it installed against the signer fingerprints published in INSTALL.md
-# and left the anchor in config/.trust/TAPPaaS.introduction.json; it goes into
-# the TAPPaaS entry here unless that entry already has one. Whichever it is, it
-# is checked against the checkout: site.json is never written with an anchor
-# that does not hold. Messages go to stderr — stdout is the JSON.
+# ADR-033 D5: the TAPPaaS repository's signer fingerprints. bootstrap.sh verified
+# the release it installed against the fingerprints published in INSTALL.md and
+# left them in config/.trust/TAPPaaS.signers.json; they go into the TAPPaaS
+# entry's trust here unless that entry already has some. Whichever they are, at
+# least one must be a key the checkout lists: site.json is never written with
+# fingerprints that do not hold. Messages go to stderr — stdout is the JSON.
 # ---------------------------------------------------------------------------
 apply_tappaas_anchor() {
-    local repos="$1" f="${CONFIG_DIR}/.trust/TAPPaaS.introduction.json" anchor path tag commit signer
-    if [[ -r "$f" ]] && jq -e '.introduction and .introductionCommit and .signer' "$f" >/dev/null 2>&1; then
+    local repos="$1" f="${CONFIG_DIR}/.trust/TAPPaaS.signers.json" anchor path fps listed fp signers
+    if [[ -r "$f" ]] && jq -e '(.signers | type) == "array" and (.signers | length) > 0' "$f" >/dev/null 2>&1; then
         repos="$(jq -c --slurpfile a "$f" \
             'map(if .name == "TAPPaaS" and (.trust == null) then .trust = $a[0] else . end)' <<<"$repos")"
     fi
@@ -534,17 +534,19 @@ apply_tappaas_anchor() {
         warn "TAPPaaS checkout not found at ${path:-?} — its trust anchor is kept but not checked" >&2
         printf '%s\n' "$repos"; return 0
     fi
-    tag="$(jq -r '.introduction' <<<"$anchor")"
-    commit="$(jq -r '.introductionCommit' <<<"$anchor")"
-    signer="$(jq -r '.signer' <<<"$anchor")"
+    fps="$(jq -r '(.signers // [.signer // empty]) | join(" ")' <<<"$anchor")"
     # shellcheck source=../../lib/verify-repo.sh
-    declare -F verify_introduction >/dev/null 2>&1 || . "${HERE}/../../lib/verify-repo.sh"
-    verify_introduction "$path" "$tag" "$commit" "$signer" "$commit" \
-        || die "TAPPaaS trust anchor does not hold (ADR-033 D5): ${VERIFY_REASON}"
-    verify_moves_forward "$path" "$commit" HEAD \
-        || die "TAPPaaS trust anchor does not hold (ADR-033 D5): ${path} does not descend from ${tag}"
-    info "TAPPaaS trust anchor: ${tag} signed by ${signer} — the fingerprint published in INSTALL.md" >&2
-    printf '%s\n' "$repos"
+    declare -F verify_signers_fingerprints >/dev/null 2>&1 || . "${HERE}/../../lib/verify-repo.sh"
+    signers="$(mktemp)"
+    verify_signers_at "$path" HEAD "$signers" || true
+    listed="$(verify_signers_fingerprints "$signers")"; rm -f "$signers"
+    for fp in $fps; do
+        if grep -qxF "$fp" <<<"$listed"; then
+            info "TAPPaaS signers: ${fps} — ${fp} is a key the checkout lists" >&2
+            printf '%s\n' "$repos"; return 0
+        fi
+    done
+    die "TAPPaaS signer fingerprints do not hold (ADR-033 D5): none of ${fps} is a key ${path} lists in .tappaas/allowed_signers"
 }
 
 # ---------------------------------------------------------------------------
