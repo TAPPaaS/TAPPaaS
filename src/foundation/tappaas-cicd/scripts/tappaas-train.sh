@@ -15,7 +15,8 @@
 #   tappaas-train init                     verify the train is promotable; start the soak clock
 #   tappaas-train boundary [--dry-run]     the boundary: promote staging→stable, main→staging
 #                 [--resume] [--force-boundary]
-#                 [--staging-host <host>]      verify the promotion on the staging site (phase 6)
+#                 [--staging-host <host>]      verify the promotion on that site (phase 6); without
+#                                              it, the staging site recorded with `staging-site`
 #                 [--production-branch <b>]    promote onto <b> instead of `stable`
 #                 [--staging-branch <b>]       use <b> as the staging channel — set both to
 #                                              throwaway refs to rehearse a whole boundary
@@ -23,6 +24,10 @@
 #                 [--to <nixos-XX.YY>]         a VERSION move: change the release branch itself
 #                 [--allow-no-pin-change]      prove the pin already in the tree, without moving it
 #                 [--major]                    cut the next MAJOR (3.0) instead of the next minor
+#   tappaas-train staging-site [<host> | --clear]
+#                                          where phase 6 verifies a boundary: an ssh name this site
+#                                          reaches the staging site's mothership by. Recorded once,
+#                                          used by every boundary that is not a rehearsal
 #   tappaas-train fault <what>             record a staging fault; blocks the next promotion
 #   tappaas-train fault --resolved <commit>  clear it — the commit must be on main
 #   tappaas-train patch <staging|production> <commit> --why "<what>" [--dry-run]
@@ -513,6 +518,13 @@ cmd_status() {
     fi
 
     [[ -n "${PIN_REV}" ]] && info "  estate pin ${BL}${PIN_REV:0:12}${CL}, ${PIN_AGE} days old"
+    if [[ -n "${STAGING_HOST}" ]]; then
+        local from="--staging-host"
+        [[ "${STAGING_HOST_FROM}" == recorded ]] && from="recorded"
+        info "  staging site ${BL}${STAGING_HOST}${CL} (${from}): a boundary verifies it in phase 6"
+    else
+        warn "  no staging site recorded — a boundary skips phase 6: ${SCRIPT_NAME} staging-site <host>"
+    fi
 
     # What would stop a boundary. Reported, never acted on: status changes
     # nothing, which is what makes it safe to run when something is wrong.
@@ -621,15 +633,16 @@ cmd_init() {
         return 0
     fi
     local now; now="$(now_epoch)"
-    local tmp="${STATE_FILE}.tmp.$$"
+    local tmp="${STATE_FILE}.tmp.$$" keep_host=""
+    [[ -f "${STATE_FILE}" ]] && keep_host="$(jq -r '.stagingHost // empty' "${STATE_FILE}" 2>/dev/null)"
     jq -n --arg started "$(iso_utc "${now}")" --arg next "$(day_utc $(( now + BOUNDARY_DAYS * 86400 )))" \
-          --argjson channels "$(channels_state "" "")" --arg pin "${PIN_REV}" '{
+          --argjson channels "$(channels_state "" "")" --arg pin "${PIN_REV}" --arg sh "${keep_host}" '{
             soakStarted: $started,
             nextBoundary: $next,
             channels: $channels,
             pin: $pin,
             fault: null
-          }' > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" \
+          } + (if $sh == "" then {} else {stagingHost: $sh} end)' > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" \
         || { rm -f "${tmp}"; error "could not write ${STATE_FILE}"; return 1; }
     info "  ${GN}✓${CL} soak clock started — a boundary becomes due in ${BOUNDARY_DAYS} days"
     return 0
@@ -1386,7 +1399,11 @@ cmd_boundary() {
                 --date "$(day_utc "$(now_epoch)")" ${soaked:+--promoted "${soaked}"} 2>&1 | sed 's/^roadmap-cut: /       ROADMAP.md: /'
         fi
     fi
-    info "  6  verify the staging site"
+    if [[ -n "${STAGING_HOST}" ]]; then
+        info "  6  verify the staging site: pull ${STAGING_BRANCH} and run its update on ${BL}${STAGING_HOST}${CL}"
+    else
+        info "  6  verify the staging site — SKIPPED: no staging site recorded (${SCRIPT_NAME} staging-site <host>)"
+    fi
     if [[ "${DRY_RUN}" == "1" ]]; then
         echo; info "Dry run: nothing was changed."
         return 0
@@ -1451,6 +1468,7 @@ cmd_boundary() {
     if [[ -z "${STAGING_HOST}" ]]; then
         warn "  Phase 6 SKIPPED: no --staging-host given, and this site holds no record of where staging runs."
         warn "    Verify it by hand, then record anything it finds: ${SCRIPT_NAME} fault <what>"
+        warn "    Record the staging site once and later boundaries verify it: ${SCRIPT_NAME} staging-site <host>"
         return 0
     fi
     info "${BOLD}Phase 6: verifying the staging site (${STAGING_HOST})${CL}"
@@ -1477,6 +1495,48 @@ cmd_boundary() {
         warn "  could not run the update on ${STAGING_HOST} — verify by hand"
     fi
     return 0
+}
+
+# ── staging-site ─────────────────────────────────────────────────────
+# Where phase 6 verifies a boundary. The train runs on the unstable site, and
+# nothing in its configuration says where staging runs, so the operator records
+# it once: an ssh name this site reaches the staging site's mothership by. It is
+# checked when recorded — reachable, and declaring channel staging — and the
+# boundary's preflight checks it again each time.
+cmd_staging_site() {
+    local host="${1:-}"
+    if [[ -z "${host}" ]]; then
+        local cur=""
+        [[ -f "${STATE_FILE}" ]] && cur="$(jq -r '.stagingHost // empty' "${STATE_FILE}" 2>/dev/null)"
+        if [[ -n "${cur}" ]]; then info "staging site: ${cur}"; else info "no staging site recorded"; fi
+        return 0
+    fi
+    local tmp="${STATE_FILE}.tmp.$$"
+    if [[ "${host}" == "--clear" ]]; then
+        [[ -f "${STATE_FILE}" ]] || { info "no staging site recorded"; return 0; }
+        jq 'del(.stagingHost)' "${STATE_FILE}" > "${tmp}" && mv -f "${tmp}" "${STATE_FILE}" \
+            || { rm -f "${tmp}"; die "could not write ${STATE_FILE}"; }
+        info "  ${GN}✓${CL} staging site cleared — a boundary skips phase 6 until one is recorded"
+        return 0
+    fi
+    [[ "${host}" =~ ^[A-Za-z0-9._@-]+$ ]] || die "not an ssh host name: '${host}'"
+    local rchan
+    rchan="$(sat_ssh "${host}" 'jq -r ".channel // empty" ~/config/site.json' 2>/dev/null)" \
+        || die "cannot reach '${host}' over ssh from this site — nothing recorded"
+    if [[ "${rchan}" != "staging" ]]; then
+        if (( FORCE_BOUNDARY )); then
+            warn "  ${host} declares channel '${rchan:-unset}', not 'staging' — recorded anyway (--force-boundary)"
+        else
+            die "${host} declares channel '${rchan:-unset}', not 'staging' — a boundary would update the wrong site (--force-boundary records it anyway)"
+        fi
+    fi
+    if [[ -f "${STATE_FILE}" ]]; then
+        jq --arg h "${host}" '.stagingHost = $h' "${STATE_FILE}" > "${tmp}"
+    else
+        jq -n --arg h "${host}" '{stagingHost: $h}' > "${tmp}"
+    fi
+    mv -f "${tmp}" "${STATE_FILE}" || { rm -f "${tmp}"; die "could not write ${STATE_FILE}"; }
+    info "  ${GN}✓${CL} staging site recorded: ${host} (channel ${rchan:-unset}) — every boundary that is not a rehearsal verifies it in phase 6"
 }
 
 # ── fault ────────────────────────────────────────────────────────────
@@ -1881,7 +1941,7 @@ cmd_releases() {
 
 # The range must cover the whole header block above: extend it when the header
 # grows, or --help quietly stops before its last line.
-usage() { sed -n '3,54p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '3,59p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; }
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
 NO_FETCH=0; DRY_RUN=0; RESUME=0; FORCE_BOUNDARY=0
@@ -1970,6 +2030,17 @@ done
 [[ -z "${_want:-}" ]] || { echo "${_want} needs a value" >&2; exit 2; }
 set -- ${_args[@]+"${_args[@]}"}
 
+# The staging site phase 6 verifies: --staging-host, else the one recorded with
+# `staging-site`. A rehearsal never takes the recorded one — it would run a real
+# update on the real staging site for a promotion onto throwaway refs.
+STAGING_HOST_FROM=""
+if [[ -n "${STAGING_HOST}" ]]; then
+    STAGING_HOST_FROM="given"
+elif ! is_rehearsal && [[ -f "${STATE_FILE}" ]]; then
+    STAGING_HOST="$(jq -r '.stagingHost // empty' "${STATE_FILE}" 2>/dev/null)"
+    [[ -n "${STAGING_HOST}" ]] && STAGING_HOST_FROM="recorded"
+fi
+
 case "${1:-}" in
     status)   cmd_status ;;
     init)     cmd_init ;;
@@ -1979,6 +2050,7 @@ case "${1:-}" in
     releases) cmd_releases ;;
     preview)  cmd_preview ;;
     ack)      cmd_ack ;;
+    staging-site) shift; cmd_staging_site "$@" ;;
     -h|--help|help|"") usage ;;
-    *) die "unknown command '${1}' (status | init | boundary | fault | patch | preview | ack | releases)" ;;
+    *) die "unknown command '${1}' (status | init | boundary | staging-site | fault | patch | preview | ack | releases)" ;;
 esac

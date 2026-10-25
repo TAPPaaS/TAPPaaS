@@ -393,6 +393,75 @@ TAPPAAS_TRAIN_SSH="${TMP}/deadssh" FAKE_NOW=$(( 1790000000 + 20*86400 )) \
     && ok "a named but unreachable staging site refuses the boundary" \
     || bad "an unreachable staging site did not refuse: ${OUT}"
 
+echo "── staging-site: recorded once, every real boundary verifies it ──"
+make_train 3 2
+FAKE_NOW=1790000000 run init
+TAPPAAS_TRAIN_SSH="${TMP}/deadssh" run staging-site staging.example
+[[ "${RC}" -ne 0 && "$(jq -r '.stagingHost // empty' "${TMP}/cfg/release-train.json")" == "" ]] \
+    && ok "an unreachable host is refused and nothing is recorded" || bad "unreachable host: rc=${RC} ${OUT}"
+cat > "${TMP}/prodssh" <<'STUB'
+#!/usr/bin/env bash
+shift
+case "$*" in *'.channel'*) echo "production" ;; *) : ;; esac
+STUB
+chmod +x "${TMP}/prodssh"
+TAPPAAS_TRAIN_SSH="${TMP}/prodssh" run staging-site prod.example
+[[ "${RC}" -ne 0 && "${OUT}" == *"not 'staging'"* && "$(jq -r '.stagingHost // empty' "${TMP}/cfg/release-train.json")" == "" ]] \
+    && ok "a site on another channel is refused" || bad "non-staging site: rc=${RC} ${OUT}"
+run staging-site 'bad host;rm'
+[[ "${RC}" -ne 0 ]] && ok "a name that is not an ssh host is refused" || bad "bad host name accepted"
+TAPPAAS_TRAIN_SSH="${TMP}/fakessh" run staging-site staging.example
+[[ "${RC}" -eq 0 && "$(jq -r '.stagingHost' "${TMP}/cfg/release-train.json")" == "staging.example" ]] \
+    && ok "a reachable staging site is recorded" || bad "not recorded: rc=${RC} ${OUT}"
+[[ "$(jq -r '.soakStarted // empty' "${TMP}/cfg/release-train.json")" != "" ]] \
+    && ok "…beside the train state it joins" || bad "recording it lost the train state"
+run staging-site
+[[ "${OUT}" == *"staging site: staging.example"* ]] && ok "staging-site shows it" || bad "show: ${OUT}"
+TAPPAAS_TRAIN_SSH="${TMP}/fakessh" run status
+[[ "$(sed 's/\x1b\[[0-9;]*m//g' <<<"${OUT}")" == *"staging site staging.example (recorded)"* ]] && ok "status names it as recorded" \
+    || bad "status does not name the staging site: ${OUT}"
+TAPPAAS_TRAIN_SSH="${TMP}/fakessh" FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run
+[[ "$(sed 's/\x1b\[[0-9;]*m//g' <<<"${OUT}")" == *"run its update on staging.example"* ]] && ok "the plan says phase 6 runs there" \
+    || bad "plan does not name the staging site: ${OUT}"
+jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+TAPPAAS_TRAIN_SSH="${TMP}/fakessh" FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume
+[[ "${OUT}" == *"verifying the staging site (staging.example)"* && "${OUT}" == *"updated cleanly"* ]] \
+    && ok "a boundary without --staging-host verifies the recorded site" || bad "recorded site not verified: ${OUT}"
+[[ "$(jq -r '.stagingHost' "${TMP}/cfg/release-train.json")" == "staging.example" ]] \
+    && ok "…and the record survives the boundary" || bad "the boundary dropped the staging site"
+
+echo "── a rehearsal never takes the recorded staging site ──"
+# Phase 6 runs a real update there; a promotion onto throwaway refs must not.
+make_train 3 2
+FAKE_NOW=1790000000 run init
+TAPPAAS_TRAIN_SSH="${TMP}/fakessh" run staging-site staging.example
+jq '.boundary.phasesDone = ["branch","prove","main"]' "${TMP}/cfg/release-train.json" > "${TMP}/x" && mv "${TMP}/x" "${TMP}/cfg/release-train.json"
+: > "${TMP}/ssh-calls"
+cat > "${TMP}/countssh" <<STUB
+#!/usr/bin/env bash
+echo "\$*" >> "${TMP}/ssh-calls"
+exec "${TMP}/fakessh" "\$@"
+STUB
+chmod +x "${TMP}/countssh"
+TAPPAAS_TRAIN_SSH="${TMP}/countssh" FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --resume \
+    --staging-branch rehearse-staging --production-branch rehearse-prod
+[[ "${OUT}" == *"Phase 6 SKIPPED"* && ! -s "${TMP}/ssh-calls" ]] \
+    && ok "a rehearsal skips phase 6 and never contacts the staging site" \
+    || bad "a rehearsal reached the staging site: $(cat "${TMP}/ssh-calls") ${OUT}"
+
+echo "── init keeps the staging site; --clear forgets it ──"
+make_train 3 2
+TAPPAAS_TRAIN_SSH="${TMP}/fakessh" run staging-site staging.example
+FAKE_NOW=1790000000 run init
+[[ "$(jq -r '.stagingHost // empty' "${TMP}/cfg/release-train.json")" == "staging.example" ]] \
+    && ok "init starts the soak clock and keeps the recorded staging site" || bad "init dropped it: $(cat "${TMP}/cfg/release-train.json")"
+run staging-site --clear
+[[ "${RC}" -eq 0 && "$(jq -r '.stagingHost // empty' "${TMP}/cfg/release-train.json")" == "" ]] \
+    && ok "--clear forgets it" || bad "--clear: ${OUT}"
+FAKE_NOW=$(( 1790000000 + 20*86400 )) run boundary --dry-run
+[[ "${OUT}" == *"SKIPPED: no staging site recorded"* ]] && ok "…and the plan says phase 6 would be skipped" \
+    || bad "plan after --clear: ${OUT}"
+
 echo "── both flags together isolate a WHOLE boundary ──"
 # Redirecting only production would still advance the real staging channel,
 # which the staging site tracks — that is a real boundary with the production

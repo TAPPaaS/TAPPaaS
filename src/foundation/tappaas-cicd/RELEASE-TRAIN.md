@@ -149,7 +149,10 @@ Six phases, in this order:
 5. **Record, then `main` → `staging`.** The release record and the `ROADMAP.md` cut are committed
    to `main` first (see *Versions* below), so the revision that starts its soak — tagged as the
    next version (`v2.2`) — already says what it is. Nobody edits either during a boundary.
-6. **Verify the staging site** (`--staging-host <host>`), if you named one.
+6. **Verify the staging site.** Over ssh from this mothership to the staging site's: its
+   checkout is fast-forwarded to `staging` and `site-manager update` runs there — the soak
+   beginning — and its result is reported. The site is the one recorded with `staging-site`
+   (below), or `--staging-host <host>` for this run. With neither, phase 6 is skipped and says so.
 
 Steps 4 and 5 are in that order deliberately: the old staging content reaches production *before*
 the new content reaches staging, so at no moment does production hold something that has not
@@ -167,8 +170,24 @@ estate is untouched, and the boundary stops.
 | `--to <nixos-XX.YY>` | a version move: rewrite the nixpkgs release branch in phase 1 |
 | `--major` | cut the next major (2.7 → 3.0) instead of the next minor. Only ever your word |
 | `--guest <module>` | choose the guest that meets the new pin first (default: the first module that depends on `templates:nixos`) |
-| `--staging-host <host>` | run phase 6 against the staging site over ssh |
+| `--staging-host <host>` | run phase 6 against this host for this run, instead of the recorded staging site |
 | `--staging-branch <b>` / `--production-branch <b>` | promote onto throwaway refs instead of `staging` and `stable` — a whole boundary rehearsed without touching a real channel. A rehearsal cuts no version and writes no record |
+
+**The staging site is recorded once.** Nothing in this site's configuration says where staging
+runs, so name it — an ssh name this mothership reaches the staging site's mothership by — and
+every later boundary verifies it:
+
+```bash
+tappaas-train.sh staging-site cicd-makerfloss    # record it: refused unless it answers and declares channel staging
+tappaas-train.sh staging-site                    # show it; status shows it too
+tappaas-train.sh staging-site --clear            # forget it: boundaries skip phase 6 again
+```
+
+It lives in `config/release-train.json` and survives `init` and every boundary. The preflight
+asks it before anything moves: a staging site that cannot be reached stops the boundary, and one
+in the middle of its own sweep makes it wait. A rehearsal (`--staging-branch`/`--production-branch`)
+never uses the recorded site — phase 6 runs a real update, which a promotion onto throwaway refs
+must not.
 
 `stable` is never *created* by a promotion, only fast-forwarded. A production channel that appears
 because of a typo is exactly what this is here to prevent.
