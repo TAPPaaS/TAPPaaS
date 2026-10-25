@@ -590,10 +590,24 @@ proxy_prune_route_lists() {
 # Encrypt's failed-validation allowance) while serving no one. Every step is
 # idempotent; a step that fails warns and the rest still run. The caller runs
 # `caddy-manager reconfigure` afterwards.
+# _caddy_detail <caddy-manager args…> — caddy-manager's own progress lines
+# ("Handler … not found — nothing to delete", "Deleting handler …") are detail
+# on every update of an unpublished module: debug. On failure they are printed.
+_caddy_detail() {
+    local out rc=0
+    out="$(caddy-manager "$@" 2>&1)" || rc=$?
+    if (( rc != 0 )); then
+        [[ -n "${out}" ]] && printf '%s\n' "${out}" >&2
+        return "${rc}"
+    fi
+    if [[ -n "${out}" ]]; then debug "  caddy-manager ${1}: ${out//$'\n'/; }"; fi
+    return 0
+}
+
 proxy_unpublish() {
     local module="$1" domain="$2" env_domain="$3" json="$4"
     local desc="TAPPaaS: ${module}"
-    caddy-manager delete-handler --description "${desc}" --no-ssl-verify \
+    _caddy_detail delete-handler --description "${desc}" --no-ssl-verify \
         || warn "Could not delete handler for ${module}"
     # Its path handles (ADR-023), then the lists its path rules used.
     if caddy-manager prune-handlers --help >/dev/null 2>&1; then
@@ -605,7 +619,7 @@ proxy_unpublish() {
     # The handler first, so nothing references the access list any more.
     caddy-manager delete-accesslist "tappaas-${module}" --no-ssl-verify >/dev/null 2>&1 || true
     if [[ -n "${domain}" ]]; then
-        caddy-manager delete-domain "${domain}" --no-ssl-verify \
+        _caddy_detail delete-domain "${domain}" --no-ssl-verify \
             || warn "Could not delete domain ${domain}"
         unbound_prune_host_override "${domain%%.*}" "${domain#*.}"
         # A route from an earlier domain shares the description, not the name.
