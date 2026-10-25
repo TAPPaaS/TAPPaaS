@@ -41,7 +41,7 @@ echo "nix $*" >> "${NIX_LOG}"
 case "$1 $2" in
     "key generate-secret") printf '%s:%s' "$4" "$(head -c 32 /dev/urandom | base64)" ;;
     "key convert-secret-to-public") cat ;;
-    "store sign") [[ -z "${SIGN_FAILS:-}" ]] ;;
+    "store sign") if [[ -z "${SIGN_FAILS:-}" ]]; then echo "added 3 signatures"; else echo "error: cannot sign" >&2; exit 1; fi ;;
 esac
 STUB
 chmod +x "${W}/bin/nix"
@@ -85,6 +85,11 @@ ck "a public key that is not one is refused" "1" "$(NIX_SITE_KEY_PUBLIC="${W}/ba
 : > "${NIX_LOG}"; run 'nix_site_key_sign /nix/store/aaaa-nixos-system-vw'
 ck "signing is recursive, with the secret key file" \
    "nix store sign --key-file ${SEC} --recursive /nix/store/aaaa-nixos-system-vw" "$(cat "${NIX_LOG}")"
+ck "…and Nix's 'added N signatures' is not printed" "" "$(run 'nix_site_key_sign /nix/store/aaaa-nixos-system-vw' 2>&1)"
+ck "…but is there for debug" "nix store sign: added 3 signatures" \
+   "$(run 'debug() { echo "$*"; }; nix_site_key_sign /nix/store/aaaa-nixos-system-vw' 2>&1)"
+ck "a failed signing says what Nix said, and fails" "error: cannot sign|1" \
+   "$(SIGN_FAILS=1 run 'nix_site_key_sign /nix/store/aaaa-nixos-system-vw; echo "|$?"' 2>&1 | tr -d '\n')"
 
 echo "== the key reaches the guest through tappaas-site.nix =="
 printf '{"location":{"timezone":"UTC"}}' > "${W}/config/site.json"

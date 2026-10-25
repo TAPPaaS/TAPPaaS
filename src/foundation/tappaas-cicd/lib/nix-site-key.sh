@@ -66,9 +66,18 @@ nix_site_key_ensure() {
 }
 
 # Sign <store path> and everything it references with the site key. Paths that
-# already carry this signature keep one.
+# already carry this signature keep one. Nix's "added N signatures" is detail
+# on every OS update, so it goes to debug; when signing fails, what Nix said is
+# printed with the failure.
 nix_site_key_sign() {
-    _nsk_as_root nix store sign --key-file "${NIX_SITE_KEY_SECRET}" --recursive "$1"
+    local out rc=0
+    out="$(_nsk_as_root nix store sign --key-file "${NIX_SITE_KEY_SECRET}" --recursive "$1" 2>&1)" || rc=$?
+    if (( rc != 0 )); then
+        [[ -n "${out}" ]] && printf '%s\n' "${out}" >&2
+        return "${rc}"
+    fi
+    if [[ -n "${out}" ]] && declare -F debug >/dev/null; then debug "nix store sign: ${out}"; fi
+    return 0
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
