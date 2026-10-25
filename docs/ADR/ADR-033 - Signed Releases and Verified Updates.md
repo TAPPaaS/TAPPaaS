@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** — built (#848): D1–D10 are implemented and on `main`; signing starts when the owners enrol their release and emergency keys |
-| **Version** | 0.7 |
+| **Version** | 0.8 |
 | **Date** | 2026-10-17 |
 | **Author** | Lars Rossen (drafted with Claude) |
 | **Deciders** | @LarsRossen, @ErikDaniel007, @AndreasJe |
 | **Closes / addresses** | Implementation: **#848**. Builds on [ADR-028](<ADR-028 - Release Cadence and Patching.md>) (D11 `channels.json`, D13 release tags, D15 urgent fixes), [ADR-011](<ADR-011 - SBOM Governance.md>) (supply-chain inventory), [ADR-007e](<ADR-007e - Health.md>) (the Health lens), [ADR-007d](<ADR-007d - Site.md>) (`site.json` repositories), [ADR-017](<ADR-017 - Update scheduling and mothership self-update.md>) (the sweep and the self-update). |
-| **Changelog** | v0.7 (2026-10-17) — operator decision: **four keys, two per owner** — a release key in the owner's vault and an **emergency key** kept offline on the owner's offsite *Keys to the Mothership* stick (the one `backup-manager key export --usb` writes), both emergency keys under `recovery@`. Rewriting that stick now keeps everything but the backup keys, so the emergency key survives it (D4a). · v0.6 (2026-10-17) — a key's validity is read against **today** whenever something is about to be trusted (a site moving to a release, a fresh clone, a tag being cut), because git reads it against the tag's own date, which whoever signs chooses: an expired or retired key could otherwise sign a back-dated tag. What a site already runs is still judged by its tag's date. A stolen key is **revoked** in `.tappaas/revoked_signers`, which refuses it at any date, instead of being given `valid-before` (D2, D4, D4b; built, with tests). · v0.5 (2026-10-17) — all decisions built and merged: the introduction for fresh clones (D5, `repository add --introduction/--signer`, `repository introduce`, the installer's anchor), image hashes and signed `SHA256SUMS` (D7, `release/sign-image-release.sh`), the mothership's Nix key signing guest closures with `require-sigs` asserted and the tarball fallback pinned by `narHash` (D8). Operator and developer pages: `VERIFIED-UPDATES.md`, `SIGNING.md`. · v0.4 (2026-10-17) — operator decision on the signers' keys: **software keys kept in each signer's own Bitwarden/Vaultwarden vault**, signing through its SSH agent with approval on every use, each key valid for one year (D2); an **offline recovery key** that may sign only a release changing nothing outside `.tappaas/`, so losing both signers' keys is recoverable without touching every site (D4a, built); what to do when every key is lost or one is stolen (D4b). · v0.3 (2026-10-17) — as built, first slice (#848): `tree-sha256` is a SHA-256 manifest of the tree's content, computable without Nix (D3); the last verified release is run state in `config/.trust/<repository>.json`, not a `site.json` field, and a site with no record yet takes the revision it runs as its base, so existing sites start verifying without an introduction (D5); the update converges on the exact commit it verified (D6); a repository that does not move is never refused, only reported (D6). The introduction for fresh clones, images (D7) and the Nix items (D8) are still to build. · v0.2 (2026-10-17) — operator decisions: the signers are the TAPPaaS owners, Erik and Lars; Community stays unsigned for now; `requireSigned` defaults to not required; signed commits on `main` become a future option; SHA-256 object format investigated and rejected for now (Nix cannot read it, GitHub cannot host it) — the open questions are closed; regulatory references removed. · v0.1 — first draft, from the operator's brief of 2026-10-17: every repository needs a signature, signer ownership is recorded, binaries are signed, the update verifies before it moves, NixOS fits the same chain, only staging and production are signed, and every repository's signing status is part of the health check. |
+| **Changelog** | v0.8 (2026-10-25) — operator decisions, built: **first trust is the owners' fingerprints alone** — `trust.signers` in `site.json`, `--signer` once per key, no release tag or commit (`--introduction` removed); the branch's current release must be signed by one of them (D5). **The chain**: verification walks every release between the last verified one and the target, so a key enrolled in a release a site skipped still counts, and a release an unknown key signed is passed over, never trusted (D4, D6). · v0.7 (2026-10-17) — operator decision: **four keys, two per owner** — a release key in the owner's vault and an **emergency key** kept offline on the owner's offsite *Keys to the Mothership* stick (the one `backup-manager key export --usb` writes), both emergency keys under `recovery@`. Rewriting that stick now keeps everything but the backup keys, so the emergency key survives it (D4a). · v0.6 (2026-10-17) — a key's validity is read against **today** whenever something is about to be trusted (a site moving to a release, a fresh clone, a tag being cut), because git reads it against the tag's own date, which whoever signs chooses: an expired or retired key could otherwise sign a back-dated tag. What a site already runs is still judged by its tag's date. A stolen key is **revoked** in `.tappaas/revoked_signers`, which refuses it at any date, instead of being given `valid-before` (D2, D4, D4b; built, with tests). · v0.5 (2026-10-17) — all decisions built and merged: the introduction for fresh clones (D5, `repository add --introduction/--signer`, `repository introduce`, the installer's anchor), image hashes and signed `SHA256SUMS` (D7, `release/sign-image-release.sh`), the mothership's Nix key signing guest closures with `require-sigs` asserted and the tarball fallback pinned by `narHash` (D8). Operator and developer pages: `VERIFIED-UPDATES.md`, `SIGNING.md`. · v0.4 (2026-10-17) — operator decision on the signers' keys: **software keys kept in each signer's own Bitwarden/Vaultwarden vault**, signing through its SSH agent with approval on every use, each key valid for one year (D2); an **offline recovery key** that may sign only a release changing nothing outside `.tappaas/`, so losing both signers' keys is recoverable without touching every site (D4a, built); what to do when every key is lost or one is stolen (D4b). · v0.3 (2026-10-17) — as built, first slice (#848): `tree-sha256` is a SHA-256 manifest of the tree's content, computable without Nix (D3); the last verified release is run state in `config/.trust/<repository>.json`, not a `site.json` field, and a site with no record yet takes the revision it runs as its base, so existing sites start verifying without an introduction (D5); the update converges on the exact commit it verified (D6); a repository that does not move is never refused, only reported (D6). The introduction for fresh clones, images (D7) and the Nix items (D8) are still to build. · v0.2 (2026-10-17) — operator decisions: the signers are the TAPPaaS owners, Erik and Lars; Community stays unsigned for now; `requireSigned` defaults to not required; signed commits on `main` become a future option; SHA-256 object format investigated and rejected for now (Nix cannot read it, GitHub cannot host it) — the open questions are closed; regulatory references removed. · v0.1 — first draft, from the operator's brief of 2026-10-17: every repository needs a signature, signer ownership is recorded, binaries are signed, the update verifies before it moves, NixOS fits the same chain, only staging and production are signed, and every repository's signing status is part of the health check. |
 
 How a TAPPaaS site knows that the code and images it is about to run are the ones the
 repository's owners released — and refuses them when it cannot tell.
@@ -232,7 +232,8 @@ signer is listed in `allowed_signers` *as of the previously verified release*.**
 removing a signer is an ordinary commit that lands in the next release, and takes effect for the
 release **after** that. So a pusher who adds their own key to the file cannot sign the very
 release that adds it; an attacker needs a key that was already trusted. A key is retired with
-`valid-before`, not by deleting its line, so old releases still verify.
+`valid-before`, not by deleting its line, so old releases still verify. A site that skips releases
+applies the same rule along the chain of releases it skipped (D6 step 4).
 
 **`.tappaas/revoked_signers`** *(v0.6)* lists keys that must never verify again — one public key
 per line, with a comment saying why. It is read from the same release as `allowed_signers` (the
@@ -271,8 +272,8 @@ single shared recovery key)*.
 
 - **All keys lost, both emergency keys included.** No release can be verified again, by design. The
   owners publish the new signers' fingerprints out of band (tappaas.org, a mail to operators), and
-  each operator re-anchors their site by hand to a release signed by them — the same introduction
-  a fresh clone takes (D5). Per site and by a person, deliberately: an automatic path would be the
+  each operator confirms them on their site by hand (`repository introduce --signer`) — the same
+  first trust a fresh clone takes (D5). Per site and by a person, deliberately: an automatic path would be the
   first thing an attacker used.
 - **A key is stolen.** The other signer cuts a release that adds the stolen key to
   `.tappaas/revoked_signers`, as an urgent fix (ADR-028 D12, `security:`) *(v0.6: not
@@ -283,49 +284,56 @@ single shared recovery key)*.
   lists they were checked with, so the owners also announce which versions not to trust. If both
   signers' release keys are stolen, an emergency key does the same.
 
-### D5 — First trust comes from outside the repository: the introduction
+### D5 — First trust comes from outside the repository: the owners' fingerprints
 
 A repository cannot vouch for its own first key (R3). Each repository entry in `site.json`
-(ADR-007d) gains a **trust anchor**:
+(ADR-007d) can carry the fingerprints of the keys its owners sign with *(v0.8: fingerprints only;
+v0.1–v0.7 named a starting release tag and its commit as well)*:
 
 ```json
 {
-  "name": "tappaas",
-  "url": "https://codeberg.org/TAPPaaS/TAPPaaS.git",
+  "name": "TAPPaaS",
+  "url": "codeberg.org/TAPPaaS/TAPPaaS",
   "branch": "stable",
-  "updateChannel": "stable",
   "trust": {
-    "introduction": "v2.4",
-    "introductionCommit": "<commit id>",
-    "signer": "SHA256:<fingerprint>"
+    "signers": ["SHA256:<lars>", "SHA256:<erik>"]
   }
 }
 ```
 
-- **The TAPPaaS repository's anchor is written by the installer**, which came from a signed
-  image (D7) whose key fingerprint is published on tappaas.org, in `INSTALL.md`, and in the
-  release notes. That fingerprint is the one thing an installing operator compares by hand.
-- **A repository added later** (`site-manager repository add`) is introduced explicitly: the
-  operator gives the tag and the expected fingerprint, obtained from the repository's owner out
-  of band; the command shows both and refuses without them unless `--unsigned` is given (D9).
+- **No release number.** A fresh clone's first trust is its branch's **current** release: it must
+  be signed by a key whose fingerprint is one of `signers`, which that release's own
+  `allowed_signers` lists as valid today and does not revoke, with a matching `tree-sha256`. An
+  emergency (`recovery@`) key does not count here — what it may sign is judged against an earlier
+  release, and a fresh clone has none. Naming an older starting release would only help an
+  operator holding out-of-date fingerprints, and the fix for that is to get the current ones.
+- **The TAPPaaS repository's fingerprints are written by the installer**, from the ones published
+  in `INSTALL.md`, on tappaas.org and in the release notes — the one thing an installing operator
+  compares by hand.
+- **A repository added later** (`site-manager repository add --signer <fp>`, once per key) is
+  checked against the fingerprints its owners give out of band; the command refuses without them
+  on a staging or production branch unless `--unsigned` is given (D9). On an unstable branch
+  given fingerprints must be keys the checkout lists.
+- **`repository introduce <name> [--signer <fp>]…`** runs the same check on an existing checkout —
+  against `trust.signers`, or against new fingerprints written to `site.json` once they hold. It
+  confirms that the keys a site trusts are the owners' keys, and it is how a site moves to new
+  keys after the owners lose every key (D4b).
 - **The last verified release is run state, not declaration** *(v0.3)*. It moves forward on
   every verified update and is kept in `config/.trust/<repository>.json` (tag, commit, signer,
   tree hash, time) — `site.json` says what the operator decided, not what the last run found.
   It is the base for D4's rule and D6's rollback check.
 - **A site with no record yet takes the revision it runs as its base** *(v0.3)*. That code is
   already executing on the site, so trusting its `allowed_signers` is no weaker than today, and
-  it lets every existing site start verifying at its next update without an introduction. The
-  introduction is what a **fresh clone** needs, where there is nothing running to start from.
-- **As built** — `verify_introduction` (lib/verify-repo.sh) checks a fresh clone: the tag
-  points exactly at `introductionCommit`, is signed by a key with the `signer` fingerprint
-  that its own commit's `allowed_signers` lists, its `tree-sha256` matches, and the
-  checked-out release descends from it and is authorized by the signers there. What it
-  verified is recorded in `config/.trust/`, so the next update takes the normal base rule.
-  `bootstrap.sh` checks the TAPPaaS tip against the fingerprints published in `INSTALL.md`
-  (git and ssh-keygen only, before `nixos-rebuild` runs anything from the clone; the full
-  check after it) and leaves the anchor for `create-site.sh`, which writes and re-checks it.
-  `repository add --introduction --signer | --unsigned`, `repository introduce` and the
-  clone in `repository reconcile` share `repo_sync_introduce` (lib/repo-sync.sh).
+  it lets every existing site start verifying at its next update with nothing to do: the release
+  that adds a repository's first keys arrives unsigned, and the release after it must be signed
+  by one of them. Those keys arrived the way every update did before signing, so an operator
+  confirms them once with `repository introduce --signer`.
+- **As built** — `verify_introduction` (lib/verify-repo.sh); `bootstrap.sh` checks the TAPPaaS tip
+  against the published fingerprints with git and ssh-keygen only, before `nixos-rebuild` runs
+  anything from the clone, and in full after it, and leaves the fingerprints in
+  `config/.trust/TAPPaaS.signers.json` for `create-site.sh`, which writes them to `site.json`
+  after checking that the checkout lists one of them. `repository add`, `repository introduce`
+  and the clone in `repository reconcile` share `repo_sync_introduce` (lib/repo-sync.sh).
 
 ### D6 — Update verifies before git moves
 
@@ -341,7 +349,11 @@ goes.
    (ADR-028 D11).
 3. On **staging/production**: require a release tag that points **exactly** at that commit.
 4. Verify its signature: `git verify-tag` against the `allowed_signers` **of the last verified
-   release** (D4, D5), not of the fetched tree.
+   release** (D4, D5), not of the fetched tree — **through the chain** *(v0.8)*: every release tag
+   between the last verified release and the target, oldest first, that verifies against the
+   current base becomes the next base, so a key enrolled in a release the site never stopped at
+   still counts. A release in between that does not verify is passed over, never trusted: only a
+   release signed by a key already trusted can change which keys are trusted.
 5. Check `tree-sha256` from the tag message against the fetched tree.
 6. Refuse going backwards: the new tag must descend from the last verified release (`git
    merge-base --is-ancestor`). A deliberate rollback is an operator command, never a fetch
@@ -507,8 +519,9 @@ Tracked in **#848**.
    `templates/update.sh` before import; `make-install-media.sh` checks the Proxmox ISO.
 4. Verification library (`tappaas-verify-repo`): D4–D6, used by the self-update, the sweep and
    `site-manager`.
-5. `site.json` `trust` anchors and `requireSigned`, with an ADR-025 migration writing the anchor
-   for existing sites from the release they are on (operator confirms the fingerprint).
+5. `site.json` `trust.signers` and `requireSigned`. No migration: an existing site starts
+   verifying from the revision it runs, and its operator confirms the owners' fingerprints once
+   with `repository introduce --signer` (D5).
 6. `health-manager` signature check and `validate` gate (D10), evidence file.
 7. Nix: baseline asserts `require-sigs`; mothership site key signs guest closures and
    `--no-check-sigs` goes; the tarball fallback carries `narHash`; module flake inputs pinned by
@@ -549,6 +562,6 @@ Tracked in **#848**.
 
 - `INSTALL.md` / tappaas.org: verify the installer image and record the fingerprint.
 - Operator reference: `health-manager` signature check, `requireSigned`, adding a repository
-  with an introduction.
+  with its owners' fingerprints.
 - Release runbook (`release/README.md`): key enrolment, signing a boundary, rotating a signer.
 - `docs/ADR/README.md`: index row.

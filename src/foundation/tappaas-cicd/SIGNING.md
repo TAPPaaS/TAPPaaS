@@ -40,7 +40,9 @@ recovery@tappaas.org namespaces="git" ssh-ed25519 AAAA... erik-emergency
 **The rule that keeps the repository from vouching for itself:** a release counts only if its
 signer is listed in `allowed_signers` *as of the release the site last verified*. A key added in a
 release signs the release **after** it. Somebody who can push to the repository cannot add their
-own key and sign with it in the same release.
+own key and sign with it in the same release. A site that skips releases follows the chain: each release in
+between that a trusted key signed brings the keys it adds, so a key enrolled in a release the site
+never stopped at still counts.
 
 While the file lists no key, the repository signs nothing and every site reports it as unsigned.
 The release that adds the first keys is the last unsigned one.
@@ -301,8 +303,8 @@ or run them from a TAPPaaS checkout on your laptop.) The next boundary is signed
 keys; sites follow on their own.
 
 **Every key lost, both emergency keys too.** No release can be verified again. Publish the new
-signers' fingerprints on tappaas.org and tell operators; each re-anchors their site by hand
-(see [VERIFIED-UPDATES.md](VERIFIED-UPDATES.md#re-anchoring-a-repository)).
+signers' fingerprints on tappaas.org and tell operators; each confirms them on their site by hand
+(see [VERIFIED-UPDATES.md](VERIFIED-UPDATES.md#confirming-or-renewing-a-repositorys-signers)).
 
 ## Signing your own module repository
 
@@ -322,8 +324,8 @@ A repository of modules a site adds is checked the same way once it signs:
    ```
 
    The tag must point exactly at the tip of the branch the sites track.
-4. Give the operators who add your repository the first release to trust and your key's
-   fingerprint, by a channel other than the repository itself.
+4. Give the operators who add your repository your keys' fingerprints, by a channel other than
+   the repository itself; they add it with `--signer`, once per key.
 
 A repository without `allowed_signers` keeps working on every site and is shown as unsigned —
 unless the site sets `requireSigned`.

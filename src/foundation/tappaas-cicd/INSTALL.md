@@ -29,7 +29,7 @@ drives the in-VM install end-to-end over SSH:
    keys published in the root [INSTALL.md](../../../INSTALL.md#compare-the-release-signer)
    (the third argument replaces them); generates `hardware-configuration.nix`,
    `nixos-rebuild switch --flake .#tappaas-cicd`, then checks the release in full and
-   writes the trust anchor (`~/config/.trust/TAPPaaS.introduction.json`, which
+   writes the signer fingerprints (`~/config/.trust/TAPPaaS.signers.json`, which
    `create-site.sh` puts in `site.json`); creates the tappaas SSH keypair. Then the VM
    is rebooted.
 2. `install.sh [--name SITE-CODE] [--organization ORG] [--branch NAME] [--domain DOMAIN]`

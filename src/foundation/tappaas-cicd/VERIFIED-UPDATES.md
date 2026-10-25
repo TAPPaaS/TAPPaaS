@@ -8,7 +8,7 @@ update is refused. How releases are signed, and how to sign a repository of your
 
 | What | When | What is checked |
 |---|---|---|
-| **Each repository the site tracks** (`site-manager repository list`) on a `staging` or `stable` branch | every update, after the fetch and before the checkout moves | the new tip is a release tag signed by a key the **last release this site verified** lists, the files match the hash in the tag, and it is not older than what the site runs |
+| **Each repository the site tracks** (`site-manager repository list`) on a `staging` or `stable` branch | every update, after the fetch and before the checkout moves | the new tip is a release tag signed by a key the **last release this site verified** lists — or a key a later release enrolled, signed in turn by a trusted key — the files match the hash in the tag, and it is not older than what the site runs |
 | **The TAPPaaS install** | when the mothership is installed | the release cloned is signed by one of the published release keys ([INSTALL.md](../../../INSTALL.md#compare-the-release-signer)) |
 | **VM images** (NixOS template, OPNsense) | before a downloaded image is imported | its SHA-256 matches the one in the release, which the release signers signed |
 | **Proxmox install media** | when the install USB is made | the ISO against Proxmox's published SHA-256 list |
@@ -60,18 +60,23 @@ branches are never affected.
 
 ## Adding a repository
 
-On a `staging` or `stable` branch, `site-manager repository add` needs the first release to
-trust and the fingerprint of the key that signed it — both from the repository's owner, by mail,
-their website or in person, never from the repository itself:
+On a `staging` or `stable` branch, `site-manager repository add` needs the fingerprints of the keys
+the repository's owners sign with — from them, by mail, their website or in person, never from the
+repository itself. Give each one with `--signer`:
 
 ```bash
-site-manager repository add <url> --branch stable \
-  --introduction v1.3 --signer SHA256:<fingerprint>
-site-manager repository add <url> --branch stable --unsigned     # a repository that signs nothing
+site-manager repository add <url> --branch stable --signer SHA256:<fingerprint> --signer SHA256:<fingerprint>
 ```
 
-It shows both, checks the clone against them, and refuses on a mismatch. On `main` neither is
-needed.
+The branch's current release must be signed by one of them; no version number is needed. It shows
+the fingerprints, checks the clone, refuses on a mismatch, and records them in `site.json`. A
+repository that signs nothing is added with `--unsigned`:
+
+```bash
+site-manager repository add <url> --branch stable --unsigned
+```
+
+On `main` neither is needed; fingerprints given there must be among the keys the repository lists.
 
 ## When an update is refused
 
@@ -92,17 +97,26 @@ TAPPaaS: REFUSED — 3f2a91c on 'stable' (production) is not a verified release
 
 The site keeps running the last verified release meanwhile.
 
-## Re-anchoring a repository
+## Confirming or renewing a repository's signers
 
-If a repository's owners lose every signing key, they publish new fingerprints outside the
-repository and announce it. After checking the fingerprint with them, give the repository its new
-starting point:
+To check that the keys a site trusts for a repository are its owners' keys — or, after the owners
+have replaced their keys, to start from the new ones — give the fingerprints the owners publish:
 
 ```bash
-site-manager repository introduce <name> --introduction <tag> --signer SHA256:<fingerprint>
+site-manager repository introduce <name> --signer SHA256:<fingerprint> --signer SHA256:<fingerprint>
 ```
 
-The same command checks an existing checkout against the starting point it already has.
+The current release must be signed by one of them. They are then written to `site.json`, and the
+release is recorded as the one the next update starts from. Without `--signer` the command checks
+the checkout against the fingerprints already in `site.json`.
+
+## Sites that predate signing
+
+A site already on `staging` or `stable` before a repository starts signing keeps updating with
+nothing to do. The release that adds the repository's first keys arrives like any unsigned update;
+from the release after it, every update must be signed by a key it lists. Those keys arrived the
+way every update did before signing, so run `repository introduce` with the published fingerprints
+once to confirm them.
 
 ## Checking a download by hand
 
