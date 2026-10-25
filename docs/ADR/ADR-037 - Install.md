@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (draft for the operator) |
-| **Version** | 0.1 |
+| **Version** | 0.2 |
 | **Date** | 2026-10-25 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #403 (install on the root disk; smarter placement), #377 (the installer cannot restart; the management-network question), the 2.4 install theme. Builds on [ADR-034](<ADR-034 - TAPPaaS User Interface.md>) D10 (the Setup wizard), [ADR-030](<ADR-030 - IPv6.md>) (IPv6), [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (the admin VPN), ADR-012 (backup placement), #692 (storage resolved against the node). |
-| **Changelog** | v0.1 (2026-10-25) — first draft: D1 one disk, D2 a hosted server (Hetzner), D3 the bootstrap ends at the console. |
+| **Changelog** | v0.2 (2026-10-25) — **D1:** `tanka1` is a real pool on the free part of the boot disk(s) (`hdsize`), not a dataset of `rpool` (the installer cannot name its pool, and storage names are pool names in TAPPaaS). **D2:** one IP — the firewall takes the server's address and MAC at the cut-over, with a rollback and a boot watchdog; two servers meet on a vSwitch; the virtual-MAC design becomes A5. · v0.1 (2026-10-25) — first draft. |
 
 Three changes to how a TAPPaaS site comes into being, in the order they are built: a node with
 **one disk** (or one mirrored pair) is a complete site; a site can be stood up on a **rented
@@ -42,24 +42,31 @@ for a second node (#377).
 
 ## Decision
 
-### D1 — One disk is a site: the boot pool carries `tanka1`
+### D1 — One disk is a site: the installer leaves room, and `tanka1` is a real pool on it
 
-A node installed with **ZFS on its boot disk** gets `tanka1` as a dataset of that pool:
+The Proxmox installer cannot name its ZFS pool — it is always `rpool` — and TAPPaaS treats a
+storage's name as its pool's name in some 18 places (`zfs list $STORAGE/vm-…`, `zpool status`,
+PBS placement, the storage inventory). So `tanka1` stays a pool of its own, on the free part of
+the boot disk(s):
 
-- **The install formats the boot disk(s) as ZFS** when the node has no further disk for a data
-  pool: `raid0` on one disk, `raid1` (a mirror) on two of the same size. A node with data disks
-  keeps today's layout (ext4/LVM boot disk, whole-disk tank pools), unchanged.
-- **`rpool/tanka1` is created and registered as the Proxmox storage `tanka1`** (zfspool, images
-  and rootdir) by `config-storage.sh`, which recognizes the case — the boot pool is the only
-  pool — rather than offering to build pools from disks that do not exist. Every module that
-  declares `tanka1` works unchanged; #692's rule stands; `resolve_storage` needs no new branch.
+- **The install leaves space.** The answer file's `hdsize` limits what the installer uses
+  (`disk-setup.lvm.hdsize` for ext4/LVM, `disk-setup.zfs.hdsize` for ZFS, honoured for the
+  bootable disk or mirror). A node with no further disk is installed into a fixed system size
+  (64 GiB), the rest of the disk left unpartitioned:
+  - **one disk:** ext4/LVM, as today, in the first 64 GiB;
+  - **two disks of the same size** (the usual rented server): ZFS `raid1` in the first 64 GiB of
+    each, so the system itself is mirrored.
+- **`tanka1` is created on the rest**: `config-storage.sh` adds a partition in the free space of
+  each boot disk and builds `tanka1` there — a single vdev on one disk, a mirror on two — and
+  registers it as the Proxmox storage `tanka1` as today. Every module that declares `tanka1`, and
+  every place that takes a storage name for a pool name, works unchanged. What is new is a pool on
+  partitions rather than whole disks, which `config-storage.sh` and the free-disk test learn.
 - **`tankb1` is optional and absent** on such a node; a module that declares `tankb1` is
   placed by D1b.
 - **Backups go off the node.** A PBS datastore on the same disk protects against nothing that
   matters here. A one-disk site's backup target is off-node: a second machine, a backup buddy
-  (ADR-031), or an off-site box. `backup:vm` warns, rather than fails, while none is set.
-- **The boot pool's reserve.** `tanka1` gets a quota leaving the root filesystem a fixed reserve
-  (20 % of the pool, at least 32 GB), so a full guest disk never stops the node itself.
+  ([ADR-031](<ADR-031 - Site Liveness from the Backup Buddy.md>)), or an off-site box. `backup:vm`
+  warns, rather than fails, while none is set.
 
 **D1b — A release's pool choice falls back; an operator's does not (#403).** A pool a module's
 *release* declares is a default, not the operator's word: when the node lacks it, the guest goes
@@ -67,27 +74,36 @@ to the first of `tanka1`, `tankb1` that the node has, with a warning, and the pl
 to the module's config so it stays put. A pool the *operator* set (`module modify --set
 storage=…`, recorded in `<module>.json.operator` since #488) remains a refusal, as #692 decided.
 
-### D2 — A hosted server is a first node like any other, reached through the admin VPN
+### D2 — A hosted server with one IP: the firewall takes the server's address
 
-A rented dedicated server (Hetzner Robot is the reference; any provider with a rescue system and
-an additional IP works the same way) is installed as a single-node site with D1's storage. What
-differs is only the edge:
+A rented dedicated server (Hetzner Robot is the reference) has one public IPv4 and a routed
+IPv6 `/64`, both bound to the MAC of its NIC: the provider's switch answers that MAC only. The
+site uses that one address — no additional IP is rented:
 
-- **The firewall gets its own public address.** The provider's additional IPv4 with a **virtual
-  MAC** goes to the firewall VM's WAN NIC on the `wan` bridge over the server's NIC — the same
-  bridged WAN as on a site at home, so OPNsense, Caddy and the zone model are unchanged. (The
-  main IP cannot be handed to a VM: the provider drops frames from any MAC but the server's.)
-- **The node keeps its main IP, for the rescue path only.** Proxmox's own firewall admits SSH
-  (key-only) on it and nothing else; the web UI, the API and everything TAPPaaS are reached from
-  `mgmt`, as at home. If the firewall VM is down, the node is still reachable over SSH, and the
-  provider's rescue system remains the last resort.
-- **The operator reaches the site through the admin VPN.** There is no client on an upstream
-  network: the bootstrap creates the first admin-VPN peer (ADR-010 P5) and prints its WireGuard
-  config, and every later step — the console included — is done through it. The management-network
-  question of #377 does not arise.
-- **IPv6 starts off.** ADR-030 gives each zone a `/64` out of a delegated prefix; a hosted server
-  has one routed `/64`. The site starts IPv4-only (`ipv6: false`), with the firewall's WAN on the
-  `/64`; per-zone IPv6 waits for a larger prefix (O2).
+- **It installs, and boots, as a plain server.** After the install the node holds the public
+  address on its NIC, and the operator runs the bootstrap over SSH to it.
+- **The cut-over hands the address to the firewall.** The node's NIC takes a generated,
+  locally administered MAC and no address; the firewall VM's WAN NIC, on the `wan` bridge over
+  that NIC, takes the server's real MAC and the public IPv4 and IPv6; an `ebtables` rule on the
+  bridge rewrites the source MAC of anything leaving to the real one, so no other MAC ever reaches
+  the provider's switch (the cause of the MAC-abuse notices others report). From then on `lan`
+  is what it is at home — the node's management address, behind the firewall — except that it has
+  no physical port: the node reaches the internet through the firewall, like every guest.
+- **It is the cut-over TAPPaaS already makes, with a way back.** As with `node network set`, the
+  change runs under a rollback: unless the operator confirms through the new path within a few
+  minutes, the node takes its MAC and address back. And at every boot a watchdog on the node
+  gives the address back to the node — firewall VM stopped first — when the firewall has not
+  answered for a set time, so a broken firewall leaves the server reachable over SSH, and the
+  provider's rescue system is the last resort, not the plan.
+- **The operator reaches the site through the admin VPN.** The bootstrap creates the first
+  admin-VPN peer (ADR-010 P5) and prints its WireGuard config; the console and the node are
+  reached through it. SSH to the public address lands on the firewall, which forwards nothing.
+- **IPv6 starts off for the zones.** ADR-030 gives each zone a `/64` out of a delegated prefix;
+  one routed `/64` is the firewall's WAN. The site starts with `ipv6: false` (O2).
+- **Two servers meet on the provider's vSwitch.** Only a site of two or more hosted servers gives
+  `lan` a port: a vSwitch VLAN (Hetzner: a VLAN ID 4000–4091 on the same NIC, MTU 1400), which
+  becomes the `lan` bridge's uplink on each node and carries corosync and the zones between them
+  (O5). A single server's `lan` has no port.
 - **Installed from the rescue system.** The rescue system boots the TAPPaaS auto-install ISO in
   QEMU with the server's disks passed through, so the same answer file installs it as at home;
   after a reboot the node's NIC is pinned by MAC (`pve-network-interface-pinning`), since QEMU's
@@ -118,14 +134,18 @@ differs is only the edge:
   server mirrors its boot pool, which D1 makes the default for two equal disks.
 - The install's questions move from a terminal into forms. The terminal path stays for
   automation, so the scripts cannot rot: the hrossen and makerfloss automation keeps using them.
-- `config-storage.sh` gains one case (the boot pool is the only pool) and the answer file one
-  choice (ZFS on the boot disk); the module JSONs and `resolve_storage` do not change for D1.
+- `config-storage.sh` learns a pool on partitions of the boot disk(s), and the answer file a
+  system size; the module JSONs, `resolve_storage` and every reader of pool names do not change
+  for D1.
 - D1b changes #692's behaviour for release-declared pools only, which needs the #488 ledger to
   tell the two apart; a site whose operator set `storage` before #488 has no record, and its
   module is treated as release-declared (it falls back with a warning, never fails).
 
 ## Alternatives considered
 
+- **A0 — `tanka1` as a dataset of the boot pool** (`rpool/tanka1`, registered as storage
+  `tanka1`). The first draft. Rejected: TAPPaaS takes a storage name for a pool name in some 18
+  places, which would all have to learn the difference.
 - **A1 — Build guests on `local-lvm`** (the stock ext4/LVM boot disk). Keeps the installer as it
   is, but every zvol assumption — snapshots, replication, the stale-ZFS pre-flight, `cluster:ha`
   replication — would need an LVM twin. Rejected: ZFS on the boot disk is one installer choice.
@@ -136,9 +156,11 @@ differs is only the edge:
   second install path to maintain, with a layout of the provider's choosing.
 - **A4 — The provider's remote KVM** with our ISO as virtual media. Needs a support request and a
   time-limited session; fine as a fallback, not as the documented path.
-- **A5 — A routed WAN** (the node keeps the public IP and routes to the firewall). No extra IP to
-  rent, but the node itself is the internet-facing host and the firewall is no longer the edge:
-  the model every other site has would not hold.
+- **A5 — An additional IP with a virtual MAC** for the firewall, the node keeping the main IP.
+  Simpler — no MAC handover, no watchdog — but a second address to rent per site, and the node
+  stays on the internet. The operator wants one address (2026-10-25).
+- **A6 — A routed WAN** (the node keeps the public IP and routes to the firewall). The node is the
+  internet-facing host and the firewall is no longer the edge.
 
 ## Open questions
 
@@ -147,6 +169,12 @@ differs is only the edge:
 - **O2 — IPv6 on a hosted site.** A routed `/64` cannot be split into zones. Ask the provider for
   a `/56` (Hetzner offers additional subnets for some products), NPTv6 from ULA zones, or stay
   IPv4-only. Decided when the first hosted site exists.
+- **O5 — The zones between two hosted servers.** A vSwitch is one VLAN; whether it carries the
+  zones' own VLAN tags inside it (QinQ) is not documented. If not: one vSwitch per zone (an account
+  has a limited number), or VXLAN over the one vSwitch (Proxmox SDN), at an MTU of 1350.
+- **O6 — The provider's tolerance.** Others report MAC-abuse notices from this pattern, explained
+  by MACs leaking past the bridge, and one a setup that stopped working after a year. Ask
+  Hetzner support before the first hosted site is a production one.
 - **O3 — The QEMU install's network.** The answer file takes DHCP; on a hosted server the public
   address is static. Bake it in at build time (`--fqdn`, address, gateway), or let the first boot
   take DHCP from the provider (Hetzner answers DHCP for the main IP)?
@@ -159,7 +187,7 @@ differs is only the edge:
 |------|------|:-:|:-:|------|
 | **P1 — one disk** | answer file: ZFS on the boot disk(s) when there is no data disk (`--single-disk`, auto-detected for the auto-ISO); `config-storage.sh`: `rpool/tanka1` with its quota, registered as `tanka1`; `backup:vm`'s warning without an off-node target | M | M | a VM on hrossen with one virtual disk installed from the auto-ISO; `cluster/test.sh --deep` and one module per stack on it |
 | **P1b — D1b** | `resolve_storage`: a release-declared pool falls back with a warning and the placement is written; an operator-declared one (ledger) refuses | L | M | unit cases in the VM-creation tests; one live create on a node without `tankb1` |
-| **P2 — a hosted server** | the virtual-MAC WAN (`--wan-mac` for the firewall VM), the node's SSH-only firewall on the main IP, the first admin-VPN peer from the bootstrap, the rescue-system QEMU install documented as `INSTALL-HOSTED.md` | H | M | a scratch Hetzner server, the whole install, `site-manager test --deep`, then a teardown (the server cancelled) |
+| **P2 — a hosted server** | the MAC handover at the cut-over (generated MAC on the NIC, the real one on the firewall's WAN, the `ebtables` rule), its rollback and boot watchdog, the first admin-VPN peer from the bootstrap, the rescue-system QEMU install documented as `INSTALL-HOSTED.md` | H | H | a scratch Hetzner server, the whole install, `site-manager test --deep`, then a teardown (the server cancelled) |
 | **P3a — the bootstrap ends at the console** | `install.sh` stops after the console is up and prints its address, the token and the VPN config; `--all` keeps the scripted path | M | M | a fresh install on the hosted server, the rest done in the wizard |
 | **P3b — the bootstrap runs again** (#377) | the bootstrap's steps decide from their records; a second run continues | M | M | a bootstrap killed at each step and run again, on a scratch VM |
 | **P3c — INSTALL.md** | steps 3–6 as the wizard's pages, the scripts as the headless path | L | L | a read-through by the operator |
