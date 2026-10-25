@@ -7,6 +7,8 @@
 # The consumer module's name is $1; its config is /home/tappaas/config/$1.json.
 # Delete the warning when you write the steps — while it is here, this service
 # does nothing for its consumers.
+# Output: one ✓ line per consumer saying what is wired; the steps at debug
+# (README-service-provider.md, "Output").
 # ─────────────────────────────────────────────────────────────────────────
 #
 # Usage: install-service.sh <consumer-module-name>

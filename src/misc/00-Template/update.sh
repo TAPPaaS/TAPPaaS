@@ -30,15 +30,8 @@ HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 
 warn "update.sh has not been implemented for this module — it is a template stub, so nothing module-specific was updated. Please contact the module's developer."
 
-echo ""
-info "${BOLD}Post-Install Configuration${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
-
-echo ""
-info "${BOLD}Installation Complete${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
-if [[ -n "${HANODE}" ]]; then
-    info "  HA Node: ${HANODE}"
-fi
+# Output (DEVELOP.md, "Output"): one ✓ line per thing this update established
+# or checked; the steps at debug; where the module is and how to use it with
+# install_note, which shows it on the first install only.
+debug "  ${VMNAME} (VMID ${VMID}) on ${NODE}${HANODE:+, HA ${HANODE}}, zone ${ZONE0NAME}"
+install_note "  ${VMNAME} runs on ${NODE}, zone ${ZONE0NAME}: ${VMNAME}.${ZONE0NAME}.internal"

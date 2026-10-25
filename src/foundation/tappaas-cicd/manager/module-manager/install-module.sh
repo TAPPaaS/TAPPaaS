@@ -858,6 +858,10 @@ main() {
     fi
 
     # ── Step 5: Call dependency install-service.sh scripts ───────────
+    # From here on the module's services and its own install.sh run for its
+    # first install: what they say once (where it is, how to use it) is [Info]
+    # now and [Debug] on every update after (install_note).
+    export TAPPAAS_FIRST_INSTALL=1
     info "${BOLD}Step 5: Call dependency service installers${CL}"
 
     # cluster:vm creates the guest in this step. Remember whether it was there
@@ -1004,6 +1008,8 @@ main() {
         # instance that was deleted, and nothing re-wired them until each got an
         # update of its own (#739). Re-apply each one's wiring through this
         # provider's update-service.sh — what that consumer's own update would run.
+        # That is an update of theirs, not a first install.
+        unset TAPPAAS_FIRST_INSTALL
         local rewired_any=false
         for svc in ${provides}; do
             local uscript="${module_dir}/services/${svc}/update-service.sh"

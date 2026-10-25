@@ -25,7 +25,5 @@ set -euo pipefail
 warn "install.sh has not been implemented for this module — it is a template stub, so nothing module-specific was installed. Please contact the module's developer."
 
 # run the update script as all update actions are also needed at install time
+# (module-manager reports the install itself; DEVELOP.md, "Output")
 . ./update.sh
-
-echo ""
-info "${GN}✓${CL} VM installation completed successfully."

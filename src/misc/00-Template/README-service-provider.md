@@ -205,3 +205,10 @@ broken contract — report it and keep the exit code for the wiring.
 
 Full detail, including the hook contract and the disruption model:
 [`docs/design/ADR-020-field-change-realization.md`](../../../docs/design/ADR-020-field-change-realization.md).
+
+## Output
+
+A service's install-service.sh and update-service.sh run on every update of every module that
+consumes it. Print one `✓` line per consumer saying what is wired (`info`), the steps and what
+already existed at `debug`, and addresses or how-to with `install_note` — shown once, on the
+consumer's first install. The full rule: [DEVELOP.md](DEVELOP.md), *Output*.

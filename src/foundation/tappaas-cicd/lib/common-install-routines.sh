@@ -43,6 +43,16 @@ debug() {
     echo -e "${BL}[Debug]${CL} $*";
 }
 warn()  { echo -e "${YW}[Warning]${CL} $*"; }
+# What to print at which level: src/misc/00-Template/DEVELOP.md, "Output".
+#
+# first_install — true while module-manager installs a module for the first
+# time: install-module.sh exports TAPPAAS_FIRST_INSTALL=1 for its services and
+# its install.sh (which sources update.sh). An update or a reconcile runs the
+# same scripts without it.
+first_install() { [[ "${TAPPAAS_FIRST_INSTALL:-0}" == 1 ]]; }
+# install_note <msg> — worth reading once: where the new module is, how to use
+# it. [Info] on the first install, [Debug] on every run after.
+install_note() { if first_install; then info "$@"; else debug "$@"; fi; }
 error() { echo -e "${RD}[Error]${CL} $*" >&2; }
 fatal() { echo -e "${RD}${BOLD}[Fatal]${CL} $*" >&2; }
 die()   { error "$@"; exit 1; }

@@ -77,6 +77,30 @@ module-manager module delete myapp      # --archive by default
 Can't SSH in? [README.md](README.md) shows how to take a VM console screenshot through
 Proxmox — works on any OS, including mid-install.
 
+## Output: Info, Debug and the first install
+
+Your scripts run inside every nightly update of the site, next to thirty other modules. What
+they print at `[Info]` is what the operator reads; everything else is noise there. The helpers
+come from `common-install-routines.sh`:
+
+| Level | Use it for | Example |
+|---|---|---|
+| `info` | one `✓` line per thing your script established or checked, naming the object | `info "  ${GN}✓${CL} forgejo:repo wired for lazysite: websites/lazysite, read-only deploy key"` |
+| `install_note` | where the new module is and how to use it — worth reading once | `install_note "  Site: https://${DOMAIN}"` |
+| `debug` | the steps on the way, what already existed, IDs, paths, raw tool output | `debug "  deploy key tappaas-lazysite already in place"` |
+| `warn` / `error` | something the operator must know or act on | unchanged |
+
+- **One line per outcome.** Not a header, the steps, then a result: the `✓` line says what is now
+  true. A step that only confirms what already existed is `debug`.
+- **No banners and no "complete" blocks.** module-manager already announces each step and says
+  when the module is done.
+- **`install_note`** prints at `[Info]` while module-manager installs the module for the first
+  time (`TAPPAAS_FIRST_INSTALL=1`, also `first_install` to test it) and at `[Debug]` on every
+  update and reconcile after. Use it for addresses, first steps and how-to.
+- **A tool's own output** (an API client, `nix`, `curl`) goes to `debug`, not straight through;
+  print it when the call fails.
+- `--debug` on any module-manager verb shows everything.
+
 ## Going deeper
 
 The module details — every file, field and convention — are in **[README.md](README.md)**.
