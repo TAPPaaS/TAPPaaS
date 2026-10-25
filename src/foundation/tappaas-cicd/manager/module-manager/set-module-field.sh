@@ -41,6 +41,11 @@
 # configured to, beyond what module-fields.json can say. install-module.sh runs
 # the same check before an install provisions anything.
 #
+# Every field it sets is recorded in `<config>.json.operator` (a JSON list of
+# field names), and one it unsets is taken off: the 3-way merge reads it to tell
+# an operator's choice from a value nothing explains (#488). A field the release
+# did not define when .orig was taken is kept on update only if it is listed.
+#
 # `--check` runs every gate and writes nothing: the --dry-run of `module modify`.
 #
 # Usage: set-module-field.sh <module> [--check] [--set <field>=<value>]... [--unset <field>]...
@@ -222,6 +227,23 @@ if [[ ${#UNSETS[@]} -gt 0 ]]; then
             || { error "failed to unset ${field}"; exit 1; }
         info "  unset ${field} in ${TARGET}"
     done
+fi
+
+# The operator's choices, for the merge (#488): what was set is added, what was
+# unset taken off. A ledger that cannot be written is said, not fatal — the
+# config itself is written; the next update would then treat a field the
+# release newly defines as unchosen.
+LEDGER="${TARGET}.operator"
+set_names="$(for pair in "${PAIRS[@]}"; do printf '%s\n' "${pair%%=*}"; done | jq -R . | jq -sc .)"
+unset_names="$(for field in "${UNSETS[@]}"; do printf '%s\n' "${field}"; done | jq -R . | jq -sc 'map(select(. != ""))')"
+prev='[]'
+[[ -s "${LEDGER}" ]] && prev="$(jq -c 'if type == "array" then . else [] end' "${LEDGER}" 2>/dev/null || echo '[]')"
+if jq -n --argjson p "${prev}" --argjson a "${set_names}" --argjson d "${unset_names}" \
+        '($p + $a | map(select(. != "")) | unique) - $d' > "${LEDGER}.tmp" 2>/dev/null; then
+    mv "${LEDGER}.tmp" "${LEDGER}"
+else
+    rm -f "${LEDGER}.tmp"
+    warn "  could not record the operator's fields in ${LEDGER}"
 fi
 
 exit 0

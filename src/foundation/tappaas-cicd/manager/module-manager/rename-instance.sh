@@ -19,6 +19,7 @@
 #
 #   config/<old>.json        → config/<new>.json
 #   config/<old>.json.orig   → config/<new>.json.orig      (the merge baseline)
+#   config/<old>.json.operator → config/<new>.json.operator (the operator's fields, #488)
 #   config/<old>.meta.json   → config/<new>.meta.json
 #   .node == <old> elsewhere → <new>                       (the Host a module runs on, D6.5)
 #
@@ -62,7 +63,7 @@ kind="$(jq -r '(.kind // (.config? // {} | to_entries[]?.value.kind?)) // ""' "$
 
 # What moves, and what points at the old name.
 files=()
-for suffix in .json .json.orig .meta.json; do
+for suffix in .json .json.orig .json.operator .meta.json; do
     [[ -f "${CONFIG_DIR}/${OLD}${suffix}" ]] && files+=("${suffix}")
 done
 refs=()

@@ -37,16 +37,17 @@
 #   5. Else:                                                 keep current
 #        5a. …and orig HAS the path:                          pinned
 #            The operator demonstrably diverged from a release value.
-#        5b. …and orig does NOT:                              pinned, unproven (#736)
-#            Nothing shows the operator ever chose this. The release did not
-#            define the path when orig was taken, so current came from
-#            elsewhere — by hand, or a service writing into the config it
-#            consumes. Keeping it is still correct (adopting would overwrite
-#            whatever put it there), but it is reported per field with the
-#            remedy, because the verdict is a decision nobody has taken yet.
-#            Previously indistinguishable from 5a and surfaced only as a debug
-#            COUNT, so a release that narrowed a coturn relay range was refused
-#            on every update for the life of the site and said nothing.
+#        5b. …and orig does NOT: the release did not define the path when
+#            orig was taken, so current came from elsewhere.
+#            5b-i.  The operator set it (`module modify --set`, recorded in
+#                   <eff>.json.operator):                     pinned
+#            5b-ii. Nothing records a choice:                 adopt source (#488)
+#                   An operator cannot have chosen a value nobody recorded, and
+#                   keeping it pinned a stale value for the life of the site (a
+#                   release that narrowed a coturn relay range never reached the
+#                   guest). Reported per field, with the value replaced and how
+#                   to set it back. A value set by `--set` before the ledger
+#                   existed has no record either, and is replaced the same way.
 #
 # Note on field MOVES: they are not a case here. All three sides are normalised
 # to flat first, so a field moving between top-level and a `config` block is the
@@ -125,6 +126,7 @@ _merge_locate_converter() {
     local candidates=(
         "/home/tappaas/bin/convert-json-to-config.sh"
         "$(dirname "${BASH_SOURCE[0]}")/convert-json-to-config.sh"
+        "$(dirname "${BASH_SOURCE[0]}")/../manager/site-manager/convert-json-to-config.sh"
         "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/manager/site-manager/convert-json-to-config.sh"
     )
     local p
@@ -236,6 +238,9 @@ apply_three_way_merge() {
     c_n="$(normalize_module_config < "${current}")"
     o_n="$(normalize_module_config < "${orig}")"
     s_n="$(normalize_module_config < "${source}")"
+    # The fields the operator set with `module modify --set` (#488).
+    local ledger="${current}.operator" set_fields='[]'
+    [[ -s "${ledger}" ]] && set_fields="$(jq -c 'if type == "array" then map(strings) else [] end' "${ledger}" 2>/dev/null || echo '[]')"
 
     if [[ "${TAPPAAS_MERGE_TRACE:-0}" == "1" ]]; then
         printf '  trace INPUTS: source=%s\n' "${source}" >&2
@@ -253,6 +258,7 @@ apply_three_way_merge() {
         --argjson c "${c_n}" \
         --argjson o "${o_n}" \
         --argjson s "${s_n}" \
+        --argjson set "${set_fields}" \
         --argjson auto "${_MERGE_AUTO_FIELDS}" \
         --argjson site "${_MERGE_SITE_FIELDS}" '
         # Collect every leaf path. "Leaf" = a path whose value is a scalar OR
@@ -266,7 +272,7 @@ apply_three_way_merge() {
         ( ($c | [leaves]) + ($o | [leaves]) + ($s | [leaves]) | unique ) as $paths
 
         | reduce $paths[] as $p (
-            { result: {}, adopted: [], pinned: [], pinned_unproven: [], added: [], kept: [], removed: [] };
+            { result: {}, adopted: [], pinned: [], replaced_unrecorded: [], added: [], kept: [], removed: [] };
 
             ($p[0]) as $top
             | (try ($c | getpath($p)) catch null) as $cv
@@ -330,30 +336,26 @@ apply_three_way_merge() {
                     | .adopted += [{ field: ($p | join(".")), before: $cv, after: $sv }]
                 end
               else
-                # Rule 5: keep current. Two different situations arrive here and
-                # they are NOT the same claim (#736, and #488 in general):
+                # Rule 5: current differs from the release, and the operator
+                # never left it at a release value. Two situations arrive here:
                 #
                 #   in orig, current != orig → the operator demonstrably diverged
                 #       from a release value. Pinning is their decision, recorded.
-                #   not in orig              → there is no evidence either way.
-                #       The release did not define this path when orig was taken,
-                #       so current came from somewhere else — the operator by hand,
-                #       or a service writing into the config it consumes. Keeping
-                #       it is still the SAFE verdict (adopting would silently
-                #       overwrite whatever put it there), but calling it "pinned"
-                #       states an operator intention that was never expressed.
-                #
-                # The second case is why a release that narrows the coturn relay
-                # range never reached a deployed guest: the merge refused it, was
-                # right to refuse it, and said so only at debug level as a count.
-                if $in_c then
-                    .result = (.result | setpath($p; $cv))
-                    | (if $in_s and ($sv != $cv) then
-                          (if $in_o then .pinned += [$p | join(".")]
-                           else .pinned_unproven += [{ field: ($p | join(".")),
-                                                       kept: $cv, offered: $sv }] end)
-                       else . end)
-                else . end
+                #   not in orig → the release did not define this path when orig
+                #       was taken. Kept only if the operator set it (the ledger
+                #       `module modify --set` keeps, #488); otherwise nothing
+                #       explains the value and the release value is taken, reported
+                #       with what it replaced.
+                ($p | join(".")) as $f
+                | ($set | any(. as $x | $f == $x or ($f | startswith($x + ".")))) as $chosen
+                | if ($in_c | not) then .
+                  elif ($in_s | not) or ($sv == $cv) then .result = (.result | setpath($p; $cv))
+                  elif $in_o or $chosen then
+                    .result = (.result | setpath($p; $cv)) | .pinned += [$f]
+                  else
+                    .result = (.result | setpath($p; $sv))
+                    | .replaced_unrecorded += [{ field: $f, was: $cv, now: $sv }]
+                  end
               end
         )
     ')"
@@ -371,33 +373,25 @@ apply_three_way_merge() {
     local n_adopted n_pinned n_unproven n_added n_kept n_removed
     n_adopted=$(jq '.adopted | length' <<<"${merged_with_report}")
     n_pinned=$(jq  '.pinned  | length' <<<"${merged_with_report}")
-    n_unproven=$(jq '.pinned_unproven | length' <<<"${merged_with_report}")
+    n_unproven=$(jq '.replaced_unrecorded | length' <<<"${merged_with_report}")
     n_added=$(jq   '.added   | length' <<<"${merged_with_report}")
     n_kept=$(jq    '.kept    | length' <<<"${merged_with_report}")
     n_removed=$(jq '.removed | length' <<<"${merged_with_report}")
 
-    debug "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_unproven} pinned-unproven, ${n_added} added, ${n_kept} kept (orphan), ${n_removed} removed"
+    debug "  Merge: ${n_adopted} adopted, ${n_pinned} pinned, ${n_unproven} replaced (unrecorded), ${n_added} added, ${n_kept} kept (orphan), ${n_removed} removed"
 
-    # A release value the merge REFUSED, where nothing shows the operator ever
-    # chose the value being kept (#736). Reported per field at info, not as a
-    # debug count: the coturn case sat on a deployed guest for as long as the
-    # site existed because a count at debug level is indistinguishable from
-    # nothing happening. Not a warning — keeping the value is correct, and the
-    # operator may well want it — but it is a decision somebody has to take,
-    # so it names the remedy.
+    # A value the release replaced although it differed (#488, rule 5b-ii): a
+    # warning per field with the value that went, and the --set that brings it
+    # back and records it as the operator's — never silent, as the coturn relay
+    # range was for as long as the merge kept it at debug level (#736).
     if [[ "${n_unproven}" -gt 0 ]]; then
         local _up_line
-        info "  ${n_unproven} field(s) the release changed were kept, with no record of a choice:"
         while IFS= read -r _up_line; do
-            info "    ${_up_line}"
-        done < <(jq -r '
-            .pinned_unproven[]
-            | "\(.field): keeping \(.kept | tojson), release offers \(.offered | tojson)"
+            warn "  ${_up_line}"
+        done < <(jq -r --arg m "${eff}" '
+            .replaced_unrecorded[]
+            | "Took the release value of \(.field): \(.was | tojson) -> \(.now | tojson) — nothing recorded \(.was | tojson) as your choice; to keep it: module-manager module modify \($m) --set \(.field)=\(.was | if type == "string" then . else tojson end)"
         ' <<<"${merged_with_report}")
-        info "    Nothing recorded these as customized — the release did not define them when"
-        info "    .orig was taken, so they arrived by another route (by hand, or a service"
-        info "    writing into the config). To take the release value:"
-        info "      module-manager module modify <module> --unset <field>   then update again"
     fi
 
     # TAPPAAS_MERGE_TRACE=1 prints the engine's own verdict per field, and the
@@ -409,6 +403,7 @@ apply_three_way_merge() {
                           | map(if . == null then "-" else tojson end) | join("  |  ");
             ( (.adopted // []) | map(if type == "object" then .field else . end) | map({v: "adopted", f: .}) )
             + ( (.pinned  // []) | map({v: "pinned",  f: .}) )
+            + ( (.replaced_unrecorded // []) | map({v: "replaced", f: .field}) )
             + ( (.added   // []) | map({v: "added",   f: .}) )
             + ( (.kept    // []) | map({v: "kept",    f: .}) )
             + ( (.removed // []) | map({v: "removed", f: (if type == "object" then .field else . end)}) )

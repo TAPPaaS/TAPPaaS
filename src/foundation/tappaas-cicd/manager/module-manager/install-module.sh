@@ -337,7 +337,7 @@ rollback_failed_install() {
             error "  Could not remove '${INSTALL_MODULE_NAME}' — do it by hand: module-manager module delete ${INSTALL_MODULE_NAME} --remove"
         fi
     else
-        rm -f "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json" "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json.orig"
+        rm -f "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json" "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json.orig" "${CONFIG_DIR}/${INSTALL_MODULE_NAME}.json.operator"
         info "  ${GN}✓${CL} Deployed config of '${INSTALL_MODULE_NAME}' removed — nothing half-installed is left"
     fi
     warn "  Fix the cause and run the install again."

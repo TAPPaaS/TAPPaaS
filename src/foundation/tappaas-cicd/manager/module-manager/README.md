@@ -278,6 +278,16 @@ Where it is decides what `backup-manager validate` compares an off-site copy on 
 where the topology and the console's Physical and Device views draw it. A `location` with a
 `/` is the old name of `moduleSource` and is never read as a place.
 
+### Your fields are recorded: `<module>.json.operator` (#488)
+
+Every field `modify --set` writes is recorded in `config/<module>.json.operator`, and
+`--unset` takes it off again. The 3-way merge reads it for one case: a release that starts
+defining a field the deployed config already has with another value (the field was not in the
+release when `<module>.json.orig` was taken). If the operator set it, the value stays; if
+nothing recorded it, the release value is taken and the update warns with the value it
+replaced and the `--set` that brings it back, which also records it. A value set before the
+ledger existed has no record, so such a release replaces it once, with that warning.
+
 ### Removing a stale field: `modify --unset` (#648)
 
 ```

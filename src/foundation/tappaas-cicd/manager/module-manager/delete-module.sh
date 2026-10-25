@@ -654,6 +654,7 @@ main() {
         info "  Removed ${module_json}"
     fi
 
+    rm -f "${CONFIG_DIR}/${module}.json.operator"   # the operator's fields (#488)
     if [[ -f "${config_orig}" ]]; then
         rm -f "${config_orig}"
         info "  Removed ${config_orig}"

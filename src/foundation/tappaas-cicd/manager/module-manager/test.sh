@@ -2116,6 +2116,33 @@ else
     ok "--set with a refused --unset fails"
 fi
 
+# The ledger the merge reads (#488): --set records the field, --unset takes it
+# off, a refused change records nothing.
+LEDGER="${UDIR}/config/unsettest.json.operator"
+rm -f "${LEDGER}"; write_ucfg
+TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+    bash "$SETF" unsettest --set cores=4 --set vmname=y > "${UDIR}/out" 2>&1
+[[ "$(jq -c . "${LEDGER}" 2>/dev/null)" == '["cores","vmname"]' ]] \
+    && ok "--set records its fields as the operator's (<module>.json.operator)" \
+    || bad "--set did not record the operator's fields: $(cat "${LEDGER}" 2>/dev/null || echo none)"
+TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+    bash "$SETF" unsettest --set cores=6 > "${UDIR}/out" 2>&1
+[[ "$(jq -c . "${LEDGER}" 2>/dev/null)" == '["cores","vmname"]' ]] \
+    && ok "a field set twice is recorded once" || bad "the ledger repeats a field: $(cat "${LEDGER}")"
+write_ucfg; echo '["legacyField","cores"]' > "${LEDGER}"
+TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+    bash "$SETF" unsettest --unset legacyField > "${UDIR}/out" 2>&1
+[[ "$(jq -c . "${LEDGER}" 2>/dev/null)" == '["cores"]' ]] \
+    && ok "--unset takes the field off the ledger" || bad "--unset left the ledger as $(cat "${LEDGER}")"
+TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+    bash "$SETF" unsettest --set cores=notanumber > "${UDIR}/out" 2>&1
+[[ "$(jq -c . "${LEDGER}" 2>/dev/null)" == '["cores"]' ]] \
+    && ok "a refused --set records nothing" || bad "a refused --set changed the ledger: $(cat "${LEDGER}")"
+TAPPAAS_CONFIG="${UDIR}/config" TAPPAAS_SCHEMA_FILE="${UDIR}/schema.json" \
+    bash "$SETF" unsettest --check --set vmname=z > "${UDIR}/out" 2>&1
+[[ "$(jq -c . "${LEDGER}" 2>/dev/null)" == '["cores"]' ]] \
+    && ok "--check records nothing" || bad "--check changed the ledger: $(cat "${LEDGER}")"
+
 grep -q -- '--unset <field>' <<< "$(TAPPAAS_CONFIG="${UDIR}/config" bash "$SETF" --help 2>&1)" \
     && ok "set-module-field.sh --help documents --unset" \
     || bad "set-module-field.sh --help does not document --unset (#648)"

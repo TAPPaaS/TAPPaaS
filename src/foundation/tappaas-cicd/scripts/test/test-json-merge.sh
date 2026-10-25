@@ -47,9 +47,11 @@ pass() { echo "  ✓ $*"; PASS=$((PASS + 1)); }
 fail() { echo "  ✗ $*"; FAIL=$((FAIL + 1)); }
 
 # Run a single case.
-# Usage: run_case <name> <current_json> <orig_json> <source_json> <module> <module_dir> <expect_jq_filter>
+# Usage: run_case <name> <current_json> <orig_json> <source_json> <module> <module_dir> <expect_jq_filter> [ledger_json] [expect_in_output]
+#   ledger_json: the fields `module modify --set` recorded (<module>.json.operator, #488)
 run_case() {
     local name="$1" cur="$2" orig="$3" src="$4" module="$5" mdir="$6" expect_filter="$7"
+    local ledger="${8:-}" expect_out="${9:-}"
     echo "  Case: ${name}"
     # Fresh per-case CONFIG_DIR + module dir
     local cd="${WORKDIR}/${name}/config"
@@ -58,6 +60,7 @@ run_case() {
     if [[ -n "${cur}"  ]]; then echo "${cur}"  > "${cd}/${module}.json"; fi
     if [[ -n "${orig}" ]]; then echo "${orig}" > "${cd}/${module}.json.orig"; fi
     if [[ -n "${src}"  ]]; then echo "${src}"  > "${md}/${module##*-}.json"; fi
+    if [[ -n "${ledger}" ]]; then echo "${ledger}" > "${cd}/${module}.json.operator"; fi
 
     # Call the REAL apply_three_way_merge (#581).
     #
@@ -92,7 +95,9 @@ run_case() {
         then reduce (.config | to_entries[]) as $svc (.; . * $svc.value) | del(.config)
         else . end' "${cd}/${module}.json")
 
-    if echo "${merged}" | jq -e "${expect_filter}" >/dev/null 2>&1; then
+    if [[ -n "${expect_out}" && "${out}" != *"${expect_out}"* ]]; then
+        fail "${name} — the merge did not say: ${expect_out} (said: ${out})"
+    elif echo "${merged}" | jq -e "${expect_filter}" >/dev/null 2>&1; then
         pass "${name}"
     else
         fail "${name} — got: $(echo "${merged}" | jq -c '.')"
@@ -116,6 +121,35 @@ run_case "release-update" \
     '{"vmname":"a","cores":8}' \
     "a" "moda" \
     '.cores == 8'
+
+# Rule 5b (#488): the release defines a field .orig never recorded, and the
+# deployed value differs. Nothing records it as the operator's: take the
+# release value, and say what was replaced and how to set it back.
+run_case "unrecorded-replaced" \
+    '{"vmname":"a","cores":2,"relayRange":"49152-65535"}' \
+    '{"vmname":"a","cores":2}' \
+    '{"vmname":"a","cores":2,"relayRange":"49152-49999"}' \
+    "a" "moda" \
+    '.relayRange == "49152-49999"' \
+    '' 'module-manager module modify a --set relayRange=49152-65535'
+
+# …the operator set it with `module modify --set`: kept.
+run_case "recorded-kept" \
+    '{"vmname":"a","cores":2,"relayRange":"49152-65535"}' \
+    '{"vmname":"a","cores":2}' \
+    '{"vmname":"a","cores":2,"relayRange":"49152-49999"}' \
+    "a" "moda" \
+    '.relayRange == "49152-65535"' \
+    '["relayRange"]'
+
+# …a ledger naming other fields does not protect this one.
+run_case "recorded-other-field" \
+    '{"vmname":"a","cores":2,"relayRange":"49152-65535"}' \
+    '{"vmname":"a","cores":2}' \
+    '{"vmname":"a","cores":2,"relayRange":"49152-49999"}' \
+    "a" "moda" \
+    '.relayRange == "49152-49999"' \
+    '["cores"]'
 
 # Case 3: operator pinned → keep operator
 run_case "user-pinned" \
