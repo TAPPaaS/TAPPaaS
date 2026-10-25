@@ -34,6 +34,7 @@ from dataclasses import dataclass
 from oxl_opnsense_client import Client
 
 from .config import Config
+from .log import quiet
 
 # OPNsense API coordinates for the outbound-NAT controller.
 _MODULE = "firewall"
@@ -176,7 +177,7 @@ class SnatManager:
 
     def test_connection(self) -> bool:
         """Test the connection to OPNsense."""
-        return self.client.test()
+        return quiet(self.client.test)
 
     # =========================================================================
     # Raw API helpers

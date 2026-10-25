@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 from oxl_opnsense_client import Client
 
 from .config import Config
+from .log import quiet
 
 
 # Allowed transports per OPNsense Syslog.xml model
@@ -117,7 +118,7 @@ class SyslogManager:
         return self._client
 
     def test_connection(self) -> bool:
-        return self.client.test()
+        return quiet(self.client.test)
 
     # ── Raw API helpers ────────────────────────────────────────────────
 

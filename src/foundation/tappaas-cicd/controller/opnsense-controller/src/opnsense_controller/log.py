@@ -11,6 +11,8 @@ Environment variables:
   TAPPAAS_SILENT=1  — suppress info output
 """
 
+import contextlib
+import io
 import os
 import sys
 
@@ -52,3 +54,20 @@ def warn(msg: str) -> None:
 def error(msg: str) -> None:
     """Print an [Error] message (always shown, to stderr)."""
     print(f"{_RD}[Error]{_CL} {msg}", file=sys.stderr)
+
+
+def quiet(fn, *args, **kwargs):
+    """Call fn with what it prints to stdout kept out of the output.
+
+    For a library that prints instead of returning: the OPNsense client's
+    test() prints OK or UNREACHABLE, so every controller run started with a
+    bare "OK" line. What it said is kept for --debug.
+    """
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        result = fn(*args, **kwargs)
+    said = buf.getvalue().strip()
+    if said:
+        debug(f"{getattr(fn, '__qualname__', 'call')}: {said}")
+    return result
+

@@ -5,6 +5,7 @@ from enum import Enum
 from oxl_opnsense_client import Client
 
 from .config import Config
+from .log import quiet
 
 
 class RuleAction(str, Enum):
@@ -182,7 +183,7 @@ class FirewallManager:
 
     def test_connection(self) -> bool:
         """Test the connection to OPNsense."""
-        return self.client.test()
+        return quiet(self.client.test)
 
     def get_rule_spec(self) -> dict:
         """Get the specification for the rule module."""

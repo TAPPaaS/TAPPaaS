@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from oxl_opnsense_client import Client
 
 from .config import Config
+from .log import quiet
 
 
 @dataclass
@@ -290,7 +291,7 @@ class CaddyManager:
 
     def test_connection(self) -> bool:
         """Test the connection to OPNsense."""
-        return self.client.test()
+        return quiet(self.client.test)
 
     # =========================================================================
     # Raw API helpers

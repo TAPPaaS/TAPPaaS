@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from oxl_opnsense_client import Client
 
 from .config import Config
+from .log import quiet
 
 
 @dataclass
@@ -75,7 +76,7 @@ class VlanManager:
 
     def test_connection(self) -> bool:
         """Test the connection to OPNsense."""
-        return self.client.test()
+        return quiet(self.client.test)
 
     def list_modules(self) -> list[str]:
         """List all available modules."""

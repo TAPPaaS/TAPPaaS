@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from oxl_opnsense_client import Client
 
 from .config import Config
-from .log import error, info
+from .log import error, info, quiet
 
 
 def _convert_bools_to_int(params):
@@ -149,7 +149,7 @@ class DhcpManager:
 
     def test_connection(self) -> bool:
         """Test the connection to OPNsense."""
-        return self.client.test()
+        return quiet(self.client.test)
 
     def get_range_spec(self) -> dict:
         """Get the specification for the dnsmasq_range module."""
