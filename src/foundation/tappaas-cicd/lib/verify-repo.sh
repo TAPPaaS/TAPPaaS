@@ -52,9 +52,12 @@ verify_tree_sha256() {
     local path="$1" commit="$2"
     git -C "${path}" rev-parse -q --verify "${commit}^{tree}" >/dev/null || return 1
     # One `git cat-file --batch` stream for every blob: a process per file took
-    # 18 s on this repository, the stream well under one.
+    # 18 s on this repository, the stream well under one. The ids are written
+    # from a thread while this one reads: written all at once first, git stops
+    # reading once its output pipe is full and the two wait on each other for
+    # ever (Linux pipes hold 64 KiB; the 2.3 tree, 1928 files, crossed it).
     python3 -I - "${path}" "${commit}" <<'PY'
-import hashlib, subprocess, sys
+import hashlib, subprocess, sys, threading
 path, commit = sys.argv[1], sys.argv[2]
 ls = subprocess.run(["git", "-C", path, "ls-tree", "-r", "-z", "--full-tree", commit],
                     check=True, capture_output=True).stdout
@@ -68,14 +71,16 @@ for e in ls.split(b"\0"):
 blobs = [oid for _, typ, oid, _ in entries if typ == b"blob"]
 cat = subprocess.Popen(["git", "-C", path, "cat-file", "--batch"],
                        stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-cat.stdin.write(b"".join(o + b"\n" for o in blobs)); cat.stdin.close()
+def feed():
+    cat.stdin.write(b"".join(o + b"\n" for o in blobs)); cat.stdin.close()
+feeder = threading.Thread(target=feed); feeder.start()
 digest = {}
 for oid in blobs:
     hdr = cat.stdout.readline().split(b" ")
     size = int(hdr[2])
     digest[oid] = hashlib.sha256(cat.stdout.read(size)).hexdigest().encode()
     cat.stdout.read(1)
-cat.wait()
+feeder.join(); cat.wait()
 out = hashlib.sha256()
 for mode, typ, oid, p in entries:
     out.update(mode + b" " + (digest[oid] if typ == b"blob" else oid) + b" " + p + b"\n")
