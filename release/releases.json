@@ -2,10 +2,38 @@
   "_README": "Every TAPPaaS version: the revision it names and when it reached each channel (ADR-028 D13). tappaas-train writes this at each boundary and urgent fix; RELEASES.md is rendered from it (tappaas-train releases --render after a hand edit). Dates are UTC days. kind: minor | major (a boundary), patch (an urgent fix, ADR-028 D12), release (made by hand, before the train).",
   "releases": [
     {
+      "version": "2.3",
+      "commit": "",
+      "staging": "2026-10-25",
+      "production": null,
+      "kind": "minor",
+      "forced": false,
+      "pin": "1f607aa79b63",
+      "supersedes": [
+        "2.2.1",
+        "2.2.2"
+      ],
+      "accepted": [
+        "cve jellyfin CVE-2019-1010022",
+        "cve jellyfin CVE-2019-1010023",
+        "major dotnet-aspnetcore-runtime 9->10",
+        "major dotnet-aspnetcore-runtime-wrapped 9->10",
+        "major ffmpeg-headless 8->9",
+        "major gcc 15->16",
+        "major giflib 5->6",
+        "major jellyfin 10->12",
+        "major jellyfin-ffmpeg 7->8",
+        "major jellyfin-plugin-sso 4->5",
+        "major jellyfin-web 10->12",
+        "major lame 3->4",
+        "major svt-av1 3->4"
+      ]
+    },
+    {
       "version": "2.2.2",
       "commit": "41919e52906f",
       "staging": "2026-10-12",
-      "production": null,
+      "production": "2026-10-25",
       "kind": "patch",
       "channel": "staging",
       "why": "disruption: logging's nightly check fails on every SSO site (Grafana's 307 to OIDC); the 24 Oct boundary would carry it to production"
