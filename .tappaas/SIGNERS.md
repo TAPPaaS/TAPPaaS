@@ -5,9 +5,9 @@ The keys themselves are in [`allowed_signers`](allowed_signers); this page says 
 
 | Signer | Role | Key (fingerprint) | Kept in | Valid until | Contact |
 |---|---|---|---|---|---|
-| Lars Rossen | TAPPaaS owner, release manager | *not enrolled yet* | his own vault (Bitwarden SSH agent) | — | @LarsRossen |
+| Lars Rossen | TAPPaaS owner, release manager | SHA256:Vv5LV6e07/r+PLMFlzcfZ9dtCXAbqdydrnIiBVBWzJk | his own vault (Bitwarden SSH agent) | — | @LarsRossen |
 | Erik Daniel | TAPPaaS owner, release manager | *not enrolled yet* | his own vault (Bitwarden SSH agent) | — | @ErikDaniel007 |
-| Lars Rossen — emergency (`recovery@tappaas.org`) | recovery only — may sign a release that changes nothing outside `.tappaas/` | *not made yet* | offline: his offsite Keys-to-the-Mothership stick, `kingdom/`, passphrase-protected | no expiry | @LarsRossen |
+| Lars Rossen — emergency (`recovery@tappaas.org`) | recovery only — may sign a release that changes nothing outside `.tappaas/` | SHA256:vcROgNHX0Z4wxU40fp2/46YeMqeg8TKbjLAttW0Q3y4 | offline: his offsite Keys-to-the-Mothership stick, `kingdom/`, passphrase-protected | no expiry | @LarsRossen |
 | Erik Daniel — emergency (`recovery@tappaas.org`) | recovery only — may sign a release that changes nothing outside `.tappaas/` | *not made yet* | offline: his offsite Keys-to-the-Mothership stick, `kingdom/`, passphrase-protected | no expiry | @ErikDaniel007 |
 
 Two signers, so one lost key or one absence does not stop a release; an emergency key each, so

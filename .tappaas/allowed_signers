@@ -18,7 +18,7 @@
 # reports it as unsigned (declared). The release that adds the first keys is
 # the last unsigned one.
 #
-# lars@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... lars-2026
-# erik@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAA... erik-2026
-# recovery@tappaas.org namespaces="git" ssh-ed25519 AAAA... lars-emergency
-# recovery@tappaas.org namespaces="git" ssh-ed25519 AAAA... erik-emergency
+lars@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDn6uDzuvcEFyH5uSg52HGccUZ0cgvohWI35ws/4xRx/ lars-2026
+# erik@tappaas.org     namespaces="git,tappaas-image",valid-before="20271101" ssh-ed25519 … erik-2026
+recovery@tappaas.org namespaces="git" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFm/SHyx/WDS6duTKy7WmxfvP1P5NXtAckTAD5vdp7P7 larsrossen-emergency
+# recovery@tappaas.org namespaces="git" ssh-ed25519 … erik-emergency
