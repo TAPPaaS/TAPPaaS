@@ -312,6 +312,12 @@ export class CliSiteClient implements SiteClient {
   testModule(module: string, deep: boolean, logFile?: string): number {
     const args = ["test", module];
     if (deep) args.push("--deep");
-    return logFile ? streamToFile(MODULE_BIN(), args, logFile) : runStreaming(MODULE_BIN(), args);
+    if (!logFile) return runStreaming(MODULE_BIN(), args);
+    // A long module test names its steps (test_step); with its output in a log,
+    // those lines also go to the terminal, so a long run shows where it is. No
+    // terminal (the nightly service): the write fails quietly and that is all.
+    return streamToFile(MODULE_BIN(), args, logFile, {
+      env: { TAPPAAS_TEST_PROGRESS: "/dev/tty", TAPPAAS_TEST_MODULE: module },
+    });
   }
 }

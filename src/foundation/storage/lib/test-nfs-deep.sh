@@ -52,7 +52,18 @@ PASS=0; FAIL=0
 pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 ok()   { if eval "$2" >/dev/null 2>&1; then pass "$1"; else fail "$1"; fi; }
-step() { info "${BOLD}── $1${CL}"; }
+# Each phase, with the time the one before it took; also to the progress
+# channel site-manager test opens (TAPPAAS_TEST_PROGRESS), as test_step does.
+_step_t0=""
+step() {
+    local took=""
+    [[ -n "${_step_t0}" ]] && took=" — previous phase $(_ts_dur $(( SECONDS - _step_t0 )))"
+    _step_t0="${SECONDS}"
+    info "${BOLD}── $1${CL}${took}"
+    if [[ -n "${TAPPAAS_TEST_PROGRESS:-}" ]]; then
+        { printf '        %s NFS deep %s%s\n' "${TAPPAAS_TEST_MODULE:-}" "$1" "${took}" >> "${TAPPAAS_TEST_PROGRESS}"; } 2>/dev/null || true
+    fi
+}
 
 node_ssh()  { ssh -n -o BatchMode=yes -o ConnectTimeout=15 -o LogLevel=ERROR "root@$(nfs_instance_address_of "$1")" "${@:2}"; }
 # node_ssh_in — the same, reading stdin: the receiving end of a zfs send pipe.

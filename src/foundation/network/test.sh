@@ -135,6 +135,11 @@ fi
 # Basic tests (issue #172 requirements)
 # ─────────────────────────────────────────────────────────────────────
 
+# Steps (test_step, common-install-routines.sh): where a long run is, and how
+# long each part took. Eight with --deep, four without.
+TEST_STEPS=$(( DEEP == 1 ? 8 : 4 ))
+test_step "basics: DNS, internet, OPNsense"
+
 section "Basic 1: DNS lookup"
 
 if getent hosts "${FIREWALL_FQDN}" >/dev/null 2>&1; then
@@ -203,6 +208,8 @@ BASIC_FAIL=${FAIL}
 # ─────────────────────────────────────────────────────────────────────
 # Standard tests (always run; non-destructive)
 # ─────────────────────────────────────────────────────────────────────
+
+test_step "tools, schemas, zones, DNS, proxy, CrowdSec (Standard 1-6b)"
 
 section "Standard 1: CLI tools available"
 
@@ -434,6 +441,8 @@ else
         *)       pass "CrowdSec never bans the site's own IPv6 networks ($(_csv whitelist) whitelisted)" ;;
     esac
 fi
+
+test_step "rules, pinholes, test tooling, proxy drift (Standard 7-12)"
 
 section "Standard 7: rules-manager dry-run against an installed module"
 
@@ -1426,12 +1435,14 @@ deep_test_adr008_providers() {
 }
 
 if [[ "${DEEP}" != "1" ]]; then
+    test_step "deep tests — skipped (use --deep)"
     section "Deep tests skipped"
     info "  Re-run with --deep (or TAPPAAS_TEST_DEEP=1) to provision two test VMs and"
     info "  validate inter-zone firewall rules end-to-end. Expected runtime: 5–10 min."
 else
     # ADR-008 switch/ap provider deep tests run first: isolated (temp CONFIG_DIR),
     # fast, hardware-free, and independent of the VM-provisioning deep flow below.
+    test_step "switch and AP managers (Deep A-C)"
     deep_test_adr008_providers
 
     # ── Derive zone names + FQDNs from the fixture JSON (issue #306) ──────
@@ -1461,6 +1472,7 @@ else
     TFW_B_FQDN="test-fw-b.${TFW_B_ZONE}.internal"
     TFW_C_FQDN="test-fw-c.${TFW_C_ZONE}.internal"
 
+    test_step "test zones and test VMs (Deep 1-2b)"
     section "Deep 1: Activate ${TFW_A_ZONE} and ${TFW_B_ZONE} zones"
 
     # #306 regression guard: no fixture zone NAME may be hardcoded anywhere in
@@ -1661,6 +1673,7 @@ else
     getent hosts "${TFW_A_FQDN}" >/dev/null 2>&1 \
         || fail "${TFW_A_FQDN} did not appear in DNS within 90s"
 
+    test_step "proxy, rules and connectivity (Deep 3-9b)"
     section "Deep 3: Verify test-fw-a webserver"
 
     if curl -fsS --max-time 5 "http://${TFW_A_FQDN}:8080/" 2>/dev/null \
@@ -2011,6 +2024,7 @@ EVIDENCE
         fail "test-fw-a → test-fw-c:22 should be blocked (auto-pinhole only opens 9091)"
     fi
 
+    test_step "reconcile, Caddy, the resolver (Deep 10-11e)"
     section "Deep 10: Reconcile prunes a removed ingress entry"
 
     # Remove one ingress entry from the deployed test-fw-b.json and reconcile.
@@ -2201,6 +2215,7 @@ EVIDENCE
         fi
     fi
 
+    test_step "source NAT and teardown (Deep 12-)"
     section "Deep 12: source NAT — subnet-filtering device (ADR-016, #239)"
 
     # The one test that would have caught #239. A device that accepts only its
@@ -2423,6 +2438,7 @@ fi
 # NOTE: the completeness/truncation check now lives in cleanup_deep (the EXIT
 # trap), because everything below is skipped when the run aborts.
 
+test_steps_done
 echo ""
 # ── Assertion-count floor ───────────────────────────────────────────
 # (truncation itself is caught by cleanup_deep's EXIT trap, above)

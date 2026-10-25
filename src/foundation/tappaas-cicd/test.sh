@@ -62,6 +62,13 @@ pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 skip() { info "  ${YW}⊘${CL} $1 (skipped)"; SKIP=$((SKIP + 1)); }
 
+# Steps (test_step, common-install-routines.sh): where a long run is, and how
+# long each part took. Nine with --deep, five without; the --runtime-only gate
+# has no tabletop step.
+TEST_STEPS=$(( DEEP == 1 ? 9 : 5 ))
+if [[ "${RUNTIME_ONLY}" == "1" ]]; then TEST_STEPS=$(( TEST_STEPS - 1 )); fi
+test_step "basics: pin, scripts, tools, config, git, SSH, scheduler"
+
 # ── Test 0: how old is the nixpkgs this site would rebuild from? ─────
 #
 # ONE lock decides the estate (ADR-028 D1): templates/flake.lock is what
@@ -331,8 +338,10 @@ fi
 # deep sweep, CI. The body below is intentionally left unindented so this guard
 # reads as a gate over existing tests rather than a rewrite of them.
 if [[ "${RUNTIME_ONLY}" == "1" ]]; then
+    test_step "source-tree checks — skipped (the update gate)"
     skip "Tests 7-10b: source-tree unit + tabletop suites (--runtime-only gate, #595)"
 else
+test_step "source-tree unit tests (Tests 7-9f)"
 # ── Test 7: Repository management ───────────────────────────────────
 
 info "${BOLD}Test 7: Repository management${CL}"
@@ -554,6 +563,8 @@ fi
 
 # ── Test 10: P10 manager/controller dispatch contract (ADR-007 S1) ───────────
 
+test_step "tabletop suites and contract checks (Tests 9z-10c)"
+
 # ── Test 9z: every tabletop test under scripts/test/ ─────────────────────────
 #
 # A SWEEP, not a list. This suite used to name three of the eleven files in
@@ -725,6 +736,8 @@ fi
 
 fi   # end source-tree checks (Tests 7-10b)
 
+test_step "component smoke (Test 11)"
+
 # ── Test 11: ADR-007 component smoke (lightweight, non-disruptive) ───────────
 # A sub-second sanity check that the new ADR-007 components' BASIC functionality
 # is present — using the already-built bins. NO compile, NO nix-build, NO live
@@ -850,6 +863,7 @@ fi
 # ── Deep Test: VM creation suite ────────────────────────────────────
 
 if [[ "${DEEP}" -eq 1 ]]; then
+    test_step "VM creation suite"
     info "${BOLD}Deep Test: VM creation suite${CL}"
 
     cd "${SCRIPT_DIR}"
@@ -863,6 +877,8 @@ if [[ "${DEEP}" -eq 1 ]]; then
     else
         skip "test-vm-creation/test.sh not found"
     fi
+
+    test_step "reinstall round-trip and snapshot rollback"
 
     # ── Deep Test: --reinstall round-trip (issue #301) ───────────────
     info "${BOLD}Deep Test: install-module.sh --reinstall round-trip${CL}"
@@ -892,6 +908,8 @@ if [[ "${DEEP}" -eq 1 ]]; then
         skip "test-vm-creation/test-rollback.sh not found"
     fi
 
+    test_step "alias names and the variant suite"
+
     # ── Deep Test: vmname -> OPNsense alias length guard (issue #300) ─
     info "${BOLD}Deep Test: vmname alias-name length validation${CL}"
 
@@ -918,6 +936,8 @@ if [[ "${DEEP}" -eq 1 ]]; then
         skip "test-variants/test.sh not found"
     fi
 
+    test_step "manager, controller and console suites"
+
     # ── Deep Test: relocated component dispatchers (ADR-007 S0 P4 3d, option A) ─
     # The cicd module test additionally drives the manager/ + controller/ parent
     # dispatchers, so every relocated component's own test.sh runs as part of the
@@ -939,6 +959,7 @@ if [[ "${DEEP}" -eq 1 ]]; then
         fi
     done
 else
+    test_step "deep tests — skipped (use --deep)"
     info "${BOLD}Deep Test: VM creation suite${CL}"
     skip "VM creation tests (use --deep to run)"
     info "${BOLD}Deep Test: install-module.sh --reinstall round-trip${CL}"
@@ -950,6 +971,8 @@ else
     info "${BOLD}Deep Test: variant architecture suite${CL}"
     skip "variant architecture suite (use --deep to run)"
 fi
+
+if [[ "${DEEP}" == "1" ]]; then test_step "exec mode and the sweep's own context"; fi
 
 # ── Deep Test: tracked exec-mode is authoritative (#565) ────────────
 # The lifecycle chmod paths must honour the tracked git mode: restore +x on a
@@ -1018,6 +1041,7 @@ else
 fi
 
 # ── Summary ─────────────────────────────────────────────────────────
+test_steps_done
 
 info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}, ${YW}${SKIP} skipped${CL}"
 

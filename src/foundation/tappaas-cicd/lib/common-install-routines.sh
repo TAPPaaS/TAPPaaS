@@ -53,6 +53,43 @@ first_install() { [[ "${TAPPAAS_FIRST_INSTALL:-0}" == 1 ]]; }
 # install_note <msg> — worth reading once: where the new module is, how to use
 # it. [Info] on the first install, [Debug] on every run after.
 install_note() { if first_install; then info "$@"; else debug "$@"; fi; }
+
+# test_step <name> — a long module test says where it is, as part of
+# module-manager's "Test Step 4: Run module test.sh": one line per step, with
+# the time the step before it took. Set TEST_STEPS (how many) before the first;
+# end with test_steps_done, which lists every step's time. With
+# TAPPAAS_TEST_PROGRESS (site-manager test sets it to /dev/tty while the output
+# goes to a log) the step is also written there, so a long run shows progress.
+_ts_dur() { local s="$1"; if (( s >= 60 )); then printf '%dm%02ds' $((s / 60)) $((s % 60)); else printf '%ds' "${s}"; fi; }
+test_step() {
+    local now="${SECONDS}" prev=""
+    [[ -v _TS_DONE ]] || _TS_DONE=()
+    if [[ -n "${_TS_NAME:-}" ]]; then
+        _TS_DONE+=("$(( now - _TS_T0 ))|${_TS_N}|${_TS_NAME}")
+        prev=" — step ${_TS_N} took $(_ts_dur $(( now - _TS_T0 )))"
+    fi
+    _TS_N=$(( ${_TS_N:-0} + 1 )); _TS_NAME="$1"; _TS_T0="${now}"
+    info "${BOLD}Test Step 4: Run module test.sh (step ${_TS_N}/${TEST_STEPS:-?}: $1)${CL}${prev}"
+    if [[ -n "${TAPPAAS_TEST_PROGRESS:-}" ]]; then
+        { printf '      %s step %s/%s: %s%s\n' "${TAPPAAS_TEST_MODULE:-}" "${_TS_N}" "${TEST_STEPS:-?}" "$1" "${prev}" \
+            >> "${TAPPAAS_TEST_PROGRESS}"; } 2>/dev/null || true
+    fi
+}
+test_steps_done() {
+    [[ -n "${_TS_NAME:-}" ]] || return 0
+    _TS_DONE+=("$(( SECONDS - _TS_T0 ))|${_TS_N}|${_TS_NAME}")
+    _TS_NAME=""
+    local e out="" total=0
+    for e in "${_TS_DONE[@]}"; do
+        local secs="${e%%|*}" rest="${e#*|}"
+        total=$(( total + secs ))
+        out+="${out:+ · }${rest%%|*} ${rest#*|} $(_ts_dur "${secs}")"
+    done
+    info "  step times: ${out} (total $(_ts_dur "${total}"))"
+    if [[ -n "${TEST_STEPS:-}" && "${_TS_N}" != "${TEST_STEPS}" ]]; then
+        warn "  this test ran ${_TS_N} step(s) but declares TEST_STEPS=${TEST_STEPS} — correct the count"
+    fi
+}
 error() { echo -e "${RD}[Error]${CL} $*" >&2; }
 fatal() { echo -e "${RD}${BOLD}[Fatal]${CL} $*" >&2; }
 die()   { error "$@"; exit 1; }

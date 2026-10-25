@@ -34,6 +34,8 @@ pass() { info "  ${GN}✓${CL} $1"; PASS=$((PASS + 1)); }
 fail() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 
 info "${BOLD}Testing storage${CL}"
+TEST_STEPS=$(( DEEP == 1 ? 2 : 1 ))
+test_step "share model and config/shares.json"
 if out="$("${HERE}/lib/test-nfs-lib.sh" 2>&1)"; then pass "share model unit suite ($(tail -1 <<< "${out}" | tr -s ' '))"
 else fail "share model unit suite:"; printf '%s\n' "${out}" | grep -E "FAIL" | head -10 >&2; fi
 
@@ -58,9 +60,11 @@ if [[ "${DEEP}" -eq 1 ]]; then
         done
         NODE="${NODE:-$(tappaas_cluster_nodes "${CONFIG_DIR}" | head -1)}"
     fi
+    test_step "NFS deep suite on ${NODE} (eleven phases and teardown)"
     if "${HERE}/lib/test-nfs-deep.sh" "${NODE}"; then pass "NFS deep suite on ${NODE}"
     else fail "NFS deep suite on ${NODE} (above)"; fi
 fi
 
+test_steps_done
 info "  Results: ${GN}${PASS} passed${CL}, ${RD}${FAIL} failed${CL}"
 [[ "${FAIL}" -eq 0 ]]
