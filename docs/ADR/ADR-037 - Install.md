@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** (draft for the operator) |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-10-25 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #403 (install on the root disk; smarter placement), #377 (the installer cannot restart; the management-network question), the 2.4 install theme. Builds on [ADR-034](<ADR-034 - TAPPaaS User Interface.md>) D10 (the Setup wizard), [ADR-030](<ADR-030 - IPv6.md>) (IPv6), [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (the admin VPN), ADR-012 (backup placement), #692 (storage resolved against the node). |
-| **Changelog** | v0.2 (2026-10-25) — **D1:** `tanka1` is a real pool on the free part of the boot disk(s) (`hdsize`), not a dataset of `rpool` (the installer cannot name its pool, and storage names are pool names in TAPPaaS). **D2:** one IP — the firewall takes the server's address and MAC at the cut-over, with a rollback and a boot watchdog; two servers meet on a vSwitch; the virtual-MAC design becomes A5. · v0.1 (2026-10-25) — first draft. |
+| **Changelog** | v0.3 (2026-10-25) — **D1:** a pool on a partition: alignment, `ashift=12`, by-id names, one layout on every boot disk, and the runbook that replaces a failed disk for both pools; P1 rehearses it. · v0.2 (2026-10-25) — **D1:** `tanka1` is a real pool on the free part of the boot disk(s) (`hdsize`), not a dataset of `rpool` (the installer cannot name its pool, and storage names are pool names in TAPPaaS). **D2:** one IP — the firewall takes the server's address and MAC at the cut-over, with a rollback and a boot watchdog; two servers meet on a vSwitch; the virtual-MAC design becomes A5. · v0.1 (2026-10-25) — first draft. |
 
 Three changes to how a TAPPaaS site comes into being, in the order they are built: a node with
 **one disk** (or one mirrored pair) is a complete site; a site can be stood up on a **rented
@@ -61,6 +61,29 @@ the boot disk(s):
   registers it as the Proxmox storage `tanka1` as today. Every module that declares `tanka1`, and
   every place that takes a storage name for a pool name, works unchanged. What is new is a pool on
   partitions rather than whole disks, which `config-storage.sh` and the free-disk test learn.
+- **A pool on a partition is as good as one on a disk.** Proxmox's own ZFS install puts `rpool`
+  on partition 3; on Linux a whole disk adds only ZFS writing the partition table itself and
+  setting the I/O scheduler to `none`, the default on NVMe and SSDs anyway. Three rules make the
+  difference not matter:
+  - **aligned:** the `tanka1` partition starts on a 1 MiB boundary (`sgdisk`'s default) and runs to
+    the end of the disk, and the pool is created with `ashift=12`;
+  - **named by id:** the pool is built on `/dev/disk/by-id/<disk>-part<N>`, never on a kernel
+    name such as `nvme0n1p4`, which can name another disk after a reboot;
+  - **one layout on every boot disk:** the disks of a mirror carry the same partition table, so a
+    replacement disk is a copy of its partner's.
+- **A failed disk is replaced for both pools at once.** The runbook, in `cluster/README.md` and
+  rehearsed in P1:
+  1. `sgdisk -R /dev/disk/by-id/<new> /dev/disk/by-id/<healthy>` and `sgdisk -G
+     /dev/disk/by-id/<new>`: the partner's partition table, with new GUIDs;
+  2. `zpool replace rpool <old>-part3 <new>-part3`, then `proxmox-boot-tool format` and `init` on
+     `<new>-part2`, so the node boots from either disk (two-disk ZFS installs only);
+  3. `zpool replace tanka1 <old>-part<N> <new>-part<N>`, and wait for both resilvers
+     (`zpool status`) before anything else;
+  4. on a one-disk node there is no partner: the new disk is installed as in D1 and the guests are
+     restored from the off-node backup.
+- **The system pool and `tanka1` share the disk's I/O.** The system part is small and quiet; the
+  disk's throughput is in practice the guests'. A node that needs more gets a data disk, and is
+  then a node like any other.
 - **`tankb1` is optional and absent** on such a node; a module that declares `tankb1` is
   placed by D1b.
 - **Backups go off the node.** A PBS datastore on the same disk protects against nothing that
@@ -185,7 +208,7 @@ site uses that one address — no additional IP is rented:
 
 | Step | What | Ease | Risk | Test |
 |------|------|:-:|:-:|------|
-| **P1 — one disk** | answer file: ZFS on the boot disk(s) when there is no data disk (`--single-disk`, auto-detected for the auto-ISO); `config-storage.sh`: `rpool/tanka1` with its quota, registered as `tanka1`; `backup:vm`'s warning without an off-node target | M | M | a VM on hrossen with one virtual disk installed from the auto-ISO; `cluster/test.sh --deep` and one module per stack on it |
+| **P1 — one disk** | answer file: a 64 GiB system (`hdsize`), ext4/LVM on one disk, ZFS `raid1` on two, when there is no data disk (`--single-disk`, auto-detected for the auto-ISO); `config-storage.sh`: the aligned partition on each boot disk and `tanka1` on them by id, `ashift=12`; the disk-replacement runbook; `backup:vm`'s warning without an off-node target | M | M | VMs on hrossen with one and with two virtual disks, installed from the auto-ISO; `cluster/test.sh --deep` and one module per stack on them; on the two-disk VM, one disk replaced by the runbook and the node rebooted from the new one |
 | **P1b — D1b** | `resolve_storage`: a release-declared pool falls back with a warning and the placement is written; an operator-declared one (ledger) refuses | L | M | unit cases in the VM-creation tests; one live create on a node without `tankb1` |
 | **P2 — a hosted server** | the MAC handover at the cut-over (generated MAC on the NIC, the real one on the firewall's WAN, the `ebtables` rule), its rollback and boot watchdog, the first admin-VPN peer from the bootstrap, the rescue-system QEMU install documented as `INSTALL-HOSTED.md` | H | H | a scratch Hetzner server, the whole install, `site-manager test --deep`, then a teardown (the server cancelled) |
 | **P3a — the bootstrap ends at the console** | `install.sh` stops after the console is up and prints its address, the token and the VPN config; `--all` keeps the scripted path | M | M | a fresh install on the hosted server, the rest done in the wizard |
