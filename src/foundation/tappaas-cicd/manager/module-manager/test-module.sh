@@ -193,6 +193,9 @@ main() {
     export TAPPAAS_TEST_DEEP="${OPT_DEEP}"
     export TAPPAAS_TEST_RUNTIME_ONLY="${OPT_RUNTIME_ONLY}"
     export TAPPAAS_DEBUG="${OPT_DEBUG}"
+    # A test never stops to ask: nobody may be watching the terminal it has (a
+    # deep run in tmux). Every prompt then refuses or names its flag instead.
+    export TAPPAAS_NONINTERACTIVE=1
     [[ -n "${opt_vmid}" ]] && export TAPPAAS_VMID_OVERRIDE="${opt_vmid}"
     [[ -n "${opt_zone0}" ]] && export TAPPAAS_ZONE0_OVERRIDE="${opt_zone0}"
 

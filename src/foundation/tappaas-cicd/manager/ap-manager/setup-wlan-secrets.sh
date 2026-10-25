@@ -154,6 +154,7 @@ read_passphrase() {
 
 cmd_interactive() {
     [[ -t 0 ]] || die "interactive mode needs a terminal (use --list for a non-interactive view)"
+    no_one_to_ask && die "interactive mode needs someone at the terminal (use --list for a non-interactive view)"
     info "${BOLD}WiFi SSID + passphrase setup${CL}"
     info "Reads active zones with an SSID from ${ZONES_FILE}; secrets → ${SECRETS_FILE}"
     info "Press Ctrl-C any time; nothing is written until you answer each prompt."

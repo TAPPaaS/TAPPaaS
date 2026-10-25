@@ -68,7 +68,7 @@ import { placementFinishReset, placementReset, placementUseExternal, ResetDeps }
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { existsSync, readFileSync } from "fs";
 import { spawnSync } from "child_process";
-import { stream } from "../../../lib/ts/src/exec";
+import { askTerminal, stream } from "../../../lib/ts/src/exec";
 import { clusterNodeNames } from "../../../lib/ts/src/nodes";
 import { GN, CL, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { readJsonObject, writeJsonAtomic } from "../../../lib/ts/src/config-io";
@@ -657,11 +657,9 @@ const RESET_DEPS: ResetDeps = {
     return rc === -1 ? 1 : rc; // killed by a signal
   },
   confirm: (q) => {
-    const r = spawnSync("bash", ["-c", 'printf "%s" "$1" > /dev/tty; IFS= read -r v < /dev/tty || exit 1; printf "%s" "$v"', "--", q], {
-      encoding: "utf8",
-    });
-    if (r.status !== 0) die("cannot ask for confirmation (non-interactive session?) — pass --yes");
-    return /^y(es)?$/i.test((r.stdout ?? "").trim());
+    const a = askTerminal(q);
+    if (a === null) die("cannot ask for confirmation (non-interactive session?) — pass --yes");
+    return /^y(es)?$/i.test(a!);
   },
   info,
   warn,
@@ -1191,10 +1189,9 @@ function cmdPurge(opts: Opts, client: Client): number {
     return 0;
   }
   if (!opts.yes) {
-    const r = spawnSync("bash", ["-c", 'printf "%s" "$1" > /dev/tty; IFS= read -r v < /dev/tty || exit 1; printf "%s" "$v"', "--",
-      `  This permanently deletes ${plan.snapshots} restore point(s) of vm/${vmid}. Type ${vmid} to confirm: `], { encoding: "utf8" });
-    if (r.status !== 0) die("purge: cannot ask for confirmation (non-interactive session?) — pass --yes");
-    if ((r.stdout ?? "").trim() !== vmid) die("purge: not confirmed — nothing deleted");
+    const a = askTerminal(`  This permanently deletes ${plan.snapshots} restore point(s) of vm/${vmid}. Type ${vmid} to confirm: `);
+    if (a === null) die("purge: cannot ask for confirmation (non-interactive session?) — pass --yes");
+    if (a !== vmid) die("purge: not confirmed — nothing deleted");
   }
   const res = client.purge(vmid, true);
   if (!res.purged) die(`purge ${vmid}: not purged${res.refused.length ? ` (${res.refused.join("; ")})` : ""}`);

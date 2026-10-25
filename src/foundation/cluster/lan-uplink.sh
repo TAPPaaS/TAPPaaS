@@ -254,6 +254,7 @@ drift() {  # <report> → true when live differs from the declaration
 
 confirm() {  # <what>
     [[ "${YES}" == 1 ]] && return 0
+    no_one_to_ask && die "$1 — needs confirmation and nobody can answer here: pass --yes"
     warn "${BOLD}$1${CL}"
     read -rp "  Type the node name to confirm (or Ctrl-C to abort): " _c </dev/tty
     [[ "${_c}" == "${NODE}" ]] || die "confirmation mismatch — nothing changed"

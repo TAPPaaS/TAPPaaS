@@ -42,6 +42,10 @@ import { keyStampArgs, keyTarget, keysUsb } from "../../src/keys";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { allocateNet, allocatePort, buddyPool, nextServe, slash30Error, tunnelErrors, tunnelHosts } from "../../src/tunnel";
 
+// Nobody answers a prompt here: a confirmation read from /dev/tty would wait for
+// whoever owns the terminal (a deep run in tmux) instead of failing.
+process.env.TAPPAAS_NONINTERACTIVE = "1";
+
 // Fixtures are JSON in the SOURCE tree (test/fixtures/config), not compiled.
 // The compiled test runs from dist-test/manager/backup-manager/test/unit/
 // (the shared tsconfig.base rootDir is the cicd root, so emit mirrors the
@@ -1105,6 +1109,7 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
 
   c.log.length = 0;
   check(cli(["purge", "350"]) !== 0, "purge without --yes in a non-interactive session is refused");
+  check(lines.some((l) => l.includes("pass --yes")), "…and says to pass --yes");
   eq(yesCalls(), 0, "…and nothing is deleted");
 
   c.log.length = 0;

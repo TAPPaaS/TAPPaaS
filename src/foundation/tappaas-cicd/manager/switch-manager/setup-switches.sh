@@ -51,7 +51,11 @@ INTERACTIVE=1
 
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
-ask() { local p="$1" d="${2:-}" a; read -r -p "${p}" a < /dev/tty || true; echo "${a:-$d}"; }
+ask() {
+    local p="$1" d="${2:-}" a
+    no_one_to_ask && die "setup-switches asks questions and nobody can answer here — run it from a terminal"
+    read -r -p "${p}" a < /dev/tty || true; echo "${a:-$d}"
+}
 
 # Prompt for a menu choice in 1..<max>; re-prompt on anything else (no silent exit).
 ask_choice() {

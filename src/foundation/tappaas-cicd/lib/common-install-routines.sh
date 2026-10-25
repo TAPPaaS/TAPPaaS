@@ -54,6 +54,12 @@ first_install() { [[ "${TAPPAAS_FIRST_INSTALL:-0}" == 1 ]]; }
 # it. [Info] on the first install, [Debug] on every run after.
 install_note() { if first_install; then info "$@"; else debug "$@"; fi; }
 
+# no_one_to_ask — true when nobody is there to answer a prompt:
+# TAPPAAS_NONINTERACTIVE=1, which test-module.sh and site-manager test set. A
+# terminal can be open (a boundary in tmux) while no one watches it; a prompt
+# then behaves as with no terminal at all: it refuses, or asks for its flag.
+no_one_to_ask() { [[ "${TAPPAAS_NONINTERACTIVE:-0}" == 1 ]]; }
+
 # test_step <name> — a long module test says where it is, as part of
 # module-manager's "Test Step 4: Run module test.sh": one line per step, with
 # the time the step before it took. Set TEST_STEPS (how many) before the first;

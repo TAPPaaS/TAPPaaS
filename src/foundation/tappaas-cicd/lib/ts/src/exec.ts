@@ -106,3 +106,17 @@ export function streamToFile(
     closeSync(fd);
   }
 }
+
+// Ask the operator on the terminal (sync, like every TS manager's loop): the
+// answer, or null when nobody can answer — no terminal, or
+// TAPPAAS_NONINTERACTIVE=1 (test-module.sh and site-manager test set it: a
+// boundary in tmux has a terminal and no one watching it). The caller then
+// refuses or names the flag that answers it.
+export function askTerminal(question: string): string | null {
+  if (process.env.TAPPAAS_NONINTERACTIVE === "1") return null;
+  const r = spawnSync("bash", ["-c", 'printf "%s" "$1" > /dev/tty; IFS= read -r v < /dev/tty || exit 1; printf "%s" "$v"', "--", question], {
+    encoding: "utf8",
+  });
+  if (r.status !== 0) return null;
+  return (r.stdout ?? "").trim();
+}

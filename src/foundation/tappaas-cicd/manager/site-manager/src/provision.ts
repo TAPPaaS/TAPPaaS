@@ -30,6 +30,7 @@
 // TTL keeps the boot phase fail-safe.
 
 import { spawnSync } from "child_process";
+import { askTerminal } from "../../../lib/ts/src/exec";
 import * as fs from "fs";
 
 import { GN, YW, CL, die, info, warn } from "../../../lib/ts/src/cli";
@@ -190,13 +191,9 @@ function sleep(seconds: number): void {
 // Interactive prompt on the operator's terminal (sync, /dev/tty — the
 // site-manager main loop is synchronous like all TS managers).
 function prompt(question: string): string {
-  const r = spawnSync(
-    "bash",
-    ["-c", `printf '%s' "$1" > /dev/tty; IFS= read -r v < /dev/tty; printf '%s' "$v"`, "--", question],
-    { encoding: "utf8" },
-  );
-  if (r.status !== 0) die("cannot read from the terminal (non-interactive session? pass the value as a flag)");
-  return (r.stdout ?? "").trim();
+  const a = askTerminal(question);
+  if (a === null) die("cannot read from the terminal (non-interactive session? pass the value as a flag)");
+  return a!;
 }
 
 // Sequential step banners across whichever phases a flow runs.
