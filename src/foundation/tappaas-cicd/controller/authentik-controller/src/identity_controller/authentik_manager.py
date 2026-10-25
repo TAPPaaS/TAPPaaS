@@ -1018,12 +1018,14 @@ class AuthentikManager:
 
     # ── Access bindings: group → Application (ADR-006 §5) ────────────────
 
-    def app_bind_groups(self, slug: str, group_names: list[str]) -> int:
+    def app_bind_groups(self, slug: str, group_names: list[str], exact: bool = False) -> int:
         """Bind the named groups to an Application via PolicyBindings (additive).
 
         This is the access gate: without any binding, Authentik allows ALL users
         into the app (fail-open). Returns the count of bindings newly created.
-        Idempotent — skips groups already bound.
+        Idempotent — skips groups already bound. ``exact``: also remove the
+        app's bindings to other groups (bindings to a user — a service account —
+        stay), after the wanted ones exist, so the app is never left unbound.
         """
         all_apps = self._applications()
         app = self._find_by_field(all_apps, "slug", slug)
@@ -1052,6 +1054,11 @@ class AuthentikManager:
             })
             next_order += 1
             created += 1
+        if exact:
+            wanted = set(group_pks)
+            for b in bindings:
+                if b.get("target") == target and b.get("group") and b.get("group") not in wanted:
+                    self._delete(f"/policies/bindings/{b['pk']}/")
         return created
 
     def service_account_ensure(self, name: str, app_slug: str) -> dict:

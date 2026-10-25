@@ -25,7 +25,7 @@ List it **after** `network:proxy` — it layers onto the route that service crea
 ```
 
 Who may log in to the app is decided by Authentik's groups and policies, managed with
-`identity-manager`: members of `users` by default.
+`identity-manager`: members of `users` by default, or the groups in the module's `gateGroups`.
 
 A module that also declares `identity:identity` keeps both (the ADR-006 §4 exception,
 #806): its OIDC app holds the slug `<module>` and is the tile, and the gate becomes
@@ -50,4 +50,6 @@ as a warning, not a failure.
 
 ## Fields
 
-`identity:accessControl` declares no fields.
+| Field | What it does |
+|---|---|
+| `gateGroups` | The Authentik groups whose members pass the gate. Unset: `users`, added to whatever else is bound. Set: exactly these groups (others are unbound; a service account's binding stays). NOMAD sets `["admin"]`: its Command Center starts containers. |

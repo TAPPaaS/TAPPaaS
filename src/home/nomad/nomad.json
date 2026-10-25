@@ -2,7 +2,7 @@
   "description": "Project N.O.M.A.D. — an offline knowledge and education server: Wikipedia and other libraries, courses, books and tools, on hardware you own.",
   "displayName": "Project N.O.M.A.D.",
   "kind": "vm",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "stack": "home",
   "releaseDate": "2026-10-15",
   "maintainer": "@larsrossen",
@@ -15,7 +15,9 @@
     "cluster:vm",
     "templates:nixos",
     "backup:vm",
-    "network:rules"
+    "network:proxy",
+    "network:rules",
+    "identity:accessControl"
   ],
   "integratesWith": [
     "logging:logs"
@@ -31,13 +33,26 @@
       "imageType": "clone",
       "image": "8080",
       "bridge0": "lan"
+    },
+    "network:proxy": {
+      "proxyPort": 8080,
+      "proxyAllowedZones": [
+        "home",
+        "mgmt",
+        "admin"
+      ]
+    },
+    "identity:accessControl": {
+      "gateGroups": [
+        "admin"
+      ]
     }
   },
   "ports": [
     {
       "port": 8080,
       "protocol": "TCP",
-      "description": "Command Center"
+      "description": "Command Center — reached only through the proxy and the identity gate (members of admin); the VM refuses every other source"
     },
     {
       "port": "8090:8100",
@@ -54,12 +69,11 @@
     {
       "from": "home",
       "ports": [
-        8080,
         "8090:8100",
         "8200:8500"
       ],
       "protocol": "TCP",
-      "description": "Client networks reach the Command Center and the apps it links to, at nomad.dmz.internal; nothing is published outside the site"
+      "description": "Client networks reach the apps the Command Center installs, at nomad.dmz.internal:<port>. The Command Center itself is at https://nomad.<domain>, through the proxy and the gate"
     }
   ]
 }
