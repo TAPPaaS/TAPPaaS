@@ -21,12 +21,11 @@ URL="http://${NOMAD_HOST}:8080"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o BatchMode=yes)
 vm() { ssh "${SSH_OPTS[@]}" "tappaas@${NOMAD_HOST}" "$@"; }
 
-echo ""
-info "${BOLD}nomad: the Command Center at ${URL}${CL}"
+debug "  nomad: the Command Center at ${URL}"
 
 if [[ "$(vm "sudo cat /var/lib/project-nomad/url 2>/dev/null" || true)" != "${URL}" ]]; then
     vm "sudo install -d -m 0700 /var/lib/project-nomad && echo '${URL}' | sudo tee /var/lib/project-nomad/url >/dev/null && sudo systemctl restart project-nomad.service" \
-        && info "  ${GN}✓${CL} URL set" \
+        && info "  ${GN}✓${CL} nomad URL set to ${URL}" \
         || warn "  could not set the URL on ${NOMAD_HOST}"
 fi
 
@@ -35,8 +34,5 @@ for _i in $(seq 1 60); do
     [[ ${_i} -eq 60 ]] && { warn "  the Command Center did not answer within 5 minutes — see journalctl -u project-nomad on the VM"; exit 0; }
     sleep 5
 done
-info "  ${GN}✓${CL} Command Center answers"
-
-echo ""
-info "${BOLD}Update complete${CL}"
-info "  From the home network: ${URL} — the apps open at ${NOMAD_HOST}:<port>"
+info "  ${GN}✓${CL} nomad Command Center answers"
+install_note "  From the home network: ${URL} — the apps open at ${NOMAD_HOST}:<port>"

@@ -60,8 +60,8 @@ else
 fi
 URIS="$(printf '%s\n' "${PATHS[@]}" | jq -R --arg b "${BASE}" '$b + .' | jq -sc .)"
 
-info "${BOLD}forgejo:oauth install-service${CL}: wiring ${BL}${CONSUMING_MODULE}${CL}"
-info "  application: ${APP} on ${FORGEJO_HOST}   redirect: $(jq -r 'join(", ")' <<<"${URIS}")"
+debug "forgejo:oauth install-service: wiring ${CONSUMING_MODULE}"
+debug "  application: ${APP} on ${FORGEJO_HOST}   redirect: $(jq -r 'join(", ")' <<<"${URIS}")"
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
     info "  ${YW}[dry-run]${CL} would ensure the OAuth2 application ${APP} and /etc/secrets/forgejo-oauth.env on ${CONSUMING_HOST}"
@@ -89,7 +89,7 @@ elif [[ "$(jq -r .client_id <<<"${CUR}")" != "${STORED_ID}" \
     info "  ${GN}✓${CL} OAuth2 application ${APP} updated (redirect URIs, new secret)"
 else
     NEW=""
-    info "  ${GN}✓${CL} OAuth2 application ${APP} in place"
+    debug "  OAuth2 application ${APP} in place"
 fi
 if [[ -n "${NEW}" ]]; then
     ID="$(jq -r '.client_id // empty' <<<"${NEW}")"; SECRET="$(jq -r '.client_secret // empty' <<<"${NEW}")"
@@ -109,9 +109,8 @@ printf 'FORGEJO_URL=%s\nFORGEJO_CLIENT_ID=%s\nFORGEJO_CLIENT_SECRET=%s\n' '${ROO
 sudo chmod 600 "\$t"
 if sudo cmp -s "\$t" /etc/secrets/forgejo-oauth.env; then sudo rm -f "\$t"; else sudo mv -f "\$t" /etc/secrets/forgejo-oauth.env; fi
 EOSH
-info "  ${GN}✓${CL} /etc/secrets/forgejo-oauth.env on ${CONSUMING_HOST}"
+debug "  /etc/secrets/forgejo-oauth.env on ${CONSUMING_HOST}"
+debug "  Application : ${APP} (client ${ID})"
 
-info ""
-info "  ${GN}${BOLD}✓ forgejo:oauth wired for ${CONSUMING_MODULE}${CL}"
-info "    Forgejo     : ${ROOT_URL}"
-info "    Application : ${APP} (client ${ID})"
+info "  ${GN}✓${CL} forgejo:oauth wired for ${CONSUMING_MODULE}: OAuth2 application ${APP}"
+install_note "    Forgejo     : ${ROOT_URL}"

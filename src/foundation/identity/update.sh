@@ -77,17 +77,12 @@ IDENTITY_PUBLIC="https://identity.${DOMAIN}"
 FIREWALL_FQDN="firewall.mgmt.internal"
 OPNSENSE_CREDS="${HOME}/.opnsense-credentials.txt"
 
-# install.sh sources this file and wants its summary; an update (run as a
-# script) says it started and keeps the summary as detail.
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    summary() { debug "$@"; }
-    info "${BOLD}*** Starting identity update${CL}"
-else
-    summary() { info "$@"; }
-fi
-summary "${BOLD}Post-Install / Update Configuration${CL}"
-summary "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
-[[ -n "${HANODE}" ]] && summary "  HA Node: ${HANODE}"
+# The summary below is for the first install (install_note); an update keeps it
+# as detail (DEVELOP.md, "Output").
+debug "*** Starting identity update"
+install_note "${BOLD}Post-Install / Update Configuration${CL}"
+install_note "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
+[[ -n "${HANODE}" ]] && install_note "  HA Node: ${HANODE}"
 
 # ── Phase B step 1-4: bootstrap + verify the cicd-side Authentik credentials ─
 # Waits for the Authentik API, fetches AUTHENTIK_BOOTSTRAP_TOKEN from the
@@ -332,10 +327,10 @@ if [[ -d "${PEOPLE_DIR}/organizations" ]]; then
     fi
 fi
 
-summary "${BOLD}Installation Complete${CL}"
-summary "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
-[[ -n "${HANODE}" ]] && summary "  HA Node: ${HANODE}"
-summary "  Authentik UI : ${IDENTITY_PUBLIC}"
-summary "  Admin login  : the site owner (member of '${AK_ADMIN_GROUP}') — break-glass: akadmin / (see /etc/secrets/authentik.env on ${IDENTITY_FQDN}: AUTHENTIK_BOOTSTRAP_PASSWORD)"
-summary "  Per-app SSO  : every consumer with dependsOn: identity:accessControl gets forward-auth wired automatically"
-summary "  Password reset: authentik-controller user-recovery-link <user>  (one-time link; the URL's host is the one the API was called on)"
+install_note "${BOLD}Installation Complete${CL}"
+install_note "  VM: ${VMNAME} (VMID: ${VMID})  Node: ${NODE}  Zone: ${ZONE0NAME}"
+[[ -n "${HANODE}" ]] && install_note "  HA Node: ${HANODE}"
+install_note "  Authentik UI : ${IDENTITY_PUBLIC}"
+install_note "  Admin login  : the site owner (member of '${AK_ADMIN_GROUP}') — break-glass: akadmin / (see /etc/secrets/authentik.env on ${IDENTITY_FQDN}: AUTHENTIK_BOOTSTRAP_PASSWORD)"
+install_note "  Per-app SSO  : every consumer with dependsOn: identity:accessControl gets forward-auth wired automatically"
+install_note "  Password reset: authentik-controller user-recovery-link <user>  (one-time link; the URL's host is the one the API was called on)"

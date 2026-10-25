@@ -37,10 +37,10 @@ VMNAME=$(jq -r '.vmname' "${NEXTCLOUD_JSON}")
 ZONE=$(jq -r '.zone0' "${NEXTCLOUD_JSON}")
 INTERNAL_URL="http://${VMNAME}.${ZONE}.internal"
 
-info "nextcloud:fileservice install-service — verifying Nextcloud is reachable for module: ${MODULE}"
+debug "nextcloud:fileservice install-service — verifying Nextcloud is reachable for module: ${MODULE}"
 
 if curl -sf --max-time 10 "${INTERNAL_URL}/status.php" | grep -q '"installed":true'; then
-    info "${GN}✓${CL} Nextcloud is installed and reachable at ${INTERNAL_URL}"
+    info "  ${GN}✓${CL} Nextcloud is installed and reachable at ${INTERNAL_URL}"
 else
     die "Nextcloud is not responding at ${INTERNAL_URL}/status.php — ensure the nextcloud module is fully installed"
 fi

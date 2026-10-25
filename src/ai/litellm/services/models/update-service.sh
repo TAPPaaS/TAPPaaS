@@ -48,7 +48,7 @@ LITELLM_HOST="${LITELLM_VMNAME}.${LITELLM_ZONE}.internal"
 
 VK_ALIAS="litellm-svc-${CONSUMING_VMNAME}"
 
-debug "${BOLD}litellm:models update-service${CL}: checking ${BL}${CONSUMING_MODULE}${CL}"
+debug "litellm:models update-service: checking ${CONSUMING_MODULE}"
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
     info "  ${YW}[dry-run]${CL} would verify VK '${VK_ALIAS}' on ${LITELLM_HOST}"
@@ -107,7 +107,7 @@ EOSH
 
 if [[ "${VK_STATUS}" == "ok" ]]; then
     VK_OK=1
-    debug "  ${GN}✓${CL} VK '${VK_ALIAS}' exists with key file"
+    debug "  VK '${VK_ALIAS}' exists with key file"
 elif [[ "${VK_STATUS}" == "alias_no_file" ]]; then
     warn "  VK alias found but key file missing on ${LITELLM_HOST}"
 elif [[ "${VK_STATUS}" == "missing" ]]; then
@@ -143,7 +143,9 @@ if [[ "${NO_KEY_COUNT}" -gt 0 ]]; then
         | while IFS= read -r _m; do warn "${_m}"; done || true
     warn "Wire each one to a credential: scripts/litellm-credentials.sh assign-model --model <model> --credential <name>"
 else
-    debug "  ${GN}✓${CL} every DB model resolves a key (api_key or named credential)"
+    debug "  every DB model resolves a key (api_key or named credential)"
 fi
 
-debug "  ${GN}✓${CL} update-service complete for ${CONSUMING_MODULE}"
+# A re-provisioned key already printed its own ✓ line from install-service.sh.
+[[ "${VK_OK}" -eq 1 ]] && info "  ${GN}✓${CL} litellm:models for ${CONSUMING_MODULE}: virtual key ${VK_ALIAS} valid$([[ "${NO_KEY_COUNT}" -eq 0 ]] && echo ', every DB model resolves a key')"
+exit 0

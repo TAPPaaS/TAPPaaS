@@ -101,7 +101,7 @@ STATE="$(pbs_placement_state)"
 
 # ── external: no local PBS to touch; clients push to the consumed PBS ──
 if [[ "${STATE}" == "external" ]]; then
-    info "Backup placement is ${BL}external${CL} (${BGN}$(pbs_pbs_url)${CL}) — no local PBS to update."
+    debug "Backup placement is external ($(pbs_pbs_url)) — no local PBS to update."
     # Clients still push to it (§1.4), so keep client coverage in step with
     # current cluster membership (#382).
     pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
@@ -121,6 +121,7 @@ if [[ "${STATE}" == "external" ]]; then
     # ciphertext only (#760).
     pbs_storage_key_ensure "${_ext_store}" "${ZONE}" \
         || { error "Backups to the external PBS (${_ext_store}) are NOT encrypted (see above)."; exit 1; }
+    info "  ${GN}✓${CL} backup: external PBS $(pbs_pbs_url), storage ${_ext_store} registered, usable and encrypted"
     exit 0
 fi
 
@@ -145,7 +146,7 @@ if [[ -z "${STATE}" ]]; then
     else
         PNODE="$(pbs_legacy_pbs_node "${ZONE}")"
     fi
-    info "No placement state recorded — backfilling to ${BGN}node:${PNODE}${CL}; the datastore is left where it is."
+    info "  ${GN}✓${CL} No placement state recorded — backfilled to ${BGN}node:${PNODE}${CL}; the datastore is left where it is."
     pbs_write_placement_state "node:${PNODE}"
     STATE="node:${PNODE}"
 fi
@@ -154,7 +155,7 @@ if [[ "${STATE}" == "shim" ]]; then
     NODE_CONSTRAINT="$(get_config_value 'node' '')"
     read -r MODE PSTORAGE < <(pbs_resolve_placement_state "${STATE}" "${NODE_CONSTRAINT}" "${ZONE}" "$(get_node_hostname 0)")
     if PNODE="$(pbs_state_node "${MODE}")"; then
-        info "${BOLD}Storage now available (${BGN}${PNODE}:${PSTORAGE}${CL}${BOLD}) — promoting shim → real PBS${CL}"
+        info "  Storage now available (${BGN}${PNODE}:${PSTORAGE}${CL}) — promoting shim → real PBS"
         # install.sh is idempotent: it realizes the datastore + reconciles
         # clients and rewrites .placementState. Dependent modules
         # (dependsOn:backup) are untouched. (Run via `bash` — install.sh's
@@ -194,7 +195,7 @@ pbs_host_ensure_patched "$(pbs_state_node "$(pbs_placement_state)" || true)" "${
 pbs_client_reconcile "${ZONE}" "${IMAGE_LOCATION}" \
     || warn "One or more nodes could not be reconciled for proxmox-backup-client (see above)"
 
-info "${BOLD}Ensuring every opted-in VM is registered in the managed backup job${CL}"
+debug "Ensuring every opted-in VM is registered in the managed backup job"
 pbs_ensure_declared
 
 # ── the pulse (ADR-031): the backup node watches our buddies and this site ──
@@ -203,9 +204,9 @@ pbs_ensure_declared
 _pulse_host="$(pbs_state_node "$(pbs_placement_state)" || true)"
 if [[ -n "${_pulse_host}" ]] && jq -e '(.moduleSource // "") | test("/satellite/?$")' \
         "${CONFIG_DIR:-/home/tappaas/config}/${_pulse_host}.json" >/dev/null 2>&1; then
-    info "  The pulse is not installed on ${_pulse_host}: a satellite needs a mail path of its own first (ADR-031 P3)"
+    debug "  The pulse is not installed on ${_pulse_host}: a satellite needs a mail path of its own first (ADR-031 P3)"
 elif [[ -n "${_pulse_host}" ]]; then
-    info "${BOLD}Ensuring the pulse on the backup node${CL}"
+    debug "Ensuring the pulse on the backup node"
     pulse_ensure "${_pulse_host}" || warn "The pulse is not running on ${_pulse_host} (see above)"
 fi
 
@@ -214,7 +215,7 @@ fi
 # backup in plaintext. This gives it one on the next update — or puts back the
 # escrowed one on a rebuilt cluster — and escrows it. Fatal: an update that
 # leaves backups unencrypted must not report success.
-info "${BOLD}Ensuring VM and container backups are encrypted${CL}"
+debug "Ensuring VM and container backups are encrypted"
 pbs_storage_key_ensure "$(pbs_storage_name)" "${ZONE}" \
     || { error "Backups to $(pbs_storage_name) are NOT encrypted (see above)."; exit 1; }
 
@@ -231,4 +232,4 @@ pbs_ensure_verify
 pbs_immutable_from_config "$(get_config_value 'storage' 'tankc1')" "$(pbs_storage_name)" \
     || warn "Could not configure immutable snapshots"
 
-info "  ${GN}✓${CL} Backup module update completed"
+info "  ${GN}✓${CL} backup: PBS ${STATE}, storage $(pbs_storage_name) encrypted, opted-in VMs in the backup job"

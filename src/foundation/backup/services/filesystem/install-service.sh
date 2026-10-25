@@ -74,7 +74,7 @@ NS="$(pbs_fs_namespace "${MODULE}")"
 AUTHID="$(pbs_fs_authid "${MODULE}")"
 REPO="${AUTHID}@$(pbs_pbs_url):$(pbs_storage_name)"
 
-info "${BOLD}backup:filesystem: provisioning file capture for ${BL}${MODULE}${CL}${BOLD} (${#FS_PATHS[@]} path(s))${CL}"
+debug "backup:filesystem: provisioning file capture for ${MODULE} (${#FS_PATHS[@]} path(s))"
 
 # 2. Namespace + write-no-delete login. The password is generated, handed to the
 #    guest and escrowed centrally — never echoed, never stored in config.
@@ -97,7 +97,7 @@ pbs_fs_ensure_target "${MODULE}" "${FS_PW}" || die "could not provision the PBS 
 if [[ "${PBS_FS_LOGIN_EXISTED:-0}" -eq 1 ]]; then
     if tappaas_ssh_guest -o BatchMode=yes "${TARGET}" \
             "${SUDO}test -s /etc/secrets/backup-fs.pw" >/dev/null 2>&1; then
-        info "  ${MODULE} already holds its backup credential — left as it is"
+        debug "  ${MODULE} already holds its backup credential — left as it is"
         DEPLOY_PW=0
     else
         warn "  ${MODULE} has no backup credential but the PBS login exists — re-creating the login"
@@ -124,7 +124,7 @@ fi
 
 pbs_fs_ensure_key "${MODULE}" "${TARGET}" "${OWNER}" "${SUDO}" \
     || die "could not put ${MODULE}'s encryption key in place on ${GUEST}"
-info "  ${GN}✓${CL} guest secrets in place on ${BL}${GUEST}${CL}"
+debug "  guest secrets in place on ${GUEST}"
 
 # 4. Manifest + runner on the guest.
 SCHEDULE="$(pbs_schedule_resolve "${MODULE}")"
@@ -146,15 +146,15 @@ fi
 pbs_fs_deploy_runner "${MODULE}" "${TARGET}" "${MANIFEST}" \
     || die "could not deliver the capture runner to ${GUEST} — backup:filesystem is NOT wired for ${MODULE}"
 
-info "  ${GN}✓${CL} backup:filesystem install-service completed for ${MODULE} (${SCHEDULE})"
+info "  ${GN}✓${CL} backup:filesystem wired for ${MODULE}: ${#FS_PATHS[@]} path(s) to namespace ${NS}, encrypted, captured ${SCHEDULE}"
 if [[ "${KIND}" == "machine" ]]; then
-    info "     The capture TIMER was installed by this script: a machine has no NixOS"
-    info "     baseline to declare one. It is enabled and armed for 20:30."
+    debug "     The capture TIMER was installed by this script: a machine has no NixOS"
+    debug "     baseline to declare one. It is enabled and armed for 20:30."
 else
-    info "     The capture TIMER is declared in the guest's own NixOS config, not by this"
-    info "     script: /etc/systemd/system is a read-only store symlink on NixOS, so the"
-    info "     trigger cannot be delivered imperatively. Every guest built from the TAPPaaS"
-    info "     baseline (templates/tappaas-common.nix) carries an inert tappaas-fs-backup"
-    info "     timer that arms itself once this runner lands; test-service.sh verifies it."
+    debug "     The capture TIMER is declared in the guest's own NixOS config, not by this"
+    debug "     script: /etc/systemd/system is a read-only store symlink on NixOS, so the"
+    debug "     trigger cannot be delivered imperatively. Every guest built from the TAPPaaS"
+    debug "     baseline (templates/tappaas-common.nix) carries an inert tappaas-fs-backup"
+    debug "     timer that arms itself once this runner lands; test-service.sh verifies it."
 fi
-info "     Run a capture now with: ssh ${TARGET} $(pbs_fs_runner_for "${MODULE}")"
+install_note "     Run a capture now with: ssh ${TARGET} $(pbs_fs_runner_for "${MODULE}")"

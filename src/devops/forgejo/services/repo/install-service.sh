@@ -49,8 +49,8 @@ ORG="websites"
 REPO="${CONSUMING_VMNAME}"
 KEY_TITLE="tappaas-${CONSUMING_VMNAME}"
 
-info "${BOLD}forgejo:repo install-service${CL}: wiring ${BL}${CONSUMING_MODULE}${CL}"
-info "  repository: ${ORG}/${REPO} on ${FORGEJO_HOST}   consumer: ${CONSUMING_HOST}"
+debug "forgejo:repo install-service: wiring ${CONSUMING_MODULE}"
+debug "  repository: ${ORG}/${REPO} on ${FORGEJO_HOST}   consumer: ${CONSUMING_HOST}"
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
     info "  ${YW}[dry-run]${CL} would ensure ${ORG}/${REPO}, a read-only deploy key from ${CONSUMING_HOST}, and /etc/secrets/forgejo-repo.* there"
@@ -68,7 +68,7 @@ if ! fsvc_api GET "/orgs/${ORG}" >/dev/null 2>&1; then
     info "  ${GN}✓${CL} organisation ${ORG} created"
 fi
 if REPO_JSON="$(fsvc_api GET "/repos/${ORG}/${REPO}" 2>/dev/null)"; then
-    info "  ${GN}✓${CL} repository ${ORG}/${REPO} exists"
+    debug "  repository ${ORG}/${REPO} exists"
 else
     REPO_JSON="$(fsvc_api POST "/orgs/${ORG}/repos" "$(jq -nc --arg r "${REPO}" '{name: $r, private: true,
         auto_init: false, default_branch: "main", description: "Website content: Markdown pages, served as HTML"}')")" \
@@ -106,7 +106,7 @@ if [[ "$(jq -r --arg t "${KEY_TITLE}" --arg k "${PUBKEY_BARE}" \
         '{title: $t, key: $k, read_only: true}')" >/dev/null || die "could not add the deploy key to ${ORG}/${REPO}"
     info "  ${GN}✓${CL} read-only deploy key ${KEY_TITLE} added"
 else
-    info "  ${GN}✓${CL} read-only deploy key ${KEY_TITLE} in place"
+    debug "  read-only deploy key ${KEY_TITLE} in place"
 fi
 
 # ── Editors ───────────────────────────────────────────────────────────────────
@@ -116,7 +116,7 @@ for who in "${EDITORS[@]}"; do
         continue
     fi
     fsvc_api PUT "/repos/${ORG}/${REPO}/collaborators/${who}" '{"permission":"write"}' >/dev/null \
-        && info "  ${GN}✓${CL} ${who} may edit ${ORG}/${REPO}" || warn "  could not add ${who} to ${ORG}/${REPO}"
+        && debug "  ${who} may edit ${ORG}/${REPO}" || warn "  could not add ${who} to ${ORG}/${REPO}"
 done
 
 # ── What the consumer needs to pull ──────────────────────────────────────────
@@ -134,9 +134,8 @@ write /etc/secrets/forgejo-repo.env 'REPO_SSH_URL=${SSH_URL}
 REPO_WEB_URL=${WEB_URL}
 REPO_BRANCH=${BRANCH}'
 EOSH
-info "  ${GN}✓${CL} /etc/secrets/forgejo-repo.env on ${CONSUMING_HOST}"
+debug "  /etc/secrets/forgejo-repo.env on ${CONSUMING_HOST}"
 
-info ""
-info "  ${GN}${BOLD}✓ forgejo:repo wired for ${CONSUMING_MODULE}${CL}"
-info "    Repository : ${WEB_URL}"
-info "    Clone      : ${SSH_URL} (read-only from ${CONSUMING_HOST})"
+info "  ${GN}✓${CL} forgejo:repo wired for ${CONSUMING_MODULE}: ${ORG}/${REPO}, read-only deploy key${EDITORS[*]:+, editors ${EDITORS[*]}}"
+install_note "    Repository : ${WEB_URL}"
+install_note "    Clone      : ${SSH_URL} (read-only from ${CONSUMING_HOST})"

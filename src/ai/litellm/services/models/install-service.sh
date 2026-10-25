@@ -59,9 +59,9 @@ VK_ALIAS="litellm-svc-${CONSUMING_VMNAME}"
 LITELLM_KEYSTORE="/etc/secrets/litellm-svc-${CONSUMING_VMNAME}.key"
 CONSUMER_SECRETS="/etc/secrets/litellm-svckey.env"
 
-info "${BOLD}litellm:models install-service${CL}: wiring ${BL}${CONSUMING_MODULE}${CL}"
-info "  provider: ${LITELLM_HOST}  consumer: ${CONSUMING_HOST}"
-info "  VK alias: ${VK_ALIAS}"
+debug "litellm:models install-service: wiring ${CONSUMING_MODULE}"
+debug "  provider: ${LITELLM_HOST}  consumer: ${CONSUMING_HOST}"
+debug "  VK alias: ${VK_ALIAS}"
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
     info "  ${YW}[dry-run]${CL} would provision VK '${VK_ALIAS}' on ${LITELLM_HOST}"
@@ -140,7 +140,7 @@ if [[ "${FOUND}" == UNAVAILABLE:* ]]; then
     die "litellm did not answer /key/list on ${LITELLM_HOST} (HTTP ${FOUND#UNAVAILABLE:}) — refusing to provision over an unknown key state"
 elif [[ "${FOUND}" == EXISTING:* ]]; then
     NEW_KEY="${FOUND#EXISTING:}"
-    info "  ${GN}✓${CL} VK '${VK_ALIAS}' exists and key file found — reusing"
+    debug "  VK '${VK_ALIAS}' exists and key file found — reusing"
 elif [[ "${FOUND}" == ALIAS_ONLY:* ]]; then
     # VK alias exists but key file missing — delete and regenerate. The token
     # comes from the listing just made; re-listing to find it again was a second
@@ -158,7 +158,7 @@ fi
 
 # ── Provision new VK if needed ────────────────────────────────────────────────
 if [[ -z "${NEW_KEY}" ]]; then
-    info "  Provisioning new VK '${VK_ALIAS}' on ${LITELLM_HOST} (no expiry)"
+    debug "  Provisioning new VK '${VK_ALIAS}' on ${LITELLM_HOST} (no expiry)"
     NEW_KEY=$(litellm_run <<EOSH
 MASTER="${MASTER}"
 ALIAS="${VK_ALIAS}"
@@ -197,7 +197,7 @@ EOSH
 fi
 
 # ── Write svckey env file to consuming VM ────────────────────────────────────
-info "  Writing ${CONSUMER_SECRETS} on ${CONSUMING_HOST}"
+debug "  Writing ${CONSUMER_SECRETS} on ${CONSUMING_HOST}"
 consumer_run <<EOSH || die "failed to write ${CONSUMER_SECRETS} on ${CONSUMING_HOST}"
 NEW_KEY="${NEW_KEY}"
 LITELLM_HOST="${LITELLM_HOST}"
@@ -210,13 +210,11 @@ sudo chmod 600 "\${T}"
 sudo mv -f "\${T}" "\${SECRETS_FILE}"
 echo "written"
 EOSH
-info "  ${GN}✓${CL} wrote ${CONSUMER_SECRETS} on ${CONSUMING_HOST}"
+debug "  wrote ${CONSUMER_SECRETS} on ${CONSUMING_HOST}"
+debug "  Key store : ${LITELLM_KEYSTORE} on ${LITELLM_HOST}"
 
-info ""
-info "  ${GN}${BOLD}✓ litellm:models wired for ${CONSUMING_MODULE}${CL}"
-info "    VK alias  : ${VK_ALIAS}"
-info "    Key store : ${LITELLM_KEYSTORE} on ${LITELLM_HOST}"
-info "    Key file  : ${CONSUMER_SECRETS} on ${CONSUMING_HOST}"
-info "    LiteLLM   : http://${LITELLM_HOST}:4000/v1"
-info "    Note      : configure OpenWebUI admin → Settings → Connections with"
-info "                Base URL and the key from ${CONSUMER_SECRETS}"
+info "  ${GN}✓${CL} litellm:models wired for ${CONSUMING_MODULE}: virtual key ${VK_ALIAS}, ${CONSUMER_SECRETS} on ${CONSUMING_HOST}"
+install_note "    LiteLLM   : http://${LITELLM_HOST}:4000/v1"
+install_note "    Key file  : ${CONSUMER_SECRETS} on ${CONSUMING_HOST}"
+install_note "    Note      : configure OpenWebUI admin → Settings → Connections with"
+install_note "                Base URL and the key from ${CONSUMER_SECRETS}"

@@ -66,7 +66,7 @@ fi
 # package updates (including potential dnspython/unbound fixes) are
 # applied before we trigger config regeneration via zone-manager.
 
-info "Updating OPNsense (base, kernel, and packages)..."
+debug "Updating OPNsense (base, kernel, and packages)..."
 # Fingerprint the installed base+kernel first, so we can tell whether this run
 # actually applies a firmware update (→ reboot) vs. a no-op re-run (→ no reboot).
 # NOTE: OPNsense's root login shell is csh (opnsense-shell) — it CANNOT parse
@@ -78,13 +78,12 @@ if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
         warn "OPNsense update returned non-zero exit code"
     }
 else
+    # opnsense-update's own output shows with --debug only.
     ssh root@"$FIREWALL_FQDN" "opnsense-update -bkp" 2>&1 | while IFS= read -r _; do
-        printf "."
+        :
     done || {
-        echo ""
         warn "OPNsense update returned non-zero exit code"
     }
-    echo ""
 fi
 
 # Did the update actually install a new base/kernel? If the fingerprint is
@@ -112,11 +111,11 @@ fi
 if [[ "$_fw_reboot_needed" -eq 0 ]]; then
     debug "${GN}✓${CL} OPNsense already current (${_fw_ver_after%%|*}) — no base/kernel update, skipping reboot."
 elif automatic_reboot_enabled; then
-    info "Rebooting firewall to apply updates..."
+    debug "Rebooting firewall to apply updates..."
     ssh root@"$FIREWALL_FQDN" "shutdown -r now" 2>/dev/null || true
 
     # Wait for SSH to go down (firewall is rebooting)
-    info "Waiting for firewall to reboot..."
+    debug "Waiting for firewall to reboot..."
     sleep 10
 
     # Wait for SSH to come back (max 5 minutes)
@@ -130,10 +129,8 @@ elif automatic_reboot_enabled; then
             error "Firewall did not come back after reboot within ${WAIT_MAX}s"
             exit 1
         fi
-        printf "."
     done
-    echo ""
-    info "${GN}✓${CL} Firewall is back online"
+    info "  ${GN}✓${CL} OPNsense updated (kernel ${_fw_ver_after%%|*}); firewall rebooted and back online"
 else
     warn "${BOLD}automaticReboot=false${CL} — skipping firewall reboot."
     warn "  A reboot is needed to apply OPNsense updates and regenerate Unbound config."
@@ -161,12 +158,9 @@ while ! dig @10.0.0.1 firewall.mgmt.internal +short +timeout=5 >/dev/null 2>&1; 
         break
     fi
     sleep 5
-    printf "."
+    debug "  Unbound not answering yet (attempt ${DNS_CHECK_COUNT} of ${DNS_CHECK_RETRIES})"
 done
 if [[ $DNS_CHECK_COUNT -lt $DNS_CHECK_RETRIES ]]; then
-    # Only emit the newline when progress dots were actually printed (retry path);
-    # in the normal first-try case this avoids a spurious blank line.
-    [[ $DNS_CHECK_COUNT -gt 0 ]] && echo ""
     debug "${GN}✓${CL} Unbound DNS is responding"
 fi
 
@@ -192,7 +186,7 @@ EOF
 )" || true
 case "${_qga_state}" in
     unchanged) debug "${GN}✓${CL} QEMU guest agent reopens its channel after a migration (-r)" ;;
-    changed)   info "  QEMU guest agent: -r added, so it survives a live migration (#793)" ;;
+    changed)   info "  ${GN}✓${CL} QEMU guest agent: -r added, so it survives a live migration (#793)" ;;
     absent)    warn "QEMU guest agent plugin is not installed on the firewall — Proxmox cannot reach it" ;;
     *)         warn "Could not set the QEMU guest agent's -r flag on the firewall: ${_qga_state:-no answer}" ;;
 esac
@@ -301,7 +295,7 @@ quiet_on_success() {
 
 # ── Apply zone configuration ────────────────────────────────────────
 
-info "Applying zone configuration..."
+debug "Applying zone configuration..."
 # Via network-manager: it renders zones.effective.json (the environment-link-derived
 # edges) and hands THAT to zone-manager. The authored zones.json lacks those
 # edges, so the stale-rule reaper would delete them on every update.
@@ -446,7 +440,7 @@ _ntp_php="${SCRIPT_DIR}/scripts/ntpd-converge.php"
 if [[ -f "${_ntp_php}" ]]; then
     _ntp_out="$(ssh root@"$FIREWALL_FQDN" /bin/sh -c 'php /dev/stdin' < "${_ntp_php}" 2>&1)" || true
     case "${_ntp_out}" in
-        CHANGED*)   info "  firewall ntpd: ${_ntp_out#CHANGED }" ;;
+        CHANGED*)   info "  ${GN}✓${CL} firewall ntpd: ${_ntp_out#CHANGED }" ;;
         UNCHANGED*) debug "  firewall ntpd settings already converged" ;;
         *)          warn "  could not converge the firewall's ntpd settings: ${_ntp_out:-no output}" ;;
     esac

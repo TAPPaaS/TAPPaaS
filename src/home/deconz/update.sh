@@ -35,10 +35,11 @@ if [[ "${DECONZ_SKIP_USB:-0}" == "1" ]]; then
   warn "DECONZ_SKIP_USB=1 — skipping ConBee USB attach (smoke/no-coordinator deploy). Production Zigbee untouched."
 elif command -v qm >/dev/null 2>&1 && qm config "${VMID}" >/dev/null 2>&1; then
   if qm config "${VMID}" | grep -q "^usb0:.*${CONBEE_USB}"; then
-    info "ConBee II (${CONBEE_USB}) already attached to VM ${VMID} (usb0)."
+    info "  ${GN}✓${CL} deCONZ: ConBee II (${CONBEE_USB}) attached to VM ${VMID} as usb0"
   else
-    info "Attaching ConBee II (${CONBEE_USB}) to VM ${VMID} as usb0…"
+    debug "  Attaching ConBee II (${CONBEE_USB}) to VM ${VMID} as usb0…"
     qm set "${VMID}" -usb0 "host=${CONBEE_USB}"
+    info "  ${GN}✓${CL} deCONZ: ConBee II (${CONBEE_USB}) attached to VM ${VMID} as usb0 (binds on next VM start)"
     # The device binds on next VM start; deCONZ (services.deconz.device) then
     # finds it at /dev/serial/by-id. A VM restart may be required to make the
     # passthrough live if the VM is already running.
@@ -49,13 +50,6 @@ else
 fi
 # ──────────────────────────────────────────────────────────────────────────────
 
-echo ""
-info "${BOLD}deCONZ Post-Install Configuration${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
-info "  Pair devices + create scenes in Phoscon: http://${VMNAME}.${ZONE0NAME}.internal:8080"
-info "  HA: add the deCONZ integration -> host ${VMNAME}.${ZONE0NAME}.internal, port 8080 (ws 8443)."
-
-echo ""
-info "${BOLD}Installation Complete${CL}"
+debug "  ${VMNAME} (VMID ${VMID}) on ${NODE}, zone ${ZONE0NAME}"
+install_note "  Pair devices + create scenes in Phoscon: http://${VMNAME}.${ZONE0NAME}.internal:8080"
+install_note "  HA: add the deCONZ integration -> host ${VMNAME}.${ZONE0NAME}.internal, port 8080 (ws 8443)."

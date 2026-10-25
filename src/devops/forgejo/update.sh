@@ -20,12 +20,7 @@ ZONE0NAME="$(get_config_value 'zone0' 'srvWork')"
 VM_HOST="${VMNAME}.${ZONE0NAME}.internal"
 SSH_OPTS="-o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new -o BatchMode=yes"
 
-echo ""
-info "${BOLD}Forgejo — update${CL}"
-info "  VM:   ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
-info "  Host: ${VM_HOST}"
+debug "  ${VMNAME} (VMID ${VMID}) on ${NODE}, zone ${ZONE0NAME}: ${VM_HOST}"
 
 # The NixOS configuration (forgejo.nix) is NOT applied here: the templates:nixos
 # dependency (update-os.sh) builds and applies it on every install and update,
@@ -34,7 +29,7 @@ info "  Host: ${VM_HOST}"
 # against the VM's own channel and could undo a release move.
 
 # ── Verify Forgejo is responding ───────────────────────────────────────────
-info "Verifying Forgejo service on port 3000…"
+debug "  Verifying Forgejo service on port 3000…"
 RETRY=0
 until ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
         "curl -sf http://localhost:3000 > /dev/null 2>&1" 2>/dev/null; do
@@ -45,8 +40,6 @@ until ssh ${SSH_OPTS} "tappaas@${VM_HOST}" \
     fi
     sleep 5
 done
-[[ ${RETRY} -lt 60 ]] && info "  Forgejo responding on port 3000 — OK"
+[[ ${RETRY} -lt 60 ]] && info "  ${GN}✓${CL} Forgejo on ${VM_HOST} answers on port 3000"
 
-echo ""
-info "${BOLD}Update complete${CL}"
-info "  VM: ${VMNAME}  Node: ${NODE}  Zone: ${ZONE0NAME}"
+install_note "  ${VMNAME} runs on ${NODE}, zone ${ZONE0NAME}: http://${VM_HOST}:3000"

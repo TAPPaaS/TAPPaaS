@@ -68,11 +68,11 @@ main() {
         exit 1
     fi
 
-    info "${BOLD}*** Starting OpenWebUI update${CL}"
+    debug "OpenWebUI update"
     debug "VM: ${VMNAME} (VMID: ${VMID}) at ${VM_HOST}"
 
     # ── Step 1: PostgreSQL version migration (if needed) ─────────────
-    info "Step 1: Check for PostgreSQL version migration"
+    debug "Step 1: Check for PostgreSQL version migration"
 
     # shellcheck disable=SC2086
     local pg_migration_result
@@ -130,10 +130,10 @@ REMOTE
             debug "  PostgreSQL already has data (${pg_migration_result#*:}) — skipping migration"
             ;;
         MIGRATING:*)
-            info "  ${pg_migration_result}"
+            debug "  ${pg_migration_result}"
             ;;
         MIGRATED:*)
-            info "  Migration complete: ${pg_migration_result#*:}"
+            info "  ${GN}✓${CL} OpenWebUI PostgreSQL data migrated to the new major version: ${pg_migration_result#*:}"
             ;;
         ERROR:*)
             warn "  Migration warning: ${pg_migration_result#*:}"
@@ -144,14 +144,14 @@ REMOTE
     esac
 
     # ── Step 2: Run health checks ─────────────────────────────────────
-    info "Step 2: Verify upgrade health"
+    debug "Step 2: Verify upgrade health"
 
     # The health check narrates every check; on success that is detail, shown
     # under TAPPAAS_DEBUG=1, and on failure it is printed in full.
     local _hc_out
     if _hc_out="$("${SCRIPT_DIR}/test.sh" "${VMNAME}" 2>&1)"; then
         [[ "${OPT_DEBUG:-0}" -eq 1 ]] && printf '%s\n' "${_hc_out}"
-        debug "Health checks passed — upgrade confirmed healthy"
+        info "  ${GN}✓${CL} OpenWebUI on ${VM_HOST} passes its health checks"
     else
         printf '%s\n' "${_hc_out}" >&2
         error "Health checks FAILED — skipping image prune to preserve rollback capability"
@@ -160,7 +160,7 @@ REMOTE
     fi
 
     # ── Step 3: Prune unused container images ─────────────────────────
-    info "Step 3: Prune unused container images"
+    debug "Step 3: Prune unused container images"
 
     local prune_output
     # shellcheck disable=SC2086
@@ -168,9 +168,10 @@ REMOTE
         "sudo podman image prune -a -f" 2>&1) || true
 
     if [[ -n "${prune_output}" ]]; then
-        info "Pruned images:"
+        info "  ${GN}✓${CL} pruned $(grep -c . <<<"${prune_output}") unused container image(s) on ${VM_HOST}"
+        debug "Pruned images:"
         echo "${prune_output}" | while IFS= read -r line; do
-            info "  ${line}"
+            debug "  ${line}"
         done
     else
         debug "No unused images to prune"
@@ -195,7 +196,7 @@ REMOTE
     # so once they have run at boot they stay "active" and `systemctl start` is a
     # silent no-op. Seeding then never happens — the owner file lands on the VM
     # and nothing consumes it, with every step still reporting success.
-    info "Step 4: Push environment-owner identity"
+    debug "Step 4: Push environment-owner identity"
 
     local _env _owner_org _owner_user _owner_email _owner_name
     _env="$(get_config_value 'environment' '')"
@@ -228,7 +229,7 @@ REMOTE
                      sudo systemctl restart openwebui-apply-connection.service && \
                      sudo systemctl restart openwebui-seed-admin.service" 2>/dev/null
             then
-                debug "  ${GN}✓${CL} owner identity pushed; admin seeded if the instance has no accounts yet"
+                info "  ${GN}✓${CL} OpenWebUI owner ${_owner_user} pushed; admin seeded if the instance has no accounts yet"
             else
                 warn "  Could not push owner identity to ${VM_HOST} (is the VM up?)"
             fi

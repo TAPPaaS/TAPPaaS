@@ -19,4 +19,3 @@ info "      Then change it in the UI and:"
 info "      ssh tappaas@${VMNAME}.${ZONE0NAME}.internal -- sudo rm /root/grafana-admin-password.initial"
 info "  - Other VMs: install an Alloy client pointing at http://${VMNAME}.${ZONE0NAME}.internal:3100"
 
-info "${GN}✓${CL} VM installation completed successfully."

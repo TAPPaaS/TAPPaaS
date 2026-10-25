@@ -64,7 +64,7 @@ configure_ha_trusted_proxy() {
     [[ -z "${host_node}" ]] && host_node="${NODE}"
     node_fqdn="${host_node}.mgmt.internal"
 
-    info "  Ensuring HA trusts reverse proxy ${BL}${gw}${CL} (use_x_forwarded_for)..."
+    debug "  Ensuring HA trusts reverse proxy ${gw} (use_x_forwarded_for)..."
 
     # Remote POSIX-sh run inside HAOS via the guest agent. Exit codes:
     #   0  http: block already present and trusts ${gw} (no change)
@@ -88,9 +88,9 @@ exit 10"
     ec=$(jq -r '.["exitcode"] // empty' <<<"${ge}" 2>/dev/null)
 
     case "${ec}" in
-        0)  info "  ${GN}✓${CL} HA already trusts ${gw}" ;;
+        0)  info "  ${GN}✓${CL} Home Assistant trusts reverse proxy ${gw}" ;;
         10)
-            info "  ${GN}✓${CL} Added trusted_proxies (${gw}); restarting HA Core..."
+            info "  ${GN}✓${CL} Home Assistant: added trusted_proxies (${gw}); restarting HA Core"
             ssh -o BatchMode=yes root@"${node_fqdn}" \
                 "qm guest exec ${VMID} -- /bin/sh -c 'nohup ha core restart >/dev/null 2>&1 &'" \
                 >/dev/null 2>&1 || warn "  Could not trigger HA Core restart (restart it manually)"
@@ -107,18 +107,8 @@ exit 10"
     esac
 }
 
-echo ""
-info "${BOLD}Post-Install Configuration${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
+debug "  ${VMNAME} (VMID ${VMID}) on ${NODE}${HANODE:+, HA ${HANODE}}, zone ${ZONE0NAME}"
 
 configure_ha_trusted_proxy
 
-echo ""
-info "${BOLD}Installation Complete${CL}"
-info "  VM: ${VMNAME} (VMID: ${VMID})"
-info "  Node: ${NODE}"
-info "  Zone: ${ZONE0NAME}"
-if [[ -n "${HANODE}" ]]; then
-    info "  HA Node: ${HANODE}"
-fi
-info "  Access: http://${VMNAME}:8123 (HAOS handles updates via web UI)"
+install_note "  Access: http://${VMNAME}:8123 (HAOS handles updates via web UI)"

@@ -17,8 +17,7 @@ HOST="${VMNAME}.${ZONE0NAME}.internal"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o BatchMode=yes)
 vm() { ssh "${SSH_OPTS[@]}" "tappaas@${HOST}" "$@"; }
 
-echo ""
-info "${BOLD}woodpecker: waiting for the server and its agent on ${HOST}${CL}"
+debug "  woodpecker: waiting for the server and its agent on ${HOST}"
 if [[ "$(vm "sudo test -s /etc/secrets/forgejo-oauth.env && echo yes" 2>/dev/null)" != "yes" ]]; then
     warn "  no Forgejo client (/etc/secrets/forgejo-oauth.env) — forgejo:oauth has not run; the server starts once it has"
     exit 0
@@ -30,9 +29,7 @@ for _i in $(seq 1 36); do
     [[ ${_i} -eq 36 ]] && { warn "  Woodpecker or its agent did not answer within 3 minutes — journalctl -u woodpecker-server -u woodpecker-agent-docker on the VM"; exit 0; }
     sleep 5
 done
-info "  ${GN}✓${CL} the server and its agent answer"
+info "  ${GN}✓${CL} woodpecker server and its agent answer on ${HOST}"
 
 URL="$(vm "systemctl show -p Environment --value woodpecker-server | tr ' ' '\n' | sed -n 's/^WOODPECKER_HOST=//p'" 2>/dev/null || true)"
-echo ""
-info "${BOLD}Update complete${CL}"
-info "  Open ${URL:-http://${HOST}:8000} — Login with Forgejo"
+install_note "  Open ${URL:-http://${HOST}:8000} — Login with Forgejo"

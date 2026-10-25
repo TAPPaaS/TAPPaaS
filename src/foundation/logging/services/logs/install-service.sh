@@ -12,7 +12,7 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/_common.sh" "$@"
 
-info "logging:logs: ${CONSUMER} ships its journal to logging (push receiver :3101)"
+info "  ${GN}✓${CL} logging:logs: ${CONSUMER} ships its journal to logging (push receiver :3101)"
 logs_reconcile_consumer_rules
 logs_sync_credentials
-info "  the journal client is applied with the consumer's OS update (update-module.sh ${CONSUMER})"
+debug "  the journal client is applied with the consumer's OS update (update-module.sh ${CONSUMER})"

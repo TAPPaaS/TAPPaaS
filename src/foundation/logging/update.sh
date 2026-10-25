@@ -36,12 +36,12 @@ _SUMMARY="  VM: ${VMNAME} (VMID: ${VMID}), Node: ${NODE}, Zone: ${ZONE0NAME}"
 if [[ -n "${HANODE}" && "${HANODE}" != "NONE" ]]; then
     _SUMMARY="${_SUMMARY}, HA Node: ${HANODE}"
 fi
-info "${_SUMMARY}"
+debug "${_SUMMARY}"
 
 # ── Configure OPNsense to forward syslog to this VM ──────────────────
 # Idempotent: matches the destination by description ("tappaas-logging").
 # Skipped when firewallType != opnsense (deployment uses a different firewall).
-info "${BOLD}Configure OPNsense syslog forwarding${CL}"
+debug "Configure OPNsense syslog forwarding"
 
 FIREWALL_TYPE="$(get_config_value 'firewallType' 'opnsense')"
 SYSLOG_TARGET="${VMNAME}.${ZONE0NAME}.internal"
@@ -53,7 +53,7 @@ elif ! command -v syslog-manager >/dev/null 2>&1; then
     warn "  syslog-manager CLI not found — rebuild the mothership to pick it up"
     warn "  Manual fallback: System → Settings → Logging / Targets → add ${SYSLOG_TARGET}:1514 (TCP, RFC 5424)"
 else
-    info "  Target: ${SYSLOG_TARGET}:1514 (TCP, RFC 5424)"
+    debug "  Target: ${SYSLOG_TARGET}:1514 (TCP, RFC 5424)"
     # Capture syslog-manager's chatter ("OK", "Destination … already correct",
     # "Reconfiguring syslog…", "syslog reconfigured") and route it to [Debug] —
     # it is noise on the console, useful only when troubleshooting.
@@ -69,7 +69,7 @@ else
         _sl_out="$(syslog-manager reconfigure --no-ssl-verify 2>&1)" && _sl_rc=0 || _sl_rc=$?
         [[ -n "${_sl_out}" ]] && while IFS= read -r _sl_l; do debug "  ${_sl_l}"; done <<<"${_sl_out}"
         if [[ ${_sl_rc} -eq 0 ]]; then
-            info "  ${GN}✓${CL} OPNsense will now forward syslog to ${SYSLOG_TARGET}:1514"
+            info "  ${GN}✓${CL} OPNsense forwards syslog to ${SYSLOG_TARGET}:1514"
         else
             warn "  Destination saved but OPNsense reconfigure failed — apply manually in the UI"
         fi
@@ -109,7 +109,7 @@ install_guest_memory_sampler() {
 # Each cluster node ships its journal-forwarded syslog (via rsyslog) to the
 # Alloy syslog receiver on tcp/1515 (source=proxmox).
 # Idempotent: scp overwrites the conf file; rsyslog restart is harmless.
-info "${BOLD}Configure Proxmox nodes' rsyslog forwarding${CL}"
+debug "Configure Proxmox nodes' rsyslog forwarding"
 
 # Node hostnames: the cluster's nodes (their pvehost instances) — via the
 # shared helper.
@@ -141,6 +141,7 @@ EOF
 
     SSH_OPTS="-o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new"
     REMOTE_PATH="/etc/rsyslog.d/99-tappaas-loki.conf"
+    _rsyslog_ok=0
 
     for NODE_HOSTNAME in "${NODE_HOSTS[@]}"; do
         [[ -z "${NODE_HOSTNAME}" ]] && continue
@@ -172,12 +173,16 @@ EOF
         if ssh ${SSH_OPTS} "root@${NODE_FQDN}" \
             "systemctl enable --now rsyslog >/dev/null 2>&1 && systemctl restart rsyslog" 2>/dev/null; then
             debug "    ${GN}✓${CL} ${NODE_HOSTNAME}: rsyslog → ${SYSLOG_FQDN}:1515"
+            _rsyslog_ok=$((_rsyslog_ok + 1))
         else
             warn "    ${NODE_HOSTNAME}: config pushed but rsyslog (enable|restart) failed"
         fi
 
         install_guest_memory_sampler "${NODE_FQDN}" "${NODE_HOSTNAME}"
     done
+    if [[ "${_rsyslog_ok}" -gt 0 ]]; then
+        info "  ${GN}✓${CL} Proxmox nodes forward syslog to ${SYSLOG_FQDN}:1515 (${_rsyslog_ok} of ${NODE_COUNT})"
+    fi
 fi
 
 # ── The alert webhook's token (#126) ─────────────────────────────────
@@ -186,7 +191,7 @@ fi
 # is /etc/secrets/tappaas-alert-token here (tappaas-cicd.nix generates it), and
 # Grafana reads its copy from the logging VM. Copied only when it differs, and
 # Grafana restarted only then: the contact point reads the file at start.
-info "${BOLD}Deliver the alert webhook token to Grafana${CL}"
+debug "Deliver the alert webhook token to Grafana"
 _ALERT_TOKEN=/etc/secrets/tappaas-alert-token
 _VM_TOKEN=/etc/secrets/grafana-alert-webhook-token
 _VM="tappaas@${VMNAME}.${ZONE0NAME}.internal"
@@ -200,11 +205,11 @@ else
     _have="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "${_VM}" "sudo sha256sum ${_VM_TOKEN} 2>/dev/null | cut -d' ' -f1" 2>/dev/null || true)"
     # shellcheck disable=SC2029  # the elif's path is expanded here on purpose too
     if [[ "${_have}" == "${_want}" ]]; then
-        debug "  token already in place"
+        debug "  alert webhook token already in place"
     elif ssh -o BatchMode=yes -o ConnectTimeout=10 "${_VM}" \
             "sudo install -m 0600 -o grafana -g grafana /dev/stdin ${_VM_TOKEN} && sudo systemctl restart grafana" \
             < "${_ALERT_TOKEN}"; then
-        info "  ${GN}✓${CL} token delivered; Grafana restarted to read it"
+        info "  ${GN}✓${CL} alert webhook token delivered to Grafana; Grafana restarted to read it"
     else
         warn "  could not deliver the token to ${VMNAME} — alerts cannot reach the mothership until it is"
     fi
@@ -215,12 +220,12 @@ fi
 # query against the admin credential; both password files are kept here on the
 # mothership and written to the VM when they differ. The mothership's own
 # credential is made here, as tappaas, before its own rebuild reads it.
-info "${BOLD}Sync the push and admin credentials to nginx${CL}"
+debug "Sync the push and admin credentials to nginx"
 # shellcheck source=../tappaas-cicd/lib/log-shipping.sh
 . /home/tappaas/bin/log-shipping.sh
 log_shipping_password tappaas-cicd >/dev/null || warn "  could not make the mothership's push credential"
 if log_shipping_sync_logging; then
-    info "  ${GN}✓${CL} credentials in place ($(ls "${LOG_SHIPPING_CRED_DIR}" 2>/dev/null | wc -l) pushing hosts)"
+    info "  ${GN}✓${CL} nginx push and admin credentials synced ($(ls "${LOG_SHIPPING_CRED_DIR}" 2>/dev/null | wc -l) pushing hosts)"
 else
     warn "  could not write the credentials to ${VMNAME} — pushes and queries are refused until they are"
 fi

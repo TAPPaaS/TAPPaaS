@@ -62,7 +62,7 @@ NODE1_FQDN="$(get_primary_node_fqdn)"
 # Run a command on the template's node as root.
 node_run() { ssh "${SSH_OPTS[@]}" "root@${NODE}.mgmt.internal" "$@"; }
 
-info "${BOLD}TAPPaaS NixOS template update${CL} (${VMNAME}, VM ${VMID})"
+debug "TAPPaaS NixOS template update (${VMNAME}, VM ${VMID})"
 
 # ── 1. Target version from tappaas-nixos.json (branch-controlled). ─────────────
 debug "Target template version: ${GN}${TARGET_TAG}${CL} (from tappaas-nixos.json)"
@@ -85,7 +85,7 @@ if [[ "$is_template" == "1" && "$installed_tag" == "$TARGET_TAG" ]]; then
   exit 0
 fi
 
-info "Update available: ${YW}${installed_tag:-<none>}${CL} -> ${GN}${TARGET_TAG}${CL}"
+debug "Update available: ${installed_tag:-<none>} -> ${TARGET_TAG}"
 
 # Fall back to the primary node if the template does not exist yet.
 [[ -n "$NODE" ]] || NODE="$(get_node_hostname 0)"
@@ -94,7 +94,7 @@ info "Update available: ${YW}${installed_tag:-<none>}${CL} -> ${GN}${TARGET_TAG}
 # ── 4. Pre-flight: confirm the release asset is fetchable BEFORE we destroy the
 #       existing template, so a bad/missing release leaves us untouched. ────────
 asset_url="${TAG_URL}/${IMAGE#/}"
-info "Verifying release asset is reachable: ${asset_url}"
+debug "Verifying release asset is reachable: ${asset_url}"
 http_code="$(curl -fsIL -o /dev/null -w '%{http_code}' "$asset_url" 2>/dev/null || echo 000)"
 [[ "$http_code" == "200" ]] || die "Release asset not reachable (HTTP ${http_code}): ${asset_url}"
 
@@ -112,17 +112,17 @@ prefetch_image() {
   fi
   [[ "$want" =~ ^([Ss][Hh][Aa]256:)?[0-9a-fA-F]{64}$ ]] || die "imageSha256 '${want}' in ${NIX_JSON} is not a SHA-256 hash."
   want="$(printf '%s' "$want" | tr '[:upper:]' '[:lower:]')"; want="${want#sha256:}"
-  info "Downloading and checking ${image} on ${NODE} before the template is replaced..."
+  debug "Downloading and checking ${image} on ${NODE} before the template is replaced..."
   if ! node_run "mkdir -p '${dir}' && cd '${dir}' && rm -f '${image}' && curl -fsSLo '${image}.part' '${url}' && printf '%s  %s\\n' '${want}' '${image}.part' | sha256sum -c --status - && mv '${image}.part' '${image}'"; then
     node_run "rm -f '${dir}/${image}.part'" || true
     die "${image} failed its SHA-256 check (or did not download) — expected ${want}. The template is unchanged."
   fi
-  info "SHA-256 verified: ${image}"
+  debug "SHA-256 verified: ${image}"
 }
 prefetch_image "$asset_url" "${IMAGE##*/}" "$IMAGE_SHA256"
 
 # ── 5. Stage the current provisioner + module JSON on the node. ────────────────
-info "Staging provisioner files to ${NODE}..."
+debug "Staging provisioner files to ${NODE}..."
 node_run "mkdir -p /root/tappaas"
 # Stage the module JSON with imageLocation pinned to the resolved release tag, so
 # Create-TAPPaaS-VM.sh downloads THIS stream's asset (not the repo-wide latest).
@@ -140,7 +140,7 @@ fi
 # ── 6. Rebuild the template on the node: drop the old one, recreate from the new
 #       image (this is the only step that downloads the ~700 MB image), convert
 #       to a template, and record the new version. ──────────────────────────────
-info "Rebuilding template on ${NODE} (downloading the new image)..."
+debug "Rebuilding template on ${NODE} (downloading the new image)..."
 node_run bash -s <<REMOTE
 set -euo pipefail
 cd /root/tappaas
@@ -155,6 +155,5 @@ qm template ${VMID} >/dev/null
 printf '%s\n' "${TARGET_TAG}" > ${MARKER}
 REMOTE
 
-echo ""
-info "${GN}✓${CL} NixOS template ${VMNAME} (VM ${VMID}) updated to ${BOLD}${TARGET_TAG}${CL} on ${NODE}."
-info "New clones use the updated template; existing VMs update via their own nixos-rebuild."
+info "  ${GN}✓${CL} NixOS template ${VMNAME} (VM ${VMID}) updated ${installed_tag:-<none>} → ${TARGET_TAG} on ${NODE}"
+install_note "  New clones use the updated template; existing VMs update via their own nixos-rebuild."

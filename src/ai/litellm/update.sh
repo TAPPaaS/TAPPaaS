@@ -21,16 +21,11 @@ NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'mgmt')"
 HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 
-# install.sh sources this file and wants its summary; an update (run as a
-# script) says it started and keeps the summary as detail.
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    summary() { debug "$@"; }
-    info "${BOLD}*** Starting litellm update${CL}"
-else
-    summary() { info "$@"; }
-fi
-summary "${BOLD}Post-Install Configuration${CL}"
-summary "  VM: ${VMNAME} (VMID: ${VMID})"
+# The summary below is for the first install (install_note); an update keeps it
+# as detail (DEVELOP.md, "Output").
+debug "*** Starting litellm update"
+install_note "${BOLD}Post-Install Configuration${CL}"
+install_note "  VM: ${VMNAME} (VMID: ${VMID})"
 
 # ── Environment owner + public URL → LiteLLM (#503) ──────────────────────────
 #
@@ -90,10 +85,10 @@ else
     fi
 fi
 
-summary "${BOLD}Installation Complete${CL}"
-summary "  VM: ${VMNAME} (VMID: ${VMID})"
-summary "  Node: ${NODE}"
-summary "  Zone: ${ZONE0NAME}"
+install_note "${BOLD}Installation Complete${CL}"
+install_note "  VM: ${VMNAME} (VMID: ${VMID})"
+install_note "  Node: ${NODE}"
+install_note "  Zone: ${ZONE0NAME}"
 if [[ -n "${HANODE}" ]]; then
-    summary "  HA Node: ${HANODE}"
+    install_note "  HA Node: ${HANODE}"
 fi

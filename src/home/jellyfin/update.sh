@@ -24,8 +24,7 @@ ZONE0NAME="$(get_config_value 'zone0' 'srvHome')"
 JELLYFIN_HOST="${VMNAME}.${ZONE0NAME}.internal"
 SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -o BatchMode=yes"
 
-echo ""
-info "${BOLD}jellyfin: library folders on ${JELLYFIN_HOST}${CL}"
+debug "  jellyfin: library folders on ${JELLYFIN_HOST}"
 
 # ── Library folders under /media ──────────────────────────────────────────────
 # /media is the share "media" (subdir jellyfin) when a server declares it, and a
@@ -44,12 +43,9 @@ else
         || where="this VM's disk (media share pending -- declare 'media' for a real library)"
     ssh ${SSH_OPTS} "tappaas@${JELLYFIN_HOST}" \
         "sudo install -d -o jellyfin -g jellyfin /media 2>/dev/null || true; sudo -u jellyfin mkdir -p /media/Movies /media/TV /media/Music /media/Photos /media/Audiobooks" \
-      && info "  ${GN}✓${CL} library folders present on ${where}" \
+      && info "  ${GN}✓${CL} jellyfin library folders present on ${where}" \
       || warn "  could not create the library folders on /media -- check the share's grant (rw)"
 fi
 
-echo ""
-info "${BOLD}Update complete${CL}"
-info "  VM   : ${VMNAME} (VMID: ${VMID})"
-info "  Node : ${NODE}"
-info "  Zone : ${ZONE0NAME}"
+debug "  ${VMNAME} (VMID ${VMID}) on ${NODE}, zone ${ZONE0NAME}"
+install_note "  ${VMNAME} runs on ${NODE}, zone ${ZONE0NAME}: ${JELLYFIN_HOST}"

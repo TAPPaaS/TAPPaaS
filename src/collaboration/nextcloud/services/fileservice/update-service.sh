@@ -231,7 +231,7 @@ if [[ "${CONNECTOR}" == "onlyoffice" ]]; then
                 warn "    by hand: ssh -t tappaas@${NC_HOST} sudo nextcloud-occ eurooffice:documentserver --check"
                 warn "  Left as it is rather than called broken on an answer nobody got."
             elif [[ "${_oo_verdict}" == "working" ]]; then
-                debug "${GN}✓${CL} onlyoffice document server round-trip verified"
+                info "  ${GN}✓${CL} onlyoffice connector wired for ${MODULE}: document server round-trip verified"
 
                 # ── Point the document server's splash page at this Nextcloud ──
                 # The stock image serves a "Docs installed — now integrate me"
@@ -349,7 +349,7 @@ nc_apply_env() {
 # TURN, so the public name alone strands internal callers and the internal name
 # alone strands external ones.
 if [[ "${CONNECTOR}" == "talk" ]]; then
-    info "  ${MODULE} declares a talk connector — wiring the TURN/STUN relay into Talk (ADR-COM-0002)"
+    debug "  ${MODULE} declares a talk connector — wiring the TURN/STUN relay into Talk (ADR-COM-0002)"
     COTURN_MGMT_SECRETS="/home/tappaas/secrets/coturn.env"
     COTURN_SECRET="$(grep -h '^COTURN_SECRET=' "${COTURN_MGMT_SECRETS}" 2>/dev/null | cut -d= -f2- || true)"
     TURN_SERVER_INTERNAL="$(jq -r '.vmname // "coturn"' "${CONSUMER_JSON}").$(jq -r '.zone0 // "dmz"' "${CONSUMER_JSON}").internal:3478"
@@ -361,7 +361,7 @@ if [[ "${CONNECTOR}" == "talk" ]]; then
     elif printf 'TURN_SERVER=%s\nTURN_SERVER_INTERNAL=%s\nTURN_SECRET=%s\n' \
             "${TURN_SERVER}" "${TURN_SERVER_INTERNAL}" "${COTURN_SECRET}" \
             | nc_apply_env talk.env nextcloud-configure-talk-turn.service; then
-        info "${GN}✓${CL} talk connector wired: STUN/TURN ${TURN_SERVER:-(none)} + ${TURN_SERVER_INTERNAL} registered in Nextcloud Talk"
+        info "  ${GN}✓${CL} talk connector wired: STUN/TURN ${TURN_SERVER:-(none)} + ${TURN_SERVER_INTERNAL} registered in Nextcloud Talk"
     else
         warn "  failed to apply talk.env on ${NC_HOST} — re-run after both VMs are up"
     fi
@@ -374,7 +374,7 @@ fi
 # exists, so an absent secret is "not yet", not an error — install.sh calls this
 # service again once the secret is published, and every update re-converges it.
 if [[ "${CONNECTOR}" == "hpb" ]]; then
-    info "  ${MODULE} declares an hpb connector — wiring the Talk signaling backend (ADR-COM-0002)"
+    debug "  ${MODULE} declares an hpb connector — wiring the Talk signaling backend (ADR-COM-0002)"
     HPB_MGMT_SECRETS="/home/tappaas/secrets/${MODULE}.env"
     [[ -f "${HPB_MGMT_SECRETS}" ]] || HPB_MGMT_SECRETS="/home/tappaas/secrets/nextcloud-hpb.env"
     HPB_SECRET="$(grep -h '^HPB_SECRET=' "${HPB_MGMT_SECRETS}" 2>/dev/null | cut -d= -f2- || true)"
@@ -385,7 +385,7 @@ if [[ "${CONNECTOR}" == "hpb" ]]; then
         info "  HPB_SECRET not published yet (${HPB_MGMT_SECRETS}) — the HPB's install.sh wires it once its VM is up"
     elif printf 'HPB_SECRET=%s\nHPB_URL=%s\n' "${HPB_SECRET}" "${HPB_URL}" \
             | nc_apply_env hpb.env nextcloud-configure-hpb.service; then
-        info "${GN}✓${CL} hpb connector wired: wss://${HPB_URL} registered as Talk's signaling backend"
+        info "  ${GN}✓${CL} hpb connector wired: wss://${HPB_URL} registered as Talk's signaling backend"
     else
         warn "  failed to apply hpb.env on ${NC_HOST} — re-run after both VMs are up"
     fi

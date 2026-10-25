@@ -29,7 +29,7 @@ NODE1_FQDN="$(get_primary_node_fqdn)"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-info "${BOLD}*** Starting TAPPaaS Cluster module update${CL}"
+debug "*** Starting TAPPaaS Cluster module update"
 
 # (Removed: a legacy "Step 0" that ran validate-configuration.sh against the now-
 # retired config/configuration.json — warn-only, and spurious since that file is
@@ -43,16 +43,15 @@ NODES=$(ssh -o StrictHostKeyChecking=no root@"$NODE1_FQDN" \
 debug "Found nodes: $(echo "$NODES" | tr '\n' ' ')"
 
 # Step 1: Run apt update && apt dist-upgrade on all Proxmox nodes
-info "${BOLD}Step 1: Updating Proxmox node packages${CL}"
+debug "Step 1: Updating Proxmox node packages"
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
-    # One header for both apt phases; each phase renders its own line of progress
-    # dots (update, then dist-upgrade) so the console stays compact (two dot lines).
+    # apt's own output shows with --debug only; the outcome is one ✓ line per node.
     # dist-upgrade, NOT upgrade: `apt upgrade` never installs a NEW package, and
     # every Proxmox kernel bump ships a new package name (proxmox-kernel-<ver>),
     # so plain upgrade held the kernel back on every run (#591). dist-upgrade
     # matches install.sh and is the command Proxmox documents.
-    info "Running apt update & dist-upgrade on $node..."
+    debug "Running apt update & dist-upgrade on $node..."
     if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
         if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt update"; then
             warn "apt update failed on $node"
@@ -63,20 +62,16 @@ while read -r node; do
             continue
         fi
     else
-        if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt update" 2>&1 | while IFS= read -r _; do printf "."; done; then
-            echo ""
+        if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt update" 2>&1 | while IFS= read -r _; do :; done; then
             warn "apt update failed on $node"
             continue
         fi
-        echo ""
-        if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt dist-upgrade --assume-yes" 2>&1 | while IFS= read -r _; do printf "."; done; then
-            echo ""
+        if ! ssh -n -o StrictHostKeyChecking=no root@"$NODE_FQDN" "apt dist-upgrade --assume-yes" 2>&1 | while IFS= read -r _; do :; done; then
             warn "apt dist-upgrade failed on $node"
             continue
         fi
-        echo ""
     fi
-    debug "$node package update completed."
+    info "  ${GN}✓${CL} $node: packages up to date (apt dist-upgrade)"
 
     # Detect pending kernel reboot — Proxmox does not create /var/run/reboot-required.
     # Compare the running kernel with the newest installed kernel package. The
@@ -112,7 +107,7 @@ while read -r node; do
     if [[ "$_rm_line" == "REMOVE: (none)" ]]; then
         debug "  $node no superseded kernels to prune"
     elif [[ -n "$_rm_line" ]]; then
-        info "  $node pruned: ${_rm_line#REMOVE: }"
+        info "  ${GN}✓${CL} $node: superseded kernels pruned: ${_rm_line#REMOVE: }"
     else
         warn "  $node kernel prune produced no summary — check output"
         [[ "${OPT_DEBUG:-0}" -eq 1 ]] && printf '%s\n' "$_prune_out"
@@ -122,7 +117,8 @@ done <<< "$NODES"
 debug "All Proxmox nodes package update completed."
 
 # Step 2: Distribute files to all nodes
-info "${BOLD}Step 2: Distributing files to all Proxmox nodes${CL}"
+_baseline_fail=0
+debug "Step 2: Distributing files to all Proxmox nodes"
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
     debug "Copying zones.json and the VM/LXC provisioners to $node..."
@@ -166,7 +162,7 @@ debug "Files distributed to all Proxmox nodes."
 #   - redeploys /etc/cron.weekly/tappaas-zpool-trim and
 #     /etc/cron.monthly/tappaas-ssd-health
 # smartmontools is ensured here so existing pre-#152 nodes get it too.
-info "${BOLD}Step 3: Refreshing SSD lifecycle configuration${CL}"
+debug "Step 3: Refreshing SSD lifecycle configuration"
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
     debug "Deploying SSD lifecycle setup to $node..."
@@ -181,6 +177,7 @@ while read -r node; do
     else
         [[ -n "${_ssd_out}" ]] && printf '%s\n' "${_ssd_out}" >&2
         warn "SSD lifecycle setup failed on $node"
+        _baseline_fail=1
         continue
     fi
 done <<< "$NODES"
@@ -192,7 +189,7 @@ debug "SSD lifecycle configuration refreshed on all Proxmox nodes."
 #     the module is confirmed to build/load), so MS-S1 MAX nodes survive a warm
 #     reboot instead of needing a power cycle. Re-asserted every update so the
 #     fix is reinstated if a kernel/package change ever drifted it.
-info "${BOLD}Step 4: Refreshing Realtek RTL8127 NIC driver fix${CL}"
+debug "Step 4: Refreshing Realtek RTL8127 NIC driver fix"
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
     debug "Deploying Realtek NIC setup to $node..."
@@ -206,6 +203,7 @@ while read -r node; do
     else
         _rt_reason="$(printf '%s\n' "${_rt_out}" | grep -iE '\[realtek-nic\]\[(error|warn)' | tail -1 | sed 's/^[[:space:]]*//')"
         warn "Realtek NIC setup issue on $node: ${_rt_reason:-see the node output} — continuing"
+        _baseline_fail=1
         continue
     fi
 done <<< "$NODES"
@@ -219,7 +217,7 @@ debug "Realtek NIC driver fix refreshed on all Proxmox nodes."
 #   Guard: a node is hardened only if it is reachable RIGHT NOW with a key and
 #   passwords refused. That is what makes it safe — hardening can never be the
 #   step that locks the mothership out, whatever state the node's keys are in.
-info "${BOLD}Step 5: Enforcing key-only SSH on Proxmox nodes${CL}"
+debug "Step 5: Enforcing key-only SSH on Proxmox nodes"
 _ssh_hard_fail=0
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
@@ -251,7 +249,7 @@ fi
 #   node by node. Fed over the key login like Step 5; a node that does not take
 #   it is reported and the update goes on: neither control is a precondition for
 #   anything else the sweep does.
-info "${BOLD}Step 5b: CPU microcode and the audit trail on Proxmox nodes${CL}"
+debug "Step 5b: CPU microcode and the audit trail on Proxmox nodes"
 _host_hard_fail=0
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
@@ -274,7 +272,7 @@ fi
 #   quorum. A pre-start hookscript on every guest but the firewall waits until it
 #   answers DNS, at most 180s. The firewall is network's VM; a site without one
 #   gets '-' and a hook that waits for nothing. Report-and-continue, as Step 5b.
-info "${BOLD}Step 5d: guests wait for the firewall before they start${CL}"
+debug "Step 5d: guests wait for the firewall before they start"
 _fw_vmid="$(jq -r '.vmid // empty' /home/tappaas/config/network.json 2>/dev/null)"
 _fw_vmid="${_fw_vmid:--}"
 _guest_hook_fail=0
@@ -290,6 +288,10 @@ while read -r node; do
     fi
 done <<< "$NODES"
 [[ "${_guest_hook_fail}" -eq 0 ]] && debug "Every guest waits for the firewall (VM ${_fw_vmid}) before it starts."
+# Steps 2-5d re-assert the same node baseline every run: one line for all of it.
+if [[ "${_baseline_fail}" -eq 0 && "${_ssh_hard_fail}" -eq 0 && "${_host_hard_fail}" -eq 0 && "${_guest_hook_fail}" -eq 0 ]]; then
+    info "  ${GN}✓${CL} node baseline on $(wc -w <<< "${NODES}") nodes: SSD lifecycle, RTL8127 fix, key-only SSH, microcode and audit trail, guests wait for the firewall"
+fi
 
 # Step 5c: Proxmox's own notification mails off (#126).
 #   PVE mails root@pam's address through its built-in `default-matcher`: smartd
@@ -302,7 +304,7 @@ done <<< "$NODES"
 #   deleted: `pvesh set /cluster/notifications/matchers/default-matcher
 #   --disable 0` brings PVE's mails back, and a site that adds its OWN matcher
 #   keeps it. /etc/pve is cluster-wide, so one node is enough.
-info "${BOLD}Step 5c: Proxmox's own notification mails off (alerting is the logging module's)${CL}"
+debug "Step 5c: Proxmox's own notification mails off (alerting is the logging module's)"
 _pve_notify_done=0
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
@@ -329,7 +331,7 @@ done <<< "$NODES"
 #   with it). Only the timezone: a node's keyboard and locale are the console's.
 _site_tz="$(jq -r '(.locations[.primaryLocation // ""] // .location // {}).timezone // empty' "${CONFIG_DIR:-/home/tappaas/config}/site.json" 2>/dev/null || true)"
 if [[ -n "${_site_tz}" ]]; then
-    info "${BOLD}Step 5e: node timezone ${_site_tz} (site.json)${CL}"
+    debug "Step 5e: node timezone ${_site_tz} (site.json)"
     while read -r node; do
         [[ -n "${node}" ]] || continue
         NODE_FQDN="$node.$MGMTVLAN.internal"
@@ -347,7 +349,7 @@ fi
 # The lists have only one-shot writers (config-storage at pool creation,
 # site-manager node add after a join) — a node that joined by any other
 # path shows its pools 'disabled' until reconciled (node-provisioning §7.3).
-info "${BOLD}Step 6: Reconciling storage node lists from the node records${CL}"
+debug "Step 6: Reconciling storage node lists from the node records"
 if ! bash "${SCRIPT_DIR}/reconcile-storage-nodes.sh"; then
     warn "storage nodes reconcile reported an error — run reconcile-storage-nodes.sh manually"
 fi
@@ -358,7 +360,7 @@ fi
 #   node. Idempotent; a node already registered is left alone. A failure is a
 #   warning, never a failed cluster update: registration is bookkeeping, and the
 #   patching above does not depend on it (that is stage 2).
-info "${BOLD}Step 7: Registering cluster nodes as pvehost instances${CL}"
+debug "Step 7: Registering cluster nodes as pvehost instances"
 
 # A node is adopted BY NAME, so it has to resolve first. The firewall's base
 # config ships entries for the first nodes only; beyond those the entry is made
@@ -420,7 +422,7 @@ done <<< "$NODES"
 #   done here: re-carrying a lan bridge drains the node, so it is the operator's
 #   `site-manager node network set <node> --apply`. Drift is reported by
 #   health-manager (lan-uplink). Report-and-continue, as Step 5b.
-info "${BOLD}Step 7b: lan uplinks — lldpd and the recorded declaration${CL}"
+debug "Step 7b: lan uplinks — lldpd and the recorded declaration"
 while read -r node; do
     [[ -n "${node}" ]] || continue
     [[ "$(module_of "${node}" 2>/dev/null)" == pvehost ]] || continue
@@ -469,18 +471,17 @@ retire_node_placeholders() {
              | grep -E "^tappaas[0-9]+\.${zone}\.internal$" || true)
 }
 
-info "${BOLD}Step 8: Retiring unused node DNS placeholders${CL}"
+debug "Step 8: Retiring unused node DNS placeholders"
 # shellcheck disable=SC2086
 retire_node_placeholders "${MGMTVLAN}" ${NODES}
 
 # Step 9: what each node's CPU offers a guest, and which live moves are safe
 # (#827). Re-read every update: a CPU can be swapped or a node added. The page
 # config/cluster-cpu.md is the operator's view; .json is what HA placement reads.
-info "${BOLD}Step 9: CPU inventory of the cluster nodes${CL}"
+debug "Step 9: CPU inventory of the cluster nodes"
 if proxmox-controller cpu-inventory --apply > /dev/null; then
-    info "  ${GN}✓${CL} $(jq -r '"common level \(.common.level // "none"); " + ([.nodes[] | "\(.node) \(.level // "?")"] | join(", "))' /home/tappaas/config/cluster-cpu.json)"
+    info "  ${GN}✓${CL} CPU inventory: $(jq -r '"common level \(.common.level // "none"); " + ([.nodes[] | "\(.node) \(.level // "?")"] | join(", "))' /home/tappaas/config/cluster-cpu.json)"
 else
     warn "  CPU inventory incomplete — see: proxmox-controller cpu-inventory"
 fi
 
-info "${GN}✓${CL} Cluster module update completed successfully."
