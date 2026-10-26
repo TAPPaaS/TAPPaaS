@@ -104,6 +104,24 @@ module_test_dependencies() {
         ((.integratesWith // []) | .[] | "\(.) optional")' 2>/dev/null
 }
 
+# test_output_log <module> <output> — keep a failed test's full output in
+# ~/logs/tests/<module>-<yyyymmdd>-<hhmmss>.log; prints the path ("" when it
+# cannot be written).
+test_output_log() {
+    local dir="${TAPPAAS_TEST_LOG_DIR:-${HOME}/logs/tests}" f
+    mkdir -p "${dir}" 2>/dev/null || return 0
+    f="${dir}/${1}-$(date +%Y%m%d-%H%M%S).log"
+    printf '%s\n' "$2" | sed 's/\x1b\[[0-9;]*m//g' > "${f}" 2>/dev/null && echo "${f}"
+    return 0
+}
+
+# failed_lines — from a test's output, the lines that say what failed: a ✗
+# check, a test.sh's [FAIL] / FAIL:, and its [Error] / [Fatal] lines. The update
+# grades these against its baseline (update-module.sh failed_checks).
+failed_lines() {
+    grep -E '✗|\[FAIL\]|^[[:space:]]*FAIL:|\[Error\]|\[Fatal\]' || true
+}
+
 test_skip() {
     info "  ${YW}⊘${CL} $1 (skipped)"
     SKIP_COUNT=$((SKIP_COUNT + 1))
@@ -327,7 +345,18 @@ main() {
                 fi
                 test_pass_quiet "${dep} service tests passed"
             else
-                if [[ -n "${_svc_out}" ]]; then printf '%s\n' "${_svc_out}" >&2; fi
+                if [[ -n "${_svc_out}" ]]; then
+                    if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then printf '%s\n' "${_svc_out}" >&2
+                    else
+                        local _slog _sfl
+                        _slog="$(test_output_log "${module}-${dep//:/-}" "${_svc_out}")"
+                        _sfl="$(failed_lines <<<"${_svc_out}")"
+                        # A service test that says nothing in the failure form is
+                        # printed whole: it is all there is to go on.
+                        if [[ -n "${_sfl}" ]]; then printf '%s\n' "${_sfl}" >&2; else printf '%s\n' "${_svc_out}" >&2; fi
+                        [[ -n "${_slog}" ]] && warn "  ${dep}: the service test's full output is in ${_slog}"
+                    fi
+                fi
                 if [[ ${_svc_rc} -eq 2 ]]; then
                     fatal "${dep} service test reported a fatal error"
                     FATAL=true
@@ -346,8 +375,10 @@ main() {
         if [[ -x "${module_dir}/test.sh" ]]; then
             debug "  Running ${module_dir}/test.sh..."
             cd "${module_dir}"
-            # Capture the test output: route it to [Debug] when green (it's noise),
-            # but surface it in full on failure so it stays diagnosable.
+            # Capture the test output: [Debug] when green (it's noise). On a
+            # failure the full output goes to a log, and only the checks that
+            # failed are printed, with where the log is — a test of a hundred
+            # checks printed whole, twice per update, buried the two that failed.
             local _test_out _test_rc _tl
             _test_out="$(./test.sh "${module}" 2>&1)" && _test_rc=0 || _test_rc=$?
             if [[ ${_test_rc} -eq 0 ]]; then
@@ -356,7 +387,18 @@ main() {
                 fi
                 test_pass_quiet "Module test.sh passed"
             else
-                if [[ -n "${_test_out}" ]]; then printf '%s\n' "${_test_out}" >&2; fi
+                if [[ -n "${_test_out}" ]]; then
+                    if [[ "${OPT_DEBUG:-0}" -eq 1 ]]; then
+                        printf '%s\n' "${_test_out}" >&2
+                    else
+                        local _tlog
+                        _tlog="$(test_output_log "${module}" "${_test_out}")"
+                        local _tfl
+                        _tfl="$(failed_lines <<<"${_test_out}")"
+                        if [[ -n "${_tfl}" ]]; then printf '%s\n' "${_tfl}" >&2; else printf '%s\n' "${_test_out}" >&2; fi
+                        [[ -n "${_tlog}" ]] && warn "  ${module}: the test's full output is in ${_tlog}"
+                    fi
+                fi
                 if [[ ${_test_rc} -eq 2 ]]; then
                     fatal "Module test.sh reported a fatal error"
                     FATAL=true

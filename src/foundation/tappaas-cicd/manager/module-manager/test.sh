@@ -969,6 +969,22 @@ bash "${TMSTUB_SH}" cb >/dev/null 2>&1
     && ok "test (#718): …and a default-environment consumer tests the shared one" \
     || bad "test (#718): default consumer tested the wrong provider"
 
+# A failing test.sh: only the checks that failed are printed, with where its
+# full output is (makerfloss: network's hundred-line test printed whole, twice).
+mkdir -p "${TMW}/src/noisy"
+{ echo '#!/usr/bin/env bash'; echo 'for i in $(seq 1 40); do echo "    ✓ filler check $i"; done'
+  echo 'echo "    ✗ CrowdSec has no hub index"'; echo 'exit 1'; } > "${TMW}/src/noisy/test.sh"
+chmod +x "${TMW}/src/noisy/test.sh"
+printf '{"moduleSource":"%s/src/noisy"}\n' "${TMW}" > "${TMW}/cfg/noisy.json"
+tmn="$(TAPPAAS_TEST_LOG_DIR="${TMW}/logs" bash "${TMSTUB_SH}" noisy 2>&1)"
+_nlog="$(ls "${TMW}"/logs/noisy-*.log 2>/dev/null | head -1)"
+[[ "${tmn}" == *"✗ CrowdSec has no hub index"* && "${tmn}" != *"filler check 7"* ]] \
+    && ok "test: a failing test.sh prints the check that failed, not its passing ones" \
+    || bad "test: failing test.sh output: ${tmn}"
+[[ -n "${_nlog}" && "${tmn}" == *"full output is in ${_nlog}"* ]] && grep -q "filler check 40" "${_nlog}" \
+    && ok "test: …and keeps its full output in a log it names" \
+    || bad "test: no full-output log (${_nlog})"
+
 # ---------------------------------------------------------------------------
 # integratesWith helpers (#501): the soft-guard + reverse-lookup primitives.
 # Offline — pure functions over a fixture CONFIG_DIR, no cluster.
