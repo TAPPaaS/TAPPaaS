@@ -7,6 +7,8 @@ user/group/binding/OIDC verbs.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -926,6 +928,45 @@ class TestBeforeFilesApi(unittest.TestCase):
         mgr, _ = TestBrandEnsure()._mgr(dict(TestBrandEnsure.BRAND), [])
         mgr._version = ""  # noqa: SLF001 — /admin/version/ did not answer
         self.assertTrue(mgr.has_files_api())
+
+
+class TestUploadRefused(unittest.TestCase):
+    """An icon or logo the server will not take is cosmetic: the app or the
+    brand is still ensured, with a warning (a 2025.12 server whose /data is not
+    mounted answers every upload with HTTP 500)."""
+
+    def _refusing(self):
+        import httpx
+        mgr, calls = TestBrandEnsure()._mgr(dict(TestBrandEnsure.BRAND), [])
+        mgr._version = "2025.12.0"  # noqa: SLF001
+        inner = mgr._client.post.side_effect  # noqa: SLF001
+
+        def post(path, json=None, files=None, data=None):
+            if path == "/admin/file/":
+                calls.append({"m": "POST", "p": path})
+                req = httpx.Request("POST", "http://x/api/v3/admin/file/")
+                raise httpx.HTTPStatusError("500", request=req, response=httpx.Response(
+                    500, request=req, text="No file management backend configured."))
+            return inner(path, json=json, files=files, data=data)
+        mgr._client.post.side_effect = post  # noqa: SLF001
+        return mgr, calls
+
+    def test_a_refused_icon_keeps_the_tile_icon(self):
+        mgr, _ = self._refusing()
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            self.assertIsNone(mgr.app_icon_ensure("logging", "Logging", "auto"))
+        self.assertIn("[Warning] the icon for 'logging'", err.getvalue())
+        self.assertIn("No file management backend", err.getvalue())
+
+    def test_a_refused_logo_still_sets_the_title(self):
+        mgr, calls = self._refusing()
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            mgr.brand_ensure("rossen")
+        patch = next(c for c in calls if c["m"] == "PATCH" and c["p"] == "/core/brands/B/")
+        self.assertEqual(patch["json"], {"branding_title": "rossen"})
+        self.assertIn("site logo could not be uploaded", err.getvalue())
 
 
 if __name__ == "__main__":

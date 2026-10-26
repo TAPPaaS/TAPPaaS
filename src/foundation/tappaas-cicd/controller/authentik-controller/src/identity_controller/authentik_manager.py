@@ -20,12 +20,26 @@ from dataclasses import dataclass
 
 import httpx
 import hashlib
+import sys
 from xml.sax.saxutils import escape as _xml_escape
 
 
 # The file types a site's own logo may be.
 LOGO_MIME = {"svg": "image/svg+xml", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
              "webp": "image/webp"}
+
+
+def _warn(msg: str) -> None:
+    """A warning on stderr: stdout carries the CLI's JSON results."""
+    print(f"[Warning] {msg}", file=sys.stderr)
+
+
+def _http_reason(e: httpx.HTTPError) -> str:
+    """The server's own words for a failed call, short enough for one line."""
+    resp = getattr(e, "response", None)
+    if resp is None:
+        return str(e)
+    return f"HTTP {resp.status_code}: {resp.text.strip()[:200]}"
 
 
 def read_logo(path: str) -> tuple[bytes, str]:
@@ -856,14 +870,20 @@ class AuthentikManager:
         name carries a content hash, so a changed icon is a new file (no stale
         browser cache) and an unchanged one is not uploaded again. None on a
         server without the files API (before 2025.12, #858): the tile keeps the
-        icon it has.
+        icon it has. None, with a warning, when the upload fails — an icon is
+        cosmetic and never fails the application it belongs to (a server whose
+        file storage is not mounted refuses every upload).
         """
         if not self.has_files_api():
             return None
         data, ext = (app_icon_svg(name).encode(), "svg") if icon == "auto" else icon  # type: ignore[misc]
         fname = f"tappaas-app-{slug}-{hashlib.sha256(data).hexdigest()[:12]}.{ext}"
-        if fname not in self.file_names():
-            self.file_upload(fname, data, LOGO_MIME[ext])
+        try:
+            if fname not in self.file_names():
+                self.file_upload(fname, data, LOGO_MIME[ext])
+        except httpx.HTTPError as e:
+            _warn(f"the icon for '{slug}' could not be uploaded ({_http_reason(e)}): the tile keeps the icon it has")
+            return None
         return fname
 
     def brand_ensure(self, site_name: str, flow_title: str = "Sign in",
@@ -904,14 +924,20 @@ class AuthentikManager:
                      else f"tappaas-site-logo-{tag}.{ext}")
         icon = site_icon_svg(site_name).encode()
         icon_name = f"tappaas-site-icon-{hashlib.sha256(icon).hexdigest()[:12]}.svg"
-        have = self.file_names()
         uploads = [(logo_name.replace("%(theme)s", t), variants[t][0], LOGO_MIME[ext]) for t in sorted(variants)]
         uploads.append((icon_name, icon, "image/svg+xml"))
-        for name, data, mime in uploads:
-            if name not in have:
-                self.file_upload(name, data, mime)
-                changed.append(f"uploaded {name}")
         want = {"branding_title": site_name, "branding_logo": logo_name, "branding_favicon": icon_name}
+        try:
+            have = self.file_names()
+            for name, data, mime in uploads:
+                if name not in have:
+                    self.file_upload(name, data, mime)
+                    changed.append(f"uploaded {name}")
+        except httpx.HTTPError as e:
+            # The logo is cosmetic: the title and flow heading are still set,
+            # and the brand keeps the logo it has until an upload succeeds.
+            _warn(f"the site logo could not be uploaded ({_http_reason(e)}): the login page keeps the logo it has")
+            del want["branding_logo"], want["branding_favicon"]
         delta = {k: v for k, v in want.items() if brand.get(k) != v}
         if delta:
             self._patch_json(f"/core/brands/{brand['brand_uuid']}/", delta)
