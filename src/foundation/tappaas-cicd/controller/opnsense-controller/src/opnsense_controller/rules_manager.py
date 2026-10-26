@@ -276,6 +276,29 @@ def stable_hash_index(name: str, count: int = SLOT_COUNT) -> int:
     return int.from_bytes(digest[:8], "big") % count
 
 
+
+def _table_matches(have: list[str], expected: set[str]) -> bool:
+    """Does a host alias's pf table hold what its names resolve to now?
+
+    Per family: the IPv4 members must be the expected ones; the IPv6 members
+    only when both sides have some — a firewall that resolves no AAAA, or a
+    resolver here that returns none, is not a stale table.
+    """
+    def fam(addrs, v):
+        out = set()
+        for a in addrs:
+            try:
+                ip = ipaddress.ip_address(str(a).split("%")[0])
+            except ValueError:
+                continue
+            if ip.version == v:
+                out.add(str(ip))
+        return out
+    if fam(have, 4) != fam(expected, 4):
+        return False
+    h6, e6 = fam(have, 6), fam(expected, 6)
+    return not (h6 and e6) or h6 == e6
+
 def _normalize_protocol(value: str | None) -> str:
     if not value:
         return Protocol.TCP.value
@@ -1182,7 +1205,7 @@ class RulesManager:
                     continue
                 if not have:
                     empty.append(n)
-                elif expected[n] is not None and set(have) != expected[n]:
+                elif expected[n] is not None and not _table_matches(have, expected[n]):
                     stale.append(n)
             pending = empty + stale
             if not pending:
@@ -1222,15 +1245,19 @@ class RulesManager:
         out: set[str] = set()
         for c in content:
             try:
-                out.add(str(ipaddress.IPv4Address(c)))
+                out.add(str(ipaddress.ip_address(c)))
                 continue
             except ValueError:
                 pass
             if "/" in c or all(ch.isdigit() or ch in ".-" for ch in c):  # a CIDR or a range
                 return None
+            # Both families: OPNsense puts a name's AAAA answers in the table too.
+            # Asked for IPv4 only, a dual-stack guest's table never matched, and
+            # every update of it waited the full 90 s (jellyfin, from #26 on).
             try:
-                out.update(socket.gethostbyname_ex(c)[2])
-            except OSError:
+                out.update(str(ipaddress.ip_address(ai[4][0].split("%")[0]))
+                           for ai in socket.getaddrinfo(c, None, proto=socket.IPPROTO_TCP))
+            except (OSError, ValueError):
                 return None
         return out or None
 
