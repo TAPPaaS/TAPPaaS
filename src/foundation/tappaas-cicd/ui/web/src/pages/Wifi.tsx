@@ -1,10 +1,11 @@
-// Wifi.tsx — Day 2's "Add WiFi for <zone>": one SSID that puts clients on a
-// zone's VLAN. 1 the network: the access point, the SSID's name, how clients
-// join, and the WPA passphrase, written to ~/.wlan-secrets.txt through the
-// secrets endpoint and never shown back or put in a command; 2 the mapping
-// (ap-manager ssid <ap> add, after `ssid <ap> remove` of the SSID the zone
-// had when it is a change); 3 the reconcile that programs the access point,
-// previewed first; 4 the SSID on its zone, read back from ap-manager list.
+// Wifi.tsx — Day 2's "Add WiFi for <zone>": one site-wide SSID that puts
+// clients on a zone's VLAN, broadcast by every access point (#889). 1 the
+// network: the SSID's name and how clients join; 2 declaring it (ap-manager ssid
+// add — after `ssid remove` of the zone's old SSID when the name changes, or
+// `ssid modify` when only its security does); 3 the WPA passphrase, handed to
+// `ap-manager ssid set-passphrase` on stdin through the secrets endpoint, never
+// shown back or put in a command; 4 the reconcile that programs every access
+// point, previewed first; 5 the SSID on its zone, read back from ap-manager.
 
 import { useMemo, useState } from "react";
 import { post, reloadAll, useRead, useVerb } from "../api";
@@ -12,74 +13,76 @@ import { Step, StepView } from "../operate";
 import { TargetValue, TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
 import { Dot, canOperate, useMe } from "../ui";
-import { ApIn, StepSpec, WifiPlan, WifiZone, defaultAp, defaultSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb } from "../wizards";
+import { PASSPHRASE_TEXT, SiteSsid, StepSpec, WifiPlan, WifiZone, broadcastText, defaultSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, wifiSpecs, wifiVerb } from "../wizards";
 import { SecretStatus, StepRow } from "./Setup";
 
 const asStep = (spec: StepSpec, title: string, note: Step["note"]): Step => ({ ...spec, title, note, only: [], hide: ["@ssid"] });
 
-function zoneSsids(zone: string, aps: ApIn[]) {
-  return aps.flatMap((a) => (a.ssids ?? []).filter((s) => s.zone === zone).map((s) => ({ ap: a.name, ...s })));
-}
-
 const str = (v: TargetValue | undefined): string | null => (typeof v === "string" ? v : null);
 
-// `prefill`: what the assistant opened it with (open_console add-wifi <zone>): ssid, ap, security.
-export function WifiWizard({ z, aps, site, onClose, prefill }: { z: WifiZone; aps: ApIn[]; site: string; onClose: () => void; prefill?: TargetValues | null }) {
+// `prefill`: what the assistant opened it with (open_console add-wifi <zone>): ssid, security.
+export function WifiWizard({ z, apCount, site, onClose, prefill }: { z: WifiZone; apCount: number; site: string; onClose: () => void; prefill?: TargetValues | null }) {
   const me = useMe();
   const verb = useVerb("ap-manager", "ssid add");
   const securities = verb?.options.find((o) => o.flag === "--security")?.choices ?? ["wpa2-personal"];
-  const secrets = useRead<SecretStatus[]>("secrets", 600_000);
-  const kept = (secrets.env?.data ?? []).find((x) => x.name === "wlan")?.keys ?? [];
-  const change = wifiVerb(z) === "Change";
-  const old = z.ssids[0] ?? null;
-  const [ap, setAp] = useState(str(prefill?.ap) ?? defaultAp(z, aps));
+  // What the zone had when the form opened: the reads refresh behind it as its
+  // steps run, and the form keeps saying what it is changing.
+  const [old] = useState(z.ssid);
+  const change = old !== null;
   const [name, setName] = useState(str(prefill?.ssid) ?? defaultSsid(site, z));
   const [security, setSecurity] = useState(str(prefill?.security) ?? old?.security ?? "wpa2-personal");
   const [pass, setPass] = useState("");
-  const [savedFor, setSavedFor] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
   const [plan, setPlan] = useState<WifiPlan | null>(null);
   const [removed, setRemoved] = useState(false);
-  const [added, setAdded] = useState(false);
+  const [declared, setDeclared] = useState(false);
+  const [passDone, setPassDone] = useState(false);
   const [reconciled, setReconciled] = useState(false);
   const ssid = name.trim();
   const problem = ssidProblem(ssid);
   const personal = needsPassphrase(security);
-  const passKept = savedFor === ssid || kept.includes(ssid);
-  const ready = ap !== "" && problem === null && (!personal || passKept);
-  const sameName = old !== null && old.name === ssid && old.ap === ap;
-  // Read again while the result is awaited: the job's end re-reads it behind the console.
-  const live = useRead<ApIn[]>("aps", added ? 5_000 : 300_000).env?.data ?? aps;
-  const now = zoneSsids(z.zone, live);
-
-  const savePass = async () => {
-    setMsg(null);
-    const r = await post<SecretStatus>("secrets/wlan", { ssid, passphrase: pass });
-    if (!r.ok) return setMsg(r.error);
-    setPass("");
-    setSavedFor(ssid);
-    setMsg(`kept for ${ssid} in ${r.data?.file ?? "~/.wlan-secrets.txt"} — never shown again`);
-    secrets.reload();
-  };
+  // Read again while a step is awaited: the job's end re-reads it behind the console.
+  const ssidsRead = useRead<SiteSsid[]>("ssids", declared ? 5_000 : 300_000);
+  const live = (ssidsRead.env?.data ?? []).find((s) => s.name === (plan?.ssid ?? ssid)) ?? null;
+  const state = live ? passphraseOf(live) : null;
 
   const steps = useMemo(() => {
     if (!plan) return null;
     const s = wifiSpecs(plan);
-    const disruption = plan.replace ? <> Clients on <b>{plan.replace.ssid}</b> lose the WiFi when the reconcile below programs the access point, and join <b>{plan.ssid}</b> with its passphrase.</> : null;
+    const disruption = s.remove ? <> Clients on <b>{plan.old!.name}</b> lose the WiFi when the reconcile programs the access points, and join <b>{plan.ssid}</b> with its passphrase.</> : null;
     return {
-      remove: s.remove ? asStep(s.remove, `ap-manager ssid ${plan.replace!.ap} remove ${plan.replace!.ssid}`, <>Takes <b>{plan.replace!.ssid}</b> off {plan.replace!.ap} in the declared state (switch-configuration-desired.json); the AP keeps broadcasting it until the reconcile.{disruption}</>) : null,
-      add: asStep(s.add, `ap-manager ssid ${plan.ap} add ${plan.ssid}`, <>Maps <b>{plan.ssid}</b> on {plan.ap} to zone <b>{plan.zone}</b>{plan.vlan !== null ? <> (VLAN {plan.vlan})</> : null}, {plan.security}, in the declared state. There is no dry run: the preview is the command; nothing reaches the access point until the reconcile.</>),
-      reconcile: asStep(s.reconcile, "ap-manager reconcile", <>The preview reads the access points and lists what would change (the delta); apply programs them with the passphrase from ~/.wlan-secrets.txt.{disruption}</>),
+      remove: s.remove ? asStep(s.remove, `ap-manager ssid remove ${plan.old!.name}`, <>Removes <b>{plan.old!.name}</b> from the declared state (switch-configuration-desired.json), with its passphrase and the zone's SSID; the access points keep broadcasting it until the reconcile.{disruption}</>) : null,
+      declare: s.declare
+        ? asStep(s.declare, `ap-manager ${s.declare.verb} ${plan.ssid}`, s.declare.verb === "ssid add"
+          ? <>Declares <b>{plan.ssid}</b> for the whole site: zone <b>{plan.zone}</b>{plan.vlan !== null ? <> (VLAN {plan.vlan})</> : null}, {plan.security}, broadcast by every access point; the zone shows it as its SSID. There is no dry run: the preview is the command; nothing reaches an access point until the reconcile.</>
+          : <>Changes <b>{plan.ssid}</b> in the declared state{s.declare.initial["--security"] ? <> to {plan.security}</> : null}{s.declare.initial["--enabled"] ? <>, broadcast again</> : null}; nothing reaches an access point until the reconcile.</>)
+        : null,
+      reconcile: asStep(s.reconcile, "ap-manager reconcile", <>The preview reads the access points and lists what would change on each (the delta); apply programs every one of them, with the passphrase from ~/.wlan-secrets.txt.{disruption}</>),
     };
   }, [plan]);
+  const declareDone = !!steps && (!steps.declare || declared) && (!steps.remove || removed);
 
+  const savePass = async () => {
+    setMsg(null);
+    const r = await post<SecretStatus>("secrets/wlan", { ssid: plan!.ssid, passphrase: pass });
+    if (!r.ok) return setMsg(r.error);
+    setPass("");
+    setPassDone(true);
+    setMsg(`kept for ${plan!.ssid} — the next reconcile pushes it to every access point; never shown again`);
+    ssidsRead.reload();
+  };
+
+  const passRequired = needsPassphrase(plan?.security ?? security);
+  const passOk = !passRequired || passDone || state === "set" || state === "changed";
   const stages = [
-    { id: "network", title: "1 · The network", required: true, done: plan !== null, detail: "Which access point broadcasts it, the SSID's name, how clients join." },
-    { id: "map", title: change ? `2 · Replace ${old!.name} with the new SSID` : `2 · Map the SSID to ${z.zone}`, required: true, done: added, detail: change ? "Remove the old mapping, then add the new one — each previewed." : `The SSID on the zone's VLAN${z.vlan !== null ? ` (${z.vlan})` : ""}, in the declared state.` },
-    { id: "reconcile", title: "3 · Program the access point", required: true, done: reconciled, detail: "ap-manager reconcile: the delta first, then apply." },
-    { id: "result", title: `4 · The WiFi on ${z.zone}`, required: false, done: reconciled && now.some((s) => s.name === plan?.ssid), detail: "What ap-manager now maps to the zone." },
+    { id: "network", title: "1 · The network", required: true, done: plan !== null, detail: "The SSID's name and how clients join; every access point broadcasts it." },
+    { id: "declare", title: change && plan && plan.old && plan.old.name !== plan.ssid ? `2 · Replace ${plan.old.name} with ${plan.ssid}` : "2 · Declare the SSID", required: true, done: declareDone, detail: steps && !steps.declare && !steps.remove ? "Nothing to declare: the same SSID, the same security." : "In the declared state, each previewed." },
+    { id: "passphrase", title: "3 · The passphrase", required: passRequired, done: plan !== null && declareDone && passOk, detail: passRequired ? "Handed to ap-manager on stdin; never shown again and never in a command." : `None: ${plan?.security ?? security} takes no passphrase.` },
+    { id: "reconcile", title: "4 · Program the access points", required: true, done: reconciled, detail: "ap-manager reconcile: the delta per access point first, then apply." },
+    { id: "result", title: `5 · The WiFi on ${z.zone}`, required: false, done: reconciled && !!live && live.zone === z.zone, detail: "What ap-manager now declares for the zone." },
   ];
-  const current = !plan ? "network" : !added ? "map" : !reconciled ? "reconcile" : "result";
+  const current = !plan ? "network" : !declareDone ? "declare" : !passOk ? "passphrase" : !reconciled ? "reconcile" : "result";
+  const passProblem = pass ? passphraseProblem(pass) : null;
 
   return (
     <div className="modal-back" onClick={onClose}>
@@ -89,24 +92,15 @@ export function WifiWizard({ z, aps, site, onClose, prefill }: { z: WifiZone; ap
           <button className="btn-x" onClick={onClose} aria-label="close">×</button>
         </header>
         <p className="small">
-          Devices that join this SSID land in zone <b>{z.zone}</b> ({z.type}{z.vlan !== null ? `, VLAN ${z.vlan}` : ""}) with its rules. {change ? <>Today it is <b>{old!.name}</b> on {old!.ap}{old!.security ? ` (${old!.security})` : ""}.</> : "It has no SSID yet."} Nothing reaches the access point until you apply the reconcile in stage 3.
+          Devices that join this SSID land in zone <b>{z.zone}</b> ({z.type}{z.vlan !== null ? `, VLAN ${z.vlan}` : ""}) with its rules. {old ? <>Today it is <b>{old.name}</b> ({old.security}), on {broadcastText(old)}.</> : "It has no SSID yet."} An SSID is site-wide: every access point ({apCount}) broadcasts it. Nothing reaches an access point until you apply the reconcile in stage 4.
         </p>
         <ol className="setup">
           <StepRow s={stages[0]} open={current === "network"}>
             <div className="form">
               <label className="form-row">
-                <span>access point *</span>
-                <select value={ap} disabled={plan !== null} onChange={(e) => setAp(e.target.value)}>
-                  <option value="">—</option>
-                  {aps.map((a) => (
-                    <option key={a.name} value={a.name}>{a.name}{a.model ? ` (${a.model})` : ""} · {(a.ssids ?? []).length} SSID(s)</option>
-                  ))}
-                </select>
-              </label>
-              <label className="form-row">
                 <span>SSID *</span>
                 <input type="text" value={name} disabled={plan !== null} onChange={(e) => setName(e.target.value)} />
-                {problem ? <small className="ff-error">{problem}</small> : <small className="muted">The network's name as devices see it.{z.declared && z.declared !== ssid ? ` zones.json names ${z.declared} for this zone.` : ""}</small>}
+                {problem ? <small className="ff-error">{problem}</small> : <small className="muted">The network's name as devices see it.{z.declared && z.declared !== ssid && z.declared !== old?.name ? ` zones.json names ${z.declared} for this zone.` : ""}{old && old.name !== ssid ? ` Replaces ${old.name}: one SSID per zone.` : ""}</small>}
               </label>
               <label className="form-row">
                 <span>security *</span>
@@ -115,59 +109,67 @@ export function WifiWizard({ z, aps, site, onClose, prefill }: { z: WifiZone; ap
                     <option key={c} value={c}>{c}</option>
                   ))}
                 </select>
-                <small className="muted">{personal ? "A WPA passphrase every device types." : /enterprise/.test(security) ? "Each user logs in through RADIUS (the access point's RADIUS profile)." : "Open: anyone in range joins the zone."}</small>
+                <small className="muted">{personal ? "A WPA passphrase every device types (stage 3)." : /enterprise/.test(security) ? "Each user logs in through RADIUS (the access point's RADIUS profile)." : "Open: anyone in range joins the zone."}</small>
               </label>
-              {personal ? (
-                <label className="form-row">
-                  <span>passphrase *</span>
-                  <span className="toolbar">
-                    <input type="password" autoComplete="new-password" placeholder={passKept ? "kept — type a new one to replace it" : "8 to 63 characters"} value={pass} disabled={plan !== null || problem !== null} onChange={(e) => setPass(e.target.value)} />
-                    <button className="btn" disabled={plan !== null || problem !== null || pass.length < 8 || pass.length > 63 || me?.role !== "installer"} onClick={() => void savePass()}>Save the passphrase</button>
-                  </span>
-                  <small className="muted">
-                    {passKept ? <><Dot level="pass" /> a passphrase for {ssid} is kept in ~/.wlan-secrets.txt. </> : null}
-                    Written to ~/.wlan-secrets.txt, where the access point plugin reads it; never shown again and never in a command.{me?.role !== "installer" ? " Saving it needs the Installer role." : ""}
-                  </small>
-                  {msg ? <small className="small">{msg}</small> : null}
-                </label>
-              ) : null}
             </div>
             <div className="actions">
               {plan ? (
-                <button className="btn" disabled={removed || added} onClick={() => setPlan(null)}>Edit</button>
+                <button className="btn" disabled={removed || declared || passDone} onClick={() => setPlan(null)}>Edit</button>
               ) : (
-                <button className="btn btn-primary" disabled={!ready} onClick={() => setPlan({ ap, ssid, zone: z.zone, vlan: z.vlan, security, replace: old ? { ap: old.ap, ssid: old.name } : null })}>
+                <button className="btn btn-primary" disabled={problem !== null} onClick={() => setPlan({ ssid, zone: z.zone, vlan: z.vlan, security, old })}>
                   Continue
                 </button>
               )}
-              {!plan && !ready ? <span className="muted small">{ap === "" ? "choose the access point" : problem ? "name the SSID" : "save the passphrase first"}</span> : null}
+              {!plan && problem ? <span className="muted small">name the SSID</span> : null}
             </div>
-            {sameName ? <p className="readstate readstate-warn">Same name on the same access point: the reconcile programs a new SSID or a new VLAN, not a new passphrase or security on one the access point already broadcasts. Give it a new name to have the change reach the devices.</p> : null}
           </StepRow>
-          <StepRow s={stages[1]} open={current === "map"}>
+          <StepRow s={stages[1]} open={current === "declare"}>
             {steps ? (
               <>
                 {steps.remove ? <StepView key={`r-${JSON.stringify(plan)}`} step={steps.remove} me={me} onDone={(ok) => ok && setRemoved(true)} /> : null}
-                {!steps.remove || removed ? <StepView key={`a-${JSON.stringify(plan)}`} step={steps.add} me={me} onDone={(ok) => ok && setAdded(true)} /> : <p className="muted small">Next: ap-manager ssid {plan!.ap} add {plan!.ssid} — once the old mapping is removed.</p>}
+                {steps.declare && (!steps.remove || removed) ? <StepView key={`d-${JSON.stringify(plan)}`} step={steps.declare} me={me} onDone={(ok) => ok && setDeclared(true)} /> : null}
+                {steps.declare && steps.remove && !removed ? <p className="muted small">Next: ap-manager ssid add {plan!.ssid} — once {plan!.old!.name} is removed.</p> : null}
+                {!steps.declare && !steps.remove ? <p className="muted small">{plan!.ssid} stays as it is; go on to its passphrase or the reconcile.</p> : null}
               </>
             ) : (
               <p className="muted small">Once the network is chosen.</p>
             )}
           </StepRow>
-          <StepRow s={stages[2]} open={current === "reconcile"}>
-            {steps && added ? <StepView step={steps.reconcile} me={me} onDone={(ok) => ok && setReconciled(true)} /> : <p className="muted small">Once the SSID is mapped.</p>}
+          <StepRow s={stages[2]} open={current === "passphrase"}>
+            {!plan || !declareDone ? (
+              <p className="muted small">Once the SSID is declared.</p>
+            ) : !passRequired ? (
+              <p className="muted small">{plan.security} takes no passphrase.</p>
+            ) : (
+              <div className="form">
+                <label className="form-row">
+                  <span>passphrase {state === "set" || state === "changed" ? "" : "*"}</span>
+                  <span className="toolbar">
+                    <input type="password" autoComplete="new-password" placeholder={state === "set" || state === "changed" ? "kept — type a new one to replace it" : "8 to 63 characters"} value={pass} onChange={(e) => setPass(e.target.value)} />
+                    <button className="btn btn-primary" disabled={!pass || passProblem !== null || me?.role !== "installer"} onClick={() => void savePass()}>Save the passphrase</button>
+                  </span>
+                  <small className="muted">
+                    {state ? <><Dot level={state === "not set" ? "warn" : "pass"} /> {plan.ssid}: {PASSPHRASE_TEXT[state]}. </> : null}
+                    {passProblem ? <span className="ff-error">{passProblem}. </span> : null}
+                    ap-manager stores it in ~/.wlan-secrets.txt (mode 600) and the reconcile pushes it to every access point that broadcasts {plan.ssid}; never shown again and never in a command.{me?.role !== "installer" ? " Saving it needs the Installer role." : ""}
+                  </small>
+                  {msg ? <small className="small">{msg}</small> : null}
+                </label>
+              </div>
+            )}
           </StepRow>
-          <StepRow s={stages[3]} open={current === "result"}>
-            {now.length ? (
+          <StepRow s={stages[3]} open={current === "reconcile"}>
+            {steps && declareDone && passOk ? <StepView step={steps.reconcile} me={me} onDone={(ok) => ok && setReconciled(true)} /> : <p className="muted small">Once the SSID is declared{passRequired ? " and its passphrase kept" : ""}.</p>}
+          </StepRow>
+          <StepRow s={stages[4]} open={current === "result"}>
+            {live && live.zone === z.zone ? (
               <ul className="plain checks">
-                {now.map((s) => (
-                  <li key={`${s.ap}/${s.name}`}>
-                    <Dot level={s.enabled === false ? "skip" : "pass"} /> <b>{s.name}</b> on {s.ap} → zone {z.zone}{typeof s.vlan === "number" ? ` (VLAN ${s.vlan})` : ""}{s.security ? ` · ${s.security}` : ""}{s.enabled === false ? " · declared, off" : ""}
-                  </li>
-                ))}
+                <li>
+                  <Dot level={live.disabled ? "skip" : "pass"} /> <b>{live.name}</b> → zone {live.zone}{typeof live.vlan === "number" ? ` (VLAN ${live.vlan})` : ""} · {live.security} · on {broadcastText(live)} · passphrase {PASSPHRASE_TEXT[passphraseOf(live)]}
+                </li>
               </ul>
             ) : (
-              <p className="muted small">No SSID maps to {z.zone} yet.</p>
+              <p className="muted small">No SSID bridges to {z.zone} yet.</p>
             )}
           </StepRow>
         </ol>
@@ -176,7 +178,7 @@ export function WifiWizard({ z, aps, site, onClose, prefill }: { z: WifiZone; ap
   );
 }
 
-export function WifiButton({ z, aps, site }: { z: WifiZone; aps: ApIn[]; site: string }) {
+export function WifiButton({ z, apCount, site }: { z: WifiZone; apCount: number; site: string }) {
   const [open, setOpen] = useState(false);
   const [prefill, setPrefill] = useState<TargetValues | null>(null);
   const operator = canOperate(useMe());
@@ -188,9 +190,9 @@ export function WifiButton({ z, aps, site }: { z: WifiZone; aps: ApIn[]; site: s
   const label = `${wifiVerb(z)} WiFi for ${z.zone}…`;
   return (
     <>
-      <button className="btn" disabled={aps.length === 0} title={aps.length === 0 ? "No access point is registered (ap-manager add)" : undefined} onClick={() => setOpen(true)}>{label}</button>
+      <button className="btn" onClick={() => setOpen(true)}>{label}</button>
       {/* Closing it re-reads the page: the zone may have its SSID now. */}
-      {open ? <WifiWizard z={z} aps={aps} site={site} prefill={prefill} onClose={() => { setOpen(false); setPrefill(null); reloadAll(); }} /> : null}
+      {open ? <WifiWizard z={z} apCount={apCount} site={site} prefill={prefill} onClose={() => { setOpen(false); setPrefill(null); reloadAll(); }} /> : null}
     </>
   );
 }

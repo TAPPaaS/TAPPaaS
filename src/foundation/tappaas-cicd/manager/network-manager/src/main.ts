@@ -219,6 +219,16 @@ export const HELP: HelpSpec = {
         "zones.json itself stays purely authored.",
     },
     {
+      usage: "set-ssid <zone> <ssid> | set-ssid <zone> --clear", effect: { noPreview: "writes the zone's SSID field in zones.json" },
+      name: "set-ssid (ap-manager's writer of the zone's SSID)",
+      verb: "set-ssid",
+      options: [["--clear", "remove the zone's SSID: it has no WiFi"]],
+      note:
+        "The zone's SSID names the site-wide WiFi network that bridges to it. ap-manager\n" +
+        "owns the WiFi networks and calls this from `ap-manager ssid add|modify|remove`;\n" +
+        "set an SSID there, so the SSID, its zone and the access points stay in step.",
+    },
+    {
       usage: "enable|disable|manual <name> [--force]", effect: { noPreview: "changes the zone's state in zones.json only; network-manager reconcile --apply makes it live" },
       name:
         "enable|disable|manual (atomic zone state change; was zone-state.sh —\n" +
@@ -428,6 +438,8 @@ interface Opts {
   // bind
   environment?: string;
   unbind: boolean;
+  // set-ssid --clear
+  clear: boolean;
   // add --archetype (ADR-014 D5); add --environment shares `environment`
   archetype?: string;
   add?: boolean; // bind --add: one more environment for a zone that serves several
@@ -459,6 +471,7 @@ function parseOpts(args: string[]): Opts {
     diff: false,
     json: false,
     unbind: false,
+    clear: false,
     effective: false,
     sets: [],
     unsets: [],
@@ -543,6 +556,9 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--unbind":
         o.unbind = true;
+        break;
+      case "--clear":
+        o.clear = true;
         break;
       case "--add":
         o.add = true;
@@ -1065,6 +1081,56 @@ function cmdBind(opts: Opts): void {
   info(`    network-manager reconcile --apply`);
 }
 
+// ── set-ssid (#889) ────────────────────────────────────────────────────
+// The zone's SSID names the site-wide WiFi network that bridges to it. The
+// network belongs to ap-manager (its settings, the access points, the
+// passphrase), so `modify --set SSID` is refused and ap-manager writes the field
+// through this verb — zones.json keeps one writer. No reconcile: nothing on the
+// firewall or the switches reads the name.
+const NO_WIFI_TYPES = new Set(["Management", "WAN", "Overlay"]);
+
+export function ssidNameProblem(ssid: string): string | null {
+  if (ssid.length < 1 || ssid.length > 32) return "an SSID is 1 to 32 characters";
+  if (/[=\r\n\u0000]/.test(ssid)) return "an SSID has no '=' and no line break (the passphrase file is SSID=passphrase)";
+  if (/^<.*>$/.test(ssid)) return "a real name, not the template's placeholder";
+  return null;
+}
+
+function cmdSetSsid(opts: Opts): void {
+  const [name, ssid] = opts.rest;
+  if (!name || (opts.clear ? ssid !== undefined : ssid === undefined) || opts.rest.length > 2) {
+    die("set-ssid: expected <zone> <ssid>, or <zone> --clear");
+  }
+  const doc = loadZones(opts.zonesFile);
+  const z = getZone(doc, name);
+  if (!z) die(`set-ssid: zone '${name}' not found in ${opts.zonesFile}`);
+  const rawZone = doc.raw[name] as Record<string, unknown>;
+  const before = typeof rawZone.SSID === "string" ? rawZone.SSID : null;
+  if (opts.clear) {
+    if (!("SSID" in rawZone)) {
+      info(`${name}: has no SSID — no change`);
+      return;
+    }
+    delete rawZone.SSID;
+    delete z.SSID;
+    saveZones(opts.zonesFile, doc);
+    info(`${name}: SSID ${before ?? "(unset)"} removed`);
+    return;
+  }
+  const type = typeof z.type === "string" ? z.type : "";
+  if (NO_WIFI_TYPES.has(type)) die(`set-ssid: zone '${name}' is type ${type} — a WiFi network bridges to a Client, IoT, Guest, Service or DMZ zone`);
+  const why = ssidNameProblem(ssid as string);
+  if (why) die(`set-ssid: '${ssid}': ${why}`);
+  if (before === ssid) {
+    info(`${name}: SSID already ${ssid} — no change`);
+    return;
+  }
+  rawZone.SSID = ssid;
+  z.SSID = ssid;
+  saveZones(opts.zonesFile, doc);
+  info(`${name}: SSID ${before ?? "(unset)"} → ${GN}${ssid}${CL}`);
+}
+
 // ── reconcile command ──────────────────────────────────────────────────
 // `render` — zones.effective.json from zones.json, and nothing else. Lets a
 // reader that finds the effective document older than the authored one (e.g.
@@ -1495,6 +1561,9 @@ export function run(argv: string[], client?: PlaneClient): number {
         return 0;
       case "modify":
         cmdModifyZone(opts);
+        return 0;
+      case "set-ssid":
+        cmdSetSsid(opts);
         return 0;
       case "reconcile":
         cmdReconcile(opts, client ?? new CliPlaneClient());

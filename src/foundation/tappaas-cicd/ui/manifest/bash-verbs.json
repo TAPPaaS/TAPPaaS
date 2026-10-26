@@ -1221,15 +1221,23 @@
      "keys": [
       [
        "ssid",
-       "*",
        "list"
       ]
      ],
-     "usage": "ssid <ap> list",
+     "usage": "ssid list [--json]",
      "note": null,
      "details": null,
      "positionals": [],
-     "options": [],
+     "options": [
+      {
+       "flag": "--json",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "As JSON."
+      }
+     ],
      "open": false,
      "effect": "read",
      "preview": {
@@ -1245,12 +1253,290 @@
      "keys": [
       [
        "ssid",
+       "add"
+      ]
+     ],
+     "usage": "ssid add <ssid> --zone <z> --security <s> [--radius <r>] [--captive] [--disabled] [--broadcast-on all|<ap>,...]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "ssid",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--zone",
+       "takesValue": true,
+       "arg": "<z>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The zone the SSID bridges to; its VLAN is the zone's, and the zone shows the SSID (one per zone)."
+      },
+      {
+       "flag": "--security",
+       "takesValue": true,
+       "arg": "<s>",
+       "choices": [
+        "wpa2-personal",
+        "wpa3-personal",
+        "open",
+        "wpa2-enterprise",
+        "wpa3-enterprise"
+       ],
+       "repeatable": false,
+       "description": "How clients join: a WPA passphrase (personal), RADIUS (enterprise), or open."
+      },
+      {
+       "flag": "--radius",
+       "takesValue": true,
+       "arg": "<r>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The RADIUS server (enterprise only)."
+      },
+      {
+       "flag": "--captive",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "A captive portal."
+      },
+      {
+       "flag": "--disabled",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Declared but not broadcast."
+      },
+      {
+       "flag": "--broadcast-on",
+       "takesValue": true,
+       "arg": "<all|ap,ap>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Which access points broadcast it: all (the default, and every AP added later), or their names, comma-separated."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "declares the SSID site-wide in switch-configuration-desired.json and sets the zone's SSID in zones.json; ap-manager reconcile --apply programs the access points"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "ssid modify",
+     "keys": [
+      [
+       "ssid",
+       "modify"
+      ]
+     ],
+     "usage": "ssid modify <ssid> [--zone <z>] [--security <s>] [--radius <r>] [--unset radius] [--captive|--no-captive] [--disabled|--enabled] [--broadcast-on all|<ap>,...]",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "ssid",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [
+      {
+       "flag": "--zone",
+       "takesValue": true,
+       "arg": "<z>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Move it to another zone (which must carry no SSID)."
+      },
+      {
+       "flag": "--security",
+       "takesValue": true,
+       "arg": "<s>",
+       "choices": [
+        "wpa2-personal",
+        "wpa3-personal",
+        "open",
+        "wpa2-enterprise",
+        "wpa3-enterprise"
+       ],
+       "repeatable": false,
+       "description": "How clients join."
+      },
+      {
+       "flag": "--radius",
+       "takesValue": true,
+       "arg": "<r>",
+       "choices": null,
+       "repeatable": false,
+       "description": "The RADIUS server (enterprise only)."
+      },
+      {
+       "flag": "--unset",
+       "takesValue": true,
+       "arg": "<field>",
+       "choices": null,
+       "repeatable": false,
+       "description": "radius: remove the RADIUS server."
+      },
+      {
+       "flag": "--captive",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "A captive portal."
+      },
+      {
+       "flag": "--no-captive",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "No captive portal."
+      },
+      {
+       "flag": "--disabled",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Keep it, broadcast nowhere."
+      },
+      {
+       "flag": "--enabled",
+       "takesValue": false,
+       "arg": null,
+       "choices": null,
+       "repeatable": false,
+       "description": "Broadcast it again."
+      },
+      {
+       "flag": "--broadcast-on",
+       "takesValue": true,
+       "arg": "<all|ap,ap>",
+       "choices": null,
+       "repeatable": false,
+       "description": "Which access points broadcast it: all (the default, and every AP added later), or their names, comma-separated."
+      }
+     ],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "changes the SSID in switch-configuration-desired.json (and the zones' SSID on --zone); ap-manager reconcile --apply programs the access points"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "ssid remove",
+     "keys": [
+      [
+       "ssid",
+       "remove"
+      ]
+     ],
+     "usage": "ssid remove <ssid>",
+     "note": null,
+     "details": null,
+     "positionals": [
+      {
+       "name": "ssid",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "removes the SSID, the zone's SSID and its passphrase; the next reconcile lists it for removal on each access point"
+     },
+     "destructive": true,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "ssid set-passphrase",
+     "keys": [
+      [
+       "ssid",
+       "set-passphrase"
+      ]
+     ],
+     "usage": "ssid set-passphrase <ssid>",
+     "note": null,
+     "details": "The passphrase comes from stdin or --file, never an argument. In the console the WiFi form's passphrase field sets it (POST /api/v1/secrets/wlan).",
+     "positionals": [
+      {
+       "name": "ssid",
+       "optional": false,
+       "repeatable": false
+      }
+     ],
+     "options": [],
+     "open": false,
+     "effect": "write",
+     "preview": {
+      "kind": "none",
+      "touches": "stores the WPA passphrase in ~/.wlan-secrets.txt and marks the SSID; ap-manager reconcile --apply pushes it"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "ssid <ap> list",
+     "keys": [
+      [
+       "ssid",
+       "*",
+       "list"
+      ]
+     ],
+     "usage": "ssid <ap> list",
+     "note": "the old per-AP form, kept for this release: ap-manager ssid list",
+     "details": null,
+     "positionals": [],
+     "options": [],
+     "open": false,
+     "effect": "read",
+     "preview": {
+      "kind": "read"
+     },
+     "destructive": false,
+     "destructiveWhen": [],
+     "readWhen": [],
+     "disruptions": []
+    },
+    {
+     "verb": "ssid <ap> add",
+     "keys": [
+      [
+       "ssid",
        "*",
        "add"
       ]
      ],
      "usage": "ssid <ap> add <ssid> --zone <z> --security <s> [--vlan <v>] [--radius <r>] [--captive] [--disabled]",
-     "note": null,
+     "note": "the old per-AP form, kept for this release: ap-manager ssid add",
      "details": null,
      "positionals": [
       {
@@ -1327,7 +1613,7 @@
      "disruptions": []
     },
     {
-     "verb": "ssid remove",
+     "verb": "ssid <ap> remove",
      "keys": [
       [
        "ssid",
@@ -1336,7 +1622,7 @@
       ]
      ],
      "usage": "ssid <ap> remove <ssid>",
-     "note": null,
+     "note": "the old per-AP form, kept for this release: ap-manager ssid remove",
      "details": null,
      "positionals": [
       {

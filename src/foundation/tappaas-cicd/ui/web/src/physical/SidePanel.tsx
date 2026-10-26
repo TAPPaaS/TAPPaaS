@@ -26,6 +26,7 @@ import { iconOf, kindName } from "./devicecard";
 import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
 import { DeviceLocationButton, LocationLink, PlacementLine, locationOption, useSiteLocations } from "../locations";
+import { PASSPHRASE_TEXT, SiteSsid, passphraseOf } from "../wizards";
 
 function Findings({ list }: { list: TopoFinding[] }) {
   if (list.length === 0) return <p className="muted small">No finding on it.</p>;
@@ -100,6 +101,7 @@ const farEnd = (l: DevLink, device: string) => (l.a === device ? l.b : l.a);
 export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null }) {
   const operator = canOperate(useMe());
   const health = useRead<Health>("health");
+  const siteSsids = useRead<SiteSsid[]>("ssids", 600_000).env?.data ?? null;
   const locations = useSiteLocations();
   const g = useMemo(() => deviceGraph(t), [t]);
   const devOf = (id: string): DevNode | undefined => g.nodes.find((n) => n.id === id);
@@ -353,16 +355,21 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       body = (
         <>
           <KV rows={[["vendor / model", `${a.vendor ?? "?"} · ${a.model ?? "?"}`], ["address", a.address], ["uplink", a.uplink ? `${a.uplink.switch} port ${a.uplink.port}` : null], ...placeRows(t, a.name)]} />
-          <h3>SSIDs</h3>
-          {a.ssids.length === 0 ? <p className="muted small">No SSID mapped to a zone (ap-manager ssid … add).</p> : null}
+          <h3>SSIDs it broadcasts</h3>
+          {a.ssids.length === 0 ? <p className="muted small">None: the site's SSIDs are declared once and every access point broadcasts them (ap-manager ssid add).</p> : null}
           <ul className="plain">
-            {a.ssids.map((s) => (
-              <li key={s.name}>
-                {s.name} · zone {s.zone ?? "?"} · vlan {s.vlan ?? "?"} · {s.security ?? "?"}
-                {s.enabled ? "" : " · disabled"}
-              </li>
-            ))}
+            {a.ssids.map((s) => {
+              const site = siteSsids?.find((x) => x.name === s.name) ?? null;
+              return (
+                <li key={s.name}>
+                  <span className="mono">{s.name}</span> · zone {s.zone ?? "?"} · vlan {s.vlan ?? "?"} · {s.security ?? "?"}
+                  {site ? ` · passphrase ${PASSPHRASE_TEXT[passphraseOf(site)]}` : ""}
+                  {s.enabled ? "" : " · disabled"}
+                </li>
+              );
+            })}
           </ul>
+          <p className="small"><Link to="/setup/day2#wifi">Add or change WiFi in the WiFi step →</Link></p>
         </>
       );
       open = <OpenIn kind="ap" id={a.name} />;

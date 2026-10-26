@@ -13,9 +13,10 @@ import { fieldsStep } from "../fields";
 import { FieldRow, ZoneFieldSpec, shortValue, zoneFieldRows } from "../forms";
 import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
-import { Dot, ReadState, Section, since } from "../ui";
+import { Dot, Link, ReadState, Section, since } from "../ui";
 import { EnvironmentRow, SiteRead } from "../types";
 import { cardVerbs } from "../zoneverbs";
+import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, isPlaceholderSsid, passphraseOf } from "../wizards";
 import { Ipv6Read, ipv6SubnetText, typeIdText, zoneV6 } from "../zonenet";
 import { COLUMN_TITLES, PSEUDO, PublicAddress, environmentsOf, isSharedService, publicAddress, publicText, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
 
@@ -110,6 +111,23 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
   return { nodes, edges };
 }
 
+// The zone's SSID row: read-only — the WiFi network is ap-manager's (#889), so
+// the row names it, how clients join and its passphrase, and links to the WiFi
+// step that changes it.
+function SsidCell({ z, ssids }: { z: ZoneRead; ssids: SiteSsid[] | null }) {
+  const name = typeof z.SSID === "string" ? z.SSID : null;
+  const site = ssids?.find((s) => s.zone === z.name) ?? null;
+  const to = WIFI_ZONE_TYPES.includes(z.type ?? "") ? `/setup/day2#wifi-${z.name}` : "/setup/day2#wifi";
+  return (
+    <>
+      {name && !isPlaceholderSsid(name) ? name : <span className="muted">{name ? `${name} (not named yet)` : "no WiFi"}</span>}
+      {site && site.name === name ? <span className="muted"> · {site.security} · passphrase {PASSPHRASE_TEXT[passphraseOf(site)]}</span> : null}
+      {" "}
+      <Link to={to} className="small">set from the WiFi step →</Link>
+    </>
+  );
+}
+
 // A field's value in the card: typeId with the type it numbers, ipv6Subnet
 // with the /64 it numbers in the site's prefix.
 function fieldText(r: FieldRow, z: ZoneRead, v6: Ipv6Read | null): string {
@@ -121,6 +139,7 @@ function fieldText(r: FieldRow, z: ZoneRead, v6: Ipv6Read | null): string {
 function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, v6, close }: { z: ZoneRead; schema: Record<string, ZoneFieldSpec> | null; envNames: string[]; zoneNames: string[]; archetypes: string[]; wan: PublicAddress | null; v6: Ipv6Read | null; close: () => void }) {
   const rows: FieldRow[] = schema ? zoneFieldRows(z, schema) : [];
   const verbs = cardVerbs(z);
+  const ssids = useRead<SiteSsid[]>("ssids", 600_000).env?.data ?? null;
   return (
     <aside className="sidepanel">
       <header>
@@ -179,7 +198,11 @@ function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, v6, close
           {rows.map((r) => (
             <tr key={r.field} title={r.description}>
               <td className="mono">{r.field}</td>
-              <td className={`mono wrap${r.configured ? "" : " muted"}`}>{fieldText(r, z, v6)}{r.configured ? "" : <span className="dflt"> default</span>}</td>
+              {r.field === "SSID" ? (
+                <td className="mono wrap"><SsidCell z={z} ssids={ssids} /></td>
+              ) : (
+                <td className={`mono wrap${r.configured ? "" : " muted"}`}>{fieldText(r, z, v6)}{r.configured ? "" : <span className="dflt"> default</span>}</td>
+              )}
             </tr>
           ))}
         </tbody>

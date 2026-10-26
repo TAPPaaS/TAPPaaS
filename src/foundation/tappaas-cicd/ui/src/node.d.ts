@@ -118,7 +118,13 @@ declare module "child_process" {
   export interface ChildStream {
     on(event: "data", cb: (chunk: NodeBuffer) => void): void;
   }
+  // A child's stdin: written once and closed (run.ts runWithStdin).
+  export interface ChildInput {
+    end(data?: string): void;
+    on(event: "error", cb: (e: Error) => void): void;
+  }
   export interface ChildProcess {
+    stdin: ChildInput | null;
     stdout: ChildStream | null;
     stderr: ChildStream | null;
     on(event: "close", cb: (code: number | null) => void): void;

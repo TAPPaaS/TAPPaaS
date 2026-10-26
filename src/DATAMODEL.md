@@ -37,6 +37,7 @@ flowchart LR
   subgraph network["Network"]
     ZONE["zones.json: one entry per zone<br/>network-manager"]:::record
     SWCFG["switch-configuration-desired.json<br/>switches, ports, access points<br/>switch-manager, ap-manager"]:::record
+    SSID["ssids{}: the site's WiFi networks<br/>(in switch-configuration-desired.json)<br/>ap-manager"]:::record
     SWACT["switch-configuration-actual.json<br/>(interrogated)"]:::seen
   end
 
@@ -89,6 +90,9 @@ flowchart LR
   SWCFG -- "ports[].zone" --> ZONE
   SWCFG -- "ports[].target (node, switch, ap)" --> DEVICE
   SWCFG -- "accessPoints[].uplinkSwitch" --> SWCFG
+  SSID -- "zone (one SSID per zone)" --> ZONE
+  ZONE -. "SSID names it (written by ap-manager)" .-> SSID
+  SSID -- "broadcastOn: all or [ap]" --> SWCFG
   SWACT -. "same shape, live state" .-> SWCFG
 
   %% modules
@@ -142,8 +146,8 @@ source tree, not under `~/config/`.
 | Site | `site.json` | site-manager | `defaultEnvironment` → environment; `owner` → organization; `backup.target`, `backup.offsite` → the backup server and buddy; `dnsBlocklists.zones[]` → zones; `repositories[]` → the repositories whose catalogs list the modules; `locations{}` → its places; `primaryLocation` → the one it is at, whose timezone is the site's and where a device or room that names none is; `locale`, `keyboard` are site-wide |
 | Location | `site.json` → `locations{}` | site-manager | names nothing: a place with a country, city, address and timezone, of kind `site` (this site's own equipment) or `remote` (another site's). A backup peer, a machine module, a switch, an access point, a room and a recorded device name one; the primary one and one that is named cannot be deleted |
 | Environment | `environments/<env>.json` | environment-manager | `ownerOrg` → organization; `domains` are its own (no file names them back). It names no zone: its own zone is the Service zone naming it as a string; shared service zones listing it serve it too |
-| Zone | `zones.json` (one object per zone) | network-manager | `environment` → the environment it belongs to: as a string on a Service zone (and `mgmt`), the environment whose own zone it is, exactly one per environment; as a list on a Service zone, the environments a shared service zone serves (the own zone of none); on a client, IoT or guest zone, the one or several it serves; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `bridge` → an interface, not an object |
-| Switches and access points | `switch-configuration-desired.json` (`-actual.json` is the interrogated copy) | switch-manager, ap-manager, driven by network-manager | `switches{}.ports{}.zone` → zone (access and native VLAN); `ports{}.target` → the node, switch or AP on the other end; `accessPoints{}.uplinkSwitch` → switch; `ssids` → zones by VLAN; `switches{}.location`, `accessPoints{}.location` → a location (unset: the primary; free text goes in `description`) |
+| Zone | `zones.json` (one object per zone) | network-manager | `environment` → the environment it belongs to: as a string on a Service zone (and `mgmt`), the environment whose own zone it is, exactly one per environment; as a list on a Service zone, the environments a shared service zone serves (the own zone of none); on a client, IoT or guest zone, the one or several it serves; `access-to[]`, `pinhole-allowed-from[]`, `snat-allowed-from[]` → zones; `SSID` → the site-wide WiFi network that bridges to it (shown here, owned and written by ap-manager); `bridge` → an interface, not an object |
+| Switches and access points | `switch-configuration-desired.json` (`-actual.json` is the interrogated copy) | switch-manager, ap-manager, driven by network-manager | `switches{}.ports{}.zone` → zone (access and native VLAN); `ports{}.target` → the node, switch or AP on the other end; `accessPoints{}.uplinkSwitch` → switch; `ssids{}.zone` → the zone a WiFi network bridges to (one per zone; the VLAN is the zone's), `ssids{}.broadcastOn` → `"all"` or access points; `accessPoints{}.ssids` is each AP's view of that list, written by ap-manager; `switches{}.location`, `accessPoints{}.location` → a location (unset: the primary; free text goes in `description`) |
 | Module (installed instance) | `<module>.json` | module-manager | `environment` → environment; `zone0`, `zone1` → zones; `node`, `config.cluster:ha.HANode` → nodes; `config.cluster:vm.storage` → a pool; `dependsOn[]`, `integratesWith[]` → `module:service` pairs another module `provides`; `config.network:proxy.proxyAllowedZones[]` → zones; `controllers[]`, `managers[]` → components the module contributes to the control plane; `moduleSource` → its source directory; `location` → the location a machine (not a guest) is at, unset the primary |
 | Module catalog | `src/module-catalog.json` in each repository | site-manager (`repository validate-catalog`) | `modules[].moduleJson` → the module's JSON in the source tree; `vmid`, `stack` must agree with it |
 | Control-plane registry | `control-plane.json` | written by the refresh, read by the self-check and the console | `components[].module` → the module that ships a component; `plugsInto[]` → the manager a controller serves |

@@ -77,6 +77,8 @@ export function fakeSite(): FakeSite {
       }
       case "ap-manager list":
         return ok(file("aps.json"));
+      case "ap-manager ssid":
+        return ok(file("ssids.json"));
       case "node-provisioner status":
         return { rc: 1, stdout: "PXE: disabled (no TAPPaaS boot entries; zone 'mgmt')\npending registrations: none\n", stderr: "", ran: true };
       case "journalctl -u":

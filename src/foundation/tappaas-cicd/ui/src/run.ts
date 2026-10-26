@@ -45,6 +45,43 @@ export const runAsync: Runner = (bin, args, timeoutMs = 120_000) =>
     );
   });
 
+// A verb that reads a secret on stdin (ap-manager ssid set-passphrase, #889):
+// the secret never reaches argv, where the process list and the logs see it.
+// stdin is written once and closed; the output is captured as for runAsync.
+export type StdinRunner = (bin: string, args: string[], input: string, timeoutMs?: number) => Promise<ExecResult>;
+
+export const runWithStdin: StdinRunner = (bin, args, input, timeoutMs = 60_000) =>
+  new Promise((resolve) => {
+    let child: ChildProcess;
+    try {
+      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb" }, stdio: ["pipe", "pipe", "pipe"] });
+    } catch (e) {
+      resolve({ rc: -1, stdout: "", stderr: (e as Error).message, ran: false });
+      return;
+    }
+    const out: NodeBuffer[] = [];
+    const err: NodeBuffer[] = [];
+    let settled = false;
+    const done = (r: ExecResult): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(r);
+    };
+    const timer = setTimeout(() => {
+      child.kill("SIGTERM");
+      done({ rc: -1, stdout: Buffer.concat(out).toString("utf8"), stderr: `timed out after ${timeoutMs / 1000}s`, ran: true });
+    }, timeoutMs);
+    child.stdout?.on("data", (c) => out.push(c));
+    child.stderr?.on("data", (c) => err.push(c));
+    child.on("error", (e) => done({ rc: -1, stdout: "", stderr: e.message, ran: false }));
+    child.on("close", (code) =>
+      done({ rc: code ?? -1, stdout: Buffer.concat(out).toString("utf8"), stderr: Buffer.concat(err).toString("utf8"), ran: true }),
+    );
+    child.stdin?.on("error", () => undefined);
+    child.stdin?.end(input);
+  });
+
 // A verb's --json document. Some verbs exit 1 with a complete document (validate
 // when a gate fails); `okRcs` names the exit codes whose output is the answer.
 export async function runJson<T>(run: Runner, bin: string, args: string[], opts: { okRcs?: number[]; timeoutMs?: number } = {}): Promise<T> {

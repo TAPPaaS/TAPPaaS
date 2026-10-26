@@ -221,12 +221,11 @@ async function main(): Promise<void> {
   check(!w.ok, "a key the provider does not name (dns_…) is refused");
   w = writeSecret(home, "unifi", { url: "https://10.0.0.5:11443", username: "tappaas", password: "pw" });
   check(w.ok && parseKv(readFileSync(join(home, ".unifi-os-credentials.txt"), "utf8")).get("username") === "tappaas", "unifi: url=, username=, password=");
-  writeSecret(home, "wlan", { ssid: "home", passphrase: "correct horse" });
-  writeSecret(home, "wlan", { ssid: "guest", passphrase: "battery staple" });
-  writeSecret(home, "wlan", { ssid: "home", passphrase: "another passphrase" });
-  const wl = parseKv(readFileSync(join(home, ".wlan-secrets.txt"), "utf8"));
-  check(wl.size === 2 && wl.get("home") === "another passphrase" && wl.get("guest") === "battery staple", "wlan: one SSID=passphrase line per SSID, merged");
-  check(!writeSecret(home, "wlan", { ssid: "x", passphrase: "short" }).ok, "a WPA passphrase under 8 characters is refused");
+  // wlan is ap-manager's (ssid set-passphrase on stdin, #889; wifi.test.ts): the console writes no line of it.
+  check(!writeSecret(home, "wlan", { ssid: "home", passphrase: "correct horse" }).ok && !existsSync(join(home, ".wlan-secrets.txt")), "wlan: not written by the console");
+  writeFileSync(join(home, ".wlan-secrets.txt"), "home=pa=ss word\nguest=battery staple\n", { encoding: "utf8", mode: 0o600 });
+  const wl = secretStatus(home, "wlan");
+  check(wl.keys.join() === "home,guest" && !JSON.stringify(wl).includes("battery"), "…its status names the SSIDs ap-manager keeps, never a passphrase");
   check(!writeSecret(home, "unifi", { url: "x\ny", username: "a", password: "b" }).ok, "a value with a newline is refused");
 
   rmSync(dir, { recursive: true, force: true });

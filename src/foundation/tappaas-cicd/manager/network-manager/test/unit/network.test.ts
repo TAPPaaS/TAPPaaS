@@ -2027,6 +2027,8 @@ function tmpZones(): string {
   check(!state.ok && why(state, "enable|disable|manual"), "state is refused, naming the verb that has the guards");
   const envLink = gate("environment=acme");
   check(!envLink.ok && why(envLink, "bind"), "environment is refused, naming bind");
+  const ssid = gate("SSID=rossen-home");
+  check(!ssid.ok && why(ssid, "ap-manager ssid add"), "#889: SSID is refused, naming the ap-manager verbs that own it");
 
   // Reject the WHOLE command, so zones.json and the planes never move apart.
   const mixed = gate("description=fine", "vlantag=250");
@@ -2540,6 +2542,43 @@ function tmpZones(): string {
     check(nm(["bind", "mgmt", "--environment", "erik", "--add", ...zf]) !== 0, "#876: the Management zone is never shared");
   }
   if (prevDist === undefined) delete process.env.NM_NO_DISTRIBUTE; else process.env.NM_NO_DISTRIBUTE = prevDist;
+}
+
+// ── #889: the zone's SSID, written for ap-manager by set-ssid ─────────
+{
+  const dir = mkdtempSync(join(tmpdir(), "nm-889-"));
+  copyFileSync(join(FIXTURE_DIR, "shared-service-zone", "zones.json"), join(dir, "zones.json"));
+  const zf = ["--zones-file", join(dir, "zones.json")];
+  const zssid = (z: string): unknown => (JSON.parse(readFileSync(join(dir, "zones.json"), "utf8")) as Record<string, Record<string, unknown>>)[z]?.SSID;
+  const [log, err] = [console.log, console.error];
+  console.log = () => {};
+  console.error = () => {};
+  let r: number[];
+  try {
+    r = [
+      run(["set-ssid", "home", "rossen-home", ...zf]),
+      run(["set-ssid", "home", "rossen-home", ...zf]),
+      run(["set-ssid", "mgmt", "admin-wifi", ...zf]),
+      run(["set-ssid", "guest", "<GUEST_SSID>", ...zf]),
+      run(["set-ssid", "guest", "a=b", ...zf]),
+      run(["set-ssid", "nosuch", "x", ...zf]),
+      run(["modify", "home", "--set", "SSID=other", ...zf]),
+    ];
+  } finally {
+    [console.log, console.error] = [log, err];
+  }
+  check(r[0] === 0 && zssid("home") === "rossen-home", "#889: set-ssid writes the zone's SSID");
+  check(r[1] === 0, "#889: …and again is no change");
+  check(r[2] !== 0 && zssid("mgmt") === undefined, "#889: the Management zone carries no WiFi");
+  check(r[3] !== 0 && r[4] !== 0, "#889: a placeholder or a name with '=' is refused");
+  check(r[5] !== 0, "#889: an unknown zone is refused");
+  check(r[6] !== 0 && zssid("home") === "rossen-home", "#889: modify --set SSID is refused and writes nothing");
+  console.log = () => {};
+  const c = run(["set-ssid", "home", "--clear", ...zf]);
+  console.log = log;
+  check(c === 0 && zssid("home") === undefined, "#889: set-ssid --clear removes it");
+  const v = renderManifest(HELP).verbs.find((x) => x.verb === "set-ssid");
+  check(!!v && v.effect === "write", "#889: set-ssid is in the verb manifest as a write");
 }
 
 console.log("");

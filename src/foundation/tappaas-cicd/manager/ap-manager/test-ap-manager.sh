@@ -33,6 +33,11 @@ cat > "${TMP}/zones.json" <<'JSON'
 }
 JSON
 trap 'rm -rf "${TMP}"' EXIT
+# ap-manager writes the zone's SSID through network-manager set-ssid (#889):
+# a stub doing what it does, unless a real one is given.
+# shellcheck source=test-lib.bash
+. "${SCRIPT_DIR}/test-lib.bash"
+export AP_NETWORK_MANAGER="${AP_TEST_NETWORK_MANAGER:-$(make_nm_stub "${TMP}")}"
 
 DES="${TMP}/switch-configuration-desired.json"
 PASS=0; FAIL=0
@@ -96,7 +101,7 @@ jq '.home.vlantag=310' "${TMP}/zones.json" > "${TMP}/z2" && mv "${TMP}/z2" "${TM
 # AP-04: delta detects SSID create + validation: zone work declares SSID 'TAPPaaS-Work' but no AP serves it
 delta_out="$("${AM}" delta 2>&1)"
 ck "AP-04 create-ssid detected"      "yes"    "$(has "${delta_out}" 'create-ssid')"
-ck "AP-04 unserved-SSID warning"     "yes"    "$(has "${delta_out}" "no AP broadcasts it")"
+ck "AP-04 undeclared-SSID warning"   "yes"    "$(has "${delta_out}" "names SSID 'TAPPaaS-Work', which ap-manager does not hold")"
 ck "AP-04 uplink-not-carrying warning" "yes"   "$(has "${delta_out}" 'does not carry VLAN')"
 
 # reconcile --apply via manual plugin → needs-manual (rc 2)
@@ -164,7 +169,7 @@ PLUGIN_DIR="${STUB}" "${AM}" remove ap-stub >/dev/null 2>&1
 "${AM}" add "Nano HD" --vendor manual --ip 10.0.0.31 >/dev/null 2>&1
 "${AM}" ssid "Nano HD" add TAPPaaS-Home --zone home --security wpa2-personal >/dev/null 2>&1
 out="$("${AM}" delta 2>&1)"
-ck "spaced AP: its change is shown"     "yes" "$(has "${out}" 'Nano HD: 1 change(s)')"
+ck "spaced AP: its change is shown"     "yes" "$(has "${out}" 'Nano HD: [0-9]* change(s)')"
 ck "…not split into 'Nano' and 'HD'"    "no"  "$(has "${out}" 'Nano: SSIDs in sync')"
 out="$("${AM}" apply 2>&1)"
 ck "spaced AP: apply reaches its plugin" "yes" "$(has "${out}" 'Nano HD')"
@@ -179,7 +184,12 @@ cat > "${T2}/zones.json" <<'JSON'
   "iot":   { "state":"Active","vlantag":410, "SSID":"<IOT_SSID>" },
   "old":   { "state":"Inactive","vlantag":420, "SSID":"OldNet" },
   "off":   { "state":"Disabled","vlantag":430, "SSID":"OffNet" },
-  "wired": { "state":"Active","vlantag":440, "SSID":null }
+  "wired": { "state":"Active","vlantag":440, "SSID":null },
+  "za":    { "state":"Active","vlantag":451 },
+  "zb":    { "state":"Active","vlantag":452 },
+  "zc":    { "state":"Active","vlantag":453 },
+  "zd":    { "state":"Active","vlantag":454 },
+  "ze":    { "state":"Active","vlantag":455 }
 }
 JSON
 am2() { CONFIG_DIR="${T2}" "${AM}" "$@"; }
@@ -192,13 +202,13 @@ ck "#734 an Inactive zone is not demanded" "no" "$(has "${out}" "'old'")"
 ck "#734 a Disabled zone is not demanded" "no"  "$(has "${out}" "'off'")"
 ck "#734 SSID null = no WiFi, no warning" "no"  "$(has "${out}" "'wired'")"
 ck "#734 a real SSID that is served: no warning" "no" "$(has "${out}" "'home'")"
-for n in A B C; do am2 ssid ap1 add "Net${n}" --zone home --security wpa2-personal >/dev/null 2>&1; done
+for n in a b c; do am2 ssid ap1 add "Net${n^^}" --zone "z${n}" --security wpa2-personal >/dev/null 2>&1; done
 ck "#734 four SSIDs: no ceiling warning"  "no"  "$(has "$(am2 delta 2>&1)" "AP 'ap1' broadcasts")"
-out="$(am2 ssid ap1 add NetD --zone home --security wpa2-personal 2>&1)"; rc=$?
+out="$(am2 ssid ap1 add NetD --zone zd --security wpa2-personal 2>&1)"; rc=$?
 ck "#734 the add that crosses the ceiling still succeeds (rc)" "0" "${rc}"
 ck "#734 …and warns"                      "yes" "$(has "${out}" "AP 'ap1' broadcasts 5 SSIDs, more than 4")"
 ck "#734 delta counts it too"             "yes" "$(has "$(am2 delta 2>&1)" "AP 'ap1' broadcasts 5 SSIDs")"
-am2 ssid ap1 add NetE --zone home --security wpa2-personal --disabled >/dev/null 2>&1
+am2 ssid ap1 add NetE --zone ze --security wpa2-personal --disabled >/dev/null 2>&1
 ck "#734 a disabled SSID does not count"  "yes" "$(has "$(am2 delta 2>&1)" "broadcasts 5 SSIDs")"
 jq '.accessPoints.ap1.maxSsids = 5' "${T2}/switch-configuration-desired.json" > "${T2}/d" && mv "${T2}/d" "${T2}/switch-configuration-desired.json"
 ck "#734 a per-AP maxSsids accepts it"    "no"  "$(has "$(am2 delta 2>&1)" "AP 'ap1' broadcasts")"

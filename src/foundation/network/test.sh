@@ -1401,10 +1401,12 @@ deep_test_adr008_providers() {
 
     section "Deep B: ap-manager — SSID tracking + cross-provider uplink validation (#339)"
 
-    # swdeepA (965) gains an SSID; an AP (unknown vendor → manual) broadcasts it.
-    jq '.swdeepA.SSID="TAPPaaS-Test"' "${T}/zones.json" > "${T}/z" && mv "${T}/z" "${T}/zones.json"
+    # swdeepA (965) gains a site-wide SSID (#889), broadcast only by a test AP
+    # (unknown vendor → manual): never by the site's real access points, which
+    # reconcile --apply below would program.
     env CONFIG_DIR="${T}" ap-manager add testap --vendor generic --ip 10.0.0.98 >/dev/null 2>&1 || true
-    env CONFIG_DIR="${T}" ap-manager ssid testap add TAPPaaS-Test --zone swdeepA --security wpa3-personal >/dev/null 2>&1 || true
+    env CONFIG_DIR="${T}" ap-manager ssid add TAPPaaS-Test --zone swdeepA --security wpa3-personal --broadcast-on testap >/dev/null 2>&1 || true
+    _djq "Deep B1: ssid add names the SSID on its zone" '.swdeepA.SSID == "TAPPaaS-Test"' "${T}/zones.json"
     env CONFIG_DIR="${T}" ap-manager link testap --switch testcore --port 9 >/dev/null 2>&1 || true
     env CONFIG_DIR="${T}" ap-manager update-desired >/dev/null 2>&1 || true
     _djq "Deep B1: SSID VLAN auto-tracks its zone (965)" \

@@ -30,10 +30,15 @@ the nodes (every registered node — its `pvehost` instance — a cluster member
 (optional: a room recorded and every node and switch placed, from `config/positions.json`), stacks (optional).
 Each step is a form over its verbs as jobs. Secrets go through `POST /api/v1/secrets/<name>`
 (Installer or the setup token): `acme-dns` → `~/.acme-dns-credentials.txt`, `unifi` →
-`~/.unifi-os-credentials.txt`, `wlan` → `~/.wlan-secrets.txt`, mode 0600, in Activity with their
-keys and never their values; `GET /api/v1/secrets` names the keys set. The WiFi step lists each SSID
-the access points hold with whether its passphrase is kept (a personal SSID without one cannot be
-created on the access point), and a "Set passphrase…" link to its Day 2 form. The same flows serve
+`~/.unifi-os-credentials.txt`, mode 0600; `wlan` is handed to `ap-manager ssid set-passphrase <ssid>`
+on stdin (never in argv), which stores it in `~/.wlan-secrets.txt` and marks the SSID for the next
+reconcile. Each is in Activity with its keys and never their values; `GET /api/v1/secrets` names the
+keys set. The WiFi step lists the site's SSIDs (`ap-manager ssid list`, the `ssids` read) with their
+zone, security, the access points that broadcast each and the passphrase state (set, changed and not
+pushed yet, or not set — a personal SSID without one cannot be created on the access points), and a
+"Set passphrase…" link to its Day 2 form. Day 2's WiFi form declares the SSID site-wide (`ssid add`,
+or `ssid modify`, or `ssid remove` then `add` for a new name), takes the passphrase, then previews and
+applies the reconcile; the zone card shows the zone's SSID read-only with a link to it. The same flows serve
 day 2: add a node, adopt a running machine (`module-manager adopt`), an environment, a stack; enrol a
 device (the wg-quick file to download). Day 2's **physical site** is a step with that state and
 its sequence: record the rooms (by location), add a rack, place the nodes and switches, record

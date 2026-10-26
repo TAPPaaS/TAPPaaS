@@ -138,7 +138,11 @@ async function main(): Promise<void> {
   const swr = ok(["switch-manager", "reconcile", "--apply"]);
   check(swr.ok && previewArgv(swr)?.join(" ") === "switch-manager reconcile", "switch-manager reconcile previews without --apply");
   const ssid = ok(["ap-manager", "ssid", "Nano HD", "add", "home", "--zone", "home"]);
-  check(ssid.ok && ssid.verb.verb === "ssid add" && ssid.object === "home", "ap-manager ssid <ap> add <ssid>: a '*' key word takes the AP");
+  check(ssid.ok && ssid.verb.verb === "ssid <ap> add" && ssid.object === "home", "ap-manager ssid <ap> add <ssid>: a '*' key word takes the AP (the old per-AP form)");
+  const site = ok(["ap-manager", "ssid", "add", "rossen-home", "--zone", "home", "--security", "wpa2-personal", "--broadcast-on", "all"]);
+  check(site.ok && site.verb.verb === "ssid add" && site.object === "rossen-home", "#889: ap-manager ssid add <ssid>: the site-wide verb, not the per-AP form");
+  check(bad(["ap-manager", "ssid", "set-passphrase", "rossen-home", "hunter2hunter2"], ""), "#889: ssid set-passphrase takes no passphrase argument");
+  check(bad(["ap-manager", "ssid", "set-passphrase", "rossen-home", "--file", "/etc/shadow"], "unknown option"), "#889: …nor --file from the console");
   check(ok(["acme-setup.sh", "--no-save-creds"]).ok, "acme-setup.sh is its own verb (an empty key)");
   check(bad(["switch-manager", "remove-switch", "a", "--force"], "unknown option"), "remove-switch takes no option");
   // #855: the typed name is the object, not the first positional.
