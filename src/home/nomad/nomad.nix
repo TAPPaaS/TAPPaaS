@@ -180,9 +180,15 @@ let
   fenceScript = pkgs.writeShellScript "nomad-fence" ''
     set -euo pipefail
     export PATH=${lib.makeBinPath [ pkgs.iptables pkgs.iproute2 pkgs.gawk pkgs.coreutils ]}
-    up="$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
-    gw="$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "via") {print $(i + 1); exit}}')"
-    [ -n "$up" ] && [ -n "$gw" ] || { echo "nomad-fence: no default route yet"; exit 1; }
+    # At boot the default route can come after this starts: wait for it, so the
+    # stack (which requires this) starts behind the fence, never before it.
+    for _ in $(seq 1 60); do
+      up="$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
+      gw="$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "via") {print $(i + 1); exit}}')"
+      [ -n "$up" ] && [ -n "$gw" ] && break
+      sleep 2
+    done
+    [ -n "$up" ] && [ -n "$gw" ] || { echo "nomad-fence: no default route after 120 s"; exit 1; }
     net4="$(ip -4 -o addr show dev "$up" scope global | awk '{print $4; exit}')"
     fence() { # fence <iptables|ip6tables> <caddy source> <own networks...>
       local t="$1" src="$2"; shift 2
@@ -259,9 +265,11 @@ in
 
   systemd.services.project-nomad = {
     description = "Project N.O.M.A.D. (Command Center, MySQL, Redis)";
-    after = [ "docker.service" "network-online.target" ];
+    # Behind the fence or not at all: a stack without it is the Command Center
+    # open to every neighbour around the gate.
+    after = [ "docker.service" "network-online.target" "nomad-fence.service" ];
     wants = [ "network-online.target" ];
-    requires = [ "docker.service" ];
+    requires = [ "docker.service" "nomad-fence.service" ];
     wantedBy = [ "multi-user.target" ];
     path = [ pkgs.docker pkgs.coreutils pkgs.gnused ];
     serviceConfig = {
@@ -283,7 +291,7 @@ in
     partOf = [ "docker.service" ];
     wantedBy = [ "multi-user.target" "docker.service" ];
     before = [ "project-nomad.service" ];
-    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; ExecStart = fenceScript; Restart = "on-failure"; RestartSec = 10; };
+    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; ExecStart = fenceScript; TimeoutStartSec = "3min"; };
     restartTriggers = [ fenceScript ];
   };
 
