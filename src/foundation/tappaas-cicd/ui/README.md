@@ -189,6 +189,7 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | the faceplate catalog (a placement's faceplate choices) | `position-manager faceplates list --json` | 10 min |
 | storage (Physical › Storage and Overview) | `storage-manager inventory --json` (SMART included, ≈15 s on three nodes) | 10 min, read when a page asks; no timer of its own |
 | zones | `network-manager list --json`, `show <zone> --json` | every 5 min |
+| the site's IPv6 prefix (`ipv6`: each zone's /64 on the Zones page) | `site.json` `ipv6` and `network.wan.ipv6`; for a dynamic WAN, `ipv6-manager wan --json` (ssh to the firewall) | 10 min, read when a page asks; no timer of its own |
 | environments | `environment-manager list --json` | every 5 min |
 | site | `site-manager site show / node list / repository list --json`, `config/last-update-result.json` | every 5 min |
 | security | `health-manager report security --json` | every 10 min |
@@ -202,7 +203,7 @@ now (it changes nothing on the site).
 ## API (`/api/v1`)
 
 Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
-`modules/<m>/drift[?refresh=1]` · `zones` · `environments` · `topology` · `storage` · `security` ·
+`modules/<m>/drift[?refresh=1]` · `zones` · `ipv6` · `environments` · `topology` · `storage` · `security` ·
 `activity[?module=<m>]` (the sweep's runs, and `jobs`) · `manifests` ·
 `modules/<m>/icon` (SVG or PNG, 404 when it has none) · `jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site;
 disk and pool, whose id is the node: its Disks and ZFS panels in Proxmox).

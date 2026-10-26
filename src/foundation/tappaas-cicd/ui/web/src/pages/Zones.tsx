@@ -15,6 +15,7 @@ import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
 import { Dot, ReadState, Section, since } from "../ui";
 import { EnvironmentRow, SiteRead } from "../types";
+import { Ipv6Read, zoneV6 } from "../zonenet";
 import { COLUMN_TITLES, PSEUDO, PublicAddress, environmentsOf, isSharedService, publicAddress, publicText, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
 
 export interface ZoneRead {
@@ -24,6 +25,7 @@ export interface ZoneRead {
   vlantag?: number;
   ip?: string;
   tier?: number;
+  ipv6Subnet?: number;
   environment?: string | string[];
   description?: string;
   error?: string;
@@ -206,6 +208,15 @@ export function ZonesGraph({ zones, envNames, archetypes, sel, setSel }: { zones
   );
 }
 
+// Where the IPv6 column's networks come from, or why it has none.
+function ipv6Note(v6: Ipv6Read | null): string {
+  if (!v6) return "IPv6: the site's prefix is being read…";
+  if (!v6.on) return "IPv6 is off for the site (site.json ipv6): no zone has an IPv6 network.";
+  if (v6.mode === "none") return "The WAN takes no IPv6 (network.wan.ipv6 mode none): no zone has an IPv6 network.";
+  if (!v6.prefix) return `IPv6 is on, but no prefix is known${v6.error ? ` (${v6.error})` : ""}: the IPv6 column shows none until the WAN holds one.`;
+  return `IPv6: each zone's /64 is its ipv6Subnet within ${v6.prefix} (${v6.source === "site.json" ? "routed to the site, site.json" : "delegated to the WAN, as the firewall holds it now"}); a zone without an ipv6Subnet has none.`;
+}
+
 // The Zones page (/zones): the graph with its side card, and the zones' table
 // below it. A zone's verbs (network-manager modify / enable|disable|manual /
 // bind / reconcile / add from it / delete, each as a job with its preview; a
@@ -215,6 +226,8 @@ export function ZonesGraph({ zones, envNames, archetypes, sel, setSel }: { zones
 export function ZonesPage() {
   const envs = useRead<EnvironmentRow[]>("environments");
   const zones = useRead<ZoneRead[]>("zones");
+  // The site's IPv6 prefix: each zone's /64 is its ipv6Subnet within it.
+  const v6 = useRead<Ipv6Read>("ipv6", 600_000).env?.data ?? null;
   const [zone, setZone] = useState<string | null>(() => new URLSearchParams(window.location.search).get("zone"));
   useEffect(() => {
     const on = () => setZone(new URLSearchParams(window.location.search).get("zone"));
@@ -252,7 +265,7 @@ export function ZonesPage() {
         {zones.env?.data ? <ZonesGraph zones={zones.env.data} envNames={envNames} archetypes={archetypes} sel={zone} setSel={pick} /> : null}
         <table className="table compact ztable">
           <thead>
-            <tr><th>zone</th><th>type</th><th>vlan</th><th>IPv4</th><th>environment</th><th>state</th><th>tier</th></tr>
+            <tr><th>zone</th><th>type</th><th>vlan</th><th>IPv4</th><th>IPv6</th><th>environment</th><th>state</th><th>tier</th></tr>
           </thead>
           <tbody>
             {(zones.env?.data ?? []).map((z) => (
@@ -269,6 +282,7 @@ export function ZonesPage() {
                 <td>{z.type ?? ""}</td>
                 <td>{z.vlantag ?? ""}</td>
                 <td className="mono">{z.ip ?? ""}</td>
+                <td className="mono">{zoneV6(z, v6) ?? "-"}</td>
                 <td>{environmentsOf(z).join(", ")}</td>
                 <td className="nowrap"><Dot level={dot(z)} /> {z.state ?? z.error ?? ""}</td>
                 <td>{z.tier ?? ""}</td>
@@ -276,6 +290,7 @@ export function ZonesPage() {
             ))}
           </tbody>
         </table>
+        <p className="muted small">{ipv6Note(v6)}</p>
       </Section>
     </div>
   );

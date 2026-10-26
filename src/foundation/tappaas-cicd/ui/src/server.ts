@@ -205,6 +205,8 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.site.get()));
       case "zones":
         return sendJson(res, 200, envelope(await r.zones.get()));
+      case "ipv6":
+        return sendJson(res, 200, envelope(await r.ipv6.get()));
       case "aps":
         return sendJson(res, 200, envelope(await r.aps.get()));
       case "environments":
