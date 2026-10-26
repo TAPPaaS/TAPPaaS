@@ -2,6 +2,15 @@
   "_README": "Every TAPPaaS version: the revision it names and when it reached each channel (ADR-028 D13). tappaas-train writes this at each boundary and urgent fix; RELEASES.md is rendered from it (tappaas-train releases --render after a hand edit). Dates are UTC days. kind: minor | major (a boundary), patch (an urgent fix, ADR-028 D12), release (made by hand, before the train).",
   "releases": [
     {
+      "version": "2.3.1",
+      "commit": "ff6688cff796",
+      "staging": "2026-10-26",
+      "production": null,
+      "kind": "patch",
+      "channel": "staging",
+      "why": "service down: the update sweep deadlocks node reboots and fails modules on a stopped provider (Erik, 2026-10-25)"
+    },
+    {
       "version": "2.3",
       "commit": "",
       "staging": "2026-10-25",
