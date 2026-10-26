@@ -1558,6 +1558,21 @@ got="$(bash -c ". '${RB}/vmid.sh'; for f in top nested none; do printf '%s,' \"\
     && ok "(g) the VMID is read at the top level, beside a .config block" \
     || bad "(g) module_config_vmid read '${got}', expected '341,342,,'"
 
+# (h) #879: a device module names vmname+zone0 but has no vmid — no guest to
+# wait for, so no host (both readiness gates skip on an empty one).
+awk '/^module_guest_host\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" > "${RB}/host.sh"
+cat >> "${RB}/host.sh" <<HOSTSTUB
+read_module_config() {
+    jq 'if (.config | type) == "object" then reduce (.config | to_entries[]) as \$s (.; . * \$s.value) | del(.config) else . end' "${RB}/\$1.json"
+}
+HOSTSTUB
+echo '{"vmid":null,"vmname":"hue","zone0":"iotCloud"}'  > "${RB}/hue.json"
+echo '{"vmid":120,"config":{"cluster:vm":{"vmname":"vw","zone0":"srv"}}}' > "${RB}/vw.json"
+got="$(bash -c '. "$1"; printf "%s," "$(module_guest_host hue)" "$(module_guest_host vw)"' _ "${RB}/host.sh")"
+[[ "${got}" == ",vw.srv.internal," ]] \
+    && ok "(h) a module without a vmid has no guest host; one with a VM does" \
+    || bad "(h) module_guest_host gave '${got}', expected ',vw.srv.internal,'"
+
 # config backup/restore (the rollback half that a VM-less module relies on)
 awk '/^backup_module_config\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >  "${RB}/cfgfn.sh"
 awk '/^restore_module_config\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >> "${RB}/cfgfn.sh"

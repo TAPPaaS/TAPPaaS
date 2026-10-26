@@ -437,11 +437,14 @@ trap cleanup_update_files EXIT
 # run_graded_test <log> <test-module.sh args...> — run it, show its output as
 # before, keep a copy in <log>; returns test-module.sh's exit code.
 # The module's guest as <vmname>.<zone0>.internal; empty for a module without
-# one (cluster, templates — nothing to wait for). An optional second argument
-# names the zone to use instead of the config's.
+# one (cluster, templates — nothing to wait for). A device module (a bridge, a
+# camera) sets vmname and zone0 as the device's alias but has no vmid: no guest
+# either (#879) — waiting for it cost every such module its full timeout. An
+# optional second argument names the zone to use instead of the config's.
 module_guest_host() {
     local cfg vm zone
     cfg="$(read_module_config "$1")" || return 0
+    [[ -n "$(jq -r '.vmid // empty' <<<"${cfg}")" ]] || return 0
     vm="$(jq -r '.vmname // empty' <<<"${cfg}")"
     zone="${2:-$(jq -r '.zone0 // empty' <<<"${cfg}")}"
     [[ -n "${vm}" && -n "${zone}" ]] && printf '%s.%s.internal\n' "${vm}" "${zone}"
