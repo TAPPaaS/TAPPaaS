@@ -53,7 +53,7 @@ import {
 import { ReconcileOptions } from "./types";
 import { OutLine } from "./inspect";
 import { checkDependencyServices, serviceSummaryLines } from "./services";
-import { BL, BOLD, CL, GN, debug, error, info, nested, stepNote, warn } from "./shlog";
+import { BL, BOLD, CL, GN, debug, error, info, warn } from "./shlog";
 
 // Whether the operator suspended this deployed module (`suspended: true` in its
 // config). A config that cannot be read is not suspended.
@@ -204,13 +204,13 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
 
   const moduleJson = join(configDir, `${module}.json`);
 
-  stepNote(`${BOLD}╔══════════════════════════════════════════════╗${CL}`);
-  stepNote(`${BOLD}║  TAPPaaS Module Reconcile: ${BL}${module}${CL}`);
-  stepNote(`${BOLD}╚══════════════════════════════════════════════╝${CL}`);
+  info(`${BOLD}╔══════════════════════════════════════════════╗${CL}`);
+  info(`${BOLD}║  TAPPaaS Module Reconcile: ${BL}${module}${CL}`);
+  info(`${BOLD}╚══════════════════════════════════════════════╝${CL}`);
 
   // ── Step 1: Validate module config ───────────────────────────────
   console.log("");
-  stepNote(`${BOLD}Reconcile Step 1: Validate module configuration${CL}`);
+  info(`${BOLD}Reconcile Step 1: Validate module configuration${CL}`);
   if (!existsSync(moduleJson)) {
     fail(
       `Module config not found: ${moduleJson} — is the module installed? ` +
@@ -239,7 +239,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
 
   // ── Step 2: Re-apply dependency services (idempotent ensure/apply) ──
   console.log("");
-  stepNote(`${BOLD}Reconcile Step 2: Re-apply dependency services${CL}`);
+  info(`${BOLD}Reconcile Step 2: Re-apply dependency services${CL}`);
 
   const cfg = normalizeModuleConfig(raw);
   const asStrings = (v: unknown): string[] =>
@@ -361,7 +361,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
 
   // ── Step 3: Re-apply the module itself (in-VM converge) ───────────
   console.log("");
-  stepNote(`${BOLD}Reconcile Step 3: Re-apply the module${CL}`);
+  info(`${BOLD}Reconcile Step 3: Re-apply the module${CL}`);
 
   if (moduleDir) {
     ensureScriptsExecutable(moduleDir);
@@ -418,7 +418,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
   let verifyUnknown = 0;
   if (applied.length > 0) {
     console.log("");
-    stepNote(`${BOLD}Reconcile Step 4: Verify the re-applied services${CL}`);
+    info(`${BOLD}Reconcile Step 4: Verify the re-applied services${CL}`);
     const svc = checkDependencyServices(configDir, module, applied, moduleEnvironment);
     // All clean: the per-service ticks are detail. Drift or an unknown prints in
     // full — that report is what the failure below points at.
@@ -477,7 +477,7 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
         `The module's own re-apply (Step 3) was still run.`,
     );
   }
-  (nested() ? debug : info)(`${GN}${BOLD}Module '${module}' reconciled (converged to current config)${CL}`);
+  info(`${GN}${BOLD}Module '${module}' reconciled (converged to current config)${CL}`);
 }
 
 // Compose a Step 3 failure message that does not hide Step 2 failures behind it.

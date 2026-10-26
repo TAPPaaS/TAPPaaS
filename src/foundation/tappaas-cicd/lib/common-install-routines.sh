@@ -53,13 +53,6 @@ first_install() { [[ "${TAPPAAS_FIRST_INSTALL:-0}" == 1 ]]; }
 # install_note <msg> — worth reading once: where the new module is, how to use
 # it. [Info] on the first install, [Debug] on every run after.
 install_note() { if first_install; then info "$@"; else debug "$@"; fi; }
-# step_note <msg> — a step on the way ("Update Step 2: …"): [Info] while a
-# module is installed for the first time, [Debug] on every update and reconcile
-# after, where the outcome lines say what happened.
-step_note() { if first_install; then info "$@"; else debug "$@"; fi; }
-# nested — true inside a module update: test-module.sh and reconcile run for it,
-# and its own last line says how the module came out, so theirs is [Debug].
-nested() { [[ "${TAPPAAS_NESTED:-0}" == 1 ]]; }
 
 # no_one_to_ask — true when nobody is there to answer a prompt:
 # TAPPAAS_NONINTERACTIVE=1, which test-module.sh and site-manager test set. A

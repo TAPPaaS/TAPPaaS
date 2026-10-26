@@ -87,15 +87,13 @@ come from `common-install-routines.sh`:
 |---|---|---|
 | `info` | one `✓` line per thing your script established or checked, naming the object | `info "  ${GN}✓${CL} forgejo:repo wired for lazysite: websites/lazysite, read-only deploy key"` |
 | `install_note` | where the new module is and how to use it — worth reading once | `install_note "  Site: https://${DOMAIN}"` |
-| `step_note` | a step on the way, worth seeing only while the module is first installed | `step_note "Step 2: configuring the database"` |
-| `debug` | what already existed, IDs, paths, raw tool output | `debug "  deploy key tappaas-lazysite already in place"` |
+| `debug` | the steps on the way, what already existed, IDs, paths, raw tool output | `debug "  deploy key tappaas-lazysite already in place"` |
 | `warn` / `error` | something the operator must know or act on | unchanged |
 
 - **One line per outcome.** Not a header, the steps, then a result: the `✓` line says what is now
   true. A step that only confirms what already existed is `debug`.
-- **No banners and no "complete" blocks.** An update prints one line when a module starts
-  (`<module> — updating`) and one when it is done (`✓ <module> updated`); its own steps, and
-  module-manager's (Update / Test / Reconcile Step), are `[Debug]` except on a first install.
+- **No banners and no "complete" blocks.** module-manager already announces each step and says
+  when the module is done.
 - **No progress dots into a log.** Dots are for someone at a terminal (`[ -t 1 ]`); a nightly
   run's journal gets nothing.
 - **A failing test** prints the checks that failed (`✗`, `[FAIL]`) and where its full output is

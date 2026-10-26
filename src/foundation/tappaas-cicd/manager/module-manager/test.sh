@@ -890,7 +890,6 @@ cat > "${TMW}/sbin/common-install-routines.sh" <<'TMSTUB'
 : "${BOLD:=}"; : "${BL:=}"; : "${GN:=}"; : "${CL:=}"; : "${YW:=}"; : "${RD:=}"
 : "${OPT_DEBUG:=0}"; : "${OPT_SILENT:=0}"    # the real library sets these
 info(){ :; }; debug(){ :; }; warn(){ echo "WARN:$*"; }
-step_note(){ :; }; nested(){ [[ "${TAPPAAS_NESTED:-0}" == 1 ]]; }
 error(){ echo "ERROR:$*" >&2; }; fatal(){ echo "FATAL:$*" >&2; }
 die(){ echo "DIE:$*" >&2; exit 1; }
 check_json(){ return 0; }

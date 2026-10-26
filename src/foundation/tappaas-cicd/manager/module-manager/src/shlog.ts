@@ -33,19 +33,6 @@ export function debug(msg: string): void {
   console.log(`${BL}[Debug]${CL} ${msg}`);
 }
 
-// stepNote() is the bash step_note: a step on the way, [Info] while a module is
-// installed for the first time (TAPPAAS_FIRST_INSTALL=1), [Debug] otherwise.
-export function stepNote(msg: string): void {
-  if ((process.env.TAPPAAS_FIRST_INSTALL ?? "0") === "1") info(msg);
-  else debug(msg);
-}
-
-// Inside a module update (TAPPAAS_NESTED=1) the update's last line says how the
-// module came out; a verb it runs keeps its own closing line to [Debug].
-export function nested(): boolean {
-  return (process.env.TAPPAAS_NESTED ?? "0") === "1";
-}
-
 export function warn(msg: string): void {
   console.log(`${YW}[Warning]${CL} ${msg}`);
 }
