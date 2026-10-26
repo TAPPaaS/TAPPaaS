@@ -122,6 +122,31 @@ async function main(): Promise<void> {
   check((st.value?.site as { name?: string }).name === "rossen" && (st.value?.lastSweep as { ok?: boolean }).ok === true, "site: site show and the last sweep");
   check((st.value?.wan as { ipv4?: string } | null)?.ipv4 === "8.8.4.4", "site: the address the WAN held at the last network update");
 
+  // ── the site's IPv6 prefix: the firewall is asked only when IPv6 is on and the WAN dynamic ──
+  {
+    const ran: string[] = [];
+    const v6 = (site: Record<string, unknown>, wan: { rc: number; stdout: string }) =>
+      new Reads({ configDir: cfgDir, stateDir, journalDays: 7, wanAddressFile: join(cfgDir, "none.json"), run: async (bin, args) => {
+        ran.push(`${bin} ${args.join(" ")}`);
+        if (bin === "site-manager") return { rc: 0, stdout: args[0] === "site" ? JSON.stringify(site) : "[]", stderr: "", ran: true };
+        if (bin === "ipv6-manager") return { ...wan, stderr: wan.rc ? "ERROR: ssh: connect refused" : "", ran: true };
+        return { rc: 1, stdout: "", stderr: "", ran: true };
+      } }).ipv6.get();
+    const held = { rc: 0, stdout: JSON.stringify({ wanif: "vtnet1", prefix: "2a13:e747:a210:4500::/56", address: "2a13:e747:a210:4500::1" }) };
+    let r = await v6({ name: "rossen", ipv6: true }, held);
+    check(r.value?.on === true && r.value.prefix === "2a13:e747:a210:4500::/56" && r.value.source === "delegated", "ipv6: the delegated prefix the firewall holds");
+    check(ran.includes("ipv6-manager wan --json"), "…read through ipv6-manager wan --json");
+    ran.length = 0;
+    r = await v6({ name: "rossen" }, held);
+    check(r.value?.on === false && r.value.prefix === null && !ran.some((c) => c.startsWith("ipv6-manager")), "ipv6 off: no prefix, the firewall not asked");
+    r = await v6({ ipv6: true, network: { wan: { ipv6: { mode: "static", prefix: "2001:db8:6648::/48" } } } }, held);
+    check(r.value?.prefix === "2001:db8:6648::/48" && r.value.source === "site.json" && !ran.some((c) => c.startsWith("ipv6-manager")), "a static WAN: the prefix site.json routes");
+    r = await v6({ ipv6: true }, { rc: 1, stdout: "" });
+    check(r.error === null && r.value?.prefix === null && /connect refused/.test(r.value?.error ?? ""), "the firewall not answering: no prefix, and why (an answer, not a failed read)");
+    r = await v6({ ipv6: true }, { rc: 0, stdout: JSON.stringify({ prefix: "" }) });
+    check(r.value?.prefix === null && /no delegated prefix/.test(r.value?.error ?? ""), "no prefix delegated yet");
+  }
+
   // ── a failing source ─────────────────────────────────────────────────
   site.fail.add("environment-manager list");
   const env = await reads.environments.get();

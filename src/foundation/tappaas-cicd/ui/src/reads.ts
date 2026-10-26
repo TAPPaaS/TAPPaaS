@@ -84,6 +84,7 @@ export const TTL = {
   storage: 10 * MIN,
   backupRuns: 10 * MIN,
   icons: 10 * MIN,
+  ipv6: 10 * MIN,
   nodeProgress: 10_000, // while a node is being added
   drift: 0, // on demand
 };
@@ -102,6 +103,19 @@ export interface ReadsConfig {
   run: Runner;
   journalDays: number;
   now?: () => number;
+}
+
+// The site's IPv6 prefix, the one each zone's /64 is numbered in: site.json
+// `ipv6` and `network.wan.ipv6`, and for a dynamic WAN the prefix the
+// firewall holds now (`ipv6-manager wan --json`, over ssh). No prefix (IPv6
+// off, the WAN takes none, or the firewall holds none or did not answer) is
+// an answer, with why.
+export interface Ipv6Read {
+  on: boolean;
+  mode: string; // dynamic | static | none
+  prefix: string | null;
+  source: "delegated" | "site.json" | null;
+  error?: string;
 }
 
 // A node being added (site-manager node add --pxe), as the records show it:
@@ -171,6 +185,7 @@ export class Reads {
   readonly backupRuns: Cached<BackupRunsDoc>;
   readonly moduleIcons: CachedMap<ModuleIcon | null>;
   readonly setup: Cached<SetupInputs>;
+  readonly ipv6: Cached<Ipv6Read>;
 
   constructor(private readonly cfg: ReadsConfig) {
     const run = cfg.run;
@@ -194,6 +209,8 @@ export class Reads {
       return envs.map((e) => ({ ...e, zone: environmentZoneIn(zones, e.name), sharedZones: sharedZonesIn(zones, e.name) }));
     }, now);
     this.site = new Cached("site", TTL.site, () => this.loadSite(), now);
+    // Not timed: the firewall is read when a page asks, at most every TTL.
+    this.ipv6 = new Cached("ipv6", TTL.ipv6, () => this.loadIpv6(), now);
     // No scan yet is an answer (null), not a failure.
     this.security = new Cached("security", TTL.security, async () => {
       const r = await run("health-manager", ["report", "security", "--json"]);
@@ -601,7 +618,7 @@ export class Reads {
     const all: Record<string, Cached<unknown>> = {
       health: this.health, modules: this.modules, backup: this.backup, topology: this.topology,
       zones: this.zones, aps: this.aps, environments: this.environments, site: this.site, security: this.security,
-      peers: this.peers, activity: this.activity, storage: this.storage, "backup-runs": this.backupRuns,
+      peers: this.peers, activity: this.activity, storage: this.storage, "backup-runs": this.backupRuns, ipv6: this.ipv6,
     } as Record<string, Cached<unknown>>;
     if (what === "all") {
       this.moduleShow.clear();
@@ -612,9 +629,9 @@ export class Reads {
       this.moduleFields.clear();
       // health first: the topology places its findings
       await this.health.refresh();
-      // the storage inventory (SMART on every disk) and the backup runs only
-      // once someone has looked
-      const looked = (k: string) => (k !== "storage" && k !== "backup-runs") || all[k].peek().at !== null;
+      // the storage inventory (SMART on every disk), the backup runs and the
+      // firewall's IPv6 only once someone has looked
+      const looked = (k: string) => !["storage", "backup-runs", "ipv6"].includes(k) || all[k].peek().at !== null;
       await Promise.all(Object.entries(all).filter(([k]) => k !== "health" && looked(k)).map(([, c]) => c.refresh()));
       if (this.catalogs.peek().at !== null) await this.catalogs.refresh();
       return Object.keys(all);
@@ -737,6 +754,25 @@ export class Reads {
       wan = null;
     }
     return { site, nodes, repositories, lastSweep: this.readJson("last-update-result.json"), wan };
+  }
+
+  private async loadIpv6(): Promise<Ipv6Read> {
+    const site = ((await this.site.get()).value?.site ?? {}) as { ipv6?: unknown; network?: { wan?: { ipv6?: { mode?: string; prefix?: string } } } };
+    const wan = site.network?.wan?.ipv6 ?? {};
+    const mode = wan.mode ?? "dynamic";
+    if (site.ipv6 !== true || mode === "none") return { on: site.ipv6 === true, mode, prefix: null, source: null };
+    if (mode === "static") return { on: true, mode, prefix: wan.prefix || null, source: wan.prefix ? "site.json" : null };
+    const r = await this.cfg.run("ipv6-manager", ["wan", "--json"], 90_000);
+    if (!r.ran || r.rc !== 0) {
+      const why = (r.stderr || r.stdout).trim().split("\n").pop() || `exit ${r.rc}`;
+      return { on: true, mode, prefix: null, source: null, error: `ipv6-manager wan: ${why}` };
+    }
+    try {
+      const prefix = String((JSON.parse(r.stdout) as { prefix?: unknown }).prefix ?? "").trim();
+      return { on: true, mode, prefix: prefix || null, source: prefix ? "delegated" : null, ...(prefix ? {} : { error: "the firewall holds no delegated prefix" }) };
+    } catch {
+      return { on: true, mode, prefix: null, source: null, error: "ipv6-manager wan: not JSON" };
+    }
   }
 
   private async loadActivity(): Promise<Activity> {

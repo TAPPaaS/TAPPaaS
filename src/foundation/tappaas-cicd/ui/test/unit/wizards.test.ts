@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { buildArgv, confirmObject } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
-import { ApIn, BUDDY_KINDS, SatellitePlan, StepSpec, buddyNameProblem, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, defaultAp, defaultSsid, isPlaceholderSsid, needsPassphrase, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { ApIn, BUDDY_KINDS, SatellitePlan, StepSpec, buddyNameProblem, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, defaultAp, defaultSsid, isPlaceholderSsid, needsPassphrase, ssidPassphrases, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -48,6 +48,11 @@ const sec = verbOf("ap-manager", "ssid add").options.find((o) => o.flag === "--s
 check(JSON.stringify(sec.choices) === '["wpa2-personal","wpa3-personal","open","wpa2-enterprise","wpa3-enterprise"]', "security: the controller's choices, from its manifest");
 
 // ── the argv of each step ─────────────────────────────────────────────
+// Each SSID's passphrase, as the Setup page shows it (names only, never a value).
+const pp = ssidPassphrases([{ name: "Nano HD", ssids: [{ name: "Rossen", zone: "home", security: "wpa2-personal" }, { name: "Guest", zone: "guest", security: "open" }, { name: "Lab", zone: "lab" }] }], ["Rossen"]);
+check(pp.map((x) => `${x.ssid}:${x.security}:${x.needs}:${x.set}`).join() === "Rossen:wpa2-personal:true:true,Guest:open:false:false,Lab:wpa2-personal:true:false", "per SSID: personal needs a passphrase (set or not), open needs none, no security recorded is wpa2-personal");
+check(ssidPassphrases([], ["Rossen"]).length === 0 && ssidPassphrases(aps, []).length === aps.flatMap((a) => a.ssids ?? []).length, "one row per SSID the access points hold");
+
 const add = wifiSpecs({ ap: "Nano HD", ssid: "hrossen-home", zone: "home", vlan: 310, security: "wpa2-personal", replace: null });
 check(add.remove === null, "Add: nothing to remove");
 check(argv(add.add, verbOf("ap-manager", "ssid add")) === JSON.stringify(["ap-manager", "ssid", "Nano HD", "add", "hrossen-home", "--zone", "home", "--security", "wpa2-personal", "--vlan", "310"]), "ssid add: the AP as its word, the SSID, --zone, --security, --vlan");

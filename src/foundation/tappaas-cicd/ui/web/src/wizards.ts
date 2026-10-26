@@ -87,6 +87,29 @@ export function defaultAp(z: WifiZone, aps: ApIn[]): string {
 // A personal security mode takes a WPA passphrase (~/.wlan-secrets.txt).
 export const needsPassphrase = (security: string): boolean => /-personal$/.test(security);
 
+// Each SSID the access points broadcast, and whether its passphrase is kept:
+// `keys` are the SSIDs ~/.wlan-secrets.txt holds (GET /secrets, names only).
+// A personal SSID with none cannot be created on the access point (the
+// controller refuses it); an open or enterprise one needs none.
+export interface SsidPassphrase {
+  ap: string;
+  ssid: string;
+  zone: string | null;
+  security: string;
+  needs: boolean;
+  set: boolean;
+}
+export function ssidPassphrases(aps: ApIn[], keys: string[]): SsidPassphrase[] {
+  const kept = new Set(keys);
+  return aps.flatMap((a) =>
+    (a.ssids ?? []).map((s) => {
+      // ap-manager always records one; the AP controller reads none as wpa2-personal.
+      const security = s.security ?? "wpa2-personal";
+      return { ap: a.name, ssid: s.name, zone: s.zone ?? null, security, needs: needsPassphrase(security), set: kept.has(s.name) };
+    }),
+  );
+}
+
 // An SSID's name as ap-manager and ~/.wlan-secrets.txt take it: 1–32
 // characters, no '=' (the secrets file's separator), no control characters.
 export function ssidProblem(name: string): string | null {

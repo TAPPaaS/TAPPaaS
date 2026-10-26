@@ -352,6 +352,8 @@ ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap:
 .zcard-pseudo { background: #f1f5f9; border-style: dashed; text-align: center; }
 .zcard-head { background: transparent; border: 0; box-shadow: none; text-align: center; }
 .zfields td { font-size: 12px; }
+.ztable tbody tr { cursor: pointer; }
+.ztable tbody tr:hover td { background: var(--info-bg); }
 
 /* ── identity (Identity.tsx) ────────────────────────────────────────── */
 .identity-view { display: grid; grid-template-columns: minmax(0, 1fr) 430px; gap: 14px; align-items: start; }

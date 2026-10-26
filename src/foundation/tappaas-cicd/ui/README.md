@@ -31,7 +31,9 @@ the nodes (every registered node — its `pvehost` instance — a cluster member
 Each step is a form over its verbs as jobs. Secrets go through `POST /api/v1/secrets/<name>`
 (Installer or the setup token): `acme-dns` → `~/.acme-dns-credentials.txt`, `unifi` →
 `~/.unifi-os-credentials.txt`, `wlan` → `~/.wlan-secrets.txt`, mode 0600, in Activity with their
-keys and never their values; `GET /api/v1/secrets` names the keys set. The same flows serve
+keys and never their values; `GET /api/v1/secrets` names the keys set. The WiFi step lists each SSID
+the access points hold with whether its passphrase is kept (a personal SSID without one cannot be
+created on the access point), and a "Set passphrase…" link to its Day 2 form. The same flows serve
 day 2: add a node, adopt a running machine (`module-manager adopt`), an environment, a stack; enrol a
 device (the wg-quick file to download). Day 2's **physical site** is a step with that state and
 its sequence: record the rooms (by location), add a rack, place the nodes and switches, record
@@ -139,7 +141,11 @@ input whether it must be given or what the manager uses when it is left empty (o
 organization; zone and display name: from the name; DNS mode: the schema's default). **Zones**
 (`/zones`; `/environments?zone=<z>` redirects there) — the zones with network-manager's verbs,
 drawn as cards coloured by type, with an arrow for each `access-to` and a dashed one for each
-`pinhole-allowed-from`; a click opens the zone's fields and verbs, and Modify lists every field of
+`pinhole-allowed-from`; a click on a card, or on the zone's row in the table below, opens its card
+(`?zone=<z>`), the one place for its verbs (Modify, Enable/Disable, Bind, Reconcile, Add one
+like it, Delete, as network-manager takes them for the zone's state and type; a manual zone — the
+overlays, the WAN, mgmt — is kept by its own module and offers no Enable, Disable or Delete;
+`network-manager manual` stays on the command line), and Modify lists every field of
 `zones-fields.json` with its value, default and class (one `network-manager modify <zone> --set …`). **Identity** — organizations,
 groups, users and roles as a graph of their relations (a group's owning organization, a user's
 groups, the roles of users and groups, an organization's owner and parent; `GET /api/v1/identity/records`:
@@ -187,6 +193,7 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | the faceplate catalog (a placement's faceplate choices) | `position-manager faceplates list --json` | 10 min |
 | storage (Physical › Storage and Overview) | `storage-manager inventory --json` (SMART included, ≈15 s on three nodes) | 10 min, read when a page asks; no timer of its own |
 | zones | `network-manager list --json`, `show <zone> --json` | every 5 min |
+| the site's IPv6 prefix (`ipv6`: each zone's /64 on the Zones page) | `site.json` `ipv6` and `network.wan.ipv6`; for a dynamic WAN, `ipv6-manager wan --json` (ssh to the firewall) | 10 min, read when a page asks; no timer of its own |
 | environments | `environment-manager list --json` | every 5 min |
 | site | `site-manager site show / node list / repository list --json`, `config/last-update-result.json` | every 5 min |
 | security | `health-manager report security --json` | every 10 min |
@@ -200,7 +207,7 @@ now (it changes nothing on the site).
 ## API (`/api/v1`)
 
 Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
-`modules/<m>/drift[?refresh=1]` · `zones` · `environments` · `topology` · `storage` · `security` ·
+`modules/<m>/drift[?refresh=1]` · `zones` · `ipv6` · `environments` · `topology` · `storage` · `security` ·
 `activity[?module=<m>]` (the sweep's runs, and `jobs`) · `manifests` ·
 `modules/<m>/icon` (SVG or PNG, 404 when it has none) · `jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site;
 disk and pool, whose id is the node: its Disks and ZFS panels in Proxmox).
