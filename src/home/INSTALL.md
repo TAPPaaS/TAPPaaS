@@ -15,6 +15,6 @@ Install order: a module is listed after every module of this stack it needs or i
 | 3 | [immich](immich/INSTALL.md) | — | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:ha` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
 | 4 | [jellyfin](jellyfin/INSTALL.md) | — | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `storage:nfs` (foundation), `templates:nixos` (foundation) |
 | 5 | [karakeep](karakeep/INSTALL.md) | — | `litellm:models` (ai), `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:identity` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
-| 6 | [nomad](nomad/INSTALL.md) | — | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
+| 6 | [nomad](nomad/INSTALL.md) | — | `logging:logs` (foundation) | `backup:vm` (foundation), `cluster:vm` (foundation), `identity:accessControl` (foundation), `network:proxy` (foundation), `network:rules` (foundation), `templates:nixos` (foundation) |
 
 <!-- END GENERATED MODULES -->
