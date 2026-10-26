@@ -21,7 +21,8 @@ check(of("mgmt").bind && !of("wan").bind && !of("netbird").bind, "…bind only w
 check(cardVerbs({ name: "x", type: "Overlay", state: "Active" }).manual, "an overlay or the WAN is manual whatever its record says");
 
 // The lifecycle states.
-check(set(of("rossen")) === "disable manual bind add delete", "Active: Disable (and Manual), Bind, Add one like it, Delete");
+check(set(of("rossen")) === "disable bind add delete", "Active: Disable, Bind, Add one like it, Delete");
+check(zones.every((z) => !cardVerbs(z).states.includes("manual")), "no zone's card offers Manual: that verb stays on the command line");
 check(set(of("work")) === "enable bind add delete", "Inactive: Enable, Bind, Add one like it, Delete");
 check(set(of("iotUntrust")) === "enable bind add delete", "Disabled: Enable, as Inactive");
 check(set(of("dmz")) === "bind add", "Mandatory: no state verb, no Delete");

@@ -140,9 +140,10 @@ organization; zone and display name: from the name; DNS mode: the schema's defau
 (`/zones`; `/environments?zone=<z>` redirects there) — the zones with network-manager's verbs,
 drawn as cards coloured by type, with an arrow for each `access-to` and a dashed one for each
 `pinhole-allowed-from`; a click on a card, or on the zone's row in the table below, opens its card
-(`?zone=<z>`), the one place for its verbs (Modify, Enable/Disable/Manual, Bind, Reconcile, Add one
+(`?zone=<z>`), the one place for its verbs (Modify, Enable/Disable, Bind, Reconcile, Add one
 like it, Delete, as network-manager takes them for the zone's state and type; a manual zone — the
-overlays, the WAN, mgmt — is kept by its own module and offers no Enable, Disable or Delete), and Modify lists every field of
+overlays, the WAN, mgmt — is kept by its own module and offers no Enable, Disable or Delete;
+`network-manager manual` stays on the command line), and Modify lists every field of
 `zones-fields.json` with its value, default and class (one `network-manager modify <zone> --set …`). **Identity** — organizations,
 groups, users and roles as a graph of their relations (a group's owning organization, a user's
 groups, the roles of users and groups, an organization's owner and parent; `GET /api/v1/identity/records`:

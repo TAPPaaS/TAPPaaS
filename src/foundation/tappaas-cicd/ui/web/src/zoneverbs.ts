@@ -1,6 +1,7 @@
 // zoneverbs.ts — the verbs a zone's card offers, as network-manager accepts
 // them for the zone's state and type (zoneverbs.test.ts holds it to the
-// manager's own rules).
+// manager's own rules). `network-manager manual` is not among them: the
+// Manual state is for the shipped overlays and the WAN, set on the command line.
 
 export interface ZoneVerbZone {
   name: string;
@@ -9,7 +10,7 @@ export interface ZoneVerbZone {
 }
 
 export interface CardVerbs {
-  states: string[]; // enable | disable | manual
+  states: string[]; // enable | disable (manual stays on the command line)
   bind: boolean;
   addLike: boolean;
   delete: boolean;
@@ -26,7 +27,7 @@ export function cardVerbs(z: ZoneVerbZone): CardVerbs {
   const manual = z.state === "Manual" || z.type === "WAN" || z.type === "Overlay";
   const fixed = manual || z.state === "Mandatory";
   return {
-    states: fixed ? [] : z.state === "Active" ? ["disable", "manual"] : ["enable"],
+    states: fixed ? [] : z.state === "Active" ? ["disable"] : ["enable"],
     bind: BIND_TYPES.has(z.type ?? ""),
     addLike: !manual,
     delete: !fixed,

@@ -228,7 +228,7 @@ function ipv6Note(v6: Ipv6Read | null): string {
 }
 
 // The Zones page (/zones): the graph with its side card, and the zones' table
-// below it. A zone's verbs (network-manager modify / enable|disable|manual /
+// below it. A zone's verbs (network-manager modify / enable|disable /
 // bind / reconcile / add from it / delete, each as a job with its preview; a
 // delete needs the name typed) are on its card only: a click on its card or
 // its row opens it. ?zone=<name> (the assistant's modify-zone, the
