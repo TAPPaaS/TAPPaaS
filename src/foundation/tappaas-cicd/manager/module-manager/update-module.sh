@@ -555,18 +555,15 @@ main() {
     # Before the first write to it (#584).
     backup_module_config "${module}"
 
-    info "${BOLD}╔══════════════════════════════════════════════╗${CL}"
-    info "${BOLD}║  TAPPaaS Module Update: ${BL}${module}${CL}"
-    if [[ "${OPT_FORCE}" -eq 1 ]]; then
-        info "${BOLD}║  Mode: ${YW}--force${CL}"
-    fi
-    if [[ "${OPT_ALLOW_DISRUPTION}" -eq 1 ]]; then
-        info "${BOLD}║  Mode: ${YW}--allow-disruption${CL}"
-    fi
-    if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
-        info "${BOLD}║  Mode: ${YW}--no-snapshot${CL}"
-    fi
-    info "${BOLD}╚══════════════════════════════════════════════╝${CL}"
+    # One line per module; its steps are [Debug] (step_note) outside a first
+    # install, and test-module / reconcile keep their own last lines to
+    # themselves (TAPPAAS_NESTED): the module's outcome is this script's last line.
+    local _mode=""
+    [[ "${OPT_FORCE}" -eq 1 ]] && _mode+=" --force"
+    [[ "${OPT_ALLOW_DISRUPTION}" -eq 1 ]] && _mode+=" --allow-disruption"
+    [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]] && _mode+=" --no-snapshot"
+    info "${BOLD}${module}${CL} — updating${_mode:+ (${YW}${_mode# }${CL})}"
+    export TAPPAAS_NESTED=1
 
     # ── Lifecycle guard (#441) ───────────────────────────────────────
     # archived (#215) and external (#216) modules are not in the update
@@ -600,7 +597,7 @@ main() {
     # touched; pin fields the operator has customized. .orig advances to the
     # current release. If .orig is missing (pre-#207 install) we backfill it
     # from source so existing customizations remain pinned.
-    info "${BOLD}Update Step 0: Reconcile module config (3-way merge)${CL}"
+    step_note "${BOLD}Update Step 0: Reconcile module config (3-way merge)${CL}"
     # Capture dependsOn + integratesWith BEFORE the merge so Step 3.5 can act on
     # the delta with the correct verb: a newly-added coordinate has never been
     # provisioned on this install, so it needs install-service.sh (create), not
@@ -655,7 +652,7 @@ main() {
     # A machine (or any module without a VM) has nothing to snapshot: no step
     # header that promises one (#665).
     if [[ "${has_vm}" == true ]]; then
-        info "${BOLD}Update Step 1: Create pre-update snapshot: ${BL}${module}${CL}"
+        step_note "${BOLD}Update Step 1: Create pre-update snapshot: ${BL}${module}${CL}"
     else
         debug "Update Step 1: no pre-update snapshot — ${module} has no VM"
     fi
@@ -714,7 +711,7 @@ main() {
     fi
 
     # ── Step 2: Pre-update test ───────────────────────────────────────
-    info "${BOLD}Update Step 2: Run pre-update tests${CL}"
+    step_note "${BOLD}Update Step 2: Run pre-update tests${CL}"
 
     if [[ "${OPT_NO_SNAPSHOT}" -eq 1 ]]; then
         info "  Skipped (--no-snapshot)"
@@ -766,7 +763,7 @@ main() {
     fi
 
     # ── Step 3: Run pre-update.sh if present ─────────────────────────
-    info "${BOLD}Update Step 3: Run pre-update hook${CL}"
+    step_note "${BOLD}Update Step 3: Run pre-update hook${CL}"
 
     local module_dir=""
     if module_dir=$(get_module_dir "${module}" 2>/dev/null); then
@@ -793,7 +790,7 @@ main() {
     # second finds the entry and only adds itself to it.
     if [[ -n "${module_dir}" && -r "${module_dir}/$(basename "${module_dir}").json" ]] \
        && jq -e '(.controllers // []) + (.managers // []) | length > 0' "${module_dir}/$(basename "${module_dir}").json" >/dev/null 2>&1; then
-        info "${BOLD}Update Step 3.4: Register the module's controllers and managers${CL}"
+        step_note "${BOLD}Update Step 3.4: Register the module's controllers and managers${CL}"
         cpc_register "${module_dir}" "$(basename "${module_dir}")" "${module}" \
             || fatal_with_rollback "${module}" "${snapshot_created}" "the module's controllers/managers could not be registered"
     fi
@@ -803,7 +800,7 @@ main() {
     # install-service.sh for an added dependency, delete-service.sh for a removed
     # one — after the snapshot (so a failure rolls back) and before the blanket
     # reconcile. See apply_dependson_delta for the full rationale.
-    info "${BOLD}Update Step 3.5: Apply dependsOn delta (install added / delete removed)${CL}"
+    step_note "${BOLD}Update Step 3.5: Apply dependsOn delta (install added / delete removed)${CL}"
     local dep_env
     dep_env="$(read_module_config "${module}" 2>/dev/null | jq -r '.environment // ""')"
     apply_dependson_delta "${module}" "${snapshot_created}" "${dep_env}" "${deps_before}" "${deps_after}" "${integ_after}"
@@ -828,7 +825,7 @@ main() {
     # directory at all, e.g. sonos:audio, alfen:ui — those modules could not be
     # modified at all before). A dependency naming a provider that cannot serve
     # it is a config error, reported by `module validate`, not a runtime abort.
-    info "${BOLD}Update Steps 4+5: Apply config via reconcile${CL}"
+    step_note "${BOLD}Update Steps 4+5: Apply config via reconcile${CL}"
 
     # --allow-disruption is the operator's DOWNTIME authorization (ADR-020 v0.10
     # D8) — a different lever from --force ("proceed past a refusal"). Forwarded,
@@ -883,7 +880,7 @@ main() {
     fi
 
     # ── Step 6: Post-update test ──────────────────────────────────────
-    info "${BOLD}Update Step 6: Run post-update tests: ${BL}${module}${CL}"
+    step_note "${BOLD}Update Step 6: Run post-update tests: ${BL}${module}${CL}"
 
     local post_test_exit=0 post_log new_failures old_failures
     post_log="$(mktemp)"
@@ -928,7 +925,7 @@ main() {
     finalize_config "${module}"
     prune_snapshots "${module}" "${snapshot_created}"
 
-    info "${GN}${BOLD}Module '${module}' updated successfully${CL}"
+    info "  ${GN}✓${CL} ${module} updated"
 }
 
 # Sourced by the fast-tier tests for its helpers (run_graded_test, failed_checks).

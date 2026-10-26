@@ -231,7 +231,7 @@ main() {
     debug "${BOLD}╚══════════════════════════════════════════════╝${CL}"
 
     # ── Step 1: Validate module config ───────────────────────────────
-    info "${BOLD}Test Step 1: Validate module configuration${CL}"
+    step_note "${BOLD}Test Step 1: Validate module configuration${CL}"
 
     if [[ ! -f "${module_json}" ]]; then
         fatal "Module config not found: ${module_json} — is the module installed?"
@@ -260,7 +260,7 @@ main() {
     fi
 
     # ── Step 2: Check dependency test-service.sh availability ────────
-    info "${BOLD}Test Step 2: Check dependency test availability${CL}"
+    step_note "${BOLD}Test Step 2: Check dependency test availability${CL}"
 
     # Both relationship lists (#684). rules-manager synthesises an auto-pinhole
     # from dependsOn AND integratesWith (#632), so a service declared either way
@@ -304,7 +304,7 @@ main() {
     fi
 
     # ── Step 3: Call dependency test-service.sh scripts ──────────────
-    info "${BOLD}Test Step 3: Run dependency service tests${CL}"
+    step_note "${BOLD}Test Step 3: Run dependency service tests${CL}"
 
     if [[ -z "${dep_lines}" ]]; then
         debug "  No dependency services to test"
@@ -367,7 +367,7 @@ main() {
     fi
 
     # ── Step 4: Call the module's own test.sh ────────────────────────
-    info "${BOLD}Test Step 4: Run module test.sh${CL}"
+    step_note "${BOLD}Test Step 4: Run module test.sh${CL}"
 
     local module_dir
     if module_dir=$(get_module_dir "${module}" 2>/dev/null); then
@@ -423,7 +423,8 @@ main() {
         exit 1
     fi
 
-    info "${GN}${BOLD}All tests passed for module '${module}'${CL}"
+    if nested; then debug "All tests passed for module '${module}'"
+    else info "${GN}${BOLD}All tests passed for module '${module}'${CL}"; fi
     exit 0
 }
 
