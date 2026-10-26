@@ -15,7 +15,7 @@ import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
 import { Dot, ReadState, Section, since } from "../ui";
 import { EnvironmentRow, SiteRead } from "../types";
-import { Ipv6Read, zoneV6 } from "../zonenet";
+import { Ipv6Read, typeIdText, zoneV6 } from "../zonenet";
 import { COLUMN_TITLES, PSEUDO, PublicAddress, environmentsOf, isSharedService, publicAddress, publicText, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
 
 export interface ZoneRead {
@@ -114,6 +114,12 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
   return { nodes, edges };
 }
 
+// A field's value in the card: typeId with the type it numbers.
+function fieldText(r: FieldRow): string {
+  if (r.field === "typeId") return typeIdText(r.value) ?? "—";
+  return shortValue(r.value, 60);
+}
+
 function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, close }: { z: ZoneRead; schema: Record<string, ZoneFieldSpec> | null; envNames: string[]; zoneNames: string[]; archetypes: string[]; wan: PublicAddress | null; close: () => void }) {
   const rows: FieldRow[] = schema ? zoneFieldRows(z, schema) : [];
   return (
@@ -169,7 +175,7 @@ function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, close }: 
           {rows.map((r) => (
             <tr key={r.field} title={r.description}>
               <td className="mono">{r.field}</td>
-              <td className={`mono wrap${r.configured ? "" : " muted"}`}>{shortValue(r.value, 60)}{r.configured ? "" : <span className="dflt"> default</span>}</td>
+              <td className={`mono wrap${r.configured ? "" : " muted"}`}>{fieldText(r)}{r.configured ? "" : <span className="dflt"> default</span>}</td>
             </tr>
           ))}
         </tbody>

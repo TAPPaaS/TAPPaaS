@@ -1,9 +1,13 @@
-// zonenet.test.ts — a zone's /64 (web/src/zonenet.ts) against the network
-// module's own arithmetic: each expected value is what
-// opnsense-controller ipv6_plan.zone_network(prefix, subnet) prints.
+// zonenet.test.ts — a zone's numbers (web/src/zonenet.ts) against the network
+// module's own: its /64, each expected value what opnsense-controller
+// ipv6_plan.zone_network(prefix, subnet) prints; its typeId's type.
 
-import { formatV6, parseV6, zoneNetwork, zoneV6 } from "../../web/src/zonenet";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { ARCHETYPES } from "../../../manager/network-manager/src/archetypes";
+import { ZONE_TYPE_IDS, formatV6, parseV6, typeIdText, zoneNetwork, zoneV6 } from "../../web/src/zonenet";
 import { check, done } from "./check";
+import { FIX } from "./fake-site";
 
 // [site prefix, ipv6Subnet, zone_network(prefix, subnet)]
 const PLAN: [string, number, string][] = [
@@ -39,5 +43,16 @@ check(zoneV6({ ipv6Subnet: 32 }, on) === "2a13:e747:a210:4520::/64", "a zone wit
 check(zoneV6({ ipv6Subnet: 32 }, { ...on, on: false }) === null, "IPv6 off: none");
 check(zoneV6({}, on) === null, "no ipv6Subnet: none");
 check(zoneV6({ ipv6Subnet: 32 }, { ...on, prefix: null, source: null }) === null && zoneV6({ ipv6Subnet: 32 }, null) === null, "no prefix learned, or not read: none");
+
+// The typeId table against the network module's: zones-fields.json (each
+// type's typeId, and typeId's own values) and network-manager's archetypes.
+const fields = (JSON.parse(readFileSync(join(FIX, "..", "..", "..", "..", "schemas", "zones-fields.json"), "utf8")) as { fields: { type: { values: Record<string, { typeId: number }> }; typeId: { values: Record<string, string> } } }).fields;
+const fromTypes = Object.fromEntries(Object.entries(fields.type.values).map(([t, v]) => [v.typeId, t]));
+const same = (a: Record<string | number, string>, b: Record<string | number, string>): boolean => JSON.stringify(Object.entries(a).sort()) === JSON.stringify(Object.entries(b).sort());
+check(same(ZONE_TYPE_IDS, fromTypes), "the typeIds are zones-fields.json's: every type, its number");
+check(same(ZONE_TYPE_IDS, fields.typeId.values), "…and typeId's own list of values");
+check(ARCHETYPES.every((a) => ZONE_TYPE_IDS[a.typeId] === a.type), "every network-manager archetype's typeId names its type");
+check(typeIdText("2") === "2 · Service" && typeIdText(0) === "0 · Management" && typeIdText(7) === "7 · Overlay", "typeId shown with its type, from the string or the number");
+check(typeIdText(9) === "9" && typeIdText(undefined) === null, "an unknown typeId is its number; none is none");
 
 done("zonenet");

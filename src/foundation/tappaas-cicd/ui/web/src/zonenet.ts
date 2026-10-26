@@ -71,3 +71,25 @@ export function zoneV6(z: { ipv6Subnet?: unknown }, v6: Ipv6Read | null | undefi
   if (!v6?.on || !v6.prefix || typeof z.ipv6Subnet !== "number") return null;
   return zoneNetwork(v6.prefix, z.ipv6Subnet);
 }
+
+// A zone's typeId: the number of its type, the VLAN band (vlantag = typeId *
+// 100 + subId), as zones-fields.json and network-manager's archetypes number
+// them (zonenet.test.ts holds this table to both).
+export const ZONE_TYPE_IDS: Record<number, string> = {
+  0: "Management",
+  1: "WAN",
+  2: "Service",
+  3: "Client",
+  4: "IoT",
+  5: "Guest",
+  6: "DMZ",
+  7: "Overlay",
+};
+
+// "2 · Service"; the bare number when it names no type, null when there is none.
+export function typeIdText(v: unknown): string | null {
+  if (v === undefined || v === null || v === "") return null;
+  const n = Number(v);
+  const t = Number.isInteger(n) ? ZONE_TYPE_IDS[n] : undefined;
+  return t ? `${n} · ${t}` : String(v);
+}
