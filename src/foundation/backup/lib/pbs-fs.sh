@@ -27,6 +27,11 @@
 # Requires: common-install-routines.sh, lib/pbs-job.sh and lib/pbs-namespace.sh
 # sourced first.
 
+# What each step established is worth reading once, when a module is wired
+# for the first time; on every update after, the service's closing line says
+# it (install_note, from common-install-routines.sh).
+declare -F install_note >/dev/null 2>&1 || install_note() { info "$@"; }
+
 PBS_FS_CONFIG_DIR="${CONFIG_DIR:-/home/tappaas/config}"
 # Where the guest's encryption key is escrowed centrally (ADR-012 §2.5.1). A key
 # held only by the guest cannot restore that guest.
@@ -138,7 +143,7 @@ pbs_fs_ensure_target() {
     PBS_FS_LOGIN_EXISTED=0
     if _pbs_node_run proxmox-backup-manager user list --output-format json 2>/dev/null \
         | jq -e --arg u "${authid}" '.[] | select(.userid==$u)' >/dev/null 2>&1; then
-        info "  PBS login ${BL}${authid}${CL} already exists"
+        debug "  PBS login ${authid} already exists"
         PBS_FS_LOGIN_EXISTED=1
     else
         [[ -n "${pw}" ]] || { error "  pbs_fs_ensure_target: a password is required to create ${authid}"; return 1; }
@@ -195,7 +200,7 @@ pbs_fs_grant_ns() {
     _pbs_node_run proxmox-backup-manager acl update \
         "/datastore/${store}/${ns}" DatastoreBackup --auth-id "${authid}" \
         || { error "  could not grant DatastoreBackup on ${ns} to ${authid}"; return 1; }
-    info "  ${GN}✓${CL} ${authid} may write (not delete) in ${BL}${ns}${CL}"
+    install_note "  ${GN}✓${CL} ${authid} may write (not delete) in ${BL}${ns}${CL}"
 }
 
 # The PBS server certificate fingerprint. NOT a secret — it is the public half
@@ -356,7 +361,7 @@ pbs_fs_write_manifest() {
         '{module: $m, repository: $r, namespace: $n, schedule: $s, fingerprint: $fp, paths: ., exclude: $x}' >"${tmp}" \
         && mv "${tmp}" "${f}" || { rm -f "${tmp}"; return 1; }
     chmod 644 "${f}"
-    info "  ${GN}✓${CL} capture manifest → ${f}"
+    install_note "  ${GN}✓${CL} capture manifest → ${f}"
 }
 
 # The module's own release JSON, via .moduleSource (ADR-026 D6.2), or empty.
@@ -476,7 +481,7 @@ UNIT
 systemctl daemon-reload
 systemctl enable --now tappaas-fs-backup.timer
 EOF
-    info "  ${GN}✓${CL} capture timer installed and armed on ${BL}${host}${CL}"
+    install_note "  ${GN}✓${CL} capture timer installed and armed on ${BL}${host}${CL}"
 }
 
 # The same two units for a NixOS guest, as a generated fragment it imports.
@@ -542,7 +547,7 @@ EOF
     tappaas_ssh_guest -o BatchMode=yes "${target}" \
         "sudo install -m 0644 /tmp/tappaas-backup.nix /etc/nixos/tappaas-backup.nix && rm -f /tmp/tappaas-backup.nix" \
         || { error "  could not install the capture timer on ${host}"; return 1; }
-    info "  ${GN}✓${CL} capture timer ${BL}${oncal}${CL} written for ${BL}${host}${CL} (applied by its next rebuild)"
+    install_note "  ${GN}✓${CL} capture timer ${BL}${oncal}${CL} written for ${BL}${host}${CL} (applied by its next rebuild)"
 }
 
 # Args: <module> <target user@host> <manifest-path>
@@ -574,5 +579,5 @@ pbs_fs_deploy_runner() {
         "test -x '${runner}' && test -r '${mdir}/$(basename "${manifest}")'" \
         || { error "  ${runner} is not present/executable on ${host} after delivery"; return 1; }
 
-    info "  ${GN}✓${CL} runner + manifest deployed and verified on ${BL}${host}${CL}"
+    install_note "  ${GN}✓${CL} runner + manifest deployed and verified on ${BL}${host}${CL}"
 }

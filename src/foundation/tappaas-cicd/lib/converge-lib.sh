@@ -295,10 +295,8 @@ converge_apply() {
         fi
         if converge_apply_set "${set_args[@]}"; then
             local _set_n=$(( ${#set_args[@]} / 2 ))
-            # Said at info, not debug: a size an operator tuned on the guest
-            # itself (a 2.0 site sized its VMs in Proxmox) is replaced by the
-            # config's here, and that must not happen without notice (#834).
-            info "  ${module}: set from config — $(printf '%s; ' "${set_summaries[@]}" | sed 's/; $//')"
+            local _set_line
+            _set_line="  ${module}: set from config — $(printf '%s; ' "${set_summaries[@]}" | sed 's/; $//')"
             # A `set` that returned 0 has not necessarily taken effect (#532).
             # Proxmox accepts a change it cannot hot-apply and holds it until the
             # guest restarts, so counting all of them applied reported a change
@@ -330,6 +328,12 @@ converge_apply() {
                     (( _set_n < 0 )) && _set_n=0
                 fi
             fi
+            # Said at info, not debug: a size an operator tuned on the guest
+            # itself (a 2.0 site sized its VMs in Proxmox) is replaced by the
+            # config's here, and that must not happen without notice (#834). A
+            # change that is only held for the next restart is [Debug]: the
+            # DEFERRED warning above already names it, on every run until then.
+            if [[ ${_set_n} -gt 0 ]]; then info "${_set_line}"; else debug "${_set_line}"; fi
             CONVERGE_APPLIED=$(( CONVERGE_APPLIED + _set_n ))
         else
             error "  batched set failed"

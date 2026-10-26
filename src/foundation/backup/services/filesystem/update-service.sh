@@ -88,4 +88,4 @@ fi
 pbs_fs_deploy_runner "${MODULE}" "${TARGET}" "${MANIFEST}" \
     || die "could not refresh the capture runner on ${GUEST} — backup:filesystem is NOT converged for ${MODULE}"
 
-debug "  ${GN}✓${CL} backup:filesystem update-service completed for ${MODULE} (${SCHEDULE})"
+info "  ${GN}✓${CL} backup:filesystem for ${MODULE}: its paths to ${NS}, captured ${SCHEDULE}"
