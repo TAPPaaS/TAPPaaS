@@ -390,7 +390,7 @@ apply_three_way_merge() {
             warn "  ${_up_line}"
         done < <(jq -r --arg m "${eff}" '
             .replaced_unrecorded[]
-            | "Took the release value of \(.field): \(.was | tojson) -> \(.now | tojson) — nothing recorded \(.was | tojson) as your choice; to keep it: module-manager module modify \($m) --set \(.field)=\(.was | if type == "string" then . else tojson end)"
+            | "Took the release value of \(.field): \(.was | tojson) -> \(.now | tojson) — nothing recorded \(.was | tojson) as your choice; to keep it: module-manager module modify \($m) --set \(.field + "=" + (.was | if type == "string" then . else tojson end) | @sh)"
         ' <<<"${merged_with_report}")
     fi
 

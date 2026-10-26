@@ -131,7 +131,7 @@ run_case "unrecorded-replaced" \
     '{"vmname":"a","cores":2,"relayRange":"49152-49999"}' \
     "a" "moda" \
     '.relayRange == "49152-49999"' \
-    '' 'module-manager module modify a --set relayRange=49152-65535'
+    '' "module-manager module modify a --set 'relayRange=49152-65535'"
 
 # …the operator set it with `module modify --set`: kept.
 run_case "recorded-kept" \
