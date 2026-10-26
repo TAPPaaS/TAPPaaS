@@ -20,12 +20,11 @@ NOMAD_HOST="${VMNAME}.${ZONE0NAME}.internal"
 SSH_OPTS=(-o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o BatchMode=yes)
 vm() { ssh "${SSH_OPTS[@]}" "tappaas@${NOMAD_HOST}" "$@"; }
 
-echo ""
-info "${BOLD}nomad: the Command Center behind the identity gate${CL}"
+debug "  nomad: the Command Center behind the identity gate"
 
 if vm "sudo test -e /var/lib/project-nomad/url"; then
     vm "sudo rm -f /var/lib/project-nomad/url && sudo systemctl restart project-nomad.service" \
-        && info "  ${GN}✓${CL} the old internal URL is gone; the Command Center now names its gated address" \
+        && info "  ${GN}✓${CL} nomad: the old internal URL is gone; the Command Center names its gated address" \
         || warn "  could not remove /var/lib/project-nomad/url on ${NOMAD_HOST}"
 fi
 
@@ -34,11 +33,9 @@ for _i in $(seq 1 60); do
     [[ ${_i} -eq 60 ]] && { warn "  the Command Center did not answer within 5 minutes — see journalctl -u project-nomad on the VM"; exit 0; }
     sleep 5
 done
-info "  ${GN}✓${CL} Command Center answers"
+info "  ${GN}✓${CL} nomad Command Center answers"
 _url="$(vm "sudo sed -n 's/^NOMAD_URL=//p' /var/lib/project-nomad/.env" 2>/dev/null || true)"
 vm "sudo systemctl start nomad-links.service" >/dev/null 2>&1 || true
-
-echo ""
-info "${BOLD}Update complete${CL}"
-info "  The Command Center: ${_url:-https://<proxyDomain>} — signed in, members of admin"
-info "  The apps it installs: http://${NOMAD_HOST}:<port>, from the client networks"
+# The address is a first-install note where the output rule has one (install_note).
+note() { if declare -F install_note >/dev/null; then install_note "$@"; else debug "$@"; fi; }
+note "  The Command Center: ${_url:-https://<proxyDomain>}, signed in (members of admin); the apps it installs: http://${NOMAD_HOST}:<port>"
