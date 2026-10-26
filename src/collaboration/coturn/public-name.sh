@@ -65,7 +65,7 @@ coturn_converge_public_name() {
     # clients are given the internal TURN endpoint alongside the public one.
     if unbound-manager --no-ssl-verify add "${COTURN_PUBLIC%%.*}" "${COTURN_PUBLIC#*.}" "${coturn_ip}" \
             --description "TAPPaaS: ${module} TURN split-horizon" >/dev/null 2>&1; then
-        info "  split-horizon DNS: ${COTURN_PUBLIC} -> ${coturn_ip} (Unbound)"
+        debug "  split-horizon DNS: ${COTURN_PUBLIC} -> ${coturn_ip} (Unbound)"
     else
         info "  no split-horizon record for ${COTURN_PUBLIC} (a wildcard covers the domain) — internal clients use the internal TURN endpoint"
     fi

@@ -27,6 +27,7 @@ CPC_REGISTRY="${CONTROL_PLANE_REGISTRY:-${CPC_CONF}/control-plane.json}"
 CPC_BIN="${TAPPAAS_BIN:-/home/tappaas/bin}"
 
 _cpc_info()  { if declare -F info  >/dev/null; then info  "$@"; else echo "[Info] $*"; fi; }
+_cpc_debug() { if declare -F debug >/dev/null; then debug "$@"; elif [[ "${TAPPAAS_DEBUG:-0}" == 1 ]]; then echo "[Debug] $*"; fi; }
 _cpc_warn()  { if declare -F warn  >/dev/null; then warn  "$@"; else echo "[Warning] $*" >&2; fi; }
 _cpc_error() { if declare -F error >/dev/null; then error "$@"; else echo "[Error] $*" >&2; fi; }
 
@@ -126,7 +127,7 @@ cpc_register() {
     done
     _cpc_write "${reg}" || { _cpc_error "control plane: could not write ${CPC_REGISTRY}"; _cpc_rollback; return 1; }
     _cpc_unlock
-    _cpc_info "  control plane: ${n} component(s) of ${module} registered for ${instance}: ${done_names[*]}"
+    _cpc_debug "  control plane: ${n} component(s) of ${module} registered for ${instance}: ${done_names[*]}"
 }
 
 # Called inside cpc_register under its lock: the registry file was not written,

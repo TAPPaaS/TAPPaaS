@@ -260,7 +260,7 @@ fi
 # module stays reachable at its internal name. Creating its public record and
 # re-running update publishes it.
 if [[ "${UNPUBLISHED}" -eq 1 ]]; then
-    info "  ${PROXY_DOMAIN} has no public DNS record — not published: no reverse-proxy route (reach '${MODULE}' at ${UPSTREAM}:${PROXY_PORT})"
+    debug "  ${PROXY_DOMAIN} has no public DNS record — not published: no reverse-proxy route (reach '${MODULE}' at ${UPSTREAM}:${PROXY_PORT})"
     proxy_unpublish "${MODULE}" "${PROXY_DOMAIN}" "${TAPPAAS_DOMAIN}" "${JSON}"
     run_caddy reconfigure --no-ssl-verify || warn "Caddy reconfigure returned non-zero"
     debug "${GN}network:proxy update-service completed for ${MODULE} (not published)${CL}"

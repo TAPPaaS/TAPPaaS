@@ -77,7 +77,8 @@ run_check() {  # $1 = baseline file (or ""), sets RC/OUT
     local baseline="$1" args=()
     [[ -n "${baseline}" ]] && args=(--baseline "${baseline}")
     # Check 4 (#719) is driven by its own cases below; here there is no flake.
-    OUT="$(PATH="${BIN}:${PATH}" TAPPAAS_USER="$(id -un)" SELFCHECK_FLAKE="${SELFCHECK_FLAKE_T:-/nonexistent}" \
+    # TAPPAAS_DEBUG: each passed check is a [Debug] ✓ line; the cases read them.
+    OUT="$(PATH="${BIN}:${PATH}" TAPPAAS_DEBUG=1 TAPPAAS_USER="$(id -un)" SELFCHECK_FLAKE="${SELFCHECK_FLAKE_T:-/nonexistent}" \
            SELFCHECK_REGISTRY="${SELFCHECK_REGISTRY_T:-/nonexistent}" \
            SELFCHECK_BIN="${SELFCHECK_BIN_T:-${TMP}/nobin}" SELFCHECK_STORE="${SELFCHECK_STORE_T:-/nix/store}" \
            "${SELFCHECK}" "${args[@]}" 2>&1)"

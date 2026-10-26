@@ -12,7 +12,8 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/_common.sh" "$@"
 
-info "  ${GN}✓${CL} logging:logs: ${CONSUMER} ships its journal to logging (push receiver :3101)"
+# Said on the install; on every update after it is [Debug] (a failure warns).
+debug "  logging:logs: ${CONSUMER} ships its journal to logging (push receiver :3101)"
 logs_reconcile_consumer_rules
 logs_sync_credentials
 debug "  the journal client is applied with the consumer's OS update (update-module.sh ${CONSUMER})"

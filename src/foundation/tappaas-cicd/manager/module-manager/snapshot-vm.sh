@@ -243,7 +243,7 @@ case "${ACTION}" in
         if [[ "${failed}" -gt 0 ]]; then
             die "Cleanup incomplete — ${deleted} snapshot(s) removed, ${failed} failed"
         fi
-        info "${VMNAME}: ${deleted} old snapshot(s) removed (keeping last ${KEEP})"
+        debug "${VMNAME}: ${deleted} old snapshot(s) removed (keeping last ${KEEP})"
         ;;
 
     restore)

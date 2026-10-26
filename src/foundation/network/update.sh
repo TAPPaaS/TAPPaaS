@@ -498,4 +498,4 @@ else
     debug "  could not read the WAN's address (rc ${_wan_rc}); the last one recorded stays"
 fi
 
-info "${GN}✓${CL} Firewall update completed"
+debug "${GN}✓${CL} Firewall update completed"

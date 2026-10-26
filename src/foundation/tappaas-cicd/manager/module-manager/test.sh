@@ -1242,7 +1242,8 @@ case "$*" in
 esac
 EOF
 chmod +x "${_sv_tmp}/bin/ssh"
-if SV_SNAPS="${_sv_tmp}/snaps" CONFIG_DIR="${_sv_tmp}/config" PATH="${_sv_tmp}/bin:${PATH}" \
+# TAPPAAS_DEBUG: the deletion count is a [Debug] line (an update prunes every night).
+if SV_SNAPS="${_sv_tmp}/snaps" CONFIG_DIR="${_sv_tmp}/config" PATH="${_sv_tmp}/bin:${PATH}" TAPPAAS_DEBUG=1 \
         bash "$SNAP" snaptest --cleanup 2 > "${_sv_tmp}/out" 2>&1; then
     _sv_left="$(tr '\n' ' ' < "${_sv_tmp}/snaps")"
     if [[ "${_sv_left}" == "manual-before-upgrade tappaas-20260905-010101 tappaas-20260906-010101 " ]]; then

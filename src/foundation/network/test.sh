@@ -419,7 +419,7 @@ cscli scenarios list -o raw --error 2>/dev/null | grep -c '^tappaas/http-login-b
 wl=/usr/local/etc/crowdsec/parsers/s02-enrich/tappaas-site-whitelist.yaml
 wan=$(route -6 get default 2>/dev/null | awk '/interface/ {print $2}')
 v6=0; for i in $(ifconfig -l); do [ "$i" = "$wan" ] && continue
-    ifconfig $i inet6 2>/dev/null | awk '/inet6/ && $2 !~ /^fe80/ && $2 != "::1" && $4 == 64' | grep -q . && v6=1; done
+    [ -n "$(ifconfig $i inet6 2>/dev/null | awk '/inet6/ && $2 !~ /^fe80/ && $2 != "::1" && $4 == 64')" ] && v6=1; done
 if [ ! -f "$wl" ]; then [ "$v6" = 1 ] && echo "whitelist=missing" || echo "whitelist=nov6"
 elif grep -q 'cidr: \[\]' "$wl"; then echo "whitelist=empty"
 else echo "whitelist=$(grep -c -- '- "' "$wl")"; fi

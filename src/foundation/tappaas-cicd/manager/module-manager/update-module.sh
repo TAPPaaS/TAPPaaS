@@ -673,7 +673,7 @@ main() {
         # Proceed WITHOUT a snapshot — so snapshot_created stays false and no later
         # rollback will try to stop/restore this VM from inside. Info, not a
         # warning: every sweep takes this path, so there is nothing to act on.
-        info "  No pre-update snapshot: ${self_vm} is this controller VM (a self-snapshot fsfreezes its own root FS)"
+        debug "  No pre-update snapshot: ${self_vm} is this controller VM (a self-snapshot fsfreezes its own root FS)"
     elif [[ "${has_vm}" == true ]]; then
         # A guest a backup is holding cannot be snapshotted (#686). Wait for the
         # lock rather than failing on it: the two schedules simply met.

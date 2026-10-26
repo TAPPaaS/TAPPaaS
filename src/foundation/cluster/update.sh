@@ -44,6 +44,7 @@ debug "Found nodes: $(echo "$NODES" | tr '\n' ' ')"
 
 # Step 1: Run apt update && apt dist-upgrade on all Proxmox nodes
 debug "Step 1: Updating Proxmox node packages"
+_apt_ok=()
 while read -r node; do
     NODE_FQDN="$node.$MGMTVLAN.internal"
     # apt's own output shows with --debug only; the outcome is one ✓ line per node.
@@ -71,7 +72,8 @@ while read -r node; do
             continue
         fi
     fi
-    info "  ${GN}✓${CL} $node: packages up to date (apt dist-upgrade)"
+    debug "  ${GN}✓${CL} $node: packages up to date (apt dist-upgrade)"
+    _apt_ok+=("$node")
 
     # Detect pending kernel reboot — Proxmox does not create /var/run/reboot-required.
     # Compare the running kernel with the newest installed kernel package. The
@@ -114,6 +116,9 @@ while read -r node; do
     fi
 
 done <<< "$NODES"
+if [[ ${#_apt_ok[@]} -gt 0 ]]; then
+    info "  ${GN}✓${CL} packages up to date (apt dist-upgrade) on ${#_apt_ok[@]} node(s): ${_apt_ok[*]}"
+fi
 debug "All Proxmox nodes package update completed."
 
 # Step 2: Distribute files to all nodes

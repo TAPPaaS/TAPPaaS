@@ -453,7 +453,7 @@ apply_three_way_merge() {
     if [[ "${n_pinned}" -gt 0 ]]; then
         local pinned_list
         pinned_list=$(jq -r '.pinned | join(", ")' <<<"${merged_with_report}")
-        info "    pinned (operator customizations preserved): ${pinned_list}"
+        debug "    pinned (operator customizations preserved): ${pinned_list}"   # the same every run
     fi
     if [[ "${n_added}" -gt 0 ]]; then
         local added_list

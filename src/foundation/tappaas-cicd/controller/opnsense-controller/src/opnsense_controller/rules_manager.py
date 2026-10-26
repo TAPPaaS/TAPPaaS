@@ -1760,7 +1760,7 @@ class RulesManager:
         return dst in s.access_to or "all" in s.access_to
 
     def _note_covered(self, module: ModuleSpec, description: str, src: str, dst: str) -> None:
-        info(f"{module.vmname}: {description} not written — {src}.access-to already "
+        debug(f"{module.vmname}: {description} not written — {src}.access-to already "
              f"passes all traffic into {dst}")
         self._covered.append({"rule": description, "from": src, "to": dst})
 

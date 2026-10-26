@@ -69,11 +69,11 @@ done
 # Resolve cluster topology
 ###############################################################################
 echo
-info "${BOLD}TAPPaaS reboot-cluster${CL}"
+debug "TAPPaaS reboot-cluster"
 if [[ "$DRY_RUN" -eq 1 ]]; then
     info "  Mode: ${YW}DRY-RUN${CL} (no changes)"
 else
-    info "  Mode: ${GN}EXECUTE${CL}"
+    debug "  Mode: EXECUTE"
 fi
 
 # All cluster nodes, in configuration order (tappaas1 first).
@@ -101,12 +101,12 @@ CICD_HOST=$(rn_node_ssh "$ENTRY" \
     "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" 2>/dev/null \
     | jq -r --argjson id "$CICD_VMID" '.[] | select(.vmid==$id) | .node' 2>/dev/null | head -1 || true)
 [[ -n "$CICD_HOST" ]] || warn "Could not determine the tappaas-cicd (vm:${CICD_VMID}) host node"
-info "  tappaas-cicd (vm:${CICD_VMID}) host: ${BL}${CICD_HOST:-unknown}${CL} (rebooted last)"
+debug "  tappaas-cicd (vm:${CICD_VMID}) host: ${CICD_HOST:-unknown} (rebooted last)"
 
 ###############################################################################
 # Determine which nodes need a reboot, and the order
 ###############################################################################
-info "${BOLD}Checking kernel gaps${CL}"
+debug "Checking kernel gaps"
 GAP_OTHERS=()   # gapped nodes that are NOT the cicd host
 GAP_CICD=""     # the cicd host, if it has a gap
 for n in "${ALL_NODES[@]}"; do
@@ -123,7 +123,7 @@ for n in "${ALL_NODES[@]}"; do
             GAP_OTHERS+=("$n")
         fi
     else
-        info "  ${GN}✓${CL} ${n}: up to date"
+        debug "  ${n}: up to date"
     fi
 done
 
@@ -132,7 +132,7 @@ ORDER=("${GAP_OTHERS[@]}")
 [[ -n "$GAP_CICD" ]] && ORDER+=("$GAP_CICD")
 
 if [[ "${#ORDER[@]}" -eq 0 ]]; then
-    info "${GN}✓${CL} No nodes need a reboot."
+    info "  ${GN}✓${CL} no node needs a reboot (${#ALL_NODES[@]} on their newest kernel)"
     exit 0
 fi
 

@@ -18,4 +18,4 @@ set -euo pipefail
 
 . /home/tappaas/bin/common-install-routines.sh
 
-info "immich: nothing to update beyond templates:nixos (immich.nix is applied there)"
+debug "immich: nothing to update beyond templates:nixos (immich.nix is applied there)"

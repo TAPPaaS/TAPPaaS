@@ -107,7 +107,7 @@ if [[ "${MODE}" == record ]]; then
 fi
 
 PASS=0; FAIL=0
-ok()  { info "  ✓ $1"; PASS=$((PASS + 1)); }
+ok()  { debug "  ✓ $1"; PASS=$((PASS + 1)); }   # the passed count is the [Info] line
 bad() { error "  ✗ $1"; FAIL=$((FAIL + 1)); }
 
 # ── 1. The managers on the operator's PATH actually run ──────────────
