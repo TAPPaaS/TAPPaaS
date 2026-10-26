@@ -490,6 +490,25 @@ class TestAppBindGroups(unittest.TestCase):
         self.assertFalse(any(c["method"] == "POST" for c in calls))
 
 
+    def test_exact_removes_other_groups_keeps_user_bindings(self):
+        mgr, calls = _make_manager({
+            ("GET", "/core/applications/"): {"results": [{"pk": "APP", "slug": "nomad", "provider": 2}]},
+            ("GET", "/core/groups/"): {"results": [{"pk": "GA", "name": "admin"}, {"pk": "GU", "name": "users"}]},
+            ("GET", "/policies/bindings/"): {"results": [
+                {"pk": "B1", "target": "APP", "group": "GU", "order": 0},
+                {"pk": "B2", "target": "APP", "group": None, "user": 9, "order": 1},
+                {"pk": "B3", "target": "OTHER", "group": "GU", "order": 0}]},
+            ("POST", "/policies/bindings/"): {"pk": "B4"},
+        })
+        created = mgr.app_bind_groups("nomad", ["admin"], exact=True)
+        self.assertEqual(created, 1)
+        deletes = [c["path"] for c in calls if c["method"] == "DELETE"]
+        self.assertEqual(deletes, ["/policies/bindings/B1/"])
+        # the wanted binding is made before the old one goes
+        order = [(c["method"], c["path"]) for c in calls if c["method"] in ("POST", "DELETE")]
+        self.assertEqual(order[0][0], "POST")
+
+
 class TestAppDelete(unittest.TestCase):
     def test_deletes_app_and_BOTH_provider_endpoints(self):
         # Regression: an oauth2 provider was leaked because the proxy-endpoint

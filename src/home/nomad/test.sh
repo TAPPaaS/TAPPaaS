@@ -40,12 +40,30 @@ remote "sudo grep -q '^NOMAD_APP_KEY=.\{32,\}' /var/lib/project-nomad/.env" \
 _images="$(remote "sudo docker ps --format '{{.Image}}'" | grep -E 'crosstalk-solutions' | paste -sd' ' -)"
 [[ -n "${_images}" && "${_images}" != *":latest"* ]] && pass "pinned images: ${_images}" || fail "an image is unpinned or missing: ${_images:-none}"
 
-# 4. Reachable at its internal address, as the client networks reach it.
-[[ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://${TARGET}:8080/api/health")" == "200" ]] \
-    && pass "http://${TARGET}:8080 answers" || fail "http://${TARGET}:8080 does not answer"
-[[ "$(remote "sudo cat /var/lib/project-nomad/url 2>/dev/null")" == "http://${TARGET}:8080" ]] \
-    && pass "NOMAD's URL is http://${TARGET}:8080, so its app links open at ${TARGET}:<port>" \
-    || fail "NOMAD's URL is not http://${TARGET}:8080 (update.sh sets it)"
+# 4. The Command Center only through the gate (it starts any container: root on the VM).
+[[ "$(remote "systemctl is-active nomad-fence")" == "active" ]] && pass "nomad-fence is active" \
+    || fail "nomad-fence is not active (journalctl -u nomad-fence on the VM)"
+_fence="$(remote "sudo iptables -S DOCKER-USER")"
+grep -q -- "--ctorigdstport 8080 -j DROP" <<<"${_fence}" && [[ "$(grep -c -- "-j DROP" <<<"${_fence}")" -ge 2 ]] \
+    && pass "DOCKER-USER: 8080 only from Caddy, no published port from a zone neighbour" \
+    || fail "DOCKER-USER does not fence 8080 and the zone's neighbours: ${_fence:-empty}"
+_direct="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://${TARGET}:8080/api/health")"
+[[ "${_direct}" == "000" ]] && pass "http://${TARGET}:8080 is refused from here (not Caddy)" \
+    || fail "http://${TARGET}:8080 answered ${_direct} from tappaas-cicd — the Command Center is reachable around the gate"
+_url="$(remote "sudo sed -n 's/^NOMAD_URL=//p' /var/lib/project-nomad/.env")"
+[[ "${_url}" == https://* ]] && pass "the Command Center's URL is the gated name ${_url}" \
+    || fail "the Command Center's URL is ${_url:-unset}, not the gated https name"
+if [[ "${_url}" == https://* ]]; then
+    _gate="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 15 "${_url}/")"
+    [[ "${_gate}" == "302 "* ]] \
+        && pass "${_url} asks for the Authentik sign-in" \
+        || fail "${_url} does not redirect to the sign-in (got: ${_gate})"
+fi
+
+# 5. The Command Center's tiles open the apps at the internal address.
+_links="$(remote "sudo nomad-links check" | tail -1)"
+[[ "${_links}" == "0" ]] && pass "every installed app's tile opens at ${TARGET}:<port>" \
+    || fail "${_links:-?} installed app(s) without an internal URL (nomad-links on the VM)"
 
 echo ""
 info "Results: ${PASSED} passed, ${FAILED} failed"

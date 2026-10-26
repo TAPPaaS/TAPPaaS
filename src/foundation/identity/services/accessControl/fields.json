@@ -1,0 +1,24 @@
+{
+  "$schema": "../../../schemas/service-fields.json",
+  "service": "identity:accessControl",
+  "description": "Who the Authentik gate in front of the module lets through.",
+  "fields": {
+    "gateGroups": {
+      "description": "The Authentik groups whose members pass the module's gate. Unset: the team group `users` is bound, and other bindings an operator made on the gate's application are left as they are. Set: exactly these groups are bound — a binding to any other group is removed, a binding to a user (a service account, ADR-032) stays.",
+      "type": "array",
+      "requiredBy": [],
+      "usedBy": [
+        "identity:accessControl"
+      ],
+      "default": "<unset: users, additive>",
+      "items": "string",
+      "example": [
+        "admin"
+      ],
+      "note": "A role reaches Authentik as a group of the same name (identity/USERS.md), so `admin` is everyone with the admin role. Use it for a module whose UI can change the machine it runs on (NOMAD's Command Center starts containers).",
+      "class": "in-place",
+      "apply": "reconcile",
+      "changeNote": "Who may sign in to the module. Applied on the module's next update; members of a group that is no longer bound are refused at the gate from then on."
+    }
+  }
+}

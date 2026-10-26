@@ -22,16 +22,33 @@
 #     what a pin bump in this file does instead;
 #   - no Dozzle: an unauthenticated log viewer with the Docker socket;
 #   - secrets generated once on the VM (/var/lib/project-nomad/.env), never in
-#     config; the Command Center's URL written by update.sh.
+#     config.
 #
-# NOMAD is not published outside the site and has no login of its own: the
-# client networks reach it at http://nomad.<zone>.internal:8080, and the apps
-# on their own ports, as the module's ingress rules allow.
+# The Command Center has no login of its own, and through the Docker socket it
+# starts any container it is given (custom apps): reaching it is root on this
+# VM. So it is reached only at https://nomad.<domain>, through Caddy and the
+# Authentik gate (members of admin), from inside the site; the VM refuses port
+# 8080 from every other source (nomad-fence below — Docker's published ports
+# pass the NixOS firewall by, and the site firewall does not filter between
+# neighbours in one zone). The content apps it installs stay on their own
+# ports, reached from the client networks at http://nomad.<zone>.internal:<port>;
+# nomad-links points the Command Center's tiles there.
 # ============================================================================
 
 { config, lib, pkgs, modulesPath, ... }:
 
 let
+  # The module's config, deployed beside this file by update-os.sh: the name
+  # the proxy publishes it under (proxyDomain), and the firewall's IPv6 address
+  # in this zone (proxySourceV6, ADR-030 D9) — Caddy's source over IPv6.
+  moduleCfg = if builtins.pathExists ./nomad.json
+              then builtins.fromJSON (builtins.readFile ./nomad.json)
+              else {};
+  proxyCfg = (moduleCfg.config or {})."network:proxy" or {};
+  proxyDomain = proxyCfg.proxyDomain or (moduleCfg.proxyDomain or "");
+  publicUrl = if proxyDomain != "" then "https://${proxyDomain}" else "";
+  proxySourceV6 = moduleCfg.proxySourceV6 or "";
+
   # Pinned images (src/image-pins.json tracks them, #750). Immutable tags.
   adminImage = "ghcr.io/crosstalk-solutions/project-nomad:v1.35.1";
   diskCollectorImage = "ghcr.io/crosstalk-solutions/project-nomad-disk-collector:v1.31.1";
@@ -132,7 +149,8 @@ let
         echo "NOMAD_DB_ROOT_PASSWORD=$(${pkgs.openssl}/bin/openssl rand -hex 24)"
       } > "$env"
     fi
-    url="$(cat /var/lib/project-nomad/url 2>/dev/null || true)"
+    # The Command Center's own URL: the gated public name.
+    url="${publicUrl}"
     [ -n "$url" ] || url="http://$(${pkgs.nettools}/bin/hostname -f):8080"
     sed -i '/^NOMAD_URL=/d' "$env"
     echo "NOMAD_URL=$url" >> "$env"
@@ -151,6 +169,66 @@ let
     done
     exit 1
   '';
+  # Docker's published ports pass the NixOS firewall by, so the fence is in
+  # the DOCKER-USER chain Docker keeps for the host's own rules (as woodpecker
+  # does). From the uplink: 8080 only from Caddy (the zone's gateway; over IPv6
+  # the firewall's address in the zone), and no published port from another
+  # machine in this zone — the client networks are routed through the firewall,
+  # so their addresses are not this subnet's. Dropped, not rejected: a reset
+  # for a connection Docker has redirected would leave with the container's
+  # address and be ignored anyway.
+  fenceScript = pkgs.writeShellScript "nomad-fence" ''
+    set -euo pipefail
+    export PATH=${lib.makeBinPath [ pkgs.iptables pkgs.iproute2 pkgs.gawk pkgs.coreutils ]}
+    # At boot the default route can come after this starts: wait for it, so the
+    # stack (which requires this) starts behind the fence, never before it.
+    for _ in $(seq 1 60); do
+      up="$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "dev") {print $(i + 1); exit}}')"
+      gw="$(ip -4 route show default | awk '{for (i = 1; i < NF; i++) if ($i == "via") {print $(i + 1); exit}}')"
+      [ -n "$up" ] && [ -n "$gw" ] && break
+      sleep 2
+    done
+    [ -n "$up" ] && [ -n "$gw" ] || { echo "nomad-fence: no default route after 120 s"; exit 1; }
+    net4="$(ip -4 -o addr show dev "$up" scope global | awk '{print $4; exit}')"
+    fence() { # fence <iptables|ip6tables> <caddy source> <own networks...>
+      local t="$1" src="$2"; shift 2
+      $t -N DOCKER-USER 2>/dev/null || true
+      $t -F DOCKER-USER
+      $t -A DOCKER-USER -i "$up" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
+      [ -n "$src" ] && $t -A DOCKER-USER -i "$up" -s "$src" -p tcp -m conntrack --ctorigdstport 8080 -j RETURN
+      $t -A DOCKER-USER -i "$up" -p tcp -m conntrack --ctorigdstport 8080 -j DROP
+      for n in "$@"; do $t -A DOCKER-USER -i "$up" -s "$n" -j DROP; done
+      $t -A DOCKER-USER -j RETURN
+    }
+    fence iptables "$gw" ''${net4:+"$net4"}
+    net6="$(ip -6 -o addr show dev "$up" scope global | awk '$4 !~ /^f[cd]/ {print $4; exit}')"
+    fence ip6tables "${proxySourceV6}" ''${net6:+"$net6"} fe80::/10
+    echo "nomad-fence: 8080 from $gw${lib.optionalString (proxySourceV6 != "") " and ${proxySourceV6}"} only; no published port from ''${net4:-?}''${net6:+ or $net6}"
+  '';
+
+  # The Command Center links an app as http://<the address bar's host>:<port>
+  # unless the app has a custom URL. Behind the proxy that host is the public
+  # name, where the apps are not: give every installed app without a URL of
+  # its own the address the client networks reach it at. An URL set by hand
+  # is kept.
+  # `nomad-links check` prints how many installed apps still lack it.
+  linksScript = pkgs.writeShellScriptBin "nomad-links" ''
+    set -euo pipefail
+    export PATH=${lib.makeBinPath [ pkgs.docker pkgs.coreutils pkgs.nettools ]}
+    . /var/lib/project-nomad/.env
+    host="$(hostname -f)"
+    portapp="installed = 1 AND ui_location REGEXP '^(https?:)?[0-9]+$'"
+    if [ "''${1:-}" = check ]; then
+      sql="SELECT COUNT(*) FROM services WHERE $portapp AND (custom_url IS NULL OR custom_url NOT LIKE '%://$host:%');"
+    else
+      sql="UPDATE services SET custom_url = CASE
+             WHEN ui_location REGEXP '^https?:[0-9]+$'
+               THEN CONCAT(SUBSTRING_INDEX(ui_location, ':', 1), '://$host:', SUBSTRING_INDEX(ui_location, ':', -1))
+             ELSE CONCAT('http://$host:', ui_location) END
+           WHERE $portapp AND (custom_url IS NULL OR custom_url = ''');"
+    fi
+    echo "$sql" | docker exec -i -e MYSQL_PWD="$NOMAD_DB_PASSWORD" nomad_mysql mysql -N -unomad_user nomad
+  '';
 in
 {
   imports = [
@@ -163,11 +241,12 @@ in
   # -- Networking ------------------------------------------------------------
   networking.hostName = lib.mkDefault "nomad";
 
-  # 8080: the Command Center. The content apps' ports are published by Docker,
-  # which programs its own forwarding; the site firewall decides who reaches them.
+  # The Command Center (8080) and the content apps' ports are published by
+  # Docker, which programs its own forwarding past this firewall: who reaches
+  # them is the site firewall's ingress rules and nomad-fence.
   networking.firewall = {
     enable = true;
-    allowedTCPPorts = [ 22 8080 ];
+    allowedTCPPorts = [ 22 ];
   };
 
   # -- SSH: keys only ----------------------------------------------------------
@@ -179,16 +258,18 @@ in
     autoPrune = { enable = true; dates = "weekly"; };
   };
 
-  environment.systemPackages = with pkgs; [ jq docker-compose ];
+  environment.systemPackages = with pkgs; [ jq docker-compose ] ++ [ linksScript ];
 
   # Readable by update.sh (as tappaas, through sudo) to find where things are.
   environment.etc."project-nomad/compose.yml".source = compose;
 
   systemd.services.project-nomad = {
     description = "Project N.O.M.A.D. (Command Center, MySQL, Redis)";
-    after = [ "docker.service" "network-online.target" ];
+    # Behind the fence or not at all: a stack without it is the Command Center
+    # open to every neighbour around the gate.
+    after = [ "docker.service" "network-online.target" "nomad-fence.service" ];
     wants = [ "network-online.target" ];
-    requires = [ "docker.service" ];
+    requires = [ "docker.service" "nomad-fence.service" ];
     wantedBy = [ "multi-user.target" ];
     path = [ pkgs.docker pkgs.coreutils pkgs.gnused ];
     serviceConfig = {
@@ -200,6 +281,29 @@ in
     };
     # A new compose (a pin bump) brings the stack to it on the next switch.
     restartTriggers = [ compose ];
+  };
+
+  # The fence, again whenever Docker (re)starts: it builds its chains then.
+  systemd.services.nomad-fence = {
+    description = "Project N.O.M.A.D.: the Command Center only from Caddy, no app from a zone neighbour";
+    after = [ "docker.service" "network-online.target" ];
+    wants = [ "network-online.target" ];
+    partOf = [ "docker.service" ];
+    wantedBy = [ "multi-user.target" "docker.service" ];
+    before = [ "project-nomad.service" ];
+    serviceConfig = { Type = "oneshot"; RemainAfterExit = true; ExecStart = fenceScript; TimeoutStartSec = "3min"; };
+    restartTriggers = [ fenceScript ];
+  };
+
+  systemd.services.nomad-links = {
+    description = "Project N.O.M.A.D.: the Command Center's app tiles open the apps at their internal address";
+    after = [ "project-nomad.service" ];
+    requires = [ "project-nomad.service" ];
+    serviceConfig = { Type = "oneshot"; ExecStart = "${linksScript}/bin/nomad-links"; };
+  };
+  systemd.timers.nomad-links = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnActiveSec = "1min"; OnUnitActiveSec = "2min"; };
   };
 
   system.stateVersion = "25.05";

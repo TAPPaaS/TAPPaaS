@@ -292,7 +292,7 @@ def cmd_brand_ensure(mgr: AuthentikManager, args: argparse.Namespace) -> int:
 
 
 def cmd_app_bind_groups(mgr: AuthentikManager, args: argparse.Namespace) -> int:
-    created = mgr.app_bind_groups(args.slug, args.group)
+    created = mgr.app_bind_groups(args.slug, args.group, exact=args.exact)
     print(f"==> app '{args.slug}': {created} new group binding(s); {len(args.group)} requested")
     return 0
 
@@ -560,6 +560,8 @@ def main(argv: list[str] | None = None) -> int:
                         help="bind groups to an application (the access gate; additive)")
     bg.add_argument("slug")
     bg.add_argument("--group", action="append", required=True, default=[], help="group name; repeatable")
+    bg.add_argument("--exact", action="store_true",
+                    help="also remove the app's bindings to groups not named (user bindings stay)")
     bg.set_defaults(handler=cmd_app_bind_groups)
 
     sa = sub.add_parser("service-account-ensure",

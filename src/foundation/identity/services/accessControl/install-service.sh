@@ -144,12 +144,21 @@ authentik-controller proxy-app-ensure "${GATE_SLUG}" \
 # Authentik lets every user through an application with no policy binding
 # (ADR-006 §5), so without this any account on the identity provider passes the
 # forward-auth gate. Bind the org membership group `users`, as identity:identity
-# does for OIDC apps (#805). group-ensure is the same idempotent safety net.
-authentik-controller group-ensure users >/dev/null 2>&1 \
-    || warn "group-ensure users failed; assuming identity-manager already created it"
-_bind_out="$(authentik-controller app-bind-groups "${GATE_SLUG}" --group users)" \
+# does for OIDC apps (#805), or the module's gateGroups. group-ensure is the same
+# idempotent safety net.
+# A module that declares gateGroups binds exactly those (other group bindings
+# go; a service account's user binding stays); without it, `users`, additively.
+mapfile -t GATE_GROUPS < <(normalize_module_config < "${MODULE_JSON}" | jq -r '(.gateGroups // [])[]')
+declare -a bind_args=(--exact)
+if [[ ${#GATE_GROUPS[@]} -eq 0 ]]; then GATE_GROUPS=(users); bind_args=(); fi
+for _g in "${GATE_GROUPS[@]}"; do
+    authentik-controller group-ensure "${_g}" >/dev/null 2>&1 \
+        || warn "group-ensure ${_g} failed; assuming identity-manager already created it"
+    bind_args+=(--group "${_g}")
+done
+_bind_out="$(authentik-controller app-bind-groups "${GATE_SLUG}" "${bind_args[@]}")" \
     || die "app-bind-groups failed for ${GATE_SLUG} — the app would be open to every Authentik user"
-debug "  ${_bind_out}"
+debug "  ${_bind_out} (${GATE_GROUPS[*]})"
 
 # ── Step 2: Flip ForwardAuth on the existing Caddy handler ──────────────────
 
