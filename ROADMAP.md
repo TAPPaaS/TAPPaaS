@@ -113,12 +113,12 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 2 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 27 | – | 3 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 27 | 2 | 3 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | – | 5 |
 | 3 | G3.5 Installer UX | L | L | 2 | – | 2 |
-| 2 | G2.1 Firewall exposure & rule order | M | H | 25 | – | 2 |
+| 2 | G2.1 Firewall exposure & rule order | M | H | 25 | 1 | 2 |
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | – | 1 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
@@ -321,7 +321,7 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 27 · open: 3
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 27 · done for 2.4: 2 · open: 3
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753). Built from the 2.0→2.2 field report (#832): a capacity pre-flight before the sweep (#833) and visible size changes on legacy sites (#834). Next by design: dynamic placement on PVE 9.2's load balancer (#838).
 
@@ -330,6 +330,8 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #403 | Install on the root disk; smarter placement | M | L | |
 | #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; the CPU level the candidate set shares (#827), capable nodes only (#836). ADR first |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
+| ✅ #880 | Capacity pre-flight: refuse only memory growth, hard stop on install | M | L | **Done 2026-10-26** (`2696c5b2`): an over-committed node the update does not grow warns; growth past 95% refuses; install-module refuses a new guest that would. Ships in 2.3.1 |
+| ✅ #879 | Update waits for a guest on modules that have no VM | L | L | **Done 2026-10-26** (`d1832b39`): no readiness wait for a module without a `vmid`; about 72 min per nightly sweep on a site with device modules. Reported by @ErikDaniel007. Ships in 2.3.1 |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 14 · open: 1
 
@@ -380,7 +382,7 @@ A first install that is easier to get through: resumable (#377), showing its pro
 
 Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff (#645) before `--apply`.
 
-### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 25 · open: 2
+### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 25 · done for 2.4: 1 · open: 2
 
 Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) closed — on `main` 2026-10-13 after a clean `--deep` (144/0). Inbound IPv6 to Caddy, IPv6 anti-spoofing, DNSSEC (#263), #576, #257, #660 and #683 followed, on `main` 2026-10-13 after a clean `--deep` (144/0). Lockout check re-run on hrossen 2026-10-13 against the current rules, IPv4 and IPv6: only mgmt reaches the firewall's GUI and SSH, on any address; the WAN passes 80/443 and nothing else (the admin VPN not re-probed). Open: the NetBird rules below, pending the NetBird decision; #706 moved to G4.4 behind #668. NetBird rules (#385, #222) are low priority until the NetBird decision.
 
@@ -388,6 +390,7 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 |---|-------|:-:|:-:|------|
 | #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
+| ✅ #877 | mdns-manager sees no `discoveryMdns` in the stored config | L | L | **Done 2026-10-26** (`b8b59010`): it reads module configs in their flat view, so a network update no longer plans to switch the repeater off. Reported by @ErikDaniel007. Ships in 2.3.1 |
 
 ### G2.2 DNS resolver robustness — Ease L · Risk M · released: 7 · open: 1
 
@@ -434,7 +437,7 @@ someone deciding whether to upgrade. The release-train boundary turns it into th
 summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
-
+The update sweep stops failing on what a site runs that way on purpose: a node already over its memory threshold warns (only growth refuses, and a new module's install), a suspended provider no longer fails its consumers, and a run where only app modules failed ends *degraded* (exit 3, still mailed) instead of *failed*. The reboot pass finishes the cycle: in the scheduled window a guest that cannot move live is stopped, moved and started, a TSC rate the target cannot run is caught before a live move, and the waits suit slower hardware. Rollback of `module modify --set` restores the config from before the change. All of it first reached staging as 2.3.1.
 <!-- /next-release summary -->
 
 ## Release 2.3 — staging 2026-10-25 · production at the next boundary
