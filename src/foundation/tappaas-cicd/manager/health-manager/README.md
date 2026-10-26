@@ -307,8 +307,19 @@ choices are worth knowing:
 each running guest counts at the larger of its live size and its config's
 `memory`, because the update converges it to the config. A node whose VMs were
 sized down by hand in Proxmox commits more once it is updated, and that is
-seen here before it happens. The update sweep runs it first (threshold 95%)
-and updates nothing when a node would be over; `--force` overrides.
+seen here before it happens. The update sweep runs it first (threshold 95%):
+
+| Node after the update | Verdict |
+|---|---|
+| under the threshold, nothing grows | pass |
+| under the threshold, a guest grows | warning: memory changes |
+| over the threshold, nothing grows | warning: it runs like that today, so the update goes ahead — rebalance when you can |
+| at or over the threshold because a guest grows | refused: nothing is updated; `--force` overrides |
+
+`install-module` runs it with `--install <instance>` before it creates the
+guest: the new module's memory lands on its node, and an install that would
+take the node to the threshold is refused (`--force` does not override it —
+move the module with `--node`, or make room first).
 
 **read-only** here. Growing a disk is `cluster:vm`'s: every module update grows a
 VM disk that is filling up, when its pool has room (see the `cluster:vm`

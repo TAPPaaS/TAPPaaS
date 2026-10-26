@@ -42,7 +42,7 @@ import {
 } from "./security";
 import { CheckStatus, ClusterClient, HealthReport } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
-import { CL, GN, RD, YW, die, guarded, info, preflightGuard } from "../../../lib/ts/src/cli";
+import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 
 const VERSION = "0.1.0";
 
@@ -72,9 +72,10 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "capacity [--memory-threshold PCT] [--config-dir DIR]",
-      details: "What each node commits once the update has converged every guest (a guest at the larger of its live and its configured memory). Exit 1 when a node would reach the threshold — the update sweep's pre-flight.",
+      usage: "capacity [--install <instance>] [--memory-threshold PCT] [--config-dir DIR]",
+      details: "What each node commits once the update has converged every guest (a guest at the larger of its live and its configured memory). Exit 1 only when growth — a guest that grows, or the module being installed — would take a node to the threshold; a node already over that nothing grows, and any growth under it, warn (exit 0). The update sweep's and install-module's pre-flight.",
       options: [
+        ["--install <instance>", "Count this deployed config's memory as new on its node (install-module, before the guest exists)."],
         ["--memory-threshold PCT", `Percent of a node's RAM the projected commitment must stay under (default ${DEFAULT_MEMORY_THRESHOLD}).`],
       ],
     },
@@ -423,9 +424,15 @@ export function run(argv: string[], client: ClusterClient): number {
       case "validate":
         return cmdValidate(opts, client);
       case "capacity": {
-        const r = checkUpdateCapacity(client, opts.configDir, DEFAULT_NODE, opts.memoryThreshold);
-        const tag = r.status === "fail" ? `${RD}FAIL${CL}` : r.status === "skip" ? `${YW}SKIP${CL}` : `${GN}PASS${CL}`;
-        info(`[${tag}] ${r.name}: ${r.detail}`);
+        const at = opts.rest.indexOf("--install");
+        const adding = at >= 0 ? opts.rest[at + 1] : undefined;
+        if (at >= 0 && !adding) die("capacity: --install needs an instance name");
+        const r = checkUpdateCapacity(client, opts.configDir, DEFAULT_NODE, opts.memoryThreshold, adding);
+        if (r.status === "warn") warn(`${r.name}: ${r.detail}`);
+        else {
+          const tag = r.status === "fail" ? `${RD}FAIL${CL}` : r.status === "skip" ? `${YW}SKIP${CL}` : `${GN}PASS${CL}`;
+          info(`[${tag}] ${r.name}: ${r.detail}`);
+        }
         for (const row of r.rows ?? []) info(`    ${row.text}`);
         return r.status === "fail" ? 1 : 0;
       }

@@ -931,9 +931,11 @@ def backup_key_warnings(bk: dict | None) -> list[str]:
 
 def check_update_capacity() -> dict | None:
     """The sweep's capacity pre-flight (#833): `health-manager capacity` projects
-    what each node commits once every guest is at its configured memory. A node
-    at or over CAPACITY_THRESHOLD returns a failure record; anything else —
-    including a health-manager that cannot run — returns None (not refused)."""
+    what each node commits once every guest is at its configured memory. Only
+    growth that takes a node to CAPACITY_THRESHOLD returns a failure record; a
+    node already over that nothing grows, and growth under it, are warnings
+    health-manager prints (relogged here) and exit 0. A health-manager that
+    cannot run returns None too (not refused)."""
     cmd = os.environ.get("HEALTH_MANAGER_CMD", "/home/tappaas/bin/health-manager")
     try:
         r = subprocess.run([cmd, "capacity", "--memory-threshold", str(CAPACITY_THRESHOLD)],
@@ -941,13 +943,12 @@ def check_update_capacity() -> dict | None:
     except (OSError, subprocess.SubprocessError) as e:
         log.warning("Capacity pre-flight could not run (%s) — continuing", e)
         return None
-    if r.returncode == 0:
-        relog_output(r.stdout)
-        return None
     relog_output(r.stdout)
-    over = [ln.strip() for ln in r.stdout.splitlines() if "after the update" in ln and "%" in ln]
+    if r.returncode == 0:
+        return None
+    over = [ln.strip() for ln in r.stdout.splitlines() if "after the update" in ln and "grows" in ln]
     return {"dependency": "node-memory",
-            "detail": "a node would be over-committed after the update: " + ("; ".join(over) or r.stdout.strip()[-300:])}
+            "detail": "a node would be over-committed by the update: " + ("; ".join(over) or r.stdout.strip()[-300:])}
 
 
 def check_shared_dependencies() -> list[dict]:
@@ -1400,7 +1401,9 @@ def main():
 
     # Capacity pre-flight (#833): a sweep that grows guests past what a node
     # holds runs it out of memory mid-update — on a small single node that killed
-    # cicd's own VM. Refused before any module is touched; --force overrides.
+    # cicd's own VM. Growth past the threshold is refused before any module is
+    # touched (--force overrides); an over-committed node the sweep does not grow
+    # only warns, since refusing would leave it as full and unpatched.
     if not dep["down"]:
         log.info("Phase 0.6: capacity pre-flight (memory each node commits after the update)")
         over = check_update_capacity()

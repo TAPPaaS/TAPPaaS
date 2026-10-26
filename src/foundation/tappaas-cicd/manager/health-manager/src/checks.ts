@@ -280,8 +280,15 @@ export function checkMemoryCommitment(client: ClusterClient, threshold: number):
 // memory-commitment gate counts the live size, which is too late for a sweep
 // about to grow a guest — on a 2.0 site with sizes tuned in Proxmox, the first
 // converge took identity 1.75G→4G and the node out of memory, killing cicd's
-// own VM mid-sweep. The sweep runs this before it touches a module and refuses
-// when a node would reach `threshold` percent of its RAM.
+// own VM mid-sweep. The sweep runs this before it touches a module.
+//
+// Only growth is refused. A node already over `threshold` that the update does
+// not grow is running that way today; refusing the update leaves it exactly as
+// over-committed and unpatched, so it warns. Growth that stays under the
+// threshold warns too (the operator sees RAM change); growth that reaches it
+// fails. `adding` names a module about to be installed (install-module.sh):
+// its configured memory lands on its node as new, so a new module that would
+// take its node to the threshold is refused even when nothing else grows.
 const MIB = 1024 ** 2;
 
 export function checkUpdateCapacity(
@@ -289,6 +296,7 @@ export function checkUpdateCapacity(
   configDir: string,
   defaultNode: string,
   threshold: number,
+  adding?: string,
 ): CheckResult {
   let caps: NodeCapacity[];
   try {
@@ -298,17 +306,27 @@ export function checkUpdateCapacity(
   }
   if (caps.length === 0) return { name: "update-capacity", status: "skip", detail: "no nodes reported" };
   const wanted = new Map<number, { module: string; mem: number }>();
+  let added: { module: string; node: string; mem: number; vmid: number } | undefined;
   for (const m of loadConfigModules(configDir, defaultNode).filter(isManaged)) {
     const raw = readModuleJson(join(configDir, `${m.module}.json`)) ?? {};
     const mem = Number(configField(raw, "memory"));
-    if (Number.isFinite(mem) && mem > 0) wanted.set(m.vmid, { module: m.module, mem: mem * MIB });
+    if (!Number.isFinite(mem) || mem <= 0) continue;
+    wanted.set(m.vmid, { module: m.module, mem: mem * MIB });
+    if (m.module === adding) {
+      added = { module: m.module, node: String(configField(raw, "node") ?? "") || m.node, mem: mem * MIB, vmid: m.vmid };
+    }
   }
+  const exists = new Set(caps.flatMap((c) => c.guests.map((g) => g.vmid)));
+  if (added && exists.has(added.vmid)) added = undefined; // already a guest: a re-install adds nothing
   const rows: CheckRow[] = [];
+  const rank: Record<CheckStatus, number> = { skip: 0, pass: 1, warn: 2, fail: 3 };
   let worst: CheckStatus = "pass";
   for (const c of caps) {
+    let current = 0;
     let projected = 0;
     const grows: string[] = [];
     for (const g of c.guests.filter((x) => x.status === "running")) {
+      current += g.declaredMem;
       const w = wanted.get(g.vmid);
       if (w && w.mem > g.declaredMem) {
         projected += w.mem;
@@ -317,23 +335,36 @@ export function checkUpdateCapacity(
         projected += g.declaredMem;
       }
     }
+    if (added && added.node === c.node) {
+      projected += added.mem;
+      grows.push(`new ${added.module} ${gib(added.mem)}G`);
+    }
     const pct = c.physicalMem > 0 ? (100 * projected) / c.physicalMem : 0;
-    const status: CheckStatus = pct >= threshold ? "fail" : "pass";
-    if (status === "fail") worst = "fail";
+    const over = pct >= threshold;
+    const status: CheckStatus = over && grows.length ? "fail" : over || grows.length ? "warn" : "pass";
+    if (rank[status] > rank[worst]) worst = status;
+    const nowPct = c.physicalMem > 0 ? (100 * current) / c.physicalMem : 0;
     rows.push({
       status,
       text: `${c.node}: ${gib(projected)}/${gib(c.physicalMem)}G ${pct.toFixed(0)}% after the update` +
-        (grows.length ? ` (grows ${grows.join(", ")})` : ""),
+        (grows.length ? ` (grows ${grows.join(", ")}; ${nowPct.toFixed(0)}% now)` : over ? " (already so, nothing grows)" : ""),
       subject: nodeOf(c.node),
     });
   }
   const bad = rows.filter((r) => r.status === "fail");
+  const overNoGrowth = rows.filter((r) => r.status === "warn" && r.text.includes("already so"));
+  const growing = rows.filter((r) => r.status === "warn" && !r.text.includes("already so"));
+  const notes: string[] = [];
+  if (overNoGrowth.length) notes.push(`${overNoGrowth.map((r) => r.text).join("; ")} — over ${threshold}% but the update adds nothing: rebalance when you can`);
+  if (growing.length) notes.push(`${growing.map((r) => r.text).join("; ")} — memory changes`);
   return {
     name: "update-capacity",
     status: worst,
-    detail: bad.length === 0
-      ? `every node under ${threshold}% of its RAM after the update`
-      : `${bad.map((r) => r.text).join("; ")} — at or over ${threshold}%: lower a guest's memory, move one (modify --set node=), or add RAM`,
+    detail: bad.length > 0
+      ? `${bad.map((r) => r.text).join("; ")} — would reach ${threshold}%: lower a guest's memory, move one (modify --set node=), or add RAM`
+      : notes.length > 0
+        ? notes.join(" · ")
+        : `every node under ${threshold}% of its RAM after the update`,
     rows,
   };
 }

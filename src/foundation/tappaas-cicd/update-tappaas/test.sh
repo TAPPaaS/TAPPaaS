@@ -535,9 +535,11 @@ def stub(rc, out):
 os.environ["HEALTH_MANAGER_CMD"] = hm
 stub(0, "tappaas1: 51.5/61.8G 83% after the update")
 assert m.check_update_capacity() is None, "a node with room: not refused"
-stub(1, "tappaas1: 16.0/15.0G 107% after the update (grows identity 1.8→4.0G)")
+stub(0, "[Warning] update-capacity: tappaas1: 33.0/31.2G 106% after the update (already so, nothing grows)")
+assert m.check_update_capacity() is None, "over-committed already, nothing grows: warned, not refused"
+stub(1, "tappaas1: 16.0/15.0G 107% after the update (grows identity 1.8→4.0G; 95% now)")
 over = m.check_update_capacity()
-assert over and over["dependency"] == "node-memory" and "107%" in over["detail"], f"over-committed: refused, named: {over}"
+assert over and over["dependency"] == "node-memory" and "107%" in over["detail"], f"growth past the threshold: refused, named: {over}"
 os.environ["HEALTH_MANAGER_CMD"] = os.path.join(d, "missing")
 assert m.check_update_capacity() is None, "a health-manager that cannot run never blocks the sweep"
 

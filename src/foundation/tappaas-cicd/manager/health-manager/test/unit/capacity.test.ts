@@ -218,12 +218,39 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   c.capacity = [node("tappaas1", 15, 14, [["tappaas-cicd", 6, "running"], ["network", 4, "running"], ["identity", 1.75, "running"]])];
   check(checkMemoryCommitment(c, 100).status === "pass", "today's sizes fit (78%): the live gate cannot see it coming");
   const r = checkUpdateCapacity(c, dir, "tappaas1", 90);
-  check(r.status === "fail", "after the update identity is 4G: over 90% of the node — refused");
+  check(r.status === "fail", "after the update identity is 4G: growth takes the node over 90% — refused");
   check(r.detail.includes("identity 1.8→4.0G"), `the guest that grows is named (got: ${r.detail})`);
   const ok = checkUpdateCapacity(c, dir, "tappaas1", 100);
-  check(ok.status === "pass" && (ok.rows?.[0].text.includes("93%") ?? false), `under the threshold it passes, with the projection (got: ${ok.rows?.[0].text})`);
+  check(ok.status === "warn" && (ok.rows?.[0].text.includes("93%") ?? false), `growth under the threshold warns, with the projection (got: ${ok.rows?.[0].text})`);
+  check(ok.detail.includes("memory changes") && ok.detail.includes("78% now"), `the warning says memory changes and where it is now (got: ${ok.detail})`);
   writeFileSync(join(dir, "identity.json"), JSON.stringify({ vmid: 102, memory: 1024 }));
   check(checkUpdateCapacity(c, dir, "tappaas1", 90).status === "pass", "a config smaller than live never counts below live (no shrink assumed)");
+}
+
+// The makerfloss case: every guest on one node, already past the threshold,
+// and the update grows nothing — the update goes ahead with a warning.
+{
+  const dir = mkdtempSync(join(tmpdir(), "hm-cap-"));
+  writeFileSync(join(dir, "tappaas-cicd.json"), JSON.stringify({ vmid: 100, memory: 6144 }));
+  writeFileSync(join(dir, "network.json"), JSON.stringify({ vmid: 101, memory: 4096 }));
+  const c = new FakeClusterClient();
+  c.capacity = [node("tappaas1", 9.5, 10, [["tappaas-cicd", 6, "running"], ["network", 4, "running"]])];
+  const r = checkUpdateCapacity(c, dir, "tappaas1", 95);
+  check(r.status === "warn", `over the threshold, nothing grows: warn, not refuse (got: ${r.status} ${r.detail})`);
+  check(r.detail.includes("already so") && r.detail.includes("rebalance"), `it says so, and what to do (got: ${r.detail})`);
+
+  // A new module on that node: the hard stop.
+  writeFileSync(join(dir, "vault.json"), JSON.stringify({ vmid: 140, node: "tappaas1", memory: 2048 }));
+  const add = checkUpdateCapacity(c, dir, "tappaas1", 95, "vault");
+  check(add.status === "fail" && add.detail.includes("new vault 2.0G"), `installing onto an over-committed node is refused (got: ${add.detail})`);
+  check(checkUpdateCapacity(c, dir, "tappaas1", 95).status === "warn", "an un-installed config is not counted by the sweep");
+
+  // The same module placed on an empty node passes.
+  c.capacity.push(node("tappaas2", 30, 0, []));
+  writeFileSync(join(dir, "vault.json"), JSON.stringify({ vmid: 140, config: { "cluster:vm": { node: "tappaas2", memory: 2048 } } }));
+  const elsewhere = checkUpdateCapacity(c, dir, "tappaas1", 95, "vault");
+  const t2 = elsewhere.rows?.find((x) => x.text.startsWith("tappaas2"));
+  check(t2?.status === "warn" && elsewhere.status === "warn", `on a node with room it is a memory change, not a refusal (got: ${elsewhere.detail})`);
 }
 
 console.log(`capacity: ${passed} passed, ${failed} failed`);

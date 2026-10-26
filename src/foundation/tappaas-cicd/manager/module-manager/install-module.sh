@@ -788,6 +788,20 @@ main() {
     vmname_check=$(jq -r '.vmname // empty' "${module_json}")
     [[ -n "${vmname_check}" ]] && validate_module_alias_name "${vmname_check}"
 
+    # Capacity (#833): the new guest's memory lands on its node. An install that
+    # would take the node to the sweep's threshold is refused before anything is
+    # provisioned — no --force: move it (--node) or make room first. A cluster
+    # that cannot be read does not block an install.
+    if ! module_is_not_a_guest && command -v health-manager >/dev/null 2>&1; then
+        local _cap
+        if ! _cap="$(health-manager capacity --install "${effective_module}" \
+                --memory-threshold "${INSTALL_CAPACITY_THRESHOLD:-95}" --config-dir "${CONFIG_DIR}" 2>&1)"; then
+            printf '%s\n' "${_cap}" | sed 's/^/  /' >&2
+            die "Not enough memory on the node for '${effective_module}' — install it on another node (--node <n>), lower its memory, or move a module off first"
+        fi
+        debug "$(printf '%s' "${_cap}" | tail -n 5)"
+    fi
+
     # ── Step 3: Validate dependencies ────────────────────────────────
     info "${BOLD}Step 3: Validate dependencies${CL}"
 
