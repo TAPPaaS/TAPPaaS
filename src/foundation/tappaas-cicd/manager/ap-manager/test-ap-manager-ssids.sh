@@ -155,6 +155,49 @@ ck "remove drops its passphrase line"           "rossen-home=from-a-file-1" "$(c
 ck "…and every AP's view"                       '[false,false]' "$(d '[.accessPoints[].ssids | has("things")]')"
 ck "remove of none (rc)"                        1 "$(rc_of am ssid remove things)"
 
+# ── reconcile: every AP, a changed passphrase pushed, the marks cleared ──
+STUB="${TMP}/plugins"; mkdir -p "${STUB}"
+cat > "${STUB}/stubv.sh" <<'PLUGIN'
+plugin_supports() { [[ "$1" == "stubv" ]]; }
+plugin_ap_interrogate() { echo '{}'; }
+plugin_ap_apply() { echo "$1|$2" >> "${AP_TEST_APPLY_LOG}"; return 0; }
+PLUGIN
+export PLUGIN_DIR="${STUB}" AP_TEST_APPLY_LOG="${TMP}/applied.log"
+jq '.accessPoints[].vendor = "stubv"' "${DES}" > "${DES}.t" && mv "${DES}.t" "${DES}"
+jq '.guest.SSID = "<GUEST_SSID>"' "${Z}" > "${Z}.t" && mv "${Z}.t" "${Z}"
+am update-desired >/dev/null 2>&1
+out="$(am delta 2>&1)"
+ck "delta: a new SSID on each AP"               yes "$(has "${out}" 'ap2: 1 change')"
+ck "…the zone that still shows a placeholder"   yes "$(has "${out}" "zone 'guest' still has the template SSID <GUEST_SSID>")"
+ck "reconcile --apply (rc)"                     2 "$(rc_of am reconcile --apply)"
+ck "…the controller ran for every AP"           '["ap1","ap2"]' "$(cut -d'|' -f1 "${AP_TEST_APPLY_LOG}" | sort -u | jq -R . | jq -sc .)"
+ck "…the passphrase marks cleared"              false "$(d '[.ssids[] | has("passphraseChanged")] | any')"
+ck "…nothing left per AP"                       no "$(has "$(am delta 2>&1)" 'change(s)')"
+: > "${AP_TEST_APPLY_LOG}"
+echo 'a-new-passphrase' | am ssid set-passphrase rossen-home >/dev/null 2>&1
+out="$(am delta 2>&1)"
+ck "a changed passphrase is a change on each AP" yes "$(has "${out}" 'ssid-passphrase: SSID rossen-home')"
+ck "…on both"                                   2 "$(grep -c 'ssid-passphrase' <<<"${out}")"
+ck "…the passphrase itself is not shown"        no "$(has "${out}" 'a-new-passphrase')"
+am reconcile --apply >/dev/null 2>&1
+ck "reconcile --apply pushes it to every AP"    '["ap1","ap2"]' "$(cut -d'|' -f1 "${AP_TEST_APPLY_LOG}" | sort -u | jq -R . | jq -sc .)"
+ck "…as a passphrase change"                    yes "$(has "$(cat "${AP_TEST_APPLY_LOG}")" '"action":"ssid-passphrase"')"
+ck "…and confirm clears the mark"               false "$(d '.ssids["rossen-home"] | has("passphraseChanged")')"
+am ssid modify rossen-home --security wpa2-personal >/dev/null 2>&1
+ck "a security change: ssid-settings per AP"    yes "$(has "$(am delta 2>&1)" 'ssid-settings: SSID rossen-home security wpa3-personal -> wpa2-personal')"
+am ssid modify rossen-home --disabled >/dev/null 2>&1
+ck "disabled: per AP"                           yes "$(has "$(am delta 2>&1)" 'disable')"
+am reconcile --apply >/dev/null 2>&1
+am ssid add guestnet --zone guest --security open >/dev/null 2>&1
+out="$(am delta 2>&1)"
+ck "a real SSID recorded: the placeholder warning goes" no "$(has "${out}" 'template SSID <GUEST_SSID>')"
+jq '.iot.SSID = "Stray"' "${Z}" > "${Z}.t" && mv "${Z}.t" "${Z}"
+ck "a zone naming an SSID no one holds"         yes "$(has "$(am delta 2>&1)" "zone 'iot' names SSID 'Stray', which ap-manager does not hold")"
+jq '.guest.state = "Inactive" | del(.iot.SSID)' "${Z}" > "${Z}.t" && mv "${Z}.t" "${Z}"
+ck "an SSID on a zone that is off"              yes "$(has "$(am delta 2>&1)" "SSID 'guestnet' bridges to zone 'guest', which is Inactive")"
+jq '.guest.state = "Active"' "${Z}" > "${Z}.t" && mv "${Z}.t" "${Z}"
+unset PLUGIN_DIR
+
 # ── a site that has not run migration 0025 ──
 jq 'del(.ssids) | .accessPoints.ap1.ssids = {"old":{"vlan":310,"zone":"home","security":"open","enabled":true}}' "${DES}" > "${DES}.t" && mv "${DES}.t" "${DES}"
 before="$(snap)"

@@ -13,15 +13,32 @@ Linked entry points:
   usage text and messages still use the `ap-manager` name).
 - `ap-manager` — compatibility alias symlink to `ap-manager` (to be dropped
   at a later cutover).
-- `setup-wlan-secrets.sh` — interactive SSID-name + passphrase helper.
+- `setup-wlan-secrets.sh` — interactive SSID-name + passphrase helper over
+  `ap-manager ssid add` and `ssid set-passphrase`.
 
 ## Internal structure
 
-AP inventory and SSIDs live under the `accessPoints` key of the **same**
-desired/actual state files the switch controller uses
+AP inventory (`accessPoints`) and the site-wide SSIDs (`ssids`) live in the
+**same** desired/actual state files the switch controller uses
 (`switch-configuration-desired.json` / `switch-configuration-actual.json`), so
 the switch and AP planes share one topology view. Mutations are atomic `jq`
-rewrites. The active VLAN set and per-zone SSID/VLAN come from `zones.json`.
+rewrites.
+
+An SSID is one site-wide entry — `{zone, security, radius?, captive?,
+disabled?, broadcastOn: "all" | [ap…], passphraseChanged?}` — with no VLAN of its
+own: the VLAN is its zone's `vlantag`. Each AP's `ssids{}` in desired is derived
+from that list (`derive_ap_ssids`, after every change and in `update-desired`) in
+the per-AP shape the vendor controllers read, `{vlan, zone, security, enabled,
+radiusServer?, captivePortal?}`; `actual` keeps what each AP really broadcasts,
+so `delta` stays a per-AP comparison.
+
+The zone's `SSID` field names the SSID that bridges to it. ap-manager owns it
+and writes it through `network-manager set-ssid` (zones.json has one writer); a
+generic `network-manager modify --set SSID` is refused. The passphrase lives
+only in the secrets file (`lib/wlan-lib.sh` holds its rules, shared with
+`setup-wlan-secrets.sh`); `ssid set-passphrase` marks the SSID
+`passphraseChanged`, `delta` turns the mark into an `ssid-passphrase` change on
+each AP that broadcasts it, and `confirm` clears it.
 
 ### Vendor controllers (ADR-035 D4)
 
@@ -35,9 +52,12 @@ manual controller, which prints the steps for the operator.
 ### Five-verb reconcile + validations
 
 `reconcile` runs `update-desired → interrogate → delta → apply → confirm`. The
-`delta` step also validates the wiring: every zone that declares an `SSID` must
-be broadcast by some AP, and each AP's uplink switch port must carry every one
-of that AP's SSID VLANs (cross-checked against the switch config). Failures are
+`delta` step also validates the wiring: each active zone's `SSID` is a
+site-wide SSID bridged to that zone (a template placeholder is reported as not
+named yet, until the zone carries an SSID), each site-wide SSID bridges to a zone
+that exists, is on and names it, and is broadcast by some AP, no AP is over its
+SSID ceiling, and each AP's uplink switch port carries every one of that AP's
+SSID VLANs (cross-checked against the switch config). Failures are
 emitted as warnings and reflected in the exit code so a manager/CI can gate on
 them.
 
@@ -55,6 +75,11 @@ exits non-zero on failure.
 
 ## Pending / not yet implemented
 
+- **The UniFi plugin reads the derived per-AP view** and creates every WLAN on
+  the controller's "All APs" group, so an SSID's `broadcastOn` list is not
+  honoured on UniFi (ap-manager warns when a list leaves a UniFi AP out). What
+  the plugin must change is written down in `docs/design/889-site-wide-ssid.md`
+  ("What the UniFi plugin must change").
 - **Vendor controllers are limited.** Only `unifi-controller` (the Community `unifi-os`
   module) and the manual
   fallback exist. Any other AP brand falls through to manual, so `apply` prints instructions rather than programming the AP.

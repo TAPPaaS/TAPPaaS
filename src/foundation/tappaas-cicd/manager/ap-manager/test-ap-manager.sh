@@ -101,7 +101,7 @@ jq '.home.vlantag=310' "${TMP}/zones.json" > "${TMP}/z2" && mv "${TMP}/z2" "${TM
 # AP-04: delta detects SSID create + validation: zone work declares SSID 'TAPPaaS-Work' but no AP serves it
 delta_out="$("${AM}" delta 2>&1)"
 ck "AP-04 create-ssid detected"      "yes"    "$(has "${delta_out}" 'create-ssid')"
-ck "AP-04 unserved-SSID warning"     "yes"    "$(has "${delta_out}" "no AP broadcasts it")"
+ck "AP-04 undeclared-SSID warning"   "yes"    "$(has "${delta_out}" "names SSID 'TAPPaaS-Work', which ap-manager does not hold")"
 ck "AP-04 uplink-not-carrying warning" "yes"   "$(has "${delta_out}" 'does not carry VLAN')"
 
 # reconcile --apply via manual plugin → needs-manual (rc 2)

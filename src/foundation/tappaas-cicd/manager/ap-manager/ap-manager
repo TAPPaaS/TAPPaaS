@@ -2,19 +2,21 @@
 #
 # ap-manager — TAPPaaS WiFi access-point network provider (ADR-008, #339)
 #
-# Reconciles WiFi SSID→VLAN mappings to zones.json (the single source of truth)
-# so a zone with an `SSID` field is broadcast on the right VLAN without manual
-# controller edits. It is the `ap-manager` provider in the ADR-008 orchestrator
-# model and implements the same five-verb contract as switch-manager:
+# Owns the site's WiFi networks: each SSID is site-wide (desired `.ssids`),
+# bridged to one zone (whose `SSID` field names it) and broadcast by every access
+# point on that zone's VLAN, without manual controller edits (#889). It is the
+# `ap-manager` provider in the ADR-008 orchestrator model and implements the same
+# five-verb contract as switch-manager:
 #
-#   update-desired  zones.json → SSID vlan tracking in desired
+#   update-desired  .ssids + zones.json → each AP's SSIDs (VLAN from the zone)
 #   interrogate     live AP/controller state → actual (via its controller)
-#   delta           desired vs actual (SSID add/remove/vlan-change + validations)
+#   delta           desired vs actual per AP (SSID add/remove/vlan/settings, a
+#                   changed passphrase) + zone/SSID/uplink validations
 #   apply           push via the vendor controller, or print manual steps
-#   confirm         record applied state in actual;
+#   confirm         record applied state in actual; clear the passphrase marks
 #   reconcile       = the five verbs in order (apply only with --apply)
 #
-# AP inventory + SSIDs live under the .accessPoints key of the SAME files
+# AP inventory (.accessPoints) and the SSIDs (.ssids) live in the SAME files
 # switch-manager uses (switch-configuration-{desired,actual}.json). Vendor
 # automation is a controller (ADR-035 D4) answering the ap/1 verbs; manual is
 # the fallback.
@@ -691,21 +693,16 @@ warn_ssid_ceiling() {
     return 1
 }
 
-# ── Phase 0: update-desired (track SSID vlan from its zone) ──────────
+# ── Phase 0: update-desired (each AP's SSIDs from the site-wide list) ──
 
 cmd_update_desired() {
-    info "${BOLD}update-desired${CL} (zones.json → SSID vlan tracking)"
-    local out tracked
-    out=$(jq --slurpfile z "${ZONES_FILE}" '
-        ([.accessPoints[]?.ssids[]? | select((.zone // "")!="" and ($z[0][.zone].vlantag != null) and (.vlan != $z[0][.zone].vlantag))] | length) as $n
-        | .accessPoints |= map_values(
-            .ssids |= map_values(
-                if ((.zone // "")!="" and ($z[0][.zone].vlantag != null))
-                then .vlan = $z[0][.zone].vlantag else . end))
-        | {result: ., n: $n}' "${DESIRED}")
-    echo "${out}" | jq '.result' > "${DESIRED}.tmp" && mv "${DESIRED}.tmp" "${DESIRED}"
-    tracked=$(echo "${out}" | jq -r '.n')
-    info "  SSID VLANs re-tracked from zones: ${tracked}"
+    info "${BOLD}update-desired${CL} (site-wide SSIDs + zones.json → each AP's SSIDs)"
+    local before after
+    before=$(jq -c '[.accessPoints // {} | to_entries[] | {(.key): .value.ssids}] | add // {}' "${DESIRED}")
+    derive_ap_ssids
+    after=$(jq -c '[.accessPoints // {} | to_entries[] | {(.key): .value.ssids}] | add // {}' "${DESIRED}")
+    info "  SSIDs: $(jq -r '.ssids // {} | length' "${DESIRED}") site-wide, on $(jq -r '.accessPoints // {} | length' "${DESIRED}") access point(s)$(
+        [[ "${before}" == "${after}" ]] || echo "; access points' SSIDs re-derived (a zone's VLAN, the list or the inventory changed)")"
     return 0
 }
 
@@ -756,6 +753,7 @@ compute_delta() {
     jq -n --slurpfile d "${DESIRED}" --slurpfile a "${ACTUAL}" '
       ($d[0].accessPoints // {}) as $des
       | ($a[0].accessPoints // {}) as $act
+      | ($d[0].ssids // {}) as $ss
       | reduce ($des | keys[]) as $ap ({};
           . + {($ap): {
               changes: [
@@ -767,6 +765,14 @@ compute_delta() {
                   elif ($as.vlan != $s.value.vlan) then
                     {action:"ssid-vlan", ssid:$s.key,
                      description:"SSID \($s.key) VLAN \($as.vlan) -> \($s.value.vlan)"}
+                  elif (($as.security // $s.value.security) != $s.value.security)
+                       or ((if ($as | has("enabled")) then $as.enabled else $s.value.enabled end) != $s.value.enabled) then
+                    {action:"ssid-settings", ssid:$s.key,
+                     description:"SSID \($s.key) \([(if ($as.security // $s.value.security) != $s.value.security then "security \($as.security) -> \($s.value.security)" else empty end),
+                                                (if (if ($as | has("enabled")) then $as.enabled else $s.value.enabled end) != $s.value.enabled then (if $s.value.enabled then "enable" else "disable" end) else empty end)] | join(", "))"}
+                  elif ($ss[$s.key].passphraseChanged == true) then
+                    {action:"ssid-passphrase", ssid:$s.key,
+                     description:"SSID \($s.key): a new passphrase to push (from the secrets file)"}
                   else empty end
               ],
               removed: [
@@ -776,28 +782,68 @@ compute_delta() {
     '
 }
 
-# Validate: every zone with an SSID field is served by some AP; and each AP's
-# uplink switch port carries every SSID VLAN. Prints warnings; sets VALIDATION_WARN.
+# Validate the WiFi wiring and print warnings; sets VALIDATION_WARN:
+#   - each active zone's SSID is a site-wide SSID bridged to that zone (a
+#     template placeholder is "not named yet", unless the zone already carries an
+#     SSID); an enabled SSID some access point broadcasts;
+#   - each site-wide SSID bridges to a zone that exists, is on, and names it;
+#   - no AP over its SSID ceiling; each AP's uplink port carries its SSIDs' VLANs.
 validate() {
     VALIDATION_WARN=0
-    local zone ssid_name served ap
-    # Active zones with an SSID must be broadcast somewhere. An Inactive or
-    # Disabled zone keeps its SSID but broadcasts nothing; a template placeholder
-    # was never chosen, so "no AP broadcasts it" would send the operator looking
-    # for drift that is not there (#734).
+    local zone ssid_name carried_by site vz vstate vname en aps
+    # Active zones with an SSID. An Inactive or Disabled zone keeps its SSID but
+    # broadcasts nothing; a template placeholder was never chosen, so "no AP
+    # broadcasts it" would send the operator looking for drift that is not there (#734).
     while IFS=$'\t' read -r zone ssid_name _; do
         [[ -z "${ssid_name}" || "${ssid_name}" == "null" ]] && continue
+        carried_by=$(jq -r --arg z "${zone}" '[.ssids // {} | to_entries[] | select(.value.zone == $z) | .key] | first // ""' "${DESIRED}")
         if is_placeholder "${ssid_name}"; then
-            warn "  zone '${zone}' still has the template SSID ${ssid_name}: set a real name (setup-wlan-secrets.sh), or remove SSID if the zone has no WiFi"
+            if [[ -z "${carried_by}" ]]; then
+                warn "  zone '${zone}' still has the template SSID ${ssid_name}: name its WiFi (ap-manager ssid add <ssid> --zone ${zone} --security <sec>), or remove SSID if the zone has no WiFi"
+            else
+                warn "  zone '${zone}' carries SSID '${carried_by}' but still shows ${ssid_name}: ap-manager ssid modify '${carried_by}' --zone ${zone} rewrites it"
+            fi
             VALIDATION_WARN=$((VALIDATION_WARN + 1))
             continue
         fi
-        served=$(jq -r --arg s "${ssid_name}" '[.accessPoints[]?.ssids // {} | has($s)] | any' "${DESIRED}")
-        if [[ "${served}" != "true" ]]; then
-            warn "  zone '${zone}' declares SSID '${ssid_name}' but no AP broadcasts it"
+        site=$(jq -r --arg s "${ssid_name}" '.ssids[$s].zone // ""' "${DESIRED}")
+        if [[ -z "${site}" ]]; then
+            warn "  zone '${zone}' names SSID '${ssid_name}', which ap-manager does not hold: ap-manager ssid add '${ssid_name}' --zone ${zone} --security <sec>"
+            VALIDATION_WARN=$((VALIDATION_WARN + 1))
+        elif [[ "${site}" != "${zone}" ]]; then
+            warn "  zone '${zone}' names SSID '${ssid_name}', which bridges to zone '${site}'"
             VALIDATION_WARN=$((VALIDATION_WARN + 1))
         fi
     done < <(wlan_zones "${ZONES_FILE}")
+
+    # Each site-wide SSID: its zone exists, is on and names it; broadcast somewhere.
+    while IFS=$'\t' read -r ssid_name zone en; do
+        [[ -n "${ssid_name}" ]] || continue
+        if ! zone_exists "${zone}"; then
+            warn "  SSID '${ssid_name}' bridges to zone '${zone}', which does not exist: ap-manager ssid modify '${ssid_name}' --zone <zone>"
+            VALIDATION_WARN=$((VALIDATION_WARN + 1)); continue
+        fi
+        vstate=$(jq -r --arg z "${zone}" '.[$z].state // "Active"' "${ZONES_FILE}")
+        vname=$(zone_ssid "${zone}")
+        if [[ "${vname}" != "${ssid_name}" ]]; then
+            warn "  SSID '${ssid_name}' bridges to zone '${zone}', which names ${vname:-no SSID}: ap-manager ssid modify '${ssid_name}' --zone ${zone} rewrites it"
+            VALIDATION_WARN=$((VALIDATION_WARN + 1))
+        fi
+        [[ "${en}" == true ]] || continue
+        if [[ "${vstate}" != Active && "${vstate}" != Mandatory ]]; then
+            warn "  SSID '${ssid_name}' bridges to zone '${zone}', which is ${vstate}: devices that join get no network (ap-manager ssid modify '${ssid_name}' --disabled)"
+            VALIDATION_WARN=$((VALIDATION_WARN + 1))
+        fi
+        aps=$(ssid_aps "${ssid_name}")
+        if [[ -z "${aps}" ]]; then
+            if [[ "$(jq -r '.accessPoints // {} | length' "${DESIRED}")" -eq 0 ]]; then
+                warn "  SSID '${ssid_name}' (zone '${zone}'): no access point is registered to broadcast it (ap-manager add)"
+            else
+                warn "  SSID '${ssid_name}' (zone '${zone}'): no AP broadcasts it (ap-manager ssid modify '${ssid_name}' --broadcast-on all)"
+            fi
+            VALIDATION_WARN=$((VALIDATION_WARN + 1))
+        fi
+    done < <(jq -r '.ssids // {} | to_entries[] | [.key, .value.zone, (.value.disabled != true)] | @tsv' "${DESIRED}")
 
     # No AP over its SSID ceiling (wlan-lib.sh).
     while IFS= read -r ap; do
@@ -877,6 +923,12 @@ cmd_confirm() {
     local tmp; tmp="$(mktemp)"
     jq --slurpfile d "${DESIRED}" '.accessPoints = ($d[0].accessPoints // {})' "${ACTUAL}" > "${tmp}" && mv "${tmp}" "${ACTUAL}"
     info "  ${GN}✓${CL} actual.json AP state updated to match desired"
+    local pushed
+    pushed=$(jq -r '[.ssids // {} | to_entries[] | select(.value.passphraseChanged == true) | .key] | join(", ")' "${DESIRED}")
+    if [[ -n "${pushed}" ]]; then
+        jq_desired '.ssids |= map_values(del(.passphraseChanged))'
+        info "  ${GN}✓${CL} passphrase pushed: ${pushed}"
+    fi
     return 0
 }
 
