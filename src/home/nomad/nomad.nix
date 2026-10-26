@@ -174,8 +174,9 @@ let
   # does). From the uplink: 8080 only from Caddy (the zone's gateway; over IPv6
   # the firewall's address in the zone), and no published port from another
   # machine in this zone — the client networks are routed through the firewall,
-  # so their addresses are not this subnet's. A refused connection is reset, so
-  # Caddy falls back from IPv6 to IPv4 at once.
+  # so their addresses are not this subnet's. Dropped, not rejected: a reset
+  # for a connection Docker has redirected would leave with the container's
+  # address and be ignored anyway.
   fenceScript = pkgs.writeShellScript "nomad-fence" ''
     set -euo pipefail
     export PATH=${lib.makeBinPath [ pkgs.iptables pkgs.iproute2 pkgs.gawk pkgs.coreutils ]}
@@ -189,7 +190,7 @@ let
       $t -F DOCKER-USER
       $t -A DOCKER-USER -i "$up" -m conntrack --ctstate ESTABLISHED,RELATED -j RETURN
       [ -n "$src" ] && $t -A DOCKER-USER -i "$up" -s "$src" -p tcp -m conntrack --ctorigdstport 8080 -j RETURN
-      $t -A DOCKER-USER -i "$up" -p tcp -m conntrack --ctorigdstport 8080 -j REJECT --reject-with tcp-reset
+      $t -A DOCKER-USER -i "$up" -p tcp -m conntrack --ctorigdstport 8080 -j DROP
       for n in "$@"; do $t -A DOCKER-USER -i "$up" -s "$n" -j DROP; done
       $t -A DOCKER-USER -j RETURN
     }

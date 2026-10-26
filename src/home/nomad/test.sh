@@ -44,7 +44,7 @@ _images="$(remote "sudo docker ps --format '{{.Image}}'" | grep -E 'crosstalk-so
 [[ "$(remote "systemctl is-active nomad-fence")" == "active" ]] && pass "nomad-fence is active" \
     || fail "nomad-fence is not active (journalctl -u nomad-fence on the VM)"
 _fence="$(remote "sudo iptables -S DOCKER-USER")"
-grep -q -- "--ctorigdstport 8080 -j REJECT" <<<"${_fence}" && grep -q -- "-j DROP" <<<"${_fence}" \
+grep -q -- "--ctorigdstport 8080 -j DROP" <<<"${_fence}" && [[ "$(grep -c -- "-j DROP" <<<"${_fence}")" -ge 2 ]] \
     && pass "DOCKER-USER: 8080 only from Caddy, no published port from a zone neighbour" \
     || fail "DOCKER-USER does not fence 8080 and the zone's neighbours: ${_fence:-empty}"
 _direct="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://${TARGET}:8080/api/health")"
