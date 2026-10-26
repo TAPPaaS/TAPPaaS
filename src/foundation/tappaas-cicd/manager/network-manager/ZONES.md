@@ -30,7 +30,7 @@ Two pages complete it:
 | `isolated` | Inbound quarantine: no zone may reach it zone-wide. Default `false`. |
 | `environment` | The environment the zone belongs to: for a Service zone (and `mgmt`), the environment whose zone it is, or — as a list — the environments a shared service zone serves; for a Client, Guest, IoT or DMZ zone, the environment it serves ([below](#a-zone-and-its-environment-environment)). |
 | `DHCP-start` / `DHCP-end` | DHCP range offsets within the subnet (default 50–250). |
-| `SSID` | Optional WiFi network broadcast on this zone's VLAN ([below](#wifi-the-ssid-field)). |
+| `SSID` | The WiFi network that bridges to this zone, shown here and set by `ap-manager` ([below](#wifi-the-ssid-field)). |
 | `ipv6Subnet` | The zone's IPv6 network, 0–255: its `/64` within the site's prefix. Assigned by default; remove it to keep the zone IPv4-only ([IPV6.md](IPV6.md)). |
 | `mdns` | The zone takes part in mDNS discovery across zones ([below](#discovery-across-zones-mdns)). Default `false`. |
 | `description` | Human-readable purpose. |
@@ -343,9 +343,25 @@ cameras only through its module's pinhole, never zone-wide.
 
 ## WiFi: the `SSID` field
 
-An optional `SSID` is the WiFi network broadcast on the zone's VLAN, used by the WiFi
-tooling ([`network/scripts/README.md`](../../../network/scripts/README.md)):
-`setup-wlan-secrets.sh` sets the real name and stores the passphrase in a 0600 secrets file
-(never in `zones.json`), and `ap-manager` maps each SSID to its zone's VLAN. A zone
-without WiFi omits it or sets `null`; the shipped `<PLACEHOLDER>` means "not chosen yet".
-Only an `Active` zone broadcasts.
+A WiFi network is a **site-wide SSID**: declared once, broadcast by every access point
+(unless it names the ones that should), and bridged to exactly one zone — devices that join
+it land on the zone's VLAN, with the zone's rules. The zone's `SSID` names it, so a zone
+carries one SSID. `ap-manager` owns the network and writes the field:
+
+```bash
+ap-manager ssid add rossen-home --zone home --security wpa2-personal   # sets home's SSID
+echo 'a passphrase' | ap-manager ssid set-passphrase rossen-home     # stdin, never an argument
+ap-manager ssid modify rossen-home --zone work                       # moves it: home's SSID cleared, work's set
+ap-manager ssid remove rossen-home                                   # clears the zone's SSID
+ap-manager reconcile --apply                                         # every access point
+```
+
+`network-manager modify <zone> --set SSID=…` is refused and names those verbs. The
+passphrase lives only in a 0600 secrets file, never in `zones.json`; how clients join and
+which access points broadcast it belong to the SSID (`ap-manager ssid list`). The console's
+zone card shows the SSID read-only, with a link to the WiFi step on Setup's Day 2.
+
+A zone without WiFi has no `SSID`. The template's `<HOME_SSID>`-style placeholders mean
+"not named yet": `ap-manager delta` says so until an SSID is added for the zone. Only an
+`Active` zone's SSID is expected on the air.
+

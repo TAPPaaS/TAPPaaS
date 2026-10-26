@@ -544,24 +544,25 @@ switch-manager reconcile --apply     # manual switch → prints the VLANs to tag
 
 ### 6b — Wi-Fi access points
 
-First set the real SSID **names** and WPA **passphrases** (they replace the
-`<…_SSID>` placeholders in `zones.json`; secrets go to a 0600 file, never committed).
-A zone that should have no WiFi gets `"SSID": null` instead of a name:
-
-```bash
-setup-wlan-secrets.sh          # set SSID names + passphrases  (→ ~/.wlan-secrets.txt)
-setup-wlan-secrets.sh --list   # show SSIDs and whether a secret is set
-```
-
-Then register the AP(s) and map each SSID to a zone, and reconcile:
+A WiFi network is one **site-wide SSID** bridged to one zone and broadcast by every access
+point. Register the AP(s), declare each SSID on its zone (this replaces the zone's
+`<…_SSID>` placeholder), give each WPA SSID its passphrase (stdin or a file — it goes to a
+0600 file, never into a config), and reconcile:
 
 ```bash
 ap-manager add livingroom --vendor unifi --ip 10.0.0.21
-ap-manager ssid livingroom add HomeWiFi  --zone home  --security wpa2-personal
-ap-manager ssid livingroom add GuestWiFi --zone guest --security wpa2-personal
 ap-manager link livingroom --switch core --port 5      # the AP's uplink port
+ap-manager ssid add HomeWiFi  --zone home  --security wpa2-personal
+ap-manager ssid add GuestWiFi --zone guest --security wpa2-personal
+ap-manager ssid set-passphrase HomeWiFi                 # asked twice, hidden
+ap-manager ssid set-passphrase GuestWiFi
 ap-manager reconcile --apply
 ```
+
+`setup-wlan-secrets.sh` walks the zones still on a placeholder and asks the same
+questions; `--list` shows each zone's SSID and whether its passphrase is set. A changed
+passphrase (`ssid set-passphrase` again) reaches every access point at the next
+`reconcile --apply`.
 
 - With a **UniFi controller**, `switch-manager interrogate` auto-populates the AP
   inventory and marks the AP's uplink port as a WiFi-VLAN trunk — so adopting a

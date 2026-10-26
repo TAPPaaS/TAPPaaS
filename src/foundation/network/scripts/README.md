@@ -108,9 +108,10 @@ switch-manager reconcile --apply    # prints the VLANs to tag on ports 9 & 10 AN
 
 ## `ap-manager` — WiFi access points (SSID → VLAN)
 
-Stores APs + SSIDs under `.accessPoints` in the same config files. SSID *names*
-and VLANs come from `zones.json` (the `SSID` field per zone); the security level
-is chosen per SSID here; passphrases live in a separate secrets file (below).
+Stores the APs under `.accessPoints` and the site-wide SSIDs under `.ssids` in the
+same config files. An SSID is declared once, bridged to one zone (its VLAN, and the
+zone's `SSID` names it) and broadcast by every AP unless it names some; its passphrase
+lives in a separate secrets file (below).
 
 **Auto-population:** when `switch-manager interrogate` runs against a UniFi
 controller, it also enumerates the controller's **APs** — registering each into
@@ -122,8 +123,9 @@ and wires up the AP's switch port with no manual steps.
 ```
 ap-manager add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <l>]
 ap-manager remove <name> | list | show <name>
-ap-manager ssid <ap> add <ssid> --zone <z> --security <sec> [--vlan <n>] [--radius <srv>] [--captive] [--disabled]
-ap-manager ssid <ap> remove <ssid> | list
+ap-manager ssid add <ssid> --zone <z> --security <sec> [--radius <srv>] [--captive] [--disabled] [--broadcast-on all|<ap>,…]
+ap-manager ssid modify <ssid> [--zone <z>] [--security <sec>] … | remove <ssid> | list [--json]
+ap-manager ssid set-passphrase <ssid> [--file <path>]      # stdin or the file, never an argument
 ap-manager link <ap> --switch <switch> --port <port>      # AP uplink (VLAN cross-check)
 ap-manager update-desired | interrogate | delta | apply | confirm
 ap-manager reconcile [--apply]

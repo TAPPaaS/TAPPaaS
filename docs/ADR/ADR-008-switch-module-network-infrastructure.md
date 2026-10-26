@@ -19,6 +19,20 @@
 > gates (UniFi `--apply` works; a real registered switch / off-node VLAN fan-out is not yet the proven
 > default); the `opnsense-manager` rename; the MikroTik plugin.
 
+> **Addendum (2026-10-26) — an SSID is site-wide.** The per-AP SSIDs below (`accessPoints{<ap>}.ssids`,
+> `ap-manager ssid <ap> add`) declared the same network once per access point, and the zone's `SSID` was
+> a separate hand-set name. Decided by the operator: an SSID is **one site-wide object, owned by
+> ap-manager, broadcast by every access point** (a list may name fewer), bridged to exactly **one zone**
+> (its VLAN), and the zone's `SSID` field names it — display-only in `zones.json`, written by ap-manager
+> through `network-manager set-ssid`, refused by `network-manager modify --set`. Shape:
+> `switch-configuration-desired.json` `ssids{<name>: {zone, security, radius?, captive?, disabled?,
+> broadcastOn: "all" | [ap…], passphraseChanged?}}`; each AP's `ssids{}` is derived from it for the
+> vendor controllers. Verbs: `ap-manager ssid add|modify|remove|list` and `ssid set-passphrase <ssid>`
+> (stdin or a file, never an argument; the next reconcile pushes a changed passphrase to every access
+> point). Migration 0025 folds the per-AP entries into the list. Design and survey:
+> [889-site-wide-ssid.md](../design/889-site-wide-ssid.md). The JSON example in §2 shows
+> the earlier per-AP shape.
+
 ---
 
 ## Context
@@ -475,10 +489,11 @@ ap-manager remove <name>
 ap-manager list
 ap-manager show <name>
 
-# SSID configuration
-ap-manager ssid <ap> add <ssid-name> --vlan 310 --zone home --security wpa3-personal
-ap-manager ssid <ap> remove <ssid-name>
-ap-manager ssid <ap> list
+# SSID configuration (site-wide since the 2026-10-26 addendum; the per-AP forms are aliases for one release)
+ap-manager ssid add <ssid-name> --zone home --security wpa3-personal
+ap-manager ssid set-passphrase <ssid-name>          # stdin or --file
+ap-manager ssid remove <ssid-name>
+ap-manager ssid list
 
 # Link to switch port
 ap-manager link <ap> --switch core-switch-1 --port 24
