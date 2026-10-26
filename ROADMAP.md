@@ -112,7 +112,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
-| 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 2 |
+| 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | 1 | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | – | 4 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
@@ -309,7 +309,7 @@ Shared storage as a managed part of a site: the rest of the NFS service (#772). 
 |---|-------|:-:|:-:|------|
 | #772 | ADR-029 NFS: remaining work packages from #766 | M | L | Export backup, NAS servers, storage zone, LXC consumers, quota health, `show`/`purge`. **2026-10-05:** ADR-029 v0.8 (shares by name, pending mounts, `subdir`) built, smoke-tested |
 
-### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 5 · open: 2
+### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 5 · done for 2.4: 1 · open: 2
 
 The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker module): community-health files (#486), the remaining ADRs (#359; the ADR-010 sign-off, #406, is in G5.1), a tool for urgent patches (#746), a logging-function lint (#747); the service-desk spike (#63) is in G7.2.
 
@@ -317,6 +317,7 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 |---|-------|:-:|:-:|------|
 | #486 | ADR-015 community-health files | L | L | |
 | #359 | legal/processor ADR | M | L | |
+| ✅ #848 | Signed releases and verified updates — implement ADR-033 | H | M | **Closed 2026-10-26:** ADR-033 accepted, D1–D10 on `main`; v2.3 and 2.3.1 signed with Lars's keys; Erik's keys being enrolled |
 
 ---
 
