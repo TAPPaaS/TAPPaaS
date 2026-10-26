@@ -5,7 +5,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { ARCHETYPES } from "../../../manager/network-manager/src/archetypes";
-import { ZONE_TYPE_IDS, formatV6, parseV6, typeIdText, zoneNetwork, zoneV6 } from "../../web/src/zonenet";
+import { ZONE_TYPE_IDS, formatV6, ipv6SubnetText, parseV6, typeIdText, zoneNetwork, zoneV6 } from "../../web/src/zonenet";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -43,6 +43,11 @@ check(zoneV6({ ipv6Subnet: 32 }, on) === "2a13:e747:a210:4520::/64", "a zone wit
 check(zoneV6({ ipv6Subnet: 32 }, { ...on, on: false }) === null, "IPv6 off: none");
 check(zoneV6({}, on) === null, "no ipv6Subnet: none");
 check(zoneV6({ ipv6Subnet: 32 }, { ...on, prefix: null, source: null }) === null && zoneV6({ ipv6Subnet: 32 }, null) === null, "no prefix learned, or not read: none");
+
+// The card's ipv6Subnet row: the index and its /64.
+check(ipv6SubnetText({ ipv6Subnet: 32 }, on) === "32 → 2a13:e747:a210:4520::/64", "the index and the /64 it numbers");
+check(ipv6SubnetText({ ipv6Subnet: 32 }, { ...on, on: false }) === "32 → -" && ipv6SubnetText({ ipv6Subnet: 32 }, null) === "32 → -", "IPv6 off or no prefix: the index, no network");
+check(ipv6SubnetText({}, on) === "-", "no index: -");
 
 // The typeId table against the network module's: zones-fields.json (each
 // type's typeId, and typeId's own values) and network-manager's archetypes.

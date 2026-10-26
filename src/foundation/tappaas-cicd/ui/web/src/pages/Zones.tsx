@@ -15,7 +15,7 @@ import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
 import { Dot, ReadState, Section, since } from "../ui";
 import { EnvironmentRow, SiteRead } from "../types";
-import { Ipv6Read, typeIdText, zoneV6 } from "../zonenet";
+import { Ipv6Read, ipv6SubnetText, typeIdText, zoneV6 } from "../zonenet";
 import { COLUMN_TITLES, PSEUDO, PublicAddress, environmentsOf, isSharedService, publicAddress, publicText, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
 
 export interface ZoneRead {
@@ -114,13 +114,15 @@ export function zoneGraph(zones: ZoneRead[], pick: (z: string) => void, selected
   return { nodes, edges };
 }
 
-// A field's value in the card: typeId with the type it numbers.
-function fieldText(r: FieldRow): string {
+// A field's value in the card: typeId with the type it numbers, ipv6Subnet
+// with the /64 it numbers in the site's prefix.
+function fieldText(r: FieldRow, z: ZoneRead, v6: Ipv6Read | null): string {
   if (r.field === "typeId") return typeIdText(r.value) ?? "—";
+  if (r.field === "ipv6Subnet") return ipv6SubnetText(z, v6);
   return shortValue(r.value, 60);
 }
 
-function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, close }: { z: ZoneRead; schema: Record<string, ZoneFieldSpec> | null; envNames: string[]; zoneNames: string[]; archetypes: string[]; wan: PublicAddress | null; close: () => void }) {
+function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, v6, close }: { z: ZoneRead; schema: Record<string, ZoneFieldSpec> | null; envNames: string[]; zoneNames: string[]; archetypes: string[]; wan: PublicAddress | null; v6: Ipv6Read | null; close: () => void }) {
   const rows: FieldRow[] = schema ? zoneFieldRows(z, schema) : [];
   return (
     <aside className="sidepanel">
@@ -175,7 +177,7 @@ function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, close }: 
           {rows.map((r) => (
             <tr key={r.field} title={r.description}>
               <td className="mono">{r.field}</td>
-              <td className={`mono wrap${r.configured ? "" : " muted"}`}>{fieldText(r)}{r.configured ? "" : <span className="dflt"> default</span>}</td>
+              <td className={`mono wrap${r.configured ? "" : " muted"}`}>{fieldText(r, z, v6)}{r.configured ? "" : <span className="dflt"> default</span>}</td>
             </tr>
           ))}
         </tbody>
@@ -184,7 +186,7 @@ function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, close }: 
   );
 }
 
-export function ZonesGraph({ zones, envNames, archetypes, sel, setSel }: { zones: ZoneRead[]; envNames: string[]; archetypes: string[]; sel: string | null; setSel: (z: string | null) => void }) {
+export function ZonesGraph({ zones, envNames, archetypes, v6, sel, setSel }: { zones: ZoneRead[]; envNames: string[]; archetypes: string[]; v6: Ipv6Read | null; sel: string | null; setSel: (z: string | null) => void }) {
   const schemaR = useRead<{ fields?: Record<string, ZoneFieldSpec> }>("schemas/zones", 600_000);
   const schema = schemaR.env?.data?.fields ?? null;
   const siteR = useRead<SiteRead>("site", 600_000).env?.data;
@@ -199,7 +201,7 @@ export function ZonesGraph({ zones, envNames, archetypes, sel, setSel }: { zones
         <div className="zones-canvas">
           <Graph nodes={graph.nodes} edges={graph.edges} rankdir="LR" height={560} nodesep={60} ranksep={90} />
         </div>
-        {z ? <ZoneDetail key={z.name} z={z} schema={schema} envNames={envNames} zoneNames={zones.map((x) => x.name)} archetypes={archetypes} wan={z.name === wan ? pub : null} close={() => setSel(null)} /> : null}
+        {z ? <ZoneDetail key={z.name} z={z} schema={schema} envNames={envNames} zoneNames={zones.map((x) => x.name)} archetypes={archetypes} wan={z.name === wan ? pub : null} v6={v6} close={() => setSel(null)} /> : null}
       </div>
       <div className="legend">
         {Object.entries(TYPE_COLOR).map(([t, c]) => (
@@ -268,7 +270,7 @@ export function ZonesPage() {
         }
       >
         <ReadState env={zones.env} failure={zones.failure} what="zones" />
-        {zones.env?.data ? <ZonesGraph zones={zones.env.data} envNames={envNames} archetypes={archetypes} sel={zone} setSel={pick} /> : null}
+        {zones.env?.data ? <ZonesGraph zones={zones.env.data} envNames={envNames} archetypes={archetypes} v6={v6} sel={zone} setSel={pick} /> : null}
         <table className="table compact ztable">
           <thead>
             <tr><th>zone</th><th>type</th><th>vlan</th><th>IPv4</th><th>IPv6</th><th>environment</th><th>state</th><th>tier</th></tr>

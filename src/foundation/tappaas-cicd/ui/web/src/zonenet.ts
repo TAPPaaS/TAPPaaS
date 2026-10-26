@@ -93,3 +93,11 @@ export function typeIdText(v: unknown): string | null {
   const t = Number.isInteger(n) ? ZONE_TYPE_IDS[n] : undefined;
   return t ? `${n} · ${t}` : String(v);
 }
+
+// The ipv6Subnet row of a zone's card: "32 → 2a13:e747:a210:4520::/64";
+// "32 → -" when the site has no prefix to number it in (IPv6 off, none
+// learned); "-" when the zone has no index.
+export function ipv6SubnetText(z: { ipv6Subnet?: unknown }, v6: Ipv6Read | null | undefined): string {
+  if (typeof z.ipv6Subnet !== "number") return "-";
+  return `${z.ipv6Subnet} → ${zoneV6(z, v6) ?? "-"}`;
+}
