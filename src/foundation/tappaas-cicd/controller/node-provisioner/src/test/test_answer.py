@@ -1,7 +1,7 @@
 """Offline unit tests for answer.toml rendering + the POST /answer core.
 
 Golden-ish assertions on the rendered TOML (fqdn, zfs raid mapping,
-disk-list, credentials, ext4 TODO fallback) and the end-to-end answer flow
+disk-list, credentials, ZFS by default and ext4 on request) and the end-to-end answer flow
 (handle_answer_post): MAC hit -> 200 + one-shot consumption + 0600 secret,
 no match -> 404 leaving registrations pending.
 """
@@ -73,7 +73,7 @@ class TestRenderAnswer(unittest.TestCase):
     # the installer's filesystem/zfs.raid (single -> raid0, mirror -> raid1) and
     # that disk-list held the POOL's disks. That contract is superseded — see
     # answer.py ("declared pools are post-join data pools ... the installer only
-    # ever formats the boot disk (ext4/LVM)") and registry.py. The installer now
+    # ever formats the boot disk") and registry.py. The installer now
     # always lays down the TAPPaaS standard boot layout, and pools are created
     # post-join by the storage plane.
     #
@@ -81,11 +81,12 @@ class TestRenderAnswer(unittest.TestCase):
     # answer.toml must never instruct the installer to format a data-pool disk,
     # because doing so would wipe it during an unattended install.
 
-    def test_boot_disk_only_ext4_regardless_of_declared_pools(self):
+    def test_boot_disk_only_zfs_raid0_regardless_of_declared_pools(self):
         out = self._render()  # POOL = single:nvme0n1
-        self.assertIn('filesystem = "ext4"', out)
+        self.assertIn('filesystem = "zfs"', out, "ZFS on the boot disk by default (ADR-037 D1)")
+        self.assertIn('zfs.raid = "raid0"', out, "one boot disk: raid0, never a data pool's level")
         self.assertIn('disk-list = ["sda"]', out, "installer must target the BOOT disk")
-        self.assertNotIn("zfs.raid", out, "installer must not configure a data-pool raid level")
+        self.assertNotIn('zfs.raid = "raid1"', out)
 
     def test_declared_pool_disks_are_never_in_disk_list(self):
         """The regression that matters: a pool disk in disk-list would be wiped."""
@@ -114,11 +115,17 @@ class TestRenderAnswer(unittest.TestCase):
         self.assertIn('disk-list = ["nvme1n1"]', out)
         self.assertNotIn("filter.ID_SERIAL", out)
 
-    def test_no_pools_falls_back_to_ext4_with_todo(self):
+    def test_no_pools_is_zfs_on_the_boot_disk(self):
         out = self._render(pools=[])
-        self.assertIn('filesystem = "ext4"', out)
+        self.assertIn('filesystem = "zfs"', out)
         self.assertIn("TODO(V-2)", out)
-        self.assertNotIn('filesystem = "zfs"', out)
+        self.assertNotIn('filesystem = "ext4"', out)
+
+    def test_ext4_on_request(self):
+        out = self._render(boot_filesystem="ext4")
+        self.assertIn('filesystem = "ext4"', out)
+        self.assertNotIn("zfs.raid", out, "ext4 carries no raid level")
+        self.assertIn('disk-list = ["sda"]', out)
 
     def test_mailto_defaults_from_domain(self):
         out = self._render(mailto="")
@@ -264,12 +271,11 @@ class TestHandleAnswerPost(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn('fqdn = "tappaas3.mgmt.internal"', body)
         self.assertIn('country = "dk"', body)
-        # The served answer lays down the standard boot layout and records the
-        # declared pool as post-join work — it must never hand a data-pool disk
-        # to the installer. (Was: assertIn 'zfs.raid = "raid0"', the superseded
-        # contract where a declared pool drove the installer's raid level.)
-        self.assertIn('filesystem = "ext4"', body)
-        self.assertNotIn("zfs.raid", body)
+        # The served answer lays down the standard boot layout — ZFS on the boot
+        # disk alone (raid0, ADR-037 D1) — and records the declared pool as
+        # post-join work: it must never hand a data-pool disk to the installer.
+        self.assertIn('filesystem = "zfs"', body)
+        self.assertIn('zfs.raid = "raid0"', body)
         self.assertNotIn("nvme0n1", body.split("disk-list")[1].split("\n")[0])
         self.assertIn("tanka1=single:nvme0n1", body)  # noted, not installed
 

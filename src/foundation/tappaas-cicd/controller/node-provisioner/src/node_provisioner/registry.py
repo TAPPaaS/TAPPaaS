@@ -7,7 +7,8 @@ A registration is the operator's declared intent that a machine named
     {
       "name":   "tappaas3",
       "macs":   ["aa:bb:cc:dd:ee:ff"],          # optional pin
-      "boot_disk": "sda",                       # installer target (ext4/LVM)
+      "boot_disk": "sda",                       # installer target
+      "boot_filesystem": "zfs",                 # zfs (default, ADR-037) or ext4
       "pools":  [{"name": "tanka1", "layout": "single",
                   "disks": ["nvme0n1"]}],       # post-join data pools
       "created": "2026-07-06T12:00:00+00:00"
@@ -98,6 +99,7 @@ class Registration:
     name: str
     macs: list = field(default_factory=list)
     boot_disk: str = "sda"
+    boot_filesystem: str = "zfs"
     pools: list = field(default_factory=list)
     created: str = ""
     path: Path | None = None
@@ -107,6 +109,7 @@ class Registration:
             "name": self.name,
             "macs": self.macs,
             "boot_disk": self.boot_disk,
+            "boot_filesystem": self.boot_filesystem,
             "pools": self.pools,
             "created": self.created,
         }
@@ -122,7 +125,7 @@ class Registry:
         return self.directory / f"{name}.json"
 
     def register(self, name: str, macs=None, pool_specs=None,
-                 boot_disk: str = "sda") -> Registration:
+                 boot_disk: str = "sda", boot_filesystem: str = "zfs") -> Registration:
         """Create (or replace) a pending registration.
 
         Args:
@@ -130,8 +133,9 @@ class Registry:
             macs: Optional list of MAC strings (normalized).
             pool_specs: Optional list of 'name=layout:disks' strings —
                 POST-JOIN data pools; the installer never touches them.
-            boot_disk: Disk the installer puts the PVE system on
-                (ext4/LVM, the TAPPaaS standard — cf. tappaas1).
+            boot_disk: Disk the installer puts the PVE system on.
+            boot_filesystem: zfs (the default, ADR-037 D1: the boot pool
+                carries the guests when the node has no data disk) or ext4.
         """
         if not NAME_RE.match(name):
             raise ValueError(f"invalid node name: {name!r}")
@@ -139,10 +143,13 @@ class Registry:
             raise ValueError(
                 f"boot disk must be a disk's SERIAL (lsblk -o NAME,SERIAL), "
                 f"'ask', or a bare kernel name, got {boot_disk!r}")
+        if boot_filesystem not in ("zfs", "ext4"):
+            raise ValueError(f"boot filesystem must be zfs or ext4, got {boot_filesystem!r}")
         reg = Registration(
             name=name,
             macs=[normalize_mac(m) for m in (macs or [])],
             boot_disk=boot_disk,
+            boot_filesystem=boot_filesystem,
             pools=[parse_pool_spec(s) for s in (pool_specs or [])],
             created=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
@@ -176,6 +183,7 @@ class Registry:
             name=data.get("name") or path.stem,
             macs=[normalize_mac(m) for m in data.get("macs", [])],
             boot_disk=data.get("boot_disk", "sda"),
+            boot_filesystem=data.get("boot_filesystem", "zfs"),
             pools=list(data.get("pools", [])),
             created=data.get("created", ""),
             path=path,

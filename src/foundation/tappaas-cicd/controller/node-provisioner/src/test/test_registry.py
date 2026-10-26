@@ -94,6 +94,22 @@ class TestCrudRoundTrip(RegistryCase):
         self.assertEqual(self.registry.list_pending(), [])
         self.assertFalse(self.registry.unregister("tappaas3"))
 
+    def test_boot_filesystem_defaults_to_zfs_and_round_trips(self):
+        reg = self.registry.register("tappaas3")
+        self.assertEqual(reg.boot_filesystem, "zfs")
+        self.assertEqual(json.loads(reg.path.read_text())["boot_filesystem"], "zfs")
+        reg = self.registry.register("tappaas3", boot_filesystem="ext4")
+        self.assertEqual(self.registry.load("tappaas3").boot_filesystem, "ext4")
+        with self.assertRaises(ValueError):
+            self.registry.register("tappaas3", boot_filesystem="btrfs")
+
+    def test_registration_written_before_the_field_reads_as_zfs(self):
+        reg = self.registry.register("tappaas3")
+        data = json.loads(reg.path.read_text())
+        del data["boot_filesystem"]
+        reg.path.write_text(json.dumps(data))
+        self.assertEqual(self.registry.load("tappaas3").boot_filesystem, "zfs")
+
     def test_register_rejects_bad_name(self):
         with self.assertRaises(ValueError):
             self.registry.register("bad name!")

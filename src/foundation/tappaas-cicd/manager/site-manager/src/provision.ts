@@ -46,6 +46,7 @@ const SERVE_ROOT = "/tmp/tappaas-serve";
 export interface ProvisionOpts {
   name: string;
   bootDisk?: string; // undefined => ask on the node console at boot (PXE)
+  bootFilesystem?: string; // zfs (default) | ext4 — the provisioner's --boot-filesystem
   macs: string[];
   pools: string[]; // name=layout:disk[,disk...] — created at join time
   wanPort?: string; // NIC for firewall-HA uplink; undefined => ask; "" => none
@@ -291,6 +292,7 @@ export function provisionNode(o: ProvisionOpts): void {
   fs.rmSync(`${provisionDir}/${o.name}.json.consumed`, { force: true });
   const regArgs = ["register", o.name];
   if (o.bootDisk) regArgs.push("--boot-disk", o.bootDisk);
+  if (o.bootFilesystem) regArgs.push("--boot-filesystem", o.bootFilesystem);
   for (const mac of o.macs) regArgs.push("--mac", mac);
   if (runStream("node-provisioner", regArgs) !== 0) die("node-provisioner register failed");
 

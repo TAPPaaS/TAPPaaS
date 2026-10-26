@@ -118,6 +118,79 @@ is_boot_disk() {
   return 1
 }
 
+# ── The boot pool (ADR-037 D1) ───────────────────────────────────────
+# A node installed with ZFS on its boot disk has `rpool`, whose `rpool/data`
+# Proxmox registers as the storage `local-zfs`. Without a data disk it carries
+# the guests; with a mirror, each of its disks must be able to boot the node.
+readonly ESP_TYPE="c12a7328-f81f-11d2-ba4b-00a0c93ec93b"   # GPT EFI system partition
+BOOT_UUIDS_FILE="${BOOT_UUIDS_FILE:-/etc/kernel/proxmox-boot-uuids}"
+
+root_fstype() { findmnt -no FSTYPE / 2>/dev/null || true; }
+
+# boot_pool_storage — the PVE storage whose pool is rpool/data (local-zfs on a
+# stock install), or nothing.
+boot_pool_storage() {
+  awk '$1=="zfspool:" {id=$2; next} id && $1=="pool" && $2=="rpool/data" {print id; exit} /^[^ \t]/ {id=""}' \
+    /etc/pve/storage.cfg 2>/dev/null || true
+}
+
+# boot_pool_members — the disks under rpool's vdevs, one per line.
+boot_pool_members() {
+  local dev p
+  zpool status -P rpool 2>/dev/null | awk '$1 ~ /^\/dev\// {print $1}' | while read -r dev; do
+    dev="$(readlink -f "$dev")"
+    p="$(lsblk -no PKNAME "$dev" 2>/dev/null | head -1)"
+    echo "${p:-${dev##*/}}"
+  done | sort -u
+}
+
+# disk_esp <disk> — the disk's EFI system partition (/dev/...), or nothing.
+disk_esp() {
+  lsblk -rno PATH,PARTTYPE "/dev/$1" 2>/dev/null \
+    | awk -v t="${ESP_TYPE}" 'tolower($2)==t {print $1; exit}'
+}
+
+# esp_registered <partition> — proxmox-boot-tool keeps it in step with the kernels.
+esp_registered() {
+  local u
+  u="$(blkid -s UUID -o value "$1" 2>/dev/null || true)"
+  [[ -n "$u" ]] && grep -qixF "$u" "${BOOT_UUIDS_FILE}" 2>/dev/null
+}
+
+# ensure_boot_esps — on a mirrored rpool, every member's ESP registered with
+# proxmox-boot-tool, so the node boots from either disk: ZFS mirrors only the
+# pool's partition, not the ESP beside it. A missing one is initialised (and
+# formatted first only when it holds no filesystem). Returns 1 when a member
+# cannot boot the node on its own.
+ensure_boot_esps() {
+  command -v proxmox-boot-tool >/dev/null 2>&1 || return 0
+  local -a members=()
+  local d esp rc=0
+  mapfile -t members < <(boot_pool_members)
+  [[ ${#members[@]} -ge 2 ]] || return 0     # one disk: nothing to mirror
+  for d in "${members[@]}"; do
+    esp="$(disk_esp "$d")"
+    if [[ -z "$esp" ]]; then
+      warn "rpool member ${d} has no EFI system partition — the node does not boot from it alone"
+      rc=1; continue
+    fi
+    esp_registered "$esp" && { debug "ESP ${esp} on ${d} is registered"; continue; }
+    if [[ -z "$(blkid -s TYPE -o value "$esp" 2>/dev/null || true)" ]]; then
+      proxmox-boot-tool format "$esp" >/dev/null 2>&1 \
+        || { warn "could not format the ESP ${esp} on ${d}"; rc=1; continue; }
+    fi
+    if proxmox-boot-tool init "$esp" >/dev/null 2>&1; then
+      info "  ${GN}✓${CL} ESP ${esp} on ${d} registered: the node also boots from ${d}"
+    else
+      warn "could not register the ESP ${esp} on ${d} with proxmox-boot-tool — the node may not boot from ${d} alone"
+      rc=1
+    fi
+  done
+  return "$rc"
+}
+
+[[ "${LIST_ONLY:-0}" == 1 ]] || ensure_boot_esps || true
+
 # ── Candidate disk inventory ─────────────────────────────────────────
 # A disk "has data" if it carries any partition, filesystem signature, or ZFS
 # member label. We surface that so the operator confirms before wiping it.
@@ -201,7 +274,23 @@ if [[ "$LIST_ONLY" == "1" ]]; then
   exit 0
 fi
 if [[ ${#CAND_NAME[@]} -eq 0 ]]; then
-  warn "No selectable data disks found (only the boot disk is present)."
+  # One disk is a site when it is ZFS: the boot pool carries the guests, and
+  # placement puts every module there (ADR-037 D1). On ext4 there is nowhere
+  # to build a guest at all.
+  if [[ "$(root_fstype)" != "zfs" ]]; then
+    error "Only the boot disk is present, and it is not ZFS ($(root_fstype || true)): there is no pool for the guests."
+    die "Reinstall the node with ZFS on the boot disk — make-install-media.sh's default (--filesystem zfs) — or add a data disk."
+  fi
+  bp="$(boot_pool_storage)"
+  if [[ -z "$bp" ]]; then
+    die "Only the boot disk is present, and no PVE storage points at rpool/data — expected 'local-zfs' from the installer."
+  fi
+  if command -v pvesm >/dev/null 2>&1; then
+    pvesm set "$bp" --content images,rootdir >/dev/null 2>&1 \
+      || warn "Could not set PVE storage '${bp}' to images,rootdir."
+  fi
+  info "No data disks: the boot pool carries the guests (PVE storage ${BOLD}${bp}${CL}, rpool/data)."
+  info "  Modules that name tanka1 or another pool are placed there, with a warning. Keep backups off this node."
   exit 0
 fi
 

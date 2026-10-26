@@ -3,12 +3,14 @@
 Field set per the PVE >= 8.2 automated-installation docs
 (https://pve.proxmox.com/wiki/Automated_Installation): ``[global]`` with
 keyboard/country/fqdn/mailto/timezone/root-password/root-ssh-keys,
-``[network]`` from-dhcp, ``[disk-setup]`` ext4/LVM on the boot disk.
+``[network]`` from-dhcp, ``[disk-setup]`` on the boot disk.
 
-TAPPaaS disk standard (cf. tappaas1): the PVE system lives on a DEDICATED
-boot disk with the stock ext4/LVM layout (pve-root); the tankXY data pools
-are separate whole-disk ZFS pools created POST-JOIN by the storage plane
-(config-storage.sh / site.json) — the installer must never touch them.
+TAPPaaS disk standard (ADR-037 D1): the PVE system lives on the boot disk,
+ZFS by default (``rpool``; its ``rpool/data`` is the storage ``local-zfs``,
+which carries the guests on a node with no data disk), ext4/LVM on request.
+The tankXY data pools are separate whole-disk ZFS pools created POST-JOIN by
+the storage plane (config-storage.sh / site.json) — the installer must never
+touch them.
 
 TODO(V-2): validate the exact schema against the deployed PVE version's
 ``proxmox-auto-install-assistant validate-answer`` on a PVE node — key
@@ -30,7 +32,7 @@ DEFAULT_COUNTRY = "us"
 DEFAULT_TIMEZONE = "UTC"
 
 # NOTE: declared pools are post-join data pools (TAPPaaS standard, cf.
-# tappaas1) — the installer only ever formats the boot disk (ext4/LVM).
+# tappaas1) — the installer only ever formats the boot disk.
 
 
 def _toml_str(value: str) -> str:
@@ -61,6 +63,7 @@ def render_answer(
     ssh_keys,
     pools,
     boot_disk: str = "sda",
+    boot_filesystem: str = "zfs",
     country: str = DEFAULT_COUNTRY,
     tz: str = DEFAULT_TIMEZONE,
     mailto: str = "",
@@ -80,8 +83,9 @@ def render_answer(
             installer.
         pools: Registration pool dicts ({name, layout, disks}) — post-join
             data pools, listed as a comment only (never installed to).
-        boot_disk: The disk the PVE system is installed on, ext4/LVM
-            (TAPPaaS standard, cf. tappaas1).
+        boot_disk: The disk the PVE system is installed on.
+        boot_filesystem: zfs (default, a single-disk ``rpool``, raid0) or
+            ext4 (LVM).
         country / tz / mailto / keyboard: site-level installer settings.
         mgmt_mac / mgmt_cidr / mgmt_gateway: when all are given (a registration
             that pins its MACs), the management network is set from the answer
@@ -125,10 +129,19 @@ def render_answer(
     lines += [
         "",
         "[disk-setup]",
-        "# TAPPaaS standard (cf. tappaas1): PVE system on a dedicated boot",
-        "# disk, stock ext4/LVM layout (pve-root).",
-        'filesystem = "ext4"',
     ]
+    if boot_filesystem == "ext4":
+        lines += [
+            "# ext4/LVM on the boot disk (pve-root): for a node with data disks",
+            'filesystem = "ext4"',
+        ]
+    else:
+        lines += [
+            "# TAPPaaS standard (ADR-037 D1): ZFS on the boot disk — rpool; its",
+            "# rpool/data (local-zfs) carries the guests when there is no data disk",
+            'filesystem = "zfs"',
+            'zfs.raid = "raid0"',
+        ]
     # The disk the installer WIPES. By serial whenever we have one: a udev filter
     # on ID_SERIAL picks that physical disk whatever the kernel calls it on this
     # boot. A kernel name (legacy) is only as good as the enumeration order.

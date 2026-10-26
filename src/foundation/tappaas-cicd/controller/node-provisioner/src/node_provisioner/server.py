@@ -239,6 +239,7 @@ def handle_answer_post(
         ssh_keys=collect_root_ssh_keys(),
         pools=reg.pools,
         boot_disk=boot_disk,
+        boot_filesystem=reg.boot_filesystem,
         **net,
         **settings,
     )

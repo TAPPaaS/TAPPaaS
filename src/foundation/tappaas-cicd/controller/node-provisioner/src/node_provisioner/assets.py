@@ -77,7 +77,7 @@ INIT_PATCH = INIT_ANCHOR + """
             echo "1 1 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
             echo ""
             echo "==== TAPPaaS node provisioning: choose the BOOT disk ===="
-            echo "The chosen disk is WIPED (PVE system, ext4/LVM). Disks found:"
+            echo "The chosen disk is WIPED (the PVE system goes on it). Disks found:"
             for _tap_d in /sys/block/*; do
                 _tap_b="${_tap_d##*/}"
                 case "$_tap_b" in loop*|ram*|sr*|dm-*|zram*) continue ;; esac

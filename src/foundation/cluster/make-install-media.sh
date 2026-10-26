@@ -21,9 +21,16 @@
 # Usage:
 #   make-install-media.sh --iso proxmox-ve_9.x.iso \
 #       [--email <e>] [--country <cc>] [--keyboard <kb>] [--timezone <tz>] \
-#       [--password-file <f>] [--disk <serial|dev>] [--fqdn <host.domain>] \
-#       [--filesystem ext4|zfs] [--ssh-key <pubkey-file>] [--out <out.iso>] \
+#       [--password-file <f>] [--disk <serial|dev>] [--disk <dev>] [--fqdn <host.domain>] \
+#       [--filesystem zfs|ext4] [--ssh-key <pubkey-file>] [--out <out.iso>] \
 #       [--iso-sha256 <hex>]
+#
+# The boot disk is ZFS by default (ADR-037 D1): the boot pool then carries the
+# guests on a node with no data disk. --disk twice mirrors it (zfs raid1, two
+# disks of the same size, kernel names: a serial match selects one disk only);
+# each disk then gets its own EFI system partition, and config-storage.sh makes
+# sure proxmox-boot-tool keeps both, so the node boots from either. ext4 is for
+# a node that has data disks: config-storage.sh refuses an ext4 boot disk alone.
 #
 # Anything not given is prompted for — EXCEPT the boot disk: like the PXE
 # flow, network comes from DHCP and the disk is asked ON THE TARGET'S
@@ -45,11 +52,12 @@ warn()  { echo -e "${YW}[Warning]${CL} $*"; }
 die()   { echo -e "${RD}[Error]${CL} $*" >&2; exit 1; }
 debug() { [[ "${TAPPAAS_DEBUG:-0}" == 1 ]] || return 0; echo "[Debug] $*" >&2; }
 
-usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 0; }
+usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; exit 0; }
 
 ISO="" OUT="" EMAIL="" COUNTRY="" KEYBOARD="" TIMEZONE="" PASSWORD="" \
-  PASSWORD_FILE="" DISK="" FQDN="" FILESYSTEM="ext4" ISO_SHA256=""
+  PASSWORD_FILE="" DISK="" FQDN="" FILESYSTEM="zfs" ISO_SHA256=""
 SSH_KEYS=()
+DISKS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -60,7 +68,7 @@ while [[ $# -gt 0 ]]; do
     --keyboard)      KEYBOARD="${2:?}"; shift 2 ;;
     --timezone)      TIMEZONE="${2:?}"; shift 2 ;;
     --password-file) PASSWORD_FILE="${2:?}"; shift 2 ;;
-    --disk)          DISK="${2:?}"; shift 2 ;;
+    --disk)          DISKS+=("${2:?}"); DISK="${DISKS[0]}"; shift 2 ;;
     --fqdn)          FQDN="${2:?}"; shift 2 ;;
     --filesystem)    FILESYSTEM="${2:?}"; shift 2 ;;
     --ssh-key)       SSH_KEYS+=("${2:?}"); shift 2 ;;
@@ -237,7 +245,17 @@ if [[ -z "$DISK" ]]; then
   DISK="ASKDISK"
   info "no --disk given — the boot disk will be asked on the target's console at install time"
 fi
-case "$FILESYSTEM" in ext4|zfs) ;; *) die "--filesystem must be ext4 or zfs" ;; esac
+case "$FILESYSTEM" in ext4|zfs) ;; *) die "--filesystem must be zfs or ext4" ;; esac
+is_kernel_name() { [[ "$1" == /* || "$1" =~ ^(sd[a-z]+|vd[a-z]+|hd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$ ]]; }
+[[ ${#DISKS[@]} -le 2 ]] || die "--disk at most twice: one boot disk, or a mirrored pair"
+if [[ ${#DISKS[@]} -eq 2 ]]; then
+  [[ "$FILESYSTEM" == "zfs" ]] || die "two --disk mirror the boot disk, which needs --filesystem zfs"
+  is_kernel_name "${DISKS[0]}" && is_kernel_name "${DISKS[1]}" \
+    || die "a mirrored boot disk is given by kernel names (sda, nvme0n1): a serial match selects one disk only"
+  [[ "${DISKS[0]}" != "${DISKS[1]}" ]] || die "the two --disk are the same disk"
+  info "boot disk mirrored (zfs raid1) on ${DISKS[0]} and ${DISKS[1]} — give two disks of the same size"
+fi
+[[ "$FILESYSTEM" == "ext4" ]] && warn "ext4 boot disk: only for a node with data disks — without one there is no pool for the guests (ADR-037 D1)"
 
 # ── Build the answer file ──────────────────────────────────────────────
 WORK="$(mktemp -d)"
@@ -269,12 +287,14 @@ ANSWER="${WORK}/answer.toml"
   echo '[disk-setup]'
   echo "filesystem = \"${FILESYSTEM}\""
   if [[ "$FILESYSTEM" == "zfs" ]]; then
-    echo 'zfs.raid = "raid0"'
+    if [[ ${#DISKS[@]} -eq 2 ]]; then echo 'zfs.raid = "raid1"'; else echo 'zfs.raid = "raid0"'; fi
   fi
   # A serial selects the disk whatever the installer calls it (#729 §3: NVMe
   # names swap between boots — the name read elsewhere can be another disk).
   # A kernel name or /dev path, and the ASKDISK placeholder, stay a disk-list.
-  if [[ "$DISK" == /* || "$DISK" == ASKDISK || "$DISK" =~ ^(sd[a-z]+|vd[a-z]+|hd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$ ]]; then
+  if [[ ${#DISKS[@]} -eq 2 ]]; then
+    echo "disk-list = [\"${DISKS[0]}\", \"${DISKS[1]}\"]"
+  elif [[ "$DISK" == ASKDISK ]] || is_kernel_name "$DISK"; then
     echo "disk-list = [\"${DISK}\"]"
   else
     echo "filter.ID_SERIAL = \"*${DISK}*\""

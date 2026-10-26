@@ -47,13 +47,14 @@ def _add_firewall_options(parser: argparse.ArgumentParser) -> None:
 
 def cmd_register(args) -> bool:
     reg = Registry().register(args.name, macs=args.mac, pool_specs=args.pool,
-                              boot_disk=args.boot_disk or "ask")
+                              boot_disk=args.boot_disk or "ask",
+                              boot_filesystem=args.boot_filesystem)
     info(f"registered pending node '{reg.name}' -> {reg.path}")
     if reg.boot_disk == "ask":
         info("no --boot-disk given — the node's CONSOLE will ask for it at "
              "boot (one question, shows the machine's real disks)")
     else:
-        info(f"installer target: ext4/LVM on '{reg.boot_disk}' (WIPED); "
+        info(f"installer target: {reg.boot_filesystem} on '{reg.boot_disk}' (WIPED); "
              "declared pools are created post-join")
     if not reg.macs:
         info("no MAC pinned — the node matches only while it is the SINGLE "
@@ -165,10 +166,13 @@ placement is what scopes it (see README.md).
                         "(repeatable), e.g. 'tanka1=single:nvme0n1' — the "
                         "installer never touches these disks")
     p.add_argument("--boot-disk", default=None,
-                   help="Disk the installer puts the PVE system on, "
-                        "ext4/LVM — WIPED. Omit to be ASKED on the node's "
-                        "console at boot (for hardware with unknown disk "
-                        "naming)")
+                   help="Disk the installer puts the PVE system on — WIPED. "
+                        "Omit to be ASKED on the node's console at boot (for "
+                        "hardware with unknown disk naming)")
+    p.add_argument("--boot-filesystem", default="zfs", choices=("zfs", "ext4"),
+                   help="zfs (default): the boot pool carries the guests when "
+                        "the node has no data disk (ADR-037 D1); ext4 only for "
+                        "a node with data disks")
     p.set_defaults(func=cmd_register)
 
     p = sub.add_parser("unregister", help="Remove a pending registration")
