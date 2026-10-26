@@ -106,13 +106,13 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 10 | 1 | 11 |
-| 6 | G6.2 User interface & physical view | H | L | 5 | 1 | 3 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 11 | – | 11 |
+| 6 | G6.2 User interface & physical view | H | L | 6 | – | 3 |
 | 6 | G6.3 Data model | M | M | 9 | – | 1 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
-| 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | 1 | 2 |
+| 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | – | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | – | 4 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
@@ -122,7 +122,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | – | 1 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
-| 1 | G1.7 Parked for Erik discussion | – | – | – | 1 | 2 |
+| 1 | G1.7 Parked for Erik discussion | – | – | 1 | – | 2 |
 
 ## Planning items still open
 
@@ -200,7 +200,6 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 | #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
 | #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
-| ✅ #847 | switch-manager: MikroTik (RouterOS) support, including MLAG | **Closed 2026-10-26:** `mikrotik-controller` (ADR-035 P4) live on hrossen — two CRS317 as an MLAG pair under tappaas1's `lacp` uplink; failure tests, the console's MLAG view and the broadcast fix done |
 
 ---
 
@@ -230,7 +229,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 10 · done for 2.4: 1 · open: 11
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 11 · open: 11
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -242,20 +241,18 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
 | #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open). Moved from G2.1 2026-10-13: it needs #668's attachment record first |
-| ✅ #155 | Modules for physical devices | L | L | **Closed 2026-10-26:** covered by `kind: device` (ADR-022f), documented in the glossary with Community examples; #879 stops the update waiting for their guest |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 | #236 | RADIUS MAC Auth Bypass: a device's VLAN from its MAC, on Wi-Fi and wired ports | H | M | Future idea; depends on how switch ports and APs are managed (this group) |
 | #63 | Service desk tooling spike | M | L | |
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 | #883 | A debug bundle for support: the log and an anonymized `~/config`, attached to the failure mail | M | L | **Opened 2026-10-26.** PII removed from the configs; the mail suggests forwarding it to a support address. First trigger: a failed update |
 
-### G6.2 User interface & physical view — Ease H · Risk L · released: 5 · done for 2.4: 1 · open: 3
+### G6.2 User interface & physical view — Ease H · Risk L · released: 6 · open: 3
 
 A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point), designed first in a spike and an ADR (#844). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| ✅ #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **Closed 2026-10-26:** P1–P3 built and live on hrossen (the `console` behind the gate). P4 continues as #885, #886, #887; roles as #878 |
 | #885 | console: agents act through the identity gate | M | M | **Opened 2026-10-26** from #839 P4: a service identity per agent in Authentik, a group limiting its jobs, every job recorded under its name. Builds on #142 |
 | #886 | console: a security view of the SIEM's alerts | M | L | **Opened 2026-10-26** from #839 P4: open alerts per node and module, read-only, linked to the SIEM. After #843 |
 | #887 | console: a status page and badges for the site's users | M | L | **Opened 2026-10-26** from #839 P4: `status.<domain>` with each published app up or down, and badges; needs gated `proxyRoutes` |
@@ -309,7 +306,7 @@ Shared storage as a managed part of a site: the rest of the NFS service (#772). 
 |---|-------|:-:|:-:|------|
 | #772 | ADR-029 NFS: remaining work packages from #766 | M | L | Export backup, NAS servers, storage zone, LXC consumers, quota health, `show`/`purge`. **2026-10-05:** ADR-029 v0.8 (shares by name, pending mounts, `subdir`) built, smoke-tested |
 
-### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 5 · done for 2.4: 1 · open: 2
+### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 6 · open: 2
 
 The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker module): community-health files (#486), the remaining ADRs (#359; the ADR-010 sign-off, #406, is in G5.1), a tool for urgent patches (#746), a logging-function lint (#747); the service-desk spike (#63) is in G7.2.
 
@@ -317,7 +314,6 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 |---|-------|:-:|:-:|------|
 | #486 | ADR-015 community-health files | L | L | |
 | #359 | legal/processor ADR | M | L | |
-| ✅ #848 | Signed releases and verified updates — implement ADR-033 | H | M | **Closed 2026-10-26:** ADR-033 accepted, D1–D10 on `main`; v2.3 and 2.3.1 signed with Lars's keys; Erik's keys being enrolled |
 
 ---
 
@@ -420,13 +416,12 @@ Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key
 |---|-------|:-:|:-:|------|
 | #142 | RFC: AI-agent access to cicd | H | L | Decision |
 
-### G1.7 Parked for Erik discussion · done for 2.4: 1 · open: 2
+### G1.7 Parked for Erik discussion · released: 1 · open: 2
 
 Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern (#430), hass locale (#348) and Erik's image pins (#765).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| ✅ #430 | Controller/manager pattern for app modules | M | L | **Closed 2026-10-26:** ADR-035 accepted (v0.9); Erik agrees with the approach, tried on `mikrotik-controller` (#847). Authority and the burden bar are per controller |
 | #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
 | #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | From #750, for @ErikDaniel007: list his modules in `src/image-pins.json` and move the stale pins — euro-office v9.3.1 → v9.3.4 first; litellm and openwebui overlap #621 |
 
@@ -441,6 +436,50 @@ summary (`release/roadmap-cut.py`) and leaves this block empty again.
 <!-- next-release summary -->
 
 <!-- /next-release summary -->
+
+## Release 2.3.2 — staging 2026-10-26 · production at the next boundary
+
+Tag `v2.3.2`, moved into staging 2026-10-26 as an urgent fix on top of 2.3.1 (`tappaas-train patch`, ADR-028 D12); production stays on 2.2.2 until the next boundary.
+
+The fixes from the first update of a staging site to 2.3.1 (makerfloss). CrowdSec on the firewall downloads its hub index when it has none — without it the engine stopped at start and nothing was banned — and says why when it does not converge. A module test that fails prints the checks that failed and where its full output is kept, not the whole test. A dual-stack guest's firewall alias is compared per address family, which ends a 90-second wait and a warning on every update of a guest that mounts an NFS share. A satellite's `name`, `host` and `provider` are schema fields, and `_note` fields no longer warn. Updates are quieter: no progress dots in the log, no second control-plane refresh in tappaas-cicd's pre-update, no module banners. It also records the issues closed on 2026-10-26 whose work was already in 2.3: the controller pattern for app modules (ADR-035 accepted), signed releases (ADR-033 accepted), MikroTik with MLAG, the console's first phases, and modules for physical devices.
+
+The rows below are what it carried, by the wave and group they came from.
+
+### Wave 1 — the breaking-change window
+
+#### G1.7 Parked for Erik discussion
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #430 | Controller/manager pattern for app modules | M | L | **Closed 2026-10-26:** ADR-035 accepted (v0.9); Erik agrees with the approach, tried on `mikrotik-controller` (#847). Authority and the burden bar are per controller |
+
+### Wave 4 — additive capabilities
+
+#### G4.5 Governance, CI & sign-offs — Ease M · Risk L
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #848 | Signed releases and verified updates — implement ADR-033 | H | M | **Closed 2026-10-26:** ADR-033 accepted, D1–D10 on `main`; v2.3 and 2.3.1 signed with Lars's keys; Erik's keys being enrolled |
+
+### Wave 6 — site fabric and user experience
+
+#### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #155 | Modules for physical devices | L | L | **Closed 2026-10-26:** covered by `kind: device` (ADR-022f), documented in the glossary with Community examples; #879 stops the update waiting for their guest |
+
+#### G6.2 User interface & physical view — Ease H · Risk L
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **Closed 2026-10-26:** P1–P3 built and live on hrossen (the `console` behind the gate). P4 continues as #885, #886, #887; roles as #878 |
+
+### Future Work
+
+| # | Issue | Note |
+|---|-------|------|
+| ✅ #847 | switch-manager: MikroTik (RouterOS) support, including MLAG | **Closed 2026-10-26:** `mikrotik-controller` (ADR-035 P4) live on hrossen — two CRS317 as an MLAG pair under tappaas1's `lacp` uplink; failure tests, the console's MLAG view and the broadcast fix done |
 
 ## Release 2.3.1 — staging 2026-10-26 · production at the next boundary
 
