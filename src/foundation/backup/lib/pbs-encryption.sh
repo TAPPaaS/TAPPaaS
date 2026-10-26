@@ -85,7 +85,7 @@ pbs_storage_key_ensure() {
 
     case "${action}" in
         none)
-            info "  ${GN}✓${CL} backups to ${store} are encrypted; the key is escrowed" ;;
+            debug "  backups to ${store} are encrypted; the key is escrowed" ;;   # the update's ✓ line says so
         escrow)
             _pbs_enc_escrow_write "${esc}" "${key}" \
                 || { warn "  could not escrow ${store}'s encryption key"; return 1; }

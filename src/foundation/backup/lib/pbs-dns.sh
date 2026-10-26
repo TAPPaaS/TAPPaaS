@@ -129,7 +129,13 @@ pbs_dns_ensure() {
         fi
         return 1
     fi
-    info "  ${GN}✓${CL} ${name} → ${host}.${zone}.internal"
+    # A change is news; the alias already pointing there is not (the update's
+    # last line says the backup is in place).
+    if [[ -n "${old_ip}" || "${previous}" != "${host}.${zone}.internal" ]]; then
+        info "  ${GN}✓${CL} ${name} → ${host}.${zone}.internal"
+    else
+        debug "  ${name} → ${host}.${zone}.internal (unchanged)"
+    fi
     # The alias moved: the Host it left may have an entry this file created for it.
     if [[ -n "${previous}" && "${previous}" != "${host}.${zone}.internal" ]]; then
         pbs_dns_release "${previous%%.*}" "${previous#*.}"

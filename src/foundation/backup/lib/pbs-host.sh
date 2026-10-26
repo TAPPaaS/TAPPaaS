@@ -47,12 +47,12 @@ pbs_host_ensure_patched() {
     local host="$1" zone="${2:-mgmt}" owner rc=0
     owner="$(pbs_host_owner "${host}" "${zone}")" || rc=$?
     case "${owner}" in
-        cluster)  info "  ${GN}✓${CL} the PBS host ${host} is a cluster node — patched by the cluster module" ;;
+        cluster)  debug "  the PBS host ${host} is a cluster node — patched by the cluster module" ;;
         adopted)  info "  ${GN}✓${CL} the PBS host ${host} is now a debianhost instance — patched by the sweep (#603)" ;;
         unknown)  warn "  cannot tell whether ${host} is a cluster node (cluster unreachable) — not checking who patches it" ;;
         none)     warn "  NOTHING PATCHES the PBS host ${host}: it is not a cluster node and could not be adopted as a machine."
                   warn "    Register it by its address: module-manager module adopt <ip-or-fqdn of ${host}> (#603)" ;;
-        *)        info "  ${GN}✓${CL} the PBS host ${host} is a ${owner} instance — patched by the sweep" ;;
+        *)        debug "  the PBS host ${host} is a ${owner} instance — patched by the sweep" ;;
     esac
     return "${rc}"
 }

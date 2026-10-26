@@ -154,7 +154,7 @@ WantedBy=timers.target
 EOF
 systemctl daemon-reload && systemctl enable --now tappaas-pulse.timer >/dev/null 2>&1' </dev/null \
         || { warn "  pulse: could not enable its timer on ${host}"; return 1; }
-    info "  ${GN}✓${CL} pulse on ${host}: $(jq -r 'if (.tunnels | length) > 0 then "watching the home site through " + ([.tunnels[].iface] | join(", "))
+    debug "  pulse on ${host}: $(jq -r 'if (.tunnels | length) > 0 then "watching the home site through " + ([.tunnels[].iface] | join(", "))
         else ([.buddies[]?.name] | if length == 0 then "no buddy we pull" else "watching buddy " + join(", ") end)
             + ([.pulledBy[]?.name] | if length == 0 then "" else "; the pull by " + join(", ") end) + ", and this site" end' <<< "${json}")"
 }
