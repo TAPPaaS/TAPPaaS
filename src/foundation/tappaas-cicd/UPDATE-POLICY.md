@@ -386,7 +386,7 @@ depends on three things:
 | Case | Today |
 |---|---|
 | Routine converge, non-HA module | **Deferred.** `migrate` is disruptive, so the converge prints `DEFERRED:` and exits 0 without moving anything. |
-| `modify --force`, non-HA module | **Migrates.** `update-node.sh` runs `qm migrate <vmid> <target> --online <0\|1>`. |
+| `modify --allow-disruption`, non-HA module | **Migrates.** `update-node.sh` runs `qm migrate <vmid> <target> --online <0\|1>`. |
 | Any invocation, HA module | **Never migrates from `cluster:vm`.** It warns and defers to `cluster:ha`, which does its own `ha-manager crm-command migrate` for placement drift. |
 
 **What ADR-019 must still add**, marked as a seam in `update-node.sh`:

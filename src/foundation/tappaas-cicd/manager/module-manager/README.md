@@ -195,15 +195,16 @@ and the result is recorded in `release-train.json`
 ### Moving a guest to another node: `modify --set node=<node>`
 
 ```
-module-manager module modify jellyfin --set node=tappaas2           # live, when it can be
-module-manager module modify jellyfin --set node=tappaas2 --force   # offline: stop, migrate, start
+module-manager module modify jellyfin --set node=tappaas2 --allow-disruption
 ```
 
-The move is live when the target node offers every CPU feature the guest runs
-with and its disks can travel live (local disks go along). Otherwise it is
-refused until `--force`, which shuts the guest down, migrates it offline and
-starts it again. An HA module moves within its `node`/`HANode` pair the same
-way, or with `module-manager migrate`.
+A move is a disruptive change: without `--allow-disruption` the config records
+the new node and the converge defers the move (`DEFERRED:`) until an update that
+authorizes it. With it, the move is live when the target node offers every CPU
+feature the guest runs with and its disks can travel live (local disks go
+along); otherwise the guest is shut down, migrated offline and started again.
+`--force` does not authorize it. An HA module moves within its `node`/`HANode`
+pair the same way, or with `module-manager migrate`.
 
 ### Renaming an instance: `modify --set instance=<new>` (#566)
 
