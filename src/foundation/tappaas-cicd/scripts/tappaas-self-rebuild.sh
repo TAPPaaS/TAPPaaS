@@ -267,7 +267,7 @@ fi
 set +e
 HOME=/var/lib/tappaas-rebuild nixos-rebuild switch --flake ".#${VMNAME}" --impure 2>&1 \
     | tee "${REBUILD_LOG}" \
-    | { dots=0; while IFS= read -r _; do printf '.'; dots=1; done; (( dots )) && printf '\n'; true; }
+    | { dots=0; while IFS= read -r _; do [[ -t 1 ]] && printf '.' && dots=1; done; (( dots )) && printf '\n'; true; }   # dots for a terminal only
 rc="${PIPESTATUS[0]}"
 set -e
 if (( rc != 0 )); then
