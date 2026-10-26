@@ -57,6 +57,20 @@ ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" "/root/tappaas/Create-TAPPaaS-LXC.sh ${
 ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
     "rm -f /root/tappaas/${MODULE}.json /root/tappaas/${MODULE}.meta.json" || true
 
+# The storage the container was actually built on (ADR-037 D1): a module's
+# storage is a preference, so on a node without it Create-TAPPaaS-LXC.sh builds
+# elsewhere. Recorded, so the next update keeps it there and the operator sees it.
+_live_storage=$(ssh "${SSH_OPTS[@]}" "root@${NODE_FQDN}" \
+    "pct config ${VMID} 2>/dev/null | sed -n -E 's/^rootfs: ([^:,]+):.*/\\1/p'" 2>/dev/null || true)
+_cfg_storage="$(read_module_config "${MODULE}" | jq -r '.storage // empty' 2>/dev/null || true)"
+if [[ -n "${_live_storage}" && "${_live_storage}" != "${_cfg_storage}" ]]; then
+    if jq_module_write "${MODULE}" '.storage = $s' --arg s "${_live_storage}"; then
+        info "Recorded storage=${_live_storage} in config (built there: ${_cfg_storage:-the default} is not on ${NODE})"
+    else
+        warn "Could not record storage=${_live_storage} in config — the next update may look for ${_cfg_storage:-tanka1} again"
+    fi
+fi
+
 # ── 2. Wait for an IPv4 (readiness) — DNS is via masqdns, no static pin ──
 #
 # The container is created with --hostname "${VMNAME}" (see Create-TAPPaaS-LXC.sh),

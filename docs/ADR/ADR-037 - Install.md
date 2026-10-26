@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-26) — P1 in progress |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Date** | 2026-10-25 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #403 (install on the root disk; smarter placement — D1's fallback is a first step of #884, dynamic placement), #377 (the installer cannot restart; the management-network question), the 2.4 install theme. Builds on [ADR-034](<ADR-034 - TAPPaaS User Interface.md>) D10 (the Setup wizard), [ADR-030](<ADR-030 - IPv6.md>) (IPv6), [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (the admin VPN), ADR-012 (backup placement), #692 (storage resolved against the node). |
-| **Changelog** | v1.0 (2026-10-26) — **Accepted** by the operator, with the boot-pool reserve at 20 %. D1: a mirrored `rpool` boots from either disk — every member's EFI system partition registered with `proxmox-boot-tool`, checked after the install and by the health check, re-initialised on a replaced disk; P1 tests booting from each disk alone. · v0.4 (2026-10-26) — **D1 reworked (operator):** one pool per disk — ZFS on the boot disk is the default and required without a data disk; a module's `storage` is a preference: the same class, any `tanka<N>`, then the boot pool (`local-zfs`), warned and recorded; any zfspool by its storage name (readers look the dataset up). The partition layout (v0.2–v0.3) and D1b become A0b and A2b. P2 is tested on the operator's spare machine on the WAN. · v0.3 (2026-10-25) — **D1:** a pool on a partition: alignment, `ashift=12`, by-id names, one layout on every boot disk, and the runbook that replaces a failed disk for both pools; P1 rehearses it. · v0.2 (2026-10-25) — **D1:** `tanka1` is a real pool on the free part of the boot disk(s) (`hdsize`), not a dataset of `rpool` (the installer cannot name its pool, and storage names are pool names in TAPPaaS). **D2:** one IP — the firewall takes the server's address and MAC at the cut-over, with a rollback and a boot watchdog; two servers meet on a vSwitch; the virtual-MAC design becomes A5. · v0.1 (2026-10-25) — first draft. |
+| **Changelog** | v1.1 (2026-10-26) — D1: the fallback takes any other ZFS data pool before the boot pool (found building P1b: a node whose only pool is `tankc1` built there before, and would otherwise have been refused). · v1.0 (2026-10-26) — **Accepted** by the operator, with the boot-pool reserve at 20 %. D1: a mirrored `rpool` boots from either disk — every member's EFI system partition registered with `proxmox-boot-tool`, checked after the install and by the health check, re-initialised on a replaced disk; P1 tests booting from each disk alone. · v0.4 (2026-10-26) — **D1 reworked (operator):** one pool per disk — ZFS on the boot disk is the default and required without a data disk; a module's `storage` is a preference: the same class, any `tanka<N>`, then the boot pool (`local-zfs`), warned and recorded; any zfspool by its storage name (readers look the dataset up). The partition layout (v0.2–v0.3) and D1b become A0b and A2b. P2 is tested on the operator's spare machine on the WAN. · v0.3 (2026-10-25) — **D1:** a pool on a partition: alignment, `ashift=12`, by-id names, one layout on every boot disk, and the runbook that replaces a failed disk for both pools; P1 rehearses it. · v0.2 (2026-10-25) — **D1:** `tanka1` is a real pool on the free part of the boot disk(s) (`hdsize`), not a dataset of `rpool` (the installer cannot name its pool, and storage names are pool names in TAPPaaS). **D2:** one IP — the firewall takes the server's address and MAC at the cut-over, with a rollback and a boot watchdog; two servers meet on a vSwitch; the virtual-MAC design becomes A5. · v0.1 (2026-10-25) — first draft. |
 
 Three changes to how a TAPPaaS site comes into being, in the order they are built: a node with
 **one disk** (or one mirrored pair) is a complete site; a site can be stood up on a **rented
@@ -60,7 +60,10 @@ node has rather than refusing the one it lacks:
   config names when the node has it; when the node does not, to the first that it has of:
   1. a pool of the same class with another number (`tanka2` for `tanka1`),
   2. any `tanka<N>` (for a `tankb…` or `tankc…` that is missing),
-  3. the boot pool (`local-zfs`), while the guest leaves it a reserve — 20 % of the pool free —
+  3. any other ZFS data pool the node has (`tankc1`, or a pool named otherwise), so a node with
+     a data disk keeps its guests off the boot disk — and a node whose only pool is `tankc1`
+     builds there, as it did before,
+  4. the boot pool (`local-zfs`), while the guest leaves it a reserve — 20 % of the pool free —
      since the root filesystem lives in the same pool; past that the create is refused.
   The move is a warning that names the storage asked for and the one used, and the storage
   used is written to the module's config, so the guest stays where it is on the next update.

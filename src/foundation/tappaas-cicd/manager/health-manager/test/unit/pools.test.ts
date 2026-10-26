@@ -2,7 +2,7 @@
 // parsers behind the live client.
 
 import { checkStoragePools } from "../../src/checks";
-import { parseStoragePools, sumVolsizes } from "../../src/client";
+import { parseStoragePools, storageDatasets, sumVolsizes } from "../../src/client";
 import { StoragePool } from "../../src/types";
 import { FakeClusterClient } from "./fake-client";
 
@@ -57,6 +57,10 @@ const pool = (node: string, storage: string, total: number, used: number, provis
   check(p.length === 1 && p[0].storage === "tanka1", "backup stores and disabled pools are left out");
   const sums = sumVolsizes("tanka1/vm-100-disk-0\t1073741824\ntanka1/vm-101-disk-0\t1073741824\ntankb1/vm-1-disk-0\t5\n");
   check(sums.get("tanka1") === 2 * G && sums.get("tankb1") === 5, "zvol sizes add up per pool");
+  const boot = sumVolsizes("rpool/data/vm-300-disk-0\t1073741824\nrpool/data/vm-300-disk-1\t4194304\nrpool/ROOT/pve-1\t1\n");
+  check(boot.get("rpool/data") === G + 4194304 && !boot.has("rpool"), "the boot pool's zvols count for rpool/data, not rpool");
+  const ds = storageDatasets([{ storage: "local-zfs", type: "zfspool", pool: "rpool/data" }, { storage: "tanka1", type: "zfspool", pool: "tanka1" }, { storage: "local", type: "dir", path: "/var/lib/vz" }]);
+  check(ds.get("local-zfs") === "rpool/data" && ds.get("tanka1") === "tanka1" && !ds.has("local"), "a zfspool storage maps to its dataset");
 }
 
 console.log(`\nResults: ${passed} passed, ${failed} failed`);

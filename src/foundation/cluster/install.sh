@@ -498,6 +498,7 @@ mkdir -p tappaas
 apt -y install jq &>/dev/null || { msg_error "apt install jq failed"; exit 1; }
 fetch "${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-VM.sh"  ~/tappaas/Create-TAPPaaS-VM.sh  744
 fetch "${REPO}${BRANCH}/src/foundation/cluster/Create-TAPPaaS-LXC.sh" ~/tappaas/Create-TAPPaaS-LXC.sh 744
+fetch "${REPO}${BRANCH}/src/foundation/cluster/lib/storage-placement.sh" ~/tappaas/storage-placement.sh 644
 fetch "${REPO}${BRANCH}/src/foundation/cluster/sanity-check.sh"       ~/tappaas/sanity-check.sh       744
 msg_ok "Installed TAPPaaS helper scripts (VM + LXC + sanity-check)"
 

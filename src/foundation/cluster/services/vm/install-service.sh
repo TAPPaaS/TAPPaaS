@@ -218,6 +218,23 @@ if ! read_module_config "$1" | jq -e 'has("bios")' >/dev/null 2>&1; then
     fi
 fi
 
+# ── record the storage this guest was actually built on (ADR-037 D1) ──
+#
+# A module's storage is a preference: on a node without it, Create-TAPPaaS-VM.sh
+# builds on another pool and says so. Recording the storage used keeps the guest
+# where it is on the next update (the merge keeps a value that differs from the
+# release's, rule 5a) and shows the operator where it went.
+_live_storage=$(ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${NODE}.${MGMT}.internal" \
+    "qm config ${VMID} 2>/dev/null | sed -n -E 's/^(scsi0|virtio0|sata0): ([^:,]+):.*/\\2/p' | head -1" 2>/dev/null || true)
+_cfg_storage="$(read_module_config "$1" | jq -r '.storage // empty' 2>/dev/null || true)"
+if [[ -n "${_live_storage}" && "${_live_storage}" != "${_cfg_storage}" ]]; then
+    if jq_module_write "$1" '.storage = $s' --arg s "${_live_storage}"; then
+        info "Recorded storage=${_live_storage} in config (built there: ${_cfg_storage:-the default} is not on ${NODE})"
+    else
+        warn "Could not record storage=${_live_storage} in config — the next update may look for ${_cfg_storage:-tanka1} again"
+    fi
+fi
+
 # For Windows clone VMs: inject OOBE setup via the QEMU guest agent.
 # Windows post-sysprep does NOT read answer files from CDROMs — only from
 # C:\Windows\Panther\unattend.xml.  We bypass that entirely by running

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# test-storage-resolve.sh — unit test for the storage pool a guest is built on (#692).
+# test-storage-resolve.sh — unit test for the storage pool a guest is built on
+# (#692, ADR-037 D1: a module's storage is a preference).
 #
 # `tanka1` used to be the fallback whatever node the guest landed on, and nothing
 # checked the node had it. On makerfloss (tappaas1/2 carry tanka1, tappaas3 carries
@@ -8,9 +9,9 @@
 # Proxmox's "storage 'tanka1' is not available on node 'tappaas3'" — after the
 # 413 MB image had been downloaded, and naming a pool nobody had written down.
 #
-# The four functions are lifted out of Create-TAPPaaS-VM.sh (which otherwise runs
-# on a Proxmox node) with `pvesh` and the module JSON stubbed, so the rule is
-# tested without a cluster.
+# The functions are lifted out of Create-TAPPaaS-VM.sh (which otherwise runs on a
+# Proxmox node) with lib/storage-placement.sh sourced and `pvesh`, `zpool`,
+# storage.cfg and the module JSON stubbed, so the rule is tested without a cluster.
 #
 # Usage: ./test-storage-resolve.sh   (exit 0 = all passed)
 set -uo pipefail
@@ -22,7 +23,10 @@ PASS=0; FAIL=0
 ck() { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (expected '$2', got '$3')"; FAIL=$((FAIL+1)); fi; }
 ckin() { if [[ "$3" == *"$2"* ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (no '$2' in: $3)"; FAIL=$((FAIL+1)); fi; }
 
-FN="$(sed -n '/^config_declares() {/,/^}/p;/^node_storage_json() {/,/^}/p;/^image_pools() {/,/^}/p;/^resolve_storage() {/,/^}/p' "${SRC}")"
+FN="$(sed -n '/^node_storage_json() {/,/^}/p;/^image_pools() {/,/^}/p;/^resolve_storage() {/,/^}/p' "${SRC}")"
+LIB="${SCRIPT_DIR}/storage-placement.sh"
+CFG="$(mktemp)"; trap 'rm -f "${CFG}"' EXIT
+printf 'zfspool: local-zfs\n\tpool rpool/data\n\tcontent images,rootdir\n\nzfspool: tanka1\n\tpool tanka1\n\nzfspool: tankc1\n\tpool tankc1\n' > "${CFG}"
 [[ -n "${FN}" ]] || { echo "FAIL: the storage helpers are not in ${SRC}"; exit 1; }
 bash -n <(printf '%s' "${FN}") 2>/dev/null || { echo "FAIL: extracted helpers do not parse"; exit 1; }
 
@@ -31,7 +35,7 @@ bash -n <(printf '%s' "${FN}") 2>/dev/null || { echo "FAIL: extracted helpers do
 # and nothing else. run_msgs() below keeps everything the operator was told.
 run_raw() {
     local node="$1" cfg="$2" pve="$3"
-    PVE_JSON="${pve}" JSON_IN="${cfg}" bash -c '
+    PVE_JSON="${pve}" JSON_IN="${cfg}" SP_STORAGE_CFG="${CFG}" ZPOOL_LIST="${ZPOOL_LIST:-1000000000000 100000000000}" bash -c '
         JSON="${JSON_IN}"
         # Colour names the real script defines; unset here.
         RD=""; YW=""; DGN=""; CL=""; BOLD=""
@@ -62,8 +66,11 @@ run_raw() {
             [ "${PVE_JSON}" = "UNREACHABLE" ] && return 1
             echo "${PVE_JSON}" | jq -c --arg N "${node}" ".[\$N] // []"
         }
+        # zpool list -Hp -o size,alloc <pool>: the boot pool, 1 TB with 100 GB used unless a case says otherwise.
+        zpool() { echo "${ZPOOL_LIST}"; }
+        . "'"${LIB}"'"
         '"${FN}"'
-        resolve_storage "$1" tanka1
+        resolve_storage "$1" tanka1 "${DISK:-8G}"
     ' _ "${node}"
 }
 
@@ -81,7 +88,9 @@ PVE='{
                {"storage":"local","type":"dir","content":"images,iso","active":1,"enabled":1}],
   "tappaas4": [{"storage":"local","type":"dir","content":"images,iso","active":1,"enabled":1}],
   "tappaas5": [{"storage":"tanka1","type":"zfspool","content":"rootdir","active":1,"enabled":1}],
-  "tappaas6": [{"storage":"tanka1","type":"zfspool","content":"images","active":0,"enabled":1}]
+  "tappaas6": [{"storage":"tanka1","type":"zfspool","content":"images","active":0,"enabled":1}],
+  "tappaas7": [{"storage":"local-zfs","type":"zfspool","content":"images,rootdir","active":1,"enabled":1},
+               {"storage":"local","type":"dir","content":"images,iso","active":1,"enabled":1}]
 }'
 
 NO_STORAGE='{"vmname":"t","config":{"cluster:vm":{"cores":1}}}'
@@ -103,25 +112,29 @@ ck   "an undeclared pool resolves to the node's own ZFS pool, and nothing else" 
 ckin "…and says so rather than switching silently" \
      "WARN" "$(run_msgs tappaas3 "${NO_STORAGE}" "${PVE}")"
 
-# A pool the operator DID write down is not quietly replaced: that is their word.
+# A declared pool is a preference too (ADR-037 D1): the node's own pool, said.
 out="$(run_msgs tappaas3 "${DECLARED_A}" "${PVE}")"
-ckin "a declared pool the node lacks is refused"        "does not have it" "${out}"
-ckin "…the refusal names the node"                      "tappaas3"         "${out}"
-ckin "…and lists what the node does offer"              "tankc1"           "${out}"
-ck   "…and it prints no pool for a caller to use"       ""  "$(run tappaas3 "${DECLARED_A}" "${PVE}")"
+ck   "a declared pool the node lacks falls back to the node's own pool" "tankc1" "$(run tappaas3 "${DECLARED_A}" "${PVE}")"
+ckin "…with a warning naming both"                      "storage 'tanka1' is not on node 'tappaas3' — building on 'tankc1'" "${out}"
 ck   "a declared pool the node HAS is honoured"         "tankc1" "$(run tappaas3 "${DECLARED_C}" "${PVE}")"
+ck   "a flat declared pool is read the same way"        "tankc1" "$(run tappaas3 "${FLAT_A}" "${PVE}")"
 
-# Pattern A is not the only layout — a flat field is a declaration too.
-ckin "a flat declared pool is checked the same way" "does not have it" "$(run_msgs tappaas3 "${FLAT_A}" "${PVE}")"
+# ── a one-disk node: ZFS on the boot disk, nothing else (ADR-037 D1) ────────
+ck   "no data pool: the boot pool" "local-zfs" "$(run tappaas7 "${DECLARED_A}" "${PVE}")"
+ckin "…said" "building on 'local-zfs'" "$(run_msgs tappaas7 "${DECLARED_A}" "${PVE}")"
+out="$(DISK=850G run_msgs tappaas7 "${DECLARED_A}" "${PVE}")"
+ckin "a disk that would take the boot pool under 20 % free is refused" "under 20 % free" "${out}"
+ck   "…and prints no storage" "" "$(DISK=850G run tappaas7 "${DECLARED_A}" "${PVE}")"
+ck   "600G (644 GB) on a 1 TB pool with 100 GB used fits" "local-zfs" "$(DISK=600G run tappaas7 "${DECLARED_A}" "${PVE}")"
 
 # ── nodes with nothing usable ───────────────────────────────────────────────
 out="$(run_msgs tappaas4 "${NO_STORAGE}" "${PVE}")"
-ckin "a node with no ZFS pool for disks is refused, not guessed at" "no ZFS pool" "${out}"
+ckin "a node with no ZFS pool for disks is refused, not guessed at" "no storage that can hold this guest" "${out}"
 # 'rootdir' without 'images' cannot hold a VM disk; an inactive pool is not there.
-ckin "a pool that cannot hold images does not count"  "no ZFS pool" "$(run_msgs tappaas5 "${NO_STORAGE}" "${PVE}")"
-ckin "an inactive pool does not count"                "no ZFS pool" "$(run_msgs tappaas6 "${NO_STORAGE}" "${PVE}")"
+ckin "a pool that cannot hold images does not count"  "no storage that can hold" "$(run_msgs tappaas5 "${NO_STORAGE}" "${PVE}")"
+ckin "an inactive pool does not count"                "no storage that can hold" "$(run_msgs tappaas6 "${NO_STORAGE}" "${PVE}")"
 ckin "a node Proxmox lists no storage for is refused, not defaulted" \
-     "no ZFS pool" "$(run_msgs tappaas9 "${NO_STORAGE}" "${PVE}")"
+     "no storage that can hold" "$(run_msgs tappaas9 "${NO_STORAGE}" "${PVE}")"
 
 # ── Proxmox unreachable is not the same as "the node has nothing" ───────────
 # A query failure must not block a build that would have worked before.

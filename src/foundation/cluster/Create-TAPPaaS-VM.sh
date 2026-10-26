@@ -26,11 +26,12 @@ function error_handler() {
      qm stop $VMID &>/dev/null
      qm destroy $VMID &>/dev/null
   fi
-  if zfs list $STORAGE/vm-$VMID-disk-0 &>/dev/null; then
-    zfs destroy $STORAGE/vm-$VMID-disk-0
+  local ds="${STORAGE_DATASET:-${STORAGE:-}}"
+  if [ -n "$ds" ] && zfs list "$ds/vm-$VMID-disk-0" &>/dev/null; then
+    zfs destroy "$ds/vm-$VMID-disk-0"
   fi
-   if zfs list $STORAGE/vm-$VMID-disk-1 &>/dev/null; then
-    zfs destroy $STORAGE/vm-$VMID-disk-1
+  if [ -n "$ds" ] && zfs list "$ds/vm-$VMID-disk-1" &>/dev/null; then
+    zfs destroy "$ds/vm-$VMID-disk-1"
   fi
 }
 
@@ -159,6 +160,12 @@ BOLD=$(echo "\033[1m")   # Bold
 #
 # ok here we go
 #
+
+# The placement rules (ADR-037 D1): beside this script on a node, lib/ in the repo.
+_sp_lib="$(dirname "$(readlink -f "$0")")/storage-placement.sh"
+[ -r "${_sp_lib}" ] || _sp_lib="$(dirname "$(readlink -f "$0")")/lib/storage-placement.sh"
+# shellcheck source=lib/storage-placement.sh
+. "${_sp_lib}" || { echo "storage-placement.sh not found beside $0 — run the cluster update" >&2; exit 1; }
 
 set -e
 trap 'error_handler $LINENO "$BASH_COMMAND"' ERR
@@ -369,17 +376,6 @@ function zfs_recv_preflight() {
 # Proxmox is the authority here, not site.json: this script runs on the node
 # and site.json lives on the mothership.
 
-# config_declares <key> — did the module actually write this field, or is the
-# value about to come from a default? Keeps a declared pool that cannot work a
-# refusal (the operator's word is not ours to overrule) while an undeclared one
-# is simply resolved to something the node has.
-config_declares() {
-  local key="$1"
-  echo "$JSON" | jq -e --arg K "$key" \
-    'has($K) or (((.config // {}) | to_entries | map(select(.value | has($K))) | length) > 0)' \
-    >/dev/null 2>&1
-}
-
 # node_storage_json <node> — the node's storage list, or non-zero when Proxmox
 # cannot be asked. "Could not ask" and "the node has none" are different answers
 # and must never be conflated: the first is a reason to carry on as before, the
@@ -405,50 +401,40 @@ image_pools() {
       | .storage' 2>/dev/null || true
 }
 
-# resolve_storage <node> <schema-default> — the pool to build this guest on.
+# resolve_storage <node> <schema-default> <disk-size> — the storage to build this
+# guest on (ADR-037 D1, lib/storage-placement.sh). The module's `storage` is a
+# preference: when the node lacks it, the guest goes to the same class, any
+# tanka<N>, then the boot pool (keeping it 20 % free), with a warning; the
+# mothership records the storage used in the module's config.
 resolve_storage() {
-  local node="$1" fallback="$2" raw="" pools="" zfs_pools="" declared="" chosen=""
-
+  local node="$1" fallback="$2" disk="$3" raw="" pools="" zfs_pools="" want="" chosen="" boot="" pool_size="" pool_alloc=""
+  want="$(get_config_value 'storage' "${fallback}")"
   if ! raw="$(node_storage_json "${node}")"; then
     # Proxmox could not be asked. Carry on exactly as before rather than block a
     # build that would have worked; the create path reports the truth either way.
-    printf '%s' "$(get_config_value 'storage' "${fallback}")"
+    printf '%s' "${want}"
     return 0
   fi
   pools="$(image_pools "${raw}")"
-
-  if config_declares 'storage'; then
-    declared="$(get_config_value 'storage' "${fallback}")"
-    if ! printf '%s\n' "${pools}" | grep -qx -- "${declared}"; then
-      die "storage '${declared}' is declared for this guest but node '${node}' does not have it.
-      ${node} offers: $(printf '%s' "${pools}" | tr '\n' ' ')
-      Either declare one of those as 'storage', or place the guest on a node that has '${declared}'."
-    fi
-    printf '%s' "${declared}"
-    return 0
-  fi
-
-  # Undeclared: keep the schema default when the node has it, so every estate
-  # whose nodes share a pool name is unaffected. Otherwise take the node's first
-  # ZFS pool — TAPPaaS builds guests on zvols, so a directory storage is not a
-  # substitute even where Proxmox would accept the disk.
-  if printf '%s\n' "${pools}" | grep -qx -- "${fallback}"; then
-    printf '%s' "${fallback}"
-    return 0
-  fi
   zfs_pools="$(image_pools "${raw}" zfspool)"
-  chosen="$(printf '%s' "${zfs_pools}" | head -1)"
-  if [ -n "${chosen}" ]; then
-    # To stderr: this function's stdout IS the pool name, and warn() prints to
-    # stdout everywhere else in this script. Without the redirect the warning
-    # text lands in $STORAGE and `qm disk import` reports "too many arguments".
-    warn "No 'storage' declared and node '${node}' has no '${fallback}' — building on '${chosen}'" >&2
-    printf '%s' "${chosen}"
-    return 0
-  fi
-  die "No 'storage' declared, and node '${node}' has no ZFS pool that can hold a VM disk.
+  boot="$(sp_boot_storage)"
+  if ! chosen="$(sp_choose "${want}" "${pools}" "${zfs_pools}" "${boot}")"; then
+    die "node '${node}' has no storage that can hold this guest ('${want}' asked for, no tank pool, no ZFS boot pool).
       ${node} offers: $(printf '%s' "${pools}" | tr '\n' ' ')
-      Declare a usable pool as 'storage', or create a ZFS pool on ${node}."
+      Create a ZFS pool on ${node}, or place the guest on another node."
+  fi
+  if [[ -n "${boot}" && "${chosen}" == "${boot}" ]]; then
+    # The root filesystem lives in the boot pool: a guest may not take it under 20 % free.
+    read -r pool_size pool_alloc < <(zpool list -Hp -o size,alloc "$(sp_dataset "${boot}" | cut -d/ -f1)" 2>/dev/null || true)
+    sp_reserve_ok "${pool_size:-0}" "${pool_alloc:-0}" "$(sp_size_bytes "${disk}")" \
+      || die "a ${disk} disk on the boot pool ('${boot}') would leave it under 20 % free — the node's root filesystem shares it.
+      Give the guest less disk (diskSize), add a data pool to ${node}, or place it on another node."
+  fi
+  if [[ "${chosen}" != "${want}" ]]; then
+    # To stderr: this function's stdout IS the storage name.
+    warn "storage '${want}' is not on node '${node}' — building on '${chosen}' (a module's storage is a preference, ADR-037 D1); the module's config records it" >&2
+  fi
+  printf '%s' "${chosen}"
 }
 
 # generate some MAC addresses
@@ -518,7 +504,11 @@ RAM_SIZE="$(get_config_value 'memory' '4096')"
 DISK_SIZE="$(get_config_value 'diskSize' '8G')"
 # #692: resolved against NODE, not assumed. 'tanka1' stays the preferred name,
 # so an estate whose nodes all carry it sees no change.
-STORAGE="$(resolve_storage "${NODE}" 'tanka1')"
+STORAGE="$(resolve_storage "${NODE}" 'tanka1' "${DISK_SIZE}")"
+# The storage's ZFS dataset and pool: local-zfs is rpool/data in rpool, a tank
+# pool is itself. zfs and zvol paths take the dataset, never the storage name.
+STORAGE_DATASET="$(sp_dataset "${STORAGE}")"
+STORAGE_POOL="${STORAGE_DATASET%%/*}"
 IMAGETYPE="$(get_config_value 'imageType')"
 IMAGE="$(get_config_value 'image' '8080')"
 if [ "${IMAGETYPE:-}" != "clone" ]; then
@@ -565,7 +555,7 @@ create_vm_descriptions_html "$DESCRIPTION" "$(echo "$JSON" | jq -r '.moduleSourc
 # large image download — if a stuck D-state 'zfs recv' is poisoning the target
 # pool. Runs for every imageType (img/iso/clone); the remote-clone path re-runs
 # it with the migration-snapshot check just before migrating.
-zfs_recv_preflight "$STORAGE" false
+zfs_recv_preflight "$STORAGE_POOL" false
 
 if [ "${IMAGETYPE:-}" != "clone" ]; then
   if [ "$IMAGETYPE" = "iso" ]; then
@@ -673,7 +663,7 @@ if [ "$IMAGETYPE" == "img" ]; then  # First use: this is used to stand up a fire
     # these Linux images (firewall/nixos/debian/hass).
     pvesm alloc $STORAGE $VMID $DISK1 4M 1>/dev/null
     dd if=/usr/share/pve-edk2-firmware/OVMF_VARS_4M.fd \
-       of=/dev/zvol/${STORAGE}/${DISK1} bs=1M 2>/dev/null || true
+       of=/dev/zvol/${STORAGE_DATASET}/${DISK1} bs=1M 2>/dev/null || true
     qm set $VMID -efidisk0 ${DISK1_REF},efitype=4m 1>/dev/null
     info " - Created persistent EFI disk (NVRAM initialised from OVMF_VARS_4M.fd)"
   fi
@@ -719,7 +709,7 @@ if [ "$IMAGETYPE" == "iso" ]; then # First use: this is used to stand up a templ
     # to hang with no display.  Copy the MS vars template explicitly so OVMF gets
     # valid NVRAM with SecureBoot keys on first boot.
     dd if=/usr/share/pve-edk2-firmware/OVMF_VARS_4M.ms.fd \
-       of=/dev/zvol/${STORAGE}/vm-${VMID}-disk-0 bs=1M 2>/dev/null || true
+       of=/dev/zvol/${STORAGE_DATASET}/vm-${VMID}-disk-0 bs=1M 2>/dev/null || true
     info " - Created EFI disk (NVRAM initialised from OVMF_VARS_4M.ms.fd)"
 
     # Add TPM 2.0 (required for Windows Server 2025 / Windows 11)
@@ -871,7 +861,7 @@ if [ "$IMAGETYPE" == "clone" ]; then
     # recv into the poisoned pool hangs indefinitely in __flush_workqueue. Re-run
     # the shared check here (immediately before migrating) with the
     # migration-snapshot check enabled — the early call only covers stuck recvs.
-    zfs_recv_preflight "$STORAGE" true
+    zfs_recv_preflight "$STORAGE_POOL" true
 
     debug "Cloning on ${TEMPLATE_NODE} and migrating to ${CURRENT_NODE}..."
 

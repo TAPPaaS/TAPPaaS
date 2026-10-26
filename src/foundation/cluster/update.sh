@@ -130,6 +130,7 @@ while read -r node; do
     scp -q /home/tappaas/config/zones.json root@"$NODE_FQDN":/root/tappaas/
     scp -q "${SCRIPT_DIR}/Create-TAPPaaS-VM.sh" root@"$NODE_FQDN":/root/tappaas/
     scp -q "${SCRIPT_DIR}/Create-TAPPaaS-LXC.sh" root@"$NODE_FQDN":/root/tappaas/
+    scp -q "${SCRIPT_DIR}/lib/storage-placement.sh" root@"$NODE_FQDN":/root/tappaas/   # sourced by both (ADR-037 D1)
 
     # The mothership's SSH public key, distributed as the canonical
     # tappaas-cicd.pub. Create-TAPPaaS-VM.sh injects it (--sshkey) so cloud-init

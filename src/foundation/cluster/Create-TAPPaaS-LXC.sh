@@ -20,6 +20,12 @@
 
 set -euo pipefail
 
+# The placement rules (ADR-037 D1): beside this script on a node, lib/ in the repo.
+_sp_lib="$(dirname "$(readlink -f "$0")")/storage-placement.sh"
+[ -r "${_sp_lib}" ] || _sp_lib="$(dirname "$(readlink -f "$0")")/lib/storage-placement.sh"
+# shellcheck source=lib/storage-placement.sh
+. "${_sp_lib}" || { echo "storage-placement.sh not found beside $0 — run the cluster update" >&2; exit 1; }
+
 YW=$'\033[33m'; BL=$'\033[36m'; RD=$'\033[01;31m'
 BGN=$'\033[4;92m'; GN=$'\033[1;92m'; DGN=$'\033[32m'; CL=$'\033[m'; BOLD=$'\033[1m'
 
@@ -160,17 +166,6 @@ info "${BOLD}Creating TAPPaaS LXC...${CL}"
 # Proxmox is the authority here, not site.json: this script runs on the node
 # and site.json lives on the mothership.
 
-# config_declares <key> — did the module actually write this field, or is the
-# value about to come from a default? Keeps a declared pool that cannot work a
-# refusal (the operator's word is not ours to overrule) while an undeclared one
-# is simply resolved to something the node has.
-config_declares() {
-  local key="$1"
-  echo "$JSON" | jq -e --arg K "$key" \
-    'has($K) or (((.config // {}) | to_entries | map(select(.value | has($K))) | length) > 0)' \
-    >/dev/null 2>&1
-}
-
 # node_storage_json <node> — the node's storage list, or non-zero when Proxmox
 # cannot be asked. "Could not ask" and "the node has none" are different answers
 # and must never be conflated: the first is a reason to carry on as before, the
@@ -196,50 +191,40 @@ image_pools() {
       | .storage' 2>/dev/null || true
 }
 
-# resolve_storage <node> <schema-default> — the pool to build this guest on.
+# resolve_storage <node> <schema-default> <disk-size> — the storage to build this
+# guest on (ADR-037 D1, lib/storage-placement.sh). The module's `storage` is a
+# preference: when the node lacks it, the guest goes to the same class, any
+# tanka<N>, then the boot pool (keeping it 20 % free), with a warning; the
+# mothership records the storage used in the module's config.
 resolve_storage() {
-  local node="$1" fallback="$2" raw="" pools="" zfs_pools="" declared="" chosen=""
-
+  local node="$1" fallback="$2" disk="$3" raw="" pools="" zfs_pools="" want="" chosen="" boot="" pool_size="" pool_alloc=""
+  want="$(get_config_value 'storage' "${fallback}")"
   if ! raw="$(node_storage_json "${node}")"; then
     # Proxmox could not be asked. Carry on exactly as before rather than block a
     # build that would have worked; the create path reports the truth either way.
-    printf '%s' "$(get_config_value 'storage' "${fallback}")"
+    printf '%s' "${want}"
     return 0
   fi
   pools="$(image_pools "${raw}")"
-
-  if config_declares 'storage'; then
-    declared="$(get_config_value 'storage' "${fallback}")"
-    if ! printf '%s\n' "${pools}" | grep -qx -- "${declared}"; then
-      die "storage '${declared}' is declared for this guest but node '${node}' does not have it.
-      ${node} offers: $(printf '%s' "${pools}" | tr '\n' ' ')
-      Either declare one of those as 'storage', or place the guest on a node that has '${declared}'."
-    fi
-    printf '%s' "${declared}"
-    return 0
-  fi
-
-  # Undeclared: keep the schema default when the node has it, so every estate
-  # whose nodes share a pool name is unaffected. Otherwise take the node's first
-  # ZFS pool — TAPPaaS builds guests on zvols, so a directory storage is not a
-  # substitute even where Proxmox would accept the disk.
-  if printf '%s\n' "${pools}" | grep -qx -- "${fallback}"; then
-    printf '%s' "${fallback}"
-    return 0
-  fi
   zfs_pools="$(image_pools "${raw}" zfspool)"
-  chosen="$(printf '%s' "${zfs_pools}" | head -1)"
-  if [ -n "${chosen}" ]; then
-    # To stderr: this function's stdout IS the pool name, and warn() prints to
-    # stdout everywhere else in this script. Without the redirect the warning
-    # text lands in $STORAGE and `qm disk import` reports "too many arguments".
-    warn "No 'storage' declared and node '${node}' has no '${fallback}' — building on '${chosen}'" >&2
-    printf '%s' "${chosen}"
-    return 0
-  fi
-  die "No 'storage' declared, and node '${node}' has no ZFS pool that can hold a VM disk.
+  boot="$(sp_boot_storage)"
+  if ! chosen="$(sp_choose "${want}" "${pools}" "${zfs_pools}" "${boot}")"; then
+    die "node '${node}' has no storage that can hold this guest ('${want}' asked for, no tank pool, no ZFS boot pool).
       ${node} offers: $(printf '%s' "${pools}" | tr '\n' ' ')
-      Declare a usable pool as 'storage', or create a ZFS pool on ${node}."
+      Create a ZFS pool on ${node}, or place the guest on another node."
+  fi
+  if [[ -n "${boot}" && "${chosen}" == "${boot}" ]]; then
+    # The root filesystem lives in the boot pool: a guest may not take it under 20 % free.
+    read -r pool_size pool_alloc < <(zpool list -Hp -o size,alloc "$(sp_dataset "${boot}" | cut -d/ -f1)" 2>/dev/null || true)
+    sp_reserve_ok "${pool_size:-0}" "${pool_alloc:-0}" "$(sp_size_bytes "${disk}")" \
+      || die "a ${disk} disk on the boot pool ('${boot}') would leave it under 20 % free — the node's root filesystem shares it.
+      Give the guest less disk (diskSize), add a data pool to ${node}, or place it on another node."
+  fi
+  if [[ "${chosen}" != "${want}" ]]; then
+    # To stderr: this function's stdout IS the storage name.
+    warn "storage '${want}' is not on node '${node}' — building on '${chosen}' (a module's storage is a preference, ADR-037 D1); the module's config records it" >&2
+  fi
+  printf '%s' "${chosen}"
 }
 
 VMID="$(get_config_value 'vmid')"
@@ -256,7 +241,7 @@ MEMORY="$(get_config_value 'memory' '4096')"
 DISK="$(get_config_value 'diskSize' '8G')"
 # #692: a container is always created on the local node, so that is what the
 # pool is checked against. Same rule as Create-TAPPaaS-VM.sh.
-STORAGE="$(resolve_storage "$(hostname -s)" 'tanka1')"
+STORAGE="$(resolve_storage "$(hostname -s)" 'tanka1' "${DISK}")"
 IMAGE="$(get_config_value 'image')"               # CT template filename
 BRIDGE0="$(get_config_value 'bridge0' 'lan')"
 ZONE0="$(get_config_value 'zone0' 'mgmt')"

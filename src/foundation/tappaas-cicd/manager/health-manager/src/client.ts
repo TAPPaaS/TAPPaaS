@@ -283,12 +283,16 @@ export class CliClusterClient implements ClusterClient {
     if (r.rc !== 0) throw new Error("Failed to query cluster storage");
     const rows = JSON.parse(r.stdout) as Record<string, unknown>[];
     const pools = parseStoragePools(rows);
+    // A zfspool storage's dataset: its own name for a tank pool, rpool/data for
+    // the boot pool's local-zfs (ADR-037 D1). From the cluster's storage config.
+    const cfg = ssh("root", `${nodes[0]}.${mgmtDomain()}`, "pvesh get /storage --output-format json");
+    const datasets = cfg.ran && cfg.rc === 0 ? storageDatasets(JSON.parse(cfg.stdout) as Record<string, unknown>[]) : new Map<string, string>();
     for (const n of new Set(pools.filter((p) => p.type === "zfspool").map((p) => p.node))) {
       const z = ssh("root", `${n}.${mgmtDomain()}`, "zfs list -Hp -t volume -o name,volsize");
       if (!z.ran || z.rc !== 0) continue;
       const sums = sumVolsizes(z.stdout);
       for (const p of pools) {
-        if (p.node === n && p.type === "zfspool") p.provisioned = sums.get(p.storage) ?? 0;
+        if (p.node === n && p.type === "zfspool") p.provisioned = sums.get(datasets.get(p.storage) ?? p.storage) ?? 0;
       }
     }
     return pools;
@@ -316,15 +320,27 @@ export function parseStoragePools(rows: Record<string, unknown>[]): StoragePool[
     }));
 }
 
-// `zfs list -Hp -t volume -o name,volsize` → bytes per top-level pool. A
-// zfspool storage's id is its pool's name on TAPPaaS (tanka1, tankb1, …).
+// `zfs list -Hp -t volume -o name,volsize` → bytes per dataset the zvols sit
+// in: tanka1/vm-100-disk-0 counts for tanka1, rpool/data/vm-100-disk-0 for
+// rpool/data (the boot pool's local-zfs, ADR-037 D1).
 export function sumVolsizes(out: string): Map<string, number> {
   const m = new Map<string, number>();
   for (const line of out.split("\n")) {
     const [name, size] = line.trim().split(/\s+/);
     if (!name || !size || !/^\d+$/.test(size)) continue;
-    const pool = name.split("/")[0];
-    m.set(pool, (m.get(pool) ?? 0) + Number(size));
+    const i = name.lastIndexOf("/");
+    if (i <= 0) continue;
+    const ds = name.slice(0, i);
+    m.set(ds, (m.get(ds) ?? 0) + Number(size));
+  }
+  return m;
+}
+
+// `pvesh get /storage` → zfspool storage id → its dataset (`pool`).
+export function storageDatasets(rows: Record<string, unknown>[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const r of rows) {
+    if (r.type === "zfspool" && typeof r.storage === "string" && typeof r.pool === "string") m.set(r.storage, r.pool);
   }
   return m;
 }
