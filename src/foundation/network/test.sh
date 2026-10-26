@@ -407,7 +407,9 @@ section "Standard 6b: CrowdSec on the firewall (#851)"
 # site's own networks. Read-only: `cscli` and `service status` on the firewall.
 _cs="$(ssh -o BatchMode=yes -o ConnectTimeout=10 root@"${FIREWALL_FQDN:-firewall.mgmt.internal}" "/bin/sh -s" 2>/dev/null <<'CS'
 pkg info -q os-crowdsec && echo "installed=yes" || echo "installed=no"
-service crowdsec status >/dev/null 2>&1 && echo "engine=running" || echo "engine=stopped"
+# The local API answering, not `service status`: that names the supervisor's
+# pid while the engine fails at start (makerfloss, 2026-10-26).
+cscli lapi status >/dev/null 2>&1 && echo "engine=running" || echo "engine=stopped"
 [ -s /usr/local/etc/crowdsec/hub/.index.json ] && echo "hub=yes" || echo "hub=no"
 service crowdsec_firewall status >/dev/null 2>&1 && echo "bouncer=running" || echo "bouncer=stopped"
 grep -q online_client /usr/local/etc/crowdsec/config.yaml 2>/dev/null && echo "capi=configured" || echo "capi=off"
@@ -415,8 +417,11 @@ grep -q online_client /usr/local/etc/crowdsec/config.yaml 2>/dev/null && echo "c
 [ -f /usr/local/etc/crowdsec/acquis.d/tappaas-caddy.yaml ] && echo "acquis=yes" || echo "acquis=no"
 cscli scenarios list -o raw --error 2>/dev/null | grep -c '^tappaas/http-login-bf,' >/dev/null && echo "scenario=yes" || echo "scenario=no"
 wl=/usr/local/etc/crowdsec/parsers/s02-enrich/tappaas-site-whitelist.yaml
-if [ ! -f "$wl" ]; then echo "whitelist=missing"
-elif grep -q 'cidr: \[\]' "$wl"; then echo "whitelist=nov6"
+wan=$(route -6 get default 2>/dev/null | awk '/interface/ {print $2}')
+v6=0; for i in $(ifconfig -l); do [ "$i" = "$wan" ] && continue
+    ifconfig $i inet6 2>/dev/null | awk '/inet6/ && $2 !~ /^fe80/ && $2 != "::1" && $4 == 64' | grep -q . && v6=1; done
+if [ ! -f "$wl" ]; then [ "$v6" = 1 ] && echo "whitelist=missing" || echo "whitelist=nov6"
+elif grep -q 'cidr: \[\]' "$wl"; then echo "whitelist=empty"
 else echo "whitelist=$(grep -c -- '- "' "$wl")"; fi
 CS
 )"
@@ -436,13 +441,13 @@ else
         || fail "CrowdSec is set up for the central API (capi=$(_csv capi), credentials=$(_csv capicreds)) — this site's signals would leave it"
     [[ "$(_csv acquis)" == yes && "$(_csv scenario)" == yes ]] && pass "CrowdSec reads Caddy's access logs and has the TAPPaaS sign-in scenario" \
         || fail "CrowdSec is missing the Caddy acquisition ($(_csv acquis)) or the sign-in scenario ($(_csv scenario))"
-    # The converge writes `cidr: []` on a firewall without internal IPv6 networks
-    # (an IPv4-only site, #861): nothing to whitelist is not a missing whitelist —
-    # private IPv4 is crowdsecurity/whitelists. Only an absent file fails.
+    # On a firewall without internal IPv6 networks (an IPv4-only site, #861) there
+    # is nothing to whitelist and no file: private IPv4 is crowdsecurity/whitelists.
+    # A whitelist with no entries is worse than none — CrowdSec stops at start.
     case "$(_csv whitelist)" in
         missing) fail "CrowdSec has no site whitelist — a client on the site's IPv6 could be banned" ;;
         nov6)    pass "CrowdSec site whitelist: the firewall has no internal IPv6 networks (private IPv4 is never banned)" ;;
-        0)       fail "CrowdSec site whitelist names no networks and is not the no-IPv6 form — rewrite it with the network update" ;;
+        empty|0) fail "CrowdSec's site whitelist has no entries — CrowdSec stops at start on it; the network update removes it" ;;
         *)       pass "CrowdSec never bans the site's own IPv6 networks ($(_csv whitelist) whitelisted)" ;;
     esac
 fi

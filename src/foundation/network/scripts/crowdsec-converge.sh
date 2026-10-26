@@ -125,14 +125,26 @@ whitelist:
   cidr:"
 for n in \$nets; do wl="\$wl
     - \"\$n\""; done
-[ -n "\$nets" ] || wl="\$wl []"
-if [ "\$(cat "\$CS/parsers/s02-enrich/tappaas-site-whitelist.yaml" 2>/dev/null)" != "\$wl" ]; then
-    [ "\$CHECK" = 1 ] && say "would whitelist the site's IPv6 networks: \$(echo \$nets)" || { mkdir -p "\$CS/parsers/s02-enrich"; printf '%s\n' "\$wl" > "\$CS/parsers/s02-enrich/tappaas-site-whitelist.yaml"; changed=1; }
+WLF="\$CS/parsers/s02-enrich/tappaas-site-whitelist.yaml"
+if [ -z "\$nets" ]; then
+    # No internal IPv6 network, nothing to whitelist — and no file: CrowdSec
+    # refuses a whitelist with no entries ("Node is empty") and stops at start.
+    # Private IPv4 is crowdsecurity/whitelists.
+    if [ -f "\$WLF" ]; then
+        [ "\$CHECK" = 1 ] && say "would remove the empty site whitelist (no internal IPv6 networks)" || { rm -f "\$WLF"; changed=1; }
+    fi
+elif [ "\$(cat "\$WLF" 2>/dev/null)" != "\$wl" ]; then
+    [ "\$CHECK" = 1 ] && say "would whitelist the site's IPv6 networks: \$(echo \$nets)" || { mkdir -p "\$CS/parsers/s02-enrich"; printf '%s\n' "\$wl" > "\$WLF"; changed=1; }
 fi
 [ "\$changed" = 1 ] && [ "\$CHECK" != 1 ] && { service crowdsec reload >/dev/null 2>&1 || service crowdsec restart >/dev/null; say "crowdsec reloaded"; }
 # report
 cscli capi status --error >/dev/null 2>&1 && say "WARNING: registered with the central API" || say "central API: not registered (local only)"
-service crowdsec status >/dev/null 2>&1 && say "crowdsec: running" || say "crowdsec: NOT running"
+# The service status names the supervisor's pid even while the engine fails
+# at start; the local API answering is what says it runs. (No backticks in
+# this heredoc: it is unquoted, so the mothership would run them.)
+if cscli lapi status >/dev/null 2>&1; then say "crowdsec: running"; else
+    sleep 5; cscli lapi status >/dev/null 2>&1 && say "crowdsec: running" || { echo "  ERROR: crowdsec does not run — its local API does not answer: \$(tail -1 /var/log/crowdsec/crowdsec.log 2>/dev/null)" >&2; exit 1; }
+fi
 service crowdsec_firewall status >/dev/null 2>&1 && say "firewall bouncer: running" || say "firewall bouncer: NOT running"
 say "active bans: \$(cscli decisions list -o json --error 2>/dev/null | /usr/local/bin/python3 -c 'import sys, json; d = json.load(sys.stdin) or []; print(sum(len(a.get("decisions") or []) for a in d))' 2>/dev/null || echo 0)"
 EOF
