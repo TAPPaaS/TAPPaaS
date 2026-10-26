@@ -27,5 +27,5 @@ CONSUMER="${1:-}"
 nfs_is_instance "${CONSUMER}" || die "storage:nfs: no config/${CONSUMER}.json"
 
 count="$(nfs_mounts "${CONSUMER}" | grep -c . || true)"
-info "${BOLD}storage:nfs: ${count} mount(s) for ${BL}${CONSUMER}${CL}"
+debug "storage:nfs: ${count} mount(s) for ${CONSUMER}"
 nfs_service_converge "${CONSUMER}"

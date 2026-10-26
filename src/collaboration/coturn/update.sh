@@ -23,7 +23,7 @@ VMID="$(get_config_value 'vmid')"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
 ZONE0NAME="$(get_config_value 'zone0' 'dmz')"
 
-info "${BOLD}*** Starting coturn update${CL}"
+debug "*** Starting coturn update"
 debug "  VM:   ${VMNAME} (VMID: ${VMID})"
 debug "  Node: ${NODE}"
 debug "  Zone: ${ZONE0NAME}"

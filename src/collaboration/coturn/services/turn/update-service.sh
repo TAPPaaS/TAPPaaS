@@ -27,7 +27,7 @@ readonly COTURN_JSON
 VMNAME=$(jq -r '.vmname' "${COTURN_JSON}")
 ZONE=$(jq -r '.zone0' "${COTURN_JSON}")
 
-info "coturn:turn update-service for module: ${MODULE}"
+debug "coturn:turn update-service for module: ${MODULE}"
 
 if nc -z -w5 "${VMNAME}.${ZONE}.internal" 3478 2>/dev/null; then
     info "  ${GN}✓${CL} coturn STUN/TURN is reachable at ${VMNAME}.${ZONE}.internal:3478"

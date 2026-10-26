@@ -57,7 +57,7 @@ pct() {
         "root@${LXC_NODE}.mgmt.internal" "pct ${q}"
 }
 
-info "Updating ${VMNAME} (VMID ${VMID} on ${LXC_NODE})"
+debug "Updating ${VMNAME} (VMID ${VMID} on ${LXC_NODE})"
 
 # Step 0: Bootstrap Docker + /opt/vllm (idempotent)
 debug "  bootstrap (docker + /opt/vllm)..."
@@ -294,4 +294,4 @@ if pct exec "${VMID}" -- docker ps -q --filter name=vllm 2>/dev/null | grep -q .
     (( _t > 0 && _t < VLLM_READY_WAIT )) && info "  vLLM API answering after ${_t}s (the model was loading)"
 fi
 
-info "${VMNAME} converged"
+info "  ${GN:-}✓${CL:-} ${VMNAME} converged"

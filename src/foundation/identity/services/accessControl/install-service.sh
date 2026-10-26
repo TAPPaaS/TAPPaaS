@@ -134,11 +134,15 @@ if [[ "${GATE_SLUG}" != "${MODULE}" ]]; then
 fi
 
 debug "  Authentik: ensuring Proxy app/provider '${GATE_SLUG}' (attached to embedded outpost)"
-authentik-controller proxy-app-ensure "${GATE_SLUG}" \
+# Its own report ("==> proxy app …", "✓ attached …") is [Debug]; printed whole
+# when it fails.
+_pae_out=""
+_pae_out="$(authentik-controller proxy-app-ensure "${GATE_SLUG}" \
     --external-host "https://${PROXY_DOMAIN}" \
     --description "TAPPaaS forward-auth for ${MODULE} (#45)" \
     "${gate_args[@]}" \
-    --attach-outpost || die "authentik-controller proxy-app-ensure failed for ${GATE_SLUG}"
+    --attach-outpost 2>&1)" || { printf '%s\n' "${_pae_out}" >&2; die "authentik-controller proxy-app-ensure failed for ${GATE_SLUG}"; }
+while IFS= read -r _l; do [[ -n "${_l}" ]] && debug "  ${_l}"; done <<< "${_pae_out}"
 
 # ── Step 1b: access gate (MANDATORY — an unbound app is allow-all) ───────────
 # Authentik lets every user through an application with no policy binding

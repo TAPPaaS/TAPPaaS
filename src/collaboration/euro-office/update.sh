@@ -29,13 +29,13 @@ HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 # refreshes the same immutable tag (idempotent for a pinned tag).
 CONTAINER_IMAGE="ghcr.io/euro-office/documentserver:v9.3.5"
 
-info "${BOLD}*** Starting euro-office update${CL} (${CONTAINER_IMAGE})"
+debug "*** Starting euro-office update (${CONTAINER_IMAGE})"
 debug "  VM:    ${VMNAME} (VMID: ${VMID})"
 debug "  Node:  ${NODE}"
 debug "  Zone:  ${ZONE0NAME}"
 
 # ── Step 1: Pull latest DocumentServer container image and restart ────────────
-info "Pulling DocumentServer image and restarting service…"
+debug "Pulling DocumentServer image and restarting service…"
 # The pull writes a "Copying blob <sha>" line per layer, which is progress, not
 # news. Dots instead; the whole thing stays in the log, and run_with_dots prints
 # its tail if the pull fails. LogLevel=ERROR drops ssh's "Permanently added …

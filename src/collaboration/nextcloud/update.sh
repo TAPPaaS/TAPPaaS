@@ -156,7 +156,7 @@ converge_nextcloud_domains() {
 
 # install.sh sources this file for its helpers and runs the converge itself:
 # the start line belongs to an update only.
-[[ "${BASH_SOURCE[0]}" == "${0}" ]] && info "${BOLD}*** Starting nextcloud update${CL}"
+[[ "${BASH_SOURCE[0]}" == "${0}" ]] && debug "*** Starting nextcloud update"
 debug "  VM:   ${VMNAME} (VMID: ${VMID})"
 debug "  Node: ${NODE}"
 debug "  Zone: ${ZONE0NAME}"

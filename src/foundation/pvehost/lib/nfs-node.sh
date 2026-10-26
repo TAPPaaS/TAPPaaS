@@ -157,7 +157,7 @@ nfs_node_reconcile() {
     if [[ "${#exports[@]}" -eq 0 ]]; then
         debug "  ${INSTANCE}: no shares declared for it"
     else
-        info "${BOLD}nfs: ${#exports[@]} share(s) on ${BL}${INSTANCE}${CL}"
+        debug "nfs: ${#exports[@]} share(s) on ${INSTANCE}"
         nfs_node_ensure_server || return 1
     fi
     for e in "${exports[@]}"; do

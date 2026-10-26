@@ -36,7 +36,7 @@ ssh-keygen -R "${HPB_HOST}" >/dev/null 2>&1 || true
 
 # install.sh sources this file (the TURN re-sync is needed at install too): the
 # start line belongs to an update only.
-[[ "${BASH_SOURCE[0]}" == "${0}" ]] && info "${BOLD}*** Starting nextcloud-hpb update${CL}"
+[[ "${BASH_SOURCE[0]}" == "${0}" ]] && debug "*** Starting nextcloud-hpb update"
 debug "  VM:   ${VMNAME} (VMID: ${VMID})"
 debug "  Node: ${NODE}"
 debug "  Zone: ${ZONE0NAME}"
