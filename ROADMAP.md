@@ -105,9 +105,9 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | Wave | Group | Ease | Risk | released | done for 2.4 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
-| 7 | G7.2 New and reworked app modules | H | M | 3 | – | 1 |
+| 7 | G7.2 New and reworked app modules | H | M | 3 | 1 | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 10 | – | 11 |
-| 6 | G6.2 User interface & physical view | H | L | 4 | – | 1 |
+| 6 | G6.2 User interface & physical view | H | L | 4 | 1 | 1 |
 | 6 | G6.3 Data model | M | M | 9 | – | 1 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
@@ -218,12 +218,13 @@ Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can al
 | #415 | Self-hosted KVM Woodpecker runners | H | L | |
 | #284 | forgejo: SQLite → PostgreSQL | M | M | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
 
-### G7.2 New and reworked app modules — Ease H · Risk M · released: 3 · open: 1
+### G7.2 New and reworked app modules — Ease H · Risk M · released: 3 · done for 2.4: 1 · open: 1
 
 New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129), Karakeep for bookmarks (#842) — and a rework of LiteLLM's control plane (#170, decided with #430).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
+| ✅ #882 | nomad: the Command Center behind the identity gate, fenced on the VM | M | M | **Done 2026-10-26** (`2ee3d4f8`): `nomad.<domain>`, members of `admin`; 8080 only from Caddy, no DMZ neighbour. Ships in 2.3.1 |
 | #170 | LiteLLM declarative control plane | H | M | Decide with #430 (G1.7); an app controller per ADR-035 (P5) |
 
 ## Wave 6 — site fabric and user experience
@@ -249,12 +250,13 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #63 | Service desk tooling spike | M | L | |
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 
-### G6.2 User interface & physical view — Ease H · Risk L · released: 4 · open: 1
+### G6.2 User interface & physical view — Ease H · Risk L · released: 4 · done for 2.4: 1 · open: 1
 
 A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point), designed first in a spike and an ADR (#844). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
+| ✅ #881 | console: verify the identity gate's signed token, not the peer address | M | L | **Done 2026-10-25** (`85b93c13`): user and groups come from `X-Authentik-Jwt`, checked against the provider key; forged headers 401. Ships in 2.3.1 |
 | #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **P1–P3 built and live on hrossen 2026-10-18** (`839-console-p1/p2/p3`, the review fixes and the operator's UX review, on `main` as `1d9c897a`): the `console` — see, operate (jobs with preview and apply, the Setup wizard, the owner's route) and ask (the assistant through LiteLLM, proposing and never applying) — installed at `console.hrossen.dk` behind the gate, with `network-manager topology`, `health-manager validate --json` and the verb manifests (`--help --json`) in the managers. **2026-10-19 to 10-23, all live on hrossen:** the schema-driven forms and the install fixes; the Site page as Overview (the whole site record, updates and repositories), Physical (racks, rooms, recorded devices, patch panels and cable segments from the new rack-manager), Device (plain cards, a force layout around the selection, a panel opening on the device's faceplate) and Storage (nodes → pools → disks from `storage-manager inventory`, with SMART states and the pool pie); Zones as its own menu; Environments as cards with zone boxes and module icons; the Backup page's overview with last backup and verify. **Open:** P4 (agents through the gate, #142; the SIEM surface after #843; the end-user badges) and the `status.<domain>` route (needs gated `proxyRoutes`); the model behind the Physical view moves with G6.3 |
 
 ### G6.3 Data model — Ease M · Risk M · released: 9 · open: 1
@@ -437,7 +439,7 @@ someone deciding whether to upgrade. The release-train boundary turns it into th
 summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
-The update sweep stops failing on what a site runs that way on purpose: a node already over its memory threshold warns (only growth refuses, and a new module's install), a suspended provider no longer fails its consumers, and a run where only app modules failed ends *degraded* (exit 3, still mailed) instead of *failed*. The reboot pass finishes the cycle: in the scheduled window a guest that cannot move live is stopped, moved and started, a TSC rate the target cannot run is caught before a live move, and the waits suit slower hardware. Rollback of `module modify --set` restores the config from before the change. All of it first reached staging as 2.3.1.
+The update sweep stops failing on what a site runs that way on purpose: a node already over its memory threshold warns (only growth refuses, and a new module's install), a suspended provider no longer fails its consumers, and a run where only app modules failed ends *degraded* (exit 3, still mailed) instead of *failed*. The reboot pass finishes the cycle: in the scheduled window a guest that cannot move live is stopped, moved and started, a TSC rate the target cannot run is caught before a live move, and the waits suit slower hardware. Rollback of `module modify --set` restores the config from before the change. Two security fixes: the console takes who is calling from the identity gate's signed token, no longer from headers anyone on the management network could send, and NOMAD's Command Center — which can start any container — is reached only through the gate, for members of `admin`. All of it first reached staging as 2.3.1.
 <!-- /next-release summary -->
 
 ## Release 2.3 — staging 2026-10-25 · production at the next boundary
