@@ -69,7 +69,8 @@ else
         _sl_out="$(syslog-manager reconfigure --no-ssl-verify 2>&1)" && _sl_rc=0 || _sl_rc=$?
         [[ -n "${_sl_out}" ]] && while IFS= read -r _sl_l; do debug "  ${_sl_l}"; done <<<"${_sl_out}"
         if [[ ${_sl_rc} -eq 0 ]]; then
-            info "  ${GN}✓${CL} OPNsense forwards syslog to ${SYSLOG_TARGET}:1514"
+            debug "  OPNsense forwards syslog to ${SYSLOG_TARGET}:1514"
+            _sum_opn="OPNsense"
         else
             warn "  Destination saved but OPNsense reconfigure failed — apply manually in the UI"
         fi
@@ -181,7 +182,8 @@ EOF
         install_guest_memory_sampler "${NODE_FQDN}" "${NODE_HOSTNAME}"
     done
     if [[ "${_rsyslog_ok}" -gt 0 ]]; then
-        info "  ${GN}✓${CL} Proxmox nodes forward syslog to ${SYSLOG_FQDN}:1515 (${_rsyslog_ok} of ${NODE_COUNT})"
+        debug "  Proxmox nodes forward syslog to ${SYSLOG_FQDN}:1515 (${_rsyslog_ok} of ${NODE_COUNT})"
+        _sum_nodes="${_rsyslog_ok} of ${NODE_COUNT} nodes"
     fi
 fi
 
@@ -225,7 +227,15 @@ debug "Sync the push and admin credentials to nginx"
 . /home/tappaas/bin/log-shipping.sh
 log_shipping_password tappaas-cicd >/dev/null || warn "  could not make the mothership's push credential"
 if log_shipping_sync_logging; then
-    info "  ${GN}✓${CL} nginx push and admin credentials synced ($(ls "${LOG_SHIPPING_CRED_DIR}" 2>/dev/null | wc -l) pushing hosts)"
+    _sum_creds="$(ls "${LOG_SHIPPING_CRED_DIR}" 2>/dev/null | wc -l)"
+    debug "  nginx push and admin credentials synced (${_sum_creds} pushing hosts)"
 else
     warn "  could not write the credentials to ${VMNAME} — pushes and queries are refused until they are"
 fi
+
+# One line for what an update re-established (a failure above has warned).
+_sum_from="$(printf '%s and ' ${_sum_opn:+"${_sum_opn}"} ${_sum_nodes:+"${_sum_nodes}"} | sed 's/ and $//')"
+_sum=""
+[[ -n "${_sum_from}" ]] && _sum="syslog from ${_sum_from}"
+[[ -n "${_sum_creds:-}" ]] && _sum+="${_sum:+, }credentials for ${_sum_creds} pushing hosts"
+[[ -n "${_sum}" ]] && info "  ${GN}✓${CL} logging: ${_sum}"
