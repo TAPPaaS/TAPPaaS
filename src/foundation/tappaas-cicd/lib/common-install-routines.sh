@@ -2005,7 +2005,8 @@ run_with_dots() {
     local _rwd_rc=0
     "$@" 2>&1 | tee "${_rwd_log}" | {
         _rwd_dots=0
-        while IFS= read -r _; do printf '.'; _rwd_dots=1; done
+        # dots only for someone at a terminal; a journal gets nothing
+        while IFS= read -r _; do [ -t 1 ] && printf '.' && _rwd_dots=1; done
         [ "${_rwd_dots}" -eq 1 ] && printf '\n'
         true
     }

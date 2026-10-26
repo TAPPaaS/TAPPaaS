@@ -145,7 +145,7 @@ roll_back_to() {
     return 0
 }
 
-info "Rebuilding NixOS (${VMNAME}) — one dot per build line"
+info "Rebuilding NixOS (${VMNAME})"
 debug "nixos-rebuild switch --flake .#${VMNAME} --impure (full output: ${REBUILD_LOG})"
 # --impure only for the machine's /etc/nixos/hardware-configuration.nix;
 # nixpkgs stays pinned by flake.lock. A dot never swallows an error: on failure

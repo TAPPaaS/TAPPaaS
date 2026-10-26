@@ -772,7 +772,7 @@ main() {
             debug "  Running ${module_dir}/pre-update.sh..."
             cd "${module_dir}"
             if ./pre-update.sh "${module}"; then
-                info "  ${GN}✓${CL} pre-update.sh completed"
+                debug "  ${GN}✓${CL} pre-update.sh completed"
             else
                 fatal_with_rollback "${module}" "${snapshot_created}" "Module pre-update.sh failed"
             fi

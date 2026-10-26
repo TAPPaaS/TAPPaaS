@@ -31,18 +31,25 @@ ck_rc() { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else ec
 # Stub live membership (three nodes) — this is what a grown cluster looks like.
 pbs_cluster_nodes() { printf 'tappaas1\ntappaas2\ntappaas3\n'; }
 
+# The install runs in a subshell (its output is captured), so the stub records
+# its calls in a file.
+CALLS_F="$(mktemp)"; trap 'rm -f "${CALLS_F}"' EXIT
+calls() { tr '\n' ' ' < "${CALLS_F}"; }
+
 # ── all nodes reconciled, all succeed ────────────────────────────────
-CALLS=""
-_pbs_client_install_one() { CALLS+="$1 "; return 0; }
-pbs_client_reconcile mgmt "http://example/pbs" >/dev/null; r=$?
-ck    "reconcile visits every current node" "tappaas1 tappaas2 tappaas3 " "${CALLS}"
+: > "${CALLS_F}"
+_pbs_client_install_one() { echo "$1" >> "${CALLS_F}"; echo "  proxmox-backup-client already present"; return 0; }
+out="$(pbs_client_reconcile mgmt "http://example/pbs")"; r=$?
+ck    "reconcile visits every current node" "tappaas1 tappaas2 tappaas3 " "$(calls)"
+ck    "nothing installed: no line at [Info], no client chatter" "" "${out}"
 ck_rc "reconcile rc 0 when all succeed"     0 "$r"
 
 # ── one node fails: sweep continues, rc becomes 1 ────────────────────
-CALLS=""
-_pbs_client_install_one() { CALLS+="$1 "; [[ "$1" == "tappaas2" ]] && return 1; return 0; }
-pbs_client_reconcile mgmt "http://example/pbs" >/dev/null; r=$?
-ck    "reconcile continues past a failing node" "tappaas1 tappaas2 tappaas3 " "${CALLS}"
+: > "${CALLS_F}"
+_pbs_client_install_one() { echo "$1" >> "${CALLS_F}"; [[ "$1" == "tappaas2" ]] && { echo "  E: apt failed"; return 1; }; return 0; }
+out="$(pbs_client_reconcile mgmt "http://example/pbs")"; r=$?
+ck    "reconcile continues past a failing node" "tappaas1 tappaas2 tappaas3 " "$(calls)"
+ck    "a failing node's output is printed" "  E: apt failed" "${out}"
 ck_rc "reconcile rc 1 when a node fails"        1 "$r"
 
 echo "RESULT: ${PASS} passed, ${FAIL} failed"

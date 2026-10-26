@@ -210,7 +210,7 @@ command -v jq >/dev/null 2>&1 || { error "jq not found"; exit 2; }
 for h in "${GUESTS[@]}"; do reconcile_guest "${h}"; done
 
 if [[ "${DRIFTED}" -eq 0 ]]; then
-    info "collation: every database records the collation it is running"
+    debug "collation: every database records the collation it is running"
     exit 0
 fi
 if [[ "${APPLY}" != "1" ]]; then

@@ -271,7 +271,7 @@ relog_steps() {
         fi
         case "${plain}" in
             "[Warning]"*|"[Error]"*|"[Fatal]"*) printf '%s\n' "${line}" ;;
-            "[Info] Step "[0-9]*) printf '%s\n' "${line}" ;;
+            "[Info] Step "[0-9]*) step_note "${plain#\[Info\] }" ;;   # [Info] on a first install only
             "") ;;
             *) debug "  ${plain#\[Info\] }" ;;
         esac

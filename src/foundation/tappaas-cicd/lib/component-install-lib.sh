@@ -64,7 +64,8 @@ build_and_link_nix_component() {
     out="$(
         nix build "${flake_root}#${name}" --print-out-paths --out-link "${gcroots}/${name}" \
             2> >(tee "${log}" | { _dots=0
-                    while IFS= read -r _; do printf '.' >&2; _dots=1; done
+                    # dots only for someone at a terminal, not into a journal
+                    while IFS= read -r _; do [ -t 2 ] && printf '.' >&2 && _dots=1; done
                     [ "${_dots}" -eq 1 ] && printf '\n' >&2; } )
     )" || {
         echo "  ERROR: nix build failed for ${name} — log tail (full log: ${log}):" >&2
@@ -110,7 +111,8 @@ build_and_link_ts_component() {
                 name = \"${name}\"; kind = \"${kind}\"; src = /. + \"${src}\";
               }" \
             2> >(tee "${log}" | { _dots=0
-                    while IFS= read -r _; do printf '.' >&2; _dots=1; done
+                    # dots only for someone at a terminal, not into a journal
+                    while IFS= read -r _; do [ -t 2 ] && printf '.' >&2 && _dots=1; done
                     [ "${_dots}" -eq 1 ] && printf '\n' >&2; } )
     )" || {
         echo "  ERROR: nix build failed for ${name} — log tail (full log: ${log}):" >&2

@@ -195,14 +195,16 @@ log = logging.getLogger("update-tappaas")
 
 
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
-_LABELLED = {"[Warning]": logging.WARNING, "[Error]": logging.ERROR, "[Fatal]": logging.CRITICAL}
+_LABELLED = {"[Warning]": logging.WARNING, "[Error]": logging.ERROR, "[Fatal]": logging.CRITICAL,
+             # a bash script's own labels: its level, without a second "[Info]"
+             "[Info]": logging.INFO, "[Debug]": logging.DEBUG}
 
 
 def relog_output(text: str) -> None:
     """Relog a manager's human output at the sweep's levels.
 
     The TS managers' info() carries no label, so their lines arrive bare. Here
-    a line's own [Warning]/[Error] label is kept, action lines (indented) and
+    a line's own label ([Info]/[Warning]/[Error], a bash script's) is kept, action lines (indented) and
     the closing summary go to [Info], and the rest (headers, blank lines) is
     [Debug].
     """
@@ -211,7 +213,7 @@ def relog_output(text: str) -> None:
     for i, ln in enumerate(lines):
         label, _, rest = ln.partition(" ")
         if label in _LABELLED:
-            log.log(_LABELLED[label], "  %s", rest)
+            log.log(_LABELLED[label], "  %s", rest.strip())
         elif ln.startswith(" ") or i == len(lines) - 1:
             log.info("  %s", ln.strip())
         else:
@@ -1478,8 +1480,9 @@ def main():
     _coll = Path("/home/tappaas/bin/tappaas-collation-reconcile.sh")
     if _coll.exists():
         _rc = subprocess.run([str(_coll), "--apply"], capture_output=True, text=True)
-        for _line in (_rc.stdout or "").splitlines():
-            log.info("  %s", _line)
+        # Its lines carry their own [Info]/[Warning] label: relogged at that
+        # level, not wrapped in a second "[Info]".
+        relog_output(_rc.stdout or "")
         if _rc.returncode != 0:
             collation_ok = False
             for _line in (_rc.stderr or "").splitlines():

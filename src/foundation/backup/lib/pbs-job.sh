@@ -66,7 +66,7 @@ pbs_node_addr() {
 pbs_ensure_zfs_ordering() {
     local node _out _rc _l
     node="$(pbs_node)"
-    info "${BOLD}Ensuring PBS waits for ZFS mount on ${node} (issue #230)${CL}"
+    debug "Ensuring PBS waits for ZFS mount on ${node} (issue #230)"
     # Route the remote script's per-unit output to [Debug]; surface it on failure.
     _out="$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
         "root@$(pbs_node_addr "${node}")" 'bash -s' 2>&1 <<'REMOTE'

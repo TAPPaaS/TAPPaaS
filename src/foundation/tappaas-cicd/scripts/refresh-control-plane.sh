@@ -202,7 +202,7 @@ _comp_failed=0
 # ui/ is the console (ADR-034): one component, built and linked the same way.
 for _disp in manager controller ui; do
   if [ -x "${_disp}/install.sh" ]; then
-    info "  linking ${_disp}/ components..."
+    debug "  linking ${_disp}/ components..."
     "./${_disp}/install.sh" || { warn "  ${_disp}/install.sh reported non-zero rc"; _comp_failed=$((_comp_failed + 1)); }
   fi
 done
@@ -230,7 +230,7 @@ if [ -f lib/control-plane-components.sh ]; then
   # shellcheck source=../lib/control-plane-components.sh
   . lib/control-plane-components.sh
   _cpc_n="$(jq '[.components[]? | select(.module != "tappaas-cicd")] | length' "${CPC_REGISTRY}" 2>/dev/null || echo 0)"
-  [ "${_cpc_n}" -gt 0 ] && info "  relinking ${_cpc_n} module component(s)..."
+  [ "${_cpc_n}" -gt 0 ] && debug "  relinking ${_cpc_n} module component(s)..."
   cpc_relink || _comp_failed=$((_comp_failed + 1))
 fi
 

@@ -524,6 +524,17 @@ failed = []; dep = {"down": True, "culprit": "x", "last_good": "w", "failures": 
 na = m.run_update_phase(["p", "q"], "foundation", failed, dep)
 assert na == ["p", "q"] and failed == [], f"already-down phase skips all: na={na}"
 
+# relog_output keeps a bash script's own label, never "[Info]   [Info] …".
+import logging
+class _Cap(logging.Handler):
+    def __init__(self): super().__init__(); self.rows = []
+    def emit(self, r): self.rows.append((r.levelno, r.getMessage()))
+_cap = _Cap(); m.log.addHandler(_cap); _lvl = m.log.level; m.log.setLevel(logging.DEBUG)
+m.relog_output("\x1b[32m[Info]\x1b[m collation: 2 database(s) reconciled\n[Debug] detail\n[Warning] careful")
+m.log.removeHandler(_cap); m.log.setLevel(_lvl)
+assert _cap.rows == [(logging.INFO, "  collation: 2 database(s) reconciled"), (logging.DEBUG, "  detail"),
+                     (logging.WARNING, "  careful")], f"relog levels: {_cap.rows}"
+
 # How a run ends: broken (1) vs completed with failed app modules (3).
 ro = m.run_outcome
 assert ro([], [], False, True, "refreshed") == (0, "ok")

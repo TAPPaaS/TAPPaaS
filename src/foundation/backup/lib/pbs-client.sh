@@ -57,14 +57,26 @@ REMOTE
 # Warns (does not die) per node so one unreachable node can't abort the sweep.
 # Args: <zone> <image-location>
 pbs_client_reconcile() {
-    local zone="${1:-mgmt}" image_location="$2" reachable node rc=0
+    local zone="${1:-mgmt}" image_location="$2" reachable node rc=0 out n=0 added=""
     reachable="$(get_node_hostname 0)"
-    info "${BOLD}Reconciling proxmox-backup-client across cluster nodes (#382)${CL}"
+    debug "Reconciling proxmox-backup-client across cluster nodes (#382)"
     while IFS= read -r node; do
         [[ -n "$node" ]] || continue
-        info "  Ensuring proxmox-backup-client on ${BL}${node}${CL}..."
-        _pbs_client_install_one "$node" "$zone" "$image_location" \
-            || { warn "  Failed to ensure proxmox-backup-client on ${node}"; rc=1; }
+        debug "  Ensuring proxmox-backup-client on ${node}..."
+        # Its narration (apt) is [Debug]; printed whole when it fails.
+        if out="$(_pbs_client_install_one "$node" "$zone" "$image_location" 2>&1)"; then
+            while IFS= read -r _l; do [[ -n "${_l}" ]] && debug "  ${_l}"; done <<< "${out}"
+            n=$((n + 1))
+            [[ "${out}" == *"proxmox-backup-client installed"* ]] && added+=" ${node}"
+        else
+            printf '%s\n' "${out}"
+            warn "  Failed to ensure proxmox-backup-client on ${node}"; rc=1
+        fi
     done < <(pbs_cluster_nodes "$reachable" "$zone")
+    if [[ -n "${added}" ]]; then
+        info "  ${GN}✓${CL} proxmox-backup-client installed on${added}"
+    elif [[ ${n} -gt 0 ]]; then
+        debug "  ${GN}✓${CL} proxmox-backup-client on ${n} node(s)"
+    fi
     return "$rc"
 }

@@ -8,7 +8,7 @@ set -euo pipefail
 
 VMNAME="$(get_config_value 'vmname' "$1")"
 NODE="$(get_config_value 'node' "$(get_node_hostname 0)")"
-info "Starting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
+debug "Starting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 
 # ── Control-plane refresh (pull + relink + component build) ──────────
 # Extracted to scripts/refresh-control-plane.sh and hoisted to update-tappaas
@@ -20,7 +20,12 @@ info "Starting TAPPaaS-CICD module update for VM: $VMNAME on node: $NODE"
 # Non-fatal here exactly as it was inline, and reported at the end of this file.
 _refresh="${TAPPAAS_CICD_DIR:-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd}/scripts/refresh-control-plane.sh"
 _comp_failed=0
-if [ -x "${_refresh}" ]; then
+if [ -f "${RUNTIME_DIRECTORY:-/run/update-tappaas}/prepared" ]; then
+  # Inside update-tappaas.service: its prepare step refreshed the control plane
+  # minutes ago (and recorded how that went), so a second pull and relink here
+  # only repeats it — on every nightly run.
+  debug "control plane already refreshed by this run's prepare step"
+elif [ -x "${_refresh}" ]; then
   _rrc=0
   "${_refresh}" || _rrc=$?
   case "${_rrc}" in
@@ -43,10 +48,16 @@ cd /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd || die "TAPPaaS-CICD direct
 # the source of truth for fresh installs; the node-discovery refresh applies only
 # to legacy systems still backed by configuration.json.
 if [[ -f /home/tappaas/config/configuration.json && -x /home/tappaas/bin/create-configuration.sh ]]; then
-    info "Refreshing configuration.json (legacy system)..."
-    /home/tappaas/bin/create-configuration.sh --update || {
+    debug "Refreshing configuration.json (legacy system)..."
+    # Its own narration (discovery, summary, "next steps") is for the operator
+    # who runs it by hand; here it is [Debug], and printed whole if it fails.
+    _cc_out=""
+    if _cc_out="$(/home/tappaas/bin/create-configuration.sh --update 2>&1)"; then
+        while IFS= read -r line; do [ -n "$line" ] && debug "  $line"; done <<< "${_cc_out}"
+    else
+        printf '%s\n' "${_cc_out}"
         warn "Configuration refresh failed. Using existing configuration.json."
-    }
+    fi
 fi
 
 # --- ADR-007 P8 rename leftover: firewall:proxy -> network:proxy ---
@@ -142,7 +153,7 @@ fi
 # (first install before its bin is linked above).
 if command -v network-manager >/dev/null 2>&1 \
    && [ -f /home/tappaas/config/zones.json ]; then
-  info "Reconciling zones.json against upstream (rename-aware 3-way merge)..."
+  debug "Reconciling zones.json against upstream (rename-aware 3-way merge)..."
   network-manager merge 2>&1 | while IFS= read -r line; do debug "  $line"; done \
     || warn "  zones.json merge reported an error — continuing"
 fi
@@ -155,7 +166,7 @@ fi
 # is not yet on PATH (first install before its bin is linked above).
 if command -v network-manager >/dev/null 2>&1 \
    && [ -f /home/tappaas/config/zones.json ]; then
-  info "Checking zones.json consistency (network-manager zones-check)..."
+  debug "Checking zones.json consistency (network-manager zones-check)..."
   # Report-only: this must NEVER abort pre-update. Under `set -e` + `pipefail` a
   # standalone failing pipeline aborts the SCRIPT before the PIPESTATUS check
   # below can run — so a non-zero zones-check (e.g. a mid-migration zones.json)
@@ -185,5 +196,5 @@ fi
 if [ "${_comp_failed}" -gt 0 ]; then
   warn "TAPPaaS-CICD pre-update done, but the control-plane refresh left component bins STALE (see warnings above)."
 else
-  info "${GN}✓${CL} TAPPaaS-CICD pre-update completed successfully."
+  debug "${GN}✓${CL} TAPPaaS-CICD pre-update completed successfully."
 fi

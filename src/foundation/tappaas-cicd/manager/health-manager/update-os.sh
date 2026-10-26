@@ -43,12 +43,19 @@ readonly MGMT="mgmt"
 # warn/error/die are unaffected, and the detail is still recoverable with
 # TAPPAAS_DEBUG=1. A standalone/operator run (health-manager update-os verb,
 # env unset) keeps the normal [Info] output.
-# announce() stays [Info] either way: the one line that says what the progress
-# dots below it are.
+# announce() is the one line that says what the progress dots below it are:
+# [Info] on an operator run, [Debug] inside a module update — and the dots are
+# drawn only for someone at a terminal (DOTS), never into the journal of a
+# nightly run, where they were rows of "." under nothing.
 announce() { [[ "${OPT_SILENT}" -eq 1 ]] || echo -e "${DGN}[Info]${CL} $*"; }
+DOTS=0; [[ -t 1 ]] && DOTS=1
 if [[ "${TAPPAAS_OS_AS_DEBUG:-0}" == "1" ]]; then
     info() { debug "$@"; }
+    announce() { debug "$@"; }
+    DOTS=0
 fi
+# progress — one "." per line read, when DOTS; otherwise it only drains.
+progress() { if [[ "${DOTS}" -eq 1 ]]; then while IFS= read -r _; do printf "."; done; echo ""; else cat >/dev/null; fi; }
 
 # An unguarded command that fails ends the script through `set -e`, printing
 # nothing: #711 saw exactly that — the announce line, then silence, then the
@@ -92,10 +99,9 @@ run_quiet() {
     local _log
     _log="$(mktemp /tmp/tappaas-update-os.XXXXXX.log)"
     set +e
-    "$@" 2>&1 | tee "${_log}" | while IFS= read -r _; do printf "."; done
+    "$@" 2>&1 | tee "${_log}" | progress
     rc=${PIPESTATUS[0]}
     set -e
-    echo ""
     if [[ "${rc}" -ne 0 ]]; then
         error "${desc} failed (exit ${rc}) — last 20 lines of output:"
         tail -n 20 "${_log}" | sed 's/^/    /' >&2
@@ -322,10 +328,9 @@ run_quiet_rc() {
     shift
     RUN_QUIET_LOG="$(mktemp /tmp/tappaas-update-os.XXXXXX.log)"
     set +e
-    "$@" 2>&1 | tee "${RUN_QUIET_LOG}" | while IFS= read -r _; do printf "."; done
+    "$@" 2>&1 | tee "${RUN_QUIET_LOG}" | progress
     rc=${PIPESTATUS[0]}
     set -e
-    echo ""
     if [[ "${rc}" -ne 0 ]]; then
         error "${desc} failed (exit ${rc}) — last 20 lines of output:"
         tail -n 20 "${RUN_QUIET_LOG}" | sed 's/^/    /' >&2

@@ -15,11 +15,11 @@ for d in "${here}"/*/; do
         echo "==> controller/${name}/install.sh"
         "${d}install.sh" "$@" || rc=$?
     elif log="$("${d}install.sh" "$@" 2>&1)"; then
-        printf '.'
+        [ -t 1 ] && printf '.'   # progress for someone at a terminal only
     else
         rc=$?
         printf '\n[controller/%s] install failed:\n%s\n' "${name}" "${log}" >&2
     fi
 done
-[ -n "${TAPPAAS_DEBUG:-}" ] || printf '\n'
+[ -n "${TAPPAAS_DEBUG:-}" ] || { [ -t 1 ] && printf '\n'; } || true
 exit "${rc}"
