@@ -63,11 +63,18 @@ Inventory:
   show <name>
   validate                every access point's location is one of the site's
 
-SSID configuration:
-  ssid <ap> add <ssid> --zone <zone> --security <sec> [--vlan <n>] [--radius <srv>]
-        [--captive] [--disabled]
-  ssid <ap> remove <ssid>
-  ssid <ap> list
+SSIDs (site-wide: every access point broadcasts each one, on its zone's VLAN):
+  ssid add <ssid> --zone <zone> --security <sec> [--radius <srv>] [--captive] [--disabled]
+        [--broadcast-on all|<ap>,<ap>...]
+                          also sets the zone's SSID (one SSID per zone)
+  ssid modify <ssid> [--zone <zone>] [--security <sec>] [--radius <srv>] [--unset radius]
+        [--captive|--no-captive] [--disabled|--enabled] [--broadcast-on all|<ap>,...]
+  ssid remove <ssid>      the SSID, the zone's SSID and its passphrase go
+  ssid list [--json]      zone, VLAN, security, access points, passphrase set or not
+  ssid set-passphrase <ssid> [--file <path>]
+                          the WPA passphrase from stdin or the file's first line,
+                          never an argument; reconcile --apply pushes it
+  ssid <ap> add|remove|list ...   the old per-AP forms, kept for this release
 
   link <ap> --switch <switch> --port <port>     associate AP uplink to a switch port
 
@@ -92,6 +99,11 @@ remove:
 list: --json
 show:
 link: --switch= --port=
+ssid add: --zone= --security= --radius= --captive --disabled --broadcast-on=
+ssid modify: --zone= --security= --radius= --unset= --captive --no-captive --disabled --enabled --broadcast-on=
+ssid remove:
+ssid list: --json
+ssid set-passphrase: --file=
 ssid * add: --zone= --security= --vlan= --radius= --captive --disabled
 ssid * remove:
 ssid * list:
@@ -109,7 +121,7 @@ ensure_files() {
     local f
     for f in "${DESIRED}" "${ACTUAL}"; do
         if [[ ! -f "${f}" ]]; then
-            jq -n '{"$schema":"switch-configuration-schema.json","version":"1.0","switches":{},"accessPoints":{},"wifiController":{}}' > "${f}"
+            jq -n '{"$schema":"switch-configuration-schema.json","version":"1.0","switches":{},"accessPoints":{},"ssids":{},"wifiController":{}}' > "${f}"
         fi
     done
 }
@@ -148,7 +160,8 @@ cmd_add() {
     jq_desired '.accessPoints[$n] = ({vendor:$v, model:$m, managementIp:$ip, ssids:{}}
                 + (if $loc == "" then {} else {location:$loc} end) + (if $d == "" then {} else {description:$d} end))' \
         --arg n "${name}" --arg v "${vendor}" --arg m "${model}" --arg ip "${ip}" --arg loc "${location}" --arg d "${description}"
-    info "${GN}✓${CL} added AP '${name}' (${vendor}${location:+, at ${location}})"
+    derive_ap_ssids
+    info "${GN}✓${CL} added AP '${name}' (${vendor}${location:+, at ${location}})$(jq -r --arg n "${name}" '.accessPoints[$n].ssids | keys | if length > 0 then ", broadcasting " + join(", ") else "" end' "${DESIRED}")"
 }
 
 # modify <name> [--location <n>] [--description <d>] [--model <m>] [--ip <ip>]
@@ -205,8 +218,13 @@ cmd_remove() {
     [[ -n "${name}" ]] || die "remove requires a <name>"
     jq -e --arg n "${name}" '.accessPoints | has($n)' "${DESIRED}" >/dev/null \
         || die "AP '${name}' not found"
-    jq_desired 'del(.accessPoints[$n])' --arg n "${name}"
+    # An SSID broadcast on a list of APs loses this one; one left on none says so.
+    jq_desired 'del(.accessPoints[$n])
+        | if has("ssids") then .ssids |= map_values(if (.broadcastOn | type) == "array" then .broadcastOn -= [$n] else . end) else . end' --arg n "${name}"
     info "${GN}✓${CL} removed AP '${name}'"
+    jq -r '.ssids // {} | to_entries[] | select(.value.broadcastOn == []) | .key' "${DESIRED}" | while IFS= read -r s; do
+        warn "  SSID '${s}' is now broadcast by no access point: ap-manager ssid modify '${s}' --broadcast-on all"
+    done
 }
 
 cmd_list() {
@@ -250,52 +268,415 @@ cmd_link() {
     info "${GN}✓${CL} linked AP '${ap}' → ${switch}:${port}"
 }
 
-# ── SSID subcommands ─────────────────────────────────────────────────
+# ── SSIDs: site-wide networks (#889) ─────────────────────────────────
+#
+# An SSID is ONE site-wide network in desired `.ssids{<name>}`: the zone it
+# bridges to, how clients join, and which access points broadcast it
+# (`broadcastOn`: "all", the default, or a list of APs). The VLAN is the zone's.
+# The zone's own `SSID` field names it; ap-manager owns that field and writes it
+# through network-manager set-ssid, so zones.json keeps one writer. The
+# passphrase lives only in the secrets file (wlan-lib.sh); setting one marks the
+# SSID `passphraseChanged` so the next reconcile pushes it to every AP.
+#
+# Each AP's `ssids{}` is DERIVED from the site-wide list (derive_ap_ssids), in
+# the shape the vendor controllers read: {vlan, zone, security, enabled,
+# radiusServer?, captivePortal?}. It is rewritten by every change here.
 
-cmd_ssid() {
-    local ap="$1" sub="$2"; shift 2 2>/dev/null || die "ssid requires <ap> <add|remove|list>"
-    [[ -n "${ap}" ]] || die "ssid requires an <ap>"
-    jq -e --arg n "${ap}" '.accessPoints | has($n)' "${DESIRED}" >/dev/null \
-        || die "AP '${ap}' not found"
-    case "${sub}" in
-        add)    _ssid_add "${ap}" "$@" ;;
-        remove) _ssid_remove "${ap}" "${1:-}" ;;
-        list)   jq --arg n "${ap}" '.accessPoints[$n].ssids' "${DESIRED}" ;;
-        *) die "ssid: unknown subcommand '${sub}' (add|remove|list)" ;;
-    esac
+readonly SECURITIES="open wpa2-personal wpa3-personal wpa2-enterprise wpa3-enterprise"
+# ap-manager's writer of the zone's SSID (network-manager set-ssid).
+NETWORK_MANAGER="${AP_NETWORK_MANAGER:-network-manager}"
+
+is_personal() { [[ "$1" == wpa2-personal || "$1" == wpa3-personal ]]; }
+is_enterprise() { [[ "$1" == wpa2-enterprise || "$1" == wpa3-enterprise ]]; }
+
+ssid_entry() { jq -c --arg s "$1" '.ssids[$s] // null' "${DESIRED}"; }
+zone_exists() { jq -e --arg z "$1" 'has($z) and ($z | startswith("_") | not)' "${ZONES_FILE}" >/dev/null; }
+zone_ssid() { jq -r --arg z "$1" '.[$z].SSID // "" | strings' "${ZONES_FILE}"; }
+ap_exists() { jq -e --arg n "$1" '.accessPoints // {} | has($n)' "${DESIRED}" >/dev/null; }
+
+# Rewrite every AP's ssids{} from the site-wide list. The VLAN is the zone's
+# vlantag (0 when the zone is missing — delta says so).
+# Per-AP SSIDs and no site-wide list: a site that has not run migration 0025.
+# Deriving would wipe them, so every verb that writes stops before it starts.
+require_site_wide() {
+    if jq -e '(has("ssids") | not) and ([.accessPoints // {} | .[] | .ssids // {} | length] | add // 0) > 0' "${DESIRED}" >/dev/null; then
+        die "the access points still declare SSIDs one by one: migration 0025 folds them into the site-wide list (site-manager update runs it) — nothing changed"
+    fi
 }
 
-_ssid_add() {
-    local ap="$1" ssid="$2"; shift 2 2>/dev/null || die "ssid add requires <ssid-name>"
-    [[ -n "${ssid}" ]] || die "ssid add requires <ssid-name>"
-    local zone="" security="" vlan="" radius="" captive="false" enabled="true"
+derive_ap_ssids() {
+    require_site_wide
+    jq_desired '(.ssids // {}) as $ss
+        | .accessPoints = ((.accessPoints // {}) | with_entries(.key as $ap | .value.ssids = (
+            $ss | with_entries(
+                select((.value.broadcastOn // "all") == "all" or ((.value.broadcastOn | type) == "array" and any(.value.broadcastOn[]; . == $ap)))
+                | .value = ({vlan: ($z[0][.value.zone].vlantag // 0), zone: .value.zone, security: .value.security,
+                             enabled: (.value.disabled != true)}
+                            + (if (.value.radius // "") != "" then {radiusServer: .value.radius} else {} end)
+                            + (if .value.captive == true then {captivePortal: true} else {} end))))))' \
+        --slurpfile z "${ZONES_FILE}"
+}
+
+# The APs that broadcast <ssid>, one per line.
+ssid_aps() {
+    jq -r --arg s "$1" '.accessPoints // {} | to_entries[] | select(.value.ssids // {} | has($s)) | .key' "${DESIRED}"
+}
+
+# The passphrase state of an SSID: "not needed" (open or enterprise), "not set",
+# "changed" (set, not pushed yet) or "set".
+passphrase_state() {
+    local s="$1" sec="$2" changed="$3"
+    if ! is_personal "${sec}"; then echo "not needed"
+    elif ! wlan_secret_has "${s}"; then echo "not set"
+    elif [[ "${changed}" == true ]]; then echo "changed"
+    else echo "set"; fi
+}
+
+# --broadcast-on all|<ap>,<ap>… → JSON ("all" or a list of existing APs).
+parse_broadcast_on() {
+    local v="$1" ap list='[]'
+    if [[ "${v}" == all ]]; then echo '"all"'; return 0; fi
+    IFS=',' read -ra aps <<<"${v}"
+    for ap in "${aps[@]}"; do
+        ap="${ap#"${ap%%[![:space:]]*}"}"; ap="${ap%"${ap##*[![:space:]]}"}"
+        [[ -n "${ap}" ]] || continue
+        ap_exists "${ap}" || die "--broadcast-on: no access point '${ap}' (ap-manager list)"
+        list=$(jq -c --arg a "${ap}" 'if index([$a]) then . else . + [$a] end' <<<"${list}")
+    done
+    [[ "${list}" != '[]' ]] || die "--broadcast-on: 'all', or the access points by name, comma-separated"
+    echo "${list}"
+}
+
+# Write <ssid>'s entry (old → new; either may be null) and keep the zone's SSID
+# field and every AP's derived view in step. The zone is written first: a
+# refusal there leaves the desired state as it was.
+ssid_commit() {
+    local s="$1" old="$2" new="$3" oldzone newzone
+    oldzone=$(jq -r '.zone? // ""' <<<"${old}")
+    newzone=$(jq -r '.zone? // ""' <<<"${new}")
+    if [[ -n "${newzone}" && "$(zone_ssid "${newzone}")" != "${s}" ]]; then
+        "${NETWORK_MANAGER}" set-ssid "${newzone}" "${s}" --zones-file "${ZONES_FILE}" \
+            || die "zone '${newzone}': its SSID could not be set (network-manager set-ssid) — nothing changed"
+    fi
+    if [[ -n "${oldzone}" && "${oldzone}" != "${newzone}" && "$(zone_ssid "${oldzone}")" == "${s}" ]]; then
+        "${NETWORK_MANAGER}" set-ssid "${oldzone}" --clear --zones-file "${ZONES_FILE}" \
+            || warn "zone '${oldzone}' still names SSID '${s}': network-manager set-ssid ${oldzone} --clear"
+    fi
+    if [[ "${new}" == null ]]; then
+        jq_desired 'del(.ssids[$s])' --arg s "${s}"
+    else
+        jq_desired '.ssids = ((.ssids // {}) + {($s): $o})' --arg s "${s}" --argjson o "${new}"
+    fi
+    derive_ap_ssids
+}
+
+# After a change: the APs over their ceiling, a UniFi AP left out of a list
+# (its controller broadcasts every WLAN on all its APs for now), and the next step.
+ssid_after() {
+    local s="$1" e ap
+    while IFS= read -r ap; do
+        [[ -n "${ap}" ]] && { warn_ssid_ceiling "${ap}" || true; }
+    done < <(jq -r '.accessPoints // {} | keys[]' "${DESIRED}")
+    e=$(ssid_entry "${s}")
+    [[ "${e}" != null ]] || return 0
+    if [[ "$(jq -r '.broadcastOn // "all" | type' <<<"${e}")" == array ]]; then
+        while IFS= read -r ap; do
+            [[ -n "${ap}" ]] && warn "  ${ap} is a UniFi access point: the UniFi controller broadcasts '${s}' on all its access points until its plugin supports a list"
+        done < <(jq -r --argjson e "${e}" '.accessPoints // {} | to_entries[] | select(.value.vendor == "unifi" and ([.key] | inside($e.broadcastOn) | not)) | .key' "${DESIRED}")
+    fi
+    if is_personal "$(jq -r .security <<<"${e}")" && ! wlan_secret_has "${s}"; then
+        info "  next: its passphrase — ap-manager ssid set-passphrase '${s}' (from stdin or --file)"
+    fi
+    if [[ -z "$(ssid_aps "${s}")" && "$(jq -r '.accessPoints // {} | length' "${DESIRED}")" -eq 0 ]]; then
+        info "  no access point yet: ap-manager add <name> --vendor <v>"
+    fi
+    info "  to program the access points: ap-manager reconcile --apply"
+}
+
+# ssid add <ssid> --zone <z> --security <sec> [--radius <r>] [--captive] [--disabled] [--broadcast-on all|<ap>,…]
+ssid_add() {
+    local s="${1:-}"; shift || true
+    [[ -n "${s}" ]] || die "ssid add requires <ssid>"
+    local why; why="$(wlan_ssid_problem "${s}")"; [[ -z "${why}" ]] || die "ssid add '${s}': ${why}"
+    [[ "$(ssid_entry "${s}")" == null ]] || die "SSID '${s}' already exists — change it with: ap-manager ssid modify '${s}' …"
+    local zone="" security="" radius="" captive=false disabled=false bon='"all"'
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --zone) zone="$2"; shift 2 ;;
             --security) security="$2"; shift 2 ;;
-            --vlan) vlan="$2"; shift 2 ;;
             --radius) radius="$2"; shift 2 ;;
-            --captive) captive="true"; shift ;;
-            --disabled) enabled="false"; shift ;;
+            --captive) captive=true; shift ;;
+            --disabled) disabled=true; shift ;;
+            --broadcast-on) bon="$(parse_broadcast_on "$2")"; shift 2 ;;
+            *) die "ssid add: unknown option '$1'" ;;
+        esac
+    done
+    [[ -n "${zone}" ]] || die "ssid add requires --zone"
+    [[ -n "${security}" ]] || die "ssid add requires --security (${SECURITIES// /, })"
+    ssid_check_settings "${s}" "${zone}" "${security}" "${radius}"
+    local new
+    new=$(ssid_object "${zone}" "${security}" "${radius}" "${captive}" "${disabled}" "${bon}" false)
+    ssid_commit "${s}" null "${new}"
+    info "${GN}✓${CL} SSID '${s}' → zone ${zone} (VLAN $(jq -r --arg z "${zone}" '.[$z].vlantag // "?"' "${ZONES_FILE}")), ${security}, on $(ssid_on_text "${s}")"
+    ssid_after "${s}"
+}
+
+# The site-wide entry, written the same way by add, modify and the old forms.
+ssid_object() {
+    jq -nc --arg z "$1" --arg sec "$2" --arg r "$3" --argjson cap "$4" --argjson dis "$5" --argjson bon "$6" --argjson ch "$7" \
+        '{zone: $z, security: $sec}
+         + (if $r != "" then {radius: $r} else {} end)
+         + (if $cap then {captive: true} else {} end)
+         + (if $dis then {disabled: true} else {} end)
+         + {broadcastOn: $bon}
+         + (if $ch then {passphraseChanged: true} else {} end)'
+}
+
+# Where it is broadcast, for a message.
+ssid_on_text() {
+    local aps; aps="$(ssid_aps "$1" | paste -sd, -)"
+    if [[ "$(jq -r --arg s "$1" '.ssids[$s].broadcastOn // "all" | type' "${DESIRED}")" == string ]]; then
+        echo "every access point${aps:+ (${aps//,/, })}"
+    else
+        echo "${aps:-no access point}"
+    fi
+}
+
+# The zone exists, can carry WiFi and carries no other SSID; the security is
+# one ap-manager knows; a RADIUS server goes with enterprise only.
+ssid_check_settings() {
+    local s="$1" zone="$2" security="$3" radius="$4" other cur
+    zone_exists "${zone}" || die "zone '${zone}' not found in ${ZONES_FILE} (network-manager list)"
+    [[ " ${SECURITIES} " == *" ${security} "* ]] || die "--security '${security}': one of ${SECURITIES// /, }"
+    [[ -z "${radius}" ]] || is_enterprise "${security}" || die "--radius goes with wpa2-enterprise or wpa3-enterprise"
+    other=$(jq -r --arg z "${zone}" --arg s "${s}" '[.ssids // {} | to_entries[] | select(.value.zone == $z and .key != $s) | .key] | first // ""' "${DESIRED}")
+    [[ -z "${other}" ]] || die "zone '${zone}' already carries SSID '${other}' — one SSID per zone: ap-manager ssid remove '${other}', or ssid modify '${other}' --zone <another>"
+    cur="$(zone_ssid "${zone}")"
+    if [[ -n "${cur}" && "${cur}" != "${s}" ]] && ! is_placeholder "${cur}"; then
+        info "  zone '${zone}' named SSID '${cur}', which no access point declared: it now names '${s}'"
+    fi
+    return 0
+}
+
+# ssid modify <ssid> [--zone z] [--security s] [--radius r | --unset radius]
+#   [--captive | --no-captive] [--disabled | --enabled] [--broadcast-on all|<ap>,…]
+ssid_modify() {
+    local s="${1:-}"; shift || true
+    [[ -n "${s}" ]] || die "ssid modify requires <ssid>"
+    local old; old=$(ssid_entry "${s}")
+    [[ "${old}" != null ]] || die "SSID '${s}' not found (ap-manager ssid list)"
+    local zone security radius captive disabled bon changed=0 f
+    zone=$(jq -r .zone <<<"${old}"); security=$(jq -r .security <<<"${old}"); radius=$(jq -r '.radius // ""' <<<"${old}")
+    captive=$(jq -r '.captive == true' <<<"${old}"); disabled=$(jq -r '.disabled == true' <<<"${old}")
+    bon=$(jq -c '.broadcastOn // "all"' <<<"${old}")
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --zone) zone="$2"; shift 2 ;;
+            --security) security="$2"; shift 2 ;;
+            --radius) radius="$2"; shift 2 ;;
+            --captive) captive=true; shift ;;
+            --no-captive) captive=false; shift ;;
+            --disabled) disabled=true; shift ;;
+            --enabled) disabled=false; shift ;;
+            --broadcast-on) bon="$(parse_broadcast_on "$2")"; shift 2 ;;
+            --unset)
+                for f in ${2//,/ }; do
+                    [[ "${f}" == radius ]] || die "ssid modify --unset: only radius (got '${f}')"
+                    radius=""
+                done
+                shift 2 ;;
+            *) die "ssid modify: unknown option '$1'" ;;
+        esac
+        changed=1
+    done
+    [[ "${changed}" -eq 1 ]] || die "ssid modify: nothing to change (--zone, --security, --radius, --captive, --disabled, --enabled, --broadcast-on, --unset radius)"
+    is_enterprise "${security}" || radius=""
+    ssid_check_settings "${s}" "${zone}" "${security}" "${radius}"
+    local new
+    new=$(ssid_object "${zone}" "${security}" "${radius}" "${captive}" "${disabled}" "${bon}" "$(jq -r '.passphraseChanged == true' <<<"${old}")")
+    if [[ "$(jq -S . <<<"${new}")" == "$(jq -S . <<<"${old}")" ]]; then
+        if [[ "$(zone_ssid "${zone}")" != "${s}" ]]; then
+            ssid_commit "${s}" "${old}" "${new}"   # the zone's SSID only
+            info "${GN}✓${CL} zone '${zone}' names SSID '${s}' again"
+            return 0
+        fi
+        info "SSID '${s}': already as requested — no change"
+        return 0
+    fi
+    ssid_commit "${s}" "${old}" "${new}"
+    info "${GN}✓${CL} SSID '${s}': $(jq -r -n --argjson o "${old}" --argjson n "${new}" \
+        '[($n | keys_unsorted[]) as $k | select($k != "passphraseChanged" and $o[$k] != $n[$k]) | "\($k) \($o[$k] // "-" | tostring) → \($n[$k] | tostring)"]
+         + [($o | keys_unsorted[]) as $k | select($n | has($k) | not) | "\($k) removed"] | join(", ")')"
+    ssid_after "${s}"
+}
+
+# ssid remove <ssid>: the network goes, the zone's SSID with it, and its passphrase.
+ssid_remove() {
+    local s="${1:-}"
+    [[ -n "${s}" ]] || die "ssid remove requires <ssid>"
+    local old; old=$(ssid_entry "${s}")
+    [[ "${old}" != null ]] || die "SSID '${s}' not found (ap-manager ssid list)"
+    ssid_commit "${s}" "${old}" null
+    wlan_secret_del "${s}"
+    info "${GN}✓${CL} removed SSID '${s}' (zone $(jq -r .zone <<<"${old}"))"
+    info "  ap-manager reconcile shows it to remove on each access point that still broadcasts it"
+}
+
+# ssid list [--json]: every site-wide SSID with its zone, VLAN, security, where
+# it is broadcast and whether its passphrase is set — never the passphrase.
+ssid_list() {
+    local json
+    json=$(jq -c --slurpfile z "${ZONES_FILE}" '
+        . as $d | [(.ssids // {}) | to_entries[] | .key as $s | .value as $v | {
+            name: $s, zone: $v.zone, vlan: ($z[0][$v.zone].vlantag // null), security: $v.security,
+            radius: ($v.radius // null), captive: ($v.captive == true), disabled: ($v.disabled == true),
+            broadcastOn: ($v.broadcastOn // "all"),
+            accessPoints: [$d.accessPoints // {} | to_entries[] | select(.value.ssids // {} | has($s)) | .key],
+            passphraseChanged: ($v.passphraseChanged == true)}]' "${DESIRED}")
+    local i n s sec ch out='[]' st
+    n=$(jq 'length' <<<"${json}")
+    for ((i = 0; i < n; i++)); do
+        s=$(jq -r --argjson i "${i}" '.[$i].name' <<<"${json}")
+        sec=$(jq -r --argjson i "${i}" '.[$i].security' <<<"${json}")
+        ch=$(jq -r --argjson i "${i}" '.[$i].passphraseChanged' <<<"${json}")
+        st=$(passphrase_state "${s}" "${sec}" "${ch}")
+        out=$(jq -c --argjson i "${i}" --arg st "${st}" --argjson j "${json}" '. + [$j[$i] + {passphrase: $st}]' <<<"${out}")
+    done
+    if [[ "${1:-}" == --json ]]; then jq . <<<"${out}"; return 0; fi
+    info "${BOLD}SSIDs ($(jq length <<<"${out}")):${CL}"
+    jq -r '.[] | "  \(.name)  zone \(.zone) (VLAN \(.vlan // "?"))  \(.security)\(if .disabled then "  disabled" else "" end)  passphrase \(.passphrase)  on \(if .broadcastOn == "all" then "all" else (.broadcastOn | join(",")) end): \(.accessPoints | join(", ") | if . == "" then "-" else . end)"' <<<"${out}"
+    return 0
+}
+
+# ssid set-passphrase <ssid> [--file <path>]: the WPA passphrase, from the file's
+# first line or stdin (asked twice, hidden, at a terminal) — never an argument,
+# which would land in the shell history and the process list. Stored in the
+# secrets file; the SSID is marked so the next reconcile pushes it.
+ssid_set_passphrase() {
+    local s="${1:-}"; shift || true
+    [[ -n "${s}" ]] || die "ssid set-passphrase requires <ssid> (the passphrase comes from stdin or --file)"
+    local file=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --file) file="$2"; shift 2 ;;
+            *) die "ssid set-passphrase: '$1' — the passphrase is never an argument: pipe it on stdin or use --file <path>" ;;
+        esac
+    done
+    local e; e=$(ssid_entry "${s}")
+    [[ "${e}" != null ]] || die "SSID '${s}' not found — declare it first: ap-manager ssid add '${s}' --zone <zone> --security wpa2-personal"
+    local sec; sec=$(jq -r .security <<<"${e}")
+    is_personal "${sec}" || die "SSID '${s}' is ${sec}: only wpa2-personal and wpa3-personal take a passphrase"
+    local pass="" p2 why
+    if [[ -n "${file}" ]]; then
+        [[ -r "${file}" ]] || die "--file ${file}: not readable"
+        IFS= read -r pass < "${file}" || true
+    elif [[ -t 0 ]]; then
+        read -rs -p "passphrase for ${s}: " pass; echo >&2
+        read -rs -p "again: " p2; echo >&2
+        [[ "${pass}" == "${p2}" ]] || die "the two passphrases differ — nothing stored"
+    else
+        IFS= read -r pass || true
+    fi
+    pass="${pass%$'\r'}"
+    why="$(wlan_passphrase_problem "${pass}")"; [[ -z "${why}" ]] || die "SSID '${s}': ${why} — nothing stored"
+    if [[ "$(wlan_secret_get "${s}")" == "${pass}" ]]; then
+        info "SSID '${s}': that passphrase is already stored — no change"
+        return 0
+    fi
+    wlan_secret_set "${s}" "${pass}"
+    jq_desired '.ssids[$s].passphraseChanged = true' --arg s "${s}"
+    info "${GN}✓${CL} passphrase for '${s}' stored in ${WLAN_SECRETS_FILE} (mode 600)"
+    info "  ap-manager reconcile --apply pushes it to $(ssid_on_text "${s}")"
+}
+
+# ── The per-AP forms, kept for one release ────────────────────────────
+#
+#   ssid <ap> add <ssid> …   → ssid add (or modify, when it exists): every AP
+#                              broadcasts it; --vlan must be the zone's.
+#   ssid <ap> remove <ssid>  → <ap> stops broadcasting it; the SSID goes when
+#                              no access point would broadcast it.
+#   ssid <ap> list           → the SSIDs <ap> broadcasts, as before.
+legacy_note() { echo "[Info]  'ap-manager ssid <ap> $1' is the old per-AP form, kept for this release: SSIDs are site-wide now — ap-manager ssid $1 …" >&2; }
+
+legacy_ssid_add() {
+    local ap="$1" s="${2:-}"; shift 2 2>/dev/null || die "ssid <ap> add requires <ssid>"
+    local -a pass=()
+    local vlan="" zone="" security="" radius="" captive=false disabled=false
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --vlan) vlan="$2"; shift 2 ;;
+            --zone) zone="$2"; pass+=("$1" "$2"); shift 2 ;;
+            --security) security="$2"; pass+=("$1" "$2"); shift 2 ;;
+            --radius) radius="$2"; pass+=("$1" "$2"); shift 2 ;;
+            --captive) captive=true; pass+=("$1"); shift ;;
+            --disabled) disabled=true; pass+=("$1"); shift ;;
             *) die "ssid add: unknown option '$1'" ;;
         esac
     done
     [[ -n "${zone}" ]] || die "ssid add requires --zone"
     [[ -n "${security}" ]] || die "ssid add requires --security"
-    # Default the VLAN from the zone if not given.
-    if [[ -z "${vlan}" ]]; then
-        vlan=$(vmnet_zone_vlantag "${zone}" "${ZONES_FILE}" 2>/dev/null || true)
-        [[ -n "${vlan}" ]] || die "could not resolve VLAN for zone '${zone}'; pass --vlan"
+    if [[ -n "${vlan}" ]]; then
+        local zv; zv=$(jq -r --arg z "${zone}" '.[$z].vlantag // ""' "${ZONES_FILE}")
+        [[ "${vlan}" == "${zv}" ]] || die "--vlan ${vlan}: an SSID is on its zone's VLAN (zone '${zone}' is VLAN ${zv:-?}); pick the zone instead"
     fi
-    local obj
-    obj=$(jq -n --argjson v "${vlan}" --arg z "${zone}" --arg s "${security}" \
-        --argjson cap "${captive}" --argjson en "${enabled}" --arg r "${radius}" \
-        '{vlan:$v, zone:$z, security:$s, enabled:$en}
-         + (if $cap then {captivePortal:true} else {} end)
-         + (if $r!="" then {radiusServer:$r} else {} end)')
-    jq_desired '.accessPoints[$n].ssids[$ssid] = $o' --arg n "${ap}" --arg ssid "${ssid}" --argjson o "${obj}"
-    info "${GN}✓${CL} ${ap} SSID '${ssid}': $(jq -c . <<< "${obj}")"
-    warn_ssid_ceiling "${ap}" || true   # a warning here; delta counts it
+    local old; old=$(ssid_entry "${s}")
+    if [[ "${old}" == null ]]; then
+        ssid_add "${s}" "${pass[@]}"
+        return 0
+    fi
+    # It exists: the old form replaced the entry, so its settings are the ones given.
+    local -a mod=(--zone "${zone}" --security "${security}")
+    if [[ -n "${radius}" ]]; then mod+=(--radius "${radius}"); else mod+=(--unset radius); fi
+    if [[ "${captive}" == true ]]; then mod+=(--captive); else mod+=(--no-captive); fi
+    if [[ "${disabled}" == true ]]; then mod+=(--disabled); else mod+=(--enabled); fi
+    local bon; bon=$(jq -c '.broadcastOn // "all"' <<<"${old}")
+    if [[ "$(jq -r 'type' <<<"${bon}")" == array ]]; then
+        mod+=(--broadcast-on "$(jq -r --arg a "${ap}" '(if index([$a]) then . else . + [$a] end) | join(",")' <<<"${bon}")")
+    fi
+    ssid_modify "${s}" "${mod[@]}"
+}
+
+legacy_ssid_remove() {
+    local ap="$1" s="${2:-}"
+    [[ -n "${s}" ]] || die "ssid remove requires <ssid-name>"
+    jq -e --arg n "${ap}" --arg s "${s}" '.accessPoints[$n].ssids // {} | has($s)' "${DESIRED}" >/dev/null \
+        || die "SSID '${s}' not found on AP '${ap}'"
+    local old rest
+    old=$(ssid_entry "${s}")
+    rest=$(ssid_aps "${s}" | { grep -vxF -- "${ap}" || true; } | paste -sd, -)
+    if [[ "${old}" == null || -z "${rest}" ]]; then
+        if [[ "${old}" == null ]]; then
+            derive_ap_ssids
+        else
+            ssid_remove "${s}"
+        fi
+        return 0
+    fi
+    ssid_modify "${s}" --broadcast-on "${rest}"
+}
+
+cmd_ssid() {
+    local first="${1:-}"
+    [[ "${first}" == list || "${2:-}" == list ]] || require_site_wide
+    case "${first}" in
+        add)            shift; ssid_add "$@" ;;
+        modify)         shift; ssid_modify "$@" ;;
+        remove)         shift; ssid_remove "${1:-}" ;;
+        list)           shift; ssid_list "${1:-}" ;;
+        set-passphrase) shift; ssid_set_passphrase "$@" ;;
+        "") die "ssid requires add|modify|remove|list|set-passphrase (see ap-manager ssid --help)" ;;
+        *)
+            local ap="${first}" sub="${2:-}"
+            shift 2 2>/dev/null || die "ssid requires add|modify|remove|list|set-passphrase"
+            ap_exists "${ap}" || die "AP '${ap}' not found (or '${ap}' is not an ssid verb: add|modify|remove|list|set-passphrase)"
+            case "${sub}" in
+                add)    legacy_note add; legacy_ssid_add "${ap}" "$@" ;;
+                remove) legacy_note remove; legacy_ssid_remove "${ap}" "${1:-}" ;;
+                list)   jq --arg n "${ap}" '.accessPoints[$n].ssids // {}' "${DESIRED}" ;;
+                *) die "ssid: unknown subcommand '${sub}' (add|remove|list)" ;;
+            esac
+            ;;
+    esac
 }
 
 # Say so when an AP broadcasts more SSIDs than its ceiling (wlan-lib.sh). Before
@@ -308,15 +689,6 @@ warn_ssid_ceiling() {
     warn "  AP '${ap}' broadcasts ${n} SSIDs, more than ${max}: each one beacons on every radio and takes airtime from the rest"
     warn "    fold zones onto fewer SSIDs, or accept it for this AP: set .accessPoints[\"${ap}\"].maxSsids"
     return 1
-}
-
-_ssid_remove() {
-    local ap="$1" ssid="$2"
-    [[ -n "${ssid}" ]] || die "ssid remove requires <ssid-name>"
-    jq -e --arg n "${ap}" --arg s "${ssid}" '.accessPoints[$n].ssids | has($s)' "${DESIRED}" >/dev/null \
-        || die "SSID '${ssid}' not found on AP '${ap}'"
-    jq_desired 'del(.accessPoints[$n].ssids[$s])' --arg n "${ap}" --arg s "${ssid}"
-    info "${GN}✓${CL} removed SSID '${ssid}' from AP '${ap}'"
 }
 
 # ── Phase 0: update-desired (track SSID vlan from its zone) ──────────
@@ -549,6 +921,7 @@ main() {
     shift || true
     [[ -f "${ZONES_FILE}" ]] || die "zones.json not found: ${ZONES_FILE}"
     ensure_files
+    case "${cmd}" in add|remove|update-desired|apply|confirm|reconcile) require_site_wide ;; esac
     # One vendor login per run, shared by every AP's controller run (#733).
     UNIFI_SESSION="$(mktemp -d)"
     export UNIFI_SESSION

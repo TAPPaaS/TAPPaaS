@@ -138,8 +138,8 @@ export function wifiSpecs(p: WifiPlan): { remove: StepSpec | null; add: StepSpec
   const add: Values = { "@ssid": p.ssid, "--zone": p.zone, "--security": p.security };
   if (p.vlan !== null) add["--vlan"] = String(p.vlan);
   return {
-    remove: p.replace ? { bin: "ap-manager", verb: "ssid remove", words: ["ssid", p.replace.ap, "remove"], initial: { "@ssid": p.replace.ssid } } : null,
-    add: { bin: "ap-manager", verb: "ssid add", words: ["ssid", p.ap, "add"], initial: add },
+    remove: p.replace ? { bin: "ap-manager", verb: "ssid <ap> remove", words: ["ssid", p.replace.ap, "remove"], initial: { "@ssid": p.replace.ssid } } : null,
+    add: { bin: "ap-manager", verb: "ssid <ap> add", words: ["ssid", p.ap, "add"], initial: add },
     reconcile: { bin: "ap-manager", verb: "reconcile", initial: {} },
   };
 }

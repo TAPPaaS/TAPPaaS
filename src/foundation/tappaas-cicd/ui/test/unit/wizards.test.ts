@@ -44,7 +44,7 @@ check(wifiZones([{ name: "lab", type: "Client", vlantag: 330 }], aps).length ===
 // ── the form's checks ─────────────────────────────────────────────────
 check(needsPassphrase("wpa2-personal") && needsPassphrase("wpa3-personal") && !needsPassphrase("open") && !needsPassphrase("wpa2-enterprise"), "a personal mode takes a passphrase; open and enterprise do not");
 check(ssidProblem("hrossen-home") === null && ssidProblem("") !== null && ssidProblem("a=b") !== null && ssidProblem("x".repeat(33)) !== null && ssidProblem("<HOME_SSID>") !== null, "an SSID: 1–32 characters, no '=', not a placeholder");
-const sec = verbOf("ap-manager", "ssid add").options.find((o) => o.flag === "--security")!;
+const sec = verbOf("ap-manager", "ssid <ap> add").options.find((o) => o.flag === "--security")!;
 check(JSON.stringify(sec.choices) === '["wpa2-personal","wpa3-personal","open","wpa2-enterprise","wpa3-enterprise"]', "security: the controller's choices, from its manifest");
 
 // ── the argv of each step ─────────────────────────────────────────────
@@ -55,14 +55,14 @@ check(ssidPassphrases([], ["Rossen"]).length === 0 && ssidPassphrases(aps, []).l
 
 const add = wifiSpecs({ ap: "Nano HD", ssid: "hrossen-home", zone: "home", vlan: 310, security: "wpa2-personal", replace: null });
 check(add.remove === null, "Add: nothing to remove");
-check(argv(add.add, verbOf("ap-manager", "ssid add")) === JSON.stringify(["ap-manager", "ssid", "Nano HD", "add", "hrossen-home", "--zone", "home", "--security", "wpa2-personal", "--vlan", "310"]), "ssid add: the AP as its word, the SSID, --zone, --security, --vlan");
+check(argv(add.add, verbOf("ap-manager", "ssid <ap> add")) === JSON.stringify(["ap-manager", "ssid", "Nano HD", "add", "hrossen-home", "--zone", "home", "--security", "wpa2-personal", "--vlan", "310"]), "ssid add: the AP as its word, the SSID, --zone, --security, --vlan");
 check(argv(add.reconcile, verbOf("ap-manager", "reconcile")) === JSON.stringify(["ap-manager", "reconcile"]), "reconcile: the preview runs without --apply (the job model adds it)");
 check(!JSON.stringify(add).includes("passphrase"), "the passphrase is in no step");
 const ch = wifiSpecs({ ap: "Nano HD", ssid: "hrossen-home", zone: "home", vlan: 310, security: "wpa3-personal", replace: { ap: "Nano HD", ssid: "Rossen" } });
-check(argv(ch.remove!, verbOf("ap-manager", "ssid remove")) === JSON.stringify(["ap-manager", "ssid", "Nano HD", "remove", "Rossen"]), "Change: ssid remove of the old SSID first");
-check(verbOf("ap-manager", "ssid remove").destructive, "…which is destructive: its name typed, the Installer role");
+check(argv(ch.remove!, verbOf("ap-manager", "ssid <ap> remove")) === JSON.stringify(["ap-manager", "ssid", "Nano HD", "remove", "Rossen"]), "Change: ssid remove of the old SSID first");
+check(verbOf("ap-manager", "ssid <ap> remove").destructive, "…which is destructive: its name typed, the Installer role");
 const noVlan = wifiSpecs({ ap: "Nano HD", ssid: "x", zone: "home", vlan: null, security: "open", replace: null });
-check(!buildArgv(noVlan.add, verbOf("ap-manager", "ssid add"), noVlan.add.initial).includes("--vlan"), "no VLAN known: the controller takes it from the zone");
+check(!buildArgv(noVlan.add, verbOf("ap-manager", "ssid <ap> add"), noVlan.add.initial).includes("--vlan"), "no VLAN known: the controller takes it from the zone");
 
 // ── a backup buddy ────────────────────────────────────────────────────
 const bm = json<{ verbs: ManifestVerb[] }>("wizards/backup-manager.json");

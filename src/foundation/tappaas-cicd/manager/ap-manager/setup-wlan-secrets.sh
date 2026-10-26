@@ -1,36 +1,35 @@
 #!/usr/bin/env bash
 #
-# setup-wlan-secrets.sh — interactively manage WiFi SSID names + passphrases (ADR-008, #339)
+# setup-wlan-secrets.sh — interactively name the WiFi networks and set their passphrases (ADR-008, #339, #889)
 #
-# WiFi networks are declared per ZONE in zones.json via the `SSID` field (the
-# SSID name) and the zone's `vlantag` (the VLAN it maps to). This script walks
-# the active zones that declare an SSID and, for each:
-#   1. lets you set/confirm the real SSID NAME in zones.json (replacing the
-#      <PLACEHOLDER> shipped in the template), and
-#   2. collects the WPA passphrase into a SEPARATE 0600 secrets file
-#      (~/.wlan-secrets.txt by default) that ap-manager's vendor plugins read
-#      at apply time. The passphrase is NEVER written to zones.json (which is a
-#      committed config), only to the secrets file.
+# A WiFi network is a site-wide SSID owned by ap-manager: it bridges to one zone
+# (the zone's `SSID` field names it) and every access point broadcasts it. This
+# script walks the active zones whose `SSID` the template left as a placeholder
+# (<HOME_SSID>) or that name an SSID ap-manager does not hold yet, and for each:
+#   1. asks for the real name and how clients join, and declares it:
+#      `ap-manager ssid add <ssid> --zone <zone> --security <sec>` (which also
+#      sets the zone's SSID — this script never writes zones.json), then
+#   2. for a WPA-personal SSID, asks for the passphrase and hands it to
+#      `ap-manager ssid set-passphrase <ssid>` on stdin. It is stored only in the
+#      0600 secrets file (~/.wlan-secrets.txt by default), never in a config.
 #
-# A blank passphrase means "open network / leave unchanged" — no secret stored.
-# Security level (open/personal/enterprise) is chosen per-SSID in the ap-manager
-# inventory (`ap-manager ssid <ap> add ... --security`); this script only owns
-# the SSID name (in zones.json) and the passphrase (in the secrets file).
+# A blank answer skips; nothing is written until a prompt is answered.
 #
 # Usage:
-#   setup-wlan-secrets.sh           interactively set SSID names + passphrases
-#   setup-wlan-secrets.sh --list    show zones/SSIDs and whether a secret is set
+#   setup-wlan-secrets.sh           interactively name SSIDs + set passphrases
+#   setup-wlan-secrets.sh --list    show the zones, their SSIDs and whether a passphrase is set
 #   setup-wlan-secrets.sh --help
 #
 # Env:
 #   WLAN_SECRETS   secrets file path (default /home/tappaas/.wlan-secrets.txt)
+#   AP_MANAGER     the ap-manager to run (tests)
 #
 
 set -euo pipefail
 
 # shellcheck source=../../tappaas-cicd/lib/common-install-routines.sh disable=SC1091
 . /home/tappaas/bin/common-install-routines.sh
-# is_placeholder, wlan_zones — shared with ap-manager (#734).
+# is_placeholder, wlan_zones and the secrets file rules — shared with ap-manager.
 # shellcheck source=../../lib/wlan-lib.sh
 . "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/wlan-lib.sh"
 
@@ -38,93 +37,55 @@ set -euo pipefail
 # offline tests can point them at fixtures.
 ZONES_FILE="${ZONES_FILE:-${CONFIG_DIR}/zones.json}"
 SECRETS_FILE="${SECRETS_FILE:-${WLAN_SECRETS:-/home/tappaas/.wlan-secrets.txt}}"
-
-# Temp files cleaned up on exit/signal.
-TMPFILES=()
-cleanup() { local f; for f in "${TMPFILES[@]:-}"; do [[ -n "${f}" ]] && rm -f "${f}"; done; }
-trap cleanup EXIT INT TERM
+WLAN_SECRETS_FILE="${SECRETS_FILE}"
+AP_MANAGER="${AP_MANAGER:-ap-manager}"
 
 usage() {
     cat <<EOF
 Usage: setup-wlan-secrets.sh [--list]
 
-  (no args)   interactively set SSID names (in zones.json) + passphrases
-              (in ${SECRETS_FILE}) for active zones that declare an SSID
-  --list      show each SSID zone, VLAN, name and whether a secret is set
+  (no args)   for each active zone with a placeholder SSID (or one ap-manager
+              does not hold): name it and declare it (ap-manager ssid add), then
+              set its passphrase (ap-manager ssid set-passphrase, into
+              ${SECRETS_FILE})
+  --list      show each WiFi zone, its SSID and whether a passphrase is set
   --help      this help
 
-A blank passphrase leaves the network open / unchanged (no secret stored).
+ap-manager ssid add|modify|remove|set-passphrase do the same one at a time.
 EOF
 }
 
+# ── secrets file (wlan-lib.sh) ──────────────────────────────────────
 
-# ── secrets file helpers (split on the FIRST '=') ───────────────────
-
-# Print the stored passphrase for <ssid> (empty if none).
-get_secret() {
-    local ssid="$1"
-    [[ -f "${SECRETS_FILE}" ]] || return 0
-    awk -v s="${ssid}" '{eq=index($0,"="); if(eq>0 && substr($0,1,eq-1)==s){print substr($0,eq+1); exit}}' "${SECRETS_FILE}"
-}
-
-# True if a secret line exists for <ssid>.
-has_secret() {
-    [[ -f "${SECRETS_FILE}" ]] || return 1
-    awk -v s="${ssid:=$1}" 'BEGIN{f=1} {eq=index($0,"="); if(eq>0 && substr($0,1,eq-1)==s){f=0; exit}} END{exit f}' "${SECRETS_FILE}"
-}
-
-# Remove any secret line for <ssid>.
-del_secret() {
-    local ssid="$1" tmp
-    [[ -f "${SECRETS_FILE}" ]] || return 0
-    tmp="$(mktemp)"; TMPFILES+=("${tmp}"); chmod 600 "${tmp}"
-    awk -v s="${ssid}" '{eq=index($0,"="); k=(eq>0?substr($0,1,eq-1):$0); if(k!=s) print}' "${SECRETS_FILE}" > "${tmp}"
-    mv "${tmp}" "${SECRETS_FILE}"; chmod 600 "${SECRETS_FILE}"
-}
-
-# Set <ssid>=<passphrase> (replacing any existing line for that SSID).
-set_secret() {
-    local ssid="$1" pass="$2" tmp
-    ( umask 077; touch "${SECRETS_FILE}" )
-    chmod 600 "${SECRETS_FILE}"
-    tmp="$(mktemp)"; TMPFILES+=("${tmp}"); chmod 600 "${tmp}"
-    awk -v s="${ssid}" '{eq=index($0,"="); k=(eq>0?substr($0,1,eq-1):$0); if(k!=s) print}' "${SECRETS_FILE}" > "${tmp}"
-    printf '%s=%s\n' "${ssid}" "${pass}" >> "${tmp}"
-    mv "${tmp}" "${SECRETS_FILE}"; chmod 600 "${SECRETS_FILE}"
-}
-
-# ── zones.json helper ───────────────────────────────────────────────
-
-# Set zone <zone>'s SSID name to <name> (atomic).
-set_zone_ssid() {
-    local zone="$1" name="$2" tmp
-    tmp="$(mktemp)"; TMPFILES+=("${tmp}")
-    if jq --arg z "${zone}" --arg s "${name}" '.[$z].SSID = $s' "${ZONES_FILE}" > "${tmp}"; then
-        mv "${tmp}" "${ZONES_FILE}"
-    else
-        die "failed to update SSID for zone '${zone}' in ${ZONES_FILE}"
-    fi
-}
+get_secret() { wlan_secret_get "$1"; }
+has_secret() { wlan_secret_has "$1"; }
+set_secret() { wlan_secret_set "$1" "$2"; }
+del_secret() { wlan_secret_del "$1"; }
 
 # Emit "zone<TAB>ssid<TAB>vlantag" for each ACTIVE zone declaring an SSID.
 ssid_zones() { wlan_zones "${ZONES_FILE}"; }
 
+# The site-wide SSIDs as ap-manager holds them (JSON list; [] if unreadable).
+site_ssids() { "${AP_MANAGER}" ssid list --json 2>/dev/null || echo '[]'; }
+
 # ── --list ──────────────────────────────────────────────────────────
 
 cmd_list() {
-    info "${BOLD}WiFi SSIDs declared in zones.json (active zones):${CL}"
-    printf '  %-12s %-6s %-24s %s\n' "ZONE" "VLAN" "SSID" "SECRET"
-    local zone ssid vlan mark
+    info "${BOLD}WiFi zones (active zones with an SSID):${CL}"
+    printf '  %-12s %-6s %-24s %-15s %s\n' "ZONE" "VLAN" "SSID" "SECURITY" "PASSPHRASE"
+    local zone ssid vlan sites sec mark
+    sites="$(site_ssids)"
     while IFS=$'\t' read -r zone ssid vlan; do
         [[ -z "${zone}" ]] && continue
+        sec="$(jq -r --arg s "${ssid}" '[.[] | select(.name == $s)][0].security // ""' <<<"${sites}")"
         if is_placeholder "${ssid}"; then
-            mark="${YW:-}(placeholder — set a real name)${CL:-}"
-        elif has_secret "${ssid}"; then
-            mark="${GN:-}set${CL:-}"
+            mark="${YW:-}(placeholder — name it: ap-manager ssid add <ssid> --zone ${zone} --security <sec>)${CL:-}"
+        elif [[ -z "${sec}" ]]; then
+            mark="${YW:-}(not declared — ap-manager ssid add '${ssid}' --zone ${zone} --security <sec>)${CL:-}"
         else
-            mark="-  (open / not set)"
+            mark="$(jq -r --arg s "${ssid}" '[.[] | select(.name == $s)][0].passphrase' <<<"${sites}")"
         fi
-        printf '  %-12s %-6s %-24s %b\n' "${zone}" "${vlan}" "${ssid}" "${mark}"
+        printf '  %-12s %-6s %-24s %-15s %b\n' "${zone}" "${vlan}" "${ssid}" "${sec:--}" "${mark}"
     done < <(ssid_zones)
     if [[ -f "${SECRETS_FILE}" ]]; then
         info "secrets file: ${SECRETS_FILE} ($(stat -c '%a' "${SECRETS_FILE}"))"
@@ -137,15 +98,13 @@ cmd_list() {
 # ── interactive ─────────────────────────────────────────────────────
 
 # Read a passphrase twice (hidden); echoes the value on stdout, empty if blank.
-# WPA-PSK must be 8–63 chars; re-prompt on mismatch / bad length.
 read_passphrase() {
-    local p1 p2
+    local p1 p2 why
     while true; do
-        read -rs -p "    passphrase (blank = open/unchanged): " p1 < /dev/tty; echo >&2
+        read -rs -p "    passphrase (blank = leave it): " p1 < /dev/tty; echo >&2
         [[ -z "${p1}" ]] && { echo ""; return 0; }
-        if [[ ${#p1} -lt 8 || ${#p1} -gt 63 ]]; then
-            warn "    WPA passphrase must be 8–63 characters; try again"; continue
-        fi
+        why="$(wlan_passphrase_problem "${p1}")"
+        if [[ -n "${why}" ]]; then warn "    ${why}; try again"; continue; fi
         read -rs -p "    confirm passphrase: " p2 < /dev/tty; echo >&2
         [[ "${p1}" == "${p2}" ]] && { printf '%s' "${p1}"; return 0; }
         warn "    passphrases did not match; try again"
@@ -155,54 +114,55 @@ read_passphrase() {
 cmd_interactive() {
     [[ -t 0 ]] || die "interactive mode needs a terminal (use --list for a non-interactive view)"
     no_one_to_ask && die "interactive mode needs someone at the terminal (use --list for a non-interactive view)"
-    info "${BOLD}WiFi SSID + passphrase setup${CL}"
-    info "Reads active zones with an SSID from ${ZONES_FILE}; secrets → ${SECRETS_FILE}"
+    info "${BOLD}WiFi networks: names and passphrases${CL}"
+    info "Active zones with an SSID in ${ZONES_FILE}; passphrases → ${SECRETS_FILE}"
     info "Press Ctrl-C any time; nothing is written until you answer each prompt."
     echo
 
-    local zone ssid vlan newname ans pass changed=0
+    local zone ssid vlan newname sec ans pass sites changed=0
     while IFS=$'\t' read -r zone ssid vlan; do
         [[ -z "${zone}" ]] && continue
-        info "${BOLD}Zone '${zone}' (VLAN ${vlan})${CL} — current SSID: ${ssid}"
+        sites="$(site_ssids)"
+        sec="$(jq -r --arg s "${ssid}" '[.[] | select(.name == $s)][0].security // ""' <<<"${sites}")"
+        info "${BOLD}Zone '${zone}' (VLAN ${vlan})${CL} — SSID: ${ssid}${sec:+ (${sec})}"
 
-        # 1. SSID name
-        if is_placeholder "${ssid}"; then
-            read -r -p "    real SSID name (blank = skip this zone): " newname < /dev/tty
+        # 1. a placeholder or an SSID ap-manager does not hold: name and declare it
+        if [[ -z "${sec}" ]]; then
+            if is_placeholder "${ssid}"; then
+                read -r -p "    real SSID name (blank = skip this zone): " newname < /dev/tty
+            else
+                read -r -p "    SSID name [${ssid}] (Enter to keep, '-' to skip): " newname < /dev/tty
+                newname="${newname:-${ssid}}"
+                [[ "${newname}" == "-" ]] && newname=""
+            fi
             [[ -z "${newname}" ]] && { info "    skipped"; echo; continue; }
-        else
-            read -r -p "    SSID name [${ssid}] (Enter to keep): " newname < /dev/tty
-            newname="${newname:-${ssid}}"
-        fi
-        if [[ "${newname}" != "${ssid}" ]]; then
-            set_zone_ssid "${zone}" "${newname}"
-            # carry any existing secret to the new name; drop the old key
-            local old; old="$(get_secret "${ssid}")"
-            if [[ -n "${old}" ]]; then set_secret "${newname}" "${old}"; del_secret "${ssid}"; fi
-            info "    ${GN}✓${CL} SSID name → '${newname}' (zones.json)"
+            read -r -p "    how clients join [wpa2-personal] (wpa3-personal, open, wpa2-enterprise, wpa3-enterprise): " sec < /dev/tty
+            sec="${sec:-wpa2-personal}"
+            if ! "${AP_MANAGER}" ssid add "${newname}" --zone "${zone}" --security "${sec}" < /dev/null; then
+                warn "    not declared — skipped"; echo; continue
+            fi
+            ssid="${newname}"
             changed=1
         fi
-        ssid="${newname}"
 
-        # 2. passphrase
-        if [[ -n "$(get_secret "${ssid}")" ]]; then
-            read -r -p "    a passphrase is already stored for '${ssid}'. Replace it? [y/N]: " ans < /dev/tty
-            [[ "${ans,,}" == y* ]] || { info "    kept existing passphrase"; echo; continue; }
-        fi
-        pass="$(read_passphrase)"
-        if [[ -z "${pass}" ]]; then
-            info "    no passphrase stored (open network / unchanged)"
-        else
-            set_secret "${ssid}" "${pass}"
-            info "    ${GN}✓${CL} passphrase stored for '${ssid}'"
-            changed=1
+        # 2. the passphrase, for a WPA-personal SSID
+        if [[ "${sec}" == wpa2-personal || "${sec}" == wpa3-personal ]]; then
+            if has_secret "${ssid}"; then
+                read -r -p "    a passphrase is already stored for '${ssid}'. Replace it? [y/N]: " ans < /dev/tty
+                [[ "${ans,,}" == y* ]] || { info "    kept the passphrase"; echo; continue; }
+            fi
+            pass="$(read_passphrase)"
+            if [[ -z "${pass}" ]]; then
+                info "    no passphrase stored — the access points cannot create '${ssid}' without one"
+            elif printf '%s\n' "${pass}" | "${AP_MANAGER}" ssid set-passphrase "${ssid}"; then
+                changed=1
+            fi
         fi
         echo
     done < <(ssid_zones)
 
     if [[ "${changed}" -eq 1 ]]; then
-        info "${GN}Done.${CL} Next steps:"
-        info "  1. Add each SSID to your AP:   ap-manager ssid <ap> add <ssid> --zone <zone> --security wpa2-personal"
-        info "  2. Push to the controller:     ap-manager reconcile --apply"
+        info "${GN}Done.${CL} To program the access points: ap-manager reconcile --apply"
     else
         info "No changes made."
     fi

@@ -26,7 +26,7 @@ const str = (v: TargetValue | undefined): string | null => (typeof v === "string
 // `prefill`: what the assistant opened it with (open_console add-wifi <zone>): ssid, ap, security.
 export function WifiWizard({ z, aps, site, onClose, prefill }: { z: WifiZone; aps: ApIn[]; site: string; onClose: () => void; prefill?: TargetValues | null }) {
   const me = useMe();
-  const verb = useVerb("ap-manager", "ssid add");
+  const verb = useVerb("ap-manager", "ssid <ap> add");
   const securities = verb?.options.find((o) => o.flag === "--security")?.choices ?? ["wpa2-personal"];
   const secrets = useRead<SecretStatus[]>("secrets", 600_000);
   const kept = (secrets.env?.data ?? []).find((x) => x.name === "wlan")?.keys ?? [];

@@ -1,15 +1,20 @@
 # ap-manager
 
-The **wireless access-point network controller** for TAPPaaS. It reconciles WiFi
-SSID→VLAN mappings to `zones.json` (the single source of truth) so that a zone
-declaring an `SSID` is broadcast on the right VLAN without manual AP
-configuration.
+The **wireless access-point network controller** for TAPPaaS. It owns the site's
+WiFi networks (SSIDs) and keeps every access point broadcasting them on the right
+VLAN, without manual AP configuration.
 
-WiFi networks are declared per **zone** in `zones.json`: the zone's `SSID` field
-is the network name and the zone's `vlantag` is the VLAN it maps to. The
-controller keeps the access points in sync with those declarations. AP inventory
-and SSIDs live under the `accessPoints` key of the same desired/actual state
-files the [`switch-manager`](../switch-manager/) uses.
+An **SSID is site-wide**: declared once, broadcast by every access point (unless
+it names the ones that should), and bridged to exactly **one zone** — devices
+that join it land on that zone's VLAN, with its rules. The zone shows which SSID
+it carries in its `SSID` field in `zones.json`; ap-manager sets that field, so
+the SSID, its zone and the access points stay in step. A zone carries one SSID.
+
+The SSIDs live in `ssids` in `switch-configuration-desired.json`, beside the AP
+inventory under `accessPoints` — the same desired/actual files the
+[`switch-manager`](../switch-manager/) uses. Each AP's own `ssids` there is
+written by ap-manager from the site-wide list (the vendor plugins read it); do
+not edit it by hand.
 
 `managed:auto` APs are programmed through a **vendor plugin**; otherwise the
 manual plugin prints the steps and you apply them by hand, then `confirm`.
@@ -38,12 +43,30 @@ ap-manager <command> [args]
 
 | Command | Purpose |
 |---------|---------|
-| `ssid <ap> add <ssid> --zone <zone> --security <sec> [--vlan <n>] [--radius <srv>] [--captive] [--disabled]` | Add an SSID to an AP. The VLAN defaults from the zone if `--vlan` is omitted. |
-| `ssid <ap> remove <ssid>` | Remove an SSID from an AP. |
-| `ssid <ap> list` | List the AP's SSIDs. |
+| `ssid add <ssid> --zone <zone> --security <sec> [--radius <srv>] [--captive] [--disabled] [--broadcast-on all\|<ap>,…]` | Declare a WiFi network. It bridges to the zone's VLAN and sets the zone's `SSID` (replacing a template placeholder such as `<HOME_SSID>`). Refused when the zone already carries another SSID. Broadcast by every access point unless `--broadcast-on` names some. |
+| `ssid modify <ssid> [--zone <zone>] [--security <sec>] [--radius <srv>] [--unset radius] [--captive\|--no-captive] [--disabled\|--enabled] [--broadcast-on all\|<ap>,…]` | Change it. `--zone` moves it: the old zone's `SSID` is cleared and the new one's set. |
+| `ssid remove <ssid>` | Remove it, with the zone's `SSID` and its passphrase. The next `reconcile` lists it for removal on each access point. |
+| `ssid list [--json]` | Every SSID: its zone and VLAN, security, the access points that broadcast it, and its passphrase — `set`, `changed` (not pushed yet), `not set`, or `not needed` (open, enterprise). Never the passphrase itself. |
+| `ssid set-passphrase <ssid> [--file <path>]` | Store the WPA passphrase (8–63 characters) for a `wpa2-personal` or `wpa3-personal` SSID. It is read from **stdin** (asked twice, hidden, at a terminal) or the first line of `--file` — **never an argument**, which would land in the shell history and the process list. The SSID is marked changed, so the next `reconcile --apply` pushes the new passphrase to every access point that broadcasts it. |
 
 `--security` is one of: `open`, `wpa2-personal`, `wpa3-personal`,
-`wpa2-enterprise`, `wpa3-enterprise`.
+`wpa2-enterprise`, `wpa3-enterprise`. `--radius` goes with the enterprise ones.
+
+The passphrase lives only in a `0600` secrets file (`~/.wlan-secrets.txt`, one
+`<SSID>=<passphrase>` line each, `WLAN_SECRETS` moves it), which the vendor
+plugins read at apply time; never in a config.
+
+```bash
+echo 'correct horse battery' | ap-manager ssid set-passphrase rossen-home
+ap-manager ssid set-passphrase rossen-home --file /run/user/1000/psk
+```
+
+**The per-AP forms, for this release.** `ssid <ap> add …` declares the SSID
+site-wide (or updates it when it exists; a `--vlan` other than the zone's is
+refused), `ssid <ap> remove <ssid>` stops `<ap>` broadcasting it (and removes it
+when no access point would), `ssid <ap> list` shows what `<ap>` broadcasts. Each
+says on stderr which site-wide verb replaces it. An access point named like a
+verb (`add`, `list`, …) cannot use them.
 
 ### Reconciliation commands (five-verb provider flow)
 
@@ -59,10 +82,11 @@ ap-manager <command> [args]
 ### Examples
 
 ```bash
-# Register an AP, link its uplink, and add a guest SSID on its zone's VLAN:
+# Register an AP, link its uplink, and a guest WiFi on the guest zone's VLAN:
 ap-manager add ap-living --vendor unifi --ip 10.0.10.21
 ap-manager link ap-living --switch core --port 5
-ap-manager ssid ap-living add Guest --zone guest --security wpa2-personal
+ap-manager ssid add rossen-guest --zone guest --security wpa2-personal
+echo 'a passphrase for guests' | ap-manager ssid set-passphrase rossen-guest
 
 # Dry-run, then apply:
 ap-manager reconcile
@@ -73,7 +97,7 @@ ap-manager reconcile --apply
 
 Every SSID beacons separately on every radio, so each one takes airtime from the
 rest; vendor guidance (Ubiquiti) puts the practical limit at about **4 per
-radio**. `ssid <ap> add` warns when an AP goes over its ceiling, and `delta`
+radio**. `ssid add` and `ssid modify` warn when an AP goes over its ceiling, and `delta`
 counts it as a validation warning — before `reconcile --apply` creates the SSIDs.
 Only enabled SSIDs count. The ceiling is 4 (`TAPPAAS_AP_MAX_SSIDS` changes the
 default); an AP that should carry more sets `maxSsids` on its entry in
@@ -82,18 +106,14 @@ default); an AP that should carry more sets `maxSsids` on its entry in
 
 ## Setup helper: `setup-wlan-secrets.sh`
 
-Interactively sets the real SSID **names** in `zones.json` (replacing the
-shipped `<PLACEHOLDER>`) and collects each WPA **passphrase** into a separate
-`0600` secrets file (`~/.wlan-secrets.txt` by default) that the vendor plugins
-read at apply time. The passphrase is never written to `zones.json` (a committed
-config). A blank passphrase means "open / leave unchanged".
+Walks the active zones whose `SSID` is still a template placeholder (or names an
+SSID ap-manager does not hold), asks for the real name and how clients join, and
+declares it with `ap-manager ssid add`; for a WPA-personal SSID it then asks for
+the passphrase (hidden, twice) and hands it to `ap-manager ssid set-passphrase`
+on stdin. It writes no file itself. A blank answer skips.
 
 ```
-setup-wlan-secrets.sh          # interactively set SSID names + passphrases
-setup-wlan-secrets.sh --list   # show zones/SSIDs and whether a secret is set
+setup-wlan-secrets.sh          # interactively name SSIDs + set passphrases
+setup-wlan-secrets.sh --list   # each WiFi zone, its SSID and whether a passphrase is set
 setup-wlan-secrets.sh --help
 ```
-
-The per-SSID security level is chosen in the AP inventory
-(`ap-manager ssid <ap> add ... --security`); this helper owns only the SSID
-name (in `zones.json`) and the passphrase (in the secrets file).
