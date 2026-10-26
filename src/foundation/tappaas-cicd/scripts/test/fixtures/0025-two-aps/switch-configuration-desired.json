@@ -1,0 +1,24 @@
+{
+  "$schema": "switch-configuration-schema.json",
+  "version": "1.0",
+  "switches": {},
+  "accessPoints": {
+    "ap-living": {
+      "vendor": "unifi", "model": "U7NHD", "managementIp": "10.0.0.184",
+      "uplinkSwitch": "core", "uplinkPort": "9",
+      "ssids": {
+        "rossen-home": { "vlan": 310, "zone": "home", "security": "wpa2-personal", "enabled": true },
+        "rossen-iot": { "vlan": 410, "zone": "iotLocal", "security": "wpa2-personal", "enabled": true }
+      }
+    },
+    "ap-loft": {
+      "vendor": "unifi", "model": "U6-Lite", "managementIp": "10.0.0.185",
+      "ssids": {
+        "rossen-home": { "vlan": 310, "zone": "home", "security": "wpa2-personal", "enabled": true },
+        "rossen-iot": { "vlan": 410, "zone": "iotLocal", "security": "wpa2-personal", "enabled": true },
+        "rossen-guest": { "vlan": 510, "zone": "guest", "security": "open", "enabled": true, "captivePortal": true }
+      }
+    }
+  },
+  "wifiController": {}
+}

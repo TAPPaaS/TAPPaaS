@@ -52,7 +52,7 @@ VLAN it bridges to), and the zone shows which SSID it carries.
 | switch-manager (line ~950), switch-controller `main.ts` (auto-register APs) | preserve `.ssids` (or `{}` for a new AP) | unchanged; a new AP gets its derived SSIDs at the next `update-desired` |
 | network-manager `topology.ts` (`accessPoints[].ssids`) | reads | unchanged — the AP panel lists what the AP broadcasts |
 | ui `reads.ts` (`ap-manager list --json`), `setup.ts`, `wizards.ts`, `Wifi.tsx`, `Setup.tsx`, `Day2.tsx`, `SidePanel.tsx` | read per AP | read `ap-manager ssid list --json` (site-wide) where they mean "the networks"; the AP panel keeps the per-AP view |
-| `switch-configuration-schema.json` | `accessPoint.ssids` required | `ssids` at the top level (the site-wide list); `accessPoint.ssids` documented as derived, no longer required |
+| `switch-configuration-schema.json` | `accessPoint.ssids` required | `ssids` at the top level (the site-wide list, `siteSsid`); `accessPoint.ssids` documented as derived, no longer required |
 | migration 0021 fixtures | carry `ssids` | unchanged |
 
 ### The secrets file (`~/.wlan-secrets.txt`)
@@ -187,25 +187,29 @@ marked as aliases.
 
 ## Migration 0025 — per-AP entries become the site-wide list
 
-`0025-ssids-become-site-wide.sh`, touches `switch-configuration-desired.json` only.
+`0025-ssids-become-site-wide.sh`, touches `switch-configuration-desired.json` and
+`zones.json`.
 
 - For every `accessPoints{ap}.ssids{s}`: group by SSID name. The settings compared
-  are `zone`, `security`, `radiusServer`, `captivePortal`, `enabled`; `vlan` is
-  dropped when it is the zone's `vlantag` (and refused when it is not — the VLAN is
-  the zone's now).
+  are `zone`, `security`, `radiusServer`, `captivePortal`, `enabled`; `vlan` must
+  be the zone's `vlantag` (the VLAN is the zone's now).
 - One entry per SSID in `.ssids{}`: `zone`, `security`, `radius`, `captive`,
   `disabled`; `broadcastOn` `"all"` when every AP declared it, else the list of the
   APs that did.
+- Each zone names the SSID that bridges to it: a placeholder, nothing, or a
+  hand-set name nobody broadcast is replaced (the last one reported). Without it
+  every zone would warn after the update; the field's meaning is what changed.
 - Refuses, changing nothing, two APs declaring the same SSID with different
   settings (naming the SSID, the APs and the differing fields), an SSID with no
-  zone, a VLAN other than its zone's, and a `.ssids` already present that disagrees.
+  zone or a zone zones.json lacks, a VLAN other than its zone's, two SSIDs on one
+  zone, and a file that is not a JSON object.
+- A `.ssids` already present is the migrated shape: it stands, and only a zone
+  that does not name its SSID is written.
 - The per-AP `ssids` stay (they are the derived view); ap-manager's next derive
-  writes the same content.
-- Does not touch `zones.json` (a migration writes no manager-owned field through a
-  manager; the validation names the zone whose `SSID` differs, with the command).
+  writes the same content (the fixture test checks it).
 - Idempotent, `--check`, backup in `.migrations/backup/0025/`. Fixture test with two
-  APs declaring the same SSIDs with the same settings, one AP-only SSID, and a
-  conflicting case.
+  APs declaring the same SSIDs with the same settings, one AP-only SSID, hrossen's
+  configuration (one AP, no SSIDs: nothing to do) and each refusal.
 
 ## Console
 

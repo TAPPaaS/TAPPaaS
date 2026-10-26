@@ -18,6 +18,11 @@
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/accessPoint" }
     },
+    "ssids": {
+      "description": "The site's WiFi networks (desired only), by SSID name, owned by ap-manager (ssid add/modify/remove/set-passphrase). Each bridges to one zone, whose SSID field names it, and is broadcast by the access points broadcastOn names. Each access point's own ssids{} is written from this list.",
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/siteSsid" }
+    },
     "wifiController": { "type": "object" }
   },
   "$defs": {
@@ -88,7 +93,7 @@
     },
     "accessPoint": {
       "type": "object",
-      "required": ["vendor", "ssids"],
+      "required": ["vendor"],
       "additionalProperties": true,
       "properties": {
         "uuid": { "type": "string" },
@@ -100,9 +105,27 @@
         "uplinkSwitch": { "type": "string" },
         "uplinkPort": { "type": "string" },
         "ssids": {
+          "description": "In desired: what this access point broadcasts, written by ap-manager from the site-wide ssids (do not edit; the vendor controllers read it). In actual: what it was found broadcasting.",
           "type": "object",
           "additionalProperties": { "$ref": "#/$defs/ssid" }
         }
+      }
+    },
+    "siteSsid": {
+      "type": "object",
+      "required": ["zone", "security"],
+      "additionalProperties": false,
+      "properties": {
+        "zone": { "type": "string", "references": "zones", "description": "The zone it bridges to: devices that join land on its VLAN. One SSID per zone." },
+        "security": { "type": "string", "enum": ["open", "wpa2-personal", "wpa3-personal", "wpa2-enterprise", "wpa3-enterprise"] },
+        "radius": { "type": "string", "description": "The RADIUS server (enterprise only)." },
+        "captive": { "type": "boolean", "description": "A captive portal. Absent: none." },
+        "disabled": { "type": "boolean", "description": "Kept, but broadcast nowhere. Absent: broadcast." },
+        "broadcastOn": {
+          "description": "\"all\" (also every access point added later), or the access points by name. Absent: all.",
+          "oneOf": [ { "const": "all" }, { "type": "array", "items": { "type": "string" }, "uniqueItems": true } ]
+        },
+        "passphraseChanged": { "type": "boolean", "description": "Set by ssid set-passphrase; the next reconcile pushes the passphrase (from the secrets file) to every access point that broadcasts it, and confirm clears it." }
       }
     },
     "ssid": {

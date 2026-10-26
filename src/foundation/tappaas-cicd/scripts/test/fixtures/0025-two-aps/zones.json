@@ -1,0 +1,7 @@
+{
+  "mgmt": { "type": "Management", "typeId": 0, "subId": 0, "vlantag": 0, "ip": "10.0.0.0/24", "bridge": "lan", "state": "Mandatory" },
+  "home": { "type": "Client", "typeId": 3, "subId": 10, "vlantag": 310, "ip": "10.3.10.0/24", "bridge": "lan", "state": "Active", "SSID": "<HOME_SSID>" },
+  "iotLocal": { "type": "IoT", "typeId": 4, "subId": 10, "vlantag": 410, "ip": "10.4.10.0/24", "bridge": "lan", "state": "Active", "SSID": "<IOT_LOCAL_SSID>" },
+  "guest": { "type": "Guest", "typeId": 5, "subId": 10, "vlantag": 510, "ip": "10.5.10.0/24", "bridge": "lan", "state": "Active", "SSID": "OldGuest" },
+  "work": { "type": "Client", "typeId": 3, "subId": 20, "vlantag": 320, "ip": "10.3.20.0/24", "bridge": "lan", "state": "Inactive", "SSID": "<WORK_SSID>" }
+}
