@@ -237,6 +237,15 @@
       "changeClass": "manual",
       "changeNote": "Has its own verb: `network-manager bind <zone> --environment <env>` replaces the link, `--add` adds one more environment (on a Service zone, making it a shared service zone), `--unbind` clears it (with `--environment`, only that one; a shared zone's last one stays a list of one unless `--own` makes it that environment's own zone). bind checks the environment exists and that it keeps exactly one zone of its own, so a typo fails at the command rather than three reconciles later. A Client, Guest or IoT zone's derived edge follows at the next reconcile."
     },
+    "SSID": {
+      "description": "The WiFi network that bridges to this zone: the name of one of the site-wide SSIDs in switch-configuration-desired.json, which every access point broadcasts on the zone's VLAN. Absent: the zone has no WiFi. The template ships placeholders such as <HOME_SSID>, which mean no name has been chosen yet.",
+      "type": "string",
+      "required": false,
+      "example": "rossen-home",
+      "note": "Display only: the SSID's settings (security, broadcast, passphrase) live with the SSID, not the zone. A zone carries one SSID; an SSID belongs to one zone. Not on Management, WAN or Overlay zones.",
+      "changeClass": "manual",
+      "changeNote": "Set by ap-manager, which owns the WiFi networks: `ap-manager ssid add <ssid> --zone <zone> --security <sec>` sets it, `ap-manager ssid modify <ssid> --zone <zone>` moves it to another zone, `ap-manager ssid remove <ssid>` clears it. They keep the SSID, its zone and the access points in step."
+    },
     "DHCP-start": {
       "description": "Starting offset for DHCP range within the subnet",
       "type": "integer",

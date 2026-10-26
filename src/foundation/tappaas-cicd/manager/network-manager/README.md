@@ -37,6 +37,7 @@ Like `enable`/`disable`/`bind`, this **authors `zones.json` only** and prints th
 | `vlantag`, `ip`, `type`, `typeId`, `subId`, `bridge` | `immutable` | The zone's identity. Changing a VLAN would strand every guest tagged into it — that is delete-and-re-add, with the guests moved deliberately. |
 | `state` | has a verb | `enable` / `disable` / `manual`, which guard the Mandatory transition. |
 | `environment` | has a verb | `bind --environment`, which checks the environment exists and keeps one zone per environment, so a typo fails at the command. |
+| `SSID` | has a verb | ap-manager's `ssid add` / `modify --zone` / `remove`: the WiFi network is ap-manager's, and the zone only shows which one bridges to it. |
 
 A `--set` naming any of those is refused **before anything is written**, and a
 mixed `--set` is rejected whole — `zones.json` and the planes never move apart.
@@ -54,6 +55,7 @@ network-manager add <name>          [options]
 network-manager delete <name>       [--check]
 network-manager enable|disable|manual <name> [--force]
 network-manager bind <zone>         --environment <env> [--add] | --unbind [--environment <env> [--own]]
+network-manager set-ssid <zone>     <ssid> | --clear     (ap-manager's writer; use ap-manager ssid)
 network-manager reconcile           [--apply] [--only opnsense|proxmox|switch|ap]
 network-manager topology            [--json] [--health <file> | --no-health] [--no-positions]
 network-manager init  [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
