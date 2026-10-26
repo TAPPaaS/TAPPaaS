@@ -18,6 +18,7 @@
     "../../web/src/zonegraph.ts",
     "../../web/src/columns.ts",
     "../../web/src/zonenet.ts",
+    "../../web/src/zoneverbs.ts",
     "../../web/src/physical/storage.ts",
     "../../web/src/physical/views.ts",
     "../../web/src/envcards.ts",

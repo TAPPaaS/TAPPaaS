@@ -15,6 +15,7 @@ import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
 import { Dot, ReadState, Section, since } from "../ui";
 import { EnvironmentRow, SiteRead } from "../types";
+import { cardVerbs } from "../zoneverbs";
 import { Ipv6Read, ipv6SubnetText, typeIdText, zoneV6 } from "../zonenet";
 import { COLUMN_TITLES, PSEUDO, PublicAddress, environmentsOf, isSharedService, publicAddress, publicText, pseudoPlace, wanZone, zoneColumn, zoneEdges } from "../zonegraph";
 
@@ -52,11 +53,6 @@ const reconcile = net("network-manager reconcile", "reconcile", { note: "The pre
 // fills --from-zone in).
 const addStep = (zoneNames: string[], archetypes: string[], from?: string): Step =>
   fieldsStep({ title: "network-manager add <name>", bin: "network-manager", verb: "add", kind: "zone", name: null, mode: "add", keep: ["--archetype", "--from-zone", "--no-activate"], hide: ["@options"], ...(from ? { initial: { "--from-zone": from } } : {}), choices: { "--from-zone": zoneNames, ...(archetypes.length ? { "--archetype": archetypes } : {}) } });
-
-// The state verbs a zone offers: a Mandatory zone stays as it is, and the WAN
-// and the overlays are always Manual (no interface, no DHCP built for them).
-const stateVerbs = (z: ZoneRead): string[] =>
-  z.state === "Mandatory" || z.type === "WAN" || z.type === "Overlay" ? [] : z.state === "Active" ? ["disable", "manual"] : ["enable"];
 
 const live = (z: ZoneRead) => z.state === "Active" || z.state === "Mandatory" || z.state === "Manual";
 const dot = (z: ZoneRead) => (z.state === "Active" || z.state === "Mandatory" ? "pass" : z.state === "Manual" ? "info" : "skip");
@@ -124,12 +120,13 @@ function fieldText(r: FieldRow, z: ZoneRead, v6: Ipv6Read | null): string {
 
 function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, v6, close }: { z: ZoneRead; schema: Record<string, ZoneFieldSpec> | null; envNames: string[]; zoneNames: string[]; archetypes: string[]; wan: PublicAddress | null; v6: Ipv6Read | null; close: () => void }) {
   const rows: FieldRow[] = schema ? zoneFieldRows(z, schema) : [];
+  const verbs = cardVerbs(z);
   return (
     <aside className="sidepanel">
       <header>
         <div>
           <h2 className="mono">{z.name}</h2>
-          <div className="muted small">{z.type} · {z.state} · vlan {z.vlantag ?? "—"} · {wan ? publicText(wan) : z.ip ?? ""}</div>
+          <div className="muted small">{z.type} · {verbs.manual ? "manual" : z.state} · vlan {z.vlantag ?? "—"} · {wan ? publicText(wan) : z.ip ?? ""}</div>
         </div>
         <button className="btn-x" onClick={close} aria-label="close">×</button>
       </header>
@@ -137,6 +134,11 @@ function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, v6, close
       {wan ? (
         <p className="small">
           This card stands for the internet as well. The site's public address comes from the site record (network.publicIp){wan.auto ? "; auto means the provider assigns it and the firewall's WAN takes it by DHCP, read at each network update" : ""}. The zone's ip <span className="mono">{z.ip ?? "—"}</span> only fills the schema: no interface, DHCP or rule is built from it.
+        </p>
+      ) : null}
+      {verbs.manual ? (
+        <p className="small">
+          <b>manual</b>: the module that owns this zone keeps it. It is outside the enable/disable lifecycle, so it cannot be enabled, disabled or deleted here; Modify and Reconcile still apply.
         </p>
       ) : null}
       <div className="toolbar">
@@ -159,7 +161,7 @@ function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, v6, close
             reconcile,
           ]}
         />
-        {stateVerbs(z).map((w) => (
+        {verbs.states.map((w) => (
           <OperateButton
             key={w}
             label={`${w[0].toUpperCase()}${w.slice(1)}…`}
@@ -167,10 +169,10 @@ function ZoneDetail({ z, schema, envNames, zoneNames, archetypes, wan, v6, close
             steps={[{ ...net(`network-manager ${w} ${z.name}`, "enable|disable|manual", { fixed: [z.name], note: "Writes the zone's state into zones.json only; the reconcile after makes it live." }), words: [w] }, reconcile]}
           />
         ))}
-        <OperateButton label="Bind…" title={`Bind ${z.name} to an environment`} steps={[net(`network-manager bind ${z.name}`, "bind", { fixed: [z.name], choices: { "--environment": envNames } })]} />
+        {verbs.bind ? <OperateButton label="Bind…" title={`Bind ${z.name} to an environment`} steps={[net(`network-manager bind ${z.name}`, "bind", { fixed: [z.name], choices: { "--environment": envNames } })]} /> : null}
         <OperateButton label="Reconcile…" title="Reconcile the network" steps={[reconcile]} />
-        {wan ? null : <OperateButton label="Add one like it…" title={`Add a zone from ${z.name}`} steps={() => [addStep(zoneNames, archetypes, z.name)]} />}
-        {z.state === "Mandatory" || wan ? null : <OperateButton label="Delete…" kind="danger" title={`Delete zone ${z.name}`} steps={[net(`network-manager delete ${z.name}`, "delete", { fixed: [z.name] })]} />}
+        {verbs.addLike ? <OperateButton label="Add one like it…" title={`Add a zone from ${z.name}`} steps={() => [addStep(zoneNames, archetypes, z.name)]} /> : null}
+        {verbs.delete ? <OperateButton label="Delete…" kind="danger" title={`Delete zone ${z.name}`} steps={[net(`network-manager delete ${z.name}`, "delete", { fixed: [z.name] })]} /> : null}
       </div>
       <table className="table compact zfields">
         <tbody>
