@@ -2,6 +2,15 @@
   "_README": "Every TAPPaaS version: the revision it names and when it reached each channel (ADR-028 D13). tappaas-train writes this at each boundary and urgent fix; RELEASES.md is rendered from it (tappaas-train releases --render after a hand edit). Dates are UTC days. kind: minor | major (a boundary), patch (an urgent fix, ADR-028 D12), release (made by hand, before the train).",
   "releases": [
     {
+      "version": "2.3.3",
+      "commit": "3cca97fc031e",
+      "staging": "2026-10-26",
+      "production": null,
+      "kind": "patch",
+      "channel": "staging",
+      "why": "service down: an IPv4-only site's CrowdSec stops at start on an empty whitelist (makerfloss, 2026-10-26)"
+    },
+    {
       "version": "2.3.2",
       "commit": "a8b73e7d347e",
       "staging": "2026-10-26",
