@@ -130,11 +130,9 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 
 | # | Question | Waits on |
 |---|----------|----------|
-| #801 | Default update schedule: daily on every channel — on `stable`/`staging` 13 of 14 runs change nothing, but urgent fixes and OS patches arrive within a day; what to do with sites on the old weekly default | Operator (proposed 2026-10-08, from #797) |
 | #294 | VMID scheme: zone-aligned ranges for new installs only, or not at all — never renumber in place | Lars and @ErikDaniel007 (Future Work) |
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
 | #675 | What a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that fails to build. Today a site's own host-level modules are dropped by every scheduled rebuild while the unit reports success (`tappaas-cicd.nix` has no extension point — confirmed) | An ADR first; Ease H · Risk M |
-| #488 | `apply-json-merge`: should a field that `.orig` never recorded be adopted from the release, or kept? #736 made each refused value visible; the rule itself is open | Operator |
 | #385 / #222 | NetBird: keep its server-side integration (zone, OPT1 and floating rules), or make it a pure client-side tool and reserve management access to the WireGuard admin VPN | Operator (considering, 2026-10-12) |
 
 ### Gates
@@ -194,7 +192,8 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #250 | `dependsOn` ownership for community modules | Option D, `dependsOn.sh`. Out of G1.3 since 2026-09-20 (operator) |
 | #294 | Zone-aligned VMID ranges | Renumbering means backup/restore to a new VMID. **Proposal:** new scheme for new installs and variants only; never renumber in place. Out of G1.7 since 2026-10-16 (operator) |
 | #464 | migrate-firewall-to-network: dry-run reports a step it cannot predict | A dry run that overstates what it will do teaches an operator to distrust dry runs. Parking lot on the forge |
-| #488 | apply-json-merge pins fields the operator never changed | The general case of #736 — see *Decisions*. Parking lot on the forge |
+| ✅ #488 | apply-json-merge pins fields the operator never changed | **Done 2026-10-26** (`21fb806e`): a field `.orig` never had takes the release value, warned with the old one, unless `modify --set` recorded it (`<module>.json.operator`) |
+| ✅ #801 | Default update schedule: daily on every channel | **Done 2026-10-26** (`88968c6e`): new sites update daily at 02:00; migration 0024 moves a site on the old weekly default, warned with the way back |
 | #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
 | #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
@@ -434,7 +433,7 @@ someone deciding whether to upgrade. The release-train boundary turns it into th
 summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
-
+Sites update daily at 02:00 by default: a site still on the old weekly default (Tuesday or Thursday at 02:00) moves to daily on its first update, with a warning that names how to keep weekly; any schedule chosen otherwise stays. An update no longer keeps a configuration value nobody chose: when a release starts to define a field the site already has with another value, the release value is taken and the update warns with the value it replaced, unless the operator set it with `module modify --set`, which now records the fields it sets.
 <!-- /next-release summary -->
 
 ## Release 2.3.3 — staging 2026-10-26 · production at the next boundary
