@@ -53,17 +53,23 @@ export class CliSiteClient implements SiteClient {
     return existsSync(path);
   }
 
-  cloneRepo(url: string, path: string, branch: string, name?: string, trust?: RepositoryTrust): void {
+  cloneRepo(url: string, path: string, branch: string, name: string, trust?: RepositoryTrust): void {
     run(GIT(), ["clone", `https://${url}`, path]);
     run(GIT(), ["-C", path, "checkout", branch]);
-    // ADR-033 D5: a fresh clone with an anchor must verify against it before
-    // anything uses it; repository.sh owns the verifier (lib/repo-sync.sh).
-    if (trust && name) {
-      const rc = runStreaming(REPOSITORY_SH(), ["introduce", name]);
-      if (rc !== 0) {
-        rmSync(path, { recursive: true, force: true });
-        throw new Error(`repository ${name}: the clone does not verify against its signers ${trust.signers.join(" ")} — removed again`);
-      }
+    // ADR-033 D5: a fresh clone is introduced before anything uses it, with or
+    // without signers in site.json: repository.sh owns the verifier
+    // (lib/repo-sync.sh). An unstable branch passes; a staging or production one
+    // must verify against its signers, and without any recorded it is refused —
+    // `repository add` would have asked for them, or for --unsigned.
+    const rc = runStreaming(REPOSITORY_SH(), ["introduce", name]);
+    if (rc !== 0) {
+      rmSync(path, { recursive: true, force: true });
+      throw new Error(
+        trust
+          ? `repository ${name}: the clone does not verify against its signers ${trust.signers.join(" ")} — removed again`
+          : `repository ${name}: '${branch}' needs its signers, and site.json records none — removed again. ` +
+              `Add it with them: site-manager repository remove ${name}, then site-manager repository add ${url} --branch ${branch} --signer SHA256:… (or --unsigned)`,
+      );
     }
   }
 
@@ -76,9 +82,12 @@ export class CliSiteClient implements SiteClient {
     }
   }
 
-  checkoutRepo(path: string, branch: string): void {
-    run(GIT(), ["-C", path, "fetch", "origin"]);
-    run(GIT(), ["-C", path, "checkout", branch]);
+  // The branch switch goes through the sweep's own gate (`repository sync`,
+  // reconcile_repo_checkout): on a staging or production branch only to a
+  // verified release, never past a pending migration or a mothership rebuild.
+  checkoutRepo(_path: string, branch: string, name: string): void {
+    const rc = runStreaming(REPOSITORY_SH(), ["sync", name]);
+    if (rc !== 0) throw new Error(`repository ${name}: could not switch to '${branch}' (repository sync refused, above)`);
   }
 
   validateSite(siteFile: string): string[] {

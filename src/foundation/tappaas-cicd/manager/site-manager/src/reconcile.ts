@@ -155,7 +155,7 @@ export function computePlan(site: Site, client: SiteClient, opts: ReconcileOpts)
         kind: "checkout-repo",
         target: `repository ${repo.name} → checkout ${branch} (was ${cur})`,
         apply: (c) => {
-          c.checkoutRepo(path, branch);
+          c.checkoutRepo(path, branch, repo.name);
           return 0;
         },
       });

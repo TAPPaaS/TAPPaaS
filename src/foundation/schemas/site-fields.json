@@ -449,7 +449,7 @@
       "description": "Refuse to update a repository on the staging or production channel unless it signs its releases (ADR-033 D9). false (the default): a repository that lists no signing keys in .tappaas/allowed_signers still updates, and the health check reports it as unsigned. A repository that does list keys is always verified, whatever this says.",
       "type": "boolean",
       "default": false,
-      "note": "Turn it on when the site must show that everything it runs comes from signed releases. Unstable branches are never signed and are not affected.",
+      "note": "Turn it on when the site must show that everything it runs comes from signed releases. Unstable branches are never signed and are not affected. A repository that declares no channels (no channels.json at its root) has only unstable branches: it still updates, unverified, and each move is warned.",
       "changeClass": "in-place"
     }
   }

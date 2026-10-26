@@ -18,7 +18,8 @@
 #   the gate:        a staging checkout moves to a signed release and records it;
 #                    an unsigned tip is refused and nothing moves; an old signed
 #                    release is refused; unstable moves unverified; an unsigned
-#                    repository moves unless requireSigned.
+#                    repository moves unless requireSigned; one with no
+#                    channels.json moves under requireSigned, warned.
 #   first trust: a fresh clone's current release verifies against the owners'
 #   fingerprints (D5), no release number; the chain: a key enrolled in a release
 #   the site skipped counts, one an unknown key signed never does;
@@ -251,6 +252,20 @@ REPO_SYNC_REQUIRE_SIGNED=1 reconcile_repo_checkout "${US}" "file://${U}" staging
 check "requireSigned refuses unsigned" "${rc}" "3"
 reconcile_repo_checkout "${US}" "file://${U}" staging 0 usite >/dev/null 2>&1; rc=$?
 check "unsigned repository moves by default" "${rc}/$(git -C "${US}" rev-parse HEAD)" "0/$(git -C "${UD}" rev-parse HEAD)"
+
+# 15b. a repository that declares no channels is unstable: under requireSigned it
+#      still moves, and the move is warned, not left to debug
+N="${W}/nforge.git"; git init -q --bare -b main "${N}"
+ND="${W}/ndev"; git clone -q "${N}" "${ND}" 2>/dev/null
+commit "${ND}" n1; git -C "${ND}" push -q origin main
+NS="${W}/nsite"; git clone -q -b main "${N}" "${NS}"
+commit "${ND}" n2; git -C "${ND}" push -q origin main
+out="$( warn(){ echo "WARN $*"; }; REPO_SYNC_REQUIRE_SIGNED=1 reconcile_repo_checkout "${NS}" "file://${N}" main 0 nsite 2>&1 )"; rc=$?
+check "no channels.json under requireSigned: moves" "${rc}/$(git -C "${NS}" rev-parse HEAD)" "0/$(git -C "${ND}" rev-parse HEAD)"
+case "${out}" in *"declares no channels"*) ok ;; *) no "…and warns that it moved unverified (${out})" ;; esac
+commit "${ND}" n3; git -C "${ND}" push -q origin main
+out="$( warn(){ echo "WARN $*"; }; reconcile_repo_checkout "${NS}" "file://${N}" main 0 nsite 2>&1 )"
+case "${out}" in *"declares no channels"*) no "without requireSigned the warning is not given" ;; *) ok ;; esac
 
 # ── the introduction: first trust for a fresh clone (D5) ───────────────
 fp() { ssh-keygen -lf "${W}/$1.pub" | awk '{print $2}'; }

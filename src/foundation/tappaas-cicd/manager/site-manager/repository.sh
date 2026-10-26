@@ -1525,11 +1525,17 @@ cmd_introduce() {
         given=1
     else
         signers="$(jq -r '(.trust.signers // [.trust.signer // empty]) | join(" ")' <<<"${entry}")"
-        [[ -n "${signers}" ]] || die "${name} has no signer fingerprints in site.json — give them with --signer SHA256:<fp> (once per key)"
     fi
-    info "  Signers: ${BL}${signers}${CL}"
+    # No fingerprints given or recorded: repo_sync_introduce decides — an unstable
+    # branch needs none, a staging or production one is refused, and says how
+    # to add it. site-manager's reconcile clones through here.
+    if [[ -n "${signers}" ]]; then
+        info "  Signers: ${BL}${signers}${CL}"
+    else
+        info "  No signer fingerprints in site.json"
+    fi
     repo_sync_introduce "${path}" "${branch}" "${name}" "${signers}" 0 \
-        || die "${name} does not verify against these signers (ADR-033 D5)"
+        || die "${name} is not trusted on '${branch}' (ADR-033 D5, above)"
     if [[ "${given}" -eq 1 ]]; then
         local tmp; tmp="$(mktemp)"
         jq --arg n "${name}" --arg s "${REPO_SYNC_INTRO_SIGNERS}" \
@@ -1537,7 +1543,11 @@ cmd_introduce() {
             "${SITE_FILE}" >"${tmp}" && mv "${tmp}" "${SITE_FILE}" || { rm -f "${tmp}"; die "Failed to update site.json"; }
         info "  ${GN}✓${CL} Signer fingerprints written to site.json"
     fi
-    info "  ${GN}✓${CL} ${name} verified against its signers"
+    if [[ -n "${signers}" ]]; then
+        info "  ${GN}✓${CL} ${name} verified against its signers"
+    else
+        info "  ${GN}✓${CL} ${name}: '${branch}' is unstable — nothing is signed there"
+    fi
 }
 
 main() {

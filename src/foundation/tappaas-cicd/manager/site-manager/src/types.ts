@@ -168,14 +168,16 @@ export interface SiteClient {
   // (1) own concern.
   // Whether a repository's clone exists on disk at `path`.
   repoCloneExists(path: string): boolean;
-  // Clone <url> into <path> (git clone https://<url> <path>). With <trust>
-  // the clone is checked against its signers' fingerprints (ADR-033 D5) and
-  // removed again when it does not verify; the error says why.
-  cloneRepo(url: string, path: string, branch: string, name?: string, trust?: RepositoryTrust): void;
+  // Clone <url> into <path> (git clone https://<url> <path>) and introduce it
+  // (ADR-033 D5): on a staging or production branch it must verify against the
+  // signers in <trust>, and without any it is refused; either way a clone that
+  // does not pass is removed again and the error says why.
+  cloneRepo(url: string, path: string, branch: string, name: string, trust?: RepositoryTrust): void;
   // The branch currently checked out at <path>, or null if unknown.
   currentBranch(path: string): string | null;
-  // Check out <branch> at <path>.
-  checkoutRepo(path: string, branch: string): void;
+  // Switch the checkout at <path> to <branch> through `repository sync <name>`:
+  // the same verification and gates as the sweep (ADR-033 D6).
+  checkoutRepo(path: string, branch: string, name: string): void;
   // Validate site.json against site-fields.json (validate-site.sh). Returns
   // the list of validation errors (empty = valid).
   validateSite(siteFile: string): string[];

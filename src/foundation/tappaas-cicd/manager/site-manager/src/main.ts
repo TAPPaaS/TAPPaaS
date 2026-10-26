@@ -70,7 +70,7 @@ export const HELP: HelpSpec = {
         ["--email <addr>", "admin email"],
         ["--automaticReboot true|false", "allow update reboots"],
         ["--ipv6 true|false", "the site supports IPv6: OPNsense's 'Allow IPv6', applied by the next network update (default false)"],
-        ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (ADR-033 D9; default false). A repository that lists signing keys is verified either way."],
+        ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (ADR-033 D9; default false). A repository that lists signing keys is verified either way; one that declares no channels (no channels.json) is unstable, and moves unverified with a warning."],
         ["--snapshotRetention <n>", "VM snapshots kept per module"],
         ["--backupTarget <s>", "backup.target"],
         ["--backupOffsite <s>", "backup.offsite"],

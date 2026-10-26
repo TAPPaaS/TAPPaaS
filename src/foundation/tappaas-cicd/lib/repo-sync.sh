@@ -107,7 +107,8 @@ repo_sync_at_risk_commits() {
 # before anything moves. Sets REPO_SYNC_VERIFIED=1 when <target> is a verified
 # release, so the caller records it once the checkout is there.
 #
-#   unstable branch (or no channels.json)    moves; nothing is signed there (D1)
+#   unstable branch (or no channels.json)    moves; nothing is signed there (D1);
+#                                            no channels.json under requireSigned: warned
 #   no keys in allowed_signers at the base   moves, warned — unless requireSigned (D9)
 #   staging/production with keys             only to a release tag signed by a key
 #                                            the BASE lists, whose tree hash matches,
@@ -123,7 +124,17 @@ repo_sync_verify_gate() {
     channel="$(branch_channel "${path}" "${branch}")"
     case "${channel}" in
         staging|production) ;;
-        *) debug "  repo-sync: ${name} is on '${branch}' (${channel:-undeclared}) — not verified (unstable)"; return 0 ;;
+        *)
+            # requireSigned cannot hold for a repository that declares no
+            # channels: everything it has is unstable (D1). Moving is still
+            # allowed; that it moved unverified is said, not left to debug.
+            if [[ -z "${channel}" && "${target}" != "$(git -C "${path}" rev-parse -q --verify HEAD 2>/dev/null)" ]] \
+               && [[ "${REPO_SYNC_REQUIRE_SIGNED}" == "1" || "${REPO_SYNC_REQUIRE_SIGNED}" == "true" ]]; then
+                warn "  repo-sync: ${name} declares no channels (no channels.json), so '${branch}' is unstable and moves unverified — requireSigned covers staging and production branches only"
+            else
+                debug "  repo-sync: ${name} is on '${branch}' (${channel:-undeclared}) — not verified (unstable)"
+            fi
+            return 0 ;;
     esac
     head="$(git -C "${path}" rev-parse -q --verify HEAD 2>/dev/null || true)"
     base="$(verify_base "${path}" "${REPO_SYNC_TRUST_DIR}" "${name}")"

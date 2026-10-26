@@ -30,7 +30,7 @@ export class FakeSiteClient implements SiteClient {
   repoCloneExists(path: string): boolean {
     return this.clones.has(path);
   }
-  cloneRepo(url: string, path: string, branch: string, name?: string, trust?: RepositoryTrust): void {
+  cloneRepo(url: string, path: string, branch: string, name: string, trust?: RepositoryTrust): void {
     this.log.push(`clone ${url} ${path} ${branch}${trust ? ` trust=${name}@${trust.signers.join(",")}` : ""}`);
     this.clones.add(path);
     this.branches.set(path, branch);
@@ -38,8 +38,8 @@ export class FakeSiteClient implements SiteClient {
   currentBranch(path: string): string | null {
     return this.branches.get(path) ?? null;
   }
-  checkoutRepo(path: string, branch: string): void {
-    this.log.push(`checkout ${path} ${branch}`);
+  checkoutRepo(path: string, branch: string, name: string): void {
+    this.log.push(`checkout ${path} ${branch} (${name})`);
     this.branches.set(path, branch);
   }
   validateSite(_siteFile: string): string[] {
