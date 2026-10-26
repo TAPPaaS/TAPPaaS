@@ -8,7 +8,8 @@
       "production": null,
       "kind": "patch",
       "channel": "staging",
-      "why": "service down: an IPv4-only site's CrowdSec stops at start on an empty whitelist (makerfloss, 2026-10-26)"
+      "why": "service down: an IPv4-only site's CrowdSec stops at start on an empty whitelist (makerfloss, 2026-10-26)",
+      "note": "carries: no empty CrowdSec whitelist on an IPv4-only site, and running means its local API answers; backup, logging and backup:filesystem confirm in one line; nightly repeats (snapshot pruning, pinned fields, journal wiring, the self-check list, an idle reboot pass) at Debug"
     },
     {
       "version": "2.3.2",

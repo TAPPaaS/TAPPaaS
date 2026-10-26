@@ -437,6 +437,12 @@ summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- /next-release summary -->
 
+## Release 2.3.3 — staging 2026-10-26 · production at the next boundary
+
+Tag `v2.3.3`, moved into staging 2026-10-26 as an urgent fix on top of 2.3.2 (`tappaas-train patch`, ADR-028 D12); production stays on 2.2.2 until the next boundary.
+
+The second round from makerfloss's updates. On a site without internal IPv6 networks CrowdSec writes no site whitelist — an empty one stopped the engine at start, while its service status still named a process — and "running" now means the engine's local API answers, in the network update and in its test. Updates say less every night: backup and logging confirm their wiring in one line each, backup:filesystem in one line per guest, a CPU change held for the next restart is left to its DEFERRED warning, and snapshot pruning, pinned fields, the journal wiring of every module, unpublished names, the self-check's list and a reboot pass with nothing to do are [Debug] or one line. module-manager's own steps stay as they were.
+
 ## Release 2.3.2 — staging 2026-10-26 · production at the next boundary
 
 Tag `v2.3.2`, moved into staging 2026-10-26 as an urgent fix on top of 2.3.1 (`tappaas-train patch`, ADR-028 D12); production stays on 2.2.2 until the next boundary.
