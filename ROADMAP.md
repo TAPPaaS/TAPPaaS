@@ -105,20 +105,20 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | Wave | Group | Ease | Risk | released | done for 2.4 | open |
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
-| 7 | G7.2 New and reworked app modules | H | M | 3 | 1 | 1 |
+| 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 10 | – | 12 |
-| 6 | G6.2 User interface & physical view | H | L | 4 | 1 | 1 |
+| 6 | G6.2 User interface & physical view | H | L | 5 | – | 1 |
 | 6 | G6.3 Data model | M | M | 9 | – | 1 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 5 | – | 2 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 27 | 2 | 4 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | – | 4 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | – | 5 |
 | 3 | G3.5 Installer UX | L | L | 2 | – | 2 |
-| 2 | G2.1 Firewall exposure & rule order | M | H | 25 | 1 | 2 |
+| 2 | G2.1 Firewall exposure & rule order | M | H | 26 | – | 2 |
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | – | 1 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
@@ -218,13 +218,12 @@ Forgejo gets its CI: a Woodpecker module wired to it (#840), whose agents can al
 | #415 | Self-hosted KVM Woodpecker runners | H | L | |
 | #284 | forgejo: SQLite → PostgreSQL | M | M | Out of G3.3 2026-10-06 (operator): SQLite stays the default until load says otherwise |
 
-### G7.2 New and reworked app modules — Ease H · Risk M · released: 3 · done for 2.4: 1 · open: 1
+### G7.2 New and reworked app modules — Ease H · Risk M · released: 4 · open: 1
 
 New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129), Karakeep for bookmarks (#842) — and a rework of LiteLLM's control plane (#170, decided with #430).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| ✅ #882 | nomad: the Command Center behind the identity gate, fenced on the VM | M | M | **Done 2026-10-26** (`2ee3d4f8`): `nomad.<domain>`, members of `admin`; 8080 only from Caddy, no DMZ neighbour. Ships in 2.3.1 |
 | #170 | LiteLLM declarative control plane | H | M | Decide with #430 (G1.7); an app controller per ADR-035 (P5) |
 
 ## Wave 6 — site fabric and user experience
@@ -251,13 +250,12 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 | #883 | A debug bundle for support: the log and an anonymized `~/config`, attached to the failure mail | M | L | **Opened 2026-10-26.** PII removed from the configs; the mail suggests forwarding it to a support address. First trigger: a failed update |
 
-### G6.2 User interface & physical view — Ease H · Risk L · released: 4 · done for 2.4: 1 · open: 1
+### G6.2 User interface & physical view — Ease H · Risk L · released: 5 · open: 1
 
 A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point), designed first in a spike and an ADR (#844). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| ✅ #881 | console: verify the identity gate's signed token, not the peer address | M | L | **Done 2026-10-25** (`85b93c13`): user and groups come from `X-Authentik-Jwt`, checked against the provider key; forged headers 401. Ships in 2.3.1 |
 | #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **P1–P3 built and live on hrossen 2026-10-18** (`839-console-p1/p2/p3`, the review fixes and the operator's UX review, on `main` as `1d9c897a`): the `console` — see, operate (jobs with preview and apply, the Setup wizard, the owner's route) and ask (the assistant through LiteLLM, proposing and never applying) — installed at `console.hrossen.dk` behind the gate, with `network-manager topology`, `health-manager validate --json` and the verb manifests (`--help --json`) in the managers. **2026-10-19 to 10-23, all live on hrossen:** the schema-driven forms and the install fixes; the Site page as Overview (the whole site record, updates and repositories), Physical (racks, rooms, recorded devices, patch panels and cable segments from the new rack-manager), Device (plain cards, a force layout around the selection, a panel opening on the device's faceplate) and Storage (nodes → pools → disks from `storage-manager inventory`, with SMART states and the pool pie); Zones as its own menu; Environments as cards with zone boxes and module icons; the Backup page's overview with last backup and verify. **Open:** P4 (agents through the gate, #142; the SIEM surface after #843; the end-user badges) and the `status.<domain>` route (needs gated `proxyRoutes`); the model behind the Physical view moves with G6.3 |
 
 ### G6.3 Data model — Ease M · Risk M · released: 9 · open: 1
@@ -324,7 +322,7 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 27 · done for 2.4: 2 · open: 4
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 29 · open: 4
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753). Built from the 2.0→2.2 field report (#832): a capacity pre-flight before the sweep (#833) and visible size changes on legacy sites (#834). Next by design: dynamic placement on PVE 9.2's load balancer (#838).
 
@@ -334,8 +332,6 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; the CPU level the candidate set shares (#827), capable nodes only (#836). ADR first |
 | #884 | More dynamic placement and resource allocation: disk and RAM per site size (`minimalTest`, small, large), falling back to the minimum under constraint | H | M | **Opened 2026-10-26.** TAPPaaS heuristics next to Proxmox's own allocation; ADR first. Related: #838, #880, #663, #866 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
-| ✅ #880 | Capacity pre-flight: refuse only memory growth, hard stop on install | M | L | **Done 2026-10-26** (`2696c5b2`): an over-committed node the update does not grow warns; growth past 95% refuses; install-module refuses a new guest that would. Ships in 2.3.1 |
-| ✅ #879 | Update waits for a guest on modules that have no VM | L | L | **Done 2026-10-26** (`d1832b39`): no readiness wait for a module without a `vmid`; about 72 min per nightly sweep on a site with device modules. Reported by @ErikDaniel007. Ships in 2.3.1 |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 14 · open: 1
 
@@ -386,7 +382,7 @@ A first install that is easier to get through: resumable (#377), showing its pro
 
 Changes to live firewall and DNS behaviour on every installation. Restrictive defaults get harder to introduce the longer users rely on permissive ones, so they come early; every change shows its dry-run diff (#645) before `--apply`.
 
-### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 25 · done for 2.4: 1 · open: 2
+### G2.1 Firewall exposure & rule order — Ease M · Risk H · released: 26 · open: 2
 
 Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/SSH and anti-spoofing rules. Sprint from 2026-10-12: the review of the tier model and rule creation is done and published (#816), with most of its findings fixed; pinholes no longer shadowed (#386); every zone policy covers IPv6 (#815), and IPv6 itself is built (#26). The rules manager's overlap report, covered pinholes and sequence map are built (#160, #256, #162, on the branch). The review findings are done: #817, #818, #822 closed; #819–#821, #823 and the ADR amendments (#824) closed — on `main` 2026-10-13 after a clean `--deep` (144/0). Inbound IPv6 to Caddy, IPv6 anti-spoofing, DNSSEC (#263), #576, #257, #660 and #683 followed, on `main` 2026-10-13 after a clean `--deep` (144/0). Lockout check re-run on hrossen 2026-10-13 against the current rules, IPv4 and IPv6: only mgmt reaches the firewall's GUI and SSH, on any address; the WAN passes 80/443 and nothing else (the admin VPN not re-probed). Open: the NetBird rules below, pending the NetBird decision; #706 moved to G4.4 behind #668. NetBird rules (#385, #222) are low priority until the NetBird decision.
 
@@ -394,7 +390,6 @@ Tighter firewall defaults that keep what modules need. Built: the gateway, GUI/S
 |---|-------|:-:|:-:|------|
 | #385 | Persist the NetBird OPT1 pass rule | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision (*Decisions*). Land with #222 |
 | #222 | NetBird → srv floating rule is fragile | L | M | **Low priority this sprint (2026-10-12)**, pending the NetBird decision. The #816 review found no code that creates NetBird rules |
-| ✅ #877 | mdns-manager sees no `discoveryMdns` in the stored config | L | L | **Done 2026-10-26** (`b8b59010`): it reads module configs in their flat view, so a network update no longer plans to switch the repeater off. Reported by @ErikDaniel007. Ships in 2.3.1 |
 
 ### G2.2 DNS resolver robustness — Ease L · Risk M · released: 7 · open: 1
 
@@ -441,8 +436,49 @@ someone deciding whether to upgrade. The release-train boundary turns it into th
 summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
-The update sweep stops failing on what a site runs that way on purpose: a node already over its memory threshold warns (only growth refuses, and a new module's install), a suspended provider no longer fails its consumers, and a run where only app modules failed ends *degraded* (exit 3, still mailed) instead of *failed*. The reboot pass finishes the cycle: in the scheduled window a guest that cannot move live is stopped, moved and started, a TSC rate the target cannot run is caught before a live move, and the waits suit slower hardware. Rollback of `module modify --set` restores the config from before the change. Two security fixes: the console takes who is calling from the identity gate's signed token, no longer from headers anyone on the management network could send, and NOMAD's Command Center — which can start any container — is reached only through the gate, for members of `admin`.
+
 <!-- /next-release summary -->
+
+## Release 2.3.1 — staging 2026-10-26 · production at the next boundary
+
+Tag `v2.3.1`, moved into staging 2026-10-26 as an urgent fix on top of 2.3 (`tappaas-train patch`, ADR-028 D12); production stays on 2.2.2 until the next boundary.
+
+The update sweep stops failing on what a site runs that way on purpose: a node already over its memory threshold warns (only growth refuses, and a new module's install), a suspended provider no longer fails its consumers, and a run where only app modules failed ends *degraded* (exit 3, still mailed) instead of *failed*. The reboot pass finishes the cycle: in the scheduled window a guest that cannot move live is stopped, moved and started, a TSC rate the target cannot run is caught before a live move, and the waits suit slower hardware. Rollback of `module modify --set` restores the config from before the change. Two security fixes: the console takes who is calling from the identity gate's signed token, no longer from headers anyone on the management network could send, and NOMAD's Command Center — which can start any container — is reached only through the gate, for members of `admin`.
+
+The rows below are what it carried, by the wave and group they came from.
+
+### Wave 2 — network behaviour hardening
+
+#### G2.1 Firewall exposure & rule order — Ease M · Risk H
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #877 | mdns-manager sees no `discoveryMdns` in the stored config | L | L | **Done 2026-10-26** (`b8b59010`): it reads module configs in their flat view, so a network update no longer plans to switch the repeater off. Reported by @ErikDaniel007 |
+
+### Wave 3 — stability & correctness
+
+#### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #880 | Capacity pre-flight: refuse only memory growth, hard stop on install | M | L | **Done 2026-10-26** (`2696c5b2`): an over-committed node the update does not grow warns; growth past 95% refuses; install-module refuses a new guest that would |
+| ✅ #879 | Update waits for a guest on modules that have no VM | L | L | **Done 2026-10-26** (`d1832b39`): no readiness wait for a module without a `vmid`; about 72 min per nightly sweep on a site with device modules. Reported by @ErikDaniel007 |
+
+### Wave 6 — site fabric and user experience
+
+#### G6.2 User interface & physical view — Ease H · Risk L
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #881 | console: verify the identity gate's signed token, not the peer address | M | L | **Done 2026-10-25** (`85b93c13`): user and groups come from `X-Authentik-Jwt`, checked against the provider key; forged headers 401 |
+
+### Wave 7 — enhance the stacks
+
+#### G7.2 New and reworked app modules — Ease H · Risk M
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| ✅ #882 | nomad: the Command Center behind the identity gate, fenced on the VM | M | M | **Done 2026-10-26** (`2ee3d4f8`): `nomad.<domain>`, members of `admin`; 8080 only from Caddy, no DMZ neighbour |
 
 ## Release 2.3 — staging 2026-10-25 · production at the next boundary
 
