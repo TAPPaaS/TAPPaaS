@@ -2,7 +2,7 @@
   "$schema": "../schemas/fields-schema.json",
   "scope": "module",
   "description": "Fields of the satellite module (ADR-010).",
-  "_note": "MODULE TIER (#567). The satellite provides no service; these are read by its own install, update and test (lib/), so they are general fields of this module. The rest of a satellite's config is described in schemas/satellite-fields.json.",
+  "_note": "MODULE TIER (#567). The satellite provides no service; these and name, host and provider are read by its own install, update and test (lib/), so they are general fields of this module. The rest of a satellite's config is described in schemas/satellite-fields.json.",
   "fields": {
     "sshPort": {
       "description": "SSH to the mothership through the satellite (ADR-010 §4.4.2): the satellite's public TCP port that passes, blind, to tappaas-cicd:22 — for a Site with no public address, a shell on the mothership without a WireGuard client. Absent or 0: off. Needs sshAllow; only those sources are admitted. Log in as `ssh -p <sshPort> tappaas@<satellite>`; key-only, as the mothership's sshd always is.",
@@ -25,6 +25,39 @@
         "198.51.100.7"
       ],
       "note": "No 0.0.0.0/0 and no network with host bits set. A changing home or mobile address needs the list updated — or the admin WireGuard, which needs no list."
+    },
+    "name": {
+      "description": "The name the firewall knows the satellite by (server tappaas-edge-<name>, peer tappaas-<name>); defaults to the instance name. A satellite from before ADR-010 §8.4 keeps its own (e.g. satellite1).",
+      "type": "string",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": "satellite1"
+    },
+    "host": {
+      "description": "The VPS itself: publicIp, sshUser and operatorSshKeys (the operator's out-of-band keys, recorded at install). Each key is described in schemas/satellite-fields.json.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": {
+        "publicIp": "198.51.100.4",
+        "sshUser": "root"
+      }
+    },
+    "provider": {
+      "description": "Where the VPS comes from: type (hetzner), allocation (portal or api) and, for api, location and serverType. Each key is described in schemas/satellite-fields.json.",
+      "type": "object",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": {
+        "type": "hetzner",
+        "allocation": "portal"
+      }
     }
   }
 }

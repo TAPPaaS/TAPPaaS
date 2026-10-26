@@ -70,6 +70,14 @@ run_case "unknown-field" \
     '{"vmname":"a","dependsOn":["cluster:vm"],"customField":"x","cores":2}' \
     '.customField == "x" and .config["cluster:vm"].cores == 2'
 
+# Case 6b: a `_note` field stays at top, with no warning (it is for people)
+_w=$(echo '{"vmname":"a","dependsOn":["cluster:vm"],"_README":"x","customField":"y"}' | regroup_to_pattern_a 2>&1 >/dev/null)
+if [[ "${_w}" != *"_README"* && "${_w}" == *"customField"* ]]; then
+    pass "a _note field is not warned about; an unknown field still is"
+else
+    fail "note-field warning: ${_w}"
+fi
+
 # Case 7: orphan — usedBy refers to dep the module doesn't declare → stay at top
 # proxyDomain is usedBy=["network:proxy"]. Module declares only cluster:vm. Orphan.
 run_case "orphan-field" \

@@ -108,6 +108,9 @@ regroup_to_pattern_a() {
         | (.provides // []) as $prov
         | [ keys[]
             | select(. as $k | ($pinned | index($k)) | not)
+            # `_name` / `-name` notes are for people (_README, _note): never
+            # schema fields, never a finding — as validate treats them.
+            | select(startswith("_") or startswith("-") | not)
             | . as $k
             | ($fields[$k].usedBy // []) as $u
             | if $fields[$k] == null then
