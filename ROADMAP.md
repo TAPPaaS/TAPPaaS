@@ -159,6 +159,7 @@ met gates are recorded in the releases that carried their waves.
 | Legal/processor | #359 | Wave 4 |
 | IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Accepted v1.0 2026-10-13**: built and on `main`; inbound verified from a phone over IPv6 via the public AAAA. Remaining outside it: public DNS that follows a dynamic WAN (#383) | #26 closable |
 | Locations and placement | [ADR-036](docs/ADR/ADR-036%20-%20Locations%20and%20Placement.md) **Accepted, built 2026-10-23** (#869–#873, migrations 0019–0022): site-manager owns locations with a primary one, every device names its location, rack-manager becomes position-manager owning every placement, the nodes are `pvehost` machines and `site.hardware.nodes` goes; steps #869–#873 | G6.3 |
+| Install | #403, #377 — [ADR-037](docs/ADR/ADR-037%20-%20Install.md) **Accepted v1.0 2026-10-26**: ZFS on the boot disk by default, a module's `storage` a preference with the boot pool last (P1); a hosted server on one IP (P2); the bootstrap ends at the console (P3). P1 in progress | G3.1, G3.5 |
 | User interface | #844 — [ADR-034](docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md) **Accepted v1.0 2026-10-18**, built: the console at `console.<domain>` | #844 closed |
 | Service exposure | #845 — [ADR-032](docs/ADR/ADR-032%20-%20Service%20Exposure.md) **Accepted v1.0, built** (2026-10-17): the gate authenticates machine callers (service accounts, client-credentials JWT); a module without `network:proxy` is unpublished by design, in the DMZ when it runs third-party code without user data (ADR-021 R1 amended); Jellyfin published without the gate for friends and family, hardened. all phases built (P0–P4); rate limiting is #851 | #845 closed |
 
@@ -327,7 +328,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #403 | Install on the root disk; smarter placement | M | L | |
+| #403 | Install on the root disk; smarter placement | M | M | **ADR-037 D1 (2026-10-26):** ZFS boot by default; `storage` falls back to the same class, any `tanka<N>`, then the boot pool, warned. P1 in progress |
 | #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; the CPU level the candidate set shares (#827), capable nodes only (#836). ADR first |
 | #884 | More dynamic placement and resource allocation: disk and RAM per site size (`minimalTest`, small, large), falling back to the minimum under constraint | H | M | **Opened 2026-10-26.** TAPPaaS heuristics next to Proxmox's own allocation; ADR first. Related: #838, #880, #663, #866 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
@@ -372,7 +373,7 @@ A first install that is easier to get through: resumable (#377), showing its pro
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #377 | Installer cannot restart; mgmt-net routing | M | L | |
+| #377 | Installer cannot restart; mgmt-net routing | M | L | **ADR-037 D3 (P3b, 2.5):** the bootstrap decides what is left from its records, so a second run continues |
 | FW #83 | Reuse already-downloaded images | H | L | **Re-scored Ease L → H (2026-09-26):** the img download lives in a temp dir deleted on exit. Reuse needs a cache location and a staleness policy (moving tags) — a decision first |
 
 ---
