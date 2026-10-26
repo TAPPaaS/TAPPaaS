@@ -134,6 +134,14 @@ ck "the running cpu model is the cur line, not the held new one" \
 ck "…with its flags cut off" \
    "x86-64-v3" "$(printf 'cur cpu: x86-64-v3,flags=+aes\n' | cpu_running_model)"
 
+# A guest keeps its boot node's TSC rate; a node that cannot scale TSC must run
+# at that rate, or the guest hangs (Erik's cicd: AMD 2994 MHz → Intel 2200 MHz).
+tsc() { tsc_live_safe "$@"; echo $?; }
+ck "a different rate on a node without TSC scaling is not live-safe" "2" "$(tsc 2994328000 0 2200000)"
+ck "the same rate (within calibration noise) is" "0" "$(tsc 2200012000 0 2200000)"
+ck "a node that scales TSC takes any rate" "0" "$(tsc 2994328000 1 2200000)"
+ck "no scaling and no known rate: cannot tell" "1" "$(tsc 2994328000 0)"
+
 # ── CPU inventory (#827) ────────────────────────────────────────────
 # Pure: canned probe output in, set arithmetic out. The live probe is the
 # deep tier's.

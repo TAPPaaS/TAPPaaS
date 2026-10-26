@@ -44,7 +44,9 @@ rn_node_ssh() {
 }
 
 # Block until a node answers SSH again, returning non-zero after <max> seconds.
-# Default max is RN_WAIT_MAX (180s in production; lowered by tests).
+# Default max is RN_WAIT_MAX (600s in production; lowered by tests). A server
+# can spend two minutes in firmware before its kernel starts; the wait polls, so
+# a fast node still returns as soon as it is back.
 #
 # With <old-boot-id>, the node counts as back only once it reports a DIFFERENT
 # boot id. A node that has been told to reboot but has not finished shutting
@@ -53,7 +55,7 @@ rn_node_ssh() {
 # about the boot loader while the node is only just going down. Omitting the
 # argument keeps the old behaviour (any SSH answer means back).
 rn_wait_for_node() {
-    local node="$1" max="${2:-${RN_WAIT_MAX:-180}}" old_boot_id="${3:-}" n=0 boot_id
+    local node="$1" max="${2:-${RN_WAIT_MAX:-600}}" old_boot_id="${3:-}" n=0 boot_id
     info "  Waiting for ${node} to return..."
     while :; do
         boot_id=$(ssh -n -o BatchMode=yes -o ConnectTimeout=5 "root@$(rn_node_fqdn "$node")" \
@@ -97,7 +99,7 @@ rn_node_in_maintenance() {
 
 # Block until <node> is a cluster member again. Non-zero on timeout.
 rn_wait_cluster_member() {
-    local node="$1" max="${2:-${RN_CLUSTER_WAIT_MAX:-120}}" n=0
+    local node="$1" max="${2:-${RN_CLUSTER_WAIT_MAX:-300}}" n=0
     info "  Waiting for ${node} to rejoin the cluster..."
     while :; do
         rn_node_is_cluster_member "$node" && return 0
@@ -354,6 +356,31 @@ rn_drain_node() {
     if ! unsafe="$(rn_live_unsafe_guests "$node")"; then
         unsafe="(could not read the cluster's guests — not draining blind)"
     fi
+    # In the update window (RN_COLD_MOVE_OK=1: automaticReboot, the scheduled
+    # run) such a guest is moved the way it can be: stop, move, start — which
+    # also brings up a CPU change its update saved for the next restart. Not the
+    # controller's own VM: it cannot stop itself mid-run.
+    if [[ -n "${unsafe}" && "${RN_COLD_MOVE_OK:-0}" == 1 && "${unsafe}" != "("* ]]; then
+        local _seen=" " _cs _cn _ct _arrow _cicd=""
+        while read -r _cs _cn _arrow _ct; do
+            [[ -n "${_cs}" && "${_seen}" != *" ${_cs} "* ]] || continue
+            _seen+="${_cs} "
+            if [[ -n "${RN_CICD_VMID:-}" && "${_cs}" == "vm:${RN_CICD_VMID}" ]]; then
+                _cicd="${_cn} ${_ct}"; continue
+            fi
+            info "  Moving ${_cn} to ${_ct} by stop, move, start (it cannot move live)..."
+            rn_relocate "$node" "$_cs" "$_ct" \
+                || { error "Moving ${_cn} to ${_ct} failed — ${node} not drained"; return 1; }
+        done <<< "${unsafe}"
+        if [[ -n "${_cicd}" ]]; then
+            warn "DEFERRED: ${node} not ${RN_DRAIN_FOR:-rebooted} — the controller's own VM ${_cicd% *} cannot move live to ${_cicd#* },"
+            warn "  and it cannot stop itself. Move it once from a node's shell (it is down for a minute):"
+            warn "    ha-manager crm-command relocate vm:${RN_CICD_VMID} ${_cicd#* }"
+            warn "  The next run then reboots ${node}."
+            return 3
+        fi
+        unsafe="$(rn_live_unsafe_guests "$node")" || unsafe="(could not read the cluster's guests — not draining blind)"
+    fi
     if [[ -n "${unsafe}" ]]; then
         warn "DEFERRED: ${node} not ${RN_DRAIN_FOR:-rebooted} — draining it would move HA guests LIVE to a CPU lacking features they may use:"
         while IFS= read -r _l; do warn "    ${_l}"; done <<< "${unsafe}"
@@ -388,7 +415,7 @@ rn_drain_node() {
     while [[ -n "$(rn_ha_left_on_node "$node" || true)" ]]; do
         sleep 5; (( local_wait+=5 ))
         if [[ $local_wait -ge ${RN_DRAIN_MAX:-600} ]]; then
-            error "HA migration timeout on ${node} after ${local_wait}s: $(rn_ha_left_on_node "$node" | awk '{printf "%s=%s ", $1, $3}')"
+            error "HA migration timeout on ${node} after ${local_wait}s (raise RN_DRAIN_MAX): $(rn_ha_left_on_node "$node" | awk '{printf "%s=%s ", $1, $3}')"
             # #507: the reboot has NOT happened yet, so the VMs are still on this
             # node — restore the pre-attempt HA state rather than stranding it in
             # maintenance. Leaving it on here is how a CPU-heterogeneous cluster
@@ -437,7 +464,7 @@ rn_undrain_node() {
     if stuck=$(rn_wait_ha_settled "$node"); then
         info "  ${GN}✓${CL} HA settled — no services in transition"
     else
-        warn "  HA did not settle after ${RN_HA_SETTLE_MAX:-180}s; still in transition:"
+        warn "  HA did not settle after ${RN_HA_SETTLE_MAX:-180}s (raise RN_HA_SETTLE_MAX); still in transition:"
         while IFS= read -r _svc; do
             [[ -n "$_svc" ]] && warn "      ${_svc}"
         done <<< "${stuck}"
@@ -477,7 +504,7 @@ reboot_one_node() {
     rn_node_ssh "$node" "reboot" || true
     sleep 15
     if ! rn_wait_for_node "$node" "" "$old_boot_id"; then
-        error "Node ${node} did not return after reboot (left in maintenance mode so HA keeps its VMs elsewhere)"
+        error "Node ${node} did not return within ${RN_WAIT_MAX:-600}s after its reboot (raise RN_WAIT_MAX; left in maintenance mode so HA keeps its VMs elsewhere)"
         return 1
     fi
     info "  ${GN}✓${CL} ${node} is back online"
@@ -486,7 +513,7 @@ reboot_one_node() {
     # Everything below this point talks to the HA stack, so gate on membership
     # rather than reachability, or the maintenance-disable races the boot.
     if ! rn_wait_cluster_member "$node"; then
-        error "${node} rebooted but did not rejoin the cluster within ${RN_CLUSTER_WAIT_MAX:-120}s"
+        error "${node} rebooted but did not rejoin the cluster within ${RN_CLUSTER_WAIT_MAX:-300}s (raise RN_CLUSTER_WAIT_MAX)"
         error "  It is STILL IN MAINTENANCE MODE and excluded from HA placement. Investigate, then clear with:"
         error "    ha-manager crm-command node-maintenance disable ${node}"
         return 1

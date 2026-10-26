@@ -284,6 +284,42 @@ cpu_running_model() {
     sed -n 's/^cur cpu: *//p' | head -1 | cut -d, -f1
 }
 
+# ── TSC rate across a live migration ────────────────────────────────
+# A guest keeps the TSC rate of the node it booted on. A destination that
+# cannot scale TSC runs it at its own rate instead, and the guest's clock goes
+# wrong under it: a NixOS cicd moved live from a 2994 MHz AMD node to a
+# 2200 MHz Intel one hung within a second (QEMU: "TSC frequency mismatch …
+# TSC scaling unavailable") and needed a cold restart.
+
+# The running guest's TSC rate in Hz, asked of QEMU. Empty when it cannot be read.
+_vm_tsc_hz() {
+    local vmid="$1" node="$2"
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${node}.mgmt.internal" \
+        "printf '%s\n' 'qom-get /machine/unattached/device[0] tsc-frequency' | timeout 15 qm monitor ${vmid} 2>/dev/null" \
+        2>/dev/null | tr -d '\r' | grep -E '^[0-9]+$' | tail -1
+}
+
+# "<scaling 0|1> <khz>" for <node>: whether KVM there scales TSC (AMD tsc_scale,
+# Intel's vmx tsc_scaling), and its TSC rate — Intel's nominal "@ x.xxGHz", which
+# its TSC runs at; empty when the model name does not say.
+_node_tsc() {
+    ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new "root@${1}.mgmt.internal" "bash -s" 2>/dev/null <<'PROBE'
+grep -qwm1 -e tsc_scale -e tsc_scaling /proc/cpuinfo && s=1 || s=0
+g="$(sed -n 's/^model name.*@ *\([0-9.]*\)GHz.*/\1/p' /proc/cpuinfo | head -1)"
+if [ -n "$g" ]; then echo "$s $(awk -v g="$g" 'BEGIN{printf "%d", g * 1000000}')"; else echo "$s"; fi
+PROBE
+}
+
+# Pure: can a guest at <vm_hz> run on a node with <scaling> at <dst_khz>?
+# 0 safe, 2 not, 1 cannot tell (no scaling, rate not known). Within 250 ppm is
+# the same rate (calibration noise).
+tsc_live_safe() {
+    local vm_hz="$1" scaling="$2" dst_khz="${3:-}"
+    [[ "${scaling}" == 1 ]] && return 0
+    [[ -n "${dst_khz}" ]] || return 1
+    awk -v v="${vm_hz}" -v d="${dst_khz}" 'BEGIN{ r = v / (d * 1000); exit (r > 0.99975 && r < 1.00025) ? 0 : 2 }'
+}
+
 # Does <node> offer the named CPU model <model>?
 _node_supports_model() {
     local node="$1" model="$2"
@@ -480,6 +516,25 @@ live_ok() {
         warn "  Proxmox cannot move those live. Migrate offline (stop, move, start),"
         warn "  which needs an explicit --force."
         return 2
+    fi
+
+    # TSC before CPU: whatever the model, a guest whose TSC rate the destination
+    # can neither match nor scale hangs on arrival. A rate QEMU does not report
+    # is not judged here (it was not before).
+    local vm_hz dst_tsc
+    vm_hz="$(_vm_tsc_hz "${vmid}" "${src}")"
+    if [[ -n "${vm_hz}" ]]; then
+        dst_tsc="$(_node_tsc "${dst}")"
+        local _trc=0
+        # shellcheck disable=SC2086
+        [[ -n "${dst_tsc}" ]] && { tsc_live_safe "${vm_hz}" ${dst_tsc} || _trc=$?; }
+        if [[ ${_trc} -eq 2 ]]; then
+            warn "live-ok: ${vmname} runs at a TSC of $((vm_hz / 1000)) kHz; ${dst} cannot scale TSC and runs at ${dst_tsc#* } kHz"
+            warn "  A guest moved live there hangs. Move it by stop, move, start (it then runs at ${dst}'s rate)."
+            return 2
+        elif [[ ${_trc} -eq 1 ]]; then
+            warn "live-ok: ${dst} cannot scale TSC and its rate is not known — ${vmname} ($((vm_hz / 1000)) kHz) is not checked for it"
+        fi
     fi
 
     # A NAMED model (not `host`) fixes the guest's CPUID independently of the

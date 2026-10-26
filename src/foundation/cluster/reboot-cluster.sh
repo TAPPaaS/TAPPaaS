@@ -96,6 +96,7 @@ CLUSTER_SIZE=$(rn_node_ssh "$ENTRY" "pvesh get /cluster/config/nodes --output-fo
 # Which node currently hosts the tappaas-cicd VM (this orchestrator runs inside
 # it). That node is rebooted LAST so HA live-migration keeps this run alive.
 CICD_VMID=$(jq -r '.vmid // 130' "${CONFIG_DIR}/tappaas-cicd.json" 2>/dev/null || echo 130)
+export RN_CICD_VMID="${CICD_VMID}"   # rn_drain_node never stops this VM: it runs this pass
 CICD_HOST=$(rn_node_ssh "$ENTRY" \
     "pvesh get /cluster/resources --type vm --output-format json 2>/dev/null" 2>/dev/null \
     | jq -r --argjson id "$CICD_VMID" '.[] | select(.vmid==$id) | .node' 2>/dev/null | head -1 || true)

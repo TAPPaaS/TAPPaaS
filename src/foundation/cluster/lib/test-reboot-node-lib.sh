@@ -275,5 +275,41 @@ check_targets ""        n1 vm:110 "n1 n2"       # its only partner is down
 )
 read -r _p _f < "${WORK}/sub.counts" && PASS=${_p} && FAIL=${_f}
 
+# ── the update window (RN_COLD_MOVE_OK=1): a guest that cannot move live is
+# moved by stop, move, start, and the node is then drained; never the
+# controller's own VM, which cannot stop itself.
+(
+    . "${SCRIPT_DIR}/reboot-node-lib.sh"
+    LOG="${WORK}/c.log"; : > "${LOG}"; MOVED="${WORK}/moved"; : > "${MOVED}"
+    sleep() { :; }
+    rn_ha_active_count() { echo 2; }
+    rn_latest_kernel()   { echo ""; }
+    rn_node_fqdn()       { echo "$1"; }
+    rn_host_guests()     { :; }
+    havm_ha_services_on_node() { :; }
+    rn_node_ssh() { shift; printf '%s\n' "$*" >> "${LOG}"; return 0; }
+    rn_relocate() { echo "$2 $3" >> "${MOVED}"; }
+    # Unsafe until it has been moved.
+    rn_live_unsafe_guests() { [[ -s "${MOVED}" ]] || echo "vm:110 network → n3"; }
+    rn_wait_for_node() { return 1; }
+
+    rc=0; RN_COLD_MOVE_OK=1 reboot_one_node n1 >/dev/null 2>&1 || rc=$?
+    [[ "$(cat "${MOVED}")" == "vm:110 n3" ]] && pass "in the window, an unsafe guest is moved by stop, move, start" \
+                                           || fail "cold move: moved '$(cat "${MOVED}")'"
+    grep -q 'node-maintenance enable n1' "${LOG}" && pass "…and the node is then drained" || fail "no drain after the cold move"
+
+    : > "${LOG}"; : > "${MOVED}"
+    rc=0; RN_COLD_MOVE_OK=1 RN_CICD_VMID=110 reboot_one_node n1 >"${WORK}/c.out" 2>&1 || rc=$?
+    [[ ${rc} -eq 3 && ! -s "${MOVED}" ]] && pass "the controller's own VM is never stopped: deferred (3)" \
+                                         || fail "cicd guest: rc=${rc} moved='$(cat "${MOVED}")'"
+    grep -q 'relocate vm:110 n3' "${WORK}/c.out" && pass "…with the command to move it once by hand" || fail "no hand command: $(cat "${WORK}/c.out")"
+
+    : > "${LOG}"; : > "${MOVED}"
+    rc=0; reboot_one_node n1 >/dev/null 2>&1 || rc=$?
+    [[ ${rc} -eq 3 && ! -s "${MOVED}" ]] && pass "outside the window nothing is moved" || fail "outside the window: rc=${rc}"
+    echo "${PASS} ${FAIL}" > "${WORK}/sub.counts"
+)
+read -r _p _f < "${WORK}/sub.counts" && PASS=${_p} && FAIL=${_f}
+
 echo "  Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

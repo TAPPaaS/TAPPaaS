@@ -1433,10 +1433,16 @@ def main():
     # ADR-020 D8: a module that declares rebootOk may have a disruptive change
     # applied only when the window is open (disruption_window_open): the
     # scheduled run with automaticReboot, or an operator run with --force.
+    # The same window lets the reboot pass move a guest that cannot move live
+    # by stop, move, start (RN_COLD_MOVE_OK, reboot-node-lib.sh) — which also
+    # brings up a CPU change its update saved for the next restart — instead
+    # of leaving the node on its old kernel.
     if disruption_window_open(automatic_reboot, scheduled, allow_disruption):
         os.environ["TAPPAAS_SCHEDULED_PASS"] = "1"
+        os.environ["RN_COLD_MOVE_OK"] = "1"
     else:
         os.environ.pop("TAPPAAS_SCHEDULED_PASS", None)
+        os.environ.pop("RN_COLD_MOVE_OK", None)
 
     # Phase 1: Foundation modules in fixed order
     # No "[i/N] Updating <module>" line — update-module.sh's own banner
