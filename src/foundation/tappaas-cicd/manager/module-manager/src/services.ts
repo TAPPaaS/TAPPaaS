@@ -46,7 +46,10 @@ export function parseDependency(dep: string): { provider: string; service: strin
 
 // ── pure: the plan (which deps can actually be checked) ────────────────
 
-export type ServiceCheckKind = "checkable" | "no-script" | "provider-missing";
+// provider-suspended: the operator stopped the provider on purpose (its config
+// has `suspended: true`) — its service is not checked or re-applied, and the
+// consumer is not failed for it.
+export type ServiceCheckKind = "checkable" | "no-script" | "provider-missing" | "provider-suspended";
 
 export interface ServiceCheck {
   dep: string; // the dependsOn coordinate as written, e.g. "network:rules"
@@ -126,6 +129,10 @@ export function planServiceChecks(
       out.push({ dep, provider: resolved.module, service, script: "", kind: "provider-missing" });
       continue;
     }
+    if (fs.readConfig?.(resolved.module)?.suspended === true) {
+      out.push({ dep, provider: resolved.module, service, script: "", kind: "provider-suspended" });
+      continue;
+    }
     const script = join(resolved.dir, "services", service, "test-service.sh");
     if (!fs.exists(script)) {
       out.push({ dep, provider: resolved.module, service, script: "", kind: "no-script" });
@@ -160,6 +167,7 @@ export interface ServiceSection {
   drift: number;
   unknown: number;
   skipped: number;
+  suspended?: number; // of skipped: the provider is suspended
 }
 
 // Cap the surfaced output of a failing check so one chatty verifier cannot
@@ -196,7 +204,9 @@ export function buildServiceSection(
   let drift = 0;
   let unknown = 0;
   let skipped = 0;
+  let suspended = 0;
   for (const o of outcomes) {
+    if (o.check.kind === "provider-suspended") suspended++;
     const dep = `${BL}${o.check.dep}${CL}`;
     switch (o.status) {
       case "clean":
@@ -219,7 +229,7 @@ export function buildServiceSection(
     }
   }
   lines.push({ kind: "raw", text: "" });
-  return { lines, checked: true, deps, drift, unknown, skipped };
+  return { lines, checked: true, deps, drift, unknown, skipped, suspended };
 }
 
 // The summary lines the inspect report appends after its field summary. When the
@@ -253,10 +263,17 @@ export function serviceSummaryLines(module: string, svc: ServiceSection): OutLin
       text: `${svc.unknown} dependency service check(s) could not run — state unknown`,
     });
   }
-  if (svc.skipped > 0) {
+  const suspended = svc.suspended ?? 0;
+  if (suspended > 0) {
     out.push({
       kind: "warn",
-      text: `${svc.skipped} dependency service(s) have no test-service.sh — their state is NOT covered by this report`,
+      text: `${suspended} dependency service(s) come from a suspended provider — not checked until it is resumed`,
+    });
+  }
+  if (svc.skipped - suspended > 0) {
+    out.push({
+      kind: "warn",
+      text: `${svc.skipped - suspended} dependency service(s) have no test-service.sh — their state is NOT covered by this report`,
     });
   }
   if (svc.drift === 0 && svc.unknown === 0) {
@@ -295,6 +312,10 @@ export function runServiceChecks(module: string, checks: ServiceCheck[]): Servic
     }
     if (check.kind === "no-script") {
       out.push({ check, status: "skipped", rc: null, detail: "no test-service.sh" });
+      continue;
+    }
+    if (check.kind === "provider-suspended") {
+      out.push({ check, status: "skipped", rc: null, detail: `provider '${check.provider}' is suspended` });
       continue;
     }
     // Captured, not streamed: green checks stay quiet, and a failing check's

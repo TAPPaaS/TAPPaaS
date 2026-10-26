@@ -172,6 +172,26 @@ function reportShape(
   check(checks[2].kind === "provider-missing", "a dep whose provider cannot be located is provider-missing");
 }
 
+// ── 2b. a suspended provider is not checked, and does not fail its consumer ──
+// Erik's site: vllm-amd stopped on purpose, and litellm failed every night for it.
+{
+  const fs: ServiceFs = {
+    providerDir: (provider) => ({ module: provider, dir: `/src/${provider}` }),
+    exists: () => true,
+    readFile: () => null,
+    readConfig: (m) => (m === "vllm-amd" ? { suspended: true } : {}),
+  };
+  const checks = planServiceChecks(["vllm-amd:inference", "identity:identity"], "", fs);
+  check(checks[0].kind === "provider-suspended", "a suspended provider's service is provider-suspended");
+  check(checks[1].kind === "checkable", "…another provider is still checked");
+  const outcomes = runServiceChecks("litellm", [checks[0]]);
+  check(outcomes[0].status === "skipped" && outcomes[0].detail.includes("suspended"), "it is skipped, and says why");
+  const svc = buildServiceSection(["vllm-amd:inference"], outcomes);
+  const summary = text(serviceSummaryLines("litellm", svc));
+  check(svc.drift === 0 && svc.unknown === 0 && serviceExitCode(svc) === 0, "no drift, nothing unknown: the consumer is not failed");
+  check(summary.includes("suspended provider") && !summary.includes("no test-service.sh"), `the summary names the suspension (got: ${summary})`);
+}
+
 // ── 3. the environment-aware provider resolution is honoured ────────────
 {
   const seen: string[] = [];

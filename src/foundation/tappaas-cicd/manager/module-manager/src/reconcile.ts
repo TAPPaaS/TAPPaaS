@@ -55,6 +55,16 @@ import { OutLine } from "./inspect";
 import { checkDependencyServices, serviceSummaryLines } from "./services";
 import { BL, BOLD, CL, GN, debug, error, info, warn } from "./shlog";
 
+// Whether the operator suspended this deployed module (`suspended: true` in its
+// config). A config that cannot be read is not suspended.
+function providerSuspended(configDir: string, module: string): boolean {
+  try {
+    return readJsonObject(join(configDir, `${module}.json`))?.suspended === true;
+  } catch {
+    return false;
+  }
+}
+
 // die-equivalent: thrown to unwind to reconcileModule(), printed once there.
 class ReconcileFailure extends Error {}
 
@@ -276,6 +286,14 @@ function doReconcile(moduleArg: string, opts: ReconcileOptions): void {
     if (!providerDir) {
       if (optional) debug(`  ${dep}: provider '${providerModule}' not installed — skipping optional integration`);
       else warn(`  Cannot find provider '${providerModule}' location — skipping ${dep}`);
+      return;
+    }
+    // A provider the operator suspended is stopped on purpose: re-applying its
+    // service would write the consumer's side against a guest that is not
+    // there (litellm's endpoint with no key), and Step 4 would fail the
+    // consumer for it. Skipped, and said.
+    if (providerSuspended(configDir, providerModule)) {
+      warn(`  ${dep}: provider '${providerModule}' is suspended — not re-applied`);
       return;
     }
     ensureScriptsExecutable(providerDir);

@@ -302,6 +302,12 @@ main() {
                 test_skip_quiet "${dep} — provider not found"
                 continue
             fi
+            # A suspended provider is stopped on purpose (#832): its service
+            # cannot answer, and its consumer is not failed for that.
+            if [[ "$(jq -r '.suspended // false' "${CONFIG_DIR}/${provider_module}.json" 2>/dev/null)" == true ]]; then
+                test_skip "${dep} — provider ${provider_module} is suspended"
+                continue
+            fi
 
             ensure_scripts_executable "${provider_dir}"
             local svc_test="${provider_dir}/services/${service_name}/test-service.sh"
