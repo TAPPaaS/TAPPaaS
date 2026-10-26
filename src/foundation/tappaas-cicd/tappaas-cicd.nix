@@ -272,6 +272,12 @@ in
         "/run/wrappers/bin/sudo -n /home/tappaas/bin/tappaas-self-rebuild.sh"
       ];
       ExecStart = "/run/current-system/sw/bin/bash -l -c update-tappaas";
+      # Exit 3: the sweep completed, but app modules failed. Not a broken run,
+      # so not a unit failure — and not silent either: ExecStopPost mails and
+      # records it, as OnFailure does for a broken one. ($$: the variable is
+      # bash's to read, not systemd's to expand.)
+      SuccessExitStatus = [ 3 ];
+      ExecStopPost = "-/run/current-system/sw/bin/bash -l -c '[ \"$$EXIT_STATUS\" != 3 ] || exec notify-update-failure.sh --degraded'";
       # Per-run state (the claimed request, the prepared/rebuilt markers);
       # removed when the unit stops, so nothing leaks into the next run. The root
       # steps find it at /run/update-tappaas (sudo resets RUNTIME_DIRECTORY).

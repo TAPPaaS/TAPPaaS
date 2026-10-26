@@ -524,6 +524,15 @@ failed = []; dep = {"down": True, "culprit": "x", "last_good": "w", "failures": 
 na = m.run_update_phase(["p", "q"], "foundation", failed, dep)
 assert na == ["p", "q"] and failed == [], f"already-down phase skips all: na={na}"
 
+# How a run ends: broken (1) vs completed with failed app modules (3).
+ro = m.run_outcome
+assert ro([], [], False, True, "refreshed") == (0, "ok")
+assert ro([], ["hue", "sonos"], False, True, "refreshed") == (3, "degraded"), "app failures only: degraded"
+assert ro(["network"], ["hue"], False, True, "refreshed") == (1, "broken"), "a foundation failure breaks the run"
+assert ro([], [], True, True, "refreshed") == (1, "broken"), "a shared dependency down breaks the run"
+assert ro([], ["hue"], False, False, "refreshed") == (1, "broken"), "a failed reboot pass breaks the run"
+assert ro([], [], False, True, "stale") == (1, "broken"), "a stale control plane breaks the run"
+
 # #833: the capacity pre-flight — health-manager capacity's verdict, or None.
 import os, stat, tempfile
 d = tempfile.mkdtemp()

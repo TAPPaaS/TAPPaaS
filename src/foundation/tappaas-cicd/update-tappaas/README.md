@@ -201,11 +201,22 @@ site-manager validate                          # checks the schedule, prints the
   whether the last USB key stick holds the backup keys as they are now (#874; the summary
   warns on every run until it does). A run that stopped in
   `ExecStartPre` records the `stage` instead.
-- **`config/update-tappaas.failures`** — one line per failed run, and per failure notice
-  sent or not sent.
-- **A notice to the site owner** when the unit fails: `update-tappaas-failure.service` mails
-  `site.json` `email` through a Proxmox node's mail system, naming the step that failed
-  (#651, ADR-007e v1.3).
+- **An exit code and a `result`** that tell a broken run from one that did its job:
+
+  | `result` | Exit | When |
+  |---|---|---|
+  | `ok` | 0 | every module updated |
+  | `degraded` | 3 | the run completed, but app modules failed (the unit counts it as success) |
+  | `broken` | 1 | a foundation module failed, a shared service went down, the control plane is stale, or the reboot pass failed |
+
+  `failed_foundation` lists the foundation modules that failed. `site-manager update` exits
+  with the same 3 for a degraded run.
+- **`config/update-tappaas.failures`** — one line per failed or degraded run, and per
+  failure notice sent or not sent.
+- **A notice to the site owner** for both: a broken run through `update-tappaas-failure.service`
+  (the unit's `OnFailure`), naming the step that failed, and a degraded one from the unit's
+  `ExecStopPost`, naming the modules. Both go to `site.json` `email` through a Proxmox
+  node's mail system.
 - **A security scan of what the run left running**: `tappaas-security-scan.service`, started
   on success and on failure, writes `config/sbom/site.cdx.json` and `cve-status.json` and
   mails the owner when a fixable CVE or a failed scan is new (ADR-011;

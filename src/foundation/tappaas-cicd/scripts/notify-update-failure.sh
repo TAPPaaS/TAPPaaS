@@ -5,7 +5,11 @@
 # update-tappaas.service. It says what failed and where; site-notify.sh delivers
 # it to site.json `email` through a Proxmox node's own mail system (ADR-007e v1.3).
 #
-# Usage: notify-update-failure.sh [--dry-run]    (--dry-run prints the mail instead)
+# Usage: notify-update-failure.sh [--degraded] [--dry-run]    (--dry-run prints the mail instead)
+#
+# --degraded: the sweep completed but some app modules failed (exit 3, which the
+# unit counts as success, so OnFailure does not fire): run from the unit's
+# ExecStopPost instead, it records and mails that with its own subject.
 #
 # Environment:
 #   MONITOR_SERVICE_RESULT, MONITOR_EXIT_STATUS   set by systemd for OnFailure units
@@ -18,9 +22,11 @@ set -euo pipefail
 
 CONFIG_DIR="${TAPPAAS_CONFIG_DIR:-/home/tappaas/config}"
 DRY_RUN=0
+DEGRADED=0
 for a in "$@"; do
     case "${a}" in
         --dry-run) DRY_RUN=1 ;;
+        --degraded) DEGRADED=1 ;;
         -h|--help) sed -n '2,16p' "$0"; exit 0 ;;
         *) echo "notify-update-failure: unknown option: ${a}" >&2; exit 2 ;;
     esac
@@ -66,10 +72,19 @@ if [[ -f "${RESULT}" ]]; then
 fi
 
 host="$(hostname 2>/dev/null || echo tappaas-cicd)"
+headline="The scheduled TAPPaaS update on ${host} failed at $(date -Is)."
+subject="update sweep FAILED on ${host}"
+if [[ "${DEGRADED}" -eq 1 ]]; then
+    nfailed="$(jq -r '.failed // 0' "${RESULT}" 2>/dev/null || echo '?')"
+    headline="The scheduled TAPPaaS update on ${host} completed at $(date -Is), but ${nfailed} app module(s) failed."
+    subject="update sweep: ${nfailed} module(s) failed on ${host}"
+    printf '%s update-tappaas.service DEGRADED — %s app module(s) failed, see config/last-update-result.json\n' \
+        "$(date -Is)" "${nfailed}" >> "${CONFIG_DIR}/update-tappaas.failures" 2>/dev/null || true
+fi
 body="$(cat <<EOF
-The scheduled TAPPaaS update on ${host} failed at $(date -Is).
+${headline}
 
-systemd: result=${MONITOR_SERVICE_RESULT:-?} exit=${MONITOR_EXIT_STATUS:-?}
+systemd: result=${MONITOR_SERVICE_RESULT:-${SERVICE_RESULT:-?}} exit=${MONITOR_EXIT_STATUS:-${EXIT_STATUS:-?}}
 ${stage_line}
 Last sweep result: ${result_line}${written:+ (written ${written})}
 ${detail}
@@ -85,6 +100,6 @@ EOF
 
 # ── send it: addressing, the node's mailer and the fallback are site-notify.sh's
 notify_args=(--what "failure notice" --breadcrumb "${CONFIG_DIR}/update-tappaas.failures"
-             --subject "update sweep FAILED on ${host}")
+             --subject "${subject}")
 [[ "${DRY_RUN}" -eq 1 ]] && notify_args+=(--dry-run)
 printf '%s\n' "${body}" | "${SITE_NOTIFY}" "${notify_args[@]}"

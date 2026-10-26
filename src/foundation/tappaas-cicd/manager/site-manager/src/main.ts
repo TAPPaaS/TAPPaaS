@@ -22,7 +22,7 @@
 // repository.sh; `validate` → validate-site.sh. The transitional migration
 // the legacy config->site migration is retired; not ported and not wired here.
 //
-// Exit codes: ok=0, error=1.
+// Exit codes: ok=0, error=1; `update`: 3 when the sweep completed but app modules failed.
 
 import { DEFAULT_HOLD, describeHold, makeHold, parseUntil, readHolds, releaseHold, validRepoName, writeHold } from "./hold";
 import { UNIT, buildRequest, dropRequest, readResult, repoStatusLine, summaryLine, writeRequest } from "./unitrun";
@@ -1355,6 +1355,15 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
     infoTagged(summaryLine(readResult(o.configDir)));
     warn(`${UNIT} ended with result '${result}' — journalctl -u ${UNIT} -n 200; the site owner was notified (#651)`);
     return 1;
+  }
+  // Exit 3 of the sweep is a unit success (SuccessExitStatus): the run
+  // completed, but app modules failed. Said here, and not exit 0.
+  const last = readResult(o.configDir);
+  if (last?.result === "degraded") {
+    infoTagged(summaryLine(last));
+    warn(`the run completed, but ${String(last.failed ?? "?")} app module(s) failed: ` +
+      `${(Array.isArray(last.failed_modules) ? last.failed_modules : []).join(", ")} — the site owner was notified`);
+    return 3;
   }
   debug("verify:   jq .ok ~/config/last-update-result.json     → true");
   debug("verify:   site-manager update --dry-run               → no repository drift remains");

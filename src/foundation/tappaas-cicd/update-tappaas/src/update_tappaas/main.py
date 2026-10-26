@@ -929,6 +929,20 @@ def backup_key_warnings(bk: dict | None) -> list[str]:
             "Write one now: backup-manager key export --usb"]
 
 
+def run_outcome(failed_foundation: list[str], failed_apps: list[str], dep_down: bool,
+                reboot_ok: bool, control_plane: str) -> tuple[int, str]:
+    """How the run ended: (exit code, result). Broken (1) is a run that did not
+    do its job — a foundation module failed, a shared dependency went down, the
+    control plane is stale, the reboot pass failed. Degraded (3) is a run that
+    did, while some app modules failed: a site whose IoT group fails every night
+    must not look exactly like a site whose sweep is broken. Both are reported."""
+    if failed_foundation or dep_down or not reboot_ok or control_plane in ("stale", "failed"):
+        return 1, "broken"
+    if failed_apps:
+        return 3, "degraded"
+    return 0, "ok"
+
+
 def check_update_capacity() -> dict | None:
     """The sweep's capacity pre-flight (#833): `health-manager capacity` projects
     what each node commits once every guest is at its configured memory. Only
@@ -1544,6 +1558,14 @@ def main():
         "ok": (not failed_modules and not dep["down"] and reboot_ok
                and control_plane in ("refreshed", "skipped")),
     }
+    failed_foundation = [m for m in failed_modules if m in installed_foundation]
+    exit_code, outcome = run_outcome(failed_foundation,
+                                     [m for m in failed_modules if m not in installed_foundation],
+                                     dep["down"], reboot_ok, control_plane)
+    # ok/degraded/broken: what the exit code says, kept with the record (the
+    # unit's Result is "success" for a degraded run, see tappaas-cicd.nix).
+    artifact["result"] = outcome
+    artifact["failed_foundation"] = failed_foundation
     # When a shared service went down mid-sweep, carry the boundary so the run is
     # attributable to one root cause instead of N per-module symptoms (#517).
     if dep["down"]:
@@ -1578,7 +1600,10 @@ def main():
                           "— %d module(s) not attempted.", detail, len(not_attempted))
         if failed_modules:
             log.error("Failed modules: %s", ", ".join(failed_modules))
-        sys.exit(1)
+        if exit_code == 3:
+            log.warning("update-tappaas DEGRADED: the run completed; %d app module(s) failed: %s",
+                        len(failed_modules), ", ".join(failed_modules))
+        sys.exit(exit_code)
 
     log.info("All modules updated successfully (control plane %s)", control_plane)
     set_stage(None)

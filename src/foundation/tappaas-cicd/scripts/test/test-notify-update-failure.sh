@@ -53,6 +53,17 @@ grep -q 'failure notice sent to owner@example.org through tappaas1' "${d}/config
     && ok "the breadcrumb records the delivery" || bad "breadcrumb"
 ! grep -q '^From:' "${FAKE_MAIL}" && ok "no From header when Proxmox has no email_from" || bad "unexpected From"
 
+# 1b. --degraded: the run completed, some app modules failed (exit 3)
+: > "${d}/config/update-tappaas.failures"
+: > "${FAKE_LOG}"; rm -f "${FAKE_MAIL}"
+EXIT_STATUS=3 SERVICE_RESULT=success bash "${N}" --degraded >"${d}/out" 2>&1
+grep -q '^Subject: \[TAPPaaS example.org\] update sweep: 1 module(s) failed' "${FAKE_MAIL}" \
+    && ok "a degraded run has its own subject" || bad "degraded subject: $(grep -i ^Subject: "${FAKE_MAIL}")"
+grep -q 'completed at .*, but 1 app module(s) failed' "${FAKE_MAIL}" && grep -q 'result=success exit=3' "${FAKE_MAIL}" \
+    && ok "…says the run completed, with ExecStopPost's result" || bad "degraded body: $(head -3 "${FAKE_MAIL}")"
+grep -q 'DEGRADED — 1 app module(s) failed' "${d}/config/update-tappaas.failures" \
+    && ok "…and is recorded in update-tappaas.failures" || bad "degraded breadcrumb: $(cat "${d}/config/update-tappaas.failures")"
+
 # 2. Proxmox's configured sender is used
 FAKE_FROM="pve@example.org" run
 grep -q '^From: TAPPaaS <pve@example.org>$' "${FAKE_MAIL}" && ok "From is Proxmox's email_from" || bad "From header"
