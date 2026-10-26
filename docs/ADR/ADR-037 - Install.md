@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Proposed** (draft for the operator) |
-| **Version** | 0.4 |
+| **Status** | **Accepted** (operator, 2026-10-26) — P1 in progress |
+| **Version** | 1.0 |
 | **Date** | 2026-10-25 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #403 (install on the root disk; smarter placement — D1's fallback is a first step of #884, dynamic placement), #377 (the installer cannot restart; the management-network question), the 2.4 install theme. Builds on [ADR-034](<ADR-034 - TAPPaaS User Interface.md>) D10 (the Setup wizard), [ADR-030](<ADR-030 - IPv6.md>) (IPv6), [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (the admin VPN), ADR-012 (backup placement), #692 (storage resolved against the node). |
-| **Changelog** | v0.4 (2026-10-26) — **D1 reworked (operator):** one pool per disk — ZFS on the boot disk is the default and required without a data disk; a module's `storage` is a preference: the same class, any `tanka<N>`, then the boot pool (`local-zfs`), warned and recorded; any zfspool by its storage name (readers look the dataset up). The partition layout (v0.2–v0.3) and D1b become A0b and A2b. P2 is tested on the operator's spare machine on the WAN. · v0.3 (2026-10-25) — **D1:** a pool on a partition: alignment, `ashift=12`, by-id names, one layout on every boot disk, and the runbook that replaces a failed disk for both pools; P1 rehearses it. · v0.2 (2026-10-25) — **D1:** `tanka1` is a real pool on the free part of the boot disk(s) (`hdsize`), not a dataset of `rpool` (the installer cannot name its pool, and storage names are pool names in TAPPaaS). **D2:** one IP — the firewall takes the server's address and MAC at the cut-over, with a rollback and a boot watchdog; two servers meet on a vSwitch; the virtual-MAC design becomes A5. · v0.1 (2026-10-25) — first draft. |
+| **Changelog** | v1.0 (2026-10-26) — **Accepted** by the operator, with the boot-pool reserve at 20 %. D1: a mirrored `rpool` boots from either disk — every member's EFI system partition registered with `proxmox-boot-tool`, checked after the install and by the health check, re-initialised on a replaced disk; P1 tests booting from each disk alone. · v0.4 (2026-10-26) — **D1 reworked (operator):** one pool per disk — ZFS on the boot disk is the default and required without a data disk; a module's `storage` is a preference: the same class, any `tanka<N>`, then the boot pool (`local-zfs`), warned and recorded; any zfspool by its storage name (readers look the dataset up). The partition layout (v0.2–v0.3) and D1b become A0b and A2b. P2 is tested on the operator's spare machine on the WAN. · v0.3 (2026-10-25) — **D1:** a pool on a partition: alignment, `ashift=12`, by-id names, one layout on every boot disk, and the runbook that replaces a failed disk for both pools; P1 rehearses it. · v0.2 (2026-10-25) — **D1:** `tanka1` is a real pool on the free part of the boot disk(s) (`hdsize`), not a dataset of `rpool` (the installer cannot name its pool, and storage names are pool names in TAPPaaS). **D2:** one IP — the firewall takes the server's address and MAC at the cut-over, with a rollback and a boot watchdog; two servers meet on a vSwitch; the virtual-MAC design becomes A5. · v0.1 (2026-10-25) — first draft. |
 
 Three changes to how a TAPPaaS site comes into being, in the order they are built: a node with
 **one disk** (or one mirrored pair) is a complete site; a site can be stood up on a **rented
@@ -76,9 +76,19 @@ node has rather than refusing the one it lacks:
   matters here. A one-disk site's backup target is off-node: a second machine, a backup buddy
   ([ADR-031](<ADR-031 - Site Liveness from the Backup Buddy.md>)), or an off-site box. `backup:vm`
   warns, rather than fails, while none is set.
+- **The node boots from either disk of the mirror.** ZFS mirrors only `rpool`'s partition; each
+  disk also has its own EFI system partition (part 2) with the bootloader and the kernels, outside
+  the pool and not mirrored by it. `proxmox-boot-tool` keeps every ESP it has registered in step
+  — the kernel hook copies each new kernel to all of them — so TAPPaaS makes sure every disk of the
+  mirror is registered: after the install it checks `proxmox-boot-tool status` lists an ESP on
+  each `rpool` member, and initialises the one that is missing (`proxmox-boot-tool init`). The
+  health check reports a mirror member without a registered ESP, since the node would then not
+  boot when the other disk fails.
 - **A failed disk.** A two-disk node replaces one by Proxmox's own procedure for a mirrored
-  `rpool` (copy the partition table, `zpool replace`, `proxmox-boot-tool` on the new disk). A
-  one-disk node is reinstalled and its guests restored from the off-node backup.
+  `rpool`: copy the partition table from the healthy disk (`sgdisk -R`, then `-G`), `zpool
+  replace` the `rpool` partition, then `proxmox-boot-tool format` and `init` on the new disk's
+  ESP, so it is bootable before the old one is gone for good. A one-disk node is reinstalled and
+  its guests restored from the off-node backup.
 
 ### D2 — A hosted server with one IP: the firewall takes the server's address
 
@@ -201,7 +211,7 @@ site uses that one address — no additional IP is rented:
 
 | Step | What | Ease | Risk | Test |
 |------|------|:-:|:-:|------|
-| **P1 — ZFS boot** | answer file: ZFS on the boot disk by default (`raid0` on one, `raid1` on two equal), `arc-max`; ext4 only with data disks (`--boot-filesystem ext4`), refused for a node without; `config-storage.sh` with no data disk builds no pool and says the boot pool carries the guests; `backup:vm`'s warning without an off-node target | M | M | a VM on hrossen with one virtual disk installed from the auto-ISO; the spare machine on one of its two disks |
+| **P1 — ZFS boot** | answer file: ZFS on the boot disk by default (`raid0` on one, `raid1` on two equal), `arc-max`; ext4 only with data disks (`--boot-filesystem ext4`), refused for a node without; `config-storage.sh` with no data disk builds no pool and says the boot pool carries the guests; `backup:vm`'s warning without an off-node target | M | M | a VM on hrossen with one virtual disk installed from the auto-ISO; a VM with two equal disks: `proxmox-boot-tool status` lists both ESPs, and it boots with either disk detached; one disk replaced by the runbook and the node booted from the new one alone; the spare machine on one of its two disks |
 | **P1b — placement** | `resolve_storage` (VM and LXC): the declared storage, else the same class, else any `tanka<N>`, else `local-zfs`, warned and written to the module's config; the storage → dataset lookup in every reader of pool names; the boot pool in the disk-threshold gate | M | M | unit cases in the VM-creation tests; on the one-disk node: `cluster/test.sh --deep` and one module per stack, each placed on `local-zfs` with its warning |
 | **P2 — a hosted server** | the MAC handover at the cut-over (generated MAC on the NIC, the real one on the firewall's WAN, the `ebtables` rule), its rollback and boot watchdog, the first admin-VPN peer from the bootstrap, the rescue-system QEMU install documented as `INSTALL-HOSTED.md` | H | H | the spare machine on the WAN with its own public IP (a hosted server's edge): the whole install, the cut-over's rollback and the watchdog (a BMC power cycle with the firewall stopped), `site-manager test --deep`, then a teardown; Hetzner's own MAC filter, rescue install and vSwitch on a rented server later |
 | **P3a — the bootstrap ends at the console** | `install.sh` stops after the console is up and prints its address, the token and the VPN config; `--all` keeps the scripted path | M | M | a fresh install on the hosted server, the rest done in the wizard |
