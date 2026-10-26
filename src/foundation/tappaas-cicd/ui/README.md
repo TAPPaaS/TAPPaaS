@@ -31,7 +31,9 @@ the nodes (every registered node — its `pvehost` instance — a cluster member
 Each step is a form over its verbs as jobs. Secrets go through `POST /api/v1/secrets/<name>`
 (Installer or the setup token): `acme-dns` → `~/.acme-dns-credentials.txt`, `unifi` →
 `~/.unifi-os-credentials.txt`, `wlan` → `~/.wlan-secrets.txt`, mode 0600, in Activity with their
-keys and never their values; `GET /api/v1/secrets` names the keys set. The same flows serve
+keys and never their values; `GET /api/v1/secrets` names the keys set. The WiFi step lists each SSID
+the access points hold with whether its passphrase is kept (a personal SSID without one cannot be
+created on the access point), and a "Set passphrase…" link to its Day 2 form. The same flows serve
 day 2: add a node, adopt a running machine (`module-manager adopt`), an environment, a stack; enrol a
 device (the wg-quick file to download). Day 2's **physical site** is a step with that state and
 its sequence: record the rooms (by location), add a rack, place the nodes and switches, record

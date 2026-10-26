@@ -16,6 +16,7 @@ import { Job, SiteRead } from "../types";
 import { Dot, Link, ReadState, navigate, since } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { Day2 } from "./Day2";
+import { ApIn, WIFI_ZONE_TYPES, ssidPassphrases } from "../wizards";
 
 export interface SetupDoc {
   steps: SetupStep[];
@@ -174,20 +175,57 @@ export function StepRow({ s, children, open: forced }: { s: SetupStep; children?
   );
 }
 
-// The WiFi step's way on: the Day 2 button of each active Client zone with no SSID.
+// The WiFi step's way on: the Day 2 button of each active Client zone with no
+// SSID, and each SSID the access points hold with whether its passphrase is
+// kept (~/.wlan-secrets.txt, names only); a personal one without it cannot be
+// created on the access point.
 function WifiLinks({ doc }: { doc: SetupDoc | null }) {
+  const aps = useRead<ApIn[]>("aps", 600_000).env?.data ?? null;
+  const secrets = useRead<SecretStatus[]>("secrets", 600_000).env?.data ?? null;
   const w = doc?.inputs.wifi;
   if (!w) return null;
   const served = new Set((w.aps ?? []).flatMap((a) => a.ssids.map((s) => s.zone)));
   const missing = w.zones.filter((z) => z.type === "Client" && (z.state ?? "Active") === "Active" && !served.has(z.name));
-  if (missing.length === 0) return <p className="small">Change an SSID from <Link to="/setup/day2#wifi">Day 2</Link>.</p>;
+  const day2 = new Set(w.zones.filter((z) => WIFI_ZONE_TYPES.includes(z.type ?? "") && (z.state ?? "Active") === "Active").map((z) => z.name));
+  const rows = aps && secrets ? ssidPassphrases(aps, secrets.find((x) => x.name === "wlan")?.keys ?? []) : [];
   return (
-    <p className="small toolbar">
-      {missing.map((z) => (
-        <Link key={z.name} to={`/setup/day2#wifi-${z.name}`} className="btn">Add WiFi for {z.name} →</Link>
-      ))}
-      <span className="muted">on Day 2: the access point, the SSID, its passphrase, then the reconcile.</span>
-    </p>
+    <>
+      {rows.length ? (
+        <table className="table compact">
+          <thead>
+            <tr><th>SSID</th><th>access point</th><th>zone</th><th>security</th><th>passphrase</th></tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={`${r.ap}/${r.ssid}`}>
+                <td className="mono">{r.ssid}</td>
+                <td>{r.ap}</td>
+                <td className="mono">{r.zone ?? ""}</td>
+                <td>{r.security}</td>
+                <td>
+                  {!r.needs ? <span className="muted">none needed</span> : r.set ? <><Dot level="pass" /> set</> : (
+                    <>
+                      <Dot level="warn" /> not set{" "}
+                      <Link to={r.zone && day2.has(r.zone) ? `/setup/day2#wifi-${r.zone}` : "/setup/day2#wifi"} className="btn">Set passphrase…</Link>
+                    </>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : null}
+      {missing.length === 0 ? (
+        <p className="small">Change an SSID or its passphrase from <Link to="/setup/day2#wifi">Day 2</Link>.</p>
+      ) : (
+        <p className="small toolbar">
+          {missing.map((z) => (
+            <Link key={z.name} to={`/setup/day2#wifi-${z.name}`} className="btn">Add WiFi for {z.name} →</Link>
+          ))}
+          <span className="muted">on Day 2: the access point, the SSID, its passphrase, then the reconcile.</span>
+        </p>
+      )}
+    </>
   );
 }
 
