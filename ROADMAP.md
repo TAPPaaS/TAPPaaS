@@ -112,7 +112,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
-| 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | – | 2 |
+| 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | – | 4 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
@@ -305,12 +305,13 @@ Shared storage as a managed part of a site: the rest of the NFS service (#772). 
 |---|-------|:-:|:-:|------|
 | #772 | ADR-029 NFS: remaining work packages from #766 | M | L | Export backup, NAS servers, storage zone, LXC consumers, quota health, `show`/`purge`. **2026-10-05:** ADR-029 v0.8 (shares by name, pending mounts, `subdir`) built, smoke-tested |
 
-### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 6 · open: 2
+### G4.5 Governance, CI & sign-offs — Ease M · Risk L · released: 6 · done for 2.4: 1 · open: 2
 
 The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker module): community-health files (#486), the remaining ADRs (#359; the ADR-010 sign-off, #406, is in G5.1), a tool for urgent patches (#746), a logging-function lint (#747); the service-desk spike (#63) is in G7.2.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
+| ✅ #888 | site-manager: reconcile clones and branch switches skip the signature checks | L | L | **Done 2026-10-26** (`2ad00c5e`): a reconcile clone is introduced, a switch goes through `repository sync`; requireSigned warns without `channels.json` |
 | #486 | ADR-015 community-health files | L | L | |
 | #359 | legal/processor ADR | M | L | |
 
@@ -433,7 +434,7 @@ someone deciding whether to upgrade. The release-train boundary turns it into th
 summary (`release/roadmap-cut.py`) and leaves this block empty again.
 
 <!-- next-release summary -->
-Sites update daily at 02:00 by default: a site still on the old weekly default (Tuesday or Thursday at 02:00) moves to daily on its first update, with a warning that names how to keep weekly; any schedule chosen otherwise stays. An update no longer keeps a configuration value nobody chose: when a release starts to define a field the site already has with another value, the release value is taken and the update warns with the value it replaced, unless the operator set it with `module modify --set`, which now records the fields it sets.
+Sites update daily at 02:00 by default: a site still on the old weekly default (Tuesday or Thursday at 02:00) moves to daily on its first update, with a warning that names how to keep weekly; any schedule chosen otherwise stays. An update no longer keeps a configuration value nobody chose: when a release starts to define a field the site already has with another value, the release value is taken and the update warns with the value it replaced, unless the operator set it with `module modify --set`, which now records the fields it sets. Every way a repository moves now goes through the signature checks: a repository that site-manager clones again, or moves to the branch site.json declares, is verified like an update, and a staging or production clone without recorded signers is refused with the command that adds it.
 <!-- /next-release summary -->
 
 ## Release 2.3.3 — staging 2026-10-26 · production at the next boundary
