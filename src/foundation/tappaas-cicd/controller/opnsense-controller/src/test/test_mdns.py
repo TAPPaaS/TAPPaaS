@@ -6,9 +6,12 @@ Run with:
 
 from __future__ import annotations
 
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
-from opnsense_controller.mdns_cli import MDNS_GROUP, MDNS_PORT, RULE_SEQUENCE, declared_zones, plan
+from opnsense_controller.mdns_cli import MDNS_GROUP, MDNS_PORT, RULE_SEQUENCE, declared_zones, load_modules, plan
 
 ZONES = {
     "_README": {},
@@ -53,6 +56,24 @@ class TestDeclared(unittest.TestCase):
         self.assertEqual(d.warnings, declared_zones(ZONES, {}).warnings)    # [] is "none declared"
         d = declared_zones(ZONES, {"x": {"zone0": "nowhere", "discoveryMdns": ["home"]}})
         self.assertTrue(any("'nowhere' is not in zones.json" in w for w in d.warnings))
+
+
+class TestLoadModules(unittest.TestCase):
+    """#877: the stored config keeps discoveryMdns under network:discovery."""
+
+    def test_the_nested_declaration_counts(self):
+        with tempfile.TemporaryDirectory() as d:
+            Path(d, "hue.json").write_text(json.dumps({
+                "vmname": "hue", "zone0": "iotCloud",
+                "config": {"network:discovery": {"discoveryMdns": ["home", "srvHome"]}}}))
+            Path(d, "flat.json").write_text(json.dumps({"zone0": "home", "discoveryMdns": True}))
+            Path(d, "none.json").write_text(json.dumps({"zone0": "home", "config": {"cluster:vm": {"cores": 2}}}))
+            mods = load_modules(Path(d))
+        self.assertEqual(sorted(mods), ["flat", "hue"])
+        self.assertEqual(mods["hue"]["discoveryMdns"], ["home", "srvHome"])
+        d = declared_zones(ZONES, mods)
+        self.assertIn("module hue", d.zones.get("srvHome", []), d.zones)
+        self.assertIn("module hue", d.zones.get("iotCloud", []), d.zones)
 
 
 class TestPlan(unittest.TestCase):

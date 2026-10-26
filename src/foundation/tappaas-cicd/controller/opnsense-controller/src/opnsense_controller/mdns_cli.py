@@ -108,15 +108,41 @@ def declared_zones(zones: dict, modules: dict[str, dict], without: str | None = 
     return d
 
 
+def _deep_merge(a: dict, b: dict) -> dict:
+    """jq's `a * b`: objects merge recursively, anything else b wins."""
+    out = dict(a)
+    for k, v in b.items():
+        out[k] = _deep_merge(out[k], v) if isinstance(out.get(k), dict) and isinstance(v, dict) else v
+    return out
+
+
+def normalize_module_config(cfg: dict) -> dict:
+    """The flat view every reader uses (#207), as normalize_module_config in
+    common-install-routines.sh: each `.config["<module>:<service>"]` block is
+    lifted to the top level, so a stored config's discoveryMdns is seen."""
+    blocks = cfg.get("config")
+    if not isinstance(blocks, dict):
+        return cfg
+    flat = {k: v for k, v in cfg.items() if k != "config"}
+    for v in blocks.values():
+        if isinstance(v, dict):
+            flat = _deep_merge(flat, v)
+    return flat
+
+
 def load_modules(config_dir: Path) -> dict[str, dict]:
-    """Module configs that declare discoveryMdns (others are not needed here)."""
+    """Module configs that declare discoveryMdns (others are not needed here),
+    in their flat view: the stored config keeps it under network:discovery."""
     out = {}
     for f in sorted(config_dir.glob("*.json")):
         try:
             cfg = json.loads(f.read_text())
         except (OSError, ValueError):
             continue
-        if isinstance(cfg, dict) and "discoveryMdns" in cfg:
+        if not isinstance(cfg, dict):
+            continue
+        cfg = normalize_module_config(cfg)
+        if "discoveryMdns" in cfg:
             out[f.stem] = cfg
     return out
 
