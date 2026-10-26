@@ -408,6 +408,7 @@ section "Standard 6b: CrowdSec on the firewall (#851)"
 _cs="$(ssh -o BatchMode=yes -o ConnectTimeout=10 root@"${FIREWALL_FQDN:-firewall.mgmt.internal}" "/bin/sh -s" 2>/dev/null <<'CS'
 pkg info -q os-crowdsec && echo "installed=yes" || echo "installed=no"
 service crowdsec status >/dev/null 2>&1 && echo "engine=running" || echo "engine=stopped"
+[ -s /usr/local/etc/crowdsec/hub/.index.json ] && echo "hub=yes" || echo "hub=no"
 service crowdsec_firewall status >/dev/null 2>&1 && echo "bouncer=running" || echo "bouncer=stopped"
 grep -q online_client /usr/local/etc/crowdsec/config.yaml 2>/dev/null && echo "capi=configured" || echo "capi=off"
 [ -s /usr/local/etc/crowdsec/online_api_credentials.yaml ] && echo "capicreds=yes" || echo "capicreds=no"
@@ -426,6 +427,10 @@ elif [[ "$(_csv installed)" != yes ]]; then
     fail "CrowdSec is not installed — the network update converges it (scripts/crowdsec-converge.sh)"
 else
     [[ "$(_csv engine)" == running ]] && pass "CrowdSec engine running" || fail "CrowdSec engine is not running"
+    # Without its hub index the engine stops at start ("invalid hub index") while
+    # `service status` can still say running, and nothing can be installed.
+    [[ "$(_csv hub)" == yes ]] && pass "CrowdSec has its hub index" \
+        || fail "CrowdSec has no hub index — the engine cannot start and nothing installs; the network update fetches it"
     [[ "$(_csv bouncer)" == running ]] && pass "CrowdSec firewall bouncer running (bans are pf blocks)" || fail "CrowdSec firewall bouncer is not running — bans would not be enforced"
     [[ "$(_csv capi)" == off && "$(_csv capicreds)" == no ]] && pass "CrowdSec is local only: no central API configured, no credentials" \
         || fail "CrowdSec is set up for the central API (capi=$(_csv capi), credentials=$(_csv capicreds)) — this site's signals would leave it"

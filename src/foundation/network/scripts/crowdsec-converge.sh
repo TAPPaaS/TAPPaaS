@@ -88,6 +88,15 @@ if ! pkg info -q os-crowdsec; then
 fi
 # 3. what it acts on
 changed=0
+# The hub index lists what can be installed. A fresh package (or one whose
+# index was lost) has none: every install below fails, and the engine itself
+# refuses to start ("invalid hub index") — so fetch it first. Downloading the
+# index sends nothing about the site.
+if [ ! -s "\$CS/hub/.index.json" ]; then
+    if [ "\$CHECK" = 1 ]; then say "would download the hub index (cscli hub update)"; else
+    cscli hub update --error >/dev/null && say "hub index downloaded" || { echo "  ERROR: cscli hub update failed — no hub index, nothing can be installed" >&2; exit 1; }
+    changed=1; fi
+fi
 # hub items by kind (the known-exploit scenarios are a collection)
 for item in parsers:crowdsecurity/caddy-logs parsers:crowdsecurity/whitelists \
             collections:crowdsecurity/http-cve scenarios:crowdsecurity/http-bad-user-agent; do

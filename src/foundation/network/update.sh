@@ -460,10 +460,15 @@ fi
 # the site's traffic leaves it. Converged on every update (idempotent); a
 # failure warns and leaves the rest of the firewall update standing.
 debug "Converging CrowdSec on the firewall..."
-if bash "${SCRIPT_DIR}/scripts/crowdsec-converge.sh" 2>&1 | relog_steps; then
+# Captured: its lines are [Debug] when it converges, and printed as they are
+# when it does not, so the warning below has its reason above it.
+_cs_out=""
+if _cs_out="$(bash "${SCRIPT_DIR}/scripts/crowdsec-converge.sh" 2>&1)"; then
+    relog_steps <<< "${_cs_out}"
     debug "  ${GN}✓${CL} CrowdSec converged"
 else
-    warn "  CrowdSec did not converge — see the lines above; the firewall update itself is complete"
+    printf '%s\n' "${_cs_out}" | sed 's/\x1b\[[0-9;]*m//g' | while IFS= read -r _l; do [[ -n "${_l}" ]] && warn "  ${_l# }"; done
+    warn "  CrowdSec did not converge — the firewall update itself is complete"
 fi
 
 # ── The WAN's address ───────────────────────────────────────────────
