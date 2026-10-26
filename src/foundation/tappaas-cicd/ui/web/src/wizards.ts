@@ -12,7 +12,7 @@ export interface StepSpec extends ArgvStep {
   initial: Values;
 }
 
-// ── WiFi: one SSID per client zone ────────────────────────────────────
+// ── WiFi: one site-wide SSID per client zone (#889) ───────────────────
 
 // zones.json as the zones read passes it on (network-manager's zones).
 export interface ZoneIn {
@@ -22,7 +22,8 @@ export interface ZoneIn {
   vlantag?: number;
   SSID?: string | null;
 }
-// `ap-manager list --json`.
+// `ap-manager list --json`: each access point and the SSIDs it broadcasts
+// (written by ap-manager from the site-wide list).
 export interface ApSsid {
   name: string;
   zone?: string | null;
@@ -36,6 +37,22 @@ export interface ApIn {
   model?: string | null;
   managementIp?: string | null;
   ssids?: ApSsid[];
+}
+// `ap-manager ssid list --json`: the site-wide SSIDs — each bridged to one zone,
+// broadcast by the access points it names (or all), and whether its passphrase
+// is set; never the passphrase.
+export type PassphraseState = "set" | "changed" | "not set" | "not needed";
+export interface SiteSsid {
+  name: string;
+  zone: string;
+  vlan?: number | null;
+  security: string;
+  radius?: string | null;
+  captive?: boolean;
+  disabled?: boolean;
+  broadcastOn?: "all" | string[];
+  accessPoints?: string[];
+  passphrase?: PassphraseState;
 }
 
 export const WIFI_ZONE_TYPES = ["Client", "Guest"];
@@ -53,12 +70,12 @@ export interface WifiZone {
   type: string;
   vlan: number | null;
   declared: string | null; // zones.json's SSID, when it is a real name
-  ssids: { ap: string; name: string; security: string | null; enabled: boolean }[]; // what the APs map to the zone
+  ssid: SiteSsid | null; // the site-wide SSID that bridges to the zone
 }
 
 // The zones a WiFi button is offered for: every active Client and Guest zone,
-// in VLAN order, with the SSIDs the access points already map to it.
-export function wifiZones(zones: ZoneIn[], aps: ApIn[]): WifiZone[] {
+// in VLAN order, with the site-wide SSID that bridges to it.
+export function wifiZones(zones: ZoneIn[], ssids: SiteSsid[]): WifiZone[] {
   return zones
     .filter((z) => WIFI_ZONE_TYPES.includes(z.type ?? "") && isActiveZone(z))
     .map((z) => ({
@@ -66,49 +83,40 @@ export function wifiZones(zones: ZoneIn[], aps: ApIn[]): WifiZone[] {
       type: z.type!,
       vlan: typeof z.vlantag === "number" ? z.vlantag : null,
       declared: typeof z.SSID === "string" && z.SSID !== "" && !isPlaceholderSsid(z.SSID) ? z.SSID : null,
-      ssids: aps.flatMap((a) => (a.ssids ?? []).filter((s) => s.zone === z.name).map((s) => ({ ap: a.name, name: s.name, security: s.security ?? null, enabled: s.enabled !== false }))),
+      ssid: ssids.find((s) => s.zone === z.name) ?? null,
     }))
     .sort((a, b) => (a.vlan ?? 0) - (b.vlan ?? 0) || a.zone.localeCompare(b.zone));
 }
 
-// "Change WiFi" once an access point maps an SSID to the zone, else "Add".
-export const wifiVerb = (z: WifiZone): "Add" | "Change" => (z.ssids.length ? "Change" : "Add");
+// "Change WiFi" once an SSID bridges to the zone, else "Add".
+export const wifiVerb = (z: WifiZone): "Add" | "Change" => (z.ssid ? "Change" : "Add");
 
 // The name the form starts from: the SSID the zone has, else <site>-<zone>.
 export function defaultSsid(site: string, z: WifiZone): string {
-  return z.ssids[0]?.name ?? z.declared ?? `${site ? `${site}-` : ""}${z.zone}`;
-}
-
-// The AP the form starts on: the one already serving the zone, else the only one.
-export function defaultAp(z: WifiZone, aps: ApIn[]): string {
-  return z.ssids[0]?.ap ?? (aps.length === 1 ? aps[0].name : "");
+  return z.ssid?.name ?? z.declared ?? `${site ? `${site}-` : ""}${z.zone}`;
 }
 
 // A personal security mode takes a WPA passphrase (~/.wlan-secrets.txt).
 export const needsPassphrase = (security: string): boolean => /-personal$/.test(security);
 
-// Each SSID the access points broadcast, and whether its passphrase is kept:
-// `keys` are the SSIDs ~/.wlan-secrets.txt holds (GET /secrets, names only).
-// A personal SSID with none cannot be created on the access point (the
-// controller refuses it); an open or enterprise one needs none.
-export interface SsidPassphrase {
-  ap: string;
-  ssid: string;
-  zone: string | null;
-  security: string;
-  needs: boolean;
-  set: boolean;
+// Where an SSID is broadcast, in words.
+export function broadcastText(s: SiteSsid): string {
+  const on = s.accessPoints ?? [];
+  if (s.disabled) return "off (declared, broadcast nowhere)";
+  if ((s.broadcastOn ?? "all") === "all") return on.length ? `every access point (${on.join(", ")})` : "every access point (none registered yet)";
+  return on.length ? on.join(", ") : "no access point";
 }
-export function ssidPassphrases(aps: ApIn[], keys: string[]): SsidPassphrase[] {
-  const kept = new Set(keys);
-  return aps.flatMap((a) =>
-    (a.ssids ?? []).map((s) => {
-      // ap-manager always records one; the AP controller reads none as wpa2-personal.
-      const security = s.security ?? "wpa2-personal";
-      return { ap: a.name, ssid: s.name, zone: s.zone ?? null, security, needs: needsPassphrase(security), set: kept.has(s.name) };
-    }),
-  );
-}
+
+// A passphrase state as the pages say it: set, set but not pushed yet, missing
+// (a personal SSID without one cannot be created on the access point), or none
+// needed (open, enterprise).
+export const PASSPHRASE_TEXT: Record<PassphraseState, string> = {
+  set: "set",
+  changed: "changed — the next reconcile pushes it",
+  "not set": "not set",
+  "not needed": "none needed",
+};
+export const passphraseOf = (s: SiteSsid): PassphraseState => s.passphrase ?? (needsPassphrase(s.security) ? "not set" : "not needed");
 
 // An SSID's name as ap-manager and ~/.wlan-secrets.txt take it: 1–32
 // characters, no '=' (the secrets file's separator), no control characters.
@@ -121,27 +129,40 @@ export function ssidProblem(name: string): string | null {
   return null;
 }
 
+// A WPA passphrase as ap-manager takes it: 8–63 printable characters.
+export function passphraseProblem(p: string): string | null {
+  if (p.length < 8 || p.length > 63) return "8 to 63 characters";
+  if (!/^[\x20-\x7e]+$/.test(p)) return "printable characters only";
+  return null;
+}
+
 export interface WifiPlan {
-  ap: string;
   ssid: string;
   zone: string;
   vlan: number | null;
   security: string;
-  replace: { ap: string; ssid: string } | null; // the SSID a change takes away
+  old: SiteSsid | null; // the SSID the zone has today
 }
 
-// The sequence: on a change, the old mapping removed; the new SSID mapped to
-// the zone's VLAN; then the reconcile that programs the access points (its
-// preview is the delta, apply pushes it). The passphrase is never in argv: it
-// is in ~/.wlan-secrets.txt, which the plugin reads at apply.
-export function wifiSpecs(p: WifiPlan): { remove: StepSpec | null; add: StepSpec; reconcile: StepSpec } {
-  const add: Values = { "@ssid": p.ssid, "--zone": p.zone, "--security": p.security };
-  if (p.vlan !== null) add["--vlan"] = String(p.vlan);
-  return {
-    remove: p.replace ? { bin: "ap-manager", verb: "ssid <ap> remove", words: ["ssid", p.replace.ap, "remove"], initial: { "@ssid": p.replace.ssid } } : null,
-    add: { bin: "ap-manager", verb: "ssid <ap> add", words: ["ssid", p.ap, "add"], initial: add },
-    reconcile: { bin: "ap-manager", verb: "reconcile", initial: {} },
-  };
+// The sequence. A new SSID: `ssid add`. Another name than the zone's SSID:
+// `ssid remove` of the old one first (one SSID per zone). The same name: `ssid
+// modify` when its security changes or it was off, else nothing to declare —
+// a new passphrase alone is the passphrase step and the reconcile. Then the
+// reconcile that programs every access point (its preview is the delta, apply
+// pushes it). The passphrase is never in argv: it goes to ap-manager on stdin
+// through the secrets endpoint.
+export function wifiSpecs(p: WifiPlan): { remove: StepSpec | null; declare: StepSpec | null; reconcile: StepSpec } {
+  const reconcile: StepSpec = { bin: "ap-manager", verb: "reconcile", initial: {} };
+  const add: StepSpec = { bin: "ap-manager", verb: "ssid add", words: ["ssid", "add"], initial: { "@ssid": p.ssid, "--zone": p.zone, "--security": p.security } };
+  if (!p.old) return { remove: null, declare: add, reconcile };
+  if (p.old.name !== p.ssid) {
+    return { remove: { bin: "ap-manager", verb: "ssid remove", words: ["ssid", "remove"], initial: { "@ssid": p.old.name } }, declare: add, reconcile };
+  }
+  if (p.old.security === p.security && !p.old.disabled) return { remove: null, declare: null, reconcile };
+  const mod: Values = { "@ssid": p.ssid };
+  if (p.old.security !== p.security) mod["--security"] = p.security;
+  if (p.old.disabled) mod["--enabled"] = true;
+  return { remove: null, declare: { bin: "ap-manager", verb: "ssid modify", words: ["ssid", "modify"], initial: mod }, reconcile };
 }
 
 // ── a backup buddy: one pull through one tunnel (backup/BUDDY.md) ─────

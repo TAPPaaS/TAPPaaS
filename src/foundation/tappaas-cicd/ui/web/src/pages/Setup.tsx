@@ -16,7 +16,7 @@ import { Job, SiteRead } from "../types";
 import { Dot, Link, ReadState, navigate, since } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { Day2 } from "./Day2";
-import { ApIn, WIFI_ZONE_TYPES, ssidPassphrases } from "../wizards";
+import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, broadcastText, passphraseOf } from "../wizards";
 
 export interface SetupDoc {
   steps: SetupStep[];
@@ -176,42 +176,47 @@ export function StepRow({ s, children, open: forced }: { s: SetupStep; children?
 }
 
 // The WiFi step's way on: the Day 2 button of each active Client zone with no
-// SSID, and each SSID the access points hold with whether its passphrase is
-// kept (~/.wlan-secrets.txt, names only); a personal one without it cannot be
-// created on the access point.
+// SSID, and the site's SSIDs (ap-manager ssid list: each bridged to one zone,
+// broadcast by every access point unless it names some) with how clients join
+// and whether the passphrase is set — names only; a personal SSID without one
+// cannot be created on the access points.
 function WifiLinks({ doc }: { doc: SetupDoc | null }) {
-  const aps = useRead<ApIn[]>("aps", 600_000).env?.data ?? null;
-  const secrets = useRead<SecretStatus[]>("secrets", 600_000).env?.data ?? null;
+  const ssids = useRead<SiteSsid[]>("ssids", 600_000);
   const w = doc?.inputs.wifi;
   if (!w) return null;
   const served = new Set((w.aps ?? []).flatMap((a) => a.ssids.map((s) => s.zone)));
   const missing = w.zones.filter((z) => z.type === "Client" && (z.state ?? "Active") === "Active" && !served.has(z.name));
   const day2 = new Set(w.zones.filter((z) => WIFI_ZONE_TYPES.includes(z.type ?? "") && (z.state ?? "Active") === "Active").map((z) => z.name));
-  const rows = aps && secrets ? ssidPassphrases(aps, secrets.find((x) => x.name === "wlan")?.keys ?? []) : [];
+  const rows = ssids.env?.data ?? [];
+  const to = (zone: string) => (day2.has(zone) ? `/setup/day2#wifi-${zone}` : "/setup/day2#wifi");
   return (
     <>
+      {ssids.env?.error || ssids.failure ? <p className="readstate readstate-fail">ap-manager ssid list could not be read: {ssids.env?.error ?? ssids.failure}</p> : null}
       {rows.length ? (
         <table className="table compact">
           <thead>
-            <tr><th>SSID</th><th>access point</th><th>zone</th><th>security</th><th>passphrase</th></tr>
+            <tr><th>SSID</th><th>zone</th><th>security</th><th>broadcast on</th><th>passphrase</th></tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={`${r.ap}/${r.ssid}`}>
-                <td className="mono">{r.ssid}</td>
-                <td>{r.ap}</td>
-                <td className="mono">{r.zone ?? ""}</td>
-                <td>{r.security}</td>
-                <td>
-                  {!r.needs ? <span className="muted">none needed</span> : r.set ? <><Dot level="pass" /> set</> : (
-                    <>
-                      <Dot level="warn" /> not set{" "}
-                      <Link to={r.zone && day2.has(r.zone) ? `/setup/day2#wifi-${r.zone}` : "/setup/day2#wifi"} className="btn">Set passphrase…</Link>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))}
+            {rows.map((r) => {
+              const p = passphraseOf(r);
+              return (
+                <tr key={r.name}>
+                  <td className="mono">{r.name}</td>
+                  <td className="mono">{r.zone}{typeof r.vlan === "number" ? <span className="muted"> · VLAN {r.vlan}</span> : null}</td>
+                  <td>{r.security}</td>
+                  <td>{broadcastText(r)}</td>
+                  <td>
+                    {p === "not needed" ? <span className="muted">{PASSPHRASE_TEXT[p]}</span> : p === "set" ? <><Dot level="pass" /> set</> : p === "changed" ? <><Dot level="info" /> {PASSPHRASE_TEXT[p]}</> : (
+                      <>
+                        <Dot level="warn" /> not set{" "}
+                        <Link to={to(r.zone)} className="btn">Set passphrase…</Link>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ) : null}
@@ -222,7 +227,7 @@ function WifiLinks({ doc }: { doc: SetupDoc | null }) {
           {missing.map((z) => (
             <Link key={z.name} to={`/setup/day2#wifi-${z.name}`} className="btn">Add WiFi for {z.name} →</Link>
           ))}
-          <span className="muted">on Day 2: the access point, the SSID, its passphrase, then the reconcile.</span>
+          <span className="muted">on Day 2: the SSID, its passphrase, then the reconcile that programs every access point.</span>
         </p>
       )}
     </>

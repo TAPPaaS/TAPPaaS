@@ -69,6 +69,7 @@ export const TTL = {
   topology: 5 * MIN,
   zones: 5 * MIN,
   aps: 5 * MIN,
+  ssids: 5 * MIN,
   environments: 5 * MIN,
   site: 5 * MIN,
   backup: 10 * MIN,
@@ -165,6 +166,7 @@ export class Reads {
   readonly topology: Cached<TopologyDoc & Record<string, unknown>>;
   readonly zones: Cached<Record<string, unknown>[]>;
   readonly aps: Cached<Record<string, unknown>[]>;
+  readonly ssids: Cached<Record<string, unknown>[]>;
   readonly environments: Cached<EnvironmentRow[]>;
   readonly site: Cached<Record<string, unknown>>;
   readonly security: Cached<Record<string, unknown> | null>;
@@ -201,6 +203,9 @@ export class Reads {
     this.zones = new Cached("zones", TTL.zones, () => this.loadZones(), now);
     // The access points and the SSIDs each maps to a zone (Setup's WiFi).
     this.aps = new Cached("aps", TTL.aps, () => j<Record<string, unknown>[]>("ap-manager", ["list", "--json"]), now);
+    // The site-wide SSIDs: zone, security, the APs that broadcast each, and
+    // whether its passphrase is set — never the passphrase (#889).
+    this.ssids = new Cached("ssids", TTL.ssids, () => j<Record<string, unknown>[]>("ap-manager", ["ssid", "list", "--json"]), now);
     this.environments = new Cached("environments", TTL.environments, async () => {
       // The environment names no zone; the zone naming it is its zone (#865).
       // A shared service zone listing it is not its zone, and is listed apart (#876).
@@ -617,7 +622,7 @@ export class Reads {
   async refresh(what: string): Promise<string[]> {
     const all: Record<string, Cached<unknown>> = {
       health: this.health, modules: this.modules, backup: this.backup, topology: this.topology,
-      zones: this.zones, aps: this.aps, environments: this.environments, site: this.site, security: this.security,
+      zones: this.zones, aps: this.aps, ssids: this.ssids, environments: this.environments, site: this.site, security: this.security,
       peers: this.peers, activity: this.activity, storage: this.storage, "backup-runs": this.backupRuns, ipv6: this.ipv6,
     } as Record<string, Cached<unknown>>;
     if (what === "all") {
@@ -676,7 +681,7 @@ export class Reads {
     const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
     // A faceplate added or changed: the forms' plates follow.
     const plates = this.faceplates.peek().at !== null ? [this.faceplates] : [];
-    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.ssids.peek().at !== null ? [this.ssids] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
   }
 
   private async loadStorage(): Promise<StorageDoc> {

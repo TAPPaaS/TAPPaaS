@@ -18,7 +18,7 @@ import { Link, canOperate, useMe } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
-import { ApIn, ZoneIn, wifiVerb, wifiZones } from "../wizards";
+import { ApIn, PASSPHRASE_TEXT, SiteSsid, ZoneIn, broadcastText, passphraseOf, wifiVerb, wifiZones } from "../wizards";
 import { SetupDoc, StepRow, addStackSteps, enrolSteps } from "./Setup";
 import { WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
@@ -203,7 +203,8 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
   const apsRead = useRead<ApIn[]>("aps");
   const site = useRead<SiteRead>("site").env?.data?.site;
   const aps = apsRead.env?.data ?? [];
-  const wifi = wifiZones(zones.env?.data ?? [], aps);
+  const ssidsRead = useRead<SiteSsid[]>("ssids");
+  const wifi = wifiZones(zones.env?.data ?? [], ssidsRead.env?.data ?? []);
   // /setup/day2#wifi-<zone> (Day 1's WiFi step): that card, once it is there.
   const target = window.location.hash.slice(1);
   const there = target !== "" && (target === "wifi" ? wifi.length > 0 : target === "physical" ? doc !== null : wifi.some((z) => `wifi-${z.zone}` === target));
@@ -249,16 +250,17 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
       </Group>
       <Group title="WiFi" id="wifi">
         {wifi.map((z) => (
-          <WizardCard key={z.zone} id={`wifi-${z.zone}`} on={target === `wifi-${z.zone}`} title={`${wifiVerb(z)} WiFi for ${z.zone}`} tag={z.type} action={<WifiButton z={z} aps={aps} site={site?.name ?? ""} />}>
-            {z.ssids.length ? (
-              <>Broadcast as {z.ssids.map((s) => `${s.name} on ${s.ap}${s.security ? ` (${s.security})` : ""}`).join(", ")}; devices that join land on VLAN {z.vlan ?? "?"}.</>
+          <WizardCard key={z.zone} id={`wifi-${z.zone}`} on={target === `wifi-${z.zone}`} title={`${wifiVerb(z)} WiFi for ${z.zone}`} tag={z.type} action={<WifiButton z={z} apCount={aps.length} site={site?.name ?? ""} />}>
+            {z.ssid ? (
+              <>{z.ssid.name} ({z.ssid.security}), on {broadcastText(z.ssid)}; passphrase {PASSPHRASE_TEXT[passphraseOf(z.ssid)]}. Devices that join land on VLAN {z.vlan ?? "?"}.</>
             ) : (
-              <>No SSID yet{z.declared ? ` (zones.json names ${z.declared}, no access point broadcasts it)` : ""}: an SSID that puts devices on VLAN {z.vlan ?? "?"}.</>
+              <>No SSID yet{z.declared ? ` (zones.json names ${z.declared}, which ap-manager does not hold)` : ""}: a site-wide SSID that puts devices on VLAN {z.vlan ?? "?"}.</>
             )}
           </WizardCard>
         ))}
         {zones.env?.data && wifi.length === 0 ? <p className="muted small">No active Client or Guest zone.</p> : null}
-        {apsRead.env?.error || apsRead.failure ? <p className="readstate readstate-fail">ap-manager list could not be read: {apsRead.env?.error ?? apsRead.failure}</p> : apsRead.env?.data && aps.length === 0 ? <p className="muted small">No access point is registered yet (ap-manager add).</p> : null}
+        {ssidsRead.env?.error || ssidsRead.failure ? <p className="readstate readstate-fail">ap-manager ssid list could not be read: {ssidsRead.env?.error ?? ssidsRead.failure}</p> : null}
+        {apsRead.env?.error || apsRead.failure ? <p className="readstate readstate-fail">ap-manager list could not be read: {apsRead.env?.error ?? apsRead.failure}</p> : apsRead.env?.data && aps.length === 0 ? <p className="muted small">No access point is registered yet (ap-manager add): an SSID can be declared now and is broadcast once one is.</p> : null}
       </Group>
     </>
   );

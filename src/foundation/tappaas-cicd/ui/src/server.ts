@@ -19,7 +19,8 @@ import { Jobs, jobsNaming, summary } from "./jobs";
 import { Manifests } from "./manifest";
 import { MODULE_NAME, NODE_NAME, OBJECT_NAME, Reads } from "./reads";
 import { ownerSummary, readConfigs } from "./owner";
-import { SECRETS, isSecretName, secretStatus, writeSecret } from "./secrets";
+import { SECRETS, isSecretName, secretCommand, secretStatus, writeSecret } from "./secrets";
+import { StdinRunner, runWithStdin } from "./run";
 import { closeSetupToken, setupComplete, setupSteps } from "./setup";
 import { FIELD_KINDS, FieldKind } from "./fieldmanifest";
 
@@ -30,6 +31,7 @@ export interface ServerConfig {
   version: string;
   log: (line: string) => void;
   home?: string; // where the Setup wizard's credential files go (secrets.ts)
+  runStdin?: StdinRunner; // the verb that takes a secret on stdin (wlan: ap-manager ssid set-passphrase)
   litellm?: LiteLLM | null; // the assistant's LiteLLM (ADR-034 D7); absent: no assistant
   assistant?: Assistant | null; // its agent loop (assistant.ts)
 }
@@ -209,6 +211,8 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.ipv6.get()));
       case "aps":
         return sendJson(res, 200, envelope(await r.aps.get()));
+      case "ssids":
+        return sendJson(res, 200, envelope(await r.ssids.get()));
       case "environments":
         return sendJson(res, 200, envelope(await r.environments.get()));
       case "identity":
@@ -492,6 +496,25 @@ export class ConsoleServer {
       body = req ? await readJsonBody(req) : {};
     } catch (e) {
       return sendJson(res, 400, { error: (e as Error).message });
+    }
+    // A secret its owner keeps (wlan: ap-manager, #889) is handed to the owner's
+    // verb on stdin: never in argv, never in a log, never in the answer.
+    const cmd = secretCommand(name, body);
+    if (typeof cmd === "string") return sendJson(res, 400, { error: cmd });
+    if (cmd) {
+      const run = this.cfg.runStdin ?? runWithStdin;
+      const out = await run(cmd.bin, cmd.args, cmd.input);
+      if (!out.ran || out.rc !== 0) {
+        const secret = cmd.input.replace(/\n$/, "");
+        const last = (out.stderr || out.stdout).replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").slice(-1)[0] ?? "";
+        const why = (secret && last.includes(secret) ? last.split(secret).join("…") : last) || `exit ${out.rc}`;
+        return sendJson(res, out.ran ? 400 : 502, { error: `${cmd.bin} ${cmd.args.join(" ")}: ${why}` });
+      }
+      const file = join(home, SECRETS[name].file);
+      if (this.jobs) this.jobs.recordSecret(me, name, file, cmd.keys, `${cmd.bin} ${cmd.args.join(" ")}`);
+      this.cfg.log(`secret ${name} set by ${me.user ?? "?"} (${me.via}) through ${cmd.bin} ${cmd.args.join(" ")}`);
+      void this.reads.ssids.refreshAfterChange();
+      return sendJson(res, 200, { data: secretStatus(home, name) });
     }
     const r = writeSecret(home, name, body);
     if (!r.ok) return sendJson(res, 400, { error: r.error });

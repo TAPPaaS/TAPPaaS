@@ -527,8 +527,9 @@ export class Jobs {
   }
 
   // A secret the Setup wizard wrote (secrets.ts): in Activity like any change,
-  // with the keys it set and never their values.
-  recordSecret(me: Me, name: string, file: string, keys: string[]): Job {
+  // with the keys it set and never their values. `via`: the owner's verb that
+  // stored it (wlan: ap-manager ssid set-passphrase <ssid>), when not the console.
+  recordSecret(me: Me, name: string, file: string, keys: string[], via?: string): Job {
     const t = new Date(this.now()).toISOString();
     const job: JobSummary = {
       id: `${t.replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`,
@@ -542,7 +543,7 @@ export class Jobs {
       verb: `secret ${name}`,
       argv: ["console", "secret", name],
       ran: null,
-      preview: { kind: "none", touches: `writes ${file} (mode 0600)` },
+      preview: { kind: "none", touches: via ? `${via} stores it in ${file} (mode 0600)` : `writes ${file} (mode 0600)` },
       previewOf: null,
       destructive: false,
       object: name,
@@ -555,7 +556,7 @@ export class Jobs {
       refused: null,
     };
     this.add(job);
-    this.appendOutput(job.id, `wrote ${file}: ${keys.join(", ")} (values are never recorded or shown)\n`);
+    this.appendOutput(job.id, `${via ? `${via}: stored in ${file}` : `wrote ${file}`}: ${keys.join(", ")} (values are never recorded or shown)\n`);
     this.record(job);
     return this.get(job.id)!;
   }

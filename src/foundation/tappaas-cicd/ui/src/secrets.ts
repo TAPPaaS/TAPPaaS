@@ -5,7 +5,10 @@
 //
 //   acme-dns   ~/.acme-dns-credentials.txt   provider=<p>, dns_<key>=<value>   (acme-setup.sh)
 //   unifi      ~/.unifi-os-credentials.txt   url=, username=, password=       (the UniFi plugin)
-//   wlan       ~/.wlan-secrets.txt           <SSID>=<passphrase>, merged by SSID (ap-manager)
+//   wlan       ~/.wlan-secrets.txt           <SSID>=<passphrase>, one per SSID — written by
+//                                            `ap-manager ssid set-passphrase <ssid>` with the
+//                                            passphrase on stdin, which also marks the SSID so
+//                                            the next reconcile pushes it (#889)
 
 import { chmodSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -18,6 +21,16 @@ interface SecretSpec {
   // The lines to write from the posted fields, given what the file holds now;
   // an error when the fields are not what the script reads.
   lines: (fields: Record<string, unknown>, current: Map<string, string>) => Map<string, string> | string;
+  // Set by its owner's verb instead of written here: the argv (never the
+  // secret), the secret on stdin, and the keys it sets.
+  command?: (fields: Record<string, unknown>) => SecretCommand | string;
+}
+
+export interface SecretCommand {
+  bin: string;
+  args: string[];
+  input: string;
+  keys: string[];
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 && v.length <= 4096 && !/[\r\n\u0000]/.test(v) ? v : null);
@@ -60,10 +73,17 @@ export const SECRETS: Record<SecretName, SecretSpec> = {
       const ssid = str(f.ssid);
       const pass = str(f.passphrase);
       if (!ssid || ssid.includes("=")) return "ssid: the SSID's name (no '=')";
-      if (!pass || pass.length < 8 || pass.length > 63) return "passphrase: 8 to 63 characters (WPA)";
+      if (!pass || pass.length < 8 || pass.length > 63 || !/^[\x20-\x7e]+$/.test(pass)) return "passphrase: 8 to 63 printable characters (WPA)";
       const out = new Map(current);
       out.set(ssid, pass);
       return out;
+    },
+    // ap-manager owns the SSIDs: it stores the passphrase and marks the SSID.
+    command: (f) => {
+      const ok = SECRETS.wlan.lines(f, new Map());
+      if (typeof ok === "string") return ok;
+      const ssid = str(f.ssid) as string;
+      return { bin: "ap-manager", args: ["ssid", "set-passphrase", ssid], input: `${str(f.passphrase)}\n`, keys: [ssid] };
     },
   },
 };
@@ -116,6 +136,7 @@ export function secretStatus(home: string, name: SecretName): SecretStatus {
 export function writeSecret(home: string, name: SecretName, fields: Record<string, unknown>): { ok: true; keys: string[]; file: string } | { ok: false; error: string } {
   const spec = SECRETS[name];
   const f = join(home, spec.file);
+  if (spec.command) return { ok: false, error: `${name} is set through its owner's verb (secretCommand), not written here` };
   let current = new Map<string, string>();
   try {
     if (existsSync(f)) current = parseKv(readFileSync(f, "utf8"));
@@ -130,4 +151,11 @@ export function writeSecret(home: string, name: SecretName, fields: Record<strin
   chmodSync(tmp, 0o600);
   renameSync(tmp, f);
   return { ok: true, keys: [...lines.keys()], file: f };
+}
+
+// The verb that sets a secret its owner keeps (wlan: ap-manager), or null when
+// the console writes the file itself; an error for the form.
+export function secretCommand(name: SecretName, fields: Record<string, unknown>): SecretCommand | string | null {
+  const spec = SECRETS[name];
+  return spec.command ? spec.command(fields) : null;
 }
