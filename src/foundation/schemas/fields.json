@@ -114,7 +114,6 @@
       "apply": "none",
       "changeNote": "Where a machine is: a location of the site (site-manager location list), checked at the write. Changing it moves nothing; it changes where the topology and the console draw the machine and what backup-manager validate's off-site check compares with the site. A value with a '/' is the pre-#609 name of moduleSource and is never written."
     },
-
     "kind": {
       "class": "immutable",
       "apply": "none",
@@ -141,7 +140,6 @@
       "deprecated": true,
       "changeNote": "RETIRED: a machine names its location (`location`). Migration 0021 moves it; never write it."
     },
-
     "uplinks": {
       "class": "manual",
       "apply": "none",
@@ -196,6 +194,21 @@
       "class": "manual",
       "apply": "none",
       "changeNote": "What the control plane links and registers for this module: a change adds or removes verbs operators and the console use, so it is made in the module's JSON and released."
+    },
+    "name": {
+      "class": "manual",
+      "apply": "none",
+      "changeNote": "The name the firewall knows a satellite by (its WireGuard server and peer). Renaming it means re-creating both on the firewall — not a --set."
+    },
+    "host": {
+      "class": "manual",
+      "apply": "none",
+      "changeNote": "The satellite's VPS (public address, SSH user, operator keys), recorded at install. A new VPS is a reinstall of the satellite."
+    },
+    "provider": {
+      "class": "manual",
+      "apply": "none",
+      "changeNote": "Where the satellite's VPS comes from (provider, portal or api). Changing it is a new VPS — a reinstall."
     }
   }
 }
