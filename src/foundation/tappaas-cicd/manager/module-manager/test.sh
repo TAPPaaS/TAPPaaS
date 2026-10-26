@@ -1698,6 +1698,16 @@ new6="$(comm -13 <(fc "$PRE6") <(fc "$POST6"))"
     && ok "baseline: a check that newly fails inside an already-failing test.sh is graded new" \
     || bad "baseline: new check inside a failing test.sh not graded new (new='${new6}')"
 
+# (7) The post-rollback test is graded against the same baseline. On makerfloss
+# a rollback was declared fatal for a check that failed before the update too.
+awk '/^rollback_verdict\(\) \{/{f=1} f{print} f&&/^\}/{exit}' "$UPD_MOD" >> "$GFN"
+rv() { bash -c '. "'"$GFN"'"; PRE_TEST_LOG="$1"; rollback_verdict "$2" "$3"' _ "$@"; }
+EMPTY7="${GW}/empty7.log"; printf 'boom\n' > "$EMPTY7"
+got7="$(rv "$PRE" "$POST_SAME" 1),$(rv "$PRE" "$POST_NEW" 1),$(rv "$PRE" "$POST_SAME" 0),$(rv "$PRE" "$EMPTY7" 2)"
+[[ "${got7}" == "same,fatal,pass,fatal" ]] \
+    && ok "post-rollback: an old failure is 'same', a new one or an unnamed one is fatal" \
+    || bad "post-rollback verdicts: expected same,fatal,pass,fatal, got ${got7}"
+
 # (7) The same check with another number (a timing, a count, a version) is the
 # same check: graded old, not new.
 PRE7="${GW}/pre7.log";  printf '%s\n' '[FAIL] backup older than 26h (last 31h ago)' > "$PRE7"

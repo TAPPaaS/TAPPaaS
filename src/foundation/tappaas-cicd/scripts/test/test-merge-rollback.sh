@@ -29,7 +29,7 @@ printf '%s' '{"kind":"machine"}'                                                
 # The two functions under test, with the logging they expect.
 info(){ :; }; debug(){ :; }; warn(){ echo "WARN: $*" >&2; }; fatal(){ echo "FATAL: $*" >&2; exit 1; }
 GN=""; CL=""; BL=""
-CONFIG_BACKUP=""; ORIG_BACKUP=""; KEEP_CONFIG_BACKUP=0; PRE_TEST_LOG=""
+CONFIG_BACKUP=""; ORIG_BACKUP=""; KEEP_CONFIG_BACKUP=0; PRE_TEST_LOG=""; CONFIG_BACKUP_WHAT="pre-update"
 eval "$(sed -n '/^backup_module_config() {/,/^}/p' "${UM}")"
 eval "$(sed -n '/^restore_module_config() {/,/^}/p' "${UM}")"
 eval "$(sed -n '/^cleanup_update_files() {/,/^}/p' "${UM}")"
@@ -81,6 +81,20 @@ else
     [[ "${_msg}" == *"${_cb}"*"kept"* ]] && ok "…and the error says where it is" || bad "failure message: ${_msg}"
 fi
 rm -f "${_cb}" "${ORIG_BACKUP}"
+
+# ── a rolled-back `modify --set` leaves no --set behind ──────────────
+# modify writes the field before it runs the update, and hands over its copy
+# from before that write. Seen on makerfloss: `--set node=tappaas2` stayed in
+# logging.json after the update rolled back.
+printf '%s' '{"kind":"machine","node":"tappaas1"}' > "${W}/pre.json"
+printf '%s' '{"kind":"machine"}'                   > "${W}/pre.json.orig"
+printf '%s' '{"kind":"machine","node":"tappaas2"}' > "${CONFIG_DIR}/m.json"
+TAPPAAS_PRE_MODIFY_CONFIG="${W}/pre.json" TAPPAAS_PRE_MODIFY_ORIG="${W}/pre.json.orig" backup_module_config m
+restore_module_config m >/dev/null 2>&1
+[[ "$(jq -r .node "${CONFIG_DIR}/m.json")" == tappaas1 ]] \
+    && ok "a rolled-back modify restores the config from before its --set" || bad "node is $(jq -r .node "${CONFIG_DIR}/m.json") after the rollback"
+[[ "${CONFIG_BACKUP_WHAT}" == pre-modify ]] && ok "…and says so" || bad "restore calls it ${CONFIG_BACKUP_WHAT}"
+cleanup_update_files; CONFIG_BACKUP_WHAT="pre-update"
 
 # The real script wires it: one EXIT trap, and it is this function.
 [[ "$(grep -c '^trap ' "${UM}")" == 1 ]] && grep -q '^trap cleanup_update_files EXIT$' "${UM}" \

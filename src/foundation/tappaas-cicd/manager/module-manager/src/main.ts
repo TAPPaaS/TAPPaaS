@@ -25,7 +25,8 @@
 //
 // Exit codes: ok=0, error / non-zero child rc = that rc (1 for config errors).
 
-import { existsSync, readFileSync, readdirSync } from "fs";
+import { copyFileSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from "fs";
+import { tmpdir } from "os";
 import { dirname, join } from "path";
 import { CliModuleClient } from "./client";
 import {
@@ -1156,9 +1157,17 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
   if (verb === "modify" && opts.sets.length === 0 && opts.unsets.length === 0) {
     warn("`modify` with no --set is the release update — say `module-manager module update` instead (#655)");
   }
+  // The update's rollback restores the config it backed up — which, after the
+  // write below, already carries the --set. It is handed the copy from before
+  // the write instead, so a rolled-back modify leaves the config as it was.
+  let preModify: string | undefined;
   if (opts.sets.length > 0 || opts.unsets.length > 0) {
+    preModify = savePreModifyConfig(opts.configDir, module);
     const rc = applyFieldChanges(module, opts);
-    if (rc !== 0) return rc;
+    if (rc !== 0) {
+      if (preModify) rmSync(preModify, { recursive: true, force: true });
+      return rc;
+    }
   }
 
   const m: ModifyOptions = {
@@ -1169,7 +1178,27 @@ function cmdModify(opts: Opts, client: ModuleClient, verb: "update" | "modify"):
     debug: opts.debug,
     silent: opts.silent,
   };
-  return client.modify(module, m);
+  try {
+    return client.modify(module, m);
+  } finally {
+    if (preModify) rmSync(preModify, { recursive: true, force: true });
+  }
+}
+
+// Copy config/<module>.json (and its .orig merge baseline) aside and name the
+// copies in TAPPAAS_PRE_MODIFY_CONFIG / _ORIG for update-module.sh. Returns the
+// directory to remove afterwards; undefined when there is nothing to copy.
+function savePreModifyConfig(configDir: string, module: string): string | undefined {
+  const src = join(configDir, `${module}.json`);
+  if (!existsSync(src)) return undefined;
+  const dir = mkdtempSync(join(tmpdir(), `tappaas-premodify-${module}-`));
+  copyFileSync(src, join(dir, "config.json"));
+  process.env.TAPPAAS_PRE_MODIFY_CONFIG = join(dir, "config.json");
+  if (existsSync(`${src}.orig`)) {
+    copyFileSync(`${src}.orig`, join(dir, "config.json.orig"));
+    process.env.TAPPAAS_PRE_MODIFY_ORIG = join(dir, "config.json.orig");
+  }
+  return dir;
 }
 
 // `modify <instance> --lockdown` (ADR-010 §8.4.4): a deliberate, one-way change of

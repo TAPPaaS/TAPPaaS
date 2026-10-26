@@ -14,9 +14,9 @@
 #
 # Options:
 #   -h, --help       Show this help message
-#   --force          Proceed even if pre-update test fails, AND authorize a
-#                    disruptive change (guest reboot / offline migrate) during
-#                    the converge — see ADR-020 D8
+#   --force          Proceed even if pre-update test fails
+#   --allow-disruption  Authorize a disruptive change (guest reboot, node move)
+#                    during the converge — see ADR-020 D8
 #   --no-snapshot    Skip pre-update test, snapshot, and rollback
 #   --debug          Show Debug-level messages
 #   --silent         Suppress Info-level messages
@@ -158,12 +158,22 @@ resolve_effective_module_name() {
 CONFIG_BACKUP=""
 ORIG_BACKUP=""
 KEEP_CONFIG_BACKUP=0
+CONFIG_BACKUP_WHAT="pre-update"
 
 
 backup_module_config() {
     local module="$1"
     local src="${CONFIG_DIR}/${module}.json"
     [[ -f "${src}" ]] || return 0
+    # `module modify --set` writes the config before it runs this update, and
+    # names its copy from before that write: a rollback restores that one, so a
+    # rolled-back modify leaves no --set behind.
+    local orig_src="${src}.orig"
+    if [[ -n "${TAPPAAS_PRE_MODIFY_CONFIG:-}" && -f "${TAPPAAS_PRE_MODIFY_CONFIG}" ]]; then
+        src="${TAPPAAS_PRE_MODIFY_CONFIG}"
+        orig_src="${TAPPAAS_PRE_MODIFY_ORIG:-}"
+        CONFIG_BACKUP_WHAT="pre-modify"
+    fi
     CONFIG_BACKUP="$(mktemp "${TMPDIR:-/tmp}/tappaas-config-${module}.XXXXXX")" || { CONFIG_BACKUP=""; return 0; }
     cp -p "${src}" "${CONFIG_BACKUP}" || CONFIG_BACKUP=""
     [[ -n "${CONFIG_BACKUP}" ]] && debug "  Config backed up to ${CONFIG_BACKUP}"
@@ -174,9 +184,9 @@ backup_module_config() {
     # reads that as "the operator removed them" — rule 2a then DROPS what the
     # release still declares, or rule 5 pins a value the operator never chose.
     ORIG_BACKUP=""
-    if [[ -f "${src}.orig" ]]; then
+    if [[ -n "${orig_src}" && -f "${orig_src}" ]]; then
         ORIG_BACKUP="$(mktemp "${TMPDIR:-/tmp}/tappaas-orig-${module}.XXXXXX")" || return 0
-        cp -p "${src}.orig" "${ORIG_BACKUP}" || ORIG_BACKUP=""
+        cp -p "${orig_src}" "${ORIG_BACKUP}" || ORIG_BACKUP=""
     fi
     return 0
 }
@@ -186,7 +196,7 @@ restore_module_config() {
     local dst="${CONFIG_DIR}/${module}.json"
     [[ -n "${CONFIG_BACKUP}" && -f "${CONFIG_BACKUP}" ]] || { warn "No pre-update config copy — ${dst} left as it is"; return 1; }
     if cp -p "${CONFIG_BACKUP}" "${dst}"; then
-        info "  ${GN}✓${CL} Config restored to its pre-update content (${dst})"
+        info "  ${GN}✓${CL} Config restored to its ${CONFIG_BACKUP_WHAT:-pre-update} content (${dst})"
         # …and with it the baseline, so the next merge judges against the state
         # the config is actually in (#688).
         if [[ -n "${ORIG_BACKUP}" && -f "${ORIG_BACKUP}" ]]; then
@@ -260,13 +270,17 @@ attempt_rollback() {
                     || warn "  '${module}' not ready after rollback — post-rollback tests may see a starting service"
             fi
             info "  Running post-rollback verification..."
-            local rollback_test_exit=0
-            /home/tappaas/bin/test-module.sh "${module}" || rollback_test_exit=$?
-            if [[ "${rollback_test_exit}" -eq 0 ]]; then
-                info "  ${GN}✓${CL} Post-rollback tests passed — module is back to working state"
-            else
-                fatal "Post-rollback tests also failed (exit ${rollback_test_exit})"
-            fi
+            local rollback_test_exit=0 rb_log
+            rb_log="$(mktemp)"
+            # Runtime-only, like the baseline it is graded against (Step 2).
+            run_graded_test "${rb_log}" --runtime-only "${module}" || rollback_test_exit=$?
+            case "$(rollback_verdict "${rb_log}" "${rollback_test_exit}")" in
+                pass) info "  ${GN}✓${CL} Post-rollback tests passed — module is back to working state" ;;
+                same) warn "  Post-rollback tests fail only checks that already failed before the update — the module is back where it was"
+                      echo "TEST-WARN: ${module}: after the rollback $(failed_checks "${rb_log}" | paste -sd ';' -)" ;;
+                *)    fatal "Post-rollback tests also failed (exit ${rollback_test_exit})$(failed_checks "${rb_log}" | comm -13 <(failed_checks "${PRE_TEST_LOG}") - | paste -sd ';' - | sed 's/^./ — new since before the update: &/')" ;;
+            esac
+            rm -f "${rb_log}"
         else
             fatal "Rollback failed — manual intervention required"
         fi
@@ -456,6 +470,21 @@ failed_checks() {
                  -e 's/^[[:space:]]*\[FAIL\][[:space:]]*//p' \
                  -e 's/^[[:space:]]*FAIL:[[:space:]]*//p' \
         | sed -E 's/[0-9]+/#/g; s/[[:space:]]+$//' | grep -vxE '#?' | sort -u
+}
+
+# rollback_verdict <log> <exit> — grade the post-rollback test against the
+# pre-update baseline: pass (exit 0), same (it fails, but only checks that also
+# failed before the update — the rollback put the module back where it was), or
+# fatal (a check the baseline did not fail, or a failure with no check named).
+rollback_verdict() {
+    local log="$1" rc="$2" now
+    [[ "${rc}" -eq 0 ]] && { echo pass; return; }
+    now="$(failed_checks "${log}")"
+    if [[ -n "${now}" && -z "$(comm -13 <(failed_checks "${PRE_TEST_LOG}") <(printf '%s\n' "${now}"))" ]]; then
+        echo same
+    else
+        echo fatal
+    fi
 }
 
 # ── Main ─────────────────────────────────────────────────────────────
