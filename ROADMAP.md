@@ -106,8 +106,8 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 10 | – | 12 |
-| 6 | G6.2 User interface & physical view | H | L | 5 | – | 1 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 10 | 1 | 11 |
+| 6 | G6.2 User interface & physical view | H | L | 5 | 1 | 3 |
 | 6 | G6.3 Data model | M | M | 9 | – | 1 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
@@ -122,7 +122,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 2 | G2.2 DNS resolver robustness | L | M | 7 | – | 1 |
 | 1 | ✅ G1.2 Backup placement model + managed machines (ADR-012, ADR-026) | M | H | 27 | – | – |
 | 1 | G1.6 Secrets & privileged access | H | H | 4 | – | 1 |
-| 1 | G1.7 Parked for Erik discussion | – | – | – | – | 3 |
+| 1 | G1.7 Parked for Erik discussion | – | – | – | 1 | 2 |
 
 ## Planning items still open
 
@@ -132,7 +132,6 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |---|----------|----------|
 | #801 | Default update schedule: daily on every channel — on `stable`/`staging` 13 of 14 runs change nothing, but urgent fixes and OS patches arrive within a day; what to do with sites on the old weekly default | Operator (proposed 2026-10-08, from #797) |
 | #294 | VMID scheme: zone-aligned ranges for new installs only, or not at all — never renumber in place | Lars and @ErikDaniel007 (Future Work) |
-| #430 | Controller/manager pattern for app modules — **ADR-035 v0.7 (2026-10-20)** (pluggable controllers and managers; P1 registry and P2 renames, `switch/1` executables, exported TS builder, P3 module registration — all live on hrossen); Ansible first and the foundational/domain line are its O4 | Lars and @ErikDaniel007 (G1.7) |
 | #142 | AI-agent access to the mothership: SSH + sudo, or a REST API (which would need an ADR) | RFC outcome (G1.6) |
 | #675 | What a managed repository may contribute to the control plane's own NixOS configuration, and what happens when that fails to build. Today a site's own host-level modules are dropped by every scheduled rebuild while the unit reports success (`tappaas-cicd.nix` has no extension point — confirmed) | An ADR first; Ease H · Risk M |
 | #488 | `apply-json-merge`: should a field that `.orig` never recorded be adopted from the release, or kept? #736 made each refused value visible; the rule itself is open | Operator |
@@ -231,7 +230,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 10 · open: 12
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 10 · done for 2.4: 1 · open: 11
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -243,20 +242,23 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #668 | A machine's zone is recorded, not enforced | H | M | A machine's `zone0` says which network its physical NIC is cabled to, and nothing checks the switch port. Record switch and port per NIC, report VLAN drift. Decide with #697 |
 | #697 | Node `lan` trunks and their switch ports are set once at install, maintained by nothing | M | H | Node trunks and switch ports are set at install and maintained by nothing; untagged mgmt survives on PVID 1 by accident. Five candidate fixes on the issue — **decide with #668** |
 | #706 | A wireless device zone cannot be checked against its SSID | M | L | **Scored 2026-10-13:** an attachment field (`port`/`ssid`) for `kind: device` and the #668 check extended to SSIDs. Additive check; after #668 (the wired half, open). Moved from G2.1 2026-10-13: it needs #668's attachment record first |
-| #155 | Modules for physical devices | L | L | Docs and examples only (Lars, 2026-05-15) |
+| ✅ #155 | Modules for physical devices | L | L | **Closed 2026-10-26:** covered by `kind: device` (ADR-022f), documented in the glossary with Community examples; #879 stops the update waiting for their guest |
 | FW #158 | Multi-NIC module firewall rules | M | L | Optional roll-in |
 | #236 | RADIUS MAC Auth Bypass: a device's VLAN from its MAC, on Wi-Fi and wired ports | H | M | Future idea; depends on how switch ports and APs are managed (this group) |
 | #63 | Service desk tooling spike | M | L | |
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 | #883 | A debug bundle for support: the log and an anonymized `~/config`, attached to the failure mail | M | L | **Opened 2026-10-26.** PII removed from the configs; the mail suggests forwarding it to a support address. First trigger: a failed update |
 
-### G6.2 User interface & physical view — Ease H · Risk L · released: 5 · open: 1
+### G6.2 User interface & physical view — Ease H · Risk L · released: 5 · done for 2.4: 1 · open: 3
 
 A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point), designed first in a spike and an ADR (#844). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **P1–P3 built and live on hrossen 2026-10-18** (`839-console-p1/p2/p3`, the review fixes and the operator's UX review, on `main` as `1d9c897a`): the `console` — see, operate (jobs with preview and apply, the Setup wizard, the owner's route) and ask (the assistant through LiteLLM, proposing and never applying) — installed at `console.hrossen.dk` behind the gate, with `network-manager topology`, `health-manager validate --json` and the verb manifests (`--help --json`) in the managers. **2026-10-19 to 10-23, all live on hrossen:** the schema-driven forms and the install fixes; the Site page as Overview (the whole site record, updates and repositories), Physical (racks, rooms, recorded devices, patch panels and cable segments from the new rack-manager), Device (plain cards, a force layout around the selection, a panel opening on the device's faceplate) and Storage (nodes → pools → disks from `storage-manager inventory`, with SMART states and the pool pie); Zones as its own menu; Environments as cards with zone boxes and module icons; the Backup page's overview with last backup and verify. **Open:** P4 (agents through the gate, #142; the SIEM surface after #843; the end-user badges) and the `status.<domain>` route (needs gated `proxyRoutes`); the model behind the Physical view moves with G6.3 |
+| ✅ #839 | TAPPaaS user interface: a general UX, starting with a physical view of the site | H | L | **Closed 2026-10-26:** P1–P3 built and live on hrossen (the `console` behind the gate). P4 continues as #885, #886, #887; roles as #878 |
+| #885 | console: agents act through the identity gate | M | M | **Opened 2026-10-26** from #839 P4: a service identity per agent in Authentik, a group limiting its jobs, every job recorded under its name. Builds on #142 |
+| #886 | console: a security view of the SIEM's alerts | M | L | **Opened 2026-10-26** from #839 P4: open alerts per node and module, read-only, linked to the SIEM. After #843 |
+| #887 | console: a status page and badges for the site's users | M | L | **Opened 2026-10-26** from #839 P4: `status.<domain>` with each published app up or down, and badges; needs gated `proxyRoutes` |
 
 ### G6.3 Data model — Ease M · Risk M · released: 9 · open: 1
 
@@ -417,13 +419,13 @@ Least privilege on the platform. Built: nodes hardened to the Proxmox guide, key
 |---|-------|:-:|:-:|------|
 | #142 | RFC: AI-agent access to cicd | H | L | Decision |
 
-### G1.7 Parked for Erik discussion · open: 3
+### G1.7 Parked for Erik discussion · done for 2.4: 1 · open: 2
 
 Waiting on a conversation between Lars and @ErikDaniel007, not on work: the controller pattern (#430), hass locale (#348) and Erik's image pins (#765).
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #430 | Controller/manager pattern for app modules | M | L | **ADR-035 v0.7 (2026-10-20)** (operator; P1–P3 live on hrossen 2026-10-20): controllers and managers live with their module in tappaas-cicd's layout, declared in its JSON, linked and registered by module-manager in one registry; vendor code a controller, vendor-neutral code a manager. Open for Erik: O4 (Ansible first, the foundational/domain line) |
+| ✅ #430 | Controller/manager pattern for app modules | M | L | **Closed 2026-10-26:** ADR-035 accepted (v0.9); Erik agrees with the approach, tried on `mikrotik-controller` (#847). Authority and the burden bar are per controller |
 | #348 | hass locale from site master data | M | L | **Parked 2026-09-21:** no test site runs hass. The fix is written on the issue — `core_config` at `lib/config.sh:158` plus a converge for onboarded instances, from `.location` |
 | #765 | Container image pins: list litellm, openwebui, vllm-amd, deconz; move the stale ones | L | L | From #750, for @ErikDaniel007: list his modules in `src/image-pins.json` and move the stale pins — euro-office v9.3.1 → v9.3.4 first; litellm and openwebui overlap #621 |
 
