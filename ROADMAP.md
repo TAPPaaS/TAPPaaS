@@ -706,6 +706,8 @@ The verbs operators otherwise do by hand (the `test` verbs, #499, are in G5.2): 
 | ✅ #855 | console: a destructive verb's typed confirmation names the object, not the switch | L | L | **Closed 2026-10-18** (`11439bf0`): the verb manifest names the positional that identifies the object; `remove-port` asks for the port |
 | ✅ #183 | TAPPaaS service catalog | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Folded into #839** (ADR-034 D6): the console's Modules page is the catalog — every registered repository's modules, installed or not, with Install |
 | ✅ #91 | Backstage as a component of tappaas-cicd | H | L | **Closed 2026-10-18** with ADR-034's acceptance. **Not adopted** (ADR-034 A3): a developer portal, not an operations console |
+| ✅ #878 | console: which Authentik roles give read access and which give update access | M | L | **Done 2026-10-27** (`f5a40083`, on `main`): the console is for the `installer` group only, one role that may do everything (destructive verbs behind the typed name); a caller outside the group gets 403 naming the group, the console's Authentik application is bound to the group, the read and admin profiles and the owner route are gone, ADR-034 D3 amended. The differentiated roles are #892 |
+| #892 | console: differentiated roles (viewer, environment operator, user editor, network operator) | H | M | the second step after #878: TAPPaaS roles with their own console profiles and API scopes, the existing-site migration, the per-role Authentik policy, the assistant honouring the role |
 
 #### G6.3 Data model — Ease M · Risk M
 
