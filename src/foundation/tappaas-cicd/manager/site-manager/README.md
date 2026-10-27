@@ -30,13 +30,13 @@ The bin owns config CRUD (`site modify`, `node` CRUD, the `site.json` writes) +
 
 ```
 site (singleton)   site show [--json]
-                   site modify --<field> <value> [...]
+                   site modify --set <field>=<value>... [--unset <field>] [--<shortcut> <value>]...
 location           location list [--json]
                    location show <name> [--json]
                    location add <name> --country <CC> [--displayName <s>] [--kind site|remote]
                             [--city <c>] [--address <a>] [--timezone <tz>]
                             [--latitude <deg>] [--longitude <deg>] [--primary] [--check]
-                   location modify <name> [--<field> <value>]... [--unset <f,g>] [--check]
+                   location modify <name> [--set <field>=<value>]... [--<shortcut> <value>]... [--unset <f,g>] [--check]
                    location delete <name> [--check]
 node               node list [--json]
                    node add <N> [--pxe] [--boot-disk <d>] [--mac <m>]
@@ -160,9 +160,14 @@ missing repository, and removes the clone again if it fails. The TAPPaaS reposit
 fingerprints are written by the installer, from the ones published in the root
 `INSTALL.md`.
 
-`site modify` editable fields (scalar, site-wide): `--channel`, `--displayName`, `--owner`,
-`--email`, `--supportEmail` (where an alert's support bundle is to be forwarded; one address,
-empty by default, `''` clears it), `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
+`site modify --set <field>=<value>` sets a field by its name in `site-fields.json`, dotted
+inside an object (`--set supportEmail=help@example.org`, `--set backup.target=pbs2`,
+`--set updateSchedule.hour=3`); it repeats, and `--unset <field>` removes an optional one. The
+options below are **shortcuts**, one field each (ADR-020 D11): `--email a@b.org` is
+`--set email=a@b.org`, and both run the same checks. `supportEmail` — where an alert's support
+bundle is to be forwarded — is one e-mail address (the schema refuses anything else), empty
+by default and set as a day-two step. The shortcuts (scalar, site-wide): `--channel`,
+`--displayName`, `--owner`, `--email`, `--supportEmail` (`''` clears it), `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
 `--backupOffsite`, `--primaryLocation`, `--locale`, `--keyboard`, `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`,
 `--brandingLogo`, `--brandingLogoDark`, `--dnsBlocklistsLists|Zones|Allow` (comma lists, `''`
 empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the

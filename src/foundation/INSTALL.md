@@ -627,7 +627,7 @@ says to forward the mail to the site's support address. It is empty after the in
 the mail then says to forward it to your support contact. Set it when you have one:
 
 ```bash
-site-manager site modify --supportEmail <address>
+site-manager site modify --set supportEmail=<address>
 ```
 
 (or on the console's Site page). Which address that is will come with the TAPPaaS

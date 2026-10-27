@@ -547,7 +547,7 @@ line in front. No `email` in `site.json`: nothing is sent, exit 0.
 - `--to` sends to one address instead of `site.json` `email` (a test, a forward).
 - `--attach` makes it a multipart mail with the file attached (a support bundle, below);
   the body then says to forward it to `site.json` `supportEmail`
-  (`site-manager site modify --supportEmail <addr>`). Over 5 MB it is not attached and
+  (`site-manager site modify --set supportEmail=<addr>`). Over 5 MB it is not attached and
   the body says where it is.
 - `--key` names the condition the notice is about (#883): `update-sweep`,
   `grafana:<rule>:<host>`, `alert-watchdog`. The first ALERT for a key records it as open

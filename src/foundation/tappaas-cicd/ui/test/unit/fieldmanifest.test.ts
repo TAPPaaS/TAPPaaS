@@ -93,36 +93,37 @@ const edefs = environmentDefs(schema("environment-fields.json"));
 check(!flattenSchema(schema("environment-fields.json")).some((f) => f.name.startsWith("network")), "environment-fields: an environment names no zone");
 const env = buildManifest({ kind: "environment", name: "rossen", mode: "modify", defs: edefs, record: { name: "rossen", displayName: "Rossen", ownerOrg: "rossen", zone: "rossen", domains: { primary: "hrossen.dk", dnsMode: "per-service" } }, refs, vars: {} });
 check(field(env, "name") === undefined, "environment modify: the name is the verb's positional, not a field");
-check(field(env, "ownerOrg")?.typeText === "an organization" && field(env, "ownerOrg")?.arg === "--owner" && field(env, "ownerOrg")?.value === "rossen", "…ownerOrg names an organization, passed as --owner");
+check(field(env, "ownerOrg")?.typeText === "an organization" && field(env, "ownerOrg")?.arg === "--owner" && field(env, "ownerOrg")?.value === "rossen", "…ownerOrg names an organization, passed as --owner (its fields cannot be emptied, so the form keeps the flags)");
 check(field(env, "zone")?.choices?.includes("rossen") === true && field(env, "zone")?.arg === "--zone" && field(env, "zone")?.value === "rossen" && field(env, "domains.dnsMode")?.typeText === "one of per-service, wildcard", "…its zone a zone (--zone, the zone naming it); dnsMode one of per-service, wildcard");
 check(field(env, "displayName")?.required === true && field(env, "domains.primary")?.required === false, "…required as the schema says");
 const eadd = buildManifest({ kind: "environment", name: null, mode: "add", defs: edefs, record: null, defaults: { displayName: "<Name>", ownerOrg: "rossen", zone: "<name>" }, refs, vars: { name: null } });
+check(field(eadd, "ownerOrg")?.arg === "--owner", "…while an add passes the verb's own flag");
 check(field(eadd, "ownerOrg")?.default === "rossen" && field(eadd, "displayName")?.defaultTemplate === true, "environment add: what the manager uses when a field is left empty");
 check(placeholderOf(field(eadd, "displayName")!, typedVars({ "@env": "acme" })) === "default Acme" && placeholderOf(field(eadd, "zone")!, typedVars({ "@env": "acme" })) === "default acme", "…filled from the name as it is typed: default Acme, default acme");
 
 // ── identity ────────────────────────────────────────────────────────────
 const user = buildManifest({ kind: "user", name: "lars", mode: "modify", defs: flattenSchema(schema("user-fields.json")), record: { name: "lars", displayName: "lars", primaryEmail: "lars@hrossen.dk", state: "active", memberOf: ["users", "installer"], roles: ["admin"] }, refs, vars: {} });
-check(field(user, "memberOf")?.typeText === "groups" && field(user, "memberOf")?.arg === "--groups" && field(user, "memberOf")?.choices?.includes("authentik Admins") === true, "user: memberOf is a list of groups, passed as --groups");
-check(field(user, "primaryEmail")?.arg === "--email" && field(user, "roles")?.typeText === "roles" && field(user, "state")?.default === "active", "…primaryEmail as --email; roles; state's default");
+check(field(user, "memberOf")?.typeText === "groups" && field(user, "memberOf")?.arg === "--set" && field(user, "memberOf")?.choices?.includes("authentik Admins") === true, "user: memberOf is a list of groups, passed as --set");
+check(field(user, "primaryEmail")?.arg === "--set" && field(user, "roles")?.typeText === "roles" && field(user, "state")?.default === "active", "…primaryEmail as --set; roles; state's default");
 const group = buildManifest({ kind: "group", name: "users", mode: "modify", defs: flattenSchema(schema("group-fields.json")), record: { name: "users", displayName: "Users", ownerOrg: "rossen", roles: ["user"] }, refs, vars: {} });
-check(field(group, "ownerOrg")?.typeText === "an organization" && field(group, "roles")?.arg === "--roles", "group: ownerOrg an organization; roles as --roles");
+check(field(group, "ownerOrg")?.typeText === "an organization" && field(group, "roles")?.arg === "--set", "group: ownerOrg an organization; roles as --set");
 const org = buildManifest({ kind: "org", name: null, mode: "add", defs: flattenSchema(schema("organization-fields.json")), record: null, refs, vars: {} });
 check(field(org, "owner")?.typeText === "a user" && field(org, "parentOrg")?.typeText === "an organization" && field(org, "type")?.default === "company", "org add: owner a user, parentOrg an organization, type's default");
 const role = buildManifest({ kind: "role", name: "admin", mode: "modify", defs: flattenSchema(schema("role-fields.json")), record: { name: "admin", displayName: "Administrator" }, refs, vars: {} });
-check(role.fields.map((f) => f.arg).join() === "--displayName,--description", "role: displayName and description");
+check(role.fields.map((f) => f.arg).join() === "--set,--set", "role: displayName and description, by --set");
 
 // ── site ────────────────────────────────────────────────────────────────
 const site = buildManifest({ kind: "site", name: null, mode: "modify", defs: flattenSchema(schema("site-fields.json")), record: { name: "rossen", defaultEnvironment: "rossen", channel: "unstable", primaryLocation: "rodovre", keyboard: "dk", updateSchedule: { frequency: "weekly", weekday: "Thursday", hour: 2 } }, refs, vars: {} });
 check(field(site, "defaultEnvironment")?.typeText === "an environment" && field(site, "defaultEnvironment")?.editable === false, "site: defaultEnvironment names an environment; site modify has no option for it");
-check(field(site, "updateSchedule.frequency")?.arg === "--updateFrequency" && field(site, "updateSchedule.hour")?.type === "integer" && field(site, "updateSchedule.weekday")?.choices?.length === 7, "…the schedule's three fields, with their flags");
+check(field(site, "updateSchedule.frequency")?.arg === "--set" && field(site, "updateSchedule.hour")?.type === "integer" && field(site, "updateSchedule.weekday")?.choices?.length === 7, "…the schedule's three fields, by --set");
 const locDefs = flattenSchema((schema("site-fields.json").$defs as Record<string, unknown>).location);
 check(locDefs.find((d) => d.name === "latitude")?.type === "number" && field(site, "updateSchedule.hour")?.typeText === "integer", "…a decimal is a number, an integer integer");
-check(field(site, "primaryLocation")?.arg === "--primaryLocation" && field(site, "primaryLocation")?.value === "rodovre" && field(site, "keyboard")?.arg === "--keyboard", "…the primary location and the keyboard, passed as their flags");
+check(field(site, "primaryLocation")?.arg === "--set" && field(site, "primaryLocation")?.value === "rodovre" && field(site, "keyboard")?.arg === "--set", "…the primary location and the keyboard, by --set");
 check(field(site, "diskAutoGrow.threshold")?.class === "in-place", "…a leaf takes its object's class");
 check(field(site, "name")?.editable === false && /^immutable: The site's code/.test(field(site, "name")?.why ?? "") && field(site, "name")?.value === "rossen", "…name shown, refused with the schema's reason");
 check(/^immutable: Written once/.test(field(site, "version")?.why ?? "") && /^immutable: /.test(field(site, "defaultEnvironment")?.why ?? ""), "…version and defaultEnvironment too");
-check(field(site, "dnssec")?.arg === "--dnssec" && field(site, "dnssec")?.type === "boolean" && field(site, "dnsBlocklists.zones")?.type === "list" && field(site, "dnsBlocklists.zones")?.typeText === "zones", "…dnssec a boolean, the blocklist zones a list of zones");
-check(field(site, "diskAutoGrow.threshold")?.arg === "--diskAutoGrowThreshold" && field(site, "diskAutoGrow.threshold")?.default === "80" && field(site, "branding.logoDark")?.arg === "--brandingLogoDark", "…disk growth by key, with its defaults; branding's two files");
+check(field(site, "dnssec")?.arg === "--set" && field(site, "dnssec")?.type === "boolean" && field(site, "dnsBlocklists.zones")?.type === "list" && field(site, "dnsBlocklists.zones")?.typeText === "zones", "…dnssec a boolean, the blocklist zones a list of zones");
+check(field(site, "diskAutoGrow.threshold")?.arg === "--set" && field(site, "diskAutoGrow.threshold")?.default === "80" && field(site, "branding.logoDark")?.arg === "--set", "…disk growth by key, with its defaults; branding's two files");
 check(/^manual: Has verbs of its own: site-manager location/.test(field(site, "locations")?.why ?? "") && /^manual: Retired: migration 0022/.test(field(site, "hardware")?.why ?? ""), "…the locations are manual and the retired hardware says why");
 
 check(field(site, "primaryLocation")?.typeText === "a location" && field(site, "primaryLocation")?.choices?.join() === "hareskov,rodovre", "…the primary location is one of the site's locations");
@@ -147,7 +148,8 @@ const c1 = fieldChanges(mod.fields, { memory: "2048", proxyDomain: "vault.hrosse
 check(c1.tokens.join(" ") === "--set memory=2048 --unset zone0 --set proxyDomain=vault.hrossen.dk", "module modify: --set per changed field, in the schema's order; an emptied configured field is unset");
 check(classSummary(c1.changed).join(" | ") === "restarts the module: memory, zone0 | applied live: proxyDomain", "…the Preview's head groups them by class, in words");
 const c2 = fieldChanges(user.fields, { memberOf: "users\ninstaller\nauthentik Admins", primaryEmail: "lars@example.org" });
-check(c2.tokens.join("|") === "--email|lars@example.org|--groups|users,installer,authentik Admins", "user modify: the verb's own flags; a list comma-separated");
+check(c2.tokens.join("|") === '--set|primaryEmail=lars@example.org|--set|memberOf=["users","installer","authentik Admins"]', "user modify: --set per field; a list as JSON (identity-manager makes it the shortcut's comma list)");
+check(fieldChanges(site.fields, { keyboard: "" }).tokens.join(" ") === "--unset keyboard", "site modify: an emptied optional field is unset");
 const c3 = fieldChanges(zone.fields, { "access-to": "internet\nmgmt" });
 check(c3.tokens.join(" ") === '--set access-to=["internet","mgmt"]', "zone modify: a list goes to --set as JSON");
 check(fieldChanges(mod.fields, { memory: "lots" }).errors.memory === "memory must be a number", "a value of the wrong type is refused in the form");

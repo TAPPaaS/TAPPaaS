@@ -116,8 +116,10 @@
       "changeClass": "in-place"
     },
     "supportEmail": {
-      "description": "Where the site's operator sends a support bundle (#883): an alert that carries one tells them to forward it here. One address. Unset: the alert still carries the bundle and says to forward it to the site's support contact.",
+      "description": "Where the site's operator sends a support bundle (#883): an alert that carries one tells them to forward it here. One e-mail address. Empty by default — set it as a day-two step; unset, the alert still carries the bundle and says to forward it to the site's support contact.",
       "type": "string",
+      "format": "email",
+      "pattern": "^[^@\\s<>,;\"()]+@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$",
       "changeClass": "in-place"
     },
     "version": {

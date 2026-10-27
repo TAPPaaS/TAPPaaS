@@ -10,6 +10,8 @@
 // change it, and how a change is passed to the manager's own verb (`--set` or
 // the verb's own flag). Pure: the reads that feed it are in reads.ts.
 
+import { MODIFY_SHORTCUTS } from "../../lib/ts/src/setfields";
+
 export const FIELD_KINDS = ["module", "zone", "environment", "org", "group", "user", "role", "site", "location", "backup", "rack", "placement", "room"] as const;
 export type FieldKind = (typeof FIELD_KINDS)[number];
 export type FormMode = "add" | "modify";
@@ -300,41 +302,32 @@ export function backupDefs(schemaDoc: unknown): FieldDef[] {
 // memberOf → --groups, …). A field with no flag cannot change through that
 // verb: the form shows it read-only. test/unit/flags.test.ts holds the
 // identity and backup rows to identity-manager's and backup-manager's own
-// option lists.
+// option lists. The modify rows of the kinds in SET_SHORTCUT_KINDS are the
+// managers' own table (lib/ts setfields.ts): there the flags are shortcuts of
+// `--set field=value`, which is what the form sends (ADR-020 D11).
+const S = MODIFY_SHORTCUTS;
 export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<string, string>>>>> = {
-  environment: {
-    add: { displayName: "--display", ownerOrg: "--owner", zone: "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode" },
-    modify: { displayName: "--display", ownerOrg: "--owner", zone: "--zone", "domains.primary": "--domain", "domains.dnsMode": "--dns-mode" },
-  },
-  org: { add: { displayName: "--displayName", type: "--type", owner: "--owner", parentOrg: "--parentOrg" }, modify: { displayName: "--displayName", type: "--type", owner: "--owner", parentOrg: "--parentOrg" } },
-  group: { add: { displayName: "--displayName", type: "--type", ownerOrg: "--ownerOrg", roles: "--roles" }, modify: { displayName: "--displayName", type: "--type", ownerOrg: "--ownerOrg", roles: "--roles" } },
-  user: {
-    add: { displayName: "--displayName", primaryEmail: "--email", state: "--state", roles: "--roles", memberOf: "--groups" },
-    modify: { displayName: "--displayName", primaryEmail: "--email", state: "--state", roles: "--roles", memberOf: "--groups" },
-  },
-  role: { add: { displayName: "--displayName", description: "--description" }, modify: { displayName: "--displayName", description: "--description" } },
-  site: {
-    modify: {
-      displayName: "--displayName", owner: "--owner", email: "--email", supportEmail: "--supportEmail", channel: "--channel", automaticReboot: "--automaticReboot", ipv6: "--ipv6", requireSigned: "--requireSigned",
-      snapshotRetention: "--snapshotRetention", "backup.target": "--backupTarget", "backup.offsite": "--backupOffsite", "backup.defaultSchedule": "--backupDefaultSchedule",
-      "backup.defaultRetention": "--backupDefaultRetention", primaryLocation: "--primaryLocation", locale: "--locale", keyboard: "--keyboard", "branding.logo": "--brandingLogo", "branding.logoDark": "--brandingLogoDark", "network.isp": "--networkIsp", "network.publicIp": "--networkPublicIp",
-      dnssec: "--dnssec", "dnsBlocklists.lists": "--dnsBlocklistsLists", "dnsBlocklists.zones": "--dnsBlocklistsZones", "dnsBlocklists.allow": "--dnsBlocklistsAllow",
-      "diskAutoGrow.enabled": "--diskAutoGrowEnabled", "diskAutoGrow.threshold": "--diskAutoGrowThreshold", "diskAutoGrow.growPercent": "--diskAutoGrowGrowPercent",
-      "diskAutoGrow.minGrowGB": "--diskAutoGrowMinGrowGB", "diskAutoGrow.poolCeiling": "--diskAutoGrowPoolCeiling",
-      "updateSchedule.frequency": "--updateFrequency", "updateSchedule.weekday": "--updateWeekday", "updateSchedule.hour": "--updateHour",
-    },
-  },
+  environment: { add: S.environment, modify: S.environment },
+  org: { add: S.org, modify: S.org },
+  group: { add: S.group, modify: S.group },
+  user: { add: S.user, modify: S.user },
+  role: { add: S.role, modify: S.role },
+  site: { modify: S.site },
   // site-manager location add/modify: one flag per field of site-fields' $defs.location.
-  location: {
-    add: { displayName: "--displayName", kind: "--kind", country: "--country", city: "--city", address: "--address", timezone: "--timezone", latitude: "--latitude", longitude: "--longitude" },
-    modify: { displayName: "--displayName", kind: "--kind", country: "--country", city: "--city", address: "--address", timezone: "--timezone", latitude: "--latitude", longitude: "--longitude" },
-  },
+  location: { add: S.location, modify: S.location },
   backup: { modify: { enabled: "--enabled", retention: "--retention", exclude: "--exclude" } },
   zone: { add: { type: "--type", typeId: "--typeId", vlantag: "--vlan", variant: "--variant", environment: "--environment", "tftp-server-name": "--tftp-server-name", "bootfile-name": "--bootfile-name" } },
   rack: { add: { displayName: "--display-name", units: "--units", width: "--width", numbering: "--numbering", room: "--room", description: "--description" } },
   room: { add: { displayName: "--display-name", description: "--description", location: "--location" } },
   placement: { add: { rack: "--rack", u: "--u", room: "--room", height: "--height", width: "--width", slot: "--slot", face: "--face", faceplate: "--faceplate", label: "--label", description: "--description" } },
 };
+
+// The kinds whose modify verb takes `--set field=value` with its flags as
+// shortcuts (lib/ts setfields.ts): the form sends --set, and --unset to empty.
+// environment-manager modify takes --set too, but none of its fields can be
+// emptied: its form keeps the flags, so the form refuses an emptied field
+// before anything is sent (fieldlogic.ts unsets only through --set).
+const SET_SHORTCUT_KINDS = new Set<FieldKind>(["site", "location", "org", "group", "user", "role"]);
 
 // Fields a form never offers whatever the schema says: the object's name is
 // the verb's positional.
@@ -433,7 +426,7 @@ export function buildManifest(i: ManifestInput): FieldManifest {
     } else if (i.kind === "site" && i.mode === "modify" && def.changeClass && def.changeClass !== "in-place") {
       // site-fields.json's class: name, version, defaultEnvironment are immutable
       why = `${def.changeClass}: ${oneLine(def.changeNote) || "site modify does not change it"}`;
-    } else if (flags && flags[def.name]) arg = flags[def.name];
+    } else if (flags && flags[def.name]) arg = i.mode === "modify" && SET_SHORTCUT_KINDS.has(i.kind) ? "--set" : flags[def.name];
     else why = i.mode === "add" ? "not set when adding: change it afterwards" : "the verb has no option for it";
     fields.push({
       name: def.name,

@@ -32,7 +32,7 @@ environment-manager show <env> [--json] [--config-dir DIR]
 environment-manager validate [<file|dir>] [--config-dir DIR]
 environment-manager add [<env>] [--name N] [--domain D] [--owner ORG]
                         [--zone Z] [--display D] [--dns-mode M] [--force] [--config-dir DIR]
-environment-manager modify <env> [--domain D] [--owner ORG] [--zone Z]
+environment-manager modify <env> [--set <field>=<value>]... [--domain D] [--owner ORG] [--zone Z]
                         [--display D] [--dns-mode M] [--config-dir DIR]
 environment-manager delete <env> [--force] [--check] [--config-dir DIR]
 environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
@@ -45,7 +45,7 @@ environment-manager reconcile <env> [--deep] [--apply] [--config-dir DIR]
 | `show <env>` | One environment in detail (canonical pretty JSON; `--json` = compact). |
 | `validate [<file/dir>]` | The canonical schema + reference gate, implemented natively (src/validate.ts interprets `environment-fields.json` in-process — the former `validate-environment.sh` is retired). Checks full schema conformance (`additionalProperties:false`, `pattern`/`enum`/`minLength`, the `tlsCertRefid` rejection) **and** reference integrity (exactly one own zone in `zones.json`, `ownerOrg` in the organizations). See "The `validate` gate" below. |
 | `add` | Create an environment (writes validated config). With **no** positional `<env>` it **seeds the minimal set** (`mgmt` + the default `<N>`) — the bootstrap that replaced the retired `create-minimal-environments.sh`; `--name <N>` gives the system name explicitly, else it derives from `site.json '.name'` (see "The minimal-set bootstrap" below). With a positional `<env>` it creates that single env. `--owner` defaults to the first org under `identities/organizations/`; `--zone` defaults to `<env>`. |
-| `modify <env>` | Change an existing environment (preserves un-flagged fields; writes validated config). |
+| `modify <env>` | Change an existing environment (preserves un-flagged fields; writes validated config). `--set <field>=<value>` names the field as `environment-fields.json` does (`displayName`, `ownerOrg`, `zone`, `domains.primary`, `domains.dnsMode`); `--domain`, `--owner`, `--zone`, `--display` and `--dns-mode` are shortcuts for one of them each (ADR-020 D11). An environment's fields cannot be emptied, so there is no `--unset`. |
 
 `--dns-mode <per-service\|wildcard>` (on `add`/`modify`) sets `domains.dnsMode` —
 the cert strategy: `per-service` (default; Caddy per-host HTTP-01) or `wildcard`

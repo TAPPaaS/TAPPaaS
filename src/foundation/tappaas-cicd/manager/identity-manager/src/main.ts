@@ -27,6 +27,7 @@ import { applyPlan, computePlan, pushEntityDeletion, snapshot } from "./reconcil
 import { revokeSessions, sessionRevokers, usersLosingAccess } from "./sessions";
 import { PeopleModel, PrimitiveClient } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
+import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfields";
 import { CL, DieError, GN, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 
 const VERSION = "0.1.0";
@@ -34,7 +35,10 @@ const VERSION = "0.1.0";
 // <kind> is the first word of the entity verbs.
 const KINDS = "role|org|organization|group|user";
 
-const FIELD_FLAGS = `Field flags (write the validated config, then push it to the identity service):
+const FIELD_FLAGS = `modify also takes --set <field>=<value> (repeatable) and --unset <field>, by the
+schema's field name (user: displayName, primaryEmail, state, roles, memberOf); the
+flags below are shortcuts for them, one field each (ADR-020 D11).
+Field flags (write the validated config, then push it to the identity service):
   role:  --displayName V  --description V
   org:   --displayName V  --type V  --owner USER  --parentOrg ORG
   group: --displayName V  --type V  --ownerOrg ORG  --roles "a,b"  --add-roles R  --remove-roles R
@@ -534,7 +538,17 @@ function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
         const r = addEntity(opts.configDir, kind, name, fa, force);
         info(`Added ${kind} '${name}' → ${r.path}`);
       } else if (sub === "modify") {
-        const fa = parseFieldArgs(rest);
+        // ADR-020 D11: --set field=value becomes the field's shortcut flag; --unset
+        // gives it "" (an emptied list; a required field is refused by validation).
+        const table = MODIFY_SHORTCUTS[kind === "organization" ? "org" : (kind as "org" | "group" | "user" | "role")];
+        let args = rest;
+        try {
+          args = expandSet(rest, table, `${kind} modify`, { unset: "empty" });
+        } catch (e) {
+          if (e instanceof SetError) die(e.message);
+          throw e;
+        }
+        const fa = parseFieldArgs(args);
         const r = modifyEntity(opts.configDir, kind, name, fa);
         info(`Modified ${kind} '${name}' → ${r.path}`);
       } else {

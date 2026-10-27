@@ -55,7 +55,7 @@ identity-manager validate                            [--config-dir DIR]
 identity-manager <kind> list   [--json] [--deep]     [--config-dir DIR]
 identity-manager <kind> show   <name> [--json]       [--config-dir DIR]   (alias: get, deprecated)
 identity-manager <kind> add    <name> [field flags]  [--force] [--config-dir DIR]
-identity-manager <kind> modify <name> [field flags]  [--config-dir DIR]
+identity-manager <kind> modify <name> [--set <field>=<value>]... [--unset <field>] [field flags]  [--config-dir DIR]
 identity-manager <kind> delete <name> [--force]      [--config-dir DIR]
 identity-manager -h | --help
 ```
@@ -65,6 +65,11 @@ identity-manager -h | --help
 The standardized ADR-007 verb vocabulary applies: `add` (was create), `modify`
 (was set/update-entity), `delete` (was remove), `show` (was get), `list`,
 `reconcile` (was sync). `get` is kept as a deprecated alias for `show`.
+
+`modify --set <field>=<value>` names a field as its schema does (`user-fields.json`:
+`displayName`, `primaryEmail`, `state`, `roles`, `memberOf`; a list as `a,b` or JSON), and
+`--unset <field>` empties one. The field flags (`--email`, `--groups`, …) are shortcuts for
+one field each (ADR-020 D11); `--add-*` / `--remove-*` change a list by one entry.
 
 Options:
 

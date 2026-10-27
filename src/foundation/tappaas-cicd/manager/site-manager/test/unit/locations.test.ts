@@ -2,7 +2,8 @@
 // helper every manager reads them through, and the rules site-manager
 // validate and the location verbs keep.
 
-import { run } from "../../src/main";
+import { EMAIL, run } from "../../src/main";
+import { defaultSchemaDir, siteSchema } from "../../src/config";
 import { FakeSiteClient } from "./fake-client";
 import {
   addLocation, deleteLocation, ensureLocation, findLocation, locationErrors, locationName, locationNamers,
@@ -202,11 +203,39 @@ check(findLocation(readLocations(SITE).locations, { country: "DK", city: "Rodovr
   check(r.rc === 0 && /modified site: displayName=Rossen; site.json otherwise unchanged/.test(r.out.join("\n")), `site modify reports the same line (${r.out.join(" | ")})`);
   // #883: supportEmail — one address, "" clears it.
   r = say(["site", "modify", "--supportEmail", "a@b.org, c@d.org", "--check", "--config-dir", d]);
-  check(r.rc === 1 && /^\[refused\] --supportEmail must be one plain address/.test(r.out[0] ?? ""), `supportEmail: a list is refused (${r.out.join(" | ")})`);
+  check(r.rc === 1 && /^\[refused\] --supportEmail must be one e-mail address/.test(r.out[0] ?? ""), `supportEmail: a list is refused (${r.out.join(" | ")})`);
   r = say(["site", "modify", "--supportEmail", "support@tappaas.example", "--config-dir", d]);
   check(r.rc === 0 && (JSON.parse(readFileSync(join(d, "site.json"), "utf8")) as Obj).supportEmail === "support@tappaas.example", `supportEmail is written (${r.out.join(" | ")})`);
   r = say(["site", "modify", "--supportEmail", "", "--config-dir", d]);
   check(r.rc === 0 && !("supportEmail" in (JSON.parse(readFileSync(join(d, "site.json"), "utf8")) as Obj)), `supportEmail "" clears it (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--supportEmail", "support@localhost", "--check", "--config-dir", d]);
+  check(r.rc === 1, `supportEmail: an address without a domain is refused (${r.out.join(" | ")})`);
+  // site-fields.json's pattern and the check site modify makes are one rule.
+  const sf = siteSchema(defaultSchemaDir()) as { properties: Record<string, { pattern?: string; format?: string }> };
+  check(sf.properties.supportEmail.pattern === EMAIL.source && sf.properties.supportEmail.format === "email", `supportEmail: the schema's pattern is site modify's (${sf.properties.supportEmail.pattern})`);
+
+  // ADR-020 D11: --set field=value is the general form; the flags are its shortcuts.
+  r = say(["site", "modify", "--set", "supportEmail=help@tappaas.example", "--set", "backup.target=pbs2", "--set", "dnsBlocklists.lists=[\"a\",\"b\"]", "--config-dir", d]);
+  let sj = JSON.parse(readFileSync(join(d, "site.json"), "utf8")) as Obj;
+  check(r.rc === 0 && sj.supportEmail === "help@tappaas.example" && (sj.backup as Obj).target === "pbs2" && JSON.stringify((sj.dnsBlocklists as Obj).lists) === '["a","b"]',
+    `--set writes fields by name, dotted, and a JSON list (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--set", "supportEmail=nope", "--check", "--config-dir", d]);
+  check(r.rc === 1 && /must be one e-mail address/.test(r.out.join(" ")), `--set is checked as its shortcut is (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--set", "name=other", "--check", "--config-dir", d]);
+  check(r.rc === 1 && /^\[refused\] site modify: name cannot be set — immutable/.test(r.out[0] ?? ""), `--set name: refused with its change class (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--set", "nosuch=1", "--check", "--config-dir", d]);
+  check(r.rc === 1 && /nosuch/.test(r.out.join(" ")), `--set of no field is refused (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--set", "email=a@b.org", "--email", "c@d.org", "--check", "--config-dir", d]);
+  check(r.rc === 1 && /disagree/.test(r.out.join(" ")), `a shortcut and --set that disagree are refused (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--unset", "supportEmail", "--config-dir", d]);
+  sj = JSON.parse(readFileSync(join(d, "site.json"), "utf8")) as Obj;
+  check(r.rc === 0 && !("supportEmail" in sj) && /supportEmail=\(removed\)/.test(r.out.join(" ")), `--unset removes an optional field (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--unset", "displayName", "--check", "--config-dir", d]);
+  check(r.rc === 1 && /required/.test(r.out.join(" ")), `--unset of a required field is refused (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--unset", "updateSchedule.hour", "--check", "--config-dir", d]);
+  check(r.rc === 1 && /frequency=none/.test(r.out.join(" ")), `--unset of the schedule is refused, naming the way to stop it (${r.out.join(" | ")})`);
+  r = say(["location", "modify", "hareskov", "--set", "city=Værløse", "--config-dir", d]);
+  check(r.rc === 0 && ((JSON.parse(readFileSync(join(d, "site.json"), "utf8")) as { locations: Record<string, Obj> }).locations.hareskov.city === "Værløse"), `location modify --set (${r.out.join(" | ")})`);
 }
 
 console.log(`locations.test: ${passed} passed, ${failed} failed`);

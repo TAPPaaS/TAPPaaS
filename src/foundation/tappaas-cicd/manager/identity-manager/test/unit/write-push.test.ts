@@ -7,7 +7,7 @@
 // path, which reconcile alone cannot cover (a removed config file is invisible
 // to computePlan).
 
-import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import { HELP, run } from "../../src/main";
@@ -209,6 +209,12 @@ function quiet<T>(fn: () => T): T {
       `${argv.join(" ")}: refused, nothing written or pushed`);
   }
   check(call(["user", "modify", "ann", "--colour", "red"]).rc === 1, "a field flag the kind lacks is still refused (entity layer)");
+  // ADR-020 D11: --set field=value is the general form, the flags its shortcuts.
+  const ann = (): { displayName?: string; primaryEmail?: string; roles?: string[] } => JSON.parse(readFileSync(join(d, "users", "ann.json"), "utf8"));
+  check(call(["user", "modify", "ann", "--set", "displayName=Ann B", "--set", "primaryEmail=ann@acme.test", "--set", 'roles=["admin","user"]', "--no-reconcile"]).rc === 0
+    && ann().displayName === "Ann B" && ann().primaryEmail === "ann@acme.test" && JSON.stringify(ann().roles) === '["admin","user"]', "user modify --set: by the schema's names, a JSON list");
+  check(call(["user", "modify", "ann", "--unset", "roles", "--no-reconcile"]).rc === 0 && JSON.stringify(ann().roles ?? []) === "[]", "user modify --unset roles: the list emptied");
+  check(call(["user", "modify", "ann", "--set", "colour=red", "--no-reconcile"]).rc === 1, "user modify --set of a field the kind lacks: refused");
   check(undocumentedOptions(HELP).length === 0, `every usage option is described (${undocumentedOptions(HELP).join(", ")})`);
 }
 

@@ -30,6 +30,7 @@ import { clusterScript, defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, r
 import { CliSiteClient } from "./client";
 import { cmdLocation } from "./location";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
+import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfields";
 import { evacuateNode, evacuateExitCode } from "./evacuate";
 import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, preflightGuard, refused, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
@@ -63,12 +64,14 @@ export const HELP: HelpSpec = {
         "--locationCountry <cc>", "--locationTimezone <tz>", "--locationLocale <l>", "--locationKeyboard <kb>",
         "--locationLatitude <deg>", "--locationLongitude <deg>", "--locationCity <c>", "--locationBuilding <f>"],
       options: [
+        ["--set <field>=<value>", "set any field site-fields.json classes in-place, by its name (dotted inside an object: backup.target, updateSchedule.hour); repeat it. The options below are shortcuts, one field each (ADR-020 D11)."],
+        ["--unset <field[,field]>", "remove optional fields (supportEmail, branding.logo, …); a required field and the update schedule cannot be removed."],
         ["--channel <c>", "release channel: unstable | staging | production. Checks EVERY registered repository against the branch it declares for that channel in its channels.json, warns where they disagree or where none is declared, and proposes the fix; moving towards production needs --force."],
         ["--force", "authorize a channel move towards production — older code, and migrations do not run backwards."],
         ["--displayName <s>", "display name"],
         ["--owner <org>", "owning organization"],
         ["--email <addr>", "admin email"],
-        ["--supportEmail <addr>", "where an alert's support bundle is to be forwarded (#883); \"\" clears it"],
+        ["--supportEmail <addr>", "where an alert's support bundle is to be forwarded (#883): one e-mail address; empty by default, \"\" clears it"],
         ["--automaticReboot true|false", "allow update reboots"],
         ["--ipv6 true|false", "the site supports IPv6: OPNsense's 'Allow IPv6', applied by the next network update (default false)"],
         ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (ADR-033 D9; default false). A repository that lists signing keys is verified either way; one that declares no channels (no channels.json) is unstable, and moves unverified with a warning."],
@@ -118,9 +121,10 @@ export const HELP: HelpSpec = {
         ["--check", "say what would change, in one line; write nothing."],
         ["--json", "with --check: the whole resulting site.json, for machines."],
       ] },
-    { usage: "location modify <name> [--displayName <s>] [--kind site|remote] [--country <CC>] [--city <c>] [--address <a>] [--timezone <tz>] [--latitude <deg>] [--longitude <deg>] [--unset <f,g>] [--check]",
+    { usage: "location modify <name> [--set <field>=<value>]... [--displayName <s>] [--kind site|remote] [--country <CC>] [--city <c>] [--address <a>] [--timezone <tz>] [--latitude <deg>] [--longitude <deg>] [--unset <f,g>] [--check]",
       effect: { dryRun: "--check" },
       options: [
+        ["--set <field>=<value>", "set a field by its name (displayName, kind, country, city, address, timezone, latitude, longitude); repeat it. The options below are shortcuts, one field each (ADR-020 D11)."],
         ["--displayName <s>", "the name shown; '' (or --unset) clears this and the other optional fields."],
         ["--kind site|remote", "site: this site's own equipment is there; remote: another site's place."],
         ["--country <CC>", "ISO 3166-1 alpha-2 country code."],
@@ -635,8 +639,8 @@ function cmdSite(o: Opts): void {
     // #883: one address — site-notify.sh puts it into a mail body as the
     // place to forward a support bundle. "" clears it.
     const sup = o.flags.get("--supportEmail");
-    if (sup !== undefined && sup !== "" && !/^[^@\s<>,;"()]+@[^@\s<>,;"()]+$/.test(sup)) {
-      no("--supportEmail must be one plain address (name@domain)");
+    if (sup !== undefined && sup !== "" && !EMAIL.test(sup)) {
+      no("--supportEmail must be one e-mail address (name@domain.tld)");
     }
     if (sup === "") {
       delete (raw as Record<string, unknown>).supportEmail;
@@ -725,6 +729,26 @@ function cmdSite(o: Opts): void {
       put(["updateSchedule"], writeSchedule(f, d, h));
     }
 
+    // --unset (ADR-020 D11): optional fields only. The schedule has a value
+    // that means "never" (--updateFrequency none), not an absence.
+    const unset = o.flags.get("--unset");
+    if (unset !== undefined) {
+      const required = ((siteSchema(o.schemaDir)?.required ?? []) as string[]);
+      for (const f of unset.split(",").map((x) => x.trim()).filter(Boolean)) {
+        if (!(f in MODIFY_SHORTCUTS.site)) no(`site modify: --unset ${f}: not a field site modify sets`);
+        if (f.startsWith("updateSchedule.")) no(`site modify: the update schedule cannot be removed — --set updateSchedule.frequency=none stops it`);
+        if (required.includes(f.split(".")[0])) no(`site modify: ${f} is required and cannot be removed`);
+        if (unsetDeep(raw, f.split("."))) {
+          changes.push(`${f}=(removed)`);
+          changed++;
+        }
+      }
+      if (changed === 0) {
+        info(`site: nothing to remove (${unset}); site.json unchanged`);
+        return;
+      }
+    }
+
     if (changed === 0) no("site modify: no recognised --<field> given (see --help)");
     const what = `site: ${changes.join(", ")}; site.json otherwise unchanged`;
     if (check) {
@@ -786,6 +810,25 @@ export function writeSchedule(f: string, d: string | null, h: number | undefined
   if (f !== "daily" && f !== "none" && d) out.weekday = d;
   if (f !== "none") out.hour = h ?? 2;
   return out;
+}
+
+// One e-mail address: site-fields.json's pattern for supportEmail (the unit
+// test holds the two together).
+export const EMAIL = /^[^@\s<>,;"()]+@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)+$/;
+
+// Remove a dotted path; an object left empty by it goes too. False: not there.
+function unsetDeep(obj: Record<string, unknown>, path: string[]): boolean {
+  const [head, ...tail] = path;
+  if (!(head in obj)) return false;
+  if (tail.length === 0) {
+    delete obj[head];
+    return true;
+  }
+  const child = obj[head];
+  if (child === null || typeof child !== "object" || Array.isArray(child)) return false;
+  const gone = unsetDeep(child as Record<string, unknown>, tail);
+  if (gone && Object.keys(child as object).length === 0) delete obj[head];
+  return gone;
 }
 
 function setDeep(obj: Record<string, unknown>, path: string[], value: unknown): void {
@@ -1475,11 +1518,29 @@ export function run(argv: string[], client: SiteClient): number {
     usage();
     return 0;
   }
-  const args = argv[0] === "repo" ? ["repository", ...argv.slice(1)] : argv;
+  let args = argv[0] === "repo" ? ["repository", ...argv.slice(1)] : argv;
   // #644: --help in any position prints help and runs nothing (`update --help`
   // used to start the sweep); an option the verb does not take is refused.
   const gate = checkArgs(HELP, args);
   if (gate !== undefined) return gate;
+  // ADR-020 D11: `--set field=value` becomes the field's shortcut flag, so both
+  // spellings run the code below. A field site modify does not set is refused
+  // with its change class, as --name and friends are.
+  if ((args[0] === "site" || args[0] === "location") && args[1] === "modify") {
+    const kind = args[0];
+    const sdi = args.indexOf("--schema-dir");
+    const sd = sdi >= 0 && args[sdi + 1] ? args[sdi + 1] : defaultSchemaDir();
+    try {
+      args = expandSet(args, MODIFY_SHORTCUTS[kind], `${kind} modify`, {
+        unset: "list",
+        whyNot: kind === "site" ? (f) => refusedField(siteSchema(sd), f) : undefined,
+      });
+    } catch (e) {
+      if (!(e instanceof SetError)) throw e;
+      const msg = e.message;
+      return guarded(() => (args.includes("--check") ? refused : die)(msg));
+    }
+  }
   const cmd = args[0];
   const o = parseOpts(args.slice(1));
 

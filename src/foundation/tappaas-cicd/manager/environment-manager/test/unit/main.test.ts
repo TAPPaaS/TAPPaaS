@@ -232,6 +232,17 @@ throwsDie(() => parseOpts(["-x"]), "unknown short flag -x is rejected");
   r = go(d, ["modify", "acme", "--zone", "acme"]);
   check(r.rc === 0 && r.log.length === 0, "#865 modify --zone onto the zone it already has: no change");
 
+  // ADR-020 D11: --set field=value is the general form, the flags its shortcuts
+  r = go(d, ["modify", "acme", "--set", "displayName=Acme Inc", "--set", "domains.primary=acme.example"]);
+  const acme = JSON.parse(readFileSync(join(d, "environments", "acme.json"), "utf8")) as { displayName: string; domains?: { primary: string } };
+  check(r.rc === 0 && acme.displayName === "Acme Inc" && acme.domains?.primary === "acme.example", "modify --set: fields by name, dotted inside an object");
+  r = go(d, ["modify", "acme", "--set", "zone=acme2"]);
+  check(r.rc === 0 && JSON.stringify(r.log) === JSON.stringify(["unbind acme", "bind acme2 acme"]), "modify --set zone=: the same move as --zone");
+  r = go(d, ["modify", "acme", "--unset", "displayName"]);
+  check(r.rc === 1, "modify --unset: an environment's fields cannot be emptied");
+  r = go(d, ["modify", "acme", "--set", "name=other"]);
+  check(r.rc === 1 && JSON.parse(readFileSync(join(d, "environments", "acme.json"), "utf8")).name === "acme", "modify --set of a field it does not set: refused, nothing written");
+
   // delete: every zone naming the environment loses the link
   d = setup({ acme: { type: "Service", state: "Active", environment: "acme" }, home: { type: "Client", state: "Active", environment: "acme" }, work: { type: "Client", state: "Active", environment: ["acme", "lab"] }, guest: { type: "Guest", state: "Active" } });
   writeFileSync(join(d, "environments", "acme.json"), JSON.stringify({ name: "acme", displayName: "Acme", ownerOrg: "o" }));

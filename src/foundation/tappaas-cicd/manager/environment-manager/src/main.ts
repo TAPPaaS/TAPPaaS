@@ -43,6 +43,7 @@ import { applyPlan, computePlan } from "./reconcile";
 import { runValidate } from "./validate";
 import { DnsTlsClient, Environment, ModuleClient, NetworkClient, RefSources } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
+import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfields";
 import { RD, GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -96,11 +97,14 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "modify <env> [--domain D] [--owner ORG] [--zone Z]\n" +
+      usage: "modify <env> [--set <field>=<value>]... [--domain D] [--owner ORG] [--zone Z]\n" +
         "                          [--display D] [--dns-mode M]", effect: { noPreview: "writes config/environments/<env>.json; environment-manager reconcile <env> --apply makes it live" },
       name: "modify",
       hidden: ["--dnsMode M"],
       options: [
+        ["--set <field>=<value>", "Set a field by its name: displayName, ownerOrg, zone, domains.primary,\n" +
+          "                   domains.dnsMode; repeat it. The options below are shortcuts, one field\n" +
+          "                   each (ADR-020 D11)."],
         ["--domain D", "The environment's public primary domain."],
         ["--owner ORG", "The organization that owns the environment."],
         ["--zone Z", "Move the environment to this Service zone: it is linked to the environment\n" +
@@ -753,6 +757,12 @@ function cmdReconcile(opts: Opts, net: NetworkClient, mod: ModuleClient, dt: Dns
   }
 }
 
+// ADR-020 D11: `modify --set field=value` becomes the field's shortcut flag.
+// An environment's fields cannot be emptied, so --unset is refused.
+function expandModify(argv: string[]): string[] {
+  return expandSet(argv, MODIFY_SHORTCUTS.environment, "environment modify", { unset: "no" });
+}
+
 export function run(argv: string[], net: NetworkClient, mod: ModuleClient, dt: DnsTlsClient): number {
   if (argv.length === 0) {
     usage();
@@ -762,6 +772,15 @@ export function run(argv: string[], net: NetworkClient, mod: ModuleClient, dt: D
   // option the verb does not take is refused.
   const gate = checkArgs(HELP, argv);
   if (gate !== undefined) return gate;
+  if (argv[0] === "modify") {
+    try {
+      argv = expandModify(argv);
+    } catch (e) {
+      if (!(e instanceof SetError)) throw e;
+      const msg = e.message;
+      return guarded(() => die(msg));
+    }
+  }
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
 
@@ -806,8 +825,15 @@ if (require.main === module) {
       // The argument gate first: the early parseOpts below must not see --help.
       const gate = argv.length > 0 ? checkArgs(HELP, argv) : undefined;
       if (gate !== undefined) return gate;
-      // Resolve config-dir early for the module client's discovery root.
-      const opts = parseOpts(argv.slice(1));
+      // Resolve config-dir early for the module client's discovery root. A
+      // `modify --set` is expanded first (run() reports a bad one).
+      let early = argv;
+      try {
+        if (argv[0] === "modify") early = expandModify(argv);
+      } catch {
+        early = argv.filter((a, i) => a !== "--set" && a !== "--unset" && argv[i - 1] !== "--set" && argv[i - 1] !== "--unset");
+      }
+      const opts = parseOpts(early.slice(1));
       const net = new CliNetworkClient(opts.configDir);
       const mod = new CliModuleClient(opts.configDir);
       const dt = new CliDnsTlsClient(opts.configDir);
