@@ -265,7 +265,7 @@ attempt_rollback() {
             local rb_host
             rb_host="$(module_guest_host "${module}")"
             if [[ -n "${rb_host}" ]]; then
-                { wait_for_guest_settled "${rb_host}" 180 \
+                { settle_guest "${module}" "${rb_host}" 180 \
                   && wait_for_module_ready "${module}" "${rb_host}" 180 hook-only; } \
                     || warn "  '${module}' not ready after rollback — post-rollback tests may see a starting service"
             fi
@@ -284,6 +284,11 @@ attempt_rollback() {
         else
             fatal "Rollback failed — manual intervention required"
         fi
+    elif [[ -f "${CONFIG_DIR}/${module}.json" ]] \
+         && ! jq -e '.dependsOn // [] | index("cluster:vm")' "${CONFIG_DIR}/${module}.json" &>/dev/null; then
+        # Step 1's test: no cluster:vm, no snapshot. A device fleet, a policy
+        # module: the restored config is all there was to roll back.
+        info "  No VM of its own — restoring its config was the whole rollback"
     else
         error "  No VM snapshot available for rollback — manual intervention required"
     fi
@@ -436,6 +441,21 @@ trap cleanup_update_files EXIT
 
 # run_graded_test <log> <test-module.sh args...> — run it, show its output as
 # before, keep a copy in <log>; returns test-module.sh's exit code.
+# settle_guest <module> <host> <timeout> — wait_for_guest_settled, unless the
+# module's guest takes no ssh ("sshAccess": false: an appliance such as Home
+# Assistant OS). The wait asks over ssh, so for such a guest it only ever heard
+# "Connection refused" and spent its whole timeout (300 s before an update,
+# 180 s after a rollback). Its ready.sh, if any, still says when it is up.
+settle_guest() {
+    local module="$1" host="$2" timeout="$3"
+    if jq -e '[.sshAccess, (.config["cluster:vm"] // {}).sshAccess] | any(. == false)' \
+            "${CONFIG_DIR}/${module}.json" >/dev/null 2>&1; then
+        debug "  ${host} takes no ssh (sshAccess=false) — not asking whether it has booted"
+        return 0
+    fi
+    wait_for_guest_settled "${host}" "${timeout}"
+}
+
 # The module's guest as <vmname>.<zone0>.internal; empty for a module without
 # one (cluster, templates — nothing to wait for). A device module (a bridge, a
 # camera) sets vmname and zone0 as the device's alias but has no vmid: no guest
@@ -745,7 +765,7 @@ main() {
         [[ -n "${pre_zone}" ]] && pre_zone_arg=(--zone0 "${pre_zone}")
         gate_host="$(module_guest_host "${module}" "${pre_zone}")"
         if [[ -n "${gate_host}" ]]; then
-            if ! wait_for_guest_settled "${gate_host}" "${TAPPAAS_READY_WAIT:-300}" \
+            if ! settle_guest "${module}" "${gate_host}" "${TAPPAAS_READY_WAIT:-300}" \
                || ! wait_for_module_ready "${module}" "${gate_host}" "${TAPPAAS_READY_WAIT:-300}" hook-only; then
                 gate_note=" — the guest had NOT become ready within ${TAPPAAS_READY_WAIT:-300}s, so this may be a module still starting"
             fi
@@ -875,7 +895,7 @@ main() {
     ready_host="$(module_guest_host "${module}")"
     if [[ -n "${ready_host}" ]]; then
         # An apply that rebooted the guest leaves it booting (#700).
-        { wait_for_guest_settled "${ready_host}" 180 \
+        { settle_guest "${module}" "${ready_host}" 180 \
           && wait_for_module_ready "${module}" "${ready_host}" 180 hook-only; } \
             || warn "  '${module}' not ready after apply — post-update tests may see a starting service"
     else

@@ -398,15 +398,21 @@ for node in $(get_all_node_hostnames); do
     fi
 done
 
+# A config whose guest exists and runs: the live checks below need one.
+HAS_GUEST='(.status // "") != "archived" and (.suspended // false) != true and (.stack // "") != "template"'
+
 if [[ "${node_reachable}" -eq 0 ]]; then
     skip "no Proxmox node reachable"
 else
     # Pick an installed module that dependsOn cluster:vm (skip the test fixture).
+    # Only one with a guest: an archived module's VM is gone, a suspended one is
+    # stopped on purpose and a template is no running guest — each made every
+    # run fail on a module the sweep does not touch (report-service exit 5).
     target=""
     for j in "${CONFIG_DIR}"/*.json; do
         m=$(basename "$j" .json)
         [[ "$m" == "test-vmdrift" || "$m" == "test-hadrift" || "$m" == "test-lxcdrift" ]] && continue
-        if jq -e '(.dependsOn // []) | index("cluster:vm") != null' "$j" >/dev/null 2>&1; then
+        if jq -e "${HAS_GUEST}"' and ((.dependsOn // []) | index("cluster:vm") != null)' "$j" >/dev/null 2>&1; then
             target="$m"; break
         fi
     done
@@ -535,7 +541,7 @@ else
     # is still reported.
     lxc_probe=""
     for j in "${CONFIG_DIR}"/*.json; do
-        if jq -e '(.dependsOn // []) | index("cluster:lxc") != null' "$j" >/dev/null 2>&1; then
+        if jq -e "${HAS_GUEST}"' and ((.dependsOn // []) | index("cluster:lxc") != null)' "$j" >/dev/null 2>&1; then
             lxc_probe="$(basename "$j" .json)"; break
         fi
     done
@@ -678,7 +684,7 @@ lxc_target=""
 for j in "${CONFIG_DIR}"/*.json; do
     m=$(basename "$j" .json)
     [[ "$m" == "test-lxcdrift" ]] && continue
-    if jq -e '(.dependsOn // []) | index("cluster:lxc") != null' "$j" >/dev/null 2>&1; then
+    if jq -e "${HAS_GUEST}"' and ((.dependsOn // []) | index("cluster:lxc") != null)' "$j" >/dev/null 2>&1; then
         lxc_target="$m"; break
     fi
 done

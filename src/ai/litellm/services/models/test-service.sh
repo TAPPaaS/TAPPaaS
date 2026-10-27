@@ -98,10 +98,18 @@ SECRETS_FILE="${SECRETS_FILE}"
 sudo test -f "\${SECRETS_FILE}" && echo "present" || echo "missing"
 EOSH
 ) || FILE_STATUS="error"
-if [[ "${FILE_STATUS}" == "present" ]]; then
+# An ssh that fails says nothing about the file: "missing" sent the operator to
+# install-service.sh for a guest that only refused the connection. A guest that
+# takes no ssh at all (sshAccess=false, an appliance) cannot hold the file.
+if jq -e '[.sshAccess, (.config["cluster:vm"] // {}).sshAccess] | any(. == false)' \
+        "${CONSUMING_JSON}" >/dev/null 2>&1; then
+    info "  ${SECRETS_FILE} on ${CONSUMING_HOST}: not checked (sshAccess=false — the guest takes no ssh)"
+elif [[ "${FILE_STATUS}" == "present" ]]; then
     _pass "${SECRETS_FILE} present on ${CONSUMING_HOST}"
-else
+elif [[ "${FILE_STATUS}" == "missing" ]]; then
     _fail "${SECRETS_FILE} missing on ${CONSUMING_HOST} — run install-service.sh"
+else
+    _fail "could not ask ${CONSUMING_HOST} over ssh whether ${SECRETS_FILE} is there — is the guest up and taking ssh?"
 fi
 
 # ── Test 3: stored key can see at least one model ────────────────────────────
