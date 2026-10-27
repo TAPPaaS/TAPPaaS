@@ -151,6 +151,7 @@ fi
 for j in "${REPL_JOBS[@]}"; do [[ -n "$j" && "$LOST" -eq 1 ]] && info "  remove replication job ${j%% *}"; done
 [[ "$MEMBER" -eq 1 ]] && info "  pvecm delnode ${NODE} (from ${PEER})"
 info "  remove /etc/pve/nodes/${NODE} and its entries in the cluster's known_hosts"
+info "  remove its DNS entry (and DHCP reservation) $(rn_node_fqdn "$NODE"), and its host keys on this controller"
 for c in "${STOR_CHANGES[@]}"; do
     case "$c" in
         set*)    info "  storage ${c#set }  (${NODE} taken out)" ;;
@@ -246,6 +247,20 @@ if peer "test -d /etc/pve/nodes/${NODE}"; then
     fi
 fi
 peer "ssh-keygen -R ${NODE} -f /etc/pve/priv/known_hosts >/dev/null 2>&1; ssh-keygen -R $(rn_node_fqdn "$NODE") -f /etc/pve/priv/known_hosts >/dev/null 2>&1; true"
+# Its mgmt address goes too: the Host entry TAPPaaS made for the node (with the
+# DHCP reservation pinned to its MAC) and the controller's own host keys. Left
+# behind, a rebuild under the name meets a reservation for the old machine's
+# MAC and a host key that no longer matches.
+_fqdn="$(rn_node_fqdn "$NODE")"
+_ip="$(dns-manager --no-ssl-verify list 2>/dev/null | awk -v h="${_fqdn}" '$1 == h {print $3; exit}')"
+if [[ -n "${_ip}" ]]; then
+    if dns-manager --no-ssl-verify delete "${NODE}" "${_fqdn#*.}" >/dev/null 2>&1; then
+        info "  ${GN}✓${CL} DNS entry ${_fqdn} (${_ip}) removed"
+    else
+        warn "  could not remove the DNS entry ${_fqdn} — dns-manager delete ${NODE} ${_fqdn#*.}"
+    fi
+fi
+for _h in "${NODE}" "${_fqdn}" ${_ip}; do ssh-keygen -R "${_h}" >/dev/null 2>&1 || true; done
 for c in "${STOR_CHANGES[@]}"; do
     read -r verb s rest <<<"$c"
     if [[ "$verb" == set ]]; then

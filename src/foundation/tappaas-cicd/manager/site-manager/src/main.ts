@@ -374,14 +374,17 @@ function parseOpts(args: string[]): Opts {
 
 // A deleted node's pvehost module instance (ADR-026 D4) goes with it: archived
 // and unregistered, never --decommission — the machine is not touched. Left
-// behind, it is a module for a node the site no longer has (#729 §3).
+// behind, it is a module for a node the site no longer has (#729 §3). A node
+// is a foundation (site-scoped) module, which delete refuses without --force;
+// --archive keeps it an archive, and a node still some module's Host is refused
+// even so.
 function unregisterNodeModule(name: string, configDir: string): void {
   const cfg = `${configDir.replace(/\/$/, "")}/${name}.json`;
   if (!existsSync(cfg)) return;
   try {
     if (!String(JSON.parse(readFileSync(cfg, "utf8")).moduleSource ?? "").endsWith("/pvehost")) return;
   } catch { return; }
-  const r = spawnSync("module-manager", ["delete", name, "--archive", "--yes"], { stdio: "inherit" });
+  const r = spawnSync("module-manager", ["delete", name, "--archive", "--force"], { stdio: "inherit" });
   if (r.status === 0) info(`${GN}✓${CL} its pvehost module instance is archived and unregistered`);
   else warn(`the pvehost module instance '${name}' is still registered — module-manager delete ${name}`);
 }
