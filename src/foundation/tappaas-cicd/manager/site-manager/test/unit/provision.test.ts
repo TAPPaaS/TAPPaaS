@@ -25,6 +25,10 @@ check(pxeDiskProblems("25414A800205", ["tanka1=single:disk/by-id/nvme-KINGSTON_X
   "serial boot disk + by-id pool pass");
 check(pxeDiskProblems("50026B73842AD86F", ["tanka1=single:50026B73842AD86F"]).length === 0,
   "a pool disk by bare serial passes");
+check(pxeDiskProblems("nvme0n1", [], "nvme1n1").length === 0, "a mirrored pair by kernel names: accepted (both are mirrored)");
+check(pxeDiskProblems("25414A800205", [], "nvme1n1").length === 1, "a mirror with a serial: refused (one disk only)");
+check(pxeDiskProblems("nvme0n1", [], "nvme0n1").length === 1, "a mirror onto the boot disk itself: refused");
+check(pxeDiskProblems(undefined, [], "nvme1n1").length === 1, "a mirror without --boot-disk: refused");
 const boot = pxeDiskProblems("nvme0n1", []);
 check(boot.length === 1 && boot[0].includes("SERIAL"), "a kernel-name boot disk is refused, pointing at the serial");
 const pool = pxeDiskProblems(undefined, ["tankb1=mirror:disk/by-id/a,sdc"]);

@@ -127,6 +127,9 @@ DESIRED_PRIMARY="$(cfg 'node' "$(get_node_hostname 0)")"
 # (#836). A declared HANode without one is refused; without a declared one, the
 # first node that has them all is chosen.
 mapfile -t GUEST_BRIDGES < <(habr_guest_bridges)
+# The failover node must also have the guest's storage: replication writes to
+# the same storage name there (a one-disk node has only local-zfs, ADR-037 D1).
+HABR_STORAGE="$(cfg 'storage' 'tanka1')"
 HANODE="$(cfg 'HANode' '')"
 [[ "${HANODE}" == "null" ]] && HANODE=""
 if [[ -n "${HANODE}" ]]; then
@@ -147,7 +150,14 @@ else
             warn "  ${MODULE}: no other node has bridge(s) $(printf '%s ' "${GUEST_BRIDGES[@]}")— nowhere to fail over to; not made HA"
             exit 0
         fi
+        if [[ -n "${HANODE}" ]] && habr_node_storages "${HANODE}" >/dev/null 2>&1 && ! habr_has_storage "${HANODE}" "${HABR_STORAGE}"; then
+            warn "  ${MODULE}: no other node has storage ${HABR_STORAGE} — replication has nowhere to go; not made HA"
+            exit 0
+        fi
     fi
+fi
+if [[ -n "${HANODE}" ]] && habr_node_storages "${HANODE}" >/dev/null 2>&1 && ! habr_has_storage "${HANODE}" "${HABR_STORAGE}"; then
+    warn "  ${MODULE}: HANode ${HANODE} has no storage ${HABR_STORAGE} — replication to it fails (a one-disk node has local-zfs only)"
 fi
 
 REPL_SCHEDULE="$(cfg 'replicationSchedule' '*/15')"

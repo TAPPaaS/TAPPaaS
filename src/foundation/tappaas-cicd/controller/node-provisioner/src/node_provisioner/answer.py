@@ -64,6 +64,7 @@ def render_answer(
     pools,
     boot_disk: str = "sda",
     boot_filesystem: str = "zfs",
+    boot_mirror: str = "",
     country: str = DEFAULT_COUNTRY,
     tz: str = DEFAULT_TIMEZONE,
     mailto: str = "",
@@ -86,6 +87,8 @@ def render_answer(
         boot_disk: The disk the PVE system is installed on.
         boot_filesystem: zfs (default, a single-disk ``rpool``, raid0) or
             ext4 (LVM).
+        boot_mirror: a second disk (kernel name): ``rpool`` becomes a zfs
+            raid1 over both, and each disk gets its own EFI system partition.
         country / tz / mailto / keyboard: site-level installer settings.
         mgmt_mac / mgmt_cidr / mgmt_gateway: when all are given (a registration
             that pins its MACs), the management network is set from the answer
@@ -140,12 +143,18 @@ def render_answer(
             "# TAPPaaS standard (ADR-037 D1): ZFS on the boot disk — rpool; its",
             "# rpool/data (local-zfs) carries the guests when there is no data disk",
             'filesystem = "zfs"',
-            'zfs.raid = "raid0"',
+            'zfs.raid = "raid1"' if boot_mirror else 'zfs.raid = "raid0"',
         ]
     # The disk the installer WIPES. By serial whenever we have one: a udev filter
     # on ID_SERIAL picks that physical disk whatever the kernel calls it on this
     # boot. A kernel name (legacy) is only as good as the enumeration order.
-    if is_kernel_disk_name(boot_disk):
+    if boot_mirror:
+        lines += [
+            "# a mirrored boot pair, by kernel name: a serial filter selects one disk only,",
+            "# and both disks are mirrored whichever the kernel numbers first",
+            f"disk-list = {_toml_str_list([boot_disk, boot_mirror])}",
+        ]
+    elif is_kernel_disk_name(boot_disk):
         lines.append(f"disk-list = {_toml_str_list([boot_disk])}")
     else:
         lines += [

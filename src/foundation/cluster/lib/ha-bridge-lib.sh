@@ -13,9 +13,15 @@
 #   habr_missing <node> <bridge>... the ones the node lacks, one per line;
 #                                   rc 1 when the node does not answer
 #   habr_first_capable <primary> <bridge>...
-#                                   the first other node with them all, or ""
+#                                   the first other node with them all — and,
+#                                   with HABR_STORAGE set, with the guest's
+#                                   storage (replication needs the same storage
+#                                   on both nodes; a one-disk node has only
+#                                   local-zfs, ADR-037 D1) — or ""
+#   habr_has_storage <node> <storage>  rc 0 when the node has it active
 #
-# HABR_NODE_BRIDGES_CMD (tests) replaces the probe: `cmd <node>` prints names.
+# HABR_NODE_BRIDGES_CMD / HABR_NODE_STORAGE_CMD (tests) replace the probes:
+# `cmd <node>` prints names.
 
 habr_guest_bridges() {
     local b0 b1
@@ -47,12 +53,28 @@ habr_missing() {
     return 0
 }
 
+habr_node_storages() {
+    local node="$1"
+    if [[ -n "${HABR_NODE_STORAGE_CMD:-}" ]]; then
+        ${HABR_NODE_STORAGE_CMD} "${node}"
+        return
+    fi
+    ssh -n -o BatchMode=yes -o ConnectTimeout=10 "root@${node}.${MGMT:-mgmt}.internal" \
+        "pvesm status 2>/dev/null | awk 'NR > 1 && \$3 == \"active\" {print \$1}'" 2>/dev/null
+}
+
+habr_has_storage() {
+    habr_node_storages "$1" | grep -qx -- "$2"
+}
+
 habr_first_capable() {
     local primary="$1" n miss; shift
     for n in $(get_all_node_hostnames); do
         [[ "${n}" == "${primary}" ]] && continue
         miss="$(habr_missing "${n}" "$@")" || continue
-        [[ -z "${miss}" ]] && { printf '%s' "${n}"; return 0; }
+        [[ -z "${miss}" ]] || continue
+        if [[ -n "${HABR_STORAGE:-}" ]] && ! habr_has_storage "${n}" "${HABR_STORAGE}"; then continue; fi
+        printf '%s' "${n}"; return 0
     done
     return 0
 }

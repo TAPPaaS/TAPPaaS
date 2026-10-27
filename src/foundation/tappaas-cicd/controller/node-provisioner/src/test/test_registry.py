@@ -103,6 +103,17 @@ class TestCrudRoundTrip(RegistryCase):
         with self.assertRaises(ValueError):
             self.registry.register("tappaas3", boot_filesystem="btrfs")
 
+    def test_boot_mirror(self):
+        reg = self.registry.register("tappaas4", boot_disk="nvme0n1", boot_mirror="nvme1n1")
+        self.assertEqual(self.registry.load("tappaas4").boot_mirror, "nvme1n1")
+        for disk, mirror, fs in (("25414A800205", "nvme1n1", "zfs"),   # a serial cannot pair
+                                 ("nvme0n1", "nvme0n1", "zfs"),        # the same disk
+                                 ("nvme0n1", "nvme1n1", "ext4"),       # ext4 has no mirror
+                                 ("ask", "nvme1n1", "zfs")):           # chosen on the console
+            with self.assertRaises(ValueError, msg=(disk, mirror, fs)):
+                self.registry.register("tappaas4", boot_disk=disk, boot_mirror=mirror, boot_filesystem=fs)
+        self.assertEqual(self.registry.register("tappaas4", boot_disk="sda").boot_mirror, "")
+
     def test_registration_written_before_the_field_reads_as_zfs(self):
         reg = self.registry.register("tappaas3")
         data = json.loads(reg.path.read_text())

@@ -38,5 +38,27 @@ check "the first capable failover skips the --no-wan node" "$(habr_first_capable
 check "a lan-only guest takes the first other node"        "$(habr_first_capable tappaas1 lan)"     "tappaas2"
 check "nobody else has it: none"       "$(habr_first_capable tappaas1 lan wan dmzbr)" ""
 
+# The guest's storage (ADR-037 D1): a one-disk node has local-zfs only, and
+# replication needs the same storage on the failover node.
+fake_storages() {
+    case "$1" in
+        tappaas2) printf 'local\nlocal-zfs\n' ;;
+        tappaas1|tappaas3) printf 'local\ntanka1\ntankb1\n' ;;
+        *) return 1 ;;
+    esac
+}
+# shellcheck disable=SC2034  # read by the sourced lib
+HABR_NODE_STORAGE_CMD=fake_storages
+habr_has_storage tappaas3 tanka1; check "a node with the storage has it" "$?" "0"
+habr_has_storage tappaas2 tanka1; check "a one-disk node has no tanka1" "$?" "1"
+HABR_STORAGE=tanka1
+check "a tanka1 guest skips the one-disk node" "$(habr_first_capable tappaas1 lan)" "tappaas3"
+HABR_STORAGE=local-zfs
+check "a local-zfs guest fails over only to a node with local-zfs" "$(habr_first_capable tappaas3 lan)" "tappaas2"
+HABR_STORAGE=fastpool
+check "nobody has the storage: none" "$(habr_first_capable tappaas1 lan)" ""
+unset HABR_STORAGE
+check "without HABR_STORAGE: bridges only, as before" "$(habr_first_capable tappaas1 lan)" "tappaas2"
+
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

@@ -47,6 +47,7 @@ export interface ProvisionOpts {
   name: string;
   bootDisk?: string; // undefined => ask on the node console at boot (PXE)
   bootFilesystem?: string; // zfs (default) | ext4 — the provisioner's --boot-filesystem
+  bootMirror?: string; // a second boot disk: rpool mirrored (zfs raid1), by kernel name
   macs: string[];
   pools: string[]; // name=layout:disk[,disk...] — created at join time
   wanPort?: string; // NIC for firewall-HA uplink; undefined => ask; "" => none
@@ -71,9 +72,16 @@ export function isKernelDiskName(d: string): boolean {
   return KERNEL_DISK.test(d);
 }
 
-export function pxeDiskProblems(bootDisk: string | undefined, pools: string[]): string[] {
+export function pxeDiskProblems(bootDisk: string | undefined, pools: string[], bootMirror?: string): string[] {
   const out: string[] = [];
-  if (bootDisk && isKernelDiskName(bootDisk)) {
+  if (bootMirror) {
+    // A mirrored pair is named by kernel names: the installer's serial match
+    // selects one disk only, and both are mirrored whichever comes first.
+    if (!bootDisk) out.push("--boot-mirror needs --boot-disk: the two disks of the pair, by kernel name");
+    else if (!isKernelDiskName(bootDisk) || !isKernelDiskName(bootMirror)) {
+      out.push(`--boot-disk ${bootDisk} --boot-mirror ${bootMirror}: a mirrored pair is named by kernel names (nvme0n1, nvme1n1)`);
+    } else if (bootDisk === bootMirror) out.push(`--boot-mirror ${bootMirror} is the boot disk itself`);
+  } else if (bootDisk && isKernelDiskName(bootDisk)) {
     out.push(`--boot-disk ${bootDisk}: a kernel name moves between boots — give the disk's SERIAL ` +
       `(lsblk -o NAME,SERIAL), or omit --boot-disk to choose it on the node console`);
   }
@@ -282,7 +290,7 @@ export function provisionNode(o: ProvisionOpts): void {
   const stdIp = stdIpOf(o.name);
   const provisionDir = `${defaultConfigDir()}/provision`;
   const step = stepper();
-  const diskProblems = pxeDiskProblems(o.bootDisk, o.pools);
+  const diskProblems = pxeDiskProblems(o.bootDisk, o.pools, o.bootMirror);
   if (diskProblems.length > 0) die(diskProblems.join("\n"));
 
   // register --------------------------------------------------------------
@@ -293,6 +301,7 @@ export function provisionNode(o: ProvisionOpts): void {
   const regArgs = ["register", o.name];
   if (o.bootDisk) regArgs.push("--boot-disk", o.bootDisk);
   if (o.bootFilesystem) regArgs.push("--boot-filesystem", o.bootFilesystem);
+  if (o.bootMirror) regArgs.push("--boot-mirror", o.bootMirror);
   for (const mac of o.macs) regArgs.push("--mac", mac);
   if (runStream("node-provisioner", regArgs) !== 0) die("node-provisioner register failed");
 
@@ -426,7 +435,7 @@ function joinAndCapture(
       pools.push(spec);
     }
   }
-  if (pools.length === 0) warn("no data pools declared — the platform layer expects tanka1; declare later via config-storage.sh");
+  if (pools.length === 0) info("  no data pools declared — the boot pool (local-zfs) carries the guests; modules that name tanka1 are placed there (ADR-037 D1)");
 
   // serve the repo + run the node step -------------------------------------
   step(`node step on ${o.name} (repo served from cicd:${SERVE_PORT}, branch state = last commit)`);

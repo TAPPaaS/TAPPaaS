@@ -9,6 +9,7 @@ A registration is the operator's declared intent that a machine named
       "macs":   ["aa:bb:cc:dd:ee:ff"],          # optional pin
       "boot_disk": "sda",                       # installer target
       "boot_filesystem": "zfs",                 # zfs (default, ADR-037) or ext4
+      "boot_mirror": "nvme1n1",                 # optional: rpool mirrored onto a second disk
       "pools":  [{"name": "tanka1", "layout": "single",
                   "disks": ["nvme0n1"]}],       # post-join data pools
       "created": "2026-07-06T12:00:00+00:00"
@@ -100,6 +101,7 @@ class Registration:
     macs: list = field(default_factory=list)
     boot_disk: str = "sda"
     boot_filesystem: str = "zfs"
+    boot_mirror: str = ""
     pools: list = field(default_factory=list)
     created: str = ""
     path: Path | None = None
@@ -110,6 +112,7 @@ class Registration:
             "macs": self.macs,
             "boot_disk": self.boot_disk,
             "boot_filesystem": self.boot_filesystem,
+            "boot_mirror": self.boot_mirror,
             "pools": self.pools,
             "created": self.created,
         }
@@ -125,7 +128,8 @@ class Registry:
         return self.directory / f"{name}.json"
 
     def register(self, name: str, macs=None, pool_specs=None,
-                 boot_disk: str = "sda", boot_filesystem: str = "zfs") -> Registration:
+                 boot_disk: str = "sda", boot_filesystem: str = "zfs",
+                 boot_mirror: str = "") -> Registration:
         """Create (or replace) a pending registration.
 
         Args:
@@ -136,6 +140,10 @@ class Registry:
             boot_disk: Disk the installer puts the PVE system on.
             boot_filesystem: zfs (the default, ADR-037 D1: the boot pool
                 carries the guests when the node has no data disk) or ext4.
+            boot_mirror: a second disk to mirror the boot pool onto (zfs
+                raid1). Both disks by kernel name: the installer's serial
+                match selects one disk only, and for a mirrored pair the
+                order does not matter.
         """
         if not NAME_RE.match(name):
             raise ValueError(f"invalid node name: {name!r}")
@@ -145,11 +153,20 @@ class Registry:
                 f"'ask', or a bare kernel name, got {boot_disk!r}")
         if boot_filesystem not in ("zfs", "ext4"):
             raise ValueError(f"boot filesystem must be zfs or ext4, got {boot_filesystem!r}")
+        if boot_mirror:
+            if boot_filesystem != "zfs":
+                raise ValueError("a mirrored boot disk needs the zfs boot filesystem")
+            if not (is_kernel_disk_name(boot_disk) and is_kernel_disk_name(boot_mirror)):
+                raise ValueError("a mirrored boot disk is named by kernel names (nvme0n1, sda) for both "
+                                 "disks — the installer's serial match selects one disk only")
+            if boot_mirror == boot_disk:
+                raise ValueError("the boot mirror is the boot disk itself")
         reg = Registration(
             name=name,
             macs=[normalize_mac(m) for m in (macs or [])],
             boot_disk=boot_disk,
             boot_filesystem=boot_filesystem,
+            boot_mirror=boot_mirror,
             pools=[parse_pool_spec(s) for s in (pool_specs or [])],
             created=datetime.now(timezone.utc).isoformat(timespec="seconds"),
         )
@@ -184,6 +201,7 @@ class Registry:
             macs=[normalize_mac(m) for m in data.get("macs", [])],
             boot_disk=data.get("boot_disk", "sda"),
             boot_filesystem=data.get("boot_filesystem", "zfs"),
+            boot_mirror=data.get("boot_mirror", ""),
             pools=list(data.get("pools", [])),
             created=data.get("created", ""),
             path=path,

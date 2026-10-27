@@ -240,6 +240,7 @@ def handle_answer_post(
         pools=reg.pools,
         boot_disk=boot_disk,
         boot_filesystem=reg.boot_filesystem,
+        boot_mirror=reg.boot_mirror,
         **net,
         **settings,
     )

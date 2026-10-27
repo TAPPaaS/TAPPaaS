@@ -48,13 +48,15 @@ def _add_firewall_options(parser: argparse.ArgumentParser) -> None:
 def cmd_register(args) -> bool:
     reg = Registry().register(args.name, macs=args.mac, pool_specs=args.pool,
                               boot_disk=args.boot_disk or "ask",
-                              boot_filesystem=args.boot_filesystem)
+                              boot_filesystem=args.boot_filesystem,
+                              boot_mirror=args.boot_mirror or "")
     info(f"registered pending node '{reg.name}' -> {reg.path}")
     if reg.boot_disk == "ask":
         info("no --boot-disk given — the node's CONSOLE will ask for it at "
              "boot (one question, shows the machine's real disks)")
     else:
-        info(f"installer target: {reg.boot_filesystem} on '{reg.boot_disk}' (WIPED); "
+        mirror = f" + '{reg.boot_mirror}' (mirror)" if reg.boot_mirror else ""
+        info(f"installer target: {reg.boot_filesystem} on '{reg.boot_disk}'{mirror} (WIPED); "
              "declared pools are created post-join")
     if not reg.macs:
         info("no MAC pinned — the node matches only while it is the SINGLE "
@@ -169,6 +171,9 @@ placement is what scopes it (see README.md).
                    help="Disk the installer puts the PVE system on — WIPED. "
                         "Omit to be ASKED on the node's console at boot (for "
                         "hardware with unknown disk naming)")
+    p.add_argument("--boot-mirror", default=None,
+                   help="A second disk to mirror the boot pool onto (zfs raid1) — "
+                        "WIPED. Both disks by kernel name (nvme0n1, nvme1n1)")
     p.add_argument("--boot-filesystem", default="zfs", choices=("zfs", "ext4"),
                    help="zfs (default): the boot pool carries the guests when "
                         "the node has no data disk (ADR-037 D1); ext4 only for "

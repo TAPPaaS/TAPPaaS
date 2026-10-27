@@ -121,6 +121,13 @@ class TestRenderAnswer(unittest.TestCase):
         self.assertIn("TODO(V-2)", out)
         self.assertNotIn('filesystem = "ext4"', out)
 
+    def test_boot_mirror_is_raid1_over_both_disks(self):
+        out = self._render(boot_disk="nvme0n1", boot_mirror="nvme1n1")
+        self.assertIn('zfs.raid = "raid1"', out)
+        self.assertIn('disk-list = ["nvme0n1", "nvme1n1"]', out)
+        self.assertNotIn("filter.ID_SERIAL", out)
+        self.assertNotIn('zfs.raid = "raid0"', out)
+
     def test_ext4_on_request(self):
         out = self._render(boot_filesystem="ext4")
         self.assertIn('filesystem = "ext4"', out)
