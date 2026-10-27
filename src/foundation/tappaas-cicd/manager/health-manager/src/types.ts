@@ -23,6 +23,8 @@ export interface ConfigModule {
   node: string;
   status: string; // "", "archived", "external", ...
   suspended?: boolean; // paused by `module-manager suspend` (#428): stopped on purpose
+  suspendedNoUpdate?: boolean; // `suspend --no-update`: out of the update's patch pass (#890)
+  updateTime?: string; // when its last update finished, YYYYMMDD-HH:MM:SS
 }
 
 // ── `list vm` (no --diff): one row of the cluster overview ─────────────
@@ -103,7 +105,7 @@ export interface NodeCapacity {
   node: string;
   physicalMem: number; // bytes
   usedMem: number; // bytes the host reports in use (guests + ARC + overhead)
-  committedMem: number; // sum of maxmem over RUNNING guests
+  committedMem: number; // what the RUNNING guests commit: a VM its maxmem, a container countedMem()
   guests: GuestMemory[];
 }
 
@@ -123,6 +125,9 @@ export interface GuestMemory {
   // the HOST's view as the guest's. That is how a firewall using 1.15G read as
   // 8.0G of 8.0G — its `mem` even exceeded its `maxmem`.
   measured: boolean;
+  // A container's highest memory use over the last 7 days (Proxmox rrddata,
+  // MAX); 0 or absent: no history yet. Unused for a VM.
+  peakMem?: number;
 }
 
 // ── AVX-512 use inside a guest (#827) ─────────────────────────────────

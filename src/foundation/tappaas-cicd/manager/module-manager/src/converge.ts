@@ -25,6 +25,7 @@ import {
   ZonesFile,
   computeDrift,
   hasChanges,
+  holdGrowth,
   needsDisruption,
   unitSideEffects,
 } from "../../../lib/ts/src/drift";
@@ -124,7 +125,7 @@ export function driftForService(
   if (!needsActualState(manifest)) {
     return {
       ok: true,
-      record: computeDrift(desired, { manifest, actual: {}, zones: loadZones(configDir) }),
+      record: held(module, computeDrift(desired, { manifest, actual: {}, zones: loadZones(configDir) })),
     };
   }
 
@@ -146,12 +147,22 @@ export function driftForService(
 
   return {
     ok: true,
-    record: computeDrift(desired, {
+    record: held(module, computeDrift(desired, {
       manifest,
       actual: outcome.actual,
       zones: loadZones(configDir),
-    }),
+    })),
   };
+}
+
+// #891: the modules this update run holds at their current memory, named by
+// the sweep from health-manager capacity's `held`.
+export function heldModules(): Set<string> {
+  return new Set((process.env.TAPPAAS_HOLD_MEMORY ?? "").split(/[\s,]+/).filter(Boolean));
+}
+
+function held(module: string, r: DriftRecord): DriftRecord {
+  return heldModules().has(module) ? holdGrowth(r) : r;
 }
 
 // Which of a module's coordinates can produce a drift record at all: those whose
@@ -439,6 +450,7 @@ const SKIP_REASON_TEXT: Record<string, string> = {
   "defaulted-unappliable":
     "the value is a schema default this guest cannot take, and the field cannot be changed in place — a property of the guest, not drift (#679)",
   "not-reported": "the service's reporter does not observe it",
+  "capacity-held": "growth held: its node has no room, so the guest keeps its current memory; the next update tries again",
 };
 
 function failureLines(coordinate: string, f: DriftFailure): string[] {
@@ -467,6 +479,9 @@ function failureLines(coordinate: string, f: DriftFailure): string[] {
 
 export function renderDrift(coordinate: string, r: DriftRecord): string[] {
   const out: string[] = [`${GN}${coordinate}${CL}`];
+  // #891: a held growth is said whatever else the record holds.
+  const heldFields = r.skipped.filter((s) => s.reason === "capacity-held").map((s) => s.field);
+  if (heldFields.length) out.push(`  ${YW}~${CL} ${SKIP_REASON_TEXT["capacity-held"]}: ${heldFields.join(", ")}`);
   if (!hasChanges(r)) {
     // "Nothing compared" is NOT "in sync" — the same confusion #458 had to fix
     // on the dependency-service side. A clean verdict is only honest when

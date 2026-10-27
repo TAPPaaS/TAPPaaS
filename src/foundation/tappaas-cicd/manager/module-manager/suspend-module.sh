@@ -5,8 +5,11 @@
 # Suspend pauses a module and keeps everything else: its guest is stopped, its
 # config, backups, DNS and published route stay. The config records
 # `"suspended": true`, which takes the module out of the nightly update and makes
-# the health check report it as suspended rather than down. Resume starts it
-# again and clears the mark.
+# the health check report it as suspended rather than down. The nightly update
+# still patches it (#890): after every other module it is resumed, updated and
+# suspended again, when it fits on its node. --no-update keeps it out of that
+# too (`"suspendedNoUpdate": true`), for a module stopped because it is broken.
+# Resume starts it again and clears both marks.
 #
 # Stopping is done the way that stays stopped:
 #   - an HA guest through the CRM (ha-vm-lib), which then keeps it stopped —
@@ -14,7 +17,7 @@
 #   - any other guest with `onboot` cleared, so a node reboot does not start it.
 # Resume reverses both (onboot 1, as TAPPaaS creates every guest).
 #
-# Usage: suspend-module.sh <module> [--resume]
+# Usage: suspend-module.sh <module> [--resume | --no-update]
 #
 # Exit: 0 done (or already so), 1 refused or failed.
 
@@ -33,15 +36,18 @@ fi
 
 MODULE=""
 RESUME=0
+NO_UPDATE=0
 for a in "$@"; do
     case "${a}" in
         --resume) RESUME=1 ;;
-        -h|--help) echo "Usage: $0 <module> [--resume]"; exit 0 ;;
+        --no-update) NO_UPDATE=1 ;;
+        -h|--help) echo "Usage: $0 <module> [--resume | --no-update]"; exit 0 ;;
         -*) die "unknown option '${a}'" ;;
         *) MODULE="${a}" ;;
     esac
 done
-[[ -n "${MODULE}" ]] || die "Usage: $0 <module> [--resume]"
+[[ -n "${MODULE}" ]] || die "Usage: $0 <module> [--resume | --no-update]"
+[[ "${RESUME}" == 1 && "${NO_UPDATE}" == 1 ]] && die "--no-update is a suspend option, not a resume one"
 
 CFG="${CONFIG_DIR:-/home/tappaas/config}/${MODULE}.json"
 [[ -f "${CFG}" ]] || die "module '${MODULE}' is not installed (no ${CFG})"
@@ -83,8 +89,10 @@ if [[ "${RESUME}" == "0" ]]; then
     fi
     havm_stop "${FQDN}" "${VMID}" "${TYPE}" "${STOP_TIMEOUT:-180}" \
         || die "${VMID} did not stop — '${MODULE}' is not suspended"
-    jq_module_write "${MODULE}" '.suspended = true' || die "stopped, but could not mark '${MODULE}' suspended in its config"
+    if [[ "${NO_UPDATE}" == 1 ]]; then _mark='.suspended = true | .suspendedNoUpdate = true'; else _mark='.suspended = true | del(.suspendedNoUpdate)'; fi
+    jq_module_write "${MODULE}" "${_mark}" || die "stopped, but could not mark '${MODULE}' suspended in its config"
     info "  ${GN}✓${CL} ${MODULE} suspended: stopped$([[ "${HA}" == 1 ]] && echo ", held stopped by HA" || echo ", onboot off"); config, backups and its route are kept"
+    [[ "${NO_UPDATE}" == 1 ]] && info "  kept out of the nightly update's patch pass (--no-update)"
     info "  Resume with: module-manager resume ${MODULE}"
 else
     info "${BOLD}Resuming ${MODULE}${CL} (${TYPE} ${VMID} on ${NODE})"
@@ -93,6 +101,6 @@ else
     fi
     havm_start "${FQDN}" "${VMID}" "${TYPE}" "${START_TIMEOUT:-180}" \
         || die "${VMID} did not start — '${MODULE}' stays marked suspended"
-    jq_module_write "${MODULE}" 'del(.suspended)' || die "started, but could not clear the suspended mark of '${MODULE}'"
+    jq_module_write "${MODULE}" 'del(.suspended) | del(.suspendedNoUpdate)' || die "started, but could not clear the suspended mark of '${MODULE}'"
     info "  ${GN}✓${CL} ${MODULE} resumed"
 fi

@@ -11,6 +11,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { checkGuestMemory, checkMemoryCommitment, checkUpdateCapacity } from "../../src/checks";
 import { NodeCapacity } from "../../src/types";
+import { countedMem } from "../../src/memcount";
 import { FakeClusterClient } from "./fake-client";
 
 let passed = 0;
@@ -218,10 +219,12 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   c.capacity = [node("tappaas1", 15, 14, [["tappaas-cicd", 6, "running"], ["network", 4, "running"], ["identity", 1.75, "running"]])];
   check(checkMemoryCommitment(c, 100).status === "pass", "today's sizes fit (78%): the live gate cannot see it coming");
   const r = checkUpdateCapacity(c, dir, "tappaas1", 90);
-  check(r.status === "fail", "after the update identity is 4G: growth takes the node over 90% — refused");
-  check(r.detail.includes("identity 1.8→4.0G"), `the guest that grows is named (got: ${r.detail})`);
+  check(r.status === "warn", "after the update identity is 4G: growth takes the node over 90% — held, not refused (#891)");
+  check(r.held.length === 1 && r.held[0].module === "identity" && r.held[0].node === "tappaas1" && r.held[0].to === 4 * G, `the held growth is named for the sweep (got: ${JSON.stringify(r.held)})`);
+  check(r.detail.includes("identity on tappaas1 1.8→4.0G") && r.detail.includes("current memory"), `…and the warning says it keeps its current memory (got: ${r.detail})`);
+  check(r.rows?.[0].text.includes("holds back identity") === true && r.rows?.[0].text.includes("78% after the update"), `the node's row shows the hold and stays at today's size (got: ${r.rows?.[0].text})`);
   const ok = checkUpdateCapacity(c, dir, "tappaas1", 100);
-  check(ok.status === "warn" && (ok.rows?.[0].text.includes("93%") ?? false), `growth under the threshold warns, with the projection (got: ${ok.rows?.[0].text})`);
+  check(ok.status === "warn" && (ok.rows?.[0].text.includes("93%") ?? false) && ok.held.length === 0, `growth under the threshold warns, with the projection, and holds nothing (got: ${ok.rows?.[0].text})`);
   check(ok.detail.includes("memory changes") && ok.detail.includes("78% now"), `the warning says memory changes and where it is now (got: ${ok.detail})`);
   writeFileSync(join(dir, "identity.json"), JSON.stringify({ vmid: 102, memory: 1024 }));
   check(checkUpdateCapacity(c, dir, "tappaas1", 90).status === "pass", "a config smaller than live never counts below live (no shrink assumed)");
@@ -251,6 +254,43 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   const elsewhere = checkUpdateCapacity(c, dir, "tappaas1", 95, "vault");
   const t2 = elsewhere.rows?.find((x) => x.text.startsWith("tappaas2"));
   check(t2?.status === "warn" && elsewhere.status === "warn", `on a node with room it is a memory change, not a refusal (got: ${elsewhere.detail})`);
+}
+
+// ── #891: one node's growth holds back only what does not fit ─────────
+{
+  const dir = mkdtempSync(join(tmpdir(), "hm-cap-"));
+  // vmids follow node()'s numbering: 100 small, 101 big, 102 base.
+  writeFileSync(join(dir, "small.json"), JSON.stringify({ vmid: 100, memory: 3072 }));
+  writeFileSync(join(dir, "big.json"), JSON.stringify({ vmid: 101, memory: 8192 }));
+  const c = new FakeClusterClient();
+  c.capacity = [node("tappaas1", 20, 10, [["small", 2, "running"], ["big", 4, "running"], ["base", 12, "running"]])];
+  const r = checkUpdateCapacity(c, dir, "tappaas1", 95);
+  // 18G now, limit 19G: even small's +1G reaches it — both held, the node stays as it is.
+  check(r.held.map((h) => h.module).join() === "small,big" && (r.rows?.[0].text.includes("18.0/20.0G") ?? false), `growth that does not fit is held (got: ${JSON.stringify(r.held)})`);
+  c.capacity = [node("tappaas1", 24, 10, [["small", 2, "running"], ["big", 4, "running"], ["base", 12, "running"]])];
+  const r2 = checkUpdateCapacity(c, dir, "tappaas1", 95);
+  // 18G now, limit 22.8G: small +1G → 19G fits, big +4G → 23G does not.
+  check(r2.held.map((h) => h.module).join() === "big", `the smallest growth goes first; the one that no longer fits is held (got: ${JSON.stringify(r2.held)})`);
+  check(r2.rows?.[0].text.includes("grows small 2.0→3.0G") === true && r2.rows?.[0].text.includes("holds back big 4.0→8.0G") === true, `the row shows both (got: ${r2.rows?.[0].text})`);
+  check(r2.status === "warn", "a hold is a warning: the sweep goes on");
+}
+
+// ── #891: a container counts at its week of use, not its limit ────────
+{
+  const ct = (name: string, limit: number, peak: number | undefined, status = "running") =>
+    ({ vmid: 300, name, node: "tappaas2", status, type: "lxc", declaredMem: limit * G, usedMem: 0, residentMem: 0, measured: true, peakMem: peak === undefined ? undefined : peak * G });
+  check(countedMem(ct("vllm", 46, 4)) === 5 * G, "a container used up to 4G in its week counts 5G (peak + 25%)");
+  check(countedMem(ct("tiny", 4, 0.1)) === 512 * 1024 ** 2, "…at least 512 MB");
+  check(countedMem(ct("busy", 4, 3.8)) === 4 * G, "…at most its limit");
+  check(countedMem(ct("new", 8, undefined)) === 8 * G, "…and at its limit with no history yet");
+  check(countedMem({ type: "qemu", declaredMem: 8 * G, peakMem: 1 * G }) === 8 * G, "a VM counts at its configured memory, whatever it used");
+
+  const dir = mkdtempSync(join(tmpdir(), "hm-cap-"));
+  writeFileSync(join(dir, "vllm.json"), JSON.stringify({ vmid: 300, memory: 61440 }));
+  const c = new FakeClusterClient();
+  c.capacity = [{ node: "tappaas2", physicalMem: 32 * G, usedMem: 10 * G, committedMem: 5 * G, guests: [ct("vllm", 46, 4)] }];
+  const r = checkUpdateCapacity(c, dir, "tappaas2", 95);
+  check(r.status === "pass" && r.held.length === 0 && (r.rows?.[0].text.includes("5.0/32.0G") ?? false), `a container over the node's RAM by its limit, raised further, commits its use: pass (got: ${r.rows?.[0].text})`);
 }
 
 console.log(`capacity: ${passed} passed, ${failed} failed`);

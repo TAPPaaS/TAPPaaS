@@ -945,26 +945,32 @@ def run_outcome(failed_foundation: list[str], failed_apps: list[str], dep_down: 
     return 0, "ok"
 
 
-def check_update_capacity() -> dict | None:
-    """The sweep's capacity pre-flight (#833): `health-manager capacity` projects
-    what each node commits once every guest is at its configured memory. Only
-    growth that takes a node to CAPACITY_THRESHOLD returns a failure record; a
-    node already over that nothing grows, and growth under it, are warnings
-    health-manager prints (relogged here) and exit 0. A health-manager that
-    cannot run returns None too (not refused)."""
+def check_update_capacity() -> list[dict]:
+    """The sweep's capacity pre-flight (#833, #880, #891): `health-manager
+    capacity --json` projects what each node commits once every guest is at its
+    configured memory. A node already over CAPACITY_THRESHOLD that nothing grows,
+    and growth that fits, are warnings it prints (relogged here). Growth that
+    does NOT fit is returned as the hold list — {module, node, from, to} — and
+    those modules are updated with their current memory (TAPPAAS_HOLD_MEMORY);
+    nothing else waits for them. A health-manager that cannot run holds nothing."""
     cmd = os.environ.get("HEALTH_MANAGER_CMD", "/home/tappaas/bin/health-manager")
     try:
-        r = subprocess.run([cmd, "capacity", "--memory-threshold", str(CAPACITY_THRESHOLD)],
+        r = subprocess.run([cmd, "capacity", "--memory-threshold", str(CAPACITY_THRESHOLD), "--json"],
                            text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
     except (OSError, subprocess.SubprocessError) as e:
         log.warning("Capacity pre-flight could not run (%s) — continuing", e)
-        return None
-    relog_output(r.stdout)
-    if r.returncode == 0:
-        return None
-    over = [ln.strip() for ln in r.stdout.splitlines() if "after the update" in ln and "grows" in ln]
-    return {"dependency": "node-memory",
-            "detail": "a node would be over-committed by the update: " + ("; ".join(over) or r.stdout.strip()[-300:])}
+        return []
+    try:
+        data = json.loads(r.stdout[r.stdout.index("{"):])
+    except ValueError:
+        relog_output(r.stdout)
+        log.warning("Capacity pre-flight gave no verdict — continuing")
+        return []
+    level = log.warning if data.get("status") in ("warn", "fail") else log.info
+    level("  update-capacity: %s", data.get("detail", ""))
+    for row in data.get("rows") or []:
+        log.info("    %s", row.get("text", ""))
+    return [h for h in data.get("held") or [] if isinstance(h, dict) and h.get("module")]
 
 
 def check_shared_dependencies() -> list[dict]:
@@ -1017,6 +1023,132 @@ def collect_dependency_evidence(failures: list[dict]) -> dict:
         except (subprocess.SubprocessError, FileNotFoundError, OSError) as e:
             evidence["unbound_checkconf"] = f"could not run unbound-manager checkconf: {e}"
     return evidence
+
+
+def _gib(b) -> str:
+    try:
+        return f"{float(b) / 1024 ** 3:.1f}G"
+    except (TypeError, ValueError):
+        return "?"
+
+
+# ── Phase 2.5: the suspended modules (#890) ─────────────────────────────
+# `module-manager suspend` stops a module to free memory; until #890 that also
+# took it out of every update. Now each suspended module is patched after the
+# others: resumed (when its guest fits on its node), updated, tested by its
+# update, and suspended again — one at a time, so only one extra guest runs at
+# once. `suspend --no-update` (suspendedNoUpdate) keeps a module out, for one
+# stopped because it is broken. A pass that dies leaves its module running; the
+# marker file says which, and the next run suspends it again first.
+SUSPENDED_PASS_MARKER = Path(os.environ.get("TAPPAAS_SUSPENDED_PASS_MARKER",
+                                            "/var/lib/tappaas/update-suspended-pass"))
+
+
+def suspended_to_patch(modules: list[str], guests: set[int] | None) -> list[str]:
+    """The suspended modules the pass patches, in name order: suspended, not
+    opted out, in the update lifecycle otherwise, and deployed."""
+    out = []
+    for name in sorted(set(modules)):
+        if not (CONFIG_DIR / f"{name}.json").exists() or not module_suspended(name):
+            continue
+        try:
+            with open(CONFIG_DIR / f"{name}.json") as f:
+                if json.load(f).get("suspendedNoUpdate") is True:
+                    continue
+        except (OSError, ValueError):
+            continue
+        if module_stack(name) in NON_LIFECYCLE_STACKS or module_status(name) in NON_LIFECYCLE_STATUSES:
+            continue
+        if module_management(name) == "unmanaged":
+            continue
+        if guests is not None and (vmid := module_vmid(name)) is not None and vmid not in guests:
+            continue
+        out.append(name)
+    return out
+
+
+def _module_manager(*args: str) -> bool:
+    try:
+        r = subprocess.run([MODULE_MANAGER_CMD, *args], text=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=1800)
+    except (OSError, subprocess.SubprocessError) as e:
+        log.error("  module-manager %s: %s", " ".join(args), e)
+        return False
+    relog_output(r.stdout)
+    return r.returncode == 0
+
+
+def fits_to_resume(module: str) -> tuple[bool, str]:
+    """Would starting this suspended module's guest keep its node under the
+    threshold? `health-manager capacity --install` counts a guest that is not
+    running as new on its node. A health-manager that cannot answer says no:
+    starting a guest blind is how a node runs out of memory."""
+    cmd = os.environ.get("HEALTH_MANAGER_CMD", "/home/tappaas/bin/health-manager")
+    try:
+        r = subprocess.run([cmd, "capacity", "--memory-threshold", str(CAPACITY_THRESHOLD), "--install", module, "--json"],
+                           text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
+        data = json.loads(r.stdout[r.stdout.index("{"):])
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        return False, f"capacity could not be checked ({e})"
+    if data.get("status") == "fail":
+        return False, f"does not fit on its node ({data.get('detail', '')})"
+    return True, ""
+
+
+def recover_suspended_pass() -> None:
+    try:
+        module = SUSPENDED_PASS_MARKER.read_text().strip()
+    except OSError:
+        return
+    if module:
+        log.warning("A patch pass for suspended modules stopped with %s running — suspending it again", module)
+        if not _module_manager("suspend", module):
+            log.error("  could not suspend %s again — it is running; suspend it by hand", module)
+            return
+    try:
+        SUSPENDED_PASS_MARKER.unlink()
+    except OSError:
+        pass
+
+
+def patch_suspended(modules: list[str], dep: dict) -> dict:
+    """Resume, update and suspend each module in turn. Returns
+    {"patched": [...], "failed": [...], "not_patched": [{"module", "reason"}]}."""
+    out: dict = {"patched": [], "failed": [], "not_patched": []}
+    if not modules:
+        log.info("  no suspended module to patch")
+        return out
+    for module in modules:
+        if dep["down"]:
+            out["not_patched"].append({"module": module, "reason": "a shared service is down"})
+            continue
+        ok, why = fits_to_resume(module)
+        if not ok:
+            log.warning("  %s: not patched — %s", module, why)
+            out["not_patched"].append({"module": module, "reason": why})
+            continue
+        log.info("  %s: resume, update, suspend", module)
+        try:
+            SUSPENDED_PASS_MARKER.parent.mkdir(parents=True, exist_ok=True)
+            SUSPENDED_PASS_MARKER.write_text(module + "\n")
+        except OSError as e:
+            log.warning("  %s: no crash marker (%s) — patching anyway", module, e)
+        if not _module_manager("resume", module):
+            out["not_patched"].append({"module": module, "reason": "it did not start"})
+            _module_manager("suspend", module)  # leave it as it was
+        else:
+            updated = update_module(module)
+            (out["patched"] if updated else out["failed"]).append(module)
+            if not updated:
+                log.error("FAILED: %s (suspended module)", module)
+            if not _module_manager("suspend", module):
+                log.error("  %s: could not be suspended again — it is running; suspend it by hand", module)
+                continue  # keep the marker: the next run tries again
+        try:
+            SUSPENDED_PASS_MARKER.unlink()
+        except OSError:
+            pass
+    return out
 
 
 def run_update_phase(
@@ -1317,6 +1449,8 @@ def main():
         if (name := deployed_foundation_name(m)) is not None
     ], machines), guests)
 
+    deployed_foundation = [n for m in FOUNDATION_MODULES if (n := deployed_foundation_name(m)) is not None]
+
     # automaticReboot (default true) gates the Phase 3 node reboot pass.
     # site.json is flat (ADR-007): .automaticReboot (was .tappaas.automaticReboot).
     automatic_reboot = config.get("automaticReboot", True)
@@ -1352,6 +1486,10 @@ def main():
         else:
             log.info("  (no app modules installed)")
         log_skipped(skipped_apps)
+        planned = suspended_to_patch(discovered + deployed_foundation, guests)
+        log.info("Phase 2.5 - Suspended modules patched one at a time (%d):", len(planned))
+        for i, mod in enumerate(planned, 1):
+            log.info("  %d. resume, update, suspend %s (when it fits on its node)", i, mod)
         log.info("Phase 3 - Node reboot pass (automaticReboot=%s):", automatic_reboot)
         log.info("Phase 4 - Postgres collation reconciliation (#726)")
         reboot_pass(automatic_reboot, dry_run=True)
@@ -1415,22 +1553,35 @@ def main():
         if checkconf:
             log.error("unbound-checkconf on the firewall reports: %s", checkconf)
 
-    # Capacity pre-flight (#833): a sweep that grows guests past what a node
-    # holds runs it out of memory mid-update — on a small single node that killed
-    # cicd's own VM. Growth past the threshold is refused before any module is
-    # touched (--force overrides); an over-committed node the sweep does not grow
-    # only warns, since refusing would leave it as full and unpatched.
+    # Capacity pre-flight (#833, #891): a sweep that grows guests past what a
+    # node holds runs it out of memory mid-update — on a small single node that
+    # killed cicd's own VM. A growth that does not fit is HELD: that module is
+    # updated with its current memory (the converge leaves its memory alone,
+    # TAPPAAS_HOLD_MEMORY), everything else goes ahead, and the next run tries
+    # again. --force applies the growth anyway. An over-committed node the sweep
+    # does not grow only warns, since refusing would leave it as full and unpatched.
+    memory_held: list[dict] = []
     if not dep["down"]:
         log.info("Phase 0.6: capacity pre-flight (memory each node commits after the update)")
-        over = check_update_capacity()
-        if over and module_force:
-            log.warning("%s — continuing because of --force", over["detail"])
-        elif over:
-            log.error("%s — no module is updated. Lower a guest's memory, move one "
-                      "(module-manager module modify <m> --set node=<n>), add RAM, or run with --force.",
-                      over["detail"])
-            dep["down"] = True
-            dep["failures"] = [over]
+        memory_held = check_update_capacity()
+        if memory_held and module_force:
+            log.warning("--force: applying memory growth that does not fit: %s",
+                        ", ".join(h["module"] for h in memory_held))
+            memory_held = []
+        for h in memory_held:
+            log.warning("  holding %s on %s at its current memory (%s → %s does not fit) — "
+                        "lower a guest's memory, move one (module-manager module modify <m> --set node=<n>) "
+                        "or add RAM; the next update applies it once there is room",
+                        h["module"], h.get("node", "?"), _gib(h.get("from")), _gib(h.get("to")))
+    if memory_held:
+        os.environ["TAPPAAS_HOLD_MEMORY"] = " ".join(h["module"] for h in memory_held)
+    else:
+        os.environ.pop("TAPPAAS_HOLD_MEMORY", None)
+
+    # A patch pass for suspended modules (#890) that died left a module running:
+    # suspend it again before anything else.
+    if not args.dry_run:
+        recover_suspended_pass()
 
     # ADR-020 D8: a module that declares rebootOk may have a disruptive change
     # applied only when the window is open (disruption_window_open): the
@@ -1460,6 +1611,14 @@ def main():
         not_attempted += run_update_phase(sorted_apps, "app", failed_modules, dep)
     else:
         log.info("No app modules found to update")
+
+    # Phase 2.5: patch the suspended modules (#890), one at a time — resume,
+    # update, test, suspend again — so stopping a module to free memory no
+    # longer stops it being patched. Before the reboots: every suspended guest is
+    # stopped again while the nodes are drained.
+    log.info("Phase 2.5: Patching suspended modules")
+    suspended_patch = patch_suspended(suspended_to_patch(discovered + deployed_foundation, guests), dep)
+    failed_modules.extend(suspended_patch["failed"])
 
     # Phase 3: controlled node reboot pass (issue #275)
     log.info("Phase 3: Node reboot pass (automaticReboot=%s)", automatic_reboot)
@@ -1496,7 +1655,7 @@ def main():
 
     # Summary
     end_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    total = len(installed_foundation) + len(sorted_apps)
+    total = len(installed_foundation) + len(sorted_apps) + len(suspended_patch["patched"]) + len(suspended_patch["failed"])
     # not_attempted modules never ran (halted at the boundary / baseline-down),
     # so they are neither successes nor per-module failures.
     succeeded = total - len(failed_modules) - len(not_attempted)
@@ -1514,6 +1673,15 @@ def main():
             "<module> --allow-disruption   (or set rebootOk on the module to permit "
             "it in the scheduled pass)"
         )
+    if memory_held:
+        log.warning("%d module(s) kept at their current memory — the growth their release asks for "
+                    "does not fit on their node:", len(memory_held))
+        for h in memory_held:
+            log.warning("  %s on %s: %s → %s", h["module"], h.get("node", "?"), _gib(h.get("from")), _gib(h.get("to")))
+    if suspended_patch["not_patched"]:
+        log.warning("%d suspended module(s) not patched:", len(suspended_patch["not_patched"]))
+        for n in suspended_patch["not_patched"]:
+            log.warning("  %s — %s", n["module"], n["reason"])
     if TEST_WARNINGS:
         log.warning(
             "%d module(s) updated with checks that were already failing before "
@@ -1564,6 +1732,11 @@ def main():
         # Whether a key stick holds the backup keys as they are (#874); recorded,
         # not failed: every backup is fine, a full-site restore is what is at risk.
         "backup_keys": backup_keys,
+        # Growth held for want of room (#891): updated at their current memory.
+        "memory_held": memory_held,
+        # The patch pass for suspended modules (#890): a failed update counts as
+        # a failed module above; one that did not fit is recorded, not failed.
+        "suspended_patch": suspended_patch,
         "ok": (not failed_modules and not dep["down"] and reboot_ok
                and control_plane in ("refreshed", "skipped")),
     }

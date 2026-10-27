@@ -235,14 +235,16 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "suspend <module>", effect: { noPreview: "stops the guest and keeps it stopped; config, backups, DNS and route stay; the nightly update skips it" },
+      usage: "suspend <module> [--no-update]", effect: { noPreview: "stops the guest and keeps it stopped; config, backups, DNS and route stay; the nightly update still patches it" },
       name: "suspend",
-      note: "(#428: stop the guest and keep everything else; out of the nightly update until resumed)",
+      note: "(#428: stop the guest and keep everything else; patched by the nightly update, stopped again after)",
       details:
         "The guest stops — through HA for an HA guest, which then keeps it stopped; otherwise with\n" +
         "onboot cleared, so a node reboot does not start it. Config, backups, DNS and the published\n" +
-        "route stay. The config is marked suspended: the nightly update skips it and the health check\n" +
-        "reports it as suspended, not down. A machine cannot be suspended.",
+        "route stay. The config is marked suspended and the health check reports it as suspended, not\n" +
+        "down. The nightly update still patches it (#890): after every other module, when it fits on its\n" +
+        "node, it is resumed, updated, tested and suspended again. A machine cannot be suspended.",
+      options: [["--no-update", "Keep it out of that patch pass too — for a module stopped because it is broken. Resume clears it."]],
     },
     { usage: "resume <module>", effect: { noPreview: "starts a suspended module and clears its mark" }, name: "resume", note: "(start a suspended module and clear the mark)" },
     {
@@ -343,6 +345,7 @@ interface Opts {
   blueprint: boolean; // validate: the ADR-027 blueprint check (#674)
   repo?: string; // validate --blueprint: one repository's catalogue
   lockdown: boolean; // modify: run the module's lockdown.sh (ADR-010 §8.4.4)
+  noUpdate: boolean; // suspend: out of the update's patch pass for suspended modules (#890)
   dryRun: boolean; // modify --set instance=: preview the rename (#566)
   // list --resolution: which of the three tracking paths locates each module (#460)
   resolution: boolean;
@@ -381,6 +384,7 @@ function parseOpts(args: string[]): Opts {
     decommission: false,
     blueprint: false,
     lockdown: false,
+    noUpdate: false,
     dryRun: false,
     resolution: false,
     sets: [],
@@ -426,6 +430,8 @@ function parseOpts(args: string[]): Opts {
       o.force = true;
     } else if (a === "--allow-disruption") {
       o.allowDisruption = true;
+    } else if (a === "--no-update") {
+      o.noUpdate = true;
     } else if (a === "--fail-fast") {
       o.failFast = true;
     } else if (a === "--reinstall") {
@@ -1527,7 +1533,8 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
       const module = opts.rest[0];
       if (!module) die(`${verb}: expected <module>`);
       if (opts.rest.length > 1) die(`${verb}: one module at a time (got ${opts.rest.join(", ")})`);
-      return client.suspend(module, verb === "resume");
+      if (verb === "resume" && opts.noUpdate) die("resume: --no-update is a suspend option");
+      return client.suspend(module, verb === "resume", opts.noUpdate);
     }
     case "snapshot-vm":
       return cmdSnapshot(opts, client);

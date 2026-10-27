@@ -35,6 +35,7 @@ import { checkControlPlaneTrust } from "./controlplane";
 import { checkMlagPairs } from "./mlag";
 import { checkIpv6Egress } from "./ipv6egress";
 import { primaryLocation } from "../../../lib/ts/src/locations";
+import { countedMem } from "./memcount";
 
 // Resolve a guest's `<vmname>.<zone0>.internal` target, as check-disk-threshold.sh
 // does (defaulting zone0 to "mgmt"), for the gates that probe a guest over SSH.
@@ -176,10 +177,21 @@ export function checkBackupStatus(configDir: string): CheckResult {
 // (b) additionally guest-agent ping responds. This first pass implements (a)
 // from clusterResources() — a configured-but-not-running managed module = FAIL.
 // PARKED: confirm whether (a) suffices or guest-agent ping is required.
+export const SUSPENDED_STALE_DAYS = 14;
+
+// Days since a module's updateTime (YYYYMMDD-HH:MM:SS); 0 when unknown.
+export function daysSince(updateTime: string | undefined, now: Date): number {
+  const m = /^(\d{4})(\d{2})(\d{2})-(\d{2}):(\d{2}):(\d{2})$/.exec(updateTime ?? "");
+  if (!m) return 0;
+  const t = new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]).getTime();
+  return (now.getTime() - t) / 86_400_000;
+}
+
 export function checkServiceLiveness(
   client: ClusterClient,
   configDir: string,
   defaultNode: string,
+  now: Date = new Date(),
 ): CheckResult {
   const running = new Set(
     client.clusterResources().filter((g) => g.status === "running").map((g) => g.vmid),
@@ -190,12 +202,29 @@ export function checkServiceLiveness(
   const managed = all.filter((m) => !m.suspended);
   const paused = suspended.length > 0 ? `; suspended: ${suspended.join(", ")}` : "";
   const down = managed.filter((m) => !running.has(m.vmid)).map((m) => m.module);
+  // The nightly update patches a suspended module (#890); one it has not
+  // reached for SUSPENDED_STALE_DAYS — it never fitted on its node — is said.
+  // A config with no updateTime is not judged: it says nothing about when.
+  const stale = all.filter((m) => m.suspended && !m.suspendedNoUpdate && daysSince(m.updateTime, now) > SUSPENDED_STALE_DAYS);
   const findings: CheckRow[] = [
     ...down.map((m): CheckRow => ({ status: "fail", text: "not running", subject: mod(m) })),
-    ...suspended.map((m): CheckRow => ({ status: "skip", text: "suspended", subject: mod(m) })),
+    ...suspended.map((m): CheckRow => {
+      const s = stale.find((x) => x.module === m);
+      return s
+        ? { status: "warn", text: `suspended, not patched since ${s.updateTime} — it has not fitted on its node to be patched`, subject: mod(m) }
+        : { status: "skip", text: "suspended", subject: mod(m) };
+    }),
   ];
   if (down.length > 0) {
     return { name: "service-liveness", status: "fail", detail: `not running: ${down.join(", ")}${paused}`, findings };
+  }
+  if (stale.length > 0) {
+    return {
+      name: "service-liveness",
+      status: "warn",
+      detail: `${managed.length} managed module(s) running${paused}; not patched for over ${SUSPENDED_STALE_DAYS} days: ${stale.map((m) => m.module).join(", ")}`,
+      findings,
+    };
   }
   // Report the population, not just the verdict: a bare "all managed modules
   // running" over an EMPTY set read as PASS for as long as #441 was live.
@@ -274,22 +303,38 @@ export function checkMemoryCommitment(client: ClusterClient, threshold: number):
   return { name: "memory-commitment", status: "pass", detail: parts.join("; "), findings };
 }
 
-// ── update-capacity pre-flight (#833) ──────────────────────────────────
+// ── update-capacity pre-flight (#833, #880, #891) ──────────────────────
 // What a node WILL commit once the sweep has converged every guest: a running
-// guest counts at the larger of its live size and its config's `memory`. The
-// memory-commitment gate counts the live size, which is too late for a sweep
-// about to grow a guest — on a 2.0 site with sizes tuned in Proxmox, the first
-// converge took identity 1.75G→4G and the node out of memory, killing cicd's
-// own VM mid-sweep. The sweep runs this before it touches a module.
+// guest counts at what it commits (countedMem: a VM its memory, a container its
+// week of use) with the memory its config asks for. The memory-commitment gate
+// counts the live size, which is too late for a sweep about to grow a guest —
+// on a 2.0 site with sizes tuned in Proxmox, the first converge took identity
+// 1.75G→4G and the node out of memory, killing cicd's own VM mid-sweep. The
+// sweep runs this before it touches a module.
 //
-// Only growth is refused. A node already over `threshold` that the update does
-// not grow is running that way today; refusing the update leaves it exactly as
-// over-committed and unpatched, so it warns. Growth that stays under the
-// threshold warns too (the operator sees RAM change); growth that reaches it
-// fails. `adding` names a module about to be installed (install-module.sh):
-// its configured memory lands on its node as new, so a new module that would
-// take its node to the threshold is refused even when nothing else grows.
+// Growth is the only thing it acts on. A node already over `threshold` that the
+// update does not grow is running that way today: refusing the update would
+// leave it as full and unpatched, so it warns (#880). Growth that fits warns
+// too (the operator sees RAM change). Growth that does not fit is HELD (#891):
+// smallest growth first, each that keeps the node under the threshold is let
+// through, the rest are named in `held` — the sweep updates those modules with
+// their current memory and the next update tries again. Nothing else on the
+// node, or on any other node, waits for it. `adding` names a module about to be
+// installed (install-module.sh): its configured memory lands on its node as
+// new, and an install that takes its node to the threshold is refused — there
+// is no current size to keep.
 const MIB = 1024 ** 2;
+
+export interface HeldGrowth {
+  module: string;
+  node: string;
+  from: number; // bytes it has now
+  to: number; // bytes its config asks for
+}
+
+export interface UpdateCapacityResult extends CheckResult {
+  held: HeldGrowth[];
+}
 
 export function checkUpdateCapacity(
   client: ClusterClient,
@@ -297,14 +342,14 @@ export function checkUpdateCapacity(
   defaultNode: string,
   threshold: number,
   adding?: string,
-): CheckResult {
+): UpdateCapacityResult {
   let caps: NodeCapacity[];
   try {
     caps = client.nodeCapacity();
   } catch (e) {
-    return { name: "update-capacity", status: "skip", detail: `cluster capacity unavailable: ${(e as Error).message}` };
+    return { name: "update-capacity", status: "skip", detail: `cluster capacity unavailable: ${(e as Error).message}`, held: [] };
   }
-  if (caps.length === 0) return { name: "update-capacity", status: "skip", detail: "no nodes reported" };
+  if (caps.length === 0) return { name: "update-capacity", status: "skip", detail: "no nodes reported", held: [] };
   const wanted = new Map<number, { module: string; mem: number }>();
   let added: { module: string; node: string; mem: number; vmid: number } | undefined;
   for (const m of loadConfigModules(configDir, defaultNode).filter(isManaged)) {
@@ -316,56 +361,81 @@ export function checkUpdateCapacity(
       added = { module: m.module, node: String(configField(raw, "node") ?? "") || m.node, mem: mem * MIB, vmid: m.vmid };
     }
   }
-  const exists = new Set(caps.flatMap((c) => c.guests.map((g) => g.vmid)));
-  if (added && exists.has(added.vmid)) added = undefined; // already a guest: a re-install adds nothing
+  // Already a running guest: a re-install adds nothing. A stopped one (a
+  // suspended module about to be resumed and patched, #890) lands on the node
+  // it is on, at its configured memory.
+  const guest = added ? caps.flatMap((c) => c.guests).find((g) => g.vmid === added!.vmid) : undefined;
+  if (added && guest?.status === "running") added = undefined;
+  else if (added && guest) added = { ...added, node: guest.node, mem: countedMem(guest, added.mem) };
   const rows: CheckRow[] = [];
+  const held: HeldGrowth[] = [];
   const rank: Record<CheckStatus, number> = { skip: 0, pass: 1, warn: 2, fail: 3 };
   let worst: CheckStatus = "pass";
   for (const c of caps) {
+    const limit = (threshold / 100) * c.physicalMem;
     let current = 0;
-    let projected = 0;
-    const grows: string[] = [];
+    const growths: { module: string; delta: number; from: number; to: number }[] = [];
     for (const g of c.guests.filter((x) => x.status === "running")) {
-      current += g.declaredMem;
+      const now = countedMem(g);
+      current += now;
       const w = wanted.get(g.vmid);
-      if (w && w.mem > g.declaredMem) {
-        projected += w.mem;
-        grows.push(`${w.module} ${gib(g.declaredMem)}→${gib(w.mem)}G`);
+      if (!w || w.mem <= g.declaredMem) continue;
+      // A container's raised limit commits nothing until it is used.
+      const next = countedMem(g, w.mem);
+      if (next > now) growths.push({ module: w.module, delta: next - now, from: g.declaredMem, to: w.mem });
+    }
+    let projected = current;
+    const grows: string[] = [];
+    const heldHere: string[] = [];
+    for (const gr of growths.sort((a, b) => a.delta - b.delta || a.module.localeCompare(b.module))) {
+      if (projected + gr.delta < limit || c.physicalMem === 0) {
+        projected += gr.delta;
+        grows.push(`${gr.module} ${gib(gr.from)}→${gib(gr.to)}G`);
       } else {
-        projected += g.declaredMem;
+        held.push({ module: gr.module, node: c.node, from: gr.from, to: gr.to });
+        heldHere.push(`${gr.module} ${gib(gr.from)}→${gib(gr.to)}G`);
       }
     }
+    let installOver = false;
     if (added && added.node === c.node) {
       projected += added.mem;
       grows.push(`new ${added.module} ${gib(added.mem)}G`);
+      installOver = projected >= limit;
     }
     const pct = c.physicalMem > 0 ? (100 * projected) / c.physicalMem : 0;
     const over = pct >= threshold;
-    const status: CheckStatus = over && grows.length ? "fail" : over || grows.length ? "warn" : "pass";
+    const status: CheckStatus = installOver ? "fail" : over || grows.length || heldHere.length ? "warn" : "pass";
     if (rank[status] > rank[worst]) worst = status;
     const nowPct = c.physicalMem > 0 ? (100 * current) / c.physicalMem : 0;
     rows.push({
       status,
       text: `${c.node}: ${gib(projected)}/${gib(c.physicalMem)}G ${pct.toFixed(0)}% after the update` +
-        (grows.length ? ` (grows ${grows.join(", ")}; ${nowPct.toFixed(0)}% now)` : over ? " (already so, nothing grows)" : ""),
+        (grows.length ? ` (grows ${grows.join(", ")}; ${nowPct.toFixed(0)}% now)` : "") +
+        (heldHere.length ? ` (holds back ${heldHere.join(", ")})` : "") +
+        (over && !grows.length && !heldHere.length ? " (already so, nothing grows)" : ""),
       subject: nodeOf(c.node),
     });
   }
   const bad = rows.filter((r) => r.status === "fail");
-  const overNoGrowth = rows.filter((r) => r.status === "warn" && r.text.includes("already so"));
-  const growing = rows.filter((r) => r.status === "warn" && !r.text.includes("already so"));
   const notes: string[] = [];
+  if (held.length) {
+    notes.push(`${held.map((h) => `${h.module} on ${h.node} ${gib(h.from)}→${gib(h.to)}G`).join("; ")} — does not fit under ${threshold}%: ` +
+      "updated with its current memory; the next update applies the growth once there is room (lower a guest's memory, move one with modify --set node=, or add RAM)");
+  }
+  const overNoGrowth = rows.filter((r) => r.status === "warn" && r.text.includes("already so"));
+  const growing = rows.filter((r) => r.status === "warn" && r.text.includes("(grows"));
   if (overNoGrowth.length) notes.push(`${overNoGrowth.map((r) => r.text).join("; ")} — over ${threshold}% but the update adds nothing: rebalance when you can`);
   if (growing.length) notes.push(`${growing.map((r) => r.text).join("; ")} — memory changes`);
   return {
     name: "update-capacity",
     status: worst,
     detail: bad.length > 0
-      ? `${bad.map((r) => r.text).join("; ")} — would reach ${threshold}%: lower a guest's memory, move one (modify --set node=), or add RAM`
+      ? `${bad.map((r) => r.text).join("; ")} — starting ${adding} would reach ${threshold}%: put it on another node, give it less memory, or move a module off first`
       : notes.length > 0
         ? notes.join(" · ")
         : `every node under ${threshold}% of its RAM after the update`,
     rows,
+    held,
   };
 }
 

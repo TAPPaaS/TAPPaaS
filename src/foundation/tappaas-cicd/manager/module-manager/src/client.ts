@@ -147,8 +147,8 @@ export class CliModuleClient implements ModuleClient {
     return run(BIN.migrate, args);
   }
 
-  suspend(module: string, resume: boolean): number {
-    return run(BIN.suspend, resume ? [module, "--resume"] : [module]);
+  suspend(module: string, resume: boolean, noUpdate = false): number {
+    return run(BIN.suspend, resume ? [module, "--resume"] : noUpdate ? [module, "--no-update"] : [module]);
   }
 
   snapshot(module: string, action: SnapshotAction): number {

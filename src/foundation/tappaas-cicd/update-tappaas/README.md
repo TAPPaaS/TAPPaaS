@@ -101,6 +101,31 @@ run earns exactly one resume and a sweep failing for some other reason cannot lo
 
 Each module is updated via: `update-module.sh <module-name>`
 
+### Before the phases: memory that does not fit is held (#891)
+
+`health-manager capacity` projects each node after the update (see the
+health-manager README). A module whose release raises its memory beyond what its
+node holds under 95% is updated with its **current** memory: the converge leaves
+that one field alone (`TAPPAAS_HOLD_MEMORY`, reported as "growth held"), the rest
+of its update goes ahead, and nothing else waits for it. Config keeps the size the
+release asks for, so the next run tries again. Nothing is moved automatically.
+`last-update-result.json` lists them as `memory_held`, and the summary warns.
+`site-manager update --force` applies the growth anyway.
+
+### Phase 2.5: Suspended modules are patched (#890)
+
+`module-manager suspend` stops a module to free memory; it no longer also stops it
+being patched. After the app modules, each suspended module is handled one at a
+time: if its guest fits on its node (`health-manager capacity --install`), it is
+resumed, updated (its tests included) and suspended again. One that does not fit
+is recorded as not patched; the health check warns when a suspended module has not
+been patched for 14 days. `suspend --no-update` keeps a module out, for one stopped
+because it is broken. A marker (`/var/lib/tappaas/update-suspended-pass`) names the
+module being patched; a run that dies mid-pass leaves it, and the next run suspends
+that module again first. `last-update-result.json` records the pass as
+`suspended_patch` (patched, failed, not_patched); a failed update counts as a failed
+module.
+
 ### Phase 3: Node Reboot Pass
 
 Governed by `automaticReboot` in `site.json`. See `cluster/reboot-cluster.sh`.

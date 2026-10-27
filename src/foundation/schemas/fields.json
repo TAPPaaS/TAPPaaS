@@ -44,6 +44,11 @@
       "apply": "none",
       "changeNote": "Written by 'module-manager suspend' and 'resume', which stop and start the guest with it; set by hand it would say a running guest is paused, or hide a stopped one from the update and the health check."
     },
+    "suspendedNoUpdate": {
+      "class": "immutable",
+      "apply": "none",
+      "changeNote": "Written by 'module-manager suspend --no-update' and cleared by 'resume'; it means something only beside suspended."
+    },
     "tier": {
       "class": "immutable",
       "apply": "none",

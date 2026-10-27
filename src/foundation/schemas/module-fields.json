@@ -90,7 +90,17 @@
   ],
   "fields": {
     "suspended": {
-      "description": "The module is paused: its guest is stopped on purpose by 'module-manager suspend' and stays so until 'module-manager resume'. The nightly update skips it and the health check reports it as suspended, not down. Written by those two verbs only.",
+      "description": "The module is paused: its guest is stopped on purpose by 'module-manager suspend' and stays so until 'module-manager resume'. The health check reports it as suspended, not down; the nightly update still patches it after every other module — resumed, updated and suspended again — unless suspendedNoUpdate is set. Written by those two verbs only.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": false,
+      "example": true
+    },
+    "suspendedNoUpdate": {
+      "description": "A suspended module the nightly update leaves alone: 'module-manager suspend --no-update' sets it, for a module stopped because it is broken, and 'resume' clears it. Without it a suspended module is patched in the update's closing pass (#890).",
       "type": "boolean",
       "requiredBy": [],
       "usedBy": [

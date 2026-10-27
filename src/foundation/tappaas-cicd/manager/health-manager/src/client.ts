@@ -25,6 +25,7 @@ import {
 import { spawnSync } from "child_process";
 import { existsSync } from "fs";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
+import { countedMem } from "./memcount";
 import { Avx512Use, ClusterClient, LanUplink, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
 
 export class CliClusterClient implements ClusterClient {
@@ -153,13 +154,26 @@ export class CliClusterClient implements ClusterClient {
         measured: type === "lxc", // a container has no agent and needs none
       };
       cap.guests.push(g);
-      if (g.status === "running") cap.committedMem += g.declaredMem;
     }
     // Per node, ONE ssh answers both remaining questions: how much the host has
     // actually backed for each guest (RSS of its kvm process), and whether a
     // guest agent is answering at all. Without the second, `usedMem` is the
     // host's own view wearing the guest's clothes.
     for (const cap of caps.values()) {
+      // A container's limit is a ceiling, not memory set aside (#891): what it
+      // commits is read from its week of use — one pvesh per container, on its node.
+      const cts = cap.guests.filter((g) => g.type === "lxc" && g.status === "running").map((g) => g.vmid);
+      if (cts.length > 0) {
+        const r = ssh("root", `${cap.node}.${mgmtDomain()}`, cts
+          .map((v) => `echo "peak ${v} $(pvesh get /nodes/${cap.node}/lxc/${v}/rrddata --timeframe week --cf MAX --output-format json 2>/dev/null | jq '[.[].mem // 0] | max // 0' 2>/dev/null)"`)
+          .join("; "));
+        for (const line of r.rc === 0 ? r.stdout.split("\n") : []) {
+          const f = line.trim().split(/\s+/);
+          const g = f[0] === "peak" ? cap.guests.find((x) => x.vmid === Number(f[1])) : undefined;
+          if (g && Number.isFinite(Number(f[2]))) g.peakMem = Number(f[2]);
+        }
+      }
+      for (const g of cap.guests) if (g.status === "running") cap.committedMem += countedMem(g);
       const vmids = cap.guests.filter((g) => g.type === "qemu" && g.status === "running").map((g) => g.vmid);
       if (vmids.length === 0) continue;
       // `free_mem` in the balloon statistics is the signal, NOT whether a guest

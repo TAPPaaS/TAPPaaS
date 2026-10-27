@@ -18,6 +18,7 @@ import {
   ZonesFile,
   computeDrift,
   hasChanges,
+  holdGrowth,
   needsDisruption,
   normSize,
   normTags,
@@ -363,6 +364,20 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
     r.inSync.some((f) => f.field === "zone0" && f.desired === "rossen" && f.actual === "200"),
     "zone0 compares the config's zone NAME against the guest's VLAN TAG and agrees",
   );
+
+  // #891: a held growth is dropped, the module's other drift stays.
+  const memGrown = computeDrift(
+    resolveModule("nextcloud", { ...cfg, memory: 16384, cores: 6 }, null, SCHEMA),
+    { manifest: VM_MANIFEST, actual, zones: ZONES },
+  );
+  const fieldsOf = (d: DriftRecord): string[] => d.units.flatMap((u) => u.fields.map((f) => f.field)).sort();
+  check(fieldsOf(memGrown).join() === "cores,memory", `memory and cores drift before the hold (got: ${fieldsOf(memGrown).join()})`);
+  const h = holdGrowth(memGrown);
+  check(fieldsOf(h).join() === "cores" && h.skipped.some((x) => x.field === "memory" && x.reason === "capacity-held"),
+    `holdGrowth drops the memory growth, keeps cores, and says why (got: ${fieldsOf(h).join()})`);
+  const shrunk = computeDrift(resolveModule("nextcloud", { ...cfg, memory: 4096 }, null, SCHEMA), { manifest: VM_MANIFEST, actual, zones: ZONES });
+  check(fieldsOf(holdGrowth(shrunk)).join() === "memory", "a shrink is not held");
+  check(holdGrowth(r) === r, "a record with nothing to hold is returned as it is");
 
   // And a real change is detected, with the right class and authorization.
   const moved = computeDrift(

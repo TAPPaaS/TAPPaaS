@@ -131,8 +131,12 @@ assert ("satellite-s1", "status=external") in skipped, f"the pre-§8.4 stop-gap 
 # sweep for 13 days on the reporter's site. `stack` is the declared signal.
 assert ("tappaas-nixos", "stack=template") in skipped, f"a VM template is not updatable: {skipped}"
 assert "tappaas-nixos" not in to_update, "a VM template must never be queued for update"
-# #428: a suspended module's guest is stopped on purpose -- nothing to update.
+# #428: a suspended module's guest is stopped on purpose -- not in the main passes.
 assert ("paused", "suspended") in skipped and "paused" not in to_update, f"a suspended module is skipped: {skipped}"
+# #890: ...but the closing pass patches it, unless suspend --no-update said not to.
+w("broken.json", {"kind": "vm", "vmname": "broken", "suspended": True, "suspendedNoUpdate": True, "moduleSource": "/x/b"})
+assert m.suspended_to_patch(got + ["broken"], None) == ["paused"], f"patched: {m.suspended_to_patch(got + ['broken'], None)}"
+(d / "broken.json").write_text("{ broken")
 # #832: a config whose VMID no guest on the cluster has was never installed --
 # the sweep skips it (and names `module add`) instead of deferring it nightly.
 w("hosting.json", {"kind": "vm", "vmname": "hosting", "vmid": 777, "moduleSource": "/x/hosting"})
@@ -546,24 +550,61 @@ assert ro([], [], True, True, "refreshed") == (1, "broken"), "a shared dependenc
 assert ro([], ["hue"], False, False, "refreshed") == (1, "broken"), "a failed reboot pass breaks the run"
 assert ro([], [], False, True, "stale") == (1, "broken"), "a stale control plane breaks the run"
 
-# #833: the capacity pre-flight — health-manager capacity's verdict, or None.
+# #833/#891: the capacity pre-flight — the modules whose growth does not fit.
 import os, stat, tempfile
+from pathlib import Path
 d = tempfile.mkdtemp()
 hm = os.path.join(d, "hm")
 def stub(rc, out):
     with open(hm, "w") as f:
-        f.write(f"#!/bin/sh\nprintf '%s\\n' '{out}'\nexit {rc}\n")
+        f.write(f"#!/bin/sh\ncat <<'EOF'\n{out}\nEOF\nexit {rc}\n")
     os.chmod(hm, 0o755)
 os.environ["HEALTH_MANAGER_CMD"] = hm
-stub(0, "tappaas1: 51.5/61.8G 83% after the update")
-assert m.check_update_capacity() is None, "a node with room: not refused"
-stub(0, "[Warning] update-capacity: tappaas1: 33.0/31.2G 106% after the update (already so, nothing grows)")
-assert m.check_update_capacity() is None, "over-committed already, nothing grows: warned, not refused"
-stub(1, "tappaas1: 16.0/15.0G 107% after the update (grows identity 1.8→4.0G; 95% now)")
-over = m.check_update_capacity()
-assert over and over["dependency"] == "node-memory" and "107%" in over["detail"], f"growth past the threshold: refused, named: {over}"
+stub(0, '{"status": "pass", "detail": "every node under 95%", "rows": [], "held": []}')
+assert m.check_update_capacity() == [], "a node with room: nothing held"
+stub(0, '{"status": "warn", "detail": "already so", "rows": [{"text": "tappaas1: 33.0/31.2G 106% after the update (already so, nothing grows)"}], "held": []}')
+assert m.check_update_capacity() == [], "over-committed already, nothing grows: warned, nothing held"
+stub(0, '{"status": "warn", "detail": "identity on tappaas1 does not fit", "rows": [], "held": [{"module": "identity", "node": "tappaas1", "from": 1879048192, "to": 4294967296}]}')
+held = m.check_update_capacity()
+assert [h["module"] for h in held] == ["identity"] and held[0]["node"] == "tappaas1", f"growth that does not fit is held, named: {held}"
+assert m._gib(held[0]["to"]) == "4.0G"
+stub(0, "not json")
+assert m.check_update_capacity() == [], "no verdict holds nothing"
 os.environ["HEALTH_MANAGER_CMD"] = os.path.join(d, "missing")
-assert m.check_update_capacity() is None, "a health-manager that cannot run never blocks the sweep"
+assert m.check_update_capacity() == [], "a health-manager that cannot run never blocks the sweep"
+
+# #890: the patch pass — resume, update, suspend each, one at a time; one that
+# does not fit is recorded; a pass that died is finished by the next run.
+calls = []
+mm = os.path.join(d, "mm")
+with open(mm, "w") as f:
+    f.write(f"#!/bin/sh\necho \"$*\" >> {d}/mm.log\n[ \"$1 $2\" = 'resume nostart' ] && exit 1\nexit 0\n")
+os.chmod(mm, 0o755)
+m.MODULE_MANAGER_CMD = mm
+stub(0, '{"status": "pass", "held": []}')
+os.environ["HEALTH_MANAGER_CMD"] = hm
+m.SUSPENDED_PASS_MARKER = Path(d) / "marker"
+_update = m.update_module
+m.update_module = lambda name: (calls.append(name), name != "flaky")[1]
+dep = {"down": False}
+r = m.patch_suspended(["a", "flaky", "nostart"], dep)
+log_ = open(f"{d}/mm.log").read().split("\n")
+assert r["patched"] == ["a"] and r["failed"] == ["flaky"], f"patch result: {r}"
+assert [n["module"] for n in r["not_patched"]] == ["nostart"], f"one that did not start: {r}"
+assert log_[:3] == ["resume a", "suspend a", "resume flaky"], f"one at a time, suspended again: {log_}"
+assert "suspend flaky" in log_ and "suspend nostart" in log_, "a failed update or a failed start is suspended again"
+assert calls == ["a", "flaky"], f"updated between resume and suspend: {calls}"
+assert not m.SUSPENDED_PASS_MARKER.exists(), "the marker is gone once the module is suspended again"
+stub(1, '{"status": "fail", "detail": "starting big would reach 95%", "held": []}')
+r = m.patch_suspended(["big"], dep)
+assert r["not_patched"] == [{"module": "big", "reason": "does not fit on its node (starting big would reach 95%)"}], f"no room: {r}"
+r = m.patch_suspended(["x"], {"down": True})
+assert r["not_patched"][0]["reason"] == "a shared service is down"
+open(f"{d}/mm.log", "w").close()
+m.SUSPENDED_PASS_MARKER.write_text("left\n")
+m.recover_suspended_pass()
+assert open(f"{d}/mm.log").read().strip() == "suspend left" and not m.SUSPENDED_PASS_MARKER.exists(), "a pass that died: suspended again"
+m.update_module = _update
 
 # #874: does a key stick hold the backup keys as they are — asked on every run.
 bm = os.path.join(d, "bm")

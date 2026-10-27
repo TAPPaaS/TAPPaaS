@@ -71,6 +71,8 @@ export function loadConfigModules(configDir: string, defaultNode: string): Confi
       node: asString(raw.node) || defaultNode,
       status: asString(raw.status),
       suspended: raw.suspended === true,
+      suspendedNoUpdate: raw.suspendedNoUpdate === true,
+      updateTime: asString(raw.updateTime) || undefined,
     });
   }
   return out;

@@ -22,7 +22,7 @@ pending the `update-os.sh` port.
 
 ```
 health-manager validate [--threshold PCT] [--memory-threshold PCT] [--json] [--config-dir DIR]
-health-manager capacity [--memory-threshold PCT] [--config-dir DIR]
+health-manager capacity [--install <instance>] [--memory-threshold PCT] [--json] [--config-dir DIR]
 health-manager update-os <name> <vmid> <node>
 health-manager reboot <module>
 health-manager scan security [--if-new-sweep] [--notify]
@@ -300,26 +300,42 @@ choices are worth knowing:
   cache.
 - **Stopped guests hold nothing.** A stopped guest is not counted; counting it
   would report an overcommit the node is not living with.
+- **A container counts at what it uses, not at its limit.** A VM counts at its
+  configured memory: without ballooning the host keeps every page it has touched.
+  A container's memory setting is a ceiling the kernel enforces, not memory set
+  aside, so a running container counts at its highest use of the last week
+  (Proxmox `rrddata`) plus 25%, at least 512 MB and at most its limit; with no
+  history yet, at its limit. Counting limits made hrossen read 46 GB of container
+  memory that used 2.9 GB.
+- **Not counted:** night-time use, KSM, the guests' zram, the ZFS ARC and host
+  swap. They are a margin the node runs on, not capacity it can promise.
 - **An idle node is reported at 0%, not hidden.** An empty node beside a full
   one is a placement problem, and the report is where you see it.
 
 `health-manager capacity` answers the same question for **after** an update:
-each running guest counts at the larger of its live size and its config's
-`memory`, because the update converges it to the config. A node whose VMs were
-sized down by hand in Proxmox commits more once it is updated, and that is
-seen here before it happens. The update sweep runs it first (threshold 95%):
+each running guest counts at what it commits with the memory its config asks
+for, because the update converges it to the config. A node whose VMs were sized
+down by hand in Proxmox commits more once it is updated, and that is seen here
+before it happens. The update sweep runs it first (threshold 95%):
 
 | Node after the update | Verdict |
 |---|---|
 | under the threshold, nothing grows | pass |
 | under the threshold, a guest grows | warning: memory changes |
 | over the threshold, nothing grows | warning: it runs like that today, so the update goes ahead — rebalance when you can |
-| at or over the threshold because a guest grows | refused: nothing is updated; `--force` overrides |
+| a growth would take it to the threshold | **held**: that module is updated with its current memory, everything else goes ahead, and the next update tries again; `--force` applies it anyway |
+
+Growth is let through smallest first, as long as the node stays under the
+threshold; the rest is held. `--json` names the held modules (`held`: module,
+node, from, to) — the sweep passes them to the converge, which leaves their
+memory alone and reports the growth as held. A container whose limit is raised
+grows only by what it uses.
 
 `install-module` runs it with `--install <instance>` before it creates the
 guest: the new module's memory lands on its node, and an install that would
 take the node to the threshold is refused (`--force` does not override it —
-move the module with `--node`, or make room first).
+move the module with `--node`, or make room first). The update's patch pass for
+suspended modules asks the same question before it starts a suspended guest.
 
 **read-only** here. Growing a disk is `cluster:vm`'s: every module update grows a
 VM disk that is filling up, when its pool has room (see the `cluster:vm`

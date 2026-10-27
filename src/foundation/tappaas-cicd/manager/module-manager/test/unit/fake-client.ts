@@ -76,7 +76,7 @@ export class FakeModuleClient implements ModuleClient {
     this.log.push({ verb: "migrate", module, opts });
     return this.rc;
   }
-  suspend(module: string, resume: boolean): number {
+  suspend(module: string, resume: boolean, _noUpdate?: boolean): number {
     this.log.push({ verb: resume ? "resume" : "suspend", module, opts: {} });
     return this.rc;
   }

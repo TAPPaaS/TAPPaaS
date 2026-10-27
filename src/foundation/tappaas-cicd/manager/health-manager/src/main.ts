@@ -72,9 +72,10 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "capacity [--install <instance>] [--memory-threshold PCT] [--config-dir DIR]",
-      details: "What each node commits once the update has converged every guest (a guest at the larger of its live and its configured memory). Exit 1 only when growth — a guest that grows, or the module being installed — would take a node to the threshold; a node already over that nothing grows, and any growth under it, warn (exit 0). The update sweep's and install-module's pre-flight.",
+      usage: "capacity [--install <instance>] [--memory-threshold PCT] [--json] [--config-dir DIR]",
+      details: "What each node commits once the update has converged every guest: a VM at its configured memory, a container at its highest use of the last week plus 25% (at least 512 MB, at most its limit). Growth that does not fit under the threshold is held: named, and the update keeps that module at its current memory; everything else goes ahead. A node already over that nothing grows, and growth that fits, warn. Exit 1 only when the module being installed would take its node to the threshold. The update sweep's and install-module's pre-flight.",
       options: [
+        ["--json", "Print the result as JSON, with `held`: the modules whose growth does not fit (module, node, from, to in bytes)."],
         ["--install <instance>", "Count this deployed config's memory as new on its node (install-module, before the guest exists)."],
         ["--memory-threshold PCT", `Percent of a node's RAM the projected commitment must stay under (default ${DEFAULT_MEMORY_THRESHOLD}).`],
       ],
@@ -428,6 +429,10 @@ export function run(argv: string[], client: ClusterClient): number {
         const adding = at >= 0 ? opts.rest[at + 1] : undefined;
         if (at >= 0 && !adding) die("capacity: --install needs an instance name");
         const r = checkUpdateCapacity(client, opts.configDir, DEFAULT_NODE, opts.memoryThreshold, adding);
+        if (opts.rest.includes("--json")) {
+          info(JSON.stringify({ status: r.status, detail: r.detail, rows: r.rows ?? [], held: r.held }, null, 2));
+          return r.status === "fail" ? 1 : 0;
+        }
         if (r.status === "warn") warn(`${r.name}: ${r.detail}`);
         else {
           const tag = r.status === "fail" ? `${RD}FAIL${CL}` : r.status === "skip" ? `${YW}SKIP${CL}` : `${GN}PASS${CL}`;

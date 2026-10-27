@@ -220,7 +220,8 @@ export type SkipReason =
   | "no-desired-value" // neither declared nor defaulted into scope
   | "self-reconciling" // apply:"reconcile" — the service converges it itself
   | "not-reported" // the service's reporter does not observe this field
-  | "defaulted-unappliable"; // a schema default, in a class no converge applies (#679)
+  | "defaulted-unappliable" // a schema default, in a class no converge applies (#679)
+  | "capacity-held"; // a memory growth the node has no room for: kept at its current size (#891)
 
 export interface DriftField {
   field: string;
@@ -295,6 +296,29 @@ export interface DriftRecord {
   inSync: DriftField[];
   // Not compared, and why.
   skipped: { field: string; reason: SkipReason }[];
+}
+
+// #891: the update sweep holds back a memory growth its node has no room for
+// (health-manager capacity names it; TAPPAAS_HOLD_MEMORY carries the module
+// names to every converge of the run). The guest keeps its current memory and
+// the rest of its drift is applied; config keeps the size it asks for, so the
+// next run tries again. Only growth is held — a shrink, or memory equal to what
+// it has, goes through. Pure: the caller decides whether the module is held.
+export const HOLD_FIELDS = ["memory"];
+
+export function holdGrowth(r: DriftRecord): DriftRecord {
+  const grows = (f: DriftField): boolean =>
+    HOLD_FIELDS.includes(f.field) && Number(f.desiredNorm) > Number(f.actualNorm);
+  const held: DriftField[] = [];
+  const units: DriftUnit[] = [];
+  for (const u of r.units) {
+    const keep = u.fields.filter((f) => !grows(f));
+    held.push(...u.fields.filter(grows));
+    if (keep.length === u.fields.length) units.push(u);
+    else if (keep.length > 0) units.push({ ...u, fields: keep });
+  }
+  if (held.length === 0) return r;
+  return { ...r, units, skipped: [...r.skipped, ...held.map((f) => ({ field: f.field, reason: "capacity-held" as SkipReason }))] };
 }
 
 export function hasChanges(r: DriftRecord): boolean {
