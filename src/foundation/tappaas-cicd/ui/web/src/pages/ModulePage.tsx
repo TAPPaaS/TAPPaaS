@@ -155,9 +155,6 @@ export function ModulePage({ name }: { name: string }) {
   useEffect(() => {
     if (modify) setTab("Config");
   }, [modify?.n]);
-  // The owner's route reads what the module is, not how it is configured.
-  const owner = useMe()?.route === "status";
-  const tabs = TABS.filter((t) => !owner || ["Overview", "Backup"].includes(t));
   const d = r.env?.data;
   const m = d?.summary;
   const show_ = d?.show.data ?? {};
@@ -192,7 +189,7 @@ export function ModulePage({ name }: { name: string }) {
         </div>
       ) : null}
       <div className="tabs" role="tablist">
-        {tabs.map((t) => (
+        {TABS.map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className={tab === t ? "tab tab-on" : "tab"} onClick={() => setTab(t)}>
             {t}
           </button>

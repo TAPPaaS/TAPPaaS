@@ -146,12 +146,12 @@ export function WifiWizard({ z, apCount, site, onClose, prefill }: { z: WifiZone
                   <span>passphrase {state === "set" || state === "changed" ? "" : "*"}</span>
                   <span className="toolbar">
                     <input type="password" autoComplete="new-password" placeholder={state === "set" || state === "changed" ? "kept — type a new one to replace it" : "8 to 63 characters"} value={pass} onChange={(e) => setPass(e.target.value)} />
-                    <button className="btn btn-primary" disabled={!pass || passProblem !== null || me?.role !== "installer"} onClick={() => void savePass()}>Save the passphrase</button>
+                    <button className="btn btn-primary" disabled={!pass || passProblem !== null || !canOperate(me)} onClick={() => void savePass()}>Save the passphrase</button>
                   </span>
                   <small className="muted">
                     {state ? <><Dot level={state === "not set" ? "warn" : "pass"} /> {plan.ssid}: {PASSPHRASE_TEXT[state]}. </> : null}
                     {passProblem ? <span className="ff-error">{passProblem}. </span> : null}
-                    ap-manager stores it in ~/.wlan-secrets.txt (mode 600) and the reconcile pushes it to every access point that broadcasts {plan.ssid}; never shown again and never in a command.{me?.role !== "installer" ? " Saving it needs the Installer role." : ""}
+                    ap-manager stores it in ~/.wlan-secrets.txt (mode 600) and the reconcile pushes it to every access point that broadcasts {plan.ssid}; never shown again and never in a command.
                   </small>
                   {msg ? <small className="small">{msg}</small> : null}
                 </label>

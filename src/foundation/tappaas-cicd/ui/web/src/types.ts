@@ -13,9 +13,9 @@ export interface Me {
   user: string | null;
   name: string | null;
   groups: string[];
-  role: "installer" | "admin" | "read";
+  role: "installer" | "read"; // read: loopback without the gate
   via: "gate" | "local" | "setup-token";
-  route: "console" | "status";
+  route: "console";
 }
 
 export interface Subject {

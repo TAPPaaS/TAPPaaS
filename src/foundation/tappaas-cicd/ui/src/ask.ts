@@ -70,7 +70,7 @@ export function proposalText(p: Proposal): string {
     if (p.previewArgv) lines.push(`  preview:  ${shellQuote(p.previewArgv)}`);
     else lines.push(`  (no dry run: read \`${p.applyArgv[0]} --help\` for what it touches)`);
     lines.push(`  apply:    ${shellQuote(p.applyArgv)}`);
-    if (p.destructive) lines.push("  destructive: it cannot be undone; the console asks the Installer to type its name.");
+    if (p.destructive) lines.push("  destructive: it cannot be undone; the console asks for its name typed.");
   }
   lines.push("  Run it yourself, or from the card in the console (Activity records it there).");
   return lines.join("\n") + "\n";

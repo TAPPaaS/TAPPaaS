@@ -9,7 +9,8 @@ import { Envelope, Jump, Me } from "./types";
 // status route see no operate control (ADR-034 D2, D3).
 export const MeContext = createContext<Me | null>(null);
 export const useMe = (): Me | null => useContext(MeContext);
-export const canOperate = (me: Me | null): boolean => me !== null && me.role !== "read" && me.route !== "status";
+// Every caller the console accepts operates, but loopback without the gate (it reads only).
+export const canOperate = (me: Me | null): boolean => me?.role === "installer";
 
 // ── a router of four pages ────────────────────────────────────────────
 export function usePath(): string {

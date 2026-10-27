@@ -159,7 +159,7 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
   const [dismissed, setDismissed] = useState(false);
   const pj = useJob(preview);
   const aj = useJob(applied);
-  const may = canOperate(me) && (!p.destructive || me?.role === "installer");
+  const may = canOperate(me);
   const from = { conversation, proposal: p.id };
   const previewDone = pj !== null && pj.state === "done";
   const refusedByDryRun = previewDone && p.preview === "dry-run-flag" && pj!.exit !== 0;
@@ -200,9 +200,7 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
       <p className="muted small">
         {may
           ? `Runs as ${me?.user ?? "you"} through the job runner; ${p.read ? "a read" : "preview first"}, recorded in Activity.`
-          : p.destructive && canOperate(me)
-            ? "A destructive verb: an Installer runs it."
-            : "You may read only: an Admin or Installer runs it."}
+          : "Read only here (no sign-in through the gate): an installer runs it."}
       </p>
       <div className="actions">
         {!p.read ? (
@@ -269,7 +267,7 @@ function TurnView({ t, conversation, me }: { t: Turn; conversation: string; me: 
           <p key={i} className="turn-opened small">
             ↗ Opened <a href={o.path} onClick={(e) => { e.preventDefault(); follow(o); }}>{o.title}</a>
             {vals.length ? <span className="muted"> · filled in: {vals.join(", ")}</span> : null}
-            {wizard && !operator ? <span className="muted"> · its form needs an Admin or Installer</span> : wizard ? <span className="muted"> · nothing changes until you preview and apply it there</span> : null}
+            {wizard && !operator ? <span className="muted"> · its form needs an installer signed in</span> : wizard ? <span className="muted"> · nothing changes until you preview and apply it there</span> : null}
           </p>
         );
       })}

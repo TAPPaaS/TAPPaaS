@@ -7,7 +7,7 @@
 // every module's policy, whether the PBS job has it, its last backup and
 // verify, the off-site peers, and
 // per module show / coverage / restore list (reads that run at once), modify
-// (a job with its preview) and purge (destructive: the name typed, Installer;
+// (a job with its preview) and purge (destructive: the name typed;
 // never a side effect of a module's delete).
 
 import { Read, useRead } from "../api";

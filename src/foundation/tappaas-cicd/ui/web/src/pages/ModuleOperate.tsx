@@ -71,7 +71,7 @@ export function ModuleOperate({ m, onConfig }: { m: ModuleSummary; onConfig: () 
               }),
             ]}
           />
-          <small>--archive (default) · --remove · typed name, Installer</small>
+          <small>--archive (default) · --remove · typed name</small>
         </div>
       </div>
     </Section>
