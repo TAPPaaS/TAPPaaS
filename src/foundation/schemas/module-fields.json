@@ -99,6 +99,26 @@
       "default": false,
       "example": true
     },
+    "pauseOk": {
+      "description": "May the nightly update suspend this module for a while to make room on a node that is too full — to patch a suspended module, or to move guests off a node it reboots (#891)? Only in the maintenance window (automaticReboot, or --allow-disruption), lowest pausePriority first; the update resumes it once every module is patched and the nodes are rebooted. A foundation module is never paused.",
+      "type": "boolean",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": false,
+      "example": true
+    },
+    "pausePriority": {
+      "description": "Among pauseOk modules, which the update suspends first when it needs room (#891): the lowest number first; equal numbers, the largest memory first.",
+      "type": "integer",
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "default": 50,
+      "example": 10
+    },
     "suspendedNoUpdate": {
       "description": "A suspended module the nightly update leaves alone: 'module-manager suspend --no-update' sets it, for a module stopped because it is broken, and 'resume' clears it. Without it a suspended module is patched in the update's closing pass (#890).",
       "type": "boolean",

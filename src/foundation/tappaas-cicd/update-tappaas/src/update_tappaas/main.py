@@ -1095,6 +1095,101 @@ def fits_to_resume(module: str) -> tuple[bool, str]:
     return True, ""
 
 
+# ── Room for a while (#891) ───────────────────────────────────────────
+# Twice the update needs memory for a while: to start a suspended module and
+# patch it, and to move a node's HA guests onto the others before the node
+# reboots. In the maintenance window only (disruption_window_open), it may
+# suspend modules whose owner set `pauseOk` — `health-manager capacity
+# --room-for/--drain` names which, lowest pausePriority first — and it resumes
+# them once every module is patched and the nodes are rebooted. Its own list
+# (PAUSE_LIST) is what it resumes: a module an operator suspended is never on it.
+# A run that dies leaves the list; the next run resumes them first.
+PAUSE_LIST = Path(os.environ.get("TAPPAAS_PAUSE_LIST", "/var/lib/tappaas/update-paused"))
+
+
+def paused_by_update() -> list[str]:
+    try:
+        v = json.loads(PAUSE_LIST.read_text())
+        return [m for m in v if isinstance(m, str)] if isinstance(v, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def _save_paused(mods: list[str]) -> None:
+    try:
+        if mods:
+            PAUSE_LIST.parent.mkdir(parents=True, exist_ok=True)
+            PAUSE_LIST.write_text(json.dumps(mods) + "\n")
+        else:
+            PAUSE_LIST.unlink(missing_ok=True)
+    except OSError as e:
+        log.error("  could not record the modules the update paused (%s): %s", PAUSE_LIST, e)
+
+
+def make_room(flag: str, target: str, window: bool) -> bool:
+    """Suspend the pauseOk modules health-manager names so `target` fits
+    (flag: --room-for <module> or --drain <node>). True when it fits now."""
+    cmd = os.environ.get("HEALTH_MANAGER_CMD", "/home/tappaas/bin/health-manager")
+    try:
+        r = subprocess.run([cmd, "capacity", "--memory-threshold", str(CAPACITY_THRESHOLD), flag, target, "--json"],
+                           text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
+        data = json.loads(r.stdout[r.stdout.index("{"):])
+    except (OSError, subprocess.SubprocessError, ValueError) as e:
+        log.warning("  room for %s could not be checked (%s)", target, e)
+        return False
+    if data.get("fits"):
+        return True
+    if not data.get("possible") or not data.get("pause"):
+        log.warning("  %s", data.get("detail", f"no room for {target}"))
+        return False
+    if not window:
+        log.warning("  %s — not paused: outside the maintenance window (automaticReboot, or --allow-disruption)",
+                    data.get("detail", ""))
+        return False
+    log.info("  %s", data.get("detail", ""))
+    paused = paused_by_update()
+    for mod in data["pause"]:
+        log.info("  pausing %s for room (pauseOk) — resumed after the reboots", mod)
+        if not _module_manager("suspend", mod):
+            log.error("  could not pause %s", mod)
+            return False
+        if mod not in paused:
+            paused.append(mod)
+            _save_paused(paused)
+    return True
+
+
+def resume_paused(reason: str) -> dict:
+    """Resume every module the update paused. Returns {"resumed", "not_resumed"};
+    one that does not start stays on the list for the next run."""
+    out: dict = {"resumed": [], "not_resumed": []}
+    left: list[str] = []
+    for mod in paused_by_update():
+        log.info("  resuming %s (%s)", mod, reason)
+        if _module_manager("resume", mod):
+            out["resumed"].append(mod)
+        else:
+            log.error("  %s did not resume — still paused; the next update tries again", mod)
+            out["not_resumed"].append(mod)
+            left.append(mod)
+    _save_paused(left)
+    return out
+
+
+def nodes_needing_reboot() -> list[str]:
+    """The nodes the reboot pass will reboot: its own plan, from --dry-run."""
+    script = reboot_cluster_script()
+    if script is None:
+        return []
+    try:
+        r = subprocess.run(["bash", str(script), "--dry-run"], text=True,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=600)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", r.stdout)
+    return re.findall(r"↻\s+(\S+?):.*reboot needed", plain)
+
+
 def recover_suspended_pass() -> None:
     try:
         module = SUSPENDED_PASS_MARKER.read_text().strip()
@@ -1111,7 +1206,7 @@ def recover_suspended_pass() -> None:
         pass
 
 
-def patch_suspended(modules: list[str], dep: dict) -> dict:
+def patch_suspended(modules: list[str], dep: dict, window: bool = False) -> dict:
     """Resume, update and suspend each module in turn. Returns
     {"patched": [...], "failed": [...], "not_patched": [{"module", "reason"}]}."""
     out: dict = {"patched": [], "failed": [], "not_patched": []}
@@ -1123,6 +1218,8 @@ def patch_suspended(modules: list[str], dep: dict) -> dict:
             out["not_patched"].append({"module": module, "reason": "a shared service is down"})
             continue
         ok, why = fits_to_resume(module)
+        if not ok and make_room("--room-for", module, window):
+            ok, why = fits_to_resume(module)
         if not ok:
             log.warning("  %s: not patched — %s", module, why)
             out["not_patched"].append({"module": module, "reason": why})
@@ -1491,6 +1588,9 @@ def main():
         for i, mod in enumerate(planned, 1):
             log.info("  %d. resume, update, suspend %s (when it fits on its node)", i, mod)
         log.info("Phase 3 - Node reboot pass (automaticReboot=%s):", automatic_reboot)
+        log.info("  where a node or a suspended module needs room, pauseOk modules are paused %s",
+                 "and resumed after the reboots" if disruption_window_open(automatic_reboot, scheduled, allow_disruption)
+                 else "— not in this run: outside the maintenance window")
         log.info("Phase 4 - Postgres collation reconciliation (#726)")
         reboot_pass(automatic_reboot, dry_run=True)
         log.info("To run these updates: site-manager update")
@@ -1579,9 +1679,15 @@ def main():
         os.environ.pop("TAPPAAS_HOLD_MEMORY", None)
 
     # A patch pass for suspended modules (#890) that died left a module running:
-    # suspend it again before anything else.
+    # suspend it again before anything else. Modules a run that died paused for
+    # room (#891) are resumed: that run never got to.
+    window = disruption_window_open(automatic_reboot, scheduled, allow_disruption)
     if not args.dry_run:
         recover_suspended_pass()
+        if paused_by_update():
+            log.warning("A previous update paused %s for room and did not resume them — resuming",
+                        ", ".join(paused_by_update()))
+            resume_paused("left by a previous run")
 
     # ADR-020 D8: a module that declares rebootOk may have a disruptive change
     # applied only when the window is open (disruption_window_open): the
@@ -1617,14 +1723,25 @@ def main():
     # longer stops it being patched. Before the reboots: every suspended guest is
     # stopped again while the nodes are drained.
     log.info("Phase 2.5: Patching suspended modules")
-    suspended_patch = patch_suspended(suspended_to_patch(discovered + deployed_foundation, guests), dep)
+    suspended_patch = patch_suspended(suspended_to_patch(discovered + deployed_foundation, guests), dep, window)
     failed_modules.extend(suspended_patch["failed"])
 
-    # Phase 3: controlled node reboot pass (issue #275)
+    # Phase 3: controlled node reboot pass (issue #275). A node whose HA guests
+    # do not fit on the others gets room first, from pauseOk modules (#891).
     log.info("Phase 3: Node reboot pass (automaticReboot=%s)", automatic_reboot)
+    if automatic_reboot and window:
+        for node in nodes_needing_reboot():
+            log.info("  room to move %s's HA guests for its reboot:", node)
+            make_room("--drain", node, window)
     reboot_ok = reboot_pass(automatic_reboot, dry_run=False)
     if not reboot_ok:
         log.error("FAILED: node reboot pass")
+
+    # Every module is patched and the nodes are rebooted: resume what the
+    # update paused for room (#891). Never a module an operator suspended.
+    paused_for_room = paused_by_update()
+    pause_result = resume_paused("every module patched, nodes rebooted") if paused_for_room else {"resumed": [], "not_resumed": []}
+    pause_result["paused"] = paused_for_room
 
     # Phase 4: settle Postgres collation versions (#726).
     # A nixpkgs release move changes glibc, and Postgres warns on every
@@ -1678,6 +1795,11 @@ def main():
                     "does not fit on their node:", len(memory_held))
         for h in memory_held:
             log.warning("  %s on %s: %s → %s", h["module"], h.get("node", "?"), _gib(h.get("from")), _gib(h.get("to")))
+    if pause_result["paused"]:
+        log.info("Paused for room and resumed: %s", ", ".join(pause_result["resumed"]) or "(none)")
+    if pause_result["not_resumed"]:
+        log.warning("Paused for room and NOT resumed (the next update tries again): %s",
+                    ", ".join(pause_result["not_resumed"]))
     if suspended_patch["not_patched"]:
         log.warning("%d suspended module(s) not patched:", len(suspended_patch["not_patched"]))
         for n in suspended_patch["not_patched"]:
@@ -1737,6 +1859,8 @@ def main():
         # The patch pass for suspended modules (#890): a failed update counts as
         # a failed module above; one that did not fit is recorded, not failed.
         "suspended_patch": suspended_patch,
+        # Paused for room in the maintenance window and resumed after (#891).
+        "paused_for_room": pause_result,
         "ok": (not failed_modules and not dep["down"] and reboot_ok
                and control_plane in ("refreshed", "skipped")),
     }

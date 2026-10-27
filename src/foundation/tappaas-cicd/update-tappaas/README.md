@@ -118,13 +118,32 @@ release asks for, so the next run tries again. Nothing is moved automatically.
 being patched. After the app modules, each suspended module is handled one at a
 time: if its guest fits on its node (`health-manager capacity --install`), it is
 resumed, updated (its tests included) and suspended again. One that does not fit
-is recorded as not patched; the health check warns when a suspended module has not
+is recorded as not patched — unless, in the maintenance window, pausing `pauseOk` modules
+on its node makes room (below); the health check warns when a suspended module has not
 been patched for 14 days. `suspend --no-update` keeps a module out, for one stopped
 because it is broken. A marker (`/var/lib/tappaas/update-suspended-pass`) names the
 module being patched; a run that dies mid-pass leaves it, and the next run suspends
 that module again first. `last-update-result.json` records the pass as
 `suspended_patch` (patched, failed, not_patched); a failed update counts as a failed
 module.
+
+### Pausing modules for room (#891)
+
+Twice the run needs memory for a while: to start a suspended module and patch it, and to
+move a node's HA guests onto the others before the node reboots (only HA guests move; the
+others restart with the node). When it is not there, and only in the maintenance window —
+the scheduled run with `automaticReboot`, or `site-manager update --allow-disruption` — the
+run suspends modules whose owner set `pauseOk: true`, lowest `pausePriority` first (default
+50; equal ones, the largest first), never a foundation module.
+`health-manager capacity --room-for <module>` and `--drain <node>` say which.
+
+What it paused is resumed once every module is patched and the nodes are rebooted, right
+after Phase 3. The run keeps its own list in `/var/lib/tappaas/update-paused`, so a module
+an operator suspended is never resumed by it; a run that dies leaves the list, and the next
+run resumes those first. `last-update-result.json` records `paused_for_room` (paused,
+resumed, not_resumed). Pausing never makes room for a module that grows — that room ends
+when the others resume — so growth is held instead (above). Mark a module pausable with
+`module-manager module modify <m> --set pauseOk=true [--set pausePriority=10]`.
 
 ### Phase 3: Node Reboot Pass
 

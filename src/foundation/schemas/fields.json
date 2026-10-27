@@ -44,6 +44,16 @@
       "apply": "none",
       "changeNote": "Written by 'module-manager suspend' and 'resume', which stop and start the guest with it; set by hand it would say a running guest is paused, or hide a stopped one from the update and the health check."
     },
+    "pauseOk": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Read by the nightly update when it needs room; writing it changes nothing on the guest."
+    },
+    "pausePriority": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "Read by the nightly update when it needs room; writing it changes nothing on the guest."
+    },
     "suspendedNoUpdate": {
       "class": "immutable",
       "apply": "none",

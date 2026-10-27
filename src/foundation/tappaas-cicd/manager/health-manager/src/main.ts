@@ -36,6 +36,7 @@ import { join } from "path";
 import { defaultConfigDir, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
 import { checkUpdateCapacity, guestTarget, runHealthGates } from "./checks";
+import { checkRoom } from "./room";
 import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
   sweepIsNewer, writeScan,
@@ -72,10 +73,12 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "capacity [--install <instance>] [--memory-threshold PCT] [--json] [--config-dir DIR]",
+      usage: "capacity [--install <instance> | --room-for <module> | --drain <node>] [--memory-threshold PCT] [--json] [--config-dir DIR]",
       details: "What each node commits once the update has converged every guest: a VM at its configured memory, a container at its highest use of the last week plus 25% (at least 512 MB, at most its limit). Growth that does not fit under the threshold is held: named, and the update keeps that module at its current memory; everything else goes ahead. A node already over that nothing grows, and growth that fits, warn. Exit 1 only when the module being installed would take its node to the threshold. The update sweep's and install-module's pre-flight.",
       options: [
         ["--json", "Print the result as JSON, with `held`: the modules whose growth does not fit (module, node, from, to in bytes)."],
+        ["--room-for <module>", "Instead: would starting this suspended module fit on its node, and which pauseOk modules there — lowest pausePriority first — would make it fit (#891). Exit 1 when even that does not."],
+        ["--drain <node>", "Instead: would this node's HA guests fit on the other nodes for its reboot, and which pauseOk modules would make them fit. Exit 1 when even that does not."],
         ["--install <instance>", "Count this deployed config's memory as new on its node (install-module, before the guest exists)."],
         ["--memory-threshold PCT", `Percent of a node's RAM the projected commitment must stay under (default ${DEFAULT_MEMORY_THRESHOLD}).`],
       ],
@@ -425,6 +428,19 @@ export function run(argv: string[], client: ClusterClient): number {
       case "validate":
         return cmdValidate(opts, client);
       case "capacity": {
+        // #891: room for one thing the update needs for a while — a suspended
+        // module started to be patched, or a node's HA guests moved for its reboot.
+        const rf = opts.rest.indexOf("--room-for");
+        const dr = opts.rest.indexOf("--drain");
+        if (rf >= 0 || dr >= 0) {
+          const arg = opts.rest[(rf >= 0 ? rf : dr) + 1];
+          if (!arg) die(`capacity: ${rf >= 0 ? "--room-for needs a module" : "--drain needs a node"}`);
+          const r = checkRoom(client, opts.configDir, DEFAULT_NODE, opts.memoryThreshold,
+            rf >= 0 ? { kind: "resume", module: arg } : { kind: "drain", node: arg });
+          if (opts.rest.includes("--json")) info(JSON.stringify(r, null, 2));
+          else (r.fits ? info : warn)(`${r.target}: ${r.detail}`);
+          return r.possible ? 0 : 1;
+        }
         const at = opts.rest.indexOf("--install");
         const adding = at >= 0 ? opts.rest[at + 1] : undefined;
         if (at >= 0 && !adding) die("capacity: --install needs an instance name");

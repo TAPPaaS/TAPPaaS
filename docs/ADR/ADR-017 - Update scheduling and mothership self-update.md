@@ -3,13 +3,13 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (2026-09-15) — v0.3; implementation in G0.3 (#471). D7 is decided but ships with the G0.1 migration runner. |
-| **Version** | 0.3 |
-| **Date** | 2026-09-16 |
+| **Version** | 0.6 |
+| **Date** | 2026-10-27 |
 | **Author** | Lars Rossen |
 | **Parent** | [ADR-009 Composition Meta-Model](<ADR-009 - Composition Meta-Model.md>) (`<module>:<service>` coordinates) |
 | **Refines** | [ADR-007d Site](<ADR-007d - Site.md>) (`site.json` as the site's single source of truth), [ADR-003 Dependency management](<ADR-003 - Dependency management in TAPPaaS.md>) (`dependsOn` ordering of the update loop) |
 | **Related** | **#471** (implementation reminder for this ADR), **#357** (update window / channel — settled by D8), **#447** (schedule editing and listing), **#588** (`site-manager update`), **#595** (Phase 0 control-plane refresh), **#533** (ownership repair `ExecStartPre`), **#653** (pull hold), **#651** (failure notice), **#635** / **#633** (`--force` semantics), **#150** (cron retired in favour of the systemd timer), **#467** (ambient `<nixpkgs>` — closed by `a65c6c61`), **#515** (wheel polkit rule); [ADR-020](<ADR-020 - Declared-Field Change Model (validate, drift, modify).md>) D8 owns the `--force` / `rebootOk` rule; [ADR-007e](<ADR-007e - Health.md>) v1.3 owns the notification target. **Owner:** `tappaas-cicd` (unit definitions, self-update), `site-manager` (schedule rendering, `update`) |
-| **Changelog** | **v0.5 (draft, 2026-10-04)** — D3 amended: the unit runs each step in the operator's console context — tappaas steps in a login shell, root steps through `sudo -n` — and drops its sandbox; three sweeps failed on context differences (#713, #742, #719); `tappaas-unit-run` covers what remains (#767). For the operator's review. **v0.4 (2026-09-26)** — D1 clarified: a *resume* of a sweep that a planned mothership reboot cut short is not the *catch-up* `Persistent=false` refuses, and is implemented as a marker in `config/` consumed at the next boot (#744). `Persistent` stays `false`. · v0.1 — initial draft: hoist the mothership self-update into the unit via `ExecStartPre=+`, render `OnCalendar` from `site.json`, delete the in-process schedule gate, deprecate `--force`, introduce `site-manager site update` (with progress/completeness reporting), restate `updateSchedule` as a named object in which `daily` carries no weekday. v0.2 — Erik Daniel's review on #471 (2026-08-19, 2026-09-01) and the operator's decisions of 2026-09-15, checked against `main`: D3 has three `ExecStartPre` lines (the #533 repair stays first), takes over Phase 0 (#595) and the hold-aware pull (#653), makes a failed pull or rebuild abort the run, and relies on the #651 notice; D1 pairs the gate deletion with `Persistent=false`; the operator path is the existing `site-manager update` (#588), which starts the unit and hands per-run options over in a one-shot request file; `update-tappaas --force` is deprecated and `site-manager update --force` adds `--ignore-test-failure` under ADR-020 D8's `rebootOk` rule; D6 targets `validate-site.sh`/`site-fields.json`, not the legacy validator; D7 keeps accepting the legacy triple and leaves the in-place rewrite to a G0.1 migration; new D8 settles #357; new *Bootstrap* section for the first activation; #467 recorded as closed by `a65c6c61`; counts and line references brought up to date. Accepted 2026-09-15 with two operator rulings: D7's object form and its rewrite are deferred to the G0.1 migration runner (this release keeps the triple); the disruption window opens only for the scheduled run or an operator run with `--force` (D8, ADR-020 D8). v0.3 (2026-09-16): D5 follows ADR-020 v0.10 — the fleet `--force` forwards `--force` (one meaning at every level), downtime is `--allow-disruption`, and `--ignore-test-failure` is retired. |
+| **Changelog** | **v0.6 (2026-10-27, operator decision on #890/#891)** — new **D9**: memory in the run. Growth that does not fit under 95% is held — the module keeps its current memory, nothing else waits; a container counts at its week of use; suspended modules are patched in a closing pass; and in the maintenance window the run may pause `pauseOk` modules for room it needs for a while, resuming them after the reboots. Nothing is moved for good by the run. **v0.5 (draft, 2026-10-04)** — D3 amended: the unit runs each step in the operator's console context — tappaas steps in a login shell, root steps through `sudo -n` — and drops its sandbox; three sweeps failed on context differences (#713, #742, #719); `tappaas-unit-run` covers what remains (#767). For the operator's review. **v0.4 (2026-09-26)** — D1 clarified: a *resume* of a sweep that a planned mothership reboot cut short is not the *catch-up* `Persistent=false` refuses, and is implemented as a marker in `config/` consumed at the next boot (#744). `Persistent` stays `false`. · v0.1 — initial draft: hoist the mothership self-update into the unit via `ExecStartPre=+`, render `OnCalendar` from `site.json`, delete the in-process schedule gate, deprecate `--force`, introduce `site-manager site update` (with progress/completeness reporting), restate `updateSchedule` as a named object in which `daily` carries no weekday. v0.2 — Erik Daniel's review on #471 (2026-08-19, 2026-09-01) and the operator's decisions of 2026-09-15, checked against `main`: D3 has three `ExecStartPre` lines (the #533 repair stays first), takes over Phase 0 (#595) and the hold-aware pull (#653), makes a failed pull or rebuild abort the run, and relies on the #651 notice; D1 pairs the gate deletion with `Persistent=false`; the operator path is the existing `site-manager update` (#588), which starts the unit and hands per-run options over in a one-shot request file; `update-tappaas --force` is deprecated and `site-manager update --force` adds `--ignore-test-failure` under ADR-020 D8's `rebootOk` rule; D6 targets `validate-site.sh`/`site-fields.json`, not the legacy validator; D7 keeps accepting the legacy triple and leaves the in-place rewrite to a G0.1 migration; new D8 settles #357; new *Bootstrap* section for the first activation; #467 recorded as closed by `a65c6c61`; counts and line references brought up to date. Accepted 2026-09-15 with two operator rulings: D7's object form and its rewrite are deferred to the G0.1 migration runner (this release keeps the triple); the disruption window opens only for the scheduled run or an operator run with `--force` (D8, ADR-020 D8). v0.3 (2026-09-16): D5 follows ADR-020 v0.10 — the fleet `--force` forwards `--force` (one meaning at every level), downtime is `--allow-disruption`, and `--ignore-test-failure` is retired. |
 
 ## Context
 
@@ -497,6 +497,45 @@ migration once the runner exists, and the triple is accepted until then. v0.1's 
   a plain `site-manager update` never disrupts a guest. ADR-020 D8 owns the rule.
 
 #357 closes against this ADR, design only.
+
+### D9 — memory: hold growth, patch suspended modules, pause for room (#890, #891)
+
+Decided by the operator on 2026-10-27. A site run close to its RAM must still be patched
+every night, and one tight node must not stop the others.
+
+- **The measure.** A node's memory is what its running guests commit, against 95% of its
+  physical RAM (`health-manager capacity`): a VM its configured memory — without
+  ballooning the host keeps every page it has touched — and a container its highest use
+  of the last week plus 25%, at least 512 MB and at most its limit (a container's limit
+  is a ceiling, not memory set aside). Not counted: night-time use, KSM, the guests'
+  zram, the ZFS ARC, host swap. They are margin, not capacity.
+- **Growth that does not fit is held.** When a release raises a module's memory and its
+  node cannot take it, the module is updated with its current memory and a warning;
+  everything else, on every node, goes ahead. Config keeps the size the release asks
+  for, so the next run tries again. Nothing is moved automatically — a lasting fix is
+  the operator's: lower a guest, move one, add RAM. `--force` applies the growth.
+  (A node already over the line that nothing grows is updated with a warning, #880.)
+- **Suspended modules are patched.** After the app modules, each suspended module is
+  resumed, updated and suspended again, one at a time, when its guest fits.
+  `suspend --no-update` keeps one out. A module that never fits is warned about after
+  14 days.
+- **Pause for room, for a while.** The run needs memory for a while at two moments: to
+  start a suspended module to patch it, and to move a node's HA guests onto the others
+  for its reboot. In the maintenance window — the scheduled run with `automaticReboot`,
+  or `--allow-disruption`, the window D8 and ADR-020 D8 define — it may suspend modules
+  whose owner set **`pauseOk`**, lowest **`pausePriority`** first (equal ones, the
+  largest first), never a foundation module. Their order: patch every module (the paused
+  ones were updated in the main pass), reboot the nodes, then resume what the run paused.
+  The run keeps its own list (`/var/lib/tappaas/update-paused`); a module an operator
+  suspended is never on it and never resumed by the run. A run that dies leaves the list,
+  and the next run resumes those first.
+- **Why pausing never makes room for growth.** Room made by pausing lasts only while the
+  others are paused; a module grown into it would take the node over the line again the
+  moment they resume. So growth is held, and pausing is only for needs that end within
+  the run.
+
+Ballooning as an opt-in (a planned minimum per module, counted instead of the full size)
+is #893.
 
 ## Bootstrap — the first activation
 

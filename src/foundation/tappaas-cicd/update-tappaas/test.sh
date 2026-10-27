@@ -604,6 +604,51 @@ open(f"{d}/mm.log", "w").close()
 m.SUSPENDED_PASS_MARKER.write_text("left\n")
 m.recover_suspended_pass()
 assert open(f"{d}/mm.log").read().strip() == "suspend left" and not m.SUSPENDED_PASS_MARKER.exists(), "a pass that died: suspended again"
+
+# #891: room for a while — pauseOk modules paused in the window, resumed after.
+m.PAUSE_LIST = Path(d) / "paused"
+open(f"{d}/mm.log", "w").close()
+stub(0, '{"fits": false, "possible": true, "pause": ["wiki", "ai"], "detail": "media fits once wiki, ai are paused"}')
+assert m.make_room("--room-for", "media", False) is False and not m.PAUSE_LIST.exists(), "outside the window nothing is paused"
+assert m.make_room("--room-for", "media", True) is True, "in the window: paused, room made"
+assert m.paused_by_update() == ["wiki", "ai"], f"the update's own list: {m.paused_by_update()}"
+assert open(f"{d}/mm.log").read().split() == ["suspend", "wiki", "suspend", "ai"], "suspended through module-manager"
+stub(0, '{"fits": true, "possible": true, "pause": [], "detail": "fits"}')
+assert m.make_room("--drain", "tappaas1", True) is True and m.paused_by_update() == ["wiki", "ai"], "fits: nothing more paused"
+stub(1, '{"fits": false, "possible": false, "pause": [], "detail": "does not fit even with every pauseOk module paused"}')
+assert m.make_room("--drain", "tappaas1", True) is False, "impossible: nothing paused, False"
+open(f"{d}/mm.log", "w").close()
+with open(mm, "w") as f:   # ai does not start again
+    f.write(f"#!/bin/sh\necho \"$*\" >> {d}/mm.log\n[ \"$1 $2\" = 'resume ai' ] && exit 1\nexit 0\n")
+rr = m.resume_paused("test")
+assert rr == {"resumed": ["wiki"], "not_resumed": ["ai"]}, f"resume: {rr}"
+assert m.paused_by_update() == ["ai"], "one that did not resume stays on the list for the next run"
+m.PAUSE_LIST.unlink()
+assert m.resume_paused("test") == {"resumed": [], "not_resumed": []} and not m.PAUSE_LIST.exists()
+
+# The patch pass makes room for a suspended module that does not fit.
+open(f"{d}/mm.log", "w").close()
+seq = iter(['{"status": "fail", "detail": "no room", "held": []}',
+            '{"fits": false, "possible": true, "pause": ["wiki"], "detail": "fits once wiki is paused"}',
+            '{"status": "pass", "held": []}'])
+def _hm(*a, **k):
+    class R: pass
+    r = R(); r.stdout = next(seq); r.returncode = 0
+    return r
+_run = m.subprocess.run
+m.subprocess.run = lambda args, **k: _hm() if "capacity" in args else _run(args, **k)
+m.update_module = lambda name: True
+r = m.patch_suspended(["media"], {"down": False}, True)
+m.subprocess.run = _run
+assert r["patched"] == ["media"] and m.paused_by_update() == ["wiki"], f"room made, then patched: {r} {m.paused_by_update()}"
+assert open(f"{d}/mm.log").read().split("\n")[:3] == ["suspend wiki", "resume media", "suspend media"], open(f"{d}/mm.log").read()
+m.PAUSE_LIST.unlink()
+
+# The nodes the reboot pass will reboot, from its own plan.
+rc = Path(d) / "reboot-cluster.sh"
+rc.write_text("#!/bin/sh\nprintf '\\033[33m[Info]\\033[m   \\033[33m↻\\033[m tappaas2: 6.8.12-1 running, 6.8.12-4 installed — reboot needed\\n'\nprintf '[Info]   ↻ tappaas3: a running, b installed — reboot needed\\n'\n")
+m.reboot_cluster_script = lambda: rc
+assert m.nodes_needing_reboot() == ["tappaas2", "tappaas3"], f"plan: {m.nodes_needing_reboot()}"
 m.update_module = _update
 
 # #874: does a key stick hold the backup keys as they are — asked on every run.

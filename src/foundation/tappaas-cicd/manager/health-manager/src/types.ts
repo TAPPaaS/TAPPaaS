@@ -25,6 +25,9 @@ export interface ConfigModule {
   suspended?: boolean; // paused by `module-manager suspend` (#428): stopped on purpose
   suspendedNoUpdate?: boolean; // `suspend --no-update`: out of the update's patch pass (#890)
   updateTime?: string; // when its last update finished, YYYYMMDD-HH:MM:SS
+  pauseOk?: boolean; // the update may suspend it for room in the maintenance window (#891)
+  pausePriority?: number; // lowest first (default 50)
+  stack?: string; // "foundation" is never paused
 }
 
 // ── `list vm` (no --diff): one row of the cluster overview ─────────────
@@ -128,6 +131,9 @@ export interface GuestMemory {
   // A container's highest memory use over the last 7 days (Proxmox rrddata,
   // MAX); 0 or absent: no history yet. Unused for a VM.
   peakMem?: number;
+  // An HA resource: the reboot pass moves it off its node (HA maintenance);
+  // any other guest restarts with the node.
+  ha?: boolean;
 }
 
 // ── AVX-512 use inside a guest (#827) ─────────────────────────────────

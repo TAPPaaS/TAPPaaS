@@ -152,6 +152,7 @@ export class CliClusterClient implements ClusterClient {
         usedMem: num(row.mem),
         residentMem: 0,
         measured: type === "lxc", // a container has no agent and needs none
+        ha: str(row.hastate) !== "",
       };
       cap.guests.push(g);
     }

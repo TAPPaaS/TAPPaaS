@@ -331,6 +331,15 @@ node, from, to) — the sweep passes them to the converge, which leaves their
 memory alone and reports the growth as held. A container whose limit is raised
 grows only by what it uses.
 
+Two more questions, for room the update needs only for a while (#891):
+`--room-for <module>` — would starting this suspended module fit on its node — and
+`--drain <node>` — would this node's HA guests fit on the other nodes for its reboot (the
+others counted together, as the HA manager spreads them). Each answers with `pause`: the
+`pauseOk` modules that would make it fit, lowest `pausePriority` first, equal ones largest
+first, never a foundation module and never a non-HA guest on the node being drained (it
+restarts with the node). Exit 1 when even pausing all of them would not do. The update
+pauses them only in its maintenance window.
+
 `install-module` runs it with `--install <instance>` before it creates the
 guest: the new module's memory lands on its node, and an install that would
 take the node to the threshold is refused (`--force` does not override it —

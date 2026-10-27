@@ -73,6 +73,9 @@ export function loadConfigModules(configDir: string, defaultNode: string): Confi
       suspended: raw.suspended === true,
       suspendedNoUpdate: raw.suspendedNoUpdate === true,
       updateTime: asString(raw.updateTime) || undefined,
+      pauseOk: raw.pauseOk === true,
+      pausePriority: Number.isFinite(Number(raw.pausePriority)) && raw.pausePriority !== undefined && raw.pausePriority !== null ? Number(raw.pausePriority) : 50,
+      stack: asString(raw.stack).toLowerCase(),
     });
   }
   return out;
