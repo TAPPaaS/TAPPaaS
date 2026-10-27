@@ -41,10 +41,11 @@ then continue with [Step 2](#step-2--bootstrap-minimal-tappaas-on-the-first-node
 ### Option A — preconfigured install media (recommended)
 
 Build a USB stick
-that installs Proxmox with **one question asked on the target itself** (the
-boot disk, chosen from the machine's real disks); everything else is
-answered at build time (email, locale, root password) with TAPPaaS defaults
-for the rest. The build runs on **your laptop** — no Proxmox needed and **no
+that installs Proxmox **unattended**: the boot disk is chosen on the target
+itself from its real disks — the smallest SSD or NVMe disk, or both when the
+smallest two are the same model and size (a mirrored ZFS boot pool) — and
+everything else is answered at build time (email, locale, root password) with
+TAPPaaS defaults for the rest. The build runs on **your laptop** — no Proxmox needed and **no
 repo checkout needed**: the script is self-contained (on Linux it fetches the
 Proxmox assistant automatically; **on macOS it re-runs itself in a Debian
 container, so Docker Desktop must be installed and running**).
@@ -78,16 +79,19 @@ dd if=proxmox-ve_9.2-1-tappaas-auto.iso of=/dev/<usb> bs=4M status=progress
 
 Boot the target from the stick with the NIC to your **upstream router**
 connected — network comes from **DHCP**, exactly like the PXE flow (the
-management addressing is applied later by the TAPPaaS install). Pick the
-boot disk when the console asks; the rest is hands-off and WIPES that
-disk. Pass `--disk <dev>` at build time for a zero-keystroke install.
+management addressing is applied later by the TAPPaaS install). The install
+is hands-off and WIPES the boot disk(s) it picks. To pick another, pass
+`--disk` at build time: a size (`--disk 500GB`), a model (`--disk "Samsung 990"`)
+or a serial; a second `--disk` mirrors it, `--disk ask` asks on the target's
+console — which it also does when the field matches no disk.
 ⚠ The stick embeds the root password — treat the media like a credential
 and rewrite it after use.
 
-> **Disk standard:** the PVE system goes on a **dedicated boot disk**
-> (ext4/LVM — the default). The `tankXY` data pools live on **other**
-> disks and are created later by the platform (Step 2, [1/5] /
-> `config-storage.sh`), never by the installer.
+> **Disk standard:** the PVE system goes on a **ZFS boot pool** (one disk, or a
+> mirrored pair), which also carries the guests until the node has a data pool
+> (ADR-037 D1). The `tankXY` data pools live on **other** disks and are created
+> later (Step 2, [1/5] / `config-storage.sh`, or `site-manager node storage add`),
+> never by the installer.
 
 ### Option B — stock ISO, manual screens
 
@@ -121,17 +125,14 @@ repack TAPPaaS uses for follow-on nodes (validated against the PVE 9.2 ISO).
 the **same wired L2 network** (no VLAN/managed-switch separation between them); the
 target set to **UEFI network boot**.
 
-**1. Build the preconfigured ISO** as in Option A, but **bake in the boot disk**
-(`--disk <dev>`) so the netboot install is fully hands-off (a console disk prompt
-over PXE is fiddly):
+**1. Build the preconfigured ISO** as in Option A — the install picks the boot
+disk on the target, so the netboot install is hands-off:
 
 ```bash
-./make-install-media.sh --iso proxmox-ve_9.2-1.iso \
-    --fqdn tappaas1.mgmt.internal --disk 25414A800205
-# → proxmox-ve_9.2-1-tappaas-auto.iso  (answer + boot disk embedded)
-# --disk takes the disk's SERIAL (lsblk -o NAME,SERIAL, from any Linux live
-# system on the target): a kernel name like nvme0n1 can name another disk when
-# the installer boots — NVMe names are not stable across boots.
+./make-install-media.sh --iso proxmox-ve_9.2-1.iso --fqdn tappaas1.mgmt.internal
+# → proxmox-ve_9.2-1-tappaas-auto.iso  (answer embedded)
+# --disk 500GB / --disk "Samsung 990" / --disk <serial> picks another disk; NOT a
+# kernel name like nvme0n1 — NVMe names are not stable across boots.
 ```
 
 **2. Stage the netboot assets** — extract the installer kernel + initrd and append
@@ -156,8 +157,8 @@ docker run --rm -v "$PWD:/work" -w /work debian:trixie bash -c '
 
 ```bash
 cd pxe
-curl -fSLO http://boot.ipxe.org/ipxe.efi        # UEFI targets (most machines)
-curl -fSLO http://boot.ipxe.org/undionly.kpxe   # legacy-BIOS targets (optional)
+curl -fSLO https://boot.ipxe.org/x86_64-efi/ipxe.efi   # UEFI targets (most machines)
+curl -fSLO https://boot.ipxe.org/undionly.kpxe        # legacy-BIOS targets (optional)
 MAC_IP=$(ipconfig getifaddr en0)                # your Mac's LAN interface → IP
 cat > boot.ipxe <<EOF
 #!ipxe
