@@ -92,5 +92,10 @@ blk="$(sed -n "/systemd.services.update-tappaas-schedule = {/,/^  };/p" "${NIX}"
 if grep -q 'ConditionPathExists = \[ "/home/tappaas/config/site.json"' <<<"${blk}"; then ck "the renderer waits for site.json" ok ok
 else ck "the renderer waits for site.json" ok missing; fi
 
+# …and config/ itself exists from the first switch: the units that name it in
+# ReadWritePaths fail their namespace setup without it.
+if grep -q '"d /home/tappaas/config ' "${NIX}"; then ck "tmpfiles makes config/" ok ok
+else ck "tmpfiles makes config/" ok missing; fi
+
 echo "── summary: ${pass} pass, ${fail} fail ──"
 [[ "${fail}" -eq 0 ]]

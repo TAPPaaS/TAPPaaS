@@ -689,6 +689,10 @@ in
     # check-ha-health.sh records when each HA service entered a transitional
     # state, so it can alert on duration rather than on the state alone (#146).
     "d /var/lib/tappaas 0750 tappaas users -"
+    # config/: most units name it in ReadWritePaths, and a missing directory
+    # fails their namespace setup — on a fresh mothership the first switch runs
+    # before install.sh writes anything there (lab2 bootstrap, 2026-10-27).
+    "d /home/tappaas/config 0755 tappaas users -"
     # The security scan's scanner databases (ADR-011): the unit's ReadWritePaths
     # names this directory, and a missing one fails the unit's namespace setup.
     "d /home/tappaas/.cache 0700 tappaas users -"
