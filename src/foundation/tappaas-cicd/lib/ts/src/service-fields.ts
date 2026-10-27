@@ -194,6 +194,10 @@ export interface FieldEntry {
   composite?: string;
   normalize?: Normalizer;
   sideEffects?: SideEffect[];
+  // A reporter key listing (comma-separated) the values the guest's node can
+  // take. A desired value not among them is a preference the create path fell
+  // back from (ADR-037 D1): config adopts the actual value instead of drifting.
+  adoptWhenAbsentFrom?: string;
   // When the module does NOT declare this field, is its module-fields.json
   // default DESIRED STATE, or merely an install-time seed? Default true.
   //

@@ -50,7 +50,7 @@ function readJson(p: string): Record<string, unknown> | null {
 // #567 a merged entry holds both, and `note` belongs to the DEFINITION.
 const CHANGE_KEYS = new Set([
   "class", "apply", "liveKey", "setFlag", "hook", "composite",
-  "normalize", "sideEffects", "changeNote", "inputs",
+  "normalize", "sideEffects", "changeNote", "inputs", "adoptWhenAbsentFrom",
 ]);
 
 function definitionOf(entry: Record<string, unknown>): Record<string, unknown> | null {

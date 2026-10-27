@@ -99,6 +99,7 @@
       "class": "manual",
       "apply": "none",
       "liveKey": "storage",
+      "adoptWhenAbsentFrom": "storagesOnNode",
       "changeNote": "As cluster:vm, and for a bind-mounted container this is not a move at all. The schema default 'tanka1' is what Create-TAPPaaS-LXC.sh builds on, so an undeclared container is in sync from install and the manual-class report is restored rather than suppressed (ADR-020 D9)."
     },
     "vmid": {

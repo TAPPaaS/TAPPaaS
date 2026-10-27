@@ -227,6 +227,13 @@ report_disk() {
     printf ''
 }
 report_disk_storage() { printf '%s' "${1%%:*}"; }
+# The storages active on the guest's node, comma-separated: what a storage field
+# that is a preference (ADR-037 D1) is checked against — `adoptWhenAbsentFrom`.
+# Empty when the node does not answer, which the reporter then leaves out.
+report_node_storages() {
+    ssh "${REPORT_SSH_OPTS[@]}" "root@${REPORT_NODE}.${REPORT_MGMT}.internal" \
+        "pvesm status --enabled 1 2>/dev/null | awk 'NR > 1 && \$3 == \"active\" {print \$1}' | paste -sd, -" 2>/dev/null || true
+}
 report_disk_size()    { sed -n 's/.*size=\([0-9]\+[GMTKgmtk]\?\).*/\1/p' <<< "$1"; }
 
 # Emit the object on the REAL stdout (fd 3).

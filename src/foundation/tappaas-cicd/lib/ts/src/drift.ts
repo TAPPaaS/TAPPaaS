@@ -456,6 +456,19 @@ export function computeDrift(
       }
     }
 
+    // Changed, and the desired value is one the guest's node cannot take: a
+    // preference the create path fell back from (ADR-037 D1 — a module's
+    // storage, on a node without that pool). The guest is where it had to be;
+    // config adopts it, as for a completed grow. Only when the reporter said
+    // what the node has: no list, no verdict.
+    if (entry.adoptWhenAbsentFrom && actualNorm !== "") {
+      const avail = (actual[entry.adoptWhenAbsentFrom] ?? "").split(",").map((x) => x.trim()).filter(Boolean);
+      if (avail.length > 0 && !avail.includes(desiredNorm)) {
+        record.adopt.push(df);
+        continue;
+      }
+    }
+
     // Changed, and the module never asked for it (#679). A desired value that
     // came from a SCHEMA DEFAULT, in a class the converge can never apply, is
     // not drift: it is a property of the guest the default does not describe,

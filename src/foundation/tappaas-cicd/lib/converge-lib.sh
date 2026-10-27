@@ -155,9 +155,15 @@ converge_apply() {
         [[ "${aactual}" =~ ^-?[0-9]+$ ]] && _vflag=--argjson
         if jq_module_write "${module}" '.[$f] = $v' \
                --arg f "${af}" "${_vflag}" v "${aactual}"; then
-            # A warning, not a debug line: this rewrites the operator's own
-            # config, and a deliberate smaller value lands here too (#531).
-            warn "  ${af} only grows: config asked for ${adesired}, the guest has ${aactual} — config adopted ${aactual}"
+            if [[ "${aclass}" == "grow-only" ]]; then
+                # A warning, not a debug line: this rewrites the operator's own
+                # config, and a deliberate smaller value lands here too (#531).
+                warn "  ${af} only grows: config asked for ${adesired}, the guest has ${aactual} — config adopted ${aactual}"
+            else
+                # A preference its node cannot take (ADR-037 D1): the guest is
+                # where the create path had to put it, and config now says so.
+                info "  ${af}: ${adesired} is not on this guest's node — it runs on ${aactual}, which config now records (a preference, ADR-037 D1)"
+            fi
             CONVERGE_APPLIED=$((CONVERGE_APPLIED + 1))
         else
             error "  ${af}: could not adopt ${aactual} into config"

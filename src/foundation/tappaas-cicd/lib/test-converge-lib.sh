@@ -335,6 +335,27 @@ EOF
     unset -f converge_pending_fields
 }
 
+# ── adoption: config moves to the guest, with the reason said ─────────
+# A grow-only field the guest outgrew warns (it rewrites the operator's
+# config); a storage its node does not have is a preference's fallback
+# (ADR-037 D1) and says so without a warning.
+{
+    reset
+    jq_module_write() { echo "WRITE $*" >> "${CMDLOG}"; }
+    cat > "${W}/drift.json" <<'EOF'
+{ "module": "demo", "service": "cluster:vm", "actual": {}, "units": [], "unreconciled": [], "inSync": [], "skipped": [],
+  "adopt": [ { "field": "storage", "class": "manual", "desired": "tanka1", "actual": "local-zfs" },
+             { "field": "diskSize", "class": "grow-only", "desired": "40G", "actual": "80G" } ] }
+EOF
+    run; rc=$?
+    check "adoptions converge cleanly" "${rc}" "0"
+    check "…both written into config" "$(grep -c '^WRITE demo' "${CMDLOG}")" "2"
+    contains "…a storage fallback is said as information" "${LOG}" "INFO:  storage: tanka1 is not on this guest's node — it runs on local-zfs"
+    contains "…a grow keeps its warning" "${LOG}" "WARN:  diskSize only grows"
+    check "…and the storage is no warning" "$(grep -c 'WARN:.*storage' <<<"${LOG}")" "0"
+    unset -f jq_module_write
+}
+
 echo ""
 echo "Results: ${pass} passed, ${fail} failed"
 [[ ${fail} -eq 0 ]]

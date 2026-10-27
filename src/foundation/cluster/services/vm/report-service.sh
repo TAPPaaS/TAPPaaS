@@ -141,7 +141,8 @@ report_emit \
       "net1.mac": $net1m, "net1.queues": $net1q,
       cloudInit: $cloudInit}
      + (if $hasOs then {os: $os} else {} end)
-     + (if $hasThin then {thinDisk: $thinDisk} else {} end)' \
+     + (if $hasThin then {thinDisk: $thinDisk} else {} end)
+     + (if $storages != "" then {storagesOnNode: $storages} else {} end)' \
     --arg vmid     "${REPORT_VMID}" \
     --arg node     "${REPORT_NODE}" \
     --arg status   "${REPORT_STATUS}" \
@@ -153,6 +154,7 @@ report_emit \
     --arg bios     "$(report_field_or 'bios' 'seabios')" \
     --arg ostype   "$(report_field 'ostype')" \
     --arg storage  "$(report_disk_storage "${disk_value}")" \
+    --arg storages "$(report_node_storages)" \
     --arg diskSize "$(report_disk_size "${disk_value}")" \
     --arg net0     "${net0}" \
     --arg net0b    "$(vmnet_parse "${net0}" bridge)" \

@@ -424,6 +424,31 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
   );
   check(hasChanges(lagging), "…but still counts as a change, so --check reports it");
 
+  // ── a storage the guest's node does not have (ADR-037 D1) ──
+  //
+  // A module's storage is a preference: on a node without tanka1 the create
+  // path builds on the boot pool. The bootstrap builds the firewall and the
+  // mothership before any config exists, so their config says tanka1 while the
+  // guest is on local-zfs — not a move anyone made, so config adopts it.
+  const onBoot = { ...actual, storage: "local-zfs", storagesOnNode: "local,local-zfs" };
+  const fellBack = computeDrift(resolveModule("nextcloud", cfg, null, SCHEMA), { manifest: VM_MANIFEST, actual: onBoot, zones: ZONES });
+  check(
+    fellBack.adopt.length === 1 && fellBack.adopt[0].field === "storage" && fellBack.adopt[0].actual === "local-zfs",
+    "storage its node does not have: the guest's storage is adopted (ADR-037 D1)",
+  );
+  check(fellBack.unreconciled.length === 0 && fellBack.units.length === 0, "…not reported as drift, nothing dispatched");
+  const realMove = computeDrift(resolveModule("nextcloud", cfg, null, SCHEMA), {
+    manifest: VM_MANIFEST, actual: { ...onBoot, storagesOnNode: "local,local-zfs,tanka1" }, zones: ZONES,
+  });
+  check(
+    realMove.unreconciled.length === 1 && realMove.unreconciled[0].field === "storage" && realMove.adopt.length === 0,
+    "a storage its node HAS while the guest is elsewhere: still drift, for the operator",
+  );
+  const unknownNode = computeDrift(resolveModule("nextcloud", cfg, null, SCHEMA), {
+    manifest: VM_MANIFEST, actual: { ...actual, storage: "local-zfs" }, zones: ZONES,
+  });
+  check(unknownNode.unreconciled.length === 1 && unknownNode.adopt.length === 0, "no node storage list reported: no adoption, the old verdict");
+
   // A shrink is only an adoption when actual genuinely EXCEEDS desired. Equal
   // sizes spelled differently must stay in sync, not adopt: 80G vs 81920M is
   // the same disk, and the size normalizer is what makes that true.

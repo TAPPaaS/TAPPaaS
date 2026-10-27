@@ -159,6 +159,10 @@
         "normalize": {
           "$ref": "#/$defs/normalizer"
         },
+        "adoptWhenAbsentFrom": {
+          "type": "string",
+          "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (ADR-037 D1: a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
+        },
         "sideEffects": {
           "type": "array",
           "items": {

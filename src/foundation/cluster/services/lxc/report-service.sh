@@ -81,7 +81,8 @@ report_emit \
       storage: $storage, diskSize: $diskSize,
       net0: $net0,
       "net0.bridge": $net0b, "net0.tag": $net0t, "net0.trunks": $net0k,
-      "net0.mac": $net0m}' \
+      "net0.mac": $net0m}
+     + (if $storages != "" then {storagesOnNode: $storages} else {} end)' \
     --arg vmid     "${REPORT_VMID}" \
     --arg node     "${REPORT_NODE}" \
     --arg status   "${REPORT_STATUS}" \
@@ -93,6 +94,7 @@ report_emit \
     --arg tags     "$(report_field 'tags')" \
     --arg ostype   "$(report_field 'ostype')" \
     --arg storage  "$(report_disk_storage "${disk_value}")" \
+    --arg storages "$(report_node_storages)" \
     --arg diskSize "$(report_disk_size "${disk_value}")" \
     --arg net0     "${net0}" \
     --arg net0b    "$(vmnet_parse "${net0}" bridge)" \
