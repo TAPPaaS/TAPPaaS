@@ -98,7 +98,9 @@ Common options: `--config-dir DIR`, `--json` (machine output for list/show),
 
 When a run fails, the site owner hears about it: `update-tappaas-failure.service` mails
 `site.json` `email` through a Proxmox node's mail system, naming the step that failed
-(#651; ADR-007e v1.3 owns the target). Every run is also followed by a security scan of
+(#651; ADR-007e v1.3 owns the target), with a support bundle of the run attached to forward
+to `site.json` `supportEmail`. The next clean run says so: "RESOLVED: update sweep OK
+again", as a reply to the failure. Every run is also followed by a security scan of
 what it left running (`health-manager report security`, ADR-011). `site show` prints the schedule as it is meant —
 no weekday under `daily`/`none` (#447) — and the TAPPaaS version the site runs, read from its
 checkout (`2.2`, or `2.2+14` between boundaries; ADR-028 D13), beside the one it was installed from.
@@ -159,7 +161,8 @@ fingerprints are written by the installer, from the ones published in the root
 `INSTALL.md`.
 
 `site modify` editable fields (scalar, site-wide): `--channel`, `--displayName`, `--owner`,
-`--email`, `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
+`--email`, `--supportEmail` (where an alert's support bundle is to be forwarded; one address,
+empty by default, `''` clears it), `--automaticReboot`, `--snapshotRetention`, `--backupTarget`,
 `--backupOffsite`, `--primaryLocation`, `--locale`, `--keyboard`, `--networkIsp`, `--networkPublicIp`, `--ipv6`, `--requireSigned`, `--dnssec`,
 `--brandingLogo`, `--brandingLogoDark`, `--dnsBlocklistsLists|Zones|Allow` (comma lists, `''`
 empties one), `--diskAutoGrowEnabled|Threshold|GrowPercent|MinGrowGB|PoolCeiling`, and the

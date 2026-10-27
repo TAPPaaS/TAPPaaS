@@ -101,7 +101,8 @@ On the installer screens:
      management domain `mgmt.internal`, **not** your public domain. (Your public
      domain is supplied with `--domain` in Step 2.)
 - **Email:** a **working** address you actually monitor — Proxmox sends
-     system/health notifications here, and TAPPaaS reuses it as the admin email.
+     system/health notifications here, and TAPPaaS reuses it as the admin email:
+     its alert mails (a failed update, a lost quorum, a silent host …) go here too.
 - **Management interface / IP / netmask / gateway / DNS:** must be **valid for
      your existing network** — use a free IP (the proxmox installer is not using DHCP), and the real gateway and DNS
      server of the network this node currently sits on (so it has internet for
@@ -608,6 +609,29 @@ If your first node had no `tankc` pool, the backup module installed as a **shim*
 — dependencies are satisfied but nothing is being backed up yet. Add the pool and
 run `module-manager module update backup`; it promotes in place. Check with
 `backup-manager placement`.
+
+**Check that alert mails reach you.** On the mothership:
+
+```bash
+tappaas-support-bundle.sh --test
+```
+
+It sends a test ALERT to the site's email, with a support bundle attached, and then its
+RESOLVED, which arrives as a reply in the same thread. If neither arrives, check the
+spam folder and the address (`site-manager site show`), then the mail log of the first
+node (`journalctl -t postfix/smtp` there). Run it again any time, for instance after
+changing the address.
+
+**Later, as a day-two step: a support address.** An alert that carries a support bundle
+says to forward the mail to the site's support address. It is empty after the install —
+the mail then says to forward it to your support contact. Set it when you have one:
+
+```bash
+site-manager site modify --supportEmail <address>
+```
+
+(or on the console's Site page). Which address that is will come with the TAPPaaS
+support plans; until then, leave it empty or use your own support contact.
 
 The rest of the foundation is complete. Everything from here is covered on the
 documentation site: **configure environments**, **add a satellite**, **add workloads**

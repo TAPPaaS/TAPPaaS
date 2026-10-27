@@ -15,6 +15,7 @@ VM that collects logs from every TAPPaaS VM, the Proxmox nodes and the OPNsense 
 | OPNsense firewall logs | firewall | syslog RFC 5424 → `tcp/1514` (`source=opnsense`) |
 | Proxmox node logs | nodes | rsyslog forwarder → `tcp/1515` (`source=proxmox`) |
 | CLI queries on the VM | mgmt admins (SSH) | `logcli` installed on the VM |
+| Alert mails from the logs | site owner (`site.json` `email`) | Grafana rules over every host's logs — quorum lost, fencing, a silent host, a stuck HA service, a lost network leg, failed replication or backup, an out-of-memory kill, disk errors, a changed root key or firewall certificate — mailed by the mothership's `tappaas-alert-receiver` as `ALERT: …`. One that clears is mailed again as `RESOLVED: …`, a reply to the alert. The ones about the cluster, backups and memory carry a support bundle (the cluster's state and the anonymized configuration) to forward to `site.json` `supportEmail`. A watchdog on the mothership mails when the alerting itself stops |
 
 ## What is not included
 

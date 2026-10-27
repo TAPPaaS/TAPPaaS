@@ -16,7 +16,10 @@ configures every other module in the system.
 | Run an update now | mothership CLI | `site-manager update [--dry-run] [--force] [--no-git-pull]` — starts the unit and follows it |
 | Pause one repository's pull | mothership CLI | `site-manager repository hold <name> --reason … [--until …]` / `release` (#653) |
 | Local changes a sync set aside | mothership CLI | `site-manager repository stash list` — then `show` / `restore` / `discard --force` (#681) |
-| Failed-update notice | automatic | mail to `site.json` `email` through a Proxmox node, naming the step that failed (#651) |
+| Failed-update notice | automatic | mail to `site.json` `email` through a Proxmox node, naming the step that failed, with a support bundle of the run attached; the next clean run sends "RESOLVED: update sweep OK again" as a reply to it |
+| Alert mails | automatic | every notice goes through `site-notify.sh`: the update notices, the log alerts (see [logging](../logging/README.md)), the security scan. An ALERT and its RESOLVED are one condition, so they thread in your mail client; `site-notify.sh --list-open` lists the open ones |
+| Support bundle | automatic, or mothership CLI | `tappaas-support-bundle.sh`: the logs of the event, the site's state and its configuration with personal data and secrets removed, attached to the alerts that need one. You decide whether to forward it — to `site.json` `supportEmail` (empty by default; `site-manager site modify --supportEmail <addr>`). Bundles and their decoding maps stay in `/var/lib/tappaas/support/` |
+| Test the alert mail | mothership CLI | `tappaas-support-bundle.sh --test [--to <addr>]` — a test ALERT with a bundle of the last update run, then its RESOLVED |
 | System configuration store | mothership | `/home/tappaas/config` (`site.json`, `zones.json`, environments, module jsons) |
 | Unattended node adding (PXE) | mothership CLI | `site-manager node add <name> --pxe` (netboot assets staged at install) |
 | Admin VPN termination on OPNsense | anywhere (WireGuard) | set up at install; enrol devices with `network-manager wgvpn` per [ADMIN-VPN.md](./manager/network-manager/ADMIN-VPN.md) |

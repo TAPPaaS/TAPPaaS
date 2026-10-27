@@ -27,6 +27,8 @@ src/foundation/tappaas-cicd/
 ├── scripts/update-tappaas-schedule.sh # renders update-tappaas.timer from site.json (D2)
 ├── scripts/notify-update-failure.sh   # mails the site owner when a run fails (#651)
 ├── scripts/site-notify.sh             # the mail itself: site.json email via a node's mailer (ADR-007e)
+├── scripts/tappaas-support-bundle.sh  # the support bundle an alert carries
+├── scripts/support-anonymize.py       # …its anonymizer: the config in, personal data and secrets out
 ├── tappaas-cicd.nix / flake.nix       # the cicd VM's NixOS configuration
 ├── manager/                           # domain-object lifecycle (CONFIG state)
 │   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components
@@ -281,6 +283,32 @@ The same reasoning keeps the console's own restart off a running job: `ui/instal
 linked a new build, leaves `restart-pending` in the console's state directory when a job runs
 (it is reached from `module update tappaas-cicd`, itself a job) and the console exits into
 the new build when its runner is idle.
+
+## Notices: one mailer, conditions, support bundles
+
+Every notice the site sends goes through `scripts/site-notify.sh` to `site.json` `email`,
+through a Proxmox node's own mail system (the mothership has no mailer; the nodes are
+tried in turn). The senders — the update notices, the log alert receiver and its
+watchdog, the security scan, the switch read — only say what to send.
+
+- **A condition is named.** A notice about something that can clear carries a key
+  (`update-sweep`, `grafana:<rule>:<host>`, `alert-watchdog`). Its first ALERT records the
+  key as open in `/var/lib/tappaas/alerts-open/`, with the mail's Message-ID. A RESOLVED is
+  sent only for an open key, as a reply to that mail, and closes it. So a RESOLVED never
+  arrives for an alert nobody saw, and a mail client shows the two together. Something
+  that only happened (an OOM kill, a lost quorum) has no key and no RESOLVED.
+- **A support bundle goes with the alerts a supporter could act on**: a failed or
+  degraded update, the log alerts about the cluster, backups and memory, log alerting
+  being down. Not disk errors (the mail names the disk), not security events (they stay
+  on the site), not the CVE scan, never a RESOLVED. `tappaas-support-bundle.sh` packs the
+  journal of the unit concerned, the module test logs of the window, the site's state
+  (versions, failed units, modules, disk, cluster, open alerts) and its configuration;
+  `support-anonymize.py` lets in only the files that describe how the site is built and
+  replaces personal data and secrets in them and in every log alike, keeping domains,
+  private addresses and module, environment and zone names — what a supporter debugs
+  with. The map from originals to replacements stays next to the bundle, never in it.
+- **Nothing goes to the maintainers by itself.** The mail tells the owner to forward it
+  to `site.json` `supportEmail`, which is empty until the owner sets one.
 
 ## Preferred language
 
