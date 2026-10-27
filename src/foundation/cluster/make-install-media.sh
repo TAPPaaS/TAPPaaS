@@ -118,10 +118,10 @@ iso_check() {
   fi
   want="$(printf '%s' "$want" | tr '[:upper:]' '[:lower:]')"; want="${want#sha256:}"
   [[ "$want" =~ ^[0-9a-f]{64}$ ]] || die "not a SHA-256 hash: ${want}"
-  info "Checking ${name} against its published SHA-256..."
+  debug "checking ${name} against its published SHA-256"
   have="$(media_sha256 "$iso")"
   [[ "$have" == "$want" ]] || die "${name} does not match its published SHA-256 (expected ${want}, got ${have}) — download it again."
-  info "ISO verified: ${name}"
+  info "  ${GN:-}✓${CL:-} ${name} matches its published SHA-256"
 }
 
 # paia_fetch <dir> — download the newest proxmox-auto-install-assistant .deb into
@@ -162,7 +162,7 @@ paia_fetch() {
     media_fetch "${PVE_REPO_BASE}/${file}" "${dir}/paia.deb" || die "assistant .deb download failed."
     [[ "$(media_sha256 "${dir}/paia.deb")" == "$want" ]] \
       || { rm -f "${dir}/paia.deb"; die "the assistant .deb (${ver}) does not match the SHA-256 in the signed Packages index."; }
-    info "proxmox-auto-install-assistant ${ver} verified (${codename})"
+    info "  ${GN:-}✓${CL:-} proxmox-auto-install-assistant ${ver} (${codename}), signature checked"
     return 0
   done
   die "could not locate proxmox-auto-install-assistant in the Proxmox repo — install it manually."
@@ -186,13 +186,18 @@ if ! command -v proxmox-auto-install-assistant >/dev/null 2>&1; then
       # 'proxmox-release-trixie.gpg' key to pin with 'signed-by', so an apt
       # install of the assistant fails. The direct .deb fetch checks the
       # repository's signature itself (paia_fetch), with gpgv.
-      exec docker run --rm -it --platform linux/amd64 -v "$PWD:/work" -w /work debian:trixie bash -c "
-        apt-get update -qq >/dev/null &&
-        apt-get install -y -qq wget ca-certificates zstd cpio xorriso gpgv >/dev/null &&
+      # apt's own chatter (and debconf's, without a terminal frontend) is shown
+      # only when it fails.
+      exec docker run --rm -it --platform linux/amd64 -e DEBIAN_FRONTEND=noninteractive -e TAPPAAS_MEDIA_CONTAINER=1 \
+        -v "$PWD:/work" -w /work debian:trixie bash -c "
+        { apt-get update -qq && apt-get install -y -qq wget ca-certificates zstd cpio xorriso gpgv; } >/tmp/apt.log 2>&1 \
+          || { cat /tmp/apt.log; echo 'installing the build tools in the container failed' >&2; exit 1; }
         exec ./$(basename "$0") $(printf '%q ' "${ORIG_ARGS[@]}")"
       ;;
     Linux)
-      info "assistant not found — fetching the .deb from the Proxmox repo (no install needed)..."
+      # In the macOS container this is the expected path, said once above.
+      if [[ -n "${TAPPAAS_MEDIA_CONTAINER:-}" ]]; then debug "fetching the assistant .deb"
+      else info "assistant not found — fetching the .deb from the Proxmox repo (no install needed)..."; fi
       _PAIA_DIR="$(mktemp -d)"
       paia_fetch "${_PAIA_DIR}"
       if command -v dpkg-deb >/dev/null 2>&1; then
@@ -313,16 +318,20 @@ ANSWER="${WORK}/answer.toml"
   fi
 } > "$ANSWER"
 
-info "Validating the answer file (assistant catches schema drift here)..."
-proxmox-auto-install-assistant validate-answer "$ANSWER" \
-  || die "Answer file failed validation — see above (PVE version schema mismatch?)."
+# The assistant's own progress lines are shown only when it fails.
+if ! _out="$(proxmox-auto-install-assistant validate-answer "$ANSWER" 2>&1)"; then
+  echo "$_out" >&2
+  die "Answer file failed validation — see above (PVE version schema mismatch?)."
+fi
+info "  ${GN}✓${CL} answer file valid"
 
 # ── Prepare the ISO (answer embedded — no network needed at install) ──
 [[ -n "$OUT" ]] || OUT="${ISO%.iso}-tappaas-auto.iso"
-info "Preparing ISO: ${OUT}"
-proxmox-auto-install-assistant prepare-iso "$ISO" \
-  --fetch-from iso --answer-file "$ANSWER" --output "$OUT" \
-  || die "prepare-iso failed."
+if ! _out="$(proxmox-auto-install-assistant prepare-iso "$ISO" --fetch-from iso --answer-file "$ANSWER" --output "$OUT" 2>&1)"; then
+  echo "$_out" >&2
+  die "prepare-iso failed — see above."
+fi
+info "  ${GN}✓${CL} answer embedded in ${OUT}"
 
 # ── The boot disk on the target: inject the matcher and prompt into the initrd ──
 # Same mechanism as the PXE flow (node-provisioner assets.py): the kernel
@@ -334,7 +343,7 @@ if [[ "$ASK_DISK" -eq 1 ]]; then
   for _tool in xorriso cpio; do
     command -v "$_tool" >/dev/null 2>&1 || die "$_tool is required for the ask-at-install disk prompt (apt/brew install $_tool) — or pass --disk <dev> to bake the disk in."
   done
-  info "Injecting the boot-disk matcher and console prompt into the installer initrd..."
+  debug "injecting the boot-disk matcher and console prompt into the installer initrd"
   AW="$(mktemp -d)"
   xorriso -osirrox on -indev "$OUT" -extract /boot/initrd.img "${AW}/initrd.img" >/dev/null 2>&1 \
     || die "cannot extract boot/initrd.img from the prepared ISO."
@@ -531,13 +540,15 @@ ASKBLOCK
     || die "ISO reseal (rebuild) failed."
   mv "${OUT}.tmp.iso" "$OUT"
   rm -rf "$_tree" "$AW"
-  info "boot-disk matcher and console prompt injected."
+  info "  ${GN}✓${CL} boot-disk matcher injected (the disk is picked on the target)"
 fi
 
-info "${GN}✓${CL} Done. Write it to USB:  dd if='${OUT}' of=/dev/<usb> bs=4M status=progress"
+info "${GN}✓ ${OUT} is ready.${CL} Install with it from:"
+info "    a USB stick:   dd if='${OUT}' of=/dev/<usb> bs=4M status=progress"
+info "    the network:   INSTALL.md, Step 1 Option C (netboot from this machine)"
 if [[ "$ASK_DISK" -eq 1 ]]; then
-  info "The install picks the boot disk on the target (its console asks only when nothing matches), then runs unattended and WIPES it."
+  info "  The install picks the boot disk on the target (its console asks only when nothing matches), then runs unattended and WIPES it."
 else
-  info "The install runs UNATTENDED and WIPES ${DISK} on the target machine."
+  info "  The install runs UNATTENDED and WIPES ${DISK} on the target machine."
 fi
-warn "The ISO embeds the root password — treat the media like a credential."
+warn "The ISO embeds the root password — treat the media like a credential, and delete it after the install."
