@@ -75,7 +75,9 @@ let
   # `query` is the log query to paste into Explore; the mail carries it.
   # `headline`, when given, is how the mail's subject names the rule
   # ("ALERT: Out of Memory Kill on tappaas3" rather than "ALERT: OomKill on …").
-  alertRule = { uid, title, kind, expr, window, summary, query, headline ? null }: {
+  # `bundle`: the receiver attaches a support bundle (#883) — the cluster's
+  # state and the site's anonymized configuration — when the rule fires.
+  alertRule = { uid, title, kind, expr, window, summary, query, headline ? null, bundle ? false }: {
     inherit uid title;
     condition = "C";
     data = [
@@ -95,26 +97,26 @@ let
     noDataState = "OK";
     execErrState = "Error";
     for = "0s";
-    labels = { inherit kind; };
+    labels = { inherit kind; } // lib.optionalAttrs bundle { bundle = "true"; };
     annotations = { inherit summary query; } // lib.optionalAttrs (headline != null) { inherit headline; };
   };
   # Proxmox nodes arrive by syslog (source=proxmox); every VM by its journal.
   pve = ''{source="proxmox"}'';
   alertRules = [
     (alertRule {
-      uid = "tappaas-quorum-lost"; title = "QuorumLost"; kind = "event"; window = 300;
+      uid = "tappaas-quorum-lost"; title = "QuorumLost"; kind = "event"; window = 300; bundle = true;
       expr = ''sum by (host) (count_over_time(${pve} |~ "non-primary component|node lost quorum" [5m]))'';
       summary = "A Proxmox node lost cluster quorum. HA guests on it stop; repeated, the cluster resets itself.";
       query = ''${pve} |~ "QUORUM|quorum|corosync"'';
     })
     (alertRule {
-      uid = "tappaas-ha-fencing"; title = "HaFencing"; kind = "event"; window = 300;
+      uid = "tappaas-ha-fencing"; title = "HaFencing"; kind = "event"; window = 300; bundle = true;
       expr = ''sum by (host) (count_over_time(${pve} |~ "client watchdog expired|watchdog did not stop|=> 'fence'" [5m]))'';
       summary = "HA fencing: a node's watchdog expired or a node is being fenced (it resets).";
       query = ''${pve} |~ "watchdog|fence"'';
     })
     (alertRule {
-      uid = "tappaas-host-silent"; title = "HostSilent"; kind = "state"; window = 4500;
+      uid = "tappaas-host-silent"; title = "HostSilent"; kind = "state"; window = 4500; bundle = true;
       # Hosts that logged in the hour before and not in the last 15 minutes: no
       # list to keep, so a new VM is covered at once; a deleted one alerts once
       # and clears after the hour. It is the rule the others depend on — a host
@@ -124,13 +126,13 @@ let
       query = ''{host="<host>"}'';
     })
     (alertRule {
-      uid = "tappaas-backup-failed"; title = "BackupFailed"; kind = "event"; window = 300;
+      uid = "tappaas-backup-failed"; title = "BackupFailed"; kind = "event"; window = 300; bundle = true;
       expr = ''sum by (host) (count_over_time(${pve} |~ "ERROR: Backup of VM [0-9]+ failed|Backup job finished with errors|ERROR: job errors" [5m]))'';
       summary = "A VM backup failed.";
       query = ''${pve} |~ "vzdump|Backup"'';
     })
     (alertRule {
-      uid = "tappaas-oom-kill"; title = "OomKill"; kind = "event"; window = 300;
+      uid = "tappaas-oom-kill"; title = "OomKill"; kind = "event"; window = 300; bundle = true;
       headline = "Out of Memory Kill";
       # Anchored: Loki and Grafana log every rule's query text on this VM, and
       # this VM's journal is searched too — unanchored, the rule matched its own
@@ -155,7 +157,7 @@ let
       query = ''${pve} |= "tappaas-rootkeys"'';
     })
     (alertRule {
-      uid = "tappaas-replication-failed"; title = "ReplicationFailed"; kind = "state"; window = 3600;
+      uid = "tappaas-replication-failed"; title = "ReplicationFailed"; kind = "state"; window = 3600; bundle = true;
       # A condition, not an event: replication runs every 15 minutes, so a job
       # that keeps failing stays one alert (repeated every 4 h), and its resolve
       # — an hour without the error — is mailed. The line PVE logs, seen on
@@ -170,7 +172,7 @@ let
       query = ''${pve} |~ "replication job"'';
     })
     (alertRule {
-      uid = "tappaas-ha-stuck"; title = "HaStuck"; kind = "state"; window = 600;
+      uid = "tappaas-ha-stuck"; title = "HaStuck"; kind = "state"; window = 600; bundle = true;
       # The mothership's check-ha-health (every 5 minutes) logs this line while
       # an HA service stays in a transitional state past 10 minutes, or a node
       # stays in HA maintenance past 30 — a rolling reboot that died with the
@@ -192,7 +194,7 @@ let
       query = ''{host="tappaas-cicd", unit="check-firewall-cert.service"} |= "tappaas-firewall-cert"'';
     })
     (alertRule {
-      uid = "tappaas-lan-leg-down"; title = "LanLegDown"; kind = "event"; window = 300;
+      uid = "tappaas-lan-leg-down"; title = "LanLegDown"; kind = "event"; window = 300; bundle = true;
       headline = "lan uplink lost a leg";
       # A node's lan bridge on a bond (#40) keeps running when one leg goes: that
       # is the point, and also why nothing else would tell. The kernel's bonding

@@ -115,6 +115,11 @@
       "type": "string",
       "changeClass": "in-place"
     },
+    "supportEmail": {
+      "description": "Where the site's operator sends a support bundle (#883): an alert that carries one tells them to forward it here. One address. Unset: the alert still carries the bundle and says to forward it to the site's support contact.",
+      "type": "string",
+      "changeClass": "in-place"
+    },
     "version": {
       "description": "The TAPPaaS release this site was installed from, written once by create-site.sh. Not the version it runs: that is read from the checkout (git describe; site-manager site show, ADR-028 D13).",
       "type": "string",

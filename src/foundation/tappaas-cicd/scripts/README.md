@@ -530,17 +530,71 @@ Output → journald → Alloy → Loki.
 
 The site notification target: a notice goes to `site.json` `email` through a Proxmox
 node's own mail system — the cicd has no mailer. Nodes are tried in order until one
-accepts. Used by `notify-update-failure.sh` (a failed sweep, #651) and
-`health-manager scan security --notify` (ADR-011).
+accepts. Every site notice goes through it: `notify-update-failure.sh` (a failed sweep,
+#651), the log alerts (`tappaas-alert-receiver.py`, `tappaas-alert-watchdog.sh`, #126),
+`health-manager scan security --notify` (ADR-011) and the switch read.
 
 ```bash
 echo "body" | site-notify.sh --subject "what happened" [--what "failure notice"] \
-    [--breadcrumb ~/config/update-tappaas.failures] [--dry-run]
+    [--breadcrumb ~/config/update-tappaas.failures] [--to addr] [--attach bundle.tar.gz] \
+    [--key <condition> [--resolve]] [--dry-run]
+site-notify.sh --list-open
 ```
 
 The subject becomes `[TAPPaaS <site domain>] <subject>`; the body gets a `Site: … — host …`
-line in front. No `email` in `site.json`: nothing is sent, exit 0. Tests:
-`test/test-notify-update-failure.sh`.
+line in front. No `email` in `site.json`: nothing is sent, exit 0.
+
+- `--to` sends to one address instead of `site.json` `email` (a test, a forward).
+- `--attach` makes it a multipart mail with the file attached (a support bundle, below);
+  the body then says to forward it to `site.json` `supportEmail`
+  (`site-manager site modify --supportEmail <addr>`). Over 5 MB it is not attached and
+  the body says where it is.
+- `--key` names the condition the notice is about (#883): `update-sweep`,
+  `grafana:<rule>:<host>`, `alert-watchdog`. The first ALERT for a key records it as open
+  in `/var/lib/tappaas/alerts-open/`; `--resolve` sends only while the key is open — as a
+  reply to the ALERT, so the two thread in a mail client — and closes it. `--list-open`
+  prints what is open.
+
+Tests: `test/test-notify-update-failure.sh`.
+
+---
+
+### tappaas-support-bundle.sh — the package an alert carries (#883)
+
+Packs what the maintainers need to look at a problem into
+`/var/lib/tappaas/support/tappaas-support-<site>-<time>.tar.gz` (mode 0600, the newest 20
+kept): the journal of the unit that went wrong, the module test logs of the window,
+the site's state (versions, failed units, modules, disk, the cluster from a node, open
+alerts) and the configuration, anonymized by `support-anonymize.py`:
+
+- **in:** the files that say how the site is built — site, network, zones, cluster,
+  storage, backup, control plane, switches, the environments and every module's own JSON.
+  **Never:** people and identities, VPN and backup peers, provisioning records, firewall
+  state, the SBOM, `*.orig`/`*.bak*`.
+- **replaced, in the config and every log alike:** secrets (fields named like one, and
+  `password=…` in logs) → `REDACTED`; the owner's and users' names, the peers' names →
+  `person-N`; addresses, cities, coordinates → `place-N`; e-mail addresses →
+  `user-N@<their domain>`; public IPs → `203.0.113.N` / `2001:db8::N`.
+- **kept:** domains, private addresses, MACs, module, environment and zone names.
+- The map (original → replacement) stays next to the bundle, mode 0600, so the operator
+  can decode a supporter's question. It is never in the bundle. `manifest.json` in the
+  bundle says why it was made and counts what was replaced.
+
+Which notices carry one: a failed, degraded or stopped update sweep; the log alerts
+labelled `bundle` (QuorumLost, HaFencing, HostSilent, HaStuck, LanLegDown,
+ReplicationFailed, BackupFailed, OomKill); "log alerting is down". Not DiskErrors, the
+security events (RootKeyChanged, FirewallCertChanged, repository signatures), the CVE
+scan, the switch read, or any RESOLVED. Nothing is sent to the maintainers: the owner
+forwards the mail.
+
+```bash
+tappaas-support-bundle.sh --reason "why" [--unit update-tappaas.service] [--since T [--until T]]
+tappaas-support-bundle.sh --test [--to addr]   # a test ALERT with a bundle of the last sweep, then its RESOLVED
+```
+
+`--test` proves the whole path on a good day — the node's mailer, the attachment, the
+threading — and gives a real anonymized bundle to look at. Tests:
+`test/test-support-bundle.sh`.
 
 ---
 

@@ -274,10 +274,12 @@ in
       ExecStart = "/run/current-system/sw/bin/bash -l -c update-tappaas";
       # Exit 3: the sweep completed, but app modules failed. Not a broken run,
       # so not a unit failure — and not silent either: ExecStopPost mails and
-      # records it, as OnFailure does for a broken one. ($$: the variable is
-      # bash's to read, not systemd's to expand.)
+      # records it, as OnFailure does for a broken one. Exit 0 after a failure
+      # notice: the RESOLVED (#883; it sends nothing unless one is open and a
+      # clean sweep has run since). ($$: the variable is bash's to read, not
+      # systemd's to expand.)
       SuccessExitStatus = [ 3 ];
-      ExecStopPost = "-/run/current-system/sw/bin/bash -l -c '[ \"$$EXIT_STATUS\" != 3 ] || exec notify-update-failure.sh --degraded'";
+      ExecStopPost = "-/run/current-system/sw/bin/bash -l -c 'case \"$$EXIT_STATUS\" in 3) exec notify-update-failure.sh --degraded ;; 0) exec notify-update-failure.sh --resolved ;; esac'";
       # Per-run state (the claimed request, the prepared/rebuilt markers);
       # removed when the unit stops, so nothing leaks into the next run. The root
       # steps find it at /run/update-tappaas (sudo resets RUNTIME_DIRECTORY).
@@ -318,7 +320,9 @@ in
           + ":/run/current-system/sw/bin")
       ];
       ProtectSystem = "strict";
-      ReadWritePaths = [ "/home/tappaas/config" ];
+      # /var/lib/tappaas: the open condition (alerts-open) and the support
+      # bundle the notice carries (support/, #883).
+      ReadWritePaths = [ "/home/tappaas/config" "/var/lib/tappaas" ];
     };
   };
 

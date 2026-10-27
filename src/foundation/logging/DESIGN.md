@@ -254,7 +254,14 @@ in `config/alerts.log` on the mothership.
 | `Heartbeat` | heartbeat | logs arriving at all — never mailed, see below |
 
 - **event** — something happened. It "resolves" only because its window moved on,
-  so a resolve is not mailed. **state** — something is so; its resolve is mailed.
+  so a resolve is not mailed. **state** — something is so; its resolve is mailed, as a
+  reply to the alert (the condition `grafana:<rule>:<host>`, #883), and only if that
+  alert was mailed.
+- A rule declared with `bundle = true` — QuorumLost, HaFencing, HostSilent, BackupFailed,
+  OomKill, ReplicationFailed, HaStuck, LanLegDown — carries a support bundle: the
+  cluster's state and the site's anonymized configuration from half an hour before it
+  fired (`tappaas-support-bundle.sh`, see the tappaas-cicd scripts README). The mail
+  says to forward it to `site.json` `supportEmail`.
 - Grafana groups per rule and host and repeats a firing alert every 4 h (DiskErrors
   every 24 h). Rules match `{source="proxmox"}` where they can: this VM's own journal
   carries Loki's and Grafana's logged query texts, which an unanchored all-hosts rule

@@ -19,26 +19,42 @@ most); this only turns one webhook into one mail. Two kinds of rule, from the
           written to the heartbeat file, and tappaas-alert-watchdog.sh — a timer
           on this host, independent of the logging VM — mails when it stops.
 
+A state alert is one condition from its ALERT to its RESOLVED (#883): its key,
+grafana:<alertname>:<host> (Grafana groups by those two), tells site-notify.sh
+to send the RESOLVED as a reply to the ALERT, and only while one is open.
+
+A rule labelled bundle="true" gets a support bundle attached
+(tappaas-support-bundle.sh: the cluster's state and the anonymized config since
+half an hour before it fired). Building one takes a while, longer than Grafana
+waits for a webhook, so that alert is acknowledged at once and mailed from a
+worker thread, which retries the mail itself; without a bundle the reply waits
+for the mail, and a 502 makes Grafana retry.
+
 Every request is authenticated with a bearer token both sides read from a file
 (the receiver's, and Grafana's copy that logging/update.sh delivers). Every
 notice, sent or not, is a line in the breadcrumb file.
 
 Usage: tappaas-alert-receiver.py [--listen ADDR:PORT] [--token-file F]
-                                 [--notify CMD] [--breadcrumb F]
+                                 [--notify CMD] [--bundle CMD] [--breadcrumb F]
        tappaas-alert-receiver.py --render < webhook.json   (print the mail; tests)
 """
 
 import argparse
 import hmac
 import json
+import re
 import subprocess
 import sys
+import threading
+import time
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 DEFAULTS = {
     "listen": "0.0.0.0:9095",
     "token_file": "/etc/secrets/tappaas-alert-token",
     "notify": "/home/tappaas/bin/site-notify.sh",
+    "bundle": "/home/tappaas/bin/tappaas-support-bundle.sh",
     "breadcrumb": "/home/tappaas/config/alerts.log",
     "heartbeat_file": "/var/lib/tappaas/alert-heartbeat",
 }
@@ -47,7 +63,7 @@ MAX_BODY = 1 << 20  # a Grafana notification is a few KB; refuse anything absurd
 
 # Labels every alert carries; the rest are the series' own (a replication job,
 # a unit…) and are what tells one alert from the next, so the mail names them.
-_PLAIN_LABELS = {"alertname", "host", "kind", "grafana_folder"}
+_PLAIN_LABELS = {"alertname", "host", "kind", "grafana_folder", "bundle"}
 
 
 def extra_labels(labels):
@@ -108,13 +124,68 @@ def render(payload):
     return subject, "\n".join(lines) + "\n"
 
 
-def notify(args, subject, body):
+def meta(payload):
+    """What goes with the mail: its key (state rules), whether it resolves, and
+    whether it carries a bundle — with the time to start the bundle from."""
+    alerts = [a for a in (payload.get("alerts") or []) if not is_heartbeat(a)]
+    first = (alerts[0].get("labels") or {}) if alerts else {}
+    common = payload.get("commonLabels") or {}
+    labels = {**first, **common}
+    resolved = payload.get("status") == "resolved"
+    key = None
+    if labels.get("kind") == "state":
+        hosts = sorted({(a.get("labels") or {}).get("host", "") for a in alerts} - {""})
+        key = re.sub(r"[^A-Za-z0-9_.:@-]", "-", f"grafana:{labels.get('alertname', 'alert')}:{','.join(hosts) or 'site'}")[:128]
+    since = None
+    if labels.get("bundle") == "true" and not resolved:
+        starts = [a.get("startsAt", "") for a in alerts if a.get("startsAt")]
+        try:
+            t = datetime.fromisoformat(min(starts).replace("Z", "+00:00"))
+        except ValueError:
+            t = datetime.now(timezone.utc)
+        since = (t.astimezone(timezone.utc) - timedelta(minutes=30)).strftime("%Y-%m-%d %H:%M:%S UTC")
+    return {"key": key, "resolve": resolved and key is not None, "bundle_since": since}
+
+
+def make_bundle(args, subject, since):
+    """A support bundle's path, or None (the mail then goes without one)."""
+    try:
+        r = subprocess.run([args.bundle, "--reason", subject, "--since", since],
+                           text=True, capture_output=True, timeout=600)
+        path = r.stdout.strip().splitlines()[-1] if r.returncode == 0 and r.stdout.strip() else ""
+        if not path:
+            print(f"bundle NOT made: {r.stderr.strip()[-300:]}", flush=True)
+        return path or None
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"bundle NOT made: {e}", flush=True)
+        return None
+
+
+def notify(args, subject, body, key=None, resolve=False, attach=None):
     cmd = [args.notify, "--subject", subject, "--what", "alert", "--breadcrumb", args.breadcrumb]
+    if key:
+        cmd += ["--key", key] + (["--resolve"] if resolve else [])
+    if attach:
+        cmd += ["--attach", attach]
     try:
         r = subprocess.run(cmd, input=body, text=True, capture_output=True, timeout=120)
         return r.returncode == 0, (r.stdout + r.stderr).strip()
     except (OSError, subprocess.TimeoutExpired) as e:
         return False, str(e)
+
+
+def send_with_bundle(args, mail, m, tries=3, pause=60):
+    subject, body = mail
+    path = make_bundle(args, subject, m["bundle_since"])
+    for i in range(tries):
+        ok, out = notify(args, subject, body, key=m["key"], attach=path)
+        print(f"{'sent' if ok else 'NOT sent'}: {subject}" + (" (with bundle)" if path else "")
+              + (f" — {out}" if out and not ok else ""), flush=True)
+        if ok:
+            return True
+        if i + 1 < tries:
+            time.sleep(pause)
+    return False
 
 
 def make_handler(args):
@@ -168,7 +239,12 @@ def make_handler(args):
             if mail is None:
                 self.reply(200, "nothing to send")
                 return
-            ok, out = notify(args, *mail)
+            m = meta(payload)
+            if m["bundle_since"]:
+                threading.Thread(target=send_with_bundle, args=(args, mail, m), daemon=True).start()
+                self.reply(200, "queued")
+                return
+            ok, out = notify(args, *mail, key=m["key"], resolve=m["resolve"])
             print(f"{'sent' if ok else 'NOT sent'}: {mail[0]}" + (f" — {out}" if out and not ok else ""),
                   flush=True)
             # 5xx makes Grafana retry a notice that did not go out.
@@ -185,6 +261,7 @@ def main():
     p.add_argument("--listen", default=DEFAULTS["listen"])
     p.add_argument("--token-file", default=DEFAULTS["token_file"])
     p.add_argument("--notify", default=DEFAULTS["notify"])
+    p.add_argument("--bundle", default=DEFAULTS["bundle"])
     p.add_argument("--breadcrumb", default=DEFAULTS["breadcrumb"])
     p.add_argument("--heartbeat-file", default=DEFAULTS["heartbeat_file"])
     p.add_argument("--render", action="store_true", help="read one webhook on stdin, print the mail")

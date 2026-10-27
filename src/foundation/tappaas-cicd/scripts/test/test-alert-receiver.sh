@@ -24,7 +24,8 @@ trap '[[ -n "${PID}" ]] && kill "${PID}" 2>/dev/null; rm -rf "${TMP}"' EXIT INT 
 printf 'sekret\n' > "${TMP}/token"
 cat > "${TMP}/notify" <<EOF
 #!/usr/bin/env bash
-# fake site-notify.sh: record the subject and the body; fail when told to
+# fake site-notify.sh: record the subject, the body and every argument; fail when told to
+printf '%s\n' "\$*" >> "${TMP}/args"
 while [[ \$# -gt 0 ]]; do case "\$1" in --subject) S="\$2"; shift 2 ;; *) shift ;; esac; done
 printf '%s\n' "\${S}" >> "${TMP}/subjects"
 cat >> "${TMP}/bodies"
@@ -32,10 +33,17 @@ cat >> "${TMP}/bodies"
 exit 0
 EOF
 chmod +x "${TMP}/notify"
+cat > "${TMP}/bundle" <<EOF
+#!/usr/bin/env bash
+# fake tappaas-support-bundle.sh: record the arguments, print a path
+printf '%s\n' "\$*" >> "${TMP}/bundle-args"
+echo "${TMP}/b.tar.gz"
+EOF
+chmod +x "${TMP}/bundle"
 
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
 python3 "${R}" --listen "127.0.0.1:${PORT}" --token-file "${TMP}/token" \
-    --notify "${TMP}/notify" --breadcrumb "${TMP}/crumbs" --heartbeat-file "${TMP}/heartbeat" > "${TMP}/log" 2>&1 &
+    --notify "${TMP}/notify" --bundle "${TMP}/bundle" --breadcrumb "${TMP}/crumbs" --heartbeat-file "${TMP}/heartbeat" > "${TMP}/log" 2>&1 &
 PID=$!
 for _ in $(seq 1 50); do curl -s "http://127.0.0.1:${PORT}/" >/dev/null 2>&1 && break; sleep 0.1; done
 
@@ -91,6 +99,22 @@ ck "a series label names WHICH one in the subject (replication job)" "Subject: A
 ck "…and in the body; grafana's own labels stay out" "replication_job: 110-0" "$(python3 "${R}" --render <<<"${rep}" | grep -E '^(replication_job|grafana_folder|__alert)' | paste -sd' ' -)"
 ck "a rule's headline names it in the subject, after ALERT:" "Subject: ALERT: Out of Memory Kill on openwebui" \
    "$(wh firing event OomKill openwebui | sed 's/"query":/"headline":"Out of Memory Kill","query":/' | python3 "${R}" --render | head -1)"
+
+# #883: one condition from ALERT to RESOLVED, and the support bundle
+: > "${TMP}/args"
+post rotated "$(wh firing state HostSilent tappaas3)" >/dev/null
+ck "a state alert names its condition" "yes" "$(grep -q -- '--key grafana:HostSilent:tappaas3$' "${TMP}/args" && echo yes || echo no)"
+post rotated "$(wh resolved state HostSilent tappaas3)" >/dev/null
+ck "…and its resolve closes it" "yes" "$(grep -q -- '--key grafana:HostSilent:tappaas3 --resolve' "${TMP}/args" && echo yes || echo no)"
+post rotated "$(wh firing event QuorumLost tappaas1)" >/dev/null
+ck "an event has no condition to close" "no" "$(tail -1 "${TMP}/args" | grep -q -- --key && echo yes || echo no)"
+ck "…and no bundle without the label" "no" "$([[ -s "${TMP}/bundle-args" ]] && echo yes || echo no)"
+bw="$(wh firing event QuorumLost tappaas2 | sed 's/"kind":"event"/"kind":"event","bundle":"true"/')"
+ck "a bundle alert is acknowledged at once" "200" "$(post rotated "${bw}")"
+for _ in $(seq 1 50); do grep -q 'QuorumLost on tappaas2' "${TMP}/args" 2>/dev/null && break; sleep 0.1; done
+ck "…the bundle starts half an hour before it fired" "yes" "$(grep -q -- '--since 2026-10-04 17:30:00 UTC' "${TMP}/bundle-args" && echo yes || echo no)"
+ck "…and the mail carries it" "yes" "$(grep 'QuorumLost on tappaas2' "${TMP}/args" | grep -q -- "--attach ${TMP}/b.tar.gz" && echo yes || echo no)"
+ck "…and its subject does not show the bundle label" "ALERT: QuorumLost on tappaas2" "$(tail -1 "${TMP}/subjects")"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

@@ -98,6 +98,7 @@ export function loadSite(siteFile: string): Site {
     displayName: asString(raw.displayName),
     owner: asString(raw.owner),
     email: typeof raw.email === "string" ? raw.email : undefined,
+    supportEmail: typeof raw.supportEmail === "string" ? raw.supportEmail : undefined,
     version: typeof raw.version === "string" ? raw.version : undefined,
     locations,
     primaryLocation: primary,

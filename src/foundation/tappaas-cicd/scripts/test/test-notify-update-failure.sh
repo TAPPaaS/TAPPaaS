@@ -26,8 +26,17 @@ case "${cmd}" in
 esac
 FAKE
 chmod +x "${d}/fake-ssh"
+# The support bundle (#883) is its own suite (test-support-bundle.sh): here a
+# fake writes a small file, or nothing when FAKE_NO_BUNDLE is set.
+cat > "${d}/fake-bundle" <<'FAKE'
+#!/usr/bin/env bash
+[[ -n "${FAKE_NO_BUNDLE:-}" ]] && exit 1
+f="${FAKE_BUNDLE_DIR}/tappaas-support-test.tar.gz"; echo "bundle bytes" > "${f}"; echo "${f}"
+FAKE
+chmod +x "${d}/fake-bundle"
 export TAPPAAS_CONFIG_DIR="${d}/config" TAPPAAS_NOTIFY_SSH="${d}/fake-ssh" \
-       FAKE_LOG="${d}/ssh.log" FAKE_MAIL="${d}/mail.txt" TAPPAAS_NOTIFY_NODES="tappaas1 tappaas2"
+       FAKE_LOG="${d}/ssh.log" FAKE_MAIL="${d}/mail.txt" TAPPAAS_NOTIFY_NODES="tappaas1 tappaas2" \
+       TAPPAAS_ALERT_STATE="${d}/open" TAPPAAS_SUPPORT_BUNDLE="${d}/fake-bundle" FAKE_BUNDLE_DIR="${d}"
 site() { printf '{"name":"rossen","email":"%s"}\n' "$1" > "${d}/config/site.json"; }
 run() { : > "${FAKE_LOG}"; rm -f "${FAKE_MAIL}"; MONITOR_SERVICE_RESULT=exit-code MONITOR_EXIT_STATUS=1 bash "${N}" "$@" >"${d}/out" 2>&1; }
 
@@ -122,6 +131,44 @@ site ""; run; rc=$?
 [[ ${rc} -eq 0 && ! -s "${FAKE_LOG}" ]] && ok "no email: nothing sent, exit 0" || bad "no email: rc=${rc}"
 site 'a@b.org\nBcc: x@y.org'; run; rc=$?
 [[ ${rc} -eq 1 && ! -s "${FAKE_LOG}" ]] && ok "an address with a header in it is refused" || bad "header injection: rc=${rc}"
+
+# 6. one condition from failure to RESOLVED, with its bundle (#883)
+rm -rf "${d}/open"
+printf '{"name":"rossen","email":"owner@example.org","supportEmail":"help@tappaas.example"}\n' > "${d}/config/site.json"
+echo '{"ok": false, "failed": 1, "failed_modules": ["network"]}' > "${d}/config/last-update-result.json"
+touch -d '-1 minute' "${d}/config/last-update-result.json"
+run
+[[ -f "${d}/open/update-sweep" ]] && ok "a failure notice opens update-sweep" || bad "no open state: $(ls "${d}/open" 2>&1)"
+alert_id="$(jq -r .message_id "${d}/open/update-sweep" 2>/dev/null)"
+grep -q "^Message-ID: ${alert_id}$" "${FAKE_MAIL}" && ok "…and the mail carries the Message-ID it recorded" || bad "Message-ID: ${alert_id}"
+grep -q '^Content-Type: multipart/mixed' "${FAKE_MAIL}" && grep -q 'filename="tappaas-support-test.tar.gz"' "${FAKE_MAIL}" \
+    && ok "the notice carries the support bundle as an attachment" || bad "no attachment: $(grep -i content- "${FAKE_MAIL}")"
+grep -q "$(printf 'bundle bytes\n' | base64)" "${FAKE_MAIL}" && ok "…base64-encoded" || bad "attachment body"
+grep -q 'attachment to help@tappaas.example' "${FAKE_MAIL}" && ok "…and says to forward it to site.json supportEmail" || bad "forward line"
+
+: > "${FAKE_LOG}"; rm -f "${FAKE_MAIL}"
+bash "${N}" --resolved >"${d}/out" 2>&1
+[[ ! -e "${FAKE_MAIL}" && -f "${d}/open/update-sweep" ]] && ok "--resolved: no sweep since the failure, nothing sent" || bad "resolved too early: $(cat "${d}/out")"
+
+echo '{"ok": false, "failed": 2}' > "${d}/config/last-update-result.json"
+bash "${N}" --resolved >"${d}/out" 2>&1
+[[ ! -e "${FAKE_MAIL}" ]] && ok "--resolved: a sweep that failed again clears nothing" || bad "resolved a failed sweep"
+
+echo '{"ok": true, "failed": 0, "succeeded": 30, "total": 30, "end_time": "2026-10-27 03:03:29"}' > "${d}/config/last-update-result.json"
+bash "${N}" --resolved >"${d}/out" 2>&1
+grep -q '^Subject: \[TAPPaaS .*\] RESOLVED: update sweep OK again' "${FAKE_MAIL}" && ok "a clean sweep sends the RESOLVED" || bad "no RESOLVED: $(cat "${d}/out")"
+grep -q "^In-Reply-To: ${alert_id}$" "${FAKE_MAIL}" && grep -q "^References: ${alert_id}$" "${FAKE_MAIL}" \
+    && ok "…as a reply to the failure notice" || bad "threading: $(grep -iE '^(In-Reply-To|References):' "${FAKE_MAIL}")"
+! grep -q multipart "${FAKE_MAIL}" && ok "…with no bundle" || bad "RESOLVED carries a bundle"
+[[ ! -e "${d}/open/update-sweep" ]] && ok "…and closes the condition" || bad "still open"
+
+rm -f "${FAKE_MAIL}"
+bash "${N}" --resolved >"${d}/out" 2>&1
+[[ ! -e "${FAKE_MAIL}" ]] && ok "the next clean sweep sends nothing" || bad "a second RESOLVED"
+
+FAKE_NO_BUNDLE=1 run
+grep -q '^Content-Type: text/plain' "${FAKE_MAIL}" && grep -q 'update sweep FAILED' "${FAKE_MAIL}" \
+    && ok "no bundle could be made: the notice goes without one" || bad "bundle failure stopped the notice"
 
 echo "── summary: ${pass} pass, ${fail} fail ──"
 [[ "${fail}" -eq 0 ]]

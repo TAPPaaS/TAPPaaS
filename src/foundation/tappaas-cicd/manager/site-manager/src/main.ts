@@ -68,6 +68,7 @@ export const HELP: HelpSpec = {
         ["--displayName <s>", "display name"],
         ["--owner <org>", "owning organization"],
         ["--email <addr>", "admin email"],
+        ["--supportEmail <addr>", "where an alert's support bundle is to be forwarded (#883); \"\" clears it"],
         ["--automaticReboot true|false", "allow update reboots"],
         ["--ipv6 true|false", "the site supports IPv6: OPNsense's 'Allow IPv6', applied by the next network update (default false)"],
         ["--requireSigned true|false", "refuse to update a staging/production repository that signs no releases (ADR-033 D9; default false). A repository that lists signing keys is verified either way; one that declares no channels (no channels.json) is unstable, and moves unverified with a warning."],
@@ -436,6 +437,7 @@ function cmdSite(o: Opts): void {
     info(`${lbl("Site")}${site.name}${site.displayName && site.displayName !== site.name ? ` (${site.displayName})` : ""}`);
     info(`${lbl("Owner")}${site.owner || "(unset)"}`);
     info(`${lbl("Email")}${site.email || "(unset)"}`);
+    info(`${lbl("Support email")}${site.supportEmail || "(unset)"}`);
     // The code's version, read live from the checkout (ADR-028 D13). site.json's
     // `version` is the release the site was installed from, written once.
     const tp = repos.find((r) => r.name === "TAPPaaS")?.path ?? "/home/tappaas/TAPPaaS";
@@ -630,6 +632,17 @@ function cmdSite(o: Opts): void {
     setStr("--displayName", ["displayName"]);
     setStr("--owner", ["owner"]);
     setStr("--email", ["email"]);
+    // #883: one address — site-notify.sh puts it into a mail body as the
+    // place to forward a support bundle. "" clears it.
+    const sup = o.flags.get("--supportEmail");
+    if (sup !== undefined && sup !== "" && !/^[^@\s<>,;"()]+@[^@\s<>,;"()]+$/.test(sup)) {
+      no("--supportEmail must be one plain address (name@domain)");
+    }
+    if (sup === "") {
+      delete (raw as Record<string, unknown>).supportEmail;
+      changes.push("supportEmail=(cleared)");
+      changed++;
+    } else setStr("--supportEmail", ["supportEmail"]);
     setBool("--automaticReboot", ["automaticReboot"]);
     setBool("--ipv6", ["ipv6"]);
     setBool("--requireSigned", ["requireSigned"]);

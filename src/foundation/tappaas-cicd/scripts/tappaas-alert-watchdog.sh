@@ -14,6 +14,9 @@
 #                               once a day while it lasts
 #   fresh again                 "RESOLVED: log alerting is back"
 #
+# The two are one condition, key alert-watchdog (#883): the RESOLVED replies to
+# the ALERT. The first ALERT carries a support bundle with the receiver's journal.
+#
 # A heartbeat file that does not exist yet (a fresh install, a new mothership)
 # is created now: the first heartbeat then has MAX_AGE to arrive before this
 # says anything. A notice that does not go out is retried on the next run.
@@ -24,6 +27,7 @@
 #   TAPPAAS_ALERT_MAX_AGE     seconds before stale (default 7200: the heartbeat repeats hourly)
 #   TAPPAAS_ALERT_REPEAT      seconds between repeat notices while down (default 86400)
 #   TAPPAAS_NOTIFY_CMD        the mailer (default /home/tappaas/bin/site-notify.sh)
+#   TAPPAAS_BUNDLE_CMD        the support bundle (default /home/tappaas/bin/tappaas-support-bundle.sh)
 #   TAPPAAS_NOW               the time, in epoch seconds
 #
 # Exit: 0 nothing to do or notice sent · 1 a notice did not go out
@@ -34,6 +38,7 @@ STATE="${TAPPAAS_ALERT_WATCHDOG_STATE:-/var/lib/tappaas/alert-watchdog.state}"
 MAX_AGE="${TAPPAAS_ALERT_MAX_AGE:-7200}"
 REPEAT="${TAPPAAS_ALERT_REPEAT:-86400}"
 NOTIFY="${TAPPAAS_NOTIFY_CMD:-/home/tappaas/bin/site-notify.sh}"
+BUNDLE="${TAPPAAS_BUNDLE_CMD:-/home/tappaas/bin/tappaas-support-bundle.sh}"
 BREADCRUMB="${TAPPAAS_ALERT_BREADCRUMB:-/home/tappaas/config/alerts.log}"
 NOW="${TAPPAAS_NOW:-$(date +%s)}"
 
@@ -51,8 +56,9 @@ when="$(date -d "@${last}" '+%Y-%m-%d %H:%M %Z' 2>/dev/null || date -r "${last}"
 down_since=""; last_mail=""
 [[ -f "${STATE}" ]] && read -r down_since last_mail < "${STATE}"
 
-notice() {  # notice <subject> — body on stdin
-    "${NOTIFY}" --subject "$1" --what "alert-watchdog" --breadcrumb "${BREADCRUMB}"
+notice() {  # notice <subject> [site-notify options…] — body on stdin
+    local subject="$1"; shift
+    "${NOTIFY}" --subject "${subject}" --what "alert-watchdog" --breadcrumb "${BREADCRUMB}" --key alert-watchdog "$@"
 }
 
 if (( age > MAX_AGE )); then
@@ -60,7 +66,15 @@ if (( age > MAX_AGE )); then
         echo "alert-watchdog: still no heartbeat (last ${when}); notified already"
         exit 0
     fi
-    if notice "ALERT: log alerting is down — no heartbeat since ${when}" <<EOF
+    # The first notice carries the receiver's journal since before the last heartbeat.
+    attach=()
+    if [[ -z "${down_since}" ]]; then
+        b="$("${BUNDLE}" --reason "log alerting is down (no heartbeat since ${when})" \
+              --unit tappaas-alert-receiver.service --since "$(date -d "@$(( last - 3600 ))" '+%Y-%m-%d %H:%M:%S' 2>/dev/null)" \
+              2>/dev/null | tail -n 1)"
+        [[ -f "${b}" ]] && attach=(--attach "${b}")
+    fi
+    if notice "ALERT: log alerting is down — no heartbeat since ${when}" ${attach[@]+"${attach[@]}"} <<EOF
 The logging module's alert rules have not reported in for $(( age / 60 )) minutes
 (the last heartbeat was ${when}). Until they do, NOTHING in the logs raises an
 alert: quorum loss, fencing, disk errors, failed backups, silent hosts.
@@ -84,7 +98,7 @@ EOF
 fi
 
 if [[ -n "${down_since}" ]]; then
-    if notice "RESOLVED: log alerting is back — heartbeat ${when}" <<EOF
+    if notice "RESOLVED: log alerting is back — heartbeat ${when}" --resolve <<EOF
 The logging module's alert rules are reporting again (heartbeat ${when}),
 after $(( (NOW - down_since) / 60 )) minutes without. Log conditions raise alerts again.
 

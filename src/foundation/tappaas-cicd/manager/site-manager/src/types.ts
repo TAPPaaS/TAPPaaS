@@ -53,6 +53,8 @@ export interface Site {
   displayName: string;
   owner: string;
   email?: string;
+  // #883: where an alert's support bundle is to be forwarded.
+  supportEmail?: string;
   version?: string;
   // ADR-036 D1: the site's places by name, and the one it is at (its
   // timezone is the site's); locale and keyboard are site-wide.
@@ -96,6 +98,7 @@ export type SiteModifiableField =
   | "displayName"
   | "owner"
   | "email"
+  | "supportEmail"
   | "automaticReboot"
   | "ipv6"
   | "requireSigned"

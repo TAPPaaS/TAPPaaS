@@ -315,7 +315,7 @@ export const FLAGS: Partial<Record<FieldKind, Partial<Record<FormMode, Record<st
   role: { add: { displayName: "--displayName", description: "--description" }, modify: { displayName: "--displayName", description: "--description" } },
   site: {
     modify: {
-      displayName: "--displayName", owner: "--owner", email: "--email", channel: "--channel", automaticReboot: "--automaticReboot", ipv6: "--ipv6", requireSigned: "--requireSigned",
+      displayName: "--displayName", owner: "--owner", email: "--email", supportEmail: "--supportEmail", channel: "--channel", automaticReboot: "--automaticReboot", ipv6: "--ipv6", requireSigned: "--requireSigned",
       snapshotRetention: "--snapshotRetention", "backup.target": "--backupTarget", "backup.offsite": "--backupOffsite", "backup.defaultSchedule": "--backupDefaultSchedule",
       "backup.defaultRetention": "--backupDefaultRetention", primaryLocation: "--primaryLocation", locale: "--locale", keyboard: "--keyboard", "branding.logo": "--brandingLogo", "branding.logoDark": "--brandingLogoDark", "network.isp": "--networkIsp", "network.publicIp": "--networkPublicIp",
       dnssec: "--dnssec", "dnsBlocklists.lists": "--dnsBlocklistsLists", "dnsBlocklists.zones": "--dnsBlocklistsZones", "dnsBlocklists.allow": "--dnsBlocklistsAllow",
