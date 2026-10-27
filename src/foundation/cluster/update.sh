@@ -19,6 +19,11 @@
 # Arguments:
 #   module-name   (optional) Passed by update-module.sh, not used by this script
 #
+# Environment:
+#   CLUSTER_UPDATE_NODES  (optional) the nodes the per-node steps run on, space or
+#                         comma separated — node add brings a new node to the
+#                         baseline with it. Cluster-wide steps run as always.
+#
 
 set -euo pipefail
 
@@ -41,6 +46,12 @@ debug "Discovering Proxmox cluster nodes..."
 NODES=$(ssh -o StrictHostKeyChecking=no root@"$NODE1_FQDN" \
     "pvesh get /cluster/resources --type node --output-format json | jq --raw-output '.[].node'")
 debug "Found nodes: $(echo "$NODES" | tr '\n' ' ')"
+ALL_NODES="${NODES}"   # Step 8 decides membership: it always sees every node
+if [[ -n "${CLUSTER_UPDATE_NODES:-}" ]]; then
+    NODES="$(grep -Fx -f <(tr ', ' '\n\n' <<< "${CLUSTER_UPDATE_NODES}" | grep -vx '') <<< "${ALL_NODES}" || true)"
+    [[ -n "${NODES}" ]] || die "CLUSTER_UPDATE_NODES='${CLUSTER_UPDATE_NODES}' names no cluster node"
+    debug "Limited to: $(echo "$NODES" | tr '\n' ' ')"
+fi
 
 # Step 1: Run apt update && apt dist-upgrade on all Proxmox nodes
 debug "Step 1: Updating Proxmox node packages"
@@ -479,7 +490,7 @@ retire_node_placeholders() {
 
 debug "Step 8: Retiring unused node DNS placeholders"
 # shellcheck disable=SC2086
-retire_node_placeholders "${MGMTVLAN}" ${NODES}
+retire_node_placeholders "${MGMTVLAN}" ${ALL_NODES}
 
 # Step 9: what each node's CPU offers a guest, and which live moves are safe
 # (#827). Re-read every update: a CPU can be swapped or a node added. The page

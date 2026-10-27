@@ -571,11 +571,41 @@ function joinAndCapture(
       warn(`  could not register ${o.name} on storage '${pool}': ${r.out.trim()} — fix with: pvesm set ${pool} --nodes <list>`);
     }
   }
+  // The boot pool (ADR-037 D1): the installer registered rpool/data as
+  // local-zfs in the node's own storage.cfg, and the join replaced it with the
+  // cluster's — which on a site of ext4-booted nodes has no local-zfs at all.
+  // Register it again, scoped to the nodes that have it, so a node with no
+  // data pool (or one whose modules fall back to it) can hold guests.
+  const bootPool = sshTo(stdIp,
+    `[ "$(findmnt -no FSTYPE /)" = zfs ] && zfs list -H -o name rpool/data >/dev/null 2>&1 && echo HAS-BOOT-POOL`);
+  if (bootPool.out.includes("HAS-BOOT-POOL")) {
+    const r = sshTo(`tappaas1.${domain}`,
+      `if grep -q '^zfspool: local-zfs$' /etc/pve/storage.cfg; then ` +
+      `cur=$(sed -n "/zfspool: local-zfs\$/,/^\$/s/^\s*nodes //p" /etc/pve/storage.cfg | head -1); ` +
+      `case ",\${cur}," in *,${o.name},*) echo "already" ;; ",,") echo "unrestricted" ;; ` +
+      `*) pvesm set local-zfs --nodes "\${cur},${o.name}" && echo "added" ;; esac; ` +
+      `else pvesm add zfspool local-zfs --pool rpool/data --content images,rootdir --sparse 1 --nodes ${o.name} && echo "created"; fi`);
+    if (/created|added/.test(r.out)) info(`  ${GN}✓${CL} ${o.name}'s boot pool registered as storage 'local-zfs' (rpool/data)`);
+    else if (/already|unrestricted/.test(r.out)) info(`  storage 'local-zfs' already covers ${o.name}`);
+    else warn(`  could not register ${o.name}'s boot pool as 'local-zfs': ${r.out.trim()} — fix with: pvesm add zfspool local-zfs --pool rpool/data --content images,rootdir --nodes ${o.name}`);
+    if (/created|added|already|unrestricted/.test(r.out) && capturedPools.length === 0) storageOk = true;
+  }
+
+  // The node baseline (cluster update, limited to this node): the provisioners,
+  // the mothership's key cloud-init guests are given, the vendor-data snippet
+  // and guest hook. Without them a guest HA places here comes up unreachable
+  // ("Permission denied (publickey)"), so the node takes guests only after it.
+  step("bringing the new node to the cluster baseline (cluster update)");
+  const upd = clusterScript("update.sh");
+  const baselineOk = upd !== null &&
+    spawnSync("bash", [upd], { stdio: "inherit", env: { ...process.env, CLUSTER_UPDATE_NODES: o.name } }).status === 0;
+  if (!baselineOk) warn(`  ${o.name} is not at the cluster baseline yet — run ${YW}update-module.sh cluster${CL}`);
+
   const lift = `ha-manager crm-command node-maintenance disable ${o.name}`;
-  if (storageOk && sshTo(`tappaas1.${domain}`, `${lift} && echo LIFTED`).out.includes("LIFTED")) {
+  if (storageOk && baselineOk && sshTo(`tappaas1.${domain}`, `${lift} && echo LIFTED`).out.includes("LIFTED")) {
     info(`  ${GN}✓${CL} HA maintenance lifted — ${o.name} takes guests`);
   } else {
-    warn(`  ${o.name} stays in HA maintenance (no guests placed on it) until its pools are registered — then: ` +
+    warn(`  ${o.name} stays in HA maintenance (no guests placed on it) until its pools are registered and it is at the baseline — then: ` +
          `ssh root@tappaas1.${domain} ${lift}`);
   }
 
