@@ -41,7 +41,7 @@ async function main(): Promise<void> {
   check(/3 servers · 1 switch · 1 access point · 1 firewall/.test(o.numbers), "the site in numbers, from the topology");
   check(o.offsite.some((x) => /rasmus/.test(x)) && o.operator === "lars@hrossen.dk" && /Channel unstable · updates nightly/.test(o.release), "off-site copy, operator, release");
 
-  // ── the route cap (T1) ──────────────────────────────────────────────
+  // ── the status route is off (T1) ──────────────────────────────────────────────
   const dir = mkdtempSync(join(tmpdir(), "console-owner-"));
   writeFileSync(join(dir, "identity.json"), "{}");
   const access: AccessConfig = { firewall: ["10.0.0.1"], allow: ["127.0.0.1"], setupAllow: [], tokenFile: join(dir, "tok"), identityFile: join(dir, "identity.json"), trustLocalHeaders: false, gate: testGate() };
@@ -62,20 +62,15 @@ async function main(): Promise<void> {
     await srv.handle(req as unknown as IncomingMessage, res as unknown as ServerResponse);
     return { status: res.statusCode, body };
   };
-  let r = await call("GET", "/api/v1/me", "users");
-  check(r.status === 200 && JSON.parse(r.body).data.role === "read" && JSON.parse(r.body).data.route === "status", "users on status.<domain>: read");
-  r = await call("GET", "/api/v1/owner", "users");
-  check(r.status === 200 && Array.isArray(JSON.parse(r.body).data.services), "…reads the owner view");
-  r = await call("POST", "/api/v1/jobs", "users");
-  check(r.status === 403, "…a job: 403 (T1)");
-  r = await call("POST", "/api/v1/jobs", "installer");
-  check(r.status === 403, "even Installer's job on the status route: 403 (the route caps the role)");
-  r = await call("GET", "/api/v1/setup", "users");
-  check(r.status === 403, "the setup checklist: 403");
+  // The owner's view waits for the differentiated roles: refused for everyone.
+  for (const g of ["users", "admin", "installer"]) {
+    const r = await call("GET", "/api/v1/owner", g);
+    check(r.status === 403 && /status route/.test(r.body), `${g} on status.<domain>: 403`);
+  }
+  let r = await call("POST", "/api/v1/jobs", "installer");
+  check(r.status === 403, "an installer's job on the status route: 403");
   r = await call("POST", "/api/v1/secrets/unifi", "installer");
   check(r.status === 403, "a secret: 403");
-  r = await call("GET", "/api/v1/jumps/module/immich", "installer");
-  check(r.status === 200 && JSON.parse(r.body).data.length === 0, "no jumps from the status route");
 
   rmSync(dir, { recursive: true, force: true });
   done("owner");

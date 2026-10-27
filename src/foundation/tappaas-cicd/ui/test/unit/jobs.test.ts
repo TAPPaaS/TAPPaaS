@@ -34,7 +34,7 @@ const SPEC: HelpSpec = {
   ],
 };
 
-const me = (over: Partial<Me> = {}): Me => ({ user: "lars", name: "Lars", email: null, groups: ["admin"], role: "admin", via: "gate", route: "console", ...over });
+const me = (over: Partial<Me> = {}): Me => ({ user: "lars", name: "Lars", email: null, groups: ["installer"], role: "installer", via: "gate", route: "console", ...over });
 const closed: SetupState = { active: false, identityInstalled: true, tokenPresent: false };
 const open_: SetupState = { active: true, identityInstalled: false, tokenPresent: true };
 
@@ -81,8 +81,6 @@ async function main(): Promise<void> {
   check(r.status === 403 && !r.job, "loopback without the gate starts no job");
   r = await jobs.create(me({ role: "read", groups: ["users"] }), closed, { argv: ["module-manager", "reconcile", "immich"], preview: true });
   check(r.status === 403, "a member of users starts no job (T1)");
-  r = await jobs.create(me({ role: "admin", route: "status" }), closed, { argv: ["module-manager", "reconcile", "immich"], preview: true });
-  check(r.status === 403, "nothing is started from the status route (T1)");
 
   // ── preview before apply (T3) ───────────────────────────────────────
   r = await jobs.create(me(), closed, { argv: ["module-manager", "reconcile", "immich", "--apply"] });
@@ -118,10 +116,10 @@ async function main(): Promise<void> {
 
   // ── destructive: Installer and the typed name (D3) ──────────────────
   r = await jobs.create(me(), closed, { argv: ["module-manager", "delete", "deconz-test", "--remove"], preview: true });
-  check(r.status === 201 && r.job?.destructive === true, "an Admin may preview a destructive verb");
+  check(r.status === 201 && r.job?.destructive === true, "the installer previews a destructive verb");
   const del = r.job!;
-  r = await jobs.applyPreview(me(), closed, del.id, { confirm: "deconz-test" });
-  check(r.status === 403, "…but not apply it, name or no name (T1)");
+  r = await jobs.applyPreview(me({ role: "read", groups: ["admin"] }), closed, del.id, { confirm: "deconz-test" });
+  check(r.status === 403, "a caller outside installer may not apply it, name or no name (T1)");
   r = await jobs.applyPreview(me({ role: "installer" }), closed, del.id, { confirm: "deconz-te" });
   check(r.status === 400 && /type 'deconz-test'/.test(r.error ?? ""), "Installer with the wrong name: refused");
   r = await jobs.applyPreview(me({ role: "installer" }), closed, del.id, {});
@@ -198,8 +196,8 @@ async function main(): Promise<void> {
   await settle();
   check(nodry.previewPhase === undefined && nodry.exit === 0 && ran.slice(n0).join("|") === "module-manager suspend deconz-test", "a verb with no dry run applies at once, as after its preview");
 
-  r = await jobs.create(me(), closed, { argv: ["module-manager", "delete", "deconz-test", "--remove"], apply: true, confirm: "deconz-test" });
-  check(r.status === 403 && !r.job, "a destructive Apply is the Installer's");
+  r = await jobs.create(me({ role: "read", groups: ["admin"] }), closed, { argv: ["module-manager", "delete", "deconz-test", "--remove"], apply: true, confirm: "deconz-test" });
+  check(r.status === 403 && !r.job, "a destructive Apply is the installer's");
   r = await jobs.create(me({ role: "installer" }), closed, { argv: ["module-manager", "delete", "deconz-test", "--remove"], apply: true });
   check(r.status === 400 && /type 'deconz-test'/.test(r.error ?? "") && !r.job, "…with the name typed before anything runs");
   r = await jobs.create(me({ role: "installer" }), closed, { argv: ["module-manager", "delete", "deconz-test", "--remove"], apply: true, confirm: "deconz-test" });
@@ -313,7 +311,7 @@ async function main(): Promise<void> {
     return { status: res.statusCode, body: out, headers: h };
   };
   const gateH = (groups: string, host = "console.hrossen.dk") => ({ ...gateHeaders("lars", groups, host), "content-type": "application/json" });
-  let h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich"], preview: true }, { ...gateH("admin"), "content-type": "text/plain" });
+  let h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich"], preview: true }, { ...gateH("installer"), "content-type": "text/plain" });
   check(h.status === 415, "a job posted as anything but JSON is refused (no cross-site form)");
   h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich"], preview: true }, { "content-type": "application/json" }, "127.0.0.1");
   check(h.status === 403, "POST /jobs from loopback without the gate: 403");
@@ -321,20 +319,22 @@ async function main(): Promise<void> {
   check(h.status === 403, "POST /jobs as users: 403 (T1)");
   h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich"], preview: true }, gateH("installer", "status.hrossen.dk"));
   check(h.status === 403, "POST /jobs on the status route, even as Installer: 403 (T1)");
-  h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich", "--purge"], preview: true }, gateH("admin"));
+  h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich", "--purge"], preview: true }, gateH("installer"));
   check(h.status === 400 && /unknown option/.test(h.body), "an undeclared option: 400 before a job exists (T2)");
-  h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich"], preview: true }, gateH("admin"));
+  h = await call("POST", "/api/v1/jobs", { argv: ["module-manager", "reconcile", "immich"], preview: true }, gateH("installer"));
   const pj = JSON.parse(h.body).data as Job;
-  check(h.status === 201 && pj.kind === "preview" && pj.who.user === "lars", "POST /jobs as Admin through the gate: the preview starts");
+  check(h.status === 201 && pj.kind === "preview" && pj.who.user === "lars", "POST /jobs as the installer through the gate: the preview starts");
   await settle();
-  h = await call("GET", `/api/v1/jobs/${pj.id}`, undefined, { ...gateH("admin"), accept: "text/event-stream" });
+  h = await call("GET", `/api/v1/jobs/${pj.id}`, undefined, { ...gateH("installer"), accept: "text/event-stream" });
   check(h.headers["content-type"]?.startsWith("text/event-stream") && /event: job/.test(h.body) && /event: end/.test(h.body), "GET /jobs/<id> as an event stream: the job, then its end");
-  h = await call("POST", `/api/v1/jobs/${pj.id}/apply`, {}, gateH("admin"));
+  h = await call("POST", `/api/v1/jobs/${pj.id}/apply`, {}, gateH("installer"));
   check(h.status === 201 && (JSON.parse(h.body).data as Job).ran?.includes("--apply") === true, "POST /jobs/<id>/apply runs the preview's argv with --apply");
   await settle();
   h = await call("GET", "/api/v1/jobs", undefined, gateH("users"));
-  check(h.status === 200 && (JSON.parse(h.body).data.jobs as Job[]).length > 0, "GET /jobs is a read: users see the jobs");
-  h = await call("GET", "/api/v1/activity", undefined, gateH("admin"));
+  check(h.status === 403, "GET /jobs as users: 403, the console is the installer's");
+  h = await call("GET", "/api/v1/jobs", undefined, gateH("installer"));
+  check(h.status === 200 && (JSON.parse(h.body).data.jobs as Job[]).length > 0, "GET /jobs is a read: the installer sees the jobs");
+  h = await call("GET", "/api/v1/activity", undefined, gateH("installer"));
   check(Array.isArray(JSON.parse(h.body).jobs), "Activity lists the jobs beside the sweep's journal");
   check(existsSync(jobs.file), "jobs.jsonl is in the state directory");
 

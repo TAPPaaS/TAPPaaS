@@ -12,13 +12,12 @@
 //   apply    only from a finished preview of the same argv, within the hour;
 //            or straight from the form (createApply): the job runs the dry run
 //            first and goes on to apply only on a clean one, both in its record;
-//            a destructive call needs the object's name typed and Installer
+//            a destructive call needs the object's name typed
 //   read     a verb that changes nothing (module test, node network show):
 //            runs at once, beside the queue
 //
-// Who may: access.ts mayWrite — the gate's Admin or Installer, or the setup
-// token while setup is open; never loopback without the gate, never the status
-// route.
+// Who may: access.ts mayWrite — the gate's installer, or the setup token while
+// setup is open; never loopback without the gate.
 //
 // From the assistant (ADR-034 D7): a proposed-job card posts its preview (or
 // read) with {conversation, proposal}; the proposal must be in the caller's
@@ -421,7 +420,7 @@ export class Jobs {
   // is refused (T3): its apply goes through applyPreview.
   async create(me: Me, setup: SetupState, req: CreateRequest): Promise<CreateResult> {
     // Who first: a caller who may not write is refused whatever it sent (T1).
-    const w = mayWrite(me, setup, false);
+    const w = mayWrite(me, setup);
     if (!w.ok) return { status: w.status, error: w.reason };
     const ms = this.cfg.manifests();
     if (!ms) return { status: 503, error: "the verb manifests are still loading" };
@@ -479,7 +478,7 @@ export class Jobs {
 
   // POST /jobs/<id>/apply: the preview's own argv with the applying flag (T3).
   // A destructive call needs `confirm` to be the object's name (or the object
-  // as shown, within its container) and Installer.
+  // as shown, within its container).
   async applyPreview(me: Me, setup: SetupState, previewId: string, body: { confirm?: unknown }): Promise<CreateResult> {
     const ms = this.cfg.manifests();
     if (!ms) return { status: 503, error: "the verb manifests are still loading" };
@@ -492,7 +491,7 @@ export class Jobs {
     const v = validateArgv(ms, p.argv);
     if (!v.ok) return { status: 400, error: v.reason };
     if (!sameArgv(baseArgv(v), p.argv)) return { status: 409, error: "the preview's argv no longer validates as the same change" };
-    const w = mayWrite(me, setup, v.destructive);
+    const w = mayWrite(me, setup);
     if (!w.ok) return { status: w.status, error: w.reason };
     if (v.destructive && body.confirm !== v.object && body.confirm !== v.objectLabel) {
       return { status: 400, error: `a destructive verb: type '${v.object}' to confirm${v.objectLabel !== v.object ? ` (${v.objectLabel})` : ""}` };
@@ -509,9 +508,9 @@ export class Jobs {
   // job runs the verb's dry run first and, when it exits clean and reports no
   // refusal, the apply in the same job (one hold of the runner: nothing runs
   // between them). A verb with no dry run applies at once, as after its
-  // preview. The typed name and Installer are checked before anything runs.
+  // preview. The caller and the typed name are checked before anything runs.
   private async createApply(me: Me, setup: SetupState, v: Validated, card: Job["assistant"], confirm: unknown): Promise<CreateResult> {
-    const w = mayWrite(me, setup, v.destructive);
+    const w = mayWrite(me, setup);
     if (!w.ok) return { status: w.status, error: w.reason };
     if (v.destructive && confirm !== v.object && confirm !== v.objectLabel) {
       return { status: 400, error: `a destructive verb: type '${v.object}' to confirm${v.objectLabel !== v.object ? ` (${v.objectLabel})` : ""}` };

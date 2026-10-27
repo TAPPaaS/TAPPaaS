@@ -1,7 +1,8 @@
 // access.test.ts — who reaches the console and as whom (ADR-034 D2, D3, D10;
 // Testing T1 and T6): the connection filter, the gate's headers believed only
-// from the firewall, the role table and the route cap, and the setup token,
-// good only while identity is not installed.
+// from the firewall, the installer group as the one way in (people and service
+// accounts), the status route off, and the setup token, good only while
+// identity is not installed.
 
 import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -38,18 +39,35 @@ check(!peerAllowed("10.0.0.144", cfg, s), "another mgmt address is refused (T1)"
 check(!peerAllowed("10.0.0.50", cfg, s), "a laptop on mgmt is refused");
 
 // ── the gate's headers, from the firewall only ───────────────────────
-let d = decide("10.0.0.1", gate("users|Admin"), null, cfg, s);
-check(d.ok && d.me.user === "lars" && d.me.role === "admin" && d.me.via === "gate", "Admin through the gate operates");
-d = decide("10.0.0.1", gate("Installer|users"), null, cfg, s);
-check(d.ok && d.me.role === "installer", "Installer is the installer role");
+// The group sets: only `installer` gets the console.
+let d = decide("10.0.0.1", gate("Installer|users"), null, cfg, s);
+check(d.ok && d.me.user === "lars" && d.me.role === "installer" && d.me.via === "gate", "installer (any case, beside users): the console");
+d = decide("10.0.0.1", gate("installer"), null, cfg, s);
+check(d.ok && d.me.role === "installer", "installer alone: the console");
+d = decide("10.0.0.1", gate("users|admin"), null, cfg, s);
+check(!d.ok && d.status === 403 && /not in the group installer/.test(d.reason), "admin (with users): 403, naming the group");
+d = decide("10.0.0.1", gate("admin"), null, cfg, s);
+check(!d.ok && d.status === 403 && /installer/.test(d.reason), "admin only: 403");
 d = decide("10.0.0.1", gate("users"), null, cfg, s);
-check(d.ok && d.me.role === "read", "users reads");
-d = decide("10.0.0.1", gate("guests"), null, cfg, s);
-check(!d.ok && d.status === 403, "a user in none of the groups is refused");
+check(!d.ok && d.status === 403 && /installer/.test(d.reason), "users only: 403");
+d = decide("10.0.0.1", gate(""), null, cfg, s);
+check(!d.ok && d.status === 403 && /installer/.test(d.reason), "no group at all: 403");
+d = decide("10.0.0.1", gate("installers|installer-old"), null, cfg, s);
+check(!d.ok && d.status === 403, "a group that only looks like it: 403");
 d = decide("10.0.0.1", H({}), null, cfg, s);
 check(!d.ok && d.status === 401, "from the firewall without the gate's headers: refused (an ungated route)");
 d = decide("10.0.0.1", gate("Installer", "status.hrossen.dk"), null, cfg, s);
-check(d.ok && d.me.role === "read" && d.me.route === "status", "the status route caps Installer at read (Host, as with proxyPreserveHost)");
+check(!d.ok && d.status === 403 && /status route/.test(d.reason), "the status route is off, for an installer too (Host, as with proxyPreserveHost)");
+
+// A service account's client-credentials token: the same rule, by its groups.
+const sa = (groups: string[], over: Record<string, unknown> = {}) =>
+  H({ "x-authentik-username": "ak-agent", "x-authentik-groups": groups.join("|"), "x-authentik-jwt": signToken(claimsFor("ak-agent", groups, { scope: "openid read operate", ...over })) });
+d = decide("10.0.0.1", sa(["installer"]), null, cfg, s);
+check(d.ok && d.me.user === "ak-agent" && d.me.role === "installer", "a service account in installer: the console");
+d = decide("10.0.0.1", sa([]), null, cfg, s);
+check(!d.ok && d.status === 403 && /installer/.test(d.reason), "a service account outside it: 403, whatever scopes it carries");
+d = decide("10.0.0.1", sa(["admin"], { scope: "operate" }), null, cfg, s);
+check(!d.ok && d.status === 403, "…the operate scope grants nothing on its own");
 // Caddy's real headers: Host is the upstream's name, the client's Host travels in X-Forwarded-Host.
 const caddy = (fwdHost: string, groups = "Installer") => ({
   host: "tappaas-cicd.mgmt.internal:9097",
@@ -61,11 +79,11 @@ const caddy = (fwdHost: string, groups = "Installer") => ({
   "x-authentik-jwt": gateHeaders("lars", groups)["x-authentik-jwt"],
 });
 d = decide("10.0.0.1", caddy("status.hrossen.dk"), null, cfg, s);
-check(d.ok && d.me.route === "status" && d.me.role === "read", "through Caddy, X-Forwarded-Host names the route: status caps at read");
+check(!d.ok && d.status === 403 && /status route/.test(d.reason), "through Caddy, X-Forwarded-Host names the route: status is refused");
 d = decide("10.0.0.1", caddy("console.hrossen.dk"), null, cfg, s);
 check(d.ok && d.me.route === "console" && d.me.role === "installer", "…and console.<domain> operates");
 d = decide("10.0.0.1", caddy("status.hrossen.dk, other.example"), null, cfg, s);
-check(d.ok && d.me.route === "status", "a forwarded list: the first host is the client's");
+check(!d.ok && /status route/.test(d.reason), "a forwarded list: the first host is the client's");
 d = decide("10.0.0.1", { ...caddy("console.hrossen.dk"), host: "console.hrossen.dk", "x-forwarded-host": "" }, null, cfg, s);
 check(d.ok && d.me.route === "console" && routeHost({ host: "status.x", "x-forwarded-host": " " }, true) === "status.x", "an empty X-Forwarded-Host falls back to Host");
 check(routeHost({ host: "console.hrossen.dk", "x-forwarded-host": "status.hrossen.dk" }, false) === "console.hrossen.dk", "from a peer whose headers are not believed, X-Forwarded-Host is ignored");
@@ -76,8 +94,12 @@ check(d.ok && d.me.via === "gate" && d.me.role === "installer", "…unless the d
 d = decide("127.0.0.1", caddy("status.hrossen.dk"), null, cfg, s);
 check(d.ok && d.me.via === "local" && d.me.route === "console", "loopback's X-Forwarded-Host is not believed either (the dev port-forward)");
 d = decide("127.0.0.1", caddy("status.hrossen.dk"), null, { ...cfg, trustLocalHeaders: true }, s);
-check(d.ok && d.me.via === "gate" && d.me.route === "status", "…unless the developer asks for it (the gate proxy of a dev run)");
-check(splitGroups("a| b |") .join(",") === "a,b" && roleOf(["ADMIN"]) === "admin", "groups are pipe-separated, compared without case");
+check(!d.ok && d.status === 403, "…unless the developer asks for it (the gate proxy of a dev run): then status is refused");
+d = decide("127.0.0.1", gate("users"), null, { ...cfg, trustLocalHeaders: true }, s);
+check(!d.ok && d.status === 403, "…and the gate proxy's users-only caller is refused like the real gate's");
+d = decide("127.0.0.1", {}, null, cfg, s);
+check(d.ok && d.me.via === "local" && d.me.role === "read", "loopback without headers reads (the health checks)");
+check(splitGroups("a| b |") .join(",") === "a,b" && roleOf(["INSTALLER"]) === "installer" && roleOf(["admin", "users"]) === null, "groups are pipe-separated, compared without case");
 
 // ── the gate's token: the firewall's address is not proof on its own ──
 const forged = H({ "x-authentik-username": "lars", "x-authentik-groups": "installer" });
@@ -85,7 +107,7 @@ d = decide("10.0.0.1", forged, null, cfg, s);
 check(!d.ok && d.status === 401 && /X-Authentik-Jwt/.test(d.reason), "from the firewall's address, the groups header without a token: 401");
 const withJwt = (jwt: string) => H({ "x-authentik-username": "lars", "x-authentik-groups": "installer", "x-authentik-jwt": jwt });
 d = decide("10.0.0.1", withJwt(signToken(claimsFor("lars", ["users"]))), null, cfg, s);
-check(d.ok && d.me.role === "read" && d.me.groups.join() === "users", "the token's groups count, not the header's (header installer, token users: read)");
+check(!d.ok && d.status === 403, "the token's groups count, not the header's (header installer, token users: 403)");
 d = decide("10.0.0.1", withJwt(signToken(claimsFor("lars", ["installer"]), "another-secret")), null, cfg, s);
 check(!d.ok && d.status === 401 && /signature/.test(d.reason) && d.forget === "console.hrossen.dk", "a token signed with another key: 401, and the cached key is fetched again");
 d = decide("10.0.0.1", withJwt(signToken(claimsFor("lars", ["installer"]), TEST_KEY.secret, "none")), null, cfg, s);
@@ -114,6 +136,8 @@ d = decide("10.0.0.50", H({}), null, cfg, s);
 check(!d.ok && d.status === 401, "from mgmt without the token: 401");
 d = decide("10.0.0.50", H({ authorization: "Bearer s3cret-token" }), null, cfg, s);
 check(d.ok && d.me.via === "setup-token" && d.me.role === "installer", "with the token: the installer");
+d = decide("10.0.0.50", { host: "status.hrossen.dk", authorization: "Bearer s3cret-token" }, null, cfg, s);
+check(!d.ok && d.status === 403, "…but not on the status route");
 d = decide("10.0.0.50", H({}), "s3cret-token", cfg, s);
 check(d.ok && d.me.via === "setup-token", "?token= works on a first page load");
 d = decide("10.0.0.50", H({ cookie: "a=b; tappaas_setup=s3cret-token" }), null, cfg, s);
@@ -137,26 +161,21 @@ check(d.ok && d.me.via === "local", "loopback with a stale token is just loopbac
 d = decide("10.0.0.1", H({ authorization: "Bearer s3cret-token" }), null, cfg, s);
 check(!d.ok && d.status === 401, "through the firewall, a token instead of the gate: 401 (T6)");
 
-// ── writes: the gate or the token, never bare loopback (T1, T6) ───────
-const me = (over: Partial<Me>): Me => ({ user: "lars", name: null, email: null, groups: [], role: "admin", via: "gate", route: "console", ...over });
+// ── writes: the gate's installer or the token, never bare loopback (T1, T6) ──
+const me = (over: Partial<Me>): Me => ({ user: "lars", name: null, email: null, groups: ["installer"], role: "installer", via: "gate", route: "console", ...over });
 const closed = { active: false, identityInstalled: true, tokenPresent: false };
 const open_ = { active: true, identityInstalled: false, tokenPresent: true };
-check(mayWrite(me({}), closed, false).ok, "Admin through the gate writes");
-check(!mayWrite(me({}), closed, true).ok, "…but not a destructive verb (T1)");
-check(mayWrite(me({ role: "installer" }), closed, true).ok, "Installer runs a destructive verb");
-let w = mayWrite(me({ via: "local", user: null, role: "read" }), closed, false);
+check(mayWrite(me({}), closed).ok, "the installer through the gate writes, destructive verbs included");
+let w = mayWrite(me({ via: "local", user: null, role: "read" }), closed);
 check(!w.ok && w.status === 403, "loopback without the gate's headers reads only");
-w = mayWrite(me({ via: "local", role: "installer" }), closed, false);
+w = mayWrite(me({ via: "local", role: "installer" }), closed);
 check(!w.ok, "…whatever role it would claim");
-w = mayWrite(me({ role: "read" }), closed, false);
-check(!w.ok && w.status === 403, "users through the gate may not write");
-w = mayWrite(me({ role: "installer", route: "status" }), closed, false);
-check(!w.ok && w.status === 403, "the status route never writes");
-check(mayWrite(me({ via: "setup-token", user: "setup", role: "installer" }), open_, true).ok, "the setup token acts as Installer while setup is open");
-w = mayWrite(me({ via: "setup-token", user: "setup", role: "installer" }), closed, false);
+w = mayWrite(me({ role: "read" }), closed);
+check(!w.ok && w.status === 403 && /installer/.test(w.reason), "a gate caller without the installer role may not write");
+check(mayWrite(me({ via: "setup-token", user: "setup" }), open_).ok, "the setup token acts as the installer while setup is open");
+w = mayWrite(me({ via: "setup-token", user: "setup" }), closed);
 check(!w.ok && w.status === 401, "…and not once identity is installed (T6)");
 
-// ── the firewall's address comes from the mgmt zone's record ──────────
 check(zoneGateway("10.0.0.0/24") === "10.0.0.1", "mgmt 10.0.0.0/24: the firewall is 10.0.0.1");
 check(zoneGateway("10.0.0.0/24") === zoneGateway("10.0.0.77/24"), "the first address of the network, whatever host the ip names");
 check(zoneGateway("172.16.4.0/22") === "172.16.4.1" && zoneGateway(null) === null && zoneGateway("bogus") === null, "other prefixes; no network, no gateway");

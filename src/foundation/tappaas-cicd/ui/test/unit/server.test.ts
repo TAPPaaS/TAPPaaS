@@ -61,8 +61,12 @@ async function main(): Promise<void> {
 
   let r = await call("GET", "/api/v1/me");
   check(r.status === 200 && (r.json().data as { via: string }).via === "local", "/api/v1/me from loopback");
-  r = await call("GET", "/api/v1/me", gate("Admin|users"), "10.0.0.1");
-  check((r.json().data as { user: string; role: string }).user === "lars" && (r.json().data as { role: string }).role === "admin", "/api/v1/me through the gate: the user and the role");
+  r = await call("GET", "/api/v1/me", gate("installer|users"), "10.0.0.1");
+  check((r.json().data as { user: string; role: string }).user === "lars" && (r.json().data as { role: string }).role === "installer", "/api/v1/me through the gate: the user and the role");
+  r = await call("GET", "/api/v1/me", gate("admin|users"), "10.0.0.1");
+  check(r.status === 403 && /installer/.test(r.json().error ?? ""), "/api/v1/me as admin and users: 403, naming the group");
+  r = await call("GET", "/", gate("users"), "10.0.0.1");
+  check(r.status === 403 && r.body.includes("not in the group installer") && !r.body.includes("Setup token"), "the page for users only: the reason, and no token form once setup is over");
   r = await call("GET", "/api/v1/me", {}, "10.0.0.1");
   check(r.status === 401, "from the firewall without the gate: 401");
   r = await call("GET", "/api/v1/health", {}, "10.0.0.77");
@@ -120,7 +124,7 @@ async function main(): Promise<void> {
   r = await call("GET", "/api/v1/jumps/port/11?switch=USW%20Pro%20XG%2010%20PoE");
   check((r.json().data as { url: string }[]).some((x) => x.url === "https://unifi-os.mgmt.internal:11443/network/default/devices"), "jump: a port opens the UniFi controller");
   r = await call("GET", "/api/v1/jumps/module/immich", gate("Installer", "status.hrossen.dk"), "10.0.0.1");
-  check(r.status === 200 && (r.json().data as unknown[]).length === 0, "the status route offers no jumps");
+  check(r.status === 403, "the status route is refused, jumps included");
   r = await call("GET", "/api/v1/jumps/bogus/x");
   check(r.status === 400, "an unknown jump kind: 400");
 

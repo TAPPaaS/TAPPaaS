@@ -71,15 +71,16 @@ function sendJson(res: ServerResponse, status: number, body: unknown): void {
   res.end(s);
 }
 
-function setupPage(reason: string): string {
+// The refusal page; it asks for the setup token only while setup is open.
+function setupPage(reason: string, askToken: boolean): string {
   const esc = reason.replace(/[<>&"]/g, (c) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" })[c] ?? c);
   return `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>TAPPaaS console</title>
 <body style="font:15px system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem;color:#1f2933">
-<h1 style="font-size:1.3rem">TAPPaaS console</h1><p>${esc}</p>
+<h1 style="font-size:1.3rem">TAPPaaS console</h1><p>${esc}</p>${askToken ? `
 <form method="get"><label>Setup token<br><input name="token" autocomplete="off" style="width:100%;font:inherit;padding:.4rem"></label>
 <p><button style="font:inherit;padding:.4rem 1rem">Continue</button></p></form>
-<p style="color:#52606d">The token is in ~/config/console-setup-token on tappaas-cicd (read it with cat); it is never printed.</p></body>`;
+<p style="color:#52606d">The token is in ~/config/console-setup-token on tappaas-cicd (read it with cat); it is never printed.</p>` : ""}</body>`;
 }
 
 export class ConsoleServer {
@@ -128,7 +129,7 @@ export class ConsoleServer {
         if (path.startsWith("/api/")) return sendJson(res, d.status, { error: d.reason });
         res.statusCode = d.status;
         res.setHeader("Content-Type", TYPES.html);
-        res.end(setupPage(d.reason));
+        res.end(setupPage(d.reason, setup.active));
         return;
       }
       // A token given on the address line becomes the session cookie, and the
@@ -271,7 +272,6 @@ export class ConsoleServer {
       case "setup": {
         // The checklist, derived from the records each time it is read (D10).
         // ?refresh=1 is the one place the foundation modules' tests run.
-        if (me.route === "status") return sendJson(res, 403, { error: "the status route has no setup" });
         closeSetupToken(this.cfg.access, this.cfg.log);
         if (url.searchParams.get("refresh") === "1") await r.refreshSetup();
         const e = await r.setup.get();
@@ -307,8 +307,6 @@ export class ConsoleServer {
         return this.modules(a, b, url, res);
       case "jumps": {
         if (!a || !JUMP_KINDS.has(a as JumpKind) || !b) return sendJson(res, 400, { error: "jumps/<kind>/<id>" });
-        // The status route's zones reach none of the component UIs (D2).
-        if (me.route === "status") return sendJson(res, 200, { data: [] });
         // The topology as it stands: a jump never waits for its first read.
         const [m, e] = await Promise.all([r.modules.get(), r.environments.get()]);
         const data = jumpsFor(a as JumpKind, b, {
@@ -426,13 +424,10 @@ export class ConsoleServer {
     if (method === "GET" && sub === "status") {
       const at = new Date().toISOString();
       const none = (reason: string) => ({ available: false, reason, model: null, modelFrom: null, endpoint: null, keyFile: null, checkedAt: at });
-      // The owner's view has no assistant: it is the operators' tool (D2, D7).
-      if (me.route === "status") return sendJson(res, 200, { data: none("the owner's view has no assistant") });
       if (!this.cfg.litellm) return sendJson(res, 200, { data: none("this console has no assistant") });
       return sendJson(res, 200, { data: await this.cfg.litellm.status() });
     }
     const a = this.cfg.assistant;
-    if (me.route === "status") return sendJson(res, 403, { error: "the owner's view has no assistant" });
     if (!a) return sendJson(res, 503, { error: "this console has no assistant" });
     if (method === "GET" && sub === "conversations") {
       if (!id) return sendJson(res, 200, { data: a.list(me) });
@@ -476,18 +471,17 @@ export class ConsoleServer {
 
   // ── the wizard's secrets (secrets.ts) ─────────────────────────────
   //   GET  /secrets          which are set, and which keys (never a value)
-  //   POST /secrets/<name>   write it where its script reads it (Installer)
+  //   POST /secrets/<name>   write it where its script reads it (the installer)
   private async secretsApi(method: string, name: string | undefined, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
     const home = this.cfg.home;
     if (!home) return sendJson(res, 503, { error: "this console writes no secrets" });
-    if (me.route === "status") return sendJson(res, 403, { error: "the status route is read-only" });
     if (method === "GET" && !name) {
       return sendJson(res, 200, { data: Object.keys(SECRETS).map((n) => secretStatus(home, n as keyof typeof SECRETS)) });
     }
     if (method !== "POST" || !name) return sendJson(res, 405, { error: "secrets: GET, or POST /secrets/<name>" });
     if (!isSecretName(name)) return sendJson(res, 404, { error: `no secret '${name}' (one of ${Object.keys(SECRETS).join(", ")})` });
-    // A credential is the Installer's to set (or the setup token's).
-    const w = mayWrite(me, setupState(this.cfg.access), true);
+    // A credential is the installer's to set (or the setup token's).
+    const w = mayWrite(me, setupState(this.cfg.access));
     if (!w.ok) return sendJson(res, w.status, { error: w.reason });
     const ctype = req ? String(req.headers["content-type"] ?? "") : "";
     if (!/^application\/json\b/i.test(ctype)) return sendJson(res, 415, { error: "a secret is posted as application/json" });

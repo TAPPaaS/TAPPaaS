@@ -369,9 +369,9 @@ async function main(): Promise<void> {
   let c = await call("GET", "/api/v1/assistant/status");
   check(c.status === 200 && (c.json().data as { available: boolean }).available === true, "GET /assistant/status: available");
   c = await call("GET", "/api/v1/assistant/status", gate("status.hrossen.dk"), "10.0.0.1");
-  check((c.json().data as { available: boolean }).available === false, "the owner's view has no assistant");
-  c = await call("POST", "/api/v1/assistant/chat", gate("status.hrossen.dk"), "10.0.0.1");
-  check(c.status === 403, "and cannot ask it");
+  check(c.status === 403, "the status route has no assistant: 403");
+  c = await call("POST", "/api/v1/assistant/chat", gateHeaders("lars", "admin|users"), "10.0.0.1");
+  check(c.status === 403, "nor does a caller outside installer");
   c = await call("POST", "/api/v1/assistant/chat", { "content-type": "text/plain" });
   check(c.status === 415, "a question is posted as JSON");
   c = await call("GET", "/api/v1/assistant/conversations", gate(), "10.0.0.1");
