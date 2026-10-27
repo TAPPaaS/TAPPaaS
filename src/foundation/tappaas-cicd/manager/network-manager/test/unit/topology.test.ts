@@ -447,6 +447,9 @@ check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPo
   const outs = named.outside.filter((o) => o.kind === "satellite").map((o) => `${o.name}:${o.location}`).join(" ");
   check(outs === "sat1:Hareskov, DK sat2:null", "a satellite on the Outside lane shows its location's place");
   const machines = buildTopology({ ...at, positions: { doc, catalog }, modules: [...at.modules!, { name: "dh1", kind: "machine", vmname: null, vmid: null, node: null, zone0: "srv", stack: "foundation", status: null, environment: "mgmt", running: "-", actualNode: null }], machineLocations: { dh1: "hareskov" } });
+  // A node removed with `node delete` is an archived machine module: no device.
+  const gone = buildTopology({ ...at, positions: { doc, catalog }, modules: [...at.modules!, { name: "tappaas9", kind: "machine", vmname: null, vmid: null, node: null, zone0: "mgmt", stack: "foundation", status: "archived", environment: "mgmt", running: "-", actualNode: null }] });
+  check(!JSON.stringify(gone).includes("tappaas9"), "an archived machine module is no device, nor anywhere else in the topology");
   check(machines.devices.find((d) => d.name === "dh1")?.source === "module" && machines.devices.find((d) => d.name === "dh1")?.location === "hareskov", "an adopted machine is at the location it names");
 }
 {

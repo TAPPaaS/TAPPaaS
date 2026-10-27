@@ -498,6 +498,9 @@ const MOTHERSHIP_MODULE = "tappaas-cicd";
 const BACKUP_MODULE = "backup";
 
 export function buildTopology(src: TopoSources, now: Date = new Date()): Topology {
+  // An archived module is a record kept, not something the site has: a node
+  // removed with `node delete` is archived, and is no device or guest here.
+  const modules = (src.modules ?? []).filter((m) => m.status !== "archived");
   const findings: TopoFinding[] = [];
   const topoFinding = (text: string, on: TopoRef, refs: TopoRef[] = []): void => {
     findings.push({ gate: "topology", level: "warn", text, on, refs });
@@ -626,7 +629,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
 
   // Guests: every deployed module that runs somewhere, where it runs now.
   const guestNode = new Map<string, string>();
-  for (const m of src.modules ?? []) {
+  for (const m of modules) {
     if (m.kind === "machine") continue;
     const where = m.actualNode ?? m.node;
     const node = nodeNamed(where);
@@ -980,7 +983,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       break;
     }
   }
-  const fwRow = (src.modules ?? []).find((m) => m.name === FIREWALL_MODULE) ?? null;
+  const fwRow = (modules).find((m) => m.name === FIREWALL_MODULE) ?? null;
   const fwNode = fwRow ? (fwRow.actualNode ?? fwRow.node) : str(src.firewall?.node);
   const paths: TopoWanPath[] = [];
   for (const n of nodes) {
@@ -995,7 +998,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
   const devices: TopoDevice[] = [];
   const unplaced = { location: null, placement: null };
   const taken = new Set([...nodes.map((n) => n.name), ...switches.map((x) => x.name), ...accessPoints.map((a) => a.name)]);
-  for (const m of src.modules ?? []) {
+  for (const m of modules) {
     if (m.kind !== "machine" || src.satellites.some((x) => x.name === m.name) || taken.has(m.name)) continue;
     taken.add(m.name);
     devices.push({ name: m.name, kind: "machine", vendor: null, model: null, ...unplaced, source: "module" });
