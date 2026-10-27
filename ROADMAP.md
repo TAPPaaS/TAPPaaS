@@ -113,7 +113,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | – | 4 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | – | 6 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | – | 5 |
@@ -197,6 +197,7 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | ✅ #801 | Default update schedule: daily on every channel | **Done 2026-10-26** (`88968c6e`): new sites update daily at 02:00; migration 0024 moves a site on the old weekly default, warned with the way back |
 | #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
 | #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
+| #893 | Memory ballooning as an opt-in per module | A minimum memory per module (`balloon`), counted by the capacity check; not for passthrough VMs. First: is free-page reporting on? Opened 2026-10-27 |
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 | #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
 | #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
@@ -322,7 +323,7 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 29 · open: 4
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 29 · open: 6
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753). Built from the 2.0→2.2 field report (#832): a capacity pre-flight before the sweep (#833) and visible size changes on legacy sites (#834). Next by design: dynamic placement on PVE 9.2's load balancer (#838).
 
@@ -331,6 +332,8 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #403 | Install on the root disk; smarter placement | M | M | **P1 on `main` 2026-10-26** (`d4a2bac8`, `5f502153`): ZFS boot by default; `storage` falls back down to `local-zfs`, warned; a mirror boots either disk. Left: the ESP health gate |
 | #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; the CPU level the candidate set shares (#827), capable nodes only (#836). ADR first |
 | #884 | More dynamic placement and resource allocation: disk and RAM per site size (`minimalTest`, small, large), falling back to the minimum under constraint | H | M | **Opened 2026-10-26.** TAPPaaS heuristics next to Proxmox's own allocation; ADR first. Related: #838, #880, #663, #866 |
+| #891 | A memory-tight node holds back only the module that grows; pause modules for temporary room | M | M | **Approach agreed 2026-10-27** (comment on #891): growth that does not fit keeps its current memory and warns, nothing moves; an LXC counts at its 7-day peak + 25%, not its limit; in the maintenance window the update may suspend `pauseOk` modules for temporary room and resumes them after the reboots. ADR amendment for the pause |
+| #890 | Suspended modules are patched | L | M | **Approach agreed 2026-10-27:** a closing pass resumes, updates, tests and suspends each suspended module one at a time, when it fits; `suspend --no-update` opts out. With #891 |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
 ### G3.2 Identity & SSO wiring — Ease M · Risk L · released: 14 · open: 1
