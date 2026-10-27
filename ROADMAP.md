@@ -113,7 +113,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
-| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 1 | 5 |
+| 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 2 | 4 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
 | 3 | G3.4 AI stack maturity | M | M | 4 | – | 5 |
@@ -323,7 +323,7 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 
 Low upgrade risk. Build continuously, in any order within a group.
 
-### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 29 · done for 2.4: 1 · open: 5
+### G3.1 cluster:vm lifecycle & capacity — Ease L · Risk M · released: 29 · done for 2.4: 2 · open: 4
 
 Guests sized, placed, started and stopped right: memory defaults from measurement (#663), moving a running guest to another node (#825), a readiness wait that skips UDP ports (#826), hardware drift (#531), shutdown and boot order (#36, #127), storage growth and placement (#100, #403), a composite-module ADR (#761), and a sweep that survives a guest restarting itself (#753). Built from the 2.0→2.2 field report (#832): a capacity pre-flight before the sweep (#833) and visible size changes on legacy sites (#834). Next by design: dynamic placement on PVE 9.2's load balancer (#838).
 
@@ -332,7 +332,7 @@ Guests sized, placed, started and stopped right: memory defaults from measuremen
 | #403 | Install on the root disk; smarter placement | M | M | **P1 on `main` 2026-10-26** (`d4a2bac8`, `5f502153`): ZFS boot by default; `storage` falls back down to `local-zfs`, warned; a mirror boots either disk. Left: the ESP health gate |
 | #838 | Dynamic placement of workloads (PVE 9.2 CRS load balancer) | H | M | **Opened 2026-10-15.** Opt-in next to the fixed default: `HANode` as a list, an empty list = dynamic; the CPU level the candidate set shares (#827), capable nodes only (#836). ADR first |
 | #884 | More dynamic placement and resource allocation: disk and RAM per site size (`minimalTest`, small, large), falling back to the minimum under constraint | H | M | **Opened 2026-10-26.** TAPPaaS heuristics next to Proxmox's own allocation; ADR first. Related: #838, #880, #663, #866 |
-| #891 | A memory-tight node holds back only the module that grows; pause modules for temporary room | M | M | **Steps 1–2 on `main` 2026-10-27** (`eec438af`): growth past 95% keeps its current memory and warns (`memory_held`), the rest of the update goes on; an LXC counts at its 7-day peak + 25%, not its limit (hrossen tappaas2 79→38 GB). Left: in the maintenance window, suspend `pauseOk` modules for temporary room and resume them after the reboots (ADR amendment) |
+| ✅ #891 | A memory-tight node holds back only the module that grows; pause modules for temporary room | M | M | **Done 2026-10-27** (`eec438af`, `8f178808`; ADR-017 D9): growth past 95% keeps its current memory and warns, the rest goes on; an LXC counts at its 7-day peak + 25%; in the maintenance window `pauseOk` modules (lowest `pausePriority` first) are paused for a suspended module's patch or a node drain and resumed after the reboots. Live-tested on hrossen |
 | ✅ #890 | Suspended modules are patched | L | M | **Done 2026-10-27** (`eec438af`): a closing pass resumes, updates, tests and suspends each suspended module one at a time when it fits; `suspend --no-update` opts out; health warns after 14 days unpatched. Live-tested on hrossen (deconz-test) |
 | #761 | A composite-module ADR: `cluster`, `kubernetes`, and modules that only provide artefacts | H | M | ADR-022d and ADR-026 defer `cluster`/`kubernetes` to an ADR that does not exist, and `templates` fits no `kind`; interim values in ADR-022d v1.2. With @ErikDaniel007 |
 
