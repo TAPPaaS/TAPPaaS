@@ -56,6 +56,7 @@ export interface ProvisionOpts {
   lanPrimary?: string; // active-backup: the port that carries traffic when up
   ttlSeconds: number;
   yes: boolean;
+  noReboot?: boolean; // skip the reboot into the kernel the baseline installed
 }
 
 // ── disks named before the install ──────────────────────────────────────
@@ -601,11 +602,30 @@ function joinAndCapture(
     spawnSync("bash", [upd], { stdio: "inherit", env: { ...process.env, CLUSTER_UPDATE_NODES: o.name } }).status === 0;
   if (!baselineOk) warn(`  ${o.name} is not at the cluster baseline yet — run ${YW}update-module.sh cluster${CL}`);
 
+  // The baseline's dist-upgrade almost always brings a newer kernel than the
+  // installer's; until the node boots it, its drivers are the old ones. Now is
+  // the one time a reboot costs nothing: no guests, still in HA maintenance.
+  // Refused (rc 2) with guests on it or when the cluster would lose quorum —
+  // then the node works on, and the reboot is the operator's (reboot-node.sh).
+  let rebootOk = true;
+  if (o.noReboot) {
+    info(`  --no-reboot: ${o.name} keeps its running kernel — reboot it later with ${YW}reboot-node.sh --execute ${o.name}${CL}`);
+  } else if (baselineOk) {
+    step("rebooting the new node into its newest kernel");
+    const rb = clusterScript("reboot-node.sh");
+    const rc = rb === null ? -1 : (spawnSync("bash", [rb, "--new-node", o.name], { stdio: "inherit" }).status ?? -1);
+    if (rc === 2) warn(`  ${o.name} not rebooted — reboot it when it suits: ${YW}reboot-node.sh --execute ${o.name}${CL}`);
+    else if (rc !== 0) {
+      rebootOk = false;
+      warn(`  ${o.name}'s reboot did not complete — check it is back in the cluster (${YW}ha-manager status${CL})`);
+    }
+  }
+
   const lift = `ha-manager crm-command node-maintenance disable ${o.name}`;
-  if (storageOk && baselineOk && sshTo(`tappaas1.${domain}`, `${lift} && echo LIFTED`).out.includes("LIFTED")) {
+  if (storageOk && baselineOk && rebootOk && sshTo(`tappaas1.${domain}`, `${lift} && echo LIFTED`).out.includes("LIFTED")) {
     info(`  ${GN}✓${CL} HA maintenance lifted — ${o.name} takes guests`);
   } else {
-    warn(`  ${o.name} stays in HA maintenance (no guests placed on it) until its pools are registered and it is at the baseline — then: ` +
+    warn(`  ${o.name} stays in HA maintenance (no guests placed on it) until its pools are registered, it is at the baseline and back from its reboot — then: ` +
          `ssh root@tappaas1.${domain} ${lift}`);
   }
 

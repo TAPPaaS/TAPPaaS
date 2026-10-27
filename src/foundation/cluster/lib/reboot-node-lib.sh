@@ -535,3 +535,63 @@ reboot_one_node() {
     info "  ${GN}✓${CL} ${node} reboot complete"
     return 0
 }
+
+# True when the cluster keeps quorum with <node>'s votes gone, read from
+# corosync on <node> itself. Counting alive LRMs is not enough here: on a
+# two-node cluster both are alive, yet the survivor of a reboot is 1 vote of 2,
+# not quorate, and HA fences it (#835). A QDevice's vote counts, as it should.
+rn_quorate_without() {
+    local node="$1"
+    rn_node_ssh "$node" "pvecm status 2>/dev/null" 2>/dev/null | awk '
+        /^Total votes:/ { t = $3 }
+        /^Quorum:/      { q = $2 }
+        /^ *0x[0-9a-f]+ +[0-9]+ .*\(local\)/ { v = $2 }
+        END { exit !(t != "" && q != "" && t - (v == "" ? 1 : v) >= q) }'
+}
+
+# A node that has just joined (site-manager node add): the first dist-upgrade
+# installed a newer kernel than the installer's, and its drivers are stale until
+# it boots that one. It carries no guests yet and is still in HA maintenance, so
+# there is nothing to drain: reboot it as it is and leave maintenance alone —
+# node add lifts it once the rest of the join is done.
+# rc 0: rebooted, or no newer kernel; 2: refused (guests on it, or the cluster
+# would lose quorum), nothing done; 1: rebooted but not back as a member.
+reboot_new_node() {
+    local node="$1" latest new_running old_boot_id guests
+
+    if ! rn_kernel_gap "$node"; then
+        info "  ${GN}✓${CL} ${node} runs its newest kernel ($(rn_running_kernel "$node")) — no reboot"
+        return 0
+    fi
+    latest=$(rn_latest_kernel "$node")
+
+    guests=$(rn_node_ssh "$node" "{ qm list 2>/dev/null; pct list 2>/dev/null; } | awk 'NR>1 && \$1 ~ /^[0-9]+\$/' | wc -l" || echo "?")
+    if [[ "${guests}" != "0" ]]; then
+        warn "  ${node} carries guests (${guests}) — not a new node's reboot; use reboot-node.sh --execute ${node}"
+        return 2
+    fi
+    if ! rn_quorate_without "$node"; then
+        warn "  the cluster would lose quorum while ${node} reboots — not rebooted (a third vote, a QDevice, makes it safe)"
+        return 2
+    fi
+
+    info "  Rebooting ${node} into kernel ${latest}..."
+    old_boot_id=$(rn_node_ssh "$node" "cat /proc/sys/kernel/random/boot_id" 2>/dev/null || true)
+    rn_node_ssh "$node" "reboot" || true
+    sleep 15
+    if ! rn_wait_for_node "$node" "" "$old_boot_id"; then
+        error "${node} did not return within ${RN_WAIT_MAX:-600}s after its reboot (raise RN_WAIT_MAX)"
+        return 1
+    fi
+    if ! rn_wait_cluster_member "$node"; then
+        error "${node} rebooted but did not rejoin the cluster within ${RN_CLUSTER_WAIT_MAX:-300}s"
+        return 1
+    fi
+    new_running=$(rn_running_kernel "$node")
+    if [[ "$new_running" == "$latest" ]]; then
+        info "  ${GN}✓${CL} ${node} is back in the cluster on kernel ${new_running}"
+    else
+        warn "  ${node} is back but runs ${new_running} (expected ${latest}) — check its boot loader default"
+    fi
+    return 0
+}

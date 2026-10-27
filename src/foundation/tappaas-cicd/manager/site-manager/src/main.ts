@@ -141,7 +141,7 @@ export const HELP: HelpSpec = {
       note: "(refused for the primary location and for one a peer, room or device names)",
       options: [["--check", "say whether it can go, in one line; write nothing."], ["--json", "with --check: the whole resulting site.json, for machines."]] },
     { usage: "node list [--json]", note: "(the cluster's nodes: their pvehost instances, with their storage pools)" },
-    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--boot-filesystem zfs|ext4] [--boot-mirror <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--storage-pools <a,b>] [--ttl <s>] [--config-only] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it, adds it to the cluster and registers it as a pvehost instance" },
+    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--boot-filesystem zfs|ext4] [--boot-mirror <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--storage-pools <a,b>] [--ttl <s>] [--no-reboot] [--config-only] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it, adds it to the cluster and registers it as a pvehost instance" },
       hidden: ["--name <N>", "--provision", "--pool <p>"],
       options: [
         ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
@@ -157,6 +157,7 @@ export const HELP: HelpSpec = {
         ["--lan-primary <if>", "active-backup: the port that carries traffic when up (default: the fastest)."],
         ["--storage-pools <a,b>", "the node's storage pools (its tankXY zpools). Default: the zpools found on the node."],
         ["--ttl <s>", "--pxe: seconds the PXE offer stays open (default 7200)."],
+        ["--no-reboot", "Do not reboot the node into the kernel its first update installed (default: it reboots before it takes guests, when the cluster keeps quorum without it)."],
         ["--yes", "do not ask for confirmation."],
         ["--config-only", "Only write the node's pvehost record, config/<N>.json (no machine contact)."],
       ] },
@@ -316,7 +317,7 @@ interface Opts {
 
 // Flags that take NO value (everything else with a value is captured generically).
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
-  "--pxe", "--provision", "--config-only", "--yes", "--no-wan",
+  "--pxe", "--provision", "--config-only", "--yes", "--no-wan", "--no-reboot",
   "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned", "--primary", "--check",
   "--verbose"]);
 
@@ -917,6 +918,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
       lanPrimary: o.flags.get("--lan-primary"),
       ttlSeconds: Number(o.flags.get("--ttl") ?? 7200),
       yes: o.boolFlags.has("--yes"),
+      noReboot: o.boolFlags.has("--no-reboot"),
     };
     if (o.boolFlags.has("--pxe") || o.boolFlags.has("--provision")) {
       // Bare machine: PXE install → join → capture (design N3).

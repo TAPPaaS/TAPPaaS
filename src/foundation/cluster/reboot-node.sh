@@ -15,6 +15,7 @@
 # Usage:
 #   reboot-node.sh --dry-run  <node>   # preview impact, no changes (default)
 #   reboot-node.sh --execute  <node>   # execute after confirmation
+#   reboot-node.sh --new-node <node>   # node add: a just-joined node, no prompt
 #
 # Guards:
 #   - HA quorum check (≥2 active nodes required)
@@ -40,14 +41,19 @@ readonly SCRIPT_DIR
 # Args
 ###############################################################################
 DRY_RUN=1
+NEW_NODE=0
 NODE=""
 
 usage() {
     cat <<'EOF'
-Usage: reboot-node.sh [--dry-run|--execute] <node>
+Usage: reboot-node.sh [--dry-run|--execute|--new-node] <node>
 
   --dry-run   Preview impact without making changes (default)
   --execute   Execute the reboot after confirmation
+  --new-node  A node that has just joined (site-manager node add): reboot it
+              into its newest kernel if it runs an older one — no prompt, no
+              drain; refused when it carries guests or the cluster would lose
+              quorum. HA maintenance is left as it is.
 
 Examples:
   reboot-node.sh --dry-run tappaas2
@@ -59,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --dry-run)  DRY_RUN=1; shift ;;
         --execute)  DRY_RUN=0; shift ;;
+        --new-node) NEW_NODE=1; shift ;;
         --help|-h)  usage; exit 0 ;;
         -*)         die "Unknown option: $1" ;;
         *)          NODE="$1"; shift ;;
@@ -66,6 +73,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -n "$NODE" ]] || { usage; die "Node name required"; }
+
+if [[ "$NEW_NODE" -eq 1 ]]; then
+    rn_node_ssh "$NODE" "true" || die "Cannot reach $(rn_node_fqdn "$NODE")"
+    _rc=0
+    reboot_new_node "$NODE" || _rc=$?
+    exit "${_rc}"
+fi
 
 ###############################################################################
 # Step 1: Pre-flight checks

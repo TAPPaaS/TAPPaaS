@@ -311,5 +311,56 @@ read -r _p _f < "${WORK}/sub.counts" && PASS=${_p} && FAIL=${_f}
 )
 read -r _p _f < "${WORK}/sub.counts" && PASS=${_p} && FAIL=${_f}
 
+# ── rn_quorate_without: corosync's votes, not the alive-LRM count — two nodes
+# are both alive, yet the survivor of a reboot is not quorate (#835).
+(
+    . "${SCRIPT_DIR}/reboot-node-lib.sh"
+    pvecm_out() {   # <total> <quorum> [qdevice]
+        printf 'Votequorum information\n----------------------\nExpected votes:   %s\nHighest expected: %s\nTotal votes:      %s\nQuorum:           %s\n' "$1" "$1" "$1" "$2"
+        printf 'Membership information\n----------------------\n    Nodeid      Votes Name\n0x00000001          1 10.0.0.10\n0x00000004          1 10.0.0.13 (local)\n'
+        [[ -n "${3:-}" ]] && printf '0x00000000          1 Qdevice\n'
+        return 0
+    }
+    rn_node_ssh() { pvecm_out ${PVECM}; }
+    PVECM="4 3"; rn_quorate_without n4 && pass "4 of 4 votes, quorum 3: a reboot keeps quorum" || fail "4 nodes refused"
+    PVECM="2 2"; rn_quorate_without n4 && fail "two nodes: a reboot would leave 1 of 2 — must refuse" || pass "two nodes: refused"
+    PVECM="3 2 q"; rn_quorate_without n4 && pass "two nodes + QDevice: the third vote makes it safe" || fail "qdevice refused"
+    rn_node_ssh() { :; }
+    rn_quorate_without n4 && fail "no pvecm output must refuse" || pass "unreadable corosync: refused"
+    echo "${PASS} ${FAIL}" > "${WORK}/sub.counts"
+)
+read -r _p _f < "${WORK}/sub.counts" && PASS=${_p} && FAIL=${_f}
+
+# ── reboot_new_node: node add's reboot — only on a kernel gap, never with
+# guests or without quorum, never touching HA maintenance.
+(
+    . "${SCRIPT_DIR}/reboot-node-lib.sh"
+    LOG="${WORK}/n.log"
+    sleep() { :; }
+    rn_node_fqdn()       { echo "$1"; }
+    rn_wait_for_node()   { return 0; }
+    rn_wait_cluster_member() { return 0; }
+    rn_quorate_without() { [[ "${QUORATE}" == 1 ]]; }
+    rn_running_kernel()  { echo "${RUNNING}"; }
+    rn_latest_kernel()   { echo "7.0.14-25-pve"; }
+    rn_node_ssh() { shift; printf '%s\n' "$*" >> "${LOG}"; case "$*" in *"qm list"*) echo "${GUESTS}" ;; esac; return 0; }
+    run() { : > "${LOG}"; rc=0; reboot_new_node n4 >/dev/null 2>&1 || rc=$?; }
+
+    RUNNING=7.0.14-25-pve GUESTS=0 QUORATE=1; run
+    [[ ${rc} -eq 0 ]] && ! grep -qx reboot "${LOG}" && pass "newest kernel already running: no reboot" || fail "no gap: rc=${rc} log=$(tr '\n' ';' < "${LOG}")"
+    RUNNING=7.0.2-6-pve GUESTS=0 QUORATE=1; run
+    [[ ${rc} -eq 0 ]] && grep -qx reboot "${LOG}" && pass "kernel gap, no guests, quorate: rebooted" || fail "gap: rc=${rc}"
+    grep -q node-maintenance "${LOG}" && fail "HA maintenance must be left to node add" || pass "…and HA maintenance is left alone"
+    RUNNING=7.0.2-6-pve GUESTS=1 QUORATE=1; run
+    [[ ${rc} -eq 2 ]] && ! grep -qx reboot "${LOG}" && pass "a node with guests: refused (2)" || fail "guests: rc=${rc}"
+    RUNNING=7.0.2-6-pve GUESTS=0 QUORATE=0; run
+    [[ ${rc} -eq 2 ]] && ! grep -qx reboot "${LOG}" && pass "quorum would be lost: refused (2)" || fail "quorum: rc=${rc}"
+    rn_wait_for_node() { return 1; }
+    RUNNING=7.0.2-6-pve GUESTS=0 QUORATE=1; run
+    [[ ${rc} -eq 1 ]] && pass "not back after the reboot: failed (1)" || fail "not back: rc=${rc}"
+    echo "${PASS} ${FAIL}" > "${WORK}/sub.counts"
+)
+read -r _p _f < "${WORK}/sub.counts" && PASS=${_p} && FAIL=${_f}
+
 echo "  Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]
