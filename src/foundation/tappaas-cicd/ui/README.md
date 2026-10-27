@@ -29,7 +29,7 @@ the nodes (every registered node — its `pvehost` instance — a cluster member
 (registered, ports discovered), the admin VPN (a peer in `wgvpn list`), the physical site
 (optional: a room recorded and every node and switch placed, from `config/positions.json`), stacks (optional).
 Each step is a form over its verbs as jobs. Secrets go through `POST /api/v1/secrets/<name>`
-(Installer or the setup token): `acme-dns` → `~/.acme-dns-credentials.txt`, `unifi` →
+(an installer or the setup token): `acme-dns` → `~/.acme-dns-credentials.txt`, `unifi` →
 `~/.unifi-os-credentials.txt`, mode 0600; `wlan` is handed to `ap-manager ssid set-passphrase <ssid>`
 on stdin (never in argv), which stores it in `~/.wlan-secrets.txt` and marks the SSID for the next
 reconcile. Each is in Activity with its keys and never their values; `GET /api/v1/secrets` names the
@@ -167,19 +167,15 @@ Every change is the operate dialog (`web/src/operate.tsx`, spike §5.4): a form 
 verb's manifest, the exact command (copyable), Preview (the verb's own dry run, streamed), Apply
 (with no preview of its own, one job runs the dry run first and goes on only on a clean one —
 a refusal stops it there, shown as the preview; disruptions are labelled checkboxes; a
-destructive verb needs the object's name typed before Apply and Installer), Result; a flow of
+destructive verb needs the object's name typed before Apply), Result; a flow of
 several steps runs them in order. Activity shows such a job's two phases.
 
-## The owner's view — `status.<domain>`
+## The status route — `status.<domain>` (off)
 
-A request whose host is `status.…` is read-only whatever its groups (access.ts: the route caps
-the role): no job, no setup, no secret, no jump. The front end then shows three pages: the
-owner's Overview (`GET /api/v1/owner`, `src/owner.ts` — one sentence about the site, every
-service with its displayName, published address and state in plain words: running, backed
-up, short of memory, inside the site only; the site in numbers, the off-site copy, the channel,
-the operator's address), Physical and Modules (without Config and Drift), and no operate
-control anywhere. The route itself is not declared yet: `proxyRoutes` publishes no gated route
-(see `../../console/INSTALL.md`, *The owner's route*).
+A request whose host is `status.…` is refused (403) whoever sends it (access.ts). The owner's
+summary is still built (`GET /api/v1/owner`, `src/owner.ts`: one sentence about the site, every
+service in plain words, the site in numbers) for the status page that comes with differentiated
+roles, a later step; the front end shows no owner's view until then.
 
 ## How it reads the site
 
@@ -224,13 +220,13 @@ Each answers `{data, at, ageSeconds, refreshing, error}`.
 |---|---|
 | `POST /jobs {argv, preview: true}` | a **preview**: the verb's own dry run (`reconcile` without `--apply`, `--check`, `--dry-run`, `modify`'s pre-gate). A verb with no dry run gets a preview that runs nothing and says what the verb touches and the exact command apply will run. |
 | `POST /jobs {argv}` | a **read** verb (`module test`, `node network show`, `wgvpn list`): runs at once. A write without a preview is refused (T3). A read verb's `writeWhen` option (`test --deep`, which creates and removes guests; a disruption flag) makes that call a write with no dry run: previewed and queued like any change, never beside the sweep. |
-| `POST /jobs/<id>/apply {confirm?}` | the **apply** of a finished preview, less than an hour old: its own argv plus the applying flag (or without the dry run). A destructive call (`delete`, `purge`, `retire`, `erase`, `--remove`, `--decommission`, `key import`, …) needs `confirm` = the object's name, and the Installer role. |
+| `POST /jobs/<id>/apply {confirm?}` | the **apply** of a finished preview, less than an hour old: its own argv plus the applying flag (or without the dry run). A destructive call (`delete`, `purge`, `retire`, `erase`, `--remove`, `--decommission`, `key import`, …) needs `confirm` = the object's name. |
 | `GET /jobs` | every job (newest first), the queue, and the sweep's state |
 | `GET /jobs/<id>` | the job with its output; with `Accept: text/event-stream` its output as it comes (`job`, `output`, `state`, `end` events) |
 
-A job is posted as `application/json` (a cross-site form cannot). Who may: the gate's Admin
-(every non-destructive verb) or Installer (every verb), or the setup token while setup is
-open; loopback without the gate's headers and the `status` route start no job (T1, T6).
+A job is posted as `application/json` (a cross-site form cannot). Who may: the gate's installer
+(every verb), or the setup token while setup is open; loopback without the gate's headers
+starts no job (T1, T6).
 **One runner**: previews and applies run one at a time, in order (a second operator's job
 queues; `GET /jobs` shows the queue); reads run beside it. **The sweep**: while
 `update-tappaas.service` is active (or starting or stopping) no job starts; the refusal says
@@ -331,11 +327,14 @@ Only the firewall may connect at all, besides loopback. The firewall's address i
 (its `ip`, first address: `10.0.0.0/24` → `10.0.0.1`); only when that is unreadable does the
 console ask DNS for `firewall.<mgmt domain>` (`CONSOLE_FIREWALL` overrides both).
 
-Roles come from the Authentik groups, by their TAPPaaS names (identity creates them,
-`identity/USERS.md`): `installer` → **Installer**, `admin` (the `admin` role, which Authentik
-carries as a group) → **Admin**, `users` → read; `status.<domain>` caps every role at read.
-A write — any job — needs the gate (Admin, or Installer for a destructive verb) or the setup
-token while it is active; loopback without the gate's headers reads only.
+The console is for one group, `installer` (identity creates it, `identity/USERS.md`),
+compared without case: a gate caller in it gets the role `installer` and may do everything,
+destructive verbs included (behind the typed name); a gate caller outside it gets 403 with a
+reason naming the group, `admin` and `users` included. A service account (a client-credentials
+token through the gate) follows the same rule by the token's groups; its scopes grant nothing.
+The setup token acts as `installer` while setup is open; loopback without the gate's headers
+reads only (role `read`, the health checks and `tappaas ask`). The gate's application is bound
+to `installer` alone (`console.json` `gateGroups`), so others are refused at the login first.
 
 **The setup token (ADR-034 D10).** `bootstrap.sh` writes `~/config/console-setup-token`; the
 install summary names the file and the operator reads it with `cat` — the token is never
@@ -362,8 +361,8 @@ from the laptop.
 against a fake LiteLLM streaming the recorded exchanges of `test/fixtures/litellm-exchange.json`
 (the loop, the allow-list, ADR-034 T5: asked to run a change it proposes a card and applies
 nothing, and the card's job carries the turn; the context in the prompt, the store's caps), the connection
-filter, the gate's headers, the role table and route cap, the setup-token rule (ADR-034 T6),
+filter, the gate's headers, the installer group and the refused status route, the setup-token rule (ADR-034 T6),
 the reads and their cache, every route, Activity and the jumps; the verb manifest and the argv
-check (T2); the job model: preview before apply (T3), the roles on every write (T1), the typed
+check (T2); the job model: preview before apply (T3), the installer on every write (T1), the typed
 confirmation, the sweep refusal, the serial runner and jobs.jsonl — over hrossen's captured
 outputs with a fake runner. `--deep`: the installed service answers `/api/v1/status`.

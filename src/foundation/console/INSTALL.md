@@ -219,32 +219,11 @@ already holds (`~/.loki-admin-password`). It sees what the console sees (the rea
 a host's logs, the managers' help and READMEs) and changes nothing: a proposal is a card the
 operator previews and runs. Conversations stay in `/var/lib/tappaas/console/assistant/`.
 
-## The owner's route — `status.<domain>` (not yet declared)
+## The status route — `status.<domain>` (off)
 
-ADR-034 D2 gives the console a second route, `status.<domain>`, from the trusted client zones
-of the default environment, gated like the first, on which the backend caps every caller at
-read and serves the owner's view (Overview in plain words, Physical, Modules; no actions, no
-jumps). The backend side is built. The declaration is not, because of a gap in the proxy:
-`proxyRoutes` (ADR-023, #597, `network/services/proxy`) publishes a further name with its own
-`proxyAllowedZones`, but **never behind forward-auth** — `identity:accessControl` gates only
-the module's primary handler and its `proxyAccess` paths. Declared today, the route would reach
-the backend without `X-Authentik-*` headers, and the backend would refuse every request on it
-(401: a route without the gate). What it waits for, in `console.json`:
-
-```json
-"network:proxy": {
-  "proxyPort": 9097,
-  "proxyAllowedZones": ["mgmt", "admin"],
-  "proxyRoutes": [
-    { "name": "status", "port": 9097, "proxyAllowedZones": ["<the default environment's client zones>"] }
-  ]
-}
-```
-
-with `identity:accessControl` (or ADR-032's `proxyAuth: gate` per route) putting the gate in
-front of it too. Until then the owner's view can be tried on the mothership with a `Host:
-status.<domain>` header through the gate's headers (`console serve --trust-local-headers`,
-development only).
+A status page for people who are not installers (the household, a small office's staff) waits
+for differentiated roles, a later step. Until then the console refuses every request whose host
+is `status.<domain>` (403), whoever sends it, and the module declares no such route.
 
 ## Verify
 
