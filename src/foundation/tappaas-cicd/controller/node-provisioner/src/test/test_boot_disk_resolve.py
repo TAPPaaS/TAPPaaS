@@ -120,6 +120,21 @@ class TestResolve(unittest.TestCase):
         self.assertEqual(self.resolve("ask")[0], 1)
 
 
+class TestInstallMediaCopy(unittest.TestCase):
+    """cluster/make-install-media.sh is self-contained (it runs with no
+    checkout), so it carries its own copy of the matcher: the same text."""
+
+    def test_the_install_media_carries_the_same_matcher(self):
+        media = Path(__file__).resolve().parents[5] / "cluster" / "make-install-media.sh"
+        if not media.is_file():
+            self.skipTest(f"{media} not in this tree")
+        text = media.read_text()
+        start = text.index("cat <<'RESOLVE'\n") + len("cat <<'RESOLVE'\n")
+        end = text.index("\nRESOLVE\n", start)
+        self.assertEqual(text[start:end], RESOLVE_SH.strip("\n"),
+                         "make-install-media.sh's matcher differs from assets.RESOLVE_SH — copy it over")
+
+
 class TestBootDiskLines(unittest.TestCase):
     @staticmethod
     def reg(disk, mirror="", macs=()):
