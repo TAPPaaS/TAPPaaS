@@ -273,6 +273,10 @@ if [[ -n "${_ip}" ]]; then
     fi
 fi
 for _h in "${NODE}" "${_fqdn}" ${_ip}; do ssh-keygen -R "${_h}" >/dev/null 2>&1 || true; done
+# Its network-install record (node-provisioner's consumed registration): the
+# console reads it as the node's install progress, so a node that is gone must
+# not seem to be installing.
+rm -f "${CONFIG_DIR:-/home/tappaas/config}/provision/${NODE}.json" "${CONFIG_DIR:-/home/tappaas/config}/provision/${NODE}.json.consumed"
 for sp in "${NODE_PORTS[@]}"; do
     _sw="${sp%%$'\t'*}"; _port="${sp#*$'\t'}"
     if switch-manager remove-port "${_sw}" "${_port}" >/dev/null 2>&1; then
