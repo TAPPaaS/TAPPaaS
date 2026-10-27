@@ -380,6 +380,11 @@ fi
 mkdir -p /home/tappaas/config
 touch /home/tappaas/config/.tappaas-cicd-installed
 
+# The update timer (ADR-017 D2): its renderer is skipped until site.json and the
+# ~/bin links exist, which they do now — render it, rather than at the next boot.
+systemctl start update-tappaas-schedule.service 2>/dev/null \
+    || _warn "could not render the update timer — it is rendered at the next boot (systemctl start update-tappaas-schedule.service)"
+
 echo ""
 info "${GN}✓${CL} TAPPaaS-CICD installation completed successfully."
 

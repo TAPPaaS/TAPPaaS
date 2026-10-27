@@ -86,5 +86,11 @@ for svc in update-tappaas-schedule update-tappaas-failure update-tappaas; do
     else ck "${svc}.service declares a PATH" ok missing; fi
 done
 
+# A fresh mothership's first switch runs before site.json and ~/bin exist: the
+# renderer must be skipped then, not fail the switch (lab2 bootstrap, 2026-10-27).
+blk="$(sed -n "/systemd.services.update-tappaas-schedule = {/,/^  };/p" "${NIX}")"
+if grep -q 'ConditionPathExists = \[ "/home/tappaas/config/site.json"' <<<"${blk}"; then ck "the renderer waits for site.json" ok ok
+else ck "the renderer waits for site.json" ok missing; fi
+
 echo "── summary: ${pass} pass, ${fail} fail ──"
 [[ "${fail}" -eq 0 ]]

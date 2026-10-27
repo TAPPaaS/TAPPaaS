@@ -560,6 +560,10 @@ in
   systemd.services.update-tappaas-schedule = {
     description = "Render update-tappaas.timer from site.json (ADR-017 D2)";
     wantedBy = [ "timers.target" ];
+    # A fresh mothership has neither yet: bootstrap.sh's first switch runs before
+    # install.sh writes config/ and links ~/bin. Skipped then (a condition is no
+    # failure, so the switch succeeds); install.sh starts it once both exist.
+    unitConfig.ConditionPathExists = [ "/home/tappaas/config/site.json" "/home/tappaas/bin/update-tappaas-schedule.sh" ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = "/home/tappaas/bin/update-tappaas-schedule.sh";

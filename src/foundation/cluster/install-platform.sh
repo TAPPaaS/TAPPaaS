@@ -306,10 +306,12 @@ build_cicd() {
 
   # Automated Phase B over SSH. Any prerequisite failure falls back to printing
   # the manual steps so the operator is never left stuck.
+  # A step that falls back to the manual steps is an install not finished: the
+  # orchestrator must not report the foundation installed (return 1).
   if ! wait_cicd_ssh "$cicdid"; then
     warn "Could not reach the cicd VM over SSH automatically."
     print_manual_cicd "$cicdid" "$dom"
-    return 0
+    return 1
   fi
 
   # Skip if cicd already looks installed (idempotent re-runs).
@@ -323,7 +325,7 @@ build_cicd() {
   if ! cicd_ssh "curl -fsSL '${REPO}${BRANCH}/src/foundation/tappaas-cicd/bootstrap.sh' -o /tmp/bootstrap.sh && bash /tmp/bootstrap.sh 'https://codeberg.org/TAPPaaS/TAPPaaS.git' '${BRANCH}'"; then
     warn "bootstrap.sh failed on cicd. Finish manually:"
     print_manual_cicd "$cicdid" "$dom"
-    return 0
+    return 1
   fi
 
   # B.2 — pre-authorise cicd's key on the nodes so install's ssh-copy-id is
@@ -337,7 +339,7 @@ build_cicd() {
   if ! wait_cicd_ssh "$cicdid"; then
     warn "cicd did not come back after reboot. Finish install manually:"
     print_manual_cicd "$cicdid" "$dom"
-    return 0
+    return 1
   fi
 
   # B.3.5 — hand the cicd what it needs to manage the firewall: the API
