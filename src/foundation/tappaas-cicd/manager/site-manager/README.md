@@ -71,6 +71,7 @@ top-level          add --name <site-code> [--organization <org>] [create-site op
                    (validate also checks updateSchedule and prints the OnCalendar it renders)
                    reconcile [--apply] [--deep]
                    update [--dry-run] [--force] [--no-git-pull]   (starts update-tappaas.service)
+                   update --stop                                  (the running update stops after the module in progress)
                    test [--deep] [--verbose]                      (= module-manager test each; one line per module, output in ~/logs/site-test-<time>/)
 ```
 
@@ -88,6 +89,17 @@ fleet-wide. For one module that is
 `module-manager module update <module> --allow-disruption` (ADR-020 v0.10 D8, #633). `--no-git-pull` (`TAPPAAS_NO_GIT_PULL`) updates
 whatever is checked out — refresh-control-plane.sh skips the per-repo pull — so local,
 not-yet-pushed changes can be tested. `--dry-run` previews the plan.
+
+`update --stop` ends a running update gracefully: the module in progress
+finishes, every later module and the phases after them (suspended modules, node
+reboots, collation) are skipped, and the run is recorded as `interrupted` with
+who asked and what was not attempted. The next update takes the rest. The
+request is `config/.update-stop`, naming the run's InvocationID; the sweep reads
+it between modules, so a stop asked during a long step (a rebuild, a big module)
+takes effect when that step ends, and one left behind never stops a later run.
+To stop at once instead, `sudo systemctl stop update-tappaas.service` — the
+module in progress is then cut off, not rolled back: run
+`module-manager reconcile <module> --apply` on it afterwards.
 
 `test` runs every deployed module's tests: it iterates
 `module-manager list` (foundation + apps, from every registered repository) and

@@ -29,6 +29,11 @@ CONFIG_DIR = Path("/home/tappaas/config")
 # at the schedule gate before a sweep, so this file is never overwritten by a
 # no-op — unlike the systemd unit's Result, which the no-op clobbers to success.
 RESULT_PATH = CONFIG_DIR / "last-update-result.json"
+# `site-manager update --stop` asks this run to stop after the module in progress
+# (unitrun.ts). It names the run by the unit's InvocationID, which systemd gives
+# every process of the run as $INVOCATION_ID: a request left over from a run
+# that is over never stops another.
+STOP_PATH = CONFIG_DIR / ".update-stop"
 # ADR-017 D3/D4: update-tappaas.service's prepare step leaves its markers and the
 # claimed operator request in the unit's RuntimeDirectory; site-manager update
 # writes the request to config/.update-request.json; config/.update-stage names
@@ -1248,6 +1253,44 @@ def patch_suspended(modules: list[str], dep: dict, window: bool = False) -> dict
     return out
 
 
+def stop_requested() -> dict | None:
+    """The stop request for THIS run, or None. A request for another
+    invocation is stale: it is removed, so it is not read again."""
+    req = _read_json(STOP_PATH)
+    if req is None:
+        return None
+    mine = os.environ.get("INVOCATION_ID", "")
+    if mine and req.get("invocation") == mine:
+        return req
+    try:
+        STOP_PATH.unlink()
+        log.debug("Removed a stop request for another run (%s)", req.get("invocation"))
+    except OSError:
+        pass
+    return None
+
+
+def stopping(dep: dict) -> bool:
+    """True once a stop was asked for; the first time, says so and consumes
+    the request. Read between modules and between phases, never inside one."""
+    if dep.get("stop"):
+        return True
+    req = stop_requested()
+    if req is None:
+        return False
+    dep["stop"] = {"requestedBy": req.get("requestedBy", "?"), "at": req.get("at", ""),
+                   "after_module": dep.get("last_attempted")}
+    try:
+        STOP_PATH.unlink()
+    except OSError:
+        pass
+    log.warning("Stop requested by %s — %s; skipping the rest of the run",
+                dep["stop"]["requestedBy"],
+                f"'{dep['stop']['after_module']}' was the last module updated"
+                if dep["stop"]["after_module"] else "before the first module")
+    return True
+
+
 def run_update_phase(
     modules: list[str], phase_label: str, failed_modules: list[str], dep: dict
 ) -> list[str]:
@@ -1263,9 +1306,10 @@ def run_update_phase(
     everything after the boundary)."""
     not_attempted: list[str] = []
     for module in modules:
-        if dep["down"]:
+        if dep["down"] or stopping(dep):
             not_attempted.append(module)
             continue
+        dep["last_attempted"] = module
         if not update_module(module):
             log.error("FAILED: %s", module)
             failed_modules.append(module)
@@ -1722,20 +1766,31 @@ def main():
     # update, test, suspend again — so stopping a module to free memory no
     # longer stops it being patched. Before the reboots: every suspended guest is
     # stopped again while the nodes are drained.
-    log.info("Phase 2.5: Patching suspended modules")
-    suspended_patch = patch_suspended(suspended_to_patch(discovered + deployed_foundation, guests), dep, window)
+    # A stop request skips every phase after the modules too: they are the
+    # rest of the run, and the next run does them.
+    if stopping(dep):
+        log.info("Phase 2.5: Patching suspended modules — skipped (stop requested)")
+        suspended_patch = {"patched": [], "failed": [], "not_patched": []}
+    else:
+        log.info("Phase 2.5: Patching suspended modules")
+        suspended_patch = patch_suspended(suspended_to_patch(discovered + deployed_foundation, guests), dep, window)
     failed_modules.extend(suspended_patch["failed"])
 
     # Phase 3: controlled node reboot pass (issue #275). A node whose HA guests
     # do not fit on the others gets room first, from pauseOk modules (#891).
-    log.info("Phase 3: Node reboot pass (automaticReboot=%s)", automatic_reboot)
-    if automatic_reboot and window:
-        for node in nodes_needing_reboot():
-            log.info("  room to move %s's HA guests for its reboot:", node)
-            make_room("--drain", node, window)
-    reboot_ok = reboot_pass(automatic_reboot, dry_run=False)
-    if not reboot_ok:
-        log.error("FAILED: node reboot pass")
+    reboot_skipped = stopping(dep)
+    if reboot_skipped:
+        log.info("Phase 3: Node reboot pass — skipped (stop requested)")
+        reboot_ok = True
+    else:
+        log.info("Phase 3: Node reboot pass (automaticReboot=%s)", automatic_reboot)
+        if automatic_reboot and window:
+            for node in nodes_needing_reboot():
+                log.info("  room to move %s's HA guests for its reboot:", node)
+                make_room("--drain", node, window)
+        reboot_ok = reboot_pass(automatic_reboot, dry_run=False)
+        if not reboot_ok:
+            log.error("FAILED: node reboot pass")
 
     # Every module is patched and the nodes are rebooted: resume what the
     # update paused for room (#891). Never a module an operator suspended.
@@ -1751,10 +1806,12 @@ def main():
     # indexes first, and refuses where they do not verify, so this cannot
     # silence a real problem. Cheap when there is nothing to do: one query per
     # Postgres guest.
-    log.info("Phase 4: Postgres collation reconciliation")
     collation_ok = True
     _coll = Path("/home/tappaas/bin/tappaas-collation-reconcile.sh")
-    if _coll.exists():
+    if stopping(dep):
+        log.info("Phase 4: Postgres collation reconciliation — skipped (stop requested)")
+    elif _coll.exists():
+        log.info("Phase 4: Postgres collation reconciliation")
         _rc = subprocess.run([str(_coll), "--apply"], capture_output=True, text=True)
         # Its lines carry their own [Info]/[Warning] label: relogged at that
         # level, not wrapped in a second "[Info]".
@@ -1768,6 +1825,7 @@ def main():
                 "not verify, so its recorded version was left alone on purpose (#726)"
             )
     else:
+        log.info("Phase 4: Postgres collation reconciliation")
         log.info("  tappaas-collation-reconcile.sh not installed — skipped")
 
     # Summary
@@ -1861,7 +1919,7 @@ def main():
         "suspended_patch": suspended_patch,
         # Paused for room in the maintenance window and resumed after (#891).
         "paused_for_room": pause_result,
-        "ok": (not failed_modules and not dep["down"] and reboot_ok
+        "ok": (not failed_modules and not dep["down"] and reboot_ok and not dep.get("stop")
                and control_plane in ("refreshed", "skipped")),
     }
     failed_foundation = [m for m in failed_modules if m in installed_foundation]
@@ -1870,6 +1928,14 @@ def main():
                                      dep["down"], reboot_ok, control_plane)
     # ok/degraded/broken: what the exit code says, kept with the record (the
     # unit's Result is "success" for a degraded run, see tappaas-cicd.nix).
+    # A run stopped on request did its job as far as it went: "interrupted",
+    # unless what it did run failed (broken/degraded stay what they are).
+    if dep.get("stop"):
+        artifact["complete"] = False
+        artifact["interrupted"] = {**dep["stop"], "not_attempted_modules": not_attempted,
+                                   "reboot": "skipped" if reboot_skipped else "ran"}
+        if outcome == "ok":
+            outcome = "interrupted"
     artifact["result"] = outcome
     artifact["failed_foundation"] = failed_foundation
     # When a shared service went down mid-sweep, carry the boundary so the run is
@@ -1911,6 +1977,12 @@ def main():
                         len(failed_modules), ", ".join(failed_modules))
         sys.exit(exit_code)
 
+    if dep.get("stop"):
+        log.warning("update-tappaas STOPPED on request of %s: %d module(s) not attempted (%s) — "
+                    "the next update takes them", dep["stop"]["requestedBy"], len(not_attempted),
+                    ", ".join(not_attempted) or "none")
+        set_stage(None)
+        return
     log.info("All modules updated successfully (control plane %s)", control_plane)
     set_stage(None)
 

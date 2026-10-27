@@ -154,6 +154,10 @@ export class FakeSiteClient implements SiteClient {
   unitResult(): string {
     return this.unitResultValue;
   }
+  unitInvocationValue = "inv-1";
+  unitInvocationId(): string {
+    return this.unitInvocationValue;
+  }
   repoProbe(path: string, branch: string): { head: string | null; tip: string | null; behind: number | null } {
     this.log.push(`probe ${path} ${branch}`);
     return this.probes.get(path) ?? { head: "aaaa", tip: "aaaa", behind: 0 };

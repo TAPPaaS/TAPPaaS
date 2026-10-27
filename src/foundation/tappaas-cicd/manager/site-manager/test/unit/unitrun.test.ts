@@ -19,6 +19,12 @@ check(buildRequest(false, true, false, "lars", new Date()).allowDisruption === t
 
 check(summaryLine(null).startsWith("no last-update-result.json"), "no result file is said plainly");
 check(summaryLine({ stage: "rebuild", end_time: "t" }).includes("FAILED in the rebuild step"), "a run that stopped before the sweep names the step");
+{
+  const s = summaryLine({ result: "interrupted", end_time: "t", succeeded: 12, failed: 0, not_attempted: 27,
+    interrupted: { requestedBy: "erik" } });
+  check(s.includes("STOPPED on request of erik") && s.includes("not_attempted=27") && s.includes("next update takes the rest"),
+    "an interrupted run says who stopped it and what is left");
+}
 const line = summaryLine({ end_time: "t", control_plane: "refreshed", total: 10, succeeded: 10, failed: 0, not_attempted: 0, skipped: 1, reboot: "ok" });
 check(line === "update-tappaas completed: t | control_plane=refreshed total=10 succeeded=10 failed=0 not_attempted=0 skipped=1 reboot=ok",
   "the summary matches update-tappaas's own last line");

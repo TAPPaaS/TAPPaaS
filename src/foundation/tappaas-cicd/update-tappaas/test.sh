@@ -686,6 +686,71 @@ else
     echo "  ⊘ #517 invariant unit test skipped (source or env python not found)"
 fi
 
+# ── 4a) Unit: a graceful stop (site-manager update --stop) ───────────
+# The request names the run by its InvocationID. Asked while "b" updates, b
+# finishes and c, d are not attempted; the request is consumed. A request for
+# another run, or a run without an InvocationID, stops nothing, and the stale
+# file is removed.
+if [[ -f "$main_py" && -x "$py" ]]; then
+    if "$py" - "$main_py" <<'PY'
+import importlib.util, json, os, sys, tempfile, logging
+from pathlib import Path
+logging.disable(logging.CRITICAL)
+spec = importlib.util.spec_from_file_location("m", sys.argv[1])
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.check_shared_dependencies = lambda: []
+m.STOP_PATH = Path(tempfile.mkdtemp()) / ".update-stop"
+def newdep():
+    return {"down": False, "culprit": None, "last_good": None, "failures": [], "evidence": {}}
+def ask(inv):
+    m.STOP_PATH.write_text(json.dumps({"requestedBy": "erik", "at": "2026-10-27T20:00:00Z", "invocation": inv}))
+
+os.environ["INVOCATION_ID"] = "run-1"
+done = []
+def upd(name):
+    done.append(name)
+    if name == "b":
+        ask("run-1")          # the operator asks while b is updating
+    return True
+m.update_module = upd
+failed = []; dep = newdep()
+na = m.run_update_phase(["a", "b", "c", "d"], "app", failed, dep)
+assert done == ["a", "b"], f"b finishes, nothing after: {done}"
+assert na == ["c", "d"], f"the rest is not attempted: {na}"
+assert dep["stop"]["after_module"] == "b" and dep["stop"]["requestedBy"] == "erik", dep
+assert not m.STOP_PATH.exists(), "the request is consumed"
+na2 = m.run_update_phase(["e"], "app", failed, dep)
+assert na2 == ["e"], "a later phase of the same run stays stopped"
+assert m.stopping(dep) is True
+
+# Asked before the first module: nothing is updated.
+m.update_module = lambda name: done.append(name) or True
+done.clear(); ask("run-1"); dep = newdep()
+na = m.run_update_phase(["a", "b"], "foundation", [], dep)
+assert done == [] and na == ["a", "b"] and dep["stop"]["after_module"] is None, (done, na, dep)
+
+# A request for another run is stale: it stops nothing and is removed.
+done.clear(); ask("run-0"); dep = newdep()
+na = m.run_update_phase(["a", "b"], "app", [], dep)
+assert done == ["a", "b"] and na == [] and "stop" not in dep, (done, na, dep)
+assert not m.STOP_PATH.exists(), "the stale request is removed"
+
+# A run with no InvocationID (by hand, outside the unit) ignores requests.
+del os.environ["INVOCATION_ID"]
+m.update_module = lambda name: True
+ask("run-1"); dep = newdep()
+assert m.run_update_phase(["a"], "app", [], dep) == [] and "stop" not in dep
+PY
+    then
+        passed=$((passed + 1))
+    else
+        echo "  ✗ graceful stop unit test FAILED"
+        failed=$((failed + 1))
+    fi
+else
+    echo "  ⊘ graceful stop unit test skipped (source or env python not found)"
+fi
+
 # ── 5) Unit: preflight guard refuses root (#533) ─────────────────────
 # require_operator() must exit(1) when euid is 0 (a manual `sudo update-tappaas`)
 # and be a no-op otherwise. os.geteuid is monkeypatched so the test needs no

@@ -274,6 +274,10 @@ export class CliSiteClient implements SiteClient {
     return captureResult(SYSTEMCTL(), ["show", "-p", "Result", "--value", UNIT]).stdout.trim();
   }
 
+  unitInvocationId(): string {
+    return captureResult(SYSTEMCTL(), ["show", "-p", "InvocationID", "--value", UNIT]).stdout.trim();
+  }
+
   repoProbe(path: string, branch: string): { head: string | null; tip: string | null; behind: number | null } {
     const g = (...a: string[]) => captureResult(GIT(), ["-C", path, ...a]);
     const head = g("rev-parse", "HEAD");

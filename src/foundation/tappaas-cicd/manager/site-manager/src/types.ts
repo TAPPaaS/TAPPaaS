@@ -261,12 +261,14 @@ export interface SiteClient {
   //   followUnit    → stream that invocation's journal until the unit stops;
   //                   "detached" when the operator pressed Ctrl-C
   //   unitResult    → the unit's Result ("success", "exit-code", …)
+  //   unitInvocationId → the running invocation's InvocationID ("" when none)
   //   repoProbe     → a checkout's HEAD, its origin tip, and commits behind
   //   runUpdateDryRun → update-tappaas --dry-run (the sweep plan); its exit code
   unitState(): string;
   startUnit(): { ok: boolean; invocationId: string; err: string };
   followUnit(invocationId: string): "finished" | "detached";
   unitResult(): string;
+  unitInvocationId(): string;
   repoProbe(path: string, branch: string): { head: string | null; tip: string | null; behind: number | null };
   runUpdateDryRun(moduleForce: boolean, allowDisruption: boolean): number;
   // `site-manager test` — the deployed modules to iterate (module-manager list

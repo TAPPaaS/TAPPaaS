@@ -54,6 +54,22 @@ const clean = () => { try { unlinkSync(join(cfg, ".update-request.json")); } cat
     "a running update is refused and no request is left for the next timer run");
 }
 {
+  // --stop: a file the sweep reads between modules, naming the running invocation
+  const stopFile = join(cfg, ".update-stop");
+  const c = new FakeSiteClient(); clean();
+  c.unitStateValue = "active"; c.unitInvocationValue = "inv-7";
+  const rc = run(["update", "--stop", "--config-dir", cfg], c);
+  const s = JSON.parse(readFileSync(stopFile, "utf8"));
+  check(rc === 0 && s.invocation === "inv-7" && typeof s.requestedBy === "string" && s.at,
+    "--stop asks the running invocation to stop, naming it");
+  check(!c.log.includes("start-unit") && !existsSync(join(cfg, ".update-request.json")),
+    "--stop starts nothing and leaves no run request");
+  unlinkSync(stopFile);
+  const idle = new FakeSiteClient();
+  check(run(["update", "--stop", "--config-dir", cfg], idle) === 0 && !existsSync(stopFile),
+    "--stop with nothing running says so and writes nothing");
+}
+{
   const c = new FakeSiteClient(); clean();
   c.startOk = false;
   const rc = run(["update", "--config-dir", cfg], c);

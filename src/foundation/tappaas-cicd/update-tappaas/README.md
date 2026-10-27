@@ -252,6 +252,7 @@ site-manager validate                          # checks the schedule, prints the
   | `ok` | 0 | every module updated |
   | `degraded` | 3 | the run completed, but app modules failed (the unit counts it as success) |
   | `broken` | 1 | a foundation module failed, a shared service went down, the control plane is stale, or the reboot pass failed |
+  | `interrupted` | 0 | stopped on request (`site-manager update --stop`) after a module, with nothing that ran failing; `interrupted` names who asked, the last module updated and those not attempted, `complete` is false |
 
   `failed_foundation` lists the foundation modules that failed. `site-manager update` exits
   with the same 3 for a degraded run.

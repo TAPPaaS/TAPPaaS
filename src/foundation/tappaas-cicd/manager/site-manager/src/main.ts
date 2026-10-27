@@ -25,7 +25,7 @@
 // Exit codes: ok=0, error=1; `update`: 3 when the sweep completed but app modules failed.
 
 import { DEFAULT_HOLD, describeHold, makeHold, parseUntil, readHolds, releaseHold, validRepoName, writeHold } from "./hold";
-import { UNIT, buildRequest, dropRequest, readResult, repoStatusLine, summaryLine, writeRequest } from "./unitrun";
+import { UNIT, buildRequest, dropRequest, readResult, repoStatusLine, summaryLine, writeRequest, writeStop } from "./unitrun";
 import { clusterScript, defaultConfigDir, defaultSchemaDir, loadRaw, loadSite, refusedField, siteSchema, writeSite } from "./config";
 import { CliSiteClient } from "./client";
 import { cmdLocation } from "./location";
@@ -278,13 +278,14 @@ export const HELP: HelpSpec = {
         ["--apply", "Commit (default is preview)."],
         ["--deep", "Cascade people → network → (every) environment."],
       ] },
-    { usage: "update [--dry-run] [--force] [--allow-disruption] [--no-git-pull]",
+    { usage: "update [--dry-run] [--force] [--allow-disruption] [--no-git-pull] | update --stop",
       note: "(run the whole-site update sweep NOW — packages update-tappaas)",
       options: [
         ["--dry-run", "Preview the update plan; change nothing."],
         ["--force", "Update every module even when its pre-update test failed fatally, or its status is archived/external. Never reboots anything."],
         ["--allow-disruption", "Open the downtime window for this run: a module with rebootOk may be rebooted or migrated offline, the others keep their disruptive changes deferred. Never overrides rebootOk:false — that is `module-manager module update <m> --allow-disruption`."],
         ["--no-git-pull", "Update whatever is checked out; skip pulling each repository (test local, not-yet-pushed changes)."],
+        ["--stop", "Stop the running update gracefully: the module in progress finishes, the rest are skipped (the next update takes them), and the run is recorded as interrupted. Ctrl-C only stops following a run; `sudo systemctl stop update-tappaas.service` stops it at once, without rolling back the module in progress."],
       ] },
     { usage: "test [--deep] [--verbose]",
       note: "(run every deployed module's tests, from every repository; one line per module, each module's output in ~/logs/site-test-<time>/)",
@@ -329,7 +330,7 @@ interface Opts {
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
   "--pxe", "--provision", "--config-only", "--yes", "--no-wan", "--no-reboot", "--wipe",
   "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned", "--primary", "--check",
-  "--verbose"]);
+  "--verbose", "--stop"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -1411,6 +1412,7 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
   const nowSec = Math.floor(Date.now() / 1000);
   const holds = readHolds(o.configDir);
 
+  if (o.boolFlags.has("--stop")) return cmdUpdateStop(o, client);
   if (dryRun) {
     // ADR-017 D4: starts nothing. Where each repository stands against its
     // origin, then the sweep's plan.
@@ -1435,7 +1437,8 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
   }
   const state = client.unitState();
   if (state === "active" || state === "activating" || state === "deactivating") {
-    die(`${UNIT} is already running (${state}) — follow it: journalctl -fu ${UNIT}`);
+    die(`${UNIT} is already running (${state}). Follow it: journalctl -fu ${UNIT} · ` +
+      `stop it after the module in progress: site-manager update --stop`);
   }
   const by = process.env.SUDO_USER || process.env.USER || "unknown";
   writeRequest(o.configDir, buildRequest(force, allowDisruption, noGitPull, by, new Date()));
@@ -1444,14 +1447,20 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
     dropRequest(o.configDir);
     die(`could not start ${UNIT}: ${started.err}`);
   }
-  infoTagged(`started ${UNIT} (this run continues if you detach — Ctrl-C only stops following)`);
+  infoTagged(`started ${UNIT} (this run continues if you detach — Ctrl-C only stops following; ` +
+    `site-manager update --stop ends it after the module in progress)`);
   debug(`follow:   journalctl -fu ${UNIT}`);
   debug(`status:   systemctl status ${UNIT}`);
   if (client.followUnit(started.invocationId) === "detached") {
-    infoTagged(`detached — the run continues: journalctl -fu ${UNIT}`);
+    infoTagged(`detached — the run continues: journalctl -fu ${UNIT} · to stop it: site-manager update --stop`);
     return 0;
   }
   const result = client.unitResult();
+  const last0 = readResult(o.configDir);
+  if (result === "success" && last0?.result === "interrupted") {
+    infoTagged(summaryLine(last0));
+    return 0;
+  }
   // On success update-tappaas's own last line, just followed, is this summary.
   if (result !== "success") {
     infoTagged(summaryLine(readResult(o.configDir)));
@@ -1469,6 +1478,27 @@ function cmdUpdate(o: Opts, client: SiteClient): number {
   }
   debug("verify:   jq .ok ~/config/last-update-result.json     → true");
   debug("verify:   site-manager update --dry-run               → no repository drift remains");
+  return 0;
+}
+
+// `update --stop` — ask the running sweep to stop after the module in progress.
+// It cannot be told by signal (a SIGTERM kills that module mid-change, with no
+// rollback), so it is told by a file it reads between modules, naming this
+// invocation so a request that outlives its run stops nothing.
+function cmdUpdateStop(o: Opts, client: SiteClient): number {
+  const state = client.unitState();
+  if (state !== "active" && state !== "activating") {
+    info(`${UNIT} is not running (${state}) — nothing to stop.`);
+    return 0;
+  }
+  const invocation = client.unitInvocationId();
+  if (!invocation) die(`${UNIT} is ${state} but has no InvocationID — stop it at once with: sudo systemctl stop ${UNIT}`);
+  const by = process.env.SUDO_USER || process.env.USER || "unknown";
+  writeStop(o.configDir, { requestedBy: by, at: new Date().toISOString(), invocation });
+  info(`Stop requested: the module in progress finishes, the rest are skipped and the run is recorded as interrupted.`);
+  info(`  The run still has to reach its next module — a rebuild or a long module update first runs to its end.`);
+  info(`  Follow it: journalctl -fu ${UNIT}`);
+  info(`  At once instead (the module in progress is NOT rolled back): sudo systemctl stop ${UNIT}`);
   return 0;
 }
 

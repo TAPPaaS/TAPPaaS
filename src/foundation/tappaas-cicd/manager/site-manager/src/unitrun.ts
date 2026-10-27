@@ -41,6 +41,27 @@ export function dropRequest(configDir: string): void {
   if (existsSync(f)) unlinkSync(f);
 }
 
+// A graceful stop (`site-manager update --stop`): config/.update-stop names the
+// run it is for by the unit's InvocationID. The sweep reads it before each
+// module, so the module in progress finishes; it then skips the rest and records
+// the run as interrupted. A request left behind names an invocation that is
+// over, so it can never stop the next run.
+export interface StopRequest {
+  requestedBy: string;
+  at: string; // ISO 8601
+  invocation: string;
+}
+
+export function stopPath(configDir: string): string {
+  return join(configDir.replace(/\/$/, ""), ".update-stop");
+}
+
+export function writeStop(configDir: string, req: StopRequest): string {
+  const f = stopPath(configDir);
+  writeFileSync(f, JSON.stringify(req) + "\n", "utf8");
+  return f;
+}
+
 // The run's own summary line, from config/last-update-result.json — the same
 // shape update-tappaas logs as its last line.
 export function summaryLine(result: Record<string, unknown> | null): string {
@@ -49,6 +70,14 @@ export function summaryLine(result: Record<string, unknown> | null): string {
     return `update-tappaas FAILED in the ${String(result.stage)} step (${String(result.end_time ?? "?")}) — no module was updated`;
   }
   const n = (k: string): string => String(result[k] ?? "?");
+  if (result.result === "interrupted") {
+    const i = (result.interrupted ?? {}) as Record<string, unknown>;
+    return (
+      `update-tappaas STOPPED on request of ${String(i.requestedBy ?? "?")} (${n("end_time")}) | ` +
+      `succeeded=${n("succeeded")} failed=${n("failed")} not_attempted=${n("not_attempted")} — ` +
+      `the next update takes the rest`
+    );
+  }
   return (
     `update-tappaas completed: ${n("end_time")} | control_plane=${n("control_plane")} total=${n("total")} ` +
     `succeeded=${n("succeeded")} failed=${n("failed")} not_attempted=${n("not_attempted")} ` +
