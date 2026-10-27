@@ -181,6 +181,7 @@ absolute `pxe/` path, your interface and Mac IP:
 
 ```bash
 brew install dnsmasq
+cp pxe/boot.ipxe pxe/autoexec.ipxe      # iPXE also looks for this beside itself
 cat > pxe/dnsmasq-pxe.conf <<'EOF'
 port=0                                  # DNS off — PXE only
 interface=en0                           # your Mac's LAN interface
@@ -189,12 +190,13 @@ log-dhcp
 dhcp-range=192.168.2.0,proxy            # YOUR lan subnet + 'proxy' (hands out NO leases)
 enable-tftp
 tftp-root=/absolute/path/to/pxe
+# Proxy mode answers only with pxe-service (dhcp-boot alone sends nothing):
+# the firmware gets iPXE, iPXE (user class "iPXE") gets the script over TFTP.
 dhcp-userclass=set:ipxe,iPXE
-dhcp-match=set:efi,option:client-arch,7
-dhcp-match=set:efi,option:client-arch,9
-dhcp-boot=tag:!ipxe,tag:efi,ipxe.efi          # firmware → iPXE (UEFI)
-dhcp-boot=tag:!ipxe,tag:!efi,undionly.kpxe    # firmware → iPXE (legacy BIOS)
-dhcp-boot=tag:ipxe,http://192.168.2.10:8080/boot.ipxe   # iPXE → our script (your Mac IP)
+pxe-service=tag:!ipxe,x86-64_EFI,"TAPPaaS: iPXE",ipxe.efi
+pxe-service=tag:!ipxe,BC_EFI,"TAPPaaS: iPXE",ipxe.efi
+pxe-service=tag:ipxe,x86-64_EFI,"TAPPaaS: installer",boot.ipxe
+pxe-service=tag:ipxe,BC_EFI,"TAPPaaS: installer",boot.ipxe
 EOF
 sudo dnsmasq --no-daemon --conf-file=pxe/dnsmasq-pxe.conf   # Ctrl-C when done
 ```
