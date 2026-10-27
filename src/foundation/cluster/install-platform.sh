@@ -363,6 +363,19 @@ build_cicd() {
   fi
 
   info "${GN}✓${CL} tappaas-cicd is installed and owns the platform (reachable at ${BL}${CICD_IP}${CL})."
+
+  # B.5 — the way to the console for whoever ran this (ADR-037 D3): the install
+  #        peer's VPN config, copied here — where the operator already is.
+  local peer="/root/tappaas-admin-vpn.conf"
+  if cicd_ssh 'cat /home/tappaas/config/admin-vpn/install-peer.conf' 2>/dev/null > "${peer}.tmp" && [[ -s "${peer}.tmp" ]]; then
+    install -m 0600 "${peer}.tmp" "${peer}"
+    info "Continue the install in the console. Import the admin VPN config into WireGuard:"
+    info "    scp root@$(hostname -I 2>/dev/null | awk '{print $1}'):${peer} .   (it holds a private key — delete it here after)"
+    info "  then open ${BL}http://${CICD_IP}:9097/${CL} and give the setup token (ssh tappaas@${CICD_IP} cat ~/config/console-setup-token)."
+  fi
+  rm -f "${peer}.tmp"
+  local lan; lan="$(cicd_ssh 'cat /home/tappaas/config/console-setup-allow 2>/dev/null' 2>/dev/null || true)"
+  [[ -n "${lan}" ]] && info "  From ${lan} (this install LAN) also without the VPN: ${BL}http://<the firewall's WAN address>:9097/${CL}"
 }
 
 # ── Run ──────────────────────────────────────────────────────────────

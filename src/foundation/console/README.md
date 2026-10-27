@@ -24,7 +24,7 @@ installer` (INSTALL.md, *Who may log in*).
 | Activity: the console's jobs, the sweep's runs and failures | `mgmt`, the admin VPN | the same |
 | The assistant: ask about the site, a module, a finding; it reads the console's records and logs and proposes a change as a card you preview and run (it never runs one) | `mgmt`, the admin VPN; `tappaas ask` on the mothership | the Assistant drawer, when the AI stack is installed |
 | "Open in" Proxmox, OPNsense, Grafana, PBS, Authentik, UniFi at the object in view | `mgmt`, the admin VPN | links that open a new tab |
-| The console before identity exists | `mgmt`, the admin VPN | `http://<tappaas-cicd>:9097/` — asks for the setup token, which is in `~/config/console-setup-token` on the mothership (the install summary names the file, never the token) |
+| The console before identity exists | `mgmt`, the admin VPN — the bootstrap makes a first peer (`/root/tappaas-admin-vpn.conf` on the node) — and, on a private WAN, the install LAN | `http://<tappaas-cicd>:9097/`, or `http://<firewall WAN>:9097/` from the install LAN — asks for the setup token, which is in `~/config/console-setup-token` on the mothership (the install summary names the file, never the token). Installing this module closes the install-LAN way in (`install-access.sh close`) |
 
 ## What is not included
 

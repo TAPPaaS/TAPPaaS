@@ -86,6 +86,18 @@ export interface ServeOpts {
 
 const list = (v: string | undefined): string[] => (v ?? "").split(",").map((s) => s.trim()).filter((s) => s.length > 0);
 
+// The networks install-access.sh added for the install LAN: one CIDR per line;
+// anything else is ignored, a missing file adds nothing.
+export function extraSetupAllow(file: string): string[] {
+  let text = "";
+  try {
+    text = readFileSync(file, "utf8");
+  } catch {
+    return [];
+  }
+  return text.split("\n").map((l) => l.trim()).filter((l) => /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/.test(l));
+}
+
 export function parseListen(v: string): { host: string; port: number }[] {
   return list(v).map((e) => {
     const m = /^(.*):(\d+)$/.exec(e);
@@ -187,7 +199,11 @@ async function serve(o: ServeOpts): Promise<number> {
   const access: AccessConfig = {
     firewall: await firewallAddress(mgmtNet),
     allow: o.allow,
-    setupAllow: process.env.CONSOLE_SETUP_ALLOW ? list(process.env.CONSOLE_SETUP_ALLOW) : [mgmtNet, adminNet].filter((x): x is string => !!x),
+    // Before identity: mgmt, the admin VPN, and the install LAN install-access.sh
+    // opened (config/console-setup-allow, a network per line; ADR-037 D3).
+    setupAllow: process.env.CONSOLE_SETUP_ALLOW
+      ? list(process.env.CONSOLE_SETUP_ALLOW)
+      : [mgmtNet, adminNet, ...extraSetupAllow(join(o.configDir, "console-setup-allow"))].filter((x): x is string => !!x),
     tokenFile: process.env.CONSOLE_SETUP_TOKEN_FILE ?? join(o.configDir, "console-setup-token"),
     identityFile: join(o.configDir, "identity.json"),
     trustLocalHeaders: o.trustLocalHeaders,

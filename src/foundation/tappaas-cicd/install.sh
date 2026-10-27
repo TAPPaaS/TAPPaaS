@@ -396,7 +396,13 @@ info "${GN}✓${CL} TAPPaaS-CICD installation completed successfully."
 _CONSOLE_TOKEN=/home/tappaas/config/console-setup-token
 if [ -s "${_CONSOLE_TOKEN}" ] && [ ! -f /home/tappaas/config/identity.json ]; then
     _cicd_addr="$(ip -4 -o addr show scope global 2>/dev/null | awk '{split($4, a, "/"); print a[1]; exit}')"
-    info "The console: http://${_cicd_addr:-tappaas-cicd.mgmt.internal}:9097/ — it asks for the setup token:"
-    info "  cat ${_CONSOLE_TOKEN}"
-    info "  from mgmt or the admin VPN, until identity is installed (then: console.<domain>, behind the gate)"
+    info "Continue the install in the console (ADR-037 D3) — it asks for the setup token:"
+    info "  cat ${_CONSOLE_TOKEN}   (on the mothership)"
+    # The ways in for the operator who ran the bootstrap (on neither mgmt nor
+    # the admin VPN): the first admin-VPN peer, and the install LAN when the
+    # WAN is private. Non-fatal: mgmt reaches the console in any case.
+    /home/tappaas/bin/install-access.sh open \
+        || _warn "could not open the install access — from mgmt, the console is at http://${_cicd_addr:-tappaas-cicd.mgmt.internal}:9097/"
+    info "  over the admin VPN or from mgmt: http://${_cicd_addr:-tappaas-cicd.mgmt.internal}:9097/"
+    info "  until identity is installed (then: console.<domain>, behind the gate)"
 fi

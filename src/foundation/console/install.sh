@@ -9,6 +9,9 @@
 # Usage: install.sh <instance>
 set -euo pipefail
 . /home/tappaas/bin/common-install-routines.sh
+# Behind the gate now: the install-LAN way in (install-access.sh, ADR-037 D3)
+# is no longer needed, and the setup token it served stops with identity.
+/home/tappaas/bin/install-access.sh close || warn "console: the install-LAN access could not be closed — install-access.sh close"
 if systemctl is-active --quiet tappaas-console.service 2>/dev/null; then
     info "${BOLD}console: registered — tappaas-console is running on the mothership${CL}"
 else

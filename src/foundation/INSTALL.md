@@ -296,7 +296,19 @@ The domain you passed configures the reverse proxy. To stop earlier, pass
 see [Appendix: install options](#appendix-install-options).
 
 When it finishes, `tappaas1` is at `10.0.0.10` behind the firewall and
-`tappaas-cicd` owns the platform. Optionally move your admin laptop onto the
+`tappaas-cicd` owns the platform. **The rest of the install can continue in the
+console** (`http://<tappaas-cicd>:9097/`, unlocked with the setup token in
+`~/config/console-setup-token` on the mothership), and the bootstrap gives you two ways
+to reach it from where you are:
+
+- **the admin VPN:** the bootstrap makes a first WireGuard peer and leaves its config on
+  the node as `/root/tappaas-admin-vpn.conf` — copy it to your laptop
+  (`scp root@<node>:/root/tappaas-admin-vpn.conf .`), import it, and delete the copy on
+  the node (it holds the peer's private key);
+- **the install LAN**, when the firewall's WAN is a private network (an install at home):
+  `http://<the firewall's WAN address>:9097/` from that network only. It closes when the
+  console module is installed behind the identity gate; on a public WAN (a hosted server)
+  there is no such way in, only the VPN. Optionally move your admin laptop onto the
 **downstream switch** (you'll get a `10.0.0.x` lease; Proxmox at
 `https://10.0.0.10:8006`, firewall GUI at `https://10.0.0.1`) — not required,
 since the node also keeps its upstream IP until you harden it later.
