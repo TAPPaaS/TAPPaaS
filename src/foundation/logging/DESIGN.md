@@ -257,6 +257,18 @@ in `config/alerts.log` on the mothership.
   so a resolve is not mailed. **state** — something is so; its resolve is mailed, as a
   reply to the alert (the condition `grafana:<rule>:<host>`, #883), and only if that
   alert was mailed.
+- **A node down is one mail.** A node that dies silences every guest on it that ships
+  logs, and each would be its own HostSilent ALERT and RESOLVED. Before a HostSilent is
+  mailed, the receiver asks the cluster (`tappaas-cluster-state.sh`: nodes, guests, the HA
+  manager's journal) whether its host is an offline node or a guest on one. If so, the
+  first such alert mails `ALERT: node <node> is down (…)`, listing the guests down with
+  it, the HA-protected guests the HA manager moved and to which node, and those it has
+  not moved (yet). Later HostSilents of that node are recorded in its incident
+  (`/var/lib/tappaas/node-down/<node>.json`) and in `alerts.log`, not mailed. The mail
+  repeats every 4 h while the node stays down. When the node is back, one `RESOLVED: node
+  <node> is back` answers it, naming any guest that is not running again. Such a guest
+  keeps its own HostSilent, which then mails as usual. If the cluster cannot be asked,
+  every HostSilent is mailed on its own.
 - A rule declared with `bundle = true` — QuorumLost, HaFencing, HostSilent, BackupFailed,
   OomKill, ReplicationFailed, HaStuck, LanLegDown — carries a support bundle: the
   cluster's state and the site's anonymized configuration from half an hour before it

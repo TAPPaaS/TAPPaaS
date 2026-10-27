@@ -29,6 +29,7 @@ src/foundation/tappaas-cicd/
 ├── scripts/site-notify.sh             # the mail itself: site.json email via a node's mailer (ADR-007e)
 ├── scripts/tappaas-support-bundle.sh  # the support bundle an alert carries
 ├── scripts/support-anonymize.py       # …its anonymizer: the config in, personal data and secrets out
+├── scripts/tappaas-cluster-state.sh   # nodes, guests and HA moves as JSON: the node-down alert
 ├── tappaas-cicd.nix / flake.nix       # the cicd VM's NixOS configuration
 ├── manager/                           # domain-object lifecycle (CONFIG state)
 │   ├── install.sh / update.sh / test.sh   # dispatcher: loop child components

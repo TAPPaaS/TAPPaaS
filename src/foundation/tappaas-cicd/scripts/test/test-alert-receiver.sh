@@ -41,9 +41,20 @@ echo "${TMP}/b.tar.gz"
 EOF
 chmod +x "${TMP}/bundle"
 
+cat > "${TMP}/cluster" <<EOF
+#!/usr/bin/env bash
+# fake tappaas-cluster-state.sh: the document the test wrote, or no answer
+[[ -e "${TMP}/cluster-fails" ]] && exit 1
+cat "${TMP}/cluster.json"
+EOF
+chmod +x "${TMP}/cluster"
+# No node down: the cluster as it is most of the time.
+echo '{"nodes":[{"name":"tappaas1","online":true},{"name":"tappaas2","online":true}],"quorate":true,"guests":[],"ha_log":[]}' > "${TMP}/cluster.json"
+
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
 python3 "${R}" --listen "127.0.0.1:${PORT}" --token-file "${TMP}/token" \
-    --notify "${TMP}/notify" --bundle "${TMP}/bundle" --breadcrumb "${TMP}/crumbs" --heartbeat-file "${TMP}/heartbeat" > "${TMP}/log" 2>&1 &
+    --notify "${TMP}/notify" --bundle "${TMP}/bundle" --breadcrumb "${TMP}/crumbs" --heartbeat-file "${TMP}/heartbeat" \
+    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down" --cluster-cache 0 > "${TMP}/log" 2>&1 &
 PID=$!
 for _ in $(seq 1 50); do curl -s "http://127.0.0.1:${PORT}/" >/dev/null 2>&1 && break; sleep 0.1; done
 
@@ -115,6 +126,53 @@ for _ in $(seq 1 50); do grep -q 'QuorumLost on tappaas2' "${TMP}/args" 2>/dev/n
 ck "…the bundle starts half an hour before it fired" "yes" "$(grep -q -- '--since 2026-10-04 17:30:00 UTC' "${TMP}/bundle-args" && echo yes || echo no)"
 ck "…and the mail carries it" "yes" "$(grep 'QuorumLost on tappaas2' "${TMP}/args" | grep -q -- "--attach ${TMP}/b.tar.gz" && echo yes || echo no)"
 ck "…and its subject does not show the bundle label" "ALERT: QuorumLost on tappaas2" "$(tail -1 "${TMP}/subjects")"
+
+# A node down is one notice: tappaas2 dies with two plain guests, one HA guest
+# the CRM moved to tappaas1 and one it has not moved yet (hrossen 2026-10-27:
+# nine HostSilent ALERTs, then nine RESOLVEDs).
+cat > "${TMP}/cluster.json" <<'EOF'
+{"nodes":[{"name":"tappaas1","online":true},{"name":"tappaas2","online":false},{"name":"tappaas3","online":true}],"quorate":true,
+ "guests":[{"vmid":140,"name":"identity","type":"qemu","node":"tappaas1","status":"running","ha":"started"},
+           {"vmid":150,"name":"logging","type":"qemu","node":"tappaas1","status":"running","ha":""},
+           {"vmid":350,"name":"forgejo","type":"qemu","node":"tappaas2","status":"unknown","ha":""},
+           {"vmid":351,"name":"woodpecker","type":"qemu","node":"tappaas2","status":"unknown","ha":""},
+           {"vmid":610,"name":"vaultwarden","type":"qemu","node":"tappaas2","status":"unknown","ha":"fence"}],
+ "ha_log":["2026-10-27T13:02:00+01:00 tappaas1 pve-ha-crm[1]: recover service 'vm:150' from fenced node 'tappaas2' to node 'tappaas1'",
+           "2026-10-27T13:05:00+01:00 tappaas1 pve-ha-crm[1]: node 'tappaas2': state changed from 'unknown' => 'online'",
+           "2026-10-27T14:15:51+01:00 tappaas1 pve-ha-crm[1]: node 'tappaas2': state changed from 'online' => 'unknown'",
+           "2026-10-27T14:18:00+01:00 tappaas1 pve-ha-crm[1]: recover service 'vm:140' from fenced node 'tappaas2' to node 'tappaas1'"]}
+EOF
+: > "${TMP}/args"; : > "${TMP}/subjects"; : > "${TMP}/bodies"
+ck "a guest of a down node: accepted" "200" "$(post rotated "$(wh firing state HostSilent woodpecker)")"
+for _ in $(seq 1 50); do grep -q 'node tappaas2' "${TMP}/subjects" 2>/dev/null && break; sleep 0.1; done
+ck "…one notice for the node, counting what it took down" "ALERT: node tappaas2 is down (2 guests down, 1 moved by HA, 1 HA not moved yet)" "$(tail -1 "${TMP}/subjects")"
+ck "…a condition of its own" "yes" "$(grep -q -- '--key grafana:NodeDown:tappaas2$' "${TMP}/args" && echo yes || echo no)"
+ck "…naming when it went (not an earlier outage)" "yes" "$(grep -q 'saw it go at 2026-10-27T14:15:51' "${TMP}/bodies" && echo yes || echo no)"
+ck "…the guests down with it" "  forgejo (350)|  woodpecker (351)" "$(sed -n '/^Down with it/,/^$/p' "${TMP}/bodies" | grep '^  ' | paste -sd'|' -)"
+ck "…the HA guest moved, and where (an earlier outage's move is not listed)" "  identity (140)  tappaas2 -> tappaas1" "$(sed -n '/^HA-protected, moved/,/^$/p' "${TMP}/bodies" | grep '^  ')"
+ck "…the HA guest not moved yet" "  vaultwarden (610)  HA state: fence" "$(sed -n '/^HA-protected, not moved/,/^$/p' "${TMP}/bodies" | grep '^  ')"
+ck "the node's own silence: folded, not mailed" "200" "$(post rotated "$(wh firing state HostSilent tappaas2)")"
+ck "another guest's silence: folded, not mailed" "200" "$(post rotated "$(wh firing state HostSilent forgejo)")"
+ck "…still one mail" "1" "$(wc -l < "${TMP}/subjects" | tr -d ' ')"
+ck "…the incident remembers who was silent" "woodpecker tappaas2 forgejo" "$(jq -r '.members | join(" ")' "${TMP}/node-down/tappaas2.json")"
+ck "…each fold is a breadcrumb" "yes" "$(grep -q 'folded into node tappaas2 down: HostSilent on forgejo' "${TMP}/crumbs" && echo yes || echo no)"
+ck "a silent host on a node that is up: mailed on its own" "ALERT: HostSilent on logging" \
+   "$(post rotated "$(wh firing state HostSilent logging)" >/dev/null; tail -1 "${TMP}/subjects")"
+post rotated "$(wh resolved state HostSilent woodpecker)" >/dev/null
+ck "a folded guest back while the node is down: no node RESOLVED" "0" "$(grep -c 'RESOLVED: node' "${TMP}/subjects")"
+# tappaas2 is back; vaultwarden did not start
+sed -e 's/"online":false/"online":true/' -e 's/"unknown"/"running"/' "${TMP}/cluster.json" \
+    | jq '.guests |= map(if .name == "vaultwarden" then .status = "stopped" else . end)' > "${TMP}/c2" && mv "${TMP}/c2" "${TMP}/cluster.json"
+post rotated "$(wh resolved state HostSilent forgejo)" >/dev/null
+ck "the node is back: one RESOLVED for it" "RESOLVED: node tappaas2 is back" "$(grep 'RESOLVED: node' "${TMP}/subjects")"
+ck "…as the reply to its ALERT" "yes" "$(grep -q -- '--key grafana:NodeDown:tappaas2 --resolve' "${TMP}/args" && echo yes || echo no)"
+ck "…naming a guest that did not come back" "yes" "$(grep -q '^  vaultwarden on tappaas2  (stopped)' "${TMP}/bodies" && echo yes || echo no)"
+ck "…and the incident is closed" "no" "$([[ -e "${TMP}/node-down/tappaas2.json" ]] && echo yes || echo no)"
+jq '.nodes |= map(if .name == "tappaas2" then .online = false else . end)' "${TMP}/cluster.json" > "${TMP}/c2" && mv "${TMP}/c2" "${TMP}/cluster.json"
+: > "${TMP}/cluster-fails"
+ck "the cluster cannot be asked: the host is mailed on its own, as before" "ALERT: HostSilent on forgejo" \
+   "$(post rotated "$(wh firing state HostSilent forgejo)" >/dev/null; tail -1 "${TMP}/subjects")"
+rm -f "${TMP}/cluster-fails"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"
