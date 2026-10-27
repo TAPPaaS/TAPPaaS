@@ -39,7 +39,7 @@ location           location list [--json]
                    location modify <name> [--set <field>=<value>]... [--<shortcut> <value>]... [--unset <f,g>] [--check]
                    location delete <name> [--check]
 node               node list [--json]
-                   node add <N> [--pxe] [--boot-disk <d>] [--boot-mirror <d>] [--mac <m>]
+                   node add <N> [--pxe] [--boot-disk <d>] [--boot-mirror <d>] [--switch-port <sw>:<p>|--mac <m>]
                             [--wan-port <if>|--no-wan] [--lan-ports <a,b>]
                             [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot]
                             [--config-only [--storage-pools <a,b>]]
@@ -331,8 +331,17 @@ pools' cluster storage entries and its boot pool as `local-zfs`. Every wait is
 time-boxed and the PXE trap is disarmed on every exit path. Fully unattended example:
 
 ```
+site-manager node add tappaas2 --pxe --switch-port "USW Pro XG 10 PoE:1" --no-wan
 site-manager node add tappaas2 --pxe --mac aa:bb:cc:dd:ee:ff --no-wan
 ```
+
+**Where it is cabled comes first.** `--switch-port <switch>:<port>` names the port on a
+switch TAPPaaS programs: node add makes it a node trunk on the switch, then watches it
+while the machine netboots (`switch-manager port-neighbors`) and pins the registration
+to the one MAC that appears there and is no cluster node's. On a switch TAPPaaS does not
+program, node add prints the port to configure — a trunk, the mgmt network untagged,
+every active zone's VLAN tagged — and `--mac` is required. A registration that names no
+MAC never answers a machine that is a cluster node.
 
 **Boot disks: two fields, blank is the default.** `--boot-disk` and `--boot-mirror`
 each take a size (`2TB`, `1.92T`, `500GB`: within 10 %), a model (`"Samsung 990"`) or

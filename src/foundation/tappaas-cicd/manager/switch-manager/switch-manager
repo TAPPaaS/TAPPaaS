@@ -90,7 +90,9 @@ Inventory (recorded in switch-configuration-actual.json):
   remove-switch <name>
   add-port <switch> <port> --type node|switch|ap|device|uplink
         [--target <t>] [--target-port <tp>] [--mode trunk|access]
-        [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>]
+        [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>] [--apply]
+                          --apply programs that switch at once (else the next
+                          reconcile --apply does)
   update-port <switch> <port> [ ...same flags... ]
   update-port <switch> <port> --park [--park-zone <zone>]
                           park the port on the switch now (an access port in
@@ -113,6 +115,10 @@ Inventory (recorded in switch-configuration-actual.json):
   list [--json]
   list-ports [<switch>] [--json]
                           one line per port: actual config + drift vs zones.json
+  port-neighbors <switch> <port> [--refresh] [--json]
+                          the MACs its controller reports behind the port (its
+                          MAC table, LLDP, the lease); --refresh reads the
+                          switches first (interrogate --no-park)
   show <controller|switch>
   validate                every switch's and access point's location is one of
                           the site's (free text belongs in its description)
@@ -150,8 +156,9 @@ remove-controller:
 add-switch: --vendor= --ip= --managed= --controller= --model= --location= --description=
 modify-switch: --location= --description= --model= --ip= --unset=
 remove-switch:
-add-port: ${PORT_OPTS}
-update-port: ${PORT_OPTS} --park --park-zone=
+add-port: ${PORT_OPTS} --apply
+update-port: ${PORT_OPTS} --park --park-zone= --apply
+port-neighbors: --refresh --json
 remove-port: --park-zone=
 lag: --ports= --apply --json
 mlag-pair: --peer-port= --json
@@ -370,9 +377,10 @@ _port_set() { # _port_set <add|update> <switch> <port> [flags...]
     registered=$(jq -r --arg n "${sw}" --arg p "${port}" '.switches[$n].ports[$p].type // null | . != null' "${ACTUAL}")
     if [[ "${op}" == "add" && "${registered}" == "true" ]]; then die "Port '${port}' already on '${sw}' (use update-port)"; fi
 
-    local type="" target="" target_port="" mode="" zone="" native="" tagged="" description="" park=0
+    local type="" target="" target_port="" mode="" zone="" native="" tagged="" description="" park=0 apply=0
     while [[ $# -gt 0 ]]; do case "$1" in
         --park) park=1; shift ;;
+        --apply) apply=1; shift ;;
         --type) type="$2"; shift 2 ;;
         --target) target="$2"; shift 2 ;;
         --target-port) target_port="$2"; shift 2 ;;
@@ -385,8 +393,8 @@ _port_set() { # _port_set <add|update> <switch> <port> [flags...]
     esac; done
     if [[ "${park}" == 1 ]]; then
         [[ "${op}" == "update" ]] || die "--park is for update-port"
-        [[ -z "${type}${target}${target_port}${mode}${zone}${native}${tagged}${description}" ]] \
-            || die "update-port --park takes no other port flag (--park-zone names the zone)"
+        [[ -z "${type}${target}${target_port}${mode}${zone}${native}${tagged}${description}" && "${apply}" == 0 ]] \
+            || die "update-port --park takes no other port flag (--park-zone names the zone; it is applied at once)"
         park_port "${sw}" "${port}"
         return
     fi
@@ -428,6 +436,34 @@ _port_set() { # _port_set <add|update> <switch> <port> [flags...]
     fi
     jq_actual '.switches[$n].ports[$p] = $port' --arg n "${sw}" --arg p "${port}" --argjson port "${upd}"
     info "${GN}✓${CL} ${sw} port ${port}: $(jq -c . <<<"${upd}")"
+    # Recording a port changes the switch only at the next apply; --apply is
+    # that apply for this one switch, now.
+    [[ "${apply}" == 1 ]] || return 0
+    apply_one "${sw}"
+}
+
+# port-neighbors <switch> <port> [--refresh]: what the controller reports behind
+# the port — one MAC per line (--json: the entries, with LLDP and the lease).
+# --refresh reads the switches first, without parking anything. A switch whose
+# controller reports no neighbours gives none.
+cmd_port_neighbors() {
+    local sw="" port="" refresh=0
+    while [[ $# -gt 0 ]]; do case "$1" in
+        --refresh) refresh=1; shift ;;
+        --json) shift ;;
+        *) if [[ -z "${sw}" ]]; then sw="$1"; elif [[ -z "${port}" ]]; then port="$1"; else die "port-neighbors: unexpected '$1'"; fi; shift ;;
+    esac; done
+    [[ -n "${sw}" && -n "${port}" ]] || die "port-neighbors requires <switch> <port>"
+    jq -e --arg n "${sw}" '.switches | has($n)' "${ACTUAL}" >/dev/null || die "Switch '${sw}' not found"
+    if [[ "${refresh}" == 1 ]]; then
+        NO_PARK=1 cmd_interrogate >/dev/null 2>&1 || warn "port-neighbors: not every switch could be read — what is shown may be old"
+    fi
+    jq -e --arg n "${sw}" --arg p "${port}" '.switches[$n].ports | has($p)' "${ACTUAL}" >/dev/null || die "Port '${port}' not on '${sw}'"
+    if [[ "${JSON}" == 1 ]]; then
+        jq --arg n "${sw}" --arg p "${port}" '.switches[$n].ports[$p].neighbors // []' "${ACTUAL}"
+    else
+        jq -r --arg n "${sw}" --arg p "${port}" '.switches[$n].ports[$p].neighbors // [] | .[].mac' "${ACTUAL}"
+    fi
 }
 
 cmd_add_port()    { _port_set add "$@"; }
@@ -1273,6 +1309,7 @@ main() {
         mlag-pair)         cmd_mlag_pair "$@" ;;
         list)              cmd_list ;;
         list-ports|--list-ports) cmd_list_ports "${1:-}" ;;
+        port-neighbors)    cmd_port_neighbors "$@" ;;
         show)              cmd_show "${1:-}" ;;
         interrogate)       cmd_interrogate; [[ "${PARK_REFUSED}" == 0 ]] || exit 1 ;;
         update-desired)    cmd_update_desired ;;

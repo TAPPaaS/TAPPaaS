@@ -34,8 +34,8 @@ switch-manager <command> [args]
 | `add-switch <name> --vendor <v> --managed auto\|manual [--controller <c>] [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]` | Register a switch. `--location` is one of the site's locations (`site-manager location list`); unset, the primary one. Free text — "rack 1, top" — goes in `--description`. |
 | `modify-switch <name> [--location <name>] [--description <d>] [--model <m>] [--ip <ip>] [--unset location,description]` | Change the switch's own record, in `actual.json` and `desired.json`; nothing on the switch changes. |
 | `remove-switch <name>` | Remove a switch. |
-| `add-port <switch> <port> --type node\|switch\|ap\|device\|uplink [--target <t>] [--target-port <tp>] [--mode trunk\|access] [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>]` | Register a port and what it connects to. |
-| `update-port <switch> <port> [ ...same flags... ]` | Change a port's settings. Giving a parked port a `--type` takes it into use (`add-port` may too). |
+| `add-port <switch> <port> --type node\|switch\|ap\|device\|uplink [--target <t>] [--target-port <tp>] [--mode trunk\|access] [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>] [--apply]` | Register a port and what it connects to. It is set on the switch at the next `reconcile --apply`; `--apply` programs that switch at once (read, desired, its delta, confirmed). |
+| `update-port <switch> <port> [ ...same flags... ] [--apply]` | Change a port's settings. Giving a parked port a `--type` takes it into use (`add-port` may too). `--apply` as for `add-port`. |
 | `update-port <switch> <port> --park [--park-zone <zone>]` | Park the port: set it **on the switch, at once and alone**, as an access port in iotLocal, then record it parked. |
 | `remove-port <switch> <port> [--park-zone <zone>]` | Give the port back: the same as `--park` — the switch first, then the record becomes a parked one. |
 | `lag set <switch> <name> --ports <p,p> [--apply]` | Make registered ports one LACP aggregate (LAG). The lowest port leads it (ports in natural order: `ether2` before `ether10`). `--apply` programs that switch at once; otherwise the next `reconcile --apply` does. |
@@ -46,6 +46,7 @@ switch-manager <command> [args]
 | `mlag-pair list [--json]` | Each pair, each peer's live MLAG state (`mlag-status` of its controller) and the LAGs across it, with what is wrong (no member on a peer, another mlag-id on the switch). `health-manager validate` checks the same offline (`mlag-pairs`). |
 | `lag list [<switch>] [--json]` | The declared aggregates, and whether the switch has formed them. |
 | `list [--json]` | List controllers and switches. |
+| `port-neighbors <switch> <port> [--refresh] [--json]` | The MACs the controller reports behind the port, one per line (`--json`: with LLDP and the lease). `--refresh` reads the switches first, parking nothing. `site-manager node add --switch-port` learns a netbooting machine's MAC with it. |
 | `list-ports [<switch>] [--json]` | One line per port: actual config and drift vs `zones.json`; `--json` adds what `zones.json` wants on it (`desired`), `drift` (`in-sync`, `drift`, `unmanaged`), `parked`, `link`, `disabled`, `lagLead` and `neighbors` (what the controller reports behind the port: MAC, LLDP, lease; empty when it reports none). |
 | `show <controller\|switch>` | Show one inventory entry. |
 

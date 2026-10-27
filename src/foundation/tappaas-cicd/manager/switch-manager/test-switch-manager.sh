@@ -448,6 +448,38 @@ ck "lag remove from one side clears both" "null null" "$(jq -r '"\(.switches.mtA
 PLUGIN_DIR="${MT}" "${SM}" mlag-pair remove mtA >/dev/null 2>&1
 ck "mlag-pair remove" "0" "$(jq '.mlagPairs | length' "${ACT}")"
 
+# ── port-neighbors and add/update-port --apply (ADR-037 D4) ─────────
+# The stub controller reports NSw: port 1 up with NB_NEIGHBORS behind it, port 2
+# free (no link) — a read that parks would park it.
+NBD="${TMP}/nbplug"; mkdir -p "${NBD}"
+cat > "${NBD}/nb.sh" <<'EOF'
+plugin_supports() { [[ "$1" == "nbv" ]]; }
+plugin_arch() { echo controller; }
+plugin_controller_interrogate() {
+    printf '{"switches":{"NSw":{"vendor":"nbv","model":"N1","managementIp":"1.2.3.9","ports":{"1":{"mode":"trunk","nativeVlan":0,"taggedVlans":[],"link":"up","lagMembers":[],"neighbors":%s},"2":{"mode":"trunk","nativeVlan":0,"taggedVlans":[],"link":"down","lagMembers":[]}}}},"aps":{}}' "${NB_NEIGHBORS:-[]}"
+}
+plugin_apply() { cp "${SWITCH_DESIRED:-${CONFIG_DIR}/switch-configuration-desired.json}" "${CONFIG_DIR}/nb-applied.json"; return "${STUB_APPLY_RC:-0}"; }
+EOF
+PLUGIN_DIR="${NBD}" "${SM}" add-controller cnb --vendor nbv --ip 1.2.3.9 >/dev/null 2>&1
+PLUGIN_DIR="${NBD}" "${SM}" interrogate --no-park >/dev/null 2>&1
+ck "port-neighbors: none reported"           ""   "$(PLUGIN_DIR="${NBD}" "${SM}" port-neighbors NSw 1)"
+export NB_NEIGHBORS='[{"mac":"02:aa:bb:cc:dd:01","lease":{"hostname":"pxe","address":"10.0.0.211"}}]'
+ck "port-neighbors --refresh reads the switch" "02:aa:bb:cc:dd:01" "$(PLUGIN_DIR="${NBD}" "${SM}" port-neighbors NSw 1 --refresh)"
+ck "…--json carries the lease"               "pxe" "$(PLUGIN_DIR="${NBD}" "${SM}" port-neighbors NSw 1 --json | jq -r '.[0].lease.hostname')"
+ck "…and parks nothing"                       "null" "$(jq -r '.switches.NSw.ports["2"].parked // null' "${ACT}")"
+ck "port-neighbors: no such port (rc)"        "1"  "$(rc_of "${SM}" port-neighbors NSw 9)"
+ck "port-neighbors: no such switch (rc)"      "1"  "$(rc_of "${SM}" port-neighbors nope 1)"
+unset NB_NEIGHBORS
+rm -f "${TMP}/nb-applied.json"
+out="$(PLUGIN_DIR="${NBD}" "${SM}" add-port NSw 2 --type node --target tappaas9 --apply 2>&1)"; rc=$?
+ck "add-port --apply (rc)"                    "0"  "${rc}"
+ck "…programs the switch at once: a node trunk" "trunk 200,310,410,610" "$(jq -r '.switches.NSw.ports["2"] | "\(.mode) \(.taggedVlans | join(","))"' "${TMP}/nb-applied.json" 2>/dev/null)"
+ck "…and confirms it"                         "in-sync" "$("${SM}" list-ports NSw --json | jq -r '.[0].ports[] | select(.port=="2") | .drift')"
+ck "update-port --park --apply refused (rc)"  "1"  "$(rc_of "${SM}" update-port NSw 2 --park --apply)"
+out="$(STUB_APPLY_RC=1 PLUGIN_DIR="${NBD}" "${SM}" update-port NSw 2 --type node --target tappaas8 --apply 2>&1)"; rc=$?
+ck "update-port --apply on a switch that refuses (rc)" "2" "${rc}"
+ck "…says so"                                 "yes" "$(has "${out}" 'NSw: not programmed')"
+
 echo ""
 echo "test-switch-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

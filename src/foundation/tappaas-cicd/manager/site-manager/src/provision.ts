@@ -39,6 +39,7 @@ import { mgmtDomain } from "../../../lib/ts/src/cluster";
 import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { clusterNode } from "../../../lib/ts/src/nodes";
 import { clusterScript, defaultConfigDir } from "./config";
+import { learnMac, parseSwitchPort, preparePort, printManualPortSetup, warnSeveral } from "./port";
 
 const SERVE_UNIT = "tappaas-repo-serve";
 const SERVE_PORT = 8090; // open in the cicd firewall; free while trap is down
@@ -58,6 +59,7 @@ export interface ProvisionOpts {
   ttlSeconds: number;
   yes: boolean;
   noReboot?: boolean; // skip the reboot into the kernel the baseline installed
+  switchPort?: string; // <switch>:<port> it is cabled to — the MAC is learned there (ADR-037 D4)
 }
 
 // ── boot disks named before the install ─────────────────────────────────
@@ -314,6 +316,24 @@ export function provisionNode(o: ProvisionOpts): void {
   if (diskProblems.length > 0) die(diskProblems.join("\n"));
   for (const w of bootDiskWarnings(o.bootDisk, o.bootMirror)) warn(w);
 
+  // Where it is cabled (ADR-037 D4): a port on a switch TAPPaaS programs is made
+  // a node trunk and the MAC is learned there; elsewhere the MAC is the operator's.
+  const sp = o.switchPort ? parseSwitchPort(o.switchPort) : null;
+  if (o.switchPort && !sp) die(`--switch-port '${o.switchPort}': <switch>:<port>, e.g. "USW Pro XG 10 PoE:1"`);
+  if (!sp && o.macs.length === 0) {
+    printManualPortSetup();
+    die("node add --pxe: say where the machine is — --switch-port <switch>:<port> on a switch TAPPaaS programs " +
+        "(the MAC is learned there), or --mac <m> (the machine's label, its BIOS or its BMC)");
+  }
+  let portBefore: string[] = [];
+  if (sp) {
+    step(`the switch port: ${sp.switch} port ${sp.port}`);
+    portBefore = preparePort(sp, o.name);
+  } else {
+    info("  the machine's port is configured by hand:");
+    printManualPortSetup();
+  }
+
   // register --------------------------------------------------------------
   step(`register '${o.name}' (standard mgmt IP ${stdIp})`);
   // A consumed marker from a PREVIOUS provisioning of this name would make
@@ -345,8 +365,27 @@ export function provisionNode(o: ProvisionOpts): void {
     info(`  waiting for the installer to fetch its answer (Ctrl-C aborts; trap auto-off in ${o.ttlSeconds}s)...`);
     const consumed = `${provisionDir}/${o.name}.json.consumed`;
     const answerDeadline = Date.now() + o.ttlSeconds * 1000;
+    // With --switch-port the MAC is learned while the machine netboots, and the
+    // registration pinned to it before the installer asks for its answer.
+    let learning = sp !== null && o.macs.length === 0;
+    if (learning) info(`  watching ${sp!.switch} port ${sp!.port} for the machine's MAC...`);
+    let ticks = 0;
     while (!fs.existsSync(consumed)) {
       if (Date.now() > answerDeadline) die("timed out waiting for the node to fetch its answer — trap TTL reached");
+      if (learning && ticks++ % 3 === 0) {
+        const got = learnMac(sp!, portBefore);
+        if (got.mac) {
+          learning = false;
+          if (runStream("node-provisioner", [...regArgs, "--mac", got.mac]) === 0) {
+            info(`  ${GN}✓${CL} the machine on ${sp!.switch} port ${sp!.port} is ${got.mac} — the registration is pinned to it`);
+          } else {
+            warn(`  could not pin the registration to ${got.mac} — the only pending registration still answers`);
+          }
+        } else if (got.several) {
+          learning = false;
+          warnSeveral(sp!, got.several);
+        }
+      }
       sleep(5);
     }
     try {

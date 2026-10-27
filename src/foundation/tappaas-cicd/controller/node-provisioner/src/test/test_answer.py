@@ -8,6 +8,7 @@ no match -> 404 leaving registrations pending.
 
 from __future__ import annotations
 
+import json
 import stat
 import tempfile
 import unittest
@@ -23,6 +24,7 @@ from node_provisioner.server import (
     extract_macs,
     extract_serial,
     handle_answer_post,
+    known_node_macs,
     write_node_secret,
 )
 
@@ -295,6 +297,25 @@ class TestHandleAnswerPost(unittest.TestCase):
             status, _ = self._post(["de:ad:be:ef:00:01"])
             self.assertEqual(status, 409, field)
             self.assertEqual(len(self.registry.list_pending()), 1)
+
+    def test_a_mac_less_registration_never_answers_a_cluster_node(self):
+        cfg = Path(self._tmp.name) / "config"
+        cfg.mkdir()
+        (cfg / "tappaas2.json").write_text(json.dumps({"moduleSource": "/x/pvehost",
+            "uplinks": {"lan": {"ports": ["AA:BB:CC:00:00:02"]}, "wan": {"ports": ["aa:bb:cc:00:00:03"]}}}))
+        (cfg / "old.json").write_text(json.dumps({"moduleSource": "/x/pvehost", "status": "archived",
+            "uplinks": {"lan": {"ports": ["aa:bb:cc:00:00:09"]}}}))
+        self.assertEqual(known_node_macs(cfg), {"aa:bb:cc:00:00:02", "aa:bb:cc:00:00:03"})
+        self.registry.register("tappaas4", boot_disk="sda")
+        for mac in ("aa:bb:cc:00:00:02", "AA:BB:CC:00:00:03"):
+            status, _ = handle_answer_post({"network_interfaces": [{"mac": mac}]}, self.registry, self.SITE,
+                                           domain="mgmt.internal", secrets_directory=self.secrets, config_directory=cfg)
+            self.assertEqual(status, 403, mac)
+        self.assertEqual(len(self.registry.list_pending()), 1)
+        with mock.patch("node_provisioner.server._reserve_standard_ip"):
+            status, _ = handle_answer_post({"network_interfaces": [{"mac": "aa:bb:cc:00:00:09"}]}, self.registry, self.SITE,
+                                           domain="mgmt.internal", secrets_directory=self.secrets, config_directory=cfg)
+        self.assertEqual(status, 200, "an archived node's MAC is no node's any more")
 
     def test_bad_mirror_parameter_is_refused(self):
         self.registry.register("tappaas4", boot_disk="auto")

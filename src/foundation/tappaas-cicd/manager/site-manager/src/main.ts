@@ -142,7 +142,7 @@ export const HELP: HelpSpec = {
       note: "(refused for the primary location and for one a peer, room or device names)",
       options: [["--check", "say whether it can go, in one line; write nothing."], ["--json", "with --check: the whole resulting site.json, for machines."]] },
     { usage: "node list [--json]", note: "(the cluster's nodes: their pvehost instances, with their storage pools)" },
-    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--boot-filesystem zfs|ext4] [--boot-mirror <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it on a ZFS boot pool, adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add" },
+    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--boot-filesystem zfs|ext4] [--boot-mirror <d>] [--switch-port <sw>:<p>|--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it on a ZFS boot pool, adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add" },
       hidden: ["--name <N>", "--provision", "--pool <p>"],
       options: [
         ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
@@ -150,7 +150,8 @@ export const HELP: HelpSpec = {
         ["--boot-disk <d>", "--pxe: the disk to install Proxmox on, WIPED: a size (2TB), a model (Samsung 990) or a serial — the installer matches it against the machine's disks. Blank: the smallest SSD or NVMe disk not on USB, and both when the smallest two are the same model and size (a mirrored boot pool). ask: chosen on the node's console. When nothing matches, the console asks."],
         ["--boot-mirror <d>", "--pxe: a second disk to mirror the boot pool onto, named like --boot-disk. Blank: a mirror only when --boot-disk finds two disks alike. none: one disk, even of a pair."],
         ["--boot-filesystem zfs|ext4", "--pxe: the boot disk's filesystem; zfs (default) lets the boot pool carry the guests on a node with no data disk (ADR-037 D1), ext4 only with data disks."],
-        ["--mac <m>", "--pxe: the NIC that PXE-boots."],
+        ["--switch-port <sw>:<p>", "--pxe: the switch and port the machine is cabled to, on a switch TAPPaaS programs: the port becomes a node trunk, and the machine's MAC is learned there when it netboots (blank MAC). On a switch TAPPaaS does not program, configure the port by hand — a trunk, mgmt untagged, every active zone's VLAN tagged — and give --mac."],
+        ["--mac <m>", "--pxe: the MAC of the card that netboots, from the machine's label, its BIOS or its BMC. Needed when the port is not one TAPPaaS programs; with --switch-port it may stay blank."],
         ["--wan-port <if>", "the node's WAN interface."],
         ["--no-wan", "the node has no WAN port."],
         ["--lan-ports <a,b>", "the node's lan port(s); two or more bond under lan as lanbond. Default: auto-detected, one port."],
@@ -914,6 +915,9 @@ function cmdNode(o: Opts, client: SiteClient): void {
       info(`${GN}✓${CL} node '${name}' added as a pvehost instance (pools: ${pools.join(", ") || "none"})`);
       return;
     }
+    if (o.flags.get("--switch-port") && !o.boolFlags.has("--pxe") && !o.boolFlags.has("--provision")) {
+      die("node add: --switch-port is for --pxe — a node installed by hand is at its address already");
+    }
     // ADR-037 D4: a node joins on its boot pool; its data pools are a second step.
     if (pools.length > 0) {
       die(`node add: data pools are not part of the join any more — add the node, then: ` +
@@ -932,6 +936,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
       lanPorts: o.flags.get("--lan-ports"),
       lanMode: o.flags.get("--lan-mode"),
       lanPrimary: o.flags.get("--lan-primary"),
+      switchPort: o.flags.get("--switch-port"),
       ttlSeconds: Number(o.flags.get("--ttl") ?? 7200),
       yes: o.boolFlags.has("--yes"),
       noReboot: o.boolFlags.has("--no-reboot"),

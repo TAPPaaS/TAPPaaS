@@ -34,6 +34,7 @@ from .registry import Registry, is_kernel_disk_name, normalize_mac
 from .util import (
     DEFAULT_NODE_DOMAIN,
     DEFAULT_PORT,
+    config_dir,
     default_credential_file,
     derive_node_ip,
     detect_mgmt_ip,
@@ -133,6 +134,29 @@ def _pinned_mgmt_network(reg, posted_macs: list) -> dict:
     return {"mgmt_mac": mac, "mgmt_cidr": f"{ip}/24", "mgmt_gateway": gateway}
 
 
+def known_node_macs(directory=None) -> set:
+    """The MACs of the site's cluster nodes: every port of every node's uplinks
+    in its record (config/<node>.json, a pvehost instance not archived). A
+    registration that names no MAC never answers one of these (ADR-037 D4): a
+    node that netboots by mistake is not reinstalled."""
+    found = set()
+    for path in sorted(Path(directory or config_dir()).glob("*.json")):
+        try:
+            rec = json.loads(path.read_text())
+        except (OSError, ValueError):
+            continue
+        if not isinstance(rec, dict) or not str(rec.get("moduleSource", "")).endswith("/pvehost") \
+                or rec.get("status") == "archived":
+            continue
+        for uplink in (rec.get("uplinks") or {}).values():
+            for m in (uplink or {}).get("ports", []) if isinstance(uplink, dict) else []:
+                try:
+                    found.add(normalize_mac(m))
+                except ValueError:
+                    pass
+    return found
+
+
 def extract_macs(system_info: dict) -> list:
     """MAC addresses from the installer's posted system info.
 
@@ -188,6 +212,7 @@ def handle_answer_post(
     request_ip: str = "",
     boot_disk_override: str = "",
     boot_mirror_override: str = "",
+    config_directory=None,
 ):
     """Pure-ish core of POST /answer: (http_status, body_text).
 
@@ -204,6 +229,18 @@ def handle_answer_post(
 
     info(f"answer request matched registration '{reg.name}' "
          f"(macs={macs} serial={serial})")
+    if not reg.macs:
+        posted = set()
+        for m in macs:
+            try:
+                posted.add(normalize_mac(m))
+            except ValueError:
+                pass
+        node_macs = posted & known_node_macs(config_directory)
+        if node_macs:
+            warn(f"REFUSED (not consumed): registration '{reg.name}' names no MAC, and this "
+                 f"machine is a cluster node ({', '.join(sorted(node_macs))}) — not reinstalled")
+            return 403, "this machine is a cluster node; the registration names no MAC\n"
 
     # Boot-disk resolution: a console choice (?bootdisk=, from the injected
     # /init prompt when the registration is ask-at-boot) always wins — the
