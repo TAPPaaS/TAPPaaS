@@ -152,6 +152,18 @@ for j in "${REPL_JOBS[@]}"; do [[ -n "$j" && "$LOST" -eq 1 ]] && info "  remove 
 [[ "$MEMBER" -eq 1 ]] && info "  pvecm delnode ${NODE} (from ${PEER})"
 info "  remove /etc/pve/nodes/${NODE} and its entries in the cluster's known_hosts"
 info "  remove its DNS entry (and DHCP reservation) $(rn_node_fqdn "$NODE"), and its host keys on this controller"
+# The switch ports recorded for the node (type node, target <node>) go back to
+# parked: left as they were, a port carries every node VLAN to whatever is
+# plugged in next, and its record names a node the site no longer has.
+SWITCH_DESIRED="${SWITCH_DESIRED:-/home/tappaas/config/switch-configuration-desired.json}"
+NODE_PORTS=()
+if [[ -r "${SWITCH_DESIRED}" ]]; then
+    mapfile -t NODE_PORTS < <(jq -r --arg n "${NODE}" '.switches // {} | to_entries[] | .key as $sw
+        | (.value.ports // {}) | to_entries[] | select(.value.type == "node" and .value.target == $n)
+        | "\($sw)\t\(.key)"' "${SWITCH_DESIRED}" 2>/dev/null)
+fi
+for sp in "${NODE_PORTS[@]}"; do info "  park switch port ${sp#*$'\t'} on ${sp%%$'\t'*} (it was ${NODE}'s)"; done
+info "  refresh the cluster's CPU inventory"
 for c in "${STOR_CHANGES[@]}"; do
     case "$c" in
         set*)    info "  storage ${c#set }  (${NODE} taken out)" ;;
@@ -261,6 +273,19 @@ if [[ -n "${_ip}" ]]; then
     fi
 fi
 for _h in "${NODE}" "${_fqdn}" ${_ip}; do ssh-keygen -R "${_h}" >/dev/null 2>&1 || true; done
+for sp in "${NODE_PORTS[@]}"; do
+    _sw="${sp%%$'\t'*}"; _port="${sp#*$'\t'}"
+    if switch-manager remove-port "${_sw}" "${_port}" >/dev/null 2>&1; then
+        info "  ${GN}✓${CL} ${_sw} port ${_port} parked"
+    else
+        warn "  could not park ${_sw} port ${_port} — switch-manager remove-port '${_sw}' ${_port}"
+    fi
+done
+if proxmox-controller cpu-inventory --apply >/dev/null 2>&1; then
+    info "  ${GN}✓${CL} CPU inventory refreshed without ${NODE}"
+else
+    warn "  CPU inventory not refreshed — proxmox-controller cpu-inventory --apply (the next cluster update does it)"
+fi
 for c in "${STOR_CHANGES[@]}"; do
     read -r verb s rest <<<"$c"
     if [[ "$verb" == set ]]; then
