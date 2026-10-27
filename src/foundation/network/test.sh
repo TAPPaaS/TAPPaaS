@@ -837,6 +837,10 @@ PROXY_TS="${SCRIPT_DIR}/services/proxy/test-service.sh"
 # for its environment: the first match had none on hrossen (deconz-test), so
 # every case below was skipped.
 _p580_strip() { sed 's/\x1b\[[0-9;]*m//g'; }
+# A module that expects no vhost says so in one of two ways: it has no domain
+# for its environment, or its domain is not published (no public DNS record —
+# every module on a fresh site, lab2 2026-10-27). Neither can show a false green.
+_P580_NONE="no vhost expected|is not published"
 _p580_mod=""
 _p580_probe="$(mktemp)"
 printf 'No Caddy reverse proxy entries configured\n' > "${_p580_probe}"
@@ -849,7 +853,7 @@ for f in "${CONFIG_DIR}"/*.json; do
         [[ -f "${PROXY_TS}" ]] || break
         _p580_txt="$(TAPPAAS_TEST_CADDY_LIST="${_p580_probe}" \
             bash "${PROXY_TS}" "${_p580_cand}" 2>&1 | _p580_strip || true)"
-        if [[ "${_p580_txt}" != *"no vhost expected"* ]]; then
+        if ! grep -qE "${_P580_NONE}" <<<"${_p580_txt}"; then
             _p580_mod="${_p580_cand}"
             break
         fi
@@ -875,14 +879,14 @@ else
     if grep -q "Domain .* not found in Caddy" <<<"${_p580_txt}" \
        && grep -q "Handler for .* not found in Caddy" <<<"${_p580_txt}"; then
         pass "vhost absent: Checks 1 and 2 both report the missing vhost (${_p580_mod})"
-    elif grep -q "no vhost expected" <<<"${_p580_txt}"; then
-        skip "'${_p580_mod}' has no domain for its environment — no vhost is expected either way"
+    elif grep -qE "${_P580_NONE}" <<<"${_p580_txt}"; then
+        skip "'${_p580_mod}' expects no vhost (no domain for its environment, or not published) — nothing to report either way"
     else
         fail "vhost absent: missing domain/handler NOT reported — the #580 false green is back"
     fi
 
     # Exit code is what reconcile actually reads (services.ts: rc 0 == clean).
-    if grep -q "no vhost expected" <<<"${_p580_txt}"; then
+    if grep -qE "${_P580_NONE}" <<<"${_p580_txt}"; then
         : # skipped above; rc is legitimately 0
     else
         TAPPAAS_TEST_CADDY_LIST="${_p580_dir}/empty.list" \
