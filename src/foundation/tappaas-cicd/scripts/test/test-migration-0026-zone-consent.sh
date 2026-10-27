@@ -41,7 +41,7 @@ EOF
     mod site '{"name":"s","zone0":"mgmt"}'
     mod hassanova '{"vmname":"hassanova","zone0":"srvHome","dependsOn":["sonos:audio","sonos:discovery","network:rules"]}'
     mod sonos "{\"vmname\":\"sonos\",\"zone0\":\"iotCloud\",\"moduleSource\":\"${SRC}/sonos\",\"egress\":[{\"to\":\"hassanova\",\"ports\":[8123],\"description\":\"d\"}]}"
-    mod deconz '{"vmname":"deconz","zone0":"iotCloud","egress":[{"to":"hassanova","ports":[8123],"description":"d"},{"to":"internet","ports":[443],"description":"d"}]}'
+    mod deconz '{"vmname":"deconz","zone0":"iotCloud","egress":[{"to":"hassanova","ports":[8123],"description":"d"},{"to":"hassanova","ports":[1883],"description":"d"},{"to":"internet","ports":[443],"description":"d"}]}'
     mod synology '{"vmname":"synology","zone0":"srvHome","egress":[{"to":"mgmt","ports":[514],"description":"d"},{"to":"srvHome","ports":[1],"description":"d"}]}'
     mod laptop '{"vmname":"laptop","zone0":"home","egress":[{"to":"hassanova","ports":[8123],"description":"d"}]}'
     mod web '{"vmname":"web","zone0":"srvHome","ingress":[{"from":"internet","ports":[443],"description":"d"}]}'
@@ -55,6 +55,7 @@ out="$(run --check)"; rc=$?
 ck "--check succeeds"                                   0 "${rc}"
 ck "--check writes nothing"                             "${before}" "$(cat "${CFG}/zones.json")"
 ck "…and names each grant with who needs it"            yes "$(has "${out}" "would add iotCloud to srvHome.pinhole-allowed-from — for deconz (egress to hassanova), sonos (egress to hassanova)")"
+ck "…a module with two rules for one grant is named once" 1 "$(grep -o 'deconz (egress to hassanova)' <<<"${out}" | wc -l | tr -d ' ')"
 
 out="$(run)"; rc=$?
 ck "the run succeeds"                                   0 "${rc}"

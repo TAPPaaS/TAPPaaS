@@ -143,12 +143,13 @@ if [[ "${#GRANT[@]}" -eq 0 ]]; then
     exit 0
 fi
 
-# One line per grant, in a stable order.
+# One line per grant, in a stable order; a module with two rules for one grant
+# (two ports from the same zone) is named once.
 mapfile -t KEYS < <(printf '%s\n' "${!GRANT[@]}" | sort)
 report() {
     local k
     for k in "${KEYS[@]}"; do
-        say "  $1 ${k%%$'\t'*} to ${k#*$'\t'}.pinhole-allowed-from — for $(sed 's/, /\n/g' <<<"${GRANT[${k}]}" | sort | paste -sd, - | sed 's/,/, /g')"
+        say "  $1 ${k%%$'\t'*} to ${k#*$'\t'}.pinhole-allowed-from — for $(sed 's/, /\n/g' <<<"${GRANT[${k}]}" | sort -u | paste -sd, - | sed 's/,/, /g')"
     done
 }
 
