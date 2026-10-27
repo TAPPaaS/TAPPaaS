@@ -27,6 +27,11 @@
         "mgmt",
         "admin"
       ]
+    },
+    "identity:accessControl": {
+      "gateGroups": [
+        "installer"
+      ]
     }
   }
 }

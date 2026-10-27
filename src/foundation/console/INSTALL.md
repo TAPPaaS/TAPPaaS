@@ -76,18 +76,39 @@ curl -s http://127.0.0.1:9097/api/v1/status | jq -r .data.version
 The same run updates `identity`, whose `update.sh` creates the `installer` group and puts the
 site owner in it.
 
-### 2. Who may log in, and as what
+### 2. Who may log in
 
-The gate (`identity:accessControl`) lets in members of `users`. Behind it the console's role
-table reads the groups Authentik sends (ADR-034 D3): `installer` (every verb, destructive ones
-included), `admin` (every read and every non-destructive change), `users` (read). Check that
-the operator is in `installer` before the first login:
+The console is for members of the Authentik group `installer`, and only for them. The gate
+(`identity:accessControl`) binds the console's application to `installer` alone, so anyone
+else is refused at the Authentik login and never reaches the console. Behind the gate the
+console checks the group again and answers 403 to a caller outside it, naming the group. An
+installer may do everything, destructive verbs included (each behind the object's name typed).
+Membership of `admin` or `users` gives no access: `admin` makes someone an admin of the apps,
+not an operator of the site, and `users` is everyone with an account. Service accounts follow
+the same rule: one in `installer` gets the console, one outside it gets 403, whatever scopes its
+token carries. Differentiated roles (a read-only view, a status page for the household) are a
+later step.
+
+On a site where the console module is already registered, its next update
+(`module-manager update console`) replaces the
+binding to `users` with `installer`.
+
+Check that the operator is in `installer` before the first login:
 
 ```bash
 identity-manager group list --deep          # installer, with the site owner in it
 ```
 
-If it is not there, `module-manager update identity` creates it.
+If the group is not there, `module-manager update identity` creates it with the site owner in
+it. Make another person an installer, or take it away again:
+
+```bash
+identity-manager user modify <user> --add-groups installer
+identity-manager user modify <user> --remove-groups installer
+```
+
+The change reaches Authentik at once (the verb reconciles); the person signs in again to get
+a token with the new group.
 
 ### 3. The public DNS record
 
@@ -139,8 +160,8 @@ later `module-manager modify console --set proxyAllowedZones=…`. Then, nothing
   the access list `tappaas-console`, mgmt's and the admin overlay's networks (and their IPv6
   networks where a zone has one); the split-horizon A record (and AAAA) for the name, pointing
   at the DMZ gateway; the certificate, issued by HTTP-01 on the first request.
-- `identity:accessControl`: an Authentik proxy application `console`, bound to `users`, and
-  forward-auth on the handler.
+- `identity:accessControl`: an Authentik proxy application `console`, bound to `installer`
+  only (the module's `gateGroups`), and forward-auth on the handler.
 - `litellm:models`, when the AI stack is installed (it is on hrossen): the assistant's key,
   below.
 
@@ -160,8 +181,8 @@ curl -sI https://console.<domain>/          # from mgmt or the tunnel: 302 to th
 From any other zone (`home`, a guest network) or from the internet, the same anonymous request
 is redirected to the Authentik login as well, and a signed-in one gets 403 from the access list:
 Caddy runs the gate before the access list, so from there the console itself is never reached.
-The login page is public anyway. Log in from a browser on mgmt or the tunnel: the header shows the
-user and role (`installer` for a member of `installer`), and the *Open in* jumps (Proxmox,
+The login page is public anyway. Log in from a browser on mgmt or the tunnel as a member of
+`installer`: the header shows the user and role (`installer`), and the *Open in* jumps (Proxmox,
 OPNsense, Grafana, PBS, Authentik, UniFi) open the object in view in a new tab.
 
 ### Removing it
