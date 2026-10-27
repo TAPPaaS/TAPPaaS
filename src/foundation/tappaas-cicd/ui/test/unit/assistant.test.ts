@@ -154,7 +154,7 @@ async function main(): Promise<void> {
   check(ll.bodies.length === 3 && ll.bodies.every((b) => b.model === "vllm" && b.stream === true), "three completions: two rounds of tools, then the answer");
   const sys = ll.bodies[0].messages[0];
   check(sys.role === "system" && /site rossen \(Rossen home\)/.test(sys.content ?? ""), "context: the site's name");
-  check(/talking to Lars \(lars\), role Installer/.test(sys.content ?? ""), "context: the operator's name and role");
+  check(/talking to Lars \(lars\), role installer/.test(sys.content ?? ""), "context: the operator's name and role");
   check(/In view: module immich on the module page/.test(sys.content ?? ""), "context: the page and the object in view");
   check(/never run, apply or change anything/.test(sys.content ?? "") && /module-manager: list · show <module> · modify <module> --set field=value\.\.\. W · delete <module> D/.test(sys.content ?? ""), "the rule, and the verbs in short form (W, D)");
   const sent = ll.bodies[0].tools.map((t) => t.function.name).sort();
@@ -218,7 +218,7 @@ async function main(): Promise<void> {
   o = await runTool(tools, "propose_job", JSON.stringify({ argv: ["rm", "-rf", "/"], rationale: "x" }));
   check(!o.ok && !o.proposal, "a command that is not a manager is not proposed");
   o = await runTool(tools, "propose_job", JSON.stringify({ argv: ["module-manager", "delete", "immich"], rationale: "x" }));
-  check(o.ok && o.proposal?.destructive === true && o.proposal.previewArgv === null && /Installer only/.test(o.content), "a destructive proposal says so");
+  check(o.ok && o.proposal?.destructive === true && o.proposal.previewArgv === null && /name typed/.test(o.content), "a destructive proposal says so");
   o = await runTool(tools, "propose_job", JSON.stringify({ argv: ["module-manager", "show", "immich"], rationale: "x" }));
   check(o.ok && o.proposal?.read === true && o.proposal.previewArgv === null, "a read is proposed as a read");
   check(/preview:  module-manager modify immich --set memory=10240 --dry-run\n  apply:    module-manager modify immich --set memory=10240/.test(proposalText({ ...p1!, previewArgv: p1!.previewArgv, applyArgv: p1!.applyArgv })), "tappaas ask prints a proposal as its preview and apply, not run");
@@ -369,9 +369,9 @@ async function main(): Promise<void> {
   let c = await call("GET", "/api/v1/assistant/status");
   check(c.status === 200 && (c.json().data as { available: boolean }).available === true, "GET /assistant/status: available");
   c = await call("GET", "/api/v1/assistant/status", gate("status.hrossen.dk"), "10.0.0.1");
-  check((c.json().data as { available: boolean }).available === false, "the owner's view has no assistant");
-  c = await call("POST", "/api/v1/assistant/chat", gate("status.hrossen.dk"), "10.0.0.1");
-  check(c.status === 403, "and cannot ask it");
+  check(c.status === 403, "the status route has no assistant: 403");
+  c = await call("POST", "/api/v1/assistant/chat", gateHeaders("lars", "admin|users"), "10.0.0.1");
+  check(c.status === 403, "nor does a caller outside installer");
   c = await call("POST", "/api/v1/assistant/chat", { "content-type": "text/plain" });
   check(c.status === 415, "a question is posted as JSON");
   c = await call("GET", "/api/v1/assistant/conversations", gate(), "10.0.0.1");

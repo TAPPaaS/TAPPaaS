@@ -6,7 +6,7 @@
 // goes on only on a clean one (a refusal stops it there, its output shown as a
 // preview's); after a preview of its own, Apply applies that. A disruption (--force, --allow-disruption,
 // --yes) is a checkbox that names its consequence, and a destructive verb needs
-// the object's name typed and the Installer role. A flow of several steps
+// the object's name typed. A flow of several steps
 // (update-port, then reconcile) runs them in order.
 
 import { ReactNode, createContext, useEffect, useMemo, useState } from "react";
@@ -249,7 +249,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
   const label = named.label;
   const confirmed = confirm !== "" && (confirm === object || confirm === label);
   const busy = applied !== null && !stopped; // an Apply runs or ran: the form is done
-  const canApply = !busy && !previewRunning && !refusedByDryRun && (!destructive || (confirmed && me?.role === "installer"));
+  const canApply = !busy && !previewRunning && !refusedByDryRun && (!destructive || (confirmed && canOperate(me)));
   const phase = busy ? (inApply ? (appliedJob?.state === "done" ? 4 : 3) : 2) : stopped ? 2 : previewDone ? 3 : preview ? 2 : 1;
 
   const doPreview = async () => {
@@ -291,7 +291,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
         <VerbForm step={step} verb={verb} values={values} set={setValues} />
       )}
       <Command argv={isRead ? argv : applyForm(verb, argv)} label={isRead ? "runs" : "apply runs"} />
-      {destructive ? <p className="readstate readstate-fail">Destructive: this cannot be undone from the console. It needs the Installer role{me ? ` (you are ${me.role})` : ""} and the object's name typed before Apply.</p> : null}
+      {destructive ? <p className="readstate readstate-fail">Destructive: this cannot be undone from the console. It needs the object's name typed before Apply.</p> : null}
       {destructive && !busy ? (
         <label className="form-row confirm">
           <span>Type <b className="mono">{object}</b> to confirm{label !== object ? <> — <span className="mono">{label}</span></> : null}</span>

@@ -65,21 +65,29 @@ passes to apps and confer nothing there. The installer (the site owner) is a mem
 day-2 user administration never needs the `akadmin` break-glass login; `root` deliberately
 is not.
 
-**`installer` is the console's Installer group** ([ADR-034](../../../docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md)
-D3). The console reads its role from the groups the gate sends:
+**`installer` is the console's group.** Its members, and only they, get the console
+(`console.<domain>`), and an installer may do everything there, destructive verbs
+(`delete`, `purge`, …) included, each behind the object's name typed. The console's gate is
+bound to `installer` alone, so anyone else is refused at the login; service accounts follow
+the same rule.
 
-| Authentik group | From | Console role | May |
-|---|---|---|---|
-| `installer` | this group; the installer is a member | Installer | every verb, destructive ones (`delete`, `purge`, …) included |
-| `admin` | the `admin` **role** (a role is an Authentik group of the same name) | Admin | every read and every non-destructive change |
-| `users` | the team group | read | the reads (and the owner view on `status.<domain>`) |
+| Authentik group | From | The console |
+|---|---|---|
+| `installer` | this group; the installer is a member | everything |
+| `admin` | the `admin` **role** (a role is an Authentik group of the same name) | no access: `admin` makes someone an admin of the apps (Nextcloud, …), not an operator of the site |
+| `users` | the team group, everyone with an account | no access: it includes family and friends with an app login |
 
-There is no separate `admin` group: the `admin` role already reaches Authentik as a group
-named `admin`, and a second, config-level group of that name would collide with it. Give
-another operator the console with `identity-manager user modify <name> --add-roles admin`
-(Admin) or `--add-groups installer` (Installer). An existing site gets the `installer` group
-and the site owner's membership from the identity module's update (`module-manager update
-identity`), as it got `authentik Admins`.
+Differentiated roles (a read-only view, a status page for the household) are a later step.
+Give another person the console, or take it away:
+
+```bash
+identity-manager user modify <name> --add-groups installer
+identity-manager user modify <name> --remove-groups installer
+```
+
+They sign in again to get the new group. An existing site gets the `installer` group and the
+site owner's membership from the identity module's update (`module-manager update identity`),
+as it got `authentik Admins`.
 
 Group names are free-form identifiers (internal spaces allowed, so an Authentik-created
 group can be named). The bootstrap ships flat names (`users`); for org-scoped groups the

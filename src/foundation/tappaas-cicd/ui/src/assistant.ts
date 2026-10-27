@@ -51,9 +51,8 @@ export type AssistantEvent =
   | { type: "error"; message: string };
 
 const ROLE_WORDS: Record<string, string> = {
-  installer: "Installer: may run every verb, the destructive ones with the object's name typed",
-  admin: "Admin: may run every verb but the destructive ones",
-  read: "read only: may preview nothing and run nothing; an Admin or Installer runs what you propose",
+  installer: "installer: may run every verb, the destructive ones with the object's name typed",
+  read: "read only (a shell on the mothership): may preview nothing and run nothing; an installer runs what you propose",
 };
 
 // The managers' verbs, one line per manager: each verb's usage without its
@@ -105,7 +104,7 @@ export function systemPrompt(o: { site: { name: string; displayName: string | nu
     "- A proposal or an opened form changes nothing, so never ask whether to make one: when the operator asks for a change, call open_console or propose_job in that same turn, with what is risky about it said. Never write a tool call or its JSON in your answer: call the tool.",
     "- When asked to run, apply or do something (\"run it\", \"do it\", \"go ahead\"), do not pretend and do not call any tool to do it: say that you do not run changes yourself, that the card's Run button does, so the record shows a person decided; if there is no card yet, propose one.",
     "- Before proposing a change, read what it touches (the module's fields and their change class, the node's memory commitment) and give the consequence: in-place or a restart, downtime, what it commits.",
-    "- Destructive verbs (delete, purge, retire, --remove) need the Installer role and the object's name typed; propose them only when asked, and say so.",
+    "- Destructive verbs (delete, purge, retire, --remove) need the object's name typed and cannot be undone; propose them only when asked, and say so.",
     "- Be brief: the cause with its numbers, at most two ways out with their consequence, the one you suggest. Plain text; short lists; no tables.",
     "- A question about the site's state is answered from a tool you call in this turn, never from memory. Answer in the language the operator writes in.",
     "",

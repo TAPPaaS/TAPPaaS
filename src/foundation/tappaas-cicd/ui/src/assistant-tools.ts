@@ -531,7 +531,7 @@ function propose(ctx: ToolContext, args: Record<string, unknown>): ToolOutcome {
     content:
       `Proposed as a card: ${shellQuote(words)}. ` +
       (v.read ? "It is a read: the operator's Run shows its result. " : v.preview.kind === "none" ? `It has no dry run (${v.preview.touches}); its preview shows the command. ` : "Its Preview runs the manager's own dry run. ") +
-      (v.destructive ? "It is destructive: Installer only, with the object's name typed. " : "") +
+      (v.destructive ? "It is destructive: it cannot be undone, and Apply needs the object's name typed. " : "") +
       "You have not run it and cannot: tell the operator the card is there and that its Run button runs it.",
   };
 }

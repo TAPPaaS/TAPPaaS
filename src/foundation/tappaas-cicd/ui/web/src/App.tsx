@@ -16,14 +16,11 @@ import { Site } from "./pages/Site";
 import { ModulePage } from "./pages/ModulePage";
 import { Modules } from "./pages/Modules";
 import { Overview } from "./pages/Overview";
-import { OwnerOverview } from "./pages/OwnerOverview";
-import { Physical } from "./pages/Physical";
 import { MOVED_PATHS, viewOfPath } from "./physical/views";
 import { AssistantStatus, Me, SiteRead } from "./types";
 import { Link, MeContext, replacePath, usePath } from "./ui";
 
-// The site as built is the Site page's four tabs (physical/views.ts); the
-// owner's route, which has no Site page, reaches them under Physical.
+// The site as built is the Site page's four tabs (physical/views.ts).
 const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/", label: "Overview", live: true },
   { to: "/setup", label: "Setup", live: true },
@@ -36,11 +33,6 @@ const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/security", label: "Security", live: false },
   { to: "/activity", label: "Activity", live: true },
 ];
-const OWNER_NAV: { to: string; label: string; live: boolean }[] = [
-  { to: "/", label: "Overview", live: true },
-  { to: "/site", label: "Site", live: true },
-  { to: "/modules", label: "Modules", live: true },
-];
 
 
 function active(path: string, to: string): boolean {
@@ -52,13 +44,10 @@ export function App() {
   const me = useRead<Me>("me", 300_000);
   const site = useRead<SiteRead>("site");
   const user = me.env?.data ?? null;
-  // status.<domain>: the owner's view, read-only, three pages (D2, spike §5.11).
-  const owner = user?.route === "status";
   // While the site is incomplete the Overview says so in one line and links
   // to the Setup wizard (D10); only /setup shows the wizard itself.
-  const setup = useRead<{ complete: boolean }>(user && !owner && user.role !== "read" ? "setup" : null, 600_000);
+  const setup = useRead<{ complete: boolean }>(user && user.role === "installer" ? "setup" : null, 600_000);
   const incomplete = setup.env?.data?.complete === false;
-  const nav = owner ? OWNER_NAV : NAV;
   // The views' earlier addresses keep working (bookmarks, ?select=).
   useEffect(() => {
     const to = MOVED_PATHS[path.replace(/\/+$/, "")];
@@ -70,7 +59,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const s = site.env?.data?.site;
   // The assistant (D7): only when LiteLLM answers with the console's key.
-  const astatus = useRead<AssistantStatus>(user && !owner ? "assistant/status" : null, 120_000).env?.data ?? null;
+  const astatus = useRead<AssistantStatus>(user ? "assistant/status" : null, 120_000).env?.data ?? null;
   const [drawer, setDrawer] = useState(false);
   const [asked, setAsked] = useState<{ question: string; focus: Focus; n: number } | null>(null);
   const assistant: AssistantApi = {
@@ -84,13 +73,10 @@ export function App() {
   };
 
   let page;
-  if ((path === "/" || path === "") && owner) page = <OwnerOverview />;
-  else if (owner && !view && !path.startsWith("/modules")) page = <OwnerOverview />;
-  else if (path === "/" || path === "") page = <Overview setupIncomplete={incomplete} />;
+  if (path === "/" || path === "") page = <Overview setupIncomplete={incomplete} />;
   else if (path === "/setup") page = <Setup />;
   else if (path === "/setup/day1") page = <Setup tab="Day 1" />;
   else if (path === "/setup/day2") page = <Setup tab="Day 2" />;
-  else if (owner && view) page = <Physical view={view} />;
   else if (view) page = <Site view={view} />;
   else if (path === "/modules") page = <Modules />;
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;
@@ -124,7 +110,7 @@ export function App() {
           <div className="brand-site">{s?.displayName ?? s?.name ?? "…"}</div>
         </div>
         <ul>
-          {nav.map((n) => (
+          {NAV.map((n) => (
             <li key={n.to}>
               {n.live ? (
                 <Link to={n.to} className={active(path, n.to) ? "nav-item nav-active" : "nav-item"}>
@@ -154,11 +140,11 @@ export function App() {
             site <b>{s?.name ?? "…"}</b>
           </span>
           <span className="spacer" />
-          <button className="btn" onClick={refresh} disabled={busy || owner} title="Ask the console to re-run its reads now (changes nothing on the site)">
+          <button className="btn" onClick={refresh} disabled={busy} title="Ask the console to re-run its reads now (changes nothing on the site)">
             {busy ? "Refreshing…" : "Refresh"}
           </button>
           <span className="user" title={user ? `via ${user.via}${user.groups.length ? ` · ${user.groups.join(", ")}` : ""}` : ""}>
-            {user ? `${user.user ?? "local"} · ${user.role}${user.route === "status" ? " (status)" : ""}` : "…"}
+            {user ? `${user.user ?? "local"} · ${user.role}` : "…"}
           </span>
         </header>
         {page}

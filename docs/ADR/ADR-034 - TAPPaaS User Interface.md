@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-18) — built: P1–P3 live on hrossen |
-| **Version** | 1.1 |
-| **Date** | 2026-10-18 |
+| **Version** | 1.2 |
+| **Date** | 2026-10-27 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#844** (the UI design spike and this ADR). Related: #839 (the UI, physical view first), #183 (service catalog), #91 (Backstage), #142 (agent access to `tappaas-cicd`), #843 (SIEM); caused #853, #854, #855 (switch-controller and console gaps) and #856 (the admin tunnel). Builds on ADR-007 (taxonomy, 007e Health, 007f managers and controllers), ADR-020 (declared-field changes), ADR-021 / ADR-023 / ADR-032 (reachability, routes, exposure), ADR-031 (pulse). |
-| **Changelog** | v1.1 (2026-10-25) — **D2:** the backend verifies the gate's signed token (`X-Authentik-Jwt`) and takes the user and groups from it; the firewall's address alone is no longer believed. · v1.0 (2026-10-18) — **Accepted** by the operator with the console installed and in use on hrossen; #183 is folded into the Modules page (D6) and #91 is not adopted (A3), both closed with this acceptance. · v0.4 (2026-10-18) — **D2** says what a source outside the route's zones gets as installed on hrossen: Caddy runs the gate before the access list, so an anonymous request is redirected to the login and a signed-in one gets 403; the console is never reached; was "403 to the internet". · v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
+| **Changelog** | v1.2 (2026-10-27) — **D3 amended (#878):** the console is for the `installer` group only, and an installer may do everything (destructive verbs behind the typed name); `admin` and `users` get no access, the gate's application is bound to `installer` alone, service accounts follow the same rule by their groups, and `status.<domain>` is refused for everyone until differentiated roles come, a later step. D2's table, D8 and T1 follow. · v1.1 (2026-10-25) — **D2:** the backend verifies the gate's signed token (`X-Authentik-Jwt`) and takes the user and groups from it; the firewall's address alone is no longer believed. · v1.0 (2026-10-18) — **Accepted** by the operator with the console installed and in use on hrossen; #183 is folded into the Modules page (D6) and #91 is not adopted (A3), both closed with this acceptance. · v0.4 (2026-10-18) — **D2** says what a source outside the route's zones gets as installed on hrossen: Caddy runs the gate before the access list, so an anonymous request is redirected to the login and a signed-in one gets 403; the console is never reached; was "403 to the internet". · v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
 
 One web UI for a TAPPaaS site: it shows the site and its health, draws the site as it is cabled,
 operates it through the managers and nothing else, and carries an assistant one can talk to.
@@ -109,9 +109,9 @@ Caddy and the Authentik gate. The `console` module has two routes (ADR-023, ADR-
 
 | Route | `proxyAllowedZones` | Who | May |
 |---|---|---|---|
-| `console.<domain>` | `mgmt`, `admin` (the admin VPN, ADR-010) | Authentik groups `installer`, `admin` | read and operate; destructive verbs `installer` only |
-| `status.<domain>` | the trusted client zones of the default environment | group `users` | read the owner view: Overview, Physical, Modules; no actions, no jumps, no assistant |
-| `/api/v1` on either | as the route | an Authentik app password or JWT at the gate (ADR-032 D3) | by scope: `read`, `operate`; never destructive |
+| `console.<domain>` | `mgmt`, `admin` (the admin VPN, ADR-010) | Authentik group `installer` (D3, v1.2) | everything; destructive verbs behind the typed name |
+| `status.<domain>` | the trusted client zones of the default environment | nobody until differentiated roles come (D3, v1.2) | refused (403); was: read the owner view |
+| `/api/v1` on either | as the route | an Authentik app password or JWT at the gate (ADR-032 D3) | as a person in the same groups: `installer` or nothing (D3, v1.2) |
 
 - **The name is public, the service is not.** `console.<domain>` has a public DNS record and its
   certificate comes by HTTP-01 (Caddy answers the challenge on :80), or from the wildcard where
@@ -142,9 +142,9 @@ groups are the token's, not the plain headers'. A request from the firewall with
 is refused (401). The hop from Caddy is plain HTTP on `mgmt`, so a host that intercepts it can
 replay a token until it expires (one hour by default). Loopback without the headers
 reads only (`tappaas ask`, a development forward). Before identity exists, `mgmt` and the admin VPN
-are accepted with the setup token (D10). The backend treats the `status` route as read-only
-whatever the caller's group: the route caps the role, defence in depth over the group mapping
-(D3).
+are accepted with the setup token (D10). The backend refuses the `status` route for every
+caller until differentiated roles come (D3, v1.2); it was to cap the role at read, defence in
+depth over the group mapping.
 
 Jumps into the component UIs (U5) open a new tab at the object in view: Proxmox at the node or
 guest, OPNsense at the interface or its rules, Grafana Explore with the host pre-filled, PBS at the
@@ -152,28 +152,48 @@ datastore, Authentik at the object, UniFi at the device, the SIEM at the agent. 
 only when the viewer's zone can reach the target; the `status` route never shows them. The UI
 never embeds these in an iframe and never re-implements them.
 
-### D3. Authentication by the gate, authorization by Authentik group, capped by the route
+### D3. Authentication by the gate, authorization by one Authentik group
 
 Authentication is `identity:accessControl`: Authentik forward-auth at Caddy, one provider per
 hostname, the user and groups from its signed token (`X-Authentik-Jwt`, D2). The UI has no login code of its own.
 
-Authorization is a role table in the backend, keyed by group by its TAPPaaS name
-(`identity/USERS.md`), compared without case:
+**Amended in v1.2 (operator, 2026-10-27, #878): the console is for the `installer` group only.**
 
-| Group | Role | May |
-|---|---|---|
-| `installer` | Installer: operate + destructive | every verb, including `delete`, `purge`, `retire`, `erase`, `--remove`, `--decommission`, `key import` |
-| `admin` | Admin: operate | every read and every write verb that is not destructive |
-| `users` | read | the reads the owner view shows |
+| Group | The console |
+|---|---|
+| `installer` | everything: every read and every verb, including `delete`, `purge`, `retire`, `erase`, `--remove`, `--decommission`, `key import` |
+| any other (`admin`, `users`, none) | refused: the gate's application is bound to `installer` alone, so the login refuses them; a caller that reaches the backend anyway gets 403 with a reason naming the group |
 
-`admin` is the TAPPaaS `admin` role, which Authentik already carries as a group; a config group
-of that name would collide with it. `installer` is a new group, created by the identity bootstrap
-with the installer in it and by `module-manager update identity` on an existing site.
+The group is compared without case, by its TAPPaaS name (`identity/USERS.md`); `installer` is
+created by the identity bootstrap with the installer in it and by `module-manager update
+identity` on an existing site. The console module declares `gateGroups: ["installer"]` for
+`identity:accessControl`, which binds exactly that group to the application. A destructive verb
+still needs the object's name typed; the purge of backups is a second, separate confirmation,
+never a side effect of a delete. The setup token acts as `installer` while setup is open (D10);
+loopback without the gate's headers reads only (the health checks, `tappaas ask`). The
+`status` route is refused for everyone (D2).
 
-A destructive verb needs the object's name typed and the Installer role; the purge of backups is
-a second, separate confirmation, never a side effect of a delete. The route caps the role (D2):
-`status` is read whatever the group. Machine callers (D8) get the same table through the
-provider's policy and a scope, and never the destructive role.
+**Why.** The table of v1.0 gave `users` the read profile and `admin` the operate profile.
+`users` is everyone with an account: on a home or small-office site that includes family
+members and friends with a Nextcloud or Jellyfin login, who through the read profile saw the
+site's cabling, addresses, job logs, identity records and an assistant that reads logs. And
+`admin` is the label TAPPaaS passes to apps (a Nextcloud admin): being an app admin and
+operating the site are different jobs, and one label made both. One group, held by the people
+who run the site, removes both problems; nobody who operates a site today loses anything, since
+the site owner is in `installer`.
+
+**Machine callers (D8)** follow the same rule: a service account with a client-credentials
+token through the gate gets the console when its user is in `installer` and 403 otherwise. The
+token's scopes (`read`, `operate`) grant nothing on their own: there is one role, and a scope
+cannot be checked against a group the account is not in.
+
+**A later step** brings differentiated roles: a read-only view for someone who should see the
+site but not change it, a status page for the household on `status.<domain>`, and scopes for
+machine callers that map onto them. The owner's summary the backend builds (`GET
+/api/v1/owner`) stays for that step; the front end shows no owner's view until then.
+
+*Superseded table (v1.0):* `installer` → Installer (operate + destructive), `admin` → Admin
+(operate, no destructive verb), `users` → read; `status.<domain>` capped every role at read.
 
 ### D4. Read-only first; then every change is a job that runs a manager verb with its own preview
 
@@ -300,7 +320,9 @@ for a click.
 user or service account with an **app password or a client-credentials JWT**, presented at the
 gate (ADR-032 D3) on `/api/v1`. Who may call is the provider's policy; what it may do is a
 **scope** (`read`, `operate`) mapped by the backend's role table; the destructive role is never
-granted to a machine caller. Every agent job is in Activity with the agent's own identity. The
+granted to a machine caller. *Amended in v1.2 (D3):* until differentiated roles come, a machine
+caller is treated like a person: a service account in `installer` gets the console, destructive
+verbs included, and one outside it gets 403; scopes grant nothing. Every agent job is in Activity with the agent's own identity. The
 firewall rule is the route's zone list; an agent outside `mgmt` and `admin` reaches nothing.
 
 ### D9. Technology: TypeScript backend on `lib/ts`, React, React Flow with automatic layout
@@ -457,9 +479,11 @@ installed or switched on the mothership.
 
 ## Testing
 
-- **T1 — the gate and the route cap.** A member of `users` on `status.<domain>` sees the owner
-  view and gets 403 on every write; an Admin on `console.<domain>` is refused a destructive verb;
-  a connection to the backend from a `mgmt` address other than the firewall's is refused.
+- **T1 — the gate and the group.** A member of `installer` on `console.<domain>` runs every verb,
+  destructive ones with the typed name; a member of `admin` or `users` only, a caller in no group
+  and a service account outside `installer` get 403 naming the group; `status.<domain>` gets 403
+  for everyone; a connection to the backend from a `mgmt` address other than the firewall's is
+  refused.
 - **T2 — the manifest.** Every verb in the UI exists in its manager's `--help`; an option the
   manager does not declare is refused by the UI before the job is created.
 - **T3 — preview before apply.** No job reaches Apply without a preview or a declared *no
@@ -472,7 +496,7 @@ installed or switched on the mothership.
   with it gets 401.
 - **T5 — the assistant.** Asked to run a change, it proposes a card and applies nothing; the card's
   job carries the conversation turn.
-- Unit: the role table, the route cap, the manifest parser, the topology join.
+- Unit: the installer group over the group sets (installer, admin only, users only, none, the setup token, loopback, a service account's token), the refused status route, the manifest parser, the topology join.
 - Module test for `console` (`console/test.sh`): the service answers `/api/v1/status` and every
   cached read answered at its last refresh; an anonymous request to `console.<domain>` is sent to
   the gate (302 or 401), or stopped by the zone filter (403, a warning), and never answered.

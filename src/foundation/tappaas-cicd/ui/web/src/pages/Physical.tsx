@@ -98,7 +98,7 @@ function Unplaced({ t, v, pick }: { t: Topology; v: PositionsView; pick: (s: Sel
   );
 }
 
-// Standalone (the owner's route: its own switch between the views) or on the
+// Standalone (its own switch between the views) or on the
 // Site page (embedded: the Site page has the heading and the tabs). view: the
 // one the address names, else the Overview.
 export function Physical({ embedded, view, aside, beforeFindings }: { embedded?: boolean; view?: PhysicalView; aside?: ReactNode; beforeFindings?: ReactNode }) {

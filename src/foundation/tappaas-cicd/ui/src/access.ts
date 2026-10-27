@@ -6,23 +6,26 @@
 //     carry the gate's X-Authentik-Jwt, verified against the route's provider
 //     (gate.ts), and the user and groups are the token's. One without the gate's
 //     headers came through a route without the gate and is refused.
-//   - The role comes from the Authentik groups (installer, admin, users); the
-//     `status.<domain>` route caps it at read whatever the groups say.
+//   - The console is for members of the Authentik group `installer` only, and
+//     an installer may do everything (destructive verbs behind the typed name).
+//     A gate caller outside the group is refused (403), people and service
+//     accounts alike. The `status.<domain>` route is refused for everyone until
+//     the differentiated roles come.
 //   - Before identity exists (D10) there is no gate. While config/identity.json is
 //     absent and the setup token file exists, the console also accepts the mgmt
 //     and admin-VPN networks — and every request from them must present the token.
 //     Once identity.json exists the token is refused even if its file remains.
 //
-//   - Reads are open to every accepted caller; a loopback peer without the
-//     gate's headers reads as `read`. A write (a job, P2) is never loopback's:
-//     it needs the gate (Admin or Installer) or, while setup is open, the token
-//     (mayWrite below), and the status route never writes.
+//   - A loopback peer without the gate's headers reads as `read` (the health
+//     checks, `tappaas ask`). A write (a job, P2) is never loopback's: it needs
+//     the gate's installer or, while setup is open, the token (mayWrite below).
 
 import { existsSync, readFileSync } from "fs";
 import { createHash, timingSafeEqual } from "crypto";
 import { GateKeys, verifyGateToken } from "./gate";
 
-export type Role = "installer" | "admin" | "read";
+// `installer` is the gate's installer or the setup token; `read` is loopback only.
+export type Role = "installer" | "read";
 
 export interface AccessConfig {
   firewall: string[]; // addresses whose X-Authentik-* headers are believed
@@ -42,7 +45,7 @@ export interface Me {
   groups: string[];
   role: Role;
   via: "gate" | "local" | "setup-token";
-  route: "console" | "status";
+  route: "console";
 }
 
 // `forget`: the cached gate key for that host refused the token — fetch it again soon.
@@ -130,21 +133,17 @@ export function presentedToken(headers: Record<string, string | string[] | undef
   return query;
 }
 
-// ── the role table (D3) ───────────────────────────────────────────────
+// ── the console's group (D3) ──────────────────────────────────────────
 
-// The groups the gate sends, by their TAPPaaS names (identity's bootstrap and
-// update create them, identity/USERS.md): `installer` is a group of its own; the
-// Admin is the `admin` role, which Authentik carries as a group named `admin`;
-// `users` is the team group everyone is in. Compared without case.
-export const ROLE_GROUPS: { group: string; role: Role }[] = [
-  { group: "installer", role: "installer" },
-  { group: "admin", role: "admin" },
-  { group: "users", role: "read" },
-];
+// The group whose members get the console, by its TAPPaaS name (identity's
+// bootstrap and update create it, identity/USERS.md), compared without case.
+// Nobody else gets it: `admin` is an app admin's role, not a site operator's,
+// and `users` is everyone with an account. Service accounts (client-credentials
+// tokens) follow the same rule: the token's groups, not its scopes, decide.
+export const CONSOLE_GROUP = "installer";
 
 export function roleOf(groups: string[]): Role | null {
-  const g = new Set(groups.map((x) => x.toLowerCase()));
-  return ROLE_GROUPS.find((r) => g.has(r.group))?.role ?? null;
+  return groups.some((g) => g.toLowerCase() === CONSOLE_GROUP) ? "installer" : null;
 }
 
 export function routeOf(host: string | undefined): "console" | "status" {
@@ -189,7 +188,8 @@ export function decide(
   const fromFirewall = anyMatch(peer, cfg.firewall);
   const local = anyMatch(peer, cfg.allow);
   const route = routeOf(routeHost(headers, fromFirewall || (local && cfg.trustLocalHeaders)));
-  const cap = (r: Role): Role => (route === "status" ? "read" : r);
+  // The owner's view waits for the differentiated roles: refused for everyone.
+  if (route === "status") return { ok: false, status: 403, reason: "the status route is off: the console is for the installer group only" };
 
   if (fromFirewall || (local && cfg.trustLocalHeaders && header(headers, "x-authentik-username"))) {
     const hdrUser = header(headers, "x-authentik-username");
@@ -210,8 +210,8 @@ export function decide(
       ({ user, groups, name, email } = v.claims);
     }
     const role = roleOf(groups);
-    if (!role) return { ok: false, status: 403, reason: `${user} is in none of the groups installer, admin, users` };
-    return { ok: true, me: { user, name, email, groups, role: cap(role), via: "gate", route } };
+    if (!role) return { ok: false, status: 403, reason: `${user} is not in the group ${CONSOLE_GROUP}: the console is for installers only` };
+    return { ok: true, me: { user, name, email, groups, role, via: "gate", route } };
   }
 
   const token = presentedToken(headers, queryToken);
@@ -219,7 +219,7 @@ export function decide(
     // A token is only ever good before identity exists; afterwards it is a 401
     // even if the file is still there (T6).
     if (setup.active && tokenMatches(token, cfg)) {
-      return { ok: true, me: { user: "setup", name: "Setup", email: null, groups: [], role: cap("installer"), via: "setup-token", route } };
+      return { ok: true, me: { user: "setup", name: "Setup", email: null, groups: [], role: "installer", via: "setup-token", route } };
     }
     if (!local) return { ok: false, status: 401, reason: setup.active ? "wrong setup token" : "the setup token is no longer accepted: identity is installed" };
   }
@@ -237,15 +237,12 @@ export function decide(
 
 export type WriteDecision = { ok: true } | { ok: false; status: number; reason: string };
 
-// Whether `me` may start a write: the identity must come from the gate (Admin
-// or Installer) or be the setup token while setup is open; loopback without the
-// gate's headers reads only. The status route never writes. A destructive verb
-// needs the Installer role (the setup token acts as Installer only while active).
-export function mayWrite(me: Me, setup: SetupState, destructive: boolean): WriteDecision {
-  if (me.route === "status") return { ok: false, status: 403, reason: "the status route is read-only" };
-  if (me.via === "local") return { ok: false, status: 403, reason: "a write needs the identity gate (Installer or Admin) or the setup token; loopback reads only" };
+// Whether `me` may start a write, destructive verbs included (their typed name
+// is the job's to check): the gate's installer, or the setup token while setup
+// is open. Loopback without the gate's headers reads only.
+export function mayWrite(me: Me, setup: SetupState): WriteDecision {
+  if (me.via === "local") return { ok: false, status: 403, reason: "a write needs the identity gate (the installer group) or the setup token; loopback reads only" };
   if (me.via === "setup-token" && !setup.active) return { ok: false, status: 401, reason: "the setup token is no longer accepted: identity is installed" };
-  if (me.role === "read") return { ok: false, status: 403, reason: `${me.user ?? "this caller"} may read only (a member of Admin or Installer operates)` };
-  if (destructive && me.role !== "installer") return { ok: false, status: 403, reason: "a destructive verb needs the Installer role" };
+  if (me.role !== "installer") return { ok: false, status: 403, reason: `${me.user ?? "this caller"} is not in the group ${CONSOLE_GROUP}` };
   return { ok: true };
 }

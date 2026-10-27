@@ -269,11 +269,6 @@ ol.setup { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px
 .setup-body { margin: 8px 0 0 18px; display: grid; gap: 8px; }
 .secret { border: 1px dashed var(--line); border-radius: 6px; padding: 8px 10px; }
 
-/* ── the owner's view (status.<domain>) ───────────────────────────── */
-.owner-sentence { font-size: 17px; margin: 6px 0; }
-ul.owner-services { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
-ul.owner-services li { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
-
 /* the Assistant drawer (ADR-034 D7, mockup 5) */
 .nav-assistant { width: 100%; text-align: left; font: inherit; border: 1px solid #3b4757; background: none; cursor: pointer; margin-top: 12px; }
 .nav-sub { display: block; font-size: 11px; color: #9aa4b2; font-weight: 400; }

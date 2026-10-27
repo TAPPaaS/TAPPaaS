@@ -105,7 +105,7 @@ export interface Validated {
   positionals: string[]; // the positional values (after the verb's words)
   read: boolean; // this call changes nothing (a read verb without a writeWhen option, or a readWhen word)
   preview: ManifestVerb["preview"]; // how THIS call previews: the verb's form, or none for a read verb's writeWhen call
-  destructive: boolean; // this call needs the typed name and the Installer role
+  destructive: boolean; // this call needs the object's name typed
   object: string; // what a typed confirmation must name
   objectLabel: string; // the object as shown: within its container ("<switch>:<port>"); also accepted typed
 }

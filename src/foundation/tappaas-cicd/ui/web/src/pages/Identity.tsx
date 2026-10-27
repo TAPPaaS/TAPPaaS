@@ -129,7 +129,7 @@ export function Identity() {
       <ReadState env={r.env} failure={r.failure} what="identity" />
       <ReadState env={rec.env} failure={rec.failure} what="the identity records" />
       <p className="muted small">
-        The console's roles come from these groups: <span className="mono">installer</span> (Installer), the <span className="mono">admin</span> role (Admin), <span className="mono">users</span> (read).
+        The console is for members of <span className="mono">installer</span> only; <span className="mono">admin</span> and <span className="mono">users</span> give no access to it.
       </p>
       <div className="identity-view">
         <div className="identity-graph">
