@@ -327,28 +327,33 @@ The command walks the whole flow and asks only what it cannot know:
 1. Registers the node and **arms a TTL-limited PXE trap** (auto-disarms;
    only registered machines are answered).
 2. Tells you to **network-boot the machine** (UEFI PXE, e.g. F11). The
-   node's console asks **one question — the boot disk** (it lists the
-   machine's real disks; the chosen disk is WIPED, ext4/LVM). Everything
-   else is hands-off: the installer fetches its per-node answer from the
+   installer picks the boot disk itself — the smallest SSD or NVMe disk, and
+   both of an identical smallest pair, mirrored (ZFS) — or the one `--boot-disk`
+   describes (a size such as `2TB`, a model or a serial). Only when nothing
+   matches does the node's console ask, listing the machine's real disks; the
+   chosen disk is WIPED. Everything else is hands-off: the installer fetches its per-node answer from the
    mothership and reboots into PVE. The generated root password lands
    under `~/.node-secrets/` (0600) — the mothership's ssh key is already
    authorized.
-3. Asks the **join-time questions** with the node's real hardware on
-   screen: the WAN NIC (only if this node will host firewall HA) and the
-   **data pool** declarations (e.g. `tanka1=single:nvme0n1`).
+3. Asks the **join-time questions** with the node's real ports on screen:
+   the WAN NIC (only if this node will host firewall HA) and the lan port(s).
 4. Runs the node step (served from the mothership — no GitHub needed),
    moves the node to its standard mgmt IP (`tappaasN` → `10.0.0.<9+N>`),
-   joins the Proxmox cluster, creates the pools, and captures everything
-   into site.json.
+   joins the Proxmox cluster, brings it to the cluster baseline, reboots it
+   into its new kernel, and registers it as its `pvehost` instance. Its guests
+   go to the boot pool until it has a data pool.
+5. Data pools are a separate step, against the node's real disks:
+   `site-manager node storage tappaas2` lists them, and
+   `site-manager node storage add tappaas2 tanka1 --disks <serial>,<serial> --layout mirror`
+   builds one.
 
 Every question can be pre-answered for a fully unattended run:
 
 ```bash
-site-manager node add tappaas2 --pxe --boot-disk 25414A800205 --mac aa:bb:cc:dd:ee:ff \
-    --no-wan --pool 'tanka1=single:50026B73842AD86F'
+site-manager node add tappaas2 --pxe --boot-disk 2TB --mac aa:bb:cc:dd:ee:ff --no-wan
 # --mac also pre-reserves the standard IP, so the node installs onto it directly.
-# Disks by SERIAL (lsblk -o NAME,SERIAL): kernel names (sda, nvme0n1) swap
-# between boots, so --pxe refuses them.
+# --boot-disk: a size, a model or a serial (blank: the automatic choice).
+site-manager node storage add tappaas2 tanka1 --disks 50026B73842AD86F --layout single
 ```
 
 Afterwards, fold the new topology into HA + replication:

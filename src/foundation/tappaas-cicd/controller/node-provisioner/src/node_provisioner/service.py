@@ -162,21 +162,19 @@ def enable(
     # Refresh boot.ipxe with the CONCRETE asset-server address (the iPXE DHCP
     # round's ${next-server} points at the firewall — see assets.py). The
     # asset tree is root-owned, so stage via a temp file + privileged install.
-    # A pending ask-at-boot registration (no --boot-disk) arms the console
-    # prompt via a kernel cmdline flag the injected /init looks for.
+    # The pending registrations' boot-disk fields go on the kernel command line,
+    # per MAC; the injected /init resolves them (ADR-037 D4).
     import tempfile
-    from .assets import ASK_DISK_FLAG, BOOT_IPXE_TEMPLATE
-    ask_disk = any(r.boot_disk == "ask" for r in Registry().list_pending())
+    from .assets import render_boot_script
+    pending = Registry().list_pending()
     with tempfile.NamedTemporaryFile("w", suffix=".ipxe", delete=False) as tf:
-        tf.write(BOOT_IPXE_TEMPLATE.format(
-            server=next_server, port=port,
-            askflag=ASK_DISK_FLAG if ask_disk else ""))
+        tf.write(render_boot_script(next_server, port, pending))
         _tmp_boot = tf.name
     run(["install", "-m", "0644", _tmp_boot, str(assets / "boot.ipxe")],
         privileged=True)
     os.unlink(_tmp_boot)
-    info(f"boot.ipxe refreshed (assets at http://{next_server}:{port})"
-         + (" — boot-disk console prompt ARMED" if ask_disk else ""))
+    info(f"boot.ipxe refreshed (assets at http://{next_server}:{port}) — "
+         f"boot-disk fields for {len(pending)} pending registration(s)")
 
     self_bin = _self_path()
 

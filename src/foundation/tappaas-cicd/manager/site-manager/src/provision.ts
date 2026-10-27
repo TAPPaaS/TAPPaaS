@@ -13,8 +13,9 @@
 //                  first (node-provisioner trap), then the same pipeline.
 //
 // The join pipeline (shared):
-//   a. interactive: WAN port + pools   (asked HERE, with the node's real
-//                                       NICs/disks on screen)
+//   a. interactive: WAN + lan ports    (asked HERE, with the node's real
+//                                       NICs on screen; data pools are
+//                                       `node storage add`, after — ADR-037 D4)
 //   b. serve repo on :8090 + node step (install.sh --join --non-interactive;
 //                                       the node moves to its standard mgmt
 //                                       IP mid-run, so the ssh drop is
@@ -35,6 +36,7 @@ import * as fs from "fs";
 
 import { GN, YW, CL, die, info, warn } from "../../../lib/ts/src/cli";
 import { mgmtDomain } from "../../../lib/ts/src/cluster";
+import { writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { clusterNode } from "../../../lib/ts/src/nodes";
 import { clusterScript, defaultConfigDir } from "./config";
 
@@ -49,7 +51,6 @@ export interface ProvisionOpts {
   bootFilesystem?: string; // zfs (default) | ext4 — the provisioner's --boot-filesystem
   bootMirror?: string; // a second boot disk: rpool mirrored (zfs raid1), by kernel name
   macs: string[];
-  pools: string[]; // name=layout:disk[,disk...] — created at join time
   wanPort?: string; // NIC for firewall-HA uplink; undefined => ask; "" => none
   lanPorts?: string; // #40: lan port(s), comma-separated; undefined => ask (empty = auto-detect)
   lanMode?: string; // active-backup | lacp, for two or more lan ports
@@ -59,45 +60,39 @@ export interface ProvisionOpts {
   noReboot?: boolean; // skip the reboot into the kernel the baseline installed
 }
 
-// ── disks named before the install ──────────────────────────────────────
+// ── boot disks named before the install ─────────────────────────────────
 //
-// A kernel disk name (nvme0n1, sda) is only valid for the boot it was read on.
-// Given up front with --pxe it was read on ANOTHER boot (or another OS) than
-// the installer's and the join's — and NVMe names swap between boots (#729 §3:
-// nvme0n1/nvme1n1 traded places, so the declared data disk was the new boot
-// disk). Up front, name a disk by what does not move: its serial
-// (lsblk -o NAME,SERIAL) or, for a pool, disk/by-id/<id>. Pure.
+// ADR-037 D4: the boot disk and its mirror are two fields the installer matches
+// against the machine's disks in its own boot — a size (2TB), a model or serial,
+// "ask" (the console), or blank: the smallest SSD/NVMe disk, both of an
+// identical smallest pair (mirrored). A kernel name (nvme0n1) is accepted for an
+// expert, with a warning: it holds for one boot only, and NVMe names swap
+// between boots (#729 §3). Pure.
 const KERNEL_DISK = /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|hd[a-z]+|nvme\d+n\d+|mmcblk\d+)$/;
+const BOOT_FIELD = /^[A-Za-z0-9][A-Za-z0-9 ._:-]{0,63}$/;
 
 export function isKernelDiskName(d: string): boolean {
   return KERNEL_DISK.test(d);
 }
 
-export function pxeDiskProblems(bootDisk: string | undefined, pools: string[], bootMirror?: string): string[] {
+export function bootDiskProblems(bootDisk: string | undefined, bootMirror?: string): string[] {
   const out: string[] = [];
-  if (bootMirror) {
-    // A mirrored pair is named by kernel names: the installer's serial match
-    // selects one disk only, and both are mirrored whichever comes first.
-    if (!bootDisk) out.push("--boot-mirror needs --boot-disk: the two disks of the pair, by kernel name");
-    else if (!isKernelDiskName(bootDisk) || !isKernelDiskName(bootMirror)) {
-      out.push(`--boot-disk ${bootDisk} --boot-mirror ${bootMirror}: a mirrored pair is named by kernel names (nvme0n1, nvme1n1)`);
-    } else if (bootDisk === bootMirror) out.push(`--boot-mirror ${bootMirror} is the boot disk itself`);
-  } else if (bootDisk && isKernelDiskName(bootDisk)) {
-    out.push(`--boot-disk ${bootDisk}: a kernel name moves between boots — give the disk's SERIAL ` +
-      `(lsblk -o NAME,SERIAL), or omit --boot-disk to choose it on the node console`);
-  }
-  for (const p of pools) {
-    const disks = (p.split(":")[1] ?? "").split(",").filter((d) => d !== "");
-    const bad = disks.filter(isKernelDiskName);
-    if (bad.length > 0) {
-      out.push(`--pool ${p}: ${bad.join(", ")} is a kernel name that moves between boots — use ` +
-        `disk/by-id/<id> or the disk's serial, or omit --pool to declare pools after the install`);
-    }
+  const disk = (bootDisk ?? "").trim() || "auto";
+  const mirror = (bootMirror ?? "").trim();
+  if (!BOOT_FIELD.test(disk)) out.push(`--boot-disk '${disk}': a size (2TB), a model or serial, ask, or blank for the automatic choice`);
+  if (mirror && mirror !== "none") {
+    if (!BOOT_FIELD.test(mirror) || mirror === "auto" || mirror === "ask") out.push(`--boot-mirror '${mirror}': a size, a model or serial, or none`);
+    else if (disk === "auto" || disk === "ask") out.push("--boot-mirror needs a named --boot-disk: blank, both of an identical smallest pair are mirrored already");
+    else if (mirror === disk) out.push(`--boot-mirror ${mirror} is the boot disk itself`);
   }
   return out;
 }
 
-// ── plumbing ────────────────────────────────────────────────────────────
+// The warnings for fields that are valid but fragile. Pure.
+export function bootDiskWarnings(bootDisk: string | undefined, bootMirror?: string): string[] {
+  return [bootDisk, bootMirror].filter((d): d is string => !!d && isKernelDiskName(d))
+    .map((d) => `${d} is a kernel name: it names the disk the installer's own boot calls ${d}, which need not be the one you read it on`);
+}
 
 function run(cmd: string, args: string[]): { rc: number; out: string } {
   const r = spawnSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
@@ -254,6 +249,30 @@ function registerNode(name: string, pools: string[]): void {
   }
 }
 
+// ADR-037 D4: the disks the node boots from, by serial, in its record — the
+// members of rpool (or the disk under / on an ext4 boot). Informational; a
+// failure is a warning.
+function recordBootDisks(name: string, host: string): void {
+  const r = sshTo(host,
+    `{ zpool list -vHP rpool 2>/dev/null | awk '$1 ~ /^\\/dev\\// {print $1}'; ` +
+    `[ "$(findmnt -no FSTYPE /)" = zfs ] || findmnt -no SOURCE /; } | ` +
+    `while read -r d; do p=$(lsblk -no PKNAME "$d" 2>/dev/null | head -1); lsblk -dno SERIAL "/dev/\${p:-\${d#/dev/}}" 2>/dev/null; done | grep -v '^$' | sort -u`);
+  const serials = r.out.split("\n").map((l) => l.trim()).filter((l) => /^[A-Za-z0-9._:-]+$/.test(l));
+  const file = `${defaultConfigDir().replace(/\/$/, "")}/${name}.json`;
+  if (serials.length === 0 || !fs.existsSync(file)) {
+    warn(`  ${name}'s boot disks are not recorded (no serial read) — informational only`);
+    return;
+  }
+  try {
+    const rec = JSON.parse(fs.readFileSync(file, "utf8"));
+    rec.bootDisks = serials;
+    writeJsonAtomic(file, rec);
+    info(`  ${GN}✓${CL} boot disk${serials.length > 1 ? "s (mirrored)" : ""}: ${serials.join(", ")}`);
+  } catch (e) {
+    warn(`  ${name}'s boot disks are not recorded: ${(e as Error).message}`);
+  }
+}
+
 // ── adopt: a Proxmox already runs at the designated IP ─────────────────
 
 export function adoptNode(o: ProvisionOpts): void {
@@ -278,7 +297,7 @@ export function adoptNode(o: ProvisionOpts): void {
     const noKvm = kvmProblem(o.name, stdIp);
     if (noKvm) warn(`  ${noKvm}`);
     step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
-    registerNode(o.name, o.pools);
+    registerNode(o.name, []);
     return;
   }
 
@@ -291,8 +310,9 @@ export function provisionNode(o: ProvisionOpts): void {
   const stdIp = stdIpOf(o.name);
   const provisionDir = `${defaultConfigDir()}/provision`;
   const step = stepper();
-  const diskProblems = pxeDiskProblems(o.bootDisk, o.pools, o.bootMirror);
+  const diskProblems = bootDiskProblems(o.bootDisk, o.bootMirror);
   if (diskProblems.length > 0) die(diskProblems.join("\n"));
+  for (const w of bootDiskWarnings(o.bootDisk, o.bootMirror)) warn(w);
 
   // register --------------------------------------------------------------
   step(`register '${o.name}' (standard mgmt IP ${stdIp})`);
@@ -316,8 +336,11 @@ export function provisionNode(o: ProvisionOpts): void {
   try {
     // wait for the answer to be served ---------------------------------------
     step("PXE-boot the machine now (UEFI network boot, e.g. F11)");
-    if (!o.bootDisk) {
+    if (o.bootDisk === "ask") {
       info(`  ${YW}the node's console will ask ONE question: the boot disk${CL}`);
+    } else {
+      info(`  the installer picks the boot disk${o.bootDisk ? ` matching '${o.bootDisk}'` : " automatically (the smallest SSD/NVMe; an identical smallest pair is mirrored)"}` +
+           ` — and asks on the node's console when nothing matches`);
     }
     info(`  waiting for the installer to fetch its answer (Ctrl-C aborts; trap auto-off in ${o.ttlSeconds}s)...`);
     const consumed = `${provisionDir}/${o.name}.json.consumed`;
@@ -425,18 +448,8 @@ function joinAndCapture(
   if (lanPorts && wanPort && lanPorts.split(",").map((p) => p.trim()).includes(wanPort)) {
     die(`${wanPort} cannot be both the WAN port and a LAN port`);
   }
-  const pools = [...o.pools];
-  if (pools.length === 0) {
-    const disks = sshTo(nodeIp, "lsblk -d -o NAME,SIZE,MODEL,SERIAL,TRAN | grep -v '^sr\\|^loop\\|^zd'").out.trimEnd();
-    info(`  disks on ${o.name} (boot disk is protected automatically):\n${disks.replace(/^/gm, "    ")}`);
-    info("  declare data pools as name=layout:disk[,disk...] — e.g. tanka1=single:nvme0n1 (empty line to finish)");
-    for (;;) {
-      const spec = prompt(`  pool ${pools.length + 1}> `);
-      if (!spec) break;
-      pools.push(spec);
-    }
-  }
-  if (pools.length === 0) info("  no data pools declared — the boot pool (local-zfs) carries the guests; modules that name tanka1 are placed there (ADR-037 D1)");
+  // ADR-037 D4: no data pools at the join — the boot pool carries the guests
+  // until `node storage add` gives the node its pools.
 
   // serve the repo + run the node step -------------------------------------
   step(`node step on ${o.name} (repo served from cicd:${SERVE_PORT}, branch state = last commit)`);
@@ -460,7 +473,6 @@ function joinAndCapture(
     if (lanPorts) joinArgs.push("--lan-port", lanPorts.replace(/\s+/g, ""));
     if (o.lanMode) joinArgs.push("--lan-mode", o.lanMode);
     if (o.lanPrimary) joinArgs.push("--lan-primary", o.lanPrimary);
-    for (const p of pools) joinArgs.push("--pool", p);
     const nodeCmd =
       `cd /root && curl -fsSO ${repoUrl}${branch}/src/foundation/install.sh && chmod +x install.sh && ` +
       `(./install.sh ${repoUrl} ${branch} ${joinArgs.join(" ")} > /root/tappaas-install.log 2>&1 &) && echo LAUNCHED`;
@@ -545,7 +557,8 @@ function joinAndCapture(
   // The pvehost record first: it is the node, and it carries the pools the
   // storage registration below reads.
   step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
-  registerNode(o.name, pools);
+  registerNode(o.name, []);
+  recordBootDisks(o.name, stdIp);
 
   // storage registration ------------------------------------------------------
   // The node's pools were CREATED pre-join (config-storage in the node

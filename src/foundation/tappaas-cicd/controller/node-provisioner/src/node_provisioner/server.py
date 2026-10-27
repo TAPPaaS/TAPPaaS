@@ -30,7 +30,7 @@ from urllib.parse import parse_qs, urlsplit
 
 from . import answer as answer_mod
 from .log import debug, info, warn
-from .registry import Registry, normalize_mac
+from .registry import Registry, is_kernel_disk_name, normalize_mac
 from .util import (
     DEFAULT_NODE_DOMAIN,
     DEFAULT_PORT,
@@ -187,6 +187,7 @@ def handle_answer_post(
     secrets_directory=None,
     request_ip: str = "",
     boot_disk_override: str = "",
+    boot_mirror_override: str = "",
 ):
     """Pure-ish core of POST /answer: (http_status, body_text).
 
@@ -209,19 +210,25 @@ def handle_answer_post(
     # operator standing at the machine knows best. An ask-registration
     # without a console choice is refused WITHOUT consuming (the machine
     # can re-post after a re-enable/reboot).
+    # The installer's /init resolved the registration's fields against this
+    # boot's disks (ADR-037 D4) and sends the kernel names: they are valid in
+    # this boot, so they are what the answer names.
     boot_disk = reg.boot_disk
+    boot_mirror = reg.boot_mirror if is_kernel_disk_name(reg.boot_mirror) else ""
     if boot_disk_override:
-        if not re.fullmatch(r"[A-Za-z0-9]+", boot_disk_override):
-            warn(f"REFUSED: bad bootdisk parameter {boot_disk_override!r}")
-            return 400, "invalid bootdisk parameter\n"
-        boot_disk = boot_disk_override
-        info(f"boot disk chosen on the node console: {boot_disk}")
-    elif boot_disk == "ask":
-        warn(f"REFUSED (not consumed): registration '{reg.name}' expects a "
-             "console-chosen boot disk but none arrived — was the trap "
-             "enabled while this registration was pending? (the askdisk "
-             "kernel flag is set at enable time)")
-        return 409, ("registration expects a console-chosen boot disk "
+        for v in (boot_disk_override, boot_mirror_override):
+            if v and not re.fullmatch(r"[A-Za-z0-9]+", v):
+                warn(f"REFUSED: bad boot disk parameter {v!r}")
+                return 400, "invalid bootdisk/bootmirror parameter\n"
+        boot_disk, boot_mirror = boot_disk_override, boot_mirror_override
+        info(f"boot disk from the installer: {boot_disk}"
+             + (f", mirrored onto {boot_mirror}" if boot_mirror else ""))
+    elif not is_kernel_disk_name(boot_disk):
+        warn(f"REFUSED (not consumed): registration '{reg.name}' names its boot "
+             f"disk as {boot_disk!r}, which the installer resolves — but no disk "
+             "arrived from it (was the trap enabled while this registration was "
+             "pending? boot.ipxe carries the fields from enable time)")
+        return 409, ("registration expects the installer to name the boot disk "
                      "(re-enable provisioning and reboot the node)\n")
 
     _reserve_standard_ip(reg.name, macs, domain)
@@ -240,7 +247,7 @@ def handle_answer_post(
         pools=reg.pools,
         boot_disk=boot_disk,
         boot_filesystem=reg.boot_filesystem,
-        boot_mirror=reg.boot_mirror,
+        boot_mirror=boot_mirror,
         **net,
         **settings,
     )
@@ -276,7 +283,9 @@ def build_handler(registry: Registry, directory: Path,
             if parts.path.rstrip("/") != "/answer":
                 self.send_error(404, "unknown endpoint")
                 return
-            bootdisk_param = parse_qs(parts.query).get("bootdisk", [""])[0]
+            query = parse_qs(parts.query)
+            bootdisk_param = query.get("bootdisk", [""])[0]
+            bootmirror_param = query.get("bootmirror", [""])[0]
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
@@ -300,6 +309,7 @@ def build_handler(registry: Registry, directory: Path,
                 domain=domain,
                 request_ip=self.client_address[0],
                 boot_disk_override=bootdisk_param,
+                boot_mirror_override=bootmirror_param,
             )
             payload = body.encode("utf-8")
             self.send_response(status)

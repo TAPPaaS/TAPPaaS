@@ -39,10 +39,12 @@ location           location list [--json]
                    location modify <name> [--set <field>=<value>]... [--<shortcut> <value>]... [--unset <f,g>] [--check]
                    location delete <name> [--check]
 node               node list [--json]
-                   node add <N> [--pxe] [--boot-disk <d>] [--mac <m>]
+                   node add <N> [--pxe] [--boot-disk <d>] [--boot-mirror <d>] [--mac <m>]
                             [--wan-port <if>|--no-wan] [--lan-ports <a,b>]
-                            [--lan-mode <m>] [--lan-primary <if>] [--storage-pools <a,b>] [--ttl <s>]
-                            [--config-only]
+                            [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot]
+                            [--config-only [--storage-pools <a,b>]]
+                   node storage <node> [--json]
+                   node storage add <node> <pool> --disks <d,d> --layout single|mirror|raidz1|raidz2 [--wipe]
                    node delete <name> [--apply] [--shutdown|--erase|--lost]
                                [--config-only]
                    node reconcile [--apply]
@@ -296,7 +298,10 @@ manager and the bash layer list the nodes the same way (`lib/ts/src/nodes.ts`,
 ### `node add` — standing up a follow-on node (design N3/N4)
 
 `node add <tappaasN>` is the operator front door for growing the cluster;
-hardware-validated end-to-end on 2026-07-07. Three modes:
+hardware-validated end-to-end on 2026-07-07. It stands the node up and nothing
+more: Proxmox on a ZFS boot pool, the join, the cluster baseline, a reboot into the
+kernel the baseline installed, and HA maintenance lifted. Its guests go to the boot
+pool (`local-zfs`) until `node storage add` gives it a data pool (below). Three modes:
 
 - **default (adopt)** — a Proxmox was already installed by hand (USB stick,
   §2.1 media) at the node's DESIGNATED mgmt IP (`tappaasN` → `10.0.0.<9+N>`):
@@ -304,8 +309,9 @@ hardware-validated end-to-end on 2026-07-07. Three modes:
   A node that is already clustered skips straight to capture.
 - **`--pxe`** — bare machine: registers the node with `node-provisioner`,
   arms the TTL-limited PXE trap, waits for the unattended install (the ONLY
-  console interaction is the boot-disk question, and only when `--boot-disk`
-  was not given), then continues with the same join pipeline. Requires the
+  console interaction is the boot-disk question, and only when the boot-disk
+  fields match nothing, or with `--boot-disk ask`), then continues with the same
+  join pipeline. Requires the
   netboot assets staged once per PVE version — done automatically by the
   cicd install (`prepare-netboot.sh`). Booting the SAME prepared ISO from a
   USB stick instead of PXE works identically (the answer still comes over
@@ -313,25 +319,46 @@ hardware-validated end-to-end on 2026-07-07. Three modes:
 - **`--config-only`** — just write the node's `pvehost` record, `config/<N>.json`,
   with `--storage-pools` (no machine contact).
 
-The join pipeline (shared by adopt and `--pxe`): asks for the WAN NIC and
-the data-pool declarations with the node's REAL hardware listed (skip the
-questions with `--wan-port <if>`/`--no-wan` and `--pool 'tanka1=…'`),
+The join pipeline (shared by adopt and `--pxe`): asks for the WAN NIC and the
+lan ports with the node's REAL ports listed (skip the questions with
+`--wan-port <if>`/`--no-wan`),
 serves the repo from the mothership on :8090 (committed branch state — no
 GitHub dependency), runs the node step (`install.sh --join`), corrects
 `/etc/hosts`, seeds node→tappaas1 ssh trust, `pvecm add`, and registers the
-node as its `pvehost` instance (`module adopt`) with its pools — `--storage-pools`,
-else the tankXY zpools on the node — before it registers the node on those pools'
-cluster storage entries, which it reads from that record. Every wait is time-boxed and
-the PXE trap is disarmed on every exit path. Fully unattended example:
+node as its `pvehost` instance (`module adopt`) with the tankXY zpools already on it
+and its boot disks by serial (`bootDisks`), before it registers the node on those
+pools' cluster storage entries and its boot pool as `local-zfs`. Every wait is
+time-boxed and the PXE trap is disarmed on every exit path. Fully unattended example:
 
 ```
-site-manager node add tappaas2 --pxe --boot-disk 25414A800205 \
-    --mac aa:bb:cc:dd:ee:ff --no-wan --pool 'tanka1=single:50026B73842AD86F'
+site-manager node add tappaas2 --pxe --mac aa:bb:cc:dd:ee:ff --no-wan
 ```
 
-Up front, disks are named by **serial** (`lsblk -o NAME,SERIAL`) or
-`disk/by-id/…`: a kernel name was read on another boot than the install's, and
-NVMe names swap between boots (#729 §3), so `--pxe` refuses `sda`/`nvme0n1`.
+**Boot disks: two fields, blank is the default.** `--boot-disk` and `--boot-mirror`
+each take a size (`2TB`, `1.92T`, `500GB`: within 10 %), a model (`"Samsung 990"`) or
+a serial; the installer matches them against the machine's disks in its own boot, so
+no Linux disk name is needed. Blank, the boot disk is the smallest SSD or NVMe disk
+not on USB, and when the smallest two are the same model and size both are taken and
+the boot pool is mirrored; `--boot-mirror none` keeps such a pair to one disk. A field
+that matches nothing, or more disks than it may, makes the node's console ask. A
+kernel name (`nvme0n1`) is accepted with a warning: it is the name the installer's
+boot gives the disk, which NVMe drives do not keep between boots (#729 §3).
+
+### `node storage` — a node's data pools (ADR-037 D4)
+
+`node storage <node>` lists the node's pools and its disks in no pool — serial, size,
+type, model, an old pool's label and SMART health (from `storage-manager inventory`) —
+and proposes a pool on the healthy ones. `node storage add <node> <pool> --disks
+<serial,...> --layout <l>` builds it on the node (`cluster/config-storage.sh`, fed from
+this checkout), registers it as the node's storage and records it in `storagePools`.
+It asks nothing: a pool name that is not `tank<…>` or that the node has, a disk count
+the layout does not take, a kernel name, the boot disk, a disk in a live pool, or a disk
+that carries data without `--wipe` is a refusal that says why, and nothing is changed.
+
+```
+site-manager node storage tappaas2
+site-manager node storage add tappaas2 tanka1 --disks S7HENJ0X100001,S7HENJ0X100002 --layout mirror
+```
 After the install node add puts the installed disk first in the UEFI boot
 order, and if the answer's ssh key did not survive the first boot it restores it
 with the node's generated root password (`/home/tappaas/.node-secrets/<name>.pw`,

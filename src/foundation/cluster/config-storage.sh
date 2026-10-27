@@ -25,13 +25,15 @@
 # Options:
 #   --pool <name>=<topology>:<disk>[,<disk>...]
 #                     Define a pool non-interactively. May be repeated.
-#                     topology ∈ { single, stripe, mirror, raidz, raidz2 }.
+#                     topology ∈ { single, stripe, mirror, raidz (raidz1), raidz2 }.
 #                     single=1 disk; stripe=2+ disks, no redundancy.
 #                     disks are kernel names (sdb), by-id paths, or serials.
 #                     e.g. --pool tanka1=mirror:sdb,sdc --pool tankb1=single:sdd
 #   --yes             Assume "yes" to wipe confirmations (DANGEROUS; for
 #                     unattended installs only). Implies non-interactive.
-#   --non-interactive Fail instead of prompting (requires --pool for any work).
+#   --non-interactive Fail instead of prompting (requires --pool for any work):
+#                     a disk that carries data is a refusal unless --yes.
+#   A disk in an IMPORTED pool is always refused, --yes or not.
 #   --no-pve-register Create the pools but do not add them to PVE storage.
 #   -h, --help        Show this help.
 #
@@ -398,7 +400,7 @@ create_pool() {
     single) vdev="" ;;
     stripe) vdev="" ;;
     mirror) vdev="mirror" ;;
-    raidz)  vdev="raidz" ;;
+    raidz|raidz1) vdev="raidz" ;;
     raidz2) vdev="raidz2" ;;
     *) error "Unknown topology '${topo}' for pool ${name}"; return 1 ;;
   esac
@@ -421,7 +423,10 @@ create_pool() {
     [[ -b "/dev/$d" ]] || { error "Not a block device: /dev/$d"; return 1; }
     if is_boot_disk "$d"; then error "Refusing to use boot disk /dev/$d"; return 1; fi
     pool_tag="$(disk_zpool "$d")"
-    if [[ -n "$pool_tag" ]] || disk_has_data "$d"; then
+    # disk_zpool sees imported pools only: such a disk is a live pool's, never
+    # wiped (an old, exported label is what --yes / the confirmation is for).
+    if [[ -n "$pool_tag" ]]; then error "Refusing /dev/$d: it is in the imported pool '${pool_tag}'"; return 1; fi
+    if disk_has_data "$d"; then
       had_data=1
       extra=""
       if [[ -n "$pool_tag" ]]; then extra="  [zpool ${pool_tag}]"; fi
@@ -429,6 +434,13 @@ create_pool() {
       listing+="  /dev/${d}  (${dinfo})${extra}"$'\n'
     fi
   done
+  if [[ "$had_data" == "1" && "$INTERACTIVE" != "1" && "$ASSUME_YES" != "1" ]]; then
+    # Without a terminal the confirmation cannot be answered: say so and fail,
+    # rather than skip the pool and report success.
+    error "Pool '${name}': these disks carry data — nothing was wiped (erase them with --yes):
+${listing}"
+    return 1
+  fi
   if [[ "$had_data" == "1" ]]; then
     if ! confirm "Pool '${name}' (${topo}) will ERASE these disks — all existing data is lost:
 

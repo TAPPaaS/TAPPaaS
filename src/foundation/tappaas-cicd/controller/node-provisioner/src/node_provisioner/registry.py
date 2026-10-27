@@ -45,6 +45,9 @@ NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 # between the installer and the running system (#729) — with the other order,
 # a kernel name would have aimed the installer at the 2 TB data disk.
 DISK_RE = re.compile(r"^[A-Za-z0-9._:-]+$")
+# A boot-disk field (ADR-037 D4): auto, ask, none (the mirror), a kernel name,
+# a size (2TB), or text in a disk's model or serial — matched by the installer.
+BOOT_FIELD_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._:-]{0,63}$")
 KERNEL_DISK_RE = re.compile(r"^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|hd[a-z]+|nvme\d+n\d+|mmcblk\d+)$")
 
 
@@ -137,28 +140,33 @@ class Registry:
             macs: Optional list of MAC strings (normalized).
             pool_specs: Optional list of 'name=layout:disks' strings —
                 POST-JOIN data pools; the installer never touches them.
-            boot_disk: Disk the installer puts the PVE system on.
+            boot_disk: The installer's boot disk, as a field the installer
+                resolves against the machine's disks (ADR-037 D4): "auto" (the
+                smallest SSD/NVMe; an identical smallest pair is mirrored),
+                "ask" (the console), a size, a model or serial, or a kernel name.
             boot_filesystem: zfs (the default, ADR-037 D1: the boot pool
                 carries the guests when the node has no data disk) or ext4.
             boot_mirror: a second disk to mirror the boot pool onto (zfs
-                raid1). Both disks by kernel name: the installer's serial
-                match selects one disk only, and for a mirrored pair the
-                order does not matter.
+                raid1), a field like boot_disk; "none" keeps a matched pair
+                unmirrored; "" mirrors when the boot field finds two disks alike.
         """
         if not NAME_RE.match(name):
             raise ValueError(f"invalid node name: {name!r}")
-        if not boot_disk or "/" in boot_disk or not DISK_RE.match(boot_disk):
+        boot_disk = (boot_disk or "auto").strip()
+        if not BOOT_FIELD_RE.match(boot_disk):
             raise ValueError(
-                f"boot disk must be a disk's SERIAL (lsblk -o NAME,SERIAL), "
-                f"'ask', or a bare kernel name, got {boot_disk!r}")
+                f"boot disk must be auto, ask, a size (2TB), a model or serial, "
+                f"or a kernel name — got {boot_disk!r}")
         if boot_filesystem not in ("zfs", "ext4"):
             raise ValueError(f"boot filesystem must be zfs or ext4, got {boot_filesystem!r}")
-        if boot_mirror:
+        boot_mirror = (boot_mirror or "").strip()
+        if boot_mirror and boot_mirror != "none":
+            if not BOOT_FIELD_RE.match(boot_mirror) or boot_mirror in ("auto", "ask"):
+                raise ValueError(f"boot mirror must be none, a size, a model or serial, or a kernel name — got {boot_mirror!r}")
             if boot_filesystem != "zfs":
                 raise ValueError("a mirrored boot disk needs the zfs boot filesystem")
-            if not (is_kernel_disk_name(boot_disk) and is_kernel_disk_name(boot_mirror)):
-                raise ValueError("a mirrored boot disk is named by kernel names (nvme0n1, sda) for both "
-                                 "disks — the installer's serial match selects one disk only")
+            if boot_disk in ("auto", "ask"):
+                raise ValueError(f"a named boot mirror needs a named boot disk, not {boot_disk!r}")
             if boot_mirror == boot_disk:
                 raise ValueError("the boot mirror is the boot disk itself")
         reg = Registration(

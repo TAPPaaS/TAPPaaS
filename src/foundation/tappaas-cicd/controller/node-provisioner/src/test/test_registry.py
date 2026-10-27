@@ -106,10 +106,14 @@ class TestCrudRoundTrip(RegistryCase):
     def test_boot_mirror(self):
         reg = self.registry.register("tappaas4", boot_disk="nvme0n1", boot_mirror="nvme1n1")
         self.assertEqual(self.registry.load("tappaas4").boot_mirror, "nvme1n1")
-        for disk, mirror, fs in (("25414A800205", "nvme1n1", "zfs"),   # a serial cannot pair
-                                 ("nvme0n1", "nvme0n1", "zfs"),        # the same disk
+        # ADR-037 D4: either field a size, a model or serial — the installer matches them
+        for disk, mirror in (("25414A800205", "S6B0NL0W123456"), ("2TB", "Samsung 990"), ("auto", "none")):
+            self.assertEqual(self.registry.register("tappaas4", boot_disk=disk, boot_mirror=mirror).boot_mirror, mirror)
+        for disk, mirror, fs in (("nvme0n1", "nvme0n1", "zfs"),        # the same disk
                                  ("nvme0n1", "nvme1n1", "ext4"),       # ext4 has no mirror
-                                 ("ask", "nvme1n1", "zfs")):           # chosen on the console
+                                 ("ask", "nvme1n1", "zfs"),            # chosen on the console
+                                 ("auto", "nvme1n1", "zfs"),           # an automatic disk has no named mirror
+                                 ("nvme0n1", "auto", "zfs")):
             with self.assertRaises(ValueError, msg=(disk, mirror, fs)):
                 self.registry.register("tappaas4", boot_disk=disk, boot_mirror=mirror, boot_filesystem=fs)
         self.assertEqual(self.registry.register("tappaas4", boot_disk="sda").boot_mirror, "")
@@ -125,10 +129,11 @@ class TestCrudRoundTrip(RegistryCase):
         with self.assertRaises(ValueError):
             self.registry.register("bad name!")
 
-    def test_boot_disk_serial_kernel_name_or_ask(self):
-        for ok in ("25414A800205", "50026B73842AD86F", "nvme1n1", "sda", "ask"):
+    def test_boot_disk_fields(self):
+        for ok in ("25414A800205", "50026B73842AD86F", "nvme1n1", "sda", "ask", "auto", "2TB", "1.92T", "Samsung 990"):
             self.assertEqual(self.registry.register("tappaas3", boot_disk=ok).boot_disk, ok)
-        for bad in ("/dev/sda", "disk/by-id/nvme-X", "a disk", "*", ""):
+        self.assertEqual(self.registry.register("tappaas3", boot_disk="").boot_disk, "auto")
+        for bad in ("/dev/sda", "disk/by-id/nvme-X", "*", "-lead", "x" * 70):
             with self.assertRaises(ValueError, msg=bad):
                 self.registry.register("tappaas3", boot_disk=bad)
 

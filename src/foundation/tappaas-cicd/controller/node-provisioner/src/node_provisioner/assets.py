@@ -53,18 +53,127 @@ ISO_ASSET_NAME = "proxmox.iso"
 # fetch dies with "Network unreachable" (stage-1 Atom, X553 NICs). 60s covers
 # link training and a 30s STP listening/learning hold.
 INIT_ANCHOR = "cp /etc/hostid /mnt/.installer-mp/etc/"
-INIT_PATCH = INIT_ANCHOR + """
-    # TAPPaaS node-provisioner: raise the DHCP timeout so the auto-installer
-    # answer fetch has a live network (link re-training + STP eat the stock 10s)
-    sed -i 's/^timeout 10;/timeout 60;/' /mnt/.installer-mp/etc/dhcp/dhclient.conf || true
-    # TAPPaaS node-provisioner: ask-at-boot boot disk (registration made
-    # without --boot-disk). The ONE question of the whole install: show the
-    # machine's real disks, read the choice on the console, and hand it to
-    # the answer server as a ?bootdisk= query parameter by bind-mounting a
-    # rewritten auto-installer-mode.toml over the ISO's copy (the ISO is
-    # read-only; a file bind on the already-bound /cdrom works). Pure
-    # busybox sh — no sed/cut dependencies.
-    if grep -q "tappaas.askdisk=1" /proc/cmdline; then
+# Boot-disk matching for the injected /init (ADR-037 D4), kept apart so the
+# unit tests run it against a fake /sys (TAPPAAS_SYS). Busybox sh, cat and grep.
+# A field is: blank or "auto" (the smallest SSD/NVMe disk not on USB; the two
+# smallest when they are the same model and size, mirrored — unless the mirror
+# field is "none"), "ask" (the console), a kernel name, a size (2TB, 1.92T,
+# 500GB: within 10 %), or text found in a disk's model or serial ('.' stands
+# for a space). _tap_resolve <boot> <mirror> sets _tap_disk, _tap_mirror and
+# _tap_why; non-zero when the console has to ask.
+RESOLVE_SH = r"""
+_tap_sys="${TAPPAAS_SYS:-/sys}"
+_tap_disks() {
+    for _d in "$_tap_sys"/block/*; do
+        _b="${_d##*/}"
+        case "$_b" in loop*|ram*|sr*|dm-*|zram*|zd*|md*|nbd*|*boot[0-9]*|*rpmb) continue ;; esac
+        [ -e "$_d/device" ] || continue
+        [ "$(cat "$_d/size" 2>/dev/null || echo 0)" -ge 31250000 ] || continue
+        case "$(cd "$_d" 2>/dev/null && pwd -P)" in */usb*) continue ;; esac
+        echo "$_b"
+    done
+}
+_tap_sectors() { cat "$_tap_sys/block/$1/size" 2>/dev/null || echo 0; }
+_tap_model() { cat "$_tap_sys/block/$1/device/model" 2>/dev/null; }
+_tap_ssd() { [ "$(cat "$_tap_sys/block/$1/queue/rotational" 2>/dev/null)" = 0 ]; }
+_tap_hay() {
+    echo "$(_tap_model "$1") $(cat "$_tap_sys/block/$1/device/serial" 2>/dev/null) $(cat "$_tap_sys/block/$1/device/wwid" 2>/dev/null)"
+}
+_tap_size_mb() {
+    _v="$1"
+    case "$_v" in
+        *[Tt][Bb]) _v="${_v%??}"; _m=1000000 ;;
+        *[Tt]) _v="${_v%?}"; _m=1000000 ;;
+        *[Gg][Bb]) _v="${_v%??}"; _m=1000 ;;
+        *[Gg]) _v="${_v%?}"; _m=1000 ;;
+        *) return 1 ;;
+    esac
+    case "$_v" in ''|.*|*.|*[!0-9.]*|*.*.*) return 1 ;; esac
+    _i="${_v%%.*}"; _f=""
+    case "$_v" in *.*) _f="${_v#*.}" ;; esac
+    _f="${_f}000"; _f="${_f%"${_f#???}"}"
+    while case "$_f" in 0?*) true ;; *) false ;; esac; do _f="${_f#0}"; done
+    while case "$_i" in 0?*) true ;; *) false ;; esac; do _i="${_i#0}"; done
+    echo $(( _i * _m + _f * _m / 1000 ))
+}
+_tap_match() {
+    if [ -e "$_tap_sys/block/$1/device" ]; then echo "$1"; return 0; fi
+    _want="$(_tap_size_mb "$1")" || _want=""
+    for _b in $(_tap_disks); do
+        if [ -n "$_want" ]; then
+            _mb=$(( $(_tap_sectors "$_b") * 512 / 1000000 ))
+            _dd=$(( _mb - _want )); [ "$_dd" -lt 0 ] && _dd=$(( 0 - _dd ))
+            [ "$_dd" -le $(( _want / 10 )) ] && echo "$_b"
+        elif _tap_hay "$_b" | grep -qi -- "$1"; then
+            echo "$_b"
+        fi
+    done
+    return 0
+}
+_tap_alike() {
+    [ "$(_tap_sectors "$1")" = "$(_tap_sectors "$2")" ] && [ "$(_tap_model "$1")" = "$(_tap_model "$2")" ]
+}
+_tap_resolve() {
+    _tap_disk=""; _tap_mirror=""; _tap_why=""
+    case "$1" in
+        ask) _tap_why="asked for on the console"; return 1 ;;
+        auto|"")
+            _s1=""; _s2=""
+            for _c in $(_tap_disks); do
+                _tap_ssd "$_c" || continue
+                _z=$(_tap_sectors "$_c")
+                if [ -z "$_s1" ] || [ "$_z" -lt "$(_tap_sectors "$_s1")" ]; then _s2="$_s1"; _s1="$_c"
+                elif [ -z "$_s2" ] || [ "$_z" -lt "$(_tap_sectors "$_s2")" ]; then _s2="$_c"; fi
+            done
+            if [ -z "$_s1" ]; then _tap_why="no SSD or NVMe disk to choose automatically"; return 1; fi
+            _tap_disk="$_s1"
+            if [ -n "$_s2" ] && [ "$2" != none ] && _tap_alike "$_s1" "$_s2"; then
+                _tap_mirror="$_s2"; _tap_why="automatic: the smallest SSD/NVMe disks, a pair alike"
+            else
+                _tap_why="automatic: the smallest SSD/NVMe disk"
+            fi
+            return 0 ;;
+    esac
+    _m1="$(_tap_match "$1")"; _n1=0; _a=""; _o=""
+    for _x in $_m1; do _n1=$((_n1 + 1)); if [ -z "$_a" ]; then _a="$_x"; else _o="$_x"; fi; done
+    if [ -z "$2" ] || [ "$2" = none ]; then
+        if [ "$_n1" = 1 ]; then _tap_disk="$_a"; _tap_why="'$1'"; return 0; fi
+        if [ "$_n1" = 2 ] && [ -z "$2" ] && _tap_alike "$_a" "$_o"; then
+            _tap_disk="$_a"; _tap_mirror="$_o"; _tap_why="'$1': two disks alike, mirrored"; return 0
+        fi
+        _tap_why="'$1' matches $_n1 disks"; return 1
+    fi
+    _m2="$(_tap_match "$2")"; _n2=0; _p=""
+    for _x in $_m2; do _n2=$((_n2 + 1)); _p="$_x"; done
+    if [ "$_n1" = 1 ] && [ "$_n2" = 1 ] && [ "$_a" != "$_p" ]; then
+        _tap_disk="$_a"; _tap_mirror="$_p"; _tap_why="'$1' + '$2'"; return 0
+    fi
+    _tap_why="'$1' matches $_n1 disk(s), '$2' $_n2"; return 1
+}
+"""
+
+# The boot-disk block of the injected /init: read the registration's two fields
+# from the kernel command line, resolve them, ask on the console when they do
+# not resolve, and hand the names to the answer server.
+BOOT_DISK_SH = r"""
+    # TAPPaaS node-provisioner: the boot disk(s) (ADR-037 D4). The registration's
+    # two fields come on the kernel command line (tappaas.bootdisk= and
+    # tappaas.bootmirror=, chosen per MAC by boot.ipxe) and are matched HERE
+    # against this boot's disks — the one moment kernel names are valid. The
+    # names go to the answer server as ?bootdisk=&bootmirror= by a rewritten
+    # auto-installer-mode.toml bound over the ISO's copy (the ISO is read-only;
+    # a file bind on the already-bound /cdrom works). A field that matches no
+    # disk, or more than it may, is the one question of the whole install,
+    # asked on the console.
+    _tap_bd=""; _tap_bm=""
+    for _tap_w in $(cat /proc/cmdline); do
+        case "$_tap_w" in
+            tappaas.bootdisk=*) _tap_bd="${_tap_w#*=}" ;;
+            tappaas.bootmirror=*) _tap_bm="${_tap_w#*=}" ;;
+            tappaas.askdisk=1) _tap_bd=ask ;;
+        esac
+    done
+    if [ -n "$_tap_bd" ]; then
         _tap_mode=/mnt/.installer-mp/cdrom/auto-installer-mode.toml
         _tap_con="/dev/${console:-console}"
         if [ -f "$_tap_mode" ]; then
@@ -75,39 +184,50 @@ INIT_PATCH = INIT_ANCHOR + """
             # (the installer sets its own loglevel later anyway).
             sleep 3
             echo "1 1 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
-            echo ""
-            echo "==== TAPPaaS node provisioning: choose the BOOT disk ===="
-            echo "The chosen disk is WIPED (the PVE system goes on it). Disks found:"
-            for _tap_d in /sys/block/*; do
-                _tap_b="${_tap_d##*/}"
-                case "$_tap_b" in loop*|ram*|sr*|dm-*|zram*) continue ;; esac
-                _tap_sz=$(cat "$_tap_d/size" 2>/dev/null || echo 0)
-                echo "  $_tap_b  ($((_tap_sz / 2097152)) GB)  $(cat "$_tap_d/device/model" 2>/dev/null)"
-            done
-            _tap_disk=""
-            while [ ! -e "/sys/block/$_tap_disk" ] || [ -z "$_tap_disk" ]; do
-                printf "TAPPaaS boot disk> "
-                read -r _tap_disk
-            done
+            if _tap_resolve "$_tap_bd" "$_tap_bm"; then
+                echo "TAPPaaS: boot disk ${_tap_disk}${_tap_mirror:+, mirrored onto ${_tap_mirror}} (${_tap_why})"
+            else
+                echo ""
+                echo "==== TAPPaaS node provisioning: choose the BOOT disk ===="
+                [ "$_tap_bd" = ask ] || echo "(${_tap_why})"
+                echo "The chosen disk is WIPED (the PVE system goes on it). Disks found:"
+                for _tap_d in /sys/block/*; do
+                    _tap_b="${_tap_d##*/}"
+                    case "$_tap_b" in loop*|ram*|sr*|dm-*|zram*) continue ;; esac
+                    _tap_sz=$(cat "$_tap_d/size" 2>/dev/null || echo 0)
+                    echo "  $_tap_b  ($((_tap_sz / 2097152)) GB)  $(cat "$_tap_d/device/model" 2>/dev/null)"
+                done
+                _tap_disk=""; _tap_mirror=""
+                while [ ! -e "/sys/block/$_tap_disk" ] || [ -z "$_tap_disk" ]; do
+                    printf "TAPPaaS boot disk> "
+                    read -r _tap_disk
+                done
+            fi
             _tap_url=""
             while IFS= read -r _tap_l; do
-                case "$_tap_l" in url*) _tap_u="${_tap_l#*\\"}"; _tap_url="${_tap_u%\\"*}" ;; esac
+                case "$_tap_l" in url*) _tap_u="${_tap_l#*\"}"; _tap_url="${_tap_u%\"*}" ;; esac
             done < "$_tap_mode"
             if [ -n "$_tap_url" ]; then
                 while IFS= read -r _tap_l; do
                     case "$_tap_l" in
-                        url*) echo "url = \\"${_tap_url}?bootdisk=${_tap_disk}\\"" ;;
+                        url*) echo "url = \"${_tap_url}?bootdisk=${_tap_disk}&bootmirror=${_tap_mirror}\"" ;;
                         *) echo "$_tap_l" ;;
                     esac
                 done < "$_tap_mode" > /tappaas-mode.toml
                 mount --bind /tappaas-mode.toml "$_tap_mode"
-                echo "TAPPaaS: boot disk '$_tap_disk' goes to the answer server"
+                echo "TAPPaaS: boot disk '${_tap_disk}'${_tap_mirror:+ + '${_tap_mirror}'} goes to the answer server"
             else
                 echo "TAPPaaS: WARNING - no answer URL in $_tap_mode; disk choice cannot be delivered"
             fi
         } < "$_tap_con" > "$_tap_con" 2>&1
         fi
     fi"""
+
+INIT_PATCH = INIT_ANCHOR + """
+    # TAPPaaS node-provisioner: raise the DHCP timeout so the auto-installer
+    # answer fetch has a live network (link re-training + STP eat the stock 10s)
+    sed -i 's/^timeout 10;/timeout 60;/' /mnt/.installer-mp/etc/dhcp/dhclient.conf || true
+""" + RESOLVE_SH + BOOT_DISK_SH
 
 BOOT_IPXE_TEMPLATE = """#!ipxe
 # TAPPaaS node provisioning (design N3) — Proxmox VE automated installer.
@@ -118,16 +238,36 @@ BOOT_IPXE_TEMPLATE = """#!ipxe
 # detected cicd mgmt IP.
 # Kernel args: proxmox-start-auto-installer runs the installer unattended
 # (answer fetched over HTTP per the URL prepared INTO the ISO); no proxdebug.
-echo TAPPaaS node provisioner: booting Proxmox VE automated installer
-kernel http://{server}:{port}/linux26 ro ramdisk_size=16777216 rw splash=silent proxmox-start-auto-installer{askflag}
+# The boot-disk fields of the registration whose MAC this is (ADR-037 D4):
+# the injected /init resolves them against the machine's disks.
+{disklines}echo TAPPaaS node provisioner: booting Proxmox VE automated installer
+kernel http://{server}:{port}/linux26 ro ramdisk_size=16777216 rw splash=silent proxmox-start-auto-installer ${{tapdisk}}
 initrd http://{server}:{port}/initrd
 boot
 """
 
-# Kernel cmdline marker consumed by the injected /init block below: ask the
-# operator for the boot disk on the NODE's console. Set by enable when a
-# pending registration was made without --boot-disk (boot_disk == "ask").
-ASK_DISK_FLAG = " tappaas.askdisk=1"
+# A field on the kernel command line: a model's spaces become '.', which the
+# /init's grep reads as any character; nothing else a field may hold needs it.
+def _cmdline_field(value: str) -> str:
+    return (value or "auto").replace(" ", ".")
+
+
+def boot_disk_lines(pending) -> str:
+    """The iPXE lines that set ${tapdisk}: per pending registration, by the
+    MAC that netboots; a registration without a MAC (or the only one) is the
+    default. ``pending`` are registry Registrations."""
+    def args(r) -> str:
+        a = f"tappaas.bootdisk={_cmdline_field(r.boot_disk)}"
+        return a + (f" tappaas.bootmirror={_cmdline_field(r.boot_mirror)}" if r.boot_mirror else "")
+    default = "tappaas.bootdisk=auto"
+    no_mac = [r for r in pending if not r.macs]
+    if len(pending) == 1 or len(no_mac) == 1:
+        default = args(pending[0] if len(pending) == 1 else no_mac[0])
+    lines = [f"set tapdisk {default}"]
+    for r in pending:
+        for m in r.macs:
+            lines.append(f"iseq ${{netX/mac}} {m} && set tapdisk {args(r)} ||")
+    return "\n".join(lines) + "\n"
 
 
 def _decompress_cmd(initrd_path: Path) -> list[str] | None:
@@ -182,13 +322,18 @@ def _patched_init(initrd_path: Path, dest: Path) -> Path | None:
     return out
 
 
+def render_boot_script(server: str, port: int, pending=()) -> str:
+    """boot.ipxe with the CONCRETE asset-server address and the pending
+    registrations' boot-disk fields."""
+    return BOOT_IPXE_TEMPLATE.format(server=server, port=port,
+                                     disklines=boot_disk_lines(list(pending)))
+
+
 def write_boot_script(directory: Path, server: str, port: int,
-                      ask_disk: bool = False) -> Path:
+                      pending=()) -> Path:
     """(Re)write boot.ipxe with the CONCRETE asset-server address."""
     boot_script = Path(directory) / "boot.ipxe"
-    boot_script.write_text(BOOT_IPXE_TEMPLATE.format(
-        server=server, port=port,
-        askflag=ASK_DISK_FLAG if ask_disk else ""))
+    boot_script.write_text(render_boot_script(server, port, pending))
     return boot_script
 
 

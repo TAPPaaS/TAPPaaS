@@ -61,6 +61,7 @@
     "physicalLocation",
     "uplinks",
     "storagePools",
+    "bootDisks",
     "trunks1",
     "firewallType",
     "aliasType",
@@ -587,7 +588,24 @@
         "tanka1",
         "tankb1"
       ],
-      "note": "Recorded from the node's zpools when it is registered (`site-manager node add`, `module adopt`), or named with `node add --storage-pools`; a node registered with none gets them filled by `site-manager node reconcile`. Read by the storage reconcile, storage-manager's inventory and the topology."
+      "note": "Recorded from the node's zpools when it is registered (`site-manager node add`, `module adopt`), or added with `site-manager node storage add`; a node registered with none gets them filled by `site-manager node reconcile`. Read by the storage reconcile, storage-manager's inventory and the topology."
+    },
+    "bootDisks": {
+      "description": "The disks a cluster node boots from (pvehost instances): the members of its boot pool, by serial — two for a mirrored boot pool. Kernel names are not used because they change between boots.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9._:-]+$"
+      },
+      "requiredBy": [],
+      "usedBy": [
+        "general"
+      ],
+      "example": [
+        "S7HENJ0X100001",
+        "S7HENJ0X100002"
+      ],
+      "note": "Recorded by `site-manager node add` once the node has joined (ADR-037 D4). Informational: a disk replacement reads it to know which disk is which."
     },
     "stack": {
       "description": "The one stack a module belongs to (#463): what a catalogue lists it under, and the directory it lives in: src/<stack>/<module> for the purpose stacks and misc, src/foundation/<module> for foundation (#421). An enumerated field, and this schema is the list's owner: every module carries exactly one of the values below, as a field in its own module JSON. Three of them say what a module IS rather than what it is for — `foundation`, `template` and `test`; the rest group application modules by what they are for. `foundation` also decides a module's scope (ADR-022e v1.1): a foundation-stack module is site-scoped — it belongs to the Site, serves every Environment, installs in mgmt, must come from an official source (or --allow-fork) and needs --force to delete; every other module is environment-scoped. A module becomes site-scoped by moving into the foundation stack, and in no other way.",

@@ -23,11 +23,13 @@ sudo node-provisioner prepare --iso /var/tmp/proxmox-ve_9.x-auto-from-http.iso
 
 # 1. Register the new node (the allowlist entry). Pin the MAC if you know it;
 #    without a MAC the node only matches while it is the ONLY pending one.
-#    The boot disk by SERIAL (lsblk -o NAME,SERIAL) — the answer selects it
-#    with a udev ID_SERIAL filter; a kernel name (sda) still works but NVMe
-#    names swap between boots. Omit --boot-disk to be asked on the console.
-node-provisioner register tappaas3 --mac aa:bb:cc:dd:ee:ff \
-    --boot-disk 25414A800205 --pool 'tanka1=single:50026B73842AD86F'
+#    The boot disk (and --boot-mirror) as fields the installer's /init matches
+#    against the machine's disks in its own boot (ADR-037 D4): a size (2TB), a
+#    model or a serial; blank, the smallest SSD/NVMe disk, both of an identical
+#    smallest pair mirrored; 'ask' asks on the console, as does a field that
+#    matches nothing. boot.ipxe carries each pending registration's fields on
+#    the kernel command line, chosen by the netbooting MAC.
+node-provisioner register tappaas3 --mac aa:bb:cc:dd:ee:ff --boot-disk 2TB
 
 # 2. Open the (TTL-limited) provisioning window:
 #    starts the HTTP answer/asset server + a TFTP server (transient systemd

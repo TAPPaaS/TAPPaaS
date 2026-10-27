@@ -47,24 +47,23 @@ def _add_firewall_options(parser: argparse.ArgumentParser) -> None:
 
 def cmd_register(args) -> bool:
     reg = Registry().register(args.name, macs=args.mac, pool_specs=args.pool,
-                              boot_disk=args.boot_disk or "ask",
+                              boot_disk=args.boot_disk or "auto",
                               boot_filesystem=args.boot_filesystem,
                               boot_mirror=args.boot_mirror or "")
     info(f"registered pending node '{reg.name}' -> {reg.path}")
     if reg.boot_disk == "ask":
-        info("no --boot-disk given — the node's CONSOLE will ask for it at "
-             "boot (one question, shows the machine's real disks)")
+        info("--boot-disk ask — the node's CONSOLE will ask for it at boot "
+             "(one question, shows the machine's real disks)")
     else:
-        mirror = f" + '{reg.boot_mirror}' (mirror)" if reg.boot_mirror else ""
-        info(f"installer target: {reg.boot_filesystem} on '{reg.boot_disk}'{mirror} (WIPED); "
-             "declared pools are created post-join")
+        mirror = (" unmirrored" if reg.boot_mirror == "none"
+                  else f" + '{reg.boot_mirror}' (mirror)" if reg.boot_mirror else "")
+        what = ("the smallest SSD/NVMe disk, both of an identical smallest pair (mirrored)"
+                if reg.boot_disk == "auto" else f"'{reg.boot_disk}'")
+        info(f"installer target: {reg.boot_filesystem} on {what}{mirror} (WIPED) — matched "
+             "against the machine's disks by the installer; the console asks if nothing matches")
     if not reg.macs:
         info("no MAC pinned — the node matches only while it is the SINGLE "
              "pending registration (add --mac to pin)")
-    if not reg.pools:
-        info("no data pool in this registration — fine under `site-manager "
-             "node add`, which declares them at the join; registering by hand, "
-             "add --pool 'tanka1=single:<serial>' (the platform layer expects tanka1)")
     return True
 
 
@@ -168,12 +167,15 @@ placement is what scopes it (see README.md).
                         "(repeatable), e.g. 'tanka1=single:nvme0n1' — the "
                         "installer never touches these disks")
     p.add_argument("--boot-disk", default=None,
-                   help="Disk the installer puts the PVE system on — WIPED. "
-                        "Omit to be ASKED on the node's console at boot (for "
-                        "hardware with unknown disk naming)")
+                   help="Disk the installer puts the PVE system on — WIPED: a "
+                        "size (2TB), a model or serial, or a kernel name; "
+                        "'ask' asks on the node's console. Omitted: the "
+                        "smallest SSD/NVMe disk, both of an identical "
+                        "smallest pair (mirrored)")
     p.add_argument("--boot-mirror", default=None,
                    help="A second disk to mirror the boot pool onto (zfs raid1) — "
-                        "WIPED. Both disks by kernel name (nvme0n1, nvme1n1)")
+                        "WIPED, named like --boot-disk; 'none' keeps an "
+                        "identical pair unmirrored")
     p.add_argument("--boot-filesystem", default="zfs", choices=("zfs", "ext4"),
                    help="zfs (default): the boot pool carries the guests when "
                         "the node has no data disk (ADR-037 D1); ext4 only for "

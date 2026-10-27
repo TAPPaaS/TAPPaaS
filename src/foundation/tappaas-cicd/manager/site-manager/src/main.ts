@@ -35,6 +35,7 @@ import { evacuateNode, evacuateExitCode } from "./evacuate";
 import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, preflightGuard, refused, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
+import { addNodeStorage, listNodeStorage } from "./storage";
 import { Site, SiteClient } from "./types";
 import { runningVersion } from "./version";
 import { spawnSync } from "child_process";
@@ -141,13 +142,13 @@ export const HELP: HelpSpec = {
       note: "(refused for the primary location and for one a peer, room or device names)",
       options: [["--check", "say whether it can go, in one line; write nothing."], ["--json", "with --check: the whole resulting site.json, for machines."]] },
     { usage: "node list [--json]", note: "(the cluster's nodes: their pvehost instances, with their storage pools)" },
-    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--boot-filesystem zfs|ext4] [--boot-mirror <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--storage-pools <a,b>] [--ttl <s>] [--no-reboot] [--config-only] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it, adds it to the cluster and registers it as a pvehost instance" },
+    { usage: "node add <N> [--pxe] [--boot-disk <d>] [--boot-filesystem zfs|ext4] [--boot-mirror <d>] [--mac <m>] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it on a ZFS boot pool, adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add" },
       hidden: ["--name <N>", "--provision", "--pool <p>"],
       options: [
         ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
-        ["--pxe", "Bare machine: PXE-install first, then join + capture. Omit --boot-disk to be asked on the NODE console; WAN port + pools are asked here."],
-        ["--boot-disk <serial>", "--pxe: the disk to install Proxmox on, by SERIAL (lsblk -o NAME,SERIAL) — kernel names move between boots."],
-        ["--boot-mirror <disk>", "--pxe: a second disk to mirror the boot pool onto (zfs raid1); both disks by kernel name (--boot-disk nvme0n1 --boot-mirror nvme1n1)."],
+        ["--pxe", "Bare machine: PXE-install first, then join + capture. The WAN port is asked here; data pools come after, with node storage add."],
+        ["--boot-disk <d>", "--pxe: the disk to install Proxmox on, WIPED: a size (2TB), a model (Samsung 990) or a serial — the installer matches it against the machine's disks. Blank: the smallest SSD or NVMe disk not on USB, and both when the smallest two are the same model and size (a mirrored boot pool). ask: chosen on the node's console. When nothing matches, the console asks."],
+        ["--boot-mirror <d>", "--pxe: a second disk to mirror the boot pool onto, named like --boot-disk. Blank: a mirror only when --boot-disk finds two disks alike. none: one disk, even of a pair."],
         ["--boot-filesystem zfs|ext4", "--pxe: the boot disk's filesystem; zfs (default) lets the boot pool carry the guests on a node with no data disk (ADR-037 D1), ext4 only with data disks."],
         ["--mac <m>", "--pxe: the NIC that PXE-boots."],
         ["--wan-port <if>", "the node's WAN interface."],
@@ -155,11 +156,19 @@ export const HELP: HelpSpec = {
         ["--lan-ports <a,b>", "the node's lan port(s); two or more bond under lan as lanbond. Default: auto-detected, one port."],
         ["--lan-mode <m>", "active-backup (default for 2+ ports: any switches, any speeds) or lacp (equal speeds; the switch side one LAG)."],
         ["--lan-primary <if>", "active-backup: the port that carries traffic when up (default: the fastest)."],
-        ["--storage-pools <a,b>", "the node's storage pools (its tankXY zpools). Default: the zpools found on the node."],
+        ["--storage-pools <a,b>", "with --config-only: the pools to record. A node that joins records the zpools found on it; new pools are node storage add."],
         ["--ttl <s>", "--pxe: seconds the PXE offer stays open (default 7200)."],
         ["--no-reboot", "Do not reboot the node into the kernel its first update installed (default: it reboots before it takes guests, when the cluster keeps quorum without it)."],
         ["--yes", "do not ask for confirmation."],
         ["--config-only", "Only write the node's pvehost record, config/<N>.json (no machine contact)."],
+      ] },
+    { usage: "node storage <node> [--json]", note: "(the node's pools, and its disks in no pool — by serial, size, type and model)" },
+    { usage: "node storage add <node> <pool> --disks <d,d> --layout single|mirror|raidz1|raidz2 [--wipe]", effect: { noPreview: "builds a ZFS data pool on the node's disks and registers it as the node's storage" },
+      options: [
+        ["<pool>", "The pool's name, also its storage name: tank<class><N> by convention — a for SSD/NVMe (tanka1), b for spinning disks. A name the node already has is refused; one other nodes have extends that storage to this node."],
+        ["--disks <d,d>", "The disks, by serial or /dev/disk/by-id name, as node storage <node> lists them. A kernel name (nvme0n1) is refused: it can change between boots. The boot disk and a disk in a live pool are always refused."],
+        ["--layout <l>", "single (1 disk, no redundancy), mirror (2 or more), raidz1 (3 or more, one disk may fail), raidz2 (4 or more, two may fail)."],
+        ["--wipe", "Erase disks that carry data or an old pool's label. Without it such a disk is a refusal and nothing is erased."],
       ] },
     { usage: "node delete <name> [--apply] [--shutdown] [--erase] [--config-only]",
       options: [
@@ -317,7 +326,7 @@ interface Opts {
 
 // Flags that take NO value (everything else with a value is captured generically).
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
-  "--pxe", "--provision", "--config-only", "--yes", "--no-wan", "--no-reboot",
+  "--pxe", "--provision", "--config-only", "--yes", "--no-wan", "--no-reboot", "--wipe",
   "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned", "--primary", "--check",
   "--verbose"]);
 
@@ -849,7 +858,7 @@ function setDeep(obj: Record<string, unknown>, path: string[], value: unknown): 
 // ── `node` CRUD + reconcile (the pvehost instances, ADR-036 D6) ─────────
 function cmdNode(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("node: expected 'list' | 'add' | 'delete' | 'reconcile' | 'reboot'");
+  if (!sub) die("node: expected 'list' | 'add' | 'storage' | 'delete' | 'reconcile' | 'reboot'");
   const siteFile = siteFileOf(o);
   // The nodes are the pvehost instances beside site.json (ADR-036 D6).
   const nodesDir = dirname(siteFile);
@@ -905,6 +914,11 @@ function cmdNode(o: Opts, client: SiteClient): void {
       info(`${GN}✓${CL} node '${name}' added as a pvehost instance (pools: ${pools.join(", ") || "none"})`);
       return;
     }
+    // ADR-037 D4: a node joins on its boot pool; its data pools are a second step.
+    if (pools.length > 0) {
+      die(`node add: data pools are not part of the join any more — add the node, then: ` +
+          `site-manager node storage add ${name} <pool> --disks <serial,...> --layout <l> (node storage ${name} lists its disks)`);
+    }
     if (o.boolFlags.has("--provision")) {
       warn("--provision is deprecated — use --pxe");
     }
@@ -914,7 +928,6 @@ function cmdNode(o: Opts, client: SiteClient): void {
       bootFilesystem: o.flags.get("--boot-filesystem"),
       bootMirror: o.flags.get("--boot-mirror"),
       macs: o.flags.get("--mac") ? [o.flags.get("--mac") as string] : [],
-      pools,
       wanPort: o.boolFlags.has("--no-wan") ? "" : o.flags.get("--wan-port"),
       lanPorts: o.flags.get("--lan-ports"),
       lanMode: o.flags.get("--lan-mode"),
@@ -931,6 +944,24 @@ function cmdNode(o: Opts, client: SiteClient): void {
       // mgmt IP — verify and run the join pipeline over ssh.
       adoptNode(opts);
     }
+    return;
+  }
+
+  if (sub === "storage") {
+    const verb = o.rest[1];
+    if (verb === "add") {
+      const [node, pool] = [o.rest[2], o.rest[3]];
+      if (!node || !pool) die("node storage add: expected <node> <pool> --disks <d,d> --layout <l>");
+      addNodeStorage({
+        node, pool,
+        disks: (o.flags.get("--disks") ?? "").split(",").map((d) => d.trim()).filter(Boolean),
+        layout: o.flags.get("--layout") ?? "",
+        wipe: o.boolFlags.has("--wipe"),
+      });
+      return;
+    }
+    if (!verb) die("node storage: expected <node> (its disks) or add <node> <pool> ...");
+    listNodeStorage(verb, o.json);
     return;
   }
 

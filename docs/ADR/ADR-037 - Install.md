@@ -8,7 +8,7 @@
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #403 (install on the root disk; smarter placement — D1's fallback is a first step of #884, dynamic placement), #377 (the installer cannot restart; the management-network question), the 2.4 install theme. Builds on [ADR-034](<ADR-034 - TAPPaaS User Interface.md>) D10 (the Setup wizard), [ADR-030](<ADR-030 - IPv6.md>) (IPv6), [ADR-010](ADR-010-vps-satellite-reverse-proxy-backup.md) (the admin VPN), ADR-012 (backup placement), #692 (storage resolved against the node). |
-| **Changelog** | v1.2 (2026-10-27) — **D4 (operator):** adding a node is two verbs — `node add` stands the node up, `node storage add` gives it data pools with precise arguments; boot disks named by size, model or serial, a blank field the automatic choice, an identical smallest pair mirrored; the MAC learned from the switch port. Waiting for a choice made in the GUI during the install is O7, not built. · v1.1 (2026-10-26) — D1: the fallback takes any other ZFS data pool before the boot pool (found building P1b: a node whose only pool is `tankc1` built there before, and would otherwise have been refused). · v1.0 (2026-10-26) — **Accepted** by the operator, with the boot-pool reserve at 20 %. D1: a mirrored `rpool` boots from either disk — every member's EFI system partition registered with `proxmox-boot-tool`, checked after the install and by the health check, re-initialised on a replaced disk; P1 tests booting from each disk alone. · v0.4 (2026-10-26) — **D1 reworked (operator):** one pool per disk — ZFS on the boot disk is the default and required without a data disk; a module's `storage` is a preference: the same class, any `tanka<N>`, then the boot pool (`local-zfs`), warned and recorded; any zfspool by its storage name (readers look the dataset up). The partition layout (v0.2–v0.3) and D1b become A0b and A2b. P2 is tested on the operator's spare machine on the WAN. · v0.3 (2026-10-25) — **D1:** a pool on a partition: alignment, `ashift=12`, by-id names, one layout on every boot disk, and the runbook that replaces a failed disk for both pools; P1 rehearses it. · v0.2 (2026-10-25) — **D1:** `tanka1` is a real pool on the free part of the boot disk(s) (`hdsize`), not a dataset of `rpool` (the installer cannot name its pool, and storage names are pool names in TAPPaaS). **D2:** one IP — the firewall takes the server's address and MAC at the cut-over, with a rollback and a boot watchdog; two servers meet on a vSwitch; the virtual-MAC design becomes A5. · v0.1 (2026-10-25) — first draft. |
+| **Changelog** | v1.2 (2026-10-27) — **D4 (operator):** adding a node is two verbs — `node add` stands the node up, `node storage add` gives it data pools with precise arguments (`--wipe` to erase a disk that carries data); boot disks named by size, model or serial, matched by the installer's hook, a blank field the automatic choice, an identical smallest pair mirrored; the MAC learned from the switch port. Waiting for a choice made in the GUI during the install is O7, not built. · v1.1 (2026-10-26) — D1: the fallback takes any other ZFS data pool before the boot pool (found building P1b: a node whose only pool is `tankc1` built there before, and would otherwise have been refused). · v1.0 (2026-10-26) — **Accepted** by the operator, with the boot-pool reserve at 20 %. D1: a mirrored `rpool` boots from either disk — every member's EFI system partition registered with `proxmox-boot-tool`, checked after the install and by the health check, re-initialised on a replaced disk; P1 tests booting from each disk alone. · v0.4 (2026-10-26) — **D1 reworked (operator):** one pool per disk — ZFS on the boot disk is the default and required without a data disk; a module's `storage` is a preference: the same class, any `tanka<N>`, then the boot pool (`local-zfs`), warned and recorded; any zfspool by its storage name (readers look the dataset up). The partition layout (v0.2–v0.3) and D1b become A0b and A2b. P2 is tested on the operator's spare machine on the WAN. · v0.3 (2026-10-25) — **D1:** a pool on a partition: alignment, `ashift=12`, by-id names, one layout on every boot disk, and the runbook that replaces a failed disk for both pools; P1 rehearses it. · v0.2 (2026-10-25) — **D1:** `tanka1` is a real pool on the free part of the boot disk(s) (`hdsize`), not a dataset of `rpool` (the installer cannot name its pool, and storage names are pool names in TAPPaaS). **D2:** one IP — the firewall takes the server's address and MAC at the cut-over, with a rollback and a boot watchdog; two servers meet on a vSwitch; the virtual-MAC design becomes A5. · v0.1 (2026-10-25) — first draft. |
 
 Three changes to how a TAPPaaS site comes into being, in the order they are built: a node with
 **one disk** (or one mirrored pair) is a complete site; a site can be stood up on a **rented
@@ -162,9 +162,11 @@ is two steps, two verbs and two pages in the console:
   `node storage <name>` lists the node's disks in no pool (`storage-manager inventory`).
   `node storage add <name> <pool> --disks <d>[,<d>...] --layout single|mirror|raidz1|raidz2`
   builds the pool, registers it as a storage for the node and records it in the node's record
-  (`storagePools`). It asks nothing: a missing or ambiguous argument, a disk that is in a pool or
-  holds a partition table, or a pool name in use is a refusal that says why. A disk is named by
-  its serial or its `/dev/disk/by-id` name; the pool's disks are recorded by id.
+  (`storagePools`). It asks nothing: a missing or ambiguous argument, a pool name that is not
+  `tank<…>` or that the node has, the boot disk or a disk in a live pool is a refusal that says
+  why; so is a disk that carries data or an old pool's label, unless `--wipe` says to erase it.
+  A disk is named by its serial or its `/dev/disk/by-id` name; the pool's disks are recorded by
+  id.
 - **The console guides; the verb decides.** The storage page shows the free disks from the
   inventory — size, type, model, serial, health — and proposes a pool from what is ticked: the
   name (the next free `tank<class><N>` for the disks' type) and the layout (`mirror` for two,
@@ -175,12 +177,14 @@ is two steps, two verbs and two pages in the console:
   unprotected boot pool, two a mirror. Left blank, the boot disk is the smallest SSD or NVMe disk
   that is not on USB; when the smallest two are the same model and size, both are taken and the
   boot pool is mirrored. The console's help text for each field says what a blank does.
-- **The choice is resolved in the installer's own boot.** The hook the installer already runs
-  reads the machine's disks; it sends them with the answer request, and the answer server matches
-  the fields against them and answers in that boot's kernel names, the one moment those are
-  valid. A field that matches no disk, or more than it may, falls back to the console's question
-  (the one the installer asks today without `--boot-disk`). The disks used are recorded in the
-  node's record by serial.
+- **The choice is resolved in the installer's own boot.** `boot.ipxe` carries each pending
+  registration's two fields on the kernel command line, chosen by the MAC that netboots; the
+  hook the installer already runs matches them against the machine's disks (size, model, serial,
+  type, USB) and sends the answer server the kernel names of that boot, the one moment those are
+  valid. The match is in the hook because the console's question is there too, and the hook runs
+  before the installer's network is up. A field that matches no disk, or more than it may, falls
+  back to that question. The disks used are recorded in the node's record by serial
+  (`bootDisks`).
 - **Ports: where it is plugged in comes first.** The console's first field is the switch and port
   the machine is cabled to. On a switch TAPPaaS manages, the port becomes a node trunk and the
   machine's MAC is learned from the switch once it netboots (UniFi's wired clients, MikroTik's

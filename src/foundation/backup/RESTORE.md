@@ -374,16 +374,18 @@ disk's partitions and partition table, its boot entry (it asks for `ERASE`).
 ### 3.2 Bring the replacement back in
 
 ```bash
-site-manager node add tappaas2 --pxe --boot-disk 25414A800205   # PXE-install it: boot disk by SERIAL
-site-manager node add tappaas2 --pool tanka1=single:50026B73842AD86F   # or adopt a hand-installed Proxmox
+site-manager node add tappaas2 --pxe --boot-disk 25414A800205   # PXE-install it: boot disk by serial, size or model
+site-manager node add tappaas2                                    # or adopt a hand-installed Proxmox
+site-manager node storage add tappaas2 tanka1 --disks 50026B73842AD86F --layout single   # then its data pool
 ```
 
-**Name disks by serial** (`lsblk -o NAME,SERIAL`, or `disk/by-id/…`), never by
-kernel name: NVMe names swap between boots. In the #729 rehearsal the installer's
-`nvme0n1` was the running system's `nvme1n1` — a pool declared on `nvme0n1` would
-have been the new boot disk. `node add --pxe` refuses kernel names; leave out
-`--boot-disk` to pick the disk on the node's console, and `--pool` to be asked
-after the install, against the node's real disks.
+**Name disks by serial, size or model**, never by kernel name: NVMe names swap
+between boots. In the #729 rehearsal the installer's `nvme0n1` was the running
+system's `nvme1n1` — a pool declared on `nvme0n1` would have been the new boot disk.
+The installer matches `--boot-disk` against the machine's disks in its own boot
+(blank: the smallest SSD or NVMe disk, an identical smallest pair mirrored) and the
+node's console asks when nothing matches; `node storage add` takes serials or
+`disk/by-id/…` names, which `node storage tappaas2` lists, and refuses kernel names.
 
 **The node's root password** is generated for the PXE install and kept on the
 mothership, the operator's and 0600: `cat ~/.node-secrets/tappaas2.pw`. You

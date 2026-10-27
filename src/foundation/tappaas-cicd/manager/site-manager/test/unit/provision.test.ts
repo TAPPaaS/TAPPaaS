@@ -1,7 +1,7 @@
-// provision.test.ts — disks named before a PXE install (#729 §3: nvme0n1 and
-// nvme1n1 swapped between boots, so a pool declared on nvme0n1 hit the boot disk).
+// provision.test.ts — boot disks named before a PXE install (ADR-037 D4; #729 §3:
+// nvme0n1 and nvme1n1 swapped between boots).
 
-import { isKernelDiskName, pxeDiskProblems, quorumAdvice } from "../../src/provision";
+import { bootDiskProblems, bootDiskWarnings, isKernelDiskName, quorumAdvice } from "../../src/provision";
 
 let passed = 0;
 let failed = 0;
@@ -20,21 +20,18 @@ for (const s of ["25414A800205", "50026B73842AD86F", "disk/by-id/nvme-KINGSTON_X
   check(!isKernelDiskName(s), `${s} is not a kernel name`);
 }
 
-check(pxeDiskProblems(undefined, []).length === 0, "nothing named: nothing to refuse");
-check(pxeDiskProblems("25414A800205", ["tanka1=single:disk/by-id/nvme-KINGSTON_X"]).length === 0,
-  "serial boot disk + by-id pool pass");
-check(pxeDiskProblems("50026B73842AD86F", ["tanka1=single:50026B73842AD86F"]).length === 0,
-  "a pool disk by bare serial passes");
-check(pxeDiskProblems("nvme0n1", [], "nvme1n1").length === 0, "a mirrored pair by kernel names: accepted (both are mirrored)");
-check(pxeDiskProblems("25414A800205", [], "nvme1n1").length === 1, "a mirror with a serial: refused (one disk only)");
-check(pxeDiskProblems("nvme0n1", [], "nvme0n1").length === 1, "a mirror onto the boot disk itself: refused");
-check(pxeDiskProblems(undefined, [], "nvme1n1").length === 1, "a mirror without --boot-disk: refused");
-const boot = pxeDiskProblems("nvme0n1", []);
-check(boot.length === 1 && boot[0].includes("SERIAL"), "a kernel-name boot disk is refused, pointing at the serial");
-const pool = pxeDiskProblems(undefined, ["tankb1=mirror:disk/by-id/a,sdc"]);
-check(pool.length === 1 && pool[0].includes("sdc") && !pool[0].includes("disk/by-id/a is"),
-  "only the kernel name in a pool is named");
-check(pxeDiskProblems("sda", ["tanka1=single:nvme0n1"]).length === 2, "both refused at once");
+// ADR-037 D4: two fields the installer matches; blank is the automatic choice.
+for (const [d, m] of [[undefined, undefined], ["2TB", ""], ["Samsung 990", "none"], ["25414A800205", "S6B0NL0W1"],
+                      ["nvme0n1", "nvme1n1"], ["ask", ""], ["auto", "none"], ["1.92T", "1.92T x"]] as [string | undefined, string | undefined][]) {
+  check(bootDiskProblems(d, m).length === 0, `--boot-disk ${d} --boot-mirror ${m}: accepted`);
+}
+check(bootDiskProblems(undefined, "nvme1n1").length === 1, "a named mirror without a named boot disk: refused");
+check(bootDiskProblems("ask", "2TB").length === 1, "a named mirror of a console choice: refused");
+check(bootDiskProblems("nvme0n1", "nvme0n1").length === 1, "a mirror onto the boot disk itself: refused");
+check(bootDiskProblems("nvme0n1", "auto").length === 1, "an automatic mirror is the blank one: refused");
+check(bootDiskProblems("/dev/sda").length === 1 && bootDiskProblems("*").length === 1, "a path or a glob: refused");
+check(bootDiskWarnings("nvme0n1", "nvme1n1").length === 2 && bootDiskWarnings("2TB", "").length === 0,
+  "kernel names are warned about, descriptions are not");
 
 // #835: two votes and no QDevice — the survivor of a node failure fences itself.
 check(quorumAdvice(2, false).includes("loses quorum") && quorumAdvice(2, false).includes("node qdevice add"),

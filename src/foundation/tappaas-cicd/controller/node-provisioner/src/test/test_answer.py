@@ -263,13 +263,44 @@ class TestHandleAnswerPost(unittest.TestCase):
         self.registry = Registry(directory=base / "provision")
         self.secrets = base / "secrets"
 
-    def _post(self, macs):
+    def _post(self, macs, bootdisk="", bootmirror=""):
         info = {"network_interfaces": [{"mac": m} for m in macs],
                 "dmi": {"system": {"serial": "SN-1"}}}
         return handle_answer_post(
             info, self.registry, self.SITE,
             domain="mgmt.internal", secrets_directory=self.secrets,
+            boot_disk_override=bootdisk, boot_mirror_override=bootmirror,
         )
+
+    # ADR-037 D4: the installer resolves the fields and sends kernel names.
+    def test_installer_named_mirror_is_raid1_over_both(self):
+        self.registry.register("tappaas4", boot_disk="2TB")
+        with mock.patch("node_provisioner.server._reserve_standard_ip"):
+            status, body = self._post(["de:ad:be:ef:00:01"], bootdisk="nvme0n1", bootmirror="nvme1n1")
+        self.assertEqual(status, 200)
+        self.assertIn('zfs.raid = "raid1"', body)
+        self.assertIn('disk-list = ["nvme0n1", "nvme1n1"]', body)
+
+    def test_installer_named_single_disk(self):
+        self.registry.register("tappaas4", boot_disk="auto")
+        with mock.patch("node_provisioner.server._reserve_standard_ip"):
+            status, body = self._post(["de:ad:be:ef:00:01"], bootdisk="sda")
+        self.assertEqual(status, 200)
+        self.assertIn('zfs.raid = "raid0"', body)
+        self.assertIn('disk-list = ["sda"]', body)
+
+    def test_a_field_without_the_installers_names_is_refused_unconsumed(self):
+        for field in ("auto", "2TB", "Samsung 990", "ask"):
+            self.registry.register("tappaas4", boot_disk=field)
+            status, _ = self._post(["de:ad:be:ef:00:01"])
+            self.assertEqual(status, 409, field)
+            self.assertEqual(len(self.registry.list_pending()), 1)
+
+    def test_bad_mirror_parameter_is_refused(self):
+        self.registry.register("tappaas4", boot_disk="auto")
+        status, _ = self._post(["de:ad:be:ef:00:01"], bootdisk="sda", bootmirror="sdb;rm")
+        self.assertEqual(status, 400)
+        self.assertEqual(len(self.registry.list_pending()), 1)
 
     def test_mac_hit_serves_answer_and_consumes(self):
         self.registry.register("tappaas3", macs=["aa:bb:cc:dd:ee:03"],

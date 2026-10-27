@@ -2,7 +2,7 @@
   "$schema": "service-fields.json",
   "scope": "module",
   "description": "Change semantics for the module-level fields that no provider service owns.",
-  "_note": "ADR-020 D9 / issue #567. module-fields.json declares 74 fields; 55 name a '<module>:<service>' coordinate in their usedBy and are classified by that service's services/<svc>/fields.json. The 19 here name none — their usedBy is empty or 'general' — so they describe the MODULE itself (its provenance, lifecycle and wiring) rather than anything a provider configures, and until now nothing declared what changing them costs. This manifest is DECLARATION ONLY: no code consumes it yet. module-manager's pre-gate still waves every one of these through as 'config-only' without consulting a class, which is why setting kind, location or installTime by hand is currently accepted. Teaching the pre-gate to refuse on this manifest — the way network-manager already refuses a zone field with no changeClass in zones-fields.json — is issue #567, deliberately deferred until ADR-020 has landed across the estate. No entry carries a liveKey: there is no report-service.sh for module-level fields, because there is no provider to ask. Every entry is therefore apply:'none' — for these fields, writing the config IS the change. That makes 'in-place' here mean 'takes effect at once, nothing to refuse' rather than 'the converge applies it live'; converge.ts already calls this situation 'config-only', and #567 may be the moment that becomes a real class.",
+  "_note": "ADR-020 D9 / issue #567. module-fields.json declares 75 fields; 55 name a '<module>:<service>' coordinate in their usedBy and are classified by that service's services/<svc>/fields.json. The 20 here name none — their usedBy is empty or 'general' — so they describe the MODULE itself (its provenance, lifecycle and wiring) rather than anything a provider configures, and until now nothing declared what changing them costs. This manifest is DECLARATION ONLY: no code consumes it yet. module-manager's pre-gate still waves every one of these through as 'config-only' without consulting a class, which is why setting kind, location or installTime by hand is currently accepted. Teaching the pre-gate to refuse on this manifest — the way network-manager already refuses a zone field with no changeClass in zones-fields.json — is issue #567, deliberately deferred until ADR-020 has landed across the estate. No entry carries a liveKey: there is no report-service.sh for module-level fields, because there is no provider to ask. Every entry is therefore apply:'none' — for these fields, writing the config IS the change. That makes 'in-place' here mean 'takes effect at once, nothing to refuse' rather than 'the converge applies it live'; converge.ts already calls this situation 'config-only', and #567 may be the moment that becomes a real class.",
   "fields": {
     "description": {
       "class": "in-place",
@@ -164,6 +164,11 @@
       "class": "in-place",
       "apply": "none",
       "changeNote": "The pools a node carries. Writing it changes nothing on the node; the next cluster update adds the node to each named pool's storage list. A pool taken out is only reported: the storage list keeps the node until the operator removes it (pvesm set <pool> --nodes)."
+    },
+    "bootDisks": {
+      "class": "in-place",
+      "apply": "none",
+      "changeNote": "The disks a node boots from, by serial, recorded when it joins. Informational: writing it changes nothing on the node."
     },
     "stack": {
       "class": "immutable",

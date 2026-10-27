@@ -639,12 +639,14 @@ else
   fetch "${REPO}${BRANCH}/src/foundation/cluster/config-storage.sh" ~/tappaas/config-storage.sh 755
   msg_ok "Fetched config-storage.sh"
   # F1: in unattended mode pass --yes (assume-yes to wipe; implies --non-interactive)
-  # plus any --pool specs. Without --pool, no pools are created — warn loudly since
-  # the platform step needs tanka1. Interactive mode keeps the config-storage menu.
+  # plus any --pool specs. Without --pool no pools are created, and the boot
+  # pool's ESPs are still checked. Interactive mode keeps the config-storage menu.
   stor_args=()
   if [ "$NONINTERACTIVE" = 1 ]; then
     stor_args+=(--yes)
-    [ "${#POOL_ARGS[@]}" -eq 0 ] && msg_error "Unattended storage but no --pool given — NO ZFS pools will be created (platform install needs tanka1). Pass --pool 'tanka1=single:<disk>'."
+    # No --pool: a node without data pools yet — the boot pool carries its guests
+    # (ADR-037 D1), and `site-manager node storage add` gives it pools later (D4).
+    [ "${#POOL_ARGS[@]}" -eq 0 ] && msg_ok "No --pool given — no data pools now; the boot pool carries the guests (site-manager node storage add)"
   fi
   stor_args+=(${POOL_ARGS[@]+"${POOL_ARGS[@]}"})
   ~/tappaas/config-storage.sh ${stor_args[@]+"${stor_args[@]}"} \
