@@ -418,8 +418,29 @@ msg_ok "Added 'pve-no-subscription' repository"
 # contains community packages (jq, powertop, …) and the first `apt install`
 # below fails with "Unable to locate package". Fatal: nothing after this works
 # without it.
+#
+# A node's first boot is where this fails for passing reasons: the clock not yet
+# synchronised (apt refuses a Release file that is "not valid yet"), or the
+# network and its DNS still coming up. So wait for time sync (up to 2 minutes),
+# then try up to five times, and on a last failure show apt's own error.
 msg_info "Refreshing apt package lists"
-apt-get update &>/dev/null || { msg_error "apt update failed"; exit 1; }
+for _ in $(seq 1 24); do
+    [[ "$(timedatectl show -p NTPSynchronized --value 2>/dev/null)" == "yes" ]] && break
+    sleep 5
+done
+_apt_log="$(mktemp)"
+_apt_ok=0
+for _try in 1 2 3 4 5; do
+    if apt-get update >"${_apt_log}" 2>&1; then _apt_ok=1; break; fi
+    sleep $((_try * 10))
+done
+if [[ "${_apt_ok}" != "1" ]]; then
+    msg_error "apt update failed (5 tries; clock synchronised: $(timedatectl show -p NTPSynchronized --value 2>/dev/null || echo unknown)):"
+    grep -E '^(E|W|Err):' "${_apt_log}" | tail -n 8 >&2 || tail -n 8 "${_apt_log}" >&2
+    rm -f "${_apt_log}"
+    exit 1
+fi
+rm -f "${_apt_log}"
 msg_ok "Refreshed apt package lists"
 
 
