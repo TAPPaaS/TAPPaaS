@@ -19,7 +19,8 @@ import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
 import { ApIn, SiteSsid, ZoneIn, wifiZones } from "../wizards";
-import { AddStackButton, SetupDoc, enrolSteps } from "./Setup";
+import { AddStackButton, SetupDoc } from "./Setup";
+import { ENROL_TEXT, EnrolButton } from "./Enrol";
 import { WIFI_TEXT, WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
 import { SatelliteButton } from "./Satellite";
@@ -214,9 +215,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
         </WizardCard>
       </Group>
       <Group title="Access and backup">
-        <WizardCard title="Enrol a device" action={<OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} opens={{ wizard: "enrol-device" }} />}>
-          A laptop or phone joins the admin VPN; the result is its WireGuard file to download.
-        </WizardCard>
+        <WizardCard title="Enrol a device for mgmt access" action={<EnrolButton />}>{ENROL_TEXT}</WizardCard>
         <WizardCard title="Add a backup buddy" action={<BuddyButton />}>
           Another site's PBS keeps an off-site copy — pulled through its own tunnel — or this site keeps theirs.
         </WizardCard>

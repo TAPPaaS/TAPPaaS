@@ -9,12 +9,13 @@
 
 import { ReactNode, useState } from "react";
 import { Read, get, post, useRead } from "../api";
-import { Output, stripAnsi } from "../jobs";
+import { stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
-import { EnvironmentRow, Job, SiteRead } from "../types";
+import { EnvironmentRow, SiteRead } from "../types";
 import { Dot, Link, ReadState, navigate, since } from "../ui";
 import { AddNodeButton } from "./AddNode";
+import { EnrolButton } from "./Enrol";
 import { Day2 } from "./Day2";
 import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, broadcastText, passphraseOf, stacksOf } from "../wizards";
 
@@ -83,42 +84,13 @@ export function wgConfig(output: string): string | null {
   return out.join("\n").trim() + "\n";
 }
 
-function download(name: string, text: string): void {
+export function download(name: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
   const a = document.createElement("a");
   a.href = url;
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
-export function enrolSteps(): Step[] {
-  return [
-    {
-      title: "Enrol a device in the admin VPN: network-manager wgvpn add-peer",
-      bin: "network-manager",
-      verb: "wgvpn",
-      words: ["wgvpn", "add-peer"],
-      hide: ["@setup|add-peer|remove-peer|list|config", "@options"],
-      note: (
-        <>
-          On the device: <span className="mono">wg genkey | tee private.key | wg pubkey</span> — give its public key here (the private key never leaves it). Under "more options" give, one per line:
-          <span className="mono"> --name &lt;device&gt;</span>, <span className="mono">--pubkey &lt;key&gt;</span>, optionally <span className="mono">--ip 10.255.1.x</span> and <span className="mono">--endpoint host:port</span>. The result is a wg-quick file to download; paste the private key into it.
-        </>
-      ),
-      after: (job: Job) => {
-        const conf = wgConfig(job.output);
-        if (!conf) return null;
-        const name = /--name\s+(\S+)/.exec((job.ran ?? []).join(" "))?.[1] ?? "tappaas-admin";
-        return (
-          <div>
-            <Output text={conf} />
-            <button className="btn btn-primary" onClick={() => download(`${name}.conf`, conf)}>Download {name}.conf</button>
-          </div>
-        );
-      },
-    },
-  ];
 }
 
 // ── secrets ───────────────────────────────────────────────────────────
@@ -338,7 +310,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
         />
       </>
     ),
-    vpn: <OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />,
+    vpn: <EnrolButton />,
     stacks: <AddStackButton />,
     wifi: <WifiLinks doc={d ?? null} />,
     physical: (

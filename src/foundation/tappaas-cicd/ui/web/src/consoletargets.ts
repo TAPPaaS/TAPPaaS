@@ -35,7 +35,7 @@ export const WIZARDS: WizardDef[] = [
     verbs: ["environment-manager add"],
   },
   { name: "add-stack", title: "the Add a stack wizard", arg: null, path: () => DAY2, keys: ["stack"], values: "stack", verbs: ["module-manager add-stack"] },
-  { name: "enrol-device", title: "the Enrol a device wizard", arg: null, path: () => DAY2, keys: ["name", "pubkey", "ip", "endpoint"], values: "name, pubkey, ip, endpoint", verbs: ["network-manager wgvpn"] },
+  { name: "enrol-device", title: "the Enrol a device for mgmt access wizard", arg: null, path: () => DAY2, keys: ["name", "pubkey", "ip", "endpoint"], values: "name, pubkey, ip, endpoint", verbs: ["network-manager wgvpn"] },
   {
     name: "add-wifi", title: "the WiFi wizard", arg: "zone", path: (z) => `${DAY2}#wifi-${z}`,
     keys: ["ssid", "ap", "security"], values: "ssid, ap, security", verbs: ["ap-manager ssid"],
