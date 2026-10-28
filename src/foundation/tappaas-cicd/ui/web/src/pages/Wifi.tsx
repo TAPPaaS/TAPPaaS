@@ -100,7 +100,7 @@ export function WifiWizard({ z, apCount, site, onClose, prefill }: { z: WifiZone
               <label className="form-row">
                 <span>SSID *</span>
                 <input type="text" value={name} disabled={plan !== null} onChange={(e) => setName(e.target.value)} />
-                {problem ? <small className="ff-error">{problem}</small> : <small className="muted">The network's name as devices see it.{z.declared && z.declared !== ssid && z.declared !== old?.name ? ` zones.json names ${z.declared} for this zone.` : ""}{old && old.name !== ssid ? ` Replaces ${old.name}: one SSID per zone.` : ""}</small>}
+                {problem ? <small className="ff-error">{problem}</small> : <small className="muted">The network's name as devices see it.{!old && !prefill?.ssid && ssid === defaultSsid(site, z) ? ` Proposed as ${site ? "<site>-" : ""}<zone>; name it as you like.` : ""}{z.declared && z.declared !== ssid && z.declared !== old?.name ? ` zones.json names ${z.declared} for this zone.` : ""}{old && old.name !== ssid ? ` Replaces ${old.name}: one SSID per zone.` : ""}</small>}
               </label>
               <label className="form-row">
                 <span>security *</span>

@@ -10,7 +10,7 @@ import { join } from "path";
 import { IncomingMessage, ServerResponse } from "http";
 import { AccessConfig, Me, SetupState } from "../../src/access";
 import { HelpSpec, renderManifest } from "../../../lib/ts/src/help";
-import { Job, JobSummary, Jobs, RESTART_MARKER, parseUnitShow, shellQuote, sweepBlocks, takeRestartMarker } from "../../src/jobs";
+import { Job, JobSummary, Jobs, RESTART_MARKER, parseUnitShow, previewStop, shellQuote, sweepBlocks, takeRestartMarker } from "../../src/jobs";
 import { Manifests } from "../../src/manifest";
 import { Reads } from "../../src/reads";
 import { Runner, Streamer } from "../../src/run";
@@ -61,7 +61,9 @@ async function main(): Promise<void> {
     onOutput(`ran ${args[0]}\n`);
     if (args.includes("refuseme") && args.includes("--dry-run")) onOutput("[refused] memory=1 is below the module's floor\n");
     if (args.includes("hold")) await new Promise<void>((r) => (release = r));
-    return { rc: args.includes("--dry-run") && args.includes("vmid=1") ? 1 : 0, ran: true, error: null };
+    if (args[0] === "reconcile" && args.includes("pending") && !args.includes("--apply")) onOutput("1 change(s) pending. Re-run with --apply.\n");
+    const rc = args.includes("--dry-run") && args.includes("vmid=1") ? 1 : args[0] === "reconcile" && args.includes("pending") && !args.includes("--apply") ? 2 : args[0] === "reconcile" && args.includes("stale") && !args.includes("--apply") ? 1 : 0;
+    return { rc, ran: true, error: null };
   };
   const run: Runner = async (bin, args) =>
     bin === "systemctl" && args[0] === "show"
@@ -189,6 +191,18 @@ async function main(): Promise<void> {
   const ref_ = r.job!;
   await settle();
   check(ref_.exit === 0 && /refuses this change: memory=1 is below/.test(ref_.previewPhase?.stopped ?? "") && ran.length === n0 + 1, "a dry run that reports a refusal stops the job, even on exit 0");
+
+  n0 = ran.length;
+  r = await jobs.create(me(), closed, { argv: ["module-manager", "reconcile", "pending"], apply: true });
+  const pend = r.job!;
+  await settle();
+  check(pend.previewPhase?.kind === "apply-flag" && pend.previewPhase.exit === 2 && pend.previewPhase.stopped === null && pend.exit === 0 && ran.slice(n0).join("|") === "module-manager reconcile pending|module-manager reconcile pending --apply", "a reconcile preview that exits 2 (changes pending) goes on to the apply");
+  n0 = ran.length;
+  r = await jobs.create(me(), closed, { argv: ["module-manager", "reconcile", "stale"], apply: true });
+  const stale = r.job!;
+  await settle();
+  check(/exit 1/.test(stale.previewPhase?.stopped ?? "") && ran.length === n0 + 1, "…but one that exits 1 (a device could not be read) still stops the job");
+  check(previewStop(true, 2, "", false) !== null && previewStop(true, 2, "", true) === null && previewStop(true, 1, "", true) !== null, "exit 2 is pending for an apply-flag preview only");
 
   n0 = ran.length;
   r = await jobs.create(me(), closed, { argv: ["module-manager", "suspend", "deconz-test"], apply: true });

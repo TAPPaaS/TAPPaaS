@@ -65,7 +65,10 @@ export interface Job {
   // An apply asked without a preview of its own (createApply): the dry run it
   // ran first, the length of the output that is the dry run's, and why it
   // stopped there when it did (the apply then never ran). Absent otherwise.
-  previewPhase?: { ran: string[]; exit: number | null; durationMs: number | null; outputLength: number; stopped: string | null };
+  // `kind`: an apply-flag preview (reconcile without --apply) reports pending
+  // changes with exit 2, which is the reason to apply; a dry-run flag exits 0
+  // when the change is fine. Absent in records from before it was kept.
+  previewPhase?: { ran: string[]; kind?: "apply-flag" | "dry-run-flag"; exit: number | null; durationMs: number | null; outputLength: number; stopped: string | null };
   // The console stopped (a restart) while this job ran or waited: cut off, no
   // exit code. Set when the records are read back; absent otherwise.
   interrupted?: boolean;
@@ -517,7 +520,7 @@ export class Jobs {
     }
     const job = this.newJob(me, v, "apply", applyArgv(v), null, card);
     const pre = previewArgv(v);
-    if (pre) job.previewPhase = { ran: pre, exit: null, durationMs: null, outputLength: 0, stopped: null };
+    if (pre) job.previewPhase = { ran: pre, kind: v.preview.kind === "apply-flag" ? "apply-flag" : "dry-run-flag", exit: null, durationMs: null, outputLength: 0, stopped: null };
     this.add(job);
     const s = await this.refuseForSweep(job);
     if (s) return { status: 409, job, error: job.refused ?? "", sweep: s };
@@ -611,7 +614,7 @@ export class Jobs {
       pp.exit = r.rc;
       pp.durationMs = t - t0;
       pp.outputLength = out.written;
-      pp.stopped = previewStop(r.ran, r.rc, out.tail);
+      pp.stopped = previewStop(r.ran, r.rc, out.tail, pp.kind === "apply-flag");
       if (pp.stopped) {
         Object.assign(job, { state: "done", exit: r.rc, ended: new Date(t).toISOString(), durationMs: t - t0 });
         this.record(job);
@@ -660,9 +663,13 @@ export class Jobs {
 
 // Why a dry run stops the apply that follows it: it did not run, it failed,
 // or it refused the change (a "[refused] …" line, even with exit 0). null: go on.
-export function previewStop(ran: boolean, rc: number, output: string): string | null {
+// `pendingIs2`: an apply-flag preview (ap-manager, switch-manager, network-manager
+// reconcile without --apply) exits 2 to say changes are pending — "Re-run with
+// --apply" — which is what the apply is for; exit 1 (a device could not be read,
+// the delta would be stale) still stops it.
+export function previewStop(ran: boolean, rc: number, output: string, pendingIs2 = false): string | null {
   if (!ran) return "the dry run could not run";
-  if (rc !== 0) return `the dry run refuses this change (exit ${rc}): nothing applied`;
+  if (rc !== 0 && !(pendingIs2 && rc === 2)) return `the dry run refuses this change (exit ${rc}): nothing applied`;
   const m = /^\[refused\]\s*(.*)$/m.exec(output);
   return m ? `the dry run refuses this change${m[1] ? `: ${m[1]}` : ""}: nothing applied` : null;
 }
