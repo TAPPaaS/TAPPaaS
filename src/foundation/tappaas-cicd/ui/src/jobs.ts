@@ -32,7 +32,7 @@ import { Me, SetupState, mayWrite } from "./access";
 import { Proposal } from "./conversations";
 import { Manifests, Validated, applyArgv, baseArgv, previewArgv, sameArgv, validateArgv } from "./manifest";
 import { ManifestVerb } from "../../lib/ts/src/help";
-import { Runner, Streamer } from "./run";
+import { Runner, StopSignal, Streamer } from "./run";
 
 export type JobKind = "preview" | "apply" | "read";
 export type JobState = "queued" | "running" | "done" | "refused";
@@ -72,6 +72,10 @@ export interface Job {
   // The console stopped (a restart) while this job ran or waited: cut off, no
   // exit code. Set when the records are read back; absent otherwise.
   interrupted?: boolean;
+  // Cancelled by an operator (POST /jobs/<id>/cancel): `was` queued, it never
+  // ran; running, it was stopped — the signals its process group was sent,
+  // in order. Absent otherwise.
+  cancelled?: { by: string | null; at: string; was: "queued" | "running"; signals: StopSignal[] };
 }
 
 export type JobSummary = Omit<Job, "output">;
@@ -117,6 +121,7 @@ export interface JobsConfig {
   proposal?: (me: Me, conversation: string, proposal: string) => Proposal | null;
   log?: (line: string) => void;
   previewTtlMs?: number;
+  stopGraceMs?: number; // a stopped job's time to clean up after SIGINT, before SIGTERM (default 30 s)
   // The runner has nothing left (no write running or queued, no read running):
   // the moment a deferred restart may happen (takeRestartMarker, main.ts).
   onIdle?: () => void;
@@ -138,6 +143,7 @@ export type CreateResult = { status: number; job?: JobSummary; error?: string; s
 const MAX_OUTPUT = 1024 * 1024; // per job, on disk; the rest is dropped and the job marked truncated
 const KEEP = 500; // summaries held in memory (and kept when jobs.jsonl is rotated)
 const ROTATE_AT = 10 * 1024 * 1024;
+const STOP_GRACE = 30_000;
 
 // ui/install.sh, having linked a new build while a job runs, leaves this file
 // in the state directory instead of restarting the service (which would kill
@@ -170,6 +176,7 @@ export class Jobs {
   private readonly queue: JobSummary[] = [];
   private running: JobSummary | null = null;
   private readonly reads = new Set<string>(); // read jobs running beside the queue
+  private readonly signals = new Map<string, (s: StopSignal) => boolean>(); // a running job's child, to stop it
   private readonly listeners = new Map<string, Set<Listener>>();
   private readonly keep: number;
   private readonly rotateAt: number;
@@ -563,6 +570,59 @@ export class Jobs {
     return this.get(job.id)!;
   }
 
+  // ── cancelling ──────────────────────────────────────────────────────
+
+  // POST /jobs/<id>/cancel, for whoever may write. A queued job leaves the
+  // queue and never runs. A running one is stopped: SIGINT to its process
+  // group, as ^C on a terminal (site-manager node add then closes its boot
+  // window and drops its registration), and SIGTERM after the grace period if
+  // it is still running. Either is recorded as cancelled, by whom.
+  cancel(me: Me, setup: SetupState, id: string): CreateResult {
+    const w = mayWrite(me, setup);
+    if (!w.ok) return { status: w.status, error: w.reason };
+    const job = this.jobs.find((j) => j.id === id);
+    if (!job) return { status: 404, error: `no job ${id}` };
+    if (job.state !== "queued" && job.state !== "running") return { status: 409, job, error: `job ${id} has ended: nothing to cancel` };
+    if (job.cancelled) return { status: 202, job }; // asked already: under way
+    job.cancelled = { by: me.user, at: new Date(this.now()).toISOString(), was: job.state, signals: [] };
+    const who = me.user ?? me.via;
+    const i = this.queue.indexOf(job);
+    if (i >= 0) {
+      this.queue.splice(i, 1);
+      this.endCancelled(job, `\n[console] cancelled by ${who} while queued: it never ran\n`);
+      this.settle();
+      return { status: 200, job };
+    }
+    // Taken from the queue, its sweep check still under way: pump ends it.
+    if (job.state === "queued") return { status: 202, job };
+    this.cfg.log?.(`job ${job.id} stopped by ${who}: ${(job.ran ?? job.argv).join(" ")}`);
+    this.appendOutput(job.id, `\n[console] stopped by ${who}: SIGINT to its process group\n`);
+    this.signal(job, "SIGINT");
+    const t = setTimeout(() => {
+      if (job.state !== "running") return;
+      this.appendOutput(job.id, `\n[console] still running ${Math.round((this.cfg.stopGraceMs ?? STOP_GRACE) / 1000)} s after SIGINT: SIGTERM\n`);
+      this.signal(job, "SIGTERM");
+    }, this.cfg.stopGraceMs ?? STOP_GRACE);
+    (t as { unref?: () => void }).unref?.(); // never holds the console up on its own
+    return { status: 202, job };
+  }
+
+  // A signal for the job's child, now if it runs; one that has not spawned yet
+  // (between its dry run and its apply) is signalled as it spawns.
+  private signal(job: JobSummary, s: StopSignal): void {
+    job.cancelled?.signals.push(s);
+    this.record(job);
+    this.signals.get(job.id)?.(s);
+  }
+
+  private endCancelled(job: JobSummary, note: string): void {
+    const t = this.now();
+    Object.assign(job, { state: "done", ended: new Date(t).toISOString(), durationMs: job.started ? t - Date.parse(job.started) : null });
+    this.appendOutput(job.id, note);
+    this.record(job);
+    this.emit(job, { type: "end", job: summary(job) });
+  }
+
   // ── running ─────────────────────────────────────────────────────────
 
   private enqueue(job: JobSummary): void {
@@ -578,7 +638,9 @@ export class Jobs {
     this.running = job;
     try {
       const s = await this.sweep();
-      if (s.active) {
+      if (job.cancelled) {
+        this.endCancelled(job, `\n[console] cancelled by ${job.cancelled.by ?? "?"} while queued: it never ran\n`);
+      } else if (s.active) {
         job.state = "refused";
         job.refused = sweepMessage(s);
         job.ended = new Date(this.now()).toISOString();
@@ -614,7 +676,7 @@ export class Jobs {
       pp.exit = r.rc;
       pp.durationMs = t - t0;
       pp.outputLength = out.written;
-      pp.stopped = previewStop(r.ran, r.rc, out.tail, pp.kind === "apply-flag");
+      pp.stopped = job.cancelled ? `stopped by ${job.cancelled.by ?? "?"} during the dry run: nothing applied` : previewStop(r.ran, r.rc, out.tail, pp.kind === "apply-flag");
       if (pp.stopped) {
         Object.assign(job, { state: "done", exit: r.rc, ended: new Date(t).toISOString(), durationMs: t - t0 });
         this.record(job);
@@ -642,7 +704,13 @@ export class Jobs {
 
   // One command of a job, its output appended to the job's log (capped at
   // MAX_OUTPUT over the whole job).
+  // A Stop asked before the child spawned reaches it as it does.
   private async stream(job: JobSummary, argv: string[], out: { written: number; tail: string }): Promise<{ rc: number; ran: boolean }> {
+    const onSpawn = (signal: (s: StopSignal) => boolean): void => {
+      this.signals.set(job.id, signal);
+      const last = job.cancelled?.signals.at(-1);
+      if (last) signal(last);
+    };
     const r = await this.cfg.stream(argv[0], argv.slice(1), (chunk) => {
       out.tail = (out.tail + chunk).slice(-4096);
       if (out.written < MAX_OUTPUT) {
@@ -651,7 +719,7 @@ export class Jobs {
         this.appendOutput(job.id, part);
         this.emit(job, { type: "output", chunk: part });
       } else job.truncated = true;
-    });
+    }, undefined, { onSpawn }).finally(() => this.signals.delete(job.id));
     if (!r.ran) {
       const note = `\n[console] could not run ${argv[0]}: ${r.error ?? "not found"}\n`;
       out.written += note.length;

@@ -162,7 +162,7 @@ export class ConsoleServer {
       r.refresh(what).catch((e: Error) => this.cfg.log(`refresh ${what}: ${e.message}`));
       return sendJson(res, 202, { refreshing: what });
     }
-    if (head === "jobs") return this.jobsApi(method, a, b, me, res, req);
+    if (head === "jobs") return this.jobsApi(method, a, b, me, res, req, url);
     if (head === "secrets") return this.secretsApi(method, a, me, res, req);
     if (head === "assistant") return this.assistantApi(method, a, b, me, res, req);
     if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/${head ?? ""}: reads are GET; a change is a job (POST /api/v1/jobs)` });
@@ -381,16 +381,27 @@ export class ConsoleServer {
   }
 
   // ── jobs (ADR-034 D4) ─────────────────────────────────────────────
-  //   GET  /jobs                 every job, newest first, and the queue
+  //   GET  /jobs                 every job, newest first, and the queue;
+  //                              ?bin=&verb=&limit=: one verb's jobs only (a
+  //                              wizard looking for its session, Add node's)
   //   POST /jobs {argv, preview}  a preview (or a read); a write never starts here
   //   POST /jobs {argv, apply, confirm?}  the dry run, then the apply on a clean one (one job)
   //   POST /jobs/<id>/apply {confirm?}  the preview's argv with its applying flag
+  //   POST /jobs/<id>/cancel     a queued job never runs; a running one is stopped
   //   GET  /jobs/<id>            the job with its output; as text/event-stream,
   //                              the output as it comes (server-sent events)
-  private async jobsApi(method: string, id: string | undefined, sub: string | undefined, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
+  private async jobsApi(method: string, id: string | undefined, sub: string | undefined, me: Me, res: ServerResponse, req?: IncomingMessage, url?: URL): Promise<void> {
     const jobs = this.jobs;
     if (!jobs) return sendJson(res, 503, { error: "this console runs no jobs" });
     if (method === "GET" && !id) {
+      const q = url?.searchParams;
+      const bin = q?.get("bin") ?? null;
+      const verb = q?.get("verb") ?? null;
+      if (bin !== null || verb !== null) {
+        const limit = Math.max(1, Math.min(500, Number(q?.get("limit") ?? "") || 500));
+        const list = jobs.list().filter((j) => (bin === null || j.bin === bin) && (verb === null || j.verb === verb)).slice(0, limit);
+        return sendJson(res, 200, { data: { jobs: list, queue: jobs.queued() } });
+      }
       // busy: a write runs or waits, or a read runs — ui/install.sh defers the
       // service's restart on it (takeRestartMarker in jobs.ts).
       return sendJson(res, 200, { data: { jobs: jobs.list(), queue: jobs.queued(), busy: jobs.busy(), sweep: await jobs.sweep() } });
@@ -416,6 +427,7 @@ export class ConsoleServer {
     let r;
     if (!id) r = await jobs.create(me, setup, { argv: body.argv, preview: body.preview, apply: body.apply, confirm: body.confirm, assistant: body.assistant });
     else if (sub === "apply") r = await jobs.applyPreview(me, setup, id, { confirm: body.confirm });
+    else if (sub === "cancel") r = jobs.cancel(me, setup, id);
     else return sendJson(res, 404, { error: `jobs/${id}/${sub ?? ""}` });
     if (r.job) this.cfg.log(`job ${r.job.id} ${r.job.kind} ${r.job.state}${r.job.refused ? ` (${r.job.refused})` : ""}: ${r.job.argv.join(" ")}`);
     if (r.status >= 400) return sendJson(res, r.status, { error: r.error, ...(r.job ? { data: summary(r.job) } : {}), ...(r.sweep ? { sweep: r.sweep } : {}) });

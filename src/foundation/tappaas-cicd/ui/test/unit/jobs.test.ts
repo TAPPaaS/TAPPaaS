@@ -348,6 +348,13 @@ async function main(): Promise<void> {
   check(h.status === 403, "GET /jobs as users: 403, the console is the installer's");
   h = await call("GET", "/api/v1/jobs", undefined, gateH("installer"));
   check(h.status === 200 && (JSON.parse(h.body).data.jobs as Job[]).length > 0, "GET /jobs is a read: the installer sees the jobs");
+  h = await call("GET", `/api/v1/jobs?bin=module-manager&verb=${encodeURIComponent("reconcile")}&limit=2`, undefined, gateH("installer"));
+  const only = JSON.parse(h.body).data.jobs as Job[];
+  check(h.status === 200 && only.length === 2 && only.every((j) => j.verb === "reconcile") && only[0].created >= only[1].created, "GET /jobs?bin=&verb=&limit=: that verb's jobs only, newest first");
+  h = await call("POST", `/api/v1/jobs/${pj.id}/cancel`, {}, gateH("users"));
+  check(h.status === 403, "POST /jobs/<id>/cancel as users: 403");
+  h = await call("POST", `/api/v1/jobs/${pj.id}/cancel`, {}, gateH("installer"));
+  check(h.status === 409, "POST /jobs/<id>/cancel on an ended job: 409");
   h = await call("GET", "/api/v1/activity", undefined, gateH("installer"));
   check(Array.isArray(JSON.parse(h.body).jobs), "Activity lists the jobs beside the sweep's journal");
   check(existsSync(jobs.file), "jobs.jsonl is in the state directory");

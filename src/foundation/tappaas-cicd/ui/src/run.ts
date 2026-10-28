@@ -101,18 +101,36 @@ export async function runJson<T>(run: Runner, bin: string, args: string[], opts:
 
 // A job's child: its output as it comes (stdout and stderr in one stream, the
 // order the child wrote them), its exit code at the end. stdin is closed, so a
-// script that would prompt fails rather than waits.
-export type Streamer = (bin: string, args: string[], onOutput: (chunk: string) => void, timeoutMs?: number) => Promise<{ rc: number; ran: boolean; error: string | null }>;
+// script that would prompt fails rather than waits. `ctl.onSpawn` is handed
+// the way to signal it (a job's Stop, jobs.ts).
+export type StopSignal = "SIGINT" | "SIGTERM";
+export interface StreamControl {
+  onSpawn?: (signal: (s: StopSignal) => boolean) => void;
+}
+export type Streamer = (bin: string, args: string[], onOutput: (chunk: string) => void, timeoutMs?: number, ctl?: StreamControl) => Promise<{ rc: number; ran: boolean; error: string | null }>;
 
-export const streamAsync: Streamer = (bin, args, onOutput, timeoutMs = 4 * 3600_000) =>
+// The child leads a process group of its own (detached): a signal reaches the
+// helpers it started too (site-manager node add's ssh, its waits), as ^C on a
+// terminal would, and its own traps clean up.
+export const streamAsync: Streamer = (bin, args, onOutput, timeoutMs = 4 * 3600_000, ctl) =>
   new Promise((resolve) => {
     let child: ChildProcess;
     try {
-      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb" }, stdio: ["ignore", "pipe", "pipe"] });
+      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb" }, stdio: ["ignore", "pipe", "pipe"], detached: true });
     } catch (e) {
       resolve({ rc: -1, ran: false, error: (e as Error).message });
       return;
     }
+    const group = (s: StopSignal): boolean => {
+      if (!child.pid) return false;
+      try {
+        process.kill(-child.pid, s);
+        return true;
+      } catch {
+        return child.kill(s); // the group is gone; the child, if it is not
+      }
+    };
+    ctl?.onSpawn?.(group);
     let settled = false;
     const done = (r: { rc: number; ran: boolean; error: string | null }): void => {
       if (settled) return;
@@ -121,7 +139,7 @@ export const streamAsync: Streamer = (bin, args, onOutput, timeoutMs = 4 * 3600_
       resolve(r);
     };
     const timer = setTimeout(() => {
-      child.kill("SIGTERM");
+      group("SIGTERM");
       onOutput(`\n[console] timed out after ${Math.round(timeoutMs / 60_000)} min: stopped\n`);
       done({ rc: -1, ran: true, error: "timed out" });
     }, timeoutMs);

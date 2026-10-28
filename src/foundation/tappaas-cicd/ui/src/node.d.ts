@@ -123,7 +123,13 @@ declare module "child_process" {
     end(data?: string): void;
     on(event: "error", cb: (e: Error) => void): void;
   }
+  // A job's child is spawned in a process group of its own (run.ts
+  // streamAsync): Stop signals the whole group, process.kill(-pid).
+  export interface SpawnSyncOptions {
+    detached?: boolean;
+  }
   export interface ChildProcess {
+    pid?: number;
     stdin: ChildInput | null;
     stdout: ChildStream | null;
     stderr: ChildStream | null;
