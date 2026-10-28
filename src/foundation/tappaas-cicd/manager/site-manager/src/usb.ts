@@ -221,11 +221,14 @@ export function writeNodeUsb(node: string, device: string, yes: boolean): void {
 
   // The image is dd's stdin on the node, read straight from the file here: no
   // copy of 1.3 GB in this process, and ssh's own flow control paces it. The
-  // ssh options are cluster.ts ssh()'s, which has no streaming form.
+  // ssh options are cluster.ts ssh()'s, which has no streaming form. dd's
+  // progress comes back on stdout as a line every few seconds (percent, rate,
+  // time left: ddProgressCmd); what is not progress (an error) stays on stderr.
+  info("a few minutes: the image streams over ssh, then the stick flushes");
   const fd = fs.openSync(image, "r");
   let r;
   try {
-    r = spawnSync("ssh", [...sshArgs(), `root@${host}`, `dd of=${device} bs=4M conv=fsync status=none`],
+    r = spawnSync("ssh", [...sshArgs(), `root@${host}`, ddProgressCmd(device, size)],
       { stdio: [fd, "inherit", "pipe"], encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
   } finally { fs.closeSync(fd); }
   if (r.error) die(`node usb write: ssh could not be started: ${r.error.message}`);
@@ -237,9 +240,24 @@ export function writeNodeUsb(node: string, device: string, yes: boolean): void {
 
   // Flush and let it go, as the key stick's twin does; an eject that fails
   // (a stick that cannot be ejected) is no failure of the write.
+  info("flushed; ejecting the stick");
   const flush = ssh("root", host, `sync; blockdev --flushbufs ${device} 2>/dev/null; eject ${device} 2>/dev/null || true`);
   if (flush.rc !== 0) info(`${YW}flush/eject on ${node} reported: ${flush.stderr.trim()} — pull the stick after a moment${CL}`);
   info(`${GN}✓ ${device} on ${node} holds the installer stick (${humanGb(size)}): boot the new machine from it once${CL}`);
+}
+
+// The command on the node: dd with its progress (a line a second, '\r'-separated
+// on stderr) turned into one line every fifth second on stdout — percent, MB
+// written of the total, the rate, the time left at that rate — and anything
+// else dd says (an error) left on stderr. The pipe fails as dd fails.
+export function ddProgressCmd(device: string, total: number): string {
+  const awk =
+    `awk -v t=${total} '` +
+    `/bytes/ && /copied/ { n++; b=$1; s=$(NF-3)+0; if (n%5 && b<t) next; ` +
+    `pct=int(b*100/t); left=(s>0 && b>0) ? int((t-b)*s/b) : -1; ` +
+    `printf "  %3d%%  %d of %d MB  %s %s%s\\n", pct, b/1e6, t/1e6, $(NF-1), $NF, (left>=0 && b<t) ? sprintf(", about %d s left", left) : ""; fflush(); next } ` +
+    `{ print > "/dev/stderr" }'`;
+  return `set -o pipefail; dd of=${device} bs=4M conv=fsync status=progress 2>&1 >/dev/null | tr '\\r' '\\n' | ${awk}`;
 }
 
 // cluster.ts ssh()'s option list, for the one call that streams a file: the

@@ -48,8 +48,9 @@ export function UsbStickPicker({ nodes, node, setNode, device, setDevice, disabl
   const sticks = usb?.sticks ?? [];
   useEffect(() => {
     onSticks?.(sticks);
-    // The picked stick is gone (pulled out): forget it.
-    if (device && !sticks.some((s) => s.device === device)) setDevice("");
+    // The picked stick is gone (pulled out): forget it — unless the picker is
+    // frozen on a stick just written, which the write ejected.
+    if (!disabled && device && !sticks.some((s) => s.device === device)) setDevice("");
   }, [usb]);
   return (
     <>

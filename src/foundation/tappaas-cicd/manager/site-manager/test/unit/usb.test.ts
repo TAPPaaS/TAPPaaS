@@ -1,7 +1,7 @@
 // usb.test.ts — `node usb`: which disks are sticks, when one is in use, and
 // what `node usb write` refuses before it touches the node.
 
-import { describeStick, humanGb, inUseReason, isKeyStick, parseSticks, usbImagePath, usbWriteProblems } from "../../src/usb";
+import { ddProgressCmd, describeStick, humanGb, inUseReason, isKeyStick, parseSticks, usbImagePath, usbWriteProblems } from "../../src/usb";
 
 let passed = 0;
 let failed = 0;
@@ -82,6 +82,11 @@ const mounted = parseSticks(LSBLK, () => 'MOUNTPOINT="/mnt/x" FSTYPE="vfat" LABE
 const inUse = ok({ yes: true, imagePresent: true, sticks: mounted, device: "/dev/sdb" });
 check(inUse.length === 1 && inUse[0].includes("/dev/sdb is in use (mounted)"), "a mounted stick: refused, with why");
 check(ok({ yes: true, imagePresent: true, sticks, device: "/dev/sdb" }).length === 0, "the key stick is a stick: writable with --yes (the verb warns)");
+
+// The write's progress: dd's own, every fifth second, with the total known.
+const cmd = ddProgressCmd("/dev/sdb", 1763180544);
+check(cmd.startsWith("set -o pipefail; dd of=/dev/sdb bs=4M conv=fsync status=progress 2>&1 >/dev/null | tr"), `dd streams progress through the pipe, failing as dd fails (${cmd.slice(0, 60)})`);
+check(cmd.includes("-v t=1763180544") && cmd.includes("n%5") && cmd.includes("about %d s left") && cmd.includes('print > "/dev/stderr"'), "percent of the total, every fifth line, the time left, errors kept on stderr");
 
 console.log(`usb: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

@@ -105,6 +105,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   const [stickDevice, setStickDevice] = useState("");
   const [stickWritten, setStickWritten] = useState(false);
   const [prepared, setPrepared] = useState(false);
+  const [skipMedium, setSkipMedium] = useState(false); // the machine network-boots: no stick
   // The boot medium on the mothership, read again every ten seconds while the
   // wizard is open: a prepare that ran shows up without a reload.
   const mediaRead = useRead<BootMedia>("media", 10_000);
@@ -233,7 +234,10 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   const mediaReady = media?.ready ?? null;
 
   const steps = [
-    { id: "medium", title: "0 · Prepare boot medium", required: true, done: mediaReady === null ? null : mediaReady || prepared ? true : false, detail: "The netboot assets and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick." },
+    // Optional, and open until the operator writes a stick or skips: a
+    // machine that network-boots needs no stick (then the medium must only be
+    // there, which stage 1's job checks again).
+    { id: "medium", title: "0 · Prepare boot medium", required: false, done: stickWritten || skipMedium ? true : mediaReady === false && !prepared ? false : null, detail: "The netboot assets and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick. Skip it for a machine that network-boots." },
     { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. The outcome is either a boot USB disk is prepared or a PXE boot process is started." },
     { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto a ZFS boot pool, the node joins the cluster, is patched and rebooted, and is registered as a pvehost instance." },
@@ -255,7 +259,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
         </p>
         <ol className="setup">
           {/* Open while the medium is not ready; collapsed once it is (most machines network-boot and need nothing more). */}
-          <StepRow s={steps[0]} open={mediaReady === false && !prepared}>
+          <StepRow s={steps[0]} open={!stickWritten && !skipMedium}>
             <p className="small">Every new node installs from one medium on the mothership: a machine that network-boots (PXE) fetches it from there, a machine that cannot boots the installer stick made from the same image. The cicd install built it once; it is built again here when it is missing, from before this version, or wanted for a new Proxmox version.</p>
             {media ? (
               <ul className="plain checks">
@@ -287,9 +291,18 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
                 <div className="form">
                   <UsbStickPicker nodes={known.length ? known : [stickNode]} node={stickNode} setNode={setStickNode} device={stickDevice} setDevice={setStickDevice} disabled={stickWritten} />
                 </div>
+                {stickWritten ? (
+                  <p className="small"><Dot level="pass" /> The installer stick is written and ejected: pull {stickDevice} out of {stickNode}. It boots the new machine in stage 2.</p>
+                ) : null}
                 <StepView key={`${stickNode}:${stickDevice}:${media?.stickImage.present ? 1 : 0}`} step={writeStick} me={me} onDone={(ok) => ok && setStickWritten(true)} />
               </div>
             </div>
+            {!stickWritten && !skipMedium ? (
+              <div className="actions">
+                <button className="btn" onClick={() => setSkipMedium(true)}>Skip: the machine network-boots</button>
+                <span className="muted small">No stick is needed then; stage 1 opens the network-boot window.</span>
+              </div>
+            ) : null}
           </StepRow>
           <StepRow s={steps[1]} open={current === "declare"}>
             <StepView key={topo ? "ports" : "no-ports"} step={declare} me={me} onApplied={setJob} onDone={(ok) => setEnded(ok)} />

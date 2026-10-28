@@ -435,7 +435,8 @@ cannot be reached is an error in the human form; with `--json` it is
 `{"node": …, "reachable": false, "sticks": []}` and exit 0, so the console can say so.
 
 `node usb write <node> <device> --yes` streams the image over ssh onto the stick
-(`dd`, then flush and eject) and **erases it**. It asks nothing and refuses, writing
+(`dd`, then flush and eject) and **erases it**, printing its progress every few
+seconds (percent, MB written, rate, time left). It asks nothing and refuses, writing
 nothing, without `--yes`, when the image is not staged, when the node cannot be reached,
 when `<device>` is not a stick `node usb <node>` lists, or when the stick is in use.
 
