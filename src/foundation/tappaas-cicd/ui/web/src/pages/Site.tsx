@@ -20,6 +20,8 @@ import { locationAnchor } from "../locations";
 import { publicAddress, publicText } from "../zonegraph";
 import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
 import { AddNodeButton } from "./AddNode";
+import { AdoptButton } from "./Day2";
+import { SatelliteButton } from "./Satellite";
 import { Physical } from "./Physical";
 
 
@@ -54,7 +56,6 @@ export const SITE_TABS = PHYSICAL_TABS.map((v) => ({ view: v, name: VIEW_NAME[v]
 function NodeActions() {
   return (
     <span className="toolbar">
-      <AddNodeButton />
       <OperateButton label="Register joined nodes…" title="site-manager node reconcile" steps={[sm("site-manager node reconcile", "node reconcile")]} />
     </span>
   );
@@ -294,6 +295,13 @@ export function Site({ view = "overview" }: { view?: PhysicalView }) {
         <h1>Site</h1>
         <span className="muted">{s.displayName ? String(s.displayName) : String(s.name ?? "")} as built{view === "overview" ? ` · site-manager read ${since(r.env?.at)}` : ""}</span>
         <span className="spacer" />
+        {view === "overview" ? (
+          <>
+            <AddNodeButton />
+            <AdoptButton />
+            <SatelliteButton />
+          </>
+        ) : null}
         {view === "overview" ? (
           <OperateButton
             label="Update now…"

@@ -19,7 +19,7 @@ import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
 import { ApIn, PASSPHRASE_TEXT, SiteSsid, ZoneIn, broadcastText, passphraseOf, wifiVerb, wifiZones } from "../wizards";
-import { SetupDoc, StepRow, addStackSteps, enrolSteps } from "./Setup";
+import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
 import { WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
 import { SatelliteButton } from "./Satellite";
@@ -105,7 +105,7 @@ function PlaceDeviceCard({ t }: { t: Topology | null }) {
 
 // module-manager adopt: a machine that already runs becomes a module, at one
 // of the site's locations (the primary unless you choose another).
-function AdoptButton() {
+export function AdoptButton() {
   const locations = useSiteLocations();
   const at = locationOption(locations);
   return (
@@ -174,25 +174,21 @@ function RecordCard({ t }: { t: Topology | null }) {
 // and switch placed), its cards in the order the work goes.
 function PhysicalSite({ doc }: { doc: SetupDoc | null }) {
   const t = useRead<Topology>("topology").env?.data ?? null;
-  const step = doc?.steps.find((s) => s.id === "physical") ?? { id: "physical", title: "The physical site (optional)", required: false, done: null, detail: "reading the records…" };
+  const step = doc?.steps.find((s) => s.id === "physical");
   return (
     <section className="wizard-group" id="physical">
-      <h2>The physical site</h2>
-      <ol className="setup">
-        <StepRow s={{ ...step, title: "Rooms, racks and where each device stands" }} open>
-          <div className="wizard-cards">
-            <RoomsCard t={t} />
-            <WizardCard title="Add a rack" action={<OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} opens={{ wizard: "add-rack" }} />}>
-              A rack the site's hardware stands in: its height in units, its width, how its units are numbered, and its room.
-            </WizardCard>
-            <PlaceDeviceCard t={t} />
-            <RecordCard t={t} />
-          </div>
-          <p className="small muted">
-            Done when every node and switch is placed. The <Link to={viewLink("rack")}>Physical view</Link> draws the result by location, room and rack.
-          </p>
-        </StepRow>
-      </ol>
+      <h2>The physical view</h2>
+      <div className="wizard-cards">
+        <RoomsCard t={t} />
+        <WizardCard title="Add a rack" action={<OperateButton label="Add a rack…" title="Add a rack" steps={rackAddSteps} opens={{ wizard: "add-rack" }} />}>
+          A rack the site's hardware stands in: its height in units, its width, how its units are numbered, and its room.
+        </WizardCard>
+        <PlaceDeviceCard t={t} />
+        <RecordCard t={t} />
+      </div>
+      <p className="small muted">
+        {step?.detail ? <>{step.detail} · </> : null}Done when every node and switch is placed. The <Link to={viewLink("rack")}>Physical view</Link> draws the result by location, room and rack.
+      </p>
     </section>
   );
 }
@@ -219,7 +215,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
       {me && !canOperate(me) ? <p className="readstate">You read the console as {me.role}: the sequences need an operator.</p> : null}
       <Group title="The site">
         <WizardCard title="Add a node" action={<AddNodeButton label="Add a node…" />}>
-          A new machine becomes a Proxmox node of this site: declared, installed over the network, joined, its lan uplink set.
+          Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools.
         </WizardCard>
         <WizardCard title="Adopt a machine" action={<AdoptButton />}>
           A machine that already runs — a Debian host in a cupboard or a data centre — becomes a module of the site, at the location it is at.
