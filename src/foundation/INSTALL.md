@@ -377,11 +377,15 @@ Afterwards, fold the new topology into HA + replication:
 site-manager update
 ```
 
-> **Machine can't PXE-boot?** Write the staged netboot image to a stick —
-> `dd if=/home/tappaas/pve-tappaas-netboot.iso of=/dev/<usb> bs=4M` on the
-> mothership — and boot from USB instead of pressing F11: the flow (and the
-> `node add <name> --pxe` command) is otherwise identical, the answer still
-> comes from the mothership over HTTP.
+> **Machine can't PXE-boot?** Write the installer stick image to a stick —
+> `dd if=/var/lib/tappaas-pxe/tappaas-usb.iso of=/dev/<usb> bs=4M` (it is
+> also served at `http://tappaas-cicd.mgmt.internal:8090/tappaas-usb.iso`
+> while the boot window is open) — and boot from USB instead of pressing F11.
+> The flow (and the `node add <name> --pxe` command) is otherwise identical:
+> the answer still comes from the mothership, which matches `--boot-disk`
+> against the disks the stick reports. The stick cannot ask on the console:
+> a boot-disk field that matches no disk stops the install with the list of
+> the machine's disks.
 >
 > **Manual install instead?** Install from a stock ISO or the Step 1 Option A
 > stick, give the node its standard mgmt IP (or let it DHCP), then run

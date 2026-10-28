@@ -9,7 +9,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from node_provisioner.assets import RESOLVE_SH, boot_disk_lines
+from node_provisioner.assets import DISK_LIST_SH, RESOLVE_SH, boot_disk_lines, parse_posted_disks, resolve_posted_disks
 
 GB = 1_000_000_000
 
@@ -66,6 +66,32 @@ class TestResolve(unittest.TestCase):
         self.sys.disk("nvme0n1", 2000 * GB, "Samsung SSD 990 PRO 2TB", "S7HENJ0X100001")
         self.sys.disk("nvme1n1", 2000 * GB, "Samsung SSD 990 PRO 2TB", "S7HENJ0X100002")
         self.sys.disk("sda", 8000 * GB, "ST8000VN004", ssd=False, wwid="t10.ATA ST8000VN004 ZA1X2Y3Z")
+
+    def disk_list(self):
+        script = RESOLVE_SH + DISK_LIST_SH + '\n_tap_disk_list\n'
+        r = subprocess.run(["sh", "-c", script], env={"TAPPAAS_SYS": str(self.sys.root), "PATH": os.environ["PATH"]},
+                           capture_output=True, text=True)
+        self.assertEqual(r.stderr, "")
+        return r.stdout.strip()
+
+    def test_a_usb_boot_posts_its_candidate_disks_url_safe(self):
+        self.two_alike_and_a_big_one()
+        self.sys.disk("sdb", 120 * GB, "USB stick", usb=True)
+        listed = self.disk_list()
+        self.assertEqual(listed.split(",")[0], "nvme0n1~3906250000~0~Samsung.SSD.990.PRO.2TB~S7HENJ0X100001~")
+        self.assertNotIn("sdb", listed)
+        self.assertIn("~t10.ATA.ST8000VN004.ZA1X2Y3Z", listed)
+        self.assertEqual(len(parse_posted_disks(listed)), 3)
+
+    def test_the_mothership_resolves_posted_disks_as_the_installer_would(self):
+        self.two_alike_and_a_big_one()
+        disks = parse_posted_disks(self.disk_list())
+        for boot, mirror in (("auto", ""), ("auto", "none"), ("2TB", ""), ("S7HENJ0X100002", ""),
+                             ("8TB", ""), ("990 PRO", "none"), ("ask", "")):
+            rc, disk, mir = self.resolve(boot.replace(" ", "."), mirror)
+            ok, rdisk, rmir, _ = resolve_posted_disks(boot, mirror, disks)
+            self.assertEqual((ok, rdisk if ok else "", rmir if ok else ""),
+                             (rc == 0, disk if rc == 0 else "", mir if rc == 0 else ""), (boot, mirror))
 
     def test_auto_mirrors_an_identical_smallest_pair(self):
         self.two_alike_and_a_big_one()

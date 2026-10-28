@@ -151,6 +151,22 @@ def enable(
                   "'node-provisioner prepare --iso <prepared-pve.iso>' first")
             return False
 
+    # Assets staged by older code carry an older installer hook (or none: the
+    # boot-disk fields then never reach the answer server): re-stage them from
+    # their ISO first. That is root's; node add runs enable with sudo.
+    from . import assets as assets_mod
+    source = assets_mod.stale_source(assets)
+    if source:
+        if not Path(source).is_file():
+            warn(f"the netboot assets predate this installer hook and their ISO {source} is gone — "
+                 "re-stage them: prepare-netboot.sh --force")
+        elif os.geteuid() != 0:
+            warn("the netboot assets predate this installer hook — re-stage them: "
+                 f"sudo node-provisioner prepare --iso {source}")
+        else:
+            info(f"the netboot assets predate this installer hook — re-staging from {source} (a few minutes)")
+            assets_mod.prepare(source, directory=assets, port=port)
+
     tftp_root = assets / "tftp"
     tftp_root.mkdir(parents=True, exist_ok=True)
     _stage_ipxe_binary(tftp_root, bootfile)  # warns + continues on failure

@@ -52,6 +52,7 @@ export interface ProvisionOpts {
   bootFilesystem?: string; // zfs (default) | ext4 — the provisioner's --boot-filesystem
   bootMirror?: string; // a second boot disk: rpool mirrored (zfs raid1), by kernel name
   macs: string[];
+  anyMac?: boolean; // --mac any: no MAC pinned; the first machine that asks gets the answer
   wanPort?: string; // NIC for firewall-HA uplink; undefined => ask; "" => none
   lanPorts?: string; // #40: lan port(s), comma-separated; undefined => ask (empty = auto-detect)
   lanMode?: string; // active-backup | lacp, for two or more lan ports
@@ -320,7 +321,10 @@ export function provisionNode(o: ProvisionOpts): void {
   // a node trunk and the MAC is learned there; elsewhere the MAC is the operator's.
   const sp = o.switchPort ? parseSwitchPort(o.switchPort) : null;
   if (o.switchPort && !sp) die(`--switch-port '${o.switchPort}': <switch>:<port>, e.g. "USW Pro XG 10 PoE:1"`);
-  if (!sp && o.macs.length === 0) {
+  if (o.anyMac) {
+    warn(`--mac any: no MAC pinned — the first machine that asks for an install answer in the next ${o.ttlSeconds}s gets ${o.name}'s ` +
+         "(a cluster node never does); keep other machines from network-booting meanwhile");
+  } else if (!sp && o.macs.length === 0) {
     printManualPortSetup();
     die("node add --pxe: say where the machine is — --switch-port <switch>:<port> on a switch TAPPaaS programs " +
         "(the MAC is learned there), or --mac <m> (the machine's label, its BIOS or its BMC)");
@@ -367,7 +371,7 @@ export function provisionNode(o: ProvisionOpts): void {
     const answerDeadline = Date.now() + o.ttlSeconds * 1000;
     // With --switch-port the MAC is learned while the machine netboots, and the
     // registration pinned to it before the installer asks for its answer.
-    let learning = sp !== null && o.macs.length === 0;
+    let learning = sp !== null && o.macs.length === 0 && !o.anyMac;
     if (learning) info(`  watching ${sp!.switch} port ${sp!.port} for the machine's MAC...`);
     let ticks = 0;
     while (!fs.existsSync(consumed)) {

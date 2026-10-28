@@ -213,6 +213,7 @@ def handle_answer_post(
     boot_disk_override: str = "",
     boot_mirror_override: str = "",
     config_directory=None,
+    posted_disks: str = "",
 ):
     """Pure-ish core of POST /answer: (http_status, body_text).
 
@@ -260,6 +261,27 @@ def handle_answer_post(
         boot_disk, boot_mirror = boot_disk_override, boot_mirror_override
         info(f"boot disk from the installer: {boot_disk}"
              + (f", mirrored onto {boot_mirror}" if boot_mirror else ""))
+    elif not is_kernel_disk_name(boot_disk) and posted_disks:
+        # A USB boot: no fields reached the installer, its disks came instead.
+        # The same matcher runs here; nothing to ask on a console from here, so
+        # a field that matches no disk (or ask) is refused without consuming.
+        from .assets import parse_posted_disks, resolve_posted_disks
+        disks = parse_posted_disks(posted_disks)
+        if disks is None:
+            warn(f"REFUSED: bad disks parameter {posted_disks[:200]!r}")
+            return 400, "invalid disks parameter\n"
+        ok, disk, mirror, why = resolve_posted_disks(reg.boot_disk, reg.boot_mirror, disks)
+        listed = "; ".join(f"{d[0]} {d[1] * 512 // 1_000_000_000} GB {d[3]}" for d in disks)
+        if not ok:
+            warn(f"REFUSED (not consumed): registration '{reg.name}' boot disk "
+                 f"{reg.boot_disk!r} on a USB boot: {why} (disks: {listed})")
+            return 409, (f"TAPPaaS: the boot disk '{reg.boot_disk}' does not resolve on this machine: {why}. "
+                         f"Its disks: {listed}. Register the node again with a --boot-disk that "
+                         "names one (or boot it from the network, where the console can ask), "
+                         "then reboot.\n")
+        boot_disk, boot_mirror = disk, mirror
+        info(f"boot disk on a USB boot, matched here: {boot_disk}"
+             + (f", mirrored onto {boot_mirror}" if boot_mirror else "") + f" ({why})")
     elif not is_kernel_disk_name(boot_disk):
         warn(f"REFUSED (not consumed): registration '{reg.name}' names its boot "
              f"disk as {boot_disk!r}, which the installer resolves — but no disk "
@@ -323,6 +345,7 @@ def build_handler(registry: Registry, directory: Path,
             query = parse_qs(parts.query)
             bootdisk_param = query.get("bootdisk", [""])[0]
             bootmirror_param = query.get("bootmirror", [""])[0]
+            disks_param = query.get("disks", [""])[0]
             try:
                 length = int(self.headers.get("Content-Length") or 0)
             except ValueError:
@@ -347,6 +370,7 @@ def build_handler(registry: Registry, directory: Path,
                 request_ip=self.client_address[0],
                 boot_disk_override=bootdisk_param,
                 boot_mirror_override=bootmirror_param,
+                posted_disks=disks_param,
             )
             payload = body.encode("utf-8")
             self.send_response(status)

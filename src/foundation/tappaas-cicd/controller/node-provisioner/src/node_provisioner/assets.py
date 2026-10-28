@@ -32,6 +32,9 @@ partition/url) are needed for the deployed PVE version.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import re
 import shutil
 import subprocess
 import tempfile
@@ -43,6 +46,9 @@ from .util import DEFAULT_PORT, pxe_dir, run
 KERNEL_IN_ISO = "boot/linux26"
 INITRD_IN_ISO = "boot/initrd.img"
 ISO_ASSET_NAME = "proxmox.iso"
+USB_ISO_NAME = "tappaas-usb.iso"  # the installer stick: the ISO with the patched /init
+STAMP_NAME = "assets.json"  # which /init patch the staged assets carry, and their ISO
+DEFAULT_SOURCE_ISO = "/home/tappaas/pve-tappaas-netboot.iso"  # prepare-netboot.sh's copy
 
 # Injected into the installer's /init right before switch_root (the installer
 # root is an overlayfs with a tmpfs upper, so the sed lands in the writable
@@ -152,9 +158,38 @@ _tap_resolve() {
 }
 """
 
+# The disk list of a USB boot, on top of RESOLVE_SH (the install media of a
+# first node carry RESOLVE_SH alone).
+DISK_LIST_SH = r"""
+# A value safe in the answer URL: what is not a letter, digit, '.', '_' or '-'
+# becomes '.', which the matcher's grep reads as any character.
+_tap_safe() {
+    _s="$1"; _o=""
+    while [ -n "$_s" ]; do
+        _c="${_s%"${_s#?}"}"; _s="${_s#?}"
+        case "$_c" in [A-Za-z0-9._-]) _o="$_o$_c" ;; *) _o="$_o." ;; esac
+    done
+    echo "$_o"
+}
+# The candidate disks for the answer server (a USB boot): name~sectors~
+# rotational~model~serial~wwid, comma-separated.
+_tap_disk_list() {
+    _l=""
+    for _b in $(_tap_disks); do
+        _e="$_b~$(_tap_sectors "$_b")~$(cat "$_tap_sys/block/$_b/queue/rotational" 2>/dev/null || echo 1)"
+        _e="$_e~$(_tap_safe "$(_tap_model "$_b")")~$(_tap_safe "$(cat "$_tap_sys/block/$_b/device/serial" 2>/dev/null)")"
+        _e="$_e~$(_tap_safe "$(cat "$_tap_sys/block/$_b/device/wwid" 2>/dev/null)")"
+        _l="${_l:+$_l,}$_e"
+    done
+    echo "$_l"
+}
+"""
+
 # The boot-disk block of the injected /init: read the registration's two fields
 # from the kernel command line, resolve them, ask on the console when they do
-# not resolve, and hand the names to the answer server.
+# not resolve, and hand the names to the answer server. A USB boot carries no
+# fields (its command line is the ISO's): the candidate disks go instead, and
+# the answer server matches the registration's fields against them.
 BOOT_DISK_SH = r"""
     # TAPPaaS node-provisioner: the boot disk(s) (ADR-037 D4). The registration's
     # two fields come on the kernel command line (tappaas.bootdisk= and
@@ -164,26 +199,31 @@ BOOT_DISK_SH = r"""
     # auto-installer-mode.toml bound over the ISO's copy (the ISO is read-only;
     # a file bind on the already-bound /cdrom works). A field that matches no
     # disk, or more than it may, is the one question of the whole install,
-    # asked on the console.
-    _tap_bd=""; _tap_bm=""
+    # asked on the console. Without fields (a USB boot) the disks go as
+    # ?disks=name~sectors~rotational~model~serial~wwid,... and the answer
+    # server runs this same matcher on them.
+    _tap_bd=""; _tap_bm=""; _tap_usb=1
     for _tap_w in $(cat /proc/cmdline); do
         case "$_tap_w" in
-            tappaas.bootdisk=*) _tap_bd="${_tap_w#*=}" ;;
+            tappaas.bootdisk=*) _tap_bd="${_tap_w#*=}"; _tap_usb="" ;;
             tappaas.bootmirror=*) _tap_bm="${_tap_w#*=}" ;;
-            tappaas.askdisk=1) _tap_bd=ask ;;
+            tappaas.askdisk=1) _tap_bd=ask; _tap_usb="" ;;
         esac
     done
-    if [ -n "$_tap_bd" ]; then
-        _tap_mode=/mnt/.installer-mp/cdrom/auto-installer-mode.toml
-        _tap_con="/dev/${console:-console}"
-        if [ -f "$_tap_mode" ]; then
-        {
-            # Late device-probe chatter (USB etc.) otherwise scrolls the
-            # menu away and buries the prompt (stage-1 operator feedback):
-            # let probing settle, then keep the console to errors only
-            # (the installer sets its own loglevel later anyway).
-            sleep 3
-            echo "1 1 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
+    _tap_mode=/mnt/.installer-mp/cdrom/auto-installer-mode.toml
+    _tap_con="/dev/${console:-console}"
+    if [ -f "$_tap_mode" ]; then
+    {
+        # Late device-probe chatter (USB etc.) otherwise scrolls the
+        # menu away and buries the prompt (stage-1 operator feedback):
+        # let probing settle, then keep the console to errors only
+        # (the installer sets its own loglevel later anyway).
+        sleep 3
+        echo "1 1 1 7" > /proc/sys/kernel/printk 2>/dev/null || true
+        if [ -n "$_tap_usb" ]; then
+            _tap_q="disks=$(_tap_disk_list)"
+            echo "TAPPaaS: no boot-disk fields on the command line (a USB boot) — the answer server matches the registration against this machine's disks"
+        else
             if _tap_resolve "$_tap_bd" "$_tap_bm"; then
                 echo "TAPPaaS: boot disk ${_tap_disk}${_tap_mirror:+, mirrored onto ${_tap_mirror}} (${_tap_why})"
             else
@@ -203,31 +243,36 @@ BOOT_DISK_SH = r"""
                     read -r _tap_disk
                 done
             fi
-            _tap_url=""
-            while IFS= read -r _tap_l; do
-                case "$_tap_l" in url*) _tap_u="${_tap_l#*\"}"; _tap_url="${_tap_u%\"*}" ;; esac
-            done < "$_tap_mode"
-            if [ -n "$_tap_url" ]; then
-                while IFS= read -r _tap_l; do
-                    case "$_tap_l" in
-                        url*) echo "url = \"${_tap_url}?bootdisk=${_tap_disk}&bootmirror=${_tap_mirror}\"" ;;
-                        *) echo "$_tap_l" ;;
-                    esac
-                done < "$_tap_mode" > /tappaas-mode.toml
-                mount --bind /tappaas-mode.toml "$_tap_mode"
-                echo "TAPPaaS: boot disk '${_tap_disk}'${_tap_mirror:+ + '${_tap_mirror}'} goes to the answer server"
-            else
-                echo "TAPPaaS: WARNING - no answer URL in $_tap_mode; disk choice cannot be delivered"
-            fi
-        } < "$_tap_con" > "$_tap_con" 2>&1
+            _tap_q="bootdisk=${_tap_disk}&bootmirror=${_tap_mirror}"
         fi
+        _tap_url=""
+        while IFS= read -r _tap_l; do
+            case "$_tap_l" in url*) _tap_u="${_tap_l#*\"}"; _tap_url="${_tap_u%\"*}" ;; esac
+        done < "$_tap_mode"
+        if [ -n "$_tap_url" ]; then
+            while IFS= read -r _tap_l; do
+                case "$_tap_l" in
+                    url*) echo "url = \"${_tap_url}?${_tap_q}\"" ;;
+                    *) echo "$_tap_l" ;;
+                esac
+            done < "$_tap_mode" > /tappaas-mode.toml
+            mount --bind /tappaas-mode.toml "$_tap_mode"
+            if [ -n "$_tap_usb" ]; then
+                echo "TAPPaaS: this machine's disks go to the answer server"
+            else
+                echo "TAPPaaS: boot disk '${_tap_disk}'${_tap_mirror:+ + '${_tap_mirror}'} goes to the answer server"
+            fi
+        else
+            echo "TAPPaaS: WARNING - no answer URL in $_tap_mode; disk choice cannot be delivered"
+        fi
+    } < "$_tap_con" > "$_tap_con" 2>&1
     fi"""
 
 INIT_PATCH = INIT_ANCHOR + """
     # TAPPaaS node-provisioner: raise the DHCP timeout so the auto-installer
     # answer fetch has a live network (link re-training + STP eat the stock 10s)
     sed -i 's/^timeout 10;/timeout 60;/' /mnt/.installer-mp/etc/dhcp/dhclient.conf || true
-""" + RESOLVE_SH + BOOT_DISK_SH
+""" + RESOLVE_SH + DISK_LIST_SH + BOOT_DISK_SH
 
 BOOT_IPXE_TEMPLATE = """#!ipxe
 # TAPPaaS node provisioning (design N3) — Proxmox VE automated installer.
@@ -245,6 +290,69 @@ kernel http://{server}:{port}/linux26 ro ramdisk_size=16777216 rw splash=silent 
 initrd http://{server}:{port}/initrd
 boot
 """
+
+# One disk of a USB boot's ?disks= list: name~sectors~rotational~model~serial~wwid.
+_POSTED_DISK_RE = re.compile(r"[a-z0-9]{1,32}~[0-9]{1,20}~[01]~[A-Za-z0-9._-]{0,64}~[A-Za-z0-9._-]{0,64}~[A-Za-z0-9._-]{0,128}")
+
+
+def parse_posted_disks(value: str) -> list | None:
+    """The ?disks= list of a USB boot as (name, sectors, rotational, model,
+    serial, wwid) tuples; None when it is not one."""
+    if not value or len(value) > 4096:
+        return None
+    out = []
+    for entry in value.split(","):
+        if not _POSTED_DISK_RE.fullmatch(entry):
+            return None
+        name, sectors, rot, model, serial, wwid = entry.split("~")
+        out.append((name, int(sectors), rot, model, serial, wwid))
+    return out or None
+
+
+def resolve_posted_disks(boot: str, mirror: str, disks: list) -> tuple:
+    """The installer's matcher (RESOLVE_SH) run on the mothership against a USB
+    boot's posted disks, laid out as a /sys: (ok, disk, mirror, why)."""
+    with tempfile.TemporaryDirectory(prefix="tappaas-disks.") as tmp:
+        root = Path(tmp)
+        (root / "block").mkdir()
+        for name, sectors, rot, model, serial, wwid in disks:
+            dev = root / "devices" / "pci0000:00" / name
+            (dev / "device").mkdir(parents=True)
+            (dev / "queue").mkdir()
+            (dev / "size").write_text(f"{sectors}\n")
+            (dev / "queue" / "rotational").write_text(f"{rot}\n")
+            (dev / "device" / "model").write_text(model + "\n")
+            if serial:
+                (dev / "device" / "serial").write_text(serial + "\n")
+            if wwid:
+                (dev / "device" / "wwid").write_text(wwid + "\n")
+            (root / "block" / name).symlink_to(dev)
+        script = RESOLVE_SH + '\n_tap_resolve "$1" "$2"; rc=$?\necho "$rc|$_tap_disk|$_tap_mirror|$_tap_why"\n'
+        r = subprocess.run(["sh", "-c", script, "resolve", _cmdline_field(boot),
+                            _cmdline_field(mirror) if mirror else ""],
+                           env={"TAPPAAS_SYS": str(root), "PATH": "/run/current-system/sw/bin:/usr/bin:/bin"},
+                           capture_output=True, text=True, timeout=30)
+    rc, disk, mir, why = (r.stdout.strip().split("|", 3) + ["", "", "", ""])[:4]
+    return rc == "0" and bool(disk), disk, mir, why or r.stderr.strip()
+
+
+def patch_stamp() -> str:
+    """The /init patch the code would stage now (its hash)."""
+    return hashlib.sha256(INIT_PATCH.encode()).hexdigest()[:16]
+
+
+def stale_source(directory=None) -> str | None:
+    """The ISO to re-stage from when the staged assets carry another /init patch
+    than this code's (or predate the stamp); None when they are current."""
+    dest = Path(directory) if directory else pxe_dir()
+    try:
+        stamp = json.loads((dest / STAMP_NAME).read_text())
+    except (OSError, ValueError):
+        stamp = {}
+    if stamp.get("patch") == patch_stamp():
+        return None
+    return stamp.get("iso") or DEFAULT_SOURCE_ISO
+
 
 # A field on the kernel command line: a model's spaces become '.', which the
 # /init's grep reads as any character; nothing else a field may hold needs it.
@@ -398,6 +506,15 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
         with open(initrd_out, "ab") as f:
             f.write(b"\0" * pad)
         info(f"padded initrd by {pad} byte(s) to a 4-byte segment boundary")
+    usb_initrd = None
+    if patched_init:
+        # The stick's initrd: the same /init over the stock one, no ISO inside
+        # (the installer finds the stick itself).
+        usb_initrd = dest / "usb-initrd"
+        shutil.copyfile(initrd_out, usb_initrd)
+        with open(usb_initrd, "ab") as f:
+            subprocess.run(["cpio", "-L", "-H", "newc", "-o"], input=b"init\n",
+                           stdout=f, stderr=subprocess.PIPE, cwd=str(dest), check=True)
     cpio_members = (["init"] if patched_init else []) + [ISO_ASSET_NAME]
     info("appending %s to initrd (newc cpio)..." % " + ".join(cpio_members))
     with open(initrd_out, "ab") as f:
@@ -410,7 +527,37 @@ def prepare(iso: str, directory=None, port: int = DEFAULT_PORT) -> Path:
             check=True,
         )
 
+    _usb_iso(iso_path, usb_initrd, dest)
+    (dest / STAMP_NAME).write_text(json.dumps({"patch": patch_stamp(),
+                                               "iso": str(iso_path)}) + "\n")
     return _finish(dest, port)
+
+
+def _usb_iso(iso_path: Path, usb_initrd: Path | None, dest: Path) -> None:
+    """The installer stick: a copy of the ISO with its initrd swapped for the
+    patched one, written as a new session that keeps the ISO's boot setup — as
+    proxmox-auto-install-assistant adds its answer settings (a rebuild with
+    -boot_image any replay refuses the ISO's hybrid MBR/GPT layout)."""
+    out = dest / USB_ISO_NAME
+    out.unlink(missing_ok=True)
+    if usb_initrd is None:
+        warn(f"no patched /init — no {USB_ISO_NAME}; a stick of the plain ISO cannot match its boot disk")
+        return
+    if not shutil.which("xorriso"):
+        warn(f"xorriso is not installed — no {USB_ISO_NAME}")
+        usb_initrd.unlink(missing_ok=True)
+        return
+    info(f"building the installer stick image {out} ...")
+    shutil.copyfile(iso_path, out)
+    r = subprocess.run(["xorriso", "-boot_image", "any", "keep", "-dev", str(out),
+                        "-map", str(usb_initrd), "/" + INITRD_IN_ISO],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    usb_initrd.unlink(missing_ok=True)
+    if r.returncode != 0:
+        out.unlink(missing_ok=True)
+        warn(f"xorriso could not build {USB_ISO_NAME}: {r.stderr.strip()[-300:]}")
+        return
+    out.chmod(0o644)
 
 
 def _finish(dest: Path, port: int) -> Path:

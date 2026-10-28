@@ -265,13 +265,14 @@ class TestHandleAnswerPost(unittest.TestCase):
         self.registry = Registry(directory=base / "provision")
         self.secrets = base / "secrets"
 
-    def _post(self, macs, bootdisk="", bootmirror=""):
+    def _post(self, macs, bootdisk="", bootmirror="", disks=""):
         info = {"network_interfaces": [{"mac": m} for m in macs],
                 "dmi": {"system": {"serial": "SN-1"}}}
         return handle_answer_post(
             info, self.registry, self.SITE,
             domain="mgmt.internal", secrets_directory=self.secrets,
             boot_disk_override=bootdisk, boot_mirror_override=bootmirror,
+            posted_disks=disks,
         )
 
     # ADR-037 D4: the installer resolves the fields and sends kernel names.
@@ -297,6 +298,40 @@ class TestHandleAnswerPost(unittest.TestCase):
             status, _ = self._post(["de:ad:be:ef:00:01"])
             self.assertEqual(status, 409, field)
             self.assertEqual(len(self.registry.list_pending()), 1)
+
+    # A USB boot: no fields on its command line, its disks posted instead.
+    USB_DISKS = ("nvme0n1~3907029168~0~Samsung.SSD.990.PRO.2TB~S7HENJ0X100001~,"
+                 "nvme1n1~3907029168~0~Samsung.SSD.990.PRO.2TB~S7HENJ0X100002~,"
+                 "sda~15625879552~1~ST8000VN004~ZA1X2Y3Z~")
+
+    def test_usb_boot_auto_mirrors_the_pair_it_posted(self):
+        self.registry.register("tappaas4", boot_disk="auto")
+        with mock.patch("node_provisioner.server._reserve_standard_ip"):
+            status, body = self._post(["de:ad:be:ef:00:01"], disks=self.USB_DISKS)
+        self.assertEqual(status, 200, body)
+        self.assertIn('disk-list = ["nvme0n1", "nvme1n1"]', body)
+
+    def test_usb_boot_matches_a_serial(self):
+        self.registry.register("tappaas4", boot_disk="S7HENJ0X100002")
+        with mock.patch("node_provisioner.server._reserve_standard_ip"):
+            status, body = self._post(["de:ad:be:ef:00:01"], disks=self.USB_DISKS)
+        self.assertEqual(status, 200, body)
+        self.assertIn('disk-list = ["nvme1n1"]', body)
+
+    def test_usb_boot_that_does_not_resolve_is_refused_unconsumed(self):
+        for field in ("ask", "4TB", "Kingston"):
+            self.registry.register("tappaas4", boot_disk=field)
+            status, body = self._post(["de:ad:be:ef:00:01"], disks=self.USB_DISKS)
+            self.assertEqual(status, 409, field)
+            self.assertIn("nvme0n1 2000 GB", body)
+            self.assertEqual(len(self.registry.list_pending()), 1)
+
+    def test_bad_disks_parameter_is_refused(self):
+        self.registry.register("tappaas4", boot_disk="auto")
+        for bad in ("sda~1~0~x~y~z;rm", "sda", "sda~x~0~m~s~w", "../a~1~0~m~s~w"):
+            status, _ = self._post(["de:ad:be:ef:00:01"], disks=bad)
+            self.assertEqual(status, 400, bad)
+        self.assertEqual(len(self.registry.list_pending()), 1)
 
     def test_a_mac_less_registration_never_answers_a_cluster_node(self):
         cfg = Path(self._tmp.name) / "config"

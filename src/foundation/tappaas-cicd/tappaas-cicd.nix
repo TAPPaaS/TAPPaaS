@@ -732,6 +732,8 @@ in
         # TFTP server for node-provisioner's PXE trap (runs tftp-only via
         # systemd-run when provisioning is enabled; node-provisioning.md N3)
         dnsmasq
+        # node-provisioner prepare builds the installer stick image with it
+        xorriso
         # The mothership captures its own config/ as a backup:filesystem
         # (ADR-012 §3.1 / #545): only the guest can read its own files, so the
         # client belongs INSIDE it.

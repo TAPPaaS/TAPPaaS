@@ -148,7 +148,7 @@ export const HELP: HelpSpec = {
         ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
         ["--pxe", "TAPPaaS will set up a PXE boot service, alternative is to use a USB stick."],
         ["--switch-port <sw>:<p>", "The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up as a trunk port, and the machine's MAC is learned there when it netboots (blank MAC). On a switch TAPPaaS does not program, configure the port by hand as a trunk port that also carries all the VLAN tagged traffic, and give --mac."],
-        ["--mac <m>", "The MAC of the card that netboots, from the machine's label, its BIOS or its BMC. Needed when the port is not one TAPPaaS programs; with --switch-port it may stay blank."],
+        ["--mac <m>", "The MAC of the card that netboots, from the machine's label, its BIOS or its BMC. Needed when the port is not one TAPPaaS programs; with --switch-port it may stay blank. any: no MAC — the first machine that asks for an install answer while the boot window is open gets it (a cluster node never does); keep --ttl short."],
         ["--boot-disk <d>", "The disk to install Proxmox on (wiped), can be the model name or size if it is unique. Blank: the smallest SSD or NVMe disk, and both when the smallest two are alike (mirrored). ask: chosen on the node's console."],
         ["--boot-mirror <d>", "A second disk to mirror the boot pool onto, named like --boot-disk. Blank: a mirror only when --boot-disk finds two disks alike. none: one disk."],
         ["--boot-filesystem zfs|ext4", "The boot disk's filesystem; zfs (default) lets the boot pool carry the guests on a node with no data disk (ADR-037 D1), ext4 only with data disks."],
@@ -927,12 +927,16 @@ function cmdNode(o: Opts, client: SiteClient): void {
     if (o.boolFlags.has("--provision")) {
       warn("--provision is deprecated — use --pxe");
     }
+    if (o.flags.get("--mac") === "any" && !o.boolFlags.has("--pxe") && !o.boolFlags.has("--provision")) {
+      die("node add: --mac any is for --pxe — the first machine that asks for an install answer gets it");
+    }
     const opts = {
       name,
       bootDisk: o.flags.get("--boot-disk"),
       bootFilesystem: o.flags.get("--boot-filesystem"),
       bootMirror: o.flags.get("--boot-mirror"),
-      macs: o.flags.get("--mac") ? [o.flags.get("--mac") as string] : [],
+      macs: o.flags.get("--mac") && o.flags.get("--mac") !== "any" ? [o.flags.get("--mac") as string] : [],
+      anyMac: o.flags.get("--mac") === "any",
       wanPort: o.boolFlags.has("--no-wan") ? "" : o.flags.get("--wan-port"),
       lanPorts: o.flags.get("--lan-ports"),
       lanMode: o.flags.get("--lan-mode"),

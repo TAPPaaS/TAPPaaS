@@ -101,7 +101,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       only: DECLARE_OPTIONS,
       placeholders: {
         "--switch-port": "blank: the port is configured by hand, and the MAC is needed",
-        "--mac": "blank with a switch port: learned there — e.g. 58:47:ca:7a:12:34",
+        "--mac": "blank with a switch port: learned there · any: the first machine that asks — e.g. 58:47:ca:7a:12:34",
         "--boot-disk": "blank: the smallest SSD/NVMe",
         "--boot-mirror": "blank: mirrored only when two disks alike match · none: one disk",
         "--ttl": "7200",
@@ -122,7 +122,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           </ul>
           <p><b>Boot disk:</b> specify the boot disk and optionally a mirror disk. Default: the installer takes the smallest SSD or NVMe disk, and both when the smallest two are the same model and size (mirrored); when nothing matches, the node's own screen asks.</p>
           <p>Its data pools come after the join (stage 4), from the disks it really has.</p>
-          <p>When applied the TAPPaaS system will create a boot image and either set up a PXE boot server or give instructions for creating a boot disk.</p>
+          <p>When applied, TAPPaaS records the node's install answer on the mothership and opens its network-boot window; stage 2 says how to boot it, from the network or from the USB stick image (the same for every node).</p>
         </>
       ),
       render: () => (
@@ -193,7 +193,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
             <StepView key={topo ? "ports" : "no-ports"} step={declare} me={me} onApplied={setJob} onDone={(ok) => setEnded(ok)} />
           </StepRow>
           <StepRow s={steps[1]} open={current === "boot"}>
-            <p className="small">Once stage 1's job is running, boot the machine one of two ways. Either way the installer asks the mothership for its answer over the network, so the machine must be cabled as stage 1 says; only if the boot-disk fields match no disk does the node's screen ask for one.</p>
+            <p className="small">Once stage 1's job is running, boot the machine one of two ways. Either way the installer asks the mothership for its answer over the network, so the machine must be cabled as stage 1 says; only if the boot-disk fields match no disk does the node's screen ask for one (from the network; a stick stops with the list of the machine's disks instead).</p>
             <div className="two">
               <div className="explain">
                 <p><b>Network boot (PXE)</b></p>
@@ -206,8 +206,8 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
               <div className="explain">
                 <p><b>USB stick</b> — for a machine that cannot network-boot</p>
                 <ol>
-                  <li>The installer image is on the mothership: <span className="mono">~/pve-tappaas-netboot.iso</span> (rebuilt by <span className="mono">sudo node-provisioner prepare --iso &lt;proxmox iso&gt;</span>). Copy it to your laptop: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:pve-tappaas-netboot.iso .</span></li>
-                  <li>Write it to a stick: <span className="mono">dd if=pve-tappaas-netboot.iso of=/dev/&lt;usb&gt; bs=4M</span> (or balenaEtcher).</li>
+                  <li>The stick image is on the mothership, the same for every node. Once stage 1's job runs it is served at <span className="mono">http://tappaas-cicd.mgmt.internal:8090/tappaas-usb.iso</span>; or copy it: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:/var/lib/tappaas-pxe/tappaas-usb.iso .</span></li>
+                  <li>Write it to a stick: <span className="mono">dd if=tappaas-usb.iso of=/dev/&lt;usb&gt; bs=4M</span> (or balenaEtcher).</li>
                   <li>Power on and boot from the stick once — the one-time boot menu.</li>
                 </ol>
               </div>
