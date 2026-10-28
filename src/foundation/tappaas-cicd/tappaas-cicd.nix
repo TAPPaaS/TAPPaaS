@@ -724,10 +724,6 @@ in
         tea         # Forgejo CLI for the Codeberg issue tracker
         dig
         shellcheck   # bash script linting for module *.sh validation (#265)
-        # node-provisioner prepare builds the installer stick image
-        # (/var/lib/tappaas-pxe/tappaas-usb.iso) with it: a new node that
-        # cannot network-boot installs from that stick (site-manager node media).
-        xorriso
         # OPNsense controller tools (opnsense-controller, opnsense-firewall, zone-manager, dns-manager)
         opnsenseController.default
         # Authentik controller tools (authentik-controller; its old names authentik-manager and
