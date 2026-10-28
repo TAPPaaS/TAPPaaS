@@ -165,7 +165,7 @@ export function StepRow({ s, children, open: forced }: { s: SetupStep; children?
       <button className="setup-head" onClick={() => setOpen(!open)} aria-expanded={open}>
         <Dot level={s.done === true ? "pass" : s.done === false ? (s.required ? "fail" : "skip") : "warn"} />
         <b>{s.title}</b>
-        <span className="muted small">{s.done === true ? "done" : s.done === false ? (s.required ? "to do" : "optional") : "unknown"}</span>
+        <span className="muted small">{s.done === true ? "done" : s.done === false ? (s.required ? "to do" : "optional") : "pending"}</span>
         <span className="spacer" />
         <span className="muted">{open ? "▾" : "▸"}</span>
       </button>

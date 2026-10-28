@@ -17,7 +17,7 @@ import { OperateButton, Step, StepView, Values } from "../operate";
 import { useOpenedBy } from "../opener";
 import { StorageInventory, SiteRead, Topology } from "../types";
 import { ZoneRead } from "./Zones";
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices } from "../nodeadd";
+import { diskId, humanSize, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices } from "../nodeadd";
 import { Dot, Link, canOperate, useMe } from "../ui";
 import { StepRow } from "./Setup";
 
@@ -45,19 +45,15 @@ export function firstFreeNode(known: string[]): string {
 
 // In the order the operator has the answers (ADR-037 D4): where it is cabled,
 // its MAC, its boot disks; every one may stay blank, and says what blank does.
-const DECLARE_OPTIONS = ["--pxe", "--switch-port", "--mac", "--boot-disk", "--boot-mirror", "--wan-port", "--no-wan", "--lan-ports", "--lan-mode", "--ttl", "--no-reboot"];
+const DECLARE_OPTIONS = ["--pxe", "--switch-port", "--mac", "--boot-disk", "--boot-mirror", "--ttl", "--no-reboot"];
 const LABELS: Record<string, string> = {
   "--pxe": "--pxe (install it over the network)",
   "--switch-port": "--switch-port: the switch port it is cabled to",
   "--mac": "--mac: the MAC of the card that network-boots",
   "--boot-disk": "--boot-disk: the disk to install Proxmox on",
   "--boot-mirror": "--boot-mirror: a second disk, mirrored",
-  "--wan-port": "--wan-port: the WAN port",
-  "--no-wan": "--no-wan (no WAN port)",
-  "--lan-ports": "--lan-ports: the lan port(s)",
-  "--lan-mode": "--lan-mode",
   "--ttl": "--ttl: seconds the window stays open",
-  "--no-reboot": "--no-reboot (keep the installer's kernel)",
+  "--no-reboot": "--no-reboot: do not reboot the node after its first update",
 };
 
 function Check({ ok, label, detail }: { ok: boolean | null; label: string; detail?: string }) {
@@ -103,7 +99,6 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   const topo = useRead<Topology>("topology").env?.data;
   const zones = useRead<ZoneRead[]>("zones").env?.data ?? [];
   const ports = useMemo(() => switchPortChoices(topo?.switches ?? [], name), [topo, name]);
-  const byHand = manualSwitches(topo?.switches ?? []);
   const trunk = manualTrunkText(nodeTrunkVlans(zones));
   const declare: Step = useMemo(
     () => ({
@@ -116,28 +111,19 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       placeholders: {
         "--switch-port": "blank: the port is configured by hand, and the MAC is needed",
         "--mac": "blank with a switch port: learned there — e.g. 58:47:ca:7a:12:34",
-        "--boot-disk": "blank: the smallest SSD/NVMe — both of an identical pair, mirrored · or 2TB, Samsung 990, a serial",
+        "--boot-disk": "blank: the smallest SSD/NVMe",
         "--boot-mirror": "blank: mirrored only when two disks alike match · none: one disk",
-        "--wan-port": "e.g. enp1s0 — or tick --no-wan",
-        "--lan-ports": "e.g. enp2s0f0,enp2s0f1 — empty: one port, detected",
         "--ttl": "7200",
       },
-      choices: { "--lan-mode": ["active-backup", "lacp"] },
       suggest: { "--switch-port": ports.map((c) => c.value) },
       suggestNotes: { "--switch-port": Object.fromEntries(ports.map((c) => [c.value, c.label])) },
-      asides: {
-        "--switch-port": (
-          <small className="muted">
-            On a switch TAPPaaS programs, pick the port: it becomes a node trunk, and the machine's MAC is learned there while it network-boots.
-            {byHand.length ? <> On {byHand.join(", ")} (configured by hand) set the port as {trunk}, leave this blank and give the MAC.</> : null}
-          </small>
-        ),
-      },
-      initial: { "--pxe": true, "--yes": true },
+      // The node joins with no WAN port and its one detected lan port; stage 5
+      // declares the lan ports and the WAN port (node network set).
+      initial: { "--pxe": true, "--yes": true, "--no-wan": true },
       prefill: options,
       note: "There is no dry run: the preview shows the exact command. Apply starts one job that runs until the node has joined: it makes the switch port a node trunk (with --switch-port), registers the node for a network install, opens the PXE window on the mothership (two hours unless --ttl says otherwise), waits for the machine to boot from the network and learns its MAC, waits for the install, then joins it to the cluster, brings it to the cluster baseline, reboots it into its new kernel and registers it as a pvehost instance. Its data pools are stage 4.",
     }),
-    [name, valid, options, ports, byHand, trunk],
+    [name, valid, options, ports],
   );
   const set: Step = useMemo(
     () => ({
@@ -164,11 +150,11 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   );
 
   const steps = [
-    { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Where it is cabled, its MAC and boot disks — each blank its default — then start the job that adds it." },
-    { id: "boot", title: "2 · Boot the machine from the network (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and choose network boot once; the mothership answers with the installer." },
+    { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. The outcome is either a boot USB disk is prepared or a PXE boot process is started." },
+    { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto a ZFS boot pool, the node joins the cluster, is patched and rebooted, and is registered as a pvehost instance." },
     { id: "storage", title: "4 · Its data pools", required: false, done: pooled ? true : null, detail: "Until it has one, its guests go to the boot pool. Proposed from its free disks." },
-    { id: "uplink", title: "5 · The lan uplink", required: false, done: tested ? true : uplinkSet ? null : false, detail: "Which ports carry lan, then the failover test — each previewed first." },
+    { id: "uplink", title: "5 · The WAN and lan ports", required: false, done: tested ? true : uplinkSet ? null : false, detail: "Which ports carry lan, and the WAN port if the node may carry the firewall; then the failover test — each previewed first." },
     { id: "done", title: "6 · The node in the device view", required: false, done: joined, detail: "Its uplinks, its switch ports and its guests, as cabled." },
   ];
   const current = !underway ? "declare" : !progress || progress.registration === "pending" ? "boot" : !joined ? "wait" : !pooled && !skipPools ? "storage" : !tested ? "uplink" : "done";
@@ -181,18 +167,17 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           <button className="btn-x" onClick={onClose} aria-label="close">×</button>
         </header>
         <p className="small">
-          A new machine becomes a Proxmox node of this site in one job that waits for you at the machine. The stages below say what each part does before it runs and what you do by hand. Nothing changes until you Apply in stage 1.
+          Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools. Nothing changes until you Apply in stage 1.
         </p>
         <ol className="setup">
           <StepRow s={steps[0]} open={current === "declare"}>
             <div className="explain">
-              <p><b>What the form asks, in this order — every field may stay blank, and says what blank does:</b></p>
+              <p><b>Where it is cabled</b> — one of two:</p>
               <ul>
-                <li><b>where it is cabled</b>: the switch port. On a switch TAPPaaS programs the port becomes a node trunk and the machine's <b>MAC</b> is learned there; on one configured by hand, set the port as {trunk}, and give the MAC (the machine's label, its BIOS or its BMC);</li>
-                <li>its <b>boot disk</b>, and a second one to mirror it onto: a size (<span className="mono">2TB</span>), a model (<span className="mono">Samsung 990</span>) or a serial. Blank, the installer takes the smallest SSD or NVMe disk, and both when the smallest two are the same model and size (mirrored); when nothing matches, the node's own screen asks;</li>
-                <li>which port is the <b>WAN</b> port (only a node that may carry the firewall needs one), or none;</li>
-                <li>the <b>lan port(s)</b>: one, or two bonded (active-backup works with any switches; lacp needs a LAG on the switch side) — left out, one is detected.</li>
+                <li><b>Connected to a TAPPaaS-managed switch:</b> pick its port. TAPPaaS makes it a node trunk and learns the machine's MAC there; the MAC field may stay blank.</li>
+                <li><b>A self-managed switch:</b> set the port as {trunk}, leave the switch port blank, and give the MAC (from the machine's label, its BIOS or its BMC).</li>
               </ul>
+              <p><b>Boot disk:</b> specify the boot disk and optionally a mirror disk. Default: the installer takes the smallest SSD or NVMe disk, and both when the smallest two are the same model and size (mirrored); when nothing matches, the node's own screen asks.</p>
               <p className="muted small">Its data pools come after the join (stage 4), from the disks it really has.</p>
             </div>
             <label className="form-row">
@@ -207,15 +192,24 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
             {valid && !known.includes(name) ? <StepView key={topo ? "ports" : "no-ports"} step={declare} me={me} onApplied={setJob} onDone={(ok) => setEnded(ok)} /> : <p className="muted small">Give the node a new name to see the form.</p>}
           </StepRow>
           <StepRow s={steps[1]} open={current === "boot"}>
-            <div className="explain">
-              <p><b>At the machine, once stage 1's job is running:</b></p>
-              <ol>
-                <li>Cable the network-boot port to the management network.</li>
-                <li>In the firmware (BIOS/UEFI setup), enable <b>network boot (PXE) over IPv4, UEFI</b> on that port.</li>
-                <li>Power on and pick network boot once — the one-time boot menu (often F11 or F12) — or put network first in the boot order for this one boot.</li>
-                <li>The mothership answers with the Proxmox installer. Only if the boot-disk fields match no disk does the node's screen ask for one.</li>
-                <li>If you changed the boot order, set the disk first again after the install has started: the window closes on its own, and a second network boot finds nothing to install.</li>
-              </ol>
+            <p className="small">Once stage 1's job is running, boot the machine one of two ways. Either way the installer asks the mothership for its answer over the network, so the machine must be cabled as stage 1 says; only if the boot-disk fields match no disk does the node's screen ask for one.</p>
+            <div className="two">
+              <div className="explain">
+                <p><b>Network boot (PXE)</b></p>
+                <ol>
+                  <li>In the firmware (BIOS/UEFI setup), enable <b>network boot (PXE) over IPv4, UEFI</b> on the cabled port.</li>
+                  <li>Power on and pick network boot once — the one-time boot menu (often F11 or F12) — or put network first in the boot order for this one boot.</li>
+                  <li>If you changed the boot order, set the disk first again after the install has started: the window closes on its own, and a second network boot finds nothing to install.</li>
+                </ol>
+              </div>
+              <div className="explain">
+                <p><b>USB stick</b> — for a machine that cannot network-boot</p>
+                <ol>
+                  <li>The installer image is on the mothership: <span className="mono">~/pve-tappaas-netboot.iso</span> (rebuilt by <span className="mono">sudo node-provisioner prepare --iso &lt;proxmox iso&gt;</span>). Copy it to your laptop: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:pve-tappaas-netboot.iso .</span></li>
+                  <li>Write it to a stick: <span className="mono">dd if=pve-tappaas-netboot.iso of=/dev/&lt;usb&gt; bs=4M</span> (or balenaEtcher).</li>
+                  <li>Power on and boot from the stick once — the one-time boot menu.</li>
+                </ol>
+              </div>
             </div>
             {progress && underway ? (
               <ul className="plain checks">
