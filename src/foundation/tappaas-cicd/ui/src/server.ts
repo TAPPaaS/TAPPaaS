@@ -287,6 +287,9 @@ export class ConsoleServer {
         });
       }
       case "backup":
+        // backup/keys: the key-stick record (backup-manager key status --json).
+        if (a === "keys") return sendJson(res, 200, envelope(await r.backupKeys.get()));
+        if (a !== undefined) return sendJson(res, 404, { error: "backup | backup/keys" });
         return sendJson(res, 200, envelope(await r.backup.get()));
       case "topology":
         return sendJson(res, 200, envelope(await r.topology.get()));
@@ -513,7 +516,10 @@ export class ConsoleServer {
       if (this.jobs) this.jobs.recordSecret(me, name, file, cmd.keys, `${cmd.bin} ${cmd.args.join(" ")}`);
       this.cfg.log(`secret ${name} set by ${me.user ?? "?"} (${me.via}) through ${cmd.bin} ${cmd.args.join(" ")}`);
       if (name === "wlan") void this.reads.ssids.refreshAfterChange();
-      if (name === "backup-keys") void this.reads.health.refreshAfterChange();
+      if (name === "backup-keys") {
+        void this.reads.backupKeys.refreshAfterChange();
+        void this.reads.health.refreshAfterChange();
+      }
       // What the verb said (a key stick: the keys read back, the stick ejected),
       // for the form; the secret itself is never printed by these verbs.
       const said = `${out.stdout}\n${out.stderr}`.replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").filter((l) => l.trim()).slice(-20).join("\n");

@@ -40,6 +40,8 @@ export function fakeSite(): FakeSite {
         return ok(JSON.stringify({ module: args[1], services: {} }));
       case "backup-manager list":
         return ok(file("backup.json"));
+      case "backup-manager key":
+        return ok(JSON.stringify({ escrowed: 7, fingerprint: "4c7c", stick: { fingerprint: "4c7c", keys: 7, written: "2026-10-28T17:18:06+01:00", label: "tappaas3: Generic Flash Disk" }, current: true }));
       case "backup-manager show":
         return ok(JSON.stringify({ module: args[1], enabled: true, inPbsJob: true }));
       case "backup-manager coverage":

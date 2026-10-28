@@ -11,6 +11,13 @@
 import { useState } from "react";
 import { post, reloadAll, useRead } from "../api";
 import { Health, SiteRead } from "../types";
+
+// backup-manager key status --json (reads.ts BackupKeyStatus).
+interface BackupKeyStatus {
+  escrowed: number;
+  stick: { keys: number; written: string; label: string } | null;
+  current: boolean;
+}
 import { Dot, Tag, canOperate, useMe } from "../ui";
 import { UsbStick, UsbStickPicker } from "../usbsticks";
 import { SecretStatus, StepRow } from "./Setup";
@@ -32,8 +39,11 @@ export function BackupKeysWizard({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [written, setWritten] = useState<string | null>(null); // the verb's last lines
-  const health = useRead<Health>("health", written ? 5_000 : 600_000);
-  const gate = (health.env?.data?.gates ?? []).find((g) => g.name === "backup-keys") ?? null;
+  // The record itself, read every few seconds once something was written: it
+  // is what the health check reads, so it says at once what health says later.
+  const keys = useRead<BackupKeyStatus>("backup/keys", written ? 5_000 : 600_000);
+  const rec = keys.env?.data ?? null;
+  const health = useRead<Health>("health", 600_000);
   const picked = sticks.find((s) => s.device === device) ?? null;
   const pwProblem = pw1.length < 12 ? "12 characters or more" : pw1 !== pw2 ? "the two do not match" : !/^[\x20-\x7e]+$/.test(pw1) ? "printable characters only" : null;
 
@@ -47,13 +57,14 @@ export function BackupKeysWizard({ onClose }: { onClose: () => void }) {
     setPw2("");
     if (!r.ok) return setMsg(r.error);
     setWritten(r.data?.output ?? "written");
+    keys.reload();
     health.reload();
   };
 
   const stages = [
     { id: "stick", title: "1 · The stick", required: true, done: plan !== null, detail: "A USB stick in a node. Everything on it is erased — except on a TAPPaaS key stick written before, where only the keys are replaced." },
     { id: "write", title: "2 · The password, then the write", required: true, done: written !== null, detail: "The keys are encrypted with it (AES-256, PBKDF2) onto the stick, read back and compared, and the stick is ejected. The password is never shown again and never in a command." },
-    { id: "status", title: "3 · Recorded, and watched from now on", required: false, done: written !== null ? (gate ? gate.status === "pass" : null) : null, detail: "TAPPaaS records which keys the stick holds. From now on the health check warns whenever a key changes after this stick was written (a new node, a rotation), so you know to write it again." },
+    { id: "status", title: "3 · Recorded, and watched from now on", required: false, done: written !== null ? (rec ? rec.current : null) : null, detail: "TAPPaaS records which keys the stick holds. From now on the health check warns whenever a key changes after this stick was written (a new node, a rotation), so you know to write it again." },
   ];
   const current = !plan ? "stick" : !written ? "write" : "status";
 
@@ -117,12 +128,19 @@ export function BackupKeysWizard({ onClose }: { onClose: () => void }) {
             )}
           </StepRow>
           <StepRow s={stages[2]} open={current === "status"}>
-            {gate ? (
+            {rec ? (
               <p className="small">
-                <Tag level={gate.status} /> {gate.status === "pass" ? <>The record matches the escrow: {gate.detail}.</> : written ? <>The record was not updated by this write, so the check still sees the stick written before: {gate.detail}. The last lines of stage 2 say why; the stick itself was read back and is good.</> : <>{gate.detail}</>}
+                <Tag level={rec.current ? "pass" : rec.stick ? "warn" : "fail"} />{" "}
+                {rec.current && rec.stick ? (
+                  <>The key stick written {rec.stick.written.slice(0, 16).replace("T", " ")} ({rec.stick.label}) holds all {rec.escrowed} key(s) as they are now. The health check says the same at its next run.</>
+                ) : rec.stick ? (
+                  <>The record still shows the stick written {rec.stick.written.slice(0, 10)} with {rec.stick.keys} of {rec.escrowed} key(s): {written ? "this write did not update it — the last lines of stage 2 say why; the stick itself was read back and is good" : "a key changed after it, write the stick again"}.</>
+                ) : (
+                  <>No stick has been recorded yet.</>
+                )}
               </p>
             ) : (
-              <p className="muted small">{health.env ? "No backup-keys gate in the last health check." : "Reading the health…"}</p>
+              <p className="muted small">{keys.env?.error || keys.failure ? <><Dot level="fail" /> backup-manager key status could not be read: {keys.env?.error ?? keys.failure}</> : "Reading the key record…"}</p>
             )}
             {written ? <p className="small">Label the stick and keep it off-site; write a second one the same way. The password goes where the stick is not.</p> : null}
           </StepRow>

@@ -73,6 +73,7 @@ export const TTL = {
   environments: 5 * MIN,
   site: 5 * MIN,
   backup: 10 * MIN,
+  backupKeys: 5_000, // the key-stick record, while the key wizard looks
   security: 10 * MIN,
   peers: 10 * MIN,
   activity: 5 * MIN,
@@ -155,6 +156,15 @@ export interface BootMedia {
   prepare: { argv: string[]; minutes: string } | null;
 }
 
+// backup-manager key status --json: the escrow's key set against the stick
+// last written (its stamp), and whether they are the same.
+export interface BackupKeyStatus {
+  escrowed: number;
+  fingerprint: string;
+  stick: { fingerprint: string; keys: number; written: string; label: string } | null;
+  current: boolean;
+}
+
 // A node name as site-manager accepts one.
 export const NODE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$/;
 // Any object a form names: a module, zone, environment, identity object (a
@@ -187,6 +197,7 @@ export class Reads {
   readonly health: Cached<HealthDoc>;
   readonly modules: Cached<ModuleList>;
   readonly backup: Cached<BackupRow[]>;
+  readonly backupKeys: Cached<BackupKeyStatus>;
   readonly topology: Cached<TopologyDoc & Record<string, unknown>>;
   readonly zones: Cached<Record<string, unknown>[]>;
   readonly aps: Cached<Record<string, unknown>[]>;
@@ -225,6 +236,14 @@ export class Reads {
     this.health = new Cached("health", TTL.health, () => j<HealthDoc>("health-manager", ["validate", "--json"], [0, 1], 10 * MIN), now);
     this.modules = new Cached("modules", TTL.modules, () => j<ModuleList>("module-manager", ["list", "--json"]), now);
     this.backup = new Cached("backup", TTL.backup, () => j<BackupRow[]>("backup-manager", ["list", "--json"]), now);
+    // The escrow's keys against the stick last written (backup-manager key
+    // status --json): what Day 2's key wizard shows right after a write, without
+    // waiting for the next health check.
+    this.backupKeys = new Cached("backup-keys", TTL.backupKeys, async () => {
+      const d = await j<BackupKeyStatus>("backup-manager", ["key", "status", "--json"], [0], 60_000);
+      if (!d || typeof d.escrowed !== "number" || typeof d.current !== "boolean") throw new Error("backup-manager key status --json gave no status (no escrowed, current)");
+      return d;
+    }, now);
     this.topology = new Cached("topology", TTL.topology, () => this.loadTopology(), now);
     this.zones = new Cached("zones", TTL.zones, () => this.loadZones(), now);
     // The access points and the SSIDs each maps to a zone (Setup's WiFi).

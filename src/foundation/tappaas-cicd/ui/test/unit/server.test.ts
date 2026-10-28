@@ -107,6 +107,8 @@ async function main(): Promise<void> {
   check(r.status === 200 && (r.json().data as { inSite: boolean }).inSite === true, "/api/v1/nodes/<name>/progress");
   r = await call("GET", "/api/v1/nodes/tappaas1/usb");
   check(r.status === 200 && (r.json().data as { sticks: { keyStick: boolean }[] }).sticks[0].keyStick === true, "/api/v1/nodes/<name>/usb: the sticks in the node (site-manager node usb --json)");
+  r = await call("GET", "/api/v1/backup/keys");
+  check(r.status === 200 && (r.json().data as { current: boolean; stick: { keys: number } }).current === true && (r.json().data as { stick: { keys: number } }).stick.keys === 7, "/api/v1/backup/keys: the key-stick record (backup-manager key status --json)");
   r = await call("GET", "/api/v1/media");
   check(r.status === 200 && (r.json().data as { ready: boolean; prepare: { argv: string[] } }).prepare.argv[1] === "node-provisioner", "/api/v1/media: the boot medium on the mothership (site-manager node media --json)");
   r = await call("GET", "/api/v1/nodes/--x/progress");
