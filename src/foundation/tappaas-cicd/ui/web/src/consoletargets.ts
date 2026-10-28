@@ -42,6 +42,10 @@ export const WIZARDS: WizardDef[] = [
   },
   { name: "add-buddy", title: "the Add a backup buddy wizard", arg: null, path: () => DAY2, keys: ["kind", "name"], values: "kind (pull or remote), name", verbs: ["backup-manager peer add"] },
   {
+    name: "adopt-machine", title: "the Adopt a machine wizard", arg: null, path: () => DAY2,
+    keys: ["address", "instance", "zone", "location", "switch-port"], values: "address, instance, zone, location (one of the site's), switch-port (<switch>:<port>)", verbs: ["module-manager adopt"],
+  },
+  {
     name: "add-satellite", title: "the Add a satellite wizard", arg: null, path: () => DAY2,
     keys: ["address", "environment", "roles", "location", "country", "city", "instance"], values: "address, environment, roles, location (one of the site's) or country and city, instance", verbs: [],
   },

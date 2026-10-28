@@ -20,7 +20,7 @@ import { locationAnchor } from "../locations";
 import { publicAddress, publicText } from "../zonegraph";
 import { PHYSICAL_TABS, PhysicalView, VIEW_NAME, VIEW_PATH } from "../physical/views";
 import { AddNodeButton } from "./AddNode";
-import { AdoptButton } from "./Day2";
+import { AdoptButton } from "./Adopt";
 import { SatelliteButton } from "./Satellite";
 import { Physical } from "./Physical";
 

@@ -12,7 +12,7 @@ import { useRead } from "../api";
 import { Operate, OperateButton } from "../operate";
 import { useOpenedBy } from "../opener";
 import { RecordDeviceButton, placeSteps, placesFor, rackAddSteps, roomAddSteps } from "../physical/rackops";
-import { LocationLink, locationOption, useSiteLocations } from "../locations";
+import { LocationLink } from "../locations";
 import { viewLink } from "../physical/views";
 import { Link, canOperate, useMe } from "../ui";
 import { AddNodeButton } from "./AddNode";
@@ -23,6 +23,7 @@ import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
 import { WIFI_TEXT, WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
 import { SatelliteButton } from "./Satellite";
+import { ADOPT_TEXT, AdoptButton } from "./Adopt";
 import { identitySteps } from "./Identity";
 
 export function WizardCard({ id, title, tag, on, children, action }: { id?: string; title: string; tag?: string; on?: boolean; children: ReactNode; action: ReactNode }) {
@@ -100,30 +101,6 @@ function PlaceDeviceCard({ t }: { t: Topology | null }) {
             ? <>Where each device stands: a rack and its units, or loose in a room at its own location. {core - coreOpen} of {core} nodes and switches placed; {choices.length} device{choices.length === 1 ? "" : "s"} placed nowhere.</>
             : "Every device is placed."}
     </WizardCard>
-  );
-}
-
-// module-manager adopt: a machine that already runs becomes a module, at one
-// of the site's locations (the primary unless you choose another).
-export function AdoptButton() {
-  const locations = useSiteLocations();
-  const at = locationOption(locations);
-  return (
-    <OperateButton
-      label="Adopt a machine…"
-      title="Adopt a running machine"
-      steps={() => [
-        {
-          title: "module-manager adopt <address>",
-          bin: "module-manager",
-          verb: "adopt",
-          only: ["--instance", "--zone", "--location", "--wait", "--set"],
-          ...at,
-          placeholders: { "@address": "its IP address or DNS name" },
-          note: "A Debian machine that already runs becomes a module: the mothership's key is added for root, its config is written and its SSH turns key-only (--set sshKeyOnly=false keeps password logins). Nothing else on it changes. There is no dry run: the preview is the command.",
-        },
-      ]}
-    />
   );
 }
 
@@ -217,7 +194,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
           Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools.
         </WizardCard>
         <WizardCard title="Adopt a machine" action={<AdoptButton />}>
-          A machine that already runs — a Debian host in a cupboard or a data centre — becomes a module of the site, at the location it is at.
+          {ADOPT_TEXT}
         </WizardCard>
         <WizardCard title="Add a satellite" action={<SatelliteButton />}>
           A rented machine with a public IPv4 gives a site without one public ingress and the admin-VPN relay.
