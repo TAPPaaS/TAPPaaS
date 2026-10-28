@@ -25,7 +25,8 @@ check(mediaProblems(ready).length === 0 && mediaReport(ready).ready, "staged, cu
 check(mediaProblems(noStick).join() === "the installer stick image is missing (/var/lib/tappaas-pxe/tappaas-usb.iso)", "a missing stick image is the one problem");
 check(mediaProblems(stale)[0] === "the netboot assets predate this version's installer hook", "stale assets are said first");
 check(mediaProblems(bare)[0] === "the netboot assets are not staged (/var/lib/tappaas-pxe)", "nothing staged");
-check(mediaProblems({ ...ready, xorriso: false }).join().includes("xorriso is not installed"), "no xorriso is a problem even when all is there now (the next build would lack the image)");
+check(mediaProblems({ ...ready, xorriso: false }).length === 0, "no xorriso is no problem once the image is built");
+check(mediaProblems({ ...noStick, xorriso: false }).join().includes("xorriso is not installed"), "…but is while the image is still to be built");
 
 check(prepareArgv(ready, false) === null, "nothing to prepare when ready");
 check(prepareArgv(ready, true)!.argv.join(" ") === "prepare-netboot.sh --force", "--force runs the whole script again");

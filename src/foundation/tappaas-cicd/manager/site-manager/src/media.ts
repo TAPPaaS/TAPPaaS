@@ -44,7 +44,8 @@ export function mediaProblems(s: MediaStatus): string[] {
   if (!s.staged) p.push(`the netboot assets are not staged (${s.directory})`);
   else if (!s.current) p.push("the netboot assets predate this version's installer hook");
   if (!s.stickImage.present) p.push(`the installer stick image is missing (${s.stickImage.path})`);
-  if (!s.xorriso) p.push("xorriso is not installed on the mothership: the stick image cannot be built until an OS update brings it");
+  // No xorriso matters only while the image is still to be built.
+  if (!s.xorriso && !s.stickImage.present) p.push("xorriso is not installed on the mothership: the stick image cannot be built until an OS update brings it");
   return p;
 }
 
