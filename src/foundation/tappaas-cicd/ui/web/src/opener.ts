@@ -54,9 +54,10 @@ function claim(n: number): boolean {
 
 // A dialog the assistant opens: open(values) once per request that matches,
 // when `ready` (the page has what the dialog needs).
-export function useOpenedBy(wizard: string, arg: string | null | undefined, open: (values: TargetValues) => void, ready = true): void {
+// `arg` undefined: any request for the wizard, its object handed to open().
+export function useOpenedBy(wizard: string, arg: string | null | undefined, open: (values: TargetValues, arg: string | null) => void, ready = true): void {
   const request = useOpenRequest(wizard, arg);
   useEffect(() => {
-    if (request && ready && claim(request.n)) open(request.values);
+    if (request && ready && claim(request.n)) open(request.values, request.arg);
   }, [request?.n, ready]);
 }

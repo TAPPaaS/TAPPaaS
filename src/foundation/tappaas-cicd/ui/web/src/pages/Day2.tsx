@@ -18,7 +18,7 @@ import { Link, canOperate, useMe } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
-import { ApIn, PASSPHRASE_TEXT, SiteSsid, ZoneIn, broadcastText, passphraseOf, wifiVerb, wifiZones } from "../wizards";
+import { ApIn, PASSPHRASE_TEXT, SiteSsid, ZoneIn, broadcastText, passphraseOf, wifiZones } from "../wizards";
 import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
 import { WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
@@ -203,9 +203,9 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
   const wifi = wifiZones(zones.env?.data ?? [], ssidsRead.env?.data ?? []);
   // /setup/day2#wifi-<zone> (Day 1's WiFi step): that card, once it is there.
   const target = window.location.hash.slice(1);
-  const there = target !== "" && (target === "wifi" ? wifi.length > 0 : target === "physical" ? doc !== null : wifi.some((z) => `wifi-${z.zone}` === target));
+  const there = target !== "" && (target.startsWith("wifi") ? wifi.length > 0 : target === "physical" ? doc !== null : false);
   useEffect(() => {
-    if (there) document.getElementById(target)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (there) document.getElementById(target.startsWith("wifi") ? "wifi" : target)?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [there, target]);
   return (
     <>
@@ -245,15 +245,18 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
         </WizardCard>
       </Group>
       <Group title="WiFi" id="wifi">
-        {wifi.map((z) => (
-          <WizardCard key={z.zone} id={`wifi-${z.zone}`} on={target === `wifi-${z.zone}`} title={`${wifiVerb(z)} WiFi for ${z.zone}`} tag={z.type} action={<WifiButton z={z} apCount={aps.length} site={site?.name ?? ""} />}>
-            {z.ssid ? (
-              <>{z.ssid.name} ({z.ssid.security}), on {broadcastText(z.ssid)}; passphrase {PASSPHRASE_TEXT[passphraseOf(z.ssid)]}. Devices that join land on VLAN {z.vlan ?? "?"}.</>
-            ) : (
-              <>No SSID yet{z.declared ? ` (zones.json names ${z.declared}, which ap-manager does not hold)` : ""}: a site-wide SSID that puts devices on VLAN {z.vlan ?? "?"}.</>
-            )}
+        {wifi.length > 0 ? (
+          <WizardCard id="wifi-card" on={target.startsWith("wifi")} title="WiFi for a zone" action={<WifiButton zones={wifi} zone={target.startsWith("wifi-") ? target.slice(5) : null} apCount={aps.length} site={site?.name ?? ""} />}>
+            A site-wide SSID that puts the devices that join it on a Client or Guest zone's VLAN, broadcast by every access point; proposed as {site?.name ? `${site.name}-` : ""}&lt;zone&gt;.
+            <ul className="plain small">
+              {wifi.map((z) => (
+                <li key={z.zone}>
+                  <b>{z.zone}</b> ({z.type}, VLAN {z.vlan ?? "?"}): {z.ssid ? <>{z.ssid.name} ({z.ssid.security}), on {broadcastText(z.ssid)}; passphrase {PASSPHRASE_TEXT[passphraseOf(z.ssid)]}</> : <>no SSID yet{z.declared ? ` (zones.json names ${z.declared}, which ap-manager does not hold)` : ""}</>}
+                </li>
+              ))}
+            </ul>
           </WizardCard>
-        ))}
+        ) : null}
         {zones.env?.data && wifi.length === 0 ? <p className="muted small">No active Client or Guest zone.</p> : null}
         {ssidsRead.env?.error || ssidsRead.failure ? <p className="readstate readstate-fail">ap-manager ssid list could not be read: {ssidsRead.env?.error ?? ssidsRead.failure}</p> : null}
         {apsRead.env?.error || apsRead.failure ? <p className="readstate readstate-fail">ap-manager list could not be read: {apsRead.env?.error ?? apsRead.failure}</p> : apsRead.env?.data && aps.length === 0 ? <p className="muted small">No access point is registered yet (ap-manager add): an SSID can be declared now and is broadcast once one is.</p> : null}

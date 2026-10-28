@@ -1,6 +1,7 @@
-// Wifi.tsx — Day 2's "Add WiFi for <zone>": one site-wide SSID that puts
-// clients on a zone's VLAN, broadcast by every access point (#889). 1 the
-// network: the SSID's name and how clients join; 2 declaring it (ap-manager ssid
+// Wifi.tsx — Day 2's "WiFi": one site-wide SSID that puts clients on a zone's
+// VLAN, broadcast by every access point (#889). 1 the network: the zone (every
+// active Client and Guest zone), the SSID's name — <site>-<zone> until one is
+// typed — and how clients join; 2 declaring it (ap-manager ssid
 // add — after `ssid remove` of the zone's old SSID when the name changes, or
 // `ssid modify` when only its security does); 3 the WPA passphrase, handed to
 // `ap-manager ssid set-passphrase` on stdin through the secrets endpoint, never
@@ -13,27 +14,35 @@ import { Step, StepView } from "../operate";
 import { TargetValue, TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
 import { Dot, canOperate, useMe } from "../ui";
-import { PASSPHRASE_TEXT, SiteSsid, StepSpec, WifiPlan, WifiZone, broadcastText, defaultSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, wifiSpecs, wifiVerb } from "../wizards";
+import { PASSPHRASE_TEXT, SiteSsid, StepSpec, WifiPlan, WifiZone, broadcastText, defaultSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, wifiSpecs } from "../wizards";
 import { SecretStatus, StepRow } from "./Setup";
 
 const asStep = (spec: StepSpec, title: string, note: Step["note"]): Step => ({ ...spec, title, note, only: [], hide: ["@ssid"] });
 
 const str = (v: TargetValue | undefined): string | null => (typeof v === "string" ? v : null);
 
-// `prefill`: what the assistant opened it with (open_console add-wifi <zone>): ssid, security.
-export function WifiWizard({ z, apCount, site, onClose, prefill }: { z: WifiZone; apCount: number; site: string; onClose: () => void; prefill?: TargetValues | null }) {
+// `zones`: the zones a WiFi can bridge to; `zone`: the one to start on (a Day 1
+// link, the assistant's add-wifi <zone>), else the first without an SSID.
+// `prefill`: what the assistant opened it with: ssid, security.
+export function WifiWizard({ zones, zone, apCount, site, onClose, prefill }: { zones: WifiZone[]; zone?: string | null; apCount: number; site: string; onClose: () => void; prefill?: TargetValues | null }) {
   const me = useMe();
   const verb = useVerb("ap-manager", "ssid add");
   const securities = verb?.options.find((o) => o.flag === "--security")?.choices ?? ["wpa2-personal"];
-  // What the zone had when the form opened: the reads refresh behind it as its
-  // steps run, and the form keeps saying what it is changing.
-  const [old] = useState(z.ssid);
+  const [zoneName, setZoneName] = useState(zone && zones.some((x) => x.zone === zone) ? zone : (zones.find((x) => !x.ssid) ?? zones[0]).zone);
+  const z = zones.find((x) => x.zone === zoneName) ?? zones[0];
+  const [plan, setPlan] = useState<WifiPlan | null>(null);
+  // What the zone had when the plan was made: the reads refresh behind the
+  // form as its steps run, and the form keeps saying what it is changing.
+  const old = plan ? plan.old : z.ssid;
   const change = old !== null;
-  const [name, setName] = useState(str(prefill?.ssid) ?? defaultSsid(site, z));
-  const [security, setSecurity] = useState(str(prefill?.security) ?? old?.security ?? "wpa2-personal");
+  // The name and security follow the zone until typed: <site>-<zone>, the
+  // zone's own security when it has an SSID.
+  const [typed, setTyped] = useState<string | null>(str(prefill?.ssid));
+  const [chosen, setChosen] = useState<string | null>(str(prefill?.security));
+  const name = typed ?? defaultSsid(site, z);
+  const security = chosen ?? old?.security ?? "wpa2-personal";
   const [pass, setPass] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
-  const [plan, setPlan] = useState<WifiPlan | null>(null);
   const [removed, setRemoved] = useState(false);
   const [declared, setDeclared] = useState(false);
   const [passDone, setPassDone] = useState(false);
@@ -75,7 +84,7 @@ export function WifiWizard({ z, apCount, site, onClose, prefill }: { z: WifiZone
   const passRequired = needsPassphrase(plan?.security ?? security);
   const passOk = !passRequired || passDone || state === "set" || state === "changed";
   const stages = [
-    { id: "network", title: "1 · The network", required: true, done: plan !== null, detail: "The SSID's name and how clients join; every access point broadcasts it." },
+    { id: "network", title: "1 · The network", required: true, done: plan !== null, detail: "The zone, the SSID's name and how clients join; every access point broadcasts it." },
     { id: "declare", title: change && plan && plan.old && plan.old.name !== plan.ssid ? `2 · Replace ${plan.old.name} with ${plan.ssid}` : "2 · Declare the SSID", required: true, done: declareDone, detail: steps && !steps.declare && !steps.remove ? "Nothing to declare: the same SSID, the same security." : "In the declared state, each previewed." },
     { id: "passphrase", title: "3 · The passphrase", required: passRequired, done: plan !== null && declareDone && passOk, detail: passRequired ? "Handed to ap-manager on stdin; never shown again and never in a command." : `None: ${plan?.security ?? security} takes no passphrase.` },
     { id: "reconcile", title: "4 · Program the access points", required: true, done: reconciled, detail: "ap-manager reconcile: the delta per access point first, then apply." },
@@ -92,19 +101,28 @@ export function WifiWizard({ z, apCount, site, onClose, prefill }: { z: WifiZone
           <button className="btn-x" onClick={onClose} aria-label="close">×</button>
         </header>
         <p className="small">
-          Devices that join this SSID land in zone <b>{z.zone}</b> ({z.type}{z.vlan !== null ? `, VLAN ${z.vlan}` : ""}) with its rules. {old ? <>Today it is <b>{old.name}</b> ({old.security}), on {broadcastText(old)}.</> : "It has no SSID yet."} An SSID is site-wide: every access point ({apCount}) broadcasts it. Nothing reaches an access point until you apply the reconcile in stage 4.
+          Devices that join this SSID land in zone <b>{z.zone}</b> ({z.type}{z.vlan !== null ? `, VLAN ${z.vlan}` : ""}) with its rules. {old ? <>Today it is <b>{old.name}</b> ({old.security}), on {broadcastText(old)}.</> : "The zone has no SSID yet."} An SSID is site-wide: every access point ({apCount}) broadcasts it. Nothing reaches an access point until you apply the reconcile in stage 4.
         </p>
         <ol className="setup">
           <StepRow s={stages[0]} open={current === "network"}>
             <div className="form">
               <label className="form-row">
+                <span>zone *</span>
+                <select value={z.zone} disabled={plan !== null} onChange={(e) => setZoneName(e.target.value)}>
+                  {zones.map((x) => (
+                    <option key={x.zone} value={x.zone}>{x.zone} ({x.type}{x.vlan !== null ? `, VLAN ${x.vlan}` : ""}){x.ssid ? ` — ${x.ssid.name}` : " — no SSID"}</option>
+                  ))}
+                </select>
+                <small className="muted">Every active Client and Guest zone; devices that join land on its VLAN.</small>
+              </label>
+              <label className="form-row">
                 <span>SSID *</span>
-                <input type="text" value={name} disabled={plan !== null} onChange={(e) => setName(e.target.value)} />
-                {problem ? <small className="ff-error">{problem}</small> : <small className="muted">The network's name as devices see it.{!old && !prefill?.ssid && ssid === defaultSsid(site, z) ? ` Proposed as ${site ? "<site>-" : ""}<zone>; name it as you like.` : ""}{z.declared && z.declared !== ssid && z.declared !== old?.name ? ` zones.json names ${z.declared} for this zone.` : ""}{old && old.name !== ssid ? ` Replaces ${old.name}: one SSID per zone.` : ""}</small>}
+                <input type="text" value={name} disabled={plan !== null} onChange={(e) => setTyped(e.target.value)} />
+                {problem ? <small className="ff-error">{problem}</small> : <small className="muted">The network's name as devices see it.{typed === null && !old ? ` Proposed as ${site ? "<site>-" : ""}<zone>; name it as you like.` : ""}{z.declared && z.declared !== ssid && z.declared !== old?.name ? ` zones.json names ${z.declared} for this zone.` : ""}{old && old.name !== ssid ? ` Replaces ${old.name}: one SSID per zone.` : ""}</small>}
               </label>
               <label className="form-row">
                 <span>security *</span>
-                <select value={security} disabled={plan !== null} onChange={(e) => setSecurity(e.target.value)}>
+                <select value={security} disabled={plan !== null} onChange={(e) => setChosen(e.target.value)}>
                   {securities.map((c) => (
                     <option key={c} value={c}>{c}</option>
                   ))}
@@ -178,21 +196,20 @@ export function WifiWizard({ z, apCount, site, onClose, prefill }: { z: WifiZone
   );
 }
 
-export function WifiButton({ z, apCount, site }: { z: WifiZone; apCount: number; site: string }) {
-  const [open, setOpen] = useState(false);
-  const [prefill, setPrefill] = useState<TargetValues | null>(null);
+// `zone`: the zone a link opened the page for (/setup/day2#wifi-<zone>): the
+// wizard opens on it at once.
+export function WifiButton({ zones, zone, apCount, site }: { zones: WifiZone[]; zone?: string | null; apCount: number; site: string }) {
+  const linked = zone && zones.some((x) => x.zone === zone) ? zone : null;
+  const [open, setOpen] = useState<{ zone: string | null; prefill: TargetValues | null } | null>(linked ? { zone: linked, prefill: null } : null);
   const operator = canOperate(useMe());
-  useOpenedBy("add-wifi", z.zone, (v) => {
-    setPrefill(v);
-    setOpen(true);
-  }, operator);
-  if (!operator) return null;
-  const label = `${wifiVerb(z)} WiFi for ${z.zone}…`;
+  useOpenedBy("add-wifi", undefined, (v, arg) => setOpen({ zone: arg, prefill: v }), operator);
+  if (!operator || zones.length === 0) return null;
+  const label = zones.every((x) => x.ssid) ? "Change WiFi…" : zones.some((x) => x.ssid) ? "Add or change WiFi…" : "Add WiFi…";
   return (
     <>
-      <button className="btn" onClick={() => setOpen(true)}>{label}</button>
+      <button className="btn" onClick={() => setOpen({ zone: null, prefill: null })}>{label}</button>
       {/* Closing it re-reads the page: the zone may have its SSID now. */}
-      {open ? <WifiWizard z={z} apCount={apCount} site={site} prefill={prefill} onClose={() => { setOpen(false); setPrefill(null); reloadAll(); }} /> : null}
+      {open ? <WifiWizard zones={zones} zone={open.zone} apCount={apCount} site={site} prefill={open.prefill} onClose={() => { setOpen(null); reloadAll(); }} /> : null}
     </>
   );
 }
