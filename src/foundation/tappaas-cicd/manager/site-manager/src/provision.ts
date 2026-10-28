@@ -534,6 +534,7 @@ function joinAndCapture(
     const repoUrl = `http://${cicdIp}:${SERVE_PORT}/`;
     const joinArgs = [`--join`, `--non-interactive`, `--name`, siteName];
     if (wanPort) joinArgs.push("--wan-port", wanPort);
+    else joinArgs.push("--no-wan"); // none: the wan bridge gets no port, not the first free one
     if (lanPorts) joinArgs.push("--lan-port", lanPorts.replace(/\s+/g, ""));
     if (o.lanMode) joinArgs.push("--lan-mode", o.lanMode);
     if (o.lanPrimary) joinArgs.push("--lan-primary", o.lanPrimary);

@@ -135,6 +135,7 @@ ORGNAME=""                # the org/system name → the Proxmox cluster name (fr
 NONINTERACTIVE=0
 LAN_PORT=""               # F1: explicit LAN NIC → config-network.sh --lan-port
 WAN_PORT=""               # F1: explicit WAN NIC → config-network.sh --wan-port
+NO_WAN=0                  # no WAN port at all (node add --no-wan) → config-network.sh --no-wan
 LAN_MODE="" LAN_PRIMARY="" # #40: a bonded lan uplink → config-network.sh --lan-mode/--lan-primary
 declare -a POOL_ARGS=()   # F1: --pool specs → config-storage.sh (repeatable)
 _pos=()
@@ -151,6 +152,7 @@ while [ $# -gt 0 ]; do
     --name)            ORGNAME="${2:-}"; shift ;;
     --lan-port)        LAN_PORT="${2:-}"; shift ;;
     --wan-port)        WAN_PORT="${2:-}"; shift ;;
+    --no-wan)          NO_WAN=1 ;;
     --lan-mode)        LAN_MODE="${2:-}"; shift ;;
     --lan-primary)     LAN_PRIMARY="${2:-}"; shift ;;
     --pool)            POOL_ARGS+=("--pool" "${2:-}"); shift ;;
@@ -159,7 +161,7 @@ while [ $# -gt 0 ]; do
       echo "Usage: install.sh [REPO] [BRANCH] --name <site-code>"
       echo "                  [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]"
       echo "                  [--lan-port <if>[,<if>...]] [--lan-mode active-backup|lacp] [--lan-primary <if>]"
-      echo "                  [--wan-port <if>] [--pool <name=topo:disks>]... [--non-interactive]"
+      echo "                  [--wan-port <if> | --no-wan] [--pool <name=topo:disks>]... [--non-interactive]"
       echo ""
       echo "The NODE step: Proxmox post-install, lan/wan bridges, cluster create"
       echo "(named <site-code>) / join, ZFS pools. This is step [1/5] driven by the"
@@ -640,6 +642,7 @@ else
   [ "$NONINTERACTIVE" = 1 ] && net_args+=(--non-interactive)
   [ -n "$LAN_PORT" ] && net_args+=(--lan-port "$LAN_PORT")
   [ -n "$WAN_PORT" ] && net_args+=(--wan-port "$WAN_PORT")
+  [ "$NO_WAN" = 1 ] && net_args+=(--no-wan)
   [ -n "$LAN_MODE" ] && net_args+=(--lan-mode "$LAN_MODE")
   [ -n "$LAN_PRIMARY" ] && net_args+=(--lan-primary "$LAN_PRIMARY")
   ~/tappaas/config-network.sh ${net_args[@]+"${net_args[@]}"} \

@@ -652,7 +652,12 @@ pick_port() {
   fi
 }
 
-if [[ -z "$WAN_PORT" ]]; then
+# --no-wan at install (a node added with no WAN port): the wan bridge gets none,
+# rather than the first free port picked for it.
+[[ "$NO_WAN" == 1 && -n "$WAN_PORT" ]] && die "--no-wan and --wan-port are each other's opposite — give one"
+if [[ "$NO_WAN" == 1 ]]; then
+  info "No WAN port (--no-wan): the 'wan' bridge has no port (node network set --wan-port gives it one)."
+elif [[ -z "$WAN_PORT" ]]; then
   if [[ "$INTERACTIVE" == "1" ]]; then
     if [[ "$ROLE" == "first" ]]; then
       WAN_TEXT="This is the PRIMARY node.\n\nSelect the WAN port — the NIC connected to your upstream router/switch (internet uplink). The TAPPaaS firewall VM will use this port for outbound traffic."
