@@ -51,6 +51,9 @@ interface NodeProgress {
   siteNodes: string[];
 }
 
+// The installer stick image on the mothership (site-manager node media).
+const IMAGE = "/var/lib/tappaas-pxe/tappaas-usb.iso";
+
 // The firewall reserves a management address and a name for tappaas1..9 only:
 // tappaasN is 10.0.0.(9+N).
 const NAME = /^tappaas([1-9])$/;
@@ -291,11 +294,25 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
                 <StepView key={`${stickNode}:${stickDevice}:${media?.stickImage.present ? 1 : 0}`} step={writeStick} me={me} onDone={(ok) => ok && setStickWritten(true)} />
               </div>
               <div className="explain">
-                <p><b>On your own machine</b></p>
+                <p><b>On your own machine</b> — copy the image from the mothership, then write it to a stick (everything on the stick is erased).</p>
+                <p><b>Linux</b></p>
                 <ol>
-                  <li>Copy the image from the mothership: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{media?.stickImage.path ?? "/var/lib/tappaas-pxe/tappaas-usb.iso"} .</span></li>
-                  <li>Write it to a stick: <span className="mono">dd if=tappaas-usb.iso of=/dev/&lt;usb&gt; bs=4M</span>, or balenaEtcher.</li>
+                  <li><span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{IMAGE} .</span></li>
+                  <li>Find the stick: <span className="mono">lsblk</span> (a disk of the stick's size, e.g. <span className="mono">sdb</span>; unmount anything mounted from it).</li>
+                  <li><span className="mono">sudo dd if=tappaas-usb.iso of=/dev/sdb bs=4M status=progress conv=fsync</span>, then <span className="mono">sudo eject /dev/sdb</span>.</li>
                 </ol>
+                <p><b>macOS</b></p>
+                <ol>
+                  <li>In Terminal: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{IMAGE} .</span></li>
+                  <li>Find the stick: <span className="mono">diskutil list</span> (an external disk of the stick's size, e.g. <span className="mono">disk4</span>), then <span className="mono">diskutil unmountDisk /dev/disk4</span>.</li>
+                  <li><span className="mono">sudo dd if=tappaas-usb.iso of=/dev/rdisk4 bs=4m status=progress</span>, then <span className="mono">diskutil eject /dev/disk4</span>. Ignore "The disk you inserted was not readable" if macOS shows it.</li>
+                </ol>
+                <p><b>Windows</b></p>
+                <ol>
+                  <li>In PowerShell: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{IMAGE} .</span> (scp comes with Windows 10 and later).</li>
+                  <li>Write it with <a href="https://rufus.ie" target="_blank" rel="noreferrer">Rufus</a> or <a href="https://etcher.balena.io" target="_blank" rel="noreferrer">balenaEtcher</a>: pick the stick and tappaas-usb.iso, and in Rufus choose <b>DD image mode</b> when asked.</li>
+                </ol>
+                <p className="small">balenaEtcher works the same way on Linux and macOS, for a stick without the terminal.</p>
               </div>
             </div>
             {!stickWritten && !skipMedium ? (
