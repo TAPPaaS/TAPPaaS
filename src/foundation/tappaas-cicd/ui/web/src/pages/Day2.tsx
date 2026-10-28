@@ -16,6 +16,7 @@ import { LocationLink } from "../locations";
 import { viewLink } from "../physical/views";
 import { Link, canOperate, useMe } from "../ui";
 import { AddNodeButton } from "./AddNode";
+import { REMOVE_NODE_TEXT, RemoveNodeButton } from "./RemoveNode";
 import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
 import { ApIn, SiteSsid, ZoneIn, wifiZones } from "../wizards";
@@ -196,6 +197,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
         <WizardCard title="Add a node" action={<AddNodeButton label="Add a node…" />}>
           Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools.
         </WizardCard>
+        <WizardCard title="Remove a node" action={<RemoveNodeButton />}>{REMOVE_NODE_TEXT}</WizardCard>
         <WizardCard title="Adopt a machine" action={<AdoptButton />}>
           {ADOPT_TEXT}
         </WizardCard>
