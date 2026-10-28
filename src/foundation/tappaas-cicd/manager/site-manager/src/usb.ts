@@ -260,7 +260,11 @@ export function ddProgressCmd(device: string, total: number): string {
     "if [ \"$b\" -gt 0 ] && [ \"${s:-0}\" -gt 0 ] && [ \"$b\" -lt \"$t\" ]; then left=\", about $(( (t-b)*s/b )) s left\"; fi; " +
     "printf '  %3d%%  %d of %d MB  %s%s\\n' \"$pct\" $((b/1000000)) $((t/1000000)) \"$r\" \"$left\";; \"\") ;; *) printf '%s\\n' \"$1\" >&2;; esac; }";
   const loop = "while IFS= read -r -d $'\\r' c || [ -n \"$c\" ]; do while IFS= read -r l || [ -n \"$l\" ]; do emit \"$l\"; done <<<\"$c\"; done";
-  return `set -o pipefail; dd of=${device} bs=4M conv=fsync status=progress 2>&1 >/dev/null | { n=0; t=${total}; ${emit}; ${loop}; }`;
+  // oflag=direct: written to the stick as it goes, so the progress is the
+  // stick's own pace. Through the page cache the node swallowed most of the
+  // image in seconds at memory speed, then sat at that percent for minutes
+  // while the flush did the real writing with nothing to report.
+  return `set -o pipefail; dd of=${device} bs=4M iflag=fullblock oflag=direct conv=fsync status=progress 2>&1 >/dev/null | { n=0; t=${total}; ${emit}; ${loop}; }`;
 }
 
 // cluster.ts ssh()'s option list, for the one call that streams a file: the

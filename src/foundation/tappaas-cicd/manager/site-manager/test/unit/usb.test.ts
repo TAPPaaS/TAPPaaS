@@ -85,7 +85,7 @@ check(ok({ yes: true, imagePresent: true, sticks, device: "/dev/sdb" }).length =
 
 // The write's progress: dd's own, every fifth second, with the total known.
 const cmd = ddProgressCmd("/dev/sdb", 1763180544);
-check(cmd.startsWith("set -o pipefail; dd of=/dev/sdb bs=4M conv=fsync status=progress 2>&1 >/dev/null | { n=0; t=1763180544;"), `dd streams progress into a bash loop (nothing buffering), failing as dd fails (${cmd.slice(0, 90)})`);
+check(cmd.startsWith("set -o pipefail; dd of=/dev/sdb bs=4M iflag=fullblock oflag=direct conv=fsync status=progress 2>&1 >/dev/null | { n=0; t=1763180544;"), `dd writes direct (the progress is the stick's pace) into a bash loop, failing as dd fails (${cmd.slice(0, 100)})`);
 check(cmd.includes("read -r -d $'\\r'") && cmd.includes("n%5") && cmd.includes("s left") && cmd.includes(">&2"), "records split on the carriage return, every fifth line, the time left, errors kept on stderr");
 
 console.log(`usb: ${passed} passed, ${failed} failed`);
