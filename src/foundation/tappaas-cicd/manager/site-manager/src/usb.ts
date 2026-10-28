@@ -249,15 +249,18 @@ export function writeNodeUsb(node: string, device: string, yes: boolean): void {
 // The command on the node: dd with its progress (a line a second, '\r'-separated
 // on stderr) turned into one line every fifth second on stdout — percent, MB
 // written of the total, the rate, the time left at that rate — and anything
-// else dd says (an error) left on stderr. The pipe fails as dd fails.
+// else dd says (an error) left on stderr. The pipe fails as dd fails. The
+// formatting is bash, not awk: mawk (the nodes' awk) buffers until the end
+// when it writes to a pipe, fflush or not, and so does a tr in between — the
+// lines all came at once when the write was over.
 export function ddProgressCmd(device: string, total: number): string {
-  const awk =
-    `awk -v t=${total} '` +
-    `/bytes/ && /copied/ { n++; b=$1; s=$(NF-3)+0; if (n%5 && b<t) next; ` +
-    `pct=int(b*100/t); left=(s>0 && b>0) ? int((t-b)*s/b) : -1; ` +
-    `printf "  %3d%%  %d of %d MB  %s %s%s\\n", pct, b/1e6, t/1e6, $(NF-1), $NF, (left>=0 && b<t) ? sprintf(", about %d s left", left) : ""; fflush(); next } ` +
-    `{ print > "/dev/stderr" }'`;
-  return `set -o pipefail; dd of=${device} bs=4M conv=fsync status=progress 2>&1 >/dev/null | tr '\\r' '\\n' | ${awk}`;
+  const emit =
+    "emit() { case \"$1\" in *\" bytes \"*\" copied, \"*) set -- $1; b=$1; s=${*: -4:1}; s=${s%.*}; r=\"${*: -2:1} ${*: -1}\"; n=$((n+1)); " +
+    "if [ $((n%5)) -ne 0 ] && [ \"$b\" -lt \"$t\" ]; then return; fi; pct=$((b*100/t)); left=\"\"; " +
+    "if [ \"$b\" -gt 0 ] && [ \"${s:-0}\" -gt 0 ] && [ \"$b\" -lt \"$t\" ]; then left=\", about $(( (t-b)*s/b )) s left\"; fi; " +
+    "printf '  %3d%%  %d of %d MB  %s%s\\n' \"$pct\" $((b/1000000)) $((t/1000000)) \"$r\" \"$left\";; \"\") ;; *) printf '%s\\n' \"$1\" >&2;; esac; }";
+  const loop = "while IFS= read -r -d $'\\r' c || [ -n \"$c\" ]; do while IFS= read -r l || [ -n \"$l\" ]; do emit \"$l\"; done <<<\"$c\"; done";
+  return `set -o pipefail; dd of=${device} bs=4M conv=fsync status=progress 2>&1 >/dev/null | { n=0; t=${total}; ${emit}; ${loop}; }`;
 }
 
 // cluster.ts ssh()'s option list, for the one call that streams a file: the
