@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { buildArgv, confirmObject } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
-import { BUDDY_KINDS, PASSPHRASE_TEXT, SatellitePlan, SiteSsid, StepSpec, buddyNameProblem, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { BUDDY_KINDS, PASSPHRASE_TEXT, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -123,6 +123,22 @@ check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its ver
   const { stacks, notes } = stacksOf(cats);
   check(stacks.join(",") === "home,office", `the stacks, sorted, without foundation or a module of no stack (${stacks.join(",")})`);
   check(notes.office === "office — nextcloud, onlyoffice", `a stack's note lists its modules once across repositories (${notes.office})`);
+}
+
+// ── a wizard's session, found again from its job ────────────────────
+{
+  const now = Date.parse("2026-10-28T12:00:00Z");
+  const j = (o: Partial<SessionJob> & { argv: string[] }): SessionJob => ({ kind: "apply", state: "done", created: "2026-10-28T11:30:00Z", ended: "2026-10-28T11:40:00Z", exit: 0, ...o });
+  const add = (n: string) => ["network-manager", "wgvpn", "add-peer", "--name", n];
+  const isAdd = (x: SessionJob) => x.argv.includes("add-peer");
+  check(sessionJob([j({ argv: add("a"), state: "running", ended: null, exit: null })], isAdd, now, 3600_000)?.argv[4] === "a", "a job that runs is the session");
+  check(sessionJob([j({ argv: add("a") })], isAdd, now, 3600_000) !== null, "…and one that ended clean within the hour");
+  check(sessionJob([j({ argv: add("a") })], isAdd, now, 600_000) === null, "…but not after it");
+  check(sessionJob([j({ argv: add("b"), exit: 1 }), j({ argv: add("a") })], isAdd, now, 3600_000) === null, "the newest failing ends the session: an older clean one does not count");
+  check(sessionJob([j({ argv: add("b"), state: "refused", exit: null }), j({ argv: add("a") })], isAdd, now, 3600_000)?.argv[4] === "a", "a refused one never ran: the one before it counts");
+  check(sessionJob([j({ argv: add("b"), cancelled: { was: "queued" }, exit: null }), j({ argv: add("a"), cancelled: { was: "running" }, exit: 130 })], isAdd, now, 3600_000) === null, "cancelled before it ran: skipped; stopped while it ran: the session is over");
+  check(sessionJob([j({ argv: ["network-manager", "wgvpn", "list"] }), j({ argv: add("a"), kind: "preview" })], isAdd, now, 3600_000) === null, "only an apply that matches");
+  check(argOf(add("lars-laptop"), "--name") === "lars-laptop" && argOf(add("x"), "--pubkey") === null, "a flag's value in the argv");
 }
 
 done("wizards");

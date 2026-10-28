@@ -273,3 +273,40 @@ export function stacksOf(cats: { modules: { name: string; stack: string | null }
   const stacks = [...mods.keys()].sort();
   return { stacks, notes: Object.fromEntries(stacks.map((s) => [s, `${s} — ${mods.get(s)!.join(", ")}`])) };
 }
+
+// ── a wizard's session, found again from its job ──────────────────────
+// A wizard keeps its state in its pop-up alone. Closed while its job ran (or
+// just after), it finds that job again on reopen (GET jobs?bin=&verb=) and
+// offers to continue from it; never from the browser's storage.
+
+// The parts of a job summary a session reads (types.ts JobSummary).
+export interface SessionJob {
+  kind: string;
+  state: string;
+  argv: string[];
+  created: string;
+  ended: string | null;
+  exit: number | null;
+  previewPhase?: { stopped: string | null } | null;
+  cancelled?: { was: string } | null;
+}
+
+// The newest apply `match` takes (`jobs` newest first) is the session while it
+// waits or runs, or for `keepMs` after it ended clean; one that failed or was
+// stopped ends it. A refused one, or one cancelled before it ran, never ran:
+// the one before it counts.
+export function sessionJob<J extends SessionJob>(jobs: J[], match: (j: J) => boolean, now: number, keepMs: number): J | null {
+  for (const j of jobs) {
+    if (j.kind !== "apply" || !match(j) || j.state === "refused" || j.cancelled?.was === "queued") continue;
+    if (j.state === "queued" || j.state === "running") return j;
+    const clean = j.exit === 0 && !j.previewPhase?.stopped && !j.cancelled;
+    return clean && now - Date.parse(j.ended ?? j.created) <= keepMs ? j : null;
+  }
+  return null;
+}
+
+// The value after `flag` in a job's argv.
+export function argOf(argv: string[], flag: string): string | null {
+  const i = argv.indexOf(flag);
+  return i >= 0 && i + 1 < argv.length ? argv[i + 1] : null;
+}

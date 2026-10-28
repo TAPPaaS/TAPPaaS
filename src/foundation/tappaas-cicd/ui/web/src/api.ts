@@ -136,6 +136,8 @@ export const readJob = (argv: string[], from?: CardRef) => post<Job>("jobs", { a
 // Apply without a preview click: one job that runs the dry run, then the apply on a clean one.
 export const applyNowJob = (argv: string[], confirm?: string) => post<Job>("jobs", { argv, apply: true, ...(confirm ? { confirm } : {}) });
 export const applyJob = (previewId: string, confirm?: string) => post<Job>(`jobs/${encodeURIComponent(previewId)}/apply`, confirm ? { confirm } : {});
+// A queued job never runs; a running one is stopped (SIGINT to its process group, then SIGTERM).
+export const cancelJob = (id: string) => post<Job>(`jobs/${encodeURIComponent(id)}/cancel`, {});
 
 // A job as it runs: its output streamed (server-sent events), then its end.
 export function useJob(id: string | null): Job | null {

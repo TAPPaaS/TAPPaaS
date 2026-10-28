@@ -216,6 +216,9 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .modal { background: var(--panel); border-radius: 10px; width: min(860px, 100%); padding: 16px 20px 20px; box-shadow: 0 20px 50px rgba(0,0,0,.25); }
 .modal-head { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; margin-bottom: 8px; }
 .modal-head h2 { font-size: 17px; margin: 0; flex: 1; }
+/* The × on a wizard with a job running asks first (wizard.tsx), the session offered on reopen. */
+.modal-confirm, .wizard-resume { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.job-control { white-space: nowrap; }
 .step { border-top: 1px dashed var(--line); padding-top: 10px; margin-top: 10px; }
 .step:first-of-type { border-top: 0; margin-top: 0; }
 .step h3 { margin: 4px 0 8px; font-size: 14.5px; }

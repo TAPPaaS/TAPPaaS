@@ -19,6 +19,7 @@ interface BackupKeyStatus {
   current: boolean;
 }
 import { Dot, Tag, canOperate, useMe } from "../ui";
+import { Wizard } from "../wizard";
 import { UsbStick, UsbStickPicker } from "../usbsticks";
 import { SecretStatus, StepRow } from "./Setup";
 
@@ -68,85 +69,82 @@ export function BackupKeysWizard({ onClose }: { onClose: () => void }) {
   ];
   const current = !plan ? "stick" : !written ? "write" : "status";
 
+  // The write is one request, not a queued job: closing while it runs leaves
+  // it running on the mothership, and the key record (stage 3, the health
+  // check) says what it wrote. Nothing else to come back to.
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Write the backup keys to a USB stick">
-        <header className="modal-head">
-          <h2>Write the backup keys to a USB stick</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        <p className="small">{BACKUP_KEYS_TEXT}</p>
-        <ol className="setup">
-          <StepRow s={stages[0]} open={current === "stick"}>
+    <Wizard title="Write the backup keys to a USB stick" onClose={onClose} running={busy && plan ? [`backup-manager key export --usb --node ${plan.node}`] : []}>
+      <p className="small">{BACKUP_KEYS_TEXT}</p>
+      <ol className="setup">
+        <StepRow s={stages[0]} open={current === "stick"}>
+          <div className="form">
+            <UsbStickPicker nodes={nodes.length ? nodes : [node]} node={node} setNode={setNode} device={device} setDevice={setDevice} disabled={plan !== null} onSticks={setSticks} />
+          </div>
+          {picked?.keyStick ? (
+            <p className="small"><Dot level="info" /> {picked.device} is a TAPPaaS key stick: its keys are replaced and everything else on it stays, unless you erase it below.</p>
+          ) : picked ? (
+            <p className="small"><Dot level="warn" /> Everything on {picked.device} will be erased.</p>
+          ) : null}
+          <div className="actions">
+            {plan ? (
+              <button className="btn" disabled={busy || written !== null} onClick={() => setPlan(null)}>Edit</button>
+            ) : (
+              <button className="btn btn-primary" disabled={!picked || picked.inUse} onClick={() => setPlan({ node, device, keyStick: picked!.keyStick })}>Continue</button>
+            )}
+            {!plan && !picked ? <span className="muted small">pick the stick</span> : null}
+          </div>
+        </StepRow>
+        <StepRow s={stages[1]} open={current === "write"}>
+          {!plan ? (
+            <p className="muted small">Once the stick is picked.</p>
+          ) : (
             <div className="form">
-              <UsbStickPicker nodes={nodes.length ? nodes : [node]} node={node} setNode={setNode} device={device} setDevice={setDevice} disabled={plan !== null} onSticks={setSticks} />
-            </div>
-            {picked?.keyStick ? (
-              <p className="small"><Dot level="info" /> {picked.device} is a TAPPaaS key stick: its keys are replaced and everything else on it stays, unless you erase it below.</p>
-            ) : picked ? (
-              <p className="small"><Dot level="warn" /> Everything on {picked.device} will be erased.</p>
-            ) : null}
-            <div className="actions">
-              {plan ? (
-                <button className="btn" disabled={busy || written !== null} onClick={() => setPlan(null)}>Edit</button>
-              ) : (
-                <button className="btn btn-primary" disabled={!picked || picked.inUse} onClick={() => setPlan({ node, device, keyStick: picked!.keyStick })}>Continue</button>
-              )}
-              {!plan && !picked ? <span className="muted small">pick the stick</span> : null}
-            </div>
-          </StepRow>
-          <StepRow s={stages[1]} open={current === "write"}>
-            {!plan ? (
-              <p className="muted small">Once the stick is picked.</p>
-            ) : (
-              <div className="form">
-                <label className="form-row">
-                  <span>password *</span>
-                  <input type="password" autoComplete="new-password" placeholder="12 characters or more" value={pw1} disabled={busy || written !== null} onChange={(e) => setPw1(e.target.value)} />
+              <label className="form-row">
+                <span>password *</span>
+                <input type="password" autoComplete="new-password" placeholder="12 characters or more" value={pw1} disabled={busy || written !== null} onChange={(e) => setPw1(e.target.value)} />
+              </label>
+              <label className="form-row">
+                <span>again *</span>
+                <input type="password" autoComplete="new-password" value={pw2} disabled={busy || written !== null} onChange={(e) => setPw2(e.target.value)} />
+                <small className="muted">{pw1 && pwProblem ? <span className="ff-error">{pwProblem}. </span> : null}Keep it apart from the stick: with both, anyone can read every backup. Lose it and the stick is useless.</small>
+              </label>
+              {plan.keyStick ? (
+                <label className="form-check">
+                  <input type="checkbox" checked={format} disabled={busy || written !== null} onChange={(e) => setFormat(e.target.checked)} />
+                  <span>erase the stick</span> <small className="muted">Unticked, only its keys, restore script and README are replaced (--format erases it anyway).</small>
                 </label>
-                <label className="form-row">
-                  <span>again *</span>
-                  <input type="password" autoComplete="new-password" value={pw2} disabled={busy || written !== null} onChange={(e) => setPw2(e.target.value)} />
-                  <small className="muted">{pw1 && pwProblem ? <span className="ff-error">{pwProblem}. </span> : null}Keep it apart from the stick: with both, anyone can read every backup. Lose it and the stick is useless.</small>
-                </label>
-                {plan.keyStick ? (
-                  <label className="form-check">
-                    <input type="checkbox" checked={format} disabled={busy || written !== null} onChange={(e) => setFormat(e.target.checked)} />
-                    <span>erase the stick</span> <small className="muted">Unticked, only its keys, restore script and README are replaced (--format erases it anyway).</small>
-                  </label>
-                ) : null}
-                <div className="actions">
-                  <button className="btn btn-primary" disabled={busy || written !== null || pwProblem !== null || !canOperate(me)} onClick={() => void write()}>
-                    {busy ? "Writing…" : `Write the keys to ${plan.device} in ${plan.node}`}
-                  </button>
-                  <span className="muted small">backup-manager key export --usb --node {plan.node} --device {plan.device} --yes --password-stdin{plan.keyStick && format ? " --format" : ""}</span>
-                </div>
-                {busy ? <p className="muted small">Formatting, encrypting, reading back and ejecting: a minute or two.</p> : null}
-                {msg ? <p className="readstate readstate-fail">{msg}</p> : null}
-                {written ? <pre className="output">{written}</pre> : null}
+              ) : null}
+              <div className="actions">
+                <button className="btn btn-primary" disabled={busy || written !== null || pwProblem !== null || !canOperate(me)} onClick={() => void write()}>
+                  {busy ? "Writing…" : `Write the keys to ${plan.device} in ${plan.node}`}
+                </button>
+                <span className="muted small">backup-manager key export --usb --node {plan.node} --device {plan.device} --yes --password-stdin{plan.keyStick && format ? " --format" : ""}</span>
               </div>
-            )}
-          </StepRow>
-          <StepRow s={stages[2]} open={current === "status"}>
-            {rec ? (
-              <p className="small">
-                <Tag level={rec.current ? "pass" : rec.stick ? "warn" : "fail"} />{" "}
-                {rec.current && rec.stick ? (
-                  <>The key stick written {rec.stick.written.slice(0, 16).replace("T", " ")} ({rec.stick.label}) holds all {rec.escrowed} key(s) as they are now. The health check says the same at its next run.</>
-                ) : rec.stick ? (
-                  <>The record still shows the stick written {rec.stick.written.slice(0, 10)} with {rec.stick.keys} of {rec.escrowed} key(s): {written ? "this write did not update it — the last lines of stage 2 say why; the stick itself was read back and is good" : "a key changed after it, write the stick again"}.</>
-                ) : (
-                  <>No stick has been recorded yet.</>
-                )}
-              </p>
-            ) : (
-              <p className="muted small">{keys.env?.error || keys.failure ? <><Dot level="fail" /> backup-manager key status could not be read: {keys.env?.error ?? keys.failure}</> : "Reading the key record…"}</p>
-            )}
-            {written ? <p className="small">Label the stick and keep it off-site; write a second one the same way. The password goes where the stick is not.</p> : null}
-          </StepRow>
-        </ol>
-      </div>
-    </div>
+              {busy ? <p className="muted small">Formatting, encrypting, reading back and ejecting: a minute or two.</p> : null}
+              {msg ? <p className="readstate readstate-fail">{msg}</p> : null}
+              {written ? <pre className="output">{written}</pre> : null}
+            </div>
+          )}
+        </StepRow>
+        <StepRow s={stages[2]} open={current === "status"}>
+          {rec ? (
+            <p className="small">
+              <Tag level={rec.current ? "pass" : rec.stick ? "warn" : "fail"} />{" "}
+              {rec.current && rec.stick ? (
+                <>The key stick written {rec.stick.written.slice(0, 16).replace("T", " ")} ({rec.stick.label}) holds all {rec.escrowed} key(s) as they are now. The health check says the same at its next run.</>
+              ) : rec.stick ? (
+                <>The record still shows the stick written {rec.stick.written.slice(0, 10)} with {rec.stick.keys} of {rec.escrowed} key(s): {written ? "this write did not update it — the last lines of stage 2 say why; the stick itself was read back and is good" : "a key changed after it, write the stick again"}.</>
+              ) : (
+                <>No stick has been recorded yet.</>
+              )}
+            </p>
+          ) : (
+            <p className="muted small">{keys.env?.error || keys.failure ? <><Dot level="fail" /> backup-manager key status could not be read: {keys.env?.error ?? keys.failure}</> : "Reading the key record…"}</p>
+          )}
+          {written ? <p className="small">Label the stick and keep it off-site; write a second one the same way. The password goes where the stick is not.</p> : null}
+        </StepRow>
+      </ol>
+    </Wizard>
   );
 }
 

@@ -612,6 +612,7 @@ export class Jobs {
   private signal(job: JobSummary, s: StopSignal): void {
     job.cancelled?.signals.push(s);
     this.record(job);
+    this.emit(job, { type: "state", job: summary(job) }); // its watchers see it stopping
     this.signals.get(job.id)?.(s);
   }
 

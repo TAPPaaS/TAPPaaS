@@ -13,9 +13,10 @@ import { ReactNode, createContext, useEffect, useMemo, useState } from "react";
 import { applyJob, applyNowJob, previewJob, readJob, reloadAll, useJob, useRead, useVerb } from "./api";
 import { ArgvStep, Values, buildArgv, confirmObject, formParts, prefillValues } from "./argv";
 import { useOpenedBy } from "./opener";
-import { Command, Output, jobResult, phaseOutputs } from "./jobs";
+import { Command, JobControl, Output, jobResult, phaseOutputs } from "./jobs";
 import { Job, ManifestVerb, Me } from "./types";
 import { Link, Tag, canOperate, useMe } from "./ui";
+import { Wizard, jobLive, useReportJob } from "./wizard";
 
 export type { Values } from "./argv";
 
@@ -165,7 +166,8 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
   );
 }
 
-function JobView({ id, label }: { id: string; label: string }) {
+// Also a continued wizard's view of the job it found again (wizard.tsx useJobSession).
+export function JobView({ id, label }: { id: string; label: string }) {
   const job = useJob(id);
   if (!job) return <p className="muted">starting {label}…</p>;
   return <JobPart job={job} label={label} state={jobResult(job)} level={job.state === "refused" ? "fail" : job.state !== "done" ? "skip" : job.exit === 0 ? "pass" : "warn"} ms={job.durationMs} text={job.output} live={job.state === "running" || job.state === "queued"} />;
@@ -178,6 +180,7 @@ function JobPart({ job, label, state, level, ms, text, live }: { job: Job; label
         <Tag level={level} /> {label}: {state}
         {ms !== null ? <span className="muted"> · {Math.round(ms / 100) / 10} s</span> : null}
         <span className="muted"> · job {job.id}</span>
+        {live ? <> <JobControl job={job} /></> : null}
       </p>
       {job.refused ? <p className="readstate readstate-fail">{job.refused}</p> : null}
       <Output text={text} live={live} />
@@ -227,7 +230,9 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
   const [error, setError] = useState<string | null>(null);
   const previewJob_ = useJob(preview?.id ?? null);
   const appliedJob = useJob(applied);
-  const stale = preview !== null && preview.argv !== JSON.stringify(argv);
+  // The wizard around the step asks before it closes on a job that runs.
+  useReportJob(jobLive(appliedJob) ? appliedJob : jobLive(previewJob_) ? previewJob_ : null);
+  const stale =preview !== null && preview.argv !== JSON.stringify(argv);
   // An Apply whose own dry run refused the change: nothing was applied, the
   // form is open again as after a refusing preview.
   const stopped = !!appliedJob?.previewPhase?.stopped;
@@ -337,7 +342,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       {step.progress && appliedJob && inApply ? <ProgressBar at={step.progress(appliedJob.output)} done={appliedJob.state === "done"} /> : null}
       {step.jobShownIn && appliedJob && appliedJob.state !== "refused" && !stopped ? (
         <p className="small">
-          <Tag level={appliedJob.state !== "done" ? "skip" : appliedJob.exit === 0 ? "pass" : "warn"} /> apply: {jobResult(appliedJob)} <span className="muted">· job {appliedJob.id}</span> — its output is in {step.jobShownIn}
+          <Tag level={appliedJob.state !== "done" ? "skip" : appliedJob.exit === 0 ? "pass" : "warn"} /> apply: {jobResult(appliedJob)} <span className="muted">· job {appliedJob.id}</span> — its output is in {step.jobShownIn} <JobControl job={appliedJob} />
         </p>
       ) : appliedJob?.previewPhase ? <TwoPhaseView job={appliedJob} /> : applied ? <JobView id={applied} label="apply" /> : null}
       {applied && appliedJob?.state === "done" && !stopped ? (
@@ -354,19 +359,16 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
 export function Operate({ title, steps, onClose }: { title: string; steps: Step[]; onClose: () => void }) {
   const me = useRead<Me>("me", 300_000).env?.data ?? null;
   const [reached, setReached] = useState(0);
+  // A flow of several steps, part applied: closing leaves the rest undone, and
+  // reopening starts at its first step (a flow keeps no session of its own).
+  const left = reached > 0 && reached < steps.length ? `${steps[reached].title} is not applied yet; reopening starts again at the first step.` : null;
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={title}>
-        <header className="modal-head">
-          <h2>{title}</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        {steps.slice(0, reached + 1).map((s, i) => (
-          <StepView key={i} step={s} me={me} onDone={(ok) => ok && setReached((r) => Math.max(r, i + 1))} />
-        ))}
-        {reached < steps.length - 1 ? <p className="muted small">Next: {steps[reached + 1].title} — once this step has been applied.</p> : null}
-      </div>
-    </div>
+    <Wizard title={title} wide={false} onClose={onClose} progress={left}>
+      {steps.slice(0, reached + 1).map((s, i) => (
+        <StepView key={i} step={s} me={me} onDone={(ok) => ok && setReached((r) => Math.max(r, i + 1))} />
+      ))}
+      {reached < steps.length - 1 ? <p className="muted small">Next: {steps[reached + 1].title} — once this step has been applied.</p> : null}
+    </Wizard>
   );
 }
 

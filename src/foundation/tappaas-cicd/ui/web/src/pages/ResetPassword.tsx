@@ -13,6 +13,7 @@ import { stripAnsi } from "../jobs";
 import { Step, StepView } from "../operate";
 import { useOpenedBy } from "../opener";
 import { Dot, canOperate, useMe } from "../ui";
+import { Wizard } from "../wizard";
 import { SecretStatus, StepRow } from "./Setup";
 
 // What the activity is, on Day 2's card and at the top of the form.
@@ -79,88 +80,86 @@ export function ResetPasswordWizard({ onClose, user: preset }: { onClose: () => 
   ];
   const current = !chosen ? "user" : !done ? "way" : "tell";
 
+  // No record marks a reset under way (the link is in its job's output, a
+  // temporary password nowhere): closing asks only once there is something to lose.
+  const left = done?.way === "link" ? "the one-time link is shown here and in its job in Activity only: copy it first." : busy ? "the temporary password is being set; whether it was is in Activity." : null;
+
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Reset a user's password">
-        <header className="modal-head">
-          <h2>Reset a user's password</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        <p className="small">{RESET_PASSWORD_TEXT}</p>
-        <ol className="setup">
-          <StepRow s={stages[0]} open={current === "user"}>
-            <div className="form">
-              <label className="form-row">
-                <span>user *</span>
-                <select value={chosen} disabled={done !== null} onChange={(e) => setUser(e.target.value)}>
-                  <option value="">{users.length ? "— pick the user" : "— reading the users…"}</option>
-                  {users.map((u) => (
-                    <option key={u} value={u}>{u}</option>
-                  ))}
-                </select>
-                <small className="muted">The users identity-manager knows; a person not listed is added first (Day 2, Add a user).</small>
-              </label>
-            </div>
-          </StepRow>
-          <StepRow s={stages[1]} open={current === "way"}>
-            {!chosen ? (
-              <p className="muted small">Once the user is picked.</p>
-            ) : (
-              <>
+    <Wizard title="Reset a user's password" onClose={onClose} progress={left}>
+      <p className="small">{RESET_PASSWORD_TEXT}</p>
+      <ol className="setup">
+        <StepRow s={stages[0]} open={current === "user"}>
+          <div className="form">
+            <label className="form-row">
+              <span>user *</span>
+              <select value={chosen} disabled={done !== null} onChange={(e) => setUser(e.target.value)}>
+                <option value="">{users.length ? "— pick the user" : "— reading the users…"}</option>
+                {users.map((u) => (
+                  <option key={u} value={u}>{u}</option>
+                ))}
+              </select>
+              <small className="muted">The users identity-manager knows; a person not listed is added first (Day 2, Add a user).</small>
+            </label>
+          </div>
+        </StepRow>
+        <StepRow s={stages[1]} open={current === "way"}>
+          {!chosen ? (
+            <p className="muted small">Once the user is picked.</p>
+          ) : (
+            <>
+              <div className="form">
+                <label className="form-check">
+                  <input type="radio" name="way" checked={way === "link"} disabled={done !== null} onChange={() => setWay("link")} />
+                  <span>a one-time link</span> <small className="muted">The user sets a password of their own. Preferred: you never know it.</small>
+                </label>
+                <label className="form-check">
+                  <input type="radio" name="way" checked={way === "password"} disabled={done !== null} onChange={() => setWay("password")} />
+                  <span>a temporary password</span> <small className="muted">You choose it and hand it over; the user changes it after signing in.</small>
+                </label>
+              </div>
+              {way === "link" ? (
+                <StepView key={chosen} step={link} me={me} onDone={(ok) => ok && setDone({ way: "link", link: null })} />
+              ) : (
                 <div className="form">
-                  <label className="form-check">
-                    <input type="radio" name="way" checked={way === "link"} disabled={done !== null} onChange={() => setWay("link")} />
-                    <span>a one-time link</span> <small className="muted">The user sets a password of their own. Preferred: you never know it.</small>
+                  <label className="form-row">
+                    <span>password *</span>
+                    <input type="password" autoComplete="new-password" placeholder="8 characters or more" value={pw1} disabled={busy || done !== null} onChange={(e) => setPw1(e.target.value)} />
                   </label>
-                  <label className="form-check">
-                    <input type="radio" name="way" checked={way === "password"} disabled={done !== null} onChange={() => setWay("password")} />
-                    <span>a temporary password</span> <small className="muted">You choose it and hand it over; the user changes it after signing in.</small>
+                  <label className="form-row">
+                    <span>again *</span>
+                    <input type="password" autoComplete="new-password" value={pw2} disabled={busy || done !== null} onChange={(e) => setPw2(e.target.value)} />
+                    <small className="muted">{pw1 && pwProblem ? <span className="ff-error">{pwProblem}. </span> : null}Set in Authentik through identity-manager with the password on its stdin: never in a command, never kept by the console.</small>
                   </label>
-                </div>
-                {way === "link" ? (
-                  <StepView key={chosen} step={link} me={me} onDone={(ok) => ok && setDone({ way: "link", link: null })} />
-                ) : (
-                  <div className="form">
-                    <label className="form-row">
-                      <span>password *</span>
-                      <input type="password" autoComplete="new-password" placeholder="8 characters or more" value={pw1} disabled={busy || done !== null} onChange={(e) => setPw1(e.target.value)} />
-                    </label>
-                    <label className="form-row">
-                      <span>again *</span>
-                      <input type="password" autoComplete="new-password" value={pw2} disabled={busy || done !== null} onChange={(e) => setPw2(e.target.value)} />
-                      <small className="muted">{pw1 && pwProblem ? <span className="ff-error">{pwProblem}. </span> : null}Set in Authentik through identity-manager with the password on its stdin: never in a command, never kept by the console.</small>
-                    </label>
-                    <div className="actions">
-                      <button className="btn btn-primary" disabled={busy || done !== null || pwProblem !== null || !canOperate(me)} onClick={() => void setPassword()}>
-                        {busy ? "Setting…" : `Set the password of ${chosen}`}
-                      </button>
-                      <span className="muted small">identity-manager user reset-password {chosen} --password-stdin</span>
-                    </div>
-                    {msg ? <p className="readstate readstate-fail">{msg}</p> : null}
-                    {done?.way === "password" ? <p className="small"><Dot level="pass" /> The password of {chosen} is set.</p> : null}
+                  <div className="actions">
+                    <button className="btn btn-primary" disabled={busy || done !== null || pwProblem !== null || !canOperate(me)} onClick={() => void setPassword()}>
+                      {busy ? "Setting…" : `Set the password of ${chosen}`}
+                    </button>
+                    <span className="muted small">identity-manager user reset-password {chosen} --password-stdin</span>
                   </div>
-                )}
-              </>
-            )}
-          </StepRow>
-          <StepRow s={stages[2]} open={current === "tell"}>
-            {!done ? (
-              <p className="muted small">Once the new way in exists.</p>
-            ) : done.way === "link" ? (
-              <ol>
-                <li>Send the link from stage 2 to {chosen} by a way you trust: it is the key to their account until it is used or expires.</li>
-                <li>They open it, set a password of their own, and sign in as before. Their other sessions are not signed out.</li>
-              </ol>
-            ) : (
-              <ol>
-                <li>Hand the password to {chosen} apart from the sign-in address: by voice, or a message that is not the one with the link.</li>
-                <li>They sign in with it and change it at once in their account settings.</li>
-              </ol>
-            )}
-          </StepRow>
-        </ol>
-      </div>
-    </div>
+                  {msg ? <p className="readstate readstate-fail">{msg}</p> : null}
+                  {done?.way === "password" ? <p className="small"><Dot level="pass" /> The password of {chosen} is set.</p> : null}
+                </div>
+              )}
+            </>
+          )}
+        </StepRow>
+        <StepRow s={stages[2]} open={current === "tell"}>
+          {!done ? (
+            <p className="muted small">Once the new way in exists.</p>
+          ) : done.way === "link" ? (
+            <ol>
+              <li>Send the link from stage 2 to {chosen} by a way you trust: it is the key to their account until it is used or expires.</li>
+              <li>They open it, set a password of their own, and sign in as before. Their other sessions are not signed out.</li>
+            </ol>
+          ) : (
+            <ol>
+              <li>Hand the password to {chosen} apart from the sign-in address: by voice, or a message that is not the one with the link.</li>
+              <li>They sign in with it and change it at once in their account settings.</li>
+            </ol>
+          )}
+        </StepRow>
+      </ol>
+    </Wizard>
   );
 }
 

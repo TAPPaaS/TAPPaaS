@@ -573,6 +573,9 @@ export interface JobSummary {
   truncated: boolean;
   refused: string | null;
   interrupted?: boolean; // the console stopped while it ran: cut off, no exit code
+  // Cancelled by an operator: `was` queued, it never ran; running, it was
+  // stopped with these signals to its process group.
+  cancelled?: { by: string | null; at: string; was: "queued" | "running"; signals: string[] };
   // An apply asked without a preview of its own: the dry run it ran first, how
   // much of the output is the dry run's, and why it stopped there (no apply ran).
   previewPhase?: { ran: string[]; exit: number | null; durationMs: number | null; outputLength: number; stopped: string | null };

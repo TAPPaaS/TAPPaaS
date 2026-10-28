@@ -7,6 +7,7 @@ import { Step, StepView } from "../operate";
 import { StorageDisk, StorageInventory } from "../types";
 import { POOL_CLASSES, PoolClass, diskId, humanSize, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName } from "../nodeadd";
 import { canOperate, useMe } from "../ui";
+import { Wizard } from "../wizard";
 
 // A pool built here, before the inventory (read every few minutes) has it.
 interface Built { name: string; layout: string; disks: string[] }
@@ -118,8 +119,8 @@ export function NodePools({ node, onContinue, continueLabel = "Continue →" }: 
 }
 
 // The node's side card: opens the picker for a node with a healthy disk in no
-// pool. Closed by its × or Continue, never by a click beside it: a pool being
-// built keeps its job in view.
+// pool. Closed by its × or Done, never by a click beside it (wizard.tsx): a
+// pool being built keeps its job in view, and × asks first while it runs.
 export function AddPoolButton({ node }: { node: string }) {
   const [open, setOpen] = useState(false);
   if (!canOperate(useMe())) return null;
@@ -127,15 +128,9 @@ export function AddPoolButton({ node }: { node: string }) {
     <>
       <button className="btn" onClick={() => setOpen(true)}>Add data pools…</button>
       {open ? (
-        <div className="modal-back">
-          <div className="modal modal-wide" role="dialog" aria-label={`Data pools on ${node}`}>
-            <header className="modal-head">
-              <h2>Data pools on {node}</h2>
-              <button className="btn-x" onClick={() => setOpen(false)} aria-label="close">×</button>
-            </header>
-            <NodePools node={node} onContinue={() => setOpen(false)} continueLabel="Done" />
-          </div>
-        </div>
+        <Wizard title={`Data pools on ${node}`} onClose={() => setOpen(false)}>
+          <NodePools node={node} onContinue={() => setOpen(false)} continueLabel="Done" />
+        </Wizard>
       ) : null}
     </>
   );

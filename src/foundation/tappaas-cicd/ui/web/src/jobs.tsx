@@ -3,9 +3,9 @@
 // Activity lists them beside the sweep; a module's page lists its own.
 
 import { Fragment, useState } from "react";
-import { useJob } from "./api";
+import { cancelJob, reloadAll, useJob } from "./api";
 import { JobSummary } from "./types";
-import { Tag, when } from "./ui";
+import { Tag, canOperate, useMe, when } from "./ui";
 
 export function quote(argv: string[]): string {
   return argv.map((a) => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`)).join(" ");
@@ -18,13 +18,15 @@ export function stripAnsi(s: string): string {
 export function jobLevel(j: JobSummary): string {
   if (j.state === "refused" || j.interrupted) return "fail";
   if (j.state !== "done") return "skip";
-  if (j.previewPhase?.stopped) return "warn";
+  if (j.previewPhase?.stopped || j.cancelled) return "warn";
   return j.exit === 0 ? "pass" : "fail";
 }
 
 export function jobResult(j: JobSummary): string {
   if (j.state === "refused") return "refused";
   if (j.interrupted) return "cut off";
+  if (j.cancelled?.was === "queued") return j.state === "done" ? "cancelled" : "cancelling…";
+  if (j.cancelled) return j.state === "done" ? `stopped${j.exit !== null ? ` (exit ${j.exit})` : ""}` : `stopping… (${j.cancelled.signals.at(-1) ?? "SIGINT"} sent)`;
   if (j.state === "queued") return "queued";
   if (j.state === "running") return j.previewPhase && j.previewPhase.exit === null ? "previewing…" : "running…";
   if (j.previewPhase?.stopped) return "stopped at the preview";
@@ -71,12 +73,46 @@ export function Output({ text, live }: { text: string; live?: boolean }) {
   return <pre className={`output${live ? " output-live" : ""}`}>{stripAnsi(text) || (live ? "…" : "(no output)")}</pre>;
 }
 
+// Cancel (queued: it never runs) or Stop (running: SIGINT to its process
+// group, SIGTERM 30 s later), for whoever may change things; each asks once.
+// `onDone`: the job's own reads (its watcher) are refreshed after.
+export function JobControl({ job, onDone }: { job: JobSummary; onDone?: () => void }) {
+  const operator = canOperate(useMe());
+  const [asking, setAsking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (!operator || (job.state !== "queued" && job.state !== "running")) return null;
+  if (job.cancelled) return null; // asked: jobResult says it is under way
+  const queued = job.state === "queued";
+  const go = async () => {
+    setAsking(false);
+    const r = await cancelJob(job.id);
+    setError(r.status >= 400 ? (r.error ?? `HTTP ${r.status}`) : null);
+    reloadAll();
+    onDone?.();
+  };
+  return (
+    <span className="job-control" onClick={(e) => e.stopPropagation()}>
+      {asking ? (
+        <>
+          <span className="small">{queued ? "Cancel it? It never runs." : "Stop it? Its process group gets SIGINT (it cleans up), SIGTERM 30 s later."}</span>{" "}
+          <button className="btn btn-small btn-danger" onClick={() => void go()}>{queued ? "Cancel the job" : "Stop the job"}</button>{" "}
+          <button className="btn btn-small" onClick={() => setAsking(false)}>No</button>
+        </>
+      ) : (
+        <button className="btn btn-small" onClick={() => setAsking(true)} title={queued ? "Take it out of the queue: it never runs" : "Stop it: SIGINT to its process group"}>{queued ? "Cancel" : "Stop"}</button>
+      )}
+      {error ? <span className="small ff-error"> {error}</span> : null}
+    </span>
+  );
+}
+
 function JobDetail({ id }: { id: string }) {
   const job = useJob(id);
   if (!job) return <p className="muted small">reading the job…</p>;
   return (
     <div className="job-detail">
       {job.refused ? <p className="readstate readstate-fail">{job.refused}</p> : null}
+      {job.cancelled ? <p className="readstate readstate-warn">{job.cancelled.was === "queued" ? "Cancelled" : "Stopped"} by {job.cancelled.by ?? "?"} at {when(job.cancelled.at)}{job.cancelled.was === "queued" ? ": it never ran." : `: ${job.cancelled.signals.join(", then ")} to its process group.`}</p> : null}
       {job.interrupted ? <p className="readstate readstate-fail">The console stopped while this job {job.started ? "ran" : "waited"}: cut off, no exit code. Check what it left and run it again.</p> : null}
       {job.previewPhase ? (
         <>
@@ -119,7 +155,7 @@ export function JobList({ jobs, empty }: { jobs: JobSummary[]; empty?: string })
               </td>
               <td className="nowrap"><span className={`kind kind-${j.kind}`}>{j.kind}</span>{j.previewPhase ? <span className="muted small" title="previewed and applied in one job"> after preview</span> : null}</td>
               <td className="mono wrap">{quote(j.ran ?? j.argv)}</td>
-              <td className="nowrap"><Tag level={jobLevel(j)} /> {jobResult(j)} <span className="muted">{duration(j.durationMs)}</span></td>
+              <td className="nowrap"><Tag level={jobLevel(j)} /> {jobResult(j)} <span className="muted">{duration(j.durationMs)}</span> <JobControl job={j} /></td>
               <td className="muted">{open === j.id ? "▾" : "▸"}</td>
             </tr>
             {open === j.id ? (

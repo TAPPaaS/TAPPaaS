@@ -14,6 +14,7 @@ import { Step, StepView } from "../operate";
 import { TargetValue, TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
 import { Dot, canOperate, useMe } from "../ui";
+import { Wizard } from "../wizard";
 import { PASSPHRASE_TEXT, SiteSsid, StepSpec, WifiPlan, WifiZone, broadcastText, defaultSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, wifiSpecs } from "../wizards";
 import { SecretStatus, StepRow } from "./Setup";
 
@@ -96,104 +97,102 @@ export function WifiWizard({ zones, zone, site, onClose, prefill }: { zones: Wif
   const current = !plan ? "network" : !declareDone ? "declare" : !passOk ? "passphrase" : !reconciled ? "reconcile" : "result";
   const passProblem = pass ? passphraseProblem(pass) : null;
 
+  // Declared but not yet on the access points: closing leaves it so, and
+  // reopening starts at the network again (Day 1 lists a passphrase not set).
+  const left = (removed || declared || passDone) && !reconciled ? `${plan?.ssid ?? "the SSID"} is declared but no access point is programmed yet; reopening starts again at the network.` : null;
+
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={`${change ? "Change" : "Add"} WiFi for ${z.zone}`}>
-        <header className="modal-head">
-          <h2>{change ? "Change" : "Add"} WiFi for {z.zone}</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        <p className="small">{WIFI_TEXT}</p>
-        <ol className="setup">
-          <StepRow s={stages[0]} open={current === "network"}>
+    <Wizard title={`${change ? "Change" : "Add"} WiFi for ${z.zone}`} onClose={onClose} progress={left}>
+      <p className="small">{WIFI_TEXT}</p>
+      <ol className="setup">
+        <StepRow s={stages[0]} open={current === "network"}>
+          <div className="form">
+            <label className="form-row">
+              <span>zone *</span>
+              <select value={z.zone} disabled={plan !== null} onChange={(e) => setZoneName(e.target.value)}>
+                {zones.map((x) => (
+                  <option key={x.zone} value={x.zone}>{x.zone} ({x.type}{x.vlan !== null ? `, VLAN ${x.vlan}` : ""}){x.ssid ? ` — ${x.ssid.name}` : " — no SSID"}</option>
+                ))}
+              </select>
+              <small className="muted">Every active Client, Guest and IoT zone; devices that join land on its VLAN.</small>
+            </label>
+            <label className="form-row">
+              <span>SSID *</span>
+              <input type="text" value={name} disabled={plan !== null} onChange={(e) => setTyped(e.target.value)} />
+              {problem ? <small className="ff-error">{problem}</small> : <small className="muted">The network's name as devices see it.{typed === null && !old ? ` Proposed as ${site ? "<site>-" : ""}<zone>; name it as you like.` : ""}{z.declared && z.declared !== ssid && z.declared !== old?.name ? ` zones.json names ${z.declared} for this zone.` : ""}{old && old.name !== ssid ? ` Replaces ${old.name}: one SSID per zone.` : ""}</small>}
+            </label>
+            <label className="form-row">
+              <span>security *</span>
+              <select value={security} disabled={plan !== null} onChange={(e) => setChosen(e.target.value)}>
+                {securities.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+              <small className="muted">{personal ? "A WPA passphrase every device types (stage 3)." : /enterprise/.test(security) ? "Each user logs in through RADIUS (the access point's RADIUS profile)." : "Open: anyone in range joins the zone."}</small>
+            </label>
+          </div>
+          <div className="actions">
+            {plan ? (
+              <button className="btn" disabled={removed || declared || passDone} onClick={() => setPlan(null)}>Edit</button>
+            ) : (
+              <button className="btn btn-primary" disabled={problem !== null} onClick={() => setPlan({ ssid, zone: z.zone, vlan: z.vlan, security, old })}>
+                Continue
+              </button>
+            )}
+            {!plan && problem ? <span className="muted small">name the SSID</span> : null}
+          </div>
+        </StepRow>
+        <StepRow s={stages[1]} open={current === "declare"}>
+          {steps ? (
+            <>
+              {steps.remove ? <StepView key={`r-${JSON.stringify(plan)}`} step={steps.remove} me={me} onDone={(ok) => ok && setRemoved(true)} /> : null}
+              {steps.declare && (!steps.remove || removed) ? <StepView key={`d-${JSON.stringify(plan)}`} step={steps.declare} me={me} onDone={(ok) => ok && setDeclared(true)} /> : null}
+              {steps.declare && steps.remove && !removed ? <p className="muted small">Next: ap-manager ssid add {plan!.ssid} — once {plan!.old!.name} is removed.</p> : null}
+              {!steps.declare && !steps.remove ? <p className="muted small">{plan!.ssid} stays as it is; go on to its passphrase or the reconcile.</p> : null}
+            </>
+          ) : (
+            <p className="muted small">Once the network is chosen.</p>
+          )}
+        </StepRow>
+        <StepRow s={stages[2]} open={current === "passphrase"}>
+          {!plan || !declareDone ? (
+            <p className="muted small">Once the SSID is declared.</p>
+          ) : !passRequired ? (
+            <p className="muted small">{plan.security} takes no passphrase.</p>
+          ) : (
             <div className="form">
               <label className="form-row">
-                <span>zone *</span>
-                <select value={z.zone} disabled={plan !== null} onChange={(e) => setZoneName(e.target.value)}>
-                  {zones.map((x) => (
-                    <option key={x.zone} value={x.zone}>{x.zone} ({x.type}{x.vlan !== null ? `, VLAN ${x.vlan}` : ""}){x.ssid ? ` — ${x.ssid.name}` : " — no SSID"}</option>
-                  ))}
-                </select>
-                <small className="muted">Every active Client, Guest and IoT zone; devices that join land on its VLAN.</small>
-              </label>
-              <label className="form-row">
-                <span>SSID *</span>
-                <input type="text" value={name} disabled={plan !== null} onChange={(e) => setTyped(e.target.value)} />
-                {problem ? <small className="ff-error">{problem}</small> : <small className="muted">The network's name as devices see it.{typed === null && !old ? ` Proposed as ${site ? "<site>-" : ""}<zone>; name it as you like.` : ""}{z.declared && z.declared !== ssid && z.declared !== old?.name ? ` zones.json names ${z.declared} for this zone.` : ""}{old && old.name !== ssid ? ` Replaces ${old.name}: one SSID per zone.` : ""}</small>}
-              </label>
-              <label className="form-row">
-                <span>security *</span>
-                <select value={security} disabled={plan !== null} onChange={(e) => setChosen(e.target.value)}>
-                  {securities.map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-                <small className="muted">{personal ? "A WPA passphrase every device types (stage 3)." : /enterprise/.test(security) ? "Each user logs in through RADIUS (the access point's RADIUS profile)." : "Open: anyone in range joins the zone."}</small>
+                <span>passphrase {state === "set" || state === "changed" ? "" : "*"}</span>
+                <span className="toolbar">
+                  <input type="password" autoComplete="new-password" placeholder={state === "set" || state === "changed" ? "kept — type a new one to replace it" : "8 to 63 characters"} value={pass} onChange={(e) => setPass(e.target.value)} />
+                  <button className="btn btn-primary" disabled={!pass || passProblem !== null || !canOperate(me)} onClick={() => void savePass()}>Save the passphrase</button>
+                </span>
+                <small className="muted">
+                  {state ? <><Dot level={state === "not set" ? "warn" : "pass"} /> {plan.ssid}: {PASSPHRASE_TEXT[state]}. </> : null}
+                  {passProblem ? <span className="ff-error">{passProblem}. </span> : null}
+                  ap-manager stores it in ~/.wlan-secrets.txt (mode 600) and the reconcile pushes it to every access point that broadcasts {plan.ssid}; never shown again and never in a command.
+                </small>
+                {msg ? <small className="small">{msg}</small> : null}
               </label>
             </div>
-            <div className="actions">
-              {plan ? (
-                <button className="btn" disabled={removed || declared || passDone} onClick={() => setPlan(null)}>Edit</button>
-              ) : (
-                <button className="btn btn-primary" disabled={problem !== null} onClick={() => setPlan({ ssid, zone: z.zone, vlan: z.vlan, security, old })}>
-                  Continue
-                </button>
-              )}
-              {!plan && problem ? <span className="muted small">name the SSID</span> : null}
-            </div>
-          </StepRow>
-          <StepRow s={stages[1]} open={current === "declare"}>
-            {steps ? (
-              <>
-                {steps.remove ? <StepView key={`r-${JSON.stringify(plan)}`} step={steps.remove} me={me} onDone={(ok) => ok && setRemoved(true)} /> : null}
-                {steps.declare && (!steps.remove || removed) ? <StepView key={`d-${JSON.stringify(plan)}`} step={steps.declare} me={me} onDone={(ok) => ok && setDeclared(true)} /> : null}
-                {steps.declare && steps.remove && !removed ? <p className="muted small">Next: ap-manager ssid add {plan!.ssid} — once {plan!.old!.name} is removed.</p> : null}
-                {!steps.declare && !steps.remove ? <p className="muted small">{plan!.ssid} stays as it is; go on to its passphrase or the reconcile.</p> : null}
-              </>
-            ) : (
-              <p className="muted small">Once the network is chosen.</p>
-            )}
-          </StepRow>
-          <StepRow s={stages[2]} open={current === "passphrase"}>
-            {!plan || !declareDone ? (
-              <p className="muted small">Once the SSID is declared.</p>
-            ) : !passRequired ? (
-              <p className="muted small">{plan.security} takes no passphrase.</p>
-            ) : (
-              <div className="form">
-                <label className="form-row">
-                  <span>passphrase {state === "set" || state === "changed" ? "" : "*"}</span>
-                  <span className="toolbar">
-                    <input type="password" autoComplete="new-password" placeholder={state === "set" || state === "changed" ? "kept — type a new one to replace it" : "8 to 63 characters"} value={pass} onChange={(e) => setPass(e.target.value)} />
-                    <button className="btn btn-primary" disabled={!pass || passProblem !== null || !canOperate(me)} onClick={() => void savePass()}>Save the passphrase</button>
-                  </span>
-                  <small className="muted">
-                    {state ? <><Dot level={state === "not set" ? "warn" : "pass"} /> {plan.ssid}: {PASSPHRASE_TEXT[state]}. </> : null}
-                    {passProblem ? <span className="ff-error">{passProblem}. </span> : null}
-                    ap-manager stores it in ~/.wlan-secrets.txt (mode 600) and the reconcile pushes it to every access point that broadcasts {plan.ssid}; never shown again and never in a command.
-                  </small>
-                  {msg ? <small className="small">{msg}</small> : null}
-                </label>
-              </div>
-            )}
-          </StepRow>
-          <StepRow s={stages[3]} open={current === "reconcile"}>
-            {steps && declareDone && passOk ? <StepView step={steps.reconcile} me={me} onDone={(ok) => ok && setReconciled(true)} /> : <p className="muted small">Once the SSID is declared{passRequired ? " and its passphrase kept" : ""}.</p>}
-          </StepRow>
-          <StepRow s={stages[4]} open={current === "result"}>
-            {live && live.zone === z.zone ? (
-              <ul className="plain checks">
-                <li>
-                  <Dot level={live.disabled ? "skip" : "pass"} /> <b>{live.name}</b> → zone {live.zone}{typeof live.vlan === "number" ? ` (VLAN ${live.vlan})` : ""} · {live.security} · on {broadcastText(live)} · passphrase {PASSPHRASE_TEXT[passphraseOf(live)]}
-                </li>
-              </ul>
-            ) : (
-              <p className="muted small">No SSID bridges to {z.zone} yet.</p>
-            )}
-          </StepRow>
-        </ol>
-      </div>
-    </div>
+          )}
+        </StepRow>
+        <StepRow s={stages[3]} open={current === "reconcile"}>
+          {steps && declareDone && passOk ? <StepView step={steps.reconcile} me={me} onDone={(ok) => ok && setReconciled(true)} /> : <p className="muted small">Once the SSID is declared{passRequired ? " and its passphrase kept" : ""}.</p>}
+        </StepRow>
+        <StepRow s={stages[4]} open={current === "result"}>
+          {live && live.zone === z.zone ? (
+            <ul className="plain checks">
+              <li>
+                <Dot level={live.disabled ? "skip" : "pass"} /> <b>{live.name}</b> → zone {live.zone}{typeof live.vlan === "number" ? ` (VLAN ${live.vlan})` : ""} · {live.security} · on {broadcastText(live)} · passphrase {PASSPHRASE_TEXT[passphraseOf(live)]}
+              </li>
+            </ul>
+          ) : (
+            <p className="muted small">No SSID bridges to {z.zone} yet.</p>
+          )}
+        </StepRow>
+      </ol>
+    </Wizard>
   );
 }
 
