@@ -2,7 +2,7 @@
 // D4): the switch ports a new node can be cabled to, the trunk a hand-configured
 // port needs, and the data pool proposed from the node's free disks.
 
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES } from "../../web/src/nodeadd";
+import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort } from "../../web/src/nodeadd";
 import { StorageDisk, TopoPort, TopoSwitch } from "../../web/src/types";
 import { check, done } from "./check";
 
@@ -60,6 +60,21 @@ check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && h
   check(writeProgress(out)?.pct === 41 && writeProgress(out)?.text === "41% — 734 of 1763 MB  24.5 MB/s, about 40 s left", "the last percent line is where the write is");
   check(writeProgress("writing x\n") === null, "no percent line yet: nothing to show");
   check(writeProgress(out + "flushed; ejecting the stick\n")?.pct === 100, "the flush is the end");
+}
+
+// A node's uplinks (stages 5a and 5b), as tappaas4's read showed them.
+{
+  const np = (name: string, mac: string, state: string, speed: number, lldp: NodePort["lldp"] = null): NodePort => ({ name, mac, state, speed, usb: false, lldp });
+  const e1 = np("enp4s0", "m:87", "up", 2500, { chassis: "c", name: "USW-Pro-XG-10-PoE", port: "Port 1" });
+  const e2 = np("enp5s0", "m:88", "up", 10000, { chassis: "c", name: "USW-Pro-XG-10-PoE", port: "Port 8" });
+  const w = np("eno1", "m:8c", "down", -1);
+  const net: NodeNetwork = { node: "tappaas4", live: { ports: [w, e1, e2], lan: { mode: "single", bond: "", members: [e1] }, wan: { members: [w] } }, declared: { lan: { ports: ["m:87"] }, wan: { ports: ["m:8c"] } }, findings: [] };
+  check(portLabel(e1) === "enp4s0 · up 2.5G · USW-Pro-XG-10-PoE Port 1" && portLabel(w) === "eno1 · no link", "a port says its link and the switch port behind it");
+  check(lanCandidates(net).map((p) => p.name).join() === "enp5s0", "a lan leg comes from neither lan nor the WAN");
+  check(wanCandidates(net).map((p) => p.name).join() === "eno1,enp5s0", "the WAN takes any port lan does not have");
+  check(wanPort(net)?.name === "eno1" && wanPort({ ...net, declared: { lan: net.declared!.lan } }) === null, "the declared WAN port, or none");
+  const choices = [{ value: "USW Pro XG 10 PoE:8", label: "" }, { value: "USW Pro XG 10 PoE:10", label: "" }];
+  check(lldpSwitchPort(e2, choices) === "USW Pro XG 10 PoE:8" && lldpSwitchPort(w, choices) === null, "LLDP's switch port is preselected when it is a free one");
 }
 
 done("nodeadd");

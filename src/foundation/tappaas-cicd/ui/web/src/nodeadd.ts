@@ -106,3 +106,60 @@ export function writeProgress(output: string): { pct: number; text: string } | n
   }
   return last;
 }
+
+// ── a node's uplinks (Add node's stages 5a and 5b) ─────────────────────
+// site-manager node network show --json, as the console reads it.
+export interface NodePort {
+  name: string; mac: string; state: string; speed: number; usb: boolean;
+  lldp: { chassis: string; name: string; port: string } | null;
+}
+export interface NodeNetwork {
+  node: string;
+  live: { ports: NodePort[]; lan: { mode: string; bond: string; members: NodePort[] }; wan: { members: NodePort[] } } | null;
+  declared: { lan?: { ports: string[]; mode?: string }; wan?: { ports: string[] } } | null;
+  findings: { level?: string; text?: string }[];
+}
+
+export const portSpeed = (s: number): string => (s <= 0 ? "" : s >= 1000 ? `${s / 1000}G` : `${s}M`);
+
+// "enp5s0 · up 10G · USW-Pro-XG-10-PoE Port 3": the name, the link, and the
+// switch port LLDP sees behind it.
+export function portLabel(p: NodePort): string {
+  const link = p.state === "up" ? `up ${portSpeed(p.speed)}`.trim() : "no link";
+  return [p.name, link, p.lldp ? `${p.lldp.name} ${p.lldp.port}` : ""].filter(Boolean).join(" · ");
+}
+
+// The ports a lan leg can be added from: physical, not lan's already and not
+// the WAN's (declared or live).
+export function lanCandidates(n: NodeNetwork): NodePort[] {
+  const lan = new Set((n.live?.lan.members ?? []).map((p) => p.mac));
+  const wan = new Set([...(n.declared?.wan?.ports ?? []), ...(n.live?.wan.members ?? []).map((p) => p.mac)]);
+  return (n.live?.ports ?? []).filter((p) => !p.usb && !lan.has(p.mac) && !wan.has(p.mac));
+}
+
+// The ports the WAN can take: physical and not lan's.
+export function wanCandidates(n: NodeNetwork): NodePort[] {
+  const lan = new Set((n.live?.lan.members ?? []).map((p) => p.mac));
+  return (n.live?.ports ?? []).filter((p) => !p.usb && !lan.has(p.mac));
+}
+
+// The declared WAN port, as the node has it.
+export function wanPort(n: NodeNetwork): NodePort | null {
+  const mac = n.declared?.wan?.ports?.[0];
+  if (!mac) return null;
+  return (n.live?.ports ?? []).find((p) => p.mac === mac) ?? { name: mac, mac, state: "unknown", speed: -1, usb: false, lldp: null };
+}
+
+// The switch port LLDP sees behind a node port, as a --switch-port value
+// among the choices: LLDP says "USW-Pro-XG-10-PoE" / "Port 3", the switch
+// registry "USW Pro XG 10 PoE" / "3".
+export function lldpSwitchPort(p: NodePort | undefined, choices: PortChoice[]): string | null {
+  if (!p?.lldp) return null;
+  const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const num = p.lldp.port.replace(/^\D+/, "");
+  const hit = choices.find((c) => {
+    const i = c.value.lastIndexOf(":");
+    return norm(c.value.slice(0, i)) === norm(p.lldp!.name) && (c.value.slice(i + 1) === num || norm(c.value.slice(i + 1)) === norm(p.lldp!.port));
+  });
+  return hit?.value ?? null;
+}

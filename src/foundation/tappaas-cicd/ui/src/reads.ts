@@ -89,6 +89,7 @@ export const TTL = {
   ipv6: 10 * MIN,
   nodeProgress: 10_000, // while a node is being added
   nodeUsb: 5_000, // the sticks in a node, while a wizard looks
+  nodeNetwork: 10_000, // a node's uplinks, while Add node's stage 5 looks
   media: 10_000, // the boot medium on the mothership, while Add a node looks
   drift: 0, // on demand
 };
@@ -139,6 +140,19 @@ export interface NodeUsb {
   node: string;
   reachable: boolean;
   sticks: { device: string; size: number; vendor: string | null; model: string | null; serial: string | null; inUse: boolean; why: string | null; keyStick: boolean }[];
+}
+
+// site-manager node network show <node> --json: its ports (state, speed, the
+// switch port LLDP sees), the lan and wan uplinks declared and live.
+export interface NodePort {
+  name: string; mac: string; state: string; speed: number; usb: boolean;
+  lldp: { chassis: string; name: string; port: string } | null;
+}
+export interface NodeNetwork {
+  node: string;
+  live: { ports: NodePort[]; lan: { mode: string; bond: string; members: NodePort[] }; wan: { members: NodePort[] }; corosync: { links: number; disconnected: number } | null } | null;
+  declared: { lan?: { ports: string[]; mode?: string; primary?: string }; wan?: { ports: string[] } } | null;
+  findings: { level?: string; text?: string }[];
 }
 
 // site-manager node media --json: the boot medium on the mothership (the
@@ -217,6 +231,7 @@ export class Reads {
   readonly schemas: CachedMap<Record<string, unknown>>;
   readonly nodeProgress: CachedMap<NodeProgress>;
   readonly nodeUsb: CachedMap<NodeUsb>;
+  readonly nodeNetwork: CachedMap<NodeNetwork>;
   readonly media: Cached<BootMedia>;
   readonly catalogs: Cached<RepositoryCatalog[]>;
   readonly faceplates: Cached<{ key: string; kind: string; units: number; width: string; site?: boolean }[]>;
@@ -317,6 +332,13 @@ export class Reads {
     this.nodeUsb = new CachedMap("node-usb", TTL.nodeUsb, async (n) => {
       const d = await j<NodeUsb>("site-manager", ["node", "usb", n, "--json"], [0], 30_000);
       if (!d || typeof d.reachable !== "boolean" || !Array.isArray(d.sticks)) throw new Error(`site-manager node usb ${n} --json gave no sticks (no reachable, sticks)`);
+      return d;
+    }, now);
+    // A node's uplinks (site-manager node network show --json): what Add node's
+    // lan and WAN stages offer and show.
+    this.nodeNetwork = new CachedMap("node-network", TTL.nodeNetwork, async (n) => {
+      const d = await j<NodeNetwork>("site-manager", ["node", "network", "show", n, "--json"], [0], 60_000);
+      if (!d || typeof d.node !== "string") throw new Error(`site-manager node network show ${n} --json gave no node`);
       return d;
     }, now);
     // The boot medium on the mothership (site-manager node media --json): what

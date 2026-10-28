@@ -224,9 +224,11 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.identity.get()));
       case "nodes": {
         // A node being added: GET nodes/<name>/progress, every ten seconds at
-        // most; nodes/<name>/usb: the USB sticks in it (site-manager node usb).
-        if (!a || !NODE_NAME.test(a) || (b !== "progress" && b !== "usb")) return sendJson(res, 404, { error: "nodes/<name>/progress | nodes/<name>/usb" });
+        // most; nodes/<name>/usb: the USB sticks in it (site-manager node usb);
+        // nodes/<name>/network: its ports and uplinks (node network show).
+        if (!a || !NODE_NAME.test(a) || (b !== "progress" && b !== "usb" && b !== "network")) return sendJson(res, 404, { error: "nodes/<name>/progress | nodes/<name>/usb | nodes/<name>/network" });
         if (b === "usb") return sendJson(res, 200, envelope(await r.nodeUsb.of(a).get()));
+        if (b === "network") return sendJson(res, 200, envelope(await r.nodeNetwork.of(a).get()));
         return sendJson(res, 200, envelope(await r.nodeProgress.of(a).get()));
       }
       case "catalogs":

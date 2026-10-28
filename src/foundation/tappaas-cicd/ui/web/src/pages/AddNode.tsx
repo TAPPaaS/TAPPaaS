@@ -12,8 +12,10 @@
 // or the USB stick, by hand; 3 the install and the join, watched live (the provisioning
 // registration, the PXE window, the cluster, the node's pvehost record, and the
 // job's own output); 4 its data pools, proposed from its free disks (node
-// storage add); 5 its lan uplink (node network set, then node network test,
-// each previewed); 6 the node in the physical view.
+// storage add); 5a a second lan port — the bond, its switch port, then the
+// failover test (node network set, node network test); 5b its WAN port, for a
+// node that may carry the firewall (pages/NodeUplinks.tsx); 6 the node in the
+// physical view.
 
 import { useMemo, useState } from "react";
 import { useJob, useRead } from "../api";
@@ -25,6 +27,7 @@ import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
 import { manualTrunkText, nodeTrunkVlans, switchPortChoices, writeProgress } from "../nodeadd";
 import { NodePools } from "../physical/nodepools";
+import { LanUplink, WanUplink } from "./NodeUplinks";
 import { Dot, Link, canOperate, useMe } from "../ui";
 import { UsbStickPicker, gb } from "../usbsticks";
 import { StepRow } from "./Setup";
@@ -96,8 +99,8 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   const name = typed ?? firstFreeNode(known);
   const [job, setJob] = useState<string | null>(null);
   const [ended, setEnded] = useState<boolean | null>(null);
-  const [uplinkSet, setUplinkSet] = useState(false);
-  const [tested, setTested] = useState(false);
+  const [lanDone, setLanDone] = useState(false);
+  const [wanDone, setWanDone] = useState(false);
   const [pooled, setPooled] = useState(false);
   const [skipPools, setSkipPools] = useState(false);
   // Stage 0: the installer stick written by a node (site-manager node usb write).
@@ -173,35 +176,6 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
     }),
     [name, valid, options, ports, trunk, known, job],
   );
-  const set: Step = useMemo(
-    () => ({
-      title: `site-manager node network set ${name}`,
-      bin: "site-manager",
-      verb: "node network set",
-      fixed: [name],
-      hide: ["--config-only"],
-      choices: { "--lan-mode": ["active-backup", "lacp"] },
-      placeholders: { "--lan-ports": "e.g. enp2s0f0,enp2s0f1 (names or MACs)", "--lan-primary": "e.g. enp2s0f0 — empty: the fastest", "--mtu": "e.g. 9000 — empty: as now", "--switch-wait": "seconds, 30–1800 (default 30)" },
-      note: (
-        <>
-          <p>The node carries the management network, the cluster link and every guest's VLANs on its lan uplink. Declare which ports form it (one port, or two bonded as <span className="mono">lanbond</span>), preview, then apply; the failover test after it proves that losing either port keeps the node reachable. For lacp, configure the LAG on the switch side first (Site › Device, the switch's ports).</p>
-          <p>The preview writes the declaration into the node's config on the mothership (<span className="mono">config/&lt;node&gt;.json</span>) and checks it on the node, which it does not change. Apply moves lan onto the declared ports: the node is drained first (its HA guests move away), the change runs under a 45-second rollback, the mothership confirms it, and the node comes back.</p>
-        </>
-      ),
-    }),
-    [name],
-  );
-  const test: Step = useMemo(
-    () => ({
-      title: `site-manager node network test ${name}`,
-      bin: "site-manager",
-      verb: "node network test",
-      fixed: [name],
-      note: "The preview says what the test will do. Apply drains the node, then takes each lan port down for ten seconds in turn: the management network and the cluster link must stay up. A timer on the node restores a port after 30 seconds whatever happens.",
-    }),
-    [name],
-  );
-
   // Stage 0: the medium built on the mothership when it is missing or stale.
   const prepare: Step = useMemo(
     () => ({
@@ -244,10 +218,11 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
     { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto a ZFS boot pool, the node joins the cluster, is patched and rebooted, and is registered as a pvehost instance." },
     { id: "storage", title: "4 · Define data pools", required: false, done: pooled ? true : null, detail: "Until it has one, its guests go to the boot pool. Proposed from its free disks." },
-    { id: "uplink", title: "5 · Define extra lan and WAN uplinks", required: false, done: tested ? true : uplinkSet ? null : false, detail: "Which ports carry lan, and the WAN port if the node may carry the firewall; then the failover test — each previewed first." },
+    { id: "lan", title: "5a · A second lan port (bond, then the failover test)", required: false, done: lanDone ? true : null, detail: "lan carries management, the cluster link and every guest: a second port, bonded, keeps the node reachable when one fails. Its switch port is set up with it, and the failover test proves it." },
+    { id: "wan", title: "5b · The WAN port", required: false, done: wanDone ? true : null, detail: "Only for a node that may carry the firewall: the port, and optionally the switch port, for its WAN." },
     { id: "done", title: "6 · Place the machine correctly in the physical view", required: false, done: joined, detail: "Its location, room and rack: where the machine actually stands." },
   ];
-  const current = !underway ? "declare" : !progress || progress.registration === "pending" ? "boot" : !joined ? "wait" : !pooled && !skipPools ? "storage" : !tested ? "uplink" : "done";
+  const current = !underway ? "declare" : !progress || progress.registration === "pending" ? "boot" : !joined ? "wait" : !pooled && !skipPools ? "storage" : !lanDone ? "lan" : !wanDone ? "wan" : "done";
 
   return (
     <div className="modal-back" onClick={onClose}>
@@ -385,19 +360,13 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           <StepRow s={steps[4]} open={current === "storage"}>
             {joined ? <NodePools node={name} onContinue={(n) => (n > 0 ? setPooled(true) : setSkipPools(true))} /> : <p className="muted small">Once the node has joined.</p>}
           </StepRow>
-          <StepRow s={steps[5]} open={current === "uplink"}>
-            {joined || !underway ? (
-              valid ? (
-                <>
-                  <StepView step={set} me={me} onDone={(ok) => ok && setUplinkSet(true)} />
-                  <StepView step={test} me={me} onDone={(ok) => ok && setTested(true)} />
-                </>
-              ) : <p className="muted small">Name the node in stage 1 first.</p>
-            ) : (
-              <p className="muted small">Once the node has joined.</p>
-            )}
+          <StepRow s={steps[5]} open={current === "lan"}>
+            {joined ? <LanUplink node={name} onDone={() => setLanDone(true)} /> : <p className="muted small">Once the node has joined.</p>}
           </StepRow>
-          <StepRow s={steps[6]} open={current === "done"}>
+          <StepRow s={steps[6]} open={current === "wan"}>
+            {joined ? <WanUplink node={name} onDone={() => setWanDone(true)} /> : <p className="muted small">Once the node has joined.</p>}
+          </StepRow>
+          <StepRow s={steps[7]} open={current === "done"}>
             {valid ? (
               <p className="small">
                 <Link to={viewLink("rack", `node:${name}`)}>Open {name} in the physical view →</Link> — select it there and use <b>Place…</b> to put it in its room and rack. {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}
