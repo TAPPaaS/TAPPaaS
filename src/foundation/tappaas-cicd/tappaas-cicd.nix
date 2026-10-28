@@ -448,6 +448,10 @@ in
         # its timestamp under /run/sudo. "-": absent until first used.
         "-/var/lib/tappaas-pxe"
         "-/run/sudo"
+        # `backup-manager key export --usb` records which keys the stick now
+        # holds (usb-copy.json, beside the escrow, tappaas's): without it the
+        # write succeeds but the backup-keys gate keeps asking for a stick.
+        "-/etc/secrets/backup-fs"
       ];
       ReadOnlyPaths = [
         "-/home/tappaas/.ssh/authorized_keys"

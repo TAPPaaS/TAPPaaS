@@ -53,7 +53,7 @@ export function BackupKeysWizard({ onClose }: { onClose: () => void }) {
   const stages = [
     { id: "stick", title: "1 · The stick", required: true, done: plan !== null, detail: "A USB stick in a node. Everything on it is erased — except on a TAPPaaS key stick written before, where only the keys are replaced." },
     { id: "write", title: "2 · The password, then the write", required: true, done: written !== null, detail: "The keys are encrypted with it (AES-256, PBKDF2) onto the stick, read back and compared, and the stick is ejected. The password is never shown again and never in a command." },
-    { id: "status", title: "3 · The keys off-site", required: false, done: written !== null ? (gate ? gate.status === "pass" : null) : null, detail: "What the backup-keys health gate says: whether a stick holds the keys as they are now." },
+    { id: "status", title: "3 · Recorded, and watched from now on", required: false, done: written !== null ? (gate ? gate.status === "pass" : null) : null, detail: "TAPPaaS records which keys the stick holds. From now on the health check warns whenever a key changes after this stick was written (a new node, a rotation), so you know to write it again." },
   ];
   const current = !plan ? "stick" : !written ? "write" : "status";
 
@@ -118,7 +118,9 @@ export function BackupKeysWizard({ onClose }: { onClose: () => void }) {
           </StepRow>
           <StepRow s={stages[2]} open={current === "status"}>
             {gate ? (
-              <p className="small"><Tag level={gate.status} /> <b>backup-keys</b> {gate.detail}</p>
+              <p className="small">
+                <Tag level={gate.status} /> {gate.status === "pass" ? <>The record matches the escrow: {gate.detail}.</> : written ? <>The record was not updated by this write, so the check still sees the stick written before: {gate.detail}. The last lines of stage 2 say why; the stick itself was read back and is good.</> : <>{gate.detail}</>}
+              </p>
             ) : (
               <p className="muted small">{health.env ? "No backup-keys gate in the last health check." : "Reading the health…"}</p>
             )}
