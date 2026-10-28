@@ -383,7 +383,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
             ) : null}
           </StepRow>
           <StepRow s={steps[4]} open={current === "storage"}>
-            {joined ? <NodePools node={name} onAdded={() => setPooled(true)} onSkip={() => setSkipPools(true)} /> : <p className="muted small">Once the node has joined.</p>}
+            {joined ? <NodePools node={name} onContinue={(n) => (n > 0 ? setPooled(true) : setSkipPools(true))} /> : <p className="muted small">Once the node has joined.</p>}
           </StepRow>
           <StepRow s={steps[5]} open={current === "uplink"}>
             {joined || !underway ? (
