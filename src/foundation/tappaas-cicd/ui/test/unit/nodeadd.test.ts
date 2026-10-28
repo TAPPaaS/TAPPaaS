@@ -22,13 +22,14 @@ const switches = [
     port("4", { type: "node", target: { kind: "node", name: "tappaas4", port: null } }),
     port("11", { lag: "l1" }), port("12", { lagLead: "11" }),
     port("10", { link: "down" }),
+    port("9", { target: { kind: "switch", name: "crs-b", port: "sfp-sfpplus15" }, link: "up" }),
   ]),
   sw("closet", "manual", [port("1")]),
 ];
 const c = switchPortChoices(switches, "tappaas4");
 check(c.map((x) => x.value).join() === "USW Pro XG 10 PoE:4,USW Pro XG 10 PoE:1,USW Pro XG 10 PoE:10,USW Pro XG 10 PoE:3",
   `the node's own port first, then free ports without a link, then with one (${c.map((x) => x.value).join()})`);
-check(!c.some((x) => /:2$|:11$|:12$/.test(x.value)), "another node's port and an aggregate's are not offered");
+check(!c.some((x) => /:2$|:9$|:11$|:12$/.test(x.value)), "another node's port, an inter-switch link and an aggregate's are not offered");
 check(!c.some((x) => x.value.startsWith("closet")), "a switch configured by hand offers no port");
 check(c[1].label.includes("parked") && c[3].label.includes("link up"), "each says what it is");
 check(manualSwitches(switches).join() === "closet", "the switches configured by hand are named");

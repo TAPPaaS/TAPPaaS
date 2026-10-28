@@ -21,7 +21,9 @@ export function switchPortChoices(switches: TopoSwitch[], node: string): PortCho
     for (const p of sw.ports) {
       if (p.lag || p.lagLead) continue;
       const mine = p.type === "node" && p.target?.name === node;
-      if (p.type && !mine) continue;
+      // A port with a type, or with something cabled to it (another switch: an
+      // inter-switch link), is not free.
+      if ((p.type || p.target) && !mine) continue;
       const state = mine ? `${node}'s already` : p.parked ? "parked" : "unused";
       const link = p.link === "up" ? ", link up" : p.link === "down" ? ", no link" : "";
       out.push({ value: `${sw.name}:${p.port}`, label: `${sw.name} port ${p.port} — ${state}${link}`, rank: mine ? 0 : p.link === "up" ? 2 : 1 });
