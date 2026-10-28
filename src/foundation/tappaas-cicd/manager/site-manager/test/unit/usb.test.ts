@@ -20,6 +20,7 @@ const LSBLK = JSON.stringify({ blockdevices: [
   { name: "sda", path: "/dev/sda", size: 8001563222016, tran: "sata", type: "disk", vendor: "ATA     ", model: "ST8000VN004", serial: "ZA1" },
   { name: "sdb", path: "/dev/sdb", size: 30752000000, tran: "usb", type: "disk", vendor: "SanDisk ", model: "Ultra", serial: "4C530001" },
   { name: "sdc", path: "/dev/sdc", size: 15376000000, tran: "usb", type: "disk", vendor: " Kingston", model: "DataTraveler 3.0", serial: null },
+  { name: "sdd", path: "/dev/sdd", size: 0, tran: "usb", type: "disk", vendor: "Generic", model: "Flash Disk", serial: "3714649B" },
   { name: "sr0", path: "/dev/sr0", size: 1073741312, tran: "sata", type: "rom", vendor: "HL-DT-ST", model: "DVDRAM", serial: "X" },
   { name: "zd0", path: "/dev/zd0", size: 34359738368, tran: null, type: "disk", vendor: null, model: null, serial: null },
 ] });
@@ -32,8 +33,9 @@ const TREES: Record<string, string> = {
 const asked: string[] = [];
 const sticks = parseSticks(LSBLK, (dev) => { asked.push(dev); return TREES[dev] ?? ""; });
 
-check(sticks.map((s) => s.device).join(",") === "/dev/sdb,/dev/sdc", `only the USB disks are sticks (${sticks.map((s) => s.device).join(",")})`);
-check(asked.join(",") === "/dev/sdb,/dev/sdc", "the tree is asked for the sticks only, not the NVMe, the data disk or the zvol");
+check(sticks.map((s) => s.device).join(",") === "/dev/sdb,/dev/sdc,/dev/sdd", `only the USB disks are sticks (${sticks.map((s) => s.device).join(",")})`);
+check(asked.join(",") === "/dev/sdb,/dev/sdc", "the tree is asked for the sticks only, not the NVMe, the data disk, the zvol or an ejected stick");
+check(sticks[2].size === 0 && sticks[2].inUse && sticks[2].why === "ejected: unplug it and plug it in again" && !sticks[2].keyStick, "a stick with no medium (size 0) is ejected: listed, never written, no key stick");
 check(sticks[0].size === 30752000000 && sticks[0].vendor === "SanDisk" && sticks[0].model === "Ultra" && sticks[0].serial === "4C530001",
   "size in bytes, vendor and model trimmed of lsblk's padding, serial kept");
 check(sticks[1].serial === null && sticks[1].vendor === "Kingston", "no serial is null, not an empty string");

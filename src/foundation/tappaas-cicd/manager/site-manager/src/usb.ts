@@ -31,6 +31,8 @@ export function usbImagePath(): string {
 // The label keys-to-usb.sh gives the backup key stick's partition: that stick
 // is listed, marked, and the console will not propose it as an installer stick.
 export const KEY_STICK_LABEL = "TAPPAASKEYS";
+// What a stick with no medium is: ejected, until it is pulled and plugged in again.
+export const EJECTED = "ejected: unplug it and plug it in again";
 
 // What lsblk -J -b -d -o NAME,PATH,SIZE,TRAN,TYPE,VENDOR,MODEL,SERIAL says.
 export const LSBLK_STICKS = "lsblk -J -b -d -o NAME,PATH,SIZE,TRAN,TYPE,VENDOR,MODEL,SERIAL";
@@ -99,8 +101,12 @@ export function parseSticks(lsblkJson: string, treeOf: (device: string) => strin
   const sticks: UsbStick[] = [];
   for (const d of doc.blockdevices ?? []) {
     if (d.type !== "disk" || d.tran !== "usb" || !d.path) continue;
-    const tree = treeOf(d.path);
-    const why = inUseReason(tree);
+    // A stick ejected after a write (the key stick's and the installer stick's
+    // last step) stays listed by the kernel with no medium and size 0 until it
+    // is pulled and plugged in again: shown, with that said, never written.
+    const ejected = Number(d.size ?? 0) === 0;
+    const tree = ejected ? "" : treeOf(d.path);
+    const why = ejected ? EJECTED : inUseReason(tree);
     const trim = (s: string | null | undefined): string => (s ?? "").trim();
     sticks.push({
       device: d.path,
@@ -110,7 +116,7 @@ export function parseSticks(lsblkJson: string, treeOf: (device: string) => strin
       serial: trim(d.serial) || null,
       inUse: why !== null,
       why,
-      keyStick: isKeyStick(tree),
+      keyStick: !ejected && isKeyStick(tree),
     });
   }
   return sticks;
@@ -223,7 +229,11 @@ export function writeNodeUsb(node: string, device: string, yes: boolean): void {
       { stdio: [fd, "inherit", "pipe"], encoding: "utf8", maxBuffer: 16 * 1024 * 1024 });
   } finally { fs.closeSync(fd); }
   if (r.error) die(`node usb write: ssh could not be started: ${r.error.message}`);
-  if (r.status !== 0) die(`node usb write: dd to ${device} on ${node} failed (rc ${r.status}): ${(r.stderr ?? "").trim()} — the stick holds a partial image, write it again`);
+  if (r.status !== 0) {
+    const err = (r.stderr ?? "").trim();
+    if (/No medium found/i.test(err)) die(`node usb write: ${device} on ${node} is ejected (${err}): unplug it and plug it in again, nothing was written`);
+    die(`node usb write: dd to ${device} on ${node} failed (rc ${r.status}): ${err} — the stick holds a partial image, write it again`);
+  }
 
   // Flush and let it go, as the key stick's twin does; an eject that fails
   // (a stick that cannot be ejected) is no failure of the write.

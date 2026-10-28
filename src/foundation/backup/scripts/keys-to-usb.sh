@@ -132,7 +132,7 @@ for i in "${!cands[@]}"; do
     [[ "${d}" == "${DEVICE}" ]] && pick=$((i + 1))
 done
 if [[ -n "${DEVICE}" ]]; then
-    [[ -n "${pick}" ]] || usbk_die "${DEVICE} is not a USB stick on ${USBK_NODE} that may be written (those are: $(printf '%s\n' "${cands[@]}" | cut -f1 | paste -sd' ' -)) — nothing was touched"
+    [[ -n "${pick}" ]] || usbk_die "${DEVICE} is not a USB stick on ${USBK_NODE} that may be written (those are: $(printf '%s\n' "${cands[@]}" | cut -f1 | paste -sd' ' -); a stick ejected after a write shows no size until it is unplugged and plugged in again) — nothing was touched"
 elif [[ ${#cands[@]} -eq 1 ]]; then pick=1
 else printf 'Which one? [1-%s] ' "${#cands[@]}" >&2; IFS= read -r pick || pick=""; fi
 [[ "${pick}" =~ ^[0-9]+$ && "${pick}" -ge 1 && "${pick}" -le ${#cands[@]} ]] || usbk_die "no stick chosen"

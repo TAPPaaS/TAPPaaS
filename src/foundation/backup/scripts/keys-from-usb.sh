@@ -47,6 +47,9 @@ usbk_die()  { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 # ── pure ─────────────────────────────────────────────────────────────
 
 # usbk_candidates <lsblk-json> — whole USB disks, as TSV: path size-bytes label.
+# A stick ejected after a write (this script's twin's last step) stays listed
+# with no medium and size 0 until it is pulled and plugged in again: not a
+# candidate, so a write never aims at it.
 # lsblk -J -b -d -o NAME,PATH,SIZE,TRAN,TYPE,VENDOR,MODEL,SERIAL. A SATA/NVMe
 # disk, an optical drive or a ZFS volume is never offered. Whether a USB disk is
 # in use (mounted, pool, LVM) is asked separately, of the node.
@@ -54,6 +57,7 @@ usbk_candidates() {
     jq -r --arg loop "${USBK_ALLOW_LOOP}" '
         .blockdevices[]
         | select((.type == "disk" and .tran == "usb") or ($loop == "1" and .type == "loop"))
+        | select((.size | tonumber) > 0)
         | [ .path, (.size | tostring),
             ([.vendor, .model, (if .serial then "serial \(.serial)" else empty end)]
              | map(select(. != null) | gsub("^ +| +$"; "")) | map(select(. != "")) | join(" "))

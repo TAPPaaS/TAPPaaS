@@ -30,6 +30,7 @@ export const gb = (bytes: number): string => `${(bytes / 1e9).toFixed(1)} GB`;
 // A stick, in words: /dev/sdb · 31.0 GB · SanDisk Ultra (key stick).
 export function stickText(s: UsbStick): string {
   const name = [s.vendor, s.model].filter(Boolean).join(" ");
+  if (s.size === 0) return `${s.device}${name ? ` · ${name}` : ""} · ejected: unplug it and plug it in again`;
   return `${s.device} · ${gb(s.size)}${name ? ` · ${name}` : ""}${s.keyStick ? " · a TAPPaaS key stick" : ""}${s.inUse ? ` · in use (${s.why ?? "mounted"})` : ""}`;
 }
 

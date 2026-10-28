@@ -69,6 +69,8 @@ ck "the restore command contains no password" "" "$(usbk_decrypt_cmd /x/blob | g
 echo "── what may be erased ──"
 ck "the erase needs the device name typed back" yes \
    "$(grep -q 'Type %s to continue' "${TO}" && grep -q '"${confirm}" == "$(basename "${DISK}")"' "${TO}" && echo yes || echo no)"
+ck "an ejected stick (no medium, size 0) is never a candidate" yes \
+   "$(grep -q 'select((.size | tonumber) > 0)' "${FROM}" && echo yes || echo no)"
 ck "a disk in use is never offered (mounted, swap, pool, LVM, RAID)" yes \
    "$(grep -q 'zfs_member|LVM2_member|swap|linux_raid_member' "${FROM}" && grep -q 'usbk_in_use "${d}"' "${TO}" && echo yes || echo no)"
 ck "the stick is read back and compared before it is trusted" yes \

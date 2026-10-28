@@ -427,7 +427,10 @@ labelled `TAPPAASKEYS` (the backup key stick). `--json` is what the console read
   "sticks": [ { "device": "/dev/sdb", "size": 30752000000, "vendor": "SanDisk", "model": "Ultra",
                 "serial": "4C530001", "inUse": false, "why": null, "keyStick": false } ] }
 ```
-`why` is `null`, `"mounted"` or the file system type that claims the stick. A node that
+`why` is `null`, `"mounted"`, the file system type that claims the stick, or
+`"ejected: unplug it and plug it in again"` for a stick with no medium (size 0): the
+eject at the end of a write leaves it so until it is pulled and plugged in again, and
+`node usb write` refuses it. A node that
 cannot be reached is an error in the human form; with `--json` it is
 `{"node": …, "reachable": false, "sticks": []}` and exit 0, so the console can say so.
 
