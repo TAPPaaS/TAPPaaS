@@ -112,9 +112,32 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       // declares the lan ports and the WAN port (node network set).
       initial: { "--pxe": true, "--yes": true, "--no-wan": true },
       prefill: options,
-      note: "There is no dry run: the preview shows the exact command. Apply starts one job that runs until the node has joined: it makes the switch port a node trunk (with --switch-port), registers the node for a network install, opens the PXE window on the mothership (two hours unless --ttl says otherwise), waits for the machine to boot from the network and learns its MAC, waits for the install, then joins it to the cluster, brings it to the cluster baseline, reboots it into its new kernel and registers it as a pvehost instance. Its data pools are stage 4.",
+      blocked: job !== null || (valid && !known.includes(name)) ? undefined : "give the node a new name first",
+      note: (
+        <>
+          <p><b>Where it is cabled</b> — one of two:</p>
+          <ul>
+            <li><b>Connected to a TAPPaaS-managed switch:</b> pick its port. TAPPaaS makes it a node trunk and learns the machine's MAC there; the MAC field may stay blank.</li>
+            <li><b>A self-managed switch:</b> set the port as {trunk}, leave the switch port blank, and give the MAC (from the machine's label, its BIOS or its BMC).</li>
+          </ul>
+          <p><b>Boot disk:</b> specify the boot disk and optionally a mirror disk. Default: the installer takes the smallest SSD or NVMe disk, and both when the smallest two are the same model and size (mirrored); when nothing matches, the node's own screen asks.</p>
+          <p>Its data pools come after the join (stage 4), from the disks it really has.</p>
+          <p>When applied the TAPPaaS system will create a boot image and either set up a PXE boot server or give instructions for creating a boot disk.</p>
+        </>
+      ),
+      render: () => (
+        <label className="form-row">
+          <span>node name *</span>
+          <input type="text" value={name} onChange={(e) => setName(e.target.value.trim())} disabled={job !== null} />
+          {name && !valid ? <small className="ff-error">tappaas1 to tappaas9: the firewall reserves a management address and name for exactly those</small> : null}
+          {valid && known.includes(name) ? <small className="ff-error">{name} is already a node of this site</small> : null}
+          <small className="muted">
+            The Proxmox host name; {valid ? <>{name} gets the management address <span className="mono">{nodeAddress(name)}</span>. </> : null}Nodes today: {known.join(", ") || "—"}.
+          </small>
+        </label>
+      ),
     }),
-    [name, valid, options, ports],
+    [name, valid, options, ports, trunk, known, job],
   );
   const set: Step = useMemo(
     () => ({
@@ -125,7 +148,12 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       hide: ["--config-only"],
       choices: { "--lan-mode": ["active-backup", "lacp"] },
       placeholders: { "--lan-ports": "e.g. enp2s0f0,enp2s0f1 (names or MACs)", "--lan-primary": "e.g. enp2s0f0 — empty: the fastest", "--mtu": "e.g. 9000 — empty: as now", "--switch-wait": "seconds, 30–1800 (default 30)" },
-      note: "The preview writes the declaration into the node's config on the mothership (config/<node>.json) and checks it on the node, which it does not change. Apply moves lan onto the declared ports: the node is drained first (its HA guests move away), the change runs under a 45-second rollback, the mothership confirms it, and the node comes back.",
+      note: (
+        <>
+          <p>The node carries the management network, the cluster link and every guest's VLANs on its lan uplink. Declare which ports form it (one port, or two bonded as <span className="mono">lanbond</span>), preview, then apply; the failover test after it proves that losing either port keeps the node reachable. For lacp, configure the LAG on the switch side first (Site › Device, the switch's ports).</p>
+          <p>The preview writes the declaration into the node's config on the mothership (<span className="mono">config/&lt;node&gt;.json</span>) and checks it on the node, which it does not change. Apply moves lan onto the declared ports: the node is drained first (its HA guests move away), the change runs under a 45-second rollback, the mothership confirms it, and the node comes back.</p>
+        </>
+      ),
     }),
     [name],
   );
@@ -162,25 +190,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
         </p>
         <ol className="setup">
           <StepRow s={steps[0]} open={current === "declare"}>
-            <div className="explain">
-              <p><b>Where it is cabled</b> — one of two:</p>
-              <ul>
-                <li><b>Connected to a TAPPaaS-managed switch:</b> pick its port. TAPPaaS makes it a node trunk and learns the machine's MAC there; the MAC field may stay blank.</li>
-                <li><b>A self-managed switch:</b> set the port as {trunk}, leave the switch port blank, and give the MAC (from the machine's label, its BIOS or its BMC).</li>
-              </ul>
-              <p><b>Boot disk:</b> specify the boot disk and optionally a mirror disk. Default: the installer takes the smallest SSD or NVMe disk, and both when the smallest two are the same model and size (mirrored); when nothing matches, the node's own screen asks.</p>
-              <p className="muted small">Its data pools come after the join (stage 4), from the disks it really has.</p>
-            </div>
-            <label className="form-row">
-              <span>node name *</span>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value.trim())} disabled={job !== null} />
-              {name && !valid ? <small className="ff-error">tappaas1 to tappaas9: the firewall reserves a management address and name for exactly those</small> : null}
-              {valid && known.includes(name) ? <small className="ff-error">{name} is already a node of this site</small> : null}
-              <small className="muted">
-                The Proxmox host name; {valid ? <>{name} gets the management address <span className="mono">{nodeAddress(name)}</span>. </> : null}Nodes today: {known.join(", ") || "—"}.
-              </small>
-            </label>
-            {valid && !known.includes(name) ? <StepView key={topo ? "ports" : "no-ports"} step={declare} me={me} onApplied={setJob} onDone={(ok) => setEnded(ok)} /> : <p className="muted small">Give the node a new name to see the form.</p>}
+            <StepView key={topo ? "ports" : "no-ports"} step={declare} me={me} onApplied={setJob} onDone={(ok) => setEnded(ok)} />
           </StepRow>
           <StepRow s={steps[1]} open={current === "boot"}>
             <p className="small">Once stage 1's job is running, boot the machine one of two ways. Either way the installer asks the mothership for its answer over the network, so the machine must be cabled as stage 1 says; only if the boot-disk fields match no disk does the node's screen ask for one.</p>
@@ -246,11 +256,6 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
             {joined ? <NodePools node={name} onAdded={() => setPooled(true)} onSkip={() => setSkipPools(true)} /> : <p className="muted small">Once the node has joined.</p>}
           </StepRow>
           <StepRow s={steps[4]} open={current === "uplink"}>
-            <div className="explain">
-              <p>
-                The node carries the management network, the cluster link and every guest's VLANs on its lan uplink. Declare which ports form it (one port, or two bonded as <span className="mono">lanbond</span>), preview, then apply; the failover test after it proves that losing either port keeps the node reachable. For lacp, configure the LAG on the switch side first (Site › Device, the switch's ports).
-              </p>
-            </div>
             {joined || !underway ? (
               valid ? (
                 <>

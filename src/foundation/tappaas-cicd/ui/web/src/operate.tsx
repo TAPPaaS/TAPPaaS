@@ -33,6 +33,7 @@ export interface Step extends ArgvStep {
   asides?: Record<string, ReactNode>; // shown under an option's input, by "@name" or flag (a link to add what the dropdown lacks)
   render?: (values: Values, set: (v: Values) => void, verb: ManifestVerb) => ReactNode; // a change form of its own, its name rows included
   note?: ReactNode;
+  blocked?: string; // why the change cannot be previewed yet (a name still missing): Preview and Apply wait
   // The head of the Preview: what the change does (fields.tsx: the change
   // classes of the fields being changed, in the operator's words).
   previewNote?: (values: Values) => ReactNode;
@@ -249,7 +250,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
   const label = named.label;
   const confirmed = confirm !== "" && (confirm === object || confirm === label);
   const busy = applied !== null && !stopped; // an Apply runs or ran: the form is done
-  const canApply = !busy && !previewRunning && !refusedByDryRun && (!destructive || (confirmed && canOperate(me)));
+  const canApply = !step.blocked && !busy && !previewRunning && !refusedByDryRun && (!destructive || (confirmed && canOperate(me)));
   const phase = busy ? (inApply ? (appliedJob?.state === "done" ? 4 : 3) : 2) : stopped ? 2 : previewDone ? 3 : preview ? 2 : 1;
 
   const doPreview = async () => {
@@ -299,7 +300,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
         </label>
       ) : null}
       <div className="actions">
-        <button className="btn" disabled={busy} onClick={() => void doPreview()}>
+        <button className="btn" disabled={busy || !!step.blocked} onClick={() => void doPreview()}>
           {isRead ? "Run" : preview && !stale ? "Preview again" : previewKind === "none" ? "Preview (no dry run)" : "Preview"}
         </button>
         {!isRead ? (
@@ -307,6 +308,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
             {destructive ? `${verb.verb} ${label || "…"}` : "Apply"}
           </button>
         ) : null}
+        {step.blocked ? <span className="muted small">{step.blocked}</span> : null}
         {stale ? <span className="muted small">the change differs from the preview: Apply previews it again</span> : null}
       </div>
       {error ? <p className="readstate readstate-fail">{error}</p> : null}
