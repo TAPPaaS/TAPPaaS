@@ -17,6 +17,7 @@ import { OperateButton, Step, StepView, Values } from "../operate";
 import { useOpenedBy } from "../opener";
 import { StorageInventory, SiteRead, Topology } from "../types";
 import { ZoneRead } from "./Zones";
+import { viewLink } from "../physical/views";
 import { diskId, humanSize, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices } from "../nodeadd";
 import { Dot, Link, canOperate, useMe } from "../ui";
 import { StepRow } from "./Setup";
@@ -153,9 +154,9 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
     { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. The outcome is either a boot USB disk is prepared or a PXE boot process is started." },
     { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto a ZFS boot pool, the node joins the cluster, is patched and rebooted, and is registered as a pvehost instance." },
-    { id: "storage", title: "4 · Its data pools", required: false, done: pooled ? true : null, detail: "Until it has one, its guests go to the boot pool. Proposed from its free disks." },
-    { id: "uplink", title: "5 · The WAN and lan ports", required: false, done: tested ? true : uplinkSet ? null : false, detail: "Which ports carry lan, and the WAN port if the node may carry the firewall; then the failover test — each previewed first." },
-    { id: "done", title: "6 · The node in the device view", required: false, done: joined, detail: "Its uplinks, its switch ports and its guests, as cabled." },
+    { id: "storage", title: "4 · Define data pools", required: false, done: pooled ? true : null, detail: "Until it has one, its guests go to the boot pool. Proposed from its free disks." },
+    { id: "uplink", title: "5 · Define extra lan and WAN uplinks", required: false, done: tested ? true : uplinkSet ? null : false, detail: "Which ports carry lan, and the WAN port if the node may carry the firewall; then the failover test — each previewed first." },
+    { id: "done", title: "6 · Place the machine correctly in the physical view", required: false, done: joined, detail: "Its location, room and rack: where the machine actually stands." },
   ];
   const current = !underway ? "declare" : !progress || progress.registration === "pending" ? "boot" : !joined ? "wait" : !pooled && !skipPools ? "storage" : !tested ? "uplink" : "done";
 
@@ -274,7 +275,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           <StepRow s={steps[5]} open={current === "done"}>
             {valid ? (
               <p className="small">
-                <Link to={`/site/device?select=node:${encodeURIComponent(name)}`}>Open {name} in the device view →</Link> {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}
+                <Link to={viewLink("rack", `node:${name}`)}>Open {name} in the physical view →</Link> — select it there and use <b>Place…</b> to put it in its room and rack. {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}
               </p>
             ) : null}
           </StepRow>
