@@ -161,5 +161,32 @@ export function addNodeStorage(o: StorageAddOpts): void {
   if (!reconcile || spawnSync("bash", [reconcile], { stdio: "inherit" }).status !== 0) {
     warn(`  the storage nodes lists were not reconciled — the next cluster update does it`);
   }
+  haOntoPool(o.node, o.pool);
   info(`${GN}✓ ${o.pool} is ${o.node}'s storage${CL} — new guests that name it are built there`);
+}
+
+// The HA modules whose storage is this pool, and that run on another node:
+// their replication can go to this node now. cluster:ha only makes a job to
+// a node that has the guest's storage, so a pool built after the join would
+// otherwise wait for the next cluster update. Its update is idempotent — a
+// module whose replication is in place is left as it is.
+function haOntoPool(node: string, pool: string): void {
+  const dir = defaultConfigDir();
+  const ha = clusterScript("services/ha/update-service.sh");
+  if (!ha) return;
+  const mods: string[] = [];
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith(".json"))) {
+    let m: { dependsOn?: unknown; storage?: unknown; node?: unknown; status?: unknown };
+    try { m = JSON.parse(fs.readFileSync(`${dir}/${f}`, "utf8")); } catch { continue; }
+    if (!Array.isArray(m.dependsOn) || !m.dependsOn.includes("cluster:ha") || m.status === "archived") continue;
+    if ((typeof m.storage === "string" ? m.storage : "tanka1") !== pool || m.node === node) continue;
+    mods.push(f.replace(/\.json$/, ""));
+  }
+  if (mods.length === 0) return;
+  info(`  HA modules on ${pool}: ${mods.join(", ")} — their replication can now reach ${node}`);
+  for (const m of mods) {
+    if (spawnSync("bash", [ha, m], { stdio: "inherit" }).status !== 0) {
+      warn(`  ${m}: cluster:ha did not converge — the next cluster update tries again (module-manager module update ${m})`);
+    }
+  }
 }
