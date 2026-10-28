@@ -1276,7 +1276,10 @@ export function run(argv: string[], client: Client): number {
         if (sub !== "export" && sub !== "import") {
           die(`key: expected 'list' | 'status' | 'export --usb|--file DIR' | 'import --usb|--file DIR', got '${sub}'`);
         }
-        const target = keyTarget(sub as "export" | "import", opts.rest.slice(1));
+        // --yes is a global option (purge, restore, placement): the parser took
+        // it out of rest, so hand it back — key export --usb --device --yes is
+        // how the console confirms the stick (the operator was shown it).
+        const target = keyTarget(sub as "export" | "import", [...opts.rest.slice(1), ...(opts.yes ? ["--yes"] : [])]);
         if ("error" in target) die(target.error);
         const t = target as KeyTarget;
         if (t.kind === "usb") {
