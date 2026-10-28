@@ -12,11 +12,11 @@ import { Read, get, post, useRead } from "../api";
 import { Output, stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
-import { Job, SiteRead } from "../types";
+import { EnvironmentRow, Job, SiteRead } from "../types";
 import { Dot, Link, ReadState, navigate, since } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { Day2 } from "./Day2";
-import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, broadcastText, passphraseOf } from "../wizards";
+import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, broadcastText, passphraseOf, stacksOf } from "../wizards";
 
 export interface SetupDoc {
   steps: SetupStep[];
@@ -39,16 +39,34 @@ export interface SecretStatus {
 
 // ── the day-2 wizards, shared with the pages ──────────────────────────
 
-export function addStackSteps(stack?: string): Step[] {
+// lists: what the form offers — the stacks the catalogues name (with their
+// modules as the note), the site's environments, and the default one picked.
+export function addStackSteps(stack?: string, lists?: { stacks: string[]; notes: Record<string, string>; environments: string[]; defaultEnv: string | null }): Step[] {
   return [
     {
       title: "Add a stack: module-manager add-stack <stack>",
       bin: "module-manager",
       verb: "add-stack",
       fixed: stack ? [stack] : [],
+      choices: lists ? { ...(lists.stacks.length ? { "@stack": lists.stacks } : {}), ...(lists.environments.length ? { "--environment": lists.environments } : {}) } : undefined,
+      suggestNotes: lists ? { "@stack": lists.notes, "--environment": lists.defaultEnv ? { [lists.defaultEnv]: `${lists.defaultEnv} — the default environment` } : {} } : undefined,
+      placeholders: { "@stack": "pick a stack", "--environment": lists?.defaultEnv ? `the default environment, ${lists.defaultEnv}` : "the default environment" },
+      initial: lists?.defaultEnv ? { "--environment": lists.defaultEnv } : undefined,
       note: "The preview is the plan (add-stack --dry-run): the modules in dependsOn order, what is skipped, what is missing outside the stack, the hand steps. Apply installs them one by one; the first failure stops it, and running it again resumes.",
     },
   ];
+}
+
+// The Add a stack button, with its lists read: every registered repository's
+// catalogue for the stacks (foundation aside: it is installed, never added),
+// the site's environments, the default one from site.json.
+export function AddStackButton({ opens }: { opens?: boolean }) {
+  const cats = useRead<{ modules: { name: string; stack: string | null }[] }[]>("catalogs", 600_000).env?.data ?? [];
+  const envs = useRead<EnvironmentRow[]>("environments").env?.data ?? [];
+  const site = useRead<SiteRead>("site").env?.data?.site;
+  const defaultEnv = typeof site?.defaultEnvironment === "string" ? site.defaultEnvironment : null;
+  const { stacks, notes } = stacksOf(cats);
+  return <OperateButton label="Add a stack…" title="Add a stack" steps={() => addStackSteps(undefined, { stacks, notes, environments: envs.map((e) => e.name), defaultEnv })} opens={opens ? { wizard: "add-stack" } : undefined} />;
 }
 
 // The wg-quick file add-peer prints (status lines go to stderr, mixed in the output).
@@ -321,7 +339,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
       </>
     ),
     vpn: <OperateButton label="Enrol a device…" title="Enrol a device in the admin VPN" steps={enrolSteps()} />,
-    stacks: <OperateButton label="Add a stack…" title="Add a stack" steps={addStackSteps()} />,
+    stacks: <AddStackButton />,
     wifi: <WifiLinks doc={d ?? null} />,
     physical: (
       <p className="small toolbar">

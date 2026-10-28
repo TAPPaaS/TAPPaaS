@@ -259,3 +259,17 @@ export function identitySpecs(kind: string, verb: "add" | "modify" | "delete", n
     reconcile: { bin: "identity-manager", verb: "reconcile", initial: {} },
   };
 }
+
+// The stacks the catalogues name, foundation aside (it is installed, never
+// added), each with its modules as the note the Add a stack form shows.
+export function stacksOf(cats: { modules: { name: string; stack: string | null }[] }[]): { stacks: string[]; notes: Record<string, string> } {
+  const mods = new Map<string, string[]>();
+  for (const c of cats) for (const m of c.modules) {
+    if (!m.stack || m.stack === "foundation") continue;
+    const l = mods.get(m.stack) ?? [];
+    if (!l.includes(m.name)) l.push(m.name);
+    mods.set(m.stack, l);
+  }
+  const stacks = [...mods.keys()].sort();
+  return { stacks, notes: Object.fromEntries(stacks.map((s) => [s, `${s} — ${mods.get(s)!.join(", ")}`])) };
+}

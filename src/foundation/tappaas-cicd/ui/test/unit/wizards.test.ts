@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { buildArgv, confirmObject } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
-import { BUDDY_KINDS, PASSPHRASE_TEXT, SatellitePlan, SiteSsid, StepSpec, buddyNameProblem, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { BUDDY_KINDS, PASSPHRASE_TEXT, SatellitePlan, SiteSsid, StepSpec, buddyNameProblem, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -113,5 +113,16 @@ check(confirmObject({ bin: "module-manager" }, delVerb, { "@module": " deconz " 
 const rpVerb = { verb: "remove-port", keys: [["remove-port"]], positionals: [{ name: "switch", optional: false, repeatable: false }, { name: "port", optional: false, repeatable: false }], readWhen: [], destructiveWhen: [], object: { positional: "port", within: ["switch"] } } as unknown as ManifestVerb;
 const rp = confirmObject({ bin: "switch-manager", fixed: ["crs-a"] }, rpVerb, { "@port": "7" }, ["switch-manager", "remove-port", "crs-a", "7"]);
 check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its verb declares, within its container");
+
+// Add a stack: the stacks the catalogues name, foundation aside, their modules as the note.
+{
+  const cats = [
+    { modules: [{ name: "cluster", stack: "foundation" }, { name: "nextcloud", stack: "office" }, { name: "immich", stack: "home" }, { name: "lonely", stack: null }] },
+    { modules: [{ name: "onlyoffice", stack: "office" }, { name: "nextcloud", stack: "office" }] },
+  ];
+  const { stacks, notes } = stacksOf(cats);
+  check(stacks.join(",") === "home,office", `the stacks, sorted, without foundation or a module of no stack (${stacks.join(",")})`);
+  check(notes.office === "office — nextcloud, onlyoffice", `a stack's note lists its modules once across repositories (${notes.office})`);
+}
 
 done("wizards");
