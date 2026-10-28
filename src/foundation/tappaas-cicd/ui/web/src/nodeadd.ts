@@ -84,3 +84,15 @@ export function humanSize(bytes: number | null): string {
   while (v >= 1000 && i < units.length - 1) { v /= 1000; i++; }
   return `${v >= 10 || i === 0 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
 }
+
+// Where the stick write is, from site-manager node usb write's output: its
+// last progress line ("  41%  734 of 1763 MB  24.5 MB/s, about 40 s left").
+export function writeProgress(output: string): { pct: number; text: string } | null {
+  let last: { pct: number; text: string } | null = null;
+  for (const line of output.split("\n")) {
+    const m = /^\s*(\d{1,3})%\s+(.+?)\s*$/.exec(line);
+    if (m) last = { pct: Number(m[1]), text: `${m[1]}% — ${m[2]}` };
+    else if (/^flushed; ejecting/.test(line.trim())) last = { pct: 100, text: "100% — flushed, ejecting the stick" };
+  }
+  return last;
+}

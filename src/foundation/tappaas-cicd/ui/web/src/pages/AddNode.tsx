@@ -23,7 +23,7 @@ import { useOpenedBy } from "../opener";
 import { StorageInventory, SiteRead, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
-import { diskId, humanSize, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices } from "../nodeadd";
+import { diskId, humanSize, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices, writeProgress } from "../nodeadd";
 import { Dot, Link, canOperate, useMe } from "../ui";
 import { UsbStickPicker, gb } from "../usbsticks";
 import { StepRow } from "./Setup";
@@ -227,6 +227,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       initial: { "--yes": true },
       hide: ["--yes"],
       blocked: !stickDevice ? "pick the stick first" : media && !media.stickImage.present ? "the installer stick image is not built yet: prepare the medium first" : undefined,
+      progress: writeProgress,
       note: `The mothership streams the installer stick image (${media?.stickImage.path ?? "/var/lib/tappaas-pxe/tappaas-usb.iso"}, the same for every node) over ssh into ${stickDevice || "the stick"} in ${stickNode}, erasing it, then flushes and ejects it: a minute or two. The node needs nothing in advance. There is no dry run: the preview is the command.`,
     }),
     [stickNode, stickDevice, media?.stickImage.present, media?.stickImage.path],
@@ -280,14 +281,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
             <p className="small" style={{ marginTop: "1em" }}><b>The installer stick</b> — only for a machine that cannot network-boot. One image for every node: the stick fetches the node's own answer from the mothership once stage 1's job runs. Two ways to write it:</p>
             <div className="two">
               <div className="explain">
-                <p><b>On your own machine</b></p>
-                <ol>
-                  <li>Get the image: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{media?.stickImage.path ?? "/var/lib/tappaas-pxe/tappaas-usb.iso"} .</span> — or, while stage 1's job runs, <a href="http://tappaas-cicd.mgmt.internal:8090/tappaas-usb.iso">tappaas-usb.iso</a> from the mothership on the management network.</li>
-                  <li>Write it to a stick: <span className="mono">dd if=tappaas-usb.iso of=/dev/&lt;usb&gt; bs=4M</span>, or balenaEtcher.</li>
-                </ol>
-              </div>
-              <div className="explain">
-                <p><b>By a node</b> — a stick in a free USB port of an existing node; the mothership is a VM with no USB port, so it writes through the node</p>
+                <p><b>By a TAPPaaS node</b> — a stick in a free USB port of an existing node; the mothership is a VM with no USB port, so it writes through the node</p>
                 <div className="form">
                   <UsbStickPicker nodes={known.length ? known : [stickNode]} node={stickNode} setNode={setStickNode} device={stickDevice} setDevice={setStickDevice} disabled={stickWritten} />
                 </div>
@@ -295,6 +289,13 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
                   <p className="small"><Dot level="pass" /> The installer stick is written and ejected: pull {stickDevice} out of {stickNode}. It boots the new machine in stage 2.</p>
                 ) : null}
                 <StepView key={`${stickNode}:${stickDevice}:${media?.stickImage.present ? 1 : 0}`} step={writeStick} me={me} onDone={(ok) => ok && setStickWritten(true)} />
+              </div>
+              <div className="explain">
+                <p><b>On your own machine</b></p>
+                <ol>
+                  <li>Copy the image from the mothership: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{media?.stickImage.path ?? "/var/lib/tappaas-pxe/tappaas-usb.iso"} .</span></li>
+                  <li>Write it to a stick: <span className="mono">dd if=tappaas-usb.iso of=/dev/&lt;usb&gt; bs=4M</span>, or balenaEtcher.</li>
+                </ol>
               </div>
             </div>
             {!stickWritten && !skipMedium ? (

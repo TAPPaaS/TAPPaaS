@@ -38,6 +38,9 @@ export interface Step extends ArgvStep {
   // classes of the fields being changed, in the operator's words).
   previewNote?: (values: Values) => ReactNode;
   after?: (job: Job) => ReactNode; // shown once the step's job has finished (a config to download)
+  // A bar over the apply while it runs, from the job's output so far (the
+  // stick write's percent lines): null until the output says where it is.
+  progress?: (output: string) => { pct: number; text: string } | null;
   // Values the assistant opened the form with (open_console): positionals and
   // options by name, merged in once the verb's manifest is read; a field form
   // takes the fields among them (PrefillContext).
@@ -199,6 +202,17 @@ function TwoPhaseView({ job }: { job: Job }) {
 
 // One step of a flow; also embedded in a wizard of its own (Add node), which
 // learns when the apply starts (onApplied) as well as when it ends (onDone).
+// The bar: what the output says so far; full once the job is done.
+function ProgressBar({ at, done }: { at: { pct: number; text: string } | null; done: boolean }) {
+  const pct = done ? 100 : at ? Math.max(0, Math.min(100, at.pct)) : 0;
+  return (
+    <div className="progress" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+      <div className="progress-bar" style={{ width: `${pct}%` }} />
+      <span className="progress-text">{done ? "done" : at ? at.text : "starting…"}</span>
+    </div>
+  );
+}
+
 export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me | null; onDone: (ok: boolean) => void; onApplied?: (jobId: string) => void }) {
   const verb = useVerb(step.bin, step.verb);
   const [values, setValues] = useState<Values>(step.initial ?? {});
@@ -316,6 +330,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       {preview && step.previewNote ? <div className="note preview-head">{step.previewNote(values)}</div> : null}
       {preview ? <JobView id={preview.id} label={isRead ? "result" : previewKind === "none" ? "preview (no dry run)" : "preview"} /> : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to apply.</p> : null}
+      {step.progress && appliedJob && inApply ? <ProgressBar at={step.progress(appliedJob.output)} done={appliedJob.state === "done"} /> : null}
       {appliedJob?.previewPhase ? <TwoPhaseView job={appliedJob} /> : applied ? <JobView id={applied} label="apply" /> : null}
       {applied && appliedJob?.state === "done" && !stopped ? (
         <>

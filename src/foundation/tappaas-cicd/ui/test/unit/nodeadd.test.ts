@@ -2,7 +2,7 @@
 // D4): the switch ports a new node can be cabled to, the trunk a hand-configured
 // port needs, and the data pool proposed from the node's free disks.
 
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices } from "../../web/src/nodeadd";
+import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices, writeProgress } from "../../web/src/nodeadd";
 import { StorageDisk, TopoPort, TopoSwitch } from "../../web/src/types";
 import { check, done } from "./check";
 
@@ -51,5 +51,13 @@ check(proposedDisks([disk("BAD", 1e12, "ssd", { state: "fail" as StorageDisk["st
 check(proposedLayout(1) === "single" && proposedLayout(2) === "mirror" && proposedLayout(3) === "raidz1", "the layout for a count");
 check(proposedPoolName("nvme", []) === "tanka1" && proposedPoolName("hdd", ["tankb1"]) === "tankb2", "tanka for fast disks, tankb for spinning, the next free number");
 check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && humanSize(null) === "?", "sizes as the inventory says them");
+
+// The stick write's progress bar: the last percent line of the output, then the flush.
+{
+  const out = "writing x (1.8 GB) to /dev/sdb in tappaas1\n   5%  88 of 1763 MB  24.5 MB/s, about 68 s left\n  41%  734 of 1763 MB  24.5 MB/s, about 40 s left\n";
+  check(writeProgress(out)?.pct === 41 && writeProgress(out)?.text === "41% — 734 of 1763 MB  24.5 MB/s, about 40 s left", "the last percent line is where the write is");
+  check(writeProgress("writing x\n") === null, "no percent line yet: nothing to show");
+  check(writeProgress(out + "flushed; ejecting the stick\n")?.pct === 100, "the flush is the end");
+}
 
 done("nodeadd");
