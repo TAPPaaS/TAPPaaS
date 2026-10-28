@@ -387,11 +387,35 @@ that carries data without `--wipe` is a refusal that says why, and nothing is ch
 site-manager node storage tappaas2
 site-manager node storage add tappaas2 tanka1 --disks S7HENJ0X100001,S7HENJ0X100002 --layout mirror
 ```
+### `node media` — the boot medium
+
+Every new node installs from one medium on the mothership, `/var/lib/tappaas-pxe`:
+the kernel, initrd and boot script a machine network-boots (PXE), and beside them the
+installer stick image, `tappaas-usb.iso`, for a machine that cannot. Both come from one
+ISO, the Proxmox installer prepared to fetch its answer from the mothership
+(`scripts/prepare-netboot.sh` makes it on a cluster node and keeps it at
+`/home/tappaas/pve-tappaas-netboot.iso`). The cicd install stages it once.
+
+`node media` says what is there: whether the assets are staged and carry this version's
+installer hook, the stick image (size, date), the ISO, and what `prepare` would run.
+`--json` is what the console's Add a node, stage 0, reads (`ready`, `problems`,
+`prepare`). `node media prepare` builds what is missing or stale: from the ISO already on
+the mothership when there is one (`sudo node-provisioner prepare --iso …`, a few
+minutes), else the whole of `prepare-netboot.sh` (the ISO fetched and prepared on a
+node, copied here and staged: ten minutes or more); `--force` stages it all again, for a
+new Proxmox version. The stick image needs `xorriso` on the mothership (in the cicd
+closure); without it `node media` says so and `prepare` stages the netboot assets only.
+
+```
+site-manager node media
+site-manager node media prepare
+```
+
 ### `node usb` — the installer stick
 
 A machine that cannot network-boot is installed from a USB stick that carries the
-installer stick image, `/var/lib/tappaas-pxe/tappaas-usb.iso` (staged on the mothership
-by `scripts/prepare-netboot.sh`, the same image for every node). `node usb <node>` lists
+installer stick image, `/var/lib/tappaas-pxe/tappaas-usb.iso` (built on the mothership
+by `node media prepare`, the same image for every node). `node usb <node>` lists
 the sticks plugged into a cluster node — the whole disks on the USB bus, as `lsblk`
 reports them; never a SATA/NVMe disk — one line each: device, size, vendor, model and
 serial, with `(in use: mounted)` (or `zfs_member`, `LVM2_member`, `swap`,

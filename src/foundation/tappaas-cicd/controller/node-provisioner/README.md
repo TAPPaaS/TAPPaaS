@@ -57,6 +57,7 @@ captures it via `site-manager node reconcile`).
 | `register <name> [--mac ..]* [--pool 'p=layout:disks']*` | Write a pending registration (`$TAPPAAS_CONFIG/provision/<name>.json`) — the allowlist. |
 | `unregister <name>` / `list` | Manage/inspect pending registrations. |
 | `prepare --iso <path>` | Stage netboot assets under `/var/lib/tappaas-pxe`: loop-mounts the ISO, extracts `boot/linux26` + `boot/initrd.img`, copies the whole ISO, appends it to the initrd as a newc cpio (`proxmox.iso`), writes `boot.ipxe`. Run with sudo. |
+| `assets [--json]` | What `prepare` staged: the netboot assets and whether they carry this code's `/init` patch (`assets.json`), the ISO they came from, the installer stick image (`tappaas-usb.iso`), whether `xorriso` is there to build it. Exit 0 = all there; `--json` is what `site-manager node media` reads. |
 | `serve [--port 8090]` | Foreground HTTP server: GET = read-only assets (no dir listing); `POST /answer` = system-info matching + answer.toml. `enable` runs this as a unit. |
 | `enable [--ttl 7200]` | `systemd-run` transient units `tappaas-pxe.service` (serve) + `tappaas-pxe-tftp.service` (dnsmasq `--port=0 --enable-tftp`, TFTP-only — OPNsense stays the only DHCP server), then `dhcp-manager pxe enable --next-server <cicd-mgmt-ip> --bootfile ipxe.efi --ipxe-script-url http://<ip>:<port>/boot.ipxe`, then arms `tappaas-pxe-ttl.timer` to auto-run `disable`. |
 | `disable` | Stops all transient units + `dhcp-manager pxe disable`. |

@@ -38,6 +38,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 from .log import info, warn
@@ -352,6 +353,36 @@ def stale_source(directory=None) -> str | None:
     if stamp.get("patch") == patch_stamp():
         return None
     return stamp.get("iso") or DEFAULT_SOURCE_ISO
+
+
+def assets_status(directory=None) -> dict:
+    """What is staged under the asset directory, for `node-provisioner assets`
+    (site-manager node media reads it): the netboot assets, whether they are
+    current with this code's /init patch, the ISO they came from, the installer
+    stick image, and whether xorriso (which builds it) is installed."""
+    dest = Path(directory) if directory else pxe_dir()
+    staged = all((dest / n).is_file() for n in ("linux26", "initrd", "boot.ipxe"))
+    try:
+        stamp = json.loads((dest / STAMP_NAME).read_text())
+    except (OSError, ValueError):
+        stamp = {}
+    source = stamp.get("iso") or DEFAULT_SOURCE_ISO
+    stick = dest / USB_ISO_NAME
+    try:
+        st = stick.stat()
+        image = {"path": str(stick), "present": True, "size": st.st_size,
+                 "modified": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(st.st_mtime))}
+    except OSError:
+        image = {"path": str(stick), "present": False, "size": 0, "modified": None}
+    return {
+        "directory": str(dest),
+        "staged": staged,
+        "current": staged and stale_source(dest) is None,
+        "source": source,
+        "sourcePresent": Path(source).is_file(),
+        "stickImage": image,
+        "xorriso": shutil.which("xorriso") is not None,
+    }
 
 
 # A field on the kernel command line: a model's spaces become '.', which the

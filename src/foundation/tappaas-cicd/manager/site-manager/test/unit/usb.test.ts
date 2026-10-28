@@ -67,7 +67,7 @@ const ok = (c: Parameters<typeof usbWriteProblems>[0]): string[] => usbWriteProb
 check(ok({ yes: true, imagePresent: true, sticks, device: free.device }).length === 0, "a free stick, the image staged, --yes: nothing in the way");
 check(ok({ yes: false, imagePresent: true, sticks, device: free.device }).join() === "erases the stick: add --yes", "no --yes: refused, and told why");
 const noimg = ok({ yes: true, imagePresent: false, sticks, device: free.device });
-check(noimg.length === 1 && noimg[0].includes("/tmp/pxe-test/tappaas-usb.iso") && noimg[0].includes("prepare-netboot.sh"),
+check(noimg.length === 1 && noimg[0].includes("/tmp/pxe-test/tappaas-usb.iso") && noimg[0].includes("node media prepare"),
   "no image: names the path and what stages it");
 check(ok({ yes: false, imagePresent: false, sticks: undefined, device: free.device }).length === 2, "before the node is asked: the cheap refusals only");
 const unreach = ok({ yes: true, imagePresent: true, sticks: null, device: free.device });

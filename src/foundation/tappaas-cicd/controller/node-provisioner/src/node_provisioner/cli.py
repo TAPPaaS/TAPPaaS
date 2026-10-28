@@ -13,6 +13,7 @@ Phase N3 of docs/design/node-provisioning.md (#404 item 2). Operator flow:
 from __future__ import annotations
 
 import argparse
+import json
 import functools
 import sys
 
@@ -93,6 +94,24 @@ def cmd_list(_args) -> bool:
 def cmd_prepare(args) -> bool:
     assets.prepare(args.iso, port=args.port)
     return True
+
+
+def cmd_assets(args) -> bool:
+    """The boot medium on this machine. Exit 0 = staged, current, with the
+    stick image (--json: always 0, the document says)."""
+    st = assets.assets_status()
+    if args.json:
+        print(json.dumps(st))
+        return True
+    img = st["stickImage"]
+    print(f"netboot assets ({st['directory']}): "
+          + ("staged, current" if st["current"] else "staged, but from before this installer hook — prepare again" if st["staged"] else "not staged"))
+    print(f"source ISO: {st['source']}" + ("" if st["sourcePresent"] else " (missing)"))
+    print(f"installer stick image: {img['path']}: "
+          + (f"{img['size']} bytes, {img['modified']}" if img["present"] else "missing"))
+    if not st["xorriso"]:
+        print("xorriso: not installed — the stick image cannot be built")
+    return bool(st["current"] and img["present"])
 
 
 def cmd_serve(args) -> bool:
@@ -200,6 +219,12 @@ placement is what scopes it (see README.md).
     p.add_argument("--port", type=int, default=DEFAULT_PORT,
                    help=f"HTTP port baked into boot.ipxe (default {DEFAULT_PORT})")
     p.set_defaults(func=cmd_prepare)
+
+    p = sub.add_parser("assets", help="What prepare has staged: the netboot "
+                                      "assets, their currency and ISO, the "
+                                      "installer stick image (exit 0 = all there)")
+    p.add_argument("--json", action="store_true", help="One JSON document")
+    p.set_defaults(func=cmd_assets)
 
     p = sub.add_parser("serve", help="Run the HTTP asset+answer server "
                                      "(foreground; enable runs this)")

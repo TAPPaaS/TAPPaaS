@@ -1,9 +1,11 @@
 // AddNode.tsx — adding a node as a guided sequence (Setup's step rows): what
 // each stage does is said before it runs, and what the operator must do by
-// hand is said where it is needed (ADR-037 D4). 0 the boot medium: nothing for
-// a network boot, else the installer stick — written on a client machine from
-// the image the mothership serves, or by a node into a stick plugged into it
-// (site-manager node usb write); 1 declare the node — where it
+// hand is said where it is needed (ADR-037 D4). 0 prepare the boot medium: the
+// netboot assets and the installer stick image on the mothership, built when
+// missing or stale (site-manager node media prepare); then, for a machine
+// that cannot network-boot, the stick — written on a client machine from the
+// image, or by a node into a stick plugged into it, the image streamed from
+// the mothership (site-manager node usb write); 1 declare the node — where it
 // is cabled first, then its MAC and boot disks, each blank its default
 // (site-manager node add: one job that registers its install answer,
 // opens the boot window and waits for it); 2 boot the machine from the network
@@ -23,8 +25,21 @@ import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
 import { diskId, humanSize, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices } from "../nodeadd";
 import { Dot, Link, canOperate, useMe } from "../ui";
-import { UsbStickPicker } from "../usbsticks";
+import { UsbStickPicker, gb } from "../usbsticks";
 import { StepRow } from "./Setup";
+
+// site-manager node media --json (reads.ts BootMedia).
+interface BootMedia {
+  staged: boolean;
+  current: boolean;
+  source: string;
+  sourcePresent: boolean;
+  stickImage: { path: string; present: boolean; size: number; modified: string | null };
+  xorriso: boolean;
+  ready: boolean;
+  problems: string[];
+  prepare: { argv: string[]; minutes: string } | null;
+}
 
 interface NodeProgress {
   name: string;
@@ -89,6 +104,11 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   const [stickNode, setStickNode] = useState(known[0] ?? "tappaas1");
   const [stickDevice, setStickDevice] = useState("");
   const [stickWritten, setStickWritten] = useState(false);
+  const [prepared, setPrepared] = useState(false);
+  // The boot medium on the mothership, read again every ten seconds while the
+  // wizard is open: a prepare that ran shows up without a reload.
+  const mediaRead = useRead<BootMedia>("media", 10_000);
+  const media = mediaRead.env?.data ?? null;
   const valid = NAME.test(name);
   // Read from the moment the name is valid: a wizard reopened while the job
   // runs (or for a node already joined) shows where it stands.
@@ -180,6 +200,20 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
     [name],
   );
 
+  // Stage 0: the medium built on the mothership when it is missing or stale.
+  const prepare: Step = useMemo(
+    () => ({
+      title: "site-manager node media prepare",
+      bin: "site-manager",
+      verb: "node media prepare",
+      fixed: [],
+      only: ["--force"],
+      note: media?.prepare
+        ? `Runs ${media.prepare.argv.join(" ")} on the mothership (${media.prepare.minutes}). There is no dry run: the preview is the command.`
+        : "Stages the netboot assets and builds the installer stick image on the mothership. There is no dry run: the preview is the command.",
+    }),
+    [media?.prepare],
+  );
   const writeStick: Step = useMemo(
     () => ({
       title: `site-manager node usb write ${stickNode} ${stickDevice || "<device>"}`,
@@ -187,15 +221,19 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       verb: "node usb write",
       fixed: stickDevice ? [stickNode, stickDevice] : [stickNode],
       only: [],
+      // The CLI's guard against erasing a stick by accident; here the preview
+      // and Apply are that confirmation, so it is always given and not offered.
       initial: { "--yes": true },
-      blocked: stickDevice ? undefined : "pick the stick first",
-      note: `Writes the installer stick image (/var/lib/tappaas-pxe/tappaas-usb.iso, the same for every node) to ${stickDevice || "the stick"} in ${stickNode}, erasing it, then ejects it: a minute or two. There is no dry run: the preview is the command.`,
+      hide: ["--yes"],
+      blocked: !stickDevice ? "pick the stick first" : media && !media.stickImage.present ? "the installer stick image is not built yet: prepare the medium first" : undefined,
+      note: `The mothership streams the installer stick image (${media?.stickImage.path ?? "/var/lib/tappaas-pxe/tappaas-usb.iso"}, the same for every node) over ssh into ${stickDevice || "the stick"} in ${stickNode}, erasing it, then flushes and ejects it: a minute or two. The node needs nothing in advance. There is no dry run: the preview is the command.`,
     }),
-    [stickNode, stickDevice],
+    [stickNode, stickDevice, media?.stickImage.present, media?.stickImage.path],
   );
+  const mediaReady = media?.ready ?? null;
 
   const steps = [
-    { id: "medium", title: "0 · The boot medium", required: false, done: stickWritten ? true : false, detail: "Nothing for a network boot (PXE). Otherwise the installer stick: written on your own machine from the image the mothership serves, or by a node into a stick plugged into it." },
+    { id: "medium", title: "0 · Prepare boot medium", required: true, done: mediaReady === null ? null : mediaReady || prepared ? true : false, detail: "The netboot assets and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick." },
     { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. The outcome is either a boot USB disk is prepared or a PXE boot process is started." },
     { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto a ZFS boot pool, the node joins the cluster, is patched and rebooted, and is registered as a pvehost instance." },
@@ -216,23 +254,40 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools. Nothing changes until you Apply in stage 1.
         </p>
         <ol className="setup">
-          {/* Collapsed unless opened: most machines network-boot. */}
-          <StepRow s={steps[0]} open={false}>
-            <p className="small">A machine that boots from the network needs no medium: skip this. For one that cannot, the installer stick is one image for every node; it fetches the node's own answer from the mothership once stage 1's job runs. Two ways to write it:</p>
+          {/* Open while the medium is not ready; collapsed once it is (most machines network-boot and need nothing more). */}
+          <StepRow s={steps[0]} open={mediaReady === false && !prepared}>
+            <p className="small">Every new node installs from one medium on the mothership: a machine that network-boots (PXE) fetches it from there, a machine that cannot boots the installer stick made from the same image. The cicd install built it once; it is built again here when it is missing, from before this version, or wanted for a new Proxmox version.</p>
+            {media ? (
+              <ul className="plain checks">
+                <Check ok={media.staged && media.current} label="netboot assets on the mothership" detail={media.staged ? (media.current ? "staged, current" : "staged, but from before this version's installer hook") : "not staged"} />
+                <Check ok={media.stickImage.present} label="installer stick image" detail={media.stickImage.present ? `${media.stickImage.path}, ${gb(media.stickImage.size)}, ${media.stickImage.modified ?? ""}` : "not built"} />
+                {!media.xorriso ? <Check ok={false} label="xorriso on the mothership" detail="not installed: the stick image cannot be built until an OS update of tappaas-cicd brings it" /> : null}
+              </ul>
+            ) : (
+              <p className="muted small">{mediaRead.env?.error || mediaRead.failure ? <><Dot level="fail" /> site-manager node media could not be read: {mediaRead.env?.error ?? mediaRead.failure}</> : "reading the boot medium…"}</p>
+            )}
+            {media && (!media.ready || prepared) ? (
+              media.prepare || prepared ? (
+                <StepView key={media.prepare?.argv.join(" ") ?? "ready"} step={prepare} me={me} onDone={(ok) => { if (ok) { setPrepared(true); mediaRead.reload(); } }} />
+              ) : (
+                <p className="small"><Dot level="warn" /> Nothing can be built here until xorriso is installed on the mothership.</p>
+              )
+            ) : null}
+            <p className="small" style={{ marginTop: "1em" }}><b>The installer stick</b> — only for a machine that cannot network-boot. One image for every node: the stick fetches the node's own answer from the mothership once stage 1's job runs. Two ways to write it:</p>
             <div className="two">
               <div className="explain">
                 <p><b>On your own machine</b></p>
                 <ol>
-                  <li>Get the image: <a href="http://tappaas-cicd.mgmt.internal:8090/tappaas-usb.iso">tappaas-usb.iso</a> (served from the mothership on the management network), or <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:/var/lib/tappaas-pxe/tappaas-usb.iso .</span></li>
+                  <li>Get the image: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{media?.stickImage.path ?? "/var/lib/tappaas-pxe/tappaas-usb.iso"} .</span> — or, while stage 1's job runs, <a href="http://tappaas-cicd.mgmt.internal:8090/tappaas-usb.iso">tappaas-usb.iso</a> from the mothership on the management network.</li>
                   <li>Write it to a stick: <span className="mono">dd if=tappaas-usb.iso of=/dev/&lt;usb&gt; bs=4M</span>, or balenaEtcher.</li>
                 </ol>
               </div>
               <div className="explain">
-                <p><b>By a node</b> — a stick in a free USB port of an existing node</p>
+                <p><b>By a node</b> — a stick in a free USB port of an existing node; the mothership is a VM with no USB port, so it writes through the node</p>
                 <div className="form">
                   <UsbStickPicker nodes={known.length ? known : [stickNode]} node={stickNode} setNode={setStickNode} device={stickDevice} setDevice={setStickDevice} disabled={stickWritten} />
                 </div>
-                <StepView key={`${stickNode}:${stickDevice}`} step={writeStick} me={me} onDone={(ok) => ok && setStickWritten(true)} />
+                <StepView key={`${stickNode}:${stickDevice}:${media?.stickImage.present ? 1 : 0}`} step={writeStick} me={me} onDone={(ok) => ok && setStickWritten(true)} />
               </div>
             </div>
           </StepRow>
@@ -253,8 +308,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
               <div className="explain">
                 <p><b>USB stick</b> — for a machine that cannot network-boot</p>
                 <ol>
-                  <li>The stick image is on the mothership, the same for every node. Once stage 1's job runs it is served at <span className="mono">http://tappaas-cicd.mgmt.internal:8090/tappaas-usb.iso</span>; or copy it: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:/var/lib/tappaas-pxe/tappaas-usb.iso .</span></li>
-                  <li>Write it to a stick: <span className="mono">dd if=tappaas-usb.iso of=/dev/&lt;usb&gt; bs=4M</span> (or balenaEtcher).</li>
+                  <li>The stick written in stage 0 (by a node, or from the image copied to your own machine).</li>
                   <li>Power on and boot from the stick once — the one-time boot menu.</li>
                 </ol>
               </div>

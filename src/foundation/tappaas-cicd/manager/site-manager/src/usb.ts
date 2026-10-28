@@ -5,8 +5,8 @@
 //   node usb write <node> <device> --yes     the installer stick image onto one
 //
 // A new machine with no network boot path is installed from a stick that
-// carries /var/lib/tappaas-pxe/tappaas-usb.iso (scripts/prepare-netboot.sh
-// stages it on the mothership, the same image for every node). The operator
+// carries /var/lib/tappaas-pxe/tappaas-usb.iso (`node media prepare` builds it
+// on the mothership, media.ts; the same image for every node). The operator
 // plugs a stick into any cluster node, this verb writes it there over ssh, and
 // the console's node-add page offers the same from the list. What counts as a
 // stick, and when one is left alone, is the backup key stick's rule
@@ -141,7 +141,7 @@ export interface UsbWriteCheck {
 export function usbWriteProblems(c: UsbWriteCheck, node: string, image: string = usbImagePath()): string[] {
   const p: string[] = [];
   if (!c.yes) p.push("erases the stick: add --yes");
-  if (!c.imagePresent) p.push(`${image} is missing — scripts/prepare-netboot.sh stages the installer stick image`);
+  if (!c.imagePresent) p.push(`${image} is missing — node media prepare builds the installer stick image`);
   if (c.sticks === undefined) return p;
   if (c.sticks === null) { p.push(`cannot reach ${node}`); return p; }
   const s = c.sticks.find((x) => x.device === c.device);

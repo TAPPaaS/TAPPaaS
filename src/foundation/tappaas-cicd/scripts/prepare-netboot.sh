@@ -22,6 +22,9 @@
 # After this, `site-manager node add <name>` works with zero prep. The
 # PXE-less alternative is a stick of /var/lib/tappaas-pxe/tappaas-usb.iso (the
 # prepared ISO with the TAPPaaS installer hook): the flow is the same.
+# `site-manager node media` says what is staged; `node media prepare` runs
+# this script (or node-provisioner prepare alone, from the ISO already here)
+# when something is missing or stale — the console's Add a node, stage 0.
 #
 set -euo pipefail
 

@@ -214,6 +214,8 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.aps.get()));
       case "ssids":
         return sendJson(res, 200, envelope(await r.ssids.get()));
+      case "media":
+        return sendJson(res, 200, envelope(await r.media.get()));
       case "environments":
         return sendJson(res, 200, envelope(await r.environments.get()));
       case "identity":

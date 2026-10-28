@@ -88,6 +88,7 @@ export const TTL = {
   ipv6: 10 * MIN,
   nodeProgress: 10_000, // while a node is being added
   nodeUsb: 5_000, // the sticks in a node, while a wizard looks
+  media: 10_000, // the boot medium on the mothership, while Add a node looks
   drift: 0, // on demand
 };
 
@@ -137,6 +138,21 @@ export interface NodeUsb {
   node: string;
   reachable: boolean;
   sticks: { device: string; size: number; vendor: string | null; model: string | null; serial: string | null; inUse: boolean; why: string | null; keyStick: boolean }[];
+}
+
+// site-manager node media --json: the boot medium on the mothership (the
+// netboot assets and the installer stick image), and what prepare would run.
+export interface BootMedia {
+  directory: string;
+  staged: boolean;
+  current: boolean;
+  source: string;
+  sourcePresent: boolean;
+  stickImage: { path: string; present: boolean; size: number; modified: string | null };
+  xorriso: boolean;
+  ready: boolean;
+  problems: string[];
+  prepare: { argv: string[]; minutes: string } | null;
 }
 
 // A node name as site-manager accepts one.
@@ -190,6 +206,7 @@ export class Reads {
   readonly schemas: CachedMap<Record<string, unknown>>;
   readonly nodeProgress: CachedMap<NodeProgress>;
   readonly nodeUsb: CachedMap<NodeUsb>;
+  readonly media: Cached<BootMedia>;
   readonly catalogs: Cached<RepositoryCatalog[]>;
   readonly faceplates: Cached<{ key: string; kind: string; units: number; width: string; site?: boolean }[]>;
   readonly storage: Cached<StorageDoc>;
@@ -281,6 +298,13 @@ export class Reads {
     this.nodeUsb = new CachedMap("node-usb", TTL.nodeUsb, async (n) => {
       const d = await j<NodeUsb>("site-manager", ["node", "usb", n, "--json"], [0], 30_000);
       if (!d || typeof d.reachable !== "boolean" || !Array.isArray(d.sticks)) throw new Error(`site-manager node usb ${n} --json gave no sticks (no reachable, sticks)`);
+      return d;
+    }, now);
+    // The boot medium on the mothership (site-manager node media --json): what
+    // Add a node's stage 0 shows, and whether it has to be prepared first.
+    this.media = new Cached("media", TTL.media, async () => {
+      const d = await j<BootMedia>("site-manager", ["node", "media", "--json"], [0], 30_000);
+      if (!d || typeof d.staged !== "boolean" || !Array.isArray(d.problems)) throw new Error("site-manager node media --json gave no status (no staged, problems)");
       return d;
     }, now);
     // Every identity object's record, for the graph of their relations: each

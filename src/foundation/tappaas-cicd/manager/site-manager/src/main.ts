@@ -37,6 +37,7 @@ import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
 import { addNodeStorage, listNodeStorage } from "./storage";
 import { listNodeUsb, writeNodeUsb } from "./usb";
+import { listMedia, prepareMedia } from "./media";
 import { Site, SiteClient } from "./types";
 import { runningVersion } from "./version";
 import { spawnSync } from "child_process";
@@ -172,11 +173,17 @@ export const HELP: HelpSpec = {
         ["--layout <l>", "single (1 disk, no redundancy), mirror (2 or more), raidz1 (3 or more, one disk may fail), raidz2 (4 or more, two may fail)."],
         ["--wipe", "Erase disks that carry data or an old pool's label. Without it such a disk is a refusal and nothing is erased."],
       ] },
+    { usage: "node media [--json]", effect: "read", note: "(the boot medium on the mothership: whether the netboot assets are staged and current with this version, the installer stick image, and what node media prepare would run)" },
+    { usage: "node media prepare [--force]", effect: { noPreview: "stages the netboot assets and builds the installer stick image on the mothership" },
+      options: [
+        ["(default)", "Stages what is missing or stale: from the prepared ISO already on the mothership when there is one (a few minutes), else the whole of prepare-netboot.sh — the Proxmox ISO fetched and prepared on a cluster node, copied here and staged (ten minutes or more). The cicd install did this once; nothing to do when all is there."],
+        ["--force", "Stage it all again, for a new Proxmox version."],
+      ] },
     { usage: "node usb <node> [--json]", effect: "read", note: "(the USB sticks plugged into the node — device, size, vendor, model, serial; whether one is in use or is the backup key stick)" },
     { usage: "node usb write <node> <device> --yes", effect: { noPreview: "writes the TAPPaaS installer stick image to a USB stick in the node, erasing it" },
       options: [
         ["<device>", "The stick, by the device name node usb <node> lists (/dev/sdb). A disk that is no USB stick, or a stick that is mounted, swap or a pool/LVM/RAID member, is refused and nothing is written."],
-        ["--yes", "Required: the stick is erased. The image is /var/lib/tappaas-pxe/tappaas-usb.iso, staged by scripts/prepare-netboot.sh; a new machine boots the installer from the stick once, where network boot is not an option."],
+        ["--yes", "Required: the stick is erased. The image is /var/lib/tappaas-pxe/tappaas-usb.iso (node media prepare builds it); a new machine boots the installer from the stick once, where network boot is not an option."],
       ] },
     { usage: "node delete <name> [--apply] [--shutdown] [--erase] [--config-only]",
       options: [
@@ -867,7 +874,7 @@ function setDeep(obj: Record<string, unknown>, path: string[], value: unknown): 
 // ── `node` CRUD + reconcile (the pvehost instances, ADR-036 D6) ─────────
 function cmdNode(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("node: expected 'list' | 'add' | 'storage' | 'usb' | 'delete' | 'reconcile' | 'reboot'");
+  if (!sub) die("node: expected 'list' | 'add' | 'storage' | 'media' | 'usb' | 'delete' | 'reconcile' | 'reboot'");
   const siteFile = siteFileOf(o);
   // The nodes are the pvehost instances beside site.json (ADR-036 D6).
   const nodesDir = dirname(siteFile);
@@ -989,6 +996,14 @@ function cmdNode(o: Opts, client: SiteClient): void {
     }
     if (!verb) die("node storage: expected <node> (its disks) or add <node> <pool> ...");
     listNodeStorage(verb, o.json);
+    return;
+  }
+
+  if (sub === "media") {
+    const verb = o.rest[1];
+    if (verb === "prepare") prepareMedia(o.force);
+    else if (verb) die("node media: expected nothing (the status) or prepare [--force]");
+    else listMedia(o.json);
     return;
   }
 
