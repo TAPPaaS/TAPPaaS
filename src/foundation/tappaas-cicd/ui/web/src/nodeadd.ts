@@ -61,8 +61,18 @@ export function proposedLayout(count: number): string {
   return count <= 1 ? "single" : count === 2 ? "mirror" : "raidz1";
 }
 
-export function proposedPoolName(type: string, taken: string[]): string {
-  const cls = type === "hdd" ? "b" : "a";
+// The pool classes, by what they hold (cluster/DESIGN.md, pool tiers).
+export const POOL_CLASSES = [
+  { cls: "a", label: "tanka — important data and workloads (VM disks, HA replication; fast, redundant)" },
+  { cls: "b", label: "tankb — less important workloads and data (no HA replication; cheaper disks)" },
+  { cls: "c", label: "tankc — backups (the backup datastore)" },
+] as const;
+export type PoolClass = (typeof POOL_CLASSES)[number]["cls"];
+
+// The class proposed for disks: fast ones hold the workloads, spinning ones the rest.
+export const proposedPoolClass = (type: string): PoolClass => (type === "hdd" ? "b" : "a");
+
+export function proposedPoolName(cls: PoolClass, taken: string[]): string {
   for (let n = 1; ; n++) if (!taken.includes(`tank${cls}${n}`)) return `tank${cls}${n}`;
 }
 

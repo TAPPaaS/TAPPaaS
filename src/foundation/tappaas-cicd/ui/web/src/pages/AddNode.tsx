@@ -23,7 +23,7 @@ import { useOpenedBy } from "../opener";
 import { StorageInventory, SiteRead, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
-import { diskId, humanSize, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices, writeProgress } from "../nodeadd";
+import { POOL_CLASSES, PoolClass, diskId, humanSize, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress } from "../nodeadd";
 import { Dot, Link, canOperate, useMe } from "../ui";
 import { UsbStickPicker, gb } from "../usbsticks";
 import { StepRow } from "./Setup";
@@ -424,9 +424,11 @@ function NodePools({ node, onAdded, onSkip }: { node: string; onAdded: () => voi
   const [ticked, setTicked] = useState<string[] | null>(null);
   const sel = ticked ?? proposedDisks(here?.otherDisks ?? []).map(diskId);
   const first = disks.find((d) => sel.includes(diskId(d)));
+  const [cls, setCls] = useState<PoolClass | null>(null);
   const [pool, setPool] = useState<string | null>(null);
   const [layout, setLayout] = useState<string | null>(null);
-  const poolName = pool ?? proposedPoolName(first?.type ?? "ssd", taken);
+  const poolClass = cls ?? proposedPoolClass(first?.type ?? "ssd");
+  const poolName = pool ?? proposedPoolName(poolClass, taken);
   const lay = layout ?? proposedLayout(sel.length);
   if (!inv) return <p className="muted small">reading the storage inventory…</p>;
   if (!here) return <p className="muted small">{node} is not in the storage inventory yet — it is read every few minutes.</p>;
@@ -463,9 +465,15 @@ function NodePools({ node, onAdded, onSkip }: { node: string; onAdded: () => voi
       {disks.length ? (
         <>
           <label className="form-row">
+            <span>what it holds</span>
+            <select value={poolClass} onChange={(e) => { setCls(e.target.value as PoolClass); setPool(null); }}>
+              {POOL_CLASSES.map((c) => <option key={c.cls} value={c.cls}>{c.label}</option>)}
+            </select>
+          </label>
+          <label className="form-row">
             <span>pool name</span>
             <input type="text" value={poolName} onChange={(e) => setPool(e.target.value.trim())} />
-            <small className="muted">tank&lt;class&gt;&lt;N&gt;: a for SSD/NVMe, b for spinning disks. A name other nodes have extends that storage to {node}.</small>
+            <small className="muted">tank&lt;class&gt;&lt;N&gt;, the next free number proposed. A name other nodes have extends that storage to {node}: HA replication needs the same tanka name on both nodes.</small>
           </label>
           <label className="form-row">
             <span>layout</span>

@@ -35,7 +35,7 @@ export const LAYOUTS: Record<string, { min: number; max?: number; topology: stri
 // <pools> are the pools the node's record already carries. Pure.
 export function storageAddProblems(pool: string, disks: string[], layout: string, pools: string[]): string[] {
   const p: string[] = [];
-  if (!/^tank[a-z0-9_-]{1,28}$/.test(pool)) p.push(`'${pool}' is no data pool name: tank<class><N> — tanka1 for SSD/NVMe, tankb1 for spinning disks`);
+  if (!/^tank[a-z0-9_-]{1,28}$/.test(pool)) p.push(`'${pool}' is no data pool name: tank<class><N> — tanka (important workloads), tankb (less important), tankc (backups)`);
   else if (pools.includes(pool)) p.push(`the node already has '${pool}'`);
   const l = LAYOUTS[layout];
   if (!l) p.push(`--layout '${layout}': one of ${Object.keys(LAYOUTS).join(", ")}`);

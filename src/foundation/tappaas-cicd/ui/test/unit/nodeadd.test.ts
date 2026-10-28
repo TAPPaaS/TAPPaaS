@@ -2,7 +2,7 @@
 // D4): the switch ports a new node can be cabled to, the trunk a hand-configured
 // port needs, and the data pool proposed from the node's free disks.
 
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices, writeProgress } from "../../web/src/nodeadd";
+import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES } from "../../web/src/nodeadd";
 import { StorageDisk, TopoPort, TopoSwitch } from "../../web/src/types";
 import { check, done } from "./check";
 
@@ -49,7 +49,9 @@ check(proposedDisks(free).map(diskId).join() === "N1,N2", "two fast disks alike:
 check(proposedDisks([disk("H1", 8e12, "hdd")]).map(diskId).join() === "H1", "only a spinning disk: that one");
 check(proposedDisks([disk("BAD", 1e12, "ssd", { state: "fail" as StorageDisk["state"] })]).length === 0, "nothing healthy: nothing");
 check(proposedLayout(1) === "single" && proposedLayout(2) === "mirror" && proposedLayout(3) === "raidz1", "the layout for a count");
-check(proposedPoolName("nvme", []) === "tanka1" && proposedPoolName("hdd", ["tankb1"]) === "tankb2", "tanka for fast disks, tankb for spinning, the next free number");
+check(proposedPoolClass("nvme") === "a" && proposedPoolClass("hdd") === "b", "tanka proposed for fast disks, tankb for spinning");
+check(proposedPoolName("a", []) === "tanka1" && proposedPoolName("b", ["tankb1"]) === "tankb2" && proposedPoolName("c", ["tanka1"]) === "tankc1", "the class's next free number");
+check(POOL_CLASSES.map((c) => c.cls).join() === "a,b,c" && POOL_CLASSES[2].label.includes("backups"), "three classes, tankc the backups");
 check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && humanSize(null) === "?", "sizes as the inventory says them");
 
 // The stick write's progress bar: the last percent line of the output, then the flush.

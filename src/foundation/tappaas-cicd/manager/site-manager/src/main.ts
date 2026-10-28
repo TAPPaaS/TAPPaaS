@@ -168,7 +168,7 @@ export const HELP: HelpSpec = {
     { usage: "node storage <node> [--json]", effect: "read", note: "(the node's pools, and its disks in no pool — by serial, size, type and model)" },
     { usage: "node storage add <node> <pool> --disks <d,d> --layout single|mirror|raidz1|raidz2 [--wipe]", effect: { noPreview: "builds a ZFS data pool on the node's disks and registers it as the node's storage" },
       options: [
-        ["<pool>", "The pool's name, also its storage name: tank<class><N> by convention — a for SSD/NVMe (tanka1), b for spinning disks. A name the node already has is refused; one other nodes have extends that storage to this node."],
+        ["<pool>", "The pool's name, also its storage name: tank<class><N> by convention — tanka: important data and workloads (VM disks, HA replication); tankb: less important workloads and data; tankc: backups. A name the node already has is refused; one other nodes have extends that storage to this node."],
         ["--disks <d,d>", "The disks, by serial or /dev/disk/by-id name, as node storage <node> lists them. A kernel name (nvme0n1) is refused: it can change between boots. The boot disk and a disk in a live pool are always refused."],
         ["--layout <l>", "single (1 disk, no redundancy), mirror (2 or more), raidz1 (3 or more, one disk may fail), raidz2 (4 or more, two may fail)."],
         ["--wipe", "Erase disks that carry data or an old pool's label. Without it such a disk is a refusal and nothing is erased."],
