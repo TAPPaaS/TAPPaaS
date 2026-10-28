@@ -28,7 +28,7 @@ export function formParts(step: ArgvStep & { hide?: string[]; only?: string[] },
   return {
     names: verb.positionals.slice(step.fixed?.length ?? 0).filter((p) => !hidden.has(`@${p.name}`)),
     options: verb.options.filter((o) => !hidden.has(o.flag) && !disruptive.has(o.flag) && (!step.only || step.only.includes(o.flag))),
-    disruptions: verb.disruptions,
+    disruptions: verb.disruptions.filter((d) => !hidden.has(d.flag)),
   };
 }
 

@@ -9,7 +9,7 @@
 //                  (tappaasN → 10.0.0.<9+N>): verify it is that machine,
 //                  then run the join pipeline over ssh.
 //
-//   provisionNode  `node add tappaasN --pxe` — bare machine: PXE-install it
+//   provisionNode  `node add tappaasN --install` — bare machine: install it (PXE or USB stick)
 //                  first (node-provisioner trap), then the same pipeline.
 //
 // The join pipeline (shared):
@@ -52,7 +52,6 @@ export interface ProvisionOpts {
   bootFilesystem?: string; // zfs (default) | ext4 — the provisioner's --boot-filesystem
   bootMirror?: string; // a second boot disk: rpool mirrored (zfs raid1), by kernel name
   macs: string[];
-  anyMac?: boolean; // --mac any: no MAC pinned; the first machine that asks gets the answer
   wanPort?: string; // NIC for firewall-HA uplink; undefined => ask; "" => none
   lanPorts?: string; // #40: lan port(s), comma-separated; undefined => ask (empty = auto-detect)
   lanMode?: string; // active-backup | lacp, for two or more lan ports
@@ -286,7 +285,7 @@ export function adoptNode(o: ProvisionOpts): void {
   run("ssh-keygen", ["-R", stdIp]);
   const probe = sshTo(stdIp, "hostname -s; pveversion 2>/dev/null | head -1", 8);
   if (probe.rc !== 0) {
-    die(`no ssh at root@${stdIp} — for a bare machine use 'node add ${o.name} --pxe'; ` +
+    die(`no ssh at root@${stdIp} — for a bare machine use 'node add ${o.name} --install'; ` +
         `for a manual install make sure it is at ${stdIp} with the cicd key authorized`);
   }
   const [host, pve] = probe.out.trim().split("\n");
@@ -321,13 +320,10 @@ export function provisionNode(o: ProvisionOpts): void {
   // a node trunk and the MAC is learned there; elsewhere the MAC is the operator's.
   const sp = o.switchPort ? parseSwitchPort(o.switchPort) : null;
   if (o.switchPort && !sp) die(`--switch-port '${o.switchPort}': <switch>:<port>, e.g. "USW Pro XG 10 PoE:1"`);
-  if (o.anyMac) {
-    warn(`--mac any: no MAC pinned — the first machine that asks for an install answer in the next ${o.ttlSeconds}s gets ${o.name}'s ` +
-         "(a cluster node never does); keep other machines from network-booting meanwhile");
-  } else if (!sp && o.macs.length === 0) {
-    printManualPortSetup();
-    die("node add --pxe: say where the machine is — --switch-port <switch>:<port> on a switch TAPPaaS programs " +
-        "(the MAC is learned there), or --mac <m> (the machine's label, its BIOS or its BMC)");
+  // No port and no MAC: no MAC pinned, the first machine that asks gets the answer.
+  if (!sp && o.macs.length === 0) {
+    warn(`no --switch-port and no --mac: the first machine that asks for an install answer in the next ${o.ttlSeconds}s gets ${o.name}'s ` +
+         "(a cluster node never does); keep other machines from booting the installer meanwhile");
   }
   let portBefore: string[] = [];
   if (sp) {
@@ -351,7 +347,7 @@ export function provisionNode(o: ProvisionOpts): void {
   if (runStream("node-provisioner", regArgs) !== 0) die("node-provisioner register failed");
 
   // arm the trap ------------------------------------------------------------
-  step(`arm the PXE trap (TTL ${o.ttlSeconds}s)`);
+  step(`open the boot window (TTL ${o.ttlSeconds}s)`);
   if (runStream("sudo", ["node-provisioner", "enable", "--ttl", String(o.ttlSeconds)]) !== 0) {
     die("node-provisioner enable failed");
   }
@@ -359,7 +355,7 @@ export function provisionNode(o: ProvisionOpts): void {
   let installIp = stdIp;
   try {
     // wait for the answer to be served ---------------------------------------
-    step("PXE-boot the machine now (UEFI network boot, e.g. F11)");
+    step("boot the machine now: from the network (UEFI network boot, e.g. F11) or the USB stick");
     if (o.bootDisk === "ask") {
       info(`  ${YW}the node's console will ask ONE question: the boot disk${CL}`);
     } else {
@@ -371,7 +367,7 @@ export function provisionNode(o: ProvisionOpts): void {
     const answerDeadline = Date.now() + o.ttlSeconds * 1000;
     // With --switch-port the MAC is learned while the machine netboots, and the
     // registration pinned to it before the installer asks for its answer.
-    let learning = sp !== null && o.macs.length === 0 && !o.anyMac;
+    let learning = sp !== null && o.macs.length === 0;
     if (learning) info(`  watching ${sp!.switch} port ${sp!.port} for the machine's MAC...`);
     let ticks = 0;
     while (!fs.existsSync(consumed)) {
@@ -399,7 +395,7 @@ export function provisionNode(o: ProvisionOpts): void {
     info(`  ${GN}✓${CL} answer served — installing; node will boot at ${installIp} (installer bakes its lease statically)`);
 
     // disarm ------------------------------------------------------------------
-    step("install underway — disarming the PXE trap");
+    step("install underway — closing the boot window");
     runStream("sudo", ["node-provisioner", "disable"]);
 
     // wait for the installed node ---------------------------------------------

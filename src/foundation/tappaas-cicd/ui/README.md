@@ -157,7 +157,7 @@ groups, the roles of users and groups, an organization's owner and parent; `GET 
 `identity-manager <kind> show` for each), the list beside it, a click for the record and its verbs; a change is staged with `--no-reconcile` and pushed by `identity-manager
 reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
 modify, purge (typed). **Site** — the four tabs above. Add node is a guided sequence in Setup's step rows: declare
-the node (`site-manager node add tappaasN --pxe` with its PXE port's MAC, boot disk, WAN and lan
+the node (`site-manager node add tappaasN --install` with its PXE port's MAC, boot disk, WAN and lan
 ports, pools), boot it from the network by hand, the install and join watched live (`GET
 /api/v1/nodes/<name>/progress`: the provisioning registration, `node-provisioner status`, cluster
 membership, the node's `pvehost` record; every 10 s), then `node network set` and `node network test`, previewed. **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last

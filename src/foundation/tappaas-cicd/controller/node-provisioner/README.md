@@ -121,7 +121,7 @@ installs in legacy mode.
 
 **Boot order after the install.** The firmware keeps netbooting while the
 network entry is first; the registration is consumed, so the next answer is a
-404 and the installer stops. On UEFI, `site-manager node add --pxe` puts the
+404 and the installer stops. On UEFI, `site-manager node add --install` puts the
 installed disk first itself once the node is up. When it cannot (it says so),
 or on legacy firmware, set the installed disk first in the firmware setup — or,
 on a UEFI node, from its shell:

@@ -142,13 +142,13 @@ export const HELP: HelpSpec = {
       note: "(refused for the primary location and for one a peer, room or device names)",
       options: [["--check", "say whether it can go, in one line; write nothing."], ["--json", "with --check: the whole resulting site.json, for machines."]] },
     { usage: "node list [--json]", note: "(the cluster's nodes: their pvehost instances, with their storage pools)" },
-    { usage: "node add <N> [--pxe] [--switch-port <sw>:<p>] [--mac <m>] [--boot-disk <d>] [--boot-mirror <d>] [--boot-filesystem zfs|ext4] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]", effect: { noPreview: "joins a node: PXE-boots and installs it on a ZFS boot pool, adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add" },
-      hidden: ["--name <N>", "--provision", "--pool <p>"],
+    { usage: "node add <N> [--install] [--switch-port <sw>:<p>] [--mac <m>] [--boot-disk <d>] [--boot-mirror <d>] [--boot-filesystem zfs|ext4] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]", effect: { noPreview: "joins a node: installs it on a ZFS boot pool (network boot or the USB stick), adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add" },
+      hidden: ["--name <N>", "--pxe", "--provision", "--pool <p>"],
       options: [
         ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
-        ["--pxe", "TAPPaaS will set up a PXE boot service, alternative is to use a USB stick."],
-        ["--switch-port <sw>:<p>", "The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up as a trunk port, and the machine's MAC is learned there when it netboots (blank MAC). On a switch TAPPaaS does not program, configure the port by hand as a trunk port that also carries all the VLAN tagged traffic, and give --mac."],
-        ["--mac <m>", "The MAC of the card that netboots, from the machine's label, its BIOS or its BMC. Needed when the port is not one TAPPaaS programs; with --switch-port it may stay blank. any: no MAC — the first machine that asks for an install answer while the boot window is open gets it (a cluster node never does); keep --ttl short."],
+        ["--install", "Install Proxmox on the machine: TAPPaaS serves the installer's answer, and the machine boots it from the network (PXE) or from the USB stick image. (--pxe: the same.)"],
+        ["--switch-port <sw>:<p>", "The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up as a trunk port, and the machine's MAC is learned there when it boots the installer (blank MAC). On a switch TAPPaaS does not program, configure the port by hand as a trunk port that also carries all the VLAN tagged traffic, and give --mac (blank: the first machine that asks gets the answer)."],
+        ["--mac <m>", "The MAC of the cabled card (aa:bb:cc:dd:ee:ff), from the machine's label, its BIOS or its BMC. Blank: learned on --switch-port; with no switch port either, the first machine that asks for an install answer while the boot window is open gets it (a cluster node never does) — keep --ttl short then."],
         ["--boot-disk <d>", "The disk to install Proxmox on (wiped), can be the model name or size if it is unique. Blank: the smallest SSD or NVMe disk, and both when the smallest two are alike (mirrored). ask: chosen on the node's console."],
         ["--boot-mirror <d>", "A second disk to mirror the boot pool onto, named like --boot-disk. Blank: a mirror only when --boot-disk finds two disks alike. none: one disk."],
         ["--boot-filesystem zfs|ext4", "The boot disk's filesystem; zfs (default) lets the boot pool carry the guests on a node with no data disk (ADR-037 D1), ext4 only with data disks."],
@@ -157,9 +157,9 @@ export const HELP: HelpSpec = {
         ["--lan-ports <a,b>", "the node's lan port(s); two or more bond under lan as lanbond. Default: auto-detected, one port."],
         ["--lan-mode <m>", "active-backup (default for 2+ ports: any switches, any speeds) or lacp (equal speeds; the switch side one LAG)."],
         ["--lan-primary <if>", "active-backup: the port that carries traffic when up (default: the fastest)."],
-        ["--ttl <s>", "Seconds the PXE offer stays open (default 7200)."],
+        ["--ttl <s>", "Seconds the boot window stays open (default 7200)."],
         ["--no-reboot", "Do not reboot the node after its first update. By default it reboots into the kernel that update installed, before it takes guests, when the cluster keeps quorum without it."],
-        ["--yes", "do not ask for confirmation."],
+        ["--yes", "Do not ask for the node's lan ports after the install: one port, auto-detected (also when --wan-port or --no-wan is given)."],
         ["--config-only", "Only write the node's pvehost record, config/<N>.json (no machine contact)."],
         ["--storage-pools <a,b>", "with --config-only: the pools to record. A node that joins records the zpools found on it; new pools are node storage add."],
       ] },
@@ -328,7 +328,7 @@ interface Opts {
 
 // Flags that take NO value (everything else with a value is captured generically).
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
-  "--pxe", "--provision", "--config-only", "--yes", "--no-wan", "--no-reboot", "--wipe",
+  "--install", "--pxe", "--provision", "--config-only", "--yes", "--no-wan", "--no-reboot", "--wipe",
   "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned", "--primary", "--check",
   "--verbose", "--stop"]);
 
@@ -916,8 +916,9 @@ function cmdNode(o: Opts, client: SiteClient): void {
       info(`${GN}✓${CL} node '${name}' added as a pvehost instance (pools: ${pools.join(", ") || "none"})`);
       return;
     }
-    if (o.flags.get("--switch-port") && !o.boolFlags.has("--pxe") && !o.boolFlags.has("--provision")) {
-      die("node add: --switch-port is for --pxe — a node installed by hand is at its address already");
+    const install = o.boolFlags.has("--install") || o.boolFlags.has("--pxe") || o.boolFlags.has("--provision");
+    if (o.flags.get("--switch-port") && !install) {
+      die("node add: --switch-port is for --install — a node installed by hand is at its address already");
     }
     // ADR-037 D4: a node joins on its boot pool; its data pools are a second step.
     if (pools.length > 0) {
@@ -925,18 +926,18 @@ function cmdNode(o: Opts, client: SiteClient): void {
           `site-manager node storage add ${name} <pool> --disks <serial,...> --layout <l> (node storage ${name} lists its disks)`);
     }
     if (o.boolFlags.has("--provision")) {
-      warn("--provision is deprecated — use --pxe");
+      warn("--provision is deprecated — use --install");
     }
-    if (o.flags.get("--mac") === "any" && !o.boolFlags.has("--pxe") && !o.boolFlags.has("--provision")) {
-      die("node add: --mac any is for --pxe — the first machine that asks for an install answer gets it");
+    const mac = o.flags.get("--mac");
+    if (mac && !/^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$/i.test(mac)) {
+      die(`node add: --mac '${mac}' is no MAC — six hex pairs, e.g. aa:bb:cc:dd:ee:ff (blank: learned on --switch-port)`);
     }
     const opts = {
       name,
       bootDisk: o.flags.get("--boot-disk"),
       bootFilesystem: o.flags.get("--boot-filesystem"),
       bootMirror: o.flags.get("--boot-mirror"),
-      macs: o.flags.get("--mac") && o.flags.get("--mac") !== "any" ? [o.flags.get("--mac") as string] : [],
-      anyMac: o.flags.get("--mac") === "any",
+      macs: mac ? [mac.toLowerCase().replace(/-/g, ":")] : [],
       wanPort: o.boolFlags.has("--no-wan") ? "" : o.flags.get("--wan-port"),
       lanPorts: o.flags.get("--lan-ports"),
       lanMode: o.flags.get("--lan-mode"),
@@ -946,8 +947,8 @@ function cmdNode(o: Opts, client: SiteClient): void {
       yes: o.boolFlags.has("--yes"),
       noReboot: o.boolFlags.has("--no-reboot"),
     };
-    if (o.boolFlags.has("--pxe") || o.boolFlags.has("--provision")) {
-      // Bare machine: PXE install → join → capture (design N3).
+    if (install) {
+      // Bare machine: install (network boot or the USB stick) → join → capture (design N3).
       provisionNode(opts);
     } else {
       // Default: a Proxmox was installed by hand at the node's designated

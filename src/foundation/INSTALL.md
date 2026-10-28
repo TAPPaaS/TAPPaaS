@@ -334,7 +334,7 @@ re-stage once with `prepare-netboot.sh --force` on the mothership.
 **Per node — one command:**
 
 ```bash
-site-manager node add tappaas2 --pxe
+site-manager node add tappaas2 --install
 ```
 
 The command walks the whole flow and asks only what it cannot know:
@@ -365,7 +365,7 @@ The command walks the whole flow and asks only what it cannot know:
 Every question can be pre-answered for a fully unattended run:
 
 ```bash
-site-manager node add tappaas2 --pxe --boot-disk 2TB --mac aa:bb:cc:dd:ee:ff --no-wan
+site-manager node add tappaas2 --install --boot-disk 2TB --mac aa:bb:cc:dd:ee:ff --no-wan
 # --mac also pre-reserves the standard IP, so the node installs onto it directly.
 # --boot-disk: a size, a model or a serial (blank: the automatic choice).
 site-manager node storage add tappaas2 tanka1 --disks 50026B73842AD86F --layout single
@@ -381,7 +381,7 @@ site-manager update
 > `dd if=/var/lib/tappaas-pxe/tappaas-usb.iso of=/dev/<usb> bs=4M` (it is
 > also served at `http://tappaas-cicd.mgmt.internal:8090/tappaas-usb.iso`
 > while the boot window is open) — and boot from USB instead of pressing F11.
-> The flow (and the `node add <name> --pxe` command) is otherwise identical:
+> The flow (and the `node add <name> --install` command) is otherwise identical:
 > the answer still comes from the mothership, which matches `--boot-disk`
 > against the disks the stick reports. The stick cannot ask on the console:
 > a boot-disk field that matches no disk stops the install with the list of
@@ -389,7 +389,7 @@ site-manager update
 >
 > **Manual install instead?** Install from a stock ISO or the Step 1 Option A
 > stick, give the node its standard mgmt IP (or let it DHCP), then run
-> `site-manager node add tappaas2` (no `--pxe`) — it finds the Proxmox at
+> `site-manager node add tappaas2` (no `--install`) — it finds the Proxmox at
 > the node's designated IP and runs the same join + capture pipeline.
 > The underlying tools remain available for surgery: `node-provisioner
 > register/enable/disable/status` and `dhcp-manager pxe/host`.

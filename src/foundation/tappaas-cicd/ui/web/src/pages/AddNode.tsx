@@ -2,9 +2,9 @@
 // each stage does is said before it runs, and what the operator must do by
 // hand is said where it is needed (ADR-037 D4). 1 declare the node — where it
 // is cabled first, then its MAC and boot disks, each blank its default
-// (site-manager node add --pxe: one job that registers it for a network
-// install, opens the PXE window and waits for it); 2 boot the machine from the
-// network, by hand; 3 the install and the join, watched live (the provisioning
+// (site-manager node add --install: one job that registers its install answer,
+// opens the boot window and waits for it); 2 boot the machine from the network
+// or the USB stick, by hand; 3 the install and the join, watched live (the provisioning
 // registration, the PXE window, the cluster, the node's pvehost record, and the
 // job's own output); 4 its data pools, proposed from its free disks (node
 // storage add); 5 its lan uplink (node network set, then node network test,
@@ -46,7 +46,7 @@ export function firstFreeNode(known: string[]): string {
 
 // In the order the operator has the answers (ADR-037 D4): where it is cabled,
 // its MAC, its boot disks; every one may stay blank, and says what blank does.
-const DECLARE_OPTIONS = ["--pxe", "--switch-port", "--mac", "--boot-disk", "--boot-mirror", "--ttl", "--no-reboot"];
+const DECLARE_OPTIONS = ["--switch-port", "--mac", "--boot-disk", "--boot-mirror", "--ttl", "--no-reboot"];
 
 function Check({ ok, label, detail }: { ok: boolean | null; label: string; detail?: string }) {
   return (
@@ -94,31 +94,34 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   const trunk = manualTrunkText(nodeTrunkVlans(zones));
   const declare: Step = useMemo(
     () => ({
-      title: `site-manager node add ${name || "<name>"} --pxe`,
+      title: `site-manager node add ${name || "<name>"}`,
       bin: "site-manager",
       verb: "node add",
       fixed: valid ? [name] : [],
       only: DECLARE_OPTIONS,
       placeholders: {
-        "--switch-port": "blank: the port is configured by hand, and the MAC is needed",
-        "--mac": "blank with a switch port: learned there · any: the first machine that asks — e.g. 58:47:ca:7a:12:34",
+        "--switch-port": "none: the port is configured by hand",
+        "--mac": "e.g. 58:47:ca:7a:12:34 — blank: learned on the switch port; with none, the first machine that asks",
         "--boot-disk": "blank: the smallest SSD/NVMe",
         "--boot-mirror": "blank: mirrored only when two disks alike match · none: one disk",
         "--ttl": "7200",
       },
-      suggest: { "--switch-port": ports.map((c) => c.value) },
+      // The free ports on the switches TAPPaaS programs (and this node's own).
+      choices: { "--switch-port": ports.map((c) => c.value) },
       suggestNotes: { "--switch-port": Object.fromEntries(ports.map((c) => [c.value, c.label])) },
       // The node joins with no WAN port and its one detected lan port; stage 5
-      // declares the lan ports and the WAN port (node network set).
-      initial: { "--pxe": true, "--yes": true, "--no-wan": true },
+      // declares the lan ports and the WAN port (node network set). --yes only
+      // skips node add's lan-port question, which --no-wan skips already.
+      initial: { "--install": true, "--yes": true, "--no-wan": true },
+      hide: ["--yes"],
       prefill: options,
       blocked: job !== null || (valid && !known.includes(name)) ? undefined : "give the node a new name first",
       note: (
         <>
           <p><b>Where it is cabled</b> — one of two:</p>
           <ul>
-            <li><b>Connected to a TAPPaaS-managed switch:</b> pick its port. TAPPaaS makes it a node trunk and learns the machine's MAC there; the MAC field may stay blank.</li>
-            <li><b>A self-managed switch:</b> set the port as {trunk}, leave the switch port blank, and give the MAC (from the machine's label, its BIOS or its BMC).</li>
+            <li><b>Connected to a TAPPaaS-managed switch:</b> pick its port (the free ones are listed). TAPPaaS makes it a node trunk and learns the machine's MAC there; the MAC field may stay blank.</li>
+            <li><b>A self-managed switch:</b> set the port as {trunk} and leave the switch port at none. Give the MAC (from the machine's label, its BIOS or its BMC); left blank, the first machine that asks for an install answer while the boot window is open gets this node's, so keep other machines from booting the installer meanwhile.</li>
           </ul>
           <p><b>Boot disk:</b> specify the boot disk and optionally a mirror disk. Default: the installer takes the smallest SSD or NVMe disk, and both when the smallest two are the same model and size (mirrored); when nothing matches, the node's own screen asks.</p>
           <p>Its data pools come after the join (stage 4), from the disks it really has.</p>

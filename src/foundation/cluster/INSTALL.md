@@ -43,7 +43,7 @@ with the same positional `REPO BRANCH` arguments.
 **Additional nodes** — after the first node's bootstrap has finished, add each node from
 the mothership with one command (network-boot, fully unattended):
 
-    site-manager node add tappaas2 --pxe
+    site-manager node add tappaas2 --install
 
 then fold the new topology into HA + replication with `site-manager update`.
 

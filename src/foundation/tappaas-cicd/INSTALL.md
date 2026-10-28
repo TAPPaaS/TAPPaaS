@@ -114,7 +114,7 @@ init is guarded on the environment file, and `install-platform.sh` keys its skip
 sequence does this, but on a re-run you can invoke it manually then
 `update-module.sh network`.
 
-**`node add --pxe` says netboot assets missing**
+**`node add --install` says netboot assets missing**
 The install stages them non-fatally; re-stage with `prepare-netboot.sh` (after a PVE
 version upgrade: `prepare-netboot.sh --force`).
 

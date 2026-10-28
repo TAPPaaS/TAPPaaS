@@ -23,11 +23,11 @@ export interface Step extends ArgvStep {
   title: string;
   verb: string; // the manifest verb's name
   initial?: Values;
-  hide?: string[]; // options not offered here
+  hide?: string[]; // options (and disruptions) not offered here
   only?: string[]; // offer only these options (and the disruptions)
   choices?: Record<string, string[]>; // offered values, by "@name" or flag
   suggest?: Record<string, string[]>; // values offered beside free text, by "@name" or flag
-  suggestNotes?: Record<string, Record<string, string>>; // a suggested value's note, by "@name" or flag, then value
+  suggestNotes?: Record<string, Record<string, string>>; // a suggested or offered value's note, by "@name" or flag, then value
   labels?: Record<string, string>;
   placeholders?: Record<string, string>; // an example in place of the help's <arg>, by "@name" or flag
   asides?: Record<string, ReactNode>; // shown under an option's input, by "@name" or flag (a link to add what the dropdown lacks)
@@ -68,7 +68,7 @@ export function applyForm(verb: ManifestVerb | null, argv: string[]): string[] {
 // disruptions.
 function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb: ManifestVerb; values: Values; set: (v: Values) => void; part?: "all" | "bottom" }) {
   const label = (k: string, fallback: string) => step.labels?.[k] ?? fallback;
-  const { names: pos, options: opts } = formParts(step, verb);
+  const { names: pos, options: opts, disruptions } = formParts(step, verb);
   const field = (key: string, arg0: string | null, choices: string[] | null, repeatable: boolean) => {
     const offered = step.choices?.[key] ?? choices;
     const arg = step.placeholders?.[key] ?? arg0;
@@ -76,9 +76,9 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
     if (offered) {
       return (
         <select value={typeof v === "string" ? v : ""} onChange={(e) => set({ ...values, [key]: e.target.value })}>
-          <option value="">—</option>
+          <option value="">{step.placeholders?.[key] ? `— ${step.placeholders[key]}` : "—"}</option>
           {offered.map((c) => (
-            <option key={c} value={c}>{c}</option>
+            <option key={c} value={c}>{step.suggestNotes?.[key]?.[c] ?? c}</option>
           ))}
         </select>
       );
@@ -143,10 +143,10 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
           {verb.details ? <small className="muted mono wrap">{verb.details}</small> : null}
         </label>
       ) : null}
-      {verb.disruptions.length ? (
+      {disruptions.length ? (
         <fieldset className="disruptions">
           <legend>Disruption — only if you mean it</legend>
-          {verb.disruptions.map((d) => (
+          {disruptions.map((d) => (
             <label key={d.flag} className="form-check">
               <input type="checkbox" checked={values[d.flag] === true} onChange={(e) => set({ ...values, [d.flag]: e.target.checked })} />
               <span className="mono">{d.flag}</span> <small>{d.consequence}</small>

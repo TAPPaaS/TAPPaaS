@@ -21,7 +21,7 @@ configures every other module in the system.
 | Support bundle | automatic, or mothership CLI | `tappaas-support-bundle.sh`: the logs of the event, the site's state and its configuration with personal data and secrets removed, attached to the alerts that need one. You decide whether to forward it — to `site.json` `supportEmail` (empty by default; `site-manager site modify --set supportEmail=<addr>`). Bundles and their decoding maps stay in `/var/lib/tappaas/support/` |
 | Test the alert mail | mothership CLI | `tappaas-support-bundle.sh --test [--to <addr>]` — a test ALERT with a bundle of the last update run, then its RESOLVED |
 | System configuration store | mothership | `/home/tappaas/config` (`site.json`, `zones.json`, environments, module jsons) |
-| Unattended node adding (PXE) | mothership CLI | `site-manager node add <name> --pxe` (netboot assets staged at install) |
+| Unattended node adding (PXE) | mothership CLI | `site-manager node add <name> --install` (netboot assets staged at install) |
 | Admin VPN termination on OPNsense | anywhere (WireGuard) | set up at install; enrol devices with `network-manager wgvpn` per [ADMIN-VPN.md](./manager/network-manager/ADMIN-VPN.md) |
 | Module store registration | mothership CLI | `repository.sh add <repo>` for community module stores |
 | The console: the site's web UI (ADR-034, P1 read-only) | mgmt, admin VPN | `tappaas-console.service` on port 9097, built from [`ui/`](./ui/README.md); published at `console.<domain>` behind the gate by the [`console`](../console/README.md) module; before identity exists, with the setup token in `~/config/console-setup-token` (the install summary names the file, never the token) |

@@ -129,6 +129,8 @@ function quiet(argv: string[]): { rc: number; out: string[] } {
   check(!("hardware" in (JSON.parse(readFileSync(join(dir, "site.json"), "utf8")) as Obj)), "node add writes nothing into site.json");
   const again = quiet(["node", "add", "tappaas1", "--config-only", "--config-dir", dir]);
   check(again.rc !== 0 && again.out.some((l) => l.includes("already exists")), "node add refuses a node that has its record");
+  const badMac = quiet(["node", "add", "tappaas4", "--install", "--mac", "any", "--config-dir", dir]);
+  check(badMac.rc !== 0 && badMac.out.some((l) => l.includes("is no MAC")), "node add --mac takes a MAC only (blank is learned, or the first to ask)");
   delete process.env.SITE_COPY_JSON_BIN;
   delete process.env.SITE_PVEHOST_DIR;
 
