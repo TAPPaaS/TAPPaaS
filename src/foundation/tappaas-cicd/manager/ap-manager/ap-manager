@@ -784,28 +784,20 @@ compute_delta() {
 
 # Validate the WiFi wiring and print warnings; sets VALIDATION_WARN:
 #   - each active zone's SSID is a site-wide SSID bridged to that zone (a
-#     template placeholder is "not named yet", unless the zone already carries an
-#     SSID); an enabled SSID some access point broadcasts;
+#     template placeholder such as <IOT_SSID> is no SSID: the zone has no WiFi
+#     until `ssid add` names one, and nothing is said about it);
+#     an enabled SSID some access point broadcasts;
 #   - each site-wide SSID bridges to a zone that exists, is on, and names it;
 #   - no AP over its SSID ceiling; each AP's uplink port carries its SSIDs' VLANs.
 validate() {
     VALIDATION_WARN=0
-    local zone ssid_name carried_by site vz vstate vname en aps
+    local zone ssid_name site vz vstate vname en aps
     # Active zones with an SSID. An Inactive or Disabled zone keeps its SSID but
-    # broadcasts nothing; a template placeholder was never chosen, so "no AP
-    # broadcasts it" would send the operator looking for drift that is not there (#734).
+    # broadcasts nothing; a template placeholder was never chosen: the zone has
+    # no WiFi, and `ssid add` replaces it when one is named (#734, #889).
     while IFS=$'\t' read -r zone ssid_name _; do
         [[ -z "${ssid_name}" || "${ssid_name}" == "null" ]] && continue
-        carried_by=$(jq -r --arg z "${zone}" '[.ssids // {} | to_entries[] | select(.value.zone == $z) | .key] | first // ""' "${DESIRED}")
-        if is_placeholder "${ssid_name}"; then
-            if [[ -z "${carried_by}" ]]; then
-                warn "  zone '${zone}' still has the template SSID ${ssid_name}: name its WiFi (ap-manager ssid add <ssid> --zone ${zone} --security <sec>), or remove SSID if the zone has no WiFi"
-            else
-                warn "  zone '${zone}' carries SSID '${carried_by}' but still shows ${ssid_name}: ap-manager ssid modify '${carried_by}' --zone ${zone} rewrites it"
-            fi
-            VALIDATION_WARN=$((VALIDATION_WARN + 1))
-            continue
-        fi
+        is_placeholder "${ssid_name}" && continue
         site=$(jq -r --arg s "${ssid_name}" '.ssids[$s].zone // ""' "${DESIRED}")
         if [[ -z "${site}" ]]; then
             warn "  zone '${zone}' names SSID '${ssid_name}', which ap-manager does not hold: ap-manager ssid add '${ssid_name}' --zone ${zone} --security <sec>"

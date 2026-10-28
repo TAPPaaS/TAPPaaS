@@ -168,8 +168,8 @@ jq '.guest.SSID = "<GUEST_SSID>"' "${Z}" > "${Z}.t" && mv "${Z}.t" "${Z}"
 am update-desired >/dev/null 2>&1
 out="$(am delta 2>&1)"
 ck "delta: a new SSID on each AP"               yes "$(has "${out}" 'ap2: 1 change')"
-ck "…the zone that still shows a placeholder"   yes "$(has "${out}" "zone 'guest' still has the template SSID <GUEST_SSID>")"
-ck "reconcile --apply (rc)"                     2 "$(rc_of am reconcile --apply)"
+ck "…a zone still on its placeholder says nothing" no "$(has "${out}" "template SSID")"
+ck "reconcile --apply (rc): converged, no warning" 0 "$(rc_of am reconcile --apply)"
 ck "…the controller ran for every AP"           '["ap1","ap2"]' "$(cut -d'|' -f1 "${AP_TEST_APPLY_LOG}" | sort -u | jq -R . | jq -sc .)"
 ck "…the passphrase marks cleared"              false "$(d '[.ssids[] | has("passphraseChanged")] | any')"
 ck "…nothing left per AP"                       no "$(has "$(am delta 2>&1)" 'change(s)')"
@@ -190,7 +190,7 @@ ck "disabled: per AP"                           yes "$(has "$(am delta 2>&1)" 'd
 am reconcile --apply >/dev/null 2>&1
 am ssid add guestnet --zone guest --security open >/dev/null 2>&1
 out="$(am delta 2>&1)"
-ck "a real SSID recorded: the placeholder warning goes" no "$(has "${out}" 'template SSID <GUEST_SSID>')"
+ck "a real SSID recorded: no placeholder talk either" no "$(has "${out}" 'template SSID')"
 jq '.iot.SSID = "Stray"' "${Z}" > "${Z}.t" && mv "${Z}.t" "${Z}"
 ck "a zone naming an SSID no one holds"         yes "$(has "$(am delta 2>&1)" "zone 'iot' names SSID 'Stray', which ap-manager does not hold")"
 jq '.guest.state = "Inactive" | del(.iot.SSID)' "${Z}" > "${Z}.t" && mv "${Z}.t" "${Z}"

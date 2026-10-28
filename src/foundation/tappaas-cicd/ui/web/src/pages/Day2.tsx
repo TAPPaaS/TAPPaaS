@@ -18,9 +18,9 @@ import { Link, canOperate, useMe } from "../ui";
 import { AddNodeButton } from "./AddNode";
 import { addEnvironmentSteps } from "./Environments";
 import { SiteRead, Topology } from "../types";
-import { ApIn, PASSPHRASE_TEXT, SiteSsid, ZoneIn, broadcastText, passphraseOf, wifiZones } from "../wizards";
+import { ApIn, SiteSsid, ZoneIn, wifiZones } from "../wizards";
 import { SetupDoc, addStackSteps, enrolSteps } from "./Setup";
-import { WifiButton } from "./Wifi";
+import { WIFI_TEXT, WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
 import { SatelliteButton } from "./Satellite";
 import { identitySteps } from "./Identity";
@@ -198,7 +198,6 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
   const zones = useRead<ZoneIn[]>("zones");
   const apsRead = useRead<ApIn[]>("aps");
   const site = useRead<SiteRead>("site").env?.data?.site;
-  const aps = apsRead.env?.data ?? [];
   const ssidsRead = useRead<SiteSsid[]>("ssids");
   const wifi = wifiZones(zones.env?.data ?? [], ssidsRead.env?.data ?? []);
   // /setup/day2#wifi-<zone> (Day 1's WiFi step): that card, once it is there.
@@ -246,20 +245,13 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
       </Group>
       <Group title="WiFi" id="wifi">
         {wifi.length > 0 ? (
-          <WizardCard id="wifi-card" on={target.startsWith("wifi")} title="WiFi for a zone" action={<WifiButton zones={wifi} zone={target.startsWith("wifi-") ? target.slice(5) : null} apCount={aps.length} site={site?.name ?? ""} />}>
-            A site-wide SSID that puts the devices that join it on a Client or Guest zone's VLAN, broadcast by every access point; proposed as {site?.name ? `${site.name}-` : ""}&lt;zone&gt;.
-            <ul className="plain small">
-              {wifi.map((z) => (
-                <li key={z.zone}>
-                  <b>{z.zone}</b> ({z.type}, VLAN {z.vlan ?? "?"}): {z.ssid ? <>{z.ssid.name} ({z.ssid.security}), on {broadcastText(z.ssid)}; passphrase {PASSPHRASE_TEXT[passphraseOf(z.ssid)]}</> : <>no SSID yet{z.declared ? ` (zones.json names ${z.declared}, which ap-manager does not hold)` : ""}</>}
-                </li>
-              ))}
-            </ul>
+          <WizardCard id="wifi-card" on={target.startsWith("wifi")} title="Add WiFi to a zone" action={<WifiButton zones={wifi} zone={target.startsWith("wifi-") ? target.slice(5) : null} site={site?.name ?? ""} />}>
+            {WIFI_TEXT}
           </WizardCard>
         ) : null}
         {zones.env?.data && wifi.length === 0 ? <p className="muted small">No active Client or Guest zone.</p> : null}
         {ssidsRead.env?.error || ssidsRead.failure ? <p className="readstate readstate-fail">ap-manager ssid list could not be read: {ssidsRead.env?.error ?? ssidsRead.failure}</p> : null}
-        {apsRead.env?.error || apsRead.failure ? <p className="readstate readstate-fail">ap-manager list could not be read: {apsRead.env?.error ?? apsRead.failure}</p> : apsRead.env?.data && aps.length === 0 ? <p className="muted small">No access point is registered yet (ap-manager add): an SSID can be declared now and is broadcast once one is.</p> : null}
+        {apsRead.env?.error || apsRead.failure ? <p className="readstate readstate-fail">ap-manager list could not be read: {apsRead.env?.error ?? apsRead.failure}</p> : null}
       </Group>
     </>
   );

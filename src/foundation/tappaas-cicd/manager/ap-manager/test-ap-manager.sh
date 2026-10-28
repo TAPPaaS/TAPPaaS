@@ -196,7 +196,7 @@ am2() { CONFIG_DIR="${T2}" "${AM}" "$@"; }
 am2 add ap1 --vendor manual --ip 10.0.0.40 >/dev/null 2>&1
 am2 ssid ap1 add HomeNet --zone home --security wpa2-personal >/dev/null 2>&1
 out="$(am2 delta 2>&1)"
-ck "#734 a placeholder gets its own message" "yes" "$(has "${out}" "zone 'iot' still has the template SSID <IOT_SSID>")"
+ck "#734 a placeholder is no SSID: no message" "no" "$(has "${out}" "'iot'")"
 ck "#734 …not the drift warning"          "no"  "$(has "${out}" "SSID '<IOT_SSID>' but no AP broadcasts it")"
 ck "#734 an Inactive zone is not demanded" "no" "$(has "${out}" "'old'")"
 ck "#734 a Disabled zone is not demanded" "no"  "$(has "${out}" "'off'")"

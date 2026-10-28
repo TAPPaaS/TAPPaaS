@@ -53,8 +53,8 @@ manual controller, which prints the steps for the operator.
 
 `reconcile` runs `update-desired → interrogate → delta → apply → confirm`. The
 `delta` step also validates the wiring: each active zone's `SSID` is a
-site-wide SSID bridged to that zone (a template placeholder is reported as not
-named yet, until the zone carries an SSID), each site-wide SSID bridges to a zone
+site-wide SSID bridged to that zone (a template placeholder counts as no SSID
+and is not mentioned), each site-wide SSID bridges to a zone
 that exists, is on and names it, and is broadcast by some AP, no AP is over its
 SSID ceiling, and each AP's uplink switch port carries every one of that AP's
 SSID VLANs (cross-checked against the switch config). Failures are
