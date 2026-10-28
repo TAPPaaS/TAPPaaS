@@ -13,7 +13,7 @@
 # Product: Euro-Office DocumentServer (collaborative document editing)
 #
 # Architecture:
-# - Single Podman container (ghcr.io/euro-office/documentserver:v9.3.5, pinned in nix)
+# - Single Podman container (ghcr.io/euro-office/documentserver:v9.3.7, pinned in nix)
 # - Container bundles Nginx, PostgreSQL, Redis, RabbitMQ, DocService,
 #   FileConverter, AdminPanel, and an example app internally
 # - Only port 80 (Nginx) is exposed to the host; all other ports are internal
@@ -151,7 +151,7 @@ EOF
     # cputype host, x86-64-v3 or better (hrossen: v4, clean 2026-10-15).
     # Immutable semver tag — NOT :latest/:nightly.
     # Keep in sync with update.sh; src/image-pins.json tracks both (#750).
-    image = "ghcr.io/euro-office/documentserver:v9.3.5";
+    image = "ghcr.io/euro-office/documentserver:v9.3.7";
 
     environment = {
       ALLOW_PRIVATE_IP_ADDRESS = "true";

@@ -27,7 +27,7 @@ HANODE="$(get_config_value 'HANode' "$(get_default_ha_node "$NODE")")"
 # Image is pinned declaratively in euro-office.nix (single source of truth).
 # Keep this value identical to euro-office.nix so the manual pull/restart below
 # refreshes the same immutable tag (idempotent for a pinned tag).
-CONTAINER_IMAGE="ghcr.io/euro-office/documentserver:v9.3.5"
+CONTAINER_IMAGE="ghcr.io/euro-office/documentserver:v9.3.7"
 
 debug "*** Starting euro-office update (${CONTAINER_IMAGE})"
 debug "  VM:    ${VMNAME} (VMID: ${VMID})"

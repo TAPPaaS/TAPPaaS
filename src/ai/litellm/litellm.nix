@@ -49,11 +49,11 @@
 let
   # Version pinning - change versions here only
   versions = {
-    # v1.103.3, deliberately not the newest (#765). 1.104 refuses to start on an
-    # unset or default master key and was days old when this moved; 1.103.3 is
-    # the first release that stops the boot on a failed migration instead of
-    # serving on a stale schema. Move on when 1.104 has been in the field.
-    litellm     = "v1.103.3";
+    # v1.106.5 (2026-10-28: clears certifi, aiohttp and nodejs CVEs). From 1.104
+    # it refuses to start on an unset or default master key — this module
+    # generates one; 1.103.3 was the first to stop the boot on a failed migration
+    # instead of serving on a stale schema (#765).
+    litellm     = "v1.106.5";
     postgresPkg = pkgs.postgresql_17;
     redisPkg    = pkgs.redis;
   };

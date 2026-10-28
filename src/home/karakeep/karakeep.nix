@@ -33,7 +33,7 @@ let
   chromeImage = "ghcr.io/karakeep-app/karakeep-chrome:156.0.8078.47-r1";
   # Meilisearch ahead of Karakeep's own compose (v1.41.0): its Alpine base
   # carried OpenSSL, curl and musl fixes only in later releases.
-  meiliImage = "getmeili/meilisearch:v1.55.0";
+  meiliImage = "getmeili/meilisearch:v1.56.0";
 
   state = "/var/lib/karakeep";
 

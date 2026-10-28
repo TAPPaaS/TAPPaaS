@@ -60,9 +60,10 @@ let
   containerRoot = 200000;
 
   versions = {
-    # 0.11.4. Never land on 0.11.0–0.11.2: they can skip database migrations
-    # without an error (upstream #29280), fixed in 0.11.3.
-    openwebui   = "0.11.4";              # OpenWebUI container version (Docker Hub, no v-prefix)
+    # 0.12.4 (2026-10-28: clears pillow, certifi and brotli CVEs). Never land on
+    # 0.11.0–0.11.2: they can skip database migrations without an error
+    # (upstream #29280), fixed in 0.11.3.
+    openwebui   = "0.12.4";              # OpenWebUI container version (Docker Hub, no v-prefix)
     postgresPkg = pkgs.postgresql_17;   # PostgreSQL version
     redisPkg    = pkgs.redis;           # Redis version
   };

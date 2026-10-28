@@ -92,7 +92,7 @@ if [ ! -f /opt/vllm/docker-compose.yml ]; then
     cat > /opt/vllm/docker-compose.yml <<EOF
 services:
   vllm:
-    image: kyuz0/vllm-therock-gfx1151@sha256:c2a4adb2aeac1ec90ffeca8bddda17f66d16ced3742eb16956779a198967afaa
+    image: kyuz0/vllm-therock-gfx1151@sha256:6aa3f7a806c8c1b4af6854815b729b3ef36112b5bfdc20c265f95e374357748c
     container_name: vllm
     env_file:
       - /opt/vllm/vllm.env
@@ -129,13 +129,14 @@ fi
 # Uses SSH heredoc to the Proxmox node to avoid pct-wrapper word-split issues
 # when passing complex sed replacement strings through the SSH→pct chain.
 debug "  pinning image digest..."
-# rocm10.0.0-torch2.11.0-vllm0.29.0, built 2026-09-16 (#765). Deliberately not
-# the newest: 0.29.0 is the vLLM version AMD lists for ROCm 10 on this GPU.
+# rocm10.0.0-torch2.11.0-vllm0.32.0, built 2026-10-19 (2026-10-28: clears the
+# pillow, certifi and aiohttp CVEs of 0.29.0). 0.29.0 was the vLLM version AMD
+# listed for ROCm 10 on this GPU (#765); 0.32.0 is live-tested on hrossen.
 # A GPTQ build of a mixture-of-experts model does not load on it ("zp shape
 # mismatch", the container restarts in a loop): move the served model to an
-# AWQ build first, see UPGRADE.md. The way back is the digest before this one:
-#   sha256:f56f8d66c3efcf2de024251f6ff2328c5aa94b3ae34b2f74a36740b970f98d9c
-PINNED_IMAGE="kyuz0/vllm-therock-gfx1151@sha256:c2a4adb2aeac1ec90ffeca8bddda17f66d16ced3742eb16956779a198967afaa"
+# AWQ build first, see UPGRADE.md. The way back is the digest before this one
+# (0.29.0): sha256:c2a4adb2aeac1ec90ffeca8bddda17f66d16ced3742eb16956779a198967afaa
+PINNED_IMAGE="kyuz0/vllm-therock-gfx1151@sha256:6aa3f7a806c8c1b4af6854815b729b3ef36112b5bfdc20c265f95e374357748c"
 # `bash -s` (not a bare heredoc): without a command ssh starts a LOGIN shell,
 # which prints the node's MOTD — the Debian licence banner that used to appear
 # mid-update under this heading. Passing a command makes the session
@@ -240,8 +241,12 @@ OLD_IMAGE="${OLD_IMAGE#sha256:}"
 # discovered later as a confusing "up" failure.
 docker compose pull -q >/dev/null 2>&1 || { echo "ERROR: docker compose pull failed"; exit 1; }
 
-# Recreate only if image changed
-NEW_IMAGE=$(docker compose images -q vllm 2>/dev/null || echo "new")
+# Recreate only if image changed: the image the compose file names, against the
+# one the container runs. `docker compose images` reports the image of the
+# container, so it always matched and a new pin was pulled but never run.
+# (No apostrophes in here: this block is one single-quoted bash -c string.)
+NEW_IMAGE=$(docker image inspect --format "{{.Id}}" "$(docker compose config --images 2>/dev/null | head -1)" 2>/dev/null || echo "new")
+NEW_IMAGE="${NEW_IMAGE#sha256:}"
 if [[ "$OLD_IMAGE" != "$NEW_IMAGE" ]]; then
     # compose writes its progress to stderr, which would bypass the tag pipe
     # and land untagged; the verdict below is what the operator needs, and a

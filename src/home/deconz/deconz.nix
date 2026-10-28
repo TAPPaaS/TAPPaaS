@@ -42,7 +42,7 @@ let
   # To upgrade: pull the new tag, re-verify lights/protocols/deconz.py still
   # matches the patched copy, then update this digest.
   versions = {
-    diyhue = "sha256:97c4a5d21806bbdef110b95277c8f0c46d47ecfb65a161ed874ef177c6278bbd";
+    diyhue = "sha256:392c1c39a5b46168d1d6d8582abd266586bdd45d61fb3459fa95821c710ffcba"; # latest, 2026-10-23
   };
   # diyHue bridge identity: bridgeid + self-signed cert derive from this MAC.
   # Start with the VM's own NIC MAC; if free@home is picky about the bridgeid,

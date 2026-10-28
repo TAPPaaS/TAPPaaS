@@ -53,7 +53,7 @@ let
   adminImage = "ghcr.io/crosstalk-solutions/project-nomad:v1.35.1";
   diskCollectorImage = "ghcr.io/crosstalk-solutions/project-nomad-disk-collector:v1.31.1";
   mysqlImage = "mysql:8.0.46";
-  redisImage = "redis:7.4.11-alpine";
+  redisImage = "redis:7.4.12-alpine";
 
   storage = "/opt/project-nomad";
 
