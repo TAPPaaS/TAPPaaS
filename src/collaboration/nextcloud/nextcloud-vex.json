@@ -156,6 +156,41 @@
           "ref": "pkg:nix/libxslt@1.1.45"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-92392",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "HTTP/2 upload use-after-free (curl 8.22.0, fixed in 8.23.0). Nextcloud 35 sends its outgoing requests over HTTP/2 (Http/Client/Client.php: CURL_HTTP_VERSION_2TLS) through php-curl, which links this curl, and federation (federatedfilesharing, cloud_federation_api) is enabled: any user sharing to a remote cloud ID makes Nextcloud POST to that server, so an attacker's server can answer the upload. Risk here: medium (high attack complexity, runs as the nextcloud PHP worker). Fix: curl 8.23.0 with the estate pin (staging-next-26.05)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "medium",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-108693",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "NTGhostscriptEXE() launching gswin64c.exe by bare name is Windows-only code; the nextcloud VM runs Linux, where ImageMagick calls the gs binary from its own store path.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-32"
+        }
+      ]
     }
   ]
 }

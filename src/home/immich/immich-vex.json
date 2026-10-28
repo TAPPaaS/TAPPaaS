@@ -761,6 +761,41 @@
           "ref": "pkg:nix/imagemagick@7.1.2-31"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-106565",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "Missing end-of-file check reading bzip2-compressed blob data (MagickCore/blob.c), an endless loop; fixed in 7.1.2-32. immich-api loads this ImageMagick through libvips (no VIPS_BLOCK_UNTRUSTED), which picks a loader by content, so a crafted upload from a signed-in user can reach it. Risk here: low: one media job spins, no memory corruption. Fix: an unstableSrc with imagemagick 7.1.2-32 or later (nixos-unstable has 7.1.2-34)."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-106567",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "PSD decoder integer-conversion loop on 32-bit builds only; the immich VM runs the x86_64 build.",
+        "justification": "requires_environment"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/imagemagick@7.1.2-31"
+        }
+      ]
     }
   ]
 }

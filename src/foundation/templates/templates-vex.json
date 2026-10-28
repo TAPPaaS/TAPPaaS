@@ -769,6 +769,80 @@
           "ref": "pkg:nix/vim@9.2.0541"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-106553",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "sshd keeping GSSAPI credentials after a failed GSSAPIAuthentication attempt. nixpkgs builds openssh without Kerberos (withKerberos = false: no --with-kerberos5, no krb5 in its closure), so sshd has no GSSAPI authentication at all: sshd -T lists no GSSAPI option. Every NixOS guest and the mothership run that one build (43zp0r...-openssh-10.5p1). Fixed upstream in OpenSSH 10.6.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/openssh@10.5p1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-106555",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "sshd keeping GSSAPI authentication state across attempts. nixpkgs builds openssh without Kerberos (withKerberos = false: no --with-kerberos5, no krb5 in its closure), so sshd has no GSSAPI authentication at all: sshd -T lists no GSSAPI option. Every NixOS guest and the mothership run that one build (43zp0r...-openssh-10.5p1). Fixed upstream in OpenSSH 10.6.",
+        "justification": "code_not_present"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/openssh@10.5p1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-106583",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ssh client: a $ or \\ in a command-line username is injected where %r/%u is expanded into a shell-run directive (ProxyCommand, LocalCommand, Match exec). The guests' ssh_config has only systemd's ssh proxy, whose ProxyCommand uses %h and %p, the operator's ~/.ssh/config none, and TAPPaaS calls ssh with fixed user names (tappaas, root). Fixed upstream in OpenSSH 10.6.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/openssh@10.5p1"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-53613",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "Non-root mount(8) TOCTOU, reachable only through an /etc/fstab entry with the user or users option. No guest's fstab has one (/ and /boot everywhere, plus jellyfin's NFS /media without user), and no module declares one; 2.42.3 already pins targets on the new mount API (2.42.2), only the legacy path without /proc is left.",
+        "justification": "requires_configuration"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/util-linux@2.42.3"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-92392",
+      "analysis": {
+        "state": "exploitable",
+        "detail": "HTTP/2 upload use-after-free when the server resets the stream (curl 8.21.0 to 8.22.0, fixed in 8.23.0). Needs a request with a body over HTTPS/HTTP2 to a malicious or compromised server. The base's libcurl users (git, nix, systemd, NetworkManager, elfutils, tpm2-tss) and TAPPaaS's curl calls upload only to TAPPaaS's own services and to the code forges over TLS. Fix: curl 8.23.0, in staging-next-26.05, not yet on the nixos-26.05 channel."
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/curl@8.22.0"
+        }
+      ],
+      "ratings": [
+        {
+          "source": {
+            "name": "TAPPaaS"
+          },
+          "severity": "low",
+          "method": "other",
+          "justification": "risk in this deployment, from the triage"
+        }
+      ]
     }
   ]
 }

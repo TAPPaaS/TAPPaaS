@@ -477,6 +477,71 @@
           "ref": "pkg:nix/libtiff@4.7.2"
         }
       ]
+    },
+    {
+      "id": "CVE-2026-107695",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-107696",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52296",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-52297",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
+    },
+    {
+      "id": "CVE-2026-96611",
+      "analysis": {
+        "state": "not_affected",
+        "detail": "ffmpeg 8.1.2 is linked only by janus-pp-rec and mjr2pcap (offline recording post-processors); the running janus does not map it, recordplay is disabled and no unit or timer runs those tools.",
+        "justification": "code_not_reachable"
+      },
+      "affects": [
+        {
+          "ref": "pkg:nix/ffmpeg@8.1.2"
+        }
+      ]
     }
   ]
 }
