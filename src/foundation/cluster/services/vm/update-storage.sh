@@ -10,9 +10,17 @@
 # (ADR-037 D1).
 #
 # What moves: every disk on the storage the guest is reported on (its boot disk's
-# storage) — scsi/virtio/sata/ide disks and the EFI disk. Not the vTPM state,
-# which stays where it was created (Create-TAPPaaS-VM.sh keeps it on local-zfs),
-# not the cloud-init drive (regenerated from config), not a CD-ROM.
+# storage) — scsi/virtio/sata/ide disks and the EFI disk — and the cloud-init
+# drive with them. The vTPM state stays where it was created (Create-TAPPaaS-VM.sh
+# keeps it on local-zfs); an ISO CD-ROM is not a disk.
+#
+# The cloud-init drive goes where the disks go, as the create path puts it. It
+# is a CD-ROM to Proxmox, never replicated (cloudinit-orphans.sh, #146): a
+# migration full-sends it to the same storage name on the target, so left on
+# the boot pool it would tie every move of the guest to the target's local-zfs.
+# It is not moved but made again on the new storage: its content is derived from
+# the VM config and its instance-id is deterministic, so the guest never sees a
+# new instance (the same reasoning the orphan sweep rests on).
 #
 # Only a DECLARED value is applied (fields.json applyOnlyDeclared): the schema
 # default never moves a disk, so a guest that never asked for a storage stays
@@ -107,12 +115,13 @@ avail_kib="$(awk '{print $6}' <<< "${target}")"
 
 # ── the disks to move ────────────────────────────────────────────────
 # "<key>: <storage>:<volume>,…" for every disk on the current storage; the vTPM
-# state, a cloud-init drive and a CD-ROM stay.
+# state and an ISO CD-ROM stay. The cloud-init drive is found apart: it is remade.
 config="$(on_node "qm config ${VMID}")" || { error "update-storage.sh: qm config ${VMID} failed on ${NODE}"; exit 1; }
 mapfile -t disks < <(awk -v s="${ACTUAL}" -F': ' '
     $1 ~ /^(scsi|virtio|sata|ide)[0-9]+$|^efidisk0$/ && index($2, s ":") == 1 &&
     $2 !~ /media=cdrom/ && $2 !~ /cloudinit/ {print $1}' <<< "${config}")
-if [[ "${#disks[@]}" -eq 0 ]]; then
+ci_key="$(awk -v s="${DESIRED}" -F': ' '$1 ~ /^(scsi|virtio|sata|ide)[0-9]+$/ && $2 ~ /cloudinit/ && index($2, s ":") != 1 {print $1; exit}' <<< "${config}")"
+if [[ "${#disks[@]}" -eq 0 && -z "${ci_key}" ]]; then
     warn "  storage ${ACTUAL:-?}→${DESIRED}: no disk of VM ${VMID} is on '${ACTUAL}' — nothing to move"
     exit 0
 fi
@@ -137,7 +146,8 @@ repl_ids="$(on_node "pvesh get /cluster/replication --output-format json" 2>/dev
     | jq -r --arg id "${VMID}" '.[] | select((.guest | tostring) == $id) | .id')" || repl_ids=""
 
 if [[ "${CHECK}" == "1" ]]; then
-    info "  storage: would move ${ACTUAL}→${DESIRED} on ${NODE}, live: ${plan[*]}"
+    info "  storage: would move ${ACTUAL}→${DESIRED} on ${NODE}, live: ${plan[*]:-no disk}"
+    [[ -n "${ci_key}" ]] && info "  …and make its cloud-init drive (${ci_key}) again on ${DESIRED}"
     [[ -n "${repl_ids}" ]] && info "  …its replication (${repl_ids//$'\n'/, }) removed first and made again to ${DESIRED} by cluster:ha"
     exit 0
 fi
@@ -162,6 +172,16 @@ for d in "${disks[@]}"; do
     on_node "qm disk move ${VMID} ${d} ${DESIRED} --delete 1" >/dev/null \
         || { error "  qm disk move ${VMID} ${d} ${DESIRED} failed on ${NODE}"; exit 1; }
 done
+# The cloud-init drive: removed and made again on the new storage, then filled.
+if [[ -n "${ci_key}" ]]; then
+    info "  making the cloud-init drive (${ci_key}) again on ${DESIRED}..."
+    on_node "qm set ${VMID} --delete ${ci_key} && qm set ${VMID} --${ci_key} ${DESIRED}:cloudinit && qm cloudinit update ${VMID}" >/dev/null \
+        || { error "  the cloud-init drive of VM ${VMID} could not be made again on ${DESIRED} — qm set ${VMID} --${ci_key} ${DESIRED}:cloudinit"; exit 1; }
+    # A running guest may hold the change until it restarts; say so rather than claim it.
+    if on_node "qm pending ${VMID}" 2>/dev/null | grep -q "^del\|^new.*${ci_key}"; then
+        warn "  VM ${VMID}'s cloud-init drive moves at its next restart (Proxmox holds the change while it runs)"
+    fi
+fi
 info "  ${GN}✓${CL} VM ${VMID}'s disks are on ${DESIRED}"
 
 # The replication again, now to the new storage.
