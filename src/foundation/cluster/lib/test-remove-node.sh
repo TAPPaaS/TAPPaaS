@@ -9,6 +9,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=remove-node-lib.sh disable=SC1091
 . "${HERE}/remove-node-lib.sh"
+SCRIPT="${HERE}/../remove-node.sh"
 PASS=0; FAIL=0
 ck() { if [[ "$2" == "$3" ]]; then echo "  ok: $1"; PASS=$((PASS+1)); else echo "  FAIL: $1 (exp '$2' got '$3')"; FAIL=$((FAIL+1)); fi; }
 
@@ -54,5 +55,9 @@ ck "remove-node: the erase needs ERASE typed, after the node name" yes \
 ck "remove-node: nothing runs while anything blocks" yes \
    "$(grep -q 'thing(s) stop the removal — nothing was changed' "${HERE}/../remove-node.sh" && echo yes || echo no)"
 
+# --yes: the typed confirmations (the node name, ERASE) are skipped only with it.
+ck "--yes is an option of the script" yes "$(grep -q -- '--yes)      YES=1' "${SCRIPT}" && echo yes || echo no)"
+ck "--yes skips the node-name prompt, and ERASE's" 2 "$(grep -c 'if \[\[ "\$YES" -eq 1 \]\]; then' "${SCRIPT}")"
+ck "without it the node name is still typed" yes "$(grep -q 'read -rp "  Type the node name to confirm' "${SCRIPT}" && echo yes || echo no)"
 echo "── remove-node: ${PASS} passed, ${FAIL} failed ──"
 [[ "$FAIL" -eq 0 ]]

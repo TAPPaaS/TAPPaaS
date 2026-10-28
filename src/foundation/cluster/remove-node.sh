@@ -17,6 +17,9 @@
 #   --erase      before powering off: destroy every ZFS pool and wipe its disks,
 #                wipe the boot disk's partitions and partition table, and delete
 #                its boot entry — the machine keeps nothing. Type ERASE as well.
+#   --yes        no typed confirmation (the node name, and ERASE with --erase):
+#                for a caller that asked for them itself — the web console has
+#                the node's name typed before Apply — or a script
 #   --lost       the node is DOWN for good (RESTORE.md §3.1): the guests the
 #                cluster still places on it are lost with it — their configs are
 #                saved on the mothership, then go with the node; replication jobs
@@ -39,7 +42,7 @@ readonly SCRIPT_DIR
 # shellcheck source=lib/remove-node-lib.sh disable=SC1091
 . "${SCRIPT_DIR}/lib/remove-node-lib.sh"
 
-DRY_RUN=1; SHUTDOWN=0; ERASE=0; LOST=0; NODE=""
+DRY_RUN=1; SHUTDOWN=0; ERASE=0; LOST=0; YES=0; NODE=""
 CONFIG_DIR="${TAPPAAS_CONFIG:-/home/tappaas/config}"
 OFF_WAIT="${RMN_OFF_WAIT:-300}"
 
@@ -51,6 +54,7 @@ while [[ $# -gt 0 ]]; do
         --shutdown) SHUTDOWN=1; shift ;;
         --erase)    ERASE=1; SHUTDOWN=1; shift ;;
         --lost)     LOST=1; shift ;;
+        --yes)      YES=1; shift ;;
         -h|--help)  usage; exit 0 ;;
         -*)         error "Unknown option: $1"; exit 2 ;;
         *)          NODE="$1"; shift ;;
@@ -187,12 +191,20 @@ fi
 # ── Step 4: confirmation ────────────────────────────────────────────────
 echo
 warn "${BOLD}You are about to remove ${NODE} from the cluster.${CL}"
-read -rp "  Type the node name to confirm (or Ctrl-C to abort): " CONFIRM
-[[ "$CONFIRM" == "$NODE" ]] || die "Confirmation mismatch — nothing was changed"
+if [[ "$YES" -eq 1 ]]; then
+    info "  confirmed by --yes: the caller asked for the node name itself"
+else
+    read -rp "  Type the node name to confirm (or Ctrl-C to abort): " CONFIRM
+    [[ "$CONFIRM" == "$NODE" ]] || die "Confirmation mismatch — nothing was changed"
+fi
 if [[ "$ERASE" -eq 1 ]]; then
     warn "${BOLD}${RD}--erase: every disk of ${NODE} — boot disk included — is wiped. This cannot be undone.${CL}"
-    read -rp "  Type ERASE to wipe ${NODE}: " CONFIRM
-    [[ "$CONFIRM" == "ERASE" ]] || die "Not confirmed — nothing was changed"
+    if [[ "$YES" -eq 1 ]]; then
+        info "  confirmed by --yes"
+    else
+        read -rp "  Type ERASE to wipe ${NODE}: " CONFIRM
+        [[ "$CONFIRM" == "ERASE" ]] || die "Not confirmed — nothing was changed"
+    fi
 fi
 
 # ── Step 5: erase / power off ───────────────────────────────────────────

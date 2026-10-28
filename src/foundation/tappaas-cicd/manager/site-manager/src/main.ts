@@ -186,12 +186,14 @@ export const HELP: HelpSpec = {
         ["<device>", "The stick, by the device name node usb <node> lists (/dev/sdb). A disk that is no USB stick, or a stick that is mounted, swap or a pool/LVM/RAID member, is refused and nothing is written."],
         ["--yes", "Required: the stick is erased. The image is /var/lib/tappaas-pxe/tappaas-usb.iso (node media prepare builds it); a new machine boots the installer from the stick once, where network boot is not an option."],
       ] },
-    { usage: "node delete <name> [--apply] [--shutdown] [--erase] [--config-only]",
+    { usage: "node delete <name> [--apply] [--shutdown | --erase | --lost] [--yes] [--config-only]",
       options: [
         ["(default)", "Preview: what still holds the node (guests, replication, HA rules, the PBS) and the plan. Changes nothing."],
         ["--apply", "Remove it from the cluster (pvecm delnode, /etc/pve/nodes/<n>, storage entries, known_hosts); then its pvehost module is archived. Refused while anything holds it; asks for the node name."],
         ["--shutdown", "Power the node off first — Proxmox removes a node only once it is off. A node that is already down needs nothing."],
         ["--erase", "Before the power-off: destroy its ZFS pools and wipe their disks, wipe the boot disk's partitions and partition table, delete its boot entry. Asks for ERASE as well. Implies --shutdown."],
+        ["--lost", "The node is down for good: the guests the cluster still places on it are lost with it (their configs saved on the mothership first), replication jobs touching it are removed, HA rules naming it stay. Refused for a node that answers."],
+        ["--yes", "With --apply: no typed confirmation (the node name, and ERASE) — for the web console, which has the node's name typed before Apply, and for a script."],
         ["--config-only", "Only archive the node's pvehost module; the cluster is not touched."],
       ] },
     { usage: "node reboot <name> [--apply]",
@@ -1042,6 +1044,9 @@ function cmdNode(o: Opts, client: SiteClient): void {
     const args = [o.apply ? "--execute" : "--dry-run"];
     if (o.boolFlags.has("--shutdown")) args.push("--shutdown");
     if (o.boolFlags.has("--erase")) args.push("--erase");
+    if (o.boolFlags.has("--lost")) args.push("--lost");
+    // --yes: the caller asked for the confirmations itself (the console's typed name).
+    if (o.apply && o.boolFlags.has("--yes")) args.push("--yes");
     args.push(name);
     info(`${o.apply ? "" : "[preview] "}node delete '${name}' → ${script} ${args.join(" ")}`);
     const r = spawnSync(script, args, { stdio: "inherit" });
