@@ -501,7 +501,9 @@ function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
     if (!entityMap(model, "user").has(name)) die(`user '${name}' not found in ${opts.configDir}`);
     let r: ReturnType<typeof resetPassword>;
     try {
-      r = resetPassword(client, name, mode, () => readFd("/dev/stdin", "utf8"));
+      // fd 0, not /dev/stdin: the console hands the password over a socket,
+      // which /dev/stdin cannot open (ENXIO).
+      r = resetPassword(client, name, mode, () => readFd(0, "utf8"));
     } catch (e) {
       die(e instanceof Error ? e.message : String(e));
     }
