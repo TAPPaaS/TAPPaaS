@@ -316,21 +316,21 @@ echo ""
 echo "== node-add wires the backup client reconcile (ADR-012 §2.4, #382) =="
 _prov="${HERE}/src/provision.ts"
 if [[ -f "${_prov}" ]]; then
-    if grep -q '"module-manager", \["modify", "backup"' "${_prov}"; then
-        ok "node add calls 'module-manager modify backup' (the client reconcile)"
+    if grep -q '"module-manager", \["update", "backup"' "${_prov}"; then
+        ok "node add calls 'module-manager update backup' (the client reconcile)"
     else
         bad "node add does NOT reconcile the backup client — a new node's VMs would go unbacked (#382)"
     fi
     # After the join + capture + storage registration: reconciling before the
     # node is actually in the cluster would reconcile the OLD membership.
     _n_storage="$(grep -n "registering the node in its pools" "${_prov}" | head -1 | cut -d: -f1)"
-    _n_backup="$(grep -n 'modify", "backup"' "${_prov}" | head -1 | cut -d: -f1)"
+    _n_backup="$(grep -n 'update", "backup"' "${_prov}" | head -1 | cut -d: -f1)"
     if [[ -n "${_n_storage}" && -n "${_n_backup}" && "${_n_backup}" -gt "${_n_storage}" ]]; then
         ok "the reconcile runs after the node is joined, captured and storage-registered"
     else
         bad "the backup reconcile is not sequenced after node capture/storage registration"
     fi
-    if grep -A 4 'modify", "backup"' "${_prov}" | grep -c "warn(" >/dev/null; then
+    if grep -A 4 'update", "backup"' "${_prov}" | grep -c "warn(" >/dev/null; then
         ok "a failed reconcile warns (the node is already joined — it must not fail the join)"
     else
         bad "a failed backup reconcile is fatal to node add — it should warn and name the remedy"

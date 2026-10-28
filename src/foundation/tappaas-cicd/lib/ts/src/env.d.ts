@@ -28,6 +28,9 @@ declare const process: {
   ppid: number;
   // kill(pid, 0) probes whether a process exists (the console's job lock).
   kill(pid: number, signal?: string | number): boolean;
+  // A signal handler (node add ignores SIGINT while its boot window is open).
+  on(event: "SIGINT" | "SIGTERM", listener: () => void): unknown;
+  off(event: "SIGINT" | "SIGTERM", listener: () => void): unknown;
   stdout: { write(s: string): void };
   stderr: { write(s: string): void };
   // getuid: POSIX-only (undefined on non-POSIX platforms). Used by the #533

@@ -192,8 +192,14 @@ function restoreRootKey(name: string, host: string): boolean {
   }
 }
 
+// A Ctrl-C (or a console stopping the job: the signal goes to the job's
+// process group) ends the sleeping child; the waits stop there, so the boot
+// window and the registration are taken back on the way out (provisionNode's
+// finally). Node itself ignores SIGINT while a boot window is open — its
+// handler could not run during these synchronous waits anyway.
 function sleep(seconds: number): void {
-  spawnSync("sleep", [String(seconds)], {});
+  const r = spawnSync("sleep", [String(seconds)], {});
+  if (r.signal === "SIGINT" || r.signal === "SIGTERM") die(`interrupted (${r.signal})`);
 }
 
 // Interactive prompt on the operator's terminal (sync, /dev/tty — the
@@ -313,6 +319,16 @@ export function adoptNode(o: ProvisionOpts, ip: string): void {
 export function provisionNode(o: ProvisionOpts): void {
   const stdIp = stdIpOf(o.name);
   const provisionDir = `${defaultConfigDir()}/provision`;
+  // One install per name: a node of the cluster is not installed over, and a
+  // pending registration is another node add's (running, or cut off).
+  if (clusterNode(defaultConfigDir(), o.name)) {
+    die(`${o.name} is already a node of this cluster — node add does not install over it ` +
+        `(site-manager node delete ${o.name} first, or --adopt <ipv4> to join a Proxmox installed by hand)`);
+  }
+  if (fs.existsSync(`${provisionDir}/${o.name}.json`)) {
+    die(`a registration for ${o.name} is pending — another node add for it runs, or one was cut off ` +
+        `(node-provisioner status says which; clear a stale one with: node-provisioner unregister ${o.name})`);
+  }
   const step = stepper();
   const diskProblems = bootDiskProblems(o.bootDisk, o.bootMirror);
   if (diskProblems.length > 0) die(diskProblems.join("\n"));
@@ -348,14 +364,17 @@ export function provisionNode(o: ProvisionOpts): void {
   for (const mac of o.macs) regArgs.push("--mac", mac);
   if (runStream("node-provisioner", regArgs) !== 0) die("node-provisioner register failed");
 
-  // arm the trap ------------------------------------------------------------
-  step(`open the boot window (TTL ${o.ttlSeconds}s)`);
-  if (runStream("sudo", ["node-provisioner", "enable", "--ttl", String(o.ttlSeconds)]) !== 0) {
-    die("node-provisioner enable failed");
-  }
-
   let installIp = stdIp;
+  let answered = false;
+  const ignoreInt = (): void => { /* the sleeping child takes it: see sleep() */ };
+  process.on("SIGINT", ignoreInt);
   try {
+    // arm the trap ------------------------------------------------------------
+    step(`open the boot window (TTL ${o.ttlSeconds}s)`);
+    if (runStream("sudo", ["node-provisioner", "enable", "--ttl", String(o.ttlSeconds)]) !== 0) {
+      die("node-provisioner enable failed");
+    }
+
     // wait for the answer to be served ---------------------------------------
     step("boot the machine now: from the network (UEFI network boot, e.g. F11) or the USB stick");
     if (o.bootDisk === "ask") {
@@ -394,6 +413,7 @@ export function provisionNode(o: ProvisionOpts): void {
       const rec = JSON.parse(fs.readFileSync(consumed, "utf8"));
       if (rec.install_ip) installIp = String(rec.install_ip);
     } catch { /* fall back to the standard IP (MAC-pinned reservation) */ }
+    answered = true;
     info(`  ${GN}✓${CL} answer served — installing; node will boot at ${installIp} (installer bakes its lease statically)`);
 
     // disarm ------------------------------------------------------------------
@@ -427,8 +447,11 @@ export function provisionNode(o: ProvisionOpts): void {
 
     joinAndCapture(o, installIp, stdIp, step);
   } finally {
-    // Never leave a network-boot trap armed on ANY exit path.
+    process.off("SIGINT", ignoreInt);
+    // Never leave a network-boot trap armed on ANY exit path, nor a
+    // registration nothing waits for any more.
     run("sudo", ["node-provisioner", "disable"]);
+    if (!answered) run("node-provisioner", ["unregister", o.name]);
   }
 }
 
@@ -694,9 +717,9 @@ function joinAndCapture(
   // A failure is a warning, never a failed join: the node IS in the cluster by
   // now, and the remedy is one idempotent command the operator can re-run.
   step("reconciling the backup client onto the new node (ADR-012 §2.4)");
-  if (runStream("module-manager", ["modify", "backup", "--silent"]) !== 0) {
+  if (runStream("module-manager", ["update", "backup", "--silent"]) !== 0) {
     warn(`  could not reconcile the backup client onto ${o.name} — ` +
-         `run ${YW}module-manager modify backup${CL} once it is reachable, ` +
+         `run ${YW}module-manager update backup${CL} once it is reachable, ` +
          `or its VMs will not be backed up`);
   }
 
