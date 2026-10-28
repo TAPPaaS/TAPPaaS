@@ -1,5 +1,5 @@
 // instances.ts — a module and its instances (ADR-026): the Installed tab shows
-// one row per module with every environment it is in, and the repository tabs
+// one row per install, a module's installs side by side, and the repository tabs
 // install a module again in another environment. Pure, so the unit tests
 // (test/unit/instances.test.ts) run it without a browser.
 
@@ -36,18 +36,11 @@ export function groupInstances<T extends InstanceLike>(list: T[], owner: Map<str
   });
 }
 
-// The environment column: each environment once, and after it the names of its
-// instances that are not the module's ("rossen, test (vaultwarden-test)";
-// "mgmt (tappaas1, tappaas2, tappaas3)" for pvehost on three nodes).
-export function environmentsOf<T extends InstanceLike>(g: ModuleGroup<T>): { environment: string; instances: string[] }[] {
-  const out: { environment: string; instances: string[] }[] = [];
-  for (const i of g.instances) {
-    const env = i.environment ?? "—";
-    let row = out.find((r) => r.environment === env);
-    if (!row) out.push((row = { environment: env, instances: [] }));
-    if (i.name !== g.module) row.instances.push(i.name);
-  }
-  return out;
+// The Installed rows: one per install (pvehost on three nodes is three rows,
+// tappaas1…tappaas3), each with the module it is; a module's installs stay
+// together in the order its group has them.
+export function installsOf<T extends InstanceLike>(groups: ModuleGroup<T>[]): { module: string; stack: string | null; install: T }[] {
+  return groups.flatMap((g) => g.instances.map((install) => ({ module: g.module, stack: g.stack, install })));
 }
 
 // Where Install may put a module: a site-scoped one (the foundation stack) in

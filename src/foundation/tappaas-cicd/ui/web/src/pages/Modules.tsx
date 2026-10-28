@@ -1,7 +1,7 @@
 // Modules — tabs. Installed: every deployed module with its badges (run
 // state, health, backup, CVE and maturity), filterable, grouped by stack with
 // foundation first (the group heads name the stack, so no column does), one
-// row per module with every environment it is installed in. Then one tab per
+// row per install (pvehost once per node), a module's installs together. Then one tab per
 // registered repository: every module its catalogue lists, by stack where it
 // spans several (else flat, with a stack column), with its description and
 // maturity, installed (with the instances) or not, and Install for every one,
@@ -12,7 +12,7 @@ import { Fragment, ReactNode, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { plainText } from "../forms";
 import { fieldsStep } from "../fields";
-import { ModuleGroup, defaultInstanceName, environmentsOf, groupInstances, installEnvironments, instanceOwners } from "../instances";
+import { ModuleGroup, defaultInstanceName, groupInstances, installEnvironments, installsOf, instanceOwners } from "../instances";
 import { OperateButton } from "../operate";
 import { EnvironmentRow, ModuleSummary, SiteRead } from "../types";
 import { Badge, Dot, Link, ReadState, levelOf, since } from "../ui";
@@ -46,12 +46,12 @@ export function byStack<T>(rows: T[], stack: (r: T) => string | null): [string, 
   return [...groups.entries()].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b));
 }
 
-function StackRows({ stack, cols, n, children }: { stack: string; cols: number; n: number; children: ReactNode }) {
+function StackRows({ stack, cols, n, noun = "module", children }: { stack: string; cols: number; n: number; noun?: string; children: ReactNode }) {
   return (
     <>
       <tr className="stack-head">
         <td colSpan={cols}>
-          <b>{stack || "no stack"}</b> <span className="muted small">{n} module{n === 1 ? "" : "s"}</span>
+          <b>{stack || "no stack"}</b> <span className="muted small">{n} {noun}{n === 1 ? "" : "s"}</span>
         </td>
       </tr>
       {children}
@@ -81,56 +81,25 @@ const rank: Record<string, number> = { fail: 0, warn: 1, pass: 2, unknown: 3 };
 const worst = (g: ModuleGroup<ModuleSummary>) => Math.min(...g.instances.map((i) => rank[i.badges.health] ?? 3));
 const uniq = (xs: (string | null)[]) => [...new Set(xs.filter((x): x is string => !!x))];
 
-// The Installed row of a module: its instances' places side by side.
-function InstalledRow({ g }: { g: ModuleGroup<ModuleSummary> }) {
-  const first = g.instances[0];
-  const runs = g.instances.map((i) => i.badges.run);
-  const run = runs.includes("stopped") ? "fail" : runs.includes("running") ? "pass" : "skip";
+// The Installed row of an install: the module it is, where it runs, its name.
+function InstalledRow({ module, m }: { module: string; m: ModuleSummary }) {
+  const run = m.badges.run === "stopped" ? "fail" : m.badges.run === "running" ? "pass" : "skip";
   const dash = <span className="muted">—</span>;
-  const nodes = uniq(g.instances.map((i) => i.actualNode ?? i.node));
-  const zones = uniq(g.instances.map((i) => i.zone0));
-  const vmids = g.instances.map((i) => i.vmid).filter((v): v is number => v !== null);
   return (
     <tr>
       <td>
-        <Dot level={run} title={runs.join(", ")} /> <Link to={`/modules/${encodeURIComponent(first.name)}`}>{g.module}</Link>
+        <Dot level={run} title={m.badges.run} /> <Link to={`/modules/${encodeURIComponent(m.name)}`}>{module}</Link>
       </td>
       <td>
-        {first.kind}
-        {vmids.length ? <span className="muted"> {vmids.join(", ")}</span> : null}
+        {m.kind}
+        {m.vmid !== null ? <span className="muted"> {m.vmid}</span> : null}
       </td>
-      <td>{nodes.length ? nodes.join(", ") : dash}</td>
-      <td>{zones.length ? zones.join(", ") : dash}</td>
+      <td>{m.actualNode ?? m.node ?? dash}</td>
+      <td>{m.zone0 ?? dash}</td>
+      <td>{m.environment ?? dash}</td>
+      <td className="mono">{m.name}</td>
       <td>
-        {environmentsOf(g).map((e, n) => (
-          <Fragment key={e.environment}>
-            {n ? ", " : ""}
-            {e.environment}
-            {e.instances.length ? (
-              <span className="muted">
-                {" "}(
-                {e.instances.map((i, k) => (
-                  <Fragment key={i}>
-                    {k ? ", " : ""}
-                    <Link to={`/modules/${encodeURIComponent(i)}`}>{i}</Link>
-                  </Fragment>
-                ))}
-                )
-              </span>
-            ) : null}
-          </Fragment>
-        ))}
-      </td>
-      <td>
-        {g.instances.length === 1 ? (
-          <ModuleBadges m={first} />
-        ) : (
-          g.instances.map((i) => (
-            <div key={i.name}>
-              <span className="muted small">{i.name}</span> <ModuleBadges m={i} />
-            </div>
-          ))
-        )}
+        <ModuleBadges m={m} />
       </td>
     </tr>
   );
@@ -153,7 +122,7 @@ export function Modules() {
       .filter((m) => only === "all" || m.badges.health === "fail" || m.badges.health === "warn" || m.badges.cve === "act")
       .sort((a, b) => (rank[a.badges.health] ?? 3) - (rank[b.badges.health] ?? 3) || a.name.localeCompare(b.name));
   }, [mods.env, q, only]);
-  // One row per module: the catalogues say which module an instance is.
+  // One row per install, a module's together: the catalogues say which module an instance is.
   const groups = useMemo(() => groupInstances(list, instanceOwners(cats.env?.data ?? [])).sort((a, b) => worst(a) - worst(b) || a.module.localeCompare(b.module)), [list, cats.env]);
   const total = mods.env?.data?.length ?? 0;
   const envOf = new Map((mods.env?.data ?? []).map((m) => [m.name, m.environment]));
@@ -193,14 +162,15 @@ export function Modules() {
             <th>runs on</th>
             <th>zone</th>
             <th>environment</th>
+            <th>Install name</th>
             <th>badges</th>
           </tr>
         </thead>
         <tbody>
-          {byStack(groups, (g) => g.stack).map(([stack, rows]) => (
-            <StackRows key={stack} stack={stack} cols={6} n={rows.length}>
-              {rows.map((g) => (
-                <InstalledRow key={g.module} g={g} />
+          {byStack(installsOf(groups), (r) => r.stack).map(([stack, rows]) => (
+            <StackRows key={stack} stack={stack} cols={7} n={rows.length} noun="install">
+              {rows.map((r) => (
+                <InstalledRow key={r.install.name} module={r.module} m={r.install} />
               ))}
             </StackRows>
           ))}
