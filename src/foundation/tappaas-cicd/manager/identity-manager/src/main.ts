@@ -22,10 +22,12 @@ import {
   parseFieldArgs,
 } from "./entity";
 import { CliPrimitiveClient, AuthentikUnreachable } from "./primitives";
+import { resetModeOf, resetPassword } from "./password";
 import { childOrgs, deepGroup, deepOrg, groupsOfOrg, orgRoots, usersOfGroup } from "./queries";
 import { applyPlan, computePlan, pushEntityDeletion, snapshot } from "./reconcile";
 import { revokeSessions, sessionRevokers, usersLosingAccess } from "./sessions";
 import { PeopleModel, PrimitiveClient } from "./types";
+import { readFileSync as readFd } from "fs";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfields";
 import { CL, DieError, GN, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
@@ -107,6 +109,12 @@ export const HELP: HelpSpec = {
       anyOption: true,
       details: FIELD_FLAGS,
     },
+    {
+      usage: "user reset-password <name> [--link | --password-stdin]", effect: { noPreview: "gives the user a new way in: a one-time link to set their own password (printed), or a password read from stdin" },
+      options: [
+        ["--link", "(default) Print a one-time link where the user sets a password of their own; the link is the authentication, it expires unused. Needs Authentik's recovery flow (identity's update.sh makes it)."],
+        ["--password-stdin", "Set the password that is the first line of stdin: never on a command line, never printed. The console's way; 8 characters or more."],
+      ] },
     {
       usage: "<kind> delete <name> [--force] [--no-reconcile]", effect: { noPreview: "removes the entity from config/identities and from Authentik (with --no-reconcile: config only)" },
       verb: `${KINDS} delete`,
@@ -481,7 +489,25 @@ function printEntity(kind: string, name: string, v: Record<string, unknown>): vo
 
 function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
   const sub = opts.rest[0];
-  if (!sub) die(`${kind}: expected one of list|show|add|modify|delete`);
+  if (!sub) die(`${kind}: expected one of list|show|add|modify|delete${kind === "user" ? "|reset-password" : ""}`);
+
+  if (sub === "reset-password") {
+    if (kind !== "user") die(`${kind} reset-password: only a user has a password`);
+    const name = opts.rest[1];
+    if (!name || name.startsWith("--")) die("user reset-password: expected <name>");
+    const mode = resetModeOf(opts.rest.slice(2));
+    if (typeof mode !== "string") die(mode.error);
+    const model = loadPeople(opts.configDir);
+    if (!entityMap(model, "user").has(name)) die(`user '${name}' not found in ${opts.configDir}`);
+    let r: ReturnType<typeof resetPassword>;
+    try {
+      r = resetPassword(client, name, mode, () => readFd("/dev/stdin", "utf8"));
+    } catch (e) {
+      die(e instanceof Error ? e.message : String(e));
+    }
+    for (const l of r.lines) info(l);
+    return;
+  }
 
   // ── read-only verbs ──────────────────────────────────────────────────
   // Default output is human-readable; --json emits the structured form (was

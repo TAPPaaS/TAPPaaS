@@ -79,6 +79,10 @@ export interface PrimitiveClient {
   removeMember(user: string, group: string): void;
   assignRole(user: string, role: string): void;
   unassignRole(user: string, role: string): void;
+  // A one-time link where the user sets a password of their own; null when
+  // Authentik has no recovery flow (then setPassword is the way).
+  recoveryLink(user: string): string | null;
+  setPassword(user: string, password: string): void;
 }
 
 // ── Reconcile plan ────────────────────────────────────────────────────

@@ -25,6 +25,7 @@ import { WIFI_TEXT, WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
 import { SatelliteButton } from "./Satellite";
 import { ADOPT_TEXT, AdoptButton } from "./Adopt";
+import { RESET_PASSWORD_TEXT, ResetPasswordCardButton } from "./ResetPassword";
 import { BACKUP_KEYS_TEXT, BackupKeysButton } from "./BackupKeys";
 import { identitySteps } from "./Identity";
 
@@ -210,6 +211,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
         <WizardCard title="Add a user" action={<OperateButton label="Add a user…" title="Add a user" steps={() => identitySteps("user", "add")} opens={{ wizard: "add-user" }} />}>
           A person who signs in: their name, email, groups and roles, staged and then pushed to Authentik.
         </WizardCard>
+        <WizardCard title="Reset a user's password" action={<ResetPasswordCardButton />}>{RESET_PASSWORD_TEXT}</WizardCard>
         <WizardCard title="Add a stack" action={<AddStackButton opens />}>
           Every module of a stack installed in dependency order; the preview is the plan.
         </WizardCard>

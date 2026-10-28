@@ -236,10 +236,18 @@ def cmd_user_delete(mgr: AuthentikManager, args: argparse.Namespace) -> int:
 
 
 def cmd_user_set_password(mgr: AuthentikManager, args: argparse.Namespace) -> int:
-    password = args.password or secrets.token_urlsafe(16)
+    if getattr(args, "password_stdin", False):
+        # The first line of stdin, once: the console hands a password this way,
+        # so it is never in a command line or a job log.
+        password = sys.stdin.readline().rstrip("\r\n")
+        if not password:
+            print("user-set-password --password-stdin: no password on stdin", file=sys.stderr)
+            return 2
+    else:
+        password = args.password or secrets.token_urlsafe(16)
     mgr.user_set_password(args.username, password)
     print(f"==> password set for '{args.username}'")
-    if not args.password:
+    if not args.password and not getattr(args, "password_stdin", False):
         print(f"    generated password: {password}")
     return 0
 
@@ -550,6 +558,8 @@ def main(argv: list[str] | None = None) -> int:
     up = sub.add_parser("user-set-password", help="set a user's password (prints generated one if omitted)")
     up.add_argument("username")
     up.add_argument("--password", default="", help="explicit password (default: generate + print)")
+    up.add_argument("--password-stdin", action="store_true",
+                    help="the password is the first line of stdin (never on a command line)")
     up.set_defaults(handler=cmd_user_set_password)
 
     ur = sub.add_parser("user-recovery-link", help="print a one-time recovery/enrollment link")

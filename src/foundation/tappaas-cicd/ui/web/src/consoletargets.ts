@@ -49,6 +49,7 @@ export const WIZARDS: WizardDef[] = [
     name: "add-satellite", title: "the Add a satellite wizard", arg: null, path: () => DAY2,
     keys: ["address", "environment", "roles", "location", "country", "city", "instance"], values: "address, environment, roles, location (one of the site's) or country and city, instance", verbs: [],
   },
+  { name: "reset-password", title: "the Reset a user's password wizard", arg: null, path: () => DAY2, keys: ["user"], values: "user", verbs: ["identity-manager user reset-password"] },
   { name: "add-user", title: "the Add a user wizard", arg: null, path: () => DAY2, keys: null, values: "name and the user's fields (email, groups, …)", verbs: ["identity-manager user add"] },
   {
     name: "add-rack", title: "the Add a rack wizard", arg: null, path: () => DAY2, keys: null,

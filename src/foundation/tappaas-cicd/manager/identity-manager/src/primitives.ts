@@ -8,6 +8,7 @@
 // list-* verbs emit JSON to stdout (NO --json flag); mutating verbs emit a
 // status line we ignore. A non-zero exit (or unreachable Authentik) throws.
 
+import { spawnSync } from "child_process";
 import { captureResult } from "../../../lib/ts/src/exec";
 import { AkNamed, AkUser, PrimitiveClient } from "./types";
 
@@ -62,6 +63,21 @@ export class CliPrimitiveClient implements PrimitiveClient {
 
   deleteUser(name: string): void {
     run(["delete-user", "--name", name]);
+  }
+
+  recoveryLink(name: string): string | null {
+    const r = captureResult(BIN, ["user-recovery-link", name]);
+    if (!r.ran) throw new AuthentikUnreachable(`${BIN} user-recovery-link: ${r.stderr}`);
+    if (r.rc === 2) return null; // no recovery flow on the brand
+    if (r.rc !== 0) throw new Error(`${BIN} user-recovery-link ${name} failed (exit ${r.rc}): ${r.stderr.trim()}`);
+    return r.stdout.trim() || null;
+  }
+
+  // The password on the controller's stdin: never in an argv.
+  setPassword(name: string, password: string): void {
+    const r = spawnSync(BIN, ["user-set-password", name, "--password-stdin"], { input: `${password}\n`, encoding: "utf8" });
+    if (r.error) throw new AuthentikUnreachable(`${BIN} user-set-password: ${r.error.message}`);
+    if (r.status !== 0) throw new Error(`${BIN} user-set-password ${name} failed (exit ${r.status}): ${(r.stderr ?? "").trim()}`);
   }
 
   ensureGroup(name: string, display: string): void {

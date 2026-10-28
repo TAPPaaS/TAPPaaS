@@ -12,6 +12,7 @@ export class FakeClient implements PrimitiveClient {
   roles = new Set<string>();
   users = new Map<string, AkUser>();
   log: string[] = [];
+  recoveryFlow = true; // false: Authentik has no recovery flow, links are null
   // Method names that throw when called — for failure-path tests (applyPlan
   // must continue past a failing action and report it).
   failOn = new Set<string>();
@@ -25,6 +26,16 @@ export class FakeClient implements PrimitiveClient {
   }
   seedUser(u: AkUser): void {
     this.users.set(u.name, { ...u, groups: [...u.groups], roles: [...u.roles] });
+  }
+
+  recoveryLink(user: string): string | null {
+    this.log.push(`recoveryLink ${user}`);
+    if (!this.users.has(user)) throw new Error(`user ${user} not found`);
+    return this.recoveryFlow ? `https://sso.example/recovery/?flow_token=tok-${user}` : null;
+  }
+  setPassword(user: string, password: string): void {
+    this.log.push(`setPassword ${user} ${"*".repeat(password.length)}`);
+    if (!this.users.has(user)) throw new Error(`user ${user} not found`);
   }
 
   listUsers(): AkUser[] {

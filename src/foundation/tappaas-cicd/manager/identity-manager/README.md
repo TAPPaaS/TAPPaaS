@@ -57,6 +57,7 @@ identity-manager <kind> show   <name> [--json]       [--config-dir DIR]   (alias
 identity-manager <kind> add    <name> [field flags]  [--force] [--config-dir DIR]
 identity-manager <kind> modify <name> [--set <field>=<value>]... [--unset <field>] [field flags]  [--config-dir DIR]
 identity-manager <kind> delete <name> [--force]      [--config-dir DIR]
+identity-manager user reset-password <name> [--link | --password-stdin]  [--config-dir DIR]
 identity-manager -h | --help
 ```
 
@@ -151,6 +152,22 @@ identity-manager role delete editor --force        # delete despite references
 identity-manager user add jan --email jan@foo.nl --no-reconcile   # stage, do not push
 identity-manager reconcile                          # preview the plan (default)
 identity-manager reconcile --apply                  # apply to the identity service
+```
+
+### `identity-manager user reset-password` — a new way in for a user
+
+A user who cannot sign in gets one of two things. `--link` (the default) prints a
+one-time link from Authentik's recovery flow: whoever opens it sets this user's
+password, so it is handed over like a key; it expires unused. It needs the recovery
+flow `identity/update.sh` makes (`authentik-controller recovery-flow-ensure`); without
+it the verb says so. `--password-stdin` sets the password that is the first line of
+stdin — 8 characters or more, never on a command line, never printed — which is how
+the web console's "Reset a user's password" sets a temporary password; the console's
+other way is the link. The user must exist in `config/identities`.
+
+```
+identity-manager user reset-password lars                 # the link, on stdout
+printf '%s\n' "$pw" | identity-manager user reset-password lars --password-stdin
 ```
 
 ### `identity-manager bootstrap` — bootstrap a minimal org

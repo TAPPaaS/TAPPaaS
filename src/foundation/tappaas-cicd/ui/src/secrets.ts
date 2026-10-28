@@ -17,7 +17,7 @@
 import { chmodSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 
-export type SecretName = "acme-dns" | "unifi" | "wlan" | "backup-keys";
+export type SecretName = "acme-dns" | "unifi" | "wlan" | "backup-keys" | "user-password";
 
 interface SecretSpec {
   file: string | null; // under the home directory; null: nothing is kept on the mothership
@@ -117,7 +117,28 @@ export const SECRETS: Record<SecretName, SecretSpec> = {
       };
     },
   },
+  "user-password": {
+    file: null,
+    what: "a user's new password, set in Authentik (identity-manager user reset-password --password-stdin)",
+    lines: () => "user-password: set in Authentik by identity-manager, never kept here",
+    command: (f) => {
+      const user = str(f.user);
+      const password = str(f.password);
+      if (!user || !USER_NAME.test(user)) return "user: the user, as identity-manager lists them";
+      if (!password || password.length < 8 || password.length > 1024 || !/^[\x20-\x7e]+$/.test(password)) return "password: 8 to 1024 printable characters";
+      return {
+        bin: "identity-manager",
+        args: ["user", "reset-password", user, "--password-stdin"],
+        input: `${password}\n`,
+        keys: [user],
+        where: `Authentik, for ${user}`,
+      };
+    },
+  },
 };
+
+// A user name as identity-manager spells one (a local part, or a short handle).
+const USER_NAME = /^[a-z0-9][a-z0-9._-]{0,62}$/i;
 
 export function isSecretName(n: string): n is SecretName {
   return Object.prototype.hasOwnProperty.call(SECRETS, n);

@@ -38,6 +38,11 @@ async function main(): Promise<void> {
   check(typeof secretCommand("backup-keys", { node: "tappaas1", device: "sdb", password: PASS }) === "string", "…a device not under /dev is refused");
   check(typeof secretCommand("backup-keys", { node: "tappaas1", device: "/dev/sdb", password: "elevenchars" }) === "string", "…and a password under 12 characters");
   check(typeof secretCommand("backup-keys", { node: "../x", device: "/dev/sdb", password: PASS }) === "string", "…and a node name site-manager would refuse");
+  // ── user-password: a user's new password to identity-manager, on stdin ──
+  const up = secretCommand("user-password", { user: "lars", password: "Pa55word-here" });
+  check(typeof up === "object" && up !== null && up.bin === "identity-manager" && up.args.join(" ") === "user reset-password lars --password-stdin" && up.input === "Pa55word-here\n", "user-password: identity-manager user reset-password --password-stdin, the password on stdin");
+  check(typeof secretCommand("user-password", { user: "lars", password: "short" }) === "string", "…a password under 8 characters is refused");
+  check(typeof secretCommand("user-password", { user: "../x", password: "Pa55word-here" }) === "string", "…and a user name identity-manager would refuse");
   check(!writeSecret("/nonexistent", "backup-keys", { node: "tappaas1", device: "/dev/sdb", password: PASS }).ok, "writeSecret refuses backup-keys: no file holds it");
 
   // ── the route ──

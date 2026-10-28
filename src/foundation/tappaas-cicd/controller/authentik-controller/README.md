@@ -53,7 +53,7 @@ the desired state).
 | `user-remove-from-groups <username> --group <g> ...` | Remove a user from groups. |
 | `disable-user --name <n>` | Set `is_active=false`. |
 | `user-delete <username>` / `delete-user --name <n>` | Delete a user. |
-| `user-set-password <username> [--password <p>]` | Set a password (generates and prints one if `--password` omitted). |
+| `user-set-password <username> [--password <p> \| --password-stdin]` | Set a password (generates and prints one if neither is given; `--password-stdin` reads the first line of stdin and prints nothing — `identity-manager user reset-password --password-stdin`). |
 | `user-recovery-link <username>` | Print a one-time password-reset link (needs the recovery flow below; exits 2 without it). |
 
 ### Password recovery

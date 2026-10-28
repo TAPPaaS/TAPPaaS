@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import { useRead } from "../api";
 import { GEdge, GNode, Graph } from "../graph";
 import { OperateButton, Step } from "../operate";
+import { ResetPasswordButton } from "./ResetPassword";
 import { fieldsStep } from "../fields";
 import { ID_KINDS, IdKind, IdNode, identityGraph } from "../relations";
 import { KV, ReadState, Section, since } from "../ui";
@@ -53,6 +54,7 @@ function Verbs({ kind, name }: { kind: string; name: string }) {
     <span className="toolbar">
       <OperateButton label="Show" title={`${kind} ${name}`} steps={[{ title: `identity-manager ${kind} show ${name}`, bin: "identity-manager", verb: "<kind> show", words: [kind, "show"], fixed: [name] }]} />
       <OperateButton label="Modify…" title={`Modify ${kind} ${name}`} steps={() => identitySteps(kind, "modify", name)} />
+      {kind === "user" ? <ResetPasswordButton user={name} small /> : null}
       <OperateButton label="Delete…" kind="danger" title={`Delete ${kind} ${name}`} steps={identitySteps(kind, "delete", name)} />
     </span>
   );
