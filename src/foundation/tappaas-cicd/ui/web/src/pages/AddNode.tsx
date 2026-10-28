@@ -47,15 +47,6 @@ export function firstFreeNode(known: string[]): string {
 // In the order the operator has the answers (ADR-037 D4): where it is cabled,
 // its MAC, its boot disks; every one may stay blank, and says what blank does.
 const DECLARE_OPTIONS = ["--pxe", "--switch-port", "--mac", "--boot-disk", "--boot-mirror", "--ttl", "--no-reboot"];
-const LABELS: Record<string, string> = {
-  "--pxe": "--pxe (install it over the network)",
-  "--switch-port": "--switch-port: the switch port it is cabled to",
-  "--mac": "--mac: the MAC of the card that network-boots",
-  "--boot-disk": "--boot-disk: the disk to install Proxmox on",
-  "--boot-mirror": "--boot-mirror: a second disk, mirrored",
-  "--ttl": "--ttl: seconds the window stays open",
-  "--no-reboot": "--no-reboot: do not reboot the node after its first update",
-};
 
 function Check({ ok, label, detail }: { ok: boolean | null; label: string; detail?: string }) {
   return (
@@ -108,7 +99,6 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       verb: "node add",
       fixed: valid ? [name] : [],
       only: DECLARE_OPTIONS,
-      labels: LABELS,
       placeholders: {
         "--switch-port": "blank: the port is configured by hand, and the MAC is needed",
         "--mac": "blank with a switch port: learned there — e.g. 58:47:ca:7a:12:34",

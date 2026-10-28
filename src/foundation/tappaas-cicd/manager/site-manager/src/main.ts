@@ -158,7 +158,7 @@ export const HELP: HelpSpec = {
         ["--lan-mode <m>", "active-backup (default for 2+ ports: any switches, any speeds) or lacp (equal speeds; the switch side one LAG)."],
         ["--lan-primary <if>", "active-backup: the port that carries traffic when up (default: the fastest)."],
         ["--ttl <s>", "Seconds the PXE offer stays open (default 7200)."],
-        ["--no-reboot", "Do not reboot the node into the kernel its first update installed (default: it reboots before it takes guests, when the cluster keeps quorum without it)."],
+        ["--no-reboot", "Do not reboot the node after its first update. By default it reboots into the kernel that update installed, before it takes guests, when the cluster keeps quorum without it."],
         ["--yes", "do not ask for confirmation."],
         ["--config-only", "Only write the node's pvehost record, config/<N>.json (no machine contact)."],
         ["--storage-pools <a,b>", "with --config-only: the pools to record. A node that joins records the zpools found on it; new pools are node storage add."],
