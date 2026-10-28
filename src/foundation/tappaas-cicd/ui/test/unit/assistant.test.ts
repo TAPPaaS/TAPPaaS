@@ -264,7 +264,7 @@ async function main(): Promise<void> {
   o = await runTool(tools, "open_console", JSON.stringify({ target: "add-wifi", values: { zone: "home", ssid: "rossen-home" } }));
   check(o.ok && o.navigate?.target === "add-wifi home" && o.navigate.path === "/setup/day2#wifi-home" && JSON.stringify(o.navigate.values) === '{"ssid":"rossen-home"}', "add-wifi takes its zone after the name or as a value");
   o = await runTool(tools, "open_console", JSON.stringify({ target: "add-wifi work" }));
-  check(!o.ok && /active Client and Guest zones; work is Client, Inactive/.test(o.content), "WiFi only for an active Client or Guest zone");
+  check(!o.ok && /active Client, Guest and IoT zones; work is Client, Inactive/.test(o.content), "WiFi only for an active Client, Guest or IoT zone");
   o = await runTool(tools, "open_console", JSON.stringify({ target: "modify-zone home", values: { description: "x" } }));
   check(o.ok && o.navigate?.path === "/zones?zone=home", "modify-zone opens the zone on the Zones page");
   o = await runTool(tools, "open_console", JSON.stringify({ target: "/site/physical" }));

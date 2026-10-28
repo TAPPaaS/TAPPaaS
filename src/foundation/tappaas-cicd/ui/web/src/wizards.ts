@@ -55,7 +55,7 @@ export interface SiteSsid {
   passphrase?: PassphraseState;
 }
 
-export const WIFI_ZONE_TYPES = ["Client", "Guest"];
+export const WIFI_ZONE_TYPES = ["Client", "Guest", "IoT"];
 
 // The template ships every SSID as a placeholder to replace (<HOME_SSID>):
 // never chosen, so not a name to broadcast or default to (wlan-lib.sh).
@@ -73,7 +73,7 @@ export interface WifiZone {
   ssid: SiteSsid | null; // the site-wide SSID that bridges to the zone
 }
 
-// The zones a WiFi button is offered for: every active Client and Guest zone,
+// The zones a WiFi button is offered for: every active Client, Guest and IoT zone,
 // in VLAN order, with the site-wide SSID that bridges to it.
 export function wifiZones(zones: ZoneIn[], ssids: SiteSsid[]): WifiZone[] {
   return zones

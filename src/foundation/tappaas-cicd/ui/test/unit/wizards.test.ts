@@ -23,9 +23,9 @@ const argv = (s: StepSpec, v: ManifestVerb): string => JSON.stringify(buildArgv(
 
 // ── which zones get a WiFi button ─────────────────────────────────────
 const wifi = wifiZones(zones, ssids);
-check(wifi.map((z) => `${z.zone}:${z.vlan}:${z.type}`).join() === "home:310:Client,guest:510:Guest", "hrossen: home (Client, 310) and guest (Guest, 510), in VLAN order");
+check(wifi.map((z) => `${z.zone}:${z.vlan}:${z.type}`).join() === "home:310:Client,iotLocal:410:IoT,iotCloud:420:IoT,iotCams:430:IoT,guest:510:Guest", "hrossen: home, the three active IoT zones and guest, in VLAN order");
 check(!wifi.some((z) => z.zone === "work"), "…work (Client, Inactive) gets none");
-check(!wifi.some((z) => ["iotLocal", "iotCloud", "rossen", "mgmt"].includes(z.zone)), "…nor an IoT, Service or Management zone");
+check(!wifi.some((z) => ["iotUntrust", "rossen", "mgmt"].includes(z.zone)), "…nor a Disabled IoT, a Service or a Management zone");
 check(wifi.every((z) => z.declared === null && z.ssid === null), "the template's <HOME_SSID> is not a name: no SSID declared, none site-wide");
 check(isPlaceholderSsid("<HOME_SSID>") && !isPlaceholderSsid("rossen-home"), "placeholders are <…>");
 const home = wifi[0];

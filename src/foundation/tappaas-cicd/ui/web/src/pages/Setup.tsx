@@ -185,7 +185,7 @@ function WifiLinks({ doc }: { doc: SetupDoc | null }) {
   const w = doc?.inputs.wifi;
   if (!w) return null;
   const served = new Set((w.aps ?? []).flatMap((a) => a.ssids.map((s) => s.zone)));
-  const missing = w.zones.filter((z) => z.type === "Client" && (z.state ?? "Active") === "Active" && !served.has(z.name));
+  const missing = w.zones.filter((z) => WIFI_ZONE_TYPES.includes(z.type ?? "") && (z.state ?? "Active") === "Active" && !served.has(z.name));
   const day2 = new Set(w.zones.filter((z) => WIFI_ZONE_TYPES.includes(z.type ?? "") && (z.state ?? "Active") === "Active").map((z) => z.name));
   const rows = ssids.env?.data ?? [];
   const to = (zone: string) => (day2.has(zone) ? `/setup/day2#wifi-${zone}` : "/setup/day2#wifi");

@@ -249,7 +249,7 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
             {WIFI_TEXT}
           </WizardCard>
         ) : null}
-        {zones.env?.data && wifi.length === 0 ? <p className="muted small">No active Client or Guest zone.</p> : null}
+        {zones.env?.data && wifi.length === 0 ? <p className="muted small">No active Client, Guest or IoT zone.</p> : null}
         {ssidsRead.env?.error || ssidsRead.failure ? <p className="readstate readstate-fail">ap-manager ssid list could not be read: {ssidsRead.env?.error ?? ssidsRead.failure}</p> : null}
         {apsRead.env?.error || apsRead.failure ? <p className="readstate readstate-fail">ap-manager list could not be read: {apsRead.env?.error ?? apsRead.failure}</p> : null}
       </Group>

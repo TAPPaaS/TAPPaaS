@@ -572,8 +572,8 @@ async function openConsole(ctx: ToolContext, args: Record<string, unknown>): Pro
     const zones = (z.value ?? []) as { name: string; type?: string; state?: string }[];
     const zone = zones.find((x) => x.name === res.arg);
     if (z.value && !zone) return no(`no zone '${res.arg}' (zones: ${zones.map((x) => x.name).join(", ")})`);
-    if (zone && res.wizard === "add-wifi" && (!["Client", "Guest"].includes(zone.type ?? "") || (zone.state ?? "Active") !== "Active")) {
-      return no(`WiFi is offered for active Client and Guest zones; ${res.arg} is ${zone.type ?? "?"}, ${zone.state ?? "Active"}`);
+    if (zone && res.wizard === "add-wifi" && (!["Client", "Guest", "IoT"].includes(zone.type ?? "") || (zone.state ?? "Active") !== "Active")) {
+      return no(`WiFi is offered for active Client, Guest and IoT zones; ${res.arg} is ${zone.type ?? "?"}, ${zone.state ?? "Active"}`);
     }
   }
   const nav: Opened = { target: res.target, values: res.values, path: res.path, title: res.title, url: await consoleUrl(r, res.path) };

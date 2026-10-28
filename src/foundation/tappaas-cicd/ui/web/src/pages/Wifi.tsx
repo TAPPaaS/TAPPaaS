@@ -1,6 +1,6 @@
 // Wifi.tsx — Day 2's "WiFi": one site-wide SSID that puts clients on a zone's
 // VLAN, broadcast by every access point (#889). 1 the network: the zone (every
-// active Client and Guest zone), the SSID's name — <site>-<zone> until one is
+// active Client, Guest and IoT zone), the SSID's name — <site>-<zone> until one is
 // typed — and how clients join; 2 declaring it (ap-manager ssid
 // add — after `ssid remove` of the zone's old SSID when the name changes, or
 // `ssid modify` when only its security does); 3 the WPA passphrase, handed to
@@ -114,7 +114,7 @@ export function WifiWizard({ zones, zone, site, onClose, prefill }: { zones: Wif
                     <option key={x.zone} value={x.zone}>{x.zone} ({x.type}{x.vlan !== null ? `, VLAN ${x.vlan}` : ""}){x.ssid ? ` — ${x.ssid.name}` : " — no SSID"}</option>
                   ))}
                 </select>
-                <small className="muted">Every active Client and Guest zone; devices that join land on its VLAN.</small>
+                <small className="muted">Every active Client, Guest and IoT zone; devices that join land on its VLAN.</small>
               </label>
               <label className="form-row">
                 <span>SSID *</span>
