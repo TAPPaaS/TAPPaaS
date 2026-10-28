@@ -441,13 +441,13 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
     manifest: VM_MANIFEST, actual: { ...onBoot, storagesOnNode: "local,local-zfs,tanka1" }, zones: ZONES,
   });
   check(
-    realMove.unreconciled.length === 1 && realMove.unreconciled[0].field === "storage" && realMove.adopt.length === 0,
-    "a storage its node HAS while the guest is elsewhere: still drift, for the operator",
+    realMove.units.map((u) => u.name).join() === "storage" && realMove.unreconciled.length === 0 && realMove.adopt.length === 0,
+    "a declared storage its node HAS while the guest is elsewhere: drift, moved by update-storage.sh",
   );
   const unknownNode = computeDrift(resolveModule("nextcloud", cfg, null, SCHEMA), {
     manifest: VM_MANIFEST, actual: { ...actual, storage: "local-zfs" }, zones: ZONES,
   });
-  check(unknownNode.unreconciled.length === 1 && unknownNode.adopt.length === 0, "no node storage list reported: no adoption, the old verdict");
+  check(unknownNode.units.map((u) => u.name).join() === "storage" && unknownNode.adopt.length === 0, "no node storage list reported: no adoption — the hook checks the node itself");
 
   // A shrink is only an adoption when actual genuinely EXCEEDS desired. Equal
   // sizes spelled differently must stay in sync, not adopt: 80G vs 81920M is
@@ -508,6 +508,27 @@ const skipReason = (r: DriftRecord, f: string): string | undefined =>
   const inPlace = d679({}, { cloudInit: "false", storage: "tanka1", cores: "4" });
   check(inPlace.units.map((u) => u.name).join() === "cores",
     "a defaulted value the converge CAN apply is still applied — the rule is scoped to what cannot");
+}
+
+// applyOnlyDeclared (storage, ADR-037 D1): an applying field whose schema
+// default must not act — the default never moves a disk, a declared value does.
+{
+  const MS = parseServiceFieldManifest(
+    { service: "t:svc", fields: { storage: { class: "in-place", apply: "hook", hook: "update-storage.sh", liveKey: "storage", adoptWhenAbsentFrom: "storagesOnNode", applyOnlyDeclared: true } } },
+    [],
+  )!;
+  const SS: ModuleFieldsSchema = { storage: { default: "tanka1", usedBy: ["t:svc"] } };
+  const ds = (cfg: Record<string, unknown>, actual: Record<string, string>): DriftRecord =>
+    computeDrift(resolveModule("m", { dependsOn: ["t:svc"], ...cfg }, null, SS), { manifest: MS, actual, zones: ZONES });
+  const undeclared = ds({}, { storage: "local-zfs", storagesOnNode: "local,local-zfs,tanka1" });
+  check(skipReason(undeclared, "storage") === "defaulted-declared-only" && !hasChanges(undeclared),
+    "a guest that never declared a storage is not moved by the default, though its node has tanka1");
+  const declared = ds({ storage: "tanka1" }, { storage: "local-zfs", storagesOnNode: "local,local-zfs,tanka1" });
+  check(declared.units.map((u) => u.name).join() === "storage" && declared.units[0].hook === "update-storage.sh",
+    "a declared storage the guest is not on is a unit for update-storage.sh");
+  const absent = ds({ storage: "tanka1" }, { storage: "local-zfs", storagesOnNode: "local,local-zfs" });
+  check(absent.adopt.map((f) => f.field).join() === "storage" && absent.units.length === 0,
+    "…while a node without that storage still adopts where the guest is (ADR-037 D1)");
 }
 
 console.log("");

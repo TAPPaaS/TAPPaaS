@@ -221,6 +221,7 @@ export type SkipReason =
   | "self-reconciling" // apply:"reconcile" — the service converges it itself
   | "not-reported" // the service's reporter does not observe this field
   | "defaulted-unappliable" // a schema default, in a class no converge applies (#679)
+  | "defaulted-declared-only" // a schema default of an applyOnlyDeclared field (storage): only a declared value acts
   | "capacity-held"; // a memory growth the node has no room for: kept at its current size (#891)
 
 export interface DriftField {
@@ -482,6 +483,11 @@ export function computeDrift(
     // cannot become is exactly what the refusal is for.
     if (df.defaulted && !CHANGE_CLASSES[entry.class]?.applies) {
       record.skipped.push({ field, reason: "defaulted-unappliable" });
+      continue;
+    }
+    // applyOnlyDeclared (storage): an applying class whose default must not act.
+    if (df.defaulted && entry.applyOnlyDeclared) {
+      record.skipped.push({ field, reason: "defaulted-declared-only" });
       continue;
     }
 

@@ -198,6 +198,10 @@ export interface FieldEntry {
   // take. A desired value not among them is a preference the create path fell
   // back from (ADR-037 D1): config adopts the actual value instead of drifting.
   adoptWhenAbsentFrom?: string;
+  // An applying class, applied only when the module DECLARES the field: a
+  // schema default is skipped as for a class that never applies (storage: the
+  // default never moves a disk, a declared storage does).
+  applyOnlyDeclared?: boolean;
   // When the module does NOT declare this field, is its module-fields.json
   // default DESIRED STATE, or merely an install-time seed? Default true.
   //
@@ -436,6 +440,9 @@ export function lintServiceFieldManifest(
       }
       if (f.setFlag && apply !== "set") {
         err(`${what}: declares setFlag '${f.setFlag}' but apply is '${apply}'`);
+      }
+      if (f.applyOnlyDeclared && !spec.applies) {
+        err(`${what}: applyOnlyDeclared on class '${e.class}', which never applies`);
       }
     }
 

@@ -53,7 +53,7 @@ BASE="${FOUNDATION}/schemas/module-fields.json"
 # The keys that are CHANGE semantics, not part of a field's definition. An entry
 # holding only these defines nothing — it is a manifest entry for a field
 # defined in another tier, which is the pre-#567 shape and must not shadow it.
-readonly CHANGE_KEYS='["class","apply","liveKey","setFlag","hook","composite","normalize","sideEffects","changeNote","inputs","adoptWhenAbsentFrom"]'
+readonly CHANGE_KEYS='["class","apply","liveKey","setFlag","hook","composite","normalize","sideEffects","changeNote","inputs","adoptWhenAbsentFrom","applyOnlyDeclared"]'
 
 # ── discovery ────────────────────────────────────────────────────────
 #

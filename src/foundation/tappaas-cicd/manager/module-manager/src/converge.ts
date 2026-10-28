@@ -449,6 +449,8 @@ const SKIP_REASON_TEXT: Record<string, string> = {
   "no-desired-value": "this module declares no value, and no schema default applies",
   "defaulted-unappliable":
     "the value is a schema default this guest cannot take, and the field cannot be changed in place — a property of the guest, not drift (#679)",
+  "defaulted-declared-only":
+    "the value is a schema default, and only a declared value of this field is applied (a storage the module names moves its disks; the default never does)",
   "not-reported": "the service's reporter does not observe it",
   "capacity-held": "growth held: its node has no room, so the guest keeps its current memory; the next update tries again",
 };

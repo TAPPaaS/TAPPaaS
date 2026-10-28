@@ -163,6 +163,10 @@
           "type": "string",
           "description": "A reporter key listing, comma-separated, the values this guest's node can take (cluster:vm storage: storagesOnNode). When the desired value is not among them, the guest's actual value is a fallback the create path chose (ADR-037 D1: a module's storage is a preference) — config adopts it instead of reporting drift. A desired value the node does have keeps the class's verdict."
         },
+        "applyOnlyDeclared": {
+          "type": "boolean",
+          "description": "An applying class, applied only when the module declares the field: a value that comes from the schema default is skipped as for a class that never applies (cluster:vm storage — the default never moves a disk; a declared storage does)."
+        },
         "sideEffects": {
           "type": "array",
           "items": {

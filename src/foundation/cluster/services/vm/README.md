@@ -396,13 +396,14 @@ Name of the storage pool for the module. Left undeclared, the pool is resolved a
 | Example | `tanka1` |
 | Required by | *(none)* |
 | Used by | `cluster:vm`, `cluster:lxc` |
-| Change class | `manual` |
-| Apply mode | `none` |
+| Change class | `in-place` |
+| Apply mode | `hook` |
 | Reported as | `storage` |
+| Hook | `update-storage.sh` |
 
 **About the field.** Must exist on the target node. A declared pool the node does not have is refused before the image is downloaded, naming the pools it does have (#692) — it is not silently replaced, because a declared pool is the operator's word.
 
-**Why this change class.** A storage change means moving the disk, and update-service.sh has always WARNED rather than acting, because an implicit qm move-disk is a long, IO-heavy operation an operator must schedule. Not pre-gated: writing the intended storage into config and reporting the gap is useful, so only the apply refuses. The schema default 'tanka1' is DESIRED state (ADR-020 D9). Since #692 it is a PREFERENCE, not an assumption: both create paths build on it when the target node has that pool and otherwise on the node's own ZFS pool, so a guest on a node with per-node pools is created instead of failing at `qm importdisk`. An undeclared guest that landed elsewhere is therefore not drift — the field is still at its schema default and cannot be applied, which is exactly the case #679 records as skipped. Nothing in TAPPaaS ever moves a disk, so this can only diverge when an operator runs qm move-disk by hand, and reporting exactly that is what the manual class is for; Excluding undeclared modules from the comparison suppressed exactly that report, which is the opposite of what manual means.
+**Why this change class.** A declared storage the guest is not on moves its disks there, live (qm disk move --delete 1): no restart, only IO. The case it exists for is ADR-037 D1's — a firewall or mothership the bootstrap built on the boot pool (local-zfs) before the node had a data pool, moved onto tanka1 once it has one so HA replication has a data pool to go to; update-storage.sh removes the guest's replication first and has cluster:ha make it again to the new storage. Only a DECLARED value acts (applyOnlyDeclared): the schema default 'tanka1' is a preference (#692), both create paths fall back from it to the node's own ZFS pool, and a guest that never asked for a storage is not moved by a default — that stays the skipped case #679 records. The hook refuses (exit 20) a storage the node lacks or one with too little free space. adoptWhenAbsentFrom (ADR-037 D1): when the storage config names is not on the guest's node at all — a firewall or mothership the bootstrap built on the boot pool, before any config existed — the guest standing elsewhere is that preference's fallback, and config adopts where it is.
 
 ### `bios`
 

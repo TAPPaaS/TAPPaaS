@@ -426,6 +426,7 @@ update-net.sh,cluster/services/vm/,common-install-routines.sh; vm-net.sh
 update-disk.sh,cluster/services/vm/,common-install-routines.sh; resize-disk.sh
 update-thin.sh,cluster/services/vm/,common-install-routines.sh; zfs-thin.sh; report-service.sh
 update-node.sh,cluster/services/vm/,common-install-routines.sh
+update-storage.sh,cluster/services/vm/,common-install-routines.sh; cluster/services/ha/update-service.sh
 delete-service.sh,cluster/services/vm/,common-install-routines.sh; delete-module.sh; dns-manager
 test-service.sh,cluster/services/vm/,common-install-routines.sh
 #
