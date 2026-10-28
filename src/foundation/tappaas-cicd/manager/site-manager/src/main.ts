@@ -36,6 +36,7 @@ import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, prefli
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
 import { addNodeStorage, listNodeStorage } from "./storage";
+import { parseSwitchPort, prepareUplinkPort } from "./port";
 import { listNodeUsb, writeNodeUsb } from "./usb";
 import { listMedia, prepareMedia } from "./media";
 import { Site, SiteClient } from "./types";
@@ -210,13 +211,15 @@ export const HELP: HelpSpec = {
         ["(default)", "The node's lan uplink, declared next to live: ports, mode, state, speed, the LACP aggregator, the switch each port reaches (LLDP), corosync — and what is wrong with it."],
         ["--json", "The declaration, the probe and the findings as JSON."],
       ] },
-    { usage: "node network set <node> [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--mtu <n>] [--no-wan | --wan-port <p>] [--switch-wait <s>] [--config-only] [--apply] [--yes]",
+    { usage: "node network set <node> [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--mtu <n>] [--switch-port <sw>:<p>] [--no-wan | --wan-port <p> [--wan-switch-port <sw>:<p>]] [--switch-wait <s>] [--config-only] [--apply] [--yes]",
       options: [
         ["(default)", "Declare the uplink in config/<node>.json (uplinks.lan, ports by MAC) and preview the change on the node. Without --lan-ports: the declaration there is."],
         ["--lan-ports <a,b>", "Ports by name or MAC. One port, or two or more bonded as lanbond."],
         ["--lan-mode <m>", "active-backup (default: any switches, any speeds — 10G + 1G) or lacp (equal speeds; the switch side one LAG: one switch or a stack/MLAG pair)."],
         ["--lan-primary <if>", "active-backup: the port that carries traffic when up (default: the fastest)."],
         ["--mtu <n>", "MTU on the bond and the lan bridge (the switch ports must match)."],
+        ["--switch-port <sw>:<p>", "The switch port a lan port being added is cabled to: made the node's trunk on the switch before the node changes (on a switch TAPPaaS programs; on another, set it by hand)."],
+        ["--wan-switch-port <sw>:<p>", "With --wan-port: the switch port the WAN cable reaches, made an access port in the WAN zone before the node changes."],
         ["--no-wan", "The wan bridge gives up its port, so it can join the lan bond (e.g. a 1G wan port as lan's backup leg). The node can then no longer carry the firewall's WAN; refused while a guest uses the wan bridge."],
         ["--wan-port <p>", "The wan bridge carries <p> (by name or MAC): the reverse of --no-wan, so the firewall's WAN role can move to this node (#849). Not one of the lan ports. Moving the firewall's failover there also takes the network module's HANode and the switch port as an access port in the WAN VLAN (cluster README)."],
         ["--switch-wait <s>", "With --apply: wait up to <s> seconds (30–1800, default 30) for the change to verify, to configure the switch side meanwhile — e.g. the LAG for lacp, once the node speaks it. Needs the drained node's HA watchdog released."],
@@ -1119,6 +1122,18 @@ function cmdNode(o: Opts, client: SiteClient): void {
     const args = [action as string, node];
     if (action === "show" && o.json) args.push("--json");
     if (action === "set") {
+      // The switch side first, so the new leg has its VLANs when the node's
+      // change is verified (preview: only said).
+      const lanSw = o.flags.get("--switch-port");
+      const wanSw = o.flags.get("--wan-switch-port");
+      if (wanSw && !o.flags.get("--wan-port")) die("node network set: --wan-switch-port goes with --wan-port");
+      if (lanSw && !o.flags.get("--lan-ports")) die("node network set: --switch-port is the switch port of a lan port being added — give --lan-ports");
+      for (const [v, role] of [[lanSw, "lan"], [wanSw, "wan"]] as const) {
+        if (!v) continue;
+        const sp = parseSwitchPort(v);
+        if (!sp) die(`node network set: '${v}' is no <switch>:<port>, e.g. "USW Pro XG 10 PoE:2"`);
+        prepareUplinkPort(sp, node, role, !o.apply || o.boolFlags.has("--config-only"));
+      }
       for (const f of ["--lan-ports", "--lan-mode", "--lan-primary", "--mtu", "--switch-wait", "--wan-port"]) {
         const v = o.flags.get(f);
         if (v) args.push(f, v);

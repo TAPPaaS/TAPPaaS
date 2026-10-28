@@ -100,6 +100,38 @@ export function preparePort(sp: SwitchPort, name: string): string[] {
   return before;
 }
 
+// The switch side of a node's uplink change (node network set): the port a
+// new lan leg reaches becomes the node's trunk, the port the WAN cable reaches
+// an access port in the WAN zone. preview: say what would change, change nothing.
+// A switch TAPPaaS does not program is said, not refused: its port is set by hand.
+export function prepareUplinkPort(sp: SwitchPort, node: string, role: "lan" | "wan", preview: boolean): void {
+  const list = sm(["list", "--json"]);
+  let sw: { name: string; managed?: string } | undefined;
+  try { sw = (JSON.parse(list.out).switches as { name: string; managed?: string }[]).find((s) => s.name === sp.switch); } catch { /* below */ }
+  if (!sw) die(`no switch '${sp.switch}' (switch-manager list)`);
+  const want = role === "lan" ? `${node}'s node trunk` : `an access port in the WAN zone (${node}'s WAN cable)`;
+  if (sw.managed !== "auto") {
+    warn(`  TAPPaaS does not program '${sp.switch}': set its port ${sp.port} by hand as ${want}`);
+    if (role === "lan") printManualPortSetup();
+    return;
+  }
+  const ports = sm(["list-ports", sp.switch, "--json"]);
+  let cur: { type?: string | null; target?: string | null; zones?: string[]; lagLead?: string | null; lag?: string | null } | undefined;
+  try { cur = (JSON.parse(ports.out)[0].ports as { port: string }[]).find((p) => p.port === sp.port) as typeof cur; } catch { /* below */ }
+  if (!cur) die(`'${sp.switch}' has no port '${sp.port}' (switch-manager list-ports '${sp.switch}')`);
+  if (cur.lag || cur.lagLead) die(`${sp.switch} port ${sp.port} is in an aggregate — name a single port`);
+  const mine = role === "lan" ? cur.type === "node" && (cur.target ?? node) === node : cur.type === "device" && (cur.zones ?? []).includes("wan");
+  if (mine) { info(`  ${GN}✓${CL} ${sp.switch} port ${sp.port} is ${want} already`); return; }
+  if (cur.type) die(`${sp.switch} port ${sp.port} is a ${cur.type} port${cur.target ? ` (${cur.target})` : ""} — not taken over; free it first (switch-manager remove-port)`);
+  if (preview) { info(`  [preview] ${sp.switch} port ${sp.port} would become ${want}`); return; }
+  const args = role === "lan"
+    ? ["add-port", sp.switch, sp.port, "--type", "node", "--target", node, "--apply"]
+    : ["add-port", sp.switch, sp.port, "--type", "device", "--zone", "wan", "--description", `${node} WAN`, "--apply"];
+  const set = sm(args);
+  if (set.rc !== 0) die(`${sp.switch} port ${sp.port} was not made ${want}:\n${set.out.trim()}`);
+  info(`  ${GN}✓${CL} ${sp.switch} port ${sp.port} is ${want}, on the switch`);
+}
+
 // One look at the port: the MAC to pin, when exactly one new one is there.
 export function learnMac(sp: SwitchPort, before: string[]): { mac?: string; several?: string[] } {
   const found = newMacs(portNeighbors(sp, true), before, nodeMacs());
