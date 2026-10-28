@@ -82,8 +82,10 @@ macOS default), a `#` comment is an error rather than ignored.
 
 ### Setting up a Mac (once)
 
-The Bitwarden desktop app runs the SSH agent; Terminal has to be told to use it instead of macOS's
-own agent.
+The Bitwarden desktop app runs an SSH agent that holds the release key. Only signing should
+reach it: made the default agent, it is asked about every `ssh` and every `git` over ssh, and
+Bitwarden prompts each time. So the macOS agent stays the default, and Bitwarden's agent is
+forwarded only by a separate host alias for each mothership you sign on.
 
 1. **Turn the agent on.** Open Bitwarden, unlock it, and open *Bitwarden → Settings…* (⌘,). Tick
    **Enable SSH agent**, and set the authorization prompt for SSH agent use to **Always**.
@@ -97,47 +99,50 @@ own agent.
    `Library/Containers/…` path for the Mac App Store version, `~/.bitwarden-ssh-agent.sock` for the
    one downloaded from bitwarden.com. Neither listed: the agent is not on yet (step 1), or
    Bitwarden is not running.
-3. **Make Terminal use it, permanently.** Open `~/.zshrc` (`open -e ~/.zshrc`; `touch ~/.zshrc`
-   first if it does not exist), paste these lines at the end, and save. They work for both
-   versions, and change nothing while Bitwarden is not running:
+3. **Add a signing alias for each mothership.** Open `~/.ssh/config` (`open -e ~/.ssh/config`;
+   `touch ~/.ssh/config` first if it does not exist) and add, per mothership you sign on, an entry
+   like this — your mothership's address, and the socket path from step 2 written out in full:
 
-   ```bash
-   # Bitwarden SSH agent (TAPPaaS release signing)
-   _bw_sock="$HOME/Library/Containers/com.bitwarden.desktop/Data/.bitwarden-ssh-agent.sock"
-   [ -S "$_bw_sock" ] || _bw_sock="$HOME/.bitwarden-ssh-agent.sock"
-   [ -S "$_bw_sock" ] && export SSH_AUTH_SOCK="$_bw_sock"
-   unset _bw_sock
+   ```
+   Host cicd-mysite-sign
+       HostName <mothership>
+       User tappaas
+       ForwardAgent /Users/<you>/Library/Containers/com.bitwarden.desktop/Data/.bitwarden-ssh-agent.sock
    ```
 
-   It has to be `SSH_AUTH_SOCK`, not an `IdentityAgent` line in `~/.ssh/config`: git signs
-   through `ssh-keygen`, which reads only `SSH_AUTH_SOCK`, and `ssh -A` forwards whatever it
-   names.
-4. **Open a new Terminal window** — a window opened before the change keeps the old agent — and
-   check:
+   `ForwardAgent` with a path forwards that one agent; the login itself uses your usual key.
+   Every other `ssh` and `git` uses the macOS agent and never reaches Bitwarden.
+4. **Check it**, with Bitwarden open and unlocked:
 
    ```bash
-   echo $SSH_AUTH_SOCK
+   ssh cicd-mysite-sign ssh-add -l
    ```
 
-   It must end in `.bitwarden-ssh-agent.sock`. If it still shows `/var/run/com.apple.launchd…`,
-   the window is an old one (`source ~/.zshrc`, or ⌘N), or `~/.zshrc` was not saved.
+   It must list your release key by name (once it is enrolled, below). `The agent has no
+   identities` or another key means the socket path in step 3 is wrong.
 
-`ssh` still finds the keys in `~/.ssh` by file. A key there with a passphrase that macOS's agent
-used to remember will now ask for it; import that key into Bitwarden (*New → SSH key → Import*),
-or add `UseKeychain yes` under `Host *` in `~/.ssh/config`.
+**Signing on the Mac itself** — the tests while enrolling a key, below — needs Bitwarden's agent
+in that one Terminal window. Set it there, with the socket path from step 2:
+
+```bash
+export SSH_AUTH_SOCK=~/Library/Containers/com.bitwarden.desktop/Data/.bitwarden-ssh-agent.sock
+```
+
+The window keeps it until it is closed; a new window is back on the macOS agent.
 
 ### Enrolling a release key (once a year)
 
 1. **Create it.** In Bitwarden: *New → SSH key*, type **ed25519**, named
    `TAPPaaS release key <year> – <your name>`. Save.
-2. **Check the agent offers it**, in a new Terminal window:
+2. **Check the agent offers it**, in a Terminal window set to Bitwarden's agent (*Signing on the
+   Mac itself*, above):
 
    ```bash
    ssh-add -l
    ```
 
    It must list the new key by name. Another key listed instead means the window is not using
-   Bitwarden's agent (Setting up a Mac, step 4).
+   Bitwarden's agent.
 3. **Save its public key** — copy the public key in the Bitwarden item, then:
 
    ```bash
@@ -158,7 +163,7 @@ or add `UseKeychain yes` under `Host *` in `~/.ssh/config`.
    ```
 
    Bitwarden asks; approve, and it prints `Signing file /tmp/t`. Then `rm /tmp/t /tmp/t.sig`.
-   `No private key found` means Terminal is not using Bitwarden's agent; `Couldn't load public
+   `No private key found` means the window is not using Bitwarden's agent; `Couldn't load public
    key` means the file name is wrong.
 6. **Enrol it.** Add the public key to `.tappaas/allowed_signers` as a new line with your
    principal and `valid-before` one year out, add or update your row in `.tappaas/SIGNERS.md` with
@@ -213,13 +218,13 @@ later `key export --usb` lists them among what it leaves in place.
 
 ### Signing a boundary or an urgent fix
 
-The train runs on the mothership; the key stays in your vault. Forward your agent and tell git
-which key to ask it for:
+The train runs on the mothership; the key stays in your vault. Log in through your signing alias,
+which forwards Bitwarden's agent, and tell git which key to ask it for.
 
 With Bitwarden open and unlocked on your laptop:
 
 ```bash
-ssh -A tappaas@<mothership>
+ssh cicd-mysite-sign
 ```
 
 Once, on the mothership — your release key's public key, as in `~/release.pub`:
