@@ -12,6 +12,25 @@ Being an `admin` (an admin of the apps) or in `users` (everyone with an account)
 access. Make someone an installer with `identity-manager user modify <user> --add-groups
 installer` (INSTALL.md, *Who may log in*).
 
+## Two parts, two owners
+
+The console is two things. **The code and the running service are part of the
+mothership:** `tappaas-cicd/ui` holds the TypeScript backend and the React front end,
+the control-plane refresh builds it like a manager and links it as `~/bin/console`, and
+the mothership runs it as `tappaas-console.service` (port 9097, as the `tappaas` user),
+restarted when a new build lands. It has to be there before any module is installed,
+because the Setup wizard runs on it right after `bootstrap.sh`, and because every change
+it makes is a manager verb run on the mothership. So a change to the console's code
+reaches a site with the control-plane refresh, like a change to a manager.
+
+**This module is the console's published face.** Registering it installs nothing: it
+gives the running service its route `console.<domain>` through Caddy (network:proxy),
+puts the Authentik gate in front of it bound to the `installer` group
+(identity:accessControl), opens its firewall rules, hands it the assistant's LiteLLM key
+when the AI stack is there, and carries the operator's settings (`proxyDomain`,
+`assistantModel`, `gateGroups`). A change to how the console is published or configured
+is a module change: `module-manager module update console`.
+
 ## What you get
 
 | Capability | Access from | How |
