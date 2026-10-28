@@ -41,6 +41,10 @@ export interface Step extends ArgvStep {
   // A bar over the apply while it runs, from the job's output so far (the
   // stick write's percent lines): null until the output says where it is.
   progress?: (output: string) => { pct: number; text: string } | null;
+  // The applied job's output is shown elsewhere (a wizard's later stage that
+  // watches it): here only its state and this line, so it is not shown twice.
+  // A refused job is still shown here, where the change was made.
+  jobShownIn?: string;
   // Values the assistant opened the form with (open_console): positionals and
   // options by name, merged in once the verb's manifest is read; a field form
   // takes the fields among them (PrefillContext).
@@ -331,7 +335,11 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       {preview ? <JobView id={preview.id} label={isRead ? "result" : previewKind === "none" ? "preview (no dry run)" : "preview"} /> : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to apply.</p> : null}
       {step.progress && appliedJob && inApply ? <ProgressBar at={step.progress(appliedJob.output)} done={appliedJob.state === "done"} /> : null}
-      {appliedJob?.previewPhase ? <TwoPhaseView job={appliedJob} /> : applied ? <JobView id={applied} label="apply" /> : null}
+      {step.jobShownIn && appliedJob && appliedJob.state !== "refused" && !stopped ? (
+        <p className="small">
+          <Tag level={appliedJob.state !== "done" ? "skip" : appliedJob.exit === 0 ? "pass" : "warn"} /> apply: {jobResult(appliedJob)} <span className="muted">· job {appliedJob.id}</span> — its output is in {step.jobShownIn}
+        </p>
+      ) : appliedJob?.previewPhase ? <TwoPhaseView job={appliedJob} /> : applied ? <JobView id={applied} label="apply" /> : null}
       {applied && appliedJob?.state === "done" && !stopped ? (
         <>
           {step.after ? step.after(appliedJob) : null}

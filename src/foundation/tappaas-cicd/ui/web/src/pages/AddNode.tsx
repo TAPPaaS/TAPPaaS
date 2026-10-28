@@ -79,10 +79,6 @@ function Check({ ok, label, detail }: { ok: boolean | null; label: string; detai
   );
 }
 
-function tail(text: string, n: number): string {
-  const lines = text.trimEnd().split("\n");
-  return lines.slice(-n).join("\n");
-}
 
 // `prefill`: what the assistant opened it with (open_console add-node): the
 // node's name, and node add's options by name (mac, boot-disk, …).
@@ -149,6 +145,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       hide: ["--yes"],
       prefill: options,
       blocked: job !== null || (valid && !known.includes(name)) ? undefined : "give the node a new name first",
+      jobShownIn: "stage 3, where the install is watched",
       note: (
         <>
           <p><b>Where it is cabled</b> — one of two:</p>
@@ -242,7 +239,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
     // machine that network-boots needs no stick (then the medium must only be
     // there, which stage 1's job checks again).
     { id: "medium", title: "0 · Prepare boot medium", required: false, done: stickWritten || skipMedium ? true : mediaReady === false && !prepared ? false : null, detail: "The netboot assets and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick. Skip it for a machine that network-boots." },
-    { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. The outcome is either a boot USB disk is prepared or a PXE boot process is started." },
+    { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. Apply records its install answer on the mothership and opens the boot window; stage 2 says how to boot the machine." },
     { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto a ZFS boot pool, the node joins the cluster, is patched and rebooted, and is registered as a pvehost instance." },
     { id: "storage", title: "4 · Define data pools", required: false, done: pooled ? true : null, detail: "Until it has one, its guests go to the boot pool. Proposed from its free disks." },
@@ -367,9 +364,9 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
             {running ? (
               <>
                 <p className="small">
-                  The job: <b>{running.state === "done" ? (running.exit === 0 ? "finished" : `ended with exit ${running.exit}`) : running.state}</b> <span className="muted">(its full output is under stage 1)</span>
+                  The job: <b>{running.state === "done" ? (running.exit === 0 ? "finished" : `ended with exit ${running.exit}`) : running.state}</b>
                 </p>
-                <Output text={tail(running.output, 14)} live={running.state === "running"} />
+                <Output text={running.output} live={running.state === "running"} />
               </>
             ) : null}
             {progress?.inCluster && !progress.inSite && ended !== null ? (
