@@ -438,12 +438,12 @@ in
         # heaviest verbs the console runs outside it altogether — a bigger
         # change than this list, kept as a follow-up.
         "/home/tappaas"
-        # /tmp itself, not a private one: `site-manager node add --pxe` stages
+        # /tmp itself, not a private one: `site-manager node add` stages
         # the netboot files in /tmp/tappaas-serve and serves them from a
         # transient unit, which sees the real /tmp; the bash controllers make
         # their scratch directories there too.
         "/tmp"
-        # `node add --pxe` runs `sudo node-provisioner`, which writes the PXE
+        # `node add` runs `sudo node-provisioner`, which writes the PXE
         # asset tree as root (still inside this unit's sandbox); sudo records
         # its timestamp under /run/sudo. "-": absent until first used.
         "-/var/lib/tappaas-pxe"

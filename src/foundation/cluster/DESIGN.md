@@ -251,11 +251,12 @@ concern.
 
 ## Adding more nodes
 
-The supported flow is `site-manager node add tappaasN --install` from the mothership (see
+The supported flow is `site-manager node add tappaasN` from the mothership (see
 [INSTALL.md](./INSTALL.md) and the repo-root [INSTALL.md](../INSTALL.md) §2.2):
-a TTL-limited PXE trap installs Proxmox unattended, then the node step runs served from
-the mothership, joins the cluster and creates the declared pools. A manual install with
-the stock ISO followed by `site-manager node add tappaasN` (no `--install`) is equivalent.
+a TTL-limited boot window installs Proxmox unattended (from the network or the USB stick),
+then the node step runs served from the mothership and joins the cluster. A manual install
+with the stock ISO followed by `site-manager node add tappaasN --adopt <its IPv4>` is
+equivalent.
 
 `update.sh` (run from the mothership) keeps the provisioners and `zones.json` in sync
 across all nodes.

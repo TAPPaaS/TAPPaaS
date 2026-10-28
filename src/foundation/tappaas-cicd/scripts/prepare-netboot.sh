@@ -19,7 +19,7 @@
 #   3. copies the prepared ISO to /home/tappaas/pve-tappaas-netboot.iso and
 #      stages kernel/initrd/ISO via `node-provisioner prepare`.
 #
-# After this, `site-manager node add <name> --pxe` works with zero prep. The
+# After this, `site-manager node add <name>` works with zero prep. The
 # PXE-less alternative is a stick of /var/lib/tappaas-pxe/tappaas-usb.iso (the
 # prepared ISO with the TAPPaaS installer hook): the flow is the same.
 #
@@ -91,5 +91,5 @@ scp -q -o BatchMode=yes "root@${NODE}:${PREPARED}" "${DEST_ISO}" \
 sudo node-provisioner prepare --iso "${DEST_ISO}" \
   || die "node-provisioner prepare failed"
 
-info "netboot staging complete — 'site-manager node add <name> --pxe' is ready."
+info "netboot staging complete — 'site-manager node add <name>' is ready."
 info "USB alternative: write the stick image:  dd if=/var/lib/tappaas-pxe/tappaas-usb.iso of=/dev/<usb> bs=4M"

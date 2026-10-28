@@ -41,9 +41,9 @@ The node step alone (no firewall/platform chain) is `src/foundation/cluster/inst
 with the same positional `REPO BRANCH` arguments.
 
 **Additional nodes** — after the first node's bootstrap has finished, add each node from
-the mothership with one command (network-boot, fully unattended):
+the mothership with one command (network boot or the USB stick image, unattended):
 
-    site-manager node add tappaas2 --install
+    site-manager node add tappaas2
 
 then fold the new topology into HA + replication with `site-manager update`.
 

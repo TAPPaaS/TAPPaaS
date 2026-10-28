@@ -334,14 +334,15 @@ re-stage once with `prepare-netboot.sh --force` on the mothership.
 **Per node — one command:**
 
 ```bash
-site-manager node add tappaas2 --install
+site-manager node add tappaas2
 ```
 
 The command walks the whole flow and asks only what it cannot know:
 
-1. Registers the node and **arms a TTL-limited PXE trap** (auto-disarms;
-   only registered machines are answered).
-2. Tells you to **network-boot the machine** (UEFI PXE, e.g. F11). The
+1. Registers the node's install answer and **opens a TTL-limited boot window**
+   (closes on its own; a cluster node is never answered).
+2. Tells you to **boot the machine** from the network (UEFI PXE, e.g. F11)
+   or from the USB stick image (below). The
    installer picks the boot disk itself — the smallest SSD or NVMe disk, and
    both of an identical smallest pair, mirrored (ZFS) — or the one `--boot-disk`
    describes (a size such as `2TB`, a model or a serial). Only when nothing
@@ -365,8 +366,9 @@ The command walks the whole flow and asks only what it cannot know:
 Every question can be pre-answered for a fully unattended run:
 
 ```bash
-site-manager node add tappaas2 --install --boot-disk 2TB --mac aa:bb:cc:dd:ee:ff --no-wan
-# --mac also pre-reserves the standard IP, so the node installs onto it directly.
+site-manager node add tappaas2 --boot-disk 2TB --mac aa:bb:cc:dd:ee:ff --no-wan
+# --mac also pre-reserves the standard IP, so the node installs onto it directly;
+# with neither --mac nor --switch-port, the first machine that asks gets the answer.
 # --boot-disk: a size, a model or a serial (blank: the automatic choice).
 site-manager node storage add tappaas2 tanka1 --disks 50026B73842AD86F --layout single
 ```
@@ -381,16 +383,17 @@ site-manager update
 > `dd if=/var/lib/tappaas-pxe/tappaas-usb.iso of=/dev/<usb> bs=4M` (it is
 > also served at `http://tappaas-cicd.mgmt.internal:8090/tappaas-usb.iso`
 > while the boot window is open) — and boot from USB instead of pressing F11.
-> The flow (and the `node add <name> --install` command) is otherwise identical:
+> The flow (and the `node add <name>` command) is otherwise identical:
 > the answer still comes from the mothership, which matches `--boot-disk`
 > against the disks the stick reports. The stick cannot ask on the console:
 > a boot-disk field that matches no disk stops the install with the list of
 > the machine's disks.
 >
 > **Manual install instead?** Install from a stock ISO or the Step 1 Option A
-> stick, give the node its standard mgmt IP (or let it DHCP), then run
-> `site-manager node add tappaas2` (no `--install`) — it finds the Proxmox at
-> the node's designated IP and runs the same join + capture pipeline.
+> stick, authorize the cicd key for root, then run
+> `site-manager node add tappaas2 --adopt <its IPv4>` — it finds the Proxmox
+> there and runs the same join + capture pipeline, which moves it to the
+> node's standard mgmt IP. The console's Add node wizard always installs.
 > The underlying tools remain available for surgery: `node-provisioner
 > register/enable/disable/status` and `dhcp-manager pxe/host`.
 

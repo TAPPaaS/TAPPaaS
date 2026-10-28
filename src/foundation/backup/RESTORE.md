@@ -374,8 +374,8 @@ disk's partitions and partition table, its boot entry (it asks for `ERASE`).
 ### 3.2 Bring the replacement back in
 
 ```bash
-site-manager node add tappaas2 --pxe --boot-disk 25414A800205   # PXE-install it: boot disk by serial, size or model
-site-manager node add tappaas2                                    # or adopt a hand-installed Proxmox
+site-manager node add tappaas2 --boot-disk 25414A800205   # install it (network or USB stick): boot disk by serial, size or model
+site-manager node add tappaas2 --adopt 192.168.1.50       # or adopt a Proxmox installed by hand, at its address
 site-manager node storage add tappaas2 tanka1 --disks 50026B73842AD86F --layout single   # then its data pool
 ```
 

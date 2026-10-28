@@ -2,7 +2,7 @@
 // each stage does is said before it runs, and what the operator must do by
 // hand is said where it is needed (ADR-037 D4). 1 declare the node — where it
 // is cabled first, then its MAC and boot disks, each blank its default
-// (site-manager node add --install: one job that registers its install answer,
+// (site-manager node add: one job that registers its install answer,
 // opens the boot window and waits for it); 2 boot the machine from the network
 // or the USB stick, by hand; 3 the install and the join, watched live (the provisioning
 // registration, the PXE window, the cluster, the node's pvehost record, and the
@@ -70,7 +70,8 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   const known = (site?.nodes ?? []).map((n) => n.name);
   const [typed, setName] = useState<string | null>(typeof prefill?.name === "string" ? prefill.name : null);
   const options = useMemo(() => {
-    const { name: _n, ...rest } = prefill ?? {};
+    // The wizard installs; adopting a hand-installed Proxmox is the CLI's only.
+    const { name: _n, adopt: _a, ...rest } = prefill ?? {};
     return Object.keys(rest).length ? rest : undefined;
   }, [prefill]);
   const name = typed ?? firstFreeNode(known);
@@ -112,7 +113,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       // The node joins with no WAN port and its one detected lan port; stage 5
       // declares the lan ports and the WAN port (node network set). --yes only
       // skips node add's lan-port question, which --no-wan skips already.
-      initial: { "--install": true, "--yes": true, "--no-wan": true },
+      initial: { "--yes": true, "--no-wan": true },
       hide: ["--yes"],
       prefill: options,
       blocked: job !== null || (valid && !known.includes(name)) ? undefined : "give the node a new name first",

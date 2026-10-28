@@ -119,7 +119,7 @@ export interface Ipv6Read {
   error?: string;
 }
 
-// A node being added (site-manager node add --install), as the records show it:
+// A node being added (site-manager node add), as the records show it:
 // its provisioning registration, the PXE window, cluster membership, site.json.
 export interface NodeProgress {
   name: string;

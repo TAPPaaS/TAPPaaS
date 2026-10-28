@@ -142,11 +142,11 @@ export const HELP: HelpSpec = {
       note: "(refused for the primary location and for one a peer, room or device names)",
       options: [["--check", "say whether it can go, in one line; write nothing."], ["--json", "with --check: the whole resulting site.json, for machines."]] },
     { usage: "node list [--json]", note: "(the cluster's nodes: their pvehost instances, with their storage pools)" },
-    { usage: "node add <N> [--install] [--switch-port <sw>:<p>] [--mac <m>] [--boot-disk <d>] [--boot-mirror <d>] [--boot-filesystem zfs|ext4] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]", effect: { noPreview: "joins a node: installs it on a ZFS boot pool (network boot or the USB stick), adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add" },
-      hidden: ["--name <N>", "--pxe", "--provision", "--pool <p>"],
+    { usage: "node add <N> [--adopt <ipv4>] [--switch-port <sw>:<p>] [--mac <m>] [--boot-disk <d>] [--boot-mirror <d>] [--boot-filesystem zfs|ext4] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]", effect: { noPreview: "joins a node: installs it on a ZFS boot pool (network boot or the USB stick), adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add" },
+      hidden: ["--name <N>", "--install", "--pxe", "--provision", "--pool <p>"],
       options: [
-        ["(default)", "Adopt a Proxmox already installed at the node's designated mgmt IP: join the cluster + capture."],
-        ["--install", "Install Proxmox on the machine: TAPPaaS serves the installer's answer, and the machine boots it from the network (PXE) or from the USB stick image. (--pxe: the same.)"],
+        ["(default)", "Install Proxmox on the machine: TAPPaaS serves the installer's answer and opens the boot window, and the machine boots the installer from the network (PXE) or from the USB stick image."],
+        ["--adopt <ipv4>", "Do not install: join a Proxmox installed by hand, reached as root over ssh at <ipv4> with the cicd key authorized; it moves to the node's management address in the join. The install options (--switch-port, --mac, --boot-*, --ttl) do not apply."],
         ["--switch-port <sw>:<p>", "The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up as a trunk port, and the machine's MAC is learned there when it boots the installer (blank MAC). On a switch TAPPaaS does not program, configure the port by hand as a trunk port that also carries all the VLAN tagged traffic, and give --mac (blank: the first machine that asks gets the answer)."],
         ["--mac <m>", "The MAC of the cabled card (aa:bb:cc:dd:ee:ff), from the machine's label, its BIOS or its BMC. Blank: learned on --switch-port; with no switch port either, the first machine that asks for an install answer while the boot window is open gets it (a cluster node never does) — keep --ttl short then."],
         ["--boot-disk <d>", "The disk to install Proxmox on (wiped), can be the model name or size if it is unique. Blank: the smallest SSD or NVMe disk, and both when the smallest two are alike (mirrored). ask: chosen on the node's console."],
@@ -916,9 +916,18 @@ function cmdNode(o: Opts, client: SiteClient): void {
       info(`${GN}✓${CL} node '${name}' added as a pvehost instance (pools: ${pools.join(", ") || "none"})`);
       return;
     }
-    const install = o.boolFlags.has("--install") || o.boolFlags.has("--pxe") || o.boolFlags.has("--provision");
-    if (o.flags.get("--switch-port") && !install) {
-      die("node add: --switch-port is for --install — a node installed by hand is at its address already");
+    // Install is the default; --adopt <ipv4> joins a Proxmox installed by hand.
+    // --install, --pxe and --provision are the former names of the default.
+    const adopt = o.flags.get("--adopt");
+    if (adopt !== undefined) {
+      if (!/^(25[0-5]|2[0-4]\d|1?\d?\d)(\.(25[0-5]|2[0-4]\d|1?\d?\d)){3}$/.test(adopt)) {
+        die(`node add: --adopt '${adopt}' is no IPv4 address — the address the hand-installed Proxmox answers ssh on`);
+      }
+      if (o.boolFlags.has("--install") || o.boolFlags.has("--pxe") || o.boolFlags.has("--provision")) {
+        die("node add: --adopt joins a Proxmox installed by hand — it does not go with --install");
+      }
+      const installOnly = ["--switch-port", "--mac", "--boot-disk", "--boot-mirror", "--boot-filesystem", "--ttl"].filter((f) => o.flags.has(f));
+      if (installOnly.length > 0) die(`node add: ${installOnly.join(", ")} ${installOnly.length > 1 ? "are" : "is"} for an install — --adopt joins a Proxmox installed by hand`);
     }
     // ADR-037 D4: a node joins on its boot pool; its data pools are a second step.
     if (pools.length > 0) {
@@ -926,7 +935,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
           `site-manager node storage add ${name} <pool> --disks <serial,...> --layout <l> (node storage ${name} lists its disks)`);
     }
     if (o.boolFlags.has("--provision")) {
-      warn("--provision is deprecated — use --install");
+      warn("--provision is deprecated — installing is node add's default");
     }
     const mac = o.flags.get("--mac");
     if (mac && !/^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$/i.test(mac)) {
@@ -947,13 +956,13 @@ function cmdNode(o: Opts, client: SiteClient): void {
       yes: o.boolFlags.has("--yes"),
       noReboot: o.boolFlags.has("--no-reboot"),
     };
-    if (install) {
+    if (adopt === undefined) {
       // Bare machine: install (network boot or the USB stick) → join → capture (design N3).
       provisionNode(opts);
     } else {
-      // Default: a Proxmox was installed by hand at the node's designated
-      // mgmt IP — verify and run the join pipeline over ssh.
-      adoptNode(opts);
+      // A Proxmox installed by hand at <ipv4>: verify it and run the join
+      // pipeline over ssh; the join moves it to the node's mgmt address.
+      adoptNode(opts, adopt);
     }
     return;
   }

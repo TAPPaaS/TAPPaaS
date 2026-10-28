@@ -4,13 +4,14 @@
 //
 // Two entry points sharing one join pipeline:
 //
-//   adoptNode      `node add tappaasN` — a Proxmox was already installed by
-//                  hand (USB, N2 media) at the node's DESIGNATED mgmt IP
-//                  (tappaasN → 10.0.0.<9+N>): verify it is that machine,
-//                  then run the join pipeline over ssh.
+//   provisionNode  `node add tappaasN` — bare machine: install it (PXE or the
+//                  USB stick) first (node-provisioner's boot window), then
+//                  the join pipeline.
 //
-//   provisionNode  `node add tappaasN --install` — bare machine: install it (PXE or USB stick)
-//                  first (node-provisioner trap), then the same pipeline.
+//   adoptNode      `node add tappaasN --adopt <ipv4>` — a Proxmox installed by
+//                  hand, at <ipv4>: verify it is that machine, then the same
+//                  pipeline over ssh, which moves it to the node's mgmt IP
+//                  (tappaasN → 10.0.0.<9+N>).
 //
 // The join pipeline (shared):
 //   a. interactive: WAN + lan ports    (asked HERE, with the node's real
@@ -277,24 +278,25 @@ function recordBootDisks(name: string, host: string): void {
 
 // ── adopt: a Proxmox already runs at the designated IP ─────────────────
 
-export function adoptNode(o: ProvisionOpts): void {
+export function adoptNode(o: ProvisionOpts, ip: string): void {
   const stdIp = stdIpOf(o.name);
   const step = stepper();
 
-  step(`probing for an existing Proxmox at ${stdIp} (designated IP of '${o.name}')`);
-  run("ssh-keygen", ["-R", stdIp]);
-  const probe = sshTo(stdIp, "hostname -s; pveversion 2>/dev/null | head -1", 8);
+  step(`probing for the Proxmox installed by hand at ${ip}${ip === stdIp ? ` (designated IP of '${o.name}')` : ""}`);
+  run("ssh-keygen", ["-R", ip]);
+  const probe = sshTo(ip, "hostname -s; pveversion 2>/dev/null | head -1", 8);
   if (probe.rc !== 0) {
-    die(`no ssh at root@${stdIp} — for a bare machine use 'node add ${o.name} --install'; ` +
-        `for a manual install make sure it is at ${stdIp} with the cicd key authorized`);
+    die(`no ssh at root@${ip} — authorize the cicd key on it (root's authorized_keys); ` +
+        `for a bare machine leave --adopt out: node add ${o.name} installs it`);
   }
   const [host, pve] = probe.out.trim().split("\n");
-  if (host?.trim() !== o.name) die(`the machine at ${stdIp} calls itself '${host?.trim()}' — expected '${o.name}'; not touching it`);
-  if (!pve || !pve.includes("pve-manager")) die(`${o.name} at ${stdIp} does not look like a Proxmox node (pveversion failed)`);
+  if (host?.trim() !== o.name) die(`the machine at ${ip} calls itself '${host?.trim()}' — expected '${o.name}'; not touching it`);
+  if (!pve || !pve.includes("pve-manager")) die(`${o.name} at ${ip} does not look like a Proxmox node (pveversion failed)`);
   info(`  ${GN}✓${CL} found ${o.name}: ${pve.trim()}`);
 
-  const clustered = sshTo(stdIp, "pvecm status >/dev/null 2>&1 && echo IN-CLUSTER || echo STANDALONE");
+  const clustered = sshTo(ip, "pvecm status >/dev/null 2>&1 && echo IN-CLUSTER || echo STANDALONE");
   if (clustered.out.includes("IN-CLUSTER")) {
+    if (ip !== stdIp) die(`${o.name} at ${ip} is already in a cluster, away from its address ${stdIp} — not moving a clustered node`);
     info(`  ${o.name} is already in a cluster — skipping straight to capture`);
     const noKvm = kvmProblem(o.name, stdIp);
     if (noKvm) warn(`  ${noKvm}`);
@@ -303,7 +305,7 @@ export function adoptNode(o: ProvisionOpts): void {
     return;
   }
 
-  joinAndCapture(o, stdIp, stdIp, step);
+  joinAndCapture(o, ip, stdIp, step);
 }
 
 // ── PXE: bare machine, install first ────────────────────────────────────

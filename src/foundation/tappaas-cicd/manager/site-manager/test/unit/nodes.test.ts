@@ -129,8 +129,12 @@ function quiet(argv: string[]): { rc: number; out: string[] } {
   check(!("hardware" in (JSON.parse(readFileSync(join(dir, "site.json"), "utf8")) as Obj)), "node add writes nothing into site.json");
   const again = quiet(["node", "add", "tappaas1", "--config-only", "--config-dir", dir]);
   check(again.rc !== 0 && again.out.some((l) => l.includes("already exists")), "node add refuses a node that has its record");
-  const badMac = quiet(["node", "add", "tappaas4", "--install", "--mac", "any", "--config-dir", dir]);
+  const badMac = quiet(["node", "add", "tappaas4", "--mac", "any", "--config-dir", dir]);
   check(badMac.rc !== 0 && badMac.out.some((l) => l.includes("is no MAC")), "node add --mac takes a MAC only (blank is learned, or the first to ask)");
+  const badIp = quiet(["node", "add", "tappaas4", "--adopt", "tappaas4.local", "--config-dir", dir]);
+  check(badIp.rc !== 0 && badIp.out.some((l) => l.includes("is no IPv4 address")), "node add --adopt takes an IPv4 address");
+  const adoptMac = quiet(["node", "add", "tappaas4", "--adopt", "192.168.1.50", "--mac", "aa:bb:cc:dd:ee:ff", "--config-dir", dir]);
+  check(adoptMac.rc !== 0 && adoptMac.out.some((l) => l.includes("--mac is for an install")), "node add --adopt refuses the install options");
   delete process.env.SITE_COPY_JSON_BIN;
   delete process.env.SITE_PVEHOST_DIR;
 

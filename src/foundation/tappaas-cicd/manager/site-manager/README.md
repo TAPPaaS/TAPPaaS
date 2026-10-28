@@ -39,7 +39,7 @@ location           location list [--json]
                    location modify <name> [--set <field>=<value>]... [--<shortcut> <value>]... [--unset <f,g>] [--check]
                    location delete <name> [--check]
 node               node list [--json]
-                   node add <N> [--pxe] [--boot-disk <d>] [--boot-mirror <d>] [--switch-port <sw>:<p>] [--mac <m>]
+                   node add <N> [--adopt <ipv4>] [--boot-disk <d>] [--boot-mirror <d>] [--switch-port <sw>:<p>] [--mac <m>]
                             [--wan-port <if>|--no-wan] [--lan-ports <a,b>]
                             [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot]
                             [--config-only [--storage-pools <a,b>]]
@@ -286,7 +286,7 @@ stays derived from the timezone. Country and timezone go to the primary location
 part of any location.
 
 What is recorded here is what the rest of the estate is set from: the PXE answer file
-(`node add --pxe`), the USB installer's defaults (`make-install-media.sh`), and the
+(`node add`), the USB installer's defaults (`make-install-media.sh`), and the
 per-OS convergence of guests and hosts. A value already in `site.json` is the operator's
 and is never overwritten — a `site add --force` re-run fills in what is *missing* and
 warns when the recorded value and the master disagree, naming the command that would
@@ -315,23 +315,26 @@ more: Proxmox on a ZFS boot pool, the join, the cluster baseline, a reboot into 
 kernel the baseline installed, and HA maintenance lifted. Its guests go to the boot
 pool (`local-zfs`) until `node storage add` gives it a data pool (below). Three modes:
 
-- **default (adopt)** — a Proxmox was already installed by hand (USB stick,
-  §2.1 media) at the node's DESIGNATED mgmt IP (`tappaasN` → `10.0.0.<9+N>`):
-  verifies the hostname + `pveversion` over ssh, then runs the join pipeline.
-  A node that is already clustered skips straight to capture.
-- **`--pxe`** — bare machine: registers the node with `node-provisioner`,
-  arms the TTL-limited PXE trap, waits for the unattended install (the ONLY
-  console interaction is the boot-disk question, and only when the boot-disk
-  fields match nothing, or with `--boot-disk ask`), then continues with the same
-  join pipeline. Requires the
-  netboot assets staged once per PVE version — done automatically by the
-  cicd install (`prepare-netboot.sh`). Booting the SAME prepared ISO from a
-  USB stick instead of PXE works identically (the answer still comes over
-  HTTP from the mothership).
+- **default (install)** — bare machine: registers the node's install answer with
+  `node-provisioner`, opens the TTL-limited boot window, waits for the unattended
+  install, then continues with the join pipeline. The machine boots the installer
+  from the network (PXE) or from the USB stick image
+  (`/var/lib/tappaas-pxe/tappaas-usb.iso`, the same for every node); either way it
+  fetches its answer over HTTP from the mothership. The only console interaction is
+  the boot-disk question on a network boot, and only when the boot-disk fields match
+  nothing or with `--boot-disk ask`; a stick stops with the machine's disk list
+  instead. Requires the netboot assets staged once per PVE version — done
+  automatically by the cicd install (`prepare-netboot.sh`), and again by node add
+  when they are stale. (`--install` and `--pxe` are former names of this mode.)
+- **`--adopt <ipv4>`** — a Proxmox installed by hand, reached as root over ssh at
+  `<ipv4>` with the cicd key authorized: verifies the hostname + `pveversion`, then
+  runs the join pipeline, which moves the node to its mgmt IP (`tappaasN` →
+  `10.0.0.<9+N>`). A node that is already clustered, at its mgmt IP, skips straight
+  to capture. The install options do not apply. The console offers no adopt.
 - **`--config-only`** — just write the node's `pvehost` record, `config/<N>.json`,
   with `--storage-pools` (no machine contact).
 
-The join pipeline (shared by adopt and `--pxe`): asks for the WAN NIC and the
+The join pipeline (shared by install and `--adopt`): asks for the WAN NIC and the
 lan ports with the node's REAL ports listed (skip the questions with
 `--wan-port <if>`/`--no-wan`),
 serves the repo from the mothership on :8090 (committed branch state — no
@@ -340,20 +343,22 @@ GitHub dependency), runs the node step (`install.sh --join`), corrects
 node as its `pvehost` instance (`module adopt`) with the tankXY zpools already on it
 and its boot disks by serial (`bootDisks`), before it registers the node on those
 pools' cluster storage entries and its boot pool as `local-zfs`. Every wait is
-time-boxed and the PXE trap is disarmed on every exit path. Fully unattended example:
+time-boxed and the boot window is closed on every exit path. Fully unattended example:
 
 ```
-site-manager node add tappaas2 --pxe --switch-port "USW Pro XG 10 PoE:1" --no-wan
-site-manager node add tappaas2 --pxe --mac aa:bb:cc:dd:ee:ff --no-wan
+site-manager node add tappaas2 --switch-port "USW Pro XG 10 PoE:1" --no-wan
+site-manager node add tappaas2 --mac aa:bb:cc:dd:ee:ff --no-wan
 ```
 
 **Where it is cabled comes first.** `--switch-port <switch>:<port>` names the port on a
 switch TAPPaaS programs: node add makes it a node trunk on the switch, then watches it
-while the machine netboots (`switch-manager port-neighbors`) and pins the registration
+while the machine boots the installer (`switch-manager port-neighbors`) and pins the registration
 to the one MAC that appears there and is no cluster node's. On a switch TAPPaaS does not
 program, node add prints the port to configure — a trunk, the mgmt network untagged,
-every active zone's VLAN tagged — and `--mac` is required. A registration that names no
-MAC never answers a machine that is a cluster node.
+every active zone's VLAN tagged — and takes `--mac`. With neither a switch port nor a
+MAC, the first machine that asks for an install answer while the window is open gets it;
+keep `--ttl` short then. A registration that names no MAC never answers a machine that is
+a cluster node. `--mac` takes a MAC only.
 
 **Boot disks: two fields, blank is the default.** `--boot-disk` and `--boot-mirror`
 each take a size (`2TB`, `1.92T`, `500GB`: within 10 %), a model (`"Samsung 990"`) or
