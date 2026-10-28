@@ -100,7 +100,7 @@ type Card = EnvCard<EnvironmentRow, ModuleSummary>;
 const modState = (m: ModuleSummary): CardState => (m.badges.health === "fail" ? "fail" : m.badges.health === "warn" ? "warn" : "ok");
 
 // A card: a click on its head opens the panel, on a zone's head the zone on
-// the Zones page, on a module its page.
+// the Network page, on a module its page.
 function EnvCardView({ c, on, pick }: { c: Card; on: boolean; pick: () => void }) {
   const e = c.env;
   const state = stateOf(c.boxes.flatMap((b) => b.modules.map(modState)));
@@ -123,7 +123,7 @@ function EnvCardView({ c, on, pick }: { c: Card; on: boolean; pick: () => void }
       <div className="env-zones">
         {c.boxes.map((b) => (
           <div key={b.zone ?? "-"} className={`zone-box${b.own ? "" : " zone-box-shared"}`} style={{ borderTopColor: TYPE_COLOR[b.record?.type ?? ""] ?? "#94a3b8" }}>
-            <div className={`zone-box-head${b.zone ? " linkish" : ""}`} onClick={b.zone ? () => navigate(`/zones?zone=${encodeURIComponent(b.zone!)}`) : undefined} title={b.zone ? `open ${b.zone} on the Zones page` : undefined}>
+            <div className={`zone-box-head${b.zone ? " linkish" : ""}`} onClick={b.zone ? () => navigate(`/zones?zone=${encodeURIComponent(b.zone!)}`) : undefined} title={b.zone ? `open ${b.zone} on the Network page` : undefined}>
               <b>{b.zone ?? "no zone"}</b>
               <span className="muted small">
                 {b.record ? [b.record.vlantag !== undefined ? `vlan ${b.record.vlantag}` : null, b.record.type, b.record.state].filter(Boolean).join(" · ") : b.zone ? "" : "modules without a zone"}

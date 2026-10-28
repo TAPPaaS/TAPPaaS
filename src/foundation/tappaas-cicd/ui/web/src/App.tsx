@@ -26,7 +26,7 @@ const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/setup", label: "Setup", live: true },
   { to: "/site", label: "Site", live: true },
   { to: "/environments", label: "Environments", live: true },
-  { to: "/zones", label: "Zones", live: true },
+  { to: "/zones", label: "Network", live: true },
   { to: "/modules", label: "Modules", live: true },
   { to: "/identity", label: "Identity", live: true },
   { to: "/backup", label: "Backup", live: true },

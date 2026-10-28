@@ -250,7 +250,7 @@ function ipv6Note(v6: Ipv6Read | null): string {
   return `IPv6: each zone's /64 is its ipv6Subnet within ${v6.prefix} (${v6.source === "site.json" ? "routed to the site, site.json" : "delegated to the WAN, as the firewall holds it now"}); a zone without an ipv6Subnet has none.`;
 }
 
-// The Zones page (/zones): the graph with its side card, and the zones' table
+// The Network page (/zones): the graph with its side card, and the zones' table
 // below it. A zone's verbs (network-manager modify / enable|disable /
 // bind / reconcile / add from it / delete, each as a job with its preview; a
 // delete needs the name typed) are on its card only: a click on its card or
@@ -282,7 +282,7 @@ export function ZonesPage() {
   return (
     <div className="page">
       <div className="page-head">
-        <h1>Zones</h1>
+        <h1>Network</h1>
         <span className="muted">network-manager · read {since(zones.env?.at)}</span>
       </div>
       <Section
