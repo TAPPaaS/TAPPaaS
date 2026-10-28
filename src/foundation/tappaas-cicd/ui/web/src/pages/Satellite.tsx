@@ -4,14 +4,15 @@
 // 2 the satellite: its address, its environment, the roles it carries, where
 // it is; 3 module-manager add satellite, previewed then applied; 4 its test.
 
-import { useMemo, useState } from "react";
-import { reloadAll, useRead } from "../api";
-import { Step, StepView } from "../operate";
+import { useEffect, useMemo, useState } from "react";
+import { reloadAll, useJob, useRead } from "../api";
+import { JobView, Step, StepView } from "../operate";
 import { TargetValue, TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
-import { EnvironmentRow } from "../types";
+import { EnvironmentRow, JobSummary } from "../types";
 import { canOperate, useMe } from "../ui";
-import { SATELLITE_ROLES, SatellitePlan, satelliteProblems, satelliteSpec } from "../wizards";
+import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
+import { SATELLITE_ROLES, SatellitePlan, argOf, satelliteProblems, satelliteSpec } from "../wizards";
 import { useSiteLocations } from "../locations";
 import { StepRow } from "./Setup";
 
@@ -37,6 +38,30 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
   });
   const [plan, setPlan] = useState<SatellitePlan | null>(null);
   const [added, setAdded] = useState(false);
+  // Closed while module-manager add satellite ran (it takes minutes), or within
+  // the hour after: the job is found again, the plan read back from its argv.
+  const [job, setJob] = useState<string | null>(null); // the job continued (set by restore only)
+  const [declined, setDeclined] = useState(false);
+  const session = useJobSession("module-manager", "add", (j) => j.argv[2] === "satellite", job === null && !declined);
+  const followed = useJob(job);
+  useEffect(() => {
+    if (followed?.state === "done" && followed.exit === 0) setAdded(true);
+  }, [followed?.state]);
+  const restore = (j: JobSummary) => {
+    const a = (f: string) => argOf(j.argv, f) ?? "";
+    let roles = p.roles;
+    try {
+      const r = JSON.parse(a("--roles")) as unknown;
+      if (Array.isArray(r)) roles = r.map(String);
+    } catch {
+      /* the default roles */
+    }
+    const q: SatellitePlan = { address: a("--address"), environment: a("--environment") || "mgmt", roles, location: a("--location"), country: a("--country"), city: a("--city"), instance: a("--instance") };
+    setP(q);
+    setPlan(q);
+    setReady(true);
+    setJob(j.id);
+  };
   const problems = satelliteProblems(p);
   const set = (o: Partial<SatellitePlan>) => setP({ ...p, ...o });
   const name = plan?.instance || "satellite";
@@ -66,102 +91,97 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
   const current = !ready ? "first" : !plan ? "what" : !added ? "add" : "test";
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add a satellite">
-        <header className="modal-head">
-          <h2>Add a satellite</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        <p className="small">
-          Only for a site with no usable public IP (CGNAT, a dynamic address, no port forwarding): the satellite is a small rented machine that receives the public traffic and passes it home through a WireGuard tunnel the firewall dials. A site with a real public IP does not need one.
-        </p>
-        <ol className="setup">
-          <StepRow s={stages[0]} open={current === "first"}>
-            <div className="explain">
-              <ol>
-                <li>Create a server with a <b>stable public IPv4</b> — at Hetzner Cloud, for example: image <b>Debian 12 or 13</b>, type <span className="mono">cx23</span> (or <span className="mono">cax11</span>, ARM). Note its address and where it is (country, city).</li>
-                <li><b>Attach your own SSH key</b> — the one on your workstation, not one of tappaas-cicd's. It is your way in when the site is down; the install authorizes the mothership's key itself.</li>
-                <li>Ask the provider to allow <b>outbound mail (port 25)</b> from it (Hetzner: Limits → port 25, after the first invoice). The satellite mails you when the site goes dark; until then its mail waits in its queue.</li>
-                <li>The install logs in to the new host with your key through a <b>forwarded agent</b>: run it from an <span className="mono">ssh -A</span> session to tappaas-cicd. A console job has no agent, so Apply in stage 3 stops with "no operator key" — copy its command into that session instead.</li>
-              </ol>
-            </div>
-            <label className="form-check">
-              <input type="checkbox" checked={ready} onChange={(e) => setReady(e.target.checked)} /> The host is running with my SSH key on it.
+    <Wizard title="Add a satellite" onClose={onClose} running={followed && jobLive(followed) ? [jobLabel(followed)] : []} progress={added ? `${name} is installed; its test is a click on its module page.` : null} resumes={job !== null}>
+      {session ? <ResumeOffer what={<>A satellite is being added: <b>{argOf(session.argv, "--instance") ?? "satellite"}</b> at {argOf(session.argv, "--address") ?? "?"}</>} job={session} onContinue={() => restore(session)} onDecline={() => setDeclined(true)} decline="Add another satellite" /> : null}
+      <p className="small">
+        Only for a site with no usable public IP (CGNAT, a dynamic address, no port forwarding): the satellite is a small rented machine that receives the public traffic and passes it home through a WireGuard tunnel the firewall dials. A site with a real public IP does not need one.
+      </p>
+      <ol className="setup">
+        <StepRow s={stages[0]} open={current === "first"}>
+          <div className="explain">
+            <ol>
+              <li>Create a server with a <b>stable public IPv4</b> — at Hetzner Cloud, for example: image <b>Debian 12 or 13</b>, type <span className="mono">cx23</span> (or <span className="mono">cax11</span>, ARM). Note its address and where it is (country, city).</li>
+              <li><b>Attach your own SSH key</b> — the one on your workstation, not one of tappaas-cicd's. It is your way in when the site is down; the install authorizes the mothership's key itself.</li>
+              <li>Ask the provider to allow <b>outbound mail (port 25)</b> from it (Hetzner: Limits → port 25, after the first invoice). The satellite mails you when the site goes dark; until then its mail waits in its queue.</li>
+              <li>The install logs in to the new host with your key through a <b>forwarded agent</b>: run it from an <span className="mono">ssh -A</span> session to tappaas-cicd. A console job has no agent, so Apply in stage 3 stops with "no operator key" — copy its command into that session instead.</li>
+            </ol>
+          </div>
+          <label className="form-check">
+            <input type="checkbox" checked={ready} onChange={(e) => setReady(e.target.checked)} /> The host is running with my SSH key on it.
+          </label>
+        </StepRow>
+        <StepRow s={stages[1]} open={current === "what"}>
+          <div className="form">
+            <label className="form-row">
+              <span>address *</span>
+              <input type="text" value={p.address} disabled={plan !== null} placeholder="its public IPv4, e.g. 203.0.113.7" onChange={(e) => set({ address: e.target.value.trim() })} />
+              {p.address && problems.address ? <small className="ff-error">{problems.address}</small> : <small className="muted">Where its public traffic arrives; point your public DNS records at it yourself.</small>}
             </label>
-          </StepRow>
-          <StepRow s={stages[1]} open={current === "what"}>
-            <div className="form">
-              <label className="form-row">
-                <span>address *</span>
-                <input type="text" value={p.address} disabled={plan !== null} placeholder="its public IPv4, e.g. 203.0.113.7" onChange={(e) => set({ address: e.target.value.trim() })} />
-                {p.address && problems.address ? <small className="ff-error">{problems.address}</small> : <small className="muted">Where its public traffic arrives; point your public DNS records at it yourself.</small>}
-              </label>
-              <label className="form-row">
-                <span>environment *</span>
-                <select value={p.environment} disabled={plan !== null} onChange={(e) => set({ environment: e.target.value })}>
-                  {[...new Set(["mgmt", ...envs])].map((e) => (
-                    <option key={e} value={e}>{e}</option>
-                  ))}
-                </select>
-                <small className="muted">A foundation module, like the other site services: mgmt.</small>
-              </label>
-              <div className="form-row">
-                <span>roles *</span>
-                <div className="ff-checks">
-                  {Object.entries(SATELLITE_ROLES).map(([r, what]) => (
-                    <label key={r} className="ff-check" title={what}>
-                      <input type="checkbox" disabled={plan !== null} checked={p.roles.includes(r)} onChange={(e) => set({ roles: e.target.checked ? [...p.roles, r] : p.roles.filter((x) => x !== r) })} /> <span className="mono">{r}</span> <small className="muted">{what}</small>
-                    </label>
-                  ))}
-                </div>
-                {problems.roles ? <small className="ff-error">{problems.roles}</small> : <small className="muted">Both by default. The backup role comes later, with locking it down as the off-site vault.</small>}
+            <label className="form-row">
+              <span>environment *</span>
+              <select value={p.environment} disabled={plan !== null} onChange={(e) => set({ environment: e.target.value })}>
+                {[...new Set(["mgmt", ...envs])].map((e) => (
+                  <option key={e} value={e}>{e}</option>
+                ))}
+              </select>
+              <small className="muted">A foundation module, like the other site services: mgmt.</small>
+            </label>
+            <div className="form-row">
+              <span>roles *</span>
+              <div className="ff-checks">
+                {Object.entries(SATELLITE_ROLES).map(([r, what]) => (
+                  <label key={r} className="ff-check" title={what}>
+                    <input type="checkbox" disabled={plan !== null} checked={p.roles.includes(r)} onChange={(e) => set({ roles: e.target.checked ? [...p.roles, r] : p.roles.filter((x) => x !== r) })} /> <span className="mono">{r}</span> <small className="muted">{what}</small>
+                  </label>
+                ))}
               </div>
-              <label className="form-row">
-                <span>location</span>
-                <select value={p.location ?? ""} disabled={plan !== null} onChange={(e) => set({ location: e.target.value })}>
-                  <option value="">a place the site has no location for yet (country, city below)</option>
-                  {locations.map((l) => (
-                    <option key={l.name} value={l.name}>{l.displayName ?? l.name}{l.place ? ` · ${l.place}` : ""}{l.primary ? " · primary" : ""}</option>
-                  ))}
-                </select>
-                <small className="muted">Where it physically runs: a backup copy on it is only off-site if it is somewhere else, and only this record shows it. One of the site's locations, or the place below, which the add records as a location of kind remote.</small>
-              </label>
-              {p.location ? null : (
-                <>
-                  <label className="form-row">
-                    <span>country</span>
-                    <input type="text" value={p.country} disabled={plan !== null} placeholder="ISO code, e.g. FI" onChange={(e) => set({ country: e.target.value.trim().toUpperCase() })} />
-                    {problems.country ? <small className="ff-error">{problems.country}</small> : null}
-                  </label>
-                  <label className="form-row">
-                    <span>city</span>
-                    <input type="text" value={p.city} disabled={plan !== null} placeholder="e.g. Helsinki — needed when the site is in the same country" onChange={(e) => set({ city: e.target.value })} />
-                  </label>
-                </>
-              )}
-              <label className="form-row">
-                <span>instance</span>
-                <input type="text" value={p.instance} disabled={plan !== null} placeholder="satellite" onChange={(e) => set({ instance: e.target.value.trim() })} />
-                {problems.instance ? <small className="ff-error">{problems.instance}</small> : <small className="muted">Empty: satellite (config/satellite.json). A second one needs its own name, e.g. satellite-hel1.</small>}
-              </label>
+              {problems.roles ? <small className="ff-error">{problems.roles}</small> : <small className="muted">Both by default. The backup role comes later, with locking it down as the off-site vault.</small>}
             </div>
-            <div className="actions">
-              {plan ? (
-                <button className="btn" disabled={added} onClick={() => setPlan(null)}>Edit</button>
-              ) : (
-                <button className="btn btn-primary" disabled={Object.keys(problems).length > 0} onClick={() => setPlan({ ...p, city: p.city.trim() })}>Continue</button>
-              )}
-            </div>
-          </StepRow>
-          <StepRow s={stages[2]} open={current === "add"}>
-            {steps ? <StepView key={JSON.stringify(plan)} step={steps.add} me={me} onDone={(ok) => ok && setAdded(true)} /> : <p className="muted small">Once the satellite is described.</p>}
-          </StepRow>
-          <StepRow s={stages[3]} open={current === "test"}>
-            {steps && added ? <StepView step={steps.test} me={me} onDone={() => undefined} /> : <p className="muted small">Once it is installed.</p>}
-          </StepRow>
-        </ol>
-      </div>
-    </div>
+            <label className="form-row">
+              <span>location</span>
+              <select value={p.location ?? ""} disabled={plan !== null} onChange={(e) => set({ location: e.target.value })}>
+                <option value="">a place the site has no location for yet (country, city below)</option>
+                {locations.map((l) => (
+                  <option key={l.name} value={l.name}>{l.displayName ?? l.name}{l.place ? ` · ${l.place}` : ""}{l.primary ? " · primary" : ""}</option>
+                ))}
+              </select>
+              <small className="muted">Where it physically runs: a backup copy on it is only off-site if it is somewhere else, and only this record shows it. One of the site's locations, or the place below, which the add records as a location of kind remote.</small>
+            </label>
+            {p.location ? null : (
+              <>
+                <label className="form-row">
+                  <span>country</span>
+                  <input type="text" value={p.country} disabled={plan !== null} placeholder="ISO code, e.g. FI" onChange={(e) => set({ country: e.target.value.trim().toUpperCase() })} />
+                  {problems.country ? <small className="ff-error">{problems.country}</small> : null}
+                </label>
+                <label className="form-row">
+                  <span>city</span>
+                  <input type="text" value={p.city} disabled={plan !== null} placeholder="e.g. Helsinki — needed when the site is in the same country" onChange={(e) => set({ city: e.target.value })} />
+                </label>
+              </>
+            )}
+            <label className="form-row">
+              <span>instance</span>
+              <input type="text" value={p.instance} disabled={plan !== null} placeholder="satellite" onChange={(e) => set({ instance: e.target.value.trim() })} />
+              {problems.instance ? <small className="ff-error">{problems.instance}</small> : <small className="muted">Empty: satellite (config/satellite.json). A second one needs its own name, e.g. satellite-hel1.</small>}
+            </label>
+          </div>
+          <div className="actions">
+            {plan ? (
+              <button className="btn" disabled={added || job !== null} onClick={() => setPlan(null)}>Edit</button>
+            ) : (
+              <button className="btn btn-primary" disabled={Object.keys(problems).length > 0} onClick={() => setPlan({ ...p, city: p.city.trim() })}>Continue</button>
+            )}
+          </div>
+        </StepRow>
+        <StepRow s={stages[2]} open={current === "add"}>
+          {job ? <JobView id={job} label="module-manager add satellite" /> : steps ? <StepView key={JSON.stringify(plan)} step={steps.add} me={me} onDone={(ok) => ok && setAdded(true)} /> : <p className="muted small">Once the satellite is described.</p>}
+        </StepRow>
+        <StepRow s={stages[3]} open={current === "test"}>
+          {steps && added ? <StepView step={steps.test} me={me} onDone={() => undefined} /> : <p className="muted small">Once it is installed.</p>}
+        </StepRow>
+      </ol>
+    </Wizard>
   );
 }
 

@@ -13,8 +13,8 @@ import { stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { EnvironmentRow, SiteRead } from "../types";
-import { Dot, Link, ReadState, navigate, since } from "../ui";
-import { AddNodeButton } from "./AddNode";
+import { Dot, Link, ReadState, canOperate, navigate, since, useMe } from "../ui";
+import { AddNodeButton, sessionText, useAddNodeSession } from "./AddNode";
 import { EnrolButton } from "./Enrol";
 import { Day2 } from "./Day2";
 import { PASSPHRASE_TEXT, SiteSsid, WIFI_ZONE_TYPES, broadcastText, passphraseOf, stacksOf } from "../wizards";
@@ -258,6 +258,9 @@ export function Setup({ tab }: { tab?: SetupTab }) {
 
 function Day1({ r }: { r: Read<SetupDoc> }) {
   const secrets = useRead<SecretStatus[]>("secrets", 600_000);
+  // A node being added (Add node closed mid-way): its Nodes step says so, open,
+  // with the way back into the wizard at its stage.
+  const adding = useAddNodeSession(canOperate(useMe()));
   const site = useRead<SiteRead>("site").env?.data?.site;
   const [checking, setChecking] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
@@ -295,7 +298,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
         ]}
       />
     ),
-    nodes: <AddNodeButton />,
+    nodes: <AddNodeButton session={adding} />,
     switch: (
       <>
         <SecretForm name="unifi" status={sec("unifi")} onSaved={secrets.reload} fields={[{ key: "url", label: "controller URL", placeholder: "https://10.0.0.5:11443" }, { key: "username", label: "local admin" }, { key: "password", label: "password", secret: true }]} />
@@ -353,7 +356,11 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
       {checking ? <p className="muted">Running the foundation modules' tests (backup, identity, logging) — a few minutes; the checklist is read again after.</p> : null}
       <ol className="setup">
         {(d?.steps ?? []).map((s) => (
-          <StepRow key={s.id} s={s}>{body[s.id]}</StepRow>
+          s.id === "nodes" && adding ? (
+            <StepRow key={s.id} s={{ ...s, done: null, detail: `${s.detail} · Adding ${sessionText(adding)}` }} open>{body[s.id]}</StepRow>
+          ) : (
+            <StepRow key={s.id} s={s}>{body[s.id]}</StepRow>
+          )
         ))}
       </ol>
     </>

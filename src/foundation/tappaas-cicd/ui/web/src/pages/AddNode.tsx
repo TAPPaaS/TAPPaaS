@@ -17,15 +17,16 @@
 // node that may carry the firewall (pages/NodeUplinks.tsx); 6 the node in the
 // physical view.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useJob, useRead } from "../api";
-import { Output } from "../jobs";
+import { JobControl, Output, jobResult } from "../jobs";
 import { OperateButton, Step, StepView, Values } from "../operate";
 import { useOpenedBy } from "../opener";
-import { SiteRead, Topology } from "../types";
+import { JobSummary, SiteRead, StorageInventory, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
-import { manualTrunkText, nodeTrunkVlans, switchPortChoices, writeProgress } from "../nodeadd";
+import { AddNodeStage, NodeNetwork, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, switchPortChoices, writeProgress } from "../nodeadd";
+import { Wizard, jobLabel, jobLive } from "../wizard";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
 import { Dot, Link, canOperate, useMe } from "../ui";
@@ -43,16 +44,6 @@ interface BootMedia {
   ready: boolean;
   problems: string[];
   prepare: { argv: string[]; minutes: string } | null;
-}
-
-interface NodeProgress {
-  name: string;
-  registration: "pending" | "answered" | "none";
-  pxe: { enabled: boolean | null; text: string };
-  inCluster: boolean | null;
-  cluster: string[] | null;
-  inSite: boolean;
-  siteNodes: string[];
 }
 
 // The installer stick image on the mothership (site-manager node media).
@@ -83,26 +74,75 @@ function Check({ ok, label, detail }: { ok: boolean | null; label: string; detai
   );
 }
 
+// A node being added (nodeadd.ts nodeAddOngoing), found again from the
+// records: the newest node add job, the node's progress, then — once it has
+// joined — its pools and its lan ports. `stage` is where the wizard stands.
+export interface AddNodeSession {
+  name: string;
+  job: JobSummary;
+  stage: AddNodeStage;
+  dataPool: boolean | null;
+  lanPorts: number | null;
+}
+
+// `enabled`: false reads nothing (the wizard has its job attached already).
+export function useAddNodeSession(enabled = true): AddNodeSession | null {
+  const jobs = useRead<{ jobs: JobSummary[] }>(enabled ? `jobs?bin=site-manager&verb=${encodeURIComponent("node add")}&limit=10` : null, 15_000).env?.data?.jobs ?? [];
+  const run = latestNodeAdd(jobs);
+  const name = run?.name ?? null;
+  const progress = useRead<NodeProgress>(name ? `nodes/${encodeURIComponent(name)}/progress` : null, 15_000).env?.data ?? null;
+  const joined = addNodeJoined(progress);
+  const inv = useRead<StorageInventory>(joined ? "storage" : null).env?.data;
+  const dataPool = inv ? (inv.nodes.find((n) => n.name === name)?.pools ?? []).some((p) => p.name !== "rpool") : null;
+  const net = useRead<NodeNetwork>(joined && dataPool ? `nodes/${encodeURIComponent(name!)}/network` : null, 60_000).env?.data;
+  const lanPorts = net?.live ? net.live.lan.members.length : null;
+  if (!run || !nodeAddOngoing(run.job, Date.now(), { progress, dataPool, lanPorts })) return null;
+  const stage = addNodeStage({ job: true, jobLive: jobLive(run.job), progress, pooled: dataPool === true, lan: (lanPorts ?? 0) > 1, wan: false });
+  return { name: run.name, job: run.job, stage, dataPool, lanPorts };
+}
+
+// "tappaas4 — stage 3, job 20261028… running": how a session is named where it is offered.
+export function sessionText(s: AddNodeSession): string {
+  return `${s.name} — stage ${STAGE_NUMBER[s.stage]}${jobLive(s.job) ? `, job ${s.job.id} ${s.job.state}` : ""}`;
+}
 
 // `prefill`: what the assistant opened it with (open_console add-node): the
 // node's name, and node add's options by name (mac, boot-disk, …).
-export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefill?: Values | null }) {
+// `resume`: open straight into the node being added (Setup's Continue).
+export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => void; prefill?: Values | null; resume?: boolean }) {
   const me = useMe();
   const site = useRead<SiteRead>("site").env?.data;
-  const known = (site?.nodes ?? []).map((n) => n.name);
   const [typed, setName] = useState<string | null>(typeof prefill?.name === "string" ? prefill.name : null);
   const options = useMemo(() => {
     // The wizard installs; adopting a hand-installed Proxmox is the CLI's only.
     const { name: _n, adopt: _a, ...rest } = prefill ?? {};
     return Object.keys(rest).length ? rest : undefined;
   }, [prefill]);
-  const name = typed ?? firstFreeNode(known);
   const [job, setJob] = useState<string | null>(null);
   const [ended, setEnded] = useState<boolean | null>(null);
   const [lanDone, setLanDone] = useState(false);
   const [wanDone, setWanDone] = useState(false);
   const [pooled, setPooled] = useState(false);
   const [skipPools, setSkipPools] = useState(false);
+  // A node already being added (its job running, or joined and unfinished):
+  // offered on open, restored on Continue. Looked for until a job is attached.
+  const session = useAddNodeSession(job === null);
+  const [resumed, setResumed] = useState(false);
+  const [declined, setDeclined] = useState(false);
+  const restore = (s: AddNodeSession) => {
+    setName(s.name);
+    setJob(s.job.id);
+    setResumed(true);
+    if (s.dataPool) setPooled(true);
+    if ((s.lanPorts ?? 0) > 1) setLanDone(true);
+  };
+  useEffect(() => {
+    if (resume && session && job === null && !declined) restore(session);
+  }, [resume, session?.job.id]);
+  // The name proposed is the next free one: not a node of the site, nor the one being added.
+  const known = (site?.nodes ?? []).map((n) => n.name);
+  const name = typed ?? firstFreeNode(session ? [...known, session.name] : known);
+  const busyName = session && jobLive(session.job) && job === null ? session.name : null;
   // Stage 0: the installer stick written by a node (site-manager node usb write).
   const [stickNode, setStickNode] = useState(known[0] ?? "tappaas1");
   const [stickDevice, setStickDevice] = useState("");
@@ -117,9 +157,10 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   // Read from the moment the name is valid: a wizard reopened while the job
   // runs (or for a node already joined) shows where it stands.
   const progress = useRead<NodeProgress>(valid ? `nodes/${encodeURIComponent(name)}/progress` : null, 10_000).env?.data ?? null;
-  const underway = job !== null || (progress !== null && (progress.registration !== "none" || progress.inCluster === true));
+  const underway = addNodeUnderway({ job: job !== null, progress });
   const running = useJob(job);
-  const joined = progress !== null && progress.inCluster === true && progress.inSite;
+  const joined = addNodeJoined(progress);
+  const endedOk = ended ?? (running?.state === "done" ? running.exit === 0 : null);
 
   const topo = useRead<Topology>("topology").env?.data;
   const zones = useRead<ZoneRead[]>("zones").env?.data ?? [];
@@ -148,7 +189,8 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
       initial: { "--yes": true, "--no-wan": true },
       hide: ["--yes"],
       prefill: options,
-      blocked: job !== null || (valid && !known.includes(name)) ? undefined : "give the node a new name first",
+      // A second node add for the node whose job runs could reinstall it.
+      blocked: busyName === name ? `${name} is being added already (job ${session!.job.id}): reopen the wizard to continue it, or name another node` : job !== null || (valid && !known.includes(name)) ? undefined : "give the node a new name first",
       jobShownIn: "stage 3, where the install is watched",
       note: (
         <>
@@ -174,7 +216,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
         </label>
       ),
     }),
-    [name, valid, options, ports, trunk, known, job],
+    [name, valid, options, ports, trunk, known, job, busyName],
   );
   // Stage 0: the medium built on the mothership when it is missing or stale.
   const prepare: Step = useMemo(
@@ -222,176 +264,201 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
     { id: "wan", title: "5b · The WAN port", required: false, done: wanDone ? true : null, detail: "Only for a node that may carry the firewall: the port, and optionally the switch port, for its WAN." },
     { id: "done", title: "6 · Place the machine correctly in the physical view", required: false, done: joined, detail: "Its location, room and rack: where the machine actually stands." },
   ];
-  const current = !underway ? "declare" : !progress || progress.registration === "pending" ? "boot" : !joined ? "wait" : !pooled && !skipPools ? "storage" : !lanDone ? "lan" : !wanDone ? "wan" : "done";
+  const current = addNodeStage({ job: job !== null, jobLive: jobLive(running), progress, pooled: pooled || skipPools, lan: lanDone, wan: wanDone });
+  // Closing mid-way: the install job keeps running, and reopening finds the
+  // node again (useAddNodeSession) while it is unfinished.
+  const left = underway && current !== "done" ? `${name} is at stage ${STAGE_NUMBER[current]}; reopen to continue.` : null;
+  const offer = session && job === null && !declined && !resume ? session : null;
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add a node">
-        <header className="modal-head">
-          <h2>Add a node</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        <p className="small">
-          Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools. Nothing changes until you Apply in stage 1.
-        </p>
-        <ol className="setup">
-          {/* Open while the medium is not ready; collapsed once it is (most machines network-boot and need nothing more). */}
-          <StepRow s={steps[0]} open={!stickWritten && !skipMedium}>
-            <p className="small">Every new node installs from one medium on the mothership: a machine that network-boots (PXE) fetches it from there, a machine that cannot boots the installer stick made from the same image. The cicd install built it once; it is built again here when it is missing, from before this version, or wanted for a new Proxmox version.</p>
-            {media ? (
-              <ul className="plain checks">
-                <Check ok={media.staged && media.current} label="netboot assets on the mothership" detail={media.staged ? (media.current ? "staged, current" : "staged, but from before this version's installer hook") : "not staged"} />
-                <Check ok={media.stickImage.present} label="installer stick image" detail={media.stickImage.present ? `${media.stickImage.path}, ${gb(media.stickImage.size)}, ${media.stickImage.modified ?? ""}` : "not built"} />
-                {!media.xorriso ? <Check ok={false} label="xorriso on the mothership" detail="not installed: the stick image cannot be built until an OS update of tappaas-cicd brings it" /> : null}
-              </ul>
+    <Wizard title="Add a node" onClose={onClose} running={running && jobLive(running) ? [jobLabel(running)] : []} progress={left} resumes>
+      {offer ? (
+        <div className="readstate readstate-warn wizard-resume">
+          <span>A node is being added: <b>{sessionText(offer)}</b>.</span>
+          <button className="btn btn-small btn-primary" onClick={() => restore(offer)}>Continue {offer.name}</button>
+          <button className="btn btn-small" onClick={() => setDeclined(true)}>Add another node</button>
+        </div>
+      ) : null}
+      <p className="small">
+        Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools. Nothing changes until you Apply in stage 1.
+      </p>
+      <ol className="setup">
+        {/* Open while the medium is not ready; collapsed once it is (most machines network-boot and need nothing more). */}
+        <StepRow s={steps[0]} open={!stickWritten && !skipMedium}>
+          <p className="small">Every new node installs from one medium on the mothership: a machine that network-boots (PXE) fetches it from there, a machine that cannot boots the installer stick made from the same image. The cicd install built it once; it is built again here when it is missing, from before this version, or wanted for a new Proxmox version.</p>
+          {media ? (
+            <ul className="plain checks">
+              <Check ok={media.staged && media.current} label="netboot assets on the mothership" detail={media.staged ? (media.current ? "staged, current" : "staged, but from before this version's installer hook") : "not staged"} />
+              <Check ok={media.stickImage.present} label="installer stick image" detail={media.stickImage.present ? `${media.stickImage.path}, ${gb(media.stickImage.size)}, ${media.stickImage.modified ?? ""}` : "not built"} />
+              {!media.xorriso ? <Check ok={false} label="xorriso on the mothership" detail="not installed: the stick image cannot be built until an OS update of tappaas-cicd brings it" /> : null}
+            </ul>
+          ) : (
+            <p className="muted small">{mediaRead.env?.error || mediaRead.failure ? <><Dot level="fail" /> site-manager node media could not be read: {mediaRead.env?.error ?? mediaRead.failure}</> : "reading the boot medium…"}</p>
+          )}
+          {media && (!media.ready || prepared) ? (
+            media.prepare || prepared ? (
+              <StepView key={media.prepare?.argv.join(" ") ?? "ready"} step={prepare} me={me} onDone={(ok) => { if (ok) { setPrepared(true); mediaRead.reload(); } }} />
             ) : (
-              <p className="muted small">{mediaRead.env?.error || mediaRead.failure ? <><Dot level="fail" /> site-manager node media could not be read: {mediaRead.env?.error ?? mediaRead.failure}</> : "reading the boot medium…"}</p>
-            )}
-            {media && (!media.ready || prepared) ? (
-              media.prepare || prepared ? (
-                <StepView key={media.prepare?.argv.join(" ") ?? "ready"} step={prepare} me={me} onDone={(ok) => { if (ok) { setPrepared(true); mediaRead.reload(); } }} />
-              ) : (
-                <p className="small"><Dot level="warn" /> Nothing can be built here until xorriso is installed on the mothership.</p>
-              )
-            ) : null}
-            <p className="small" style={{ marginTop: "1em" }}><b>The installer stick</b> — only for a machine that cannot network-boot. One image for every node: the stick fetches the node's own answer from the mothership once stage 1's job runs. Two ways to write it:</p>
-            <div className="two">
-              <div className="explain">
-                <p><b>By a TAPPaaS node</b> — a stick in a free USB port of an existing node; the mothership is a VM with no USB port, so it writes through the node</p>
-                <div className="form">
-                  <UsbStickPicker nodes={known.length ? known : [stickNode]} node={stickNode} setNode={setStickNode} device={stickDevice} setDevice={setStickDevice} disabled={stickWritten} />
-                </div>
-                {stickWritten ? (
-                  <p className="small"><Dot level="pass" /> The installer stick is written and ejected: pull {stickDevice} out of {stickNode}. It boots the new machine in stage 2.</p>
-                ) : null}
-                <StepView key={`${stickNode}:${stickDevice}:${media?.stickImage.present ? 1 : 0}`} step={writeStick} me={me} onDone={(ok) => ok && setStickWritten(true)} />
-              </div>
-              <div className="explain">
-                <p><b>On your own machine</b> — copy the image from the mothership, then write it to a stick (everything on the stick is erased).</p>
-                <p><b>Linux</b></p>
-                <ol>
-                  <li><span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{IMAGE} .</span></li>
-                  <li>Find the stick: <span className="mono">lsblk</span> (a disk of the stick's size, e.g. <span className="mono">sdb</span>; unmount anything mounted from it).</li>
-                  <li><span className="mono">sudo dd if=tappaas-usb.iso of=/dev/sdb bs=4M status=progress conv=fsync</span>, then <span className="mono">sudo eject /dev/sdb</span>.</li>
-                </ol>
-                <p><b>macOS</b></p>
-                <ol>
-                  <li>In Terminal: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{IMAGE} .</span></li>
-                  <li>Find the stick: <span className="mono">diskutil list</span> (an external disk of the stick's size, e.g. <span className="mono">disk4</span>), then <span className="mono">diskutil unmountDisk /dev/disk4</span>.</li>
-                  <li><span className="mono">sudo dd if=tappaas-usb.iso of=/dev/rdisk4 bs=4m status=progress</span>, then <span className="mono">diskutil eject /dev/disk4</span>. Ignore "The disk you inserted was not readable" if macOS shows it.</li>
-                </ol>
-                <p><b>Windows</b></p>
-                <ol>
-                  <li>In PowerShell: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{IMAGE} .</span> (scp comes with Windows 10 and later).</li>
-                  <li>Write it with <a href="https://rufus.ie" target="_blank" rel="noreferrer">Rufus</a> or <a href="https://etcher.balena.io" target="_blank" rel="noreferrer">balenaEtcher</a>: pick the stick and tappaas-usb.iso, and in Rufus choose <b>DD image mode</b> when asked.</li>
-                </ol>
-                <p className="small">balenaEtcher works the same way on Linux and macOS, for a stick without the terminal.</p>
-              </div>
-            </div>
-            {!stickWritten && !skipMedium ? (
-              <div className="actions">
-                <button className="btn" onClick={() => setSkipMedium(true)}>Skip: the machine network-boots</button>
-                <span className="muted small">No stick is needed then; stage 1 opens the network-boot window.</span>
-              </div>
-            ) : null}
-          </StepRow>
-          <StepRow s={steps[1]} open={current === "declare"}>
-            <StepView key={topo ? "ports" : "no-ports"} step={declare} me={me} onApplied={setJob} onDone={(ok) => setEnded(ok)} />
-          </StepRow>
-          <StepRow s={steps[2]} open={current === "boot"}>
-            <p className="small">Once stage 1's job is running, boot the machine one of two ways. Either way the installer asks the mothership for its answer over the network, so the machine must be cabled as stage 1 says; only if the boot-disk fields match no disk does the node's screen ask for one (from the network; a stick stops with the list of the machine's disks instead).</p>
-            <div className="two">
-              <div className="explain">
-                <p><b>Network boot (PXE)</b></p>
-                <ol>
-                  <li>In the firmware (BIOS/UEFI setup), enable <b>network boot (PXE) over IPv4, UEFI</b> on the cabled port.</li>
-                  <li>Power on and pick network boot once — the one-time boot menu (often F11 or F12) — or put network first in the boot order for this one boot.</li>
-                  <li>If you changed the boot order, set the disk first again after the install has started: the window closes on its own, and a second network boot finds nothing to install.</li>
-                </ol>
-              </div>
-              <div className="explain">
-                <p><b>USB stick</b> — for a machine that cannot network-boot</p>
-                <ol>
-                  <li>The stick written in stage 0 (by a node, or from the image copied to your own machine).</li>
-                  <li>Power on and boot from the stick once — the one-time boot menu.</li>
-                </ol>
-              </div>
-            </div>
-            {progress && underway ? (
-              <ul className="plain checks">
-                <Check ok={progress.registration !== "none"} label="registered for a network install" detail={progress.registration === "pending" ? "waiting for the machine to ask" : progress.registration === "answered" ? "the installer has fetched its answer" : "no registration (the job has not reached it, or it ended)"} />
-                <Check ok={progress.pxe.enabled} label="the network-boot window on the mothership" detail={progress.pxe.enabled ? "open" : "closed"} />
-              </ul>
-            ) : underway ? <p className="muted small">reading the provisioning state…</p> : null}
-          </StepRow>
-          <StepRow s={steps[3]} open={current === "wait"}>
+              <p className="small"><Dot level="warn" /> Nothing can be built here until xorriso is installed on the mothership.</p>
+            )
+          ) : null}
+          <p className="small" style={{ marginTop: "1em" }}><b>The installer stick</b> — only for a machine that cannot network-boot. One image for every node: the stick fetches the node's own answer from the mothership once stage 1's job runs. Two ways to write it:</p>
+          <div className="two">
             <div className="explain">
-              <p>
-                Nothing to do here but wait, typically 15–25 minutes: the installer writes Proxmox to the boot disk(s) and reboots, the job waits for the node at its address, checks it and joins it to the cluster, registers it as a pvehost instance, brings it to the cluster baseline and reboots it into the kernel that installed. Watch the node's screen if it takes much longer.
-              </p>
+              <p><b>By a TAPPaaS node</b> — a stick in a free USB port of an existing node; the mothership is a VM with no USB port, so it writes through the node</p>
+              <div className="form">
+                <UsbStickPicker nodes={known.length ? known : [stickNode]} node={stickNode} setNode={setStickNode} device={stickDevice} setDevice={setStickDevice} disabled={stickWritten} />
+              </div>
+              {stickWritten ? (
+                <p className="small"><Dot level="pass" /> The installer stick is written and ejected: pull {stickDevice} out of {stickNode}. It boots the new machine in stage 2.</p>
+              ) : null}
+              <StepView key={`${stickNode}:${stickDevice}:${media?.stickImage.present ? 1 : 0}`} step={writeStick} me={me} onDone={(ok) => ok && setStickWritten(true)} />
             </div>
-            {progress ? (
-              <ul className="plain checks">
-                <Check ok={progress.registration === "answered"} label="the installer fetched its answer" />
-                <Check ok={progress.inCluster} label="in the Proxmox cluster" detail={progress.cluster ? `members: ${progress.cluster.join(", ")}` : "no node answered the membership read"} />
-                <Check ok={progress.inSite} label="registered as a pvehost instance" />
-              </ul>
-            ) : null}
-            {running ? (
-              <>
-                <p className="small">
-                  The job: <b>{running.state === "done" ? (running.exit === 0 ? "finished" : `ended with exit ${running.exit}`) : running.state}</b>
-                </p>
-                <Output text={running.output} live={running.state === "running"} />
-              </>
-            ) : null}
-            {progress?.inCluster && !progress.inSite && ended !== null ? (
+            <div className="explain">
+              <p><b>On your own machine</b> — copy the image from the mothership, then write it to a stick (everything on the stick is erased).</p>
+              <p><b>Linux</b></p>
+              <ol>
+                <li><span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{IMAGE} .</span></li>
+                <li>Find the stick: <span className="mono">lsblk</span> (a disk of the stick's size, e.g. <span className="mono">sdb</span>; unmount anything mounted from it).</li>
+                <li><span className="mono">sudo dd if=tappaas-usb.iso of=/dev/sdb bs=4M status=progress conv=fsync</span>, then <span className="mono">sudo eject /dev/sdb</span>.</li>
+              </ol>
+              <p><b>macOS</b></p>
+              <ol>
+                <li>In Terminal: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{IMAGE} .</span></li>
+                <li>Find the stick: <span className="mono">diskutil list</span> (an external disk of the stick's size, e.g. <span className="mono">disk4</span>), then <span className="mono">diskutil unmountDisk /dev/disk4</span>.</li>
+                <li><span className="mono">sudo dd if=tappaas-usb.iso of=/dev/rdisk4 bs=4m status=progress</span>, then <span className="mono">diskutil eject /dev/disk4</span>. Ignore "The disk you inserted was not readable" if macOS shows it.</li>
+              </ol>
+              <p><b>Windows</b></p>
+              <ol>
+                <li>In PowerShell: <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:{IMAGE} .</span> (scp comes with Windows 10 and later).</li>
+                <li>Write it with <a href="https://rufus.ie" target="_blank" rel="noreferrer">Rufus</a> or <a href="https://etcher.balena.io" target="_blank" rel="noreferrer">balenaEtcher</a>: pick the stick and tappaas-usb.iso, and in Rufus choose <b>DD image mode</b> when asked.</li>
+              </ol>
+              <p className="small">balenaEtcher works the same way on Linux and macOS, for a stick without the terminal.</p>
+            </div>
+          </div>
+          {!stickWritten && !skipMedium ? (
+            <div className="actions">
+              <button className="btn" onClick={() => setSkipMedium(true)}>Skip: the machine network-boots</button>
+              <span className="muted small">No stick is needed then; stage 1 opens the network-boot window.</span>
+            </div>
+          ) : null}
+        </StepRow>
+        <StepRow s={steps[1]} open={current === "declare"}>
+          {/* Continued: the job was applied before this pop-up; its form is not offered again. */}
+          {resumed ? (
+            running ? (
               <p className="small">
-                In the cluster but not registered: <OperateButton label="Register joined nodes…" title="site-manager node reconcile" steps={[{ title: "site-manager node reconcile", bin: "site-manager", verb: "node reconcile", note: "The preview lists the nodes that joined the cluster and have no pvehost instance; apply registers them, with their storage pools." }]} />
+                Applied: <span className="mono">site-manager node add {name}</span> — {jobResult(running)} <span className="muted">· job {running.id}</span> — its output is in stage 3 <JobControl job={running} />
               </p>
-            ) : null}
-            {progress?.pxe.text ? (
-              <details className="small">
-                <summary>node-provisioner status</summary>
-                <pre className="output">{progress.pxe.text}</pre>
-              </details>
-            ) : null}
-          </StepRow>
-          <StepRow s={steps[4]} open={current === "storage"}>
-            {joined ? <NodePools node={name} onContinue={(n) => (n > 0 ? setPooled(true) : setSkipPools(true))} /> : <p className="muted small">Once the node has joined.</p>}
-          </StepRow>
-          <StepRow s={steps[5]} open={current === "lan"}>
-            {joined ? <LanUplink node={name} onDone={() => setLanDone(true)} /> : <p className="muted small">Once the node has joined.</p>}
-          </StepRow>
-          <StepRow s={steps[6]} open={current === "wan"}>
-            {joined ? <WanUplink node={name} onDone={() => setWanDone(true)} /> : <p className="muted small">Once the node has joined.</p>}
-          </StepRow>
-          <StepRow s={steps[7]} open={current === "done"}>
-            {valid ? (
+            ) : <p className="muted small">reading job {job}…</p>
+          ) : (
+            <StepView key={topo ? "ports" : "no-ports"} step={declare} me={me} onApplied={setJob} onDone={(ok) => setEnded(ok)} />
+          )}
+        </StepRow>
+        <StepRow s={steps[2]} open={current === "boot"}>
+          <p className="small">Once stage 1's job is running, boot the machine one of two ways. Either way the installer asks the mothership for its answer over the network, so the machine must be cabled as stage 1 says; only if the boot-disk fields match no disk does the node's screen ask for one (from the network; a stick stops with the list of the machine's disks instead).</p>
+          <div className="two">
+            <div className="explain">
+              <p><b>Network boot (PXE)</b></p>
+              <ol>
+                <li>In the firmware (BIOS/UEFI setup), enable <b>network boot (PXE) over IPv4, UEFI</b> on the cabled port.</li>
+                <li>Power on and pick network boot once — the one-time boot menu (often F11 or F12) — or put network first in the boot order for this one boot.</li>
+                <li>If you changed the boot order, set the disk first again after the install has started: the window closes on its own, and a second network boot finds nothing to install.</li>
+              </ol>
+            </div>
+            <div className="explain">
+              <p><b>USB stick</b> — for a machine that cannot network-boot</p>
+              <ol>
+                <li>The stick written in stage 0 (by a node, or from the image copied to your own machine).</li>
+                <li>Power on and boot from the stick once — the one-time boot menu.</li>
+              </ol>
+            </div>
+          </div>
+          {progress && underway ? (
+            <ul className="plain checks">
+              <Check ok={progress.registration !== "none"} label="registered for a network install" detail={progress.registration === "pending" ? "waiting for the machine to ask" : progress.registration === "answered" ? "the installer has fetched its answer" : "no registration (the job has not reached it, or it ended)"} />
+              <Check ok={progress.pxe.enabled} label="the network-boot window on the mothership" detail={progress.pxe.enabled ? "open" : "closed"} />
+            </ul>
+          ) : underway ? <p className="muted small">reading the provisioning state…</p> : null}
+        </StepRow>
+        <StepRow s={steps[3]} open={current === "wait"}>
+          <div className="explain">
+            <p>
+              Nothing to do here but wait, typically 15–25 minutes: the installer writes Proxmox to the boot disk(s) and reboots, the job waits for the node at its address, checks it and joins it to the cluster, registers it as a pvehost instance, brings it to the cluster baseline and reboots it into the kernel that installed. Watch the node's screen if it takes much longer.
+            </p>
+          </div>
+          {progress ? (
+            <ul className="plain checks">
+              <Check ok={progress.registration === "answered"} label="the installer fetched its answer" />
+              <Check ok={progress.inCluster} label="in the Proxmox cluster" detail={progress.cluster ? `members: ${progress.cluster.join(", ")}` : "no node answered the membership read"} />
+              <Check ok={progress.inSite} label="registered as a pvehost instance" />
+            </ul>
+          ) : null}
+          {running ? (
+            <>
               <p className="small">
-                <Link to={viewLink("rack", `node:${name}`)}>Open {name} in the physical view →</Link> — select it there and use <b>Place…</b> to put it in its room and rack. {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}
+                The job: <b>{running.cancelled ? jobResult(running) : running.state === "done" ? (running.exit === 0 ? "finished" : `ended with exit ${running.exit}`) : running.state}</b> <JobControl job={running} />
               </p>
-            ) : null}
-          </StepRow>
-        </ol>
-      </div>
-    </div>
+              <Output text={running.output} live={running.state === "running"} />
+            </>
+          ) : null}
+          {progress?.inCluster && !progress.inSite && endedOk !== null ? (
+            <p className="small">
+              In the cluster but not registered: <OperateButton label="Register joined nodes…" title="site-manager node reconcile" steps={[{ title: "site-manager node reconcile", bin: "site-manager", verb: "node reconcile", note: "The preview lists the nodes that joined the cluster and have no pvehost instance; apply registers them, with their storage pools." }]} />
+            </p>
+          ) : null}
+          {progress?.pxe.text ? (
+            <details className="small">
+              <summary>node-provisioner status</summary>
+              <pre className="output">{progress.pxe.text}</pre>
+            </details>
+          ) : null}
+        </StepRow>
+        <StepRow s={steps[4]} open={current === "storage"}>
+          {joined ? <NodePools node={name} onContinue={(n) => (n > 0 ? setPooled(true) : setSkipPools(true))} /> : <p className="muted small">Once the node has joined.</p>}
+        </StepRow>
+        <StepRow s={steps[5]} open={current === "lan"}>
+          {joined ? <LanUplink node={name} onDone={() => setLanDone(true)} /> : <p className="muted small">Once the node has joined.</p>}
+        </StepRow>
+        <StepRow s={steps[6]} open={current === "wan"}>
+          {joined ? <WanUplink node={name} onDone={() => setWanDone(true)} /> : <p className="muted small">Once the node has joined.</p>}
+        </StepRow>
+        <StepRow s={steps[7]} open={current === "done"}>
+          {valid ? (
+            <p className="small">
+              <Link to={viewLink("rack", `node:${name}`)}>Open {name} in the physical view →</Link> — select it there and use <b>Place…</b> to put it in its room and rack. {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}
+            </p>
+          ) : null}
+        </StepRow>
+      </ol>
+    </Wizard>
   );
 }
 
-export function AddNodeButton({ label = "Add a node…" }: { label?: string }) {
-  const [open, setOpen] = useState(false);
+// The button, and beside it the node being added, if one is: "Adding
+// tappaas4 — stage 3 · Continue →" opens the wizard at that stage. `session`:
+// the caller has looked already (Setup's Nodes step); otherwise it looks.
+export function AddNodeButton({ label = "Add a node…", session: given }: { label?: string; session?: AddNodeSession | null }) {
+  const [open, setOpen] = useState<false | "new" | "resume">(false);
   const [prefill, setPrefill] = useState<Values | null>(null);
   const operator = canOperate(useMe());
+  const looked = useAddNodeSession(operator && given === undefined && !open);
+  const session = given === undefined ? looked : given;
   useOpenedBy("add-node", undefined, (v) => {
     setPrefill(v);
-    setOpen(true);
+    setOpen("new");
   }, operator);
   if (!operator) return null;
   return (
     <>
-      <button className="btn" onClick={() => setOpen(true)}>{label}</button>
-      {open ? <AddNodeWizard prefill={prefill} onClose={() => { setOpen(false); setPrefill(null); }} /> : null}
+      {session ? (
+        <span className="toolbar">
+          <span className="small"><Dot level="warn" /> Adding {sessionText(session)}</span>
+          <button className="btn btn-primary" onClick={() => setOpen("resume")}>Continue {session.name} →</button>
+        </span>
+      ) : null}
+      <button className="btn" onClick={() => setOpen("new")}>{label}</button>
+      {open ? <AddNodeWizard prefill={prefill} resume={open === "resume"} onClose={() => { setOpen(false); setPrefill(null); }} /> : null}
     </>
   );
 }

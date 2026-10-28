@@ -11,14 +11,16 @@
 import { useMemo, useState } from "react";
 import { reloadAll, useJob, useRead } from "../api";
 import { useSiteLocations } from "../locations";
-import { Operate, Step, StepView } from "../operate";
+import { JobView, Operate, Step, StepView } from "../operate";
 import { useOpenedBy } from "../opener";
 import { TargetValues } from "../consoletargets";
 import { manualSwitches, switchPortChoices } from "../nodeadd";
 import { placeSteps } from "../physical/rackops";
 import { viewLink } from "../physical/views";
-import { Topology } from "../types";
+import { JobSummary, Topology } from "../types";
 import { Link, canOperate, useMe } from "../ui";
+import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
+import { argOf } from "../wizards";
 import { StepRow } from "./Setup";
 
 // What the activity is, on Day 2's card and at the top of the form.
@@ -67,6 +69,24 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
   const [placing, setPlacing] = useState(false);
   const [placed, setPlaced] = useState(false);
   const running = useJob(job);
+  // Closed while the adoption ran, or within the hour after: its job is found
+  // again and the plan read back from its argv (the switch port, done before
+  // it, is not asked again).
+  const [resumed, setResumed] = useState(false);
+  const [declined, setDeclined] = useState(false);
+  const session = useJobSession("module-manager", "adopt", () => true, job === null && !declined);
+  const restore = (j: JobSummary) => {
+    const p: Plan = { address: j.argv[2] ?? "", instance: argOf(j.argv, "--instance") ?? "", zone: argOf(j.argv, "--zone") ?? "", location: argOf(j.argv, "--location") ?? "", keyOnly: !j.argv.includes("sshKeyOnly=false"), port: null };
+    setAddress(p.address);
+    setInstance(p.instance);
+    setZone(p.zone);
+    setLocation(p.location || null);
+    setKeyOnly(p.keyOnly);
+    setPort("");
+    setPlan(p);
+    setJob(j.id);
+    setResumed(true);
+  };
   const adopted = running && running.state === "done" && running.exit === 0 ? adoptedName(running.output) ?? plan?.instance ?? null : null;
   const zoneOf = zones.find((z) => z.name === zone) ?? null;
   const addr = address.trim();
@@ -124,115 +144,113 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
   ];
   const current = !plan ? "machine" : plan.port && !programmed ? "port" : !adopted ? "adopt" : "place";
 
+  // Past the machine's description: the port's record or the adoption may be applied.
+  const left = plan && !adopted ? (portSet ? `the switch port's record is written; the adoption is not done yet, and reopening starts again at the machine.` : null) : adopted && !placed ? `${adopted} is adopted; reopen within the hour to place it.` : null;
+
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Adopt a machine">
-        <header className="modal-head">
-          <h2>Adopt a machine</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        <p className="small">{ADOPT_TEXT}</p>
-        <ol className="setup">
-          <StepRow s={stages[0]} open={current === "machine"}>
-            <div className="form">
-              <label className="form-row">
-                <span>address *</span>
-                <input type="text" value={address} disabled={plan !== null} placeholder="its IP address or DNS name" onChange={(e) => setAddress(e.target.value)} />
-                <small className="muted">How the mothership reaches it today.</small>
-              </label>
-              <label className="form-row">
-                <span>name</span>
-                <input type="text" value={instance} disabled={plan !== null} placeholder="blank: the machine's own hostname" onChange={(e) => setInstance(e.target.value.trim())} />
-                <small className="muted">The module's instance name; a name another machine has is refused.</small>
-              </label>
-              <label className="form-row">
-                <span>zone{port ? " *" : ""}</span>
-                <select value={zone} disabled={plan !== null} onChange={(e) => setZone(e.target.value)}>
-                  <option value="">— blank: the zone whose subnet holds its address</option>
-                  {zones.map((z) => (
-                    <option key={z.name} value={z.name}>{z.name} ({z.type ?? "?"}, VLAN {z.vlan})</option>
-                  ))}
-                </select>
-                <small className="muted">The zone it lives in{port ? "; the switch port is set to it" : ""}.</small>
-              </label>
-              <label className="form-row">
-                <span>location</span>
-                <select value={location} disabled={plan !== null} onChange={(e) => setLocation(e.target.value)}>
-                  <option value="">— the primary location</option>
-                  {locations.map((l) => (
-                    <option key={l.name} value={l.name}>{l.name}{l.primary ? " (primary)" : ""}</option>
-                  ))}
-                </select>
-                <small className="muted">One of the site's locations: where the machine stands.</small>
-              </label>
-              <label className="form-check">
-                <input type="checkbox" checked={keyOnly} disabled={plan !== null} onChange={(e) => setKeyOnly(e.target.checked)} />
-                <span>SSH key-only</span> <small className="muted">Root logs in with the mothership's key only; unticked, password logins stay allowed (sshKeyOnly=false).</small>
-              </label>
-              <label className="form-row">
-                <span>switch port</span>
-                <select value={port} disabled={plan !== null} onChange={(e) => setPort(e.target.value)}>
-                  <option value="">— none: a self-managed switch, or not cabled yet</option>
-                  {ports.map((c) => (
-                    <option key={c.value} value={c.value}>{c.label}</option>
-                  ))}
-                </select>
-                <small className="muted">The free ports on the switches TAPPaaS programs. The port becomes an access port in the machine's zone before the adoption.{manual.length ? ` Self-managed: ${manual.join(", ")} — set their ports by hand.` : ""}</small>
-              </label>
-            </div>
-            <div className="actions">
-              {plan ? (
-                <button className="btn" disabled={portSet || job !== null} onClick={() => setPlan(null)}>Edit</button>
-              ) : (
-                <button
-                  className="btn btn-primary"
-                  disabled={problem !== null}
-                  onClick={() => {
-                    const [sw, ...rest] = port.split(":");
-                    setPlan({ address: addr, instance, zone, location, keyOnly, port: port ? { sw, port: rest.join(":") } : null });
-                  }}
-                >
-                  Continue
-                </button>
-              )}
-              {!plan && problem ? <span className="muted small">{problem}</span> : null}
-            </div>
-          </StepRow>
-          <StepRow s={stages[1]} open={current === "port"}>
-            {!plan ? (
-              <p className="muted small">Once the machine is described.</p>
-            ) : portStep ? (
-              <>
-                <StepView key={`p-${plan.port!.sw}-${plan.port!.port}`} step={portStep} me={me} onDone={(ok) => ok && setPortSet(true)} />
-                {portSet ? <StepView key="r" step={reconcile} me={me} onDone={(ok) => ok && setProgrammed(true)} /> : <p className="muted small">Next: switch-manager reconcile — once the port's record is written.</p>}
-              </>
+    <Wizard title="Adopt a machine" onClose={onClose} running={running && jobLive(running) ? [jobLabel(running)] : []} progress={left} resumes={job !== null}>
+      {session ? <ResumeOffer what={<>A machine is being adopted: <b>{session.argv[2] ?? "?"}</b></>} job={session} onContinue={() => restore(session)} onDecline={() => setDeclined(true)} decline="Adopt another machine" /> : null}
+      <p className="small">{ADOPT_TEXT}</p>
+      <ol className="setup">
+        <StepRow s={stages[0]} open={current === "machine"}>
+          <div className="form">
+            <label className="form-row">
+              <span>address *</span>
+              <input type="text" value={address} disabled={plan !== null} placeholder="its IP address or DNS name" onChange={(e) => setAddress(e.target.value)} />
+              <small className="muted">How the mothership reaches it today.</small>
+            </label>
+            <label className="form-row">
+              <span>name</span>
+              <input type="text" value={instance} disabled={plan !== null} placeholder="blank: the machine's own hostname" onChange={(e) => setInstance(e.target.value.trim())} />
+              <small className="muted">The module's instance name; a name another machine has is refused.</small>
+            </label>
+            <label className="form-row">
+              <span>zone{port ? " *" : ""}</span>
+              <select value={zone} disabled={plan !== null} onChange={(e) => setZone(e.target.value)}>
+                <option value="">— blank: the zone whose subnet holds its address</option>
+                {zones.map((z) => (
+                  <option key={z.name} value={z.name}>{z.name} ({z.type ?? "?"}, VLAN {z.vlan})</option>
+                ))}
+              </select>
+              <small className="muted">The zone it lives in{port ? "; the switch port is set to it" : ""}.</small>
+            </label>
+            <label className="form-row">
+              <span>location</span>
+              <select value={location} disabled={plan !== null} onChange={(e) => setLocation(e.target.value)}>
+                <option value="">— the primary location</option>
+                {locations.map((l) => (
+                  <option key={l.name} value={l.name}>{l.name}{l.primary ? " (primary)" : ""}</option>
+                ))}
+              </select>
+              <small className="muted">One of the site's locations: where the machine stands.</small>
+            </label>
+            <label className="form-check">
+              <input type="checkbox" checked={keyOnly} disabled={plan !== null} onChange={(e) => setKeyOnly(e.target.checked)} />
+              <span>SSH key-only</span> <small className="muted">Root logs in with the mothership's key only; unticked, password logins stay allowed (sshKeyOnly=false).</small>
+            </label>
+            <label className="form-row">
+              <span>switch port</span>
+              <select value={port} disabled={plan !== null} onChange={(e) => setPort(e.target.value)}>
+                <option value="">— none: a self-managed switch, or not cabled yet</option>
+                {ports.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+              <small className="muted">The free ports on the switches TAPPaaS programs. The port becomes an access port in the machine's zone before the adoption.{manual.length ? ` Self-managed: ${manual.join(", ")} — set their ports by hand.` : ""}</small>
+            </label>
+          </div>
+          <div className="actions">
+            {plan ? (
+              <button className="btn" disabled={portSet || job !== null} onClick={() => setPlan(null)}>Edit</button>
             ) : (
+              <button
+                className="btn btn-primary"
+                disabled={problem !== null}
+                onClick={() => {
+                  const [sw, ...rest] = port.split(":");
+                  setPlan({ address: addr, instance, zone, location, keyOnly, port: port ? { sw, port: rest.join(":") } : null });
+                }}
+              >
+                Continue
+              </button>
+            )}
+            {!plan && problem ? <span className="muted small">{problem}</span> : null}
+          </div>
+        </StepRow>
+        <StepRow s={stages[1]} open={current === "port"}>
+          {!plan ? (
+            <p className="muted small">Once the machine is described.</p>
+          ) : portStep ? (
+            <>
+              <StepView key={`p-${plan.port!.sw}-${plan.port!.port}`} step={portStep} me={me} onDone={(ok) => ok && setPortSet(true)} />
+              {portSet ? <StepView key="r" step={reconcile} me={me} onDone={(ok) => ok && setProgrammed(true)} /> : <p className="muted small">Next: switch-manager reconcile — once the port's record is written.</p>}
+            </>
+          ) : (
+            <p className="small">
+              No port on a switch TAPPaaS programs. On a self-managed switch set the machine's port as an access port in {zoneOf ? <>zone <b>{zoneOf.name}</b> (VLAN {zoneOf.vlan})</> : "the machine's zone"}; nothing to do here.
+            </p>
+          )}
+        </StepRow>
+        <StepRow s={stages[2]} open={current === "adopt"}>
+          {resumed && job ? <JobView id={job} label="module-manager adopt" /> : adopt && (!plan?.port || programmed) ? <StepView key={`a-${JSON.stringify(plan)}`} step={adopt} me={me} onApplied={setJob} onDone={() => undefined} /> : <p className="muted small">{plan?.port ? "Once the switch port is programmed." : "Once the machine is described."}</p>}
+        </StepRow>
+        <StepRow s={stages[3]} open={current === "place"}>
+          {adopted ? (
+            <>
               <p className="small">
-                No port on a switch TAPPaaS programs. On a self-managed switch set the machine's port as an access port in {zoneOf ? <>zone <b>{zoneOf.name}</b> (VLAN {zoneOf.vlan})</> : "the machine's zone"}; nothing to do here.
+                <b>{adopted}</b> is a module of the site now. Put it where it stands: a rack and its units, or loose in a room at its location. <Link to={viewLink("rack")}>Open the physical view →</Link>
               </p>
-            )}
-          </StepRow>
-          <StepRow s={stages[2]} open={current === "adopt"}>
-            {adopt && (!plan?.port || programmed) ? <StepView key={`a-${JSON.stringify(plan)}`} step={adopt} me={me} onApplied={setJob} onDone={() => undefined} /> : <p className="muted small">{plan?.port ? "Once the switch port is programmed." : "Once the machine is described."}</p>}
-          </StepRow>
-          <StepRow s={stages[3]} open={current === "place"}>
-            {adopted ? (
-              <>
-                <p className="small">
-                  <b>{adopted}</b> is a module of the site now. Put it where it stands: a rack and its units, or loose in a room at its location. <Link to={viewLink("rack")}>Open the physical view →</Link>
-                </p>
-                <div className="actions">
-                  <button className="btn btn-primary" onClick={() => setPlacing(true)}>Place {adopted}…</button>
-                  {placing ? <Operate title={`Place ${adopted}`} steps={placeSteps(adopted, topo?.positions)} onClose={() => { setPlacing(false); setPlaced(true); reloadAll(); }} /> : null}
-                </div>
-              </>
-            ) : (
-              <p className="muted small">Once the machine is adopted.</p>
-            )}
-          </StepRow>
-        </ol>
-      </div>
-    </div>
+              <div className="actions">
+                <button className="btn btn-primary" onClick={() => setPlacing(true)}>Place {adopted}…</button>
+                {placing ? <Operate title={`Place ${adopted}`} steps={placeSteps(adopted, topo?.positions)} onClose={() => { setPlacing(false); setPlaced(true); reloadAll(); }} /> : null}
+              </div>
+            </>
+          ) : (
+            <p className="muted small">Once the machine is adopted.</p>
+          )}
+        </StepRow>
+      </ol>
+    </Wizard>
   );
 }
 

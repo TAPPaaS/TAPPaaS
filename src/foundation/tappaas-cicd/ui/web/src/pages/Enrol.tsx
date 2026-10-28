@@ -6,12 +6,15 @@
 // WireGuard file); 3 the file on the device, its private key pasted in, the
 // tunnel activated.
 
-import { useMemo, useState } from "react";
-import { Job } from "../types";
+import { useEffect, useMemo, useState } from "react";
+import { useJob } from "../api";
+import { Job, JobSummary } from "../types";
 import { Output } from "../jobs";
-import { Step, StepView } from "../operate";
+import { JobView, Step, StepView } from "../operate";
 import { useOpenedBy } from "../opener";
 import { canOperate, useMe } from "../ui";
+import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
+import { argOf } from "../wizards";
 import { StepRow, download, wgConfig } from "./Setup";
 
 // What the activity is, on Day 2's card and at the top of the form.
@@ -39,6 +42,23 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
   const [more, setMore] = useState(!!(str("ip") || str("endpoint")));
   const [job, setJob] = useState<string | null>(null);
   const [done, setDone] = useState<boolean | null>(null);
+  // Closed while the device was registered, or within the hour after: its
+  // add-peer job is found again, and with it the WireGuard file to download.
+  const [resumed, setResumed] = useState(false);
+  const [declined, setDeclined] = useState(false);
+  const session = useJobSession("network-manager", "wgvpn", (j) => j.argv.includes("add-peer"), job === null && !declined);
+  const followed = useJob(resumed ? job : null);
+  useEffect(() => {
+    if (followed?.state === "done") setDone(followed.exit === 0);
+  }, [followed?.state]);
+  const restore = (j: JobSummary) => {
+    setName(argOf(j.argv, "--name") ?? "");
+    setPubkey(argOf(j.argv, "--pubkey") ?? "");
+    setAddress(argOf(j.argv, "--ip") ?? "");
+    setEndpoint(argOf(j.argv, "--endpoint") ?? "");
+    setJob(j.id);
+    setResumed(true);
+  };
   const problem = nameProblem(name) ?? pubkeyProblem(pubkey.trim()) ?? (address && !ADDRESS.test(address) ? "the address is 10.255.1.x" : null) ?? (endpoint && !ENDPOINT.test(endpoint) ? "the endpoint is host:port" : null);
   const busy = job !== null;
 
@@ -106,51 +126,53 @@ export function EnrolWizard({ onClose, prefill }: { onClose: () => void; prefill
   const current = !done ? "register" : "install";
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Enrol a device for mgmt access">
-        <header className="modal-head">
-          <h2>Enrol a device for mgmt access</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        <p className="small">{ENROL_TEXT}</p>
-        <ol className="setup">
-          <StepRow s={stages[0]} open={!PUBKEY.test(pubkey)}>
-            <div className="two">
-              <div className="explain">
-                <p><b>With the WireGuard app</b> (macOS, Windows, iOS, Android)</p>
-                <ol>
-                  <li>Install WireGuard from the app store, open it.</li>
-                  <li>Add a tunnel: <b>Add empty tunnel</b> (on a phone: <b>Create from scratch</b>). The app makes the key pair and shows the <b>public key</b>.</li>
-                  <li>Copy the public key into stage 2. Leave the tunnel open: its file comes in stage 3.</li>
-                </ol>
-              </div>
-              <div className="explain">
-                <p><b>On a Linux or Mac terminal</b></p>
-                <ol>
-                  <li>Install the tools: <span className="mono">apt install wireguard-tools</span> or <span className="mono">brew install wireguard-tools</span>.</li>
-                  <li><span className="mono">wg genkey | tee tappaas-admin.key | wg pubkey</span> — prints the public key; the private key is in <span className="mono">tappaas-admin.key</span>.</li>
-                  <li>Copy the public key into stage 2.</li>
-                </ol>
-              </div>
-            </div>
-          </StepRow>
-          <StepRow s={stages[1]} open={current === "register"}>
-            <StepView step={register} me={me} onApplied={setJob} onDone={(ok) => setDone(ok)} />
-          </StepRow>
-          <StepRow s={stages[2]} open={current === "install"}>
-            {done ? (
+    <Wizard title="Enrol a device for mgmt access" onClose={onClose} running={followed && jobLive(followed) ? [jobLabel(followed)] : []} progress={done ? `${name || "the device"} is registered; its file can be downloaded again here within the hour.` : null} resumes>
+      {session ? <ResumeOffer what={<>A device is being enrolled: <b>{argOf(session.argv, "--name") ?? "?"}</b></>} job={session} onContinue={() => restore(session)} onDecline={() => setDeclined(true)} decline="Enrol another device" /> : null}
+      <p className="small">{ENROL_TEXT}</p>
+      <ol className="setup">
+        <StepRow s={stages[0]} open={!PUBKEY.test(pubkey)}>
+          <div className="two">
+            <div className="explain">
+              <p><b>With the WireGuard app</b> (macOS, Windows, iOS, Android)</p>
               <ol>
-                <li>Download the file from stage 2 ({name || "tappaas-admin"}.conf). Open it in a text editor and put the device's <b>private key</b> where it says <span className="mono">PrivateKey = &lt;PASTE-YOUR-PRIVATE-KEY&gt;</span>. If the <span className="mono">Endpoint</span> line is a placeholder, put the site's public address there, port 51821.</li>
-                <li><b>WireGuard app:</b> import the file (<b>Import tunnel(s) from file</b>; on a phone, send the file to it or scan it as a QR code), or paste its contents into the tunnel from stage 1 under the key the app made. <b>Terminal:</b> save it as <span className="mono">/etc/wireguard/{name || "tappaas-admin"}.conf</span> and run <span className="mono">sudo wg-quick up {name || "tappaas-admin"}</span>.</li>
-                <li>Switch the tunnel on. The device now reaches the management zone: this console, the Proxmox and firewall UIs, and ssh to every host, by their names.</li>
+                <li>Install WireGuard from the app store, open it.</li>
+                <li>Add a tunnel: <b>Add empty tunnel</b> (on a phone: <b>Create from scratch</b>). The app makes the key pair and shows the <b>public key</b>.</li>
+                <li>Copy the public key into stage 2. Leave the tunnel open: its file comes in stage 3.</li>
               </ol>
-            ) : (
-              <p className="muted small">Once the device is registered.</p>
-            )}
-          </StepRow>
-        </ol>
-      </div>
-    </div>
+            </div>
+            <div className="explain">
+              <p><b>On a Linux or Mac terminal</b></p>
+              <ol>
+                <li>Install the tools: <span className="mono">apt install wireguard-tools</span> or <span className="mono">brew install wireguard-tools</span>.</li>
+                <li><span className="mono">wg genkey | tee tappaas-admin.key | wg pubkey</span> — prints the public key; the private key is in <span className="mono">tappaas-admin.key</span>.</li>
+                <li>Copy the public key into stage 2.</li>
+              </ol>
+            </div>
+          </div>
+        </StepRow>
+        <StepRow s={stages[1]} open={current === "register"}>
+          {resumed && job ? (
+            <>
+              <JobView id={job} label="network-manager wgvpn add-peer" />
+              {followed?.state === "done" && followed.exit === 0 ? register.after?.(followed) : null}
+            </>
+          ) : (
+            <StepView step={register} me={me} onApplied={setJob} onDone={(ok) => setDone(ok)} />
+          )}
+        </StepRow>
+        <StepRow s={stages[2]} open={current === "install"}>
+          {done ? (
+            <ol>
+              <li>Download the file from stage 2 ({name || "tappaas-admin"}.conf). Open it in a text editor and put the device's <b>private key</b> where it says <span className="mono">PrivateKey = &lt;PASTE-YOUR-PRIVATE-KEY&gt;</span>. If the <span className="mono">Endpoint</span> line is a placeholder, put the site's public address there, port 51821.</li>
+              <li><b>WireGuard app:</b> import the file (<b>Import tunnel(s) from file</b>; on a phone, send the file to it or scan it as a QR code), or paste its contents into the tunnel from stage 1 under the key the app made. <b>Terminal:</b> save it as <span className="mono">/etc/wireguard/{name || "tappaas-admin"}.conf</span> and run <span className="mono">sudo wg-quick up {name || "tappaas-admin"}</span>.</li>
+              <li>Switch the tunnel on. The device now reaches the management zone: this console, the Proxmox and firewall UIs, and ssh to every host, by their names.</li>
+            </ol>
+          ) : (
+            <p className="muted small">Once the device is registered.</p>
+          )}
+        </StepRow>
+      </ol>
+    </Wizard>
   );
 }
 

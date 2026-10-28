@@ -3,12 +3,14 @@
 // 1 which side this site is (pull or remote) and the buddy's name; 2 peer add,
 // with the options of its manifest; 3 peer check, the tunnel's live state.
 
-import { useMemo, useState } from "react";
-import { reloadAll } from "../api";
-import { Step, StepView } from "../operate";
+import { useEffect, useMemo, useState } from "react";
+import { reloadAll, useJob } from "../api";
+import { JobView, Step, StepView } from "../operate";
 import { TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
+import { JobSummary } from "../types";
 import { canOperate, useMe } from "../ui";
+import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
 import { locationOption, useSiteLocations } from "../locations";
 import { BUDDY_KINDS, BuddyKind, buddyNameProblem, buddySpecs } from "../wizards";
 import { StepRow } from "./Setup";
@@ -37,6 +39,22 @@ export function BuddyWizard({ onClose, prefill }: { onClose: () => void; prefill
   const [name, setName] = useState(typeof prefill?.name === "string" ? prefill.name : "");
   const [chosen, setChosen] = useState<{ kind: BuddyKind; name: string } | null>(null);
   const [added, setAdded] = useState(false);
+  // Closed while peer add ran, or within the hour after: its job is found
+  // again, with what it printed for the buddy.
+  const [job, setJob] = useState<string | null>(null); // the job continued (set by restore only)
+  const [declined, setDeclined] = useState(false);
+  const session = useJobSession("backup-manager", "peer add", (j) => (j.argv[3] ?? "") in BUDDY_KINDS, job === null && !declined);
+  const followed = useJob(job);
+  useEffect(() => {
+    if (followed?.state === "done" && followed.exit === 0) setAdded(true);
+  }, [followed?.state]);
+  const restore = (j: JobSummary) => {
+    const k = j.argv[3] as BuddyKind;
+    setKind(k);
+    setName(j.argv[4] ?? "");
+    setChosen({ kind: k, name: j.argv[4] ?? "" });
+    setJob(j.id);
+  };
   const problem = buddyNameProblem(name.trim());
   // A buddy is another site: one of the site's remote locations, or a place
   // (--country, --city) peer add records as one — never the primary preselected.
@@ -71,50 +89,45 @@ export function BuddyWizard({ onClose, prefill }: { onClose: () => void; prefill
   const current = !chosen ? "who" : !added ? "add" : "check";
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Add a backup buddy">
-        <header className="modal-head">
-          <h2>Add a backup buddy</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        <p className="small">A buddy is another site's PBS that keeps an off-site copy of backups. The copy is always pulled, through its own WireGuard tunnel that carries the pull and nothing else; two sites holding each other's copy are two pulls, one in each direction.</p>
-        <ol className="setup">
-          <StepRow s={stages[0]} open={current === "who"}>
-            <div className="form">
-              {(Object.keys(BUDDY_KINDS) as BuddyKind[]).map((k) => (
-                <label key={k} className="form-check">
-                  <input type="radio" name="buddy-kind" checked={kind === k} disabled={chosen !== null} onChange={() => setKind(k)} />
-                  <b className="mono">{k}</b> <small>{BUDDY_KINDS[k]}</small>
-                </label>
-              ))}
-              <label className="form-row">
-                <span>the buddy's name *</span>
-                <input type="text" value={name} disabled={chosen !== null} placeholder="e.g. their site's name" onChange={(e) => setName(e.target.value)} />
-                {name && problem ? <small className="ff-error">{problem}</small> : <small className="muted">Names the peer here: its config, its PBS remote or login, its tunnel.</small>}
+    <Wizard title="Add a backup buddy" onClose={onClose} running={followed && jobLive(followed) ? [jobLabel(followed)] : []} progress={added && chosen ? `${chosen.name} is added; what peer add printed for the buddy is in its job in Activity.` : null} resumes={job !== null}>
+      {session ? <ResumeOffer what={<>A backup buddy is being added: <b>{session.argv[3]} {session.argv[4] ?? "?"}</b></>} job={session} onContinue={() => restore(session)} onDecline={() => setDeclined(true)} decline="Add another buddy" /> : null}
+      <p className="small">A buddy is another site's PBS that keeps an off-site copy of backups. The copy is always pulled, through its own WireGuard tunnel that carries the pull and nothing else; two sites holding each other's copy are two pulls, one in each direction.</p>
+      <ol className="setup">
+        <StepRow s={stages[0]} open={current === "who"}>
+          <div className="form">
+            {(Object.keys(BUDDY_KINDS) as BuddyKind[]).map((k) => (
+              <label key={k} className="form-check">
+                <input type="radio" name="buddy-kind" checked={kind === k} disabled={chosen !== null} onChange={() => setKind(k)} />
+                <b className="mono">{k}</b> <small>{BUDDY_KINDS[k]}</small>
               </label>
-            </div>
-            <div className="actions">
-              {chosen ? (
-                <button className="btn" disabled={added} onClick={() => setChosen(null)}>Edit</button>
-              ) : (
-                <button className="btn btn-primary" disabled={problem !== null} onClick={() => setChosen({ kind, name: name.trim() })}>Continue</button>
-              )}
-            </div>
-          </StepRow>
-          <StepRow s={stages[1]} open={current === "add"}>
-            {steps ? (
-              <>
-                {ONBOARD(chosen!.kind, chosen!.name)}
-                <StepView key={JSON.stringify(chosen)} step={steps.add} me={me} onDone={(ok) => ok && setAdded(true)} />
-              </>
-            ) : <p className="muted small">Once the side and the name are chosen.</p>}
-          </StepRow>
-          <StepRow s={stages[2]} open={current === "check"}>
-            {steps && added ? <StepView step={steps.check} me={me} onDone={() => undefined} /> : <p className="muted small">Once the peer is added.</p>}
-          </StepRow>
-        </ol>
-      </div>
-    </div>
+            ))}
+            <label className="form-row">
+              <span>the buddy's name *</span>
+              <input type="text" value={name} disabled={chosen !== null} placeholder="e.g. their site's name" onChange={(e) => setName(e.target.value)} />
+              {name && problem ? <small className="ff-error">{problem}</small> : <small className="muted">Names the peer here: its config, its PBS remote or login, its tunnel.</small>}
+            </label>
+          </div>
+          <div className="actions">
+            {chosen ? (
+              <button className="btn" disabled={added || job !== null} onClick={() => setChosen(null)}>Edit</button>
+            ) : (
+              <button className="btn btn-primary" disabled={problem !== null} onClick={() => setChosen({ kind, name: name.trim() })}>Continue</button>
+            )}
+          </div>
+        </StepRow>
+        <StepRow s={stages[1]} open={current === "add"}>
+          {steps ? (
+            <>
+              {ONBOARD(chosen!.kind, chosen!.name)}
+              {job ? <JobView id={job} label="backup-manager peer add" /> : <StepView key={JSON.stringify(chosen)} step={steps.add} me={me} onDone={(ok) => ok && setAdded(true)} />}
+            </>
+          ) : <p className="muted small">Once the side and the name are chosen.</p>}
+        </StepRow>
+        <StepRow s={stages[2]} open={current === "check"}>
+          {steps && added ? <StepView step={steps.check} me={me} onDone={() => undefined} /> : <p className="muted small">Once the peer is added.</p>}
+        </StepRow>
+      </ol>
+    </Wizard>
   );
 }
 

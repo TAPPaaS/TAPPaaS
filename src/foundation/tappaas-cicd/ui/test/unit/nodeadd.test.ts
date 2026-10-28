@@ -2,7 +2,7 @@
 // D4): the switch ports a new node can be cabled to, the trunk a hand-configured
 // port needs, and the data pool proposed from the node's free disks.
 
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort } from "../../web/src/nodeadd";
+import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing } from "../../web/src/nodeadd";
 import { StorageDisk, TopoPort, TopoSwitch } from "../../web/src/types";
 import { check, done } from "./check";
 
@@ -75,6 +75,43 @@ check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && h
   check(wanPort(net)?.name === "eno1" && wanPort({ ...net, declared: { lan: net.declared!.lan } }) === null, "the declared WAN port, or none");
   const choices = [{ value: "USW Pro XG 10 PoE:8", label: "" }, { value: "USW Pro XG 10 PoE:10", label: "" }];
   check(lldpSwitchPort(e2, choices) === "USW Pro XG 10 PoE:8" && lldpSwitchPort(w, choices) === null, "LLDP's switch port is preselected when it is a free one");
+}
+
+// ── an Add node session, found again from the records ──────────────
+{
+  const now = Date.parse("2026-10-28T14:00:00Z");
+  const job = (o: Partial<NodeAddJob> = {}): NodeAddJob => ({
+    id: "20261028120000-abc123", kind: "apply", state: "running", bin: "site-manager", verb: "node add",
+    argv: ["site-manager", "node", "add", "tappaas4", "--yes", "--no-wan", "--mac", "58:47:ca:7a:12:34"], object: "tappaas4",
+    created: "2026-10-28T12:00:00Z", ended: null, exit: null, ...o,
+  });
+  check(nodeAddName(job()) === "tappaas4" && nodeAddName(job({ argv: ["site-manager", "node", "add", "--yes", "tappaas5"], object: "tappaas5" })) === "tappaas5", "the node a node add names: its first positional after the verb");
+  check(nodeAddName(job({ argv: ["site-manager", "node", "add", "pve-x"], object: "pve-x" })) === null, "…a name outside tappaas1..9 is none");
+  const other = job({ id: "x", verb: "node storage add", argv: ["site-manager", "node", "storage", "add", "tappaas3", "tankb1"] });
+  check(latestNodeAdd([other, job()])?.name === "tappaas4", "the newest node add, other verbs passed over");
+  check(latestNodeAdd([job({ id: "r", state: "refused", argv: ["site-manager", "node", "add", "tappaas5"], object: "tappaas5" }), job()])?.job.id === "20261028120000-abc123", "a refused one never ran: the one before it");
+  check(latestNodeAdd([job({ kind: "preview" })]) === null && latestNodeAdd([job({ cancelled: { was: "queued" } })]) === null, "a preview, or one cancelled in the queue, is no session");
+
+  const joined = { registration: "answered" as const, inCluster: true, inSite: true };
+  const done_ = job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 0 });
+  check(nodeAddOngoing(job(), now, { progress: null, dataPool: null, lanPorts: null }) === true, "a node add that runs is ongoing, whatever the reads say yet");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: false, lanPorts: null }) === true, "joined with no data pool: still being added");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: true, lanPorts: 1 }) === true, "…or with one lan port");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: true, lanPorts: 2 }) === false, "a pool and a bonded lan: finished");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: true, lanPorts: null }) === null, "…not known while its ports are still read");
+  check(nodeAddOngoing(done_, now + 2 * SESSION_MS, { progress: joined, dataPool: false, lanPorts: 1 }) === false, "a day after its job ended it is no session any more");
+  check(nodeAddOngoing(job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 1 }), now, { progress: { registration: "none", inCluster: false, inSite: false }, dataPool: null, lanPorts: null }) === false, "a job that failed before the join leaves nothing to continue");
+  check(nodeAddOngoing(job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 130, cancelled: { was: "running" } }), now, { progress: joined, dataPool: false, lanPorts: 1 }) === false, "one an operator stopped is over");
+
+  const f = (o: Partial<AddNodeFacts>): AddNodeFacts => ({ job: true, jobLive: true, progress: null, pooled: false, lan: false, wan: false, ...o });
+  check(addNodeStage(f({ job: false, jobLive: false })) === "declare", "nothing applied, nothing registered: stage 1");
+  check(addNodeStage(f({ progress: { registration: "pending", inCluster: false, inSite: false } })) === "boot", "registered, the machine not asked yet: stage 2");
+  check(addNodeStage(f({ progress: { registration: "none", inCluster: false, inSite: false } })) === "boot", "a job running before its registration is written: stage 2");
+  check(addNodeStage(f({ jobLive: false, progress: { registration: "none", inCluster: false, inSite: false } })) === "wait", "…ended without it: stage 3, where its output is");
+  check(addNodeStage(f({ progress: { registration: "answered", inCluster: false, inSite: false } })) === "wait", "answered, installing: stage 3");
+  check(addNodeStage(f({ jobLive: false, progress: joined })) === "storage" && addNodeStage(f({ progress: joined, pooled: true })) === "lan" && addNodeStage(f({ progress: joined, pooled: true, lan: true })) === "wan", "joined: the pools, then lan, then the WAN");
+  check(STAGE_NUMBER.lan === "5a" && STAGE_NUMBER.wait === "3", "stages are numbered as the wizard shows them");
+  check(addNodeUnderway({ job: false, progress: joined }) && !addNodeUnderway({ job: false, progress: { registration: "none", inCluster: false, inSite: false } }), "underway: a job, or the records say so");
 }
 
 done("nodeadd");

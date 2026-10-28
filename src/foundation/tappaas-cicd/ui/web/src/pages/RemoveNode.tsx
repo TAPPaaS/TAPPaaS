@@ -7,12 +7,13 @@
 // pvehost instance; the node's name typed before Apply is the confirmation
 // (--yes to the verb, which would otherwise ask on a terminal); 3 afterwards.
 
-import { useMemo, useState } from "react";
-import { useRead } from "../api";
-import { Step, StepView } from "../operate";
+import { useEffect, useMemo, useState } from "react";
+import { useJob, useRead } from "../api";
+import { JobView, Step, StepView } from "../operate";
 import { useOpenedBy } from "../opener";
-import { SiteRead } from "../types";
+import { JobSummary, SiteRead } from "../types";
 import { Link, canOperate, useMe } from "../ui";
+import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
 import { viewLink } from "../physical/views";
 import { StepRow } from "./Setup";
 
@@ -34,7 +35,22 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
   const [how, setHow] = useState<How>("shutdown");
   const [job, setJob] = useState<string | null>(null);
   const [done, setDone] = useState<boolean | null>(null);
-  const chosen = nodes.includes(node) ? node : "";
+  // Closed while node delete ran, or within the hour after: its job is found
+  // again (the node may be gone from the site by then: it is the job's).
+  const [resumed, setResumed] = useState(false);
+  const [declined, setDeclined] = useState(false);
+  const session = useJobSession("site-manager", "node delete", () => true, job === null && !declined);
+  const followed = useJob(resumed ? job : null);
+  useEffect(() => {
+    if (followed?.state === "done") setDone(followed.exit === 0);
+  }, [followed?.state]);
+  const restore = (j: JobSummary) => {
+    setNode(j.argv[3] ?? "");
+    setHow(HOWS.find((h) => j.argv.includes(`--${h.id}`))?.id ?? "shutdown");
+    setJob(j.id);
+    setResumed(true);
+  };
+  const chosen = nodes.includes(node) || resumed ? node : "";
 
   const remove: Step = useMemo(
     () => ({
@@ -66,55 +82,53 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
   const current = !chosen ? "node" : !done ? "remove" : "after";
 
   return (
-    <div className="modal-back" onClick={onClose}>
-      <div className="modal modal-wide" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Remove a node">
-        <header className="modal-head">
-          <h2>Remove a node</h2>
-          <button className="btn-x" onClick={onClose} aria-label="close">×</button>
-        </header>
-        <p className="small">{REMOVE_NODE_TEXT}</p>
-        <ol className="setup">
-          <StepRow s={stages[0]} open={current === "node"}>
-            <div className="form">
-              <label className="form-row">
-                <span>node *</span>
-                <select value={chosen} disabled={job !== null} onChange={(e) => setNode(e.target.value)}>
-                  <option value="">{nodes.length ? "— pick the node" : "— reading the nodes…"}</option>
-                  {nodes.map((n) => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-                <small className="muted">The site's nodes. Move what runs on it first (a module's node or HANode; the PBS with backup-manager placement): the preview in stage 2 lists what is left.</small>
+    <Wizard title="Remove a node" onClose={onClose} running={followed && jobLive(followed) ? [jobLabel(followed)] : []} resumes>
+      {session ? <ResumeOffer what={<>A node is being removed: <b>{session.argv[3] ?? "?"}</b></>} job={session} onContinue={() => restore(session)} onDecline={() => setDeclined(true)} decline="Remove another node" /> : null}
+      <p className="small">{REMOVE_NODE_TEXT}</p>
+      <ol className="setup">
+        <StepRow s={stages[0]} open={current === "node"}>
+          <div className="form">
+            <label className="form-row">
+              <span>node *</span>
+              <select value={chosen} disabled={job !== null} onChange={(e) => setNode(e.target.value)}>
+                <option value="">{nodes.length ? "— pick the node" : "— reading the nodes…"}</option>
+                {nodes.map((n) => (
+                  <option key={n} value={n}>{n}</option>
+                ))}
+                {chosen && !nodes.includes(chosen) ? <option value={chosen}>{chosen} (removed)</option> : null}
+              </select>
+              <small className="muted">The site's nodes. Move what runs on it first (a module's node or HANode; the PBS with backup-manager placement): the preview in stage 2 lists what is left.</small>
+            </label>
+            {HOWS.map((h) => (
+              <label key={h.id} className="form-check">
+                <input type="radio" name="how" checked={how === h.id} disabled={job !== null} onChange={() => setHow(h.id)} />
+                <span>{h.label}</span> <small className="muted">{h.detail}</small>
               </label>
-              {HOWS.map((h) => (
-                <label key={h.id} className="form-check">
-                  <input type="radio" name="how" checked={how === h.id} disabled={job !== null} onChange={() => setHow(h.id)} />
-                  <span>{h.label}</span> <small className="muted">{h.detail}</small>
-                </label>
-              ))}
-            </div>
-          </StepRow>
-          <StepRow s={stages[1]} open={current === "remove"}>
-            {!chosen ? (
-              <p className="muted small">Once the node is picked.</p>
-            ) : (
-              <StepView key={`${chosen}:${how}`} step={remove} me={me} onApplied={setJob} onDone={(ok) => setDone(ok)} />
-            )}
-          </StepRow>
-          <StepRow s={stages[2]} open={current === "after"}>
-            {done ? (
-              <ol>
-                <li>Run the site update (Setup › Update, or <span className="mono">site-manager update</span>) so HA and replication are folded over the nodes that remain.</li>
-                <li>Take the machine out of the physical view: <Link to={viewLink("rack")}>the rack view</Link>, where its device record is removed or the machine moved elsewhere.</li>
-                {how !== "erase" ? <li>Its disks still hold data: wipe them before the machine leaves your hands.</li> : null}
-              </ol>
-            ) : (
-              <p className="muted small">Once the node is removed.</p>
-            )}
-          </StepRow>
-        </ol>
-      </div>
-    </div>
+            ))}
+          </div>
+        </StepRow>
+        <StepRow s={stages[1]} open={current === "remove"}>
+          {!chosen ? (
+            <p className="muted small">Once the node is picked.</p>
+          ) : resumed && job ? (
+            <JobView id={job} label="site-manager node delete" />
+          ) : (
+            <StepView key={`${chosen}:${how}`} step={remove} me={me} onApplied={setJob} onDone={(ok) => setDone(ok)} />
+          )}
+        </StepRow>
+        <StepRow s={stages[2]} open={current === "after"}>
+          {done ? (
+            <ol>
+              <li>Run the site update (Setup › Update, or <span className="mono">site-manager update</span>) so HA and replication are folded over the nodes that remain.</li>
+              <li>Take the machine out of the physical view: <Link to={viewLink("rack")}>the rack view</Link>, where its device record is removed or the machine moved elsewhere.</li>
+              {how !== "erase" ? <li>Its disks still hold data: wipe them before the machine leaves your hands.</li> : null}
+            </ol>
+          ) : (
+            <p className="muted small">Once the node is removed.</p>
+          )}
+        </StepRow>
+      </ol>
+    </Wizard>
   );
 }
 

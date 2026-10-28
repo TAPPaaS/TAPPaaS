@@ -163,3 +163,104 @@ export function lldpSwitchPort(p: NodePort | undefined, choices: PortChoice[]): 
   });
   return hit?.value ?? null;
 }
+
+// ── an Add node session, rebuilt from the records ──────────────────────
+// The wizard's state lives in its pop-up only; closed mid-way, it is found
+// again from what the console reads anyway — the node add job (GET jobs), the
+// node's provisioning progress, its pools and its lan ports — never from the
+// browser's storage.
+
+// GET nodes/<name>/progress (reads.ts NodeProgress).
+export interface NodeProgress {
+  name: string;
+  registration: "pending" | "answered" | "none";
+  pxe: { enabled: boolean | null; text: string };
+  inCluster: boolean | null;
+  cluster: string[] | null;
+  inSite: boolean;
+  siteNodes: string[];
+}
+
+export type AddNodeStage = "declare" | "boot" | "wait" | "storage" | "lan" | "wan" | "done";
+export const STAGE_NUMBER: Record<AddNodeStage, string> = { declare: "1", boot: "2", wait: "3", storage: "4", lan: "5a", wan: "5b", done: "6" };
+
+// What the wizard knows of a node being added, from its own clicks or the records.
+export interface AddNodeFacts {
+  job: boolean; // a node add job is attached
+  jobLive: boolean; // …and waits or runs
+  progress: Pick<NodeProgress, "registration" | "inCluster" | "inSite"> | null;
+  pooled: boolean; // a data pool built (or the stage skipped)
+  lan: boolean; // the lan stage done (or kept at one port)
+  wan: boolean;
+}
+
+// Applied, or the records say the node is on its way (registered, or joined).
+export function addNodeUnderway(f: Pick<AddNodeFacts, "job" | "progress">): boolean {
+  return f.job || (f.progress !== null && (f.progress.registration !== "none" || f.progress.inCluster === true));
+}
+
+export function addNodeJoined(p: AddNodeFacts["progress"]): boolean {
+  return p !== null && p.inCluster === true && p.inSite;
+}
+
+// The stage the wizard stands at. A job that runs before its registration is
+// written is still at the boot.
+export function addNodeStage(f: AddNodeFacts): AddNodeStage {
+  const p = f.progress;
+  if (!addNodeUnderway(f)) return "declare";
+  if (!p || p.registration === "pending" || (f.jobLive && p.registration === "none" && p.inCluster !== true)) return "boot";
+  if (!addNodeJoined(p)) return "wait";
+  if (!f.pooled) return "storage";
+  if (!f.lan) return "lan";
+  if (!f.wan) return "wan";
+  return "done";
+}
+
+// A job summary, the parts a session reads (types.ts JobSummary).
+export interface NodeAddJob {
+  id: string; kind: string; state: string; bin: string; verb: string; argv: string[]; object: string;
+  created: string; ended: string | null; exit: number | null;
+  previewPhase?: { stopped: string | null } | null;
+  cancelled?: { was: string } | null;
+}
+
+const NODE_NAME = /^tappaas[1-9]$/;
+
+// The node a node add job names: its first positional after the verb's words.
+export function nodeAddName(j: Pick<NodeAddJob, "argv" | "verb" | "object">): string | null {
+  const first = j.argv.slice(1 + j.verb.split(" ").length).find((a) => !a.startsWith("-"));
+  const name = first ?? j.object;
+  return NODE_NAME.test(name) ? name : null;
+}
+
+// The node add a session hangs on: the newest one applied (`jobs` newest
+// first) — not refused, not stopped by its dry run, not cancelled before it ran.
+export function latestNodeAdd<J extends NodeAddJob>(jobs: J[]): { name: string; job: J } | null {
+  for (const j of jobs) {
+    if (j.bin !== "site-manager" || j.verb !== "node add" || j.kind !== "apply") continue;
+    if (j.state === "refused" || j.previewPhase?.stopped || j.cancelled?.was === "queued") continue;
+    const name = nodeAddName(j);
+    if (name) return { name, job: j };
+  }
+  return null;
+}
+
+// How long after its job ended a node still counts as being added: the
+// stages after the join (pools, lan) are often done later the same day.
+export const SESSION_MS = 24 * 3600_000;
+
+// Whether that node is still being added: its job waits or runs; or the job
+// ended within SESSION_MS (not stopped by an operator) and the node is still
+// registered for its install, or joined with no data pool or one lan port.
+// null: not known yet (a read is still out).
+export function nodeAddOngoing(job: NodeAddJob, now: number, rec: { progress: AddNodeFacts["progress"]; dataPool: boolean | null; lanPorts: number | null }): boolean | null {
+  if (job.state === "queued" || job.state === "running") return true;
+  if (job.cancelled) return false;
+  if (now - Date.parse(job.ended ?? job.created) > SESSION_MS) return false;
+  const p = rec.progress;
+  if (!p) return null;
+  if (p.registration === "pending") return true;
+  if (!addNodeJoined(p)) return false;
+  if (rec.dataPool === false || (rec.lanPorts !== null && rec.lanPorts <= 1)) return true;
+  return rec.dataPool === null || rec.lanPorts === null ? null : false;
+}
