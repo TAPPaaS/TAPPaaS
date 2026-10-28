@@ -12,6 +12,12 @@
 // scripts/keys-from-usb.sh) — an implementation detail: the operator's command is
 // backup-manager. They run interactively (stick choice, the erase confirmation, the
 // password), so they stream on the operator's terminal: `ssh -t` when remote.
+//
+// The web console runs the export without a terminal: `--device D --yes
+// --password-stdin` (export only, all three on --usb). The console lists the
+// sticks (site-manager), the operator picks one and types the password there;
+// the console hands the password as the first line of backup-manager's stdin —
+// never on a command line — and stream() inherits stdin, so the script reads it.
 
 import { existsSync } from "fs";
 import { join } from "path";
@@ -20,7 +26,7 @@ import { moduleScriptDir } from "./restore";
 
 export type KeyTarget =
   | { kind: "file"; dir: string }
-  | { kind: "usb"; node: string | null; format: boolean };
+  | { kind: "usb"; node: string | null; format: boolean; device: string | null; yes: boolean; passwordStdin: boolean };
 
 // keyTarget — what `key export|import <args>` asks for. Pure.
 // A bare directory (`key export <dir>`, the original form) is --file.
@@ -29,12 +35,21 @@ export function keyTarget(verb: "export" | "import", args: string[]): KeyTarget 
   let usb = false;
   let node: string | null = null;
   let format = false;
+  let device: string | null = null;
+  let yes = false;
+  let passwordStdin = false;
   const positional: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === "--usb") usb = true;
     else if (a === "--format") format = true;
-    else if (a === "--file") {
+    else if (a === "--yes") yes = true;
+    else if (a === "--password-stdin") passwordStdin = true;
+    else if (a === "--device") {
+      const v = args[++i];
+      if (!v || v.startsWith("--")) return { error: `key ${verb} --device: the stick's path is required (as the node lists it, e.g. /dev/sdb)` };
+      device = v;
+    } else if (a === "--file") {
       const v = args[++i];
       if (!v || v.startsWith("--")) return { error: `key ${verb} --file: a directory is required` };
       file = v;
@@ -55,7 +70,10 @@ export function keyTarget(verb: "export" | "import", args: string[]): KeyTarget 
   }
   if (node !== null && !usb) return { error: `key ${verb}: --node goes with --usb (the node holding the stick)` };
   if (format && (!usb || verb !== "export")) return { error: `key ${verb}: --format goes with export --usb (erase the stick instead of rewriting its keys)` };
-  return usb ? { kind: "usb", node, format } : { kind: "file", dir: file as string };
+  if (device !== null && (!usb || verb !== "export")) return { error: `key ${verb}: --device goes with export --usb (the stick, chosen already)` };
+  if (yes && device === null) return { error: `key ${verb}: --yes goes with export --usb --device (no confirmation — only for a stick the operator was shown)` };
+  if (passwordStdin && device === null) return { error: `key ${verb}: --password-stdin goes with export --usb --device (the password as the first line of stdin)` };
+  return usb ? { kind: "usb", node, format, device, yes, passwordStdin } : { kind: "file", dir: file as string };
 }
 
 // keyStampArgs — `key stamp --dir DIR [--label TEXT]`: the USB scripts record
@@ -77,16 +95,24 @@ export function keyStampArgs(args: string[]): { dir: string; label: string | nul
   return { dir, label };
 }
 
-// keysUsb — run the module's USB script, on this terminal. Returns its exit code.
+// keysUsb — run the module's USB script, on this terminal (stdin included: with
+// --password-stdin the password line flows through to it). Returns its exit code.
 export function keysUsb(
   verb: "export" | "import", node: string | null, configDir?: string,
   run: (bin: string, args: string[]) => number = stream,
   format = false,
+  console_: { device: string | null; yes: boolean; passwordStdin: boolean } = { device: null, yes: false, passwordStdin: false },
 ): number {
   const script = join(moduleScriptDir(configDir), "scripts", verb === "export" ? "keys-to-usb.sh" : "keys-from-usb.sh");
   if (!existsSync(script)) {
     console.error(`key ${verb} --usb: ${script} not found — check config/backup.json .moduleSource`);
     return 1;
   }
-  return run(script, [...(node ? ["--node", node] : []), ...(format ? ["--format"] : [])]);
+  return run(script, [
+    ...(node ? ["--node", node] : []),
+    ...(format ? ["--format"] : []),
+    ...(console_.device ? ["--device", console_.device] : []),
+    ...(console_.yes ? ["--yes"] : []),
+    ...(console_.passwordStdin ? ["--password-stdin"] : []),
+  ]);
 }

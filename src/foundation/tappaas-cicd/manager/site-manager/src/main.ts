@@ -36,6 +36,7 @@ import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, prefli
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
 import { addNodeStorage, listNodeStorage } from "./storage";
+import { listNodeUsb, writeNodeUsb } from "./usb";
 import { Site, SiteClient } from "./types";
 import { runningVersion } from "./version";
 import { spawnSync } from "child_process";
@@ -170,6 +171,12 @@ export const HELP: HelpSpec = {
         ["--disks <d,d>", "The disks, by serial or /dev/disk/by-id name, as node storage <node> lists them. A kernel name (nvme0n1) is refused: it can change between boots. The boot disk and a disk in a live pool are always refused."],
         ["--layout <l>", "single (1 disk, no redundancy), mirror (2 or more), raidz1 (3 or more, one disk may fail), raidz2 (4 or more, two may fail)."],
         ["--wipe", "Erase disks that carry data or an old pool's label. Without it such a disk is a refusal and nothing is erased."],
+      ] },
+    { usage: "node usb <node> [--json]", effect: "read", note: "(the USB sticks plugged into the node — device, size, vendor, model, serial; whether one is in use or is the backup key stick)" },
+    { usage: "node usb write <node> <device> --yes", effect: { noPreview: "writes the TAPPaaS installer stick image to a USB stick in the node, erasing it" },
+      options: [
+        ["<device>", "The stick, by the device name node usb <node> lists (/dev/sdb). A disk that is no USB stick, or a stick that is mounted, swap or a pool/LVM/RAID member, is refused and nothing is written."],
+        ["--yes", "Required: the stick is erased. The image is /var/lib/tappaas-pxe/tappaas-usb.iso, staged by scripts/prepare-netboot.sh; a new machine boots the installer from the stick once, where network boot is not an option."],
       ] },
     { usage: "node delete <name> [--apply] [--shutdown] [--erase] [--config-only]",
       options: [
@@ -860,7 +867,7 @@ function setDeep(obj: Record<string, unknown>, path: string[], value: unknown): 
 // ── `node` CRUD + reconcile (the pvehost instances, ADR-036 D6) ─────────
 function cmdNode(o: Opts, client: SiteClient): void {
   const sub = o.rest[0];
-  if (!sub) die("node: expected 'list' | 'add' | 'storage' | 'delete' | 'reconcile' | 'reboot'");
+  if (!sub) die("node: expected 'list' | 'add' | 'storage' | 'usb' | 'delete' | 'reconcile' | 'reboot'");
   const siteFile = siteFileOf(o);
   // The nodes are the pvehost instances beside site.json (ADR-036 D6).
   const nodesDir = dirname(siteFile);
@@ -982,6 +989,19 @@ function cmdNode(o: Opts, client: SiteClient): void {
     }
     if (!verb) die("node storage: expected <node> (its disks) or add <node> <pool> ...");
     listNodeStorage(verb, o.json);
+    return;
+  }
+
+  if (sub === "usb") {
+    const verb = o.rest[1];
+    if (verb === "write") {
+      const [node, device] = [o.rest[2], o.rest[3]];
+      if (!node || !device) die("node usb write: expected <node> <device> --yes (node usb <node> lists the sticks)");
+      writeNodeUsb(node, device, o.boolFlags.has("--yes"));
+      return;
+    }
+    if (!verb) die("node usb: expected <node> (its sticks) or write <node> <device> --yes");
+    listNodeUsb(verb, o.json);
     return;
   }
 

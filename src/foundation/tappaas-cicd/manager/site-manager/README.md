@@ -45,6 +45,8 @@ node               node list [--json]
                             [--config-only [--storage-pools <a,b>]]
                    node storage <node> [--json]
                    node storage add <node> <pool> --disks <d,d> --layout single|mirror|raidz1|raidz2 [--wipe]
+                   node usb <node> [--json]
+                   node usb write <node> <device> --yes
                    node delete <name> [--apply] [--shutdown|--erase|--lost]
                                [--config-only]
                    node reconcile [--apply]
@@ -385,6 +387,36 @@ that carries data without `--wipe` is a refusal that says why, and nothing is ch
 site-manager node storage tappaas2
 site-manager node storage add tappaas2 tanka1 --disks S7HENJ0X100001,S7HENJ0X100002 --layout mirror
 ```
+### `node usb` — the installer stick
+
+A machine that cannot network-boot is installed from a USB stick that carries the
+installer stick image, `/var/lib/tappaas-pxe/tappaas-usb.iso` (staged on the mothership
+by `scripts/prepare-netboot.sh`, the same image for every node). `node usb <node>` lists
+the sticks plugged into a cluster node — the whole disks on the USB bus, as `lsblk`
+reports them; never a SATA/NVMe disk — one line each: device, size, vendor, model and
+serial, with `(in use: mounted)` (or `zfs_member`, `LVM2_member`, `swap`,
+`linux_raid_member`) when something holds it, and `(key stick)` when a partition is
+labelled `TAPPAASKEYS` (the backup key stick). `--json` is what the console reads:
+
+```json
+{ "node": "tappaas1", "reachable": true,
+  "sticks": [ { "device": "/dev/sdb", "size": 30752000000, "vendor": "SanDisk", "model": "Ultra",
+                "serial": "4C530001", "inUse": false, "why": null, "keyStick": false } ] }
+```
+`why` is `null`, `"mounted"` or the file system type that claims the stick. A node that
+cannot be reached is an error in the human form; with `--json` it is
+`{"node": …, "reachable": false, "sticks": []}` and exit 0, so the console can say so.
+
+`node usb write <node> <device> --yes` streams the image over ssh onto the stick
+(`dd`, then flush and eject) and **erases it**. It asks nothing and refuses, writing
+nothing, without `--yes`, when the image is not staged, when the node cannot be reached,
+when `<device>` is not a stick `node usb <node>` lists, or when the stick is in use.
+
+```
+site-manager node usb tappaas1
+site-manager node usb write tappaas1 /dev/sdb --yes
+```
+
 After the install node add puts the installed disk first in the UEFI boot
 order, and if the answer's ssh key did not survive the first boot it restores it
 with the node's generated root password (`/home/tappaas/.node-secrets/<name>.pw`,

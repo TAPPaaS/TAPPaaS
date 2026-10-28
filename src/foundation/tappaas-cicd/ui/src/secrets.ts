@@ -9,14 +9,18 @@
 //                                            `ap-manager ssid set-passphrase <ssid>` with the
 //                                            passphrase on stdin, which also marks the SSID so
 //                                            the next reconcile pushes it (#889)
+//   backup-keys  (no file)                   the password of the backup-key USB stick, handed
+//                                            to `backup-manager key export --usb --node N
+//                                            --device D --yes --password-stdin` on stdin: the
+//                                            stick is the keys' copy that leaves the building
 
 import { chmodSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
 
-export type SecretName = "acme-dns" | "unifi" | "wlan";
+export type SecretName = "acme-dns" | "unifi" | "wlan" | "backup-keys";
 
 interface SecretSpec {
-  file: string; // under the home directory
+  file: string | null; // under the home directory; null: nothing is kept on the mothership
   what: string;
   // The lines to write from the posted fields, given what the file holds now;
   // an error when the fields are not what the script reads.
@@ -31,10 +35,16 @@ export interface SecretCommand {
   args: string[];
   input: string;
   keys: string[];
+  timeoutMs?: number; // a verb that formats and verifies a stick takes minutes
+  where?: string; // what holds the secret when it is no file of the mothership's
 }
 
 const str = (v: unknown): string | null => (typeof v === "string" && v.length > 0 && v.length <= 4096 && !/[\r\n\u0000]/.test(v) ? v : null);
 
+// The password of a backup-key stick (keys-to-usb.sh): 12 characters or more,
+// one line. The console never keeps it: the stick and the password apart.
+const DEVICE = /^\/dev\/[a-z][a-z0-9]{1,30}$/;
+const NODE = /^[A-Za-z0-9_][A-Za-z0-9_-]{0,62}$/;
 export const SECRETS: Record<SecretName, SecretSpec> = {
   "acme-dns": {
     file: ".acme-dns-credentials.txt",
@@ -86,6 +96,27 @@ export const SECRETS: Record<SecretName, SecretSpec> = {
       return { bin: "ap-manager", args: ["ssid", "set-passphrase", ssid], input: `${str(f.passphrase)}\n`, keys: [ssid] };
     },
   },
+  "backup-keys": {
+    file: null,
+    what: "the backup encryption keys, encrypted onto a USB stick in a node (backup-manager key export --usb)",
+    lines: () => "backup-keys: written to a stick by backup-manager, never to a file here",
+    command: (f) => {
+      const node = str(f.node);
+      const device = str(f.device);
+      const password = str(f.password);
+      if (!node || !NODE.test(node)) return "node: the node holding the stick";
+      if (!device || !DEVICE.test(device)) return "device: the stick as site-manager node usb lists it (/dev/sdX)";
+      if (!password || password.length < 12 || password.length > 1024 || !/^[\x20-\x7e]+$/.test(password)) return "password: 12 to 1024 printable characters";
+      return {
+        bin: "backup-manager",
+        args: ["key", "export", "--usb", "--node", node, "--device", device, "--yes", "--password-stdin", ...(f.format === true ? ["--format"] : [])],
+        input: `${password}\n`,
+        keys: [`${node}:${device}`],
+        timeoutMs: 10 * 60_000,
+        where: `the USB stick ${device} in ${node}`,
+      };
+    },
+  },
 };
 
 export function isSecretName(n: string): n is SecretName {
@@ -115,6 +146,7 @@ export interface SecretStatus {
 
 export function secretStatus(home: string, name: SecretName): SecretStatus {
   const spec = SECRETS[name];
+  if (spec.file === null) return { name, file: "", what: spec.what, present: false, keys: [], modified: null };
   const f = join(home, spec.file);
   if (!existsSync(f)) return { name, file: f, what: spec.what, present: false, keys: [], modified: null };
   let keys: string[] = [];
@@ -135,8 +167,8 @@ export function secretStatus(home: string, name: SecretName): SecretStatus {
 // Write the secret; returns the keys written, or an error for the form.
 export function writeSecret(home: string, name: SecretName, fields: Record<string, unknown>): { ok: true; keys: string[]; file: string } | { ok: false; error: string } {
   const spec = SECRETS[name];
+  if (spec.command || spec.file === null) return { ok: false, error: `${name} is set through its owner's verb (secretCommand), not written here` };
   const f = join(home, spec.file);
-  if (spec.command) return { ok: false, error: `${name} is set through its owner's verb (secretCommand), not written here` };
   let current = new Map<string, string>();
   try {
     if (existsSync(f)) current = parseKv(readFileSync(f, "utf8"));

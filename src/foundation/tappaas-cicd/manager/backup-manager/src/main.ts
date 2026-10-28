@@ -164,7 +164,7 @@ export const HELP: HelpSpec = {
       options: [["--yes", "placement finish-reset: do not ask for confirmation."]],
     },
     {
-      usage: "key list | status [--json] | export|import --usb [--node N] | export|import --file DIR", effect: { noPreview: "exports or imports the PBS encryption keys" }, readWhen: ["list", "status"], destructive: ["import"],
+      usage: "key list | status [--json] | export --usb [--node N] [--format] [--device D --yes --password-stdin] | import --usb [--node N] | export|import --file DIR", effect: { noPreview: "exports or imports the PBS encryption keys" }, readWhen: ["list", "status"], destructive: ["import"],
       verb: "key",
       name: "key",
       note: "(the backup encryption keys, and the copy you keep off the machine)",
@@ -172,6 +172,9 @@ export const HELP: HelpSpec = {
         ["--usb", "key export|import: a USB stick in a node — encrypted with a password, verified, ejected."],
         ["--node N", "key export|import --usb: the node holding the stick (default tappaas1)."],
         ["--format", "key export --usb: erase the stick even if it is a key stick written before (default: rewrite only its keys, keep everything else on it)."],
+        ["--device D", "key export --usb: the stick, as the node lists it (/dev/sdb) — no insert-and-press-Enter, no choice; refused unless it is a USB disk not in use. The web console passes this."],
+        ["--yes", "key export --usb --device: no typed confirmation — the caller showed the operator what is erased or kept."],
+        ["--password-stdin", "key export --usb --device: the password is the first line of stdin (never on a command line), once, 12+ characters."],
         ["--file DIR", "key export|import: a directory — the keys UNENCRYPTED; guard what holds them."],
         ["--json", "key status: machine-readable — the escrow's fingerprint, the last stick's, and whether they match."],
         ["--dir DIR", "key stamp: the keys a stick was just found to hold. The USB export and import call this."],
@@ -1276,7 +1279,10 @@ export function run(argv: string[], client: Client): number {
         const target = keyTarget(sub as "export" | "import", opts.rest.slice(1));
         if ("error" in target) die(target.error);
         const t = target as KeyTarget;
-        if (t.kind === "usb") return keysUsb(sub as "export" | "import", t.node, opts.configDir, undefined, t.format);
+        if (t.kind === "usb") {
+          return keysUsb(sub as "export" | "import", t.node, opts.configDir, undefined, t.format,
+            { device: t.device, yes: t.yes, passwordStdin: t.passwordStdin });
+        }
         if (sub === "export") client.keyExport(t.dir);
         else client.keyImport(t.dir);
         return 0;

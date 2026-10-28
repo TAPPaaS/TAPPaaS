@@ -87,6 +87,7 @@ export const TTL = {
   icons: 10 * MIN,
   ipv6: 10 * MIN,
   nodeProgress: 10_000, // while a node is being added
+  nodeUsb: 5_000, // the sticks in a node, while a wizard looks
   drift: 0, // on demand
 };
 
@@ -129,6 +130,13 @@ export interface NodeProgress {
   cluster: string[] | null;
   inSite: boolean;
   siteNodes: string[];
+}
+
+// site-manager node usb <node> --json: the USB sticks in a node.
+export interface NodeUsb {
+  node: string;
+  reachable: boolean;
+  sticks: { device: string; size: number; vendor: string | null; model: string | null; serial: string | null; inUse: boolean; why: string | null; keyStick: boolean }[];
 }
 
 // A node name as site-manager accepts one.
@@ -181,6 +189,7 @@ export class Reads {
   readonly identityRecords: Cached<Record<string, Record<string, unknown>[]>>;
   readonly schemas: CachedMap<Record<string, unknown>>;
   readonly nodeProgress: CachedMap<NodeProgress>;
+  readonly nodeUsb: CachedMap<NodeUsb>;
   readonly catalogs: Cached<RepositoryCatalog[]>;
   readonly faceplates: Cached<{ key: string; kind: string; units: number; width: string; site?: boolean }[]>;
   readonly storage: Cached<StorageDoc>;
@@ -267,6 +276,13 @@ export class Reads {
     // A module's icon file (icons.ts): read once per ten minutes at most.
     this.moduleIcons = new CachedMap("icon", TTL.icons, async (m) => moduleIcon(cfg.configDir, m), now);
     this.nodeProgress = new CachedMap("node-progress", TTL.nodeProgress, (n) => this.loadNodeProgress(n), now);
+    // The USB sticks plugged into a node (site-manager node usb --json): what a
+    // key stick or an installer stick can be written to.
+    this.nodeUsb = new CachedMap("node-usb", TTL.nodeUsb, async (n) => {
+      const d = await j<NodeUsb>("site-manager", ["node", "usb", n, "--json"], [0], 30_000);
+      if (!d || typeof d.reachable !== "boolean" || !Array.isArray(d.sticks)) throw new Error(`site-manager node usb ${n} --json gave no sticks (no reachable, sticks)`);
+      return d;
+    }, now);
     // Every identity object's record, for the graph of their relations: each
     // kind's list, then `show` per object (a name from the manager's own list).
     this.identityRecords = new Cached("identity-records", TTL.identity, async () => {

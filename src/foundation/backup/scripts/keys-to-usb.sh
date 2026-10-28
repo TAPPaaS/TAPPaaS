@@ -33,7 +33,19 @@
 # pipe into openssl (the mothership has none), and the password is passed as the
 # first line of that pipe — never on a command line, never in a file.
 #
-# Usage: keys-to-usb.sh [--node <node>] [--format]
+# Non-interactive (the web console runs it this way; nothing is asked):
+#   --device <path>    the stick, as the list above names it (/dev/sdb): no
+#                      "insert and press Enter", no choice. It must be one of
+#                      the node's USB disks and not in use, or nothing happens.
+#   --yes              no typed confirmation — the caller has shown the operator
+#                      what will be erased (or kept). Needs --device.
+#   --password-stdin   the password is the first line of stdin, read once, not
+#                      asked twice; under 12 characters the stick is not touched.
+#                      Needs --device. Never on the command line.
+# Everything after the password — format or reuse, write, verify, record,
+# eject — is the same either way.
+#
+# Usage: keys-to-usb.sh [--node <node>] [--format] [--device <path> [--yes] [--password-stdin]]
 # Exit:  0 written and verified · 1 failed · 2 usage
 
 set -euo pipefail
@@ -42,20 +54,34 @@ HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 # shellcheck source=keys-from-usb.sh disable=SC1091
 . "${HERE}/keys-from-usb.sh"
 
-FORMAT=0
+FORMAT=0 DEVICE="" YES=0 PW_STDIN=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --node) USBK_NODE="${2:?--node needs a node name}"; shift 2 ;;
         --format) FORMAT=1; shift ;;
+        --device) DEVICE="${2:?--device needs the path of the stick, e.g. /dev/sdb}"; shift 2 ;;
+        --yes) YES=1; shift ;;
+        --password-stdin) PW_STDIN=1; shift ;;
         -h|--help) awk 'NR > 1 { if ($0 !~ /^#/) exit; sub(/^# ?/, ""); print }' "${BASH_SOURCE[0]}"; exit 0 ;;
         *) usbk_say "unknown option: $1"; exit 2 ;;
     esac
 done
+[[ "${YES}" -eq 1 && -z "${DEVICE}" ]] && { usbk_say "--yes goes with --device: nothing is confirmed for a stick that was not chosen"; exit 2; }
+[[ "${PW_STDIN}" -eq 1 && -z "${DEVICE}" ]] && { usbk_say "--password-stdin goes with --device"; exit 2; }
 
 command -v backup-manager >/dev/null || usbk_die "run this on the mothership (backup-manager is not here)"
 command -v jq >/dev/null || usbk_die "jq is needed"
 usbk_on "command -v openssl >/dev/null && command -v sfdisk >/dev/null && command -v mkfs.vfat >/dev/null" \
     || usbk_die "${USBK_NODE} is not reachable as root, or lacks openssl/sfdisk/mkfs.vfat"
+
+# --password-stdin: the first line of stdin, read before anything else can.
+# usbk_on never reads stdin (ssh -n) and every usbk_on_stdin below pipes its
+# own content, so after this line stdin is never touched again.
+PW=""
+if [[ "${PW_STDIN}" -eq 1 ]]; then
+    IFS= read -r PW || true
+    usbk_password_ok "${PW}" || usbk_die "the password is shorter than 12 characters — the stick was not touched"
+fi
 
 PLAIN="$(mktemp -d "${TMPDIR:-/tmp}/tappaas-keys.XXXXXX")"
 VERIFY=""
@@ -80,8 +106,10 @@ NKEYS="$(find "${PLAIN}/${USBK_KEYDIR}" -name '*.key' | wc -l | tr -d ' ')"
 
 # ── the stick ───────────────────────────────────────────────────────
 usbk_say ""
-usbk_say "Insert the USB stick into ${USBK_NODE}, then press Enter."
-IFS= read -r _ || true
+if [[ -z "${DEVICE}" ]]; then
+    usbk_say "Insert the USB stick into ${USBK_NODE}, then press Enter."
+    IFS= read -r _ || true
+fi
 while :; do
     json="$(usbk_on "lsblk -J -b -d -o NAME,PATH,SIZE,TRAN,TYPE,VENDOR,MODEL,SERIAL")" || usbk_die "cannot list ${USBK_NODE}'s disks"
     mapfile -t all < <(usbk_candidates "${json}")
@@ -92,15 +120,20 @@ while :; do
         else cands+=("${c}"); fi
     done
     [[ ${#cands[@]} -gt 0 ]] && break
+    [[ -z "${DEVICE}" ]] || usbk_die "no USB stick on ${USBK_NODE} that may be written — ${DEVICE} was not touched"
     usbk_say "No USB stick seen on ${USBK_NODE}. Insert one and press Enter (q to quit)."
     IFS= read -r a || a=q; [[ "${a}" == q ]] && usbk_die "no USB stick"
 done
 usbk_say "USB disks on ${USBK_NODE}:"
+pick=""
 for i in "${!cands[@]}"; do
     IFS=$'\t' read -r d size desc <<<"${cands[$i]}"
     usbk_say "  $((i + 1))) ${d}  $(usbk_human "${size}")  ${desc}"
+    [[ "${d}" == "${DEVICE}" ]] && pick=$((i + 1))
 done
-if [[ ${#cands[@]} -eq 1 ]]; then pick=1
+if [[ -n "${DEVICE}" ]]; then
+    [[ -n "${pick}" ]] || usbk_die "${DEVICE} is not a USB stick on ${USBK_NODE} that may be written (those are: $(printf '%s\n' "${cands[@]}" | cut -f1 | paste -sd' ' -)) — nothing was touched"
+elif [[ ${#cands[@]} -eq 1 ]]; then pick=1
 else printf 'Which one? [1-%s] ' "${#cands[@]}" >&2; IFS= read -r pick || pick=""; fi
 [[ "${pick}" =~ ^[0-9]+$ && "${pick}" -ge 1 && "${pick}" -le ${#cands[@]} ]] || usbk_die "no stick chosen"
 IFS=$'\t' read -r DISK size desc <<<"${cands[$((pick - 1))]}"
@@ -126,26 +159,34 @@ if [[ -n "${KPART}" ]]; then
         usbk_say "(To erase it instead: backup-manager key export --usb --format)"
     fi
 fi
-if [[ "${REUSE}" -eq 1 ]]; then
-    printf 'Replace the keys on it? Type %s to continue: ' "$(basename "${DISK}")" >&2
+if [[ "${YES}" -eq 1 ]]; then
+    # --yes: the caller showed the operator this stick and what happens to it.
+    if [[ "${REUSE}" -eq 1 ]]; then usbk_say "Replacing the keys on it (--yes)."
+    else usbk_say "EVERYTHING on it will be ERASED (--yes)."; fi
 else
-    printf 'EVERYTHING on it will be ERASED. Type %s to continue: ' "$(basename "${DISK}")" >&2
+    if [[ "${REUSE}" -eq 1 ]]; then
+        printf 'Replace the keys on it? Type %s to continue: ' "$(basename "${DISK}")" >&2
+    else
+        printf 'EVERYTHING on it will be ERASED. Type %s to continue: ' "$(basename "${DISK}")" >&2
+    fi
+    IFS= read -r confirm || confirm=""
+    [[ "${confirm}" == "$(basename "${DISK}")" ]] || usbk_die "not confirmed — the stick was not touched"
 fi
-IFS= read -r confirm || confirm=""
-[[ "${confirm}" == "$(basename "${DISK}")" ]] || usbk_die "not confirmed — the stick was not touched"
 
-# ── the password ────────────────────────────────────────────────────
-for try in 1 2 3; do
-    printf 'Password for the stick (12+ characters; keep it apart from the stick): ' >&2
-    IFS= read -r -s pw1; printf '\n' >&2
-    printf 'Again: ' >&2
-    IFS= read -r -s pw2; printf '\n' >&2
-    if [[ "${pw1}" != "${pw2}" ]]; then usbk_say "  they differ — again"
-    elif ! usbk_password_ok "${pw1}"; then usbk_say "  shorter than 12 characters — again"
-    else break; fi
-    [[ "${try}" -lt 3 ]] || usbk_die "no password set — the stick was not touched"
-done
-PW="${pw1}"; unset pw1 pw2
+# ── the password (--password-stdin: read at the top, already checked) ─
+if [[ "${PW_STDIN}" -eq 0 ]]; then
+    for try in 1 2 3; do
+        printf 'Password for the stick (12+ characters; keep it apart from the stick): ' >&2
+        IFS= read -r -s pw1; printf '\n' >&2
+        printf 'Again: ' >&2
+        IFS= read -r -s pw2; printf '\n' >&2
+        if [[ "${pw1}" != "${pw2}" ]]; then usbk_say "  they differ — again"
+        elif ! usbk_password_ok "${pw1}"; then usbk_say "  shorter than 12 characters — again"
+        else break; fi
+        [[ "${try}" -lt 3 ]] || usbk_die "no password set — the stick was not touched"
+    done
+    PW="${pw1}"; unset pw1 pw2
+fi
 
 # ── format, or mount the key stick as it is ─────────────────────────
 if [[ "${REUSE}" -eq 1 ]]; then

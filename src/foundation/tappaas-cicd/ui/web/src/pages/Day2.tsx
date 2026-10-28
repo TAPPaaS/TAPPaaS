@@ -24,6 +24,7 @@ import { WIFI_TEXT, WifiButton } from "./Wifi";
 import { BuddyButton } from "./Buddy";
 import { SatelliteButton } from "./Satellite";
 import { ADOPT_TEXT, AdoptButton } from "./Adopt";
+import { BACKUP_KEYS_TEXT, BackupKeysButton } from "./BackupKeys";
 import { identitySteps } from "./Identity";
 
 export function WizardCard({ id, title, tag, on, children, action }: { id?: string; title: string; tag?: string; on?: boolean; children: ReactNode; action: ReactNode }) {
@@ -218,6 +219,9 @@ export function Day2({ doc }: { doc: SetupDoc | null }) {
         </WizardCard>
         <WizardCard title="Add a backup buddy" action={<BuddyButton />}>
           Another site's PBS keeps an off-site copy — pulled through its own tunnel — or this site keeps theirs.
+        </WizardCard>
+        <WizardCard title="Write the backup keys to a USB stick" action={<BackupKeysButton />}>
+          {BACKUP_KEYS_TEXT}
         </WizardCard>
       </Group>
       <Group title="WiFi" id="wifi">

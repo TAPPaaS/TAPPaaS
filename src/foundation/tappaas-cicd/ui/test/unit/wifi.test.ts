@@ -32,6 +32,14 @@ async function main(): Promise<void> {
   check(secretCommand("unifi", { url: "https://x", username: "a", password: "b" }) === null, "unifi is still the console's to write");
   check(!writeSecret("/nonexistent", "wlan", { ssid: "x", passphrase: PASS }).ok, "writeSecret refuses wlan: only ap-manager writes it");
 
+  // ── backup-keys: the stick's password to backup-manager key export, on stdin ──
+  const bk = secretCommand("backup-keys", { node: "tappaas1", device: "/dev/sdb", password: PASS, format: true });
+  check(typeof bk === "object" && bk !== null && bk.bin === "backup-manager" && bk.args.join(" ") === "key export --usb --node tappaas1 --device /dev/sdb --yes --password-stdin --format" && bk.input === `${PASS}\n` && (bk.timeoutMs ?? 0) >= 60_000, "backup-keys: backup-manager key export --usb … --password-stdin, the password on stdin, minutes allowed");
+  check(typeof secretCommand("backup-keys", { node: "tappaas1", device: "sdb", password: PASS }) === "string", "…a device not under /dev is refused");
+  check(typeof secretCommand("backup-keys", { node: "tappaas1", device: "/dev/sdb", password: "elevenchars" }) === "string", "…and a password under 12 characters");
+  check(typeof secretCommand("backup-keys", { node: "../x", device: "/dev/sdb", password: PASS }) === "string", "…and a node name site-manager would refuse");
+  check(!writeSecret("/nonexistent", "backup-keys", { node: "tappaas1", device: "/dev/sdb", password: PASS }).ok, "writeSecret refuses backup-keys: no file holds it");
+
   // ── the route ──
   const dir = mkdtempSync(join(tmpdir(), "console-wifi-"));
   writeFileSync(join(dir, "identity.json"), "{}");

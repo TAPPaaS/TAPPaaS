@@ -87,6 +87,24 @@ ck "an import from a stick records it too" yes \
    "$(grep -q 'backup-manager key stamp --dir "${dest}/${USBK_KEYDIR}"' "${FROM}" && echo yes || echo no)"
 ck "the restore script travels on the stick" yes "$(grep -q 'cat > ${qm}/keys-from-usb.sh' "${TO}" && echo yes || echo no)"
 
+echo "── without a terminal (the web console): --device --yes --password-stdin ──"
+# The option checks come before anything is touched or needed, so they run here.
+bash "${TO}" --yes >/dev/null 2>&1;                       ck "--yes without --device is a usage error" 2 "$?"
+bash "${TO}" --password-stdin >/dev/null 2>&1;            ck "--password-stdin without --device is a usage error" 2 "$?"
+bash "${TO}" --device /dev/sdb --yes --password-stdin </dev/null >/dev/null 2>&1; ck "…together they are accepted (then the mothership check)" 1 "$?"
+ck "--device skips 'insert the stick and press Enter'" yes \
+   "$(awk '/^if \[\[ -z "\$\{DEVICE\}" \]\]; then/ {d=NR} /Insert the USB stick into/ {i=NR} END {print (d && i == d + 1) ? "yes" : "no"}' "${TO}")"
+ck "…and must name a stick that is offered — in use or absent, nothing is touched" yes \
+   "$(grep -q 'is not a USB stick on ${USBK_NODE} that may be written' "${TO}" && grep -q '\[\[ "${d}" == "${DEVICE}" \]\] && pick=' "${TO}" && echo yes || echo no)"
+ck "--yes alone never skips the confirmation; it needs --device" yes \
+   "$(grep -q '"${YES}" -eq 1 && -z "${DEVICE}" \]\] && { usbk_say' "${TO}" && echo yes || echo no)"
+ck "the password from stdin is read before anything else reads stdin, and checked" yes \
+   "$(awk '/IFS= read -r PW \|\| true/ {r=NR} /^PLAIN=/ {p=NR} /usbk_password_ok "\$\{PW\}" \|\| usbk_die/ {c=NR} END {print (r && p && c && r < c && c < p) ? "yes" : "no"}' "${TO}")"
+ck "every node-side command either ignores stdin (ssh -n) or is fed its own pipe" "" \
+   "$(grep -nE 'usbk_on_stdin' "${TO}" | grep -vE '^[0-9]+:#|\| usbk_on_stdin|usbk_on_stdin "cat > [^"]*" (<|<<)' )"
+ck "with --password-stdin the password is asked for exactly never" yes \
+   "$(grep -q 'if \[\[ "${PW_STDIN}" -eq 0 \]\]; then' "${TO}" && echo yes || echo no)"
+
 echo "── round trip with openssl (the restore's own command) ──"
 if command -v openssl >/dev/null && openssl enc -help 2>&1 | grep -c -- '-pbkdf2' >/dev/null; then
     T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT

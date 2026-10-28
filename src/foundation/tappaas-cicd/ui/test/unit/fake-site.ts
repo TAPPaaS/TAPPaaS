@@ -57,6 +57,7 @@ export function fakeSite(): FakeSite {
       case "site-manager site":
         return ok(JSON.stringify({ name: "rossen", channel: "unstable" }));
       case "site-manager node":
+        if (args[1] === "usb") return ok(JSON.stringify({ node: args[2], reachable: true, sticks: [{ device: "/dev/sdb", size: 31000000000, vendor: "SanDisk", model: "Ultra", serial: "4C53", inUse: false, why: null, keyStick: args[2] === "tappaas1" }] }));
         return ok(args[1] === "list" ? JSON.stringify([{ name: "tappaas1" }, { name: "tappaas2" }]) : "[]");
       case "site-manager repository":
         return ok("[]");

@@ -221,8 +221,10 @@ export class ConsoleServer {
         if (a !== undefined) return sendJson(res, 404, { error: `identity/${a}` });
         return sendJson(res, 200, envelope(await r.identity.get()));
       case "nodes": {
-        // A node being added: GET nodes/<name>/progress, every ten seconds at most.
-        if (!a || !NODE_NAME.test(a) || b !== "progress") return sendJson(res, 404, { error: "nodes/<name>/progress" });
+        // A node being added: GET nodes/<name>/progress, every ten seconds at
+        // most; nodes/<name>/usb: the USB sticks in it (site-manager node usb).
+        if (!a || !NODE_NAME.test(a) || (b !== "progress" && b !== "usb")) return sendJson(res, 404, { error: "nodes/<name>/progress | nodes/<name>/usb" });
+        if (b === "usb") return sendJson(res, 200, envelope(await r.nodeUsb.of(a).get()));
         return sendJson(res, 200, envelope(await r.nodeProgress.of(a).get()));
       }
       case "catalogs":
@@ -497,18 +499,23 @@ export class ConsoleServer {
     if (typeof cmd === "string") return sendJson(res, 400, { error: cmd });
     if (cmd) {
       const run = this.cfg.runStdin ?? runWithStdin;
-      const out = await run(cmd.bin, cmd.args, cmd.input);
+      const out = await run(cmd.bin, cmd.args, cmd.input, cmd.timeoutMs);
       if (!out.ran || out.rc !== 0) {
         const secret = cmd.input.replace(/\n$/, "");
         const last = (out.stderr || out.stdout).replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").slice(-1)[0] ?? "";
         const why = (secret && last.includes(secret) ? last.split(secret).join("…") : last) || `exit ${out.rc}`;
         return sendJson(res, out.ran ? 400 : 502, { error: `${cmd.bin} ${cmd.args.join(" ")}: ${why}` });
       }
-      const file = join(home, SECRETS[name].file);
+      const spec = SECRETS[name];
+      const file = spec.file !== null ? join(home, spec.file) : cmd.where ?? "its owner";
       if (this.jobs) this.jobs.recordSecret(me, name, file, cmd.keys, `${cmd.bin} ${cmd.args.join(" ")}`);
       this.cfg.log(`secret ${name} set by ${me.user ?? "?"} (${me.via}) through ${cmd.bin} ${cmd.args.join(" ")}`);
-      void this.reads.ssids.refreshAfterChange();
-      return sendJson(res, 200, { data: secretStatus(home, name) });
+      if (name === "wlan") void this.reads.ssids.refreshAfterChange();
+      if (name === "backup-keys") void this.reads.health.refreshAfterChange();
+      // What the verb said (a key stick: the keys read back, the stick ejected),
+      // for the form; the secret itself is never printed by these verbs.
+      const said = `${out.stdout}\n${out.stderr}`.replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").filter((l) => l.trim()).slice(-20).join("\n");
+      return sendJson(res, 200, { data: { ...secretStatus(home, name), output: said } });
     }
     const r = writeSecret(home, name, body);
     if (!r.ok) return sendJson(res, 400, { error: r.error });

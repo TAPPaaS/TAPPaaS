@@ -1,6 +1,9 @@
 // AddNode.tsx — adding a node as a guided sequence (Setup's step rows): what
 // each stage does is said before it runs, and what the operator must do by
-// hand is said where it is needed (ADR-037 D4). 1 declare the node — where it
+// hand is said where it is needed (ADR-037 D4). 0 the boot medium: nothing for
+// a network boot, else the installer stick — written on a client machine from
+// the image the mothership serves, or by a node into a stick plugged into it
+// (site-manager node usb write); 1 declare the node — where it
 // is cabled first, then its MAC and boot disks, each blank its default
 // (site-manager node add: one job that registers its install answer,
 // opens the boot window and waits for it); 2 boot the machine from the network
@@ -20,6 +23,7 @@ import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
 import { diskId, humanSize, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolName, switchPortChoices } from "../nodeadd";
 import { Dot, Link, canOperate, useMe } from "../ui";
+import { UsbStickPicker } from "../usbsticks";
 import { StepRow } from "./Setup";
 
 interface NodeProgress {
@@ -81,6 +85,10 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
   const [tested, setTested] = useState(false);
   const [pooled, setPooled] = useState(false);
   const [skipPools, setSkipPools] = useState(false);
+  // Stage 0: the installer stick written by a node (site-manager node usb write).
+  const [stickNode, setStickNode] = useState(known[0] ?? "tappaas1");
+  const [stickDevice, setStickDevice] = useState("");
+  const [stickWritten, setStickWritten] = useState(false);
   const valid = NAME.test(name);
   // Read from the moment the name is valid: a wizard reopened while the job
   // runs (or for a node already joined) shows where it stands.
@@ -172,7 +180,22 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
     [name],
   );
 
+  const writeStick: Step = useMemo(
+    () => ({
+      title: `site-manager node usb write ${stickNode} ${stickDevice || "<device>"}`,
+      bin: "site-manager",
+      verb: "node usb write",
+      fixed: stickDevice ? [stickNode, stickDevice] : [stickNode],
+      only: [],
+      initial: { "--yes": true },
+      blocked: stickDevice ? undefined : "pick the stick first",
+      note: `Writes the installer stick image (/var/lib/tappaas-pxe/tappaas-usb.iso, the same for every node) to ${stickDevice || "the stick"} in ${stickNode}, erasing it, then ejects it: a minute or two. There is no dry run: the preview is the command.`,
+    }),
+    [stickNode, stickDevice],
+  );
+
   const steps = [
+    { id: "medium", title: "0 · The boot medium", required: false, done: stickWritten ? true : false, detail: "Nothing for a network boot (PXE). Otherwise the installer stick: written on your own machine from the image the mothership serves, or by a node into a stick plugged into it." },
     { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. The outcome is either a boot USB disk is prepared or a PXE boot process is started." },
     { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto a ZFS boot pool, the node joins the cluster, is patched and rebooted, and is registered as a pvehost instance." },
@@ -193,10 +216,30 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
           Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools. Nothing changes until you Apply in stage 1.
         </p>
         <ol className="setup">
-          <StepRow s={steps[0]} open={current === "declare"}>
+          {/* Collapsed unless opened: most machines network-boot. */}
+          <StepRow s={steps[0]} open={false}>
+            <p className="small">A machine that boots from the network needs no medium: skip this. For one that cannot, the installer stick is one image for every node; it fetches the node's own answer from the mothership once stage 1's job runs. Two ways to write it:</p>
+            <div className="two">
+              <div className="explain">
+                <p><b>On your own machine</b></p>
+                <ol>
+                  <li>Get the image: <a href="http://tappaas-cicd.mgmt.internal:8090/tappaas-usb.iso">tappaas-usb.iso</a> (served from the mothership on the management network), or <span className="mono">scp tappaas@tappaas-cicd.mgmt.internal:/var/lib/tappaas-pxe/tappaas-usb.iso .</span></li>
+                  <li>Write it to a stick: <span className="mono">dd if=tappaas-usb.iso of=/dev/&lt;usb&gt; bs=4M</span>, or balenaEtcher.</li>
+                </ol>
+              </div>
+              <div className="explain">
+                <p><b>By a node</b> — a stick in a free USB port of an existing node</p>
+                <div className="form">
+                  <UsbStickPicker nodes={known.length ? known : [stickNode]} node={stickNode} setNode={setStickNode} device={stickDevice} setDevice={setStickDevice} disabled={stickWritten} />
+                </div>
+                <StepView key={`${stickNode}:${stickDevice}`} step={writeStick} me={me} onDone={(ok) => ok && setStickWritten(true)} />
+              </div>
+            </div>
+          </StepRow>
+          <StepRow s={steps[1]} open={current === "declare"}>
             <StepView key={topo ? "ports" : "no-ports"} step={declare} me={me} onApplied={setJob} onDone={(ok) => setEnded(ok)} />
           </StepRow>
-          <StepRow s={steps[1]} open={current === "boot"}>
+          <StepRow s={steps[2]} open={current === "boot"}>
             <p className="small">Once stage 1's job is running, boot the machine one of two ways. Either way the installer asks the mothership for its answer over the network, so the machine must be cabled as stage 1 says; only if the boot-disk fields match no disk does the node's screen ask for one (from the network; a stick stops with the list of the machine's disks instead).</p>
             <div className="two">
               <div className="explain">
@@ -223,7 +266,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
               </ul>
             ) : underway ? <p className="muted small">reading the provisioning state…</p> : null}
           </StepRow>
-          <StepRow s={steps[2]} open={current === "wait"}>
+          <StepRow s={steps[3]} open={current === "wait"}>
             <div className="explain">
               <p>
                 Nothing to do here but wait, typically 15–25 minutes: the installer writes Proxmox to the boot disk(s) and reboots, the job waits for the node at its address, checks it and joins it to the cluster, registers it as a pvehost instance, brings it to the cluster baseline and reboots it into the kernel that installed. Watch the node's screen if it takes much longer.
@@ -256,10 +299,10 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
               </details>
             ) : null}
           </StepRow>
-          <StepRow s={steps[3]} open={current === "storage"}>
+          <StepRow s={steps[4]} open={current === "storage"}>
             {joined ? <NodePools node={name} onAdded={() => setPooled(true)} onSkip={() => setSkipPools(true)} /> : <p className="muted small">Once the node has joined.</p>}
           </StepRow>
-          <StepRow s={steps[4]} open={current === "uplink"}>
+          <StepRow s={steps[5]} open={current === "uplink"}>
             {joined || !underway ? (
               valid ? (
                 <>
@@ -271,7 +314,7 @@ export function AddNodeWizard({ onClose, prefill }: { onClose: () => void; prefi
               <p className="muted small">Once the node has joined.</p>
             )}
           </StepRow>
-          <StepRow s={steps[5]} open={current === "done"}>
+          <StepRow s={steps[6]} open={current === "done"}>
             {valid ? (
               <p className="small">
                 <Link to={viewLink("rack", `node:${name}`)}>Open {name} in the physical view →</Link> — select it there and use <b>Place…</b> to put it in its room and rack. {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}

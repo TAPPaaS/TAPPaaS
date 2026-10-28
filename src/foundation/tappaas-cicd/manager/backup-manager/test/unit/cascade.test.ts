@@ -994,7 +994,9 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
 {
   const t = (v: "export" | "import", a: string[]) => {
     const r = keyTarget(v, a);
-    return "error" in r ? `ERROR ${r.error}` : r.kind === "usb" ? `usb ${r.node ?? "-"}${r.format ? " format" : ""}` : `file ${r.dir}`;
+    return "error" in r ? `ERROR ${r.error}` : r.kind === "usb"
+      ? `usb ${r.node ?? "-"}${r.format ? " format" : ""}${r.device ? ` device=${r.device}` : ""}${r.yes ? " yes" : ""}${r.passwordStdin ? " pw-stdin" : ""}`
+      : `file ${r.dir}`;
   };
   eq(t("export", ["--usb"]), "usb -", "--usb: a stick in the default node");
   eq(t("export", ["--usb", "--node", "tappaas2"]), "usb tappaas2", "--usb --node: a stick in another node");
@@ -1007,6 +1009,17 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   eq(t("export", ["--usb", "--format"]), "usb - format", "export --usb --format: erase even a key stick");
   check(t("import", ["--usb", "--format"]).includes("--format goes with export --usb"), "--format on import: refused");
   check(t("export", ["--file", "/x", "--format"]).includes("--format goes with export --usb"), "--format with --file: refused");
+  // The web console's form: the stick chosen there, no confirmation, the password on stdin.
+  eq(t("export", ["--usb", "--device", "/dev/sdb"]), "usb - device=/dev/sdb", "export --usb --device: the stick is chosen already");
+  eq(t("export", ["--usb", "--device", "/dev/sdb", "--yes", "--password-stdin", "--node", "tappaas2", "--format"]),
+    "usb tappaas2 format device=/dev/sdb yes pw-stdin", "…with --yes --password-stdin, beside --node and --format");
+  check(t("export", ["--usb", "--device"]).includes("the stick's path is required"), "--device without a path: refused");
+  check(t("export", ["--usb", "--device", "--yes"]).includes("the stick's path is required"), "--device followed by an option: refused");
+  check(t("import", ["--usb", "--device", "/dev/sdb"]).includes("--device goes with export --usb"), "--device on import: refused");
+  check(t("export", ["--file", "/x", "--device", "/dev/sdb"]).includes("--device goes with export --usb"), "--device with --file: refused");
+  check(t("export", ["--usb", "--yes"]).includes("--yes goes with export --usb --device"), "--yes without --device: refused");
+  check(t("export", ["--usb", "--password-stdin"]).includes("--password-stdin goes with export --usb --device"), "--password-stdin without --device: refused");
+  check(t("import", ["--usb", "--yes"]).includes("--yes goes with export --usb --device"), "--yes on import: refused");
 
   // --usb runs the module's own script, on this terminal; a missing script is a failure.
   const tmp = mkdtempSync(join(tmpdir(), "bm-keys-"));
@@ -1021,6 +1034,10 @@ check(!retentionValid("7") && !retentionValid("7x") && !retentionValid(""), "inv
   calls.length = 0;
   keysUsb("export", null, tmp, runner, true);
   eq(calls.join(" | "), "scripts/keys-to-usb.sh --format", "…and passes --format on");
+  calls.length = 0;
+  keysUsb("export", "tappaas2", tmp, runner, false, { device: "/dev/sdb", yes: true, passwordStdin: true });
+  eq(calls.join(" | "), "scripts/keys-to-usb.sh --node tappaas2 --device /dev/sdb --yes --password-stdin",
+    "…and the console's --device --yes --password-stdin, the password itself never among the arguments");
   const errs: string[] = [];
   const origErr = console.error;
   console.error = (...x: unknown[]) => void errs.push(x.join(" "));

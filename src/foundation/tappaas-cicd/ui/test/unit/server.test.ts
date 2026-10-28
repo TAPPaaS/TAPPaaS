@@ -105,6 +105,8 @@ async function main(): Promise<void> {
   check(r.status === 200 && mf.fields[0].field === "memory" && mf.fields[0].service === "cluster:vm" && mf.fields[0].settable, "/api/v1/modules/immich/fields: the Modify form's rows");
   r = await call("GET", "/api/v1/nodes/tappaas1/progress");
   check(r.status === 200 && (r.json().data as { inSite: boolean }).inSite === true, "/api/v1/nodes/<name>/progress");
+  r = await call("GET", "/api/v1/nodes/tappaas1/usb");
+  check(r.status === 200 && (r.json().data as { sticks: { keyStick: boolean }[] }).sticks[0].keyStick === true, "/api/v1/nodes/<name>/usb: the sticks in the node (site-manager node usb --json)");
   r = await call("GET", "/api/v1/nodes/--x/progress");
   check(r.status === 404, "a node name site-manager would refuse reads nothing");
   r = await call("GET", "/api/v1/catalogs");

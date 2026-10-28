@@ -97,7 +97,7 @@ backup-manager backup <module>... [--config-dir DIR]
 
 backup-manager key list
 backup-manager key status [--json]
-backup-manager key export --usb [--node N] [--format] | --file DIR
+backup-manager key export --usb [--node N] [--format] [--device D --yes --password-stdin] | --file DIR
 backup-manager key import --usb [--node N] | --file DIR
         The backup encryption keys (ADR-012 §2.5.1). --usb: a USB stick in a
         node (default tappaas1) — export erases the stick you confirm (a key stick
@@ -108,6 +108,16 @@ backup-manager key import --usb [--node N] | --file DIR
         key back on the cluster. Runs the backup module's scripts/keys-to-usb.sh /
         keys-from-usb.sh, interactively (ssh -t). --file: a directory, the keys
         UNENCRYPTED (a bare directory still means --file). Keep two sticks.
+        Without a terminal (the web console): --device D names the stick as the
+        node lists it (/dev/sdb; refused unless it is a USB disk not in use —
+        nothing is inserted-and-confirmed), --yes skips the typed confirmation
+        (the console has shown the operator what is erased or kept), and
+        --password-stdin reads the password as the first line of stdin, once
+        (12+ characters, else the stick is not touched). The console lists the
+        sticks through site-manager, the operator picks one and types the
+        password in the console, which hands it on stdin — never on a command
+        line. --yes and --password-stdin need --device; all three are export
+        only. From the password on, the run is the same as the interactive one.
         Writing a stick (and reading one back with import --usb) records the
         fingerprint of the keys it holds; `key status` says whether that is the
         escrow as it is now (--json: escrowed, fingerprint, stick, current). The
