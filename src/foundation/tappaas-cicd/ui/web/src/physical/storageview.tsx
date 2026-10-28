@@ -9,6 +9,8 @@ import { GEdge, GNode, Graph } from "../graph";
 import { StorageDisk, StorageInventory, StoragePool, StorageState } from "../types";
 import { KV, Link, OpenIn, Tag } from "../ui";
 import { Sel } from "./layout";
+import { AddPoolButton } from "./nodepools";
+import { poolDisks } from "../nodeadd";
 import { STATE_COLOR, stateClass } from "./state";
 import { Slice, StorageNote, bytes, diskKey, findDisk, nodeKey, poolKey, poolPct, poolSlices, stateWith, storageLayout } from "./storage";
 
@@ -354,6 +356,7 @@ export function NodeStorage({ inv, notes, node }: { inv: StorageInventory; notes
           </ul>
         </>
       ) : null}
+      {poolDisks(n.otherDisks).length ? <p className="small"><AddPoolButton node={node} /> <span className="muted">{poolDisks(n.otherDisks).length} healthy disk(s) in no pool</span></p> : null}
       <NoteList list={notes.get(nodeKey(node)) ?? []} />
     </>
   );
