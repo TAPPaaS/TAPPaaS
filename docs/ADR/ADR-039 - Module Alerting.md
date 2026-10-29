@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** |
-| **Version** | 0.2 |
+| **Version** | 0.3 |
 | **Date** | 2026-10-29 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #904 (logging: module-supplied alert rules). Raised for @AndreasJe's hosting module. Builds on #126 (alerting from the logs), #770 / #903 (journal shipping, now NixOS, Debian and containers), #165 §1 (per-host push credentials) and #883 (the alert mail). |
-| **Changelog** | v0.2 (2026-10-29) — **operator's answers folded in:** recipients stay `site.json`'s (D3); the foundation's own rules move into module files, and converting them is the test of the format (D6) — which adds label capture, a per-rule repeat, a node scope and a foundation-only escape hatch to D1/D2; the mail is specified in the rule, with today's mail as the default template and the converted rules tested against today's mails (D7); open alerts can be read per module, machine and cluster (D8). Metrics are a separate ADR to write. The deleted-host question is answered by D4 (no false alert). · v0.1 (2026-10-29) — first draft. |
+| **Changelog** | v0.3 (2026-10-29) — **operator's review of D6:** DiskErrors and LanLegDown go to `pvehost` (the node's own hardware), FirewallCertChanged to `network`, HaStuck to `cluster`. A rule's owner is not always the host that logs it (the mothership logs the firewall's and the cluster's checks), so D2's scope names **modules** instead of `nodes`. The firewall and the nodes declare `logging:logs` too (D9), which gives HostSilent its list. The backup buddy's pulse stays outside Grafana (D6). `{lines}` elaborated (open question 2). · v0.2 (2026-10-29) — **operator's answers folded in:** recipients stay `site.json`'s (D3); the foundation's own rules move into module files, and converting them is the test of the format (D6) — which adds label capture, a per-rule repeat, a node scope and a foundation-only escape hatch to D1/D2; the mail is specified in the rule, with today's mail as the default template and the converted rules tested against today's mails (D7); open alerts can be read per module, machine and cluster (D8). Metrics are a separate ADR to write. The deleted-host question is answered by D4 (no false alert). · v0.1 (2026-10-29) — first draft. |
 
 A module may ship alert rules over its own logs. The module says *which lines* matter and how the
 mail reads; the platform builds the query, limits it to the module's own hosts, provisions it in
@@ -112,12 +112,18 @@ and for `absent`, HostSilent's form over the same selector. The rule's `query` a
 line to paste into Explore) is built the same way.
 
 **Scope.** For every module, `H` is the vmnames of its deployed instances (ADR-026 D6.3),
-computed by the mothership from `config/`, each checked as a DNS label. Foundation modules (the
-same test as `pinhole.json`'s `fromZones: any`) may also set:
+computed by the mothership from `config/`, each checked as a DNS label.
 
-- `"scope": "nodes"` — the cluster's nodes, over their syslog (`{source="proxmox"}`, the hosts
-  `cluster-nodes.sh` lists): the cluster and backup rules;
-- `"scope": "all"` — every host that ships (OomKill, HostSilent);
+The module a rule belongs to is not always the one whose host logs the line. The cluster's
+quorum and fencing lines are logged by the nodes (`pvehost` instances); the firewall's
+certificate check and the cluster's HA check run on the mothership and log there; a failed
+backup is logged by the node that ran it. So foundation modules (the same test as
+`pinhole.json`'s `fromZones: any`) may also set:
+
+- `"scope": ["<module>", …]` — the hosts of those modules' instances instead of its own:
+  `cluster` and `backup` read `["pvehost"]`, `network`'s and `cluster`'s mothership checks
+  `["tappaas-cicd"]`;
+- `"scope": "all"` — every host that declares `logging:logs` (D9): OomKill, HostSilent;
 - `"bundle": true` — attach the support bundle (#883);
 - `"expr"` — a LogQL expression as written, for a rule the form above cannot say (LanLegDown's
   down-minus-up). Grafana validates it on apply.
@@ -178,11 +184,23 @@ is the format's test: if a core rule cannot be written in D1/D2, the format is n
 
 | Module | Rules |
 |---|---|
-| `cluster` (scope `nodes`) | QuorumLost, HaFencing, ReplicationFailed, LanLegDown (`expr`), RootKeyChanged, DiskErrors (`repeat: 24h`) |
-| `backup` (scope `nodes`) | BackupFailed |
-| `tappaas-cicd` (own host) | HaStuck, FirewallCertChanged |
-| `logging` (scope `all`) | OomKill, HostSilent |
-| stays in `logging.nix` | Heartbeat |
+| Module | Rules | Scope (who logs it) |
+|---|---|---|
+| `pvehost` | DiskErrors (`repeat: 24h`), LanLegDown (`expr`) | its own instances: the node whose disk or bond it is |
+| `cluster` | QuorumLost, HaFencing, ReplicationFailed, RootKeyChanged | `["pvehost"]` |
+| `cluster` | HaStuck | `["tappaas-cicd"]` (`check-ha-health` runs on the mothership) |
+| `network` | FirewallCertChanged | `["tappaas-cicd"]` (`check-firewall-cert` runs on the mothership) |
+| `backup` | BackupFailed | `["pvehost"]` (vzdump on the node) |
+| `logging` | OomKill, HostSilent | `all` |
+| stays in `logging.nix` | Heartbeat | — |
+
+**Not Grafana rules, and they stay that way.** Two checks mail without the log pipeline on
+purpose, because they must work when it is down: the backup buddy's **pulse** (ADR-031,
+`backup/pulse/pulse.sh` on the backup node: buddies, uplink, firewall, mothership, PBS, mailed
+with the node's own `sendmail`), which reports a dark site that cannot report itself; and the
+mothership's **alert watchdog** (`tappaas-alert-watchdog`), which mails when Heartbeat stops. They
+belong to `backup` and `tappaas-cicd` already. D8 lists their state too (`backup-manager pulse`,
+the watchdog's state file), so an operator sees them beside the Grafana alerts.
 
 `logging.nix` then provisions only the contact point, the policy and Heartbeat (which must exist
 before any module has applied anything, so the watchdog has its signal). **The test:** before the
@@ -235,6 +253,26 @@ What an object *is*, and how alerts combine with its other signals into one heal
 decided here: it belongs to the health model (ADR-007e), the asset records of ADR-040 (the CMDB
 side), and the metrics ADR still to write. This ADR only gives every alert the labels those need.
 
+### D9 — Everything that ships logs declares `logging:logs`, syslog senders too
+
+Today the firewall and the nodes ship by syslog, set up by logging's own `update.sh` (OPNsense's
+target on :1514, the nodes' rsyslog forwarder on :1515), and declare nothing: `network.json` and
+`pvehost.json` have no `logging:logs`. That is why HostSilent has to watch "every host that logged
+in the last hour" instead of a list, and why D8 cannot say which machines are covered.
+
+- `network` and `pvehost` declare `"integratesWith": ["logging:logs"]`, as every NixOS and Debian
+  consumer does.
+- `logging:logs` learns a third kind of client beside the NixOS fragment and Alloy (#903): a
+  **syslog sender**. Its install and update configure the sender (OPNsense's remote target through
+  `opnsense-controller`; a node's rsyslog forwarder), its delete removes it. The code moves out of
+  logging's `update.sh` into the service.
+- The sender's lines are labelled with the instance's **vmname**, as journal lines are: logging's
+  Alloy maps the syslog `hostname` to it (today the firewall arrives as `OPNsense.internal`), so a
+  rule's host list matches.
+- `scope: "all"` (D2) is then exactly "every instance that declares `logging:logs`", and HostSilent
+  stops guessing. Syslog stays unauthenticated until the TAPPaaS CA (#787); only foundation rules
+  read it (D2).
+
 ## Consequences
 
 - A module gets operational alerts with no foundation edit and no logging rebuild; hosting drops
@@ -269,12 +307,23 @@ side), and the metrics ADR still to write. This ADR only gives every alert the l
    covers log lines. The metrics ADR decides what is scraped (node exporter, cAdvisor, module
    exporters) and where it is stored, and then whether D1 gains a metric rule (`source: metrics`)
    beside the log rules. D3's delivery and D8's listing are meant to carry both unchanged.
-2. **Absent rules over `scope: all`.** HostSilent's scope is every host that ships, which includes
-   the firewall and the nodes (not `config/` instances of a shipping module). Is "every module
-   instance that declares `logging:logs`, plus the nodes and the firewall" the right list for it?
-3. **`{lines}` and privacy.** The matching lines go by mail. They are scrubbed on the guest, but a
-   module's own lines can still carry personal data (a site's visitor). Should `{lines}` be
-   foundation-only, or opt-in per site?
+2. **`{lines}` and privacy.** `{lines}` copies up to 20 matching log lines into the mail. A mail
+   leaves the site: it goes through the site's mail relay to the operator's mailbox (a provider's
+   server), may be forwarded, and with a bundle is meant for `supportEmail`. The client scrubs
+   secrets (#903), not personal data, and a module's lines can be full of it: a hosting site's
+   visitor IP addresses and user agents, a login name, an e-mail address in a form error, a
+   customer's domain. Today no mail carries a log line; the Explore query in the mail shows the
+   lines inside the site, behind the identity gate. Options:
+   - **a. No lines in mails.** The link only. Nothing leaves that does not today.
+   - **b. Foundation rules only.** The project reviews what those lines contain (a node's
+     `lanbond` line, a vzdump error); Community rules get the link.
+   - **c. Opt-in per site.** `site.json` `alerts.includeLines` (default false); the receiver blanks
+     `{lines}` unless the site turned it on. The operator decides for their own site, and the
+     privacy notice (#359) can say so.
+   - **d. b + c.** Foundation rules may carry lines; Community rules only where the site opted in.
+
+   Recommendation: **d.** The lines help most for the platform's own events, where their content
+   is known; for a Community module, the site that runs it decides.
 
 ## Implementation plan
 
@@ -286,6 +335,9 @@ side), and the metrics ADR still to write. This ADR only gives every alert the l
   defaults equal today's mail; `test-alert-receiver.sh` covers every core rule byte-for-byte.
 - **P3 — Provisioning.** Apply and remove through the API from `logging:logs` install, update and
   delete, and from logging's `update.sh`; validation in `module-manager validate` and the install.
+- **P3b — Syslog senders as `logging:logs` consumers** (D9): `network` and `pvehost` declare it; the
+  service configures OPNsense's target and the nodes' rsyslog, logging's Alloy maps syslog
+  hostnames to vmnames; HostSilent's list follows.
 - **P4 — Convert the core rules** (D6), one module at a time: the comparison test, then the rule
   leaves `logging.nix`. Live on hrossen: each converted rule fired from a `logger` line on the right
   host, its mail compared with today's.
