@@ -113,7 +113,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
-| 4 | G4.6 Community module extension points | H | M | – | 3 | 2 |
+| 4 | G4.6 Community module extension points | H | M | – | 4 | 1 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 2 | 4 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
@@ -329,7 +329,7 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 | #486 | ADR-015 community-health files | L | L | |
 | #359 | legal/processor ADR | M | L | |
 
-### G4.6 Community module extension points — Ease H · Risk M · done for 2.4: 3 · open: 2
+### G4.6 Community module extension points — Ease H · Risk M · done for 2.4: 4 · open: 1
 
 What a Community module needs from the platform so it does not carry its own copy (from @AndreasJe's hosting module, 2026-10-28): one place for its secrets (#902), containers watched and logged like VMs (#901, #903), its own validated fields (#899) and its own alert rules (#904). The last two get an ADR each first.
 
@@ -339,7 +339,7 @@ What a Community module needs from the platform so it does not carry its own cop
 | ✅ #901 | health-manager: health gates that reach containers | M | M | **Done 2026-10-29** (`61eef6df`, `4aabf51f`): disk and pending-reboot gates probe an LXC module through `pct exec`; LXC `diskSize` grow-only (`update-disk.sh`, `pct resize`), `auto-grow.sh` grows a container's rootfs; `health-manager reboot` restarts a container. Live on hrossen: 8G→10G, shrink refused, 86% full grew 10G→15G |
 | ✅ #903 | logging:logs: journal client for Debian and LXC guests | M | M | **Done 2026-10-29** (`76e119fe`): one Alloy pipeline for NixOS and a plain `config.alloy`; Alloy 1.16.3-1 from Grafana's apt repo, key pinned (expires 2027-08-22), held; applied by `logging:logs` install/update, removed on delete. Live on hrossen: a container's journal in Loki with host/zone/unit labels, secrets scrubbed, removal clean. HostSilent on a stopped client not observed (Loki was stopped by #905's test) |
 | #899 | schemas: module-owned config fields that validate | H | M | [ADR-038](docs/ADR/ADR-038%20-%20Component%20Declarations.md) Proposed v0.2, waiting for sign-off: reworked 2026-10-29 into ADR-035 D11 declarations (hosting's sites in `hosting-manager.json`), not fields in the module JSON |
-| #904 | logging: module-supplied alert rules | M | L | [ADR-039](docs/ADR/ADR-039%20-%20Module%20Alerting.md) **Accepted** 2026-10-29; **P1–P5 built** on `main`: `<module>-alerts.json` + `tappaas-alert-rules.py`, mail templates and anonymized lines (`site.json` `alerts.includeLines`), Grafana API provisioning, firewall and nodes as `logging:logs` syslog senders, the core rules moved to pvehost/cluster/network/backup/logging, `health-manager alerts` + `open-alerts` gate. P1–P3 live on hrossen; the rest after the next sweep. P6 hosting with @AndreasJe; includes moving the core rules to their modules and the firewall and nodes declaring `logging:logs` |
+| ✅ #904 | logging: module-supplied alert rules | M | L | **Done 2026-10-29** (`f143d7cc`..`3c37b77f`; [ADR-039](docs/ADR/ADR-039%20-%20Module%20Alerting.md)): `<module>-alerts.json` (line patterns, never LogQL; scoped to the module's own hosts), mail templates, support bundle and anonymized lines (`site.json` `alerts.includeLines`), one Grafana group per module through the API; the core rules moved to pvehost/cluster/network/backup/logging (Heartbeat stays); firewall and nodes declare `logging:logs` as syslog senders; `health-manager alerts` and the `open-alerts` gate; documented in *Develop a Module*. Live on hrossen: converted rules replace the old ones, a node line fires RootKeyChanged, HostSilent on a stopped container and none after its delete. P6 (hosting adopts it) with @AndreasJe |
 
 ---
 
