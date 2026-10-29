@@ -113,7 +113,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
-| 4 | G4.6 Community module extension points | H | M | – | – | 5 |
+| 4 | G4.6 Community module extension points | H | M | – | 3 | 2 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 2 | 4 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
@@ -164,8 +164,8 @@ met gates are recorded in the releases that carried their waves.
 | Install | #403, #377 — [ADR-037](docs/ADR/ADR-037%20-%20Install.md) **Accepted v1.2 2026-10-27**: ZFS on the boot disk by default, a module's `storage` a preference with the boot pool last (P1, live on the spare machine as a mirrored tappaas4); adding a node is two verbs — `node add` stands it up (joined, patched, rebooted), `node storage add` gives it pools; boot disks by size, model or serial, the MAC learned from the switch port, the console's Add node wizard (D4, P4a–P4d built, not yet run in a real node add); a hosted server on one IP (P2); the bootstrap ends at the console (P3). Next: Stage 2 on the spare machine, then P2 | G3.1, G3.5 |
 | User interface | #844 — [ADR-034](docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md) **Accepted v1.0 2026-10-18**, built: the console at `console.<domain>` | #844 closed |
 | Service exposure | #845 — [ADR-032](docs/ADR/ADR-032%20-%20Service%20Exposure.md) **Accepted v1.0, built** (2026-10-17): the gate authenticates machine callers (service accounts, client-credentials JWT); a module without `network:proxy` is unpublished by design, in the DMZ when it runs third-party code without user data (ADR-021 R1 amended); Jellyfin published without the gate for friends and family, hardened. all phases built (P0–P4); rate limiting is #851 | #845 closed |
-| Module-owned fields | #899: a module declares its own validated fields under a key named after it; `check_json`, `validate`, `modify --set <module>.<field>` and the console use them | G4.6 |
-| Module alerting | #904: a module ships its own alert rules, scoped by the platform to its own hosts, provisioned beside the core rules | G4.6, after #903 |
+| Module-owned fields | #899 — [ADR-038](docs/ADR/ADR-038%20-%20Module-owned%20Fields.md) (Proposed v0.1): a module ships `<module>-fields.json`; its fields live under a key named after it, loaded per module; `check_json`, `validate`, `modify --set <module>.<path>` and the console use them | G4.6 |
+| Module alerting | #904 — [ADR-039](docs/ADR/ADR-039%20-%20Module%20Alerting.md) (Proposed v0.1): a module ships line patterns, never LogQL; the platform builds the query over the module's own hosts and provisions one Grafana rule group per module | G4.6 |
 
 ### Housekeeping
 
@@ -328,17 +328,17 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 | #486 | ADR-015 community-health files | L | L | |
 | #359 | legal/processor ADR | M | L | |
 
-### G4.6 Community module extension points — Ease H · Risk M · open: 5
+### G4.6 Community module extension points — Ease H · Risk M · done for 2.4: 3 · open: 2
 
 What a Community module needs from the platform so it does not carry its own copy (from @AndreasJe's hosting module, 2026-10-28): one place for its secrets (#902), containers watched and logged like VMs (#901, #903), its own validated fields (#899) and its own alert rules (#904). The last two get an ADR each first.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
-| #902 | Convention: where modules escrow their secrets on the mothership | L | M | `/home/tappaas/secrets/<module>/<instance>.env`, in the mothership's file backup (today only `config` and `/etc/secrets` are); existing files migrated |
-| #901 | health-manager: health gates that reach containers | M | M | Disk and pending-reboot probes through `pct exec`; LXC `diskSize` grow-only, grown with `pct resize` |
-| #903 | logging:logs: journal client for Debian and LXC guests | M | M | One Alloy pipeline for NixOS and plain `config.alloy`; Alloy from Grafana's apt repo, pinned |
-| #899 | schemas: module-owned config fields that validate | H | M | ADR first (Module-owned fields) |
-| #904 | logging: module-supplied alert rules | M | L | ADR first (Module alerting); after #903 |
+| ✅ #902 | Convention: where modules escrow their secrets on the mothership | L | M | **Done 2026-10-29** (`f2b657b4`): `/home/tappaas/secrets/<module>/<instance>.env` (and `<instance>/` for files), created by `module_secrets_file`/`module_secrets_dir`; in the mothership's file backup with `~/.loki-push`; kept by `delete --archive`, removed by `--remove`; documented in the module template. Existing flat files stay where they are. Mothership side live at the next tappaas-cicd update |
+| ✅ #901 | health-manager: health gates that reach containers | M | M | **Done 2026-10-29** (`61eef6df`, `4aabf51f`): disk and pending-reboot gates probe an LXC module through `pct exec`; LXC `diskSize` grow-only (`update-disk.sh`, `pct resize`), `auto-grow.sh` grows a container's rootfs; `health-manager reboot` restarts a container. Live on hrossen: 8G→10G, shrink refused, 86% full grew 10G→15G |
+| ✅ #903 | logging:logs: journal client for Debian and LXC guests | M | M | **Done 2026-10-29** (`76e119fe`): one Alloy pipeline for NixOS and a plain `config.alloy`; Alloy 1.16.3-1 from Grafana's apt repo, key pinned (expires 2027-08-22), held; applied by `logging:logs` install/update, removed on delete. Live on hrossen: a container's journal in Loki with host/zone/unit labels, secrets scrubbed, removal clean. HostSilent on a stopped client not observed (Loki was stopped by #905's test) |
+| #899 | schemas: module-owned config fields that validate | H | M | [ADR-038](docs/ADR/ADR-038%20-%20Module-owned%20Fields.md) Proposed v0.1, waiting for sign-off |
+| #904 | logging: module-supplied alert rules | M | L | [ADR-039](docs/ADR/ADR-039%20-%20Module%20Alerting.md) Proposed v0.1, waiting for sign-off |
 
 ---
 
