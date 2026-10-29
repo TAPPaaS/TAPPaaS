@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** |
-| **Version** | 0.4 |
+| **Version** | 0.5 |
 | **Date** | 2026-10-29 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #904 (logging: module-supplied alert rules). Raised for @AndreasJe's hosting module. Builds on #126 (alerting from the logs), #770 / #903 (journal shipping, now NixOS, Debian and containers), #165 §1 (per-host push credentials) and #883 (the alert mail). |
-| **Changelog** | v0.4 (2026-10-29) — **`{lines}` decided (operator, option d):** foundation rules may put matching log lines in the mail; a Community module's only where the site opted in (`site.json` `alerts.includeLines`, default false) — D7. · v0.3 (2026-10-29) — **operator's review of D6:** DiskErrors and LanLegDown go to `pvehost` (the node's own hardware), FirewallCertChanged to `network`, HaStuck to `cluster`. A rule's owner is not always the host that logs it (the mothership logs the firewall's and the cluster's checks), so D2's scope names **modules** instead of `nodes`. The firewall and the nodes declare `logging:logs` too (D9), which gives HostSilent its list. The backup buddy's pulse stays outside Grafana (D6). `{lines}` elaborated (open question 2). · v0.2 (2026-10-29) — **operator's answers folded in:** recipients stay `site.json`'s (D3); the foundation's own rules move into module files, and converting them is the test of the format (D6) — which adds label capture, a per-rule repeat, a node scope and a foundation-only escape hatch to D1/D2; the mail is specified in the rule, with today's mail as the default template and the converted rules tested against today's mails (D7); open alerts can be read per module, machine and cluster (D8). Metrics are a separate ADR to write. The deleted-host question is answered by D4 (no false alert). · v0.1 (2026-10-29) — first draft. |
+| **Changelog** | v0.5 (2026-10-29) — **what a mail carries is the rule's choice (operator):** `include: ["lines", "bundle"]` on any rule, foundation or Community; the module's author decides whether its lines may leave the site, and the template documents that duty. Lines are anonymized like the bundle's journals and still gated by `site.json` `alerts.includeLines`. `bundle` is no longer foundation-only (D1, D2, D7). · v0.4 (2026-10-29) — **`{lines}` decided (operator, option d):** foundation rules may put matching log lines in the mail; a Community module's only where the site opted in (`site.json` `alerts.includeLines`, default false) — D7. · v0.3 (2026-10-29) — **operator's review of D6:** DiskErrors and LanLegDown go to `pvehost` (the node's own hardware), FirewallCertChanged to `network`, HaStuck to `cluster`. A rule's owner is not always the host that logs it (the mothership logs the firewall's and the cluster's checks), so D2's scope names **modules** instead of `nodes`. The firewall and the nodes declare `logging:logs` too (D9), which gives HostSilent its list. The backup buddy's pulse stays outside Grafana (D6). `{lines}` elaborated (open question 2). · v0.2 (2026-10-29) — **operator's answers folded in:** recipients stay `site.json`'s (D3); the foundation's own rules move into module files, and converting them is the test of the format (D6) — which adds label capture, a per-rule repeat, a node scope and a foundation-only escape hatch to D1/D2; the mail is specified in the rule, with today's mail as the default template and the converted rules tested against today's mails (D7); open alerts can be read per module, machine and cluster (D8). Metrics are a separate ADR to write. The deleted-host question is answered by D4 (no false alert). · v0.1 (2026-10-29) — first draft. |
 
 A module may ship alert rules over its own logs. The module says *which lines* matter and how the
 mail reads; the platform builds the query, limits it to the module's own hosts, provisions it in
@@ -97,8 +97,9 @@ Six of them carry a support bundle (`bundle`), two a `headline`.
 | `repeat` | optional: how often a firing alert is mailed again, `1h` – `24h` (default `4h`) |
 | `summary` | the explanation in the mail |
 | `mail` | optional: the mail's subject and body (D7) |
+| `include` | optional: what the mail carries beyond the text, `["lines"]`, `["bundle"]` or both (D7) |
 
-A Community module does **not** write LogQL, and cannot set `bundle`, `scope` or `expr` (D2).
+A Community module does **not** write LogQL, and cannot set `scope` or `expr` (D2).
 
 ### D2 — The platform builds the query, from the rule's scope
 
@@ -124,7 +125,6 @@ backup is logged by the node that ran it. So foundation modules (the same test a
   `cluster` and `backup` read `["pvehost"]`, `network`'s and `cluster`'s mothership checks
   `["tappaas-cicd"]`;
 - `"scope": "all"` — every host that declares `logging:logs` (D9): OomKill, HostSilent;
-- `"bundle": true` — attach the support bundle (#883);
 - `"expr"` — a LogQL expression as written, for a rule the form above cannot say (LanLegDown's
   down-minus-up). Grafana validates it on apply.
 
@@ -136,7 +136,8 @@ credential that never leaves that VM):
 
 - folder `TAPPaaS modules`, one rule group `module-<m>` per module, evaluated every minute;
 - the group is replaced as a whole (PUT), so a rule removed from the file is removed from Grafana;
-- labels: `kind`, `module=<m>`, the captured labels, `bundle` where allowed;
+- labels: `kind`, `module=<m>`, the captured labels, and `bundle` / `lines` from the rule's
+  `include` (the receiver reads them, as it reads `bundle` today);
 - a rule's `repeat` becomes a notification-policy route matched on its `alertname`, as DiskErrors'
   24 h route is today.
 
@@ -224,7 +225,7 @@ nothing else (no conditions, no loops, no code — a module's text is never run)
 | `{summary}` | the rule's summary |
 | `{since}`, `{resolved}` | when it started, and when it cleared |
 | `{query}` | the Explore query |
-| `{lines}` | up to 20 of the matching lines from the window, as Loki has them (already scrubbed of secrets by the client, #903) — limited, see below |
+| `{lines}` | the rule's included log lines, anonymized (only with `include: ["lines"]` and the site's flag, see below) |
 
 The templates travel as the rule's annotations (`mailSubject`, `mailBody`), so the receiver needs
 nothing but the webhook payload; it fetches `{lines}` from Loki only when the template uses it.
@@ -234,20 +235,28 @@ the footer. `site-notify.sh` still puts `[TAPPaaS <site>]` in front, and subject
 (#905). **The test:** `test-alert-receiver.sh` renders every converted core rule with the default
 templates and checks the subject and body are byte-for-byte today's.
 
-**Log lines in a mail** (operator, 2026-10-29). A mail leaves the site: through its relay to a
-mail provider, perhaps forwarded, and with a bundle meant for `supportEmail`. The client scrubs
-secrets, not personal data, and a module's own lines can carry it (a hosting site's visitor
-addresses and user agents, login names, e-mail addresses). So:
+**What a mail carries is the rule's choice** (operator, 2026-10-29). Six core rules already
+attach the support bundle (#883): the unit's journal, the module test logs, the site's state and
+its configuration, all passed through `support-anonymize.py` (personal data and secrets removed),
+for the operator to forward to `supportEmail` if they choose. Log lines in the mail are the same
+kind of choice, so both are the rule's `include`, for any module:
 
-- a **foundation** module's rule may use `{lines}`: the project reviews what its lines contain;
-- a **Community** module's rule may use it too, but the receiver fills it only where the site
-  opted in, `site.json` `alerts.includeLines: true` (default false). Otherwise `{lines}` reads
-  `(log lines not mailed on this site — see the Explore link)`, and the Explore query, which shows
-  the lines inside the site behind the identity gate, is always in the mail;
-- the default templates do not use `{lines}`, so no mail carries a log line unless a rule asks
-  for it.
-
-The site's privacy notice (#359) says whether this site mails log lines.
+- **`"bundle"`** — the support bundle, as today, from the half hour before the alert; the rule's
+  `unit` (when given) is the journal it carries. The core rules that carry one today keep it.
+- **`"lines"`** — up to 20 matching lines from the window, put through the same anonymizer as the
+  bundle's journals, appended to the body under *Log lines*, or wherever the rule's template puts
+  `{lines}`.
+- **The module's author decides** whether its lines may leave the site. A mail goes through the
+  site's relay to a mail provider and may be forwarded, and the client scrubs secrets, not every
+  kind of personal data a module's own lines may hold (a hosting site's visitor addresses, login
+  names). The module template's documentation says so: include lines only when the rule's lines
+  carry nothing a site's users would not want in an operator's mailbox.
+- **The site decides last.** `site.json` `alerts.includeLines` (default `false`) gates `lines` for
+  every rule; with it off, the body says *log lines not mailed on this site — see the Explore
+  link*. The Explore query, which shows the lines inside the site behind the identity gate, is in
+  every mail. The site's privacy notice (#359) says whether this site mails log lines.
+- **The defaults change nothing:** no rule includes `lines` unless its file says so, and the flag is
+  off, so no mail carries a log line until both agree.
 
 ### D8 — Open alerts can be read, per module, machine and cluster
 
@@ -330,9 +339,10 @@ in the last hour" instead of a list, and why D8 cannot say which machines are co
   (quotes, `}`, `|`) stays inside the line filter, uids prefixed, captures, `absent`, `above`,
   `repeat`; foundation-only fields refused elsewhere.
 - **P2 — Mail templates.** The receiver renders `mailSubject`/`mailBody` with the placeholders, the
-  defaults equal today's mail; `{lines}` from Loki, blanked for a Community rule unless
-  `site.json` `alerts.includeLines` is true; `test-alert-receiver.sh` covers every core rule
-  byte-for-byte and both `{lines}` cases.
+  defaults equal today's mail; `include: ["lines"]` fetches from Loki and anonymizes with
+  `support-anonymize.py`, blanked unless `site.json` `alerts.includeLines` is true; `include:
+  ["bundle"]` for any module; `test-alert-receiver.sh` covers every core rule byte-for-byte, both
+  flag states, and an anonymized line.
 - **P3 — Provisioning.** Apply and remove through the API from `logging:logs` install, update and
   delete, and from logging's `update.sh`; validation in `module-manager validate` and the install.
 - **P3b — Syslog senders as `logging:logs` consumers** (D9): `network` and `pvehost` declare it; the
