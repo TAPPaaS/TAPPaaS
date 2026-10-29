@@ -102,6 +102,16 @@ both='{"status":"firing","alerts":[{"status":"firing","labels":{"alertname":"Hea
 ck "a heartbeat next to a real alert does not hide it" "200" "$(post rotated "${both}")"
 ck "…the real one is mailed" "ALERT: QuorumLost on tappaas2" "$(tail -1 "${TMP}/subjects")"
 
+# Grafana's error alert for the Heartbeat rule carries the rule's labels; it
+# says the rules cannot run, so it must not pass for a heartbeat (#905).
+n="$(sent)"
+dse='{"status":"firing","alerts":[{"status":"firing","labels":{"alertname":"DatasourceError","rulename":"Heartbeat","kind":"heartbeat"},"startsAt":"2026-10-04T20:00:00Z"}]}'
+ck "a Heartbeat's DatasourceError is accepted" "200" "$(post rotated "${dse}")"
+ck "…but not recorded as a heartbeat" "2026-10-04T19:00:00Z" "$(cat "${TMP}/heartbeat" 2>/dev/null)"
+ck "…and not mailed (the watchdog speaks for it)" "${n}" "$(sent)"
+ck "a resolved Heartbeat is not a heartbeat either" "200" "$(post rotated "$(wh resolved heartbeat Heartbeat '')")"
+ck "…the file keeps the last firing one" "2026-10-04T19:00:00Z" "$(cat "${TMP}/heartbeat" 2>/dev/null)"
+
 ck "--render prints the mail" "Subject: ALERT: QuorumLost on tappaas1" \
    "$(wh firing event QuorumLost tappaas1 | python3 "${R}" --render | head -1)"
 rep='{"status":"firing","alerts":[{"status":"firing","labels":{"alertname":"ReplicationFailed","host":"tappaas1","replication_job":"110-0","kind":"state","grafana_folder":"TAPPaaS","__alert_rule_uid__":"x"},"annotations":{"summary":"s"},"startsAt":"2026-10-08T00:31:00Z"}]}'

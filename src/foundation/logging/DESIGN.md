@@ -279,11 +279,20 @@ in `config/alerts.log` on the mothership.
   carries Loki's and Grafana's logged query texts, which an unanchored all-hosts rule
   matches (OomKill did, until it was anchored).
 - **The alerting watches itself.** `Heartbeat` fires while logs arrive and rules run;
-  its webhook, hourly, proves the whole path to the mothership. The receiver records
-  it in `/var/lib/tappaas/alert-heartbeat` and mails nothing. A timer on the
-  mothership, `tappaas-alert-watchdog`, mails "log alerting is down" when the
-  heartbeat is two hours old — so a dead logging VM, Grafana, Loki or a token
-  mismatch does not leave the site silently unwatched.
+  its webhook, every 15 minutes, proves the whole path to the mothership. The receiver
+  records it in `/var/lib/tappaas/alert-heartbeat` and mails nothing. A timer on the
+  mothership, `tappaas-alert-watchdog` (every 5 minutes), mails "log alerting is down"
+  when the heartbeat is 35 minutes old — so a dead logging VM, Grafana, Loki or a token
+  mismatch does not leave the site silently unwatched. Before it mails it asks the
+  logging VM for Loki's `/ready` and Grafana's `/api/health`, and the subject names
+  which part does not answer.
+- **A query that cannot run is not an alert of the rule's own (#905).** Every rule has
+  `execErrState = KeepLast`: when Loki or Grafana's own database cannot answer (the
+  logging VM's backup stalls its disk for minutes), the rule keeps its last state — no
+  "DatasourceError" mail under, say, LanLegDown's name, and a firing DiskErrors does not
+  resolve. The Heartbeat alone has `OK`, so a Loki that stays down stops it and the
+  watchdog's one mail names Loki. The receiver counts only a firing `Heartbeat` as a
+  heartbeat, never a Grafana error alert that carries its labels.
 - The token: generated on the mothership (`/etc/secrets/tappaas-alert-token`),
   copied here by `update.sh` (`/etc/secrets/grafana-alert-webhook-token`), read by the
   contact point with `$__file{…}`. `test.sh` Check 9 asserts the rules and contact

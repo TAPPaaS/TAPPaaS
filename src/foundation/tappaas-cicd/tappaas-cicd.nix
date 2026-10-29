@@ -481,9 +481,10 @@ in
   };
 
   # The alerting watches itself (#126): Grafana's Heartbeat rule reaches the
-  # receiver hourly while logs flow and rules run; this timer — here, not on the
-  # logging VM it watches — mails when that stops for two hours, so a dead
-  # logging VM, Grafana, Loki or token cannot leave the site silently unwatched.
+  # receiver every 15 minutes while logs flow and rules run; this timer — here,
+  # not on the logging VM it watches — mails when that stops for 35 minutes,
+  # naming what does not answer (#905), so a dead logging VM, Grafana, Loki or
+  # token cannot leave the site silently unwatched.
   systemd.services.tappaas-alert-watchdog = {
     description = "Mail when the log alerting has stopped reporting (#126)";
     serviceConfig = {
@@ -501,11 +502,11 @@ in
   };
 
   systemd.timers.tappaas-alert-watchdog = {
-    description = "Check the log alerting's heartbeat every 15 minutes (#126)";
+    description = "Check the log alerting's heartbeat every 5 minutes (#126)";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "30min";
-      OnUnitActiveSec = "15min";
+      OnUnitActiveSec = "5min";
     };
   };
 

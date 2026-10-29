@@ -260,21 +260,26 @@ check_alert_rules() {
     local out want
     # As many as logging.nix defines (each one is an `alertRule {` call), so a
     # new rule does not fail this check until the count here is edited too.
-    want="$(grep -c 'alertRule {' "$(dirname "${BASH_SOURCE[0]}")/logging.nix") 1"
+    # The last number: rules whose failed query would act — every rule keeps its
+    # last state, the Heartbeat alone goes OK so it stops (#905). Want none.
+    want="$(grep -c 'alertRule {' "$(dirname "${BASH_SOURCE[0]}")/logging.nix") 1 0"
     # Asked on the VM itself, with the admin password read there: it never
     # crosses the wire or lands in a log.
     # shellcheck disable=SC2086,SC2016
     out=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" '
         pw=$(sudo cat /etc/secrets/grafana-admin-password 2>/dev/null)
-        r=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/alert-rules \
-            | jq -r "[.[] | select(.uid | startswith(\"tappaas-\"))] | length")
+        rules=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/alert-rules)
+        r=$(jq -r "[.[] | select(.uid | startswith(\"tappaas-\"))] | length" <<<"${rules}")
+        e=$(jq -r "[.[] | select(.uid | startswith(\"tappaas-\"))
+                   | select(.execErrState != (if .uid == \"tappaas-heartbeat\" then \"OK\" else \"KeepLast\" end))]
+                   | length" <<<"${rules}")
         c=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/contact-points \
             | jq -r "[.[] | select(.uid == \"tappaas-site-notify\" and .type == \"webhook\")] | length")
-        echo "${r:-?} ${c:-?}"' 2>/dev/null) || true
+        echo "${r:-?} ${c:-?} ${e:-?}"' 2>/dev/null) || true
     if [[ "${out}" == "${want}" ]]; then
-        check_pass "${want% *} alert rules (heartbeat included) and the tappaas-site-notify webhook are provisioned"
+        check_pass "${want%% *} alert rules (heartbeat included), their query-error states and the tappaas-site-notify webhook are provisioned"
     else
-        check_fail "alert provisioning incomplete (rules, contact points: ${out:-no answer}; want ${want})"
+        check_fail "alert provisioning incomplete (rules, contact points, wrong query-error states: ${out:-no answer}; want ${want})"
     fi
 }
 

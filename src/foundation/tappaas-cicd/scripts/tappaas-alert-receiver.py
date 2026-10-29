@@ -95,6 +95,15 @@ def is_heartbeat(alert):
     return (alert.get("labels") or {}).get("kind") == "heartbeat"
 
 
+def is_beat(alert):
+    """A heartbeat that proves the path: the Heartbeat rule itself, firing. A
+    Grafana error alert (DatasourceError) carries the rule's labels too, but it
+    says the rules cannot run, so it must not refresh the heartbeat (#905)."""
+    labels = alert.get("labels") or {}
+    return (is_heartbeat(alert) and labels.get("alertname") == "Heartbeat"
+            and alert.get("status", "firing") == "firing")
+
+
 def render(payload):
     """One webhook -> (subject, body), or None when there is nothing to mail."""
     status = payload.get("status", "firing")
@@ -473,8 +482,7 @@ def make_handler(args):
             except ValueError:
                 self.reply(400, "not JSON")
                 return
-            beats = [a for a in (payload.get("alerts") or [])
-                     if is_heartbeat(a) and a.get("status", "firing") == "firing"]
+            beats = [a for a in (payload.get("alerts") or []) if is_beat(a)]
             if beats:
                 try:
                     with open(args.heartbeat_file, "w", encoding="utf-8") as f:

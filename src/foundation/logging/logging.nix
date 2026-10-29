@@ -77,7 +77,8 @@ let
   # ("ALERT: Out of Memory Kill on tappaas3" rather than "ALERT: OomKill on …").
   # `bundle`: the receiver attaches a support bundle (#883) — the cluster's
   # state and the site's anonymized configuration — when the rule fires.
-  alertRule = { uid, title, kind, expr, window, summary, query, headline ? null, bundle ? false }: {
+  alertRule = { uid, title, kind, expr, window, summary, query, headline ? null, bundle ? false,
+                execErrState ? "KeepLast" }: {
     inherit uid title;
     condition = "C";
     data = [
@@ -92,10 +93,13 @@ let
                   conditions = [{ evaluator = { type = "gt"; params = [ 0 ]; }; }];
                   datasource = { type = "__expr__"; uid = "__expr__"; }; }; }
     ];
-    # Nothing matched is the healthy case, not missing data. A Loki that
-    # cannot answer is an alert of its own (DatasourceError).
+    # Nothing matched is the healthy case, not missing data. A query that
+    # cannot run (Loki or Grafana's own database busy, as during the logging
+    # VM's backup) keeps the rule's last state: no mail under the rule's name,
+    # and a firing state rule does not resolve. A Loki that stays down stops
+    # the Heartbeat, and the mothership's watchdog says so — the one alert for it.
     noDataState = "OK";
-    execErrState = "Error";
+    inherit execErrState;
     for = "0s";
     labels = { inherit kind; } // lib.optionalAttrs bundle { bundle = "true"; };
     annotations = { inherit summary query; } // lib.optionalAttrs (headline != null) { inherit headline; };
@@ -216,7 +220,9 @@ let
       uid = "tappaas-heartbeat"; title = "Heartbeat"; kind = "heartbeat"; window = 300;
       # Fires for as long as logs arrive and rules run; its webhook proves the
       # whole path reaches the mothership. Never mailed: the receiver records
-      # it, and tappaas-alert-watchdog there mails when it stops (#126).
+      # it, and tappaas-alert-watchdog there mails when it stops (#126). A query
+      # that cannot run is not alive: OK, so the heartbeat stops (#905).
+      execErrState = "OK";
       expr = ''sum(count_over_time({host=~".+"}[5m]))'';
       summary = "The log alerting is alive (logs arrive, rules run, the webhook gets through).";
       query = ''{host=~".+"}'';
@@ -912,14 +918,14 @@ in
             group_interval = "5m";
             repeat_interval = "4h";
             routes = [{
-              # The heartbeat: hourly, never grouped with anything else. The
-              # receiver records it; the watchdog mails if it stops.
+              # The heartbeat: every 15 minutes, never grouped with anything
+              # else. The receiver records it; the watchdog mails if it stops.
               receiver = "tappaas-site-notify";
               object_matchers = [ [ "alertname" "=" "Heartbeat" ] ];
               group_by = [ "alertname" ];
               group_wait = "0s";
               group_interval = "5m";
-              repeat_interval = "1h";
+              repeat_interval = "15m";
             } {
               # Disk errors: once a day is enough (operator, 2026-10-04).
               receiver = "tappaas-site-notify";
