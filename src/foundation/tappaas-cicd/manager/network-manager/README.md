@@ -375,8 +375,12 @@ place, its rooms and the devices at it placed nowhere), the rooms with their loc
 rack with its placements resolved to their devices and faceplates (live port state on every
 plate port), the devices placed nowhere, and the cables — every link the switches and LLDP
 see, mapped to faceplate ports, plus the ones asset-manager records (the ISP's modem, a
-patch panel). `devices` lists the machines, the devices switch ports name, the devices
-asset-manager records and the devices a switch port sees that no record names.
+patch panel), each with the link speed seen where one is recorded — and `assets`, every asset
+asset-manager records with its stage (operational derived from its role) and its ports by
+connector and speed (ADR-040 D7, D9). `devices` lists the machines, the devices switch ports
+name, the assets asset-manager records that play no node, switch or AP (by their role's name,
+else their own; with `asset` and `portSpecs`), and the devices a switch port sees that no
+record names.
 
 Every device — node, switch, access point, device — carries `location` (a name of
 `site.json` `locations`: a recorded device's own, a switch's or an access point's when its
@@ -385,7 +389,7 @@ location text names one, else the primary), `placement` (`{room, rack, u}`, or `
 comes from a switch port: each MAC its controller reports behind the port (`neighbors` in
 `switch-manager list-ports --json`, with what LLDP and the lease say), or a port that is up with
 nothing reported or recorded on it; a port of a node, an access point, a switch or the ISP, a
-port a recorded cable lands on and a MAC a recorded device or a node's NIC has are accounted
+port a recorded cable lands on and a MAC on an asset's port or a node's NIC are accounted
 for. It is named by its MAC (else `<switch>:<port>`), at the switch's location, placed nowhere,
 and `asset-manager asset record` records it. A placement whose device is gone, and once the
 site has a rack a device placed nowhere at a location that has a room, are `topology` findings.

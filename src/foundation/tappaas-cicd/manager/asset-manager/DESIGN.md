@@ -10,10 +10,17 @@ room, a satellite in a provider's data centre, a backup buddy's house. Nothing
 in TAPPaaS knew where anything stands, so this manager records only that, and
 everything else comes from where it already is.
 
+And a box outlives what it is used for (#906, ADR-040 D7): bought, on the shelf,
+racked, a node, retired, a node again under another name, sold. Known only while
+it played a role, it vanished between roles and took its rack, its ports and its
+cables with it. So the manager that knows where boxes stand — position-manager,
+now asset-manager — also knows the boxes: each an **asset** with its ports and a
+life of its own, and the role it plays for the time being.
+
 ## Decisions
 
 1. **One record, nothing copied.** `config/positions.json` holds rooms, racks,
-   placements, the devices and the cables nothing can see. A placement is keyed
+   placements, the assets and the cables nothing can see. A placement is keyed
    by the device's name in the topology; the device's own record (a pvehost
    instance, the switch configuration, an AP's record, a module's config) is never
    touched or duplicated. A device renamed or removed shows as a finding, not as
@@ -56,28 +63,64 @@ everything else comes from where it already is.
    holds each verb as a function from document to document or refusal;
    `src/main.ts` locks, checks the whole result, writes atomically. The unit
    tests run the core over hrossen's captured topology.
-8. **What nothing manages is recorded, then it is a device.** A modem, an ONT,
-   a UPS or a patch panel has no inventory to come from; `devices` records it
-   with its kind and its model's or its own ports. The topology lists it among
-   its devices, so a recorded device is placed, cabled and drawn like any other;
-   a name the topology already has cannot be recorded.
-9. **What a switch port sees is one step from a record.** A device behind a port
-   that no record names is listed by the topology as seen, with its MAC and what
-   LLDP or its lease says, at the switch's location and unplaced. `device record`
-   turns it into a recorded device, keeping its MAC (so it is not seen twice) and
-   recording the port's link as its cable, since nothing else would draw it.
-10. **Rooms hold racks and loose devices.** A device on a shelf has a room and no
+8. **Every box is an asset; what it plays is its role (ADR-040 D7).** `assets`
+   records each physical thing by a name that never changes — a tag per kind
+   (`srv-NN`, `sw-NN`, `ap-NN`, `dev-NN`, O5) or the operator's own — with its
+   records (vendor, model, serial, tag, procurement, disposal), its ports and
+   its stage. Its role is the topology's name for what it is now: a node or a
+   machine, a switch, an access point, or a device nothing manages (a modem, a
+   patch panel), which the asset then is to the topology. One role, one asset;
+   a server plays a node, a switch a switch, an AP an AP. A placement and a
+   cable end keep naming the device as the topology does — the role, while
+   there is one; the asset's own name, while there is none — and allocate and
+   release move them between the two, so a placement survives its role and the
+   topology still joins on names. Every asset that is here (not ordered, not
+   disposed) is a device of the topology, so a spare server on a shelf is drawn
+   at its location and placed like any other.
+9. **Stages are recorded where nothing can see them, derived where something
+   can.** `ordered`, `stock` and `disposed` are acts (receive, dispose);
+   `placed` follows the placement and `operational` the role, so the view
+   derives them and the verbs keep the recorded stage in step. `faulty` is a
+   flag beside the stage, with a note: a node is operational and faulty. Ending
+   a role, unplacing and disposing are three acts (D8): dispose refuses an asset
+   with a role, a placement or a recorded cable, and a disposed record stays.
+10. **Ports belong to the asset, named by the connector (ADR-040 D9).** A port's
+    kind is what a cable plugs into — `rj45`, `sfp`, `wifi`, `usb-a`, `usb-c` —
+    with its speed (its maximum), a Wi-Fi standard and bands, an SFP module, a
+    role (`lan`, `wan`, `bmc`) and its MAC; a BMC is an rj45 port with role
+    `bmc`. The link a cable negotiates is the cable's `linkSpeed`. A model's
+    plate is the template: each plate port is an asset port (`poe-10g` a 10G
+    rj45, `sfp+` a 10G cage), the asset's own entries merged over it by name, so
+    a module or a MAC is recorded without restating the plate. MACs are unique
+    across every port, so a MAC names one asset.
+11. **What a switch port sees is one step from a record.** A device behind a port
+    that no record names is listed by the topology as seen, with its MAC and what
+    LLDP or its lease says, at the switch's location and unplaced. `asset record`
+    turns it into an asset playing itself, keeping its MAC on its port (so it is
+    not seen twice) and recording the port's link as its cable, since nothing
+    else would draw it.
+12. **Rooms hold racks and loose devices.** A device on a shelf has a room and no
     unit; its plate gives its size. A rack's room is a reference to a room
     record; free text from before rooms existed is kept and noted until the room
     is recorded.
-11. **A patch panel splits a wire, not a link.** A link through a panel port is
+13. **A patch panel splits a wire, not a link.** A link through a panel port is
     two recorded segments, front and rear, each marked with the origin of the
     link they replace. The topology chains them back into one link between the
     two devices (with the live state of the link it sees), so the Device view
     keeps one line and the Physical view draws the two wires; `cable join` undoes it.
-12. **A rename keeps the old words for a release.** `position-manager`, `rack-manager` and the
-    `mount` verbs answer as aliases; `racks.json` is read until the update has
-    renamed it, and a change waits until it has.
+14. **A rename keeps the old words for a release.** `position-manager`,
+    `rack-manager`, the `mount` verbs and the `device` verbs answer as aliases;
+    `racks.json` is read until migration 0020 has renamed it and `devices{}`
+    until migration 0027 has made them assets, and a change waits until each has.
+15. **`assets{}` is interim, shaped for the CMDB.** ADR-040 moves the actual
+    state into a CMDB kept by cmdb-controller (built on its own branch); this
+    half of its step 3 needs none of it. Until the CMDB migration (step 3's
+    second half), the assets live in positions.json with exactly the attributes
+    of the CMDB's `resource`/`asset` and `port` classes (D3) — kind, vendor,
+    model, serial, assetTag, procurement, disposal, stage, faulty, role as
+    `allocatedTo`, ports with kind, speed or standard and bands, module, role,
+    mac and side — so that migration is a copy, and asset-manager then reports
+    them with `source: recorded` instead of writing them here.
 
 ## Findings in the topology
 
@@ -93,5 +136,13 @@ everything else comes from where it already is.
   front and rear are checked separately.
 - A link through two panels in a row is chained, but `cable split` adds one panel
   at a time and `cable join` removes one at a time.
-- Only recorded devices carry a location here; nodes, machines, switches and
-  access points get theirs on their own records.
+- Only an asset playing no role, or a device nothing manages, carries the
+  location that counts here; nodes, machines, switches and access points get
+  theirs on their own records, and their asset's is ignored by the topology.
+- `--asset` on the role verbs (`site-manager node add`, `switch-manager
+  add-switch`, `ap-manager add`) and the installer's report of a new node's
+  serial and MACs (ADR-040 D8) are not built: the role-first path is `asset
+  allocate` by hand, or migration 0027 for what exists. The migration matches an
+  existing asset by its role only, not yet by serial or MAC.
+- Disks are attributes of a server, not assets (ADR-040 O4); history of
+  allocations is the CMDB's (D6), not kept here.

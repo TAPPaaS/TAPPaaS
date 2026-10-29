@@ -55,7 +55,7 @@ flowchart LR
     RACK["racks"]:::record
     PLACE["placements"]:::record
     CABLE["cables and segments"]:::record
-    RDEV["devices (recorded:<br/>modem, ONT, UPS, patch panel)"]:::record
+    RDEV["assets (every box: its ports,<br/>stage and role; interim,<br/>until the CMDB, ADR-040)"]:::record
     PLATE["faceplate catalog<br/>(in the source tree,<br/>with the site's own plates)"]:::catalog
   end
 
@@ -122,7 +122,7 @@ flowchart LR
   PLACE -- "device" --> DEVICE
   PLACE -- "faceplate" --> PLATE
   RDEV -- "model" --> PLATE
-  RDEV -. "is one of" .-> DEVICE
+  RDEV -. "role: plays or is one of" .-> DEVICE
   NODE -. "is one of" .-> DEVICE
   SWCFG -. "switches and APs are" .-> DEVICE
   CABLE -- "from.device, to.device" --> DEVICE
@@ -160,9 +160,9 @@ source tree, not under `~/config/`.
 | Satellite | `<instance>.json` of kind machine | module-manager (satellite module) | a module instance; `vault.pull.*` → the home PBS and datastore; `location` → the location it runs at, compared with the primary one to show its copy is off-site |
 | Room | `positions.json` → `rooms{}` | asset-manager | `location` → a location of the site (unset: the primary) |
 | Rack | `positions.json` → `racks{}` | asset-manager | `room` → room |
-| Placement | `positions.json` → `placements{}` (keyed by device) | asset-manager | `device` → a physical device; `rack` → rack (with its unit), or `room` → room when loose; `faceplate` → the catalog; the room is at the device's own location |
-| Recorded device | `positions.json` → `devices{}` | asset-manager | `model` → the faceplate catalog; `location` → a location (unset: the primary); its `ports` are its own; `mac` when a switch port saw it; it is a physical device like a node, switch or AP |
-| Cable | `positions.json` → `cables[]` | asset-manager | `from.device`, `to.device` → physical devices and their ports; a split link is two segments whose `origin` names the link they came from |
+| Placement | `positions.json` → `placements{}` (keyed by device: an asset's role, else its own name) | asset-manager | `device` → a physical device; `rack` → rack (with its unit), or `room` → room when loose; `faceplate` → the catalog; the room is at the device's own location |
+| Asset | `positions.json` → `assets{}` (interim: ADR-040 step 3 moves it into the CMDB, in the shape of its `asset` and `port` classes) | asset-manager | `role` → the node, machine, switch or access point it is allocated to, or the device nothing manages it is (one asset per role); `model` → the faceplate catalog where it names a key; `location` → a location (unset: the primary); its `ports[]` are its own (kind, speed or standard and bands, module, role, mac; a MAC unique across every port), merged over its model's plate; `stage` ordered, stock, placed or disposed (operational derived from its role), `faulty` a flag; every asset that is here is a physical device, by its role's name or its own |
+| Cable | `positions.json` → `cables[]` | asset-manager | `from.device`, `to.device` → physical devices and their ports; `linkSpeed` the speed seen on it; a split link is two segments whose `origin` names the link they came from |
 | Faceplate catalog | `asset-manager`'s catalog in the source tree, and the site's own plates in `positions.json` → `faceplates{}` (keyed `<vendor>/<model>`, merged over it; a site plate of a shipped key replaces it) | asset-manager | names nothing |
 
 ### Runtime and derived files (no references into them)
@@ -186,8 +186,15 @@ giving each its `location`, its `placement` and the `source` it came from:
 | Cluster node | its `pvehost` module instance, `config/<node>.json` (`address`, `uplinks`, `storagePools`, `location`) | Proxmox |
 | Switch | `switch-configuration-desired.json` | the switch controller (`-actual.json`) |
 | Access point | `switch-configuration-desired.json` → `accessPoints{}` | the AP controller |
-| Modem, ONT, UPS, patch panel | `positions.json` → `devices{}` | nothing: it is known by its record and its cables |
-| Something behind a switch port (a printer, a camera) | nowhere until `asset-manager device record` | the switch controller at the port (MAC, LLDP, lease): the topology lists it as seen |
+| Modem, ONT, UPS, patch panel, PDU, a spare box | `positions.json` → `assets{}` (by its role, else its own name) | nothing: it is known by its record and its cables |
+| Something behind a switch port (a printer, a camera) | nowhere until `asset-manager asset record` | the switch controller at the port (MAC, LLDP, lease): the topology lists it as seen |
+
+Every box is also an **asset** (`positions.json` → `assets{}`, ADR-040 D7): a node's, a
+switch's and an access point's as much as a modem's. The asset is the box, its ports and its
+life (ordered, stock, placed, operational, disposed; faulty beside it); the node, switch, AP or
+recorded device is the **role** it plays for a while (`role`). A placement and a cable end name
+the role while there is one and the asset when there is none, so a box keeps its place when its
+role ends. Migration 0027 gave every node, switch and AP an asset (`srv-NN`, `sw-NN`, `ap-NN`).
 
 `positions.json` never repeats a device the cluster sees: a placement, a cable end
 or a split segment names it, and the topology resolves the name. A name that is

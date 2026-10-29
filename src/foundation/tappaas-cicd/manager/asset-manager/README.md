@@ -1,10 +1,22 @@
 # asset-manager
 
-Where the site's hardware is. asset-manager owns `config/positions.json`: the rooms
-and the location each is in, the racks, where each device is placed, the devices nothing
-manages, and the few cables nothing can see. It changes no device and no device record: a
-placement names a device as `network-manager topology` names it — a node, a switch, an
-access point, a machine, or a device recorded here — and only says where that device stands.
+The site's physical assets and where they are (ADR-040 D7–D9). asset-manager owns
+`config/positions.json`: the rooms and the location each is in, the racks, where each device
+is placed, the **assets** — every physical box with its ports, its life from ordered to
+disposed, and the role it plays — and the few cables nothing can see. It changes no device
+and no device record: a placement names a device as `network-manager topology` names it — a
+node, a switch, an access point, a machine, or a device nothing manages — and only says where
+that device stands.
+
+An asset is the thing; its **role** is what it is for the time being: the topology's name for
+the node, switch or access point it is allocated to, or for the device nothing manages that it
+is (the ISP's modem, a patch panel). A placement and a cable end name the role while there is
+one, and the asset's own name when there is none, so a box keeps its rack, its ports and its
+cables when its role ends and can take another (`asset release`, `asset allocate`).
+
+`assets{}` is **interim**: ADR-040 step 3 moves the assets, with the rooms, racks, placements
+and cables, into the CMDB that cmdb-controller keeps. Its shape is the CMDB's `asset` and
+`port` classes' attributes, so that migration is a copy.
 
 A location is the site's (`site-manager location list`): a room is in one, a rack is in a
 room, a device is placed in a rack or loose in a room. A device with no placement is
@@ -38,14 +50,19 @@ which carries the positions resolved against the site.
     "patch1": { "rack": "rack1", "u": 32, "height": 1, "width": "full", "face": "front" },
     "ISP modem": { "room": "basement" }
   },
-  "devices": {
-    "ISP modem": { "kind": "modem", "model": "generic/isp-modem" },
-    "patch1": { "kind": "patch-panel", "ports": ["1", "2", "…", "24"], "displayName": "Patch panel A" },
-    "printer": { "kind": "other", "ports": ["eth0"], "mac": "aa:bb:cc:00:11:22", "displayName": "printer-1" }
+  "assets": {
+    "srv-01": { "kind": "server", "vendor": "HP", "model": "Z840", "serial": "CZC1234ABC", "stage": "placed", "role": "tappaas1", "displayName": "tappaas1",
+                "ports": [{ "name": "ilo", "kind": "rj45", "speed": "1g", "role": "bmc", "mac": "aa:bb:cc:00:00:01" }],
+                "procurement": { "supplier": "Proshop", "purchaseDate": "2024-03-01", "warrantyUntil": "2027-03-01", "ownership": "owned" } },
+    "sw-01": { "kind": "switch", "vendor": "unifi", "model": "unifi/usw-pro-xg-10-poe", "stage": "placed", "role": "USW Pro XG 10 PoE" },
+    "srv-02": { "kind": "server", "stage": "stock", "faulty": true, "faultNote": "PSU 2 dead, away for repair" },
+    "ISP modem": { "kind": "modem", "model": "generic/isp-modem", "stage": "placed", "role": "ISP modem" },
+    "patch1": { "kind": "patch-panel", "ports": [{ "name": "1", "kind": "rj45", "speed": "1g" }, "…"], "displayName": "Patch panel A", "stage": "placed", "role": "patch1" },
+    "printer": { "kind": "other", "ports": [{ "name": "eth0", "kind": "rj45", "speed": "1g", "mac": "aa:bb:cc:00:11:22" }], "displayName": "printer-1", "stage": "stock", "role": "printer" }
   },
   "cables": [
     { "from": { "device": "USW Pro XG 10 PoE", "port": "5" }, "to": { "device": "ISP modem", "port": "LAN 1" }, "kind": "uplink", "label": "ISP hand-off" },
-    { "from": { "device": "USW Pro XG 10 PoE", "port": "8" }, "to": { "device": "printer", "port": "eth0" }, "kind": "patch" },
+    { "from": { "device": "USW Pro XG 10 PoE", "port": "8" }, "to": { "device": "printer", "port": "eth0" }, "kind": "patch", "linkSpeed": "100m" },
     { "from": { "device": "USW Pro XG 10 PoE", "port": "2" }, "to": { "device": "patch1", "port": "1", "side": "front" }, "kind": "patch", "origin": "seen" },
     { "from": { "device": "patch1", "port": "1", "side": "rear" }, "to": { "device": "tappaas2", "port": "enp97s0" }, "kind": "patch", "origin": "seen" }
   ]
@@ -63,16 +80,40 @@ which carries the positions resolved against the site.
   most one placement.
 - **faceplate** is a catalog key; unset, the view draws the catalog's suggestion for
   the device's model, else a generic plate.
-- **devices** are the devices nothing manages — a modem, an ONT, a UPS, a patch panel, or
-  something a switch port saw (`modem`, `ont`, `ups`, `patch-panel`, `other`) — each with its
-  catalog **model** or its **ports**, the **location** it is at (unset: the primary) and,
-  when a switch port saw it, its **mac**. A recorded device is a device like any other: the
-  topology lists it with its kind and ports, the console draws it, it can be placed and it
-  is a cable end.
+- **assets** are the physical things, keyed by name — a tag per kind (`srv-NN`, `sw-NN`,
+  `ap-NN`, `dev-NN`: the next free one when `asset add` is given none) or the operator's own.
+  Each has a **kind** (`server`, `switch`, `access-point`, `modem`, `ont`, `ups`,
+  `patch-panel`, `pdu`, `other`), its records — **vendor**, **model** (a catalog key where the
+  catalog has one: its ports then come from the plate), **serial** (unique), **assetTag**,
+  **procurement** (`supplier`, `orderRef`, `purchaseDate`, `warrantyUntil`, `ownership`
+  owned|rented, `notes`; no prices) and, once gone, **disposal** (`how` sold|recycled|
+  returned|lost, `when`, `wiped`) — its **ports** (below), the **location** it is at (unset:
+  the primary), its **stage** and its **role**.
+- An asset's **stage** is `ordered`, `stock`, `placed` or `disposed` as recorded;
+  `operational` is derived from a role and `placed` from a placement, and the verbs keep
+  the recorded one in step. **faulty** is a flag beside the stage, with a **faultNote**: a node
+  with a failed fan is operational and faulty; a server away for repair is in stock and faulty.
+  An ordered or a disposed asset has no placement and no role; a disposed one's record stays.
+- An asset's **role** is the name the topology knows it by: a node or a machine (a server's),
+  a switch (a switch's), an access point (an AP's), or — for any other kind — a device nothing
+  manages, which the asset then is to the topology (its role usually its own name). Every asset
+  that is here (not ordered, not disposed) is a device of the topology by its role's name, else
+  its own: it can be placed, it is a cable end, the console draws it.
+- An asset's **ports** belong to it (ADR-040 D9). A port's **kind** names its connector —
+  `rj45`, `sfp`, `wifi`, `usb-a`, `usb-c` — and its **speed** is its maximum (`rj45` 1g, 2.5g,
+  10g; `sfp` 1g, 10g, 25g; `usb-*` usb2, usb3); a `wifi` port has a **standard** (`wifi5`,
+  `wifi6`, `wifi7`) and **bands** (`2.4`, `5`, `6`) instead, an `sfp` cage a **module** (`dac`,
+  `sr`, `lr`, `rj45`). **role** (`lan`, `wan`, `bmc`) says what the node uses it for — a BMC is
+  an `rj45` port with role `bmc`, with its own **mac**; power, video and serial are no ports. A
+  MAC is unique across every port. A patch panel's port may have a **side**, front or rear, when
+  it has only one. The ports of an asset's model's plate are its ports; its own entries are
+  merged over them by name (a module in a cage, a MAC), and its own the plate lacks follow.
 - **cables** are only what nothing can see: the ISP's modem, a device recorded from a
   switch port, a patch panel, a PDU. A cable the switches or LLDP see comes from the
   topology and is never recorded. A device only a cable names is still placed by that
-  cable, with its faceplate, and `validate` says how to record it (`device add`).
+  cable, with its faceplate, and `validate` says how to record it (`asset add`). A cable's
+  **linkSpeed** is the speed seen on it — the connection's, where a port's speed is its
+  maximum: a 10G cage holding a 1G module is `speed: 10g` with a `1g` link.
 - A patch panel's port has a **side**: its front (the default) and its rear each take
   one cable. A link split at a panel port (`cable split`) is two recorded segments
   marked with their **origin** — the link the topology sees, or a recorded cable — the
@@ -86,24 +127,33 @@ which carries the positions resolved against the site.
 
 | Verb | Does |
 |------|------|
-| `validate [--topology <file>] [--json]` | The whole document: every placement names a device the topology knows or one recorded here, no two overlap in a rack, each fits its rack, a loose device's room exists, every faceplate key is in the catalog, every cable end names a port the topology, a record or the catalog has, a panel port carries one cable a side; every location a room or a device names is the site's, and a device stands in a room at its own location. It notes a rack's room that is not recorded, a device only a cable names, and a device at a location that has no room (somewhere there, unplaced). |
+| `validate [--topology <file>] [--json]` | The whole document: every asset's kind, stage, ports (a speed its connector has, a standard and bands only on wifi, a module only in a cage) and records (serials unique, MACs unique across every port, dates as YYYY-MM-DD), no ordered or disposed asset placed or in a role, a disposed one with its disposal, each role one asset's and one the topology knows (a server's a node or machine, a switch's a switch, an AP's an AP); every placement names a device the topology knows or one recorded here, no two overlap in a rack, each fits its rack, a loose device's room exists, every faceplate key is in the catalog, every cable end names a port the topology, a record or the catalog has, a panel port carries one cable a side; every location a room or a device names is the site's, and a device stands in a room at its own location. It notes a rack's room that is not recorded, a device only a cable names, and a device at a location that has no room (somewhere there, unplaced). |
 | `room list\|show [<room>] [--json]` | The rooms, their location, their racks and what stands loose in them. |
 | `room add <room> [--location <location>] [--display-name] [--description]` | A new room, at the primary location unless told. |
 | `room modify <room> --set <field>=<value>... --unset <field>...` | Its display name, description or location. |
 | `room delete <room>` | An empty room (no rack names it, nothing stands loose in it). |
-| `device list\|show [<device>] [--json]` | The recorded devices, their ports, location and placement. |
-| `device add <device> --kind modem\|ont\|ups\|patch-panel\|other [--model <vendor/model>] [--ports <n> \| --port <name>...] [--location <location>] [--display-name] [--description]` | A device nothing manages. Not a name the topology already has. |
-| `device record <switch>:<port>\|<mac> --name <device> --kind <kind> [--port <name>] [--model] [--location] [--display-name] [--description]` | A device a switch port sees and nobody recorded (`network-manager topology` lists it, `source: seen`) becomes a recorded one: its MAC kept, at the switch's location unless told, shown by what LLDP or the lease calls it, and the port's link recorded as its cable to its port (what LLDP says, else its model's first, else `1`). |
-| `device modify <device> --set <field>=<value>... --unset <field>...` | Its kind, model, ports (a count or a list), display name, description, location, mac. |
-| `device remove <device>` | Once it is unplaced and no recorded cable names it. |
+| `asset list [--stage <stage>] [--kind <kind>] [--json]` | Every asset: its kind, stage (operational and placed derived), role, ports and where it is, the faulty ones marked. |
+| `asset show <asset> [--json]` | One asset, by its name or the role it plays: its records, ports (its plate's merged with its own), placement, procurement, disposal. |
+| `asset add [<asset>] --kind <kind> [--vendor] [--model <vendor/model>] [--serial] [--asset-tag] [--stage ordered\|stock] [--ports <n> \| --port <name>[:<kind>[:<speed>]]...] [--location <location>] [--display-name] [--description] [--supplier] [--order-ref] [--purchase-date] [--warranty-until] [--ownership owned\|rented] [--notes]` | A physical thing, bought (`--stage ordered`) or here (in stock), under its name or the next free tag of its kind. Not a name the topology has: that is a role, which the asset is allocated to. |
+| `asset record <switch>:<port>\|<mac> [--name <asset>] --kind <kind> [--port <name>] [--model] [--location] [--display-name] [--description]` | A device a switch port sees and nobody recorded (`network-manager topology` lists it, `source: seen`) becomes an asset playing itself: its MAC on its port (so it is not seen twice), at the switch's location unless told, shown by what LLDP or the lease calls it, and the port's link recorded as its cable to its port (what LLDP says, else its model's first, else `1`). |
+| `asset modify <asset> --set <field>=<value>... --unset <field>...` | Its kind, vendor, model, serial, assetTag, display name, description, location, ports (a count or a list, rj45 at 1g), mac (its first port's), faultNote, `procurement.<field>`. |
+| `asset receive <asset>` | What was ordered has come: in stock. |
+| `asset allocate <asset> --role <name>` | It takes a role: a node or machine (a server), a switch, an access point the topology knows — or, for another kind, a device nothing manages. Its placement and recorded cables move to the role's name. |
+| `asset release <asset>` | The role ends: its placement and cables stay with the box, under its own name; it is placed or in stock again. |
+| `asset fault <asset> --note <text>` / `asset repaired <asset>` | The faulty flag beside its stage, with what is wrong; cleared. |
+| `asset dispose <asset> --how sold\|recycled\|returned\|lost [--wiped] [--when <date>]` | It leaves the site; refused while it has a role, a placement or a recorded cable (three acts, ADR-040 D8). The record stays, read-only. |
+| `asset remove <asset>` | A record made by mistake: unplaced, no recorded cable, in no role but its own. A disposed asset's record stays. |
+| `port add <asset> <port> --kind rj45\|sfp\|wifi\|usb-a\|usb-c [--speed] [--standard] [--bands <list>] [--module] [--role lan\|wan\|bmc] [--mac] [--side front\|rear]` | A port of its own: its connector and what goes with it (rj45 is 1g unless told). |
+| `port modify <asset> <port> --set <field>=<value>... --unset <field>...` | A port's kind, speed, standard, bands, module, role, mac or side; a port of its model's plate takes an entry of its own, merged over it. |
+| `port remove <asset> <port>` | A port of its own no recorded cable uses; one over its plate's goes back to the plate's. |
 | `rack list\|show [<rack>] [--json]` | The racks; one rack with what is placed in it. |
 | `rack add <rack> [--units 42] [--width 19in\|10in] [--numbering bottom-up\|top-down] [--display-name] [--room] [--description]` | A new rack. |
 | `rack modify <rack> --set <field>=<value>... --unset <field>...` | Any field but its name; `--unset` clears a text. |
 | `rack delete <rack>` | An empty rack. |
 | `place list [--rack <rack>]\|show <device> [--json]` | What is placed where. |
-| `place <device> (--rack <rack> --u <n> \| --room <room>) [--height] [--width] [--slot] [--face] [--faceplate] [--label] [--description]` | A device into a rack, or loose into a room. A recorded device's plate is its model's or its ports'. |
+| `place <device> (--rack <rack> --u <n> \| --room <room>) [--height] [--width] [--slot] [--face] [--faceplate] [--label] [--description]` | A device into a rack, or loose into a room. An asset's plate is its model's, or one drawn from its ports. |
 | `place modify <device> --set <field>=<value>... --unset <field>...` | A move (`rack` and `u`, `slot`, `face`, or `room` — out of the rack, loose in it) or its plate and label; `--unset faceplate` goes back to the suggestion. |
-| `unplace <device>` | The device leaves its rack or room. A passive plate's recorded cables go with it; a recorded device keeps its own. |
+| `unplace <device>` | The device leaves its rack or room. A passive plate's recorded cables go with it; an asset keeps its own (and is in stock again). |
 | `cable list [--json]` | The recorded cables. |
 | `cable add --from <device:port> --to <device:port> [--kind patch\|uplink\|power] [--label] [--from-faceplate\|--to-faceplate <key>] [--from-side\|--to-side front\|rear]` | A cable nothing can see; a side on a patch panel's port. |
 | `cable remove <device:port> [--side front\|rear]` | The recorded cable on that port (on a panel, that side's). |
@@ -117,8 +167,11 @@ which carries the positions resolved against the site.
 | `export --json` | The document and the whole catalog: what `network-manager topology` reads. |
 
 `mount add`, `mount modify`, `mount remove`, `mount list` and `mount show` are the old
-names of `place`, `place modify`, `unplace`, `place list` and `place show`; they answer
-for one release.
+names of `place`, `place modify`, `unplace`, `place list` and `place show`; `device list`,
+`device show`, `device add`, `device modify`, `device remove` and `device record` are the old
+names of the `asset` verbs; they answer for one release. A verb that names an asset takes its
+name or the role it plays. Placing an asset in stock makes it placed, unplacing it puts it back
+in stock; an ordered or disposed asset is not placed.
 
 Every changing verb takes `--check` (one line of what it would change — `[check] would add
 room 'stue' at hareskov` — or `[refused] <why>` and exit 1; `--check --json` prints the whole
@@ -127,11 +180,32 @@ whole resulting document and writes it atomically; a change that would leave it 
 writes nothing. The verbs that name a device read the topology (`network-manager topology
 --json --no-health --no-positions`) unless `--topology <file>` hands one in; when it cannot be
 read, device names are not checked and a warning says so. The location checks read
-`config/site.json`. `rack delete`, `room delete`, `device remove`, `unplace` and `cable
-remove` and `faceplate delete` are destructive (the console asks for the name).
+`config/site.json`. `rack delete`, `room delete`, `asset dispose`, `unplace`, `cable
+remove`, `port remove` and `faceplate delete` are destructive (the console asks for the name).
 
 A site whose `config/racks.json` the update has not renamed yet is read as it is; a
-change is refused until it has been.
+change is refused until it has been. Likewise a `positions.json` that still records
+`devices{}`: each reads as an asset playing itself, and a change waits for migration 0027,
+which makes them assets and gives every node, switch and access point one of its own
+(`srv-NN`, `sw-NN`, `ap-NN` in the topology's order, the role's name as its display name).
+
+### A box's life
+
+A server bought, racked, made a node, retired and sold (ADR-040 D7's example):
+
+```
+asset-manager asset add --kind server --vendor HP --model Z840 --serial CZC1234ABC --stage ordered --supplier Proshop   # srv-07
+asset-manager asset receive srv-07
+asset-manager port add srv-07 ilo --kind rj45 --role bmc --mac aa:bb:cc:00:00:07
+asset-manager place srv-07 --rack rack1 --u 12 --faceplate generic/server-2u
+asset-manager asset allocate srv-07 --role tappaas5 --check     # once site-manager has added tappaas5
+asset-manager asset allocate srv-07 --role tappaas5             # its placement is tappaas5's now
+asset-manager asset fault srv-07 --note "fan 2 failed"          # operational and faulty
+asset-manager asset repaired srv-07
+asset-manager asset release srv-07                              # the node is gone; the box stays in its rack
+asset-manager unplace srv-07
+asset-manager asset dispose srv-07 --how sold --wiped
+```
 
 ### Recording a device
 
@@ -139,8 +213,8 @@ A cable recorded before devices could be (the ISP's modem, named only on its cab
 keeps working; `validate` points it out. Recording the device keeps the cable as it is:
 
 ```
-asset-manager device add 'ISP modem' --kind modem --model generic/isp-modem --check
-asset-manager device add 'ISP modem' --kind modem --model generic/isp-modem
+asset-manager asset add 'ISP modem' --kind modem --model generic/isp-modem --check
+asset-manager asset add 'ISP modem' --kind modem --model generic/isp-modem
 asset-manager place 'ISP modem' --room basement      # or --rack rack1 --u 3
 ```
 
@@ -148,8 +222,8 @@ A device a switch port sees — a printer, a camera — is listed by the topolog
 with its MAC and what LLDP or its lease says. One verb records it and its cable:
 
 ```
-asset-manager device record 'USW Pro XG 10 PoE:8' --name printer --kind other --check
-asset-manager device record aa:bb:cc:00:11:22 --name printer --kind other
+asset-manager asset record 'USW Pro XG 10 PoE:8' --name printer --kind other --check
+asset-manager asset record aa:bb:cc:00:11:22 --name printer --kind other
 asset-manager place printer --room office
 ```
 
@@ -179,8 +253,11 @@ or, a grid right of the plate's name:
   name. A plate whose ports have a layout gives **ports**, a port spec, instead (below):
   its ports in groups, each over its share of the plate's width. A port's **name** is the
   controller's ("Port 11", "sfp-sfpplus1"); its **id**, the topology's, is the number of
-  "Port N", else the name, unless given. **kind** is `rj45`, `sfp+`, `sfp28`, `poe`,
-  `console` or `power`.
+  "Port N", else the name, unless given. **kind** is how it is drawn — `rj45`, `sfp+`,
+  `sfp28`, `poe`, `console` or `power` — and says the asset's port: `rj45` and `poe` an `rj45`
+  port at 1g, `sfp+` an `sfp` cage at 10g, `sfp28` one at 25g; a console and a power inlet are
+  drawn and are no ports. **speed** gives another (a 10G RJ45: `"speed": "10g"`), one its
+  connector comes in.
 - **match** lists the models and names the inventories report the device by: the catalog's
   suggestion for a device is the plate whose model or match is its model or name.
 - **generic** `nics` fills the plate from a node's NICs (its uplinks), `ports` from a
@@ -196,9 +273,11 @@ How `faceplate add --ports` and a catalog file's **ports** write a plate's ports
 
 - **groups** stand side by side, a comma between them and a gap between them on the plate;
 - **rows** within a group, top to bottom, a slash between them;
-- **items** within a row, a plus between them: `[<n>x]<kind>[@<rows>][:<name>]`, a kind
-  `rj45`, `sfp+`, `sfp28`, `poe`, `console`, `power`, or `gap` (an empty place). A kind
-  ending in `+` takes its own `+` before the next item: `2xsfp++rj45`.
+- **items** within a row, a plus between them: `[<n>x]<kind>[-<speed>][@<rows>][:<name>]`, a
+  kind `rj45`, `sfp+`, `sfp28`, `poe`, `console`, `power`, or `gap` (an empty place). A speed
+  (`1g`, `2.5g`, `10g`, `25g`) is the port's maximum where it is not its kind's — `rj45-2.5g`,
+  `poe-10g`, `sfp+-1g` — and one its connector comes in (`rj45-25g` is refused). A kind ending
+  in `+` takes its own `+` before the next item: `2xsfp++rj45`.
 
 Ports are numbered 1, 2, … unless named; `{n}` in a name is the number that name counts
 from 1, and a name without it given to several ports gets the number after it.
@@ -214,12 +293,13 @@ right edge.
 | `8xsfp+/8xsfp+` | two rows of eight, 1-8 over 9-16 |
 | `16xsfp+@2:sfp-sfpplus{n}[3-66]` | sixteen cages odd over even, in the left two thirds |
 | `rj45:WAN+gap+4xrj45:LAN {n}` | WAN, a gap, LAN 1-4 |
+| `10xpoe-10g:Port {n}+2xsfp+:Port {n}[51-98]` | ten 10G PoE RJ45 and two SFP+ cages, over the right half |
 
 ### The site's own plates
 
 A site adds a plate for a model the catalog lacks; it is kept in `config/positions.json`
 under `faceplates`, keyed `<vendor>/<model>`, and merged over the shipped catalog, so a
-placement, a recorded device's model and a cable end name it as they name a shipped one:
+placement, an asset's model and a cable end name it as they name a shipped one:
 
 ```
 asset-manager faceplate add acme/nas-4 --units 2 --ports "4xrj45, 2xsfp+" --kind server --match NAS-4X --check
