@@ -765,6 +765,16 @@ in
             interval = "1m";
             rules = alertRules;
           }];
+          # The rules that moved into their modules' <module>-alerts.json
+          # (ADR-039 D6). Grafana keeps a file-provisioned rule that leaves the
+          # file until it is deleted by name: without this, each would fire
+          # beside its module copy and mail twice.
+          deleteRules = map (uid: { orgId = 1; inherit uid; }) [
+            "tappaas-quorum-lost" "tappaas-ha-fencing" "tappaas-host-silent"
+            "tappaas-backup-failed" "tappaas-oom-kill" "tappaas-root-key-changed"
+            "tappaas-replication-failed" "tappaas-ha-stuck" "tappaas-firewall-cert"
+            "tappaas-lan-leg-down" "tappaas-disk-errors"
+          ];
         };
         contactPoints.settings = {
           apiVersion = 1;
