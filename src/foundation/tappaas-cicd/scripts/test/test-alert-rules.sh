@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+#
+# test-alert-rules.sh — tappaas-alert-rules.py (ADR-039), offline: no Grafana, no
+# logging VM. The validator's rules, the query the platform builds (always the
+# computed host list, whatever the module writes), the Grafana rule shape, and
+# the hosts a scope reads from a fixture config/.
+set -uo pipefail
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+S="${HERE}/../tappaas-alert-rules.py"
+[[ -f "${S}" ]] || { echo "tappaas-alert-rules.py not found"; exit 77; }
+command -v python3 >/dev/null || { echo "needs python3"; exit 77; }
+
+TMP="$(mktemp -d "${TMPDIR:-/tmp}/alertrules.XXXXXX")"
+trap 'rm -rf "${TMP}"' EXIT
+
+# A fixture site: a Community module with two instances (one archived), a
+# foundation module, and the logging:logs consumers that make up "all".
+mkdir -p "${TMP}/config" "${TMP}/repo/src/foundation/cluster" "${TMP}/community/hosting" "${TMP}/repo/src/foundation/pvehost"
+cat > "${TMP}/config/site1.json"  <<EOF
+{"vmname": "site1", "moduleSource": "${TMP}/community/hosting", "integratesWith": ["logging:logs"]}
+EOF
+cat > "${TMP}/config/site2.json"  <<EOF
+{"vmname": "site2", "location": "${TMP}/community/hosting/"}
+EOF
+cat > "${TMP}/config/oldsite.json" <<EOF
+{"vmname": "oldsite", "moduleSource": "${TMP}/community/hosting", "status": "archived"}
+EOF
+cat > "${TMP}/config/tappaas1.json" <<EOF
+{"moduleSource": "${TMP}/repo/src/foundation/pvehost", "integratesWith": ["logging:logs"]}
+EOF
+cat > "${TMP}/config/cluster.json" <<EOF
+{"moduleSource": "${TMP}/repo/src/foundation/cluster"}
+EOF
+
+TAPPAAS_REPO_SRC="${TMP}/repo/src" python3 -I - "${S}" "${TMP}" <<'PYEOF'
+import importlib.util, json, sys
+spec = importlib.util.spec_from_file_location("ar", sys.argv[1]); ar = importlib.util.module_from_spec(spec); spec.loader.exec_module(ar)
+T = sys.argv[2]; cfg = f"{T}/config"
+passed = failed = 0
+def ck(cond, msg):
+    global passed, failed
+    if cond: passed += 1
+    else: failed += 1; print(f"  FAIL: {msg}")
+
+ok = {"name": "sig-rejected", "title": "Release signature rejected", "kind": "event",
+      "match": "tappaas-site: signature rejected", "window": 300, "summary": "A release was refused."}
+def rules(*r): return {"rules": list(r)}
+def errs(r, foundation=False): return ar.validate(rules(r), foundation)
+
+# ── the validator ──
+ck(errs(ok) == [], f"a plain rule validates ({errs(ok)})")
+ck(ar.validate({"rules": []}) != [], "an empty rule list is refused")
+ck(ar.validate({"rules": [ok], "extra": 1}) != [], "an unknown top-level key is refused")
+ck(ar.validate({"rules": [ok], "_comment": "x"}) == [], "a _comment is allowed")
+ck(errs({**ok, "name": "Bad Name"}) != [], "a name that is not a DNS label is refused")
+ck(ar.validate(rules(ok, ok)) != [], "a name used twice is refused")
+ck(errs({**ok, "title": "Släpp"}) != [], "a non-ASCII title is refused (mail subject)")
+ck(errs({**ok, "kind": "maybe"}) != [], "an unknown kind is refused")
+ck(errs({**ok, "window": 30}) != [] and errs({**ok, "window": 90000}) != [], "a window out of 60–86400 is refused")
+ck(errs({k: v for k, v in ok.items() if k != "match"}) != [], "a rule without match (not absent) is refused")
+ck(errs({**ok, "match": "a\nb"}) != [], "a multi-line match is refused")
+ck(errs({**ok, "colour": "red"}) != [], "an unknown key is refused")
+for k, v in (("scope", "all"), ("expr", "sum(x)"), ("query", "{a}")):
+    ck(any("foundation" in e for e in errs({**ok, k: v})), f"'{k}' is refused for a Community module")
+ck(errs({**ok, "scope": ["pvehost"]}, True) == [], "a foundation rule may scope to another module")
+ck(errs({**ok, "scope": "nodes"}, True) != [], "an unknown scope word is refused")
+ck(errs({"name": "e", "title": "E", "kind": "event", "window": 300, "summary": "s", "expr": "sum(x)"}, True) != [], "an expr rule needs its query")
+ck(errs({"name": "e", "title": "E", "kind": "event", "window": 300, "summary": "s", "expr": "sum(x)", "query": "{a}", "match": "x"}, True) != [], "match does not go with expr")
+ck(errs({**ok, "capture": {"site": "site=(?P<site>[a-z]+)"}}) == [], "a capture with its named group validates")
+ck(errs({**ok, "capture": {"site": "site=([a-z]+)"}}) != [], "a capture without its named group is refused")
+ck(errs({**ok, "capture": {"host": "(?P<host>x)"}}) != [], "a reserved label cannot be captured")
+ck(errs({**ok, "absent": True, "capture": {"s": "(?P<s>x)"}}) != [], "an absent rule cannot capture")
+ck(errs({**ok, "absent": True, "above": 2}) != [], "above does not go with absent")
+ck(errs({**ok, "repeat": "24h"}) == [] and errs({**ok, "repeat": "48h"}) != [] and errs({**ok, "repeat": "30m"}) != [], "repeat is 1h–24h")
+ck(errs({**ok, "include": ["lines", "bundle"]}) == [], "include lines and bundle validates for any module")
+ck(errs({**ok, "include": ["config"]}) != [] and errs({**ok, "include": ["lines", "lines"]}) != [], "include takes lines/bundle once each")
+ck(errs({**ok, "mail": {"subject": "{state}: {title} on {host}"}}) == [], "known placeholders validate")
+ck(errs({**ok, "mail": {"subject": "{secret}"}}) != [], "an unknown placeholder is refused")
+ck(errs({**ok, "mail": {"body": "{lines}"}}) != [], "{lines} without include lines is refused")
+ck(errs({**ok, "include": ["lines"], "mail": {"body": "{lines}"}}) == [], "{lines} with include lines validates")
+ck(errs({**ok, "mail": {"body": "{label.site}"}}) != [], "a placeholder for a label the rule does not capture is refused")
+ck(ar.validate(rules(*[{**ok, "name": f"r{i}"} for i in range(21)])) != [], "more than 20 rules are refused")
+
+# ── the query: the platform's host list, the module's text kept inside its string ──
+e = ar.expression(["site2", "site1"], ok)
+ck(e == 'sum by (host) (count_over_time({host=~"^(site1|site2)$"} |~ "tappaas-site: signature rejected" [300s]))', f"plain rule expression ({e})")
+hostile = {**ok, "match": 'x"} or {host=~".+"} |= "', "unit": 'a"}|{b'}
+e = ar.expression(["site1"], hostile)
+ck(e.startswith('sum by (host) (count_over_time({host=~"^(site1)$", unit=~"a\\"}|{b"} |~ "x\\"} or {host=~\\".+\\"} |= \\"" [300s]))'),
+   f"a hostile match and unit stay inside their string literals ({e})")
+ck(f"|~ {ar._q(hostile['match'])} [" in e and e.count('{host=~"^(') == 1, "a hostile match is one quoted literal: no second stream selector")
+e = ar.expression(["site1"], {**ok, "capture": {"site": "site=(?P<site>[a-z]+)"}, "above": 1})
+ck(e == 'sum by (host, site) (count_over_time({host=~"^(site1)$"} |~ "tappaas-site: signature rejected" | regexp "site=(?P<site>[a-z]+)" [300s])) > 1', f"captures and above ({e})")
+e = ar.expression(["site1"], {**ok, "absent": True, "window": 900, "unit": "agent\\.service"})
+ck(e == 'count by (host) (count_over_time({host=~"^(site1)$", unit=~"agent\\\\.service"} |~ "tappaas-site: signature rejected" [1h] offset 900s)) unless count by (host) (count_over_time({host=~"^(site1)$", unit=~"agent\\\\.service"} |~ "tappaas-site: signature rejected" [900s]))', f"absent form ({e})")
+try: ar.selector(["bad host"], ok); ck(False, "a bad host name is refused")
+except ValueError: ck(True, "")
+try: ar.selector([], ok); ck(False, "an empty host list is refused")
+except ValueError: ck(True, "")
+
+# ── the Grafana rule ──
+g = ar.grafana_rule("hosting", {**ok, "include": ["bundle", "lines"], "repeat": "24h", "headline": "Signature rejected",
+                                "mail": {"subject": "{state}: {title}"}}, ["site1"])
+ck(g["uid"] == "hosting-sig-rejected" and g["ruleGroup"] == "module-hosting" and g["folderUID"] == ar.FOLDER_UID, "uid and group are the module's")
+ck(g["labels"] == {"kind": "event", "module": "hosting", "bundle": "true", "lines": "true"}, f"labels ({g['labels']})")
+ck(g["annotations"]["headline"] == "Signature rejected" and g["annotations"]["mailSubject"] == "{state}: {title}", "headline and mail template travel as annotations")
+ck(g["annotations"]["query"] == '{host=~"^(site1)$"} |~ "tappaas-site: signature rejected"', f"the Explore query ({g['annotations']['query']})")
+ck(g["notification_settings"]["repeat_interval"] == "24h" and g["notification_settings"]["receiver"] == ar.RECEIVER, "repeat becomes the rule's routing")
+ck([d["refId"] for d in g["data"]] == ["A", "B", "C"] and g["data"][0]["relativeTimeRange"]["from"] == 300 and g["noDataState"] == "OK", "the A/B/C shape of the core rules")
+ck(ar.grafana_rule("m", {**ok, "absent": True, "window": 900}, ["a"])["data"][0]["relativeTimeRange"]["from"] == 4500, "an absent rule looks back the window plus an hour")
+try: ar.rule_uid("a-very-long-community-module-name", {**ok, "name": "and-a-long-rule-name"}); ck(False, "a uid over 40 characters is refused")
+except ValueError: ck(True, "")
+
+# ── config/: whose instances, which hosts ──
+ck(ar.scope_hosts(cfg, "hosting") == ["site1", "site2"], f"a module's hosts: its instances, archived left out ({ar.scope_hosts(cfg, 'hosting')})")
+ck(ar.scope_hosts(cfg, "pvehost") == ["tappaas1"], "an instance without vmname is named by its config")
+ck(ar.scope_hosts(cfg, "*all*") == ["site1", "tappaas1"], f"'all' is every instance that declares logging:logs ({ar.scope_hosts(cfg, '*all*')})")
+ck(ar.is_foundation(f"{T}/repo/src/foundation/cluster") and not ar.is_foundation(f"{T}/community/hosting"), "foundation is where the source lives")
+ck(not ar.is_foundation(f"{T}/repo/src/foundation/../../evil"), "a path that only starts like the foundation tree is not foundation")
+grp = ar.render_group("cluster", rules({**ok, "scope": ["pvehost"]}), lambda m: ar.scope_hosts(cfg, m))
+ck(len(grp["rules"]) == 1 and "tappaas1" in grp["rules"][0]["data"][0]["model"]["expr"], "a foundation rule reads its scope's hosts")
+grp = ar.render_group("nobody", rules(ok), lambda m: ar.scope_hosts(cfg, m))
+ck(grp["rules"] == [], "a module with no instance renders no rule")
+
+print(f"alert-rules: {passed} passed, {failed} failed")
+sys.exit(1 if failed else 0)
+PYEOF
+rc=$?
+
+# The CLI: validate's exit code and messages.
+printf '{"rules":[{"name":"x","title":"X","kind":"event","match":"y","window":300,"summary":"s","scope":"all"}]}' > "${TMP}/c.json"
+if python3 -I "${S}" validate "${TMP}/c.json" 2>/dev/null; then echo "  FAIL: CLI validate accepted a Community scope"; rc=1; fi
+python3 -I "${S}" validate --foundation "${TMP}/c.json" || { echo "  FAIL: CLI validate --foundation refused a foundation scope"; rc=1; }
+exit "${rc}"
