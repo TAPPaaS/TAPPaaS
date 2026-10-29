@@ -14,7 +14,7 @@
 . "$(dirname "${BASH_SOURCE[0]}")/_common.sh" "$@"
 
 # Said on the install; on every update after it is [Debug] (a failure warns).
-debug "  logging:logs: ${CONSUMER} ships its journal to logging (push receiver :3101)"
+debug "  logging:logs: ${CONSUMER} ships its logs to logging"
 logs_reconcile_consumer_rules
 logs_sync_credentials
 logs_apply_client

@@ -13,7 +13,13 @@
 
 . "$(dirname "${BASH_SOURCE[0]}")/_common.sh" "$@"
 
-info "  ${GN}✓${CL} logging:logs: ${CONSUMER} ships its journal to logging (push receiver :3101)"
+# shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
+. "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
+case "$(log_shipping_syslog_kind "${CONSUMER}")" in
+    opnsense) info "  ${GN}✓${CL} logging:logs: ${CONSUMER} ships its syslog to logging (:1514)" ;;
+    node)     info "  ${GN}✓${CL} logging:logs: ${CONSUMER} ships its syslog to logging (rsyslog → :1515)" ;;
+    *)        info "  ${GN}✓${CL} logging:logs: ${CONSUMER} ships its journal to logging (push receiver :3101)" ;;
+esac
 logs_reconcile_consumer_rules
 logs_sync_credentials
 logs_apply_client
