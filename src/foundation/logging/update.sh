@@ -233,9 +233,24 @@ else
     warn "  could not write the credentials to ${VMNAME} — pushes and queries are refused until they are"
 fi
 
+# ── Module alert rules (ADR-039) ─────────────────────────────────────
+# Each module's rules live in Grafana's database, not in this VM's build: put
+# every module's group back, so a rebuilt or restored Grafana has them without
+# waiting for each module's next update.
+_ALERT_RULES="${SCRIPT_DIR}/../tappaas-cicd/scripts/tappaas-alert-rules.py"
+if [[ -f "${_ALERT_RULES}" ]]; then
+    if _ar_out="$(python3 -I "${_ALERT_RULES}" apply-all 2>&1)"; then
+        _sum_rules="$(grep -c 'rule(s) in module-' <<<"${_ar_out}" || true)"
+        debug "  module alert rules re-applied: ${_ar_out//$'\n'/; }"
+    else
+        warn "  module alert rules: ${_ar_out//$'\n'/; }"
+    fi
+fi
+
 # One line for what an update re-established (a failure above has warned).
 _sum_from="$(printf '%s and ' ${_sum_opn:+"${_sum_opn}"} ${_sum_nodes:+"${_sum_nodes}"} | sed 's/ and $//')"
 _sum=""
 [[ -n "${_sum_from}" ]] && _sum="syslog from ${_sum_from}"
 [[ -n "${_sum_creds:-}" ]] && _sum+="${_sum:+, }credentials for ${_sum_creds} pushing hosts"
+[[ "${_sum_rules:-0}" -gt 0 ]] && _sum+="${_sum:+, }alert rules of ${_sum_rules} module(s)"
 [[ -n "${_sum}" ]] && info "  ${GN}✓${CL} logging: ${_sum}"

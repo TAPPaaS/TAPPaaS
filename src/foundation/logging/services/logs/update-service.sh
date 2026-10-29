@@ -18,3 +18,4 @@ debug "  logging:logs: ${CONSUMER} ships its journal to logging (push receiver :
 logs_reconcile_consumer_rules
 logs_sync_credentials
 logs_apply_client
+logs_apply_alerts

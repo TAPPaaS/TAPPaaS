@@ -155,6 +155,28 @@ console.log("checkModule — ADR-035, contributed controllers and managers");
   check(!has(run(std, "net"), "warning", /not declared in controllers/), "a directory components.json lists is declared (tappaas-cicd's standard components)");
 }
 
+console.log("ADR-039: a module's alert rules");
+{
+  const seen: Array<[string, boolean]> = [];
+  const withAlerts = (files: Record<string, string>, findings: string[]): BlueprintFs => ({
+    ...fakeFs(files),
+    alertFindings: (f, foundation) => { seen.push([f, foundation]); return findings; },
+  });
+  const files = complete("app", { "/r/app/app-alerts.json": "{}" });
+  const f = checkModule({ name: "app", dir: "/r/app", moduleJson: "/r/app/app.json" }, withAlerts(files, ["rule 'x': 'scope' is for foundation modules only"]), schema);
+  check(f.some((x) => x.severity === "error" && x.path === "app-alerts.json" && /foundation modules only/.test(x.message)),
+    "a finding of the validator is a blueprint error on <module>-alerts.json");
+  check(seen.length === 1 && seen[0][1] === false, "a module outside src/foundation is checked as Community");
+  const ok = checkModule({ name: "app", dir: "/r/app", moduleJson: "/r/app/app.json" }, withAlerts(complete("app"), ["x"]), schema);
+  check(!ok.some((x) => x.path === "app-alerts.json"), "no alerts file: nothing to check");
+  seen.length = 0;
+  const ff = complete("cluster", { "/r/src/foundation/cluster/cluster-alerts.json": "{}" });
+  const ffiles: Record<string, string> = {};
+  for (const [k, v] of Object.entries(ff)) ffiles[k.replace("/r/cluster/", "/r/src/foundation/cluster/")] = v;
+  checkModule({ name: "cluster", dir: "/r/src/foundation/cluster", moduleJson: "/r/src/foundation/cluster/cluster.json" }, withAlerts(ffiles, []), schema);
+  check(seen.length === 1 && seen[0][1] === true, "a module under src/foundation is checked as foundation");
+}
+
 console.log("realBlueprintFs, on a real tree");
 {
   const d = mkdtempSync(join(tmpdir(), "bp-"));

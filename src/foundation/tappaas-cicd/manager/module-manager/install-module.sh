@@ -628,6 +628,19 @@ main() {
     INSTALL_MODULE_NAME="${effective_module}"
     trap rollback_failed_install EXIT
 
+    # The module's alert rules (ADR-039), when it ships them: refused here, with
+    # the finding, rather than at their first apply. Foundation fields (scope,
+    # expr, query) only for a module from the TAPPaaS foundation tree.
+    if [[ -f "$(pwd)/${module}-alerts.json" ]]; then
+        local _ar _arf=()
+        _ar="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../scripts/tappaas-alert-rules.py"
+        [[ "$(readlink -f "$(pwd)")" == "$(readlink -f /home/tappaas/TAPPaaS/src/foundation)"/* ]] && _arf=(--foundation)
+        if [[ -f "${_ar}" ]]; then
+            python3 -I "${_ar}" validate "${_arf[@]}" "$(pwd)/${module}-alerts.json" \
+                || die "${module}-alerts.json does not validate (ADR-039) — fix the rules above"
+        fi
+    fi
+
     local module_json="${CONFIG_DIR}/${effective_module}.json"
 
     # The guest's VM id: the module's own unless another guest or deployed

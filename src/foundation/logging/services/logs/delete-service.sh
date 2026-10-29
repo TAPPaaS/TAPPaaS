@@ -14,6 +14,7 @@
 info "logging:logs: ${CONSUMER} stops shipping its journal"
 logs_reconcile_consumer_rules
 logs_remove_client
+logs_apply_alerts --without
 # Its push credential goes too (#165 §1): logging stops accepting it at once.
 # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
 . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"

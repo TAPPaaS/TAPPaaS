@@ -22,7 +22,8 @@
 // Pure: every filesystem question goes through BlueprintFs, so the unit tests
 // hand it a fake tree.
 
-import { readFileSync, readdirSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "fs";
+import { spawnSync } from "child_process";
 import { basename, dirname, join } from "path";
 
 export type Severity = "error" | "warning";
@@ -39,6 +40,9 @@ export interface BlueprintFs {
   isDir(p: string): boolean;
   list(dir: string): string[];
   readJson(p: string): Record<string, unknown> | null;
+  // ADR-039: the findings of tappaas-alert-rules.py validate for a module's
+  // <module>-alerts.json; absent in a test double, and the check is skipped.
+  alertFindings?(file: string, foundation: boolean): string[];
 }
 
 export const realBlueprintFs: BlueprintFs = {
@@ -70,6 +74,17 @@ export const realBlueprintFs: BlueprintFs = {
     } catch {
       return null;
     }
+  },
+  // The validator is tappaas-cicd's script, in the site's checkout (this
+  // manager runs from the Nix store); not found, the check is skipped.
+  alertFindings: (file, foundation) => {
+    const script = [process.env.TAPPAAS_ALERT_RULES, "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/scripts/tappaas-alert-rules.py"]
+      .find((p): p is string => !!p && existsSync(p));
+    if (!script) return [];
+    const r = spawnSync("python3", ["-I", script, "validate", ...(foundation ? ["--foundation"] : []), file], { encoding: "utf8", timeout: 30_000 });
+    if (r.status === 0) return [];
+    const lines = (r.stderr || r.stdout || "").split("\n").map((l) => l.replace(`${file}: `, "").trim()).filter(Boolean);
+    return lines.length ? lines : [`tappaas-alert-rules.py validate failed (${r.status ?? r.error?.message})`];
   },
 };
 
@@ -166,6 +181,13 @@ export function checkModule(t: BlueprintTarget, fs: BlueprintFs, schema: SchemaF
     if (schema && schema.usedBy.has(`${t.name}:${s}`) && !fs.isFile(join(t.dir, rel("fields.json")))) {
       add("error", rel("fields.json"), `missing ${rel("fields.json")} — fields name ${t.name}:${s} in usedBy, so the service declares fields (ADR-027 D3, #567)`);
     }
+  }
+
+  // ── ADR-039: the module's alert rules, when it ships them ──
+  const alerts = join(t.dir, `${t.name}-alerts.json`);
+  if (fs.alertFindings && fs.isFile(alerts)) {
+    const foundation = /(^|\/)src\/foundation\//.test(t.dir.replace(/\\/g, "/") + "/");
+    for (const m of fs.alertFindings(alerts, foundation)) add("error", `${t.name}-alerts.json`, m);
   }
 
   // ── ADR-035: the controllers and managers the module contributes ──

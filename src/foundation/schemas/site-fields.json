@@ -321,6 +321,20 @@
       "default": true,
       "changeClass": "in-place"
     },
+    "alerts": {
+      "description": "How the site's alert mails are put together (ADR-039).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "includeLines": {
+          "description": "Whether an alert rule that asks for its log lines (include: [\"lines\"] in a module's <module>-alerts.json) gets them in the mail: up to 20 matching lines, anonymized like a support bundle's journals. A mail leaves the site, so this is the site's choice; off by default. Off, the mail says so and keeps the Explore link, which shows the lines inside the site. Say in the site's privacy notice whether it is on.",
+          "type": "boolean",
+          "default": false,
+          "changeClass": "in-place"
+        }
+      },
+      "changeClass": "in-place"
+    },
     "ipv6": {
       "description": "Whether this site runs IPv6 next to IPv4, applied by the network module's update. True: the firewall allows IPv6, takes a prefix from the WAN (network.wan.ipv6) and gives every zone with an ipv6Subnet its /64. False: no zone has IPv6, and the firewall drops all IPv6 and Unbound resolves over IPv4 only. See network-manager/IPV6.md.",
       "type": "boolean",

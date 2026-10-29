@@ -95,3 +95,26 @@ logs_remove_client() {
         && debug "  journal client removed from ${CONSUMER}" \
         || warn "  could not remove the journal client from ${CONSUMER} (${t})"
 }
+
+# The consumer's module's alert rules (ADR-039): its <module>-alerts.json put
+# into Grafana as one rule group, with the hosts of the module's instances. On
+# delete the instance is left out at once, so its silence raises nothing (D4).
+_ALERT_RULES="${_LOGS_DIR}/../../../tappaas-cicd/scripts/tappaas-alert-rules.py"
+logs_apply_alerts() {
+    local mod out; local -a extra=()
+    [[ -f "${_ALERT_RULES}" ]] || return 0
+    mod="$(module_of "${CONSUMER}" 2>/dev/null)" || { debug "  ${CONSUMER}: module not known — no alert rules applied"; return 0; }
+    [[ "${1:-}" == "--without" ]] && extra=(--without "${CONSUMER}")
+    if [[ "${DRY_RUN}" -eq 1 ]]; then
+        debug "  [dry-run] alert rules of ${mod}"
+        return 0
+    fi
+    if out="$(python3 -I "${_ALERT_RULES}" apply "${mod}" "${extra[@]}" 2>&1)"; then
+        case "${out}" in
+            *"no rules file"*) debug "  ${mod}: no alert rules of its own" ;;
+            *) debug "  ${out}" ;;
+        esac
+    else
+        warn "  alert rules of ${mod} not applied: ${out}"
+    fi
+}

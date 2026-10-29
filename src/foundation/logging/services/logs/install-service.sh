@@ -17,3 +17,4 @@ info "  ${GN}✓${CL} logging:logs: ${CONSUMER} ships its journal to logging (pu
 logs_reconcile_consumer_rules
 logs_sync_credentials
 logs_apply_client
+logs_apply_alerts

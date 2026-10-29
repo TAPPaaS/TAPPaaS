@@ -17,7 +17,7 @@ Usage:
   tappaas-alert-rules.py validate <file> [--foundation]
   tappaas-alert-rules.py render   <module> [--file F] [--hosts a,b] [--foundation] [--config-dir D]
   tappaas-alert-rules.py hosts    <module> [--config-dir D]
-  tappaas-alert-rules.py apply    <module> [--config-dir D] [--dry-run]
+  tappaas-alert-rules.py apply    <module> [--without INSTANCE] [--config-dir D] [--dry-run]
   tappaas-alert-rules.py remove   <module> [--dry-run]
   tappaas-alert-rules.py apply-all [--config-dir D] [--dry-run]
 
@@ -353,9 +353,11 @@ def declares_logs(cfg):
     return "logging:logs" in deps
 
 
-def scope_hosts(config_dir, what):
+def scope_hosts(config_dir, what, without=()):
     hs = []
     for inst, cfg in _configs(config_dir):
+        if inst in without:
+            continue  # an instance being deleted: out of every selector at once (D4)
         if what == "*all*":
             ok = declares_logs(cfg)
         else:
@@ -495,7 +497,7 @@ def cmd_hosts(a):
     return 0
 
 
-def apply_module(module, config_dir, dry_run=False, vm=None):
+def apply_module(module, config_dir, dry_run=False, vm=None, without=()):
     """Apply (or remove) one module's group. Returns (ok, message)."""
     src = module_source(config_dir, module)
     path = alerts_file(src, module)
@@ -514,7 +516,7 @@ def apply_module(module, config_dir, dry_run=False, vm=None):
     if errs:
         return False, "; ".join(errs)
     try:
-        group = render_group(module, doc, lambda m: scope_hosts(config_dir, m))
+        group = render_group(module, doc, lambda m: scope_hosts(config_dir, m, without))
     except ValueError as e:
         return False, str(e)
     if dry_run:
@@ -532,10 +534,37 @@ def apply_module(module, config_dir, dry_run=False, vm=None):
     return True, f"{len(group['rules'])} rule(s) in module-{module}"
 
 
+def readers_of(config_dir, module):
+    """The other modules whose rules read this module's hosts: a scope that
+    names it, or "all". Their host lists change with this module's instances."""
+    out = []
+    for m in sorted({module_of(c) for _i, c in _configs(config_dir)} - {"", module}):
+        src = module_source(config_dir, m)
+        f = alerts_file(src, m)
+        if not (f and os.path.exists(f) and is_foundation(src)):
+            continue
+        try:
+            doc = load(f)
+        except (OSError, ValueError):
+            continue
+        for r in doc.get("rules", []) if isinstance(doc, dict) else []:
+            sc = r.get("scope") if isinstance(r, dict) else None
+            if sc == "all" or (isinstance(sc, list) and module in sc):
+                out.append(m)
+                break
+    return out
+
+
 def cmd_apply(a):
-    ok, msg = apply_module(a.module, a.config_dir, a.dry_run)
+    without = tuple(a.without or ())
+    ok, msg = apply_module(a.module, a.config_dir, a.dry_run, without=without)
     print(f"{a.module}: {msg}", file=sys.stdout if ok else sys.stderr)
-    return 0 if ok else 1
+    rc = 0 if ok else 1
+    for m in readers_of(a.config_dir, a.module):
+        ok, msg = apply_module(m, a.config_dir, a.dry_run, without=without)
+        print(f"{m}: {msg}", file=sys.stdout if ok else sys.stderr)
+        rc = rc if ok else 1
+    return rc
 
 
 def cmd_remove(a):
@@ -574,6 +603,8 @@ def main(argv=None):
     for n in ("apply", "remove"):
         s = sub.add_parser(n); s.add_argument("module"); s.add_argument("--config-dir", default=CONFIG_DIR)
         s.add_argument("--dry-run", action="store_true")
+        if n == "apply":
+            s.add_argument("--without", action="append", help="leave this instance out (it is being deleted)")
     s = sub.add_parser("apply-all"); s.add_argument("--config-dir", default=CONFIG_DIR); s.add_argument("--dry-run", action="store_true")
     a = p.parse_args(argv)
     if getattr(a, "module", None) is not None and not DNS.match(a.module):
