@@ -1,0 +1,292 @@
+{
+  "description": "The root of the class tree and its ci branch (ADR-040 D3): what IT4IT's Actual Product Instance is made of. A field is declared as a service's field is (ADR-020 fields.json: type, required, immutable, description), plus key — the rank of the identity key it is part of (D5; fields with one rank form one key, the lowest rank is tried first) — and identifying with otel — which OpenTelemetry resource attributes name the CI (D14). A field a subclass declares again with only some properties refines the inherited one (a key on name). type relation: the value is another object, kept as a row in relation, not in attribute.",
+  "classes": {
+    "object": {
+      "parent": null,
+      "abstract": true,
+      "description": "Every object in the CMDB: a CI, a resource or a place.",
+      "fields": {
+        "name": { "type": "string", "required": true, "immutable": true, "identifying": true, "otel": ["service.name", "host.name"], "description": "The object's name: a module's name, an asset's tag, a port's label. Kept in object.name." },
+        "displayName": { "type": "string", "description": "A label for people; the role's name on a migrated asset (O5)." },
+        "description": { "type": "string", "description": "Free text." },
+        "drift": { "type": "object", "derived": true, "description": "Set when an observation differs from the last with no change behind it (D6): since, source, the attributes with what they were and are. A change that touches the object clears it." }
+      }
+    },
+    "ci": {
+      "parent": "object",
+      "abstract": true,
+      "description": "A configuration item: exists because a desired record exists, and ends with it (D7).",
+      "fields": {
+        "stage": { "type": "string", "enum": ["created", "operational", "drifted", "unseen", "retired"], "description": "The CI's lifecycle stage (D7)." },
+        "desired": { "type": "object", "properties": { "file": { "type": "string" }, "key": { "type": "string" } }, "description": "The desired record: config/<file>.json, and the key in it where the file holds several." },
+        "release": { "type": "object", "properties": { "module": { "type": "string" }, "version": { "type": "string" } }, "description": "The module and version this CI is an instance of (D1)." },
+        "health": { "type": "string", "description": "The last health status health-manager wrote (D11)." }
+      }
+    },
+    "node": {
+      "parent": "ci",
+      "abstract": true,
+      "description": "What runs software (ArchiMate Node, ADR-022c): a module of kind vm, lxc, machine or device (ADR-022d).",
+      "fields": {
+        "os": { "type": "string" },
+        "osVersion": { "type": "string" },
+        "management": { "type": "string", "enum": ["managed", "unmanaged"], "description": "ADR-022g." },
+        "addresses": { "type": "array", "items": { "type": "string" } },
+        "environment": { "type": "relation", "relation": "member-of", "description": "The environment the node serves." },
+        "stack": { "type": "string" }
+      }
+    },
+    "vm": {
+      "parent": "node",
+      "description": "A module of kind vm.",
+      "fields": {
+        "vmid": { "type": "integer", "key": 1, "description": "The Proxmox VMID: VMID + cluster, then the module name (D5)." },
+        "name": { "key": 2 },
+        "cores": { "type": "integer" },
+        "memory": { "type": "integer", "description": "MiB." },
+        "disks": { "type": "array", "items": { "type": "object", "properties": { "storage": { "type": "string" }, "size": { "type": "string" } } } },
+        "template": { "type": "string" },
+        "haPolicy": { "type": "string" },
+        "onNode": { "type": "relation", "relation": "runs-on", "description": "The machine it runs on." }
+      }
+    },
+    "lxc": {
+      "parent": "node",
+      "description": "A module of kind lxc.",
+      "fields": {
+        "vmid": { "type": "integer", "key": 1 },
+        "name": { "key": 2 },
+        "cores": { "type": "integer" },
+        "memory": { "type": "integer", "description": "MiB." },
+        "rootfs": { "type": "string" },
+        "unprivileged": { "type": "boolean" },
+        "onNode": { "type": "relation", "relation": "runs-on" }
+      }
+    },
+    "machine": {
+      "parent": "node",
+      "description": "A module of kind machine: a cluster member, a satellite, a managed host (ADR-026).",
+      "fields": {
+        "name": { "key": 1, "description": "The Proxmox node name within the cluster (D5)." },
+        "hostname": { "type": "string" },
+        "clusterMember": { "type": "boolean" },
+        "storagePools": { "type": "array", "items": { "type": "string" } },
+        "asset": { "type": "relation", "relation": "allocated-to", "direction": "in", "key": 2, "description": "The box it runs on, for now (an asset allocated-to this machine)." }
+      }
+    },
+    "device": {
+      "parent": "node",
+      "description": "A module of kind device: reachable, not managed; also a switch or AP from the switch configuration.",
+      "fields": {
+        "name": { "key": 1, "description": "The switch configuration's name (D5)." },
+        "model": { "type": "string" },
+        "firmware": { "type": "string" },
+        "managementAddress": { "type": "string" },
+        "controller": { "type": "string", "description": "The controller that manages it, if one." },
+        "asset": { "type": "relation", "relation": "allocated-to", "direction": "in", "key": 2 }
+      }
+    },
+    "software": {
+      "parent": "ci",
+      "abstract": true,
+      "description": "What runs in a node: name + version within its node (D5).",
+      "fields": {
+        "name": { "key": 1 },
+        "version": { "type": "string", "key": 1, "identifying": true, "otel": ["service.version"] },
+        "onNode": { "type": "relation", "relation": "runs-on", "required": true, "key": 1, "description": "The node it runs in." },
+        "state": { "type": "string", "enum": ["running", "stopped"] },
+        "listens": { "type": "array", "items": { "type": "object", "properties": { "port": { "type": "integer" }, "protocol": { "type": "string" } } } }
+      }
+    },
+    "app": {
+      "parent": "software",
+      "description": "An application with a version: pve on tappaas1, authentik in identity; a module of kind application.",
+      "fields": {
+        "upstream": { "type": "object", "properties": { "project": { "type": "string" }, "package": { "type": "string" } } },
+        "cpe": { "type": "string" },
+        "purl": { "type": "string" }
+      }
+    },
+    "service": {
+      "parent": "software",
+      "description": "<module>:<service>.",
+      "fields": {
+        "provider": { "type": "string", "description": "The module that provides it." }
+      }
+    },
+    "controller": {
+      "parent": "software",
+      "description": "A controller of the control plane (ADR-007f).",
+      "fields": {
+        "registry": { "type": "object", "description": "Its config/control-plane.json entry (ADR-035)." },
+        "aliases": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "manager": {
+      "parent": "software",
+      "description": "A manager of the control plane (ADR-007f).",
+      "fields": {
+        "registry": { "type": "object" },
+        "aliases": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "network-element": { "parent": "ci", "abstract": true, "description": "What the network is made of.", "fields": {} },
+    "zone": {
+      "parent": "network-element",
+      "description": "A zone of zones.json.",
+      "fields": {
+        "vlan": { "type": "integer" },
+        "subnet": { "type": "string" },
+        "ipv6Subnet": { "type": "string" },
+        "tier": { "type": "string" },
+        "dhcp": { "type": "object", "description": "The range." }
+      }
+    },
+    "ssid": {
+      "parent": "network-element",
+      "description": "A wireless network.",
+      "fields": {
+        "security": { "type": "string" },
+        "zone": { "type": "string" },
+        "broadcastOn": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "address": {
+      "parent": "network-element",
+      "description": "An IP address, leased or reserved.",
+      "fields": {
+        "ip": { "type": "string" },
+        "family": { "type": "string", "enum": ["ipv4", "ipv6"] },
+        "reservation": { "type": "string", "description": "The MAC it is reserved for." },
+        "leaseUntil": { "type": "string" }
+      }
+    },
+    "dns-name": {
+      "parent": "network-element",
+      "description": "A name in DNS.",
+      "fields": {
+        "fqdn": { "type": "string" },
+        "target": { "type": "string" },
+        "public": { "type": "boolean" }
+      }
+    },
+    "proxy-route": {
+      "parent": "network-element",
+      "description": "A reverse-proxy route.",
+      "fields": {
+        "host": { "type": "string" },
+        "path": { "type": "string" },
+        "target": { "type": "string" },
+        "gate": { "type": "boolean", "description": "Identity gate on or off." },
+        "allowedZones": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "vpn-peer": {
+      "parent": "network-element",
+      "description": "A WireGuard peer.",
+      "fields": {
+        "publicKey": { "type": "string", "immutable": true },
+        "endpoint": { "type": "string" },
+        "allowedIps": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "storage-element": { "parent": "ci", "abstract": true, "description": "What storage is made of.", "fields": {} },
+    "storage-pool": {
+      "parent": "storage-element",
+      "description": "A pool on a node.",
+      "fields": {
+        "type": { "type": "string", "description": "zfs, …" },
+        "size": { "type": "integer" },
+        "used": { "type": "integer" },
+        "health": { "type": "string" },
+        "onNode": { "type": "relation", "relation": "runs-on" }
+      }
+    },
+    "share": {
+      "parent": "storage-element",
+      "description": "An NFS or SMB share.",
+      "fields": {
+        "path": { "type": "string" },
+        "grants": { "type": "array" }
+      }
+    },
+    "datastore": {
+      "parent": "storage-element",
+      "description": "A backup datastore.",
+      "fields": {
+        "size": { "type": "integer" },
+        "used": { "type": "integer" },
+        "retention": { "type": "object" },
+        "onNode": { "type": "relation", "relation": "runs-on" }
+      }
+    },
+    "backup-peer": {
+      "parent": "storage-element",
+      "description": "A buddy site we back up to or receive from.",
+      "fields": {
+        "direction": { "type": "string", "enum": ["pull", "receive"] },
+        "location": { "type": "relation", "relation": "at" },
+        "lastSeen": { "type": "string" }
+      }
+    },
+    "identity": { "parent": "ci", "abstract": true, "description": "ADR-007a's objects, identity-manager's.", "fields": {} },
+    "organization": {
+      "parent": "identity",
+      "description": "An organization.",
+      "fields": {
+        "domain": { "type": "string" }
+      }
+    },
+    "group": {
+      "parent": "identity",
+      "description": "A group.",
+      "fields": {
+        "uuid": { "type": "string", "key": 1, "immutable": true, "description": "The Authentik UUID (D5)." },
+        "roles": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "user": {
+      "parent": "identity",
+      "description": "A user.",
+      "fields": {
+        "uuid": { "type": "string", "key": 1, "immutable": true, "description": "The Authentik UUID (D5)." },
+        "username": { "type": "string" },
+        "email": { "type": "string" },
+        "enabled": { "type": "boolean" }
+      }
+    },
+    "role": {
+      "parent": "identity",
+      "description": "A role.",
+      "fields": {
+        "scope": { "type": "string" }
+      }
+    },
+    "collection": { "parent": "ci", "abstract": true, "description": "What groups other CIs.", "fields": {} },
+    "site": {
+      "parent": "collection",
+      "description": "The site.",
+      "fields": {
+        "code": { "type": "string" },
+        "primaryLocation": { "type": "relation", "relation": "at" },
+        "version": { "type": "string", "description": "The TAPPaaS release." }
+      }
+    },
+    "cluster": {
+      "parent": "collection",
+      "description": "The Proxmox cluster.",
+      "fields": {
+        "quorum": { "type": "boolean" }
+      }
+    },
+    "environment": {
+      "parent": "collection",
+      "description": "An environment.",
+      "fields": {
+        "domain": { "type": "string" },
+        "organization": { "type": "relation", "relation": "owned-by" },
+        "updateWindow": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "description": "The relation types of ADR-040 D3. ends: the [from, to] class pairs a relation may join; a subclass of either end may stand in it (placed-in for asset holds for a server). cardinality: n:1 — a from object has one current relation of the type (a new one closes the old); 1:n — a to object has one; 1:1 — both; n:m — neither.",
+  "relations": {
+    "allocated-to": {
+      "description": "A resource is allocated to a CI: the box a node runs on, for now. Later a pool's allocation (O10).",
+      "cardinality": "1:1",
+      "ends": [["asset", "node"]]
+    },
+    "runs-on": {
+      "description": "A guest on its machine; software on the node it runs in; a pool or datastore on its node.",
+      "cardinality": "n:1",
+      "ends": [["vm", "machine"], ["lxc", "machine"], ["software", "node"], ["storage-pool", "node"], ["datastore", "node"]]
+    },
+    "part-of": {
+      "description": "A port is part of its asset (D9).",
+      "cardinality": "n:1",
+      "ends": [["port", "asset"]]
+    },
+    "placed-in": {
+      "description": "An asset stands in a rack or a room; a rack in a room.",
+      "cardinality": "n:1",
+      "ends": [["asset", "rack"], ["asset", "room"], ["rack", "room"]]
+    },
+    "at": {
+      "description": "A room is at a location; a CI is at one (a satellite's, recorded; a site's primary).",
+      "cardinality": "n:1",
+      "ends": [["room", "location"], ["ci", "location"]]
+    },
+    "connects": {
+      "description": "A cable between two ports (seen or recorded; kind, label, origin, side and the observed link speed are its attributes); a wifi port to an SSID.",
+      "cardinality": "n:m",
+      "ends": [["port", "port"], ["port", "ssid"]]
+    },
+    "member-of": {
+      "description": "A node in a cluster or an environment; a user in a group; an address in a zone.",
+      "cardinality": "n:m",
+      "ends": [["node", "cluster"], ["node", "environment"], ["user", "group"], ["address", "zone"]]
+    },
+    "depends-on": {
+      "description": "A node depends on a service (the module's dependsOn).",
+      "cardinality": "n:m",
+      "ends": [["node", "service"]]
+    },
+    "provides": {
+      "description": "A node provides a service (the module's provides).",
+      "cardinality": "n:m",
+      "ends": [["node", "service"]]
+    },
+    "serves": {
+      "description": "A zone serves an environment; a proxy route a service.",
+      "cardinality": "n:m",
+      "ends": [["zone", "environment"], ["proxy-route", "service"]]
+    },
+    "owned-by": {
+      "description": "An environment is owned by an organization; an asset by the site.",
+      "cardinality": "n:1",
+      "ends": [["environment", "organization"], ["asset", "site"]]
+    },
+    "backs-up": {
+      "description": "A datastore backs up a guest or a machine; a backup peer the site.",
+      "cardinality": "n:m",
+      "ends": [["datastore", "node"], ["backup-peer", "site"]]
+    }
+  }
+}

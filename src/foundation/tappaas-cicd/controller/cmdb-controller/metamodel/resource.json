@@ -1,0 +1,122 @@
+{
+  "description": "The resource branch (ADR-040 D3, D7, D9): IT4IT's Resource — an asset or other limited thing, allocated to a CI or free. Its lifecycle is the asset's (ordered … disposed, reusable), not the CI's. allowedBy: the values a field may take depend on another field of the same object (a port's speed on its kind); a value of that other field not listed admits none.",
+  "classes": {
+    "resource": {
+      "parent": "object",
+      "abstract": true,
+      "description": "A resource: allocated to a CI or free.",
+      "fields": {
+        "stage": { "type": "string", "enum": ["ordered", "stock", "placed", "operational", "disposed"], "description": "The asset's lifecycle stage (D7)." },
+        "faulty": { "type": "boolean", "description": "A flag beside the stage: a device can be operational and faulty (D7, O3)." },
+        "faultNote": { "type": "string", "description": "Why it is faulty." },
+        "allocatedTo": { "type": "relation", "relation": "allocated-to", "description": "The CI it is allocated to, or none." }
+      }
+    },
+    "asset": {
+      "parent": "resource",
+      "abstract": true,
+      "physical": true,
+      "description": "A physical thing. Named by a tag per kind (srv-01, sw-01, ap-01, dev-01; O5).",
+      "fields": {
+        "name": { "key": 2, "description": "The asset's tag." },
+        "vendor": { "type": "string", "key": 1, "immutable": true },
+        "model": { "type": "string", "description": "A faceplate key where one exists." },
+        "serial": { "type": "string", "key": 1, "immutable": true, "description": "vendor + serial is the asset's key (D5)." },
+        "assetTag": { "type": "string" },
+        "procurement": {
+          "type": "object",
+          "properties": {
+            "supplier": { "type": "string" },
+            "orderRef": { "type": "string" },
+            "purchaseDate": { "type": "string" },
+            "warrantyUntil": { "type": "string" },
+            "ownership": { "type": "string", "enum": ["owned", "rented"] },
+            "notes": { "type": "string" }
+          },
+          "description": "Optional; no prices (D7)."
+        },
+        "disposal": {
+          "type": "object",
+          "properties": {
+            "how": { "type": "string", "enum": ["sold", "recycled", "returned", "lost"] },
+            "when": { "type": "string" },
+            "wiped": { "type": "boolean" }
+          }
+        },
+        "location": { "type": "relation", "relation": "placed-in", "description": "The rack or room it stands in." }
+      }
+    },
+    "server": {
+      "parent": "asset",
+      "description": "A server. The BMC is a port with role bmc.",
+      "fields": {
+        "bootDisks": { "type": "array", "items": { "type": "string" }, "description": "Serials (O4: disks are attributes for now)." },
+        "cpu": { "type": "string" },
+        "memory": { "type": "integer", "description": "MiB." }
+      }
+    },
+    "network-device": {
+      "parent": "asset",
+      "description": "A switch or an access point.",
+      "fields": {
+        "deviceType": { "type": "string", "enum": ["switch", "access-point"] },
+        "controller": { "type": "string", "description": "The controller that manages it." },
+        "ports": { "type": "integer", "description": "How many." }
+      }
+    },
+    "appliance": {
+      "parent": "asset",
+      "description": "A modem, an ONT, a UPS.",
+      "fields": {
+        "deviceType": { "type": "string", "enum": ["modem", "ont", "ups"] },
+        "ports": { "type": "integer" }
+      }
+    },
+    "passive-device": {
+      "parent": "asset",
+      "description": "A patch panel, a PDU.",
+      "fields": {
+        "deviceType": { "type": "string", "enum": ["patch-panel", "pdu"] },
+        "ports": { "type": "integer" }
+      }
+    },
+    "other-device": {
+      "parent": "asset",
+      "description": "Anything else with a port: a USB network adapter, a printer.",
+      "fields": {
+        "ports": { "type": "integer" }
+      }
+    },
+    "port": {
+      "parent": "resource",
+      "physical": true,
+      "description": "A connector on an asset (D9): its name within its asset is its key.",
+      "fields": {
+        "name": { "key": 1, "description": "The label on the case or the OS's name." },
+        "asset": { "type": "relation", "relation": "part-of", "required": true, "immutable": true, "key": 1, "description": "The asset it is part of." },
+        "kind": { "type": "string", "required": true, "enum": ["rj45", "sfp", "wifi", "usb-a", "usb-c"], "description": "The connector (D9)." },
+        "speed": {
+          "type": "string",
+          "description": "The port's maximum; the negotiated link speed belongs to the connection.",
+          "allowedBy": { "kind": { "rj45": ["1g", "2.5g", "10g"], "sfp": ["1g", "10g", "25g"], "usb-a": ["usb2", "usb3"], "usb-c": ["usb2", "usb3"] } }
+        },
+        "module": { "type": "string", "description": "What is plugged into an SFP cage.", "allowedBy": { "kind": { "sfp": ["dac", "sr", "lr", "rj45"] } } },
+        "standard": { "type": "string", "allowedBy": { "kind": { "wifi": ["wifi5", "wifi6", "wifi7"] } } },
+        "bands": { "type": "array", "items": { "type": "string", "enum": ["2.4", "5", "6"] }, "allowedBy": { "kind": { "wifi": [] } }, "description": "Wi-Fi 6E is wifi6 with band 6." },
+        "mac": { "type": "string", "description": "Unique across all ports (D9)." },
+        "role": { "type": "string", "enum": ["lan", "wan", "bmc"], "description": "What the node uses it for." },
+        "side": { "type": "string", "enum": ["front", "rear"], "description": "On a patch panel." }
+      }
+    },
+    "pool": {
+      "parent": "resource",
+      "abstract": true,
+      "description": "A consumable consumed by allocations (O10; no leaves yet).",
+      "fields": {
+        "capacity": { "type": "number" },
+        "unit": { "type": "string" },
+        "allocated": { "type": "number" }
+      }
+    }
+  }
+}

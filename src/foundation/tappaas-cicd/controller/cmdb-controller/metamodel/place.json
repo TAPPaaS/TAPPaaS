@@ -1,0 +1,44 @@
+{
+  "description": "The place branch (ADR-040 D3): where a CI or a resource stands. Physical. A room is named within its location, a rack within its room.",
+  "classes": {
+    "place": {
+      "parent": "object",
+      "abstract": true,
+      "physical": true,
+      "description": "Where something stands.",
+      "fields": {}
+    },
+    "location": {
+      "parent": "place",
+      "description": "A place with an address: the site's building, a provider's data centre, a buddy's site (site.json locations, ADR-036 D1).",
+      "fields": {
+        "kind": { "type": "string", "enum": ["site", "remote"] },
+        "country": { "type": "string" },
+        "city": { "type": "string" },
+        "address": { "type": "string" },
+        "timezone": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" }
+      }
+    },
+    "room": {
+      "parent": "place",
+      "description": "A room in a location.",
+      "fields": {
+        "name": { "key": 1 },
+        "location": { "type": "relation", "relation": "at", "required": true, "key": 1 }
+      }
+    },
+    "rack": {
+      "parent": "place",
+      "description": "A rack in a room.",
+      "fields": {
+        "name": { "key": 1 },
+        "room": { "type": "relation", "relation": "placed-in", "required": true, "key": 1 },
+        "units": { "type": "integer" },
+        "width": { "type": "integer", "description": "Inches." },
+        "numbering": { "type": "string", "enum": ["bottom-up", "top-down"] }
+      }
+    }
+  }
+}
