@@ -8,7 +8,7 @@
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #906. Amends ADR-036 D3 (who owns a placement, and what it hangs on) and D4 (the topology becomes a view of the CMDB); ADR-007f (a new controller, cmdb-controller, that every manager reports to); ADR-034 (the console's views read the CMDB). Related: ADR-020 (desired, actual and drift), ADR-022 family (the vocabulary of CI classes), ADR-022c (ArchiMate Node and Device), ADR-026 (machines as modules), ADR-028 and ADR-033 (releases), ADR-035 (manager rename and aliases), ADR-037 D4 (adding a node). |
-| **Changelog** | v0.5 (2026-10-29) — **operator's review of D1–D3:** a Product Backlog Item is not a backbone object: it relates to the design (what goes in) and to the release (what is implemented), and a Defect to the releases it was found in and fixed in — Codeberg issues carry both, `ROADMAP.md` the release each ships in; a module instance is not a class of its own — a module is a **`node`** of its kind (`vm`, `lxc`, `machine`, `device`, ADR-022d) or, of kind application, a **`software/app`**; `software` is what runs *in* a node (`app`, `service`, `controller`, `manager`), so `tappaas1` is one CI, a `machine`, with `pve` as an app on it, and `identity` a `vm` with `authentik` on it; `guest` goes (`vm` and `lxc` stand for themselves); `party` is **`identity`**, TAPPaaS's word; UCMDB named as OpenText's model, not a standard; the essential attributes of every class in a table. cmdb-controller is a **24/7 API service** and `cmdb` a CLI with verbs in front of it. · v0.4 (2026-10-29) — **operator's direction:** IT4IT keeps assets (its Resource) apart from the Actual Product Instance, but the industry tracks assets in the CMDB, and so does TAPPaaS: **resources stand beside CIs** in one store, with relations between them (D3's root has `ci`, `resource` and `place`), and **two lifecycles** are kept apart (D7): the asset's (ordered → disposed, reusable) and the CI's (created from its desired record, retired with it, never reused — the same box as `tappaas5` is a new CI). A pool consumed by allocations (storage, addresses) is a resource the model allows and this ADR does not build (O10). **The store is PostgreSQL**, TAPPaaS's database standard (D12, D13; O2 closed). Figure 3-6's nine objects read from the standard's source: the five backbone objects and the four of the Service Offering Backbone. · v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
+| **Changelog** | v0.5 (2026-10-29) — **D9 (operator):** a port's kind is its connector — `rj45`, `sfp`, `wifi`, `usb-a`, `usb-c` — with speed, module, standard and bands as attributes and `role` (lan, wan, bmc) for what the node uses it for; `bmc` and `power` are no kinds. **Review of D1–D3:** a Product Backlog Item is not a backbone object: it relates to the design (what goes in) and to the release (what is implemented), and a Defect to the releases it was found in and fixed in — Codeberg issues carry both, `ROADMAP.md` the release each ships in; a module instance is not a class of its own — a module is a **`node`** of its kind (`vm`, `lxc`, `machine`, `device`, ADR-022d) or, of kind application, a **`software/app`**; `software` is what runs *in* a node (`app`, `service`, `controller`, `manager`), so `tappaas1` is one CI, a `machine`, with `pve` as an app on it, and `identity` a `vm` with `authentik` on it; `guest` goes (`vm` and `lxc` stand for themselves); `party` is **`identity`**, TAPPaaS's word; UCMDB named as OpenText's model, not a standard; the essential attributes of every class in a table. cmdb-controller is a **24/7 API service** and `cmdb` a CLI with verbs in front of it. · v0.4 (2026-10-29) — **operator's direction:** IT4IT keeps assets (its Resource) apart from the Actual Product Instance, but the industry tracks assets in the CMDB, and so does TAPPaaS: **resources stand beside CIs** in one store, with relations between them (D3's root has `ci`, `resource` and `place`), and **two lifecycles** are kept apart (D7): the asset's (ordered → disposed, reusable) and the CI's (created from its desired record, retired with it, never reused — the same box as `tappaas5` is a new CI). A pool consumed by allocations (storage, addresses) is a resource the model allows and this ADR does not build (O10). **The store is PostgreSQL**, TAPPaaS's database standard (D12, D13; O2 closed). Figure 3-6's nine objects read from the standard's source: the five backbone objects and the four of the Service Offering Backbone. · v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
 
 TAPPaaS knows well what a site *should* be: the modules and their dependencies, the releases, and
 the desired configuration in `config/*.json`. It knows poorly what a site *is*: that is asked live
@@ -253,10 +253,10 @@ The essential attributes of each class — those every instance has, beyond what
 | `environment` | `domain`, `organization` (relation), `zone` (relation), `updateWindow` |
 | `resource` | `stage` (D7: ordered … disposed), `allocatedTo` (relation → a ci, or none) |
 | `asset` | `vendor`, `model` (a faceplate key where one exists), `serial`, `assetTag`, `procurement` (supplier, orderRef, purchaseDate, warrantyUntil, ownership), `disposal` (how, when, wiped) |
-| `server` | `bmc` (mac, address), `bootDisks[]` (serial), `cpu`, `memory` |
+| `server` | `bootDisks[]` (serial), `cpu`, `memory` (the BMC is a port with `role: bmc`) |
 | `network-device` | `controller` (the one that manages it), `ports` (count) |
 | `appliance`, `passive-device`, `other-device` | `ports` (count or names) |
-| `port` | `kind` (ethernet, sfp, wifi, bmc, usb, power), `mac`, `speed`, `side` (front, rear), `asset` (relation `part-of`) |
+| `port` | `kind` (rj45, sfp, wifi, usb-a, usb-c; D9), `speed` or `standard`, `mac`, `role` (lan, wan, bmc), `side` (front, rear), `asset` (relation `part-of`) |
 | `pool` | `capacity`, `unit`, `allocated` |
 | `location` | `kind` (site, remote), `country`, `city`, `address`, `timezone`, `latitude`, `longitude` |
 | `room` | `location` (relation) |
@@ -407,11 +407,33 @@ before keeps everything but the role. Ending a role, unplacing and disposing are
 
 ### D9 — Ports belong to the asset
 
-An asset's ports carry `name`, `kind` (`ethernet`, `sfp`, `wifi`, `bmc`, `usb`, `power`), `mac`,
-`speed`; a patch panel's port has a front and a rear. A cable connects two ports (seen by the
-switches or LLDP, or recorded): it is a `connects` relation with `kind`, `label`, `origin` and
-`side` as its attributes, not a CI of its own. A node's `uplinks`, second lan leg and WAN port name ports of its
-asset. The BMC is a port with its own MAC. A **Wi-Fi** port connects to an SSID, and through it to
+A port's **`kind` names the connector** — what one can see and plug a cable into — and speed or
+generation is an attribute, because one connector comes in several speeds and an operator plans by
+connector first ("does this cable fit?") and speed second. Network ports are what matters; USB is
+kept because a network adapter hangs off it. Nothing else (power, video, serial) is a port:
+
+| `kind` | Connector | Attribute |
+|---|---|---|
+| `rj45` | copper Ethernet | `speed`: `1g`, `2.5g`, `10g` |
+| `sfp` | an SFP cage (SFP, SFP+, SFP28) | `speed`: `1g`, `10g`, `25g`; `module`: `dac`, `sr`, `lr`, `rj45` — what is plugged in |
+| `wifi` | a radio | `standard`: `wifi5`, `wifi6`, `wifi7`; `bands`: `2.4`, `5`, `6` (Wi-Fi 6E is `wifi6` with band `6`) |
+| `usb-a` | the regular USB socket | `speed`: `usb2`, `usb3` |
+| `usb-c` | USB-C | `speed`, as `usb-a` |
+
+`speed` is the port's maximum, a fact about the asset; the negotiated link speed is what the switch
+reports and belongs to the connection, so a 10G cage holding a 1G module shows `speed: 10g` with
+an observed `1g` link. Values are lowercase with the unit in them (`2.5g`), so they sort and compare
+the same way everywhere. The scheme composes: a USB network adapter (the RTL8156 that is
+`tappaas3`'s second leg on hrossen) is a small asset of its own with an `rj45` port, connected to
+the node's `usb-a` or `usb-c` port; there is no "USB NIC" kind. A port's **`role`** (`lan`, `wan`,
+`bmc`) says what the node uses it for — a BMC is an `rj45` port with `role: bmc`, with its own MAC
+and address, not a kind of its own. An asset's power draw, if wanted, is an attribute of the asset.
+
+Every port carries `name` (the label on the case or the OS's name), `mac` where it has one, and
+on a patch panel a front and a rear `side`. A cable connects two ports (seen by the switches or
+LLDP, or recorded): it is a `connects` relation with `kind`, `label`, `origin`, `side` and the
+observed link speed as its attributes, not a CI of its own. A node's `uplinks`, second lan leg and
+WAN port name ports of its asset by `role`. A **`wifi`** port connects to an SSID, and through it to
 the zone that SSID bridges to; the AP controller's client list reports it by MAC. A MAC is unique
 across all ports, so a DHCP reservation or a pending node registration that names a MAC names an
 asset.
