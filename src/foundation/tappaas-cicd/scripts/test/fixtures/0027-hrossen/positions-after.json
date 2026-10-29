@@ -1,0 +1,312 @@
+{
+  "version": 1,
+  "rooms": {
+    "basement": {
+      "displayName": "Basement",
+      "location": "knudanchersvej95"
+    },
+    "stue": {
+      "displayName": "Stue",
+      "location": "knudanchersvej95"
+    }
+  },
+  "racks": {
+    "rack1": {
+      "units": 37,
+      "width": "19in",
+      "numbering": "bottom-up",
+      "description": "primary TAPPaaS rack",
+      "room": "basement"
+    }
+  },
+  "placements": {
+    "tappaas1": {
+      "rack": "rack1",
+      "u": 1,
+      "height": 11,
+      "width": "half",
+      "face": "front",
+      "faceplate": "generic/server-2u",
+      "description": "placeholder position, set by the operator",
+      "slot": 0
+    },
+    "tappaas2": {
+      "rack": "rack1",
+      "u": 13,
+      "height": 6,
+      "width": "third",
+      "face": "front",
+      "faceplate": "generic/server-2u",
+      "description": "placeholder position, set by the operator",
+      "slot": 0
+    },
+    "tappaas3": {
+      "rack": "rack1",
+      "u": 13,
+      "height": 6,
+      "width": "third",
+      "face": "front",
+      "faceplate": "generic/server-2u",
+      "description": "placeholder position, set by the operator",
+      "slot": 2
+    },
+    "USW Pro XG 10 PoE": {
+      "rack": "rack1",
+      "u": 23,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "unifi/usw-pro-xg-10-poe",
+      "description": "placeholder position, set by the operator"
+    },
+    "crs-a": {
+      "rack": "rack1",
+      "u": 24,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "mikrotik/crs317-1g-16s",
+      "description": "placeholder position, set by the operator"
+    },
+    "crs-b": {
+      "rack": "rack1",
+      "u": 25,
+      "height": 1,
+      "width": "full",
+      "face": "front",
+      "faceplate": "mikrotik/crs317-1g-16s",
+      "description": "placeholder position, set by the operator"
+    },
+    "ISP modem": {
+      "room": "basement"
+    },
+    "Nano HD": {
+      "room": "stue"
+    }
+  },
+  "assets": {
+    "ISP modem": {
+      "kind": "modem",
+      "model": "generic/isp-modem",
+      "stage": "placed",
+      "role": "ISP modem"
+    },
+    "patchpanel1": {
+      "kind": "patch-panel",
+      "ports": [
+        {
+          "name": "1",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "2",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "3",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "4",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "5",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "6",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "7",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "8",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "9",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "10",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "11",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "12",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "13",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "14",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "15",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "16",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "17",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "18",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "19",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "20",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "21",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "22",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "23",
+          "kind": "rj45",
+          "speed": "1g"
+        },
+        {
+          "name": "24",
+          "kind": "rj45",
+          "speed": "1g"
+        }
+      ],
+      "stage": "stock",
+      "role": "patchpanel1"
+    },
+    "printer": {
+      "kind": "other",
+      "displayName": "printer-1",
+      "ports": [
+        {
+          "name": "eth0",
+          "kind": "rj45",
+          "speed": "1g",
+          "mac": "aa:bb:cc:00:11:22"
+        }
+      ],
+      "stage": "stock",
+      "role": "printer"
+    },
+    "srv-01": {
+      "kind": "server",
+      "displayName": "tappaas1",
+      "stage": "placed",
+      "role": "tappaas1"
+    },
+    "srv-02": {
+      "kind": "server",
+      "displayName": "tappaas2",
+      "stage": "placed",
+      "role": "tappaas2"
+    },
+    "srv-03": {
+      "kind": "server",
+      "displayName": "tappaas3",
+      "stage": "placed",
+      "role": "tappaas3"
+    },
+    "sw-01": {
+      "kind": "switch",
+      "displayName": "USW Pro XG 10 PoE",
+      "vendor": "unifi",
+      "model": "USWED77",
+      "stage": "placed",
+      "role": "USW Pro XG 10 PoE"
+    },
+    "sw-02": {
+      "kind": "switch",
+      "displayName": "crs-a",
+      "vendor": "mikrotik",
+      "model": "CRS317-1G-16S+",
+      "stage": "placed",
+      "role": "crs-a"
+    },
+    "sw-03": {
+      "kind": "switch",
+      "displayName": "crs-b",
+      "vendor": "mikrotik",
+      "model": "CRS317-1G-16S+",
+      "stage": "placed",
+      "role": "crs-b"
+    },
+    "ap-01": {
+      "kind": "access-point",
+      "displayName": "Nano HD",
+      "vendor": "unifi",
+      "model": "U7NHD",
+      "stage": "placed",
+      "role": "Nano HD"
+    }
+  },
+  "cables": [
+    {
+      "from": {
+        "device": "USW Pro XG 10 PoE",
+        "port": "5"
+      },
+      "to": {
+        "device": "ISP modem",
+        "port": "LAN 1",
+        "faceplate": "generic/isp-modem"
+      },
+      "kind": "uplink",
+      "label": "ISP hand-off"
+    },
+    {
+      "from": {
+        "device": "USW Pro XG 10 PoE",
+        "port": "8"
+      },
+      "to": {
+        "device": "printer",
+        "port": "eth0"
+      },
+      "kind": "patch"
+    }
+  ]
+}
