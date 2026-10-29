@@ -30,8 +30,9 @@ The Open Group IT4IT™ Standard, Version 3.0.1 (2024) follows a **Digital Produ
 **Digital Product Backbone**: the key data objects that "annotate an aspect of the Digital Product
 model in its planning, development, consumable, or running state" — the Digital Product, the
 Product Design, the Product Release, the Desired Product Instance and the Actual Product Instance
-(§11.7.8, p. 234; Figure 3-6 expands them to nine with the Requirement, the Product Backlog Item,
-the Product Release Blueprint and the Build Package). Each is controlled by one functional
+(§11.7.8, p. 234; Figure 3-6 expands them to nine — the figure is not in the text, so which four
+join them, likely the Requirement, the Product Backlog Item, the Product Release Blueprint and the
+Build Package, is read from the chapters, not from it). Each is controlled by one functional
 component and linked to the one before, so that anything running can be traced back to why it
 exists. IT4IT 2.1 called the chain the Service Model Backbone (conceptual, logical, desired and
 actual service):
