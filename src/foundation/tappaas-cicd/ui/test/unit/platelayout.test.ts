@@ -32,7 +32,7 @@ const ppRow = Array.from({ length: 24 }, (_, i) => ppx[String(i + 1)]);
 check(near(ppRow[0], 17.6) && near(ppRow[23], 422.4) && evenly(ppRow), `patch panel: 24 ports from 17.6 to 422.4 px, evenly (${ppRow[0]}…${ppRow[23]})`);
 check(ys(pp).length === 1 && nameArea(pp).at === "top", "patch panel: one row, its name along the top");
 // A recorded 24-port panel is drawn the same.
-const rec = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 24 }, (_, i) => String(i + 1)) }, []) ;
+const rec = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 24 }, (_, i) => ({ name: String(i + 1), kind: "rj45" as const })) }, []);
 check(JSON.stringify(xs(resolvePlate(rec, null) as ResolvedPlate)) === JSON.stringify(ppx), "a recorded 24-port panel: the same places");
 
 // The UniFi switch: twelve places of 17.2 px over the right half, 224.4-431.2, its name left of them.

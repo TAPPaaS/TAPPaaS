@@ -132,7 +132,7 @@ export function roomAddSteps(at?: string | null): Step[] {
   return [at ? { ...step, prefill: { location: at } } : step];
 }
 
-export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "other"];
+export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "pdu", "other", "server", "switch", "access-point"];
 
 // Record a device nothing manages: its kind, its model from the faceplate
 // catalog (or typed), its ports (a count, or names), its location, how it is shown.
@@ -140,16 +140,16 @@ export function deviceAddSteps(models: string[], locations: SiteLocation[], note
   const at = locationOption(locations);
   return [
     {
-      title: "asset-manager device add <name>",
+      title: "asset-manager asset add <name>",
       bin: RM,
-      verb: "device add",
+      verb: "asset add",
       only: ["--kind", "--model", "--ports", "--port", "--location", "--display-name", "--description"],
       choices: { "--kind": RECORDED_KINDS, ...at.choices },
       initial: at.initial,
       asides: at.asides,
       suggest: { "--model": models },
       suggestNotes: { "--model": notes },
-      placeholders: { "--ports": "a count: 24", "--port": "a port's name: WAN, LAN 1, …" },
+      placeholders: { "--ports": "a count: 24", "--port": "a port: WAN, LAN 1, eth1:rj45:2.5g, sfp1:sfp:10g" },
       note: "A device nothing manages — a modem, an ONT, a UPS, a patch panel — recorded with its kind and its ports (from its model, a count, or by name), at the primary location unless you choose another. It then stands unplaced under its location: Place… it in a rack or a room. A patch panel: place it in a rack, then select a wire and Attach to patch panel…. --check previews.",
     },
   ];
@@ -170,9 +170,9 @@ export function deviceRecordSteps(d: TopoDevice, models: string[], locations: Si
   const at = locationOption(locations, d.location);
   return [
     {
-      title: `asset-manager device record '${target}'`,
+      title: `asset-manager asset record '${target}'`,
       bin: RM,
-      verb: "device record",
+      verb: "asset record",
       fixed: [target],
       only: ["--name", "--kind", "--port", "--model", "--location", "--display-name", "--description"],
       initial: { "--name": seenName(d), "--kind": "other", ...at.initial },

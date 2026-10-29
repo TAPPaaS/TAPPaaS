@@ -8,7 +8,7 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { Change, addCable, addDevice, addRoom, changeLine, deleteRoom, placeDevice, addRack, deleteRack, modifyPlacement, modifyRack, modifyRoom, removeCable, unplaceDevice } from "../../src/verbs";
+import { Change, addCable, addAsset, addRoom, changeLine, deleteRoom, placeDevice, addRack, deleteRack, modifyPlacement, modifyRack, modifyRoom, removeCable, unplaceDevice } from "../../src/verbs";
 import { CatalogPort, Faceplate, PositionsDoc, TopoLike, checkPositions, columnSpan, parseEnd, resolvePositions, seenCables, siteDevices, suggestFaceplate, unitAtRow } from "../../../../lib/ts/src/positions";
 
 let passed = 0;
@@ -169,7 +169,7 @@ console.log("— the one line a change is said in (--check, and the apply's repo
   check(said(room, false) === "added room 'stue' at knudanchersvej95", "…and the apply says it done, the same line");
   check(said(addRoom({}, "basement", {}, "hareskov"), true) === "would add room 'basement' at hareskov", "a room with no location of its own is at the primary");
   let p: PositionsDoc = (addRoom({}, "basement", { location: "knudanchersvej95" }) as Change).doc;
-  p = (addDevice(p, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, null) as Change).doc;
+  p = (addAsset(p, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, null) as Change).doc;
   const loose = placeDevice(p, "ISP modem", { room: "basement" }, catalog, "hareskov");
   check(said(loose, true) === "would place 'ISP modem' loose in room basement (location knudanchersvej95)", "place loose: the room and its location");
   p = (addRack(p, "rack1", { room: "basement" }) as Change).doc;

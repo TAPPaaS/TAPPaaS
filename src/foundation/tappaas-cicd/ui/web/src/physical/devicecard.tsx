@@ -10,8 +10,8 @@ export const KIND_ICON: Record<DevKind, string> = { node: "▤", switch: "⇄", 
 export const KIND_NAME: Record<DevKind, string> = { node: "cluster node", switch: "switch", ap: "access point", isp: "internet", buddy: "backup buddy", machine: "machine", device: "device" };
 
 // A recorded device's own kind: its icon and its word.
-export const RECORDED_ICON: Record<RecordedKind, string> = { modem: "⌁", ont: "⌁", ups: "ϟ", "patch-panel": "▦", other: "▭" };
-export const RECORDED_NAME: Record<RecordedKind, string> = { modem: "modem", ont: "fibre terminal (ONT)", ups: "UPS", "patch-panel": "patch panel", other: "device" };
+export const RECORDED_ICON: Record<RecordedKind, string> = { modem: "⌁", ont: "⌁", ups: "ϟ", "patch-panel": "▦", pdu: "ϟ", other: "▭", server: "▤", switch: "⇄", "access-point": "◎" };
+export const RECORDED_NAME: Record<RecordedKind, string> = { modem: "modem", ont: "fibre terminal (ONT)", ups: "UPS", "patch-panel": "patch panel", pdu: "PDU", other: "device", server: "server", switch: "switch", "access-point": "access point" };
 export const iconOf = (d: DevNode): string => (d.recorded ? RECORDED_ICON[d.recorded] : d.seen ? "?" : KIND_ICON[d.kind]);
 export const kindName = (d: DevNode): string => (d.recorded ? `${RECORDED_NAME[d.recorded]} (recorded)` : d.seen ? "device seen at a switch port, recorded nowhere" : KIND_NAME[d.kind]);
 

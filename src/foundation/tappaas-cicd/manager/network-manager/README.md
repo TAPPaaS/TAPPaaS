@@ -387,7 +387,7 @@ comes from a switch port: each MAC its controller reports behind the port (`neig
 nothing reported or recorded on it; a port of a node, an access point, a switch or the ISP, a
 port a recorded cable lands on and a MAC a recorded device or a node's NIC has are accounted
 for. It is named by its MAC (else `<switch>:<port>`), at the switch's location, placed nowhere,
-and `asset-manager device record` records it. A placement whose device is gone, and once the
+and `asset-manager asset record` records it. A placement whose device is gone, and once the
 site has a rack a device placed nowhere at a location that has a room, are `topology` findings.
 `--no-positions` leaves them out (what asset-manager itself reads, to check device names).
 

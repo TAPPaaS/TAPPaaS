@@ -397,6 +397,31 @@ check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPo
   check(rec.devices.find((y) => y.name === "ont")?.location === "hareskov" && rec.positions!.locations[1].unplaced.includes("ont"), "a recorded device at another location is listed there");
   const far = buildTopology({ ...hrossen(), site, positions: { doc: { ...doc, rooms: { basement: {} }, devices: { ont: { kind: "ont" as const, ports: ["1"], location: "hareskov" } } }, catalog } });
   check(!far.findings.some((f) => /ont is placed nowhere/.test(f.text)) && far.positions!.locations.find((l) => l.name === "hareskov")?.unplaced.includes("ont") === true, "a device at a location with no room: somewhere there, no finding");
+  // Assets (ADR-040 D7): one playing a node is that node, with its ports; one
+  // playing nothing the topology manages is a device by its role's name; one
+  // in stock by its own; an ordered or disposed one is no device.
+  const assets = buildTopology({ ...hrossen(), site, positions: { doc: { ...doc, assets: {
+    "srv-01": { kind: "server" as const, stage: "placed" as const, role: "tappaas1", serial: "CZC1", ports: [{ name: "ilo", kind: "rj45" as const, role: "bmc" as const, mac: "aa:bb:cc:00:00:01" }] },
+    "dev-01": { kind: "modem" as const, stage: "stock" as const, role: "ISP modem", ports: [{ name: "WAN", kind: "rj45" as const, speed: "1g" as const }] },
+    "srv-02": { kind: "server" as const, stage: "stock" as const },
+    "srv-03": { kind: "server" as const, stage: "ordered" as const },
+  } }, catalog } });
+  check(!assets.devices.some((y) => y.name === "tappaas1") && assets.nodes.some((n) => n.name === "tappaas1"), "an asset playing a node: the node, no device beside it");
+  const dm = assets.devices.find((y) => y.name === "ISP modem");
+  check(dm?.source === "recorded" && dm.asset === "dev-01" && dm.kind === "modem" && dm.portSpecs?.[0].speed === "1g", "an asset playing a device nothing manages: a device by its role, its asset and its ports by kind");
+  check(assets.devices.some((y) => y.name === "srv-02" && y.kind === "server") && !assets.devices.some((y) => y.name === "srv-03"), "one in stock is a device by its own name; an ordered one is not here");
+  const av = assets.positions!.assets;
+  check(av.find((a) => a.name === "srv-01")?.stage === "operational" && av.find((a) => a.name === "srv-02")?.stage === "stock" && av.find((a) => a.name === "srv-03")?.stage === "ordered", "the positions carry every asset with its stage");
+  check(!assets.findings.some((f) => /srv-02 is placed nowhere/.test(f.text)), "an asset in stock is no 'placed nowhere' finding");
+  const macs = buildTopology({ ...((): TopoSources => {
+    const src = hrossen();
+    const ports = JSON.parse(JSON.stringify(src.ports)) as SwitchPorts[];
+    const p8 = ports.find((p) => p.switch === SW)!.ports.find((p) => p.port === "8")!;
+    p8.link = "up";
+    p8.neighbors = [{ mac: "AA:BB:CC:00:00:01", lldp: null, lease: null }];
+    return { ...src, site, ports };
+  })(), positions: { doc: { ...doc, assets: { "srv-01": { kind: "server" as const, stage: "placed" as const, role: "tappaas1", ports: [{ name: "ilo", kind: "rj45" as const, mac: "aa:bb:cc:00:00:01" }] } } }, catalog } });
+  check(!macs.devices.some((y) => y.source === "seen" && y.seen?.port === "8"), "a MAC on an asset's port is not seen twice");
   // A link split at a patch panel: one link still, with its two wires.
   const split = buildTopology({ ...hrossen(), positions: { doc: { ...doc, devices: { patch1: { kind: "patch-panel" as const, ports: ["1", "2"] } }, cables: [{ from: { device: SW, port: "3" }, to: { device: "patch1", port: "1", side: "front" as const }, kind: "patch" as const, origin: "seen" as const }, { from: { device: "patch1", port: "1", side: "rear" as const }, to: { device: "tappaas3", port: "eno1" }, kind: "patch" as const, origin: "seen" as const }] }, catalog } });
   const thru = split.positions!.cables.filter((c) => [c.from.device, c.to.device].includes("tappaas3") && [c.from.port, c.to.port].includes("eno1"));
@@ -426,7 +451,7 @@ check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPo
   check(seen.positions!.cables.some((c) => c.from.device === SW && c.from.port === "8" && c.to.device === "aa:bb:cc:00:11:22" && c.to.port === "eth0"), "…its link drawn to it");
   check(!seen.findings.some((f) => /aa:bb:cc:00:11:22/.test(f.text)), "a seen device is not a finding until it is recorded");
   check(!seen.devices.some((d) => d.source === "seen" && ["2", "3", "5", "9", "11"].includes(d.seen?.port ?? "")), "the ports of nodes, the AP, the uplinks and the ISP see nothing");
-  check(renderTopology(seen).some((l) => /8 {2}aa:bb:cc:00:11:22 {2}printer-1 {2}— asset-manager device record/.test(l)), "the text view lists what is seen and the verb that records it");
+  check(renderTopology(seen).some((l) => /8 {2}aa:bb:cc:00:11:22 {2}printer-1 {2}— asset-manager asset record/.test(l)), "the text view lists what is seen and the verb that records it");
   const after = buildTopology({ ...seenSite(), positions: { doc: { ...doc, devices: { printer: { kind: "other" as const, ports: ["eth0"], mac: "aa:bb:cc:00:11:22" } }, cables: [{ from: { device: SW, port: "8" }, to: { device: "printer", port: "eth0" }, kind: "patch" as const }] }, catalog } });
   check(!after.devices.some((d) => d.source === "seen" && d.seen?.port === "8") && after.devices.find((d) => d.name === "printer")?.source === "recorded", "once recorded (its MAC, its cable), the device is recorded and no longer seen");
 

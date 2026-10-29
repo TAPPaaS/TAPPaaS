@@ -33,7 +33,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, unlinkSync 
 import { join } from "path";
 import { writeJsonAtomic } from "../../lib/ts/src/config-io";
 import { clusterNodeNames } from "../../lib/ts/src/nodes";
-import { LEGACY_RACKS_FILE, POSITIONS_FILE, PositionsDoc, devicesOf, placementsOf, roomsOf } from "../../lib/ts/src/positions";
+import { LEGACY_RACKS_FILE, POSITIONS_FILE, PositionsDoc, placementsOf, recordedDevicesOf, roomsOf } from "../../lib/ts/src/positions";
 import { readZonesFile } from "../../lib/ts/src/zones";
 import { AccessConfig, setupState } from "./access";
 import { Runner } from "./run";
@@ -184,7 +184,7 @@ export function readPhysical(configDir: string): PhysicalInputs | null {
   return {
     rooms: Object.entries(roomsOf(doc)).map(([name, r]) => ({ name, location: r.location ?? null })),
     placed: Object.keys(placementsOf(doc)),
-    recorded: Object.entries(devicesOf(doc)).map(([name, d]) => ({ name, kind: d.kind })),
+    recorded: recordedDevicesOf(doc).map((d) => ({ name: d.name, kind: d.asset.kind })),
   };
 }
 

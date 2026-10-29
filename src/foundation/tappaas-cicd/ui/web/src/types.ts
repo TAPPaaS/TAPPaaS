@@ -321,7 +321,8 @@ export interface TopoDevice extends TopoPlace {
 
 // ── the positions the topology carries (lib/ts positions.ts PositionsView) ──
 export type PortKind = "rj45" | "sfp+" | "sfp28" | "poe" | "console" | "power";
-export type RecordedKind = "modem" | "ont" | "ups" | "patch-panel" | "other";
+// An asset the topology lists as a device (ADR-040 D7): its kind.
+export type RecordedKind = "modem" | "ont" | "ups" | "patch-panel" | "pdu" | "other" | "server" | "switch" | "access-point";
 export interface PlatePort {
   id: string; // the topology's
   name: string; // the controller's

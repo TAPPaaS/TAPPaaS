@@ -43,7 +43,7 @@ day 2: add a node, adopt a running machine (`module-manager adopt`), an environm
 device (the wg-quick file to download). Day 2's **physical site** is a step with that state and
 its sequence: record the rooms (by location), add a rack, place the nodes and switches, record
 what the cluster cannot see (the modem, a patch panel). Every form that takes a location (room
-add and modify, device add and record, machine add and adopt, a switch's or AP's Location…, a
+add and modify, asset add and record, machine add and adopt, a switch's or AP's Location…, a
 buddy's peer add) offers the site's locations as a dropdown, the primary preselected (not for a
 buddy, which is elsewhere), with a link to the Site page's Locations section (`/site#locations`)
 for one the site does not have yet.
@@ -79,9 +79,9 @@ through a patch panel as its two wires —, a
 device only a cable record places beside the rack, and an Unplaced tray of the devices placed
 nowhere, by location, each with Place… (one form: a rack and its units, or loose in a room;
 `asset-manager place`) — or, for a device a switch port sees and nobody recorded, Record…
-(`asset-manager device record`: its MAC kept, the port's link recorded as its cable); the header's
+(`asset-manager asset record`: its MAC kept on its port, the port's link recorded as its cable); the header's
 Add a room… (`asset-manager room add`, at one of the site's locations), Add a
-rack…, Record a device… (`asset-manager device add`: kind, a catalog model or free text, ports, location; the
+rack…, Record a device… (`asset-manager asset add`: kind, a catalog model or free text, ports, location; the
 site's own plates first in the model list), the last also in a rack's and a room's card, and Add a faceplate…
 (`asset-manager faceplate add`: a plate for a model the catalog lacks — its key, units, width, kind and ports as a
 port spec the form explains, drawn as the rack will draw it while the fields change), and a How to card while nothing is selected; a click on a cable opens its link, whose panel

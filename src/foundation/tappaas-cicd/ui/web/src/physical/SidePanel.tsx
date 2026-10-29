@@ -668,7 +668,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           </>
         );
         actions = <RecordSeenButton d={seen} />;
-        open = <p className="muted small">Seen by {s.switch}'s controller at port {s.port}; asset-manager device record turns it into a recorded device.</p>;
+        open = <p className="muted small">Seen by {s.switch}'s controller at port {s.port}; asset-manager asset record turns it into a recorded device.</p>;
         break;
       }
       title = rec?.displayName && rec.displayName !== sel.id ? `${rec.displayName} · ${sel.id}` : sel.id;
@@ -717,7 +717,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           {recActs}
         </>
       );
-      open = <p className="muted small">{rec ? "Nothing manages it: asset-manager records it." : out ? "Nothing reports on it: it is known only by the cable that names it — record it (asset-manager device add) to place it." : "Its own records are on the module's page."}</p>;
+      open = <p className="muted small">{rec ? "Nothing manages it: asset-manager records it." : out ? "Nothing reports on it: it is known only by the cable that names it — record it (asset-manager asset add) to place it." : "Its own records are on the module's page."}</p>;
       break;
     }
   }
@@ -822,8 +822,8 @@ function DeviceRecordActions({ name, cabled, placed }: { name: string; cabled: b
   const rm = (verb: string, title: string, extra: Partial<Step> = {}): Step => ({ title, bin: "asset-manager", verb, fixed: [name], ...extra });
   return (
     <>
-      <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("device modify", `asset-manager device modify '${name}'`, { note: "Its kind, model, ports (a count or a list), display name or description; --check previews." })]} />
-      {!placed && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("device remove", `asset-manager device remove '${name}'`)]} /> : null}
+      <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("asset modify", `asset-manager asset modify '${name}'`, { note: "Its kind, vendor, model, serial, tag, ports (a count or a list), display name, description or procurement; --check previews." })]} />
+      {!placed && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("asset remove", `asset-manager asset remove '${name}'`)]} /> : null}
     </>
   );
 }

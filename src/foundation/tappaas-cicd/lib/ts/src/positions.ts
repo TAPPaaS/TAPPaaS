@@ -1,17 +1,24 @@
-// positions.ts — config/positions.json and the faceplate catalog: where the
-// site's hardware is inside its locations (schemas/positions-fields.json,
-// ADR-036 D3). asset-manager writes the document and validates it here;
-// network-manager's topology resolves it against the site here (placements to
-// devices, links to faceplate ports). Pure: documents and catalogs in,
-// findings and views out.
+// positions.ts — config/positions.json and the faceplate catalog: the site's
+// physical assets and where they are inside its locations
+// (schemas/positions-fields.json, ADR-036 D3, ADR-040 D7-D9). asset-manager
+// writes the document and validates it here; network-manager's topology
+// resolves it against the site here (placements to devices, links to faceplate
+// ports). Pure: documents and catalogs in, findings and views out.
 //
 // A room is in a location of site.json (absent: the primary one); a rack is in
 // a room; a device is placed in a rack or loose in a room, at most once.
 // Devices are named as the topology names them; a placement never holds a
-// copy of a device's record. A device nothing manages (the ISP's modem, an
-// ONT, a UPS, a patch panel) is recorded here, and is then a device like any
-// other. A cable the switches or LLDP can see comes from the topology;
-// positions.json records only the ones nothing can see.
+// copy of a device's record. An asset is a physical thing with a lifecycle of
+// its own (ordered, stock, placed, operational, disposed) and its ports (D9);
+// its role is the topology's name for what it plays — a node, a switch, an
+// access point, or a device nothing manages (the ISP's modem, a patch panel),
+// which the asset then is to the topology. A placement and a cable end name
+// the role while there is one and the asset's own name when there is none, so
+// a placement survives the role. A cable the switches or LLDP can see comes
+// from the topology; positions.json records only the ones nothing can see.
+//
+// assets{} is interim: ADR-040 step 3 moves it into the CMDB, and its shape is
+// the CMDB's asset and port classes', so that migration is a copy.
 
 export const POSITIONS_FILE = "positions.json";
 // The file's name before asset-manager (migration 0020 renames it): read
@@ -25,10 +32,28 @@ export const NUMBERINGS = ["bottom-up", "top-down"] as const;
 export const MOUNT_WIDTHS = ["full", "half", "third"] as const;
 export const FACES = ["front", "rear"] as const;
 export const CABLE_KINDS = ["patch", "uplink", "power"] as const;
+// What a plate draws a port as (the catalog's glyph); ASSET_PORT_KINDS are
+// what the port is (its connector, ADR-040 D9).
 export const PORT_KINDS = ["rj45", "sfp+", "sfp28", "poe", "console", "power"] as const;
 export const PLATE_KINDS = ["server", "switch", "ap", "patch-panel", "pdu", "modem", "other"] as const;
-export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "other"] as const;
 export const DEVICE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$/;
+
+// ── assets and their ports (ADR-040 D7-D9) ──────────────────────────────
+export const ASSET_KINDS = ["server", "switch", "access-point", "modem", "ont", "ups", "patch-panel", "pdu", "other"] as const;
+// The recorded stages; operational is derived (a role), and so is placed (a
+// placement): the verbs keep the recorded one in step.
+export const ASSET_STAGES = ["ordered", "stock", "placed", "disposed"] as const;
+export const OWNERSHIPS = ["owned", "rented"] as const;
+export const DISPOSAL_HOWS = ["sold", "recycled", "returned", "lost"] as const;
+export const ASSET_PORT_KINDS = ["rj45", "sfp", "wifi", "usb-a", "usb-c"] as const;
+export const PORT_SPEEDS = ["1g", "2.5g", "10g", "25g", "usb2", "usb3"] as const;
+export const WIFI_STANDARDS = ["wifi5", "wifi6", "wifi7"] as const;
+export const WIFI_BANDS = ["2.4", "5", "6"] as const;
+export const SFP_MODULES = ["dac", "sr", "lr", "rj45"] as const;
+export const PORT_ROLES = ["lan", "wan", "bmc"] as const;
+// An observed link speed (a cable's): a number and its unit, lowercase.
+export const LINK_SPEED_RE = /^\d+(\.\d+)?[mg]$/;
+export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export type RackWidth = (typeof RACK_WIDTHS)[number];
 export type Numbering = (typeof NUMBERINGS)[number];
@@ -37,7 +62,25 @@ export type Face = (typeof FACES)[number];
 export type CableKind = (typeof CABLE_KINDS)[number];
 export type PortKind = (typeof PORT_KINDS)[number];
 export type PlateKind = (typeof PLATE_KINDS)[number];
-export type RecordedKind = (typeof RECORDED_KINDS)[number];
+export type AssetKind = (typeof ASSET_KINDS)[number];
+// A device nothing manages is an asset to the topology: its kind is the asset's.
+export type RecordedKind = AssetKind;
+export type AssetStage = (typeof ASSET_STAGES)[number];
+export type AssetPortKind = (typeof ASSET_PORT_KINDS)[number];
+export type PortSpeed = (typeof PORT_SPEEDS)[number];
+export type WifiStandard = (typeof WIFI_STANDARDS)[number];
+export type WifiBand = (typeof WIFI_BANDS)[number];
+export type SfpModule = (typeof SFP_MODULES)[number];
+export type PortRole = (typeof PORT_ROLES)[number];
+
+// The speeds each connector comes in; wifi has a standard and bands instead.
+export const SPEEDS_OF: Record<AssetPortKind, readonly PortSpeed[]> = {
+  rj45: ["1g", "2.5g", "10g"],
+  sfp: ["1g", "10g", "25g"],
+  wifi: [],
+  "usb-a": ["usb2", "usb3"],
+  "usb-c": ["usb2", "usb3"],
+};
 
 export interface Rack {
   displayName?: string;
@@ -85,17 +128,66 @@ export interface Cable {
   // was before — one the topology sees, or a recorded cable (cable join
   // records it again).
   origin?: "seen" | "recorded";
+  // The link speed seen on it (1g on a 10g cage holding a 1G module): the
+  // connection's, where a port's speed is its maximum (ADR-040 D9).
+  linkSpeed?: string;
 }
-// A device nothing can see, recorded by its name: its kind, its plate in the
-// catalog (model) or its ports, and how it is shown.
-export interface RecordedDevice {
-  kind: RecordedKind;
-  model?: string; // a catalog key, <vendor>/<model>
-  ports?: string[]; // its port names, when the model does not give them
+// A port of an asset (ADR-040 D9): its name (the label on the case or the
+// OS's), its connector, and what goes with that connector.
+export interface AssetPort {
+  name: string;
+  kind: AssetPortKind;
+  speed?: PortSpeed; // rj45, sfp, usb: its maximum
+  standard?: WifiStandard; // wifi
+  bands?: WifiBand[]; // wifi
+  module?: SfpModule; // sfp: what is plugged in
+  role?: PortRole; // what the node uses it for
+  mac?: string;
+  side?: Side; // a patch panel's port on one side only (absent: front and rear)
+}
+export interface Procurement {
+  supplier?: string;
+  orderRef?: string;
+  purchaseDate?: string; // YYYY-MM-DD
+  warrantyUntil?: string; // YYYY-MM-DD
+  ownership?: (typeof OWNERSHIPS)[number];
+  notes?: string;
+}
+export interface Disposal {
+  how: (typeof DISPOSAL_HOWS)[number];
+  when?: string; // YYYY-MM-DD
+  wiped?: boolean;
+}
+// An asset: the physical thing, by its name (a tag per kind, srv-01, or the
+// operator's own), with its lifecycle and the role it plays for the time
+// being (ADR-040 D7). Interim, until the CMDB holds it.
+export interface Asset {
+  kind: AssetKind;
   displayName?: string;
   description?: string;
+  vendor?: string;
+  model?: string; // a faceplate key where one exists, else the model's name
+  serial?: string;
+  assetTag?: string;
+  ports?: AssetPort[]; // merged over its model's plate's ports, by name
   location?: string; // a location of site.json; absent: the primary one
-  mac?: string; // the MAC a switch port saw it by (device record)
+  stage: AssetStage;
+  faulty?: boolean; // a flag beside the stage, with a note
+  faultNote?: string;
+  procurement?: Procurement;
+  disposal?: Disposal;
+  role?: string; // the topology's name for what it plays: a node, switch, AP or device
+}
+// A device recorded before assets (migration 0027 makes each an asset): read
+// until it has run, never written.
+export interface LegacyDevice {
+  kind: string;
+  model?: string;
+  ports?: string[];
+  displayName?: string;
+  description?: string;
+  location?: string;
+  mac?: string;
 }
 export interface PositionsDoc {
   version?: 1;
@@ -105,7 +197,9 @@ export interface PositionsDoc {
   // racks.json's name for the placements, read until migration 0020 has run
   mounts?: Record<string, Placement>;
   cables?: Cable[];
-  devices?: Record<string, RecordedDevice>;
+  assets?: Record<string, Asset>;
+  // The recorded devices before assets, read until migration 0027 has run.
+  devices?: Record<string, LegacyDevice>;
   // The site's own faceplates, keyed <vendor>/<model>: merged over the
   // shipped catalog (an entry of the same key replaces the shipped one).
   faceplates?: Record<string, SiteFaceplate>;
@@ -148,7 +242,7 @@ export function legacyPlacements(mounts: Record<string, Placement> | undefined):
 export const racksOf = (d: PositionsDoc): Record<string, Rack> => d.racks ?? {};
 export const placementsOf = (d: PositionsDoc): Record<string, Placement> => d.placements ?? legacyPlacements(d.mounts);
 export const cablesOf = (d: PositionsDoc): Cable[] => d.cables ?? [];
-export const devicesOf = (d: PositionsDoc): Record<string, RecordedDevice> => d.devices ?? {};
+export const assetsOf = (d: PositionsDoc): Record<string, Asset> => d.assets ?? legacyAssets(d);
 export const faceplatesOf = (d: PositionsDoc): Record<string, SiteFaceplate> => d.faceplates ?? {};
 export const roomsOf = (d: PositionsDoc): Record<string, Room> => d.rooms ?? {};
 export const ROOM_NAME_RE = /^[a-z][a-z0-9-]{0,62}$/;
@@ -157,6 +251,116 @@ export const placeWhere = (m: Placement): string => (m.rack ? `${m.rack} U${m.u 
 
 // The room a placement is in: its own, or its rack's.
 export const roomOf = (doc: PositionsDoc, m: Placement): string | null => (m.rack ? racksOf(doc)[m.rack]?.room ?? null : m.room ?? null);
+
+// ── assets ────────────────────────────────────────────────────────────
+
+// An unmigrated document's devices, as assets: each a device nothing manages
+// (its role its own name), its ports rj45 at 1g, its MAC on the port its
+// recorded cable reaches (else its first), placed or in stock — what
+// migration 0027 writes for it.
+export function legacyAssets(d: PositionsDoc): Record<string, Asset> {
+  const out: Record<string, Asset> = {};
+  const placed = placementsOf(d);
+  for (const [name, x] of Object.entries(d.devices ?? {})) {
+    const ports: AssetPort[] = (x.ports ?? []).map((n) => ({ name: n, kind: "rj45", speed: "1g" }));
+    if (x.mac) {
+      const end = cablesOf(d).flatMap((c) => [c.from, c.to]).find((e) => e.device === name);
+      const at = end?.port ?? ports[0]?.name ?? "1";
+      const p = ports.find((q) => q.name === at);
+      if (p) p.mac = x.mac;
+      else ports.push({ name: at, kind: "rj45", speed: "1g", mac: x.mac });
+    }
+    const a: Asset = { kind: (ASSET_KINDS as readonly string[]).includes(x.kind) ? (x.kind as AssetKind) : "other", stage: placed[name] ? "placed" : "stock", role: name };
+    for (const k of ["model", "displayName", "description", "location"] as const) if (x[k]) a[k] = x[k];
+    if (ports.length) a.ports = ports;
+    out[name] = a;
+  }
+  return out;
+}
+
+// The name a placement and a cable end use for an asset: its role while it
+// has one, else its own.
+export const currentName = (key: string, a: Asset): string => a.role ?? key;
+
+// The asset a name means: its own name, or the role it plays.
+export function assetNamed(doc: PositionsDoc, name: string | undefined): { key: string; asset: Asset } | null {
+  if (!name) return null;
+  const assets = assetsOf(doc);
+  if (assets[name]) return { key: name, asset: assets[name] };
+  const hit = Object.entries(assets).find(([, a]) => a.role === name);
+  return hit ? { key: hit[0], asset: hit[1] } : null;
+}
+
+// The name a verb's argument stands for in placements and cables: an asset's
+// own name is its role's while it plays one.
+export function placementName(doc: PositionsDoc, name: string): string {
+  const a = assetsOf(doc)[name];
+  return a ? currentName(name, a) : name;
+}
+
+export type StageView = AssetStage | "operational";
+// An asset's stage as the view shows it: disposed and ordered as recorded; with
+// a role operational; with a placement placed; else in stock (ADR-040 D7).
+export function stageOf(doc: PositionsDoc, key: string, a: Asset): StageView {
+  if (a.stage === "disposed" || a.stage === "ordered") return a.stage;
+  if (a.role) return "operational";
+  return placementsOf(doc)[currentName(key, a)] ? "placed" : "stock";
+}
+
+// The assets that are devices to the topology, by the name it knows them by:
+// every one that is there (not ordered, not disposed). One that plays a node,
+// a switch or an AP is the topology's already; the topology skips those names.
+export function recordedDevicesOf(doc: PositionsDoc): { name: string; key: string; asset: Asset }[] {
+  return Object.entries(assetsOf(doc))
+    .filter(([, a]) => a.stage !== "ordered" && a.stage !== "disposed")
+    .map(([key, a]) => ({ name: currentName(key, a), key, asset: a }));
+}
+
+// The tag a new asset of a kind is named by when it is given no name
+// (ADR-040 O5): srv-NN, sw-NN, ap-NN, dev-NN, the next after the highest.
+export const TAG_PREFIX: Record<AssetKind, string> = { server: "srv", switch: "sw", "access-point": "ap", modem: "dev", ont: "dev", ups: "dev", "patch-panel": "dev", pdu: "dev", other: "dev" };
+export function nextTag(doc: PositionsDoc, kind: AssetKind): string {
+  const prefix = TAG_PREFIX[kind] ?? "dev";
+  const re = new RegExp(`^${prefix}-(\\d+)$`);
+  const top = Math.max(0, ...Object.keys(assetsOf(doc)).map((k) => Number(re.exec(k)?.[1] ?? 0)));
+  return `${prefix}-${String(top + 1).padStart(2, "0")}`;
+}
+
+// What is wrong with a port (ADR-040 D9): a speed that fits its connector, a
+// standard and bands only on wifi, a module only in an sfp cage, a role, a
+// MAC, a side only on a patch panel's port.
+export function portProblem(p: AssetPort, panel: boolean): string | null {
+  if (!p || typeof p.name !== "string" || p.name.trim() === "" || p.name.includes(":")) return "a port's name is text without a colon";
+  const at = `port ${p.name}`;
+  if (!ASSET_PORT_KINDS.includes(p.kind)) return `${at}: kind is one of ${ASSET_PORT_KINDS.join(", ")}`;
+  if (p.speed !== undefined && !SPEEDS_OF[p.kind].includes(p.speed)) return SPEEDS_OF[p.kind].length ? `${at}: a ${p.kind} port's speed is one of ${SPEEDS_OF[p.kind].join(", ")}` : `${at}: a ${p.kind} port has a standard and bands, no speed`;
+  if (p.kind !== "wifi" && (p.standard !== undefined || p.bands !== undefined)) return `${at}: a standard and bands are a wifi port's`;
+  if (p.standard !== undefined && !WIFI_STANDARDS.includes(p.standard)) return `${at}: standard is one of ${WIFI_STANDARDS.join(", ")}`;
+  if (p.bands !== undefined && (!Array.isArray(p.bands) || p.bands.length === 0 || p.bands.some((b) => !WIFI_BANDS.includes(b)))) return `${at}: bands are some of ${WIFI_BANDS.join(", ")}`;
+  if (p.module !== undefined && p.kind !== "sfp") return `${at}: a module is what an sfp cage holds`;
+  if (p.module !== undefined && !SFP_MODULES.includes(p.module)) return `${at}: module is one of ${SFP_MODULES.join(", ")}`;
+  if (p.role !== undefined && !PORT_ROLES.includes(p.role)) return `${at}: role is one of ${PORT_ROLES.join(", ")}`;
+  if (p.mac !== undefined && !MAC_RE.test(p.mac)) return `${at}: mac is six hex pairs, aa:bb:cc:dd:ee:ff`;
+  if (p.side !== undefined && !panel) return `${at}: only a patch panel's port has a side`;
+  if (p.side !== undefined && !SIDES.includes(p.side)) return `${at}: side is front or rear`;
+  return null;
+}
+
+// "<name>:<kind>[:<speed>]" (asset add --port), or a bare name: an rj45 at 1g.
+export function parsePortArg(s: string): AssetPort | { error: string } {
+  const [name, kind, speed, ...rest] = s.split(":");
+  if (rest.length || !name?.trim()) return { error: `--port ${s}: write <name>[:<kind>[:<speed>]]` };
+  const k = (kind ?? "rj45") as AssetPortKind;
+  if (!ASSET_PORT_KINDS.includes(k)) return { error: `--port ${s}: a kind is one of ${ASSET_PORT_KINDS.join(", ")}` };
+  const p: AssetPort = { name: name.trim(), kind: k };
+  const sp = speed ?? (k === "rj45" ? "1g" : undefined);
+  if (sp !== undefined) p.speed = sp as PortSpeed;
+  const bad = portProblem(p, true);
+  return bad ? { error: `--port ${s}: ${bad}` } : p;
+}
+
+// Every MAC an asset's ports carry, lowercase.
+export const assetMacs = (a: Asset): string[] => (a.ports ?? []).map((p) => p.mac).filter((m): m is string => !!m);
 
 // ── the catalog ───────────────────────────────────────────────────────
 
@@ -167,6 +371,33 @@ export interface CatalogPort {
   name: string;
   id?: string;
   kind: PortKind;
+  speed?: PortSpeed; // its maximum; absent: its glyph's (CONNECTOR_OF)
+}
+
+// What a plate's glyph is as a port of the asset (ADR-040 D9): its connector
+// and the speed a plate that says nothing means. A console and a power inlet
+// are drawn, and are no ports.
+export const CONNECTOR_OF: Record<PortKind, { kind: AssetPortKind; speed: PortSpeed } | null> = {
+  rj45: { kind: "rj45", speed: "1g" },
+  poe: { kind: "rj45", speed: "1g" },
+  "sfp+": { kind: "sfp", speed: "10g" },
+  sfp28: { kind: "sfp", speed: "25g" },
+  console: null,
+  power: null,
+};
+
+// A plate's port as the asset's port: its topology id, connector and speed;
+// null for what is drawn and is no port.
+export function catalogPort(p: CatalogPort): AssetPort | null {
+  const c = CONNECTOR_OF[p.kind];
+  return c ? { name: portId(p), kind: c.kind, speed: p.speed ?? c.speed } : null;
+}
+
+// What is wrong with a speed given to a glyph: one its connector comes in.
+function glyphSpeedProblem(kind: string, speed: string): string | null {
+  const c = CONNECTOR_OF[kind as PortKind];
+  if (!c) return `a ${kind} has no speed`;
+  return SPEEDS_OF[c.kind].includes(speed as PortSpeed) ? null : `a ${kind} port's speed is one of ${SPEEDS_OF[c.kind].join(", ")}`;
 }
 export interface Faceplate {
   key: string; // <vendor>/<model>, its path in the catalog
@@ -210,9 +441,12 @@ export interface PlateBlock<P = CatalogPort> {
 //
 //   groups  side by side, a comma between them, a gap between them on the plate
 //   rows    within a group, top to bottom, a slash between them
-//   items   within a row, a plus between them: [<n>x]<kind>[@<rows>][:<name>]
+//   items   within a row, a plus between them: [<n>x]<kind>[-<speed>][@<rows>][:<name>]
 //
-// A kind is rj45, sfp+, sfp28, poe, console, power, or gap (an empty place).
+// A kind is rj45, sfp+, sfp28, poe, console, power, or gap (an empty place);
+// a speed (1g, 2.5g, 10g, 25g) is the port's maximum, one its connector comes
+// in (rj45 and poe 1g-10g, sfp+ and sfp28 1g-25g), and absent it is the kind's
+// (rj45 and poe 1g, sfp+ 10g, sfp28 25g).
 // A port is named by the number {n} counts per name, from 1 (no name: 1, 2,
 // …); a name without {n} given to several ports gets the number after it.
 // <n>x<kind>@<k> alone in its group lays its ports in k rows, odd over even
@@ -224,6 +458,7 @@ export interface PlateBlock<P = CatalogPort> {
 //   8xsfp+/8xsfp+                   two rows of eight, 1-8 over 9-16
 //   16xsfp+@2:sfp-sfpplus{n}[3-66]  sixteen cages, odd over even, in the left two thirds
 //   rj45:WAN+gap+4xrj45:LAN {n}     WAN, a gap, LAN 1-4
+//   8xrj45-2.5g, 2xsfp+             eight 2.5G RJ45, a gap, two SFP+
 // A kind ending in + (sfp+) takes its own + before the next item: 2xsfp++rj45.
 
 export const SPEC_KINDS = [...PORT_KINDS, "gap"] as const;
@@ -233,7 +468,7 @@ export const SPEC_AREA: [number, number] = [0.3, 0.97];
 const SPEC_MAX_PITCH = 0.05;
 const SPEC_MAX_PORTS = 192;
 const SPEC_MAX_ROWS = 6;
-const ITEM_RE = /\s*(?:(\d+)\s*x\s*)?(sfp28|sfp\+|rj45|poe|console|power|gap)(?:@(\d+))?(?::([^+]*))?\s*(?:\+|$)/y;
+const ITEM_RE = /\s*(?:(\d+)\s*x\s*)?(sfp28|sfp\+|rj45|poe|console|power|gap)(?:-(\d+(?:\.\d+)?g))?(?:@(\d+))?(?::([^+]*))?\s*(?:\+|$)/y;
 const SPAN_RE = /\[\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*\]\s*$/;
 
 // A port spec, read: its blocks, or what is wrong with it.
@@ -259,16 +494,18 @@ export function parsePortSpec(spec: string): { blocks: PlateBlock[] } | { error:
     const rowTexts = g.split("/");
     for (const rt of rowTexts) {
       if (!rt.trim()) return { error: `'${g}': an empty row: two slashes, or one at an end` };
-      const items: { n: number; kind: string; stack: number; name: string | null }[] = [];
+      const items: { n: number; kind: string; speed: string | null; stack: number; name: string | null }[] = [];
       ITEM_RE.lastIndex = 0;
       const s = rt.trim();
       while (ITEM_RE.lastIndex < s.length) {
         const at = ITEM_RE.lastIndex;
         const m = ITEM_RE.exec(s);
-        if (!m || m.index !== at) return { error: `'${s.slice(at)}': not [<n>x]<kind>[@<rows>][:<name>] — a kind is ${SPEC_KINDS.join(", ")}` };
+        if (!m || m.index !== at) return { error: `'${s.slice(at)}': not [<n>x]<kind>[-<speed>][@<rows>][:<name>] — a kind is ${SPEC_KINDS.join(", ")}` };
         const n = m[1] === undefined ? 1 : Number(m[1]);
         if (n < 1 || n > 96) return { error: `${m[0].trim()}: a count is 1 to 96` };
-        items.push({ n, kind: m[2], stack: m[3] === undefined ? 1 : Number(m[3]), name: m[4] === undefined ? null : m[4].trim() });
+        const bad = m[3] !== undefined ? glyphSpeedProblem(m[2], m[3]) : null;
+        if (bad) return { error: `${m[0].trim().replace(/\+$/, "")}: ${bad}` };
+        items.push({ n, kind: m[2], speed: m[3] ?? null, stack: m[4] === undefined ? 1 : Number(m[4]), name: m[5] === undefined ? null : m[5].trim() });
         if (m[0].length === 0) break;
       }
       const row: (CatalogPort | null)[] = [];
@@ -293,7 +530,7 @@ export function parsePortSpec(spec: string): { blocks: PlateBlock[] } | { error:
           }
           if (names.has(name)) return { error: `port ${name} appears twice` };
           names.add(name);
-          ports.push({ name, kind: it.kind as PortKind });
+          ports.push({ name, kind: it.kind as PortKind, ...(it.speed ? { speed: it.speed as PortSpeed } : {}) });
         }
         total += ports.length;
         if (it.stack > 1) {
@@ -404,7 +641,11 @@ export function parseFaceplate(key: string, raw: unknown): Faceplate | { error: 
       const p = obj(c);
       if (!isStr(p.name)) return { error: `${key}: row ${i + 1} has a port with no name` };
       if (!PORT_KINDS.includes(p.kind as PortKind)) return { error: `${key}: port ${p.name}: kind is one of ${PORT_KINDS.join(", ")}` };
-      const port: CatalogPort = { name: p.name, kind: p.kind as PortKind, ...(isStr(p.id) ? { id: p.id } : {}) };
+      if (p.speed !== undefined) {
+        const bad = isStr(p.speed) ? glyphSpeedProblem(p.kind as string, p.speed) : "a speed is text (1g, 2.5g, 10g, 25g)";
+        if (bad) return { error: `${key}: port ${p.name}: ${bad}` };
+      }
+      const port: CatalogPort = { name: p.name, kind: p.kind as PortKind, ...(isStr(p.id) ? { id: p.id } : {}), ...(isStr(p.speed) ? { speed: p.speed as PortSpeed } : {}) };
       if (ids.has(portId(port))) return { error: `${key}: port ${portId(port)} appears twice` };
       ids.add(portId(port));
       row.push(port);
@@ -589,7 +830,7 @@ export function siteDevices(t: TopoLike): SiteDevice[] {
     out.push({
       name: d.name,
       kind: d.kind === "machine" ? "machine" : "device",
-      ...(d.recorded && RECORDED_KINDS.includes(d.kind as RecordedKind) ? { recorded: d.kind as RecordedKind } : {}),
+      ...(d.recorded && ASSET_KINDS.includes(d.kind as AssetKind) ? { recorded: d.kind as AssetKind } : {}),
       ...(d.source === "seen" ? { seen: true as const } : {}),
       vendor: d.vendor ?? null,
       model: d.model ?? null,
@@ -599,27 +840,47 @@ export function siteDevices(t: TopoLike): SiteDevice[] {
   return out;
 }
 
-// ── recorded devices ──────────────────────────────────────────────────
+// ── an asset's ports and plate ─────────────────────────────────────────
 
-// A recorded device's ports: its own list, else its model's plate's.
-export function recordedPorts(d: RecordedDevice, catalog: Faceplate[]): string[] {
-  if (d.ports?.length) return d.ports;
-  const f = d.model ? catalog.find((x) => x.key === d.model) : undefined;
-  return f ? f.rows.flat().filter((p): p is CatalogPort => !!p).map(portId) : [];
+// An asset's ports (ADR-040 D9): its model's plate's (each glyph as its
+// connector and speed), its own merged over them by name, and its own the
+// plate lacks after them.
+export function assetPorts(a: Pick<Asset, "model" | "ports">, catalog: Faceplate[]): AssetPort[] {
+  const f = a.model ? catalog.find((x) => x.key === a.model) : undefined;
+  const out: AssetPort[] = f ? f.rows.flat().filter((p): p is CatalogPort => !!p).map(catalogPort).filter((p): p is AssetPort => !!p) : [];
+  for (const own of a.ports ?? []) {
+    const i = out.findIndex((p) => p.name === own.name);
+    if (i >= 0) out[i] = { ...out[i], ...own };
+    else out.push({ ...own });
+  }
+  return out;
 }
+
+// A recorded device's port names: its asset's ports.
+export const recordedPorts = (a: Pick<Asset, "model" | "ports">, catalog: Faceplate[]): string[] => assetPorts(a, catalog).map((p) => p.name);
 
 // A patch panel's ports: across the plate, edge to edge.
 export const PANEL_SPAN: [number, number] = [0.02, 0.98];
 
-const PLATE_OF_KIND: Record<RecordedKind, PlateKind> = { modem: "modem", ont: "modem", ups: "pdu", "patch-panel": "patch-panel", other: "other" };
+const PLATE_OF_KIND: Record<AssetKind, PlateKind> = { server: "server", switch: "switch", "access-point": "ap", modem: "modem", ont: "modem", ups: "pdu", "patch-panel": "patch-panel", pdu: "pdu", other: "other" };
+// The glyph an asset's port is drawn with: a UPS's are its outlets.
+const glyphOf = (a: Pick<Asset, "kind">, p: AssetPort): PortKind | null =>
+  a.kind === "ups" || a.kind === "pdu" ? "power" : p.kind === "rj45" ? "rj45" : p.kind === "sfp" ? (p.speed === "25g" ? "sfp28" : "sfp+") : null;
 
-// A recorded device's plate: its model's from the catalog, else one made from
-// its ports (a patch panel across the plate, one row up to 24 and two above;
-// a modem or an ONT half width).
-export function recordedPlate(name: string, d: RecordedDevice, catalog: Faceplate[]): Faceplate {
+// An asset's plate: its model's from the catalog when every port of its own is
+// on it, else one made from its ports (a patch panel across the plate, one
+// row up to 24 and two above; a modem or an ONT half width). Wi-Fi and USB
+// ports are not drawn.
+export function recordedPlate(name: string, d: Pick<Asset, "kind" | "model" | "ports">, catalog: Faceplate[]): Faceplate {
   const f = d.model ? catalog.find((x) => x.key === d.model) : undefined;
-  if (f && !d.ports?.length) return f;
-  const ports = recordedPorts(d, catalog).map((n): CatalogPort => ({ name: n, kind: d.kind === "ups" ? "power" : "rj45" }));
+  const onPlate = new Set(f ? f.rows.flat().filter((p): p is CatalogPort => !!p).map(portId) : []);
+  if (f && (d.ports ?? []).every((p) => onPlate.has(p.name))) return f;
+  const ports = assetPorts(d, catalog)
+    .map((p): CatalogPort | null => {
+      const g = glyphOf(d, p);
+      return g ? { name: p.name, kind: g, ...(p.speed && g !== "power" ? { speed: p.speed } : {}) } : null;
+    })
+    .filter((p): p is CatalogPort => !!p);
   const rows: CatalogPort[][] = [];
   // A patch panel: its ports across the whole plate, one row up to 24, two above.
   const panel = d.kind === "patch-panel";
@@ -629,7 +890,7 @@ export function recordedPlate(name: string, d: RecordedDevice, catalog: Faceplat
   return {
     key: f?.key ?? `recorded/${d.kind}`,
     vendor: f?.vendor ?? "Generic",
-    model: f?.model ?? (d.kind === "patch-panel" ? `${ports.length}-port patch panel` : d.kind === "ups" ? "UPS" : d.kind === "ont" ? "ONT" : d.kind === "modem" ? "modem" : name),
+    model: f?.model ?? (d.kind === "patch-panel" ? `${ports.length}-port patch panel` : d.kind === "ups" ? "UPS" : d.kind === "pdu" ? "PDU" : d.kind === "ont" ? "ONT" : d.kind === "modem" ? "modem" : name),
     kind: PLATE_OF_KIND[d.kind] ?? "other",
     units: f?.units ?? (rows.length > 2 || ports.length > 48 ? 2 : 1),
     width: f?.width ?? (small ? "half" : "full"),
@@ -639,12 +900,20 @@ export function recordedPlate(name: string, d: RecordedDevice, catalog: Faceplat
   };
 }
 
-// The site's devices and the recorded ones, each once (a seen device wins).
+// The site's devices and the assets that are devices to it, each once (the
+// topology's wins: an asset that plays a node is that node, and the asset's
+// ports the topology does not know are that node's too — they are the box's).
 export function withRecorded(devices: SiteDevice[], doc: PositionsDoc, catalog: Faceplate[]): SiteDevice[] {
   const out = [...devices];
-  for (const [name, d] of Object.entries(devicesOf(doc))) {
-    if (out.some((x) => x.name === name)) continue;
-    out.push({ name, kind: "device", recorded: d.kind, vendor: null, model: d.model ?? null, ports: recordedPorts(d, catalog).map((id) => ({ id, up: null, lag: null, zones: [], disabled: false })) });
+  for (const { name, asset: a } of recordedDevicesOf(doc)) {
+    const i = out.findIndex((x) => x.name === name);
+    if (i >= 0) {
+      const known = new Set(out[i].ports.map((p) => p.id));
+      const extra = recordedPorts(a, catalog).filter((id) => !known.has(id));
+      if (extra.length) out[i] = { ...out[i], ports: [...out[i].ports, ...extra.map((id) => ({ id, up: null, lag: null, zones: [], disabled: false }))] };
+      continue;
+    }
+    out.push({ name, kind: "device", recorded: a.kind, vendor: a.vendor ?? null, model: a.model ?? null, ports: recordedPorts(a, catalog).map((id) => ({ id, up: null, lag: null, zones: [], disabled: false })) });
   }
   return out;
 }
@@ -665,6 +934,7 @@ export interface PlatePort {
   id: string; // the topology's
   name: string; // the controller's
   kind: PortKind;
+  speed?: PortSpeed; // a port's maximum (ADR-040 D9); absent on a console or power inlet
   up: boolean | null;
   disabled: boolean;
   lag: string | null;
@@ -698,11 +968,12 @@ function guessKind(id: string): PortKind {
 // row, a switch's ports odd over even).
 export function resolvePlate(f: Faceplate, dev: SiteDevice | null): ResolvedPlate {
   const live = (id: string) => dev?.ports.find((p) => p.id === id);
-  const port = (id: string, name: string, kind: PortKind): PlatePort => {
+  const port = (id: string, name: string, kind: PortKind, speed?: PortSpeed): PlatePort => {
     const l = live(id);
-    return { id, name, kind, up: l?.up ?? null, disabled: l?.disabled ?? false, lag: l?.lag ?? null, zones: l?.zones ?? [] };
+    const sp = speed ?? CONNECTOR_OF[kind]?.speed;
+    return { id, name, kind, ...(sp ? { speed: sp } : {}), up: l?.up ?? null, disabled: l?.disabled ?? false, lag: l?.lag ?? null, zones: l?.zones ?? [] };
   };
-  const fixed = f.rows.map((r) => r.map((c) => (c ? port(portId(c), c.name, c.kind) : null)));
+  const fixed = f.rows.map((r) => r.map((c) => (c ? port(portId(c), c.name, c.kind, c.speed) : null)));
   let rows = fixed;
   if (f.generic && dev) {
     const known = new Set(fixed.flat().filter((p): p is PlatePort => !!p).map((p) => p.id));
@@ -716,7 +987,7 @@ export function resolvePlate(f: Faceplate, dev: SiteDevice | null): ResolvedPlat
       rows = [top, bottom, ...fixed].filter((r) => r.length > 0);
     }
   }
-  const blocks = f.blocks && !f.generic ? f.blocks.map((b) => ({ from: b.from, to: b.to, rows: b.rows.map((r) => r.map((c) => (c ? port(portId(c), c.name, c.kind) : null))) })) : undefined;
+  const blocks = f.blocks && !f.generic ? f.blocks.map((b) => ({ from: b.from, to: b.to, rows: b.rows.map((r) => r.map((c) => (c ? port(portId(c), c.name, c.kind, c.speed) : null))) })) : undefined;
   return { key: f.key, vendor: f.vendor, model: f.model, kind: f.kind, units: f.units, width: f.width, passive: f.passive === true, rows, ...(blocks ? { blocks } : {}), labels: f.labels ?? [], ...(f.site ? { site: true as const } : {}) };
 }
 
@@ -725,7 +996,9 @@ export const platePorts = (p: ResolvedPlate): PlatePort[] => p.rows.flat().filte
 // A plate as text, one line per port row: `faceplates show`.
 export function renderPlate(p: ResolvedPlate): string[] {
   const head = `${p.key} — ${p.vendor} ${p.model} · ${p.units}U ${p.width === "full" ? "full width" : `${p.width} width`} · ${p.kind}${p.passive ? " (passive)" : ""}`;
-  const cells = p.rows.map((r) => r.map((c) => (c ? `[${c.id === c.name ? c.id : `${c.id} ${c.name}`}·${c.kind}${c.up === true ? " up" : c.up === false ? " down" : ""}]` : "")));
+  // A port's speed only where it is not its glyph's (a 10G RJ45, a 1G cage).
+  const speed = (c: PlatePort) => (c.speed && c.speed !== CONNECTOR_OF[c.kind]?.speed ? ` ${c.speed}` : "");
+  const cells = p.rows.map((r) => r.map((c) => (c ? `[${c.id === c.name ? c.id : `${c.id} ${c.name}`}·${c.kind}${speed(c)}${c.up === true ? " up" : c.up === false ? " down" : ""}]` : "")));
   const w = Math.max(4, ...cells.flat().map((c) => c.length));
   const lines = [head];
   if (cells.length === 0 || cells.every((r) => r.length === 0)) lines.push("  (no ports — filled from the device)");
@@ -772,8 +1045,11 @@ export interface SiteLocs {
   primary: string | null;
 }
 
-// checkPositions — the whole document: every placement names a device the
-// topology knows (or a passive plate's own), no two overlap in a rack, each
+// checkPositions — the whole document: every asset's kind, stage, ports and
+// records (serials and MACs unique, a disposed or ordered one neither placed
+// nor in a role, a role the topology knows and only one asset's); every
+// placement names a device the topology knows (or a passive plate's own),
+// no two overlap in a rack, each
 // fits its rack, every faceplate key is in the catalog, every cable end names
 // a port the topology or the catalog has; every location a room or a device
 // names is the site's, a device stands in a room at its own location, and a
@@ -791,22 +1067,74 @@ export function checkPositions(doc: PositionsDoc, shipped: Faceplate[], seen: Si
   const warn = (message: string) => out.push({ severity: "warn", message });
   const racks = racksOf(doc);
   const mounts = placementsOf(doc);
-  const recorded = devicesOf(doc);
+  const assets = assetsOf(doc);
+  // The assets that are devices, by the name placements and cables use.
+  const recorded: Record<string, Asset> = Object.fromEntries(recordedDevicesOf(doc).map((r) => [r.name, r.asset]));
   const byKey = (k: string | undefined) => (k ? catalog.find((f) => f.key === k) ?? null : null);
   if (seen === null) warn("the topology could not be read: the devices and their ports are not checked");
+  if (doc.devices && doc.assets) err("both devices{} and assets{}: migration 0027 makes the devices assets — a person decides which is the site's");
 
-  // The recorded devices: a kind, a model the catalog has, ports named once,
-  // and not a device the topology sees (that one is the topology's).
-  for (const [name, d] of Object.entries(recorded)) {
-    const where = `device ${name}`;
-    if (!DEVICE_NAME_RE.test(name)) err(`${where}: a device name is letters, digits, spaces, dots, dashes and underscores`);
-    if (!RECORDED_KINDS.includes(d.kind)) err(`${where}: kind is one of ${RECORDED_KINDS.join(", ")}`);
-    if (d.model && !byKey(d.model)) err(`${where}: model ${d.model} is not in the catalog (faceplates list)`);
-    const ports = d.ports ?? [];
-    const dup = ports.find((x, i) => ports.indexOf(x) !== i);
+  // The assets (ADR-040 D7-D9): each on its own, then across them.
+  const ROLE_OF: Partial<Record<AssetKind, DeviceKind[]>> = { server: ["node", "machine"], switch: ["switch"], "access-point": ["ap"] };
+  const serials = new Map<string, string>();
+  const macs = new Map<string, string>();
+  const roles = new Map<string, string>();
+  for (const [name, a] of Object.entries(assets)) {
+    const where = `asset ${name}`;
+    if (!DEVICE_NAME_RE.test(name)) err(`${where}: an asset's name is letters, digits, spaces, dots, dashes and underscores`);
+    if (!ASSET_KINDS.includes(a.kind)) err(`${where}: kind is one of ${ASSET_KINDS.join(", ")}`);
+    if (!ASSET_STAGES.includes(a.stage)) err(`${where}: stage is one of ${ASSET_STAGES.join(", ")}`);
+    if (a.model && FACEPLATE_KEY_RE.test(a.model) && !byKey(a.model)) err(`${where}: model ${a.model} is not in the catalog (faceplates list)`);
+    const ports = a.ports ?? [];
+    const dup = ports.map((p) => p?.name).find((x, i, all) => all.indexOf(x) !== i);
     if (dup) err(`${where}: port ${dup} appears twice`);
-    if (ports.some((x) => typeof x !== "string" || x.trim() === "" || x.includes(":"))) err(`${where}: a port name is text without a colon`);
-    if (seen?.some((x) => x.name === name && !x.recorded)) err(`${where}: the topology sees a device of that name — record only what it cannot see`);
+    for (const p of ports) {
+      const bad = portProblem(p, a.kind === "patch-panel");
+      if (bad) err(`${where}: ${bad}`);
+    }
+    for (const m of assetMacs(a)) {
+      if (macs.has(m)) err(`${where}: MAC ${m} is a port of ${macs.get(m)} too — a MAC names one port`);
+      else macs.set(m, name);
+    }
+    if (a.serial) {
+      if (serials.has(a.serial)) err(`${where}: serial ${a.serial} is ${serials.get(a.serial)}'s too — one asset per serial`);
+      else serials.set(a.serial, name);
+    }
+    if (a.faulty !== undefined && typeof a.faulty !== "boolean") err(`${where}: faulty is true or false`);
+    if (a.faultNote !== undefined && a.faulty !== true) err(`${where}: a fault note on an asset that is not faulty (asset repaired clears both)`);
+    const pr = a.procurement;
+    if (pr) {
+      if (pr.ownership !== undefined && !OWNERSHIPS.includes(pr.ownership)) err(`${where}: ownership is ${OWNERSHIPS.join(" or ")}`);
+      for (const k of ["purchaseDate", "warrantyUntil"] as const) if (pr[k] !== undefined && !DATE_RE.test(pr[k]!)) err(`${where}: ${k} is a date, YYYY-MM-DD`);
+    }
+    if (a.stage === "disposed") {
+      if (!a.disposal) err(`${where}: disposed, and no disposal says how (asset dispose records it)`);
+    } else if (a.disposal) err(`${where}: a disposal on an asset that is ${a.stage}`);
+    if (a.disposal) {
+      if (!DISPOSAL_HOWS.includes(a.disposal.how)) err(`${where}: disposal how is one of ${DISPOSAL_HOWS.join(", ")}`);
+      if (a.disposal.when !== undefined && !DATE_RE.test(a.disposal.when)) err(`${where}: disposal when is a date, YYYY-MM-DD`);
+      if (a.disposal.wiped !== undefined && typeof a.disposal.wiped !== "boolean") err(`${where}: disposal wiped is true or false`);
+    }
+    // Where it is and what it plays: neither, before it is here or after it is gone.
+    const at = currentName(name, a);
+    if (a.stage === "disposed" || a.stage === "ordered") {
+      if (a.role) err(`${where}: ${a.stage}, and still in the role ${a.role} — asset release ${name}`);
+      if (mounts[at]) err(`${where}: ${a.stage}, and still placed in ${placeWhere(mounts[at])} — unplace ${at}`);
+    } else if (a.stage === "placed" && !mounts[at]) warn(`${where}: its stage says placed, and it is placed nowhere`);
+    else if (a.stage === "stock" && mounts[at]) warn(`${where}: its stage says stock, and it is placed in ${placeWhere(mounts[at])}`);
+    if (a.role) {
+      if (roles.has(a.role)) err(`${where}: the role ${a.role} is ${roles.get(a.role)}'s already — one asset plays a role`);
+      else roles.set(a.role, name);
+      if (a.role !== name && assets[a.role]) err(`${where}: its role ${a.role} is another asset's name`);
+      if (mounts[name] && a.role !== name) err(`placement ${name}: ${name} plays ${a.role}, and its placement is keyed by the role (unplace ${name}, place ${a.role})`);
+      const t = seen?.find((x) => x.name === a.role && !x.recorded);
+      const want = ROLE_OF[a.kind];
+      if (t?.seen) err(`${where}: its role ${a.role} is a device a switch port only sees — record it (asset record) rather than allocate to it`);
+      else if (seen !== null && want && !t) err(`${where}: its role ${a.role} is no ${want.join(" or ")} the topology knows — asset release ${name}, or allocate it to one`);
+      else if (t && want && !want.includes(t.kind)) err(`${where}: a ${a.kind} plays ${a.role}, which is a ${t.kind}`);
+    } else if (seen?.some((x) => x.name === name && !x.recorded && !x.seen)) {
+      err(`${where}: the topology has a device of that name — allocate the asset to it (asset allocate ${name} --role ${name}), or name the asset otherwise`);
+    }
   }
   const devices = seen === null ? null : withRecorded(seen, doc, catalog);
 
@@ -826,7 +1154,7 @@ export function checkPositions(doc: PositionsDoc, shipped: Faceplate[], seen: Si
   if (sites) {
     const known = (l: string) => sites.names.includes(l);
     for (const [name, r] of Object.entries(rooms)) if (r.location !== undefined && !known(r.location)) err(`room ${name}: location '${r.location}' is not one of the site's (site-manager location list)`);
-    for (const [name, d] of Object.entries(recorded)) if (d.location !== undefined && !known(d.location)) err(`device ${name}: location '${d.location}' is not one of the site's (site-manager location list)`);
+    for (const [name, d] of Object.entries(assets)) if (d.location !== undefined && !known(d.location)) err(`asset ${name}: location '${d.location}' is not one of the site's (site-manager location list)`);
   }
 
   const placed: { device: string; rack: string; face: Face; lo: number; hi: number; cols: [number, number] }[] = [];
@@ -904,6 +1232,7 @@ export function checkPositions(doc: PositionsDoc, shipped: Faceplate[], seen: Si
   for (const [i, c] of cablesOf(doc).entries()) {
     const where = `cable ${i + 1}${c.label ? ` (${c.label})` : ""}`;
     if (!CABLE_KINDS.includes(c.kind)) err(`${where}: kind is one of ${CABLE_KINDS.join(", ")}`);
+    if (c.linkSpeed !== undefined && !LINK_SPEED_RE.test(c.linkSpeed)) err(`${where}: linkSpeed is a number and its unit, lowercase (100m, 1g, 2.5g, 10g)`);
     for (const e of [c.from, c.to]) {
       const p = endProblem(e, devices, plateOf, catalog);
       if (p) err(`${where}: ${p}`);
@@ -919,14 +1248,14 @@ export function checkPositions(doc: PositionsDoc, shipped: Faceplate[], seen: Si
     // A device only this cable names: it works, but it is no device yet.
     for (const e of [c.from, c.to]) {
       if (!isStr(e?.device) || recorded[e.device] || mounts[e.device] || devices === null || devices.some((d) => d.name === e.device)) continue;
-      warn(`${where}: ${e.device} is neither seen by the topology nor recorded — record it: asset-manager device add '${e.device}' --kind modem|ont|ups|patch-panel|other${e.faceplate ? ` --model ${e.faceplate}` : ""}`);
+      warn(`${where}: ${e.device} is neither seen by the topology nor recorded — record it: asset-manager asset add '${e.device}' --kind modem|ont|ups|patch-panel|pdu|other${e.faceplate ? ` --model ${e.faceplate}` : ""}`);
     }
   }
   return out;
 }
 
 // A recorded patch panel: its ports have a front and a rear.
-export const isPanel = (doc: PositionsDoc, device: string | undefined): boolean => !!device && devicesOf(doc)[device]?.kind === "patch-panel";
+export const isPanel = (doc: PositionsDoc, device: string | undefined): boolean => assetNamed(doc, device)?.asset.kind === "patch-panel";
 
 // "USW Pro XG 10 PoE:5" → the device and the port; a device name may hold ":".
 export function parseEnd(s: string): CableEnd | null {
@@ -955,6 +1284,7 @@ export interface PlacementView {
   suggested: boolean; // not recorded: the catalog's suggestion
   plate: ResolvedPlate | null;
   up: boolean | null; // any of its ports up; null: nothing known
+  asset?: string; // the asset placed, when one is recorded for the device
 }
 export interface RackView {
   name: string;
@@ -976,6 +1306,7 @@ export interface CableView {
   lag: string | null;
   up: boolean | null;
   label: string | null;
+  linkSpeed?: string; // a recorded cable's observed link speed
   // A link split at patch panels (cable split): the wires it is made of, end
   // to end, and the panel ports it runs through.
   segments?: { from: { device: string; port: string; side?: Side }; to: { device: string; port: string; side?: Side } }[];
@@ -1018,7 +1349,26 @@ export interface LocationView {
   rooms: string[];
   unplaced: string[];
 }
+// An asset as the topology carries it (ADR-040 D7, D9): its record, its stage
+// as derived, and its ports merged with its plate's.
+export interface AssetView {
+  name: string;
+  kind: AssetKind;
+  displayName: string | null;
+  vendor: string | null;
+  model: string | null;
+  serial: string | null;
+  assetTag: string | null;
+  stage: StageView;
+  faulty: boolean;
+  faultNote: string | null;
+  role: string | null;
+  location: string | null;
+  placed: boolean;
+  ports: AssetPort[];
+}
 export interface PositionsView {
+  assets: AssetView[];
   locations: LocationView[];
   racks: RackView[];
   rooms: RoomView[];
@@ -1111,7 +1461,7 @@ export function seenCables(t: TopoLike): CableView[] {
 // The location a device is at: the one the topology gives it, else a recorded
 // device's own, else the primary.
 export function deviceLocation(t: TopoLike, doc: PositionsDoc, name: string, primary: string | null): string | null {
-  return t.devices?.find((d) => d.name === name)?.location ?? devicesOf(doc)[name]?.location ?? primary;
+  return t.devices?.find((d) => d.name === name)?.location ?? assetNamed(doc, name)?.asset.location ?? primary;
 }
 
 // resolvePositions — positions.json against the site: the locations with
@@ -1123,7 +1473,9 @@ export function deviceLocation(t: TopoLike, doc: PositionsDoc, name: string, pri
 export function resolvePositions(doc: PositionsDoc, shipped: Faceplate[], t: TopoLike, sites: SitePlaces = { locations: {}, primary: null }, locationOf?: (device: string) => string | null): PositionsView {
   const catalog = withSiteFaceplates(shipped, doc).catalog;
   const devices = withRecorded(siteDevices(t), doc, catalog);
-  const recorded = devicesOf(doc);
+  // The assets that are devices, by the name placements use; and every asset's own name.
+  const recorded: Record<string, Asset> = Object.fromEntries(recordedDevicesOf(doc).map((r) => [r.name, r.asset]));
+  const assetKey: Record<string, string> = Object.fromEntries(Object.entries(assetsOf(doc)).map(([k, a]) => [currentName(k, a), k]));
   const mounts = placementsOf(doc);
   const byKey = (k: string | null | undefined) => (k ? catalog.find((f) => f.key === k) ?? null : null);
   const findings: PositionsView["findings"] = [];
@@ -1185,6 +1537,7 @@ export function resolvePositions(doc: PositionsDoc, shipped: Faceplate[], t: Top
       suggested: !own && !rec && !!fp,
       plate,
       up: states.length ? states.some((x) => x) : null,
+      ...(assetKey[device] ? { asset: assetKey[device] } : {}),
     });
   }
   for (const r of racks) r.placements.sort((a, b) => b.u - a.u || a.slot - b.slot);
@@ -1224,7 +1577,9 @@ export function resolvePositions(doc: PositionsDoc, shipped: Faceplate[], t: Top
   // not one until it is recorded.
   if (hasRack) {
     for (const u of unplaced) {
-      if (u.seen || (u.location !== null && !roomed.has(u.location) && sites.primary !== null)) continue;
+      // An asset in stock is on a shelf, not missing.
+      const a = assetKey[u.device] ? assetsOf(doc)[assetKey[u.device]] : null;
+      if (u.seen || (a && !a.role) || (u.location !== null && !roomed.has(u.location) && sites.primary !== null)) continue;
       findings.push({ text: `${u.device} is placed nowhere: in no rack and in no room`, device: u.device, kind: "unplaced", rack: null });
     }
   }
@@ -1233,7 +1588,7 @@ export function resolvePositions(doc: PositionsDoc, shipped: Faceplate[], t: Top
   const outside: OutsideView[] = [];
   for (const c of cablesOf(doc)) {
     const end = (e: CableEnd) => ({ device: e.device, port: e.port, ...(isPanel(doc, e.device) ? { side: e.side ?? "front" } : {}) });
-    cables.push({ from: end(c.from), to: end(c.to), kind: c.kind, source: "recorded", zones: zonesAt(t, c.from) ?? zonesAt(t, c.to) ?? [], lag: null, up: upAt(t, c.from) ?? upAt(t, c.to), label: c.label ?? null });
+    cables.push({ from: end(c.from), to: end(c.to), kind: c.kind, source: "recorded", zones: zonesAt(t, c.from) ?? zonesAt(t, c.to) ?? [], lag: null, up: upAt(t, c.from) ?? upAt(t, c.to), label: c.label ?? null, ...(c.linkSpeed ? { linkSpeed: c.linkSpeed } : {}) });
     for (const e of [c.from, c.to]) {
       if (mounts[e.device] || devices.some((d) => d.name === e.device) || outside.some((o) => o.device === e.device)) continue;
       const fp = byKey(e.faceplate);
@@ -1241,7 +1596,23 @@ export function resolvePositions(doc: PositionsDoc, shipped: Faceplate[], t: Top
     }
   }
   for (const r of rooms) r.loose.sort((a, b) => a.device.localeCompare(b.device));
-  return { locations, racks, rooms, unplaced, cables: chainSegments(doc, cables), outside, findings };
+  const assets: AssetView[] = Object.entries(assetsOf(doc)).map(([name, a]) => ({
+    name,
+    kind: a.kind,
+    displayName: a.displayName ?? null,
+    vendor: a.vendor ?? null,
+    model: a.model ?? null,
+    serial: a.serial ?? null,
+    assetTag: a.assetTag ?? null,
+    stage: stageOf(doc, name, a),
+    faulty: a.faulty === true,
+    faultNote: a.faultNote ?? null,
+    role: a.role ?? null,
+    location: a.location ?? sites.primary,
+    placed: !!mounts[currentName(name, a)],
+    ports: assetPorts(a, catalog),
+  }));
+  return { assets, locations, racks, rooms, unplaced, cables: chainSegments(doc, cables), outside, findings };
 }
 
 // The segments of links split at patch panels, each chain from a device port
