@@ -106,7 +106,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 |------|-------|:-:|:-:|---:|---:|---:|
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
-| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 11 | – | 11 |
+| 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 11 | – | 12 |
 | 6 | G6.2 User interface & physical view | H | L | 6 | – | 3 |
 | 6 | G6.3 Data model | M | M | 9 | – | 1 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
@@ -238,7 +238,7 @@ New modules — a Markdown website (#841), N.O.M.A.D. for the home stack (#129),
 The physical site and how an operator sees and runs it. Not ordered by upgrade risk like Waves 0–4:
 these two groups are designed together — the fabric is what the physical view shows and changes.
 
-### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 11 · open: 11
+### G6.1 Switching fabric, WAN, ISP & site operations — Ease H · Risk H · released: 11 · open: 12
 
 The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports and trunks kept in line with the zones (#668, #697, #706, #731), the WAN and the ISP (public DNS that follows the WAN, #383, #830; mail when the ISP blocks port 25, #125). Switch setup needs a systematic model, at install and on day 2. Operating the site belongs here too: a service desk (#63) and a SIEM (#843, Wazuh the best candidate). Linked to G6.2: the physical view shows and later changes it.
 
@@ -255,6 +255,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #63 | Service desk tooling spike | M | L | |
 | #843 | Create a SIEM for TAPPaaS | H | M | **Opened 2026-10-16.** Wazuh the best candidate (agents, syslog from OPNsense/Proxmox, FIM, vulnerability detection); placement, sizing and its overlap with logging to decide |
 | #883 | A debug bundle for support: the log and an anonymized `~/config`, attached to the failure mail | M | L | **Opened 2026-10-26.** PII removed from the configs; the mail suggests forwarding it to a support address. First trigger: a failed update |
+| #905 | Log alerting: a rule whose query cannot run mails under its own name; a Loki that is down slips past the watchdog | L | L | **Opened 2026-10-29** from a false LanLegDown on hrossen: the logging VM's backup stalled Grafana's database. Built on `fix/alert-exec-error`: rules keep their state on a failed query, the Heartbeat stops, the watchdog's mail names Loki or Grafana; heartbeat every 15 min, stale after 35. Live test with Loki stopped pending |
 
 ### G6.2 User interface & physical view — Ease H · Risk L · released: 6 · open: 3
 
