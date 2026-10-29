@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Proposed** |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-10-29 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen |
 | **Closes / addresses** | #904 (logging: module-supplied alert rules). Raised for @AndreasJe's hosting module. Builds on #126 (alerting from the logs), #770 / #903 (journal shipping, now NixOS, Debian and containers), #165 §1 (per-host push credentials) and #883 (the alert mail). |
-| **Changelog** | v0.3 (2026-10-29) — **operator's review of D6:** DiskErrors and LanLegDown go to `pvehost` (the node's own hardware), FirewallCertChanged to `network`, HaStuck to `cluster`. A rule's owner is not always the host that logs it (the mothership logs the firewall's and the cluster's checks), so D2's scope names **modules** instead of `nodes`. The firewall and the nodes declare `logging:logs` too (D9), which gives HostSilent its list. The backup buddy's pulse stays outside Grafana (D6). `{lines}` elaborated (open question 2). · v0.2 (2026-10-29) — **operator's answers folded in:** recipients stay `site.json`'s (D3); the foundation's own rules move into module files, and converting them is the test of the format (D6) — which adds label capture, a per-rule repeat, a node scope and a foundation-only escape hatch to D1/D2; the mail is specified in the rule, with today's mail as the default template and the converted rules tested against today's mails (D7); open alerts can be read per module, machine and cluster (D8). Metrics are a separate ADR to write. The deleted-host question is answered by D4 (no false alert). · v0.1 (2026-10-29) — first draft. |
+| **Changelog** | v0.4 (2026-10-29) — **`{lines}` decided (operator, option d):** foundation rules may put matching log lines in the mail; a Community module's only where the site opted in (`site.json` `alerts.includeLines`, default false) — D7. · v0.3 (2026-10-29) — **operator's review of D6:** DiskErrors and LanLegDown go to `pvehost` (the node's own hardware), FirewallCertChanged to `network`, HaStuck to `cluster`. A rule's owner is not always the host that logs it (the mothership logs the firewall's and the cluster's checks), so D2's scope names **modules** instead of `nodes`. The firewall and the nodes declare `logging:logs` too (D9), which gives HostSilent its list. The backup buddy's pulse stays outside Grafana (D6). `{lines}` elaborated (open question 2). · v0.2 (2026-10-29) — **operator's answers folded in:** recipients stay `site.json`'s (D3); the foundation's own rules move into module files, and converting them is the test of the format (D6) — which adds label capture, a per-rule repeat, a node scope and a foundation-only escape hatch to D1/D2; the mail is specified in the rule, with today's mail as the default template and the converted rules tested against today's mails (D7); open alerts can be read per module, machine and cluster (D8). Metrics are a separate ADR to write. The deleted-host question is answered by D4 (no false alert). · v0.1 (2026-10-29) — first draft. |
 
 A module may ship alert rules over its own logs. The module says *which lines* matter and how the
 mail reads; the platform builds the query, limits it to the module's own hosts, provisions it in
@@ -224,7 +224,7 @@ nothing else (no conditions, no loops, no code — a module's text is never run)
 | `{summary}` | the rule's summary |
 | `{since}`, `{resolved}` | when it started, and when it cleared |
 | `{query}` | the Explore query |
-| `{lines}` | up to 20 of the matching lines from the window, as Loki has them (already scrubbed by the client, #903) |
+| `{lines}` | up to 20 of the matching lines from the window, as Loki has them (already scrubbed of secrets by the client, #903) — limited, see below |
 
 The templates travel as the rule's annotations (`mailSubject`, `mailBody`), so the receiver needs
 nothing but the webhook payload; it fetches `{lines}` from Loki only when the template uses it.
@@ -233,6 +233,21 @@ Without `mail`, the defaults are **today's mail**: subject `{state}: {title} on 
 the footer. `site-notify.sh` still puts `[TAPPaaS <site>]` in front, and subjects stay ASCII
 (#905). **The test:** `test-alert-receiver.sh` renders every converted core rule with the default
 templates and checks the subject and body are byte-for-byte today's.
+
+**Log lines in a mail** (operator, 2026-10-29). A mail leaves the site: through its relay to a
+mail provider, perhaps forwarded, and with a bundle meant for `supportEmail`. The client scrubs
+secrets, not personal data, and a module's own lines can carry it (a hosting site's visitor
+addresses and user agents, login names, e-mail addresses). So:
+
+- a **foundation** module's rule may use `{lines}`: the project reviews what its lines contain;
+- a **Community** module's rule may use it too, but the receiver fills it only where the site
+  opted in, `site.json` `alerts.includeLines: true` (default false). Otherwise `{lines}` reads
+  `(log lines not mailed on this site — see the Explore link)`, and the Explore query, which shows
+  the lines inside the site behind the identity gate, is always in the mail;
+- the default templates do not use `{lines}`, so no mail carries a log line unless a rule asks
+  for it.
+
+The site's privacy notice (#359) says whether this site mails log lines.
 
 ### D8 — Open alerts can be read, per module, machine and cluster
 
@@ -307,23 +322,6 @@ in the last hour" instead of a list, and why D8 cannot say which machines are co
    covers log lines. The metrics ADR decides what is scraped (node exporter, cAdvisor, module
    exporters) and where it is stored, and then whether D1 gains a metric rule (`source: metrics`)
    beside the log rules. D3's delivery and D8's listing are meant to carry both unchanged.
-2. **`{lines}` and privacy.** `{lines}` copies up to 20 matching log lines into the mail. A mail
-   leaves the site: it goes through the site's mail relay to the operator's mailbox (a provider's
-   server), may be forwarded, and with a bundle is meant for `supportEmail`. The client scrubs
-   secrets (#903), not personal data, and a module's lines can be full of it: a hosting site's
-   visitor IP addresses and user agents, a login name, an e-mail address in a form error, a
-   customer's domain. Today no mail carries a log line; the Explore query in the mail shows the
-   lines inside the site, behind the identity gate. Options:
-   - **a. No lines in mails.** The link only. Nothing leaves that does not today.
-   - **b. Foundation rules only.** The project reviews what those lines contain (a node's
-     `lanbond` line, a vzdump error); Community rules get the link.
-   - **c. Opt-in per site.** `site.json` `alerts.includeLines` (default false); the receiver blanks
-     `{lines}` unless the site turned it on. The operator decides for their own site, and the
-     privacy notice (#359) can say so.
-   - **d. b + c.** Foundation rules may carry lines; Community rules only where the site opted in.
-
-   Recommendation: **d.** The lines help most for the platform's own events, where their content
-   is known; for a Community module, the site that runs it decides.
 
 ## Implementation plan
 
@@ -332,7 +330,9 @@ in the last hour" instead of a list, and why D8 cannot say which machines are co
   (quotes, `}`, `|`) stays inside the line filter, uids prefixed, captures, `absent`, `above`,
   `repeat`; foundation-only fields refused elsewhere.
 - **P2 — Mail templates.** The receiver renders `mailSubject`/`mailBody` with the placeholders, the
-  defaults equal today's mail; `test-alert-receiver.sh` covers every core rule byte-for-byte.
+  defaults equal today's mail; `{lines}` from Loki, blanked for a Community rule unless
+  `site.json` `alerts.includeLines` is true; `test-alert-receiver.sh` covers every core rule
+  byte-for-byte and both `{lines}` cases.
 - **P3 — Provisioning.** Apply and remove through the API from `logging:logs` install, update and
   delete, and from logging's `update.sh`; validation in `module-manager validate` and the install.
 - **P3b — Syslog senders as `logging:logs` consumers** (D9): `network` and `pvehost` declare it; the
