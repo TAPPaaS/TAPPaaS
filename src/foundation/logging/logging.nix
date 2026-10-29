@@ -609,8 +609,13 @@ in
     discovery.relabel "syslog_opnsense" {
       targets = []
 
+      // host = the first label of the sender's hostname, which is its
+      // instance's vmname (network.internal -> network): what a module's alert
+      // rule selects by (ADR-039 D9).
       rule {
         source_labels = ["__syslog_message_hostname"]
+        regex         = "([^.]+)(\\..*)?"
+        replacement   = "$1"
         target_label  = "host"
       }
 
@@ -649,6 +654,8 @@ in
 
       rule {
         source_labels = ["__syslog_message_hostname"]
+        regex         = "([^.]+)(\\..*)?"
+        replacement   = "$1"
         target_label  = "host"
       }
 

@@ -70,6 +70,17 @@ R="${T}/script-lxc:tappaas2:632.sh"
 grep -q 'apt-get purge' "${R}" && grep -q '\[ -f /etc/alloy/.tappaas-managed \] || exit 0' "${R}" && ok \
     || no "an undeclared module does not get the guarded removal"
 
+# ── syslog senders (ADR-039 D9) ──────────────────────────────────────
+echo '{"moduleSource":"/x/src/foundation/pvehost"}' > "${T}/config/tappaas1.json"
+echo '{"vmname":"network","moduleSource":"/x/src/foundation/network/"}' > "${T}/config/network.json"
+echo '{"vmname":"network","location":"/x/src/foundation/network","firewallType":"pfsense"}' > "${T}/config/pf.json"
+echo '{"vmname":"logging","zone0":"mgmt"}' > "${T}/config/logging.json"
+kinds="$(CONFIG_DIR="${T}/config"; for m in tappaas1 network pf site1; do printf '%s=%s ' "$m" "$(CONFIG_DIR="${T}/config" log_shipping_syslog_kind "$m")"; done)"
+[[ "${kinds}" == "tappaas1=node network=opnsense pf= site1= " ]] && ok || no "syslog kinds: ${kinds}"
+conf="$(CONFIG_DIR="${T}/config" _ls_rsyslog_conf "$(CONFIG_DIR="${T}/config" _ls_syslog_target)")"
+grep -q 'target="logging.mgmt.internal"' <<<"${conf}" && grep -q 'port="1515"' <<<"${conf}" && ok || no "the rsyslog forwarder does not name logging:1515"
+apply_log_shipping_node 'bad;node' >/dev/null 2>&1 && no "a bad node name was accepted" || ok
+
 _ls_guest_root 'lxc:tappaas2:63x;rm' </dev/null >/dev/null 2>&1 && no "a bad transport was accepted" || ok
 _ls_guest_root 'ftp:host' </dev/null >/dev/null 2>&1 && no "an unknown transport was accepted" || ok
 

@@ -45,6 +45,8 @@ logs_sync_credentials() {
     # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
     . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
     local host
+    # A syslog sender (the firewall, a node) pushes no journal: no credential.
+    [[ -n "$(log_shipping_syslog_kind "${CONSUMER}")" ]] && return 0
     host="$(read_module_config "${CONSUMER}" 2>/dev/null | jq -r '.vmname // empty')"
     if [[ "${DRY_RUN}" -eq 1 ]]; then
         debug "  [dry-run] push credential for ${host:-${CONSUMER}}, sync to logging"
@@ -63,7 +65,19 @@ logs_sync_credentials() {
 logs_apply_client() {
     # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
     . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
-    local t out
+    local t out kind
+    kind="$(log_shipping_syslog_kind "${CONSUMER}")"
+    if [[ -n "${kind}" ]]; then
+        # A syslog sender (D9): the firewall's target, or a node's rsyslog.
+        if [[ "${DRY_RUN}" -eq 1 ]]; then
+            debug "  [dry-run] syslog forwarding on ${CONSUMER} (${kind})"
+            return 0
+        fi
+        if [[ "${kind}" == opnsense ]]; then out="$(apply_log_shipping_opnsense 2>&1)"; else out="$(apply_log_shipping_node "${CONSUMER}" 2>&1)"; fi \
+            && debug "  ${out}" \
+            || warn "  could not set ${CONSUMER}'s syslog forwarding — its lines stay on it: ${out}"
+        return 0
+    fi
     if ! t="$(log_shipping_transport "${CONSUMER}")"; then
         debug "  ${CONSUMER}: no Debian or container journal client to apply here"
         return 0
@@ -88,7 +102,15 @@ logs_apply_client() {
 logs_remove_client() {
     # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
     . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
-    local t
+    local t kind
+    kind="$(log_shipping_syslog_kind "${CONSUMER}")"
+    if [[ -n "${kind}" ]]; then
+        [[ "${DRY_RUN}" -eq 1 ]] && { debug "  [dry-run] remove ${CONSUMER}'s syslog forwarding"; return 0; }
+        if [[ "${kind}" == opnsense ]]; then remove_log_shipping_opnsense; else remove_log_shipping_node "${CONSUMER}"; fi \
+            && debug "  ${CONSUMER}: syslog forwarding removed" \
+            || warn "  could not remove ${CONSUMER}'s syslog forwarding"
+        return 0
+    fi
     t="$(log_shipping_transport "${CONSUMER}")" || return 0
     [[ "${DRY_RUN}" -eq 1 ]] && { debug "  [dry-run] remove the journal client from ${CONSUMER}"; return 0; }
     remove_log_shipping_debian "${t}" >/dev/null 2>&1 \

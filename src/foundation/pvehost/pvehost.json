@@ -11,7 +11,8 @@
   "rebootOk": false,
   "dependsOn": [],
   "integratesWith": [
-    "backup:filesystem"
+    "backup:filesystem",
+    "logging:logs"
   ],
   "backup": {
     "filesystemPaths": [

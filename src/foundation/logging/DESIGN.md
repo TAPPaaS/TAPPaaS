@@ -66,7 +66,7 @@ Every log line in Loki carries at least these labels:
 | Label | Values | Meaning |
 |---|---|---|
 | `job` | `systemd-journal` \| `syslog` | how it was ingested |
-| `host` | `logging`, `tappaas-cicd`, `tappaas1`, `OPNsense.internal`, … | source machine |
+| `host` | `logging`, `tappaas-cicd`, `tappaas1`, `network`, … | source machine: a journal line's from its push credential, a syslog line's from the first label of its hostname — either way the instance's vmname |
 | `source` | `opnsense`, `proxmox` | only on `job=syslog`; identifies the syslog sender |
 | `unit` | `pveproxy.service`, `filterlog`, `sshd`, … | systemd unit or syslog program |
 | `severity` | `info`, `warn`, `err`, `crit`, … | syslog severity |

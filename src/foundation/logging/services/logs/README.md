@@ -40,8 +40,12 @@ alert rules (#770).
 it starts shipping at its first update after logging arrives. A consumer outside mgmt also
 needs `network:rules` in `dependsOn` to carry the pinhole.
 
-NixOS VMs, Debian VMs and Debian/Ubuntu containers. HAOS and Windows guests are not
-covered.
+NixOS VMs, Debian VMs and Debian/Ubuntu containers ship their journal. The firewall
+(`network`) and the nodes (`pvehost` instances) declare `logging:logs` too and ship by
+syslog: this service sets OPNsense's remote destination (:1514) or a node's rsyslog
+forwarder (:1515), and removes it on delete; they need no push credential. Every
+instance that declares `logging:logs` is what a "scope: all" alert rule, such as
+HostSilent, watches (ADR-039). HAOS and Windows guests are not covered.
 
 <!-- BEGIN GENERATED FIELDS -- edit the manifest, not this block -->
 

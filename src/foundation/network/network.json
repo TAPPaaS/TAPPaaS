@@ -37,7 +37,8 @@
     "network:proxy"
   ],
   "integratesWith": [
-    "backup:vm"
+    "backup:vm",
+    "logging:logs"
   ],
   "provides": [
     "proxy",
