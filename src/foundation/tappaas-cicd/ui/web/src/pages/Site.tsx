@@ -300,6 +300,7 @@ export function Site({ view = "overview" }: { view?: PhysicalView }) {
             <AddNodeButton />
             <AdoptButton />
             <SatelliteButton />
+            <NodeActions />
           </>
         ) : null}
         {view === "overview" ? (
@@ -323,8 +324,8 @@ export function Site({ view = "overview" }: { view?: PhysicalView }) {
           </button>
         ))}
       </div>
-      {view === "overview" ? <SiteTop r={r} /> : null}
-      <Physical embedded view={view} aside={view === "overview" ? <NodeActions /> : undefined} />
+      {/* The overview is the site's record; the physical views are the other tabs. */}
+      {view === "overview" ? <SiteTop r={r} /> : <Physical embedded view={view} />}
     </div>
   );
 }

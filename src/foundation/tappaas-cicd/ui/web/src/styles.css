@@ -96,8 +96,15 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .card-value { font-weight: 600; margin: 4px 0 2px; }
 .card-sub { font-size: 12px; color: var(--muted); }
 .attention { list-style: none; margin: 0; padding: 0; }
-.att { display: grid; grid-template-columns: 44px 130px 1fr auto; gap: 10px; align-items: center; padding: 8px 6px; border-top: 1px solid var(--line); }
+.att { display: grid; grid-template-columns: 44px 130px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 6px; border-top: 1px solid var(--line); }
 .att:first-child { border-top: 0; }
+/* A narrower window (a 14-inch laptop): the text and the links each get a
+   row of their own, instead of the text squeezed beside the links. */
+@media (max-width: 1250px) {
+  .att { grid-template-columns: 44px 1fr; row-gap: 4px; }
+  .att-text, .att-where { grid-column: 1 / -1; }
+  .att-where { justify-content: flex-start; }
+}
 .att-gate { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; color: #374151; }
 .att-text { min-width: 0; word-break: break-word; }
 .att-where { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
