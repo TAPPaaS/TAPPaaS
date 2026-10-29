@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | **Accepted** (operator, 2026-10-29) — P1 in progress |
+| **Status** | **Accepted** (operator, 2026-10-29) — P1–P5 built on `main` (offline tests; P1–P3 live on hrossen); P3b–P5 live test after the next sweep; P6 (hosting) with @AndreasJe |
 | **Version** | 1.0 |
 | **Date** | 2026-10-29 |
 | **Author** | Lars Rossen |
