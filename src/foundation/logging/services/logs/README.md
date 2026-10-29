@@ -30,6 +30,13 @@ alert rules (#770).
   credential. A Debian VM's or container's Alloy is removed at once; a NixOS guest's
   fragment goes with its next OS update.
 
+## Alert rules
+
+A module that declares `logging:logs` can ship its own alert rules in `<module>-alerts.json`:
+which log lines matter, a window, and how the mail reads. The format, with examples, is in the
+module template's *Develop a Module* guide, section *Alert rules for your module*.
+`health-manager alerts` lists what is open and what fired in the last day.
+
 ## How to use it
 
 ```json

@@ -137,6 +137,72 @@ grep -q '^DB_PASSWORD=' "${secrets}" || printf 'DB_PASSWORD=%s\n' "$(openssl ran
 - Never write a secret to a module config in `config/`, to a log line, or to the command line of
   another host (`ssh host "cmd SECRET"`): pipe it on stdin.
 
+## Alert rules for your module
+
+Your module can tell the operator by mail when one of its log lines says something went wrong.
+Put `myapp-alerts.json` next to `myapp.json`. You say **which lines** matter; TAPPaaS builds the
+log query, limits it to your module's own guests, loads it into the site's Grafana and mails it
+like every other alert. Your module needs `"integratesWith": ["logging:logs"]` so its journal is
+shipped at all.
+
+```json
+{
+  "rules": [
+    {
+      "name": "sync-failed",
+      "title": "Myapp sync failed",
+      "kind": "event",
+      "match": "myapp: sync failed",
+      "capture": { "account": "account=(?P<account>[a-z0-9-]+)" },
+      "window": 300,
+      "summary": "A sync run failed. The account is named in the subject; the next run retries it."
+    },
+    {
+      "name": "worker-silent",
+      "title": "Myapp worker stopped",
+      "kind": "state",
+      "unit": "myapp-worker\\.service",
+      "match": "heartbeat",
+      "absent": true,
+      "window": 900,
+      "summary": "The worker has not logged its heartbeat for 15 minutes.",
+      "mail": { "subject": "{state}: {title} on {host}" }
+    }
+  ]
+}
+```
+
+| Field | Meaning |
+|---|---|
+| `name` | short DNS-style name, unique in the file |
+| `title` | the alert's name in the mail subject (plain ASCII); `headline` overrides it in the subject |
+| `kind` | `event` — something happened, mailed once; `state` — something is so, mailed again when it clears |
+| `match` | a regular expression (RE2) a log line must match |
+| `unit` | optional: only lines of systemd units matching this expression |
+| `capture` | optional: up to 3 labels taken from the line, each an expression with a named group of the label's name; one alert per value |
+| `window` | seconds the rule looks back, 60–86400 |
+| `above` | optional: fire only when more than this many lines matched in the window |
+| `absent` | optional: fire when **no** line matched in the window (a heartbeat that stopped) |
+| `repeat` | optional: how often a firing alert is mailed again, `1h`–`24h` (default 4 h) |
+| `summary` | the explanation in the mail |
+| `mail` | optional: your own `subject` and `body`, with `{state}`, `{title}`, `{host}`, `{hosts}`, `{module}`, `{labels}`, `{label.<name>}`, `{summary}`, `{since}`, `{resolved}`, `{query}`, `{lines}` |
+| `include` | optional: `"bundle"` attaches the site's support bundle; `"lines"` adds up to 20 matching log lines |
+
+- **You never write LogQL.** The query only reads lines your own guests wrote; a rule cannot
+  watch another module.
+- **Log lines leave the site** when you `include` them: they go by mail. They are anonymized like a
+  support bundle (addresses, names, secrets replaced), and only on a site whose operator turned on
+  `alerts.includeLines` in `site.json`. Include them only when your lines carry nothing a site's
+  users would not want in an operator's mailbox.
+- **At most 20 rules.** The file is checked at install and at every release: a rule that does not
+  validate stops the install with the reason.
+- **Your rules follow your instances:** they are applied when your module is installed or updated,
+  and an instance you delete leaves them at once, so its silence raises nothing.
+- **See them working:** `health-manager alerts --module myapp` lists what is open now and what
+  fired in the last day. The foundation's own rules are worked examples: `pvehost-alerts.json`,
+  `cluster-alerts.json`, `logging-alerts.json` (they also use fields only foundation modules may:
+  `scope`, `expr`, `query`).
+
 ## Going deeper
 
 The module details — every file, field and convention — are in **[README.md](README.md)**.
