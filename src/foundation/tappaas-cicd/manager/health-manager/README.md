@@ -93,6 +93,7 @@ fails**:
 | `pending-reboot` | one probe per guest (SSH, or `pct exec` for an LXC module) | never — **WARN** when a guest is waiting for a reboot (see below) |
 | `site-timezone` | `site.json` + one SSH probe per node and guest | never — **WARN** when a node or guest runs another timezone than the site's, which is its primary location's (the next update of the guest, or the next cluster update for a node, sets it), or when the site has none |
 | `pulse` | the backup node's pulse (a cluster node, or a `debianhost` machine by its address) | never — **WARN** when the pulse is not running on the backup node, or reports something down (a backup buddy, the uplink, the firewall, the mothership, the PBS); `backup-manager pulse` shows it |
+| `open-alerts` | Grafana's alertmanager on the logging VM | never — **WARN** for each state alert firing now (a host silent, a replication failing…), placed on the module, machine or node it is about; `health-manager alerts` lists them with the recent events |
 | `quorum` | `pvecm status` | never — **WARN** when the cluster has two votes and no QDevice: one node down and the other is fenced (see the cluster README, *Two-node clusters*) |
 | `switch-ports` | `switch-manager list-ports --json` | never — **WARN** when a switch port has no record and is not parked (an access port in iotLocal), or the switch sets a port otherwise than its record — parked or in use (read from the switch as last interrogated — after every sweep by `tappaas-switch-read`, #860; `switch-manager reconcile` reads it again and previews the change); also **WARN** when a switch was last read more than 26 h ago, or never |
 | `mlag-pairs` | `config/switch-configuration-actual.json` (switch-manager's MLAG pairs and the switches' last read) | never — **WARN** when a LAG across an MLAG pair has no member on one of its switches, or a switch has another mlag-id on a member than its record (`switch-manager mlag-pair list` reads the pairs live) |
@@ -350,6 +351,16 @@ suspended modules asks the same question before it starts a suspended guest.
 grows a VM disk or a container's rootfs that is filling up, when its pool has room
 (see the `cluster:vm` README, *Automatic disk growth*). `check-disk-threshold.sh <vm> <threshold>`
 makes the same decision on demand with a threshold of your choosing.
+
+### `alerts [--module M] [--host H] [--node N] [--json]` — open and recent alerts
+
+What the alert mails said, still to be seen (ADR-039): **open** — state alerts firing now, read
+from Grafana on the logging VM (as admin, on that VM, the password never leaves it); **recent**
+— event alerts of the last 24 hours, from the mothership's alert receiver
+(`/var/lib/tappaas/alerts.jsonl`; an event fires only for its window, so it would not stay
+open). Each is placed on the module, machine or node it is about: a rule's `module`, a host
+resolved to its instance by vmname, a node to its `pvehost` instance. The heartbeat is never
+listed. Read-only.
 
 ### `update-os <name> <vmid> <node>` — OS-patch action (special)
 

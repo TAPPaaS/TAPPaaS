@@ -88,7 +88,9 @@ DEFAULTS = {
     "config_dir": "/home/tappaas/config",
     "loki": "http://logging.mgmt.internal:3100",
     "loki_admin_file": "/home/tappaas/.loki-admin-password",
+    "alerts_log": "/var/lib/tappaas/alerts.jsonl",
 }
+ALERTS_LOG_MAX = 2 << 20  # past 2 MB the record keeps its newer half
 MAX_LINES = 20
 NO_LINES = "(log lines not mailed on this site — see the Explore link)"
 MAX_BODY = 1 << 20  # a Grafana notification is a few KB; refuse anything absurd
@@ -594,6 +596,35 @@ def fold_node_down(args, payload):
         return payload if len(keep) == len(alerts) else {**payload, "alerts": keep}
 
 
+def record(args, payload):
+    """One JSON line per alert that arrives, mailed or not (ADR-039 D8): what
+    `health-manager alerts` lists as recent. The heartbeat is left out."""
+    now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    lines = []
+    for a in payload.get("alerts") or []:
+        if is_heartbeat(a):
+            continue
+        labels = a.get("labels") or {}
+        lines.append(json.dumps({
+            "time": now, "status": a.get("status", payload.get("status", "firing")),
+            "alertname": labels.get("alertname", ""), "host": labels.get("host", ""),
+            "module": labels.get("module", ""), "kind": labels.get("kind", ""),
+            "labels": extra_labels(labels), "startsAt": a.get("startsAt", ""),
+        }, sort_keys=True))
+    if not lines:
+        return
+    try:
+        if os.path.exists(args.alerts_log) and os.path.getsize(args.alerts_log) > ALERTS_LOG_MAX:
+            with open(args.alerts_log, encoding="utf-8") as f:
+                keep = f.readlines()
+            with open(args.alerts_log, "w", encoding="utf-8") as f:
+                f.writelines(keep[len(keep) // 2:])
+        with open(args.alerts_log, "a", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+    except OSError as e:
+        print(f"alert record NOT written: {e}", flush=True)
+
+
 def make_handler(args):
     def token():
         try:
@@ -640,6 +671,7 @@ def make_handler(args):
                         f.write(beats[0].get("startsAt", "") + "\n")
                 except OSError as e:
                     print(f"heartbeat NOT recorded: {e}", flush=True)
+            record(args, payload)
             payload = fold_node_down(args, payload)
             if payload is None:
                 self.reply(200, "folded into a node-down notice")
@@ -677,6 +709,7 @@ def main():
     p.add_argument("--node-down-dir", default=DEFAULTS["node_down_dir"])
     p.add_argument("--cluster-cache", type=float, default=DEFAULTS["cluster_cache"])
     p.add_argument("--config-dir", default=DEFAULTS["config_dir"])
+    p.add_argument("--alerts-log", default=DEFAULTS["alerts_log"])
     p.add_argument("--loki", default=DEFAULTS["loki"])
     p.add_argument("--loki-admin-file", default=DEFAULTS["loki_admin_file"])
     p.add_argument("--render", action="store_true", help="read one webhook on stdin, print the mail")

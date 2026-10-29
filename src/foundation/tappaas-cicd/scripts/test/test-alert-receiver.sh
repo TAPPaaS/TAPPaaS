@@ -54,7 +54,7 @@ echo '{"nodes":[{"name":"tappaas1","online":true},{"name":"tappaas2","online":tr
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
 python3 "${R}" --listen "127.0.0.1:${PORT}" --token-file "${TMP}/token" \
     --notify "${TMP}/notify" --bundle "${TMP}/bundle" --breadcrumb "${TMP}/crumbs" --heartbeat-file "${TMP}/heartbeat" \
-    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down" --cluster-cache 0 > "${TMP}/log" 2>&1 &
+    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down" --cluster-cache 0 --alerts-log "${TMP}/alerts.jsonl" > "${TMP}/log" 2>&1 &
 PID=$!
 for _ in $(seq 1 50); do curl -s "http://127.0.0.1:${PORT}/" >/dev/null 2>&1 && break; sleep 0.1; done
 
@@ -94,10 +94,14 @@ ck "an empty token file refuses everything" "401" "$(post '' "$(wh firing event 
 printf 'rotated\n' > "${TMP}/token"
 ck "a rotated token is read without a restart" "200" "$(post rotated "$(wh firing event OomKill openwebui)")"
 
+ck "every alert is recorded for health-manager alerts (ADR-039 D8)" "QuorumLost tappaas1 event" \
+   "$(jq -r 'select(.alertname == "QuorumLost") | "\(.alertname) \(.host) \(.kind)"' "${TMP}/alerts.jsonl" | head -1)"
+ck "…resolves too" "yes" "$(jq -e -s 'any(.[]; .status == "resolved" and .alertname == "HostSilent")' "${TMP}/alerts.jsonl" >/dev/null && echo yes || echo no)"
 n="$(sent)"
 ck "a heartbeat is accepted" "200" "$(post rotated "$(wh firing heartbeat Heartbeat '')")"
 ck "…recorded" "2026-10-04T18:00:00Z" "$(cat "${TMP}/heartbeat" 2>/dev/null)"
 ck "…and never mailed" "${n}" "$(sent)"
+ck "…nor recorded as an alert" "0" "$(jq -s '[.[] | select(.alertname == "Heartbeat")] | length' "${TMP}/alerts.jsonl")"
 both='{"status":"firing","alerts":[{"status":"firing","labels":{"alertname":"Heartbeat","kind":"heartbeat"},"startsAt":"2026-10-04T19:00:00Z"},{"status":"firing","labels":{"alertname":"QuorumLost","host":"tappaas2","kind":"event"},"startsAt":"2026-10-04T19:00:00Z"}]}'
 ck "a heartbeat next to a real alert does not hide it" "200" "$(post rotated "${both}")"
 ck "…the real one is mailed" "ALERT: QuorumLost on tappaas2" "$(tail -1 "${TMP}/subjects")"

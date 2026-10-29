@@ -35,7 +35,8 @@ import { hostname } from "os";
 import { join } from "path";
 import { defaultConfigDir, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
-import { checkUpdateCapacity, guestTarget, runHealthGates } from "./checks";
+import { checkUpdateCapacity, probeTarget, runHealthGates } from "./checks";
+import { ALERTS_LOG, alertLine, fetchGrafanaAlerts, filterAlerts, openAlerts, recentEvents } from "./alerts";
 import { checkRoom } from "./room";
 import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
@@ -139,8 +140,22 @@ export const HELP: HelpSpec = {
     {
       usage: "reboot <module>", effect: { noPreview: "reboots the module's guest" },
       details:
-        "Reboots the module's VM and waits until the module can serve — the reboot update-os takes\n" +
-        "after a rebuild, on demand, without updating. For a guest validate reports as pending-reboot.",
+        "Reboots the module's VM (or restarts its container) and waits until the module can serve —\n" +
+        "the reboot update-os takes after a rebuild, on demand, without updating. For a guest validate\n" +
+        "reports as pending-reboot.",
+    },
+    {
+      usage: "alerts [--module M] [--host H] [--node N] [--json]", effect: "read",
+      options: [
+        ["--module M", "Only what is about this module: its rules' alerts and its instances' hosts."],
+        ["--host H", "Only alerts on this host (a vmname)."],
+        ["--node N", "Only alerts on this node (a pvehost instance)."],
+        ["--json", "Print the alerts as JSON, each with the object it is about."],
+      ],
+      details:
+        "The site's alerts (ADR-039): open — state alerts firing now, from Grafana on the logging VM;\n" +
+        "recent — event alerts of the last 24 hours, from the mothership's alert receiver. Each is\n" +
+        "placed on the module, machine or node it is about. The heartbeat is never listed.",
     },
   ],
   common: [["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."]],
@@ -364,6 +379,31 @@ function cmdReportSecurity(opts: Opts): number {
   return 0;
 }
 
+// ── alerts (ADR-039 D8) ───────────────────────────────────────────────
+function cmdAlerts(opts: Opts): number {
+  const val = (flag: string): string | undefined => {
+    const i = opts.rest.indexOf(flag);
+    if (i < 0) return undefined;
+    const v = opts.rest[i + 1];
+    if (!v || v.startsWith("--")) die(`alerts: ${flag} needs a value`);
+    return v;
+  };
+  const f = { module: val("--module"), host: val("--host"), node: val("--node") };
+  const raw = fetchGrafanaAlerts(opts.configDir);
+  const items = filterAlerts([
+    ...(raw ? openAlerts(raw, opts.configDir) : []),
+    ...recentEvents(ALERTS_LOG, opts.configDir, Date.now()),
+  ], f);
+  if (opts.rest.includes("--json")) {
+    info(JSON.stringify({ grafana: raw !== null, alerts: items }, null, 2));
+    return 0;
+  }
+  if (raw === null) warn("Grafana's open alerts could not be read (logging VM not reachable?) — only recent events are shown");
+  if (items.length === 0) info("no open or recent alerts");
+  for (const a of items) info(alertLine(a));
+  return 0;
+}
+
 // ── reboot (#730) ─────────────────────────────────────────────────────
 // Resolves the module to its VM where it RUNS (HA may have moved it), then
 // hands the reboot to reboot-guest.sh — update-os.sh's own reboot path, so the
@@ -377,7 +417,6 @@ function cmdReboot(opts: Opts, client: ClusterClient): number {
   const cfg = raw as Record<string, unknown>;
   const vmid = Number(cfg.vmid);
   if (!Number.isInteger(vmid) || vmid <= 0) die(`reboot: '${module}' has no VM to reboot`);
-  if (cfg.kind === "lxc") die(`reboot: '${module}' is a container — not supported, use: pct reboot ${vmid}`);
   const vmname = typeof cfg.vmname === "string" && cfg.vmname ? cfg.vmname : module;
   const declared = typeof cfg.node === "string" && cfg.node ? cfg.node : DEFAULT_NODE;
   const node = client.actualNode(declared, vmid) || declared;
@@ -388,7 +427,8 @@ function cmdReboot(opts: Opts, client: ClusterClient): number {
     );
   }
 
-  const target = guestTarget(opts.configDir, module);
+  // A container is probed and restarted through pct on its node (#901).
+  const target = probeTarget(client, opts.configDir, { module, vmid, node: declared, status: "" });
   const before = target ? client.pendingReboot(target) : null;
   if (before?.pending) info(`  pending: booted ${before.booted || "?"}, next boot ${before.next || "?"}`);
   else if (before) info("  no reboot was pending — rebooting anyway");
@@ -478,6 +518,8 @@ export function run(argv: string[], client: ClusterClient): number {
       }
       case "reboot":
         return cmdReboot(opts, client);
+      case "alerts":
+        return cmdAlerts(opts);
       case "scan":
         if (opts.rest[0] === "nix-list") return cmdScanNixList({ ...opts, rest: opts.rest.slice(1) });
         if (opts.rest[0] === "images") return cmdScanImages({ ...opts, rest: opts.rest.slice(1) });

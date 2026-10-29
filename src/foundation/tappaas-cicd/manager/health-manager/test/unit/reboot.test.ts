@@ -165,10 +165,17 @@ console.log("reboot <module>");
     return r.rc !== 0 && readFileSync(args, "utf8") === "";
   };
   check(refused(["reboot", "self", "--config-dir", dir]), "the controller is refused — it would kill the command");
-  check(refused(["reboot", "vllm", "--config-dir", dir]), "a container is refused");
   check(refused(["reboot", "tappaas2", "--config-dir", dir]), "a module with no VM is refused");
   check(refused(["reboot", "nosuch", "--config-dir", dir]), "an unknown module is refused");
   check(refused(["reboot", "--config-dir", dir]), "a missing <module> is refused");
+
+  // #901: a container is restarted by the same driver, through pct on its node.
+  writeFileSync(args, "");
+  const ct = new RebootingClient();
+  ct.actualNodes.set("tappaas2/312", "tappaas1");
+  const r = call(["reboot", "vllm", "--config-dir", dir], ct);
+  check(r.rc === 0 && readFileSync(args, "utf8").trim() === "vllm 312 tappaas1",
+    `a container goes to the driver, on the node it runs on (rc ${r.rc}, ${readFileSync(args, "utf8").trim()})`);
 
   if (prev === undefined) delete process.env.REBOOT_BIN;
   else process.env.REBOOT_BIN = prev;

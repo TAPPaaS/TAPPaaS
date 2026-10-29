@@ -31,6 +31,7 @@ import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient, Config
 import { existsSync, readFileSync } from "fs";
 import { checkCveStatus } from "./security";
 import { checkSignatureStatus } from "./signatures";
+import { checkOpenAlerts } from "./alerts";
 import { checkControlPlaneTrust } from "./controlplane";
 import { checkMlagPairs } from "./mlag";
 import { checkIpv6Egress } from "./ipv6egress";
@@ -1138,6 +1139,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkSwitchPorts(opts.configDir),
     checkMlagPairs(opts.configDir),
     checkPulse(client, opts.configDir),
+    checkOpenAlerts(opts.configDir),
     checkCveStatus(opts.configDir, Date.now()),
     checkSignatureStatus(opts.configDir, Date.now()),
     checkControlPlaneTrust(opts.configDir),
