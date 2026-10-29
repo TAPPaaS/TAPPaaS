@@ -6,7 +6,7 @@
   "stack": "foundation",
   "releaseDate": "2026-05-14",
   "maintainer": "@larsrossen",
-  "status": "Development",
+  "status": "Production",
   "vmname": "logging",
   "vmid": 150,
   "vmtag": "TAPPaaS,Foundation",

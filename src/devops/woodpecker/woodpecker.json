@@ -6,7 +6,7 @@
   "stack": "devops",
   "releaseDate": "2026-10-18",
   "maintainer": "@larsrossen",
-  "status": "Development",
+  "status": "Testing",
   "vmname": "woodpecker",
   "vmid": 351,
   "vmtag": "TAPPaaS,App,CI",

@@ -6,7 +6,7 @@
   "stack": "collaboration",
   "releaseDate": "2026-06-12",
   "maintainer": "@ErikDaniel007",
-  "status": "Testing",
+  "status": "Production",
   "vmname": "nextcloud",
   "vmid": 340,
   "vmtag": "TAPPaaS,App",

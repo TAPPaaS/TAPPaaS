@@ -4,7 +4,7 @@
   "version": "0.3.0",
   "stack": "foundation",
   "releaseDate": "2026-10-06",
-  "status": "Development",
+  "status": "Production",
   "source": "official",
   "os": "debian",
   "management": "managed",
