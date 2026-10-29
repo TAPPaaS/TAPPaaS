@@ -26,6 +26,7 @@
 #   - the loopback listener wants the token; the change stream (SSE)
 #   - the client: a report the service cannot take is spooled and replayed;
 #     lib/cmdb.sh never fails its caller
+#   - the example report in README.md is accepted as written
 #
 # Needs pg_ctl/initdb/psql, node, tsc, curl and jq; without them on PATH it
 # re-enters itself under nix-shell. PostgreSQL will not run as root: as root
@@ -255,6 +256,13 @@ _lib_out="$(CMDB_BIN="${T}/cmdb-bin" bash -c '. "'"${CICD}"'/lib/cmdb.sh"
     cmdb_query asset | jq -r "length"' 2>"${T}/lib.err")"
 check "cmdb.sh: a refused report does not fail the caller; query answers" "rc=0 2" "$(tr '\n' ' ' <<<"${_lib_out}" | sed 's/ $//')"
 grep -q "report not recorded" "${T}/lib.err" && ok "cmdb.sh: …and warns" || bad "cmdb.sh did not warn: $(cat "${T}/lib.err")"
+
+echo "== the README's example =="
+awk '/^```json$/{f=1;next} /^```$/{if(f)exit} f' "${HERE}/README.md" >"${T}/readme.json"
+out="$(cmdb report --json <"${T}/readme.json" 2>&1)"
+check "the README's example report is accepted" "true" "$(jq -r '.delivered' <<<"${out}" 2>/dev/null || echo "${out}")"
+check "…and its cluster has the machine as a member" "machine/tappaas1" \
+    "$(cmdb show cluster/tappaas --json | jq -r '.relations[] | select(.type == "member-of") | "\(.other.class)/\(.other.name)"')"
 
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)

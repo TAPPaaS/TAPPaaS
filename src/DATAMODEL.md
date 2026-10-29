@@ -201,6 +201,28 @@ draws the site that way: location by location (the primary first), each with
 its rooms, each room with its racks and loose devices, then what is at the
 location placed nowhere; a device's panel shows the two lines, each a link.
 
+## The actual layer: the CMDB (ADR-040)
+
+Everything above is **desired** state: what the site should be, in files the
+managers own. What the site **is** — the nodes and guests the cluster runs, the
+software on them, zones, addresses, users, the physical assets, ports and
+cables, and where they stand — is kept apart, in the CMDB that
+[cmdb-controller](foundation/tappaas-cicd/controller/cmdb-controller/README.md)
+keeps in PostgreSQL on the mothership. Managers report to it what they see and
+change; nothing in `config/` names into it, and it never becomes the source of
+intent.
+
+Its model is a class tree with inheritance (`object` → `ci`, `resource`,
+`place`, ADR-040 D3), declared as data in the controller's `metamodel/*.json` in
+the shape of the `fields.json` files above, with each class's identity keys
+(D5) and the typed relations between objects (`runs-on`, `allocated-to`,
+`part-of`, `placed-in`, …). A CI points up to its desired record by name
+(`desired`: the `config/` file) and to its module release (`release`); an asset
+is allocated to the CI it serves for the time being. Every value and relation
+has a validity period, so the actual state on any past date is a query.
+`positions.json`'s rooms, racks, placements, recorded devices and cables move
+into it with asset-manager (step 3 of the ADR's plan).
+
 ## What was simplified, and what is parked
 
 The first survey of this model (2026-10-22) found seven places where one thing
