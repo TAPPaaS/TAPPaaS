@@ -22,7 +22,8 @@
       "/home/tappaas/config",
       "/home/tappaas/secrets",
       "/home/tappaas/.loki-push",
-      "/etc/secrets"
+      "/etc/secrets",
+      "/var/lib/cmdb/dump"
     ]
   },
   "provides": [],

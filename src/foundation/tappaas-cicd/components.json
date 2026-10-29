@@ -140,6 +140,13 @@
       "package": null
     },
     {
+      "name": "cmdb-controller",
+      "kind": "controller",
+      "path": "controller/cmdb-controller",
+      "language": "typescript",
+      "package": "cmdb-controller"
+    },
+    {
       "name": "update-tappaas",
       "kind": "service",
       "path": "update-tappaas",

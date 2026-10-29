@@ -480,6 +480,125 @@ in
     };
   };
 
+  # ----------------------------------------
+  # The CMDB (ADR-040): cmdb-controller and its store
+  # ----------------------------------------
+  # The actual state of the site — CIs, assets, places, their relations and
+  # history — kept by cmdb-controller in PostgreSQL's database cmdb (D12, D13).
+  # The database is tappaas's and reached only over PostgreSQL's socket with
+  # peer authentication, by the service alone; everything else goes through
+  # its API: /run/cmdb/cmdb.sock for the managers and the bash layer (tappaas),
+  # 127.0.0.1:9098 with /etc/secrets/cmdb-token for the console (D2).
+  # ~/bin/cmdb-controller is built by the control-plane refresh
+  # (controller/cmdb-controller/install.sh), as the console's is, so a path
+  # unit starts the service once the bin exists.
+  services.postgresql = {
+    enable = true;
+    package = pkgs.postgresql_16;
+    ensureDatabases = [ "cmdb" ];
+    ensureUsers = [ { name = "tappaas"; } ];
+  };
+
+  # ensureDBOwnership needs the database named after its owner; cmdb is not.
+  # btree_gist carries the history's exclusion constraints (cmdb-v1.sql).
+  systemd.services.cmdb-db = {
+    description = "Give the CMDB's database to tappaas (ADR-040 D12)";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "postgresql.service" "postgresql-setup.service" ];
+    requires = [ "postgresql.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "postgres";
+    };
+    script = ''
+      ${config.services.postgresql.package}/bin/psql -d cmdb -v ON_ERROR_STOP=1 \
+        -c 'ALTER DATABASE cmdb OWNER TO tappaas' \
+        -c 'CREATE EXTENSION IF NOT EXISTS btree_gist'
+    '';
+  };
+
+  systemd.services.cmdb-token = {
+    description = "Generate the token the CMDB's loopback listener asks for (ADR-040 D2)";
+    wantedBy = [ "multi-user.target" ];
+    before = [ "cmdb.service" ];
+    unitConfig.ConditionPathExists = "!/etc/secrets/cmdb-token";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "cmdb-token" ''
+        ${pkgs.coreutils}/bin/mkdir -p /etc/secrets
+        ${pkgs.openssl}/bin/openssl rand -hex 32 \
+          | ${pkgs.coreutils}/bin/install -m 0600 -o tappaas -g users /dev/stdin /etc/secrets/cmdb-token
+      '';
+    };
+  };
+
+  systemd.paths.cmdb = {
+    description = "Start cmdb-controller once its bin is built (ADR-040)";
+    wantedBy = [ "multi-user.target" ];
+    pathConfig.PathExists = "/home/tappaas/bin/cmdb-controller";
+  };
+
+  systemd.services.cmdb = {
+    description = "cmdb-controller — the CMDB, the actual state of the site (ADR-040)";
+    after = [ "postgresql.service" "cmdb-db.service" "cmdb-token.service" ];
+    requires = [ "postgresql.service" "cmdb-db.service" ];
+    wants = [ "cmdb-token.service" ];
+    unitConfig.ConditionPathExists = "/home/tappaas/bin/cmdb-controller";
+    serviceConfig = {
+      User = "tappaas";
+      ExecStart = "/home/tappaas/bin/cmdb-controller serve";
+      # It exits 75 when PostgreSQL drops its connection; reporters spool
+      # meanwhile (lib/ts/src/cmdb.ts), so a restart loses nothing.
+      Restart = "always";
+      RestartSec = 5;
+      # /run/cmdb: the socket, tappaas's (0660 in a 0750 directory).
+      RuntimeDirectory = "cmdb";
+      RuntimeDirectoryMode = "0750";
+      Environment = [
+        "CMDB_SOCKET=/run/cmdb/cmdb.sock"
+        "CMDB_LISTEN=127.0.0.1:9098"
+        "CMDB_TOKEN_FILE=/etc/secrets/cmdb-token"
+        "CMDB_PGHOST=/run/postgresql"
+        "CMDB_PGDATABASE=cmdb"
+        "CMDB_PGUSER=tappaas"
+      ];
+      # It writes nothing but its socket. The rescan sources (step 2 of the
+      # ADR's plan) run as its children and will need config/ writable.
+      ProtectSystem = "strict";
+      ProtectHome = "read-only";
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+    };
+  };
+
+  # The store is in tappaas-cicd's file backup as a dump (D12): taken just
+  # before each capture, so the two describe the same moment whatever the
+  # backup schedule is. /var/lib/cmdb/dump is in tappaas-cicd.json's
+  # backup.filesystemPaths.
+  systemd.services.cmdb-dump = {
+    description = "Dump the CMDB for tappaas-cicd's file backup (ADR-040 D12)";
+    after = [ "postgresql.service" "cmdb-db.service" ];
+    requires = [ "postgresql.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      StateDirectory = "cmdb/dump";
+      StateDirectoryMode = "0700";
+      UMask = "0077";
+    };
+    script = ''
+      d=/var/lib/cmdb/dump
+      ${config.services.postgresql.package}/bin/pg_dump --format=custom --file="$d/cmdb.dump.new" cmdb
+      mv "$d/cmdb.dump.new" "$d/cmdb.dump"
+    '';
+  };
+  systemd.services.tappaas-fs-backup = {
+    wants = [ "cmdb-dump.service" ];
+    after = [ "cmdb-dump.service" ];
+  };
+
   # The alerting watches itself (#126): Grafana's Heartbeat rule reaches the
   # receiver every 10 minutes while logs flow and rules run; this timer — here,
   # not on the logging VM it watches — mails when that stops for 35 minutes,
