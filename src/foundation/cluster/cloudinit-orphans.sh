@@ -109,9 +109,12 @@ say() { [[ "${QUIET}" -eq 1 ]] || info "$@"; }
 #   unowned  no config anywhere in the cluster — report only, never delete:
 #            this is a different orphan class (e.g. a VM pending restore)
 #
-# Storages are filtered to those actually available on this node; .shared
-# storages are excluded because there a single copy is visible cluster-wide and
-# freeing it would destroy the live volume.
+# Storages are filtered to those actually available on this node — active here
+# (a storage.cfg entry whose pool the node lacks, local-lvm on a ZFS-installed
+# node, is listed but inactive); .shared storages are excluded because there a
+# single copy is visible cluster-wide and freeing it would destroy the live
+# volume. A storage that cannot be listed is reported (`storefail`), never
+# taken for an unreachable node: the probe itself exits 0 once it ran.
 probe_node() {
     local node="$1"
     # shellcheck disable=SC2086  # SSH_OPTS is intentionally word-split
@@ -119,6 +122,7 @@ probe_node() {
 set -uo pipefail
 me="$(hostname -s)"
 
+active=" $(pvesm status --enabled 1 2>/dev/null | awk 'NR > 1 && $3 == "active" {printf "%s ", $1}')"
 stores=$(pvesh get /storage --output-format json 2>/dev/null | jq -r --arg me "$me" '
     .[]
     | select((.shared // 0) != 1)
@@ -127,7 +131,12 @@ stores=$(pvesh get /storage --output-format json 2>/dev/null | jq -r --arg me "$
     | .storage')
 
 for store in $stores; do
-    pvesm list "$store" 2>/dev/null | awk 'NR>1 {print $1}' | while read -r volid; do
+    case "$active" in *" ${store} "*) ;; *) continue ;; esac
+    if ! vols=$(pvesm list "$store" 2>/dev/null); then
+        printf 'storefail\t%s\t-\t-\n' "$store"
+        continue
+    fi
+    awk 'NR>1 {print $1}' <<<"$vols" | while read -r volid; do
         case "$volid" in
             *:vm-*-cloudinit) ;;
             *) continue ;;
@@ -150,6 +159,7 @@ for store in $stores; do
         fi
     done
 done
+exit 0
 REMOTE
 }
 
@@ -171,10 +181,16 @@ for node in "${NODES[@]}"; do
     say ""
     say "${BOLD}${node}${CL}"
 
-    if ! out=$(probe_node "${node}" 2>/dev/null); then
+    # ssh's own failure is 255: the node did not answer. Anything else is the
+    # probe's, which ran — said as that, not as an unreachable node.
+    probe_rc=0
+    out=$(probe_node "${node}" 2>/dev/null) || probe_rc=$?
+    if [[ "${probe_rc}" -eq 255 ]]; then
         warn "  Cannot reach ${node} — skipped"
         failed=1
         continue
+    elif [[ "${probe_rc}" -ne 0 ]]; then
+        warn "  the probe on ${node} ended with exit ${probe_rc} — its findings below may be partial"
     fi
 
     found_here=0
@@ -207,6 +223,9 @@ for node in "${NODES[@]}"; do
                         failed=1
                     fi
                 fi
+                ;;
+            storefail)
+                warn "  could not list storage ${volid} on ${node} — its cloud-init volumes were not checked"
                 ;;
             locked)
                 found_here=1
