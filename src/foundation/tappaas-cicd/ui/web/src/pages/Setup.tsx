@@ -7,13 +7,13 @@
 // /setup opens Day 1 while the checklist is incomplete and Day 2 once it is
 // complete; /setup/day1 and /setup/day2 open a tab.
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
 import { Read, get, post, useRead } from "../api";
 import { stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { EnvironmentRow, SiteRead } from "../types";
-import { Dot, Link, ReadState, canOperate, navigate, since, useMe } from "../ui";
+import { Dot, Link, ReadState, canOperate, replacePath, since, useMe } from "../ui";
 import { AddNodeButton, sessionText, useAddNodeSession } from "./AddNode";
 import { EnrolButton } from "./Enrol";
 import { Day2 } from "./Day2";
@@ -230,29 +230,29 @@ function WifiLinks({ doc }: { doc: SetupDoc | null }) {
 const mm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "module-manager", verb, ...extra });
 
 export type SetupTab = "Day 1" | "Day 2";
-const SETUP_TABS: { name: SetupTab; path: string; what: string }[] = [
-  { name: "Day 1", path: "/setup/day1", what: "the installation" },
-  { name: "Day 2", path: "/setup/day2", what: "growing the site" },
-];
+// Two menu entries, one page each (they were tabs of one Setup page).
+export const SETUP_TITLE: Record<SetupTab, string> = { "Day 1": "Day 1 setup wizard", "Day 2": "Day 2 wizards" };
+export const SETUP_PATH: Record<SetupTab, string> = { "Day 1": "/setup/day1", "Day 2": "/setup/day2" };
 
 export function Setup({ tab }: { tab?: SetupTab }) {
   const r = useRead<SetupDoc>("setup", 600_000);
   const d = r.env?.data;
-  // /setup: Day 1 until every required step is done, then Day 2.
+  // /setup (a link or bookmark): Day 1 until every required step is done,
+  // then Day 2 — the address follows, so the menu shows which it is.
   const shown: SetupTab = tab ?? (d?.complete ? "Day 2" : "Day 1");
+  useEffect(() => {
+    if (!tab && d) replacePath(SETUP_PATH[shown]);
+  }, [tab, d, shown]);
+  const todo = d ? d.steps.filter((x) => x.required && x.done !== true).length : null;
   return (
     <div className="page">
       <div className="page-head">
-        <h1>Setup</h1>
-        <span className="muted">{shown === "Day 1" ? `derived from the records · ${since(r.env?.at)}` : "the guided sequences that grow the site"}</span>
-      </div>
-      <div className="tabs" role="tablist">
-        {SETUP_TABS.map((t) => (
-          <button key={t.name} role="tab" aria-selected={shown === t.name} className={shown === t.name ? "tab tab-on" : "tab"} onClick={() => navigate(t.path)} title={t.what}>
-            {t.name}
-            {t.name === "Day 1" && d ? <span className="muted small"> {d.complete ? "· done" : `· ${d.steps.filter((x) => x.required && x.done !== true).length} to do`}</span> : null}
-          </button>
-        ))}
+        <h1>{SETUP_TITLE[shown]}</h1>
+        <span className="muted">
+          {shown === "Day 1"
+            ? `the installation, derived from the records${todo === null ? "" : todo === 0 ? " · done" : ` · ${todo} to do`} · ${since(r.env?.at)}`
+            : "the guided sequences that grow and run the site"}
+        </span>
       </div>
       {shown === "Day 1" ? <Day1 r={r} /> : <Day2 doc={d ?? null} />}
     </div>

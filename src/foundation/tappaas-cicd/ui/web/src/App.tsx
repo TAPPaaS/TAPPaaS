@@ -23,7 +23,8 @@ import { Link, MeContext, replacePath, usePath } from "./ui";
 // The site as built is the Site page's four tabs (physical/views.ts).
 const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/", label: "Overview", live: true },
-  { to: "/setup", label: "Setup", live: true },
+  { to: "/setup/day1", label: "Day 1 setup wizard", live: true },
+  { to: "/setup/day2", label: "Day 2 wizards", live: true },
   { to: "/site", label: "Site", live: true },
   { to: "/environments", label: "Environments", live: true },
   { to: "/zones", label: "Network", live: true },
@@ -45,7 +46,7 @@ export function App() {
   const site = useRead<SiteRead>("site");
   const user = me.env?.data ?? null;
   // While the site is incomplete the Overview says so in one line and links
-  // to the Setup wizard (D10); only /setup shows the wizard itself.
+  // to the Day 1 setup wizard (D10); only /setup/day1 shows the wizard itself.
   const setup = useRead<{ complete: boolean }>(user && user.role === "installer" ? "setup" : null, 600_000);
   const incomplete = setup.env?.data?.complete === false;
   // The views' earlier addresses keep working (bookmarks, ?select=).

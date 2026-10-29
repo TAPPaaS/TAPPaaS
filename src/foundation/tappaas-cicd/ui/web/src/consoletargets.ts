@@ -77,9 +77,9 @@ export const WIZARDS: WizardDef[] = [
 // The pages, by path; <module> is a module's name.
 export const PAGES: { path: string; title: string }[] = [
   { path: "/", title: "the Overview" },
-  { path: "/setup", title: "Setup" },
-  { path: "/setup/day1", title: "Setup, Day 1" },
-  { path: "/setup/day2", title: "Setup, Day 2" },
+  { path: "/setup", title: "the Day 1 setup wizard until the site is set up, then the Day 2 wizards" },
+  { path: "/setup/day1", title: "the Day 1 setup wizard" },
+  { path: "/setup/day2", title: "the Day 2 wizards" },
   { path: "/site", title: "the Site page (its Overview: the site as built, site.json, the update schedule, Update now, the release train, the repositories)" },
   { path: "/site/overview", title: "the site overview (racks, devices and storage summed up, every finding; Add node; site.json, the update schedule, Update now, the release train, the repositories)" },
   { path: "/site/physical", title: "the physical view (racks, faceplates, cables)" },

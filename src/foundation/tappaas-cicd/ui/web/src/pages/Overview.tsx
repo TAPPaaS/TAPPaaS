@@ -74,7 +74,7 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
       </div>
       {setupIncomplete ? (
         <p className="readstate readstate-warn">
-          The site's setup is not finished. <Link to="/setup">Continue in Setup</Link>
+          The site's setup is not finished. <Link to="/setup/day1">Continue in the Day 1 setup wizard</Link>
         </p>
       ) : null}
       <ReadState env={health.env} failure={health.failure} what="health (health-manager validate)" />

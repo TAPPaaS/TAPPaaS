@@ -140,7 +140,9 @@ export function RemoveNodeButton({ node }: { node?: string }) {
   if (!canOperate(useMe())) return null;
   return (
     <>
-      <button className="btn btn-danger" onClick={() => setOpen(node ?? null)}>Remove a node…</button>
+      {/* A plain button: the wizard itself carries the warnings (blockers,
+          the typed name), and a red one on Day 2 drew the eye every visit. */}
+      <button className="btn" onClick={() => setOpen(node ?? null)}>Remove a node…</button>
       {open !== false ? <RemoveNodeWizard onClose={() => setOpen(false)} node={open} /> : null}
     </>
   );
