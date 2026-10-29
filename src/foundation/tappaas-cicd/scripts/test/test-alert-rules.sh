@@ -61,12 +61,15 @@ ck(errs({**ok, "window": 30}) != [] and errs({**ok, "window": 90000}) != [], "a 
 ck(errs({k: v for k, v in ok.items() if k != "match"}) != [], "a rule without match (not absent) is refused")
 ck(errs({**ok, "match": "a\nb"}) != [], "a multi-line match is refused")
 ck(errs({**ok, "colour": "red"}) != [], "an unknown key is refused")
-for k, v in (("scope", "all"), ("expr", "sum(x)"), ("query", "{a}")):
+for k, v in (("scope", "all"), ("expr", "sum(__SELECTOR__)"), ("query", "{a}")):
     ck(any("foundation" in e for e in errs({**ok, k: v})), f"'{k}' is refused for a Community module")
 ck(errs({**ok, "scope": ["pvehost"]}, True) == [], "a foundation rule may scope to another module")
 ck(errs({**ok, "scope": "nodes"}, True) != [], "an unknown scope word is refused")
-ck(errs({"name": "e", "title": "E", "kind": "event", "window": 300, "summary": "s", "expr": "sum(x)"}, True) != [], "an expr rule needs its query")
-ck(errs({"name": "e", "title": "E", "kind": "event", "window": 300, "summary": "s", "expr": "sum(x)", "query": "{a}", "match": "x"}, True) != [], "match does not go with expr")
+ck(errs({"name": "e", "title": "E", "kind": "event", "window": 300, "summary": "s", "expr": "sum(__SELECTOR__)"}, True) != [], "an expr rule needs its query")
+ck(errs({"name": "e", "title": "E", "kind": "event", "window": 300, "summary": "s", "expr": "sum(count_over_time({host=~\".+\"}[5m]))", "query": "q"}, True) != [], "an expr with a selector of its own is refused")
+ck(errs({"name": "e", "title": "E", "kind": "event", "window": 300, "summary": "s", "expr": "sum(count_over_time(__SELECTOR__ [5m]))", "query": "q"}, True) == [], "an expr through __SELECTOR__ validates")
+ck(ar.expression(["n1"], {"expr": "sum(count_over_time(__SELECTOR__ [5m]))"}) == 'sum(count_over_time({host=~"^(n1)$"} [5m]))', "__SELECTOR__ becomes the computed selector")
+ck(errs({"name": "e", "title": "E", "kind": "event", "window": 300, "summary": "s", "expr": "sum(__SELECTOR__)", "query": "{a}", "match": "x"}, True) != [], "match does not go with expr")
 ck(errs({**ok, "capture": {"site": "site=(?P<site>[a-z]+)"}}) == [], "a capture with its named group validates")
 ck(errs({**ok, "capture": {"site": "site=([a-z]+)"}}) != [], "a capture without its named group is refused")
 ck(errs({**ok, "capture": {"host": "(?P<host>x)"}}) != [], "a reserved label cannot be captured")
@@ -124,6 +127,27 @@ grp = ar.render_group("cluster", rules({**ok, "scope": ["pvehost"]}), lambda m: 
 ck(len(grp["rules"]) == 1 and "tappaas1" in grp["rules"][0]["data"][0]["model"]["expr"], "a foundation rule reads its scope's hosts")
 grp = ar.render_group("nobody", rules(ok), lambda m: ar.scope_hosts(cfg, m))
 ck(grp["rules"] == [], "a module with no instance renders no rule")
+
+# ── the core rules, moved out of logging.nix into their modules (ADR-039 D6) ──
+import os
+root = os.path.join(os.path.dirname(sys.argv[1]), "..", "..")
+gold = json.load(open(os.path.join(os.path.dirname(sys.argv[1]), "test", "fixtures", "core-alert-rules.json")))
+hosts = {"pvehost": ["tappaas1", "tappaas2"], "tappaas-cicd": ["tappaas-cicd"], "*all*": ["logging", "tappaas-cicd"]}
+seen = set()
+for m in ("pvehost", "cluster", "network", "backup", "logging"):
+    doc = json.load(open(os.path.join(root, m, f"{m}-alerts.json")))
+    ck(ar.validate(doc, True) == [], f"{m}-alerts.json validates as foundation ({ar.validate(doc, True)})")
+    for r in ar.render_group(m, doc, lambda x, m=m: hosts.get(x, hosts["pvehost"] if x == m == "pvehost" else []))["rules"]:
+        g = gold.get(r["title"]); seen.add(r["title"])
+        if not g:
+            ck(False, f"{r['title']}: not a core rule"); continue
+        got = {"module": m, "kind": r["labels"]["kind"], "bundle": r["labels"].get("bundle") == "true",
+               "from": r["data"][0]["relativeTimeRange"]["from"], "expr": r["data"][0]["model"]["expr"],
+               "query": r["annotations"]["query"], "summary": r["annotations"]["summary"],
+               "headline": r["annotations"].get("headline"), "repeat": r.get("notification_settings", {}).get("repeat_interval")}
+        for k in g:
+            ck(got[k] == g[k], f"{r['title']}.{k}: {got[k]!r} != {g[k]!r}")
+ck(seen == set(gold), f"every core rule is in a module file ({sorted(set(gold) - seen)})")
 
 print(f"alert-rules: {passed} passed, {failed} failed")
 sys.exit(1 if failed else 0)

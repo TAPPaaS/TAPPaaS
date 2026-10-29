@@ -232,8 +232,23 @@ In Grafana's Explore tab, pick the **Loki** datasource:
 ## Alerting from the logs (#126)
 
 Every host's logs arriving here are only useful if something reads them. Grafana's
-alerting, provisioned from `logging.nix`, evaluates LogQL rules over them and posts
-what fires to **`tappaas-alert-receiver`** on the mothership (TCP 9095, bearer token).
+alerting evaluates LogQL rules over them and posts what fires to
+**`tappaas-alert-receiver`** on the mothership (TCP 9095, bearer token).
+
+**Where the rules live.** Each module ships its own rules in `<module>-alerts.json`
+beside its module JSON: it names a line pattern, a window and a kind, never LogQL, and
+the mothership builds the query over that module's own hosts
+(`tappaas-cicd/scripts/tappaas-alert-rules.py`). The rules go into Grafana through its
+provisioning API, one group per module in the folder *TAPPaaS modules*, when the module's
+`logging:logs` service is installed or updated, and all of them again on this module's
+update (a rebuilt Grafana gets them back). The foundation's own rules are in the module
+they belong to: `pvehost` (DiskErrors, LanLegDown), `cluster` (QuorumLost, HaFencing,
+ReplicationFailed, RootKeyChanged, HaStuck), `network` (FirewallCertChanged), `backup`
+(BackupFailed) and this module (OomKill, HostSilent). Only the Heartbeat, the contact
+point and the policy are built in `logging.nix`. A rule's host list comes from `config/`,
+so a deleted instance raises no HostSilent. A rule may carry its own mail (templates),
+the support bundle, and up to 20 anonymized log lines where `site.json`
+`alerts.includeLines` is on.
 The receiver mails through `site-notify.sh`, the path a failed sweep uses (#651), so
 the subject reads `[TAPPaaS <site>] ALERT: <rule> on <host>`. Every notice is a line
 in `config/alerts.log` on the mothership.

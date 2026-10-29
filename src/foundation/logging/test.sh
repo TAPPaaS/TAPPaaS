@@ -224,9 +224,10 @@ check_loki_query() {
 check_disk_filter() {
     info "Check 0: the DiskErrors filter matches disk errors, not smartd's routine lines"
     local f re line bad=""
-    f="$(dirname "${BASH_SOURCE[0]}")/logging.nix"
-    re="$(sed -n 's/^  diskErrorFilter = "\(.*\)";$/\1/p' "${f}")"
-    [[ -n "${re}" ]] || { check_fail "no diskErrorFilter in ${f}"; return; }
+    # The rule is the pvehost module's since ADR-039 (pvehost-alerts.json).
+    f="$(dirname "${BASH_SOURCE[0]}")/../pvehost/pvehost-alerts.json"
+    re="$(jq -r '.rules[] | select(.name == "disk-errors") | .match' "${f}" 2>/dev/null)"
+    [[ -n "${re}" ]] || { check_fail "no disk-errors rule in ${f}"; return; }
     while IFS= read -r line; do
         grep -qP -- "${re}" <<<"${line}" || bad+=" [missed: ${line}]"
     done <<'EOF'
@@ -262,7 +263,16 @@ check_alert_rules() {
     # new rule does not fail this check until the count here is edited too.
     # The last number: rules whose failed query would act — every rule keeps its
     # last state, the Heartbeat alone goes OK so it stops (#905). Want none.
-    want="$(grep -c 'alertRule {' "$(dirname "${BASH_SOURCE[0]}")/logging.nix") 1 0"
+    # Since ADR-039 the rest are the foundation modules' own (<module>-alerts.json),
+    # one group each in the folder "TAPPaaS modules": as many as those files hold.
+    local here mods="" n_mod=0 m
+    here="$(dirname "${BASH_SOURCE[0]}")"
+    for m in pvehost cluster network backup logging; do
+        [[ -f "${here}/../${m}/${m}-alerts.json" ]] || continue
+        n_mod=$((n_mod + $(jq '.rules | length' "${here}/../${m}/${m}-alerts.json")))
+        mods+="${mods:+,}\\\"${m}\\\""
+    done
+    want="$(grep -c 'alertRule {' "${here}/logging.nix") ${n_mod} 1 0"
     # Asked on the VM itself, with the admin password read there: it never
     # crosses the wire or lands in a log.
     # shellcheck disable=SC2086,SC2016
@@ -270,16 +280,17 @@ check_alert_rules() {
         pw=$(sudo cat /etc/secrets/grafana-admin-password 2>/dev/null)
         rules=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/alert-rules)
         r=$(jq -r "[.[] | select(.uid | startswith(\"tappaas-\"))] | length" <<<"${rules}")
-        e=$(jq -r "[.[] | select(.uid | startswith(\"tappaas-\"))
+        m=$(jq -r "[.[] | select(.folderUID == \"tappaas-modules\" and ([.labels.module] | inside(['"${mods}"'])))] | length" <<<"${rules}")
+        e=$(jq -r "[.[] | select((.uid | startswith(\"tappaas-\")) or .folderUID == \"tappaas-modules\")
                    | select(.execErrState != (if .uid == \"tappaas-heartbeat\" then \"OK\" else \"KeepLast\" end))]
                    | length" <<<"${rules}")
         c=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/contact-points \
             | jq -r "[.[] | select(.uid == \"tappaas-site-notify\" and .type == \"webhook\")] | length")
-        echo "${r:-?} ${c:-?} ${e:-?}"' 2>/dev/null) || true
+        echo "${r:-?} ${m:-?} ${c:-?} ${e:-?}"' 2>/dev/null) || true
     if [[ "${out}" == "${want}" ]]; then
-        check_pass "${want%% *} alert rules (heartbeat included), their query-error states and the tappaas-site-notify webhook are provisioned"
+        check_pass "the heartbeat, ${n_mod} foundation module alert rules, their query-error states and the tappaas-site-notify webhook are provisioned"
     else
-        check_fail "alert provisioning incomplete (rules, contact points, wrong query-error states: ${out:-no answer}; want ${want})"
+        check_fail "alert provisioning incomplete (core rules, module rules, contact points, wrong query-error states: ${out:-no answer}; want ${want})"
     fi
 }
 

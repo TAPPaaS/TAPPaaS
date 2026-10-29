@@ -118,6 +118,8 @@ def validate(doc, foundation=False):
         if expr is not None:
             if not (isinstance(expr, str) and 0 < len(expr) <= 4000):
                 errs.append(f"{where}: 'expr' must be a LogQL expression, at most 4000 characters")
+            elif "__SELECTOR__" not in expr or "{" in expr.replace("__SELECTOR__", ""):
+                errs.append(f"{where}: 'expr' selects streams only through __SELECTOR__ (the computed host list), never a {{…}} of its own")
             for k in ("match", "unit", "capture", "above", "absent"):
                 if k in r:
                     errs.append(f"{where}: '{k}' does not go with 'expr' (the expression says it)")
@@ -212,7 +214,7 @@ def selector(hosts, rule):
 
 def expression(hosts, rule):
     if "expr" in rule:
-        return rule["expr"]
+        return rule["expr"].replace("__SELECTOR__", selector(hosts, rule))
     sel = selector(hosts, rule)
     flt = f" |~ {_q(rule['match'])}" if "match" in rule else ""
     w = rule["window"]
@@ -231,7 +233,7 @@ def expression(hosts, rule):
 
 def explore_query(hosts, rule):
     if "query" in rule:
-        return rule["query"]
+        return rule["query"].replace("__SELECTOR__", selector(hosts, rule))
     sel = selector(hosts, rule)
     return sel + (f" |~ {_q(rule['match'])}" if "match" in rule else "")
 
@@ -281,7 +283,9 @@ def grafana_rule(module, rule, hosts):
                        "datasource": {"type": "__expr__", "uid": "__expr__"}}},
         ],
         "noDataState": "OK",
-        "execErrState": "Error",
+        # A query that cannot run keeps the rule's last state (#905): no mail
+        # under its name; a Loki that stays down stops the Heartbeat instead.
+        "execErrState": "KeepLast",
         "for": "0s",
         "labels": labels,
         "annotations": ann,
@@ -359,7 +363,9 @@ def scope_hosts(config_dir, what, without=()):
         if inst in without:
             continue  # an instance being deleted: out of every selector at once (D4)
         if what == "*all*":
-            ok = declares_logs(cfg)
+            # Every instance that declares logging:logs, and the logging VM
+            # itself, which ships to itself and declares nothing.
+            ok = declares_logs(cfg) or module_of(cfg) == "logging"
         else:
             ok = module_of(cfg) == what
         if ok:

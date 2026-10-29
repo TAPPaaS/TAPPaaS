@@ -1,0 +1,123 @@
+{
+  "DiskErrors": {
+    "module": "pvehost",
+    "kind": "state",
+    "bundle": false,
+    "from": 86400,
+    "expr": "sum by (host) (count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |~ \"class=(checksum|io|data|deadman) |vdev_state=(DEGRADED|FAULTED|UNAVAIL|REMOVED)|SMART.*FAILED|FAILED SMART|Failed SMART|SMART Failure|(?i:I/O error|pool .*(DEGRADED|FAULTED|UNAVAIL)|Currently unreadable|Offline uncorrectable)\" [86400s]))",
+    "query": "{host=~\"^(tappaas1|tappaas2)$\"} |~ \"class=|smartd|I/O error|DEGRADED|FAULTED\"",
+    "summary": "Disk or ZFS errors on a Proxmox node in the last 24 hours (ZED pool events, smartd sector warnings, kernel I/O errors). Repeated once a day while they continue.",
+    "headline": null,
+    "repeat": "24h"
+  },
+  "LanLegDown": {
+    "module": "pvehost",
+    "kind": "event",
+    "bundle": true,
+    "from": 300,
+    "expr": "(sum by (host, slave) (count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |~ `lanbond: \\(slave [^)]+\\): link status definitely down` | regexp `\\(slave (?P<slave>[^)]+)\\): link status definitely` [5m])) - sum by (host, slave) (count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |~ `lanbond: \\(slave [^)]+\\): link status definitely up` | regexp `\\(slave (?P<slave>[^)]+)\\): link status definitely` [5m]))) or sum by (host, slave) (count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |~ `lanbond: \\(slave [^)]+\\): link status definitely down` | regexp `\\(slave (?P<slave>[^)]+)\\): link status definitely` [5m]))",
+    "query": "{host=~\"^(tappaas1|tappaas2)$\"} |= \"lanbond\"",
+    "summary": "A leg of a node's bonded lan uplink went down and did not come back. The node runs on the rest; one more port or switch failure cuts it off. See: site-manager node network show <host>.",
+    "headline": "lan uplink lost a leg",
+    "repeat": null
+  },
+  "QuorumLost": {
+    "module": "cluster",
+    "kind": "event",
+    "bundle": true,
+    "from": 300,
+    "expr": "sum by (host) (count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |~ \"non-primary component|node lost quorum\" [300s]))",
+    "query": "{host=~\"^(tappaas1|tappaas2)$\"} |~ \"QUORUM|quorum|corosync\"",
+    "summary": "A Proxmox node lost cluster quorum. HA guests on it stop; repeated, the cluster resets itself.",
+    "headline": null,
+    "repeat": null
+  },
+  "HaFencing": {
+    "module": "cluster",
+    "kind": "event",
+    "bundle": true,
+    "from": 300,
+    "expr": "sum by (host) (count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |~ \"client watchdog expired|watchdog did not stop|=> 'fence'\" [300s]))",
+    "query": "{host=~\"^(tappaas1|tappaas2)$\"} |~ \"watchdog|fence\"",
+    "summary": "HA fencing: a node's watchdog expired or a node is being fenced (it resets).",
+    "headline": null,
+    "repeat": null
+  },
+  "ReplicationFailed": {
+    "module": "cluster",
+    "kind": "state",
+    "bundle": true,
+    "from": 3600,
+    "expr": "sum by (host, replication_job) (count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |~ \"replication job error|replication job .* failed\" | regexp \"(?P<replication_job>[0-9]+-[0-9]+)\" [3600s])) > 1",
+    "query": "{host=~\"^(tappaas1|tappaas2)$\"} |~ \"replication job\"",
+    "summary": "A storage replication job (pvesr) failed in two runs within the hour: the HA copy of its guest (the job's first number is the VMID) on the other node is getting stale.",
+    "headline": null,
+    "repeat": null
+  },
+  "RootKeyChanged": {
+    "module": "cluster",
+    "kind": "event",
+    "bundle": false,
+    "from": 300,
+    "expr": "sum(count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |= \"tappaas-rootkeys-changed:\" [5m]))",
+    "query": "{host=~\"^(tappaas1|tappaas2)$\"} |= \"tappaas-rootkeys\"",
+    "summary": "A key was added to or removed from root's authorized_keys on the Proxmox nodes (the line names it).",
+    "headline": null,
+    "repeat": null
+  },
+  "HaStuck": {
+    "module": "cluster",
+    "kind": "state",
+    "bundle": true,
+    "from": 600,
+    "expr": "sum by (host, ha_stuck) (count_over_time({host=~\"^(tappaas-cicd)$\", unit=~\"check-ha-health\\\\.service\"} |~ \"tappaas-ha-stuck:\" | regexp \"tappaas-ha-stuck: (?P<ha_stuck>(node|service)=[^ ]+)\" [600s]))",
+    "query": "{host=~\"^(tappaas-cicd)$\", unit=~\"check-ha-health\\\\.service\"} |= \"tappaas-ha-stuck\"",
+    "summary": "HA is not where it should be: a node is held in maintenance mode (its HA guests stay elsewhere) or an HA service is stuck migrating. The line says which and how to clear it.",
+    "headline": null,
+    "repeat": null
+  },
+  "FirewallCertChanged": {
+    "module": "network",
+    "kind": "event",
+    "bundle": false,
+    "from": 300,
+    "expr": "sum by (host) (count_over_time({host=~\"^(tappaas-cicd)$\", unit=~\"check-firewall-cert\\\\.service\"} |~ \"tappaas-firewall-cert-(changed|expiring):\" [300s]))",
+    "query": "{host=~\"^(tappaas-cicd)$\", unit=~\"check-firewall-cert\\\\.service\"} |= \"tappaas-firewall-cert\"",
+    "summary": "The firewall's API certificate changed (expected after a firewall rebuild or a certificate renewal — otherwise something answers as the firewall), or expires within 30 days. The line names the old and new fingerprints.",
+    "headline": null,
+    "repeat": null
+  },
+  "BackupFailed": {
+    "module": "backup",
+    "kind": "event",
+    "bundle": true,
+    "from": 300,
+    "expr": "sum by (host) (count_over_time({host=~\"^(tappaas1|tappaas2)$\"} |~ \"ERROR: Backup of VM [0-9]+ failed|Backup job finished with errors|ERROR: job errors\" [300s]))",
+    "query": "{host=~\"^(tappaas1|tappaas2)$\"} |~ \"vzdump|Backup\"",
+    "summary": "A VM backup failed.",
+    "headline": null,
+    "repeat": null
+  },
+  "OomKill": {
+    "module": "logging",
+    "kind": "event",
+    "bundle": true,
+    "from": 300,
+    "expr": "sum by (host) (count_over_time({host=~\"^(logging|tappaas-cicd)$\"} |~ \"^\\\\s*Out of memory: Killed process\" [300s]))",
+    "query": "{host=\"<host>\"} |= \"Out of memory\"",
+    "summary": "The kernel killed a process for lack of memory.",
+    "headline": "Out of Memory Kill",
+    "repeat": null
+  },
+  "HostSilent": {
+    "module": "logging",
+    "kind": "state",
+    "bundle": true,
+    "from": 4500,
+    "expr": "count by (host) (count_over_time({host=~\"^(logging|tappaas-cicd)$\"} [1h] offset 900s)) unless count by (host) (count_over_time({host=~\"^(logging|tappaas-cicd)$\"} [900s]))",
+    "query": "{host=\"<host>\"}",
+    "summary": "A host stopped logging 15 minutes ago: it is down, or its log forwarder is (rsyslog on a node, alloy on a VM).",
+    "headline": null,
+    "repeat": null
+  }
+}

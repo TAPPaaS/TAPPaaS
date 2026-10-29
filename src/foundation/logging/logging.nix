@@ -65,8 +65,13 @@ let
 
   # ── Alert rules over the logs (#126) ─────────────────────────────────────
   # Every host already logs here and nothing read it: on 2026-09-06 a cluster
-  # reset itself 13 times in 70 minutes and no one was told. Each rule is a
-  # LogQL count per host; anything above zero fires, and Grafana posts it to
+  # reset itself 13 times in 70 minutes and no one was told. Since ADR-039 the
+  # rules live with the modules whose events they are (<module>-alerts.json:
+  # pvehost, cluster, network, backup, logging's own), put into Grafana through
+  # its API by the mothership (tappaas-alert-rules.py, re-applied by this
+  # module's update). Only the Heartbeat is built here: it must exist before any
+  # module has applied anything, so the watchdog has its signal.
+  # Each rule is a LogQL count per host; anything above zero fires, and Grafana posts it to
   # the mothership's tappaas-alert-receiver, which mails it through
   # site-notify.sh (#651). `kind` tells the receiver what a resolve means:
   #   event  something happened; it "resolves" only as its window moves on, so
@@ -104,118 +109,7 @@ let
     labels = { inherit kind; } // lib.optionalAttrs bundle { bundle = "true"; };
     annotations = { inherit summary query; } // lib.optionalAttrs (headline != null) { inherit headline; };
   };
-  # Proxmox nodes arrive by syslog (source=proxmox); every VM by its journal.
-  pve = ''{source="proxmox"}'';
   alertRules = [
-    (alertRule {
-      uid = "tappaas-quorum-lost"; title = "QuorumLost"; kind = "event"; window = 300; bundle = true;
-      expr = ''sum by (host) (count_over_time(${pve} |~ "non-primary component|node lost quorum" [5m]))'';
-      summary = "A Proxmox node lost cluster quorum. HA guests on it stop; repeated, the cluster resets itself.";
-      query = ''${pve} |~ "QUORUM|quorum|corosync"'';
-    })
-    (alertRule {
-      uid = "tappaas-ha-fencing"; title = "HaFencing"; kind = "event"; window = 300; bundle = true;
-      expr = ''sum by (host) (count_over_time(${pve} |~ "client watchdog expired|watchdog did not stop|=> 'fence'" [5m]))'';
-      summary = "HA fencing: a node's watchdog expired or a node is being fenced (it resets).";
-      query = ''${pve} |~ "watchdog|fence"'';
-    })
-    (alertRule {
-      uid = "tappaas-host-silent"; title = "HostSilent"; kind = "state"; window = 4500; bundle = true;
-      # Hosts that logged in the hour before and not in the last 15 minutes: no
-      # list to keep, so a new VM is covered at once; a deleted one alerts once
-      # and clears after the hour. It is the rule the others depend on — a host
-      # that cannot log cannot raise anything else.
-      expr = ''count by (host) (count_over_time({host=~".+"}[1h] offset 15m)) unless count by (host) (count_over_time({host=~".+"}[15m]))'';
-      summary = "A host stopped logging 15 minutes ago: it is down, or its log forwarder is (rsyslog on a node, alloy on a VM).";
-      query = ''{host="<host>"}'';
-    })
-    (alertRule {
-      uid = "tappaas-backup-failed"; title = "BackupFailed"; kind = "event"; window = 300; bundle = true;
-      expr = ''sum by (host) (count_over_time(${pve} |~ "ERROR: Backup of VM [0-9]+ failed|Backup job finished with errors|ERROR: job errors" [5m]))'';
-      summary = "A VM backup failed.";
-      query = ''${pve} |~ "vzdump|Backup"'';
-    })
-    (alertRule {
-      uid = "tappaas-oom-kill"; title = "OomKill"; kind = "event"; window = 300; bundle = true;
-      headline = "Out of Memory Kill";
-      # Anchored: Loki and Grafana log every rule's query text on this VM, and
-      # this VM's journal is searched too — unanchored, the rule matched its own
-      # query and fired on `logging` forever (hrossen, 2026-10-04). The kernel's
-      # line starts with the phrase; a logged query only contains it.
-      expr = ''sum by (host) (count_over_time({host=~".+"} |~ "^\\s*Out of memory: Killed process" [5m]))'';
-      summary = "The kernel killed a process for lack of memory.";
-      query = ''{host="<host>"} |= "Out of memory"'';
-    })
-    (alertRule {
-      uid = "tappaas-root-key-changed"; title = "RootKeyChanged"; kind = "event"; window = 300;
-      # A key ADDED to or REMOVED from root's authorized_keys (#128): the nodes'
-      # tappaas-rootkeys-check compares the set of key fingerprints every 5
-      # minutes and logs this line only when it changes, naming each key. It
-      # alerted on every audited write before, and Proxmox rewrites the file
-      # itself (`pvecm updatecerts` in the pve packages' postinst) — three mails
-      # on most nights with no key changed (hrossen, 2026-10-08). The file is
-      # cluster-wide, so every node sees one change: summed, it is one alert.
-      # The sweep's own key rotation is a real change and still shows up.
-      expr = ''sum(count_over_time(${pve} |= "tappaas-rootkeys-changed:" [5m]))'';
-      summary = "A key was added to or removed from root's authorized_keys on the Proxmox nodes (the line names it).";
-      query = ''${pve} |= "tappaas-rootkeys"'';
-    })
-    (alertRule {
-      uid = "tappaas-replication-failed"; title = "ReplicationFailed"; kind = "state"; window = 3600; bundle = true;
-      # A condition, not an event: replication runs every 15 minutes, so a job
-      # that keeps failing stays one alert (repeated every 4 h), and its resolve
-      # — an hour without the error — is mailed. The line PVE logs, seen on
-      # hrossen: "<job>: got unexpected replication job error - command ...".
-      # The job id (<vmid>-<n>) is lifted into a label, so the mail says WHICH
-      # job — it named only the node before. Two failures within the hour (two
-      # 15-minute runs in a row): one failed run while a node reboots in the
-      # nightly sweep is not a stale replica (hrossen 2026-10-08 02:30: job
-      # 110-0 against a rebooting tappaas3, fine on the next run).
-      expr = ''sum by (host, replication_job) (count_over_time(${pve} |~ "replication job error|replication job .* failed" | regexp "(?P<replication_job>[0-9]+-[0-9]+)" [1h])) > 1'';
-      summary = "A storage replication job (pvesr) failed in two runs within the hour: the HA copy of its guest (the job's first number is the VMID) on the other node is getting stale.";
-      query = ''${pve} |~ "replication job"'';
-    })
-    (alertRule {
-      uid = "tappaas-ha-stuck"; title = "HaStuck"; kind = "state"; window = 600; bundle = true;
-      # The mothership's check-ha-health (every 5 minutes) logs this line while
-      # an HA service stays in a transitional state past 10 minutes, or a node
-      # stays in HA maintenance past 30 — a rolling reboot that died with the
-      # mothership left tappaas1 there, its guests elsewhere, unnoticed (hrossen,
-      # 2026-10-08). Scoped to the unit: the rule's own query text is logged too.
-      expr = ''sum by (host, ha_stuck) (count_over_time({host="tappaas-cicd", unit="check-ha-health.service"} |= "tappaas-ha-stuck:" | regexp "tappaas-ha-stuck: (?P<ha_stuck>(node|service)=[^ ]+)" [10m]))'';
-      summary = "HA is not where it should be: a node is held in maintenance mode (its HA guests stay elsewhere) or an HA service is stuck migrating. The line says which and how to clear it.";
-      query = ''{host="tappaas-cicd", unit="check-ha-health.service"} |= "tappaas-ha-stuck"'';
-    })
-    (alertRule {
-      uid = "tappaas-firewall-cert"; title = "FirewallCertChanged"; kind = "event"; window = 300;
-      # The firewall's API certificate changed, or expires within 30 days (#310):
-      # the mothership's check-firewall-cert (hourly) logs the line once per
-      # change, the expiry once a day. Controllers skip verifying it, so this is
-      # how a rebuild, a renewal — or something answering as the firewall — shows.
-      # Scoped to the unit: the rule's own query text is logged too.
-      expr = ''sum by (host) (count_over_time({host="tappaas-cicd", unit="check-firewall-cert.service"} |~ "tappaas-firewall-cert-(changed|expiring):" [5m]))'';
-      summary = "The firewall's API certificate changed (expected after a firewall rebuild or a certificate renewal — otherwise something answers as the firewall), or expires within 30 days. The line names the old and new fingerprints.";
-      query = ''{host="tappaas-cicd", unit="check-firewall-cert.service"} |= "tappaas-firewall-cert"'';
-    })
-    (alertRule {
-      uid = "tappaas-lan-leg-down"; title = "LanLegDown"; kind = "event"; window = 300; bundle = true;
-      headline = "lan uplink lost a leg";
-      # A node's lan bridge on a bond (#40) keeps running when one leg goes: that
-      # is the point, and also why nothing else would tell. The kernel's bonding
-      # driver logs "link status definitely down" when it takes a member out
-      # (miimon), and "definitely up" when it takes it back. A leg is lost when
-      # it went down more often than it came back in the window: a flap that
-      # recovers is not a loss. A node's boot shows exactly such a flap on a DAC
-      # leg (up, down, up within a second), and the lines arrive in one batch
-      # with the same timestamp, so their order cannot decide — the counts can.
-      # Per leg (host, slave); `or` keeps a leg that only went down. Nodes only:
-      # the rule's own query text, logged on this VM, is not from a node.
-      expr = let
-        leg = state: ''sum by (host, slave) (count_over_time(${pve} |~ `lanbond: \(slave [^)]+\): link status definitely ${state}` | regexp `\(slave (?P<slave>[^)]+)\): link status definitely` [5m]))'';
-      in "(${leg "down"} - ${leg "up"}) or ${leg "down"}";
-      summary = "A leg of a node's bonded lan uplink went down and did not come back. The node runs on the rest; one more port or switch failure cuts it off. See: site-manager node network show <host>.";
-      query = ''${pve} |= "lanbond"'';
-    })
     (alertRule {
       uid = "tappaas-heartbeat"; title = "Heartbeat"; kind = "heartbeat"; window = 300;
       # Fires for as long as logs arrive and rules run; its webhook proves the
@@ -229,26 +123,6 @@ let
     })
   ];
 
-  # Disk trouble is a condition, not an event, and its sources speak rarely:
-  # smartd re-warns every few hours, ZED in bursts. A short window would fire,
-  # resolve and fire again — a mail each time. Looking back a day, it stays
-  # firing while any disk error was seen, mails once a day (its own route
-  # below), and resolves after a quiet day. Its own group: a day's lines are a
-  # heavier query, so every 5 minutes rather than every minute.
-  #   ZED   class=checksum|io|data|deadman, or a vdev entering a bad state —
-  #         the line is `eid=… class=checksum pool='tankc1' vdev=…`
-  #   smartd / kernel  pending or uncorrectable sectors, SMART failure, I/O error
-  #   smartd's failures are matched as smartd spells them (FAILED, Failed SMART,
-  #   SMART Failure), not case-blind: "SMART Prefailure Attribute: … changed from
-  #   100 to 64" is an attribute moving, logged at every boot, not a failure.
-  #   test.sh's Check 0 runs real lines against this filter.
-  diskErrorFilter = "class=(checksum|io|data|deadman) |vdev_state=(DEGRADED|FAULTED|UNAVAIL|REMOVED)|SMART.*FAILED|FAILED SMART|Failed SMART|SMART Failure|(?i:I/O error|pool .*(DEGRADED|FAULTED|UNAVAIL)|Currently unreadable|Offline uncorrectable)";
-  diskRule = alertRule {
-    uid = "tappaas-disk-errors"; title = "DiskErrors"; kind = "state"; window = 86400;
-    expr = ''sum by (host) (count_over_time(${pve} |~ "${diskErrorFilter}" [24h]))'';
-    summary = "Disk or ZFS errors on a Proxmox node in the last 24 hours (ZED pool events, smartd sector warnings, kernel I/O errors). Repeated once a day while they continue.";
-    query = ''${pve} |~ "class=|smartd|I/O error|DEGRADED|FAULTED"'';
-  };
   oidcFiles    = [ "client-id" "client-secret" "auth-url" "token-url" "api-url" ];
 in
 {
@@ -877,9 +751,10 @@ in
         }];
       };
 
-      # #126: the rules above, one contact point (the mothership's receiver),
-      # and a policy that sends everything there, grouped per rule and host,
-      # repeated at most every 4 hours while it lasts.
+      # #126: the heartbeat above, one contact point (the mothership's
+      # receiver), and a policy that sends everything there — the modules'
+      # rules too (ADR-039) — grouped per rule and host, repeated at most every
+      # 4 hours while it lasts (a module rule may set its own repeat).
       alerting = {
         rules.settings = {
           apiVersion = 1;
@@ -889,12 +764,6 @@ in
             folder = "TAPPaaS";
             interval = "1m";
             rules = alertRules;
-          } {
-            orgId = 1;
-            name = "tappaas-logs-daily";
-            folder = "TAPPaaS";
-            interval = "5m";
-            rules = [ diskRule ];
           }];
         };
         contactPoints.settings = {
@@ -936,12 +805,6 @@ in
               group_wait = "0s";
               group_interval = "5m";
               repeat_interval = "10m";
-            } {
-              # Disk errors: once a day is enough (operator, 2026-10-04).
-              receiver = "tappaas-site-notify";
-              object_matchers = [ [ "alertname" "=" "DiskErrors" ] ];
-              group_by = [ "alertname" "host" ];
-              repeat_interval = "24h";
             }];
           }];
         };

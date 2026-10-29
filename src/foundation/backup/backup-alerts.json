@@ -1,0 +1,21 @@
+{
+  "_comment": "Alert rules for backups (ADR-039). The backup buddy's pulse (ADR-031) mails on its own, outside the log pipeline.",
+  "rules": [
+    {
+      "name": "backup-failed",
+      "title": "BackupFailed",
+      "kind": "event",
+      "window": 300,
+      "scope": [
+        "pvehost"
+      ],
+      "include": [
+        "bundle"
+      ],
+      "_comment": "vzdump runs on the node that holds the guest.",
+      "match": "ERROR: Backup of VM [0-9]+ failed|Backup job finished with errors|ERROR: job errors",
+      "summary": "A VM backup failed.",
+      "query": "__SELECTOR__ |~ \"vzdump|Backup\""
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "_comment": "Alert rules for the firewall (ADR-039).",
+  "rules": [
+    {
+      "name": "firewall-cert",
+      "title": "FirewallCertChanged",
+      "kind": "event",
+      "window": 300,
+      "scope": [
+        "tappaas-cicd"
+      ],
+      "_comment": "check-firewall-cert runs on the mothership and logs there.",
+      "unit": "check-firewall-cert\\.service",
+      "match": "tappaas-firewall-cert-(changed|expiring):",
+      "summary": "The firewall's API certificate changed (expected after a firewall rebuild or a certificate renewal — otherwise something answers as the firewall), or expires within 30 days. The line names the old and new fingerprints.",
+      "query": "__SELECTOR__ |= \"tappaas-firewall-cert\""
+    }
+  ]
+}

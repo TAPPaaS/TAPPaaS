@@ -1,0 +1,87 @@
+{
+  "_comment": "Alert rules for the cluster (ADR-039): read from the nodes' syslog, and from the mothership's HA check.",
+  "rules": [
+    {
+      "name": "quorum-lost",
+      "title": "QuorumLost",
+      "kind": "event",
+      "window": 300,
+      "scope": [
+        "pvehost"
+      ],
+      "include": [
+        "bundle"
+      ],
+      "match": "non-primary component|node lost quorum",
+      "summary": "A Proxmox node lost cluster quorum. HA guests on it stop; repeated, the cluster resets itself.",
+      "query": "__SELECTOR__ |~ \"QUORUM|quorum|corosync\""
+    },
+    {
+      "name": "ha-fencing",
+      "title": "HaFencing",
+      "kind": "event",
+      "window": 300,
+      "scope": [
+        "pvehost"
+      ],
+      "include": [
+        "bundle"
+      ],
+      "match": "client watchdog expired|watchdog did not stop|=> 'fence'",
+      "summary": "HA fencing: a node's watchdog expired or a node is being fenced (it resets).",
+      "query": "__SELECTOR__ |~ \"watchdog|fence\""
+    },
+    {
+      "name": "replication-failed",
+      "title": "ReplicationFailed",
+      "kind": "state",
+      "window": 3600,
+      "scope": [
+        "pvehost"
+      ],
+      "include": [
+        "bundle"
+      ],
+      "match": "replication job error|replication job .* failed",
+      "capture": {
+        "replication_job": "(?P<replication_job>[0-9]+-[0-9]+)"
+      },
+      "above": 1,
+      "summary": "A storage replication job (pvesr) failed in two runs within the hour: the HA copy of its guest (the job's first number is the VMID) on the other node is getting stale.",
+      "query": "__SELECTOR__ |~ \"replication job\""
+    },
+    {
+      "name": "root-key-changed",
+      "title": "RootKeyChanged",
+      "kind": "event",
+      "window": 300,
+      "scope": [
+        "pvehost"
+      ],
+      "_comment": "One alert for the cluster-wide authorized_keys, not one per node: a sum, so an expression.",
+      "expr": "sum(count_over_time(__SELECTOR__ |= \"tappaas-rootkeys-changed:\" [5m]))",
+      "summary": "A key was added to or removed from root's authorized_keys on the Proxmox nodes (the line names it).",
+      "query": "__SELECTOR__ |= \"tappaas-rootkeys\""
+    },
+    {
+      "name": "ha-stuck",
+      "title": "HaStuck",
+      "kind": "state",
+      "window": 600,
+      "scope": [
+        "tappaas-cicd"
+      ],
+      "include": [
+        "bundle"
+      ],
+      "_comment": "check-ha-health runs on the mothership and logs there.",
+      "unit": "check-ha-health\\.service",
+      "match": "tappaas-ha-stuck:",
+      "capture": {
+        "ha_stuck": "tappaas-ha-stuck: (?P<ha_stuck>(node|service)=[^ ]+)"
+      },
+      "summary": "HA is not where it should be: a node is held in maintenance mode (its HA guests stay elsewhere) or an HA service is stuck migrating. The line says which and how to clear it.",
+      "query": "__SELECTOR__ |= \"tappaas-ha-stuck\""
+    }
+  ]
+}

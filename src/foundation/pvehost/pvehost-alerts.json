@@ -1,0 +1,30 @@
+{
+  "_comment": "Alert rules over the nodes' own syslog (ADR-039): each node's disks and its bonded lan uplink.",
+  "rules": [
+    {
+      "name": "disk-errors",
+      "_comment": "Disk trouble is a condition, not an event, and its sources speak rarely: smartd re-warns every few hours, ZED in bursts. Looking back a day, it stays firing while any disk error was seen, mails once a day (repeat), and resolves after a quiet day. ZED: class=checksum|io|data|deadman, or a vdev entering a bad state. smartd / kernel: pending or uncorrectable sectors, SMART failure, I/O error, matched as smartd spells them, not case-blind: 'SMART Prefailure Attribute: … changed from 100 to 64' is an attribute moving at every boot, not a failure. logging/test.sh Check 0 runs real lines against this filter.",
+      "title": "DiskErrors",
+      "kind": "state",
+      "window": 86400,
+      "repeat": "24h",
+      "match": "class=(checksum|io|data|deadman) |vdev_state=(DEGRADED|FAULTED|UNAVAIL|REMOVED)|SMART.*FAILED|FAILED SMART|Failed SMART|SMART Failure|(?i:I/O error|pool .*(DEGRADED|FAULTED|UNAVAIL)|Currently unreadable|Offline uncorrectable)",
+      "summary": "Disk or ZFS errors on a Proxmox node in the last 24 hours (ZED pool events, smartd sector warnings, kernel I/O errors). Repeated once a day while they continue.",
+      "query": "__SELECTOR__ |~ \"class=|smartd|I/O error|DEGRADED|FAULTED\""
+    },
+    {
+      "name": "lan-leg-down",
+      "title": "LanLegDown",
+      "headline": "lan uplink lost a leg",
+      "kind": "event",
+      "window": 300,
+      "include": [
+        "bundle"
+      ],
+      "_comment": "A leg is lost when it went down more often than it came back in the window: a boot flaps a DAC leg (up, down, up within a second) with one timestamp, so counts decide, not order. Per leg (host, slave); `or` keeps a leg that only went down.",
+      "expr": "(sum by (host, slave) (count_over_time(__SELECTOR__ |~ `lanbond: \\(slave [^)]+\\): link status definitely down` | regexp `\\(slave (?P<slave>[^)]+)\\): link status definitely` [5m])) - sum by (host, slave) (count_over_time(__SELECTOR__ |~ `lanbond: \\(slave [^)]+\\): link status definitely up` | regexp `\\(slave (?P<slave>[^)]+)\\): link status definitely` [5m]))) or sum by (host, slave) (count_over_time(__SELECTOR__ |~ `lanbond: \\(slave [^)]+\\): link status definitely down` | regexp `\\(slave (?P<slave>[^)]+)\\): link status definitely` [5m]))",
+      "summary": "A leg of a node's bonded lan uplink went down and did not come back. The node runs on the rest; one more port or switch failure cuts it off. See: site-manager node network show <host>.",
+      "query": "__SELECTOR__ |= \"lanbond\""
+    }
+  ]
+}

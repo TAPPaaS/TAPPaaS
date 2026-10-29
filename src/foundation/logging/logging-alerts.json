@@ -1,0 +1,34 @@
+{
+  "_comment": "Alert rules over every host that ships its logs (ADR-039). Heartbeat stays in logging.nix: it must exist before any module has applied its rules.",
+  "rules": [
+    {
+      "name": "oom-kill",
+      "title": "OomKill",
+      "headline": "Out of Memory Kill",
+      "kind": "event",
+      "window": 300,
+      "scope": "all",
+      "include": [
+        "bundle"
+      ],
+      "_comment": "Anchored: Loki and Grafana log every rule's query text on the logging VM, and an unanchored rule matches its own query (hrossen, 2026-10-04).",
+      "match": "^\\s*Out of memory: Killed process",
+      "summary": "The kernel killed a process for lack of memory.",
+      "query": "{host=\"<host>\"} |= \"Out of memory\""
+    },
+    {
+      "name": "host-silent",
+      "title": "HostSilent",
+      "kind": "state",
+      "window": 900,
+      "absent": true,
+      "scope": "all",
+      "include": [
+        "bundle"
+      ],
+      "_comment": "Every instance that ships (logging:logs, and the logging VM): a deleted one leaves the list in its delete, so it raises nothing (ADR-039 D4). Heartbeat stays in logging.nix.",
+      "summary": "A host stopped logging 15 minutes ago: it is down, or its log forwarder is (rsyslog on a node, alloy on a VM).",
+      "query": "{host=\"<host>\"}"
+    }
+  ]
+}
