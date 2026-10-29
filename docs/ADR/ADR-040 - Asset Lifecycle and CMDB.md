@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** |
-| **Version** | 0.4 |
+| **Version** | 0.5 |
 | **Date** | 2026-10-29 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #906. Amends ADR-036 D3 (who owns a placement, and what it hangs on) and D4 (the topology becomes a view of the CMDB); ADR-007f (a new controller, cmdb-controller, that every manager reports to); ADR-034 (the console's views read the CMDB). Related: ADR-020 (desired, actual and drift), ADR-022 family (the vocabulary of CI classes), ADR-022c (ArchiMate Node and Device), ADR-026 (machines as modules), ADR-028 and ADR-033 (releases), ADR-035 (manager rename and aliases), ADR-037 D4 (adding a node). |
-| **Changelog** | v0.4 (2026-10-29) — **operator's direction:** IT4IT keeps assets (its Resource) apart from the Actual Product Instance, but the industry tracks assets in the CMDB, and so does TAPPaaS: **resources stand beside CIs** in one store, with relations between them (D3's root has `ci`, `resource` and `place`), and **two lifecycles** are kept apart (D7): the asset's (ordered → disposed, reusable) and the CI's (created from its desired record, retired with it, never reused — the same box as `tappaas5` is a new CI). A pool consumed by allocations (storage, addresses) is a resource the model allows and this ADR does not build (O10). **The store is PostgreSQL**, TAPPaaS's database standard (D12, D13; O2 closed). Figure 3-6's nine objects read from the standard's source: the five backbone objects and the four of the Service Offering Backbone. · v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
+| **Changelog** | v0.5 (2026-10-29) — **operator's review of D2 and D3:** a module instance is not a class of its own — a module is a **`node`** of its kind (`vm`, `lxc`, `machine`, `device`, ADR-022d) or, of kind application, a **`software/app`**; `software` is what runs *in* a node (`app`, `service`, `controller`, `manager`), so `tappaas1` is one CI, a `machine`, with `pve` as an app on it, and `identity` a `vm` with `authentik` on it; `guest` goes (`vm` and `lxc` stand for themselves); `party` is **`identity`**, TAPPaaS's word; UCMDB named as OpenText's model, not a standard; the essential attributes of every class in a table. cmdb-controller is a **24/7 API service** and `cmdb` a CLI with verbs in front of it. · v0.4 (2026-10-29) — **operator's direction:** IT4IT keeps assets (its Resource) apart from the Actual Product Instance, but the industry tracks assets in the CMDB, and so does TAPPaaS: **resources stand beside CIs** in one store, with relations between them (D3's root has `ci`, `resource` and `place`), and **two lifecycles** are kept apart (D7): the asset's (ordered → disposed, reusable) and the CI's (created from its desired record, retired with it, never reused — the same box as `tappaas5` is a new CI). A pool consumed by allocations (storage, addresses) is a resource the model allows and this ADR does not build (O10). **The store is PostgreSQL**, TAPPaaS's database standard (D12, D13; O2 closed). Figure 3-6's nine objects read from the standard's source: the five backbone objects and the four of the Service Offering Backbone. · v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
 
 TAPPaaS knows well what a site *should* be: the modules and their dependencies, the releases, and
 the desired configuration in `config/*.json`. It knows poorly what a site *is*: that is asked live
@@ -118,8 +118,17 @@ store behind a service:
 
 - **cmdb-controller** is a controller in ADR-007f's sense, on `tappaas-cicd`, present from the
   bootstrap (the first node's asset is written at install, D8). It owns the store, the schema of
-  CI classes and relation types, identity matching (D5) and history (D6), and offers one API: a
-  TypeScript client in `lib/ts`, a CLI `cmdb` for the bash layer, and HTTP for the console.
+  CI classes and relation types, identity matching (D5) and history (D6).
+- **It is a service, and the CLI is a client of it.** cmdb-controller runs as `tappaas` around the
+  clock (`cmdb.service` on `tappaas-cicd`) and offers **one API**: HTTP/JSON on a Unix socket for
+  the managers and the bash layer on the same host, and on `localhost` with a token for the
+  console (ADR-034) and the agents behind it; reports come in batches, and a change stream
+  (server-sent events) lets the console follow without polling. **`cmdb` is the verb surface in
+  front of that API** — `show`, `query`, `history`, `impact`, `report`, `rescan`, `class` — as
+  every manager has one (ADR-007f), and nothing more than a thin client, so a manager, a script,
+  the console and an agent get the same answer at the same speed. `lib/ts` wraps the API for the
+  TypeScript managers. The service is not a database server any caller may open: the store is
+  reachable only through it.
 - **Only cmdb-controller writes the store.** Managers and controllers send it observations and
   changes (D4); nothing else opens the database.
 - **The CMDB is a record, never a gate.** A manager whose report cannot be delivered spools it and
@@ -133,11 +142,12 @@ store behind a service:
 
 The CI model is a **class hierarchy with inheritance**: a class declares attributes, keys and the
 relations it may have, and a subclass inherits them and adds its own. The shape is that of the
-large CMDBs — UCMDB's class model has one root, `Managed Object`, under which `ConfigurationItem`
-branches into `BusinessElement`, `InfrastructureElement` (`Node`, `NodeElement`, `RunningSoftware`,
+large CMDBs — OpenText's UCMDB, not a standard but the model most of the industry's CMDBs
+resemble, has one root, `Managed Object`, under which `ConfigurationItem` branches into
+`BusinessElement`, `InfrastructureElement` (`Node`, `NodeElement`, `RunningSoftware`,
 `NetworkEntity`, `CommunicationEndpoint`, …), `Location`, `Monitor` and `Party`, several hundred
 classes deep — but TAPPaaS's is small: one level of abstract classes, and leaves that are the
-words the ADR-022 family and `GLOSSARY.md` already fix.
+words the ADR-022 family, ADR-007a and `GLOSSARY.md` already fix.
 
 The root has three branches. A **`ci`** is what IT4IT's Actual Product Instance is made of: it
 exists because a desired record exists, and ends with it. A **`resource`** is IT4IT's Resource —
@@ -147,18 +157,20 @@ keep in the same store as the CIs; TAPPaaS does the latter, and keeps the two ap
 store. A **`place`** is where either stands.
 
 ```
-object                      id, class, name, displayName, description, sources[], firstSeen, lastSeen, physical
-├─ ci                       stage (D7: created, operational, drifted, unseen, retired), desired (config file and key), release (module, version), health
-│  ├─ node                  something that runs software (ArchiMate Node, ADR-022c): os, address
-│  │  ├─ machine           a cluster member or a managed host (ADR-026); allocated an asset
-│  │  └─ guest             vm, lxc: vmid, cores, memory
-│  ├─ software
-│  │  ├─ module-instance   the instance of a module (its desired record is config/<name>.json)
-│  │  ├─ service           <module>:<service>
+object
+├─ ci
+│  ├─ node                  what runs software (ArchiMate Node, ADR-022c) — a module of that kind (ADR-022d)
+│  │  ├─ vm                 kind vm
+│  │  ├─ lxc                kind lxc
+│  │  ├─ machine            kind machine: a cluster member, a satellite, a managed host (ADR-026)
+│  │  └─ device             kind device: reachable, not managed; also a switch or AP from the switch configuration
+│  ├─ software              what runs in a node
+│  │  ├─ app                an application with a version: pve on tappaas1, authentik in identity, opnsense and caddy in network; a module of kind application
+│  │  ├─ service            <module>:<service>
 │  │  ├─ controller
 │  │  └─ manager
 │  ├─ network-element
-│  │  ├─ zone              vlan, subnet, tier
+│  │  ├─ zone
 │  │  ├─ ssid
 │  │  ├─ address
 │  │  ├─ dns-name
@@ -169,7 +181,7 @@ object                      id, class, name, displayName, description, sources[]
 │  │  ├─ share
 │  │  ├─ datastore
 │  │  └─ backup-peer
-│  ├─ party                 (UCMDB's word; ADR-007a's objects)
+│  ├─ identity              ADR-007a's objects, identity-manager's
 │  │  ├─ organization
 │  │  ├─ group
 │  │  ├─ user
@@ -178,46 +190,103 @@ object                      id, class, name, displayName, description, sources[]
 │     ├─ site
 │     ├─ cluster
 │     └─ environment
-├─ resource                 stage (D7: ordered … disposed), allocated-to (a ci, or none)
-│  ├─ asset                 physical; vendor, model, serial, assetTag, procurement, disposal
-│  │  ├─ server            bmc, bootDisks
-│  │  ├─ network-device    switch, access-point: the controller that manages it
-│  │  ├─ appliance         modem, ont, ups
-│  │  ├─ passive-device    patch-panel, pdu
+├─ resource
+│  ├─ asset                 physical
+│  │  ├─ server
+│  │  ├─ network-device     switch, access-point
+│  │  ├─ appliance          modem, ont, ups
+│  │  ├─ passive-device     patch-panel, pdu
 │  │  └─ other-device
-│  ├─ port                  physical; kind, mac, speed, side (D9); part of an asset
-│  └─ pool                  a consumable: capacity, and what is taken from it (O10; no leaves yet)
+│  ├─ port                  physical; part of an asset
+│  └─ pool                  a consumable (O10; no leaves yet)
 └─ place                    physical
-   ├─ location              the site's locations (ADR-036 D1): address, timezone
+   ├─ location
    ├─ room
-   └─ rack                  units, width, numbering
+   └─ rack
 ```
 
+**A module is a node, or an app.** There is no `module-instance` class: a module instance *is*
+the node of its kind — `nextcloud` is a `vm`, `tappaas1` a `machine`, `alfen` a `device` — and a
+module of kind `application` (`backup` on a cluster member) is a `software/app` on the node it
+names. The CI carries the module facts (`desired` names `config/<name>.json`, `release` the module
+and version) because every `ci` does. So `tappaas1` is **one object**, a `machine`: its desired
+record is `tappaas1.json`, its release `pvehost 0.3.0`, its OS Debian, its asset the box; on it run
+the apps `pve 9.1` and `zfs`, the service `pvehost:nfs` and the controller `proxmox-controller`,
+each a `software` CI with a `runs-on` to it. Likewise `identity` is a `vm` with the app `authentik
+2026.8` on it, and `network` a `vm` with `opnsense` and `caddy`. What is on a node is reported by
+the node's own interrogation (the OS update, `health-manager`, the module's test) and gives the
+estate the SBOM's view (ADR-011) of what version runs where. A switch or access point is a
+`device` whose desired record is the switch configuration, not a module file.
+
+The essential attributes of each class — those every instance has, beyond what it inherits:
+
+| Class | Essential attributes |
+|---|---|
+| `object` | `id`, `class`, `name`, `displayName`, `description`, `physical`, `sources[]` (reporter, last seen), `firstSeen`, `lastSeen` |
+| `ci` | `stage` (D7: created, operational, drifted, unseen, retired), `desired` (file, key), `release` (module, version), `health` |
+| `node` | `os`, `osVersion`, `management` (managed/unmanaged, ADR-022g), `addresses[]`, `environment` (a relation), `stack` |
+| `vm` | `vmid`, `cores`, `memory`, `disks[]` (storage, size), `template`, `haPolicy`, `onNode` (relation `runs-on` → machine) |
+| `lxc` | `vmid`, `cores`, `memory`, `rootfs`, `unprivileged`, `onNode` |
+| `machine` | `hostname`, `clusterMember`, `storagePools[]`, `uplinks[]` (ports, by relation), `asset` (relation `allocated-to`) |
+| `device` | `model`, `firmware`, `managementAddress`, `controller` (which controller manages it, if one) |
+| `software` | `version`, `state` (running, stopped), `listens[]` (port, protocol), `onNode` |
+| `app` | `upstream` (project, package), `cpe` or `purl` for the SBOM (ADR-011) |
+| `service` | `provider` (the module), `consumers[]` (by relation) |
+| `controller`, `manager` | `registry` (the `control-plane.json` entry, ADR-035), `aliases[]` |
+| `zone` | `vlan`, `subnet`, `ipv6Subnet`, `tier`, `dhcp` (range) |
+| `ssid` | `security`, `zone`, `broadcastOn[]` |
+| `address` | `ip`, `family`, `reservation` (mac), `leaseUntil` |
+| `dns-name` | `fqdn`, `target`, `public` |
+| `proxy-route` | `host`, `path`, `target`, `gate` (identity gate on/off), `allowedZones[]` |
+| `vpn-peer` | `publicKey`, `endpoint`, `allowedIps[]` |
+| `storage-pool` | `type` (zfs, …), `size`, `used`, `health`, `onNode` |
+| `share` | `path`, `grants[]` |
+| `datastore` | `size`, `used`, `retention`, `onNode` |
+| `backup-peer` | `direction` (pull, receive), `location` (relation), `lastSeen` |
+| `organization` | `domain`, `displayName` |
+| `group` | `uuid`, `roles[]` |
+| `user` | `uuid`, `username`, `email`, `enabled` |
+| `role` | `scope` |
+| `site` | `code`, `primaryLocation` (relation), `version` (the TAPPaaS release) |
+| `cluster` | `quorum`, `members[]` (relation) |
+| `environment` | `domain`, `organization` (relation), `zone` (relation), `updateWindow` |
+| `resource` | `stage` (D7: ordered … disposed), `allocatedTo` (relation → a ci, or none) |
+| `asset` | `vendor`, `model` (a faceplate key where one exists), `serial`, `assetTag`, `procurement` (supplier, orderRef, purchaseDate, warrantyUntil, ownership), `disposal` (how, when, wiped) |
+| `server` | `bmc` (mac, address), `bootDisks[]` (serial), `cpu`, `memory` |
+| `network-device` | `controller` (the one that manages it), `ports` (count) |
+| `appliance`, `passive-device`, `other-device` | `ports` (count or names) |
+| `port` | `kind` (ethernet, sfp, wifi, bmc, usb, power), `mac`, `speed`, `side` (front, rear), `asset` (relation `part-of`) |
+| `pool` | `capacity`, `unit`, `allocated` |
+| `location` | `kind` (site, remote), `country`, `city`, `address`, `timezone`, `latitude`, `longitude` |
+| `room` | `location` (relation) |
+| `rack` | `units`, `width`, `numbering`, `room` (relation) |
+
 A query for a class answers for its subclasses too: "every `asset`" lists servers and switches;
-"every `object` that is `physical`" is the Physical view, "every `resource`" the Assets view
-(D10). A class's attributes are declared the
+"every `node`" lists the modules by kind; "every `object` that is `physical`" is the Physical
+view, "every `resource`" the Assets view (D10). A class's attributes are declared the
 way a service declares its fields (ADR-020, `fields.json`): name, type, required, immutable,
 which of them are **keys** (D5) and which **identify** the CI in telemetry (D14). A relation type
 is declared with the classes it may join and its cardinality, and inherits the same way
 (`placed-in` is declared for `asset` → `rack|room`, so it holds for a `server`).
 
 A new class goes through the gate of ADR-022h, under an existing abstract class; a module's own
-manager (ADR-035) may add leaf classes under `software`, `asset` or `network-element` and the
+manager (ADR-035) may add leaf classes under `software`, `asset`, `network-element` or
+`storage-element` and the
 relation types between them, declared in its JSON and registered by module-manager. Nothing may
 add a root. Relations are typed, and each is reported by the manager that knows it:
 
 | Relation | Example |
 |---|---|
-| `allocated-to` | resource → ci: asset → machine (the box this node runs on, for now); later a pool's allocation → guest (O10) |
-| `runs-on` | guest → node; module-instance → guest |
+| `allocated-to` | resource → ci: asset → machine (the box this node runs on, for now); later a pool's allocation → vm (O10) |
+| `runs-on` | vm / lxc → machine; software → node (app, service, controller, manager on the node they run in) |
 | `part-of` | port → asset |
 | `placed-in`, `at` | asset → rack / room; room → location; ci → location (a machine's, through its asset; a satellite's, recorded) |
 | `connects` | port ↔ port (a cable, seen or recorded); port → ssid (Wi-Fi) |
 | `member-of` | node → cluster; user → group; address → zone |
-| `depends-on`, `provides` | module-instance → service (from `dependsOn`/`provides`) |
+| `depends-on`, `provides` | node → service (from the module's `dependsOn`/`provides`) |
 | `serves` | zone → environment; proxy-route → service |
 | `owned-by` | environment → organization; asset → site |
-| `backs-up` | datastore → guest; backup-peer → site |
+| `backs-up` | datastore → vm / lxc / machine; backup-peer → site |
 
 ### D4 — Every manager that looks or changes, reports
 
@@ -251,9 +320,10 @@ new one (D7):
 | Class | Keys |
 |---|---|
 | asset | vendor + serial, then any port's MAC (D9) |
-| node | Proxmox node name within the cluster, then its asset |
-| guest | VMID + cluster, then the module instance name |
-| module-instance | instance name (the `config/` file) |
+| machine | Proxmox node name within the cluster, then its asset |
+| vm, lxc | VMID + cluster, then the module name (the `config/` file) |
+| device | the switch configuration's name, then its asset |
+| software | name + version within its node |
 | user, group | Authentik UUID |
 | others | their name within their parent (a zone in the site, a port on its asset) |
 
@@ -368,7 +438,7 @@ about** by its CMDB id, carried as a label (OpenTelemetry's `service.instance.id
 speaks OpenTelemetry), and that the alert receiver and the console resolve it. This is IT4IT's
 split: the Event component owns events, the Configuration component the CIs and the impact.
 
-- **Enrichment:** an alert on host `nextcloud` is the guest CI, which runs on node `tappaas2`, in
+- **Enrichment:** an alert on host `nextcloud` is the `vm` CI, which runs on the machine `tappaas2`, in
   environment `home`, used by group `family`.
 - **Impact:** a node down is one event on the node's CI; the CMDB's relations list the guests,
   services, environments and users behind it, instead of each reader working it out again (today
@@ -492,8 +562,8 @@ exists and carried as such in every signal about it:
 
 | CI | OTel resource attributes |
 |---|---|
-| `module-instance`, `service` | `service.name` (the module), `service.namespace` (the environment), `service.instance.id` (the CI id), `service.version` (the release) |
-| `node` (`machine`, `guest`) | `host.name`, `host.id` (the CI id), `host.type`, `os.type` |
+| `node` (a module: `vm`, `lxc`, `machine`, `device`) | `service.name` (the module), `service.namespace` (the environment), `service.instance.id` (the CI id), `service.version` (the release); and `host.name`, `host.id` (the CI id), `host.type`, `os.type` |
+| `software` (`app`, `service`, `controller`, `manager`) | `service.name` (its name), `service.namespace` (the node), `service.instance.id` (the CI id), `service.version` |
 | `asset`, `port` | no convention yet; `tappaas.ci.id` and `tappaas.ci.class` |
 | every CI | `tappaas.ci.id`, `tappaas.ci.class`, `deployment.environment.name` |
 
