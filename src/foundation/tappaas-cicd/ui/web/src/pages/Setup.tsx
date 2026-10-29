@@ -160,7 +160,10 @@ export function StepRow({ s, children, open: forced }: { s: SetupStep; children?
         <span className="muted">{open ? "▾" : "▸"}</span>
       </button>
       <p className="small setup-detail">{s.detail}</p>
-      {open && children ? <div className="setup-body">{children}</div> : null}
+      {/* Hidden, not unmounted, when collapsed: a step's job, output and form
+          state stay, so a stage that closed as it finished reopens with its
+          result (Remove a node's stage 2, Add a node's stages). */}
+      {children ? <div className="setup-body" hidden={!open}>{children}</div> : null}
     </li>
   );
 }
