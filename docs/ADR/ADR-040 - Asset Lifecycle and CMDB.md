@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** |
-| **Version** | 0.5 |
+| **Version** | 0.6 |
 | **Date** | 2026-10-29 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #906. Amends ADR-036 D3 (who owns a placement, and what it hangs on) and D4 (the topology becomes a view of the CMDB); ADR-007f (a new controller, cmdb-controller, that every manager reports to); ADR-034 (the console's views read the CMDB). Related: ADR-020 (desired, actual and drift), ADR-022 family (the vocabulary of CI classes), ADR-022c (ArchiMate Node and Device), ADR-026 (machines as modules), ADR-028 and ADR-033 (releases), ADR-035 (manager rename and aliases), ADR-037 D4 (adding a node). |
-| **Changelog** | v0.5 (2026-10-29) — **D9 (operator):** a port's kind is its connector — `rj45`, `sfp`, `wifi`, `usb-a`, `usb-c` — with speed, module, standard and bands as attributes and `role` (lan, wan, bmc) for what the node uses it for; `bmc` and `power` are no kinds. **Review of D1–D3:** a Product Backlog Item is not a backbone object: it relates to the design (what goes in) and to the release (what is implemented), and a Defect to the releases it was found in and fixed in — Codeberg issues carry both, `ROADMAP.md` the release each ships in; a module instance is not a class of its own — a module is a **`node`** of its kind (`vm`, `lxc`, `machine`, `device`, ADR-022d) or, of kind application, a **`software/app`**; `software` is what runs *in* a node (`app`, `service`, `controller`, `manager`), so `tappaas1` is one CI, a `machine`, with `pve` as an app on it, and `identity` a `vm` with `authentik` on it; `guest` goes (`vm` and `lxc` stand for themselves); `party` is **`identity`**, TAPPaaS's word; UCMDB named as OpenText's model, not a standard; the essential attributes of every class in a table. cmdb-controller is a **24/7 API service** and `cmdb` a CLI with verbs in front of it. · v0.4 (2026-10-29) — **operator's direction:** IT4IT keeps assets (its Resource) apart from the Actual Product Instance, but the industry tracks assets in the CMDB, and so does TAPPaaS: **resources stand beside CIs** in one store, with relations between them (D3's root has `ci`, `resource` and `place`), and **two lifecycles** are kept apart (D7): the asset's (ordered → disposed, reusable) and the CI's (created from its desired record, retired with it, never reused — the same box as `tappaas5` is a new CI). A pool consumed by allocations (storage, addresses) is a resource the model allows and this ADR does not build (O10). **The store is PostgreSQL**, TAPPaaS's database standard (D12, D13; O2 closed). Figure 3-6's nine objects read from the standard's source: the five backbone objects and the four of the Service Offering Backbone. · v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
+| **Changelog** | v0.6 (2026-10-29) — **open questions answered (operator):** no split (O1); a module's classes are derived from its `kind` and its service, controller and manager definitions, nothing is declared (O9); `faulty` is a flag, not a stage — a device can be operational and faulty (O3); disks become assets and CIs later, not in the first implementation (O4); event management is future work (O6); no export (O7); the trace into Codeberg is a link only (O8); resource allocation — pools, RAM, CPU, addresses — gets an ADR of its own (O10 → an issue). O5 has examples to choose from. · v0.5 (2026-10-29) — **D9 (operator):** a port's kind is its connector — `rj45`, `sfp`, `wifi`, `usb-a`, `usb-c` — with speed, module, standard and bands as attributes and `role` (lan, wan, bmc) for what the node uses it for; `bmc` and `power` are no kinds. **Review of D1–D3:** a Product Backlog Item is not a backbone object: it relates to the design (what goes in) and to the release (what is implemented), and a Defect to the releases it was found in and fixed in — Codeberg issues carry both, `ROADMAP.md` the release each ships in; a module instance is not a class of its own — a module is a **`node`** of its kind (`vm`, `lxc`, `machine`, `device`, ADR-022d) or, of kind application, a **`software/app`**; `software` is what runs *in* a node (`app`, `service`, `controller`, `manager`), so `tappaas1` is one CI, a `machine`, with `pve` as an app on it, and `identity` a `vm` with `authentik` on it; `guest` goes (`vm` and `lxc` stand for themselves); `party` is **`identity`**, TAPPaaS's word; UCMDB named as OpenText's model, not a standard; the essential attributes of every class in a table. cmdb-controller is a **24/7 API service** and `cmdb` a CLI with verbs in front of it. · v0.4 (2026-10-29) — **operator's direction:** IT4IT keeps assets (its Resource) apart from the Actual Product Instance, but the industry tracks assets in the CMDB, and so does TAPPaaS: **resources stand beside CIs** in one store, with relations between them (D3's root has `ci`, `resource` and `place`), and **two lifecycles** are kept apart (D7): the asset's (ordered → disposed, reusable) and the CI's (created from its desired record, retired with it, never reused — the same box as `tappaas5` is a new CI). A pool consumed by allocations (storage, addresses) is a resource the model allows and this ADR does not build (O10). **The store is PostgreSQL**, TAPPaaS's database standard (D12, D13; O2 closed). Figure 3-6's nine objects read from the standard's source: the five backbone objects and the four of the Service Offering Backbone. · v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
 
 TAPPaaS knows well what a site *should* be: the modules and their dependencies, the releases, and
 the desired configuration in `config/*.json`. It knows poorly what a site *is*: that is asked live
@@ -107,8 +107,8 @@ carries the trace upward: a running guest → `config/nextcloud.json` → nextcl
 trace (D10).
 
 The conceptual and design objects (modules, ADRs, issues) are **not** CIs: they are linked, by
-module name and issue number, and read from the repository and from Codeberg when shown, never
-polled.
+module name and issue number, and read from the repository when shown; an issue is **a link** to
+Codeberg, never its state fetched or polled (O8).
 
 ### D2 — The actual state is a CMDB, kept by cmdb-controller
 
@@ -251,7 +251,7 @@ The essential attributes of each class — those every instance has, beyond what
 | `site` | `code`, `primaryLocation` (relation), `version` (the TAPPaaS release) |
 | `cluster` | `quorum`, `members[]` (relation) |
 | `environment` | `domain`, `organization` (relation), `zone` (relation), `updateWindow` |
-| `resource` | `stage` (D7: ordered … disposed), `allocatedTo` (relation → a ci, or none) |
+| `resource` | `stage` (D7: ordered … disposed), `faulty` (a flag beside the stage), `allocatedTo` (relation → a ci, or none) |
 | `asset` | `vendor`, `model` (a faceplate key where one exists), `serial`, `assetTag`, `procurement` (supplier, orderRef, purchaseDate, warrantyUntil, ownership), `disposal` (how, when, wiped) |
 | `server` | `bootDisks[]` (serial), `cpu`, `memory` (the BMC is a port with `role: bmc`) |
 | `network-device` | `controller` (the one that manages it), `ports` (count) |
@@ -270,11 +270,14 @@ which of them are **keys** (D5) and which **identify** the CI in telemetry (D14)
 is declared with the classes it may join and its cardinality, and inherits the same way
 (`placed-in` is declared for `asset` → `rack|room`, so it holds for a `server`).
 
-A new class goes through the gate of ADR-022h, under an existing abstract class; a module's own
-manager (ADR-035) may add leaf classes under `software`, `asset`, `network-element` or
-`storage-element` and the
-relation types between them, declared in its JSON and registered by module-manager. Nothing may
-add a root. Relations are typed, and each is reported by the manager that knows it:
+A new class goes through the gate of ADR-022h, under an existing abstract class, and nothing may
+add a root. A module declares no classes: **its CIs are derived** from what it already says —
+its `kind` makes it a `vm`, `lxc`, `machine`, `device` or `app`; each `services/<service>/` is a
+`service`; a controller or manager it brings (ADR-035, `components.json`) is a `controller` or
+`manager`; its `dependsOn`/`provides` are the relations. A module that needs a class of its own
+(a `storage-element` for a new kind of share, say) is the case ADR-022h's gate exists for, and
+the class is added to the metamodel in TAPPaaS, not declared by the module. Relations are typed,
+and each is reported by the manager that knows it:
 
 | Relation | Example |
 |---|---|
@@ -348,7 +351,7 @@ An asset and the CI it serves have lives of their own, and the CMDB keeps both:
 | | Asset (a `resource`) | CI |
 |---|---|---|
 | Begins | when bought or found: `asset add`, or the installer's or a controller's report (D8) | when its desired record is written: `node add`, `module add`, `add-switch` … — IT4IT: the Configuration component "shall create Actual Product Instance(s) … based on the Desired Product Instance" |
-| Lives | through `ordered`, `stock`, `placed`, `operational`, `faulty` — allocated to a CI or free | `created` → `operational` (seen by its sources), with `drifted` (D6) and `unseen` (D5) as states it passes through |
+| Lives | through `ordered`, `stock`, `placed`, `operational` — allocated to a CI or free — with `faulty` as a flag beside the stage | `created` → `operational` (seen by its sources), with `drifted` (D6) and `unseen` (D5) as states it passes through |
 | Ends | `disposed`: the record stays, read-only, with its history | `retired`: when the desired record is deleted or archived; the record stays, with its history |
 | Reused | yes: the same asset is allocated to the next CI | **never**: the box that was `tappaas3` and becomes `tappaas5` is a new CI, as is a `tappaas3` added again later |
 
@@ -365,8 +368,11 @@ What v0.1 decided for assets stands, inside the CMDB:
   a `machine` for a node or a managed host, a `network-device`'s controller-managed switch or AP, a
   recorded device — is the **role** it plays for a while. A box keeps its placement, ports, cables
   and history when its role ends, and can take another.
-- **Stages.** `ordered`, `stock`, `placed`, `operational`, `faulty`, `disposed`. `placed` and
-  `operational` are derived (a placement and no role; a role); the others are recorded.
+- **Stages.** `ordered`, `stock`, `placed`, `operational`, `disposed`. `placed` and `operational`
+  are derived (a placement and no role; a role); the others are recorded. **`faulty` is a flag**,
+  not a stage: a device can be operational and faulty (a node with a failed fan, a switch with a
+  dead port), or in stock and faulty (away for repair); `asset fault` sets it with a note and
+  `asset repaired` clears it, and the Assets view and health show it beside the stage.
   Decommissioning is an event, not a stage: when a role ends, the asset falls back to `placed` or
   `stock`.
 
@@ -376,7 +382,7 @@ What v0.1 decided for assets stands, inside the CMDB:
   | `stock` | `inventory` | `stored` | `deployable` | `free` |
   | `placed` | `staged` | `stored` | `deployable` | `to deploy` |
   | `operational` | `active` | `used` | (checked out) | `in use` |
-  | `faulty` | `failed`, `offline` | – | `undeployable` | `damaged` |
+  | `faulty` (the flag) | `failed`, `offline` | – | `undeployable` | `damaged` |
   | *role ends* | `decommissioning` | – | – | `cleaned` |
   | `disposed` | – (device deleted) | `retired` | `archived` | `liquidated` |
 
@@ -446,7 +452,8 @@ The console (ADR-034) reads the CMDB for what *is*, and the managers' verbs for 
   location, room and rack, each asset labelled with the CI it is allocated to; a device panel is
   the asset with its CI beside it.
 - **Assets:** every `resource`, by stage: ordered and in stock first, then placed and unallocated,
-  then allocated, faulty, disposed; an asset's panel shows its history of allocations.
+  then allocated, then disposed, the faulty ones flagged in each; an asset's panel shows its
+  history of allocations.
 - **Modules, Environments, People, Site:** the same CIs in other cuts.
 - **Topology:** `network-manager topology` keeps its verb and output, answered from the CMDB.
 - **A CI's panel** shows its attributes and their sources, its relations, its history and drift,
@@ -536,8 +543,9 @@ incidents. iTop is the closest to IT4IT end to end (CMDB with incident, problem 
 - **Not adopt** a CMDB as the store, for the reasons v0.1 gave for assets, now stronger: the
   first node's asset is written before any module exists; a 1–5 node site would carry a second
   application and database to know itself; and every manager would depend on its API.
-- **Keep open** for O6 and O7: iTop as the incident/problem/change side and NetBox as an export
-  target, each fed from the CMDB; Keep, or Alertmanager with Karma, for event management.
+- **No export** to NetBox or iTop (O7). Event management — Keep, or Alertmanager with Karma, and
+  whether iTop takes the incident, problem and change side — is future work (O6), decided in an
+  ADR of its own on the CI ids this one gives.
 
 ### D13 — The metamodel is data; inheritance is not the table layout
 
@@ -631,25 +639,39 @@ identifying attributes; the mapping is revisited when it stabilises (`service.*`
 
 ## Open questions
 
-- **O1** Split this ADR: an umbrella (the backbone, D1) with sub-ADRs for the CMDB (D2–D6, D10–D11)
-  and the asset lifecycle (D7–D9), as the ADR-022 family does?
+- **O1** *(closed 2026-10-29, operator)* Not split for now; one ADR.
 - **O2** *(closed 2026-10-29, operator)* The store is PostgreSQL, TAPPaaS's database standard
   (D12, D13).
-- **O9** Where a module's CI class declarations live: in `<module>.json` beside `provides`, or a
-  `cmdb.json` of its own.
-- **O10** Pools as consumable resources: IT4IT's Resource is consumed — a storage pool is the
-  resource, a guest's disk an allocation from it; the same for an address range or a VLAN range.
-  The model has the class (`pool`) and the relation (`allocated-to`); nothing is built on it in
-  this ADR. When it is, storage-manager reports the pools and proxmox-controller the allocations.
-- **O3** `faulty`: a stage, or a flag next to the stage?
-- **O4** Disks: CIs of their own (they move between machines, fail and must be wiped), or attributes
-  of the asset?
-- **O5** Naming of assets the migration makes: the role's name, or a tag.
-- **O6** The event-management ADR: incidents, problems, on-call, the SIEM; which tool (D12's event
-  survey).
-- **O7** Export to NetBox or iTop for an operator who runs one.
-- **O8** How far the backbone trace reaches into Codeberg (issue state shown live in the console, or
-  only a link), within the rule of no idle load on Codeberg.
+- **O3** *(closed 2026-10-29, operator)* `faulty` is a flag beside the stage: a device can be
+  operational and faulty (D7).
+- **O4** *(closed 2026-10-29, operator)* Disks become assets and CIs of their own eventually —
+  they move between machines, fail and must be wiped — but not in the first implementation, where
+  `bootDisks[]` and a pool's member disks stay attributes of the server and the pool.
+- **O5** *(open)* Naming of the assets the migration makes, for every node, switch, AP and
+  recorded device that exists today. The name is immutable and shows wherever the asset does, long
+  after its first role. The candidates, with hrossen's boxes as examples:
+
+  | Scheme | `tappaas1` (HP Z840, serial CZC…) | the USW Pro XG 10 PoE | the ISP modem | After reuse as `tappaas5` |
+  |---|---|---|---|---|
+  | (a) the role's name | `tappaas1` | `USW Pro XG 10 PoE` | `ISP modem` | an asset called `tappaas1` runs `tappaas5` — misleading for the rest of its life |
+  | (b) model and serial | `hp-z840-czc1234abc` | `unifi-usw-pro-xg-10-poe-f4e2…` | no serial: `generic-isp-modem-1` | right, stable, unreadable in a list; fine for switches |
+  | (c) a tag per kind, numbered | `srv-01` | `sw-01` | `dev-01` | neutral; the role's name is the label the view shows; the serial is the key (D5) |
+  | (d) the role's name with a suffix | `tappaas1-box` | `usw-pro-xg-10-poe-box` | `isp-modem-box` | still says `tappaas1` |
+
+  The draft leans to **(c)**: the migration numbers in the topology's order (`srv-01` the primary
+  node), `displayName` is the role's name at migration (`tappaas1`), the serial is the key, and an
+  operator who has tags of their own renames before the migration runs (`asset add` takes any
+  name). (a) is what a one-box site expects to see; (c) with the display name gives it that.
+- **O6** *(closed 2026-10-29, operator)* Event management — incidents, problems, on-call, the
+  SIEM, which tool — is future work, an ADR of its own on this one's CI ids.
+- **O7** *(closed 2026-10-29, operator)* No export to NetBox or iTop.
+- **O8** *(closed 2026-10-29, operator)* The trace into Codeberg is a link only; no issue state is
+  fetched or shown live (no idle load on Codeberg).
+- **O9** *(closed 2026-10-29, operator)* A module declares no CI classes: they are derived from its
+  `kind` and from its service, controller and manager definitions (D3).
+- **O10** *(closed 2026-10-29, operator → an issue)* Resource allocation — a pool consumed by
+  allocations: storage, RAM, CPU, addresses, VLANs — is an ADR of its own, requested in #907.
+  This ADR leaves the class (`pool`) and the relation (`allocated-to`) in the model for it.
 
 ## Implementation plan
 
@@ -662,4 +684,4 @@ identifying attributes; the mapping is revisited when it stabilises (`service.*`
 4. The topology and the console's Physical view from the CMDB; a CI's panel with history and trace.
 5. Events carry CI ids; health status on the CI; the Operations view.
 6. Drift recorded (ADR-020's differ into the CMDB).
-7. Exports (O7); the event-management ADR (O6).
+7. Later, each in its own ADR: resource allocation (O10), event management (O6), disks as assets (O4).
