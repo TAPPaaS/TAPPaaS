@@ -184,7 +184,10 @@ export function readPhysical(configDir: string): PhysicalInputs | null {
   return {
     rooms: Object.entries(roomsOf(doc)).map(([name, r]) => ({ name, location: r.location ?? null })),
     placed: Object.keys(placementsOf(doc)),
-    recorded: recordedDevicesOf(doc).map((d) => ({ name: d.name, kind: d.asset.kind })),
+    // What nothing manages: an asset playing a node, a switch or an AP is that one.
+    recorded: recordedDevicesOf(doc)
+      .filter((d) => !(d.asset.role && ["server", "switch", "access-point"].includes(d.asset.kind)))
+      .map((d) => ({ name: d.name, kind: d.asset.kind })),
   };
 }
 
