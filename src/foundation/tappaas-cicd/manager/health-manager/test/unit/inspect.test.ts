@@ -351,6 +351,11 @@ function testLxcProbeTarget(): void {
 
   check(JSON.stringify(lxcTarget("lxc:tappaas2:631")) === JSON.stringify({ node: "tappaas2", vmid: 631 }), "lxcTarget parses node and vmid");
   check(lxcTarget("site1.mgmt.internal") === null, "a DNS name is not an LXC target");
+  // A module on cluster:lxc without `kind` (an older module JSON) is a container too.
+  writeFileSync(join(dir, "ct2.json"), JSON.stringify({ vmname: "ct2", vmid: "633", node: "tappaas1", dependsOn: ["cluster:lxc"] }));
+  c.diskUsage.set("lxc:tappaas1:633", 88);
+  const d2 = checkDiskThreshold(c, dir, "tappaas1", 80);
+  check(/ct2 \(88%\)/.test(d2.detail), `a cluster:lxc module without kind is probed through pct exec (got: ${d2.detail})`);
   check(lxcTarget("lxc:tappaas2:63x;rm") === null, "a malformed LXC target is refused");
 }
 testLxcProbeTarget();

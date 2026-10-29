@@ -55,11 +55,12 @@ export function guestTarget(configDir: string, module: string): string | null {
 }
 
 // The target a guest's probes run against: its DNS name, or for an LXC module
-// `lxc:<node>:<vmid>`, which the client reaches through `pct exec` on the node
-// it runs on (#901) — a container needs no SSH of its own, as the security scan.
+// `lxc:<node>:<vmid>` (`kind: lxc`, or a module on cluster:lxc), which the client
+// reaches through `pct exec` on the node it runs on (#901) — a container needs no SSH of its own, as the security scan.
 export function probeTarget(client: ClusterClient, configDir: string, m: ConfigModule): string | null {
   const raw = readModuleJson(join(configDir, `${m.module}.json`));
-  if (raw && configField(raw, "kind") === "lxc") {
+  const deps = raw && Array.isArray(raw.dependsOn) ? (raw.dependsOn as unknown[]) : [];
+  if (raw && (configField(raw, "kind") === "lxc" || deps.includes("cluster:lxc"))) {
     return `lxc:${client.actualNode(m.node, m.vmid) || m.node}:${m.vmid}`;
   }
   return guestTarget(configDir, m.module);

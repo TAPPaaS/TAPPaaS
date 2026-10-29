@@ -1473,7 +1473,7 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
 
     # 5. Induce cores (1→2) and memory (1024→1536) drift, plus a disk change;
     #    detect; apply; verify live (#531). A container takes cores and memory
-    #    live; its rootfs size is `manual` — reported, never resized here.
+    #    live, and its rootfs grows live (grow-only, #901).
     if [[ "${ldeep_ok}" -eq 1 ]]; then
         # Pattern A-aware write (#207).
         if jq_module_write "${TLVM}" '.cores = 2 | .memory = 1536 | .diskSize = "10G"'; then
@@ -1504,8 +1504,46 @@ if [[ "${DEEP}" -eq 1 && -n "${DEFAULT_ZONE}" ]]; then
         # shellcheck disable=SC2086,SC2029
         lmem=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct exec ${LVMID} -- free -m" 2>/dev/null | awk '/^Mem:/{print $2}') || true
         [[ "${lmem:-0}" -ge 1400 ]] && pass "the container sees the new memory (${lmem} MB)" || fail "the container sees ${lmem:-?} MB"
-        grep -q 'rootfs:.*size=8G' <<< "${lconf}" && pass "rootfs left at 8G (diskSize is manual for a container)" || fail "rootfs size changed"
-        grep -q "diskSize drift.*operator action" <<< "${lout}" && pass "…and the drift is reported for an operator" || fail "diskSize drift not reported"
+        grep -q 'rootfs:.*size=10G' <<< "${lconf}" && pass "rootfs grown live to 10G (diskSize grow-only, #901)" || fail "rootfs not grown to 10G"
+        # shellcheck disable=SC2086,SC2029
+        lfs=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct exec ${LVMID} -- df -B1G --output=size /" 2>/dev/null | tail -1 | tr -dc 0-9) || true
+        [[ "${lfs:-0}" -ge 9 ]] && pass "…and the container sees it (${lfs}G)" || fail "the container's / is ${lfs:-?}G"
+    fi
+
+    # 5b. A smaller diskSize is never a shrink: the reconcile keeps the rootfs
+    #     and config adopts the real size, as for a VM.
+    if [[ "${ldeep_ok}" -eq 1 ]]; then
+        jq_module_write "${TLVM}" '.diskSize = "8G"' >/dev/null
+        "${LUPSVC}" "${TLVM}" >/dev/null 2>&1 || true
+        # shellcheck disable=SC2086,SC2029
+        lconf=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct config ${LVMID}" 2>/dev/null) || true
+        grep -q 'rootfs:.*size=10G' <<< "${lconf}" && pass "a smaller diskSize does not shrink the rootfs" || fail "the rootfs changed on a smaller diskSize"
+        [[ "$(jq -r "[.. | objects | .diskSize? // empty][0]" "${CONFIG_DIR}/${TLVM}.json" 2>/dev/null)" == "10G" ]] \
+            && pass "…and config adopts the real size (10G)" || fail "config diskSize not adopted"
+    fi
+
+    # 5c. Automatic disk growth reaches a container (#901): fill its / past 80%
+    #     through pct exec — random data, as a ZFS subvolume neither reserves a
+    #     fallocate nor stores zeros; the update grows the rootfs +50% (10G→15G),
+    #     config with it, and the next pass leaves it alone.
+    if [[ "${ldeep_ok}" -eq 1 ]]; then
+        # shellcheck disable=SC2086,SC2029,SC2016
+        lfilled=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct exec ${LVMID} -- sh -c 'set -- \$(df -B1M --output=size,used / | tail -1); n=\$(( (\$1 * 85 + 99) / 100 - \$2 )); [ \$n -gt 0 ] && dd if=/dev/urandom of=/root/autogrow-fill bs=1M count=\$n status=none; sync; df --output=pcent / | tail -1 | tr -dc 0-9'" 2>/dev/null) || true
+        if [[ "${lfilled:-0}" -ge 80 ]]; then
+            pass "container / filled to ${lfilled}%"
+            lout="$("${LUPSVC}" "${TLVM}" 2>&1)"
+            grep -q "auto-grow ${TLVM}: diskSize 10G→15G" <<< "${lout}" && pass "auto-grow decided 10G→15G for the container" \
+                || { fail "auto-grow did not decide 10G→15G"; indent <<< "$(grep -i 'auto-grow\|resize\|disk' <<< "${lout}")"; }
+            # shellcheck disable=SC2086,SC2029
+            lconf=$(ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct config ${LVMID}" 2>/dev/null) || true
+            grep -q 'rootfs:.*size=15G' <<< "${lconf}" && pass "the rootfs is 15G live" || fail "rootfs not grown to 15G"
+            lout="$("${LUPSVC}" "${TLVM}" 2>&1)"
+            grep -q "auto-grow ${TLVM}: diskSize" <<< "${lout}" && fail "a second pass grew again" || pass "a second pass leaves it alone"
+            # shellcheck disable=SC2086,SC2029
+            ssh ${SSH_OPTS} "root@${LNODE}.${MGMT}.internal" "pct exec ${LVMID} -- rm -f /root/autogrow-fill" 2>/dev/null || true
+        else
+            fail "could not fill the container's / past 80% (${lfilled:-?}%)"
+        fi
     fi
 
     deep_cleanup_lxc
