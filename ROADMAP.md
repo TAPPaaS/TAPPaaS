@@ -108,7 +108,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 11 | – | 12 |
 | 6 | G6.2 User interface & physical view | H | L | 6 | – | 3 |
-| 6 | G6.3 Data model | M | M | 9 | – | 1 |
+| 6 | G6.3 Data model | M | M | 9 | – | 2 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
@@ -160,6 +160,7 @@ met gates are recorded in the releases that carried their waves.
 | Legal/processor | #359 | Wave 4 |
 | IPv6 | #26 — [ADR-030](docs/ADR/ADR-030%20-%20IPv6.md) **Accepted v1.0 2026-10-13**: built and on `main`; inbound verified from a phone over IPv6 via the public AAAA. Remaining outside it: public DNS that follows a dynamic WAN (#383) | #26 closable |
 | Locations and placement | [ADR-036](docs/ADR/ADR-036%20-%20Locations%20and%20Placement.md) **Accepted, built 2026-10-23** (#869–#873, migrations 0019–0022): site-manager owns locations with a primary one, every device names its location, rack-manager becomes position-manager owning every placement, the nodes are `pvehost` machines and `site.hardware.nodes` goes; steps #869–#873 | G6.3 |
+| Asset lifecycle | #906 — ADR-038 (Draft): physical assets with a lifecycle of their own, beside their role as node, switch or device; build vs adopt | G6.3 |
 | Install | #403, #377 — [ADR-037](docs/ADR/ADR-037%20-%20Install.md) **Accepted v1.2 2026-10-27**: ZFS on the boot disk by default, a module's `storage` a preference with the boot pool last (P1, live on the spare machine as a mirrored tappaas4); adding a node is two verbs — `node add` stands it up (joined, patched, rebooted), `node storage add` gives it pools; boot disks by size, model or serial, the MAC learned from the switch port, the console's Add node wizard (D4, P4a–P4d built, not yet run in a real node add); a hosted server on one IP (P2); the bootstrap ends at the console (P3). Next: Stage 2 on the spare machine, then P2 | G3.1, G3.5 |
 | User interface | #844 — [ADR-034](docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md) **Accepted v1.0 2026-10-18**, built: the console at `console.<domain>` | #844 closed |
 | Service exposure | #845 — [ADR-032](docs/ADR/ADR-032%20-%20Service%20Exposure.md) **Accepted v1.0, built** (2026-10-17): the gate authenticates machine callers (service accounts, client-credentials JWT); a module without `network:proxy` is unpublished by design, in the DMZ when it runs third-party code without user data (ADR-021 R1 amended); Jellyfin published without the gate for friends and family, hardened. all phases built (P0–P4); rate limiting is #851 | #845 closed |
@@ -267,13 +268,14 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 | #886 | console: a security view of the SIEM's alerts | M | L | **Opened 2026-10-26** from #839 P4: open alerts per node and module, read-only, linked to the SIEM. After #843 |
 | #887 | console: a status page and badges for the site's users | M | L | **Opened 2026-10-26** from #839 P4: `status.<domain>` with each published app up or down, and badges; needs gated `proxyRoutes` |
 
-### G6.3 Data model — Ease M · Risk M · released: 9 · open: 1
+### G6.3 Data model — Ease M · Risk M · released: 9 · open: 2
 
 The meta model of the configuration is written down in [`src/DATAMODEL.md`](src/DATAMODEL.md) (2026-10-22: every JSON, which field names which object, and seven places where the model says one thing twice). The operator decided to fix the first four and park the rest (#866). Where a thing is becomes two things, a location and a placement, by ADR-036 (Accepted 2026-10-23). Linked to G6.2: the console's Physical view draws what this group models.
 
 | # | Issue | Ease | Risk | Note |
 |---|-------|:-:|:-:|------|
 | #866 | Data model: parked simplifications (backup cascade, module placement, `module:service`) | – | – | **Parked** (operator, 2026-10-23): findings 5–7 of `src/DATAMODEL.md`, recorded so they are not lost |
+| #906 | Physical asset lifecycle: an asset from procured to disposed, whether or not it is a node, switch or device at the time; ports and Wi-Fi on the asset; an asset-manager beside or replacing position-manager | H | M | **Opened 2026-10-29.** ADR-038 first (Draft); build vs adopt (NetBox, Snipe-IT, …) weighed there |
 
 ## Wave 5 — live verification
 
