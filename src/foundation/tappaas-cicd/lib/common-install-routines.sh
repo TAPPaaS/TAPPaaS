@@ -519,6 +519,51 @@ module_of() {
     basename "${dir}"
 }
 
+# Where a module escrows the secrets it generates for an instance, on the
+# mothership (#902): /home/tappaas/secrets/<module>/<instance>.env, and, for a
+# secret that is not KEY=value (a token, a key), files in
+# /home/tappaas/secrets/<module>/<instance>/. In the mothership's file backup;
+# kept by `module delete --archive`, removed by `--remove`. Modules older than
+# the rule keep their flat /home/tappaas/secrets/<name>.env.
+MODULE_SECRETS_ROOT="${MODULE_SECRETS_ROOT:-/home/tappaas/secrets}"
+
+# module_secrets_file <module> <instance> — print the instance's .env path,
+# creating its directory (0700) and the file (0600) when absent.
+module_secrets_file() {
+    local module="$1" instance="$2" dir file
+    instance_name_ok "${instance}" || { error "module_secrets_file: bad instance '${instance}'"; return 1; }
+    [[ "${module}" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { error "module_secrets_file: bad module '${module}'"; return 1; }
+    dir="${MODULE_SECRETS_ROOT}/${module}"
+    file="${dir}/${instance}.env"
+    install -d -m 0700 "${dir}" || return 1
+    [[ -e "${file}" ]] || install -m 0600 /dev/null "${file}" || return 1
+    printf '%s\n' "${file}"
+}
+
+# module_secrets_dir <module> <instance> — the same for secrets kept as files:
+# print /home/tappaas/secrets/<module>/<instance>/, created 0700 when absent.
+module_secrets_dir() {
+    local module="$1" instance="$2" dir
+    instance_name_ok "${instance}" || { error "module_secrets_dir: bad instance '${instance}'"; return 1; }
+    [[ "${module}" =~ ^[a-z0-9][a-z0-9-]*$ ]] || { error "module_secrets_dir: bad module '${module}'"; return 1; }
+    dir="${MODULE_SECRETS_ROOT}/${module}/${instance}"
+    install -d -m 0700 "${MODULE_SECRETS_ROOT}/${module}" "${dir}" || return 1
+    printf '%s\n' "${dir}"
+}
+
+# module_secrets_remove <module> <instance> — drop the instance's escrow
+# (module delete --remove), and the module's directory once it is empty.
+module_secrets_remove() {
+    local module="$1" instance="$2" dir
+    instance_name_ok "${instance}" || return 1
+    [[ "${module}" =~ ^[a-z0-9][a-z0-9-]*$ ]] || return 1
+    dir="${MODULE_SECRETS_ROOT}/${module}"
+    [[ -d "${dir}" ]] || return 0
+    rm -f "${dir}/${instance}.env"
+    rm -rf "${dir:?}/${instance}"
+    rmdir "${dir}" 2>/dev/null || true
+}
+
 # instance_name_ok <name> — may config/<name>.json hold a module instance (D6.4)?
 # It must be a DNS label (the name ends up in a hostname), and not one of the
 # names config/ already uses for things that are not instances — the same set

@@ -18,7 +18,8 @@
 #                  backup entry — the module is restorable and its config keeps
 #                  "status": "archived" rather than reading as NOT RUNNING.
 #   --remove       (destructive) Remove the VM, remove its VMID from the PBS
-#                  backup job, AND delete the module config. Requires
+#                  backup job, AND delete the module config and its escrowed
+#                  secrets (/home/tappaas/secrets/<module>/<instance>). Requires
 #                  confirmation (unless --yes/--force). Intended for test VMs and
 #                  decommissioned modules. NOTE: --force implies --remove.
 #
@@ -104,7 +105,7 @@ Lifecycle mode (default: --archive):
                    PBS backup entry — restorable; the config keeps
                    status=archived.
     --remove       Remove the VM, drop its PBS backup entry, and DELETE the
-                   config. Requires confirmation (unless --yes/--force).
+                   config and its escrowed secrets. Requires confirmation (unless --yes/--force).
 
 Options:
     --vmid <id>    Target a specific VM instance by VMID (required when several
@@ -648,6 +649,16 @@ main() {
     fi
 
     info "\n${BOLD}Step 6: Remove module configuration${CL}"
+
+    # The instance's escrowed secrets (#902), while the config still names its
+    # module; --archive keeps them with the config.
+    local _owner
+    if _owner="$(module_of "${module}" 2>/dev/null)" \
+        && [[ -e "${MODULE_SECRETS_ROOT}/${_owner}/${module}.env" || -d "${MODULE_SECRETS_ROOT}/${_owner}/${module}" ]]; then
+        module_secrets_remove "${_owner}" "${module}" \
+            && info "  Removed the secrets in ${MODULE_SECRETS_ROOT}/${_owner}/ for '${module}'" \
+            || warn "  could not remove ${MODULE_SECRETS_ROOT}/${_owner}/${module}{.env,/} — remove it by hand"
+    fi
 
     if [[ -f "${module_json}" ]]; then
         rm -f "${module_json}"

@@ -20,6 +20,8 @@
   "backup": {
     "filesystemPaths": [
       "/home/tappaas/config",
+      "/home/tappaas/secrets",
+      "/home/tappaas/.loki-push",
       "/etc/secrets"
     ]
   },

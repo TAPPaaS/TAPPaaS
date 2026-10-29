@@ -105,6 +105,38 @@ come from `common-install-routines.sh`:
   print it when the call fails.
 - `--debug` on any module-manager verb shows everything.
 
+## Secrets your module generates
+
+A password, token or key your scripts generate for an instance (a database password, an admin
+login, an API token) is kept on the mothership as well as in the guest, so a rebuilt guest gets
+the same one back. It has one place:
+
+| What | Where |
+|---|---|
+| `KEY=value` secrets | `/home/tappaas/secrets/<module>/<instance>.env` |
+| secrets that are files (a token, a key) | `/home/tappaas/secrets/<module>/<instance>/` |
+
+`<module>` is your module's name and `<instance>` the instance's (its `config/<instance>.json`;
+the same as the module name unless it was installed with `--instance`). Directories are 0700,
+files 0600, owned by `tappaas`. The helpers from `common-install-routines.sh` create them that way
+and print the path:
+
+```bash
+secrets="$(module_secrets_file myapp "${INSTANCE}")"      # .../myapp/<instance>.env
+keys="$(module_secrets_dir myapp "${INSTANCE}")"          # .../myapp/<instance>/
+grep -q '^DB_PASSWORD=' "${secrets}" || printf 'DB_PASSWORD=%s\n' "$(openssl rand -hex 24)" >> "${secrets}"
+```
+
+- Generate a secret only when the file does not hold it yet: install, update and reconcile all run
+  the same code, and a secret that changes on every run locks the guest out of itself.
+- The mothership's file backup includes `/home/tappaas/secrets`, encrypted like every backup.
+- `module delete` (archive, the default) keeps them with the config; `module delete --remove`
+  deletes them.
+- Encrypting a copy to an operator's key (with `age`, say) is your module's choice; the files are
+  readable only by `tappaas` either way.
+- Never write a secret to a module config in `config/`, to a log line, or to the command line of
+  another host (`ssh host "cmd SECRET"`): pipe it on stdin.
+
 ## Going deeper
 
 The module details — every file, field and convention — are in **[README.md](README.md)**.

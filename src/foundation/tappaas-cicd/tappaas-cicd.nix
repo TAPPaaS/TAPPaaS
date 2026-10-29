@@ -701,6 +701,12 @@ in
     # The security scan's scanner databases (ADR-011): the unit's ReadWritePaths
     # names this directory, and a missing one fails the unit's namespace setup.
     "d /home/tappaas/.cache 0700 tappaas users -"
+    # Secrets the platform and the modules generate (#902): the per-instance
+    # escrow (/home/tappaas/secrets/<module>/<instance>.env) and the log push
+    # credentials. Both are in the mothership's file backup, which fails on a
+    # declared path that does not exist.
+    "d /home/tappaas/secrets 0700 tappaas users -"
+    "d /home/tappaas/.loki-push 0700 tappaas users -"
     # The backup-key escrow (ADR-012 §2.5.1) belongs to tappaas, so the sweep
     # can write it without sudo — which its NoNewPrivileges forbids. Z hands the
     # keys a root-era escrow already holds to tappaas as well; their 0600 stays.
