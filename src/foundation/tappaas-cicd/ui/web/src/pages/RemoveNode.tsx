@@ -58,7 +58,9 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
       bin: "site-manager",
       verb: "node delete",
       fixed: chosen ? [chosen] : [],
-      only: [],
+      // Offered: --remove (the record deleted rather than archived). The way
+      // (--shutdown, --erase, --lost) is stage 1's choice, set below.
+      only: ["--remove"],
       // The console's typed name before Apply is the confirmation the script
       // would otherwise ask for on a terminal: --yes is always given, not offered.
       initial: { [`--${how}`]: true, "--yes": true },
@@ -67,7 +69,7 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
       note: (
         <>
           <p>The preview says what still holds {chosen || "the node"} — a guest, a replication job, an HA rule, the site's PBS — with what moves each, and the plan. Nothing changes until Apply, and Apply is refused while anything holds it.</p>
-          <p>Apply {how === "lost" ? "removes the dead node from the cluster" : how === "erase" ? "wipes the node's disks, powers it off and removes it from the cluster" : "powers the node off and removes it from the cluster"}: pvecm delnode, its directory under /etc/pve, its storage entries and known_hosts; then its pvehost instance is archived and it leaves site.json.</p>
+          <p>Apply {how === "lost" ? "removes the dead node from the cluster" : how === "erase" ? "wipes the node's disks, powers it off and removes it from the cluster" : "powers the node off and removes it from the cluster"}: pvecm delnode, its directory under /etc/pve, its storage entries and known_hosts; then its pvehost instance is archived (listed as archived on the Modules page, its config kept under config/archived) and it leaves site.json. Tick --remove to delete that record instead, so the node disappears from the list.</p>
         </>
       ),
     }),

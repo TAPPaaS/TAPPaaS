@@ -186,7 +186,7 @@ export const HELP: HelpSpec = {
         ["<device>", "The stick, by the device name node usb <node> lists (/dev/sdb). A disk that is no USB stick, or a stick that is mounted, swap or a pool/LVM/RAID member, is refused and nothing is written."],
         ["--yes", "Required: the stick is erased. The image is /var/lib/tappaas-pxe/tappaas-usb.iso (node media prepare builds it); a new machine boots the installer from the stick once, where network boot is not an option."],
       ] },
-    { usage: "node delete <name> [--apply] [--shutdown | --erase | --lost] [--yes] [--config-only]",
+    { usage: "node delete <name> [--apply] [--shutdown | --erase | --lost] [--yes] [--remove] [--config-only]",
       options: [
         ["(default)", "Preview: what still holds the node (guests, replication, HA rules, the PBS) and the plan. Changes nothing."],
         ["--apply", "Remove it from the cluster (pvecm delnode, /etc/pve/nodes/<n>, storage entries, known_hosts); then its pvehost module is archived. Refused while anything holds it; asks for the node name."],
@@ -194,7 +194,8 @@ export const HELP: HelpSpec = {
         ["--erase", "Before the power-off: destroy its ZFS pools and wipe their disks, wipe the boot disk's partitions and partition table, delete its boot entry. Asks for ERASE as well. Implies --shutdown."],
         ["--lost", "The node is down for good: the guests the cluster still places on it are lost with it (their configs saved on the mothership first), replication jobs touching it are removed, HA rules naming it stay. Refused for a node that answers."],
         ["--yes", "With --apply: no typed confirmation (the node name, and ERASE) — for the web console, which has the node's name typed before Apply, and for a script."],
-        ["--config-only", "Only archive the node's pvehost module; the cluster is not touched."],
+        ["--remove", "Delete the node's pvehost record (config/<node>.json) instead of archiving it: the node is gone from the modules list, not listed as archived."],
+        ["--config-only", "Only archive (or with --remove, delete) the node's pvehost module; the cluster is not touched."],
       ] },
     { usage: "node reboot <name> [--apply]",
       options: [
@@ -408,14 +409,16 @@ function parseOpts(args: string[]): Opts {
 // is a foundation (site-scoped) module, which delete refuses without --force;
 // --archive keeps it an archive, and a node still some module's Host is refused
 // even so.
-function unregisterNodeModule(name: string, configDir: string): void {
+// remove: delete the record rather than archive it (module-manager delete
+// --remove): the node is gone from the modules list, not listed as archived.
+function unregisterNodeModule(name: string, configDir: string, remove = false): void {
   const cfg = `${configDir.replace(/\/$/, "")}/${name}.json`;
   if (!existsSync(cfg)) return;
   try {
     if (!String(JSON.parse(readFileSync(cfg, "utf8")).moduleSource ?? "").endsWith("/pvehost")) return;
   } catch { return; }
-  const r = spawnSync("module-manager", ["delete", name, "--archive", "--force"], { stdio: "inherit" });
-  if (r.status === 0) info(`${GN}✓${CL} its pvehost module instance is archived and unregistered`);
+  const r = spawnSync("module-manager", ["delete", name, remove ? "--remove" : "--archive", "--force"], { stdio: "inherit" });
+  if (r.status === 0) info(`${GN}✓${CL} its pvehost module instance is ${remove ? "deleted" : "archived"} and unregistered`);
   else warn(`the pvehost module instance '${name}' is still registered — module-manager delete ${name}`);
 }
 
@@ -1029,10 +1032,11 @@ function cmdNode(o: Opts, client: SiteClient): void {
     const name = o.rest[1];
     if (!name) die("node delete: expected <name>");
     const inSite = clusterNode(nodesDir, name) !== null;
+    const remove = o.boolFlags.has("--remove");
 
     if (o.boolFlags.has("--config-only")) {
       if (!inSite) die(`node '${name}' not found (site-manager node list)`);
-      unregisterNodeModule(name, nodesDir);
+      unregisterNodeModule(name, nodesDir, remove);
       return;
     }
 
@@ -1053,10 +1057,10 @@ function cmdNode(o: Opts, client: SiteClient): void {
     const rc = r.status ?? -1;
     if (rc !== 0) die(`remove-node.sh exited ${rc} — the node's pvehost module is unchanged`);
     if (!o.apply) {
-      if (inSite) info(`  then: its pvehost module '${name}' is archived`);
+      if (inSite) info(`  then: its pvehost module '${name}' is ${remove ? "deleted (--remove)" : "archived"}`);
       return;
     }
-    unregisterNodeModule(name, nodesDir);
+    unregisterNodeModule(name, nodesDir, remove);
     // A node rebuilt under this name brings a new host key: no stale pin here.
     for (const h of [name, `${name}.mgmt.internal`]) spawnSync("ssh-keygen", ["-R", h], { stdio: "ignore" });
     return;

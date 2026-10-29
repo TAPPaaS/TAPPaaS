@@ -47,7 +47,7 @@ node               node list [--json]
                    node storage add <node> <pool> --disks <d,d> --layout single|mirror|raidz1|raidz2 [--wipe]
                    node usb <node> [--json]
                    node usb write <node> <device> --yes
-                   node delete <name> [--apply] [--shutdown|--erase|--lost] [--yes]
+                   node delete <name> [--apply] [--shutdown|--erase|--lost] [--yes] [--remove]
                                [--config-only]
                    node reconcile [--apply]
                    node qdevice add <host> [--user <u>] [--force] | remove | status
