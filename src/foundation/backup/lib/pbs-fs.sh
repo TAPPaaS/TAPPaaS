@@ -240,8 +240,11 @@ pbs_fs_consumers() {
     for j in "${PBS_FS_CONFIG_DIR}"/*.json; do
         [[ -f "${j}" ]] || continue
         name="$(basename "${j}" .json)"
-        jq -e '((.dependsOn // []) + (.integratesWith // []))
-               | index("backup:filesystem")' "${j}" >/dev/null 2>&1 \
+        # An archived module has no guest to capture (its config is kept for a
+        # restore): not a consumer.
+        jq -e '(((.status // "") | ascii_downcase) != "archived")
+               and (((.dependsOn // []) + (.integratesWith // []))
+                    | index("backup:filesystem") != null)' "${j}" >/dev/null 2>&1 \
             && printf '%s\n' "${name}"
     done
 }
