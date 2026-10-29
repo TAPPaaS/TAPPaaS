@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Draft** |
-| **Version** | 0.3 |
+| **Version** | 0.4 |
 | **Date** | 2026-10-29 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #906. Amends ADR-036 D3 (who owns a placement, and what it hangs on) and D4 (the topology becomes a view of the CMDB); ADR-007f (a new controller, cmdb-controller, that every manager reports to); ADR-034 (the console's views read the CMDB). Related: ADR-020 (desired, actual and drift), ADR-022 family (the vocabulary of CI classes), ADR-022c (ArchiMate Node and Device), ADR-026 (machines as modules), ADR-028 and ADR-033 (releases), ADR-035 (manager rename and aliases), ADR-037 D4 (adding a node). |
-| **Changelog** | v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
+| **Changelog** | v0.4 (2026-10-29) — **operator's direction:** IT4IT keeps assets (its Resource) apart from the Actual Product Instance, but the industry tracks assets in the CMDB, and so does TAPPaaS: **resources stand beside CIs** in one store, with relations between them (D3's root has `ci`, `resource` and `place`), and **two lifecycles** are kept apart (D7): the asset's (ordered → disposed, reusable) and the CI's (created from its desired record, retired with it, never reused — the same box as `tappaas5` is a new CI). A pool consumed by allocations (storage, addresses) is a resource the model allows and this ADR does not build (O10). **The store is PostgreSQL**, TAPPaaS's database standard (D12, D13; O2 closed). Figure 3-6's nine objects read from the standard's source: the five backbone objects and the four of the Service Offering Backbone. · v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
 
 TAPPaaS knows well what a site *should* be: the modules and their dependencies, the releases, and
 the desired configuration in `config/*.json`. It knows poorly what a site *is*: that is asked live
@@ -18,9 +18,10 @@ that plays no role is not known at all.
 This ADR lines TAPPaaS's lifecycle up with the **IT4IT Digital Product Backbone**, from the idea of a module
 to the thing that is running, and gives the last stage, the **actual** state, a home: a
 configuration management database (**CMDB**), kept by a **cmdb-controller** that every manager
-reports what it sees and what it changes to. A physical **asset** is one kind of object in it;
-modules, guests, zones, environments, users and the site are others. The console's Physical view
-becomes one view of the CMDB, filtered on `physical`.
+reports what it sees and what it changes to. A physical **asset** stands in it beside the
+configuration items — modules, guests, nodes, zones, environments, users, the site — with its own
+lifecycle and a relation to the CI it is allocated to. The console's Physical view becomes one view
+of the CMDB, filtered on `physical`; the Assets view another.
 
 ## Context
 
@@ -30,9 +31,9 @@ The Open Group IT4IT™ Standard, Version 3.0.1 (2024) follows a **Digital Produ
 **Digital Product Backbone**: the key data objects that "annotate an aspect of the Digital Product
 model in its planning, development, consumable, or running state" — the Digital Product, the
 Product Design, the Product Release, the Desired Product Instance and the Actual Product Instance
-(§11.7.8, p. 234; Figure 3-6 expands them to nine — the figure is not in the text, so which four
-join them, likely the Requirement, the Product Backlog Item, the Product Release Blueprint and the
-Build Package, is read from the chapters, not from it). Each is controlled by one functional
+(§11.7.8, p. 234; the "nine data objects" of Figure 3-6 are these five and the four of the Service
+Offering Backbone — Service Offering, Subscription, Chargeback Contract, Service Contract — as the
+figure in the standard's source shows). Each is controlled by one functional
 component and linked to the one before, so that anything running can be traced back to why it
 exists. IT4IT 2.1 called the chain the Service Model Backbone (conceptual, logical, desired and
 actual service):
@@ -97,7 +98,7 @@ before:
 | Product Release, with its Blueprint | a **module release** (the module JSON at a version; its services and fields the blueprint), grouped in a **repository release** | the repository's tags and `releases.json` | the design at that version |
 | Desired Product Instance | a **desired record** (`config/<instance>.json`, `zones.json`, …) | `config/`, by the managers | its module and the release the site runs |
 | Actual Product Instance | its **configuration items (CIs)** | **the CMDB** (D2) | its desired record, where it has one |
-| Resource | a physical **asset** (D7), allocated to a desired record through the role it plays, or free | the CMDB | the desired record of its role |
+| Resource (beside the backbone: "allocated to a Digital Product, or … unallocated") | a physical **asset** (D7), allocated to a CI — the node or device it is for the time being — or free | the CMDB, beside the CIs | the CI it is allocated to, and through it the desired record |
 
 Nothing in the first four changes owner or format. What is new is the fifth, and that every CI
 carries the trace upward: a running guest → `config/nextcloud.json` → nextcloud 3.4.1 in TAPPaaS
@@ -138,53 +139,63 @@ branches into `BusinessElement`, `InfrastructureElement` (`Node`, `NodeElement`,
 classes deep — but TAPPaaS's is small: one level of abstract classes, and leaves that are the
 words the ADR-022 family and `GLOSSARY.md` already fix.
 
+The root has three branches. A **`ci`** is what IT4IT's Actual Product Instance is made of: it
+exists because a desired record exists, and ends with it. A **`resource`** is IT4IT's Resource —
+"an asset or other entity that is limited in nature … allocated to a Digital Product, or
+unallocated" — which the standard keeps in its own functional component and the industry's CMDBs
+keep in the same store as the CIs; TAPPaaS does the latter, and keeps the two apart by class, not by
+store. A **`place`** is where either stands.
+
 ```
-object                      id, class, name, displayName, description, sources[], firstSeen, lastSeen
-└─ ci                       stage, desired (config file and key), release (module, version), health, physical
-   ├─ place                 physical
-   │   ├─ location          the site's locations (ADR-036 D1): address, timezone
-   │   ├─ room
-   │   └─ rack              units, width, numbering
-   ├─ asset                 physical; vendor, model, serial, assetTag, procurement, disposal (D7)
-   │   ├─ server            bmc, bootDisks
-   │   ├─ network-device    switch, access-point: the controller that manages it
-   │   ├─ appliance         modem, ont, ups
-   │   ├─ passive-device    patch-panel, pdu
-   │   └─ other-device
-   ├─ port                  physical; kind, mac, speed, side (D9)
-   ├─ node                  something that runs software (ArchiMate Node, ADR-022c): os, address
-   │   ├─ machine           a cluster member or a managed host (ADR-026); runs on an asset
-   │   └─ guest             vm, lxc: vmid, cores, memory
-   ├─ software
-   │   ├─ module-instance   the instance of a module (its desired record is config/<name>.json)
-   │   ├─ service           <module>:<service>
-   │   ├─ controller
-   │   └─ manager
-   ├─ network-element
-   │   ├─ zone              vlan, subnet, tier
-   │   ├─ ssid
-   │   ├─ address
-   │   ├─ dns-name
-   │   ├─ proxy-route
-   │   └─ vpn-peer
-   ├─ storage-element
-   │   ├─ storage-pool
-   │   ├─ share
-   │   ├─ datastore
-   │   └─ backup-peer
-   ├─ party                 (UCMDB's word; ADR-007a's objects)
-   │   ├─ organization
-   │   ├─ group
-   │   ├─ user
-   │   └─ role
-   └─ collection
-       ├─ site
-       ├─ cluster
-       └─ environment
+object                      id, class, name, displayName, description, sources[], firstSeen, lastSeen, physical
+├─ ci                       stage (D7: created, operational, drifted, unseen, retired), desired (config file and key), release (module, version), health
+│  ├─ node                  something that runs software (ArchiMate Node, ADR-022c): os, address
+│  │  ├─ machine           a cluster member or a managed host (ADR-026); allocated an asset
+│  │  └─ guest             vm, lxc: vmid, cores, memory
+│  ├─ software
+│  │  ├─ module-instance   the instance of a module (its desired record is config/<name>.json)
+│  │  ├─ service           <module>:<service>
+│  │  ├─ controller
+│  │  └─ manager
+│  ├─ network-element
+│  │  ├─ zone              vlan, subnet, tier
+│  │  ├─ ssid
+│  │  ├─ address
+│  │  ├─ dns-name
+│  │  ├─ proxy-route
+│  │  └─ vpn-peer
+│  ├─ storage-element
+│  │  ├─ storage-pool
+│  │  ├─ share
+│  │  ├─ datastore
+│  │  └─ backup-peer
+│  ├─ party                 (UCMDB's word; ADR-007a's objects)
+│  │  ├─ organization
+│  │  ├─ group
+│  │  ├─ user
+│  │  └─ role
+│  └─ collection
+│     ├─ site
+│     ├─ cluster
+│     └─ environment
+├─ resource                 stage (D7: ordered … disposed), allocated-to (a ci, or none)
+│  ├─ asset                 physical; vendor, model, serial, assetTag, procurement, disposal
+│  │  ├─ server            bmc, bootDisks
+│  │  ├─ network-device    switch, access-point: the controller that manages it
+│  │  ├─ appliance         modem, ont, ups
+│  │  ├─ passive-device    patch-panel, pdu
+│  │  └─ other-device
+│  ├─ port                  physical; kind, mac, speed, side (D9); part of an asset
+│  └─ pool                  a consumable: capacity, and what is taken from it (O10; no leaves yet)
+└─ place                    physical
+   ├─ location              the site's locations (ADR-036 D1): address, timezone
+   ├─ room
+   └─ rack                  units, width, numbering
 ```
 
 A query for a class answers for its subclasses too: "every `asset`" lists servers and switches;
-"every `ci` that is `physical`" is the Physical view (D10). A class's attributes are declared the
+"every `object` that is `physical`" is the Physical view, "every `resource`" the Assets view
+(D10). A class's attributes are declared the
 way a service declares its fields (ADR-020, `fields.json`): name, type, required, immutable,
 which of them are **keys** (D5) and which **identify** the CI in telemetry (D14). A relation type
 is declared with the classes it may join and its cardinality, and inherits the same way
@@ -197,8 +208,10 @@ add a root. Relations are typed, and each is reported by the manager that knows 
 
 | Relation | Example |
 |---|---|
-| `runs-on` | guest → node; module-instance → guest; node → asset |
-| `placed-in`, `at` | asset → rack / room; room → location |
+| `allocated-to` | resource → ci: asset → machine (the box this node runs on, for now); later a pool's allocation → guest (O10) |
+| `runs-on` | guest → node; module-instance → guest |
+| `part-of` | port → asset |
+| `placed-in`, `at` | asset → rack / room; room → location; ci → location (a machine's, through its asset; a satellite's, recorded) |
 | `connects` | port ↔ port (a cable, seen or recorded); port → ssid (Wi-Fi) |
 | `member-of` | node → cluster; user → group; address → zone |
 | `depends-on`, `provides` | module-instance → service (from `dependsOn`/`provides`) |
@@ -231,7 +244,9 @@ every existing interrogation reports what it already reads; no new polling is ad
 
 ### D5 — Identity: one thing, one CI
 
-The controller matches each report to an existing CI by the class's keys, strongest first:
+The controller matches each report to an existing object by the class's keys, strongest first,
+among the objects that are not retired or disposed — a retired CI's name may be taken again by a
+new one (D7):
 
 | Class | Keys |
 |---|---|
@@ -255,14 +270,30 @@ an observation that differs from the last one with no change behind it is **drif
 the CI with its desired reference (ADR-020's differ supplies the comparison) and shown until the
 next reconcile or modify clears it.
 
-### D7 — An asset is a physical CI with a life of its own
+### D7 — Two lifecycles: the asset's and the CI's
 
-What v0.1 decided for assets stands, now inside the CMDB:
+An asset and the CI it serves have lives of their own, and the CMDB keeps both:
 
-- **Asset and role.** An asset is the physical thing (`physical: true`); a node, a machine module, a
-  switch or AP in the switch configuration, a recorded device is a **role** it plays for a while,
-  linked by `runs-on` (node → asset). A box keeps its placement, ports, cables and history when its
-  role ends, and can take another (`tappaas3` deleted, the box becomes `tappaas5`).
+| | Asset (a `resource`) | CI |
+|---|---|---|
+| Begins | when bought or found: `asset add`, or the installer's or a controller's report (D8) | when its desired record is written: `node add`, `module add`, `add-switch` … — IT4IT: the Configuration component "shall create Actual Product Instance(s) … based on the Desired Product Instance" |
+| Lives | through `ordered`, `stock`, `placed`, `operational`, `faulty` — allocated to a CI or free | `created` → `operational` (seen by its sources), with `drifted` (D6) and `unseen` (D5) as states it passes through |
+| Ends | `disposed`: the record stays, read-only, with its history | `retired`: when the desired record is deleted or archived; the record stays, with its history |
+| Reused | yes: the same asset is allocated to the next CI | **never**: the box that was `tappaas3` and becomes `tappaas5` is a new CI, as is a `tappaas3` added again later |
+
+The example from #906, in these terms: a machine is bought (an asset, `ordered`, no CI); racked
+(`placed`); `node add tappaas3` writes `tappaas3.json`, the CI `tappaas3` is created and the asset
+**allocated to** it (`operational`, on both); `node delete tappaas3` retires the CI, and the asset
+is unallocated and back to `placed`, still in its rack; `node add tappaas5 --asset …` creates a new
+CI and allocates the same asset to it. "What has this box been" is the asset's history of
+allocations; "what happened to tappaas3" is the retired CI's history. Neither record is deleted.
+
+What v0.1 decided for assets stands, inside the CMDB:
+
+- **Asset and role.** An asset is the physical thing (`physical: true`); the CI it is allocated to —
+  a `machine` for a node or a managed host, a `network-device`'s controller-managed switch or AP, a
+  recorded device — is the **role** it plays for a while. A box keeps its placement, ports, cables
+  and history when its role ends, and can take another.
 - **Stages.** `ordered`, `stock`, `placed`, `operational`, `faulty`, `disposed`. `placed` and
   `operational` are derived (a placement and no role; a role); the others are recorded.
   Decommissioning is an event, not a stage: when a role ends, the asset falls back to `placed` or
@@ -318,8 +349,11 @@ asset.
 
 The console (ADR-034) reads the CMDB for what *is*, and the managers' verbs for what to change:
 
-- **Physical** (the Assets view): CIs with `physical: true`, by location, room and rack, with stock
-  and ordered assets in a tray; a device panel is the asset's CI.
+- **Physical:** every object with `physical: true` — assets, their ports, rooms and racks — by
+  location, room and rack, each asset labelled with the CI it is allocated to; a device panel is
+  the asset with its CI beside it.
+- **Assets:** every `resource`, by stage: ordered and in stock first, then placed and unallocated,
+  then allocated, faulty, disposed; an asset's panel shows its history of allocations.
 - **Modules, Environments, People, Site:** the same CIs in other cuts.
 - **Topology:** `network-manager topology` keeps its verb and output, answered from the CMDB.
 - **A CI's panel** shows its attributes and their sources, its relations, its history and drift,
@@ -393,11 +427,13 @@ incidents. iTop is the closest to IT4IT end to end (CMDB with incident, problem 
 
 **Decision: build cmdb-controller, borrow the models.**
 
-- **Build** a small cmdb-controller in TypeScript, like the managers, on **SQLite** on
-  `tappaas-cicd`: one writer (the controller), tables for CIs, relations and their history
-  (valid-from, valid-to), recursive queries for impact. It exists at install, needs no further VM,
-  and is backed up with `tappaas-cicd`. The schema is kept portable to PostgreSQL if a site
-  outgrows SQLite (O2).
+- **Build** a small cmdb-controller in TypeScript, like the managers, on **PostgreSQL** on
+  `tappaas-cicd` (`services.postgresql`, a database of its own): one writer (the controller),
+  tables for objects, relations and their history (valid-from, valid-to), recursive queries for
+  impact. PostgreSQL is TAPPaaS's database standard — identity, nextcloud, immich, euro-office,
+  openwebui and litellm each run one — so it adds a known service, not a new kind. It exists from
+  the bootstrap, needs no further VM, and its dump is in `tappaas-cicd`'s `backup:filesystem`
+  paths. SQLite was considered for its size and rejected for consistency with the estate (O2).
 - **Borrow:** IT4IT 3.0.1's backbone objects and the Configuration component's duties (D1, D2);
   UCMDB's shape — one root, abstract classes, inheritance, keys per class, relations as typed links
   — without its size (D3, D13); CIM's typed associations as the vocabulary of relations
@@ -428,22 +464,25 @@ So the **metamodel is stored as data**, and the controller enforces it:
 | `class_ancestor` | the transitive closure (class, ancestor, depth), rebuilt when the metamodel loads: the inheritance, as a join |
 | `attribute_def` | class, name, type, required, immutable, key, identifying, description |
 | `relation_type` | name, parent, from class, to class, cardinality, description |
-| `ci` | id, class, name, display name, created, retired — the core columns every object has |
-| `ci_attribute` | ci, name, value (JSON), source, **valid from, valid to** — one row per value per period |
-| `relation` | id, type, from ci, to ci, attributes (JSON), source, valid from, valid to |
-| `change` | job, verb, actor, time, the CIs and relations it touched (D6) |
+| `object` | id, class, name, display name, created, ended — the core columns every object has (CI, resource and place alike) |
+| `attribute` | object, name, value (JSONB), source, **validity** (a `tstzrange`) — one row per value per period; an exclusion constraint keeps one object's periods for one attribute from overlapping |
+| `relation` | id, type, from object, to object, attributes (JSONB), source, validity |
+| `change` | job, verb, actor, time, the objects and relations it touched (D6) |
 
-A CI "is a `server`" is one row in `ci`; "every asset" is `ci` joined with `class_ancestor` on
-`ancestor = 'asset'`; "the current value" is the `ci_attribute` row with `valid_to` null, and the
-value on a date is the row whose period holds it. An attribute's type, whether it is required and
+An asset "is a `server`" is one row in `object`; "every asset" is `object` joined with
+`class_ancestor` on `ancestor = 'asset'`; "the current value" is the `attribute` row whose range is
+open at the upper end, and the value on a date is the row whose range contains it (`@>`). An
+attribute's type, whether it is required and
 whether it may change are checked by cmdb-controller against `attribute_def` for the CI's class and
 its ancestors before the row is written — **the schema check moves from the database's DDL into
 the controller**, where it can read the declaration. Adding a class, an attribute or a relation
 type is rows in the metamodel tables (a module declares them, module-manager registers them,
 ADR-035); only the eight tables above are DDL, and only their change is an ADR-025 migration.
-Indexes on (`name`, `value`) in `ci_attribute` and on both ends of `relation` carry the queries;
-impact and "within two hops" are recursive queries over `relation`. The layout is plain SQL and
-moves to PostgreSQL unchanged (O2).
+Indexes on (`name`, `value`) in `attribute` (a GIN index on the JSONB) and on both ends of
+`relation` carry the queries; impact and "within two hops" are recursive queries over `relation`.
+The layout is plain SQL: PostgreSQL's ranges, exclusion constraints and JSONB are the only things
+used beyond it, and a graph extension (Apache AGE) can be added over the same tables if the
+queries ever need one.
 
 ### D14 — OpenTelemetry carries the CI's identity
 
@@ -478,9 +517,9 @@ identifying attributes; the mapping is revisited when it stabilises (`service.*`
   position-manager is renamed asset-manager.
 - ADR-036 D3 is amended (asset-manager, placement on the asset) and D4 (the topology is a view of
   the CMDB). ADR-007f gains cmdb-controller and the reporting rule. ADR-034's views read the CMDB.
-- `src/DATAMODEL.md` gains the actual layer; `GLOSSARY.md` gains CI, CMDB, asset, role, observation,
+- `src/DATAMODEL.md` gains the actual layer; `GLOSSARY.md` gains CI, CMDB, resource, asset, allocation, role, observation,
   drift and the backbone's five stages.
-- `tappaas-cicd` carries a database and a service it did not before, backed up with it.
+- `tappaas-cicd` carries a PostgreSQL database and a service it did not before, backed up with it.
 
 ## Alternatives considered
 
@@ -501,10 +540,14 @@ identifying attributes; the mapping is revisited when it stabilises (`service.*`
 
 - **O1** Split this ADR: an umbrella (the backbone, D1) with sub-ADRs for the CMDB (D2–D6, D10–D11)
   and the asset lifecycle (D7–D9), as the ADR-022 family does?
-- **O2** The store: SQLite (D12, D13), or PostgreSQL from the start for its temporal ranges and
-  exclusion constraints and a later graph extension (Apache AGE). D13's layout works on both.
+- **O2** *(closed 2026-10-29, operator)* The store is PostgreSQL, TAPPaaS's database standard
+  (D12, D13).
 - **O9** Where a module's CI class declarations live: in `<module>.json` beside `provides`, or a
   `cmdb.json` of its own.
+- **O10** Pools as consumable resources: IT4IT's Resource is consumed — a storage pool is the
+  resource, a guest's disk an allocation from it; the same for an address range or a VLAN range.
+  The model has the class (`pool`) and the relation (`allocated-to`); nothing is built on it in
+  this ADR. When it is, storage-manager reports the pools and proxmox-controller the allocations.
 - **O3** `faulty`: a stage, or a flag next to the stage?
 - **O4** Disks: CIs of their own (they move between machines, fail and must be wiped), or attributes
   of the asset?
@@ -517,8 +560,8 @@ identifying attributes; the mapping is revisited when it stabilises (`service.*`
 
 ## Implementation plan
 
-1. cmdb-controller, its eight tables and the metamodel of D3 loaded as data (D13), the `cmdb` CLI
-   and `lib/ts` client; `cmdb rescan`.
+1. cmdb-controller on PostgreSQL in `tappaas-cicd`, its eight tables and the metamodel of D3 loaded
+   as data (D13), the `cmdb` CLI and `lib/ts` client; `cmdb rescan`.
 2. Reports from the existing interrogations: site-manager, module-manager, network-manager,
    switch-manager, ap-manager, identity-manager; identity matching; history.
 3. asset-manager (rename, alias), the migration of `positions.json`, assets for every existing node,
