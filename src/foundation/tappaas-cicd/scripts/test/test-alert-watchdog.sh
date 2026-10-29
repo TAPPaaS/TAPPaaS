@@ -50,17 +50,18 @@ ck "…and nothing on stderr (no state file is the healthy case)" "" \
    "$(TAPPAAS_ALERT_HEARTBEAT="${TMP}/hb" TAPPAAS_ALERT_WATCHDOG_STATE="${TMP}/state" TAPPAAS_NOTIFY_CMD="${TMP}/notify" \
       TAPPAAS_ALERT_BREADCRUMB="${TMP}/crumbs" TAPPAAS_NOW=$((T + 60)) bash "${W}" 2>&1 >/dev/null)"
 ck "36 minutes: stale, one notice" "0 1" "$(run $((T + 2160))) $(mails)"
-ck "…saying alerting is down" "ALERT: log alerting is down" "$(tail -1 "${TMP}/subjects" | cut -d' ' -f1-5)"
-ck "…and that Loki does not answer" "Loki does not answer" "$(tail -1 "${TMP}/subjects" | sed 's/.* — //; s/ (no heartbeat.*//')"
+ck "…saying alerting is down" "ALERT: log alerting is down:" "$(tail -1 "${TMP}/subjects" | cut -d' ' -f1-5)"
+ck "…in ASCII (site-notify blanks anything else)" "" "$(LC_ALL=C grep -n '[^ -~]' "${TMP}/subjects")"
+ck "…and that Loki does not answer" "Loki does not answer" "$(tail -1 "${TMP}/subjects" | sed 's/^ALERT: log alerting is down: //; s/ (no heartbeat.*//')"
 ck "still stale an hour later: no second mail" "0 1" "$(run $((T + 10900))) $(mails)"
 printf '' > "${TMP}/probe"
 ck "still stale a day later: reminded once" "0 2" "$(run $((T + 2160 + 86400))) $(mails)"
 ck "…naming the cause as it is now (the VM does not answer)" "the logging VM does not answer" \
-   "$(tail -1 "${TMP}/subjects" | sed 's/.* — //; s/ (no heartbeat.*//')"
+   "$(tail -1 "${TMP}/subjects" | sed 's/^ALERT: log alerting is down: //; s/ (no heartbeat.*//')"
 
 touch "${TMP}/hb"; T2="$(date -r "${TMP}/hb" +%s)"
 ck "the heartbeat returns: resolved" "0 3" "$(run $((T2 + 30))) $(mails)"
-ck "…saying it is back" "RESOLVED: log alerting is back" "$(tail -1 "${TMP}/subjects" | cut -d' ' -f1-5)"
+ck "…saying it is back" "RESOLVED: log alerting is back (heartbeat" "$(tail -1 "${TMP}/subjects" | cut -d' ' -f1-6)"
 ck "…and the state is cleared" "no" "$([[ -e ${TMP}/state ]] && echo yes || echo no)"
 ck "fresh afterwards: quiet" "0 3" "$(run $((T2 + 90))) $(mails)"
 printf 'loki=ok\ngrafana=ok\n' > "${TMP}/probe"
@@ -70,13 +71,13 @@ ck "stale, but the notice does not go out: exit 1" "1 3" "$(run $((T2 + 7300))) 
 ck "…and nothing recorded, so it is retried" "no" "$([[ -e ${TMP}/state ]] && echo yes || echo no)"
 rm -f "${TMP}/fail"
 ck "the retry goes out" "0 4" "$(run $((T2 + 7400))) $(mails)"
-ck "…both answer: the subject says so" "Loki and Grafana answer" "$(tail -1 "${TMP}/subjects" | sed 's/.* — //; s/ (no heartbeat.*//')"
+ck "…both answer: the subject says so" "Loki and Grafana answer" "$(tail -1 "${TMP}/subjects" | sed 's/^ALERT: log alerting is down: //; s/ (no heartbeat.*//')"
 
 touch "${TMP}/hb"; T3="$(date -r "${TMP}/hb" +%s)"
 ck "back again: resolved" "0 5" "$(run $((T3 + 30))) $(mails)"
 printf 'loki=ok\ngrafana=down\n' > "${TMP}/probe"
 ck "Grafana down: one notice" "0 6" "$(run $((T3 + 2200))) $(mails)"
-ck "…naming Grafana" "Grafana does not answer" "$(tail -1 "${TMP}/subjects" | sed 's/.* — //; s/ (no heartbeat.*//')"
+ck "…naming Grafana" "Grafana does not answer" "$(tail -1 "${TMP}/subjects" | sed 's/^ALERT: log alerting is down: //; s/ (no heartbeat.*//')"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

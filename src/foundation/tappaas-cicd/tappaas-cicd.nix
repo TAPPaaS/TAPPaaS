@@ -481,7 +481,7 @@ in
   };
 
   # The alerting watches itself (#126): Grafana's Heartbeat rule reaches the
-  # receiver every 15 minutes while logs flow and rules run; this timer — here,
+  # receiver every 10 minutes while logs flow and rules run; this timer — here,
   # not on the logging VM it watches — mails when that stops for 35 minutes,
   # naming what does not answer (#905), so a dead logging VM, Grafana, Loki or
   # token cannot leave the site silently unwatched.

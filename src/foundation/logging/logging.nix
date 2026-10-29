@@ -918,14 +918,17 @@ in
             group_interval = "5m";
             repeat_interval = "4h";
             routes = [{
-              # The heartbeat: every 15 minutes, never grouped with anything
-              # else. The receiver records it; the watchdog mails if it stops.
+              # The heartbeat: every 10 minutes, never grouped with anything
+              # else. Repeats leave at the 5-minute group ticks, so a beat can
+              # come up to 15 minutes after the last: the watchdog's 35 then
+              # rides out one missed beat. The receiver records it; the
+              # watchdog mails if it stops.
               receiver = "tappaas-site-notify";
               object_matchers = [ [ "alertname" "=" "Heartbeat" ] ];
               group_by = [ "alertname" ];
               group_wait = "0s";
               group_interval = "5m";
-              repeat_interval = "15m";
+              repeat_interval = "10m";
             } {
               # Disk errors: once a day is enough (operator, 2026-10-04).
               receiver = "tappaas-site-notify";

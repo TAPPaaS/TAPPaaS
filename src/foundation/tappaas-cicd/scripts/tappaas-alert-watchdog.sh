@@ -10,7 +10,7 @@
 # VM it watches — and mails through site-notify.sh, the path a failed sweep
 # uses (#651), when the heartbeat goes stale:
 #
-#   stale (older than MAX_AGE)  "ALERT: log alerting is down — <cause> …", once,
+#   stale (older than MAX_AGE)  "ALERT: log alerting is down: <cause> (…)", once,
 #                               then again once a day while it lasts
 #   fresh again                 "RESOLVED: log alerting is back"
 #
@@ -30,7 +30,7 @@
 #   TAPPAAS_ALERT_HEARTBEAT   heartbeat file   (default /var/lib/tappaas/alert-heartbeat)
 #   TAPPAAS_ALERT_WATCHDOG_STATE  state file   (default /var/lib/tappaas/alert-watchdog.state)
 #   TAPPAAS_ALERT_MAX_AGE     seconds before stale (default 2100: the heartbeat repeats every
-#                             15 minutes, so two missed ones and a little slack)
+#                             10 minutes, at most 15 apart, so one missed one stays quiet)
 #   TAPPAAS_ALERT_REPEAT      seconds between repeat notices while down (default 86400)
 #   TAPPAAS_NOTIFY_CMD        the mailer (default /home/tappaas/bin/site-notify.sh)
 #   TAPPAAS_BUNDLE_CMD        the support bundle (default /home/tappaas/bin/tappaas-support-bundle.sh)
@@ -85,6 +85,7 @@ cause() {  # what stopped, in a few words
     fi
 }
 
+# Subjects stay ASCII: site-notify.sh turns every other byte into a space.
 notice() {  # notice <subject> [site-notify options…] — body on stdin
     local subject="$1"; shift
     "${NOTIFY}" --subject "${subject}" --what "alert-watchdog" --breadcrumb "${BREADCRUMB}" --key alert-watchdog "$@"
@@ -104,7 +105,7 @@ if (( age > MAX_AGE )); then
               2>/dev/null | tail -n 1)"
         [[ -f "${b}" ]] && attach=(--attach "${b}")
     fi
-    if notice "ALERT: log alerting is down — ${why%%:*} (no heartbeat since ${when})" ${attach[@]+"${attach[@]}"} <<EOF
+    if notice "ALERT: log alerting is down: ${why%%:*} (no heartbeat since ${when})" ${attach[@]+"${attach[@]}"} <<EOF
 On the logging VM: ${why}.
 
 The logging module's alert rules have not reported in for $(( age / 60 )) minutes
@@ -130,7 +131,7 @@ EOF
 fi
 
 if [[ -n "${down_since}" ]]; then
-    if notice "RESOLVED: log alerting is back — heartbeat ${when}" --resolve <<EOF
+    if notice "RESOLVED: log alerting is back (heartbeat ${when})" --resolve <<EOF
 The logging module's alert rules are reporting again (heartbeat ${when}),
 after $(( (NOW - down_since) / 60 )) minutes without. Log conditions raise alerts again.
 

@@ -279,7 +279,7 @@ in `config/alerts.log` on the mothership.
   carries Loki's and Grafana's logged query texts, which an unanchored all-hosts rule
   matches (OomKill did, until it was anchored).
 - **The alerting watches itself.** `Heartbeat` fires while logs arrive and rules run;
-  its webhook, every 15 minutes, proves the whole path to the mothership. The receiver
+  its webhook, every 10 minutes, proves the whole path to the mothership. The receiver
   records it in `/var/lib/tappaas/alert-heartbeat` and mails nothing. A timer on the
   mothership, `tappaas-alert-watchdog` (every 5 minutes), mails "log alerting is down"
   when the heartbeat is 35 minutes old — so a dead logging VM, Grafana, Loki or a token
