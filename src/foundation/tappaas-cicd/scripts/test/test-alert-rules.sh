@@ -106,6 +106,8 @@ ck(g["uid"] == "hosting-sig-rejected" and g["ruleGroup"] == "module-hosting" and
 ck(g["labels"] == {"kind": "event", "module": "hosting", "bundle": "true", "lines": "true"}, f"labels ({g['labels']})")
 ck(g["annotations"]["headline"] == "Signature rejected" and g["annotations"]["mailSubject"] == "{state}: {title}", "headline and mail template travel as annotations")
 ck(g["annotations"]["query"] == '{host=~"^(site1)$"} |~ "tappaas-site: signature rejected"', f"the Explore query ({g['annotations']['query']})")
+ck(g["annotations"]["linesQuery"] == '{host="__HOST__"} |~ "tappaas-site: signature rejected"' and g["annotations"]["linesWindow"] == "300", f"include lines carries the per-host lines query ({g['annotations'].get('linesQuery')})")
+ck(errs({**ok, "absent": True, "include": ["lines"]}) != [], "include lines is refused on an absent rule")
 ck(g["notification_settings"]["repeat_interval"] == "24h" and g["notification_settings"]["receiver"] == ar.RECEIVER, "repeat becomes the rule's routing")
 ck([d["refId"] for d in g["data"]] == ["A", "B", "C"] and g["data"][0]["relativeTimeRange"]["from"] == 300 and g["noDataState"] == "OK", "the A/B/C shape of the core rules")
 ck(ar.grafana_rule("m", {**ok, "absent": True, "window": 900}, ["a"])["data"][0]["relativeTimeRange"]["from"] == 4500, "an absent rule looks back the window plus an hour")

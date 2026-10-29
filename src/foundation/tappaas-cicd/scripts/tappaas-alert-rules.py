@@ -154,6 +154,8 @@ def validate(doc, foundation=False):
         inc = r.get("include", [])
         if not (isinstance(inc, list) and all(x in ("lines", "bundle") for x in inc) and len(set(inc)) == len(inc)):
             errs.append(f"{where}: 'include' must list 'lines' and/or 'bundle', each once")
+        elif "lines" in inc and (absent or expr is not None):
+            errs.append(f"{where}: include 'lines' needs a match rule (an absent or expr rule has no lines to send)")
         mail = r.get("mail")
         if mail is not None:
             if not isinstance(mail, dict) or set(mail) - {"subject", "body"} or not mail:
@@ -251,6 +253,12 @@ def grafana_rule(module, rule, hosts):
     ann = {"summary": rule["summary"], "query": explore_query(hosts, rule)}
     if "headline" in rule:
         ann["headline"] = rule["headline"]
+    if "lines" in rule.get("include", []):
+        # The receiver fetches the alert's own host's lines: the same filter,
+        # with __HOST__ replaced by the alert's host label.
+        sel = "{host=\"__HOST__\"" + (", unit=~" + _q(rule["unit"]) if "unit" in rule else "") + "}"
+        ann["linesQuery"] = sel + f" |~ {_q(rule['match'])}"
+        ann["linesWindow"] = str(rule["window"])
     mail = rule.get("mail") or {}
     if "subject" in mail:
         ann["mailSubject"] = mail["subject"]

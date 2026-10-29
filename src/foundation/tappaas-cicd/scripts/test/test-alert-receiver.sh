@@ -121,6 +121,51 @@ ck "…and in the body; grafana's own labels stay out" "replication_job: 110-0" 
 ck "a rule's headline names it in the subject, after ALERT:" "Subject: ALERT: Out of Memory Kill on openwebui" \
    "$(wh firing event OomKill openwebui | sed 's/"query":/"headline":"Out of Memory Kill","query":/' | python3 "${R}" --render | head -1)"
 
+# ADR-039 D7: a module's rule — its own mail, its labels, its log lines.
+modwh='{"status":"firing","alerts":[{"status":"firing","labels":{"alertname":"Release signature rejected","host":"site1","kind":"event","module":"hosting","site":"shop"},"annotations":{"summary":"A release was refused.","query":"{host=~\"^(site1)$\"} |~ \"rejected\""},"startsAt":"2026-10-29T10:00:00Z"}]}'
+ck "a module rule without a template: today's mail; module stays out of the subject" "Subject: ALERT: Release signature rejected on site1 (site shop)" \
+   "$(python3 "${R}" --render <<<"${modwh}" | head -1)"
+tpl="$(jq -c '.alerts[0].annotations.mailSubject = "{state}: {title} for site {label.site} ({module})" | .alerts[0].annotations.mailBody = "Site {label.site} on {host}: {summary}\nsince {since}"' <<<"${modwh}")"
+ck "a template fills the subject" "Subject: ALERT: Release signature rejected for site shop (hosting)" \
+   "$(python3 "${R}" --render <<<"${tpl}" | head -1)"
+ck "…and the body" "Site shop on site1: A release was refused." "$(python3 "${R}" --render <<<"${tpl}" | sed -n 3p)"
+ck "…and the Explore query is still in it" "yes" "$(python3 "${R}" --render <<<"${tpl}" | grep -q 'Explore, Loki): {host=~' && echo yes || echo no)"
+odd="$(jq -c '.alerts[0].annotations.mailSubject = "{nope} {title}"' <<<"${modwh}")"
+ck "an unknown placeholder is left as written, never evaluated" "Subject: {nope} Release signature rejected" "$(python3 "${R}" --render <<<"${odd}" | head -1)"
+lw="$(jq -c '.alerts[0].labels.lines = "true"' <<<"${modwh}")"
+ck "lines=true without lines to give: the body says so" "yes" \
+   "$(python3 "${R}" --render <<<"${lw}" | grep -qF '(log lines not mailed on this site' && echo yes || echo no)"
+printf 'GET /shop from 203.0.113.9 by person-1\n' > "${TMP}/lines"
+ck "lines=true with lines: under Log lines (anonymized)" "GET /shop from 203.0.113.9 by person-1" \
+   "$(python3 "${R}" --render --lines-file "${TMP}/lines" <<<"${lw}" | sed -n '/^Log lines (anonymized):/{n;p;}')"
+ck "a module label 'lines' stays out of the subject" "Subject: ALERT: Release signature rejected on site1 (site shop)" \
+   "$(python3 "${R}" --render --lines-file "${TMP}/lines" <<<"${lw}" | head -1)"
+# The site flag and the anonymizer, through the receiver's own fetcher.
+mkdir -p "${TMP}/cfgL"; printf '{"name":"x"}\n' > "${TMP}/cfgL/site.json"
+flag="$(python3 -I - "${R}" "${TMP}/cfgL" <<'PY'
+import importlib.util, sys, types
+s = importlib.util.spec_from_file_location("rx", sys.argv[1]); rx = importlib.util.module_from_spec(s); s.loader.exec_module(rx)
+print(rx.lines_allowed(sys.argv[2]))
+PY
+)"
+ck "site.json without alerts.includeLines: no lines" "False" "${flag}"
+printf '{"name":"x","alerts":{"includeLines":true}}\n' > "${TMP}/cfgL/site.json"
+flag="$(python3 -I - "${R}" "${TMP}/cfgL" <<'PY'
+import importlib.util, sys
+s = importlib.util.spec_from_file_location("rx", sys.argv[1]); rx = importlib.util.module_from_spec(s); s.loader.exec_module(rx)
+print(rx.lines_allowed(sys.argv[2]))
+PY
+)"
+ck "alerts.includeLines true: lines allowed" "True" "${flag}"
+anon="$(python3 -I - "${R}" "${TMP}/cfgL" "${TMP}/bundle" <<'PY'
+import importlib.util, sys
+s = importlib.util.spec_from_file_location("rx", sys.argv[1]); rx = importlib.util.module_from_spec(s); s.loader.exec_module(rx)
+print(rx._anonymizer(sys.argv[2], sys.argv[3]).text("login by alice@example.org from 81.2.69.160 password=hunter2"))
+PY
+)"
+ck "mailed lines go through support-anonymize.py" "yes" \
+   "$([[ "${anon}" != *alice@example.org* && "${anon}" != *hunter2* && "${anon}" != *81.2.69.160* ]] && echo yes || echo "no: ${anon}")"
+
 # #883: one condition from ALERT to RESOLVED, and the support bundle
 : > "${TMP}/args"
 post rotated "$(wh firing state HostSilent tappaas3)" >/dev/null

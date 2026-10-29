@@ -44,6 +44,14 @@ run again. The folded hosts' own RESOLVEDs find no open condition in
 site-notify.sh and send nothing. When the cluster cannot be asked, every
 HostSilent is mailed on its own, as before.
 
+A module's rule (ADR-039, tappaas-alert-rules.py) may carry its mail as
+templates (the mailSubject and mailBody annotations): `{placeholder}`
+substitution and nothing else, so a module's text is never run. Without them the
+mail is the one below, unchanged. A rule labelled lines="true" gets up to 20 of
+its matching log lines, fetched from Loki for the alert's host and put through
+support-anonymize.py's scrubbing, as a bundle's journals are, but only on a
+site that opted in: site.json `alerts.includeLines` (default false).
+
 Every request is authenticated with a bearer token both sides read from a file
 (the receiver's, and Grafana's copy that logging/update.sh delivers). Every
 notice, sent or not, is a line in the breadcrumb file.
@@ -77,13 +85,18 @@ DEFAULTS = {
     "cluster": "/home/tappaas/bin/tappaas-cluster-state.sh",
     "node_down_dir": "/var/lib/tappaas/node-down",
     "cluster_cache": 60,  # seconds: a burst of webhooks asks the cluster once
+    "config_dir": "/home/tappaas/config",
+    "loki": "http://logging.mgmt.internal:3100",
+    "loki_admin_file": "/home/tappaas/.loki-admin-password",
 }
+MAX_LINES = 20
+NO_LINES = "(log lines not mailed on this site — see the Explore link)"
 MAX_BODY = 1 << 20  # a Grafana notification is a few KB; refuse anything absurd
 
 
 # Labels every alert carries; the rest are the series' own (a replication job,
 # a unit…) and are what tells one alert from the next, so the mail names them.
-_PLAIN_LABELS = {"alertname", "host", "kind", "grafana_folder", "bundle"}
+_PLAIN_LABELS = {"alertname", "host", "kind", "grafana_folder", "bundle", "module", "lines"}
 
 
 def extra_labels(labels):
@@ -104,8 +117,18 @@ def is_beat(alert):
             and alert.get("status", "firing") == "firing")
 
 
-def render(payload):
-    """One webhook -> (subject, body), or None when there is nothing to mail."""
+_PH = re.compile(r"\{([a-z]+(?:\.[a-z_][a-z0-9_]*)?)\}")
+
+
+def fill(template, values):
+    """{placeholder} substitution, nothing more: an unknown one stays as written."""
+    return _PH.sub(lambda m: values.get(m.group(1), m.group(0)), template)
+
+
+def render(payload, lines_for=None):
+    """One webhook -> (subject, body), or None when there is nothing to mail.
+    lines_for(alert) gives an alert's log lines (text) for a rule labelled
+    lines="true", or None when it has none to give."""
     status = payload.get("status", "firing")
     alerts = [a for a in (payload.get("alerts") or []) if not is_heartbeat(a)]
     if status == "resolved":
@@ -132,6 +155,10 @@ def render(payload):
     what = f" ({', '.join(f'{k} {v}' for k, v in extra.items())})" if extra else ""
     subject = f"{word}: {headline or name}{where}{what}"
 
+    ann0 = alerts[0].get("annotations") or {}
+    if ann0.get("mailSubject") or ann0.get("mailBody"):
+        return render_templated(payload, alerts, status, word, headline or name, hosts, lines_for)
+
     lines = []
     for a in alerts:
         labels = a.get("labels") or {}
@@ -148,9 +175,133 @@ def render(payload):
                      + (f"   resolved: {a.get('endsAt')}" if status == "resolved" else ""))
         if ann.get("query"):
             lines.append(f"In Grafana (Explore, Loki): {ann['query']}")
+        if labels.get("lines") == "true" and status != "resolved":
+            lines.append("Log lines (anonymized):")
+            lines.append(_lines_text(a, lines_for))
         lines.append("")
     lines.append("Sent by the logging module's alert rules (#126) through tappaas-alert-receiver.")
     return subject, "\n".join(lines) + "\n"
+
+
+def _lines_text(alert, lines_for):
+    got = lines_for(alert) if lines_for else None
+    return got if got else NO_LINES
+
+
+def _values(alert, status, word, title, hosts, lines_for):
+    labels = alert.get("labels") or {}
+    ann = alert.get("annotations") or {}
+    extra = extra_labels(labels)
+    v = {
+        "state": word,
+        "title": title,
+        "host": labels.get("host", ""),
+        "hosts": ", ".join(hosts),
+        "module": labels.get("module", ""),
+        "labels": ", ".join(f"{k} {x}" for k, x in extra.items()),
+        "summary": ann.get("summary", ""),
+        "since": alert.get("startsAt", "?"),
+        "resolved": alert.get("endsAt", "") if status == "resolved" else "",
+        "query": ann.get("query", ""),
+    }
+    v["lines"] = _lines_text(alert, lines_for) if labels.get("lines") == "true" and status != "resolved" else ""
+    for k, x in extra.items():
+        v[f"label.{k}"] = x
+    return v
+
+
+def render_templated(payload, alerts, status, word, title, hosts, lines_for):
+    """A rule's own mail (ADR-039 D7): its subject once, its body per alert."""
+    ann0 = alerts[0].get("annotations") or {}
+    first = _values(alerts[0], status, word, title, hosts, lines_for)
+    subject = fill(ann0.get("mailSubject") or "{state}: {title} on {hosts}", first)
+    # One line, as a subject must be; site-notify.sh blanks what is not ASCII.
+    subject = " ".join(subject.split())
+    parts = []
+    for a in alerts:
+        ann = a.get("annotations") or {}
+        v = _values(a, status, word, title, hosts, lines_for)
+        if ann.get("mailBody"):
+            parts.append(fill(ann["mailBody"], v).rstrip("\n"))
+        else:
+            parts.append(f"== {title}" + (f" — {v['host']}" if v["host"] else "") + f"\n{v['summary']}\nsince: {v['since']}")
+        if ann.get("query") and "{query}" not in (ann.get("mailBody") or ""):
+            parts.append(f"In Grafana (Explore, Loki): {ann['query']}")
+        parts.append("")
+    parts.append("Sent by the logging module's alert rules (#126) through tappaas-alert-receiver.")
+    return subject, "\n".join(parts) + "\n"
+
+
+# ── log lines for a rule labelled lines="true" (ADR-039 D7) ───────────────
+
+def lines_allowed(config_dir):
+    try:
+        with open(os.path.join(config_dir, "site.json"), encoding="utf-8") as f:
+            return ((json.load(f).get("alerts") or {}).get("includeLines")) is True
+    except (OSError, ValueError, AttributeError):
+        return False
+
+
+def _anonymizer(config_dir, bundle_cmd):
+    """support-anonymize.py's Anonymizer, taught the site's people and places.
+    It sits beside this script in the checkout, and beside the bundle script the
+    receiver already calls (this file itself may run from the Nix store)."""
+    import importlib.util
+    path = ""
+    for d in (os.path.dirname(os.path.abspath(__file__)), os.path.dirname(os.path.realpath(bundle_cmd))):
+        if os.path.exists(os.path.join(d, "support-anonymize.py")):
+            path = os.path.join(d, "support-anonymize.py")
+            break
+    if not path:
+        raise OSError("support-anonymize.py not found: no lines without it")
+    spec = importlib.util.spec_from_file_location("support_anonymize", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    an = mod.Anonymizer()
+    mod.collect(an, config_dir)
+    return an
+
+
+def make_lines_for(args):
+    """lines_for(alert): the alert's host's matching lines from Loki, newest
+    first, anonymized — or None when the site has not opted in or Loki cannot
+    say. The selector is the rule's linesQuery with the alert's own host."""
+    def lines_for(alert):
+        if not lines_allowed(args.config_dir):
+            return None
+        ann = alert.get("annotations") or {}
+        host = (alert.get("labels") or {}).get("host", "")
+        q = ann.get("linesQuery", "")
+        if "__HOST__" not in q or not re.match(r"^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$", host):
+            return None
+        q = q.replace("__HOST__", host)
+        try:
+            window = max(60, min(86400, int(ann.get("linesWindow", "300"))))
+            with open(args.loki_admin_file, encoding="utf-8") as f:
+                pw = f.read().strip()
+            end = time.time()
+            r = subprocess.run(
+                ["curl", "-sfG", "--max-time", "20", "-u", f"tappaas:{pw}",
+                 f"{args.loki}/loki/api/v1/query_range",
+                 "--data-urlencode", f"query={q}", "--data-urlencode", f"limit={MAX_LINES}",
+                 "--data-urlencode", "direction=backward",
+                 "--data-urlencode", f"start={int((end - window - 60) * 1e9)}",
+                 "--data-urlencode", f"end={int(end * 1e9)}"],
+                capture_output=True, text=True, timeout=30)
+            if r.returncode != 0:
+                return None
+            vals = []
+            for st in json.loads(r.stdout).get("data", {}).get("result", []):
+                vals += st.get("values", [])
+            vals.sort(key=lambda x: x[0], reverse=True)
+            text = "\n".join(v[1] for v in vals[:MAX_LINES])
+            if not text:
+                return None
+            return _anonymizer(args.config_dir, args.bundle).text(text)
+        except (OSError, ValueError, subprocess.SubprocessError) as e:
+            print(f"log lines NOT fetched: {e}", flush=True)
+            return None
+    return lines_for
 
 
 def meta(payload):
@@ -493,7 +644,7 @@ def make_handler(args):
             if payload is None:
                 self.reply(200, "folded into a node-down notice")
                 return
-            mail = render(payload)
+            mail = render(payload, make_lines_for(args))
             if mail is None:
                 self.reply(200, "nothing to send")
                 return
@@ -525,11 +676,19 @@ def main():
     p.add_argument("--cluster", default=DEFAULTS["cluster"], help="prints the cluster's state (tappaas-cluster-state.sh)")
     p.add_argument("--node-down-dir", default=DEFAULTS["node_down_dir"])
     p.add_argument("--cluster-cache", type=float, default=DEFAULTS["cluster_cache"])
+    p.add_argument("--config-dir", default=DEFAULTS["config_dir"])
+    p.add_argument("--loki", default=DEFAULTS["loki"])
+    p.add_argument("--loki-admin-file", default=DEFAULTS["loki_admin_file"])
     p.add_argument("--render", action="store_true", help="read one webhook on stdin, print the mail")
+    p.add_argument("--lines-file", help="--render only: the log lines a lines=\"true\" alert gets (tests)")
     args = p.parse_args()
 
     if args.render:
-        mail = render(json.load(sys.stdin))
+        fixed = None
+        if args.lines_file:
+            with open(args.lines_file, encoding="utf-8") as f:
+                fixed = f.read().rstrip("\n")
+        mail = render(json.load(sys.stdin), (lambda _a: fixed) if args.lines_file else None)
         if mail is None:
             print("(nothing to send)")
         else:
