@@ -55,3 +55,43 @@ logs_sync_credentials() {
     log_shipping_sync_logging \
         || warn "  could not update logging's password file — ${host:-${CONSUMER}}'s pushes are refused until it is"
 }
+
+# The journal client on a Debian VM or a container (#903): Alloy from Grafana's
+# Debian package with the NixOS guests' pipeline, applied here on every install
+# and update. A NixOS guest gets its fragment with its OS update (update-os.sh);
+# a guest this cannot reach as root (HAOS, Windows) gets none.
+logs_apply_client() {
+    # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
+    . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
+    local t out
+    if ! t="$(log_shipping_transport "${CONSUMER}")"; then
+        debug "  ${CONSUMER}: no Debian or container journal client to apply here"
+        return 0
+    fi
+    if [[ "${DRY_RUN}" -eq 1 ]]; then
+        debug "  [dry-run] Alloy journal client on ${CONSUMER} (${t})"
+        return 0
+    fi
+    if out="$(apply_log_shipping_debian "${t}" "${CONSUMER}" 2>&1)"; then
+        if [[ "${out}" == *"(changed)"* ]]; then
+            info "  ${GN}✓${CL} ${CONSUMER}: $(tail -1 <<<"${out}" | sed 's/ (changed)//') (${t%%:*})"
+        else
+            debug "  ${CONSUMER}: $(tail -1 <<<"${out}")"
+        fi
+    else
+        warn "  could not apply the journal client on ${CONSUMER} (${t}) — its journal stays on the guest"
+        sed 's/^/    /' <<<"${out}" | tail -10 >&2
+    fi
+}
+
+# Take the client off again (delete). A guest already gone is not an error.
+logs_remove_client() {
+    # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
+    . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"
+    local t
+    t="$(log_shipping_transport "${CONSUMER}")" || return 0
+    [[ "${DRY_RUN}" -eq 1 ]] && { debug "  [dry-run] remove the journal client from ${CONSUMER}"; return 0; }
+    remove_log_shipping_debian "${t}" >/dev/null 2>&1 \
+        && debug "  journal client removed from ${CONSUMER}" \
+        || warn "  could not remove the journal client from ${CONSUMER} (${t})"
+}

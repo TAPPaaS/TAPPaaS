@@ -3,8 +3,9 @@
 # TAPPaaS logging:logs — delete (#770)
 #
 # The consumer stops shipping: its pinhole to the push receiver goes with a
-# rules reconcile, and update-os.sh removes /etc/nixos/tappaas-logging.nix on its
-# next OS update (no logging, or no declaration, means no fragment).
+# rules reconcile, a Debian VM's or container's Alloy client is removed here, and
+# update-os.sh removes a NixOS guest's /etc/nixos/tappaas-logging.nix on its next
+# OS update (no logging, or no declaration, means no fragment).
 #
 # Usage: delete-service.sh <consumer-module> [--dry-run]
 
@@ -12,6 +13,7 @@
 
 info "logging:logs: ${CONSUMER} stops shipping its journal"
 logs_reconcile_consumer_rules
+logs_remove_client
 # Its push credential goes too (#165 §1): logging stops accepting it at once.
 # shellcheck source=../../../tappaas-cicd/lib/log-shipping.sh
 . "${LOG_SHIPPING_LIB:-/home/tappaas/bin/log-shipping.sh}"

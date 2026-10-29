@@ -483,6 +483,20 @@ else
     skip "lib/test-repo-sync.sh not found"
 fi
 
+# Test 9c1: journal client renderers (#770, #903) — the NixOS fragment and the
+# Debian/container client carry one pipeline. Offline.
+info "${BOLD}Test 9c1: log shipping — one pipeline for NixOS, Debian and containers${CL}"
+if [[ -x "${SCRIPT_DIR}/lib/test-log-shipping.sh" ]]; then
+    if ls_out="$("${SCRIPT_DIR}/lib/test-log-shipping.sh" 2>&1)"; then
+        pass "log-shipping: $(tail -1 <<< "${ls_out}")"
+    else
+        fail "log-shipping test failed"
+        sed 's/^/    /' <<< "${ls_out}"
+    fi
+else
+    skip "lib/test-log-shipping.sh not found"
+fi
+
 # Test 9c2: signed releases (ADR-033) — a staging/production checkout moves only to
 # a release tag signed by a key the last verified release lists. Temp repos and
 # throwaway keys only.

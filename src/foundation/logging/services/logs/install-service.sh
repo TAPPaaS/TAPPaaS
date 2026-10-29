@@ -2,11 +2,12 @@
 #
 # TAPPaaS logging:logs — install (#770)
 #
-# A consumer's journal ships to Loki through the NixOS baseline's journal client,
-# which update-os.sh writes as /etc/nixos/tappaas-logging.nix while the consumer
-# declares logging:logs and logging is deployed (lib/log-shipping.sh). Nothing to
-# do on the logging side; this reconciles the consumer's pinhole to the push
-# receiver — which matters when logging arrives after the consumer.
+# A consumer's journal ships to Loki through a journal client (lib/log-shipping.sh):
+# on NixOS the baseline's, which update-os.sh writes as /etc/nixos/tappaas-logging.nix
+# while the consumer declares logging:logs and logging is deployed; on a Debian VM
+# or a container, Alloy with the same pipeline, applied here (#903). This also
+# reconciles the consumer's pinhole to the push receiver — which matters when
+# logging arrives after the consumer.
 #
 # Usage: install-service.sh <consumer-module> [--dry-run]
 
@@ -15,4 +16,4 @@
 info "  ${GN}✓${CL} logging:logs: ${CONSUMER} ships its journal to logging (push receiver :3101)"
 logs_reconcile_consumer_rules
 logs_sync_credentials
-debug "  the journal client is applied with the consumer's OS update (update-module.sh ${CONSUMER})"
+logs_apply_client
