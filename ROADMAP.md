@@ -113,6 +113,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
 | 4 | G4.4 Storage & physical devices | H | L | 5 | – | 1 |
 | 4 | G4.5 Governance, CI & sign-offs | M | L | 6 | 1 | 2 |
+| 4 | G4.6 Community module extension points | H | M | – | – | 5 |
 | 3 | G3.1 cluster:vm lifecycle & capacity | L | M | 29 | 2 | 4 |
 | 3 | G3.2 Identity & SSO wiring | M | L | 14 | – | 1 |
 | 3 | G3.3 App module fixes | L | L | 15 | – | 7 |
@@ -162,6 +163,8 @@ met gates are recorded in the releases that carried their waves.
 | Install | #403, #377 — [ADR-037](docs/ADR/ADR-037%20-%20Install.md) **Accepted v1.2 2026-10-27**: ZFS on the boot disk by default, a module's `storage` a preference with the boot pool last (P1, live on the spare machine as a mirrored tappaas4); adding a node is two verbs — `node add` stands it up (joined, patched, rebooted), `node storage add` gives it pools; boot disks by size, model or serial, the MAC learned from the switch port, the console's Add node wizard (D4, P4a–P4d built, not yet run in a real node add); a hosted server on one IP (P2); the bootstrap ends at the console (P3). Next: Stage 2 on the spare machine, then P2 | G3.1, G3.5 |
 | User interface | #844 — [ADR-034](docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md) **Accepted v1.0 2026-10-18**, built: the console at `console.<domain>` | #844 closed |
 | Service exposure | #845 — [ADR-032](docs/ADR/ADR-032%20-%20Service%20Exposure.md) **Accepted v1.0, built** (2026-10-17): the gate authenticates machine callers (service accounts, client-credentials JWT); a module without `network:proxy` is unpublished by design, in the DMZ when it runs third-party code without user data (ADR-021 R1 amended); Jellyfin published without the gate for friends and family, hardened. all phases built (P0–P4); rate limiting is #851 | #845 closed |
+| Module-owned fields | #899: a module declares its own validated fields under a key named after it; `check_json`, `validate`, `modify --set <module>.<field>` and the console use them | G4.6 |
+| Module alerting | #904: a module ships its own alert rules, scoped by the platform to its own hosts, provisioned beside the core rules | G4.6, after #903 |
 
 ### Housekeeping
 
@@ -198,6 +201,11 @@ items that belong to a group — FW #40, #83, #157, #158, #162 — are rows in t
 | #678 | windows-server: time zone, keyboard and locale from the site | From G1.4: its own time-zone vocabulary and a Windows test |
 | #757 | `debianhost` over PXE (ADR-026 D8a) | `adopt` covers every known site |
 | #893 | Memory ballooning as an opt-in per module | A minimum memory per module (`balloon`), counted by the capacity check; not for passthrough VMs. First: is free-page reporting on? Opened 2026-10-27 |
+| #895 | Catalogue `vmidRange` for multi-instance modules | Proposal on the issue (2026-10-29): the range bounds `next_free_vmid`, which today counts upward into other modules' blocks. Settle with #294. From @AndreasJe (hosting) |
+| #897 | network:proxy: extra hostnames, redirects, wildcard and path routes | Proposal on the issue (2026-10-29): part 1 aliases, redirects and full-domain routes (extra certificates under `dns01`); part 2 path routes to another module needs its own design. From @AndreasJe (hosting) |
+| #900 | cluster:ha for containers | `ct:` resources, restart-mode migration only, `pvesr` replication; refused with `bindMounts` or passthrough. From @AndreasJe (hosting) |
+| #896 | Module-supplied CT templates, hash-verified, placed on the node | From @AndreasJe (hosting) |
+| #898 | cluster:lxc linked clones (`ctclone`) | Ties a clone to the template's node and storage, against #900 and migration. From @AndreasJe (hosting) |
 | #771 | NFS over TLS for `pvehost:nfs` | ADR-029 v0.7: OpenZFS `sharenfs` cannot carry `xprtsec` |
 | #787 | logging: TLS for syslog ingest and Loki's ports | From #165 §3 (2026-10-06). Waits for a TAPPaaS CA; traffic stays inside mgmt / the site network meanwhile |
 | #310 | Firewall API certificate verified, not skipped (`--no-ssl-verify`) | **Follows #787:** the same TAPPaaS CA issues the firewall a certificate for `firewall.mgmt.internal`, and the controllers verify it. Rescoped 2026-10-08 out of G2.1: blocking on a pinned self-signed certificate would stop the sweep at every rebuild or renewal for a narrow risk (a foothold on mgmt). Meanwhile a change is detected — `check-firewall-cert`, hourly, mails FirewallCertChanged (`ddf94cdb`) |
@@ -316,6 +324,18 @@ The project's own machinery (CI runners, #415, moved to G7.1 with the Woodpecker
 | ✅ #888 | site-manager: reconcile clones and branch switches skip the signature checks | L | L | **Done 2026-10-26** (`2ad00c5e`): a reconcile clone is introduced, a switch goes through `repository sync`; requireSigned warns without `channels.json` |
 | #486 | ADR-015 community-health files | L | L | |
 | #359 | legal/processor ADR | M | L | |
+
+### G4.6 Community module extension points — Ease H · Risk M · open: 5
+
+What a Community module needs from the platform so it does not carry its own copy (from @AndreasJe's hosting module, 2026-10-28): one place for its secrets (#902), containers watched and logged like VMs (#901, #903), its own validated fields (#899) and its own alert rules (#904). The last two get an ADR each first.
+
+| # | Issue | Ease | Risk | Note |
+|---|-------|:-:|:-:|------|
+| #902 | Convention: where modules escrow their secrets on the mothership | L | M | `/home/tappaas/secrets/<module>/<instance>.env`, in the mothership's file backup (today only `config` and `/etc/secrets` are); existing files migrated |
+| #901 | health-manager: health gates that reach containers | M | M | Disk and pending-reboot probes through `pct exec`; LXC `diskSize` grow-only, grown with `pct resize` |
+| #903 | logging:logs: journal client for Debian and LXC guests | M | M | One Alloy pipeline for NixOS and plain `config.alloy`; Alloy from Grafana's apt repo, pinned |
+| #899 | schemas: module-owned config fields that validate | H | M | ADR first (Module-owned fields) |
+| #904 | logging: module-supplied alert rules | M | L | ADR first (Module alerting); after #903 |
 
 ---
 
