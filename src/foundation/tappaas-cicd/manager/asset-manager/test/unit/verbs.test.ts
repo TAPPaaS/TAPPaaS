@@ -1,10 +1,10 @@
-// verbs.test.ts — what each position-manager verb does to config/positions.json, the
+// verbs.test.ts — what each asset-manager verb does to config/positions.json, the
 // whole-document check, and the view the topology carries, over hrossen's
 // topology (test/fixtures/topology-hrossen.json, captured 2026-10-22).
 // Offline: documents in, documents out; the catalog is in memory here
 // (catalog.test.ts reads the real one).
 //
-// Run: RM_FIXTURE_DIR=<position-manager>/test/fixtures node verbs.test.js
+// Run: RM_FIXTURE_DIR=<asset-manager>/test/fixtures node verbs.test.js
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -186,5 +186,5 @@ console.log("— the one line a change is said in (--check, and the apply's repo
   check(!said(loose, true).includes("{") && said(loose, true).split("\n").length === 1, "never the document: one line");
 }
 
-console.log(`\nposition-manager verbs: ${passed} passed, ${failed} failed`);
+console.log(`\nasset-manager verbs: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

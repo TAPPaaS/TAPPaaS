@@ -309,7 +309,7 @@ export class Reads {
       return (Array.isArray(repos) ? repos : []).map((r) => repositoryCatalog(r, instances));
     }, now);
     // The faceplate catalog: the keys a placement's faceplate may name, the site's own first.
-    this.faceplates = new Cached("faceplates", TTL.faceplates, () => j<{ key: string; kind: string; units: number; width: string; site?: boolean }[]>("position-manager", ["faceplates", "list", "--json"]), now);
+    this.faceplates = new Cached("faceplates", TTL.faceplates, () => j<{ key: string; kind: string; units: number; width: string; site?: boolean }[]>("asset-manager", ["faceplates", "list", "--json"]), now);
     // The disks and pools of every node, with SMART (≈15 s on three nodes): no
     // timer of its own, read when a page asks and the answer is older than
     // its TTL.

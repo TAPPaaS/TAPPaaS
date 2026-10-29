@@ -357,8 +357,8 @@ function mlagSite(): TopoSources {
   check(compactPorts(["sfp-sfpplus15", "sfp-sfpplus16"]) === "sfp-sfpplus15+16" && compactPorts(["11", "12"]) === "11+12", "port lists compact");
 }
 
-// ── the positions (position-manager export) ───────────────────────────
-check(t.positions === null && !t.sources.some((s) => s.name === "position-manager export"), "no positions read: positions is null and not a source");
+// ── the positions (asset-manager export) ───────────────────────────
+check(t.positions === null && !t.sources.some((s) => s.name === "asset-manager export"), "no positions read: positions is null and not a source");
 check(t.nodes.every((n) => n.source === "cluster" && n.location === "rodovre" && n.placement === null), "every node: from the cluster, at the primary location, placed nowhere");
 check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPoints.every((a) => a.source === "switch-configuration" && a.location === "rodovre"), "switches and access points: from the switch configuration, at the primary location");
 {
@@ -389,7 +389,7 @@ check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPo
   check(x.findings.some((f) => f.on.kind === "ap" && f.on.name === "Nano HD"), "an access point placed nowhere: a finding on it");
   check(r.locations[0].unplaced.includes("tappaas2") && r.unplaced.find((u) => u.device === "tappaas2")?.location === "rodovre", "…listed under its location");
   check(renderTopology(x).some((l) => /^ {8}U20 front {2}USW Pro XG 10 PoE {2}generic\/switch-1u \(suggested\)/.test(l)) && renderTopology(x).some((l) => /^ {2}rodovre \(primary\)/.test(l)), "the text view lists the placements by location, room and rack");
-  // A device position-manager records is a device of the topology, with its kind and ports.
+  // A device asset-manager records is a device of the topology, with its kind and ports.
   const rec = buildTopology({ ...hrossen(), site, positions: { doc: { ...doc, devices: { "ISP modem": { kind: "modem" as const, ports: ["WAN", "LAN 1"], displayName: "Provider modem" }, ont: { kind: "ont" as const, ports: ["1"], location: "hareskov" } } }, catalog } });
   const modem = rec.devices.find((y) => y.name === "ISP modem");
   check(modem?.kind === "modem" && modem.recorded === true && modem.ports?.join() === "WAN,LAN 1" && modem.displayName === "Provider modem" && modem.source === "recorded" && modem.location === "rodovre", "a recorded device: in devices, with its kind, ports, name, source and location");
@@ -426,7 +426,7 @@ check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPo
   check(seen.positions!.cables.some((c) => c.from.device === SW && c.from.port === "8" && c.to.device === "aa:bb:cc:00:11:22" && c.to.port === "eth0"), "…its link drawn to it");
   check(!seen.findings.some((f) => /aa:bb:cc:00:11:22/.test(f.text)), "a seen device is not a finding until it is recorded");
   check(!seen.devices.some((d) => d.source === "seen" && ["2", "3", "5", "9", "11"].includes(d.seen?.port ?? "")), "the ports of nodes, the AP, the uplinks and the ISP see nothing");
-  check(renderTopology(seen).some((l) => /8 {2}aa:bb:cc:00:11:22 {2}printer-1 {2}— position-manager device record/.test(l)), "the text view lists what is seen and the verb that records it");
+  check(renderTopology(seen).some((l) => /8 {2}aa:bb:cc:00:11:22 {2}printer-1 {2}— asset-manager device record/.test(l)), "the text view lists what is seen and the verb that records it");
   const after = buildTopology({ ...seenSite(), positions: { doc: { ...doc, devices: { printer: { kind: "other" as const, ports: ["eth0"], mac: "aa:bb:cc:00:11:22" } }, cables: [{ from: { device: SW, port: "8" }, to: { device: "printer", port: "eth0" }, kind: "patch" as const }] }, catalog } });
   check(!after.devices.some((d) => d.source === "seen" && d.seen?.port === "8") && after.devices.find((d) => d.name === "printer")?.source === "recorded", "once recorded (its MAC, its cable), the device is recorded and no longer seen");
 
@@ -459,10 +459,10 @@ check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPo
     return { rc: -1, stdout: "", stderr: "", ran: false };
   };
   const skip = collectSources({ configDir: FIX, zonesFile: join(FIX, "zones.json"), health: null, wanAddressFile: join(FIX, "none.json"), run: fake, positions: false });
-  check(!runs.some((r) => r.startsWith("position-manager")) && skip.positions === undefined, "--no-positions: position-manager is not run");
+  check(!runs.some((r) => r.startsWith("asset-manager")) && skip.positions === undefined, "--no-positions: asset-manager is not run");
   const asked = collectSources({ configDir: FIX, zonesFile: join(FIX, "zones.json"), health: null, wanAddressFile: join(FIX, "none.json"), run: fake });
-  check(runs.includes("position-manager export --json") && asked.positions === null, "positions read through position-manager export");
-  check(buildTopology(asked).sources.some((s) => s.name === "position-manager export" && !s.ok), "no position-manager: the source is named");
+  check(runs.includes("asset-manager export --json") && asked.positions === null, "positions read through asset-manager export");
+  check(buildTopology(asked).sources.some((s) => s.name === "asset-manager export" && !s.ok), "no asset-manager: the source is named");
 }
 
 console.log(`\ntopology: ${passed} passed, ${failed} failed`);

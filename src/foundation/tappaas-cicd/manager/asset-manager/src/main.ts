@@ -1,4 +1,4 @@
-// position-manager — where the site's hardware is (ADR-036 D3). Owns
+// asset-manager — where the site's hardware is (ADR-036 D3). Owns
 // config/positions.json: the rooms (each in a location of the site), the racks,
 // where each device is placed (keyed by the device's topology name; the
 // device's own record is never touched), the devices the topology cannot see
@@ -14,8 +14,9 @@
 // at hareskov"), or "[refused] <why>" and exit 1; --check --json prints the
 // whole resulting document instead. Nothing here touches a device.
 //
-// rack-manager is its old name: the package links it beside position-manager
-// for one release (ADR-035 P2), and it answers the same verbs.
+// position-manager and rack-manager are its old names: the package links them
+// beside asset-manager for one release (ADR-035 P2), and they answer the same
+// verbs.
 //
 // Exit codes: ok=0, error=1.
 
@@ -56,7 +57,7 @@ import {
 import { Store, loadCatalog, readDevices } from "./store";
 import { Result, changeLine, addFaceplate, deleteFaceplate, modifyFaceplate, addCable, addDevice, recordSeen, placeDevice, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyPlacement, modifyRack, modifyRoom, removeCable, removeDevice, unplaceDevice, splitCable } from "./verbs";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 const CHECK: [string, string] = ["--check", "Say what would change, in one line; change nothing."];
 const CHECK_JSON: [string, string] = ["--json", "With --check: the whole resulting positions.json, for machines."];
@@ -64,7 +65,7 @@ const TOPO: [string, string] = ["--topology F", "A `network-manager topology --j
 const JSON_OUT: [string, string] = ["--json", "As JSON."];
 
 export const HELP: HelpSpec = {
-  name: "position-manager",
+  name: "asset-manager",
   version: VERSION,
   tagline: "where the site's hardware is — rooms in the site's locations, racks, placements and the cables nothing can see, in config/positions.json",
   verbs: [
@@ -221,7 +222,7 @@ export const HELP: HelpSpec = {
   ],
   notes: [
     "A placement names a device as `network-manager topology` does. A cable the switches or LLDP see is drawn from the topology and never recorded; record only what nothing can see — the ISP's modem, a patch panel, a PDU.",
-    "rack-manager is the old name of position-manager and answers the same verbs for one release; config/racks.json becomes config/positions.json by migration.",
+    "position-manager and rack-manager are the old names of asset-manager and answer the same verbs for one release; config/racks.json became config/positions.json by migration 0020.",
     "A device nothing manages is recorded (device add, or device record for one a switch port sees), then placed in a rack or loose in a room (place). A link through a patch panel is split there (cable split): the topology still shows one link, the racks its two wires.",
     "mount add, mount modify and mount remove are the old names of place, place modify and unplace, answering for one release.",
   ],
@@ -389,7 +390,7 @@ export function run(argv: string[]): number {
     return 0;
   }
   if (args[0] === "--version" || args[0] === "version") {
-    info(`position-manager ${VERSION}`);
+    info(`asset-manager ${VERSION}`);
     return 0;
   }
   const rc = checkArgs(HELP, args);
@@ -752,7 +753,7 @@ export function run(argv: string[]): number {
     if (side) end.side = side;
     return change(store, check, undefined, (d) => removeCable(d, end));
   }
-  die(`unknown verb 'position-manager ${args.slice(0, 2).join(" ")}' — see 'position-manager --help'`);
+  die(`unknown verb 'asset-manager ${args.slice(0, 2).join(" ")}' — see 'asset-manager --help'`);
 }
 
 if (require.main === module) {

@@ -369,14 +369,14 @@ ports read `peer-link`, and a LAG across the pair is drawn once, under the pair 
 otherwise it says how many members are active and why. A disabled port reads `disabled`. The
 pair's live state is `switch-manager mlag-pair list`.
 
-The positions come from `position-manager export` (config/positions.json and the faceplate
+The positions come from `asset-manager export` (config/positions.json and the faceplate
 catalog): `positions` in `--json` holds the site's locations (the primary first, each with its
 place, its rooms and the devices at it placed nowhere), the rooms with their location, each
 rack with its placements resolved to their devices and faceplates (live port state on every
 plate port), the devices placed nowhere, and the cables — every link the switches and LLDP
-see, mapped to faceplate ports, plus the ones position-manager records (the ISP's modem, a
+see, mapped to faceplate ports, plus the ones asset-manager records (the ISP's modem, a
 patch panel). `devices` lists the machines, the devices switch ports name, the devices
-position-manager records and the devices a switch port sees that no record names.
+asset-manager records and the devices a switch port sees that no record names.
 
 Every device — node, switch, access point, device — carries `location` (a name of
 `site.json` `locations`: a recorded device's own, a switch's or an access point's when its
@@ -387,9 +387,9 @@ comes from a switch port: each MAC its controller reports behind the port (`neig
 nothing reported or recorded on it; a port of a node, an access point, a switch or the ISP, a
 port a recorded cable lands on and a MAC a recorded device or a node's NIC has are accounted
 for. It is named by its MAC (else `<switch>:<port>`), at the switch's location, placed nowhere,
-and `position-manager device record` records it. A placement whose device is gone, and once the
+and `asset-manager device record` records it. A placement whose device is gone, and once the
 site has a rack a device placed nowhere at a location that has a room, are `topology` findings.
-`--no-positions` leaves them out (what position-manager itself reads, to check device names).
+`--no-positions` leaves them out (what asset-manager itself reads, to check device names).
 
 ### `wan ipv6-relearn` — re-learn the WAN's IPv6 router
 

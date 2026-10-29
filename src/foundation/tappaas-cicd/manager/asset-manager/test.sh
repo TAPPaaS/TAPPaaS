@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# test.sh — position-manager offline test suite.
+# test.sh — asset-manager offline test suite.
 #
 # Compiles the TS sources + unit tests, runs the unit suite (the verbs, the
 # document check and the topology's rack view over hrossen's topology, the
 # help manifest, the catalog), then drives the compiled CLI against a temp
 # config dir with hrossen's topology handed in (--topology) and a fixture
-# catalog — never the live config, the topology verb or a device. position-manager
+# catalog — never the live config, the topology verb or a device. asset-manager
 # changes no device, so there is no deep tier.
 set -uo pipefail
 
@@ -25,10 +25,10 @@ DIST="${HERE}/dist-test"
 rm -rf -- "${DIST}"
 run_ts "tsc --noEmit -p '${HERE}/tsconfig.json'" >/dev/null 2>&1 && ok "tsc --noEmit clean (src)" || bad "tsc --noEmit reported type errors (src)"
 if run_ts "tsc -p '${HERE}/test/unit/tsconfig.json'" >/dev/null 2>&1; then ok "sources + unit tests compile"
-else bad "unit tests do not compile"; echo "position-manager test: ${pass} passed, ${fail} failed"; exit 1; fi
+else bad "unit tests do not compile"; echo "asset-manager test: ${pass} passed, ${fail} failed"; exit 1; fi
 for unit in $(cd "${HERE}/test/unit" && ls *.test.ts | sed 's/\.test\.ts$//'); do
-    run_ts "RM_FIXTURE_DIR='${HERE}/test/fixtures' RM_CATALOG_DIR='${HERE}/faceplates' node '${DIST}/manager/position-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1 \
-        && ok "unit: ${unit}" || bad "unit: ${unit} (rerun: RM_FIXTURE_DIR=${HERE}/test/fixtures RM_CATALOG_DIR=${HERE}/faceplates node ${DIST}/manager/position-manager/test/unit/${unit}.test.js)"
+    run_ts "RM_FIXTURE_DIR='${HERE}/test/fixtures' RM_CATALOG_DIR='${HERE}/faceplates' node '${DIST}/manager/asset-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1 \
+        && ok "unit: ${unit}" || bad "unit: ${unit} (rerun: RM_FIXTURE_DIR=${HERE}/test/fixtures RM_CATALOG_DIR=${HERE}/faceplates node ${DIST}/manager/asset-manager/test/unit/${unit}.test.js)"
 done
 
 # ── the CLI against a fixture config ─────────────────────────────────
@@ -40,7 +40,7 @@ USW="USW Pro XG 10 PoE"
 # Both config spellings: TS reads TAPPAAS_CONFIG first, and an inherited one
 # would point this suite at the live config. The catalog is the fixture's.
 RM() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="${HERE}/test/fixtures/faceplates" \
-    run_ts "node '${DIST}/manager/position-manager/src/main.js' $(printf "'%s' " "$@")"; }
+    run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
 DOC="${FIX}/cfg/positions.json"
 
 RM rack add rack1 --units 42 --check >/dev/null 2>&1
@@ -117,7 +117,7 @@ RM rack delete rack1 >/dev/null 2>&1 && ok "rack delete: once empty" || bad "rac
 [[ -z "$(ls -A "${FIX}/cfg" | grep -v '^positions.json$' | grep -v '^site.json$')" ]] && ok "no lock or temp file left behind" || bad "left behind: $(ls -A "${FIX}/cfg")"
 # The catalog as shipped, through the CLI.
 RMC() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="${HERE}/faceplates" \
-    run_ts "node '${DIST}/manager/position-manager/src/main.js' $(printf "'%s' " "$@")"; }
+    run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
 [[ "$(RMC faceplates list --json 2>/dev/null | jq 'length')" -ge 11 ]] && ok "faceplates list: the shipped catalog" || bad "faceplates list"
 [[ "$(RMC faceplates show mikrotik/crs317-1g-16s 2>/dev/null | grep -c '\[sfp-sfpplus')" == "1" ]] && ok "faceplates show: the CRS317's one row of cages" || bad "faceplates show mikrotik/crs317-1g-16s"
 [[ "$(RMC faceplates show unifi/usw-pro-xg-10-poe --device "${USW}" --topology "${TOPO}" --json 2>/dev/null | jq -r '[.rows[][] | select(. != null and .id == "5")][0].zones[0]')" == "wan" ]] \
@@ -161,7 +161,7 @@ RM cable remove "${USW}:8" >/dev/null 2>&1 && RM device remove printer >/dev/nul
 LEG="$(mktemp -d "${TMPDIR:-/tmp}/rm-leg.XXXXXX")"
 printf '{"version":1,"racks":{"r1":{"units":10,"width":"19in","numbering":"bottom-up"}}}' > "${LEG}/racks.json"
 RML() { CONFIG_DIR="${LEG}" TAPPAAS_CONFIG="${LEG}" TAPPAAS_FACEPLATES="${HERE}/test/fixtures/faceplates" \
-    run_ts "node '${DIST}/manager/position-manager/src/main.js' $(printf "'%s' " "$@")"; }
+    run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
 [[ "$(RML rack list --json 2>/dev/null | jq -r '.[0].name')" == "r1" ]] && ok "racks.json read while the migration has not run" || bad "racks.json not read"
 RML rack add r2 >/dev/null 2>&1 && bad "a write beside racks.json refused" || ok "a write beside racks.json refused"
 [[ ! -e "${LEG}/positions.json" ]] && ok "nothing written beside racks.json" || bad "positions.json written beside racks.json"
@@ -170,5 +170,5 @@ RM --help --json 2>/dev/null | jq -e '.verbs | length > 10' >/dev/null && ok "--
 
 rm -rf -- "${DIST}"
 echo ""
-echo "position-manager test: ${pass} passed, ${fail} failed"
+echo "asset-manager test: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

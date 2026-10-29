@@ -11,7 +11,7 @@ import { Placed, nameArea, portCells } from "../../web/src/physical/platelayout"
 import { ResolvedPlate } from "../../web/src/types";
 import { check, done } from "./check";
 
-const CATALOG = join(__dirname, "..", "..", "..", "..", "..", "manager", "position-manager", "faceplates");
+const CATALOG = join(__dirname, "..", "..", "..", "..", "..", "manager", "asset-manager", "faceplates");
 const W = 440;
 const plateOf = (key: string): ResolvedPlate => {
   const f = parseFaceplate(key, JSON.parse(readFileSync(join(CATALOG, `${key}.json`), "utf8")));

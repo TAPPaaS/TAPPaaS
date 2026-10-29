@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "positions-fields.json",
   "title": "TAPPaaS Positions",
-  "description": "config/positions.json — where the site's hardware is inside its locations: the rooms (each in a location of site.json), the racks, every placement, the devices and the cables nothing can see, and the faceplates the site adds to the catalog. Site state, written only by position-manager. A placement is keyed by the device's name in the physical topology (a node, a switch, an access point, a machine, a device recorded here); the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one.",
+  "description": "config/positions.json — where the site's hardware is inside its locations: the rooms (each in a location of site.json), the racks, every placement, the devices and the cables nothing can see, and the faceplates the site adds to the catalog. Site state, written only by asset-manager. A placement is keyed by the device's name in the physical topology (a node, a switch, an access point, a machine, a device recorded here); the device's own record is never touched. A cable between two devices the switches or LLDP already see is not recorded here: the topology draws it. An absent file is an empty one.",
   "type": "object",
   "additionalProperties": false,
   "properties": {
@@ -81,7 +81,7 @@
           "changeNote": "Renumbers every device's position as drawn; the recorded U of each placement stays."
         },
         "room": {
-          "description": "The room the rack stands in: a room record's name (position-manager room add). Text naming no room yet is kept as it is, with a note.",
+          "description": "The room the rack stands in: a room record's name (asset-manager room add). Text naming no room yet is kept as it is, with a note.",
           "type": "string",
           "references": "rooms",
           "changeClass": "in-place"

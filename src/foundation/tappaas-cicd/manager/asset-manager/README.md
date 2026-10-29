@@ -1,6 +1,6 @@
-# position-manager
+# asset-manager
 
-Where the site's hardware is. position-manager owns `config/positions.json`: the rooms
+Where the site's hardware is. asset-manager owns `config/positions.json`: the rooms
 and the location each is in, the racks, where each device is placed, the devices nothing
 manages, and the few cables nothing can see. It changes no device and no device record: a
 placement names a device as `network-manager topology` names it — a node, a switch, an
@@ -10,9 +10,9 @@ A location is the site's (`site-manager location list`): a room is in one, a rac
 room, a device is placed in a rack or loose in a room. A device with no placement is
 somewhere at its location; the console lists it under that location.
 
-`rack-manager` is its old name, and `racks.json` its file's: `rack-manager` answers the same
-verbs for one release, and the update renames the file (rooms get the primary location,
-`mounts` become `placements`).
+`position-manager` (ADR-036) and `rack-manager` before it are its old names: both answer the
+same verbs for one release (ADR-040 D7, ADR-035 P2). `racks.json` was its file's old name;
+migration 0020 renamed it.
 
 The console's Site › Physical tab draws it by location, room and rack, with faceplates and the
 links the switches and LLDP see drawn port to port, through `network-manager topology`,
@@ -139,18 +139,18 @@ A cable recorded before devices could be (the ISP's modem, named only on its cab
 keeps working; `validate` points it out. Recording the device keeps the cable as it is:
 
 ```
-position-manager device add 'ISP modem' --kind modem --model generic/isp-modem --check
-position-manager device add 'ISP modem' --kind modem --model generic/isp-modem
-position-manager place 'ISP modem' --room basement      # or --rack rack1 --u 3
+asset-manager device add 'ISP modem' --kind modem --model generic/isp-modem --check
+asset-manager device add 'ISP modem' --kind modem --model generic/isp-modem
+asset-manager place 'ISP modem' --room basement      # or --rack rack1 --u 3
 ```
 
 A device a switch port sees — a printer, a camera — is listed by the topology at its port
 with its MAC and what LLDP or its lease says. One verb records it and its cable:
 
 ```
-position-manager device record 'USW Pro XG 10 PoE:8' --name printer --kind other --check
-position-manager device record aa:bb:cc:00:11:22 --name printer --kind other
-position-manager place printer --room office
+asset-manager device record 'USW Pro XG 10 PoE:8' --name printer --kind other --check
+asset-manager device record aa:bb:cc:00:11:22 --name printer --kind other
+asset-manager place printer --room office
 ```
 
 ## The faceplate catalog
@@ -222,9 +222,9 @@ under `faceplates`, keyed `<vendor>/<model>`, and merged over the shipped catalo
 placement, a recorded device's model and a cable end name it as they name a shipped one:
 
 ```
-position-manager faceplate add acme/nas-4 --units 2 --ports "4xrj45, 2xsfp+" --kind server --match NAS-4X --check
-position-manager faceplate add acme/nas-4 --units 2 --ports "4xrj45, 2xsfp+" --kind server --match NAS-4X
-position-manager place nas --rack rack1 --u 6 --faceplate acme/nas-4
+asset-manager faceplate add acme/nas-4 --units 2 --ports "4xrj45, 2xsfp+" --kind server --match NAS-4X --check
+asset-manager faceplate add acme/nas-4 --units 2 --ports "4xrj45, 2xsfp+" --kind server --match NAS-4X
+asset-manager place nas --rack rack1 --u 6 --faceplate acme/nas-4
 ```
 
 It is checked as a shipped plate is: a broken one is an error and is not drawn. A site
@@ -235,7 +235,7 @@ neither has. To contribute a plate upstream, `faceplates show <key> --file` prin
 
 ## Lifecycle
 
-`install.sh` / `update.sh` build the flake package and link `position-manager` (and
-`rack-manager`, its old name, for one release) into `~/bin`; the package carries the
+`install.sh` / `update.sh` build the flake package and link `asset-manager` (and
+`position-manager` and `rack-manager`, its old names, for one release) into `~/bin`; the package carries the
 catalog beside the compiled sources. `test.sh` is offline: the unit suite over hrossen's
-topology and the CLI against a temp config. `validate.sh` runs `position-manager validate`.
+topology and the CLI against a temp config. `validate.sh` runs `asset-manager validate`.

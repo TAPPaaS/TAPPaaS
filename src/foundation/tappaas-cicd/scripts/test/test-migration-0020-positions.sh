@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test-migration-0020-positions.sh — the fixture test for migration 0020 (#870).
 #
-# hrossen's racks.json and site.json (position-manager's test fixtures): rack1
+# hrossen's racks.json and site.json (asset-manager's test fixtures): rack1
 # in basement with six devices, the ISP modem loose in basement, Nano HD loose
 # in stue, patchpanel1, one cable. Before → after, --check writes nothing,
 # applying twice is a no-op, the backup holds racks.json, no site.json leaves
@@ -12,7 +12,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CICD="$(cd "${HERE}/../.." && pwd)"
 M="${CICD}/migrations/0020-racks-become-positions.sh"
-FIX="${CICD}/manager/position-manager/test/fixtures"
+FIX="${CICD}/manager/asset-manager/test/fixtures"
 
 pass=0; fail=0
 ck() { if [[ "$2" == "$3" ]]; then echo "  ✓ $1"; pass=$((pass+1)); else echo "  ✗ $1 (expected '$2', got '$3')"; fail=$((fail+1)); fi; }
@@ -67,7 +67,7 @@ ck "twice: exit 0"                                     0 "${rc}"
 ck "…changes nothing"                                  "${after}" "$(snap)"
 ck "…and says so"                                      yes "$(yes '' '[[ "${out}" == *"nothing to migrate"* ]]')"
 
-# position-manager's reading of an unmigrated racks.json is what 0020 writes.
+# asset-manager's reading of an unmigrated racks.json is what 0020 writes.
 ck "the reader's legacy shape matches (loose: room, faceplate, label, description)" yes "$(yes '' 'grep -q "\"room\", \"faceplate\", \"label\", \"description\"" "${CICD}/lib/ts/src/positions.ts"')"
 
 # No site.json: the rooms keep no location (absent is the primary).

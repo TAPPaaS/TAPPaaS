@@ -67,7 +67,7 @@ and status, and the repositories (sync, hold, release, stashes, reconcile).
 headed by its name — a link to its row in the Site page's Locations — and its address, around its
 rooms and, after them, what is at it placed nowhere (with no room: somewhere there) and a backup
 buddy or satellite that is there; each room of
-position-manager's `config/positions.json` as an area with its racks and, beside them, the devices
+asset-manager's `config/positions.json` as an area with its racks and, beside them, the devices
 standing loose in it; each rack as a frame with its units numbered as the rack numbers them, each placed device as its
 faceplate at its units and width with its ports' live state (link, LAG), the cabled ports
 underlined (a patch panel's rear-cabled ports overlined), the cables port to port — each one thin curve
@@ -78,14 +78,14 @@ device, patch), highlighted with a label on hover, a selected cable labelled mid
 through a patch panel as its two wires —, a
 device only a cable record places beside the rack, and an Unplaced tray of the devices placed
 nowhere, by location, each with Place… (one form: a rack and its units, or loose in a room;
-`position-manager place`) — or, for a device a switch port sees and nobody recorded, Record…
-(`position-manager device record`: its MAC kept, the port's link recorded as its cable); the header's
-Add a room… (`position-manager room add`, at one of the site's locations), Add a
-rack…, Record a device… (`position-manager device add`: kind, a catalog model or free text, ports, location; the
+`asset-manager place`) — or, for a device a switch port sees and nobody recorded, Record…
+(`asset-manager device record`: its MAC kept, the port's link recorded as its cable); the header's
+Add a room… (`asset-manager room add`, at one of the site's locations), Add a
+rack…, Record a device… (`asset-manager device add`: kind, a catalog model or free text, ports, location; the
 site's own plates first in the model list), the last also in a rack's and a room's card, and Add a faceplate…
-(`position-manager faceplate add`: a plate for a model the catalog lacks — its key, units, width, kind and ports as a
+(`asset-manager faceplate add`: a plate for a model the catalog lacks — its key, units, width, kind and ports as a
 port spec the form explains, drawn as the rack will draw it while the fields change), and a How to card while nothing is selected; a click on a cable opens its link, whose panel
-lists the wires and offers Attach to patch panel…; a click on a patch panel's port (on its plate or in its port table) opens the link through it, a free one its port with Attach a wire here… (the links that could run through it), (`position-manager cable split`, its `--check` the
+lists the wires and offers Attach to patch panel…; a click on a patch panel's port (on its plate or in its port table) opens the link through it, a free one its port with Attach a wire here… (the links that could run through it), (`asset-manager cable split`, its `--check` the
 preview, the free panel ports to choose from) or Remove patch panel (`cable join`); a click on a plate or a port
 opens the side card to the left of the racks, with the device's location and placement as two
 lines — the location a link to its row on the Site page, the placement to its rack or room in the
@@ -192,7 +192,7 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | the repositories' catalogues (`catalogs`) | `site-manager repository list --json`, `<path>/<catalog>`, each module's JSON, `config/<m>.json` moduleSource | 10 min, and after a job |
 | a form's schema (`schemas/zones`, `schemas/environment`, the rack, room and placement `$defs` of `positions-fields`) | `src/foundation/schemas/<name>-fields.json` of `$CONSOLE_REPO` | 10 min |
 | topology (the Physical page) | `network-manager topology --json --health <the cached validate>` | every 5 min |
-| the faceplate catalog (a placement's faceplate choices) | `position-manager faceplates list --json` | 10 min |
+| the faceplate catalog (a placement's faceplate choices) | `asset-manager faceplates list --json` | 10 min |
 | storage (Physical › Storage and Overview) | `storage-manager inventory --json` (SMART included, ≈15 s on three nodes) | 10 min, read when a page asks; no timer of its own |
 | zones | `network-manager list --json`, `show <zone> --json` | every 5 min |
 | the site's IPv6 prefix (`ipv6`: each zone's /64 on the Zones page) | `site.json` `ipv6` and `network.wan.ipv6`; for a dynamic WAN, `ipv6-manager wan --json` (ssh to the firewall) | 10 min, read when a page asks; no timer of its own |

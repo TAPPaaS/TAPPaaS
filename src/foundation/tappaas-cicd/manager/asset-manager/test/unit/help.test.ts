@@ -1,4 +1,4 @@
-// help.test.ts — position-manager's --help is its verb manifest (`--help --json`):
+// help.test.ts — asset-manager's --help is its verb manifest (`--help --json`):
 // every option a usage names is described, the reads are reads, the writes
 // preview with --check, and what removes something is destructive.
 
@@ -31,5 +31,5 @@ check(v("place").positionals[0]?.name === "device", "place's positional is the d
 check(v("device record").positionals[0]?.name === "port-or-mac" && v("device record").object?.positional === "port-or-mac", "device record names the port it records from");
 check(v("place").keys.some((k) => k.join(" ") === "mount add") && v("place modify").keys.some((k) => k.join(" ") === "mount modify") && v("unplace").keys.some((k) => k.join(" ") === "mount remove"), "mount add, modify and remove answer as aliases");
 
-console.log(`\nposition-manager help: ${passed} passed, ${failed} failed`);
+console.log(`\nasset-manager help: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

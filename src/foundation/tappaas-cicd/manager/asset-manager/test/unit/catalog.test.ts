@@ -2,7 +2,7 @@
 // parses, the plates hrossen's devices are drawn with have the ports their
 // controllers name, and each device gets the plate it should.
 //
-// Run: RM_FIXTURE_DIR=<position-manager>/test/fixtures RM_CATALOG_DIR=<position-manager>/faceplates node catalog.test.js
+// Run: RM_FIXTURE_DIR=<asset-manager>/test/fixtures RM_CATALOG_DIR=<asset-manager>/faceplates node catalog.test.js
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -99,5 +99,5 @@ check(near(cages[0], 0.02 + 0.58 / 32) && near(cages[15], 0.6 - 0.58 / 32) && ev
 check(near(cx["ether1"], 0.625) && near(cx["console"], 0.655) && cx["ether1"] > cages[15], "CRS317: ether1 and the console at the row's right end");
 check(Math.max(...Object.values(cx)) < 2 / 3, "CRS317: the right third blank, its name's place");
 
-console.log(`\nposition-manager catalog: ${passed} passed, ${failed} failed`);
+console.log(`\nasset-manager catalog: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

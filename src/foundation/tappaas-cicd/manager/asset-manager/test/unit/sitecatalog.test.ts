@@ -2,7 +2,7 @@
 // groups, names, places on the plate), a site plate merged over the shipped
 // catalog and checked as a shipped one is, and faceplate add/modify/delete.
 //
-// Run: RM_CATALOG_DIR=<position-manager>/faceplates node sitecatalog.test.js
+// Run: RM_CATALOG_DIR=<asset-manager>/faceplates node sitecatalog.test.js
 
 import { loadCatalog } from "../../src/store";
 import { addFaceplate, deleteFaceplate, modifyFaceplate, placeDevice, addRack, Result } from "../../src/verbs";
@@ -120,5 +120,5 @@ const gone = doc(deleteFaceplate({ faceplates: { "acme/x": { units: 1, ports: "r
 check(gone.faceplates === undefined, "faceplate delete: the last one, and the section goes");
 check(refused(deleteFaceplate(d, "unifi/nano-hd", shipped)).includes("shipped plate is not deleted"), "faceplate delete: a shipped plate, refused");
 
-console.log(`\nposition-manager site catalog: ${passed} passed, ${failed} failed`);
+console.log(`\nasset-manager site catalog: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

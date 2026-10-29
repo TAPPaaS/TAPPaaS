@@ -1,4 +1,4 @@
-// portspec.ts — the port spec, as position-manager reads it (lib/ts
+// portspec.ts — the port spec, as asset-manager reads it (lib/ts
 // positions.ts parsePortSpec, blockRows, blockX — the same code, which the
 // front end's build cannot import): the Add a faceplate form's live preview
 // draws what `faceplate add --ports` will record. ui/test's portspec test

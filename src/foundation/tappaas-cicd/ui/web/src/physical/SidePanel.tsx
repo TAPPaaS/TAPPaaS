@@ -3,7 +3,7 @@
 // the day-2 changes it offers (a switch port's zone, spike mockup 3: the port's
 // record with switch-manager update-port, then reconcile previewed and
 // applied; a node's uplinks: site-manager node network show / set), and where
-// to open it. Where the hardware is (position-manager): every device's location
+// to open it. Where the hardware is (asset-manager): every device's location
 // and placement, each a link to its object, with Place…, Move to… and
 // Unplace…; a room's location, a rack's own record, a passive or outside
 // device's placement and recorded cables, and a device a switch port sees with
@@ -577,7 +577,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
                 return room.location ? <><LocationLink name={room.location}>{l?.displayName ?? room.location}</LocationLink>{p || l?.primary ? <span className="muted">{p ? ` · ${p}` : ""}{l?.primary ? " · primary" : ""}</span> : null}</> : null;
               })()],
               ["description", room.description],
-              ["recorded", room.recorded ? "yes" : "no — only a rack's text names it (position-manager room add)"],
+              ["recorded", room.recorded ? "yes" : "no — only a rack's text names it (asset-manager room add)"],
             ]}
           />
           <h3>Racks</h3>
@@ -596,20 +596,20 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           </ul>
         </>
       );
-      const rmStep = (verb: string, t: string, extra: Partial<Step> = {}): Step => ({ title: t, bin: "position-manager", verb, fixed: [room.name], ...extra });
+      const rmStep = (verb: string, t: string, extra: Partial<Step> = {}): Step => ({ title: t, bin: "asset-manager", verb, fixed: [room.name], ...extra });
       actions = room.recorded ? (
         <>
           <OperateButton label="Change…" title={`Room ${room.name}`} steps={() => roomModifySteps(room.name)} />
-          {room.racks.length === 0 && room.loose.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete room ${room.name}`} steps={[rmStep("room delete", `position-manager room delete ${room.name}`)]} /> : null}
+          {room.racks.length === 0 && room.loose.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete room ${room.name}`} steps={[rmStep("room delete", `asset-manager room delete ${room.name}`)]} /> : null}
           <RecordDeviceButton />
         </>
       ) : /^[a-z][a-z0-9-]{0,62}$/.test(room.name) ? (
-        <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `position-manager room add ${room.name}`, locationOption(locations))]} />
+        <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `asset-manager room add ${room.name}`, locationOption(locations))]} />
       ) : (
         // A room name is lower case: record it under one, then point the racks at it.
         <p className="muted small">
           '{room.name}' is no room name (lower case letters, digits, dashes): record it as{" "}
-          <span className="mono">position-manager room add {room.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-")} --display-name '{room.name}'</span>, then set each rack's room to it ({room.racks.map((r) => `rack modify ${r} --set room=…`).join(", ")}).
+          <span className="mono">asset-manager room add {room.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-")} --display-name '{room.name}'</span>, then set each rack's room to it ({room.racks.map((r) => `rack modify ${r} --set room=…`).join(", ")}).
         </p>
       );
       open = <p className="muted small">A room is a record of config/positions.json only.</p>;
@@ -654,7 +654,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
         title = seen.displayName ? `${seen.displayName} · seen` : `${sel.id} · seen`;
         body = (
           <>
-            <p className="small">A switch port sees this device, and no record names it: nothing manages it and position-manager does not record it yet.</p>
+            <p className="small">A switch port sees this device, and no record names it: nothing manages it and asset-manager does not record it yet.</p>
             <KV
               rows={[
                 ["seen at", <button className="linklike" onClick={() => pick({ kind: "port", id: s.port, switch: s.switch })}>{s.switch} port {s.port}</button>],
@@ -668,7 +668,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           </>
         );
         actions = <RecordSeenButton d={seen} />;
-        open = <p className="muted small">Seen by {s.switch}'s controller at port {s.port}; position-manager device record turns it into a recorded device.</p>;
+        open = <p className="muted small">Seen by {s.switch}'s controller at port {s.port}; asset-manager device record turns it into a recorded device.</p>;
         break;
       }
       title = rec?.displayName && rec.displayName !== sel.id ? `${rec.displayName} · ${sel.id}` : sel.id;
@@ -717,7 +717,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           {recActs}
         </>
       );
-      open = <p className="muted small">{rec ? "Nothing manages it: position-manager records it." : out ? "Nothing reports on it: it is known only by the cable that names it — record it (position-manager device add) to place it." : "Its own records are on the module's page."}</p>;
+      open = <p className="muted small">{rec ? "Nothing manages it: asset-manager records it." : out ? "Nothing reports on it: it is known only by the cable that names it — record it (asset-manager device add) to place it." : "Its own records are on the module's page."}</p>;
       break;
     }
   }
@@ -819,16 +819,16 @@ function NodeNetwork({ node }: { node: string }) {
 
 // A recorded device's own record: change it, or remove it once nothing names it.
 function DeviceRecordActions({ name, cabled, placed }: { name: string; cabled: boolean; placed: boolean }) {
-  const rm = (verb: string, title: string, extra: Partial<Step> = {}): Step => ({ title, bin: "position-manager", verb, fixed: [name], ...extra });
+  const rm = (verb: string, title: string, extra: Partial<Step> = {}): Step => ({ title, bin: "asset-manager", verb, fixed: [name], ...extra });
   return (
     <>
-      <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("device modify", `position-manager device modify '${name}'`, { note: "Its kind, model, ports (a count or a list), display name or description; --check previews." })]} />
-      {!placed && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("device remove", `position-manager device remove '${name}'`)]} /> : null}
+      <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("device modify", `asset-manager device modify '${name}'`, { note: "Its kind, model, ports (a count or a list), display name or description; --check previews." })]} />
+      {!placed && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("device remove", `asset-manager device remove '${name}'`)]} /> : null}
     </>
   );
 }
 
-// A wire through a patch panel: position-manager cable split, its --check the preview.
+// A wire through a patch panel: asset-manager cable split, its --check the preview.
 function PanelSplit({ t, c, many }: { t: Topology; c: RackCable; many: boolean }) {
   const free = freePanelPorts(t);
   if (!free.length) return null;
@@ -837,12 +837,12 @@ function PanelSplit({ t, c, many }: { t: Topology; c: RackCable; many: boolean }
     <OperateButton
       label={many ? `Attach ${c.from.port} ↔ ${c.to.port} to a patch panel…` : "Attach to patch panel…"}
       title={`${end} — ${c.to.device}:${c.to.port} through a patch panel`}
-      steps={[{ title: `position-manager cable split '${end}' --via <panel:port>`, bin: "position-manager", verb: "cable split", fixed: [end], only: ["--via"], choices: { "--via": free }, note: "The link becomes two recorded wires: this port to the panel port's front, its rear to the far end. The Device view keeps one link; the racks draw the two wires. Preview: position-manager's --check." }]}
+      steps={[{ title: `asset-manager cable split '${end}' --via <panel:port>`, bin: "asset-manager", verb: "cable split", fixed: [end], only: ["--via"], choices: { "--via": free }, note: "The link becomes two recorded wires: this port to the panel port's front, its rear to the far end. The Device view keeps one link; the racks draw the two wires. Preview: asset-manager's --check." }]}
     />
   );
 }
 
-// Undo it: position-manager cable join at the panel port.
+// Undo it: asset-manager cable join at the panel port.
 function PanelJoin({ c }: { c: RackCable }) {
   const v = c.via?.[0];
   if (!v) return null;
@@ -850,7 +850,7 @@ function PanelJoin({ c }: { c: RackCable }) {
     <OperateButton
       label="Remove patch panel"
       title={`${c.from.device}:${c.from.port} — ${c.to.device}:${c.to.port} without ${v.device}`}
-      steps={[{ title: `position-manager cable join '${v.device}:${v.port}'`, bin: "position-manager", verb: "cable join", fixed: [`${v.device}:${v.port}`], note: "The two wires through the panel port are one link again: the topology's own, or one recorded cable when it was recorded. Preview: position-manager's --check." }]}
+      steps={[{ title: `asset-manager cable join '${v.device}:${v.port}'`, bin: "asset-manager", verb: "cable join", fixed: [`${v.device}:${v.port}`], note: "The two wires through the panel port are one link again: the topology's own, or one recorded cable when it was recorded. Preview: asset-manager's --check." }]}
     />
   );
 }
@@ -899,13 +899,13 @@ function PanelAttach({ panelPort, links }: { panelPort: string; links: { end: st
       title={`A link through ${panelPort}`}
       steps={[
         {
-          title: `position-manager cable split <device:port> --via '${panelPort}'`,
-          bin: "position-manager",
+          title: `asset-manager cable split <device:port> --via '${panelPort}'`,
+          bin: "asset-manager",
           verb: "cable split",
           only: [],
           initial: { "--via": panelPort },
           choices: { "@device:port": links.map((l) => l.end) },
-          note: <>The link on the port you choose becomes two recorded wires: that port to {panelPort}'s front, its rear to the far end. The links: {links.map((l) => l.text).join("; ")}. Preview: position-manager's --check.</>,
+          note: <>The link on the port you choose becomes two recorded wires: that port to {panelPort}'s front, its rear to the far end. The links: {links.map((l) => l.text).join("; ")}. Preview: asset-manager's --check.</>,
         },
       ]}
     />

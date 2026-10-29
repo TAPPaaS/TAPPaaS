@@ -3,8 +3,8 @@
 // site.json, `site-manager node list / node network show`, `switch-manager
 // list / list-ports / lag list`, `ap-manager list`, zones.json, `module-manager
 // module list` (guests and their run state, read through lib/ts/cluster.ts),
-// `backup-manager peers`, `health-manager validate` and `position-manager
-// export` — and stores nothing. The positions (position-manager's
+// `backup-manager peers`, `health-manager validate` and `asset-manager
+// export` — and stores nothing. The positions (asset-manager's
 // config/positions.json and its faceplate catalog) are resolved here against
 // the devices and links found: the site's locations with their rooms and
 // racks, each placement on its device and plate, every link on faceplate
@@ -210,7 +210,7 @@ export interface TopoSources {
   machineLocations?: Record<string, string>;
   wanAddress?: WanAddress | null; // what the WAN held at the last network update
   actual?: SwitchActual | null; // switch-configuration-actual.json: MLAG pairs, peer links
-  // position-manager export --json; undefined: not read (--no-positions), null: it did not answer
+  // asset-manager export --json; undefined: not read (--no-positions), null: it did not answer
   positions?: { doc: PositionsDoc; catalog: Faceplate[] } | null;
   errors: { source: string; error: string }[];
 }
@@ -391,14 +391,14 @@ export interface TopoWanPath {
   active: boolean; // the firewall runs on this node
 }
 // A device the topology knows besides the nodes, switches and access points:
-// a machine module, a device a switch port names, a device position-manager
+// a machine module, a device a switch port names, a device asset-manager
 // records, or one a switch port sees that nobody recorded. What a rack holds.
 export interface TopoDevice extends TopoPlace {
   name: string;
   kind: "machine" | "device" | RecordedKind;
   vendor: string | null;
   model: string | null;
-  // A device position-manager records (nothing manages it): its ports and how
+  // A device asset-manager records (nothing manages it): its ports and how
   // it is shown.
   recorded?: true;
   ports?: string[];
@@ -434,7 +434,7 @@ export interface Topology {
   zones: TopoZone[];
   outside: TopoOutside[];
   devices: TopoDevice[];
-  // Where the hardware is (position-manager): null when it was not read.
+  // Where the hardware is (asset-manager): null when it was not read.
   positions: PositionsView | null;
   findings: TopoFinding[];
   sources: { name: string; ok: boolean; error?: string }[];
@@ -1010,7 +1010,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
       devices.push({ name: p.target.name, kind: "device", vendor: null, model: null, ...unplaced, source: "switch-configuration" });
     }
   }
-  // The devices position-manager records: what nothing above manages.
+  // The devices asset-manager records: what nothing above manages.
   const posDoc = src.positions?.doc ?? {};
   for (const [name, d] of Object.entries(posDoc.devices ?? {})) {
     if (taken.has(name)) continue;
@@ -1168,9 +1168,9 @@ export const SOURCE_NAMES = [
   "health-manager validate",
   "wan-address.json",
   "switch-configuration-actual.json",
-  "position-manager export",
+  "asset-manager export",
 ];
-const POSITIONS_SOURCE = "position-manager export";
+const POSITIONS_SOURCE = "asset-manager export";
 
 export type Runner = (bin: string, args: string[]) => ExecResult;
 
@@ -1182,7 +1182,7 @@ export interface CollectOpts {
   health?: HealthDoc | null;
   run?: Runner;
   wanAddressFile?: string; // default $TAPPAAS_WAN_ADDRESS_FILE or /var/lib/tappaas/wan-address.json
-  positions?: boolean; // read position-manager export (default); false for position-manager's own read
+  positions?: boolean; // read asset-manager export (default); false for asset-manager's own read
 }
 
 export function collectSources(o: CollectOpts): TopoSources {
@@ -1285,8 +1285,8 @@ export function collectSources(o: CollectOpts): TopoSources {
     machineLocations,
     wanAddress,
     actual,
-    // No positions.json is an empty document, not an error; no position-manager is.
-    positions: o.positions === false ? undefined : json<{ doc: PositionsDoc; catalog: Faceplate[] }>(POSITIONS_SOURCE, "position-manager", ["export", "--json"]),
+    // No positions.json is an empty document, not an error; no asset-manager is.
+    positions: o.positions === false ? undefined : json<{ doc: PositionsDoc; catalog: Faceplate[] }>(POSITIONS_SOURCE, "asset-manager", ["export", "--json"]),
     errors,
   };
 }
@@ -1388,7 +1388,7 @@ export function renderTopology(t: Topology): string[] {
   const seen = t.devices.filter((d) => d.source === "seen");
   if (seen.length) {
     out.push("", "Seen at a port, recorded nowhere");
-    for (const d of seen) out.push(`  ${d.seen!.switch}:${d.seen!.port}  ${d.seen!.mac ?? "(link up)"}${d.displayName ? `  ${d.displayName}` : ""}  — position-manager device record`);
+    for (const d of seen) out.push(`  ${d.seen!.switch}:${d.seen!.port}  ${d.seen!.mac ?? "(link up)"}${d.displayName ? `  ${d.displayName}` : ""}  — asset-manager device record`);
   }
   if (t.findings.length) {
     out.push("", "Findings");

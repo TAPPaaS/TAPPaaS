@@ -3,7 +3,7 @@
 // view the topology carries, over hrossen's topology
 // (test/fixtures/topology-hrossen.json). Offline; the catalog is in memory.
 //
-// Run: RM_FIXTURE_DIR=<position-manager>/test/fixtures node physical.test.js
+// Run: RM_FIXTURE_DIR=<asset-manager>/test/fixtures node physical.test.js
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -164,5 +164,5 @@ check(pl.tappaas1.height === 2 && pl["ISP modem"].room === "basement" && pl["ISP
 const w = doc(addRoom(racksJson, "attic", {}));
 check(w.placements!.tappaas1.u === 1 && (w as Record<string, unknown>).mounts === undefined && Object.keys(w)[0] === "version", "a write turns mounts into placements, in the schema's order");
 
-console.log(`\nposition-manager physical: ${passed} passed, ${failed} failed`);
+console.log(`\nasset-manager physical: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

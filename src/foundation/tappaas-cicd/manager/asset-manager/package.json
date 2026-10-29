@@ -1,0 +1,13 @@
+{
+  "name": "asset-manager",
+  "version": "0.3.0",
+  "description": "the site's physical assets and where they are \u2014 rooms in locations, racks, placements, assets with their ports and lifecycle, and cables in config/positions.json \u2014 TypeScript",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "asset-manager": "dist/main.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

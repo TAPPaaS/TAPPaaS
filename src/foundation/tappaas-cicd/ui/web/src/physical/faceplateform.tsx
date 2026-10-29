@@ -1,7 +1,7 @@
 // faceplateform.tsx — Add a faceplate…: a plate the site adds for a model the
-// catalog lacks (position-manager faceplate add). The form takes its key, its
+// catalog lacks (asset-manager faceplate add). The form takes its key, its
 // units and width, what it is and its ports as a port spec, explains the spec
-// and draws the plate as the fields change, with the code position-manager
+// and draws the plate as the fields change, with the code asset-manager
 // reads the spec with (portspec.ts). Change → Preview (--check) → Apply.
 
 import { ManifestVerb, PlatePort, ResolvedPlate } from "../types";
@@ -9,7 +9,7 @@ import { Step, Values } from "../operate";
 import { PlateSvg, Placed, R } from "./rack";
 import { CatalogPort, blockRows, parsePortSpec } from "./portspec";
 
-const RM = "position-manager";
+const RM = "asset-manager";
 const KINDS = ["other", "server", "switch", "ap", "patch-panel", "pdu", "modem"];
 const WIDTHS = ["full", "half", "third"];
 const KEY_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9.+-]*$/;
@@ -150,7 +150,7 @@ function FaceplateFields({ values, set, verb }: { values: Values; set: (v: Value
 export function faceplateAddSteps(): Step[] {
   return [
     {
-      title: "position-manager faceplate add <vendor/model>",
+      title: "asset-manager faceplate add <vendor/model>",
       bin: RM,
       verb: "faceplate add",
       only: [],

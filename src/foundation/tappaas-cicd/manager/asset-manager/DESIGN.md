@@ -1,4 +1,4 @@
-# position-manager — design
+# asset-manager — design
 
 ## What it is for
 
@@ -25,12 +25,12 @@ everything else comes from where it already is.
    on its own record (a recorded device here); unset, it is at the primary
    location. Its placement's room must be at that location, and a device at a
    location with no room is somewhere there, unplaced.
-3. **The topology joins it.** `network-manager topology` reads `position-manager
+3. **The topology joins it.** `network-manager topology` reads `asset-manager
    export --json` (the document and the catalog) and carries `positions`: the
    locations, their rooms and racks with each placement resolved to its device
    and plate, live port state on every plate port, and the cables; every device
    it lists carries its location, its placement and the record it came from. The
-   console reads only the topology. position-manager in turn reads the topology
+   console reads only the topology. asset-manager in turn reads the topology
    to check device and port names (`--no-positions`, so the two never recurse).
 4. **Cables come from what is seen.** Every switch port with a known far end and
    every node leg LLDP places is a cable, mapped to the plates' ports.
@@ -52,7 +52,7 @@ everything else comes from where it already is.
    face, per column: a half and a half side by side are fine) and being at the
    device's location.
 7. **Pure core, thin CLI.** `lib/ts/src/positions.ts` holds the model, the check
-   and the view, shared by position-manager and network-manager; `src/verbs.ts`
+   and the view, shared by asset-manager and network-manager; `src/verbs.ts`
    holds each verb as a function from document to document or refusal;
    `src/main.ts` locks, checks the whole result, writes atomically. The unit
    tests run the core over hrossen's captured topology.
@@ -75,7 +75,7 @@ everything else comes from where it already is.
     link they replace. The topology chains them back into one link between the
     two devices (with the live state of the link it sees), so the Device view
     keeps one line and the Physical view draws the two wires; `cable join` undoes it.
-12. **A rename keeps the old words for a release.** `rack-manager` and the
+12. **A rename keeps the old words for a release.** `position-manager`, `rack-manager` and the
     `mount` verbs answer as aliases; `racks.json` is read until the update has
     renamed it, and a change waits until it has.
 
