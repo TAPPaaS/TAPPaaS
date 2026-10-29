@@ -27,7 +27,7 @@
 import { spawnSync } from "child_process";
 import { join } from "path";
 import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from "./config";
-import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient, HealthReport, NodeCapacity, StoragePool } from "./types";
+import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient, ConfigModule, HealthReport, NodeCapacity, StoragePool } from "./types";
 import { existsSync, readFileSync } from "fs";
 import { checkCveStatus } from "./security";
 import { checkSignatureStatus } from "./signatures";
@@ -54,6 +54,17 @@ export function guestTarget(configDir: string, module: string): string | null {
   return `${vmname}.${zone0}.internal`;
 }
 
+// The target a guest's probes run against: its DNS name, or for an LXC module
+// `lxc:<node>:<vmid>`, which the client reaches through `pct exec` on the node
+// it runs on (#901) — a container needs no SSH of its own, as the security scan.
+export function probeTarget(client: ClusterClient, configDir: string, m: ConfigModule): string | null {
+  const raw = readModuleJson(join(configDir, `${m.module}.json`));
+  if (raw && configField(raw, "kind") === "lxc") {
+    return `lxc:${client.actualNode(m.node, m.vmid) || m.node}:${m.vmid}`;
+  }
+  return guestTarget(configDir, m.module);
+}
+
 // ── disk-threshold gate ───────────────────────────────────────────────
 // check-disk-threshold.sh ALSO auto-grows the disk by 50% when over threshold.
 // That is a MUTATION and does NOT belong in a read-only health assertion, so the
@@ -71,7 +82,7 @@ export function checkDiskThreshold(
   const findings: CheckRow[] = [];
   let probed = 0;
   for (const m of modules) {
-    const target = guestTarget(configDir, m.module);
+    const target = probeTarget(client, configDir, m);
     if (!target) continue;
     const pct = client.diskUsagePct(target);
     if (pct === null) continue; // unreachable → skip this guest
@@ -566,7 +577,7 @@ export function checkPendingReboot(
   const rows: CheckRow[] = [];
   let probed = 0;
   for (const m of modules) {
-    const target = guestTarget(configDir, m.module);
+    const target = probeTarget(client, configDir, m);
     if (!target) continue;
     const p = client.pendingReboot(target);
     if (p === null) continue; // unreachable → skip this guest

@@ -22,8 +22,10 @@
 #   - `node` is MANUAL, not `migrate`: live-migrating a container with a GPU
 #     passed through or a bind-mount from the host is unsafe, and those are
 #     exactly the workloads TAPPaaS runs in containers. Reported, never moved.
-#   - `diskSize`/`storage` are MANUAL for the same reason — a bind-mounted
-#     rootfs is not something to resize or move mid-sweep.
+#   - `storage` is MANUAL for the same reason — a container with bind mounts
+#     is not something to move mid-sweep. `diskSize` is grow-only, as for a VM:
+#     update-disk.sh grows the rootfs live, and auto-grow.sh (cluster:vm's,
+#     container-aware) grows it before it fills (#901).
 #   - DNS follows the DHCP lease (masqdns), so the dns side effect REMOVES
 #     stale static pins rather than registering one.
 #
@@ -94,6 +96,16 @@ check_json "${CONFIG_DIR}/${MODULE}.json" || exit 1
 debug "${BOLD}cluster:lxc update-service: reconciling ${BL}${MODULE}${CL}"
 [[ "${CHECK_MODE}" == "1" ]] && warn "  CHECK MODE — drift will be reported, not applied"
 CONVERGE_CHECK="${CHECK_MODE}"
+
+# ── Automatic disk growth (#100, #901) ───────────────────────────────
+# Before the drift record, so a grow it decides is converged in this same pass;
+# only on a bare invocation, as in cluster:vm.
+if [[ -z "${DRIFT_FILE}" ]]; then
+    _ag=()
+    [[ "${CHECK_MODE}" == "1" ]] && _ag=(--check)
+    "${SCRIPT_DIR}/../vm/auto-grow.sh" "${_ag[@]}" "${MODULE}" \
+        || warn "  auto-grow ${MODULE} failed — the update continues without it"
+fi
 
 # ── The drift record ─────────────────────────────────────────────────
 

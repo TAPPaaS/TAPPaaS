@@ -8,7 +8,8 @@ import { tmpdir } from "os";
 import { HELP, parseOpts, run } from "../../src/main";
 import { undocumentedOptions } from "../../../../lib/ts/src/help";
 import { clusterDiff, inspectCluster, inspectVm } from "../../src/inspect";
-import { checkDiskThreshold, checkServiceLiveness } from "../../src/checks";
+import { checkDiskThreshold, checkPendingReboot, checkServiceLiveness } from "../../src/checks";
+import { lxcTarget } from "../../src/client";
 import { resolveGitJson, siteNodeHostnames } from "../../src/config";
 import { RunningGuest } from "../../src/types";
 import { FakeClusterClient } from "./fake-client";
@@ -329,6 +330,30 @@ function testParseOpts(): void {
   check(o.rest.length === 0, `no value is left over as an argument (rest: ${o.rest.join(" ")})`);
 }
 testParseOpts();
+
+// #901: an LXC module is probed through `pct exec` on the node it runs on, not
+// over SSH of its own — a container without sshd was skipped by both gates.
+function testLxcProbeTarget(): void {
+  const dir = mkdtempSync(join(tmpdir(), "health-lxc-"));
+  writeFileSync(join(dir, "site1.json"), JSON.stringify({ vmname: "site1", vmid: "631", node: "tappaas1", kind: "lxc" }));
+  writeFileSync(join(dir, "web.json"), JSON.stringify({ vmname: "web", vmid: "632", node: "tappaas1" }));
+  const c = new FakeClusterClient();
+  c.actualNodes.set("tappaas1/631", "tappaas2"); // migrated: the live node wins
+  c.diskUsage.set("lxc:tappaas2:631", 91);
+  c.diskUsage.set("web.mgmt.internal", 40);
+  const disk = checkDiskThreshold(c, dir, "tappaas1", 80);
+  check(disk.status === "fail" && /site1 \(91%\)/.test(disk.detail), `an LXC module's disk is probed on its live node (got: ${disk.detail})`);
+  check(!/web/.test(disk.detail), "a VM under the threshold stays out of the finding");
+
+  c.reboots.set("lxc:tappaas2:631", { pending: true, os: "debian", booted: "", next: "", active: false });
+  const r = checkPendingReboot(c, dir, "tappaas1");
+  check(r.status === "warn" && (r.rows ?? []).some((x) => /site1/.test(x.text)), "an LXC module's pending restart is reported");
+
+  check(JSON.stringify(lxcTarget("lxc:tappaas2:631")) === JSON.stringify({ node: "tappaas2", vmid: 631 }), "lxcTarget parses node and vmid");
+  check(lxcTarget("site1.mgmt.internal") === null, "a DNS name is not an LXC target");
+  check(lxcTarget("lxc:tappaas2:63x;rm") === null, "a malformed LXC target is refused");
+}
+testLxcProbeTarget();
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

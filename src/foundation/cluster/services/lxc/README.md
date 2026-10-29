@@ -237,13 +237,15 @@ Disk size with unit suffix
 | Example | `32G` |
 | Required by | *(none)* |
 | Used by | `cluster:vm`, `cluster:lxc` |
-| Change class | `manual` |
-| Apply mode | `none` |
+| Change class | `grow-only` |
+| Apply mode | `hook` |
+| Normalizer | `size` |
 | Reported as | `diskSize` |
+| Hook | `update-disk.sh` |
 
 **About the field.** G=gigabytes, M=megabytes, K=kilobytes
 
-**Why this change class.** Not grown by this service. main's update-service.sh header promised a warn for 'rootfs size' that the code never implemented — it read only vmname/node/zone0/bridge0/trunks0/cores/memory/swap — so the rootfs size was invisible rather than reported. Classed manual, which restores the report. The schema default 8G is DESIRED state (ADR-020 D9): it is what Create-TAPPaaS-LXC.sh builds with, so an undeclared container is in sync from install. Unlike cluster:vm diskSize there is no path that grows it behind config's back — check-disk-threshold.sh calls resize-disk.sh, which is qm-only — so a divergence means an operator ran pct resize by hand, which is exactly what manual exists to surface. Reclassifying to grow-only so pct resize could grow it live is a capability change (recommendation 3), deliberately not bundled here.
+**Why this change class.** The rootfs grows live with pct resize (update-disk.sh), and auto-grow.sh grows it before it fills, as for a VM: on every update, under the same threshold, diskSizeMax and pool limits. A SHRINK is refused at apply time (hook exit 20). Only the rootfs is the field; bind mounts and other mount points are never resized. The schema default 8G is what Create-TAPPaaS-LXC.sh builds with, so an undeclared container is in sync from install; a rootfs grown by hand reads as config behind actual and is adopted into config, as for cluster:vm.
 
 ### `storage`
 

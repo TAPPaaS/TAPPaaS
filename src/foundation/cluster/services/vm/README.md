@@ -624,9 +624,11 @@ Built from `bridge1`, `zone1`, `mac1`, `trunks1`.
 ## Automatic disk growth
 
 Every update of a module checks its VM's disk before the converge
-(`auto-grow.sh`), so a disk is grown before it fills rather than after:
+(`auto-grow.sh`), so a disk is grown before it fills rather than after. A
+`cluster:lxc` container's rootfs is grown the same way, by the same script:
 
-1. **Measure** — how full the guest's `/` is (`df`), and the disk's real size.
+1. **Measure** — how full the guest's `/` is (`df`; in a container through
+   `pct exec` on its node), and the disk's real size.
 2. **Decide** — at or over `threshold` (80%): grow by `growPercent` (50%), at
    least `minGrowGB` (5 GB), never past the module's `diskSizeMax`.
 3. **Room** — the disk's pool must hold the increase and stay at or under

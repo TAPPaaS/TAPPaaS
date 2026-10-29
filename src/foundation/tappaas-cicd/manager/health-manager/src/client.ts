@@ -13,6 +13,7 @@
 //   vmStatus()       : ssh root@<node> qm|pct status <vmid>       → status word
 //   actualNode()     : pvesh /cluster/resources | select vmid
 //   diskUsagePct()   : ssh tappaas@<target> df / | tail -1 | awk '{print $5}'
+//                      (an LXC: ssh root@<node> pct exec <vmid> -- sh -c …, #901)
 //   pendingReboot()  : ssh tappaas@<target> booted-system vs system profile (#730)
 
 import {
@@ -27,6 +28,21 @@ import { existsSync } from "fs";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
 import { countedMem } from "./memcount";
 import { Avx512Use, ClusterClient, LanUplink, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
+
+// `lxc:<node>:<vmid>` (checks.ts probeTarget): an LXC module, reached through
+// `pct exec` on its node rather than SSH of its own (#901).
+export function lxcTarget(target: string): { node: string; vmid: number } | null {
+  const m = /^lxc:([A-Za-z0-9.-]+):(\d+)$/.exec(target);
+  return m ? { node: m[1], vmid: Number(m[2]) } : null;
+}
+
+// Run a probe on a guest: over SSH as tappaas, or in a container as its root.
+function guestRun(target: string, cmd: string) {
+  const ct = lxcTarget(target);
+  if (!ct) return ssh("tappaas", target, cmd);
+  const host = ct.node.includes(".") ? ct.node : `${ct.node}.${mgmtDomain()}`;
+  return ssh("root", host, `pct exec ${ct.vmid} -- sh -c '${cmd.replace(/'/g, "'\\''")}'`);
+}
 
 export class CliClusterClient implements ClusterClient {
   reachableNodes(): string[] {
@@ -207,9 +223,12 @@ export class CliClusterClient implements ClusterClient {
 
   diskUsagePct(target: string): number | null {
     // Reachability probe first (check-disk-threshold.sh skips unreachable guests).
-    const probe = ssh("tappaas", target, "exit 0");
-    if (!probe.ran || probe.rc !== 0) return null;
-    const r = ssh("tappaas", target, "df / | tail -1 | awk '{print $5}'");
+    // A container is probed through its node: a stopped one fails the probe itself.
+    if (!lxcTarget(target)) {
+      const probe = ssh("tappaas", target, "exit 0");
+      if (!probe.ran || probe.rc !== 0) return null;
+    }
+    const r = guestRun(target, "df / | tail -1 | awk '{print $5}'");
     if (!r.ran || r.rc !== 0) return null;
     const pct = Number(r.stdout.trim().replace("%", ""));
     return Number.isFinite(pct) ? pct : null;
@@ -229,7 +248,7 @@ export class CliClusterClient implements ClusterClient {
       "elif [ -f /etc/debian_version ]; then " +
       '[ -e /var/run/reboot-required ] && echo "debian 1" || echo "debian 0"; ' +
       'else echo "other 0"; fi';
-    const r = ssh("tappaas", target, probe);
+    const r = guestRun(target, probe);
     if (!r.ran || r.rc !== 0) return null;
     return parsePendingReboot(r.stdout);
   }

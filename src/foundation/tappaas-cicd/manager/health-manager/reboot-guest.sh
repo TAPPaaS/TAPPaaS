@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
-# reboot-guest.sh — reboot one module's VM and wait until it can serve (#730).
+# reboot-guest.sh — reboot one module's VM (or restart its container) and wait
+# until it can serve (#730, #901).
 #
 # The driver behind `health-manager reboot <module>`: the same reboot path
 # update-os.sh takes after a rebuild (reboot_guest — lock wait, qm reboot, ssh,
@@ -43,6 +44,21 @@ reboot_main() {
 
     [[ "${vmname}" != "$(hostname)" ]] \
         || die "${vmname} is this controller — reboot it from a node, under supervision: ssh root@${node}.${MGMT}.internal 'qm reboot ${vmid}'"
+
+    # A container (#901): no SSH of its own and no guest agent — restart it with
+    # pct and wait until it runs commands again.
+    if ssh "root@${node}.${MGMT}.internal" "test -f /etc/pve/lxc/${vmid}.conf" 2>/dev/null; then
+        info "Restarting ${vmname} (CT ${vmid} on ${node})..."
+        ssh "root@${node}.${MGMT}.internal" "pct reboot ${vmid}" || die "could not restart ${vmname} (CT ${vmid})"
+        local i up=0
+        for i in $(seq 1 30); do
+            sleep 4
+            ssh "root@${node}.${MGMT}.internal" "pct exec ${vmid} -- true" 2>/dev/null && { up=1; break; }
+        done
+        (( up )) || die "${vmname} (CT ${vmid}) did not come back within 2 minutes"
+        info "${GN}✓${CL} ${vmname} restarted and running"
+        return 0
+    fi
 
     vm_ip=$(wait_for_vm_ip "${node}" "${vmid}" 6) || die "no IP address for ${vmname} (VM ${vmid} on ${node}) — is it running?"
     info "Rebooting ${vmname} (VM ${vmid} on ${node}, ${vm_ip})..."

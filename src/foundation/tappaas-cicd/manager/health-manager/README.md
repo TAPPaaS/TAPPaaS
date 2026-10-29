@@ -82,7 +82,7 @@ fails**:
 | Gate | Source | FAIL when |
 |------|--------|-----------|
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` |
-| `disk-threshold` | SSH `df /` per guest | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
+| `disk-threshold` | `df /` per guest: over SSH, or through `pct exec` on its node for an LXC module | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
 | `memory-commitment` | one `pvesh /cluster/resources` | a node's COMMITTED memory ≥ threshold of its physical RAM (default **100%**, `--memory-threshold PCT`) |
 | `storage-pools` | `pvesh /cluster/resources` + one `zfs list` per node | a guest-disk pool **≥ 90%** used (**WARN** at 80%, the ceiling automatic disk growth stops at), or **WARN** when a pool's disks add up to more than it holds (thin disks); `storage-manager inventory` shows what each pool holds, guest by guest |
 | `storage-disks` | `storage-manager inventory --json` | never — **WARN** when a disk's SMART health is FAILED or it shows reallocated, pending or uncorrectable sectors, media errors, wear or heat; when ZFS has degraded or faulted a disk; when a pool is not ONLINE; or when a replication job (an HA guest's copy on its other node) is in error or behind its schedule. Each row names the node and the disk (`<node>:<device>`), the pool (`<node>/<pool>`) or the module |
@@ -90,7 +90,7 @@ fails**:
 | `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a module **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose allocated memory exceeds its declared limit |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 | `backup-keys` | `backup-manager key status --json` | never — **WARN** when the backup encryption keys changed after the last USB key stick was written, or no stick has been written; it stays until `backup-manager key export --usb` writes one |
-| `pending-reboot` | one SSH probe per guest | never — **WARN** when a guest is waiting for a reboot (see below) |
+| `pending-reboot` | one probe per guest (SSH, or `pct exec` for an LXC module) | never — **WARN** when a guest is waiting for a reboot (see below) |
 | `site-timezone` | `site.json` + one SSH probe per node and guest | never — **WARN** when a node or guest runs another timezone than the site's, which is its primary location's (the next update of the guest, or the next cluster update for a node, sets it), or when the site has none |
 | `pulse` | the backup node's pulse (a cluster node, or a `debianhost` machine by its address) | never — **WARN** when the pulse is not running on the backup node, or reports something down (a backup buddy, the uplink, the firewall, the mothership, the PBS); `backup-manager pulse` shows it |
 | `quorum` | `pvecm status` | never — **WARN** when the cluster has two votes and no QDevice: one node down and the other is fenced (see the cluster README, *Two-node clusters*) |
@@ -346,9 +346,9 @@ take the node to the threshold is refused (`--force` does not override it —
 move the module with `--node`, or make room first). The update's patch pass for
 suspended modules asks the same question before it starts a suspended guest.
 
-**read-only** here. Growing a disk is `cluster:vm`'s: every module update grows a
-VM disk that is filling up, when its pool has room (see the `cluster:vm`
-README, *Automatic disk growth*). `check-disk-threshold.sh <vm> <threshold>`
+**read-only** here. Growing a disk is the cluster service's: every module update
+grows a VM disk or a container's rootfs that is filling up, when its pool has room
+(see the `cluster:vm` README, *Automatic disk growth*). `check-disk-threshold.sh <vm> <threshold>`
 makes the same decision on demand with a threshold of your choosing.
 
 ### `update-os <name> <vmid> <node>` — OS-patch action (special)

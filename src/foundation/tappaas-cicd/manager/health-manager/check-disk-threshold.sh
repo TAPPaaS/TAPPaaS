@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # TAPPaaS Disk Threshold Check Script
 #
-# Checks if a VM's disk usage exceeds a threshold and grows the disk — the
+# Checks if a guest's (VM or container) disk usage exceeds a threshold and grows it — the
 # same decision auto-grow.sh makes on every update (#100), with a threshold
 # chosen here.
 #

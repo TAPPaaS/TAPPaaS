@@ -3,9 +3,11 @@
 # TAPPaaS Cluster VM Service - automatic disk growth (#100)
 #
 # Grows a guest's disk before it fills. Run by update-service.sh ahead of the
-# drift converge, so every module update checks its own disk:
+# drift converge, so every module update checks its own disk — a VM's scsi0, or
+# a container's rootfs (cluster:lxc runs it too, #901):
 #
-#   1. measure  — how full the guest's / is (df), and the disk's real size
+#   1. measure  — how full the guest's / is (df; a container through
+#                 `pct exec` on its node), and the disk's real size
 #   2. decide   — at or over the threshold: +growPercent, at least minGrowGB,
 #                 capped at the module's diskSizeMax
 #   3. room     — the disk's pool on the guest's node, and on its HA replica
@@ -77,7 +79,6 @@ cfgval() { jq -r --arg f "$1" '[.. | objects | select(has($f)) | .[$f]][0] | if 
 [[ "$(cfgval diskAutoGrow)" == "false" ]] && skip "off for this module (diskAutoGrow: false)"
 case "$(field status)" in external|archived) skip "status $(field status)" ;; esac
 ostype="$(field ostype)"
-[[ -z "${ostype}" || "${ostype}" == l26 ]] || skip "not a Linux guest (ostype ${ostype})"
 VMID="$(field vmid)"
 [[ -n "${VMID}" ]] || skip "no vmid"
 VMNAME="$(field vmname)"; VMNAME="${VMNAME:-${MODULE}}"
@@ -88,27 +89,42 @@ _max="$(cfgval diskSizeMax)"
 HANODE="$(cfgval HANode)"
 
 # ── measure ──────────────────────────────────────────────────────────
-node="" status=""
+node="" status="" gtype=""
 for n in $(get_all_node_hostnames); do
     row="$(ssh -n "${SSH_OPTS[@]}" "root@${n}.${MGMT}.internal" \
         "pvesh get /cluster/resources --type vm --output-format json" 2>/dev/null \
-        | jq -r --argjson id "${VMID}" '.[] | select(.vmid == $id and .type == "qemu") | "\(.node) \(.status)"' 2>/dev/null)" || true
-    [[ -n "${row}" ]] && { node="${row%% *}"; status="${row#* }"; break; }
+        | jq -r --argjson id "${VMID}" '.[] | select(.vmid == $id and (.type == "qemu" or .type == "lxc")) | "\(.node) \(.status) \(.type)"' 2>/dev/null)" || true
+    [[ -n "${row}" ]] && { read -r node status gtype <<< "${row}"; break; }
 done
-[[ -n "${node}" ]] || skip "VM ${VMID} not found on the cluster"
-[[ "${status}" == "running" ]] || skip "VM ${VMID} is ${status}"
+[[ -n "${node}" ]] || skip "guest ${VMID} not found on the cluster"
+[[ "${status}" == "running" ]] || skip "guest ${VMID} is ${status}"
+# A container's ostype names its distribution; a VM's must be Linux (l26).
+[[ "${gtype}" == lxc || -z "${ostype}" || "${ostype}" == l26 ]] || skip "not a Linux guest (ostype ${ostype})"
 
-# shellcheck disable=SC2029
-scsi0="$(ssh -n "${SSH_OPTS[@]}" "root@${node}.${MGMT}.internal" "qm config ${VMID}" 2>/dev/null | sed -n 's/^scsi0: //p')"
-[[ -n "${scsi0}" ]] || skip "no scsi0 disk on VM ${VMID}"
-storage="${scsi0%%:*}"
-size="$(sed -n 's/.*size=\([0-9]*[KMGT]\).*/\1/p' <<< "${scsi0}")"
-[[ -n "${size}" ]] || skip "cannot read the size of ${scsi0}"
+# The disk: a VM's scsi0, a container's rootfs. Its use: df over SSH in a VM,
+# through `pct exec` on the node for a container (which needs no SSH of its own).
+DF="df -P / | awk 'NR==2 {sub(\"%\",\"\",\$5); print \$5}'"
+if [[ "${gtype}" == lxc ]]; then
+    # shellcheck disable=SC2029
+    disk="$(ssh -n "${SSH_OPTS[@]}" "root@${node}.${MGMT}.internal" "pct config ${VMID}" 2>/dev/null | sed -n 's/^rootfs: //p')"
+    [[ -n "${disk}" ]] || skip "no rootfs on CT ${VMID}"
+    # shellcheck disable=SC2029
+    used="$(ssh -n "${SSH_OPTS[@]}" "root@${node}.${MGMT}.internal" "pct exec ${VMID} -- sh -c $(printf '%q' "${DF}")" 2>/dev/null)" || used=""
+    where="pct exec ${VMID} on ${node}"
+else
+    # shellcheck disable=SC2029
+    disk="$(ssh -n "${SSH_OPTS[@]}" "root@${node}.${MGMT}.internal" "qm config ${VMID}" 2>/dev/null | sed -n 's/^scsi0: //p')"
+    [[ -n "${disk}" ]] || skip "no scsi0 disk on VM ${VMID}"
+    used="$(ssh -n "${SSH_OPTS[@]}" "tappaas@${VMNAME}.${ZONE0}.internal" "${DF}" 2>/dev/null)" || used=""
+    where="ssh ${VMNAME}.${ZONE0}.internal"
+fi
+storage="${disk%%:*}"
+size="$(sed -n 's/.*size=\([0-9]*[KMGT]\).*/\1/p' <<< "${disk}")"
+[[ -n "${size}" ]] || skip "cannot read the size of ${disk}"
 CURGB="$(dg_size_gb "${size}")"
 
-used="$(ssh -n "${SSH_OPTS[@]}" "tappaas@${VMNAME}.${ZONE0}.internal" "df -P / | awk 'NR==2 {sub(\"%\",\"\",\$5); print \$5}'" 2>/dev/null)" || used=""
 if ! [[ "${used}" =~ ^[0-9]+$ ]]; then
-    warn "  auto-grow ${MODULE}: cannot read disk use in the guest (ssh ${VMNAME}.${ZONE0}.internal) — not checked"
+    warn "  auto-grow ${MODULE}: cannot read disk use in the guest (${where}) — not checked"
     exit 0
 fi
 

@@ -90,10 +90,12 @@
       "changeNote": "NOT cluster:vm's `migrate`. Live-migrating a container is unsafe when it has a GPU passed through or bind-mounts from the host — which is why TAPPaaS runs containers for exactly those workloads. The service reports the drift and leaves the move to an operator who can stop it, move it and start it deliberately."
     },
     "diskSize": {
-      "class": "manual",
-      "apply": "none",
+      "class": "grow-only",
+      "apply": "hook",
+      "hook": "update-disk.sh",
       "liveKey": "diskSize",
-      "changeNote": "Not grown by this service. main's update-service.sh header promised a warn for 'rootfs size' that the code never implemented — it read only vmname/node/zone0/bridge0/trunks0/cores/memory/swap — so the rootfs size was invisible rather than reported. Classed manual, which restores the report. The schema default 8G is DESIRED state (ADR-020 D9): it is what Create-TAPPaaS-LXC.sh builds with, so an undeclared container is in sync from install. Unlike cluster:vm diskSize there is no path that grows it behind config's back — check-disk-threshold.sh calls resize-disk.sh, which is qm-only — so a divergence means an operator ran pct resize by hand, which is exactly what manual exists to surface. Reclassifying to grow-only so pct resize could grow it live is a capability change (recommendation 3), deliberately not bundled here."
+      "normalize": "size",
+      "changeNote": "The rootfs grows live with pct resize (update-disk.sh), and auto-grow.sh grows it before it fills, as for a VM: on every update, under the same threshold, diskSizeMax and pool limits. A SHRINK is refused at apply time (hook exit 20). Only the rootfs is the field; bind mounts and other mount points are never resized. The schema default 8G is what Create-TAPPaaS-LXC.sh builds with, so an undeclared container is in sync from install; a rootfs grown by hand reads as config behind actual and is adopted into config, as for cluster:vm."
     },
     "storage": {
       "class": "manual",
