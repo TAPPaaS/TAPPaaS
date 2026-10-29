@@ -1,0 +1,14 @@
+{
+  "name": "cmdb-controller",
+  "version": "0.1.0",
+  "description": "TAPPaaS cmdb-controller (ADR-040) — the CMDB service and the cmdb CLI, TypeScript, no npm dependencies",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "cmdb-controller": "dist/controller/cmdb-controller/src/main.js",
+    "cmdb": "dist/controller/cmdb-controller/src/cli.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  }
+}

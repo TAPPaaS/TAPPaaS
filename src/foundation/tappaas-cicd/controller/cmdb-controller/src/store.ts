@@ -1,0 +1,998 @@
+// store.ts — what cmdb-controller does with the store (ADR-040 D2, D5, D6,
+// D13, D14): take a report, answer a query, show an object and its history,
+// walk its impact, resolve telemetry attributes to it.
+//
+// A report is one transaction: every object in it is matched by its class's
+// keys (D5), every attribute checked against the fields of its class and its
+// ancestors, and only then written; one problem refuses the whole batch, so a
+// reporter never leaves half a picture. A value that changes closes the row
+// that held it and opens a new one (D6); nothing is ever deleted.
+
+import { FieldDef, Metamodel } from "./metamodel";
+import { Param, Pg, Query, Row } from "./pg";
+
+type Obj = Record<string, unknown>;
+
+export const CONTROLLER_SOURCE = "cmdb-controller";
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ── the report's shape ──────────────────────────────────────────────────
+
+/** A reference to an object: a ref given earlier in the same report, an id,
+ *  or a class and a name. As a plain string: a ref, else an id, else a name. */
+export type Ref = string | { ref?: string; id?: string; class?: string; name?: string };
+
+export interface ReportObject {
+  ref?: string;
+  class: string;
+  name: string;
+  attributes?: Obj;
+  end?: boolean; // retired (a CI) or disposed (a resource): kept, out of key matching
+}
+
+export interface ReportRelation {
+  type: string;
+  from: Ref;
+  to: Ref;
+  attributes?: Obj;
+  end?: boolean;
+}
+
+export interface Report {
+  source: string;
+  kind?: "observation" | "change";
+  time?: string;
+  job?: string;
+  verb?: string;
+  actor?: string;
+  objects?: ReportObject[];
+  relations?: ReportRelation[];
+}
+
+export interface Problem {
+  at: string;
+  error: string;
+  candidates?: { id: string; class: string; name: string }[];
+}
+
+/** A refused report: 409 when it conflicts with what is stored (a key
+ *  matching two objects, an immutable value changed), 422 when it does not
+ *  fit the metamodel. */
+export class ReportError extends Error {
+  constructor(
+    readonly status: 409 | 422,
+    readonly problems: Problem[],
+  ) {
+    super(problems.map((p) => `${p.at}: ${p.error}`).join("; "));
+  }
+}
+
+export class HttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+    readonly extra?: Obj,
+  ) {
+    super(message);
+  }
+}
+
+export interface ChangeEvent {
+  id: number;
+  kind: string;
+  source: string;
+  job: string | null;
+  verb: string | null;
+  actor: string | null;
+  time: string;
+  objects: string[];
+  relations: number[];
+  drift: boolean;
+}
+
+interface Target {
+  id: string;
+  class: string;
+  name: string;
+}
+
+interface Current {
+  id: number;
+  value: unknown;
+  from: string;
+}
+
+function isObj(v: unknown): v is Obj {
+  return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+function same(a: unknown, b: unknown): boolean {
+  return canonical(a) === canonical(b);
+}
+
+// JSON with object keys sorted: jsonb does not keep key order.
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  if (isObj(v)) return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`).join(",")}}`;
+  return JSON.stringify(v);
+}
+
+function later(a: string, b: string): string {
+  return Date.parse(a) >= Date.parse(b) ? a : b;
+}
+
+function typeOk(f: FieldDef, v: unknown): string | null {
+  const enumOf = (spec: Obj): unknown[] | null =>
+    Array.isArray(spec.enum) ? spec.enum : isObj(spec.values) ? Object.keys(spec.values) : null;
+  switch (f.type) {
+    case "string": {
+      if (typeof v !== "string") return "a string";
+      const e = enumOf(f.spec);
+      return e && !e.includes(v) ? `one of ${e.join(", ")}` : null;
+    }
+    case "integer":
+      return Number.isInteger(v) ? null : "an integer";
+    case "number":
+      return typeof v === "number" && Number.isFinite(v) ? null : "a number";
+    case "boolean":
+      return typeof v === "boolean" ? null : "true or false";
+    case "array": {
+      if (!Array.isArray(v)) return "an array";
+      const items = isObj(f.spec.items) ? f.spec.items : null;
+      if (items) {
+        const e = enumOf(items);
+        for (const x of v) {
+          if (items.type === "string" && typeof x !== "string") return "an array of strings";
+          if (items.type === "integer" && !Number.isInteger(x)) return "an array of integers";
+          if (items.type === "object" && !isObj(x)) return "an array of objects";
+          if (e && !e.includes(x)) return `an array of ${e.join(", ")}`;
+        }
+      }
+      return null;
+    }
+    case "object":
+      return isObj(v) ? null : "an object";
+    default:
+      return null;
+  }
+}
+
+/** What a report wrote, for the reporter. */
+export interface ReportResult {
+  change: number | null;
+  objects: { ref?: string; id: string; class: string; name: string; created: boolean; changed: string[]; drift: string[]; ended: boolean }[];
+  relations: number[];
+}
+
+export class Store {
+  private listeners = new Set<(e: ChangeEvent) => void>();
+
+  constructor(
+    readonly pg: Pg,
+    readonly mm: Metamodel,
+  ) {}
+
+  onChange(fn: (e: ChangeEvent) => void): () => void {
+    this.listeners.add(fn);
+    return () => this.listeners.delete(fn);
+  }
+
+  // ── report ────────────────────────────────────────────────────────────
+
+  async report(r: Report): Promise<ReportResult> {
+    if (!isObj(r)) throw new HttpError(400, "a report is a JSON object");
+    if (typeof r.source !== "string" || !r.source) throw new HttpError(400, "a report names its source");
+    const kind = r.kind ?? "observation";
+    if (kind !== "observation" && kind !== "change") throw new HttpError(400, "kind is observation or change");
+    const t = r.time ?? new Date().toISOString();
+    if (Number.isNaN(Date.parse(t))) throw new HttpError(400, `time ${t} is not a date`);
+    const objects = r.objects ?? [];
+    const relations = r.relations ?? [];
+    if (!Array.isArray(objects) || !Array.isArray(relations)) throw new HttpError(400, "objects and relations are arrays");
+
+    const { result, event } = await this.pg.tx(async (q) => {
+      const run = new ReportRun(this.mm, q, r.source, kind, new Date(t).toISOString());
+      const c = await q(
+        `INSERT INTO change (kind, source, job, verb, actor, time) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+        [kind, r.source, r.job ?? null, r.verb ?? null, r.actor ?? null, run.t],
+      );
+      run.change = Number(c.rows[0].id);
+      for (let i = 0; i < objects.length; i++) await run.object(i, objects[i]);
+      for (let i = 0; i < relations.length; i++) await run.relation(i, relations[i]);
+      if (run.problems.length) {
+        throw new ReportError(run.problems.some((p) => p.candidates || /conflict|immutable|matches/.test(p.error)) ? 409 : 422, run.problems);
+      }
+      const touched = [...run.touched];
+      if (!touched.length && !run.relationIds.size) {
+        await q("DELETE FROM change WHERE id = $1", [run.change]);
+        return { result: { change: null, objects: run.results, relations: [] }, event: null };
+      }
+      const ev = await q(
+        `UPDATE change SET objects = ARRAY(SELECT (jsonb_array_elements_text($2::jsonb))::uuid),
+                relations = ARRAY(SELECT (jsonb_array_elements_text($3::jsonb))::bigint), drift = $4
+          WHERE id = $1
+          RETURNING id, kind, source, job, verb, actor, time, to_jsonb(objects) AS objects, to_jsonb(relations) AS relations, drift`,
+        [run.change, touched, [...run.relationIds], run.drift],
+      );
+      return {
+        result: { change: run.change, objects: run.results, relations: [...run.relationIds] },
+        event: ev.rows[0] as unknown as ChangeEvent,
+      };
+    });
+    if (event) for (const fn of this.listeners) fn(event);
+    return result;
+  }
+
+  // ── query ─────────────────────────────────────────────────────────────
+
+  /** Objects by class (its subclasses too, through class_ancestor), by
+   *  physical, by attribute value (containment: a scalar equals, an array
+   *  contains), as of a time. */
+  async query(body: Obj): Promise<Obj[]> {
+    const cls = body.class === undefined || body.class === null ? null : String(body.class);
+    if (cls !== null && !this.mm.has(cls)) throw new HttpError(404, `no class ${cls}`);
+    const at = body.at === undefined || body.at === null ? null : String(body.at);
+    if (at !== null && Number.isNaN(Date.parse(at))) throw new HttpError(400, `at ${at} is not a date`);
+    const where = isObj(body.where) ? body.where : {};
+    const params: Param[] = [cls, typeof body.physical === "boolean" ? body.physical : null];
+    const conds = [
+      "($1::text IS NULL OR EXISTS (SELECT 1 FROM class_ancestor ca WHERE ca.class = o.class AND ca.ancestor = $1))",
+      "($2::boolean IS NULL OR c.physical = $2)",
+    ];
+    let valid = "upper_inf(a.validity)";
+    if (at !== null) {
+      params.push(at);
+      const p = `$${params.length}::timestamptz`;
+      conds.push(`o.created <= ${p} AND (o.ended IS NULL OR o.ended > ${p})`);
+      valid = `a.validity @> ${p}`;
+    } else if (body.includeEnded !== true) conds.push("o.ended IS NULL");
+    for (const [k, v] of Object.entries(where)) {
+      if (k === "name") {
+        params.push(String(v));
+        conds.push(`o.name = $${params.length}`);
+        continue;
+      }
+      params.push(k, JSON.stringify(v));
+      conds.push(`EXISTS (SELECT 1 FROM attribute a WHERE a.object = o.id AND a.name = $${params.length - 1} AND a.value @> $${params.length}::jsonb AND ${valid})`);
+    }
+    const limit = Number.isInteger(body.limit) ? Number(body.limit) : 10000;
+    const rows = (
+      await this.pg.query(
+        `SELECT o.id, o.class, o.name, o.display_name, o.created, o.ended, o.last_seen, c.physical
+           FROM object o JOIN class c ON c.name = o.class
+          WHERE ${conds.join(" AND ")}
+          ORDER BY o.class, o.name LIMIT ${limit}`,
+        params,
+      )
+    ).rows;
+    const attrs = await this.attributesOf(rows.map((r) => String(r.id)), at);
+    return rows.map((r) => ({
+      id: r.id,
+      class: r.class,
+      name: r.name,
+      displayName: r.display_name,
+      physical: r.physical,
+      created: r.created,
+      ended: r.ended,
+      lastSeen: r.last_seen,
+      attributes: Object.fromEntries((attrs.get(String(r.id)) ?? []).map((a) => [a.name, a.value])),
+    }));
+  }
+
+  private async attributesOf(ids: string[], at: string | null): Promise<Map<string, { name: string; value: unknown; source: string; since: string }[]>> {
+    const out = new Map<string, { name: string; value: unknown; source: string; since: string }[]>();
+    if (!ids.length) return out;
+    const rows = (
+      await this.pg.query(
+        `SELECT a.object, a.name, a.value, a.source, lower(a.validity) AS since FROM attribute a
+          WHERE a.object IN (SELECT (jsonb_array_elements_text($1::jsonb))::uuid)
+            AND ${at === null ? "upper_inf(a.validity)" : "a.validity @> $2::timestamptz"}
+          ORDER BY a.name`,
+        at === null ? [ids] : [ids, at],
+      )
+    ).rows;
+    for (const r of rows) {
+      const k = String(r.object);
+      out.set(k, [...(out.get(k) ?? []), { name: String(r.name), value: r.value, source: String(r.source), since: String(r.since) }]);
+    }
+    return out;
+  }
+
+  // ── show, history ─────────────────────────────────────────────────────
+
+  /** An object by id, or by name (in a class, when given): the live one,
+   *  else the one that ended last. Two live ones by that name: 409. */
+  async find(ref: string, cls: string | null): Promise<Row> {
+    if (cls !== null && !this.mm.has(cls)) throw new HttpError(404, `no class ${cls}`);
+    const rows = UUID_RE.test(ref)
+      ? (await this.pg.query("SELECT o.*, c.physical FROM object o JOIN class c ON c.name = o.class WHERE o.id = $1", [ref])).rows
+      : (
+          await this.pg.query(
+            `SELECT o.*, c.physical FROM object o JOIN class c ON c.name = o.class
+              WHERE o.name = $1 AND ($2::text IS NULL OR EXISTS (SELECT 1 FROM class_ancestor ca WHERE ca.class = o.class AND ca.ancestor = $2))
+              ORDER BY o.ended IS NULL DESC, o.ended DESC`,
+            [ref, cls],
+          )
+        ).rows;
+    if (!rows.length) throw new HttpError(404, `no object ${cls ? `${cls}/` : ""}${ref}`);
+    const live = rows.filter((r) => r.ended === null);
+    if (live.length > 1) {
+      throw new HttpError(409, `${ref} names ${live.length} objects; give the class or the id`, {
+        candidates: live.map((r) => ({ id: r.id, class: r.class, name: r.name })),
+      });
+    }
+    return rows[0];
+  }
+
+  async show(ref: string, cls: string | null, at: string | null): Promise<Obj> {
+    const o = await this.find(ref, cls);
+    const id = String(o.id);
+    const attrs = (await this.attributesOf([id], at)).get(id) ?? [];
+    const valid = at === null ? "upper_inf(r.validity)" : "r.validity @> $2::timestamptz";
+    const rels = (
+      await this.pg.query(
+        `SELECT r.id, r.type, r.attributes, r.source, lower(r.validity) AS since,
+                CASE WHEN r.from_object = $1 THEN 'out' ELSE 'in' END AS direction,
+                p.id AS other_id, p.class AS other_class, p.name AS other_name
+           FROM relation r JOIN object p ON p.id = CASE WHEN r.from_object = $1 THEN r.to_object ELSE r.from_object END
+          WHERE (r.from_object = $1 OR r.to_object = $1) AND ${valid}
+          ORDER BY r.type, p.name`,
+        at === null ? [id] : [id, at],
+      )
+    ).rows;
+    const attributes: Obj = {};
+    for (const a of attrs) attributes[a.name] = { value: a.value, source: a.source, since: a.since };
+    return {
+      id,
+      class: o.class,
+      ancestors: this.mm.ancestors(String(o.class)),
+      name: o.name,
+      displayName: o.display_name,
+      physical: o.physical,
+      created: o.created,
+      ended: o.ended,
+      lastSeen: o.last_seen,
+      seen: o.seen,
+      at,
+      attributes,
+      drift: (attributes.drift as Obj | undefined)?.value ?? null,
+      relations: rels.map((r) => ({
+        id: r.id,
+        type: r.type,
+        direction: r.direction,
+        other: { id: r.other_id, class: r.other_class, name: r.other_name },
+        attributes: r.attributes,
+        source: r.source,
+        since: r.since,
+      })),
+    };
+  }
+
+  /** Every period of every attribute and relation of an object, and the
+   *  reports that wrote them; with at, the object as it was then. */
+  async history(ref: string, cls: string | null, at: string | null): Promise<Obj> {
+    if (at !== null) {
+      if (Number.isNaN(Date.parse(at))) throw new HttpError(400, `at ${at} is not a date`);
+      return this.show(ref, cls, new Date(at).toISOString());
+    }
+    const o = await this.find(ref, cls);
+    const id = String(o.id);
+    const attributes = (
+      await this.pg.query(
+        `SELECT a.name, a.value, a.source, a.change, lower(a.validity) AS "from", upper(a.validity) AS "to"
+           FROM attribute a WHERE a.object = $1 AND NOT isempty(a.validity)
+          ORDER BY lower(a.validity), a.name`,
+        [id],
+      )
+    ).rows;
+    const relations = (
+      await this.pg.query(
+        `SELECT r.id, r.type, CASE WHEN r.from_object = $1 THEN 'out' ELSE 'in' END AS direction,
+                p.id AS other_id, p.class AS other_class, p.name AS other_name, r.attributes, r.source, r.change,
+                lower(r.validity) AS "from", upper(r.validity) AS "to"
+           FROM relation r JOIN object p ON p.id = CASE WHEN r.from_object = $1 THEN r.to_object ELSE r.from_object END
+          WHERE (r.from_object = $1 OR r.to_object = $1) AND NOT isempty(r.validity)
+          ORDER BY lower(r.validity), r.type`,
+        [id],
+      )
+    ).rows;
+    const changes = (
+      await this.pg.query(
+        `SELECT id, kind, source, job, verb, actor, time, drift FROM change WHERE objects @> ARRAY[$1::uuid] ORDER BY time, id`,
+        [id],
+      )
+    ).rows;
+    return {
+      id,
+      class: o.class,
+      name: o.name,
+      created: o.created,
+      ended: o.ended,
+      attributes,
+      relations: relations.map((r) => ({
+        id: r.id,
+        type: r.type,
+        direction: r.direction,
+        other: { id: r.other_id, class: r.other_class, name: r.other_name },
+        attributes: r.attributes,
+        source: r.source,
+        change: r.change,
+        from: r.from,
+        to: r.to,
+      })),
+      changes,
+    };
+  }
+
+  // ── impact ────────────────────────────────────────────────────────────
+
+  /** Everything within `hops` current relations of an object (D11: a node
+   *  down — which guests, services, environments, users). Each object once,
+   *  at its shortest distance, with the relation it was reached by. */
+  async impact(ref: string, cls: string | null, hops: number, direction: string): Promise<Obj> {
+    if (!Number.isInteger(hops) || hops < 1 || hops > 10) throw new HttpError(400, "hops is 1 to 10");
+    if (!["in", "out", "both"].includes(direction)) throw new HttpError(400, "direction is in, out or both");
+    const o = await this.find(ref, cls);
+    const step =
+      direction === "out" ? "r.from_object = w.id" : direction === "in" ? "r.to_object = w.id" : "(r.from_object = w.id OR r.to_object = w.id)";
+    const rows = (
+      await this.pg.query(
+        `WITH RECURSIVE walk(id, depth, via, prev, path) AS (
+           SELECT $1::uuid, 0, NULL::text, NULL::uuid, ARRAY[$1::uuid]
+           UNION ALL
+           SELECT CASE WHEN r.from_object = w.id THEN r.to_object ELSE r.from_object END,
+                  w.depth + 1, r.type, w.id,
+                  w.path || CASE WHEN r.from_object = w.id THEN r.to_object ELSE r.from_object END
+             FROM walk w JOIN relation r ON ${step} AND upper_inf(r.validity)
+            WHERE w.depth < $2
+              AND NOT (CASE WHEN r.from_object = w.id THEN r.to_object ELSE r.from_object END) = ANY (w.path)
+         )
+         SELECT DISTINCT ON (w.id) w.id, w.depth, w.via, w.prev, x.class, x.name
+           FROM walk w JOIN object x ON x.id = w.id
+          WHERE w.depth > 0
+          ORDER BY w.id, w.depth`,
+        [String(o.id), hops],
+      )
+    ).rows;
+    rows.sort((a, b) => Number(a.depth) - Number(b.depth) || String(a.class).localeCompare(String(b.class)) || String(a.name).localeCompare(String(b.name)));
+    return {
+      id: o.id,
+      class: o.class,
+      name: o.name,
+      hops,
+      direction,
+      impact: rows.map((r) => ({ id: r.id, class: r.class, name: r.name, depth: r.depth, via: r.via, from: r.prev })),
+    };
+  }
+
+  // ── resolve (D14) ─────────────────────────────────────────────────────
+
+  /** OpenTelemetry resource attributes → the one live object they name. */
+  async resolve(attrs: Obj): Promise<Obj> {
+    if (!isObj(attrs) || !Object.keys(attrs).length) throw new HttpError(400, "resolve takes OpenTelemetry resource attributes");
+    for (const k of ["tappaas.ci.id", "service.instance.id", "host.id"]) {
+      const v = attrs[k];
+      if (typeof v === "string" && UUID_RE.test(v)) {
+        const r = (await this.pg.query("SELECT id, class, name FROM object WHERE id = $1", [v])).rows;
+        if (r.length) return { ...r[0], by: k };
+      }
+    }
+    // Every other attribute narrows the candidates: a field declared
+    // identifying with that OpenTelemetry name, in any class.
+    const params: Param[] = [];
+    const conds: string[] = ["o.ended IS NULL"];
+    const used: string[] = [];
+    for (const [k, v] of Object.entries(attrs)) {
+      if (typeof v !== "string" || ["tappaas.ci.id", "service.instance.id", "host.id", "service.namespace", "tappaas.ci.class"].includes(k)) continue;
+      const alts: string[] = [];
+      for (const cls of this.mm.classes.keys()) {
+        for (const f of this.mm.fields(cls).values()) {
+          if (!f.identifying || !Array.isArray(f.spec.otel) || !f.spec.otel.includes(k) || f.class !== cls) continue;
+          params.push(JSON.stringify(this.mm.descendants(cls)));
+          const classes = `o.class IN (SELECT jsonb_array_elements_text($${params.length}::jsonb))`;
+          params.push(v);
+          const val = `$${params.length}::text`;
+          alts.push(
+            f.name === "name"
+              ? `(${classes} AND o.name = ${val})`
+              : `(${classes} AND EXISTS (SELECT 1 FROM attribute a WHERE a.object = o.id AND a.name = '${f.name.replace(/'/g, "''")}' AND upper_inf(a.validity) AND a.value = to_jsonb(${val})))`,
+          );
+        }
+      }
+      if (!alts.length) continue;
+      used.push(k);
+      conds.push(`(${alts.join(" OR ")})`);
+    }
+    if (typeof attrs["tappaas.ci.class"] === "string") {
+      params.push(attrs["tappaas.ci.class"]);
+      conds.push(`EXISTS (SELECT 1 FROM class_ancestor ca WHERE ca.class = o.class AND ca.ancestor = $${params.length})`);
+      used.push("tappaas.ci.class");
+    }
+    if (typeof attrs["service.namespace"] === "string") {
+      // software: its node; a node: its environment.
+      params.push(attrs["service.namespace"]);
+      conds.push(`EXISTS (SELECT 1 FROM relation r JOIN object n ON n.id = r.to_object
+                           WHERE r.from_object = o.id AND r.type IN ('runs-on', 'member-of') AND upper_inf(r.validity) AND n.name = $${params.length})`);
+      used.push("service.namespace");
+    }
+    if (!used.length) throw new HttpError(400, "none of these attributes identifies an object");
+    const rows = (await this.pg.query(`SELECT o.id, o.class, o.name FROM object o WHERE ${conds.join(" AND ")} ORDER BY o.class, o.name`, params)).rows;
+    if (!rows.length) throw new HttpError(404, `no object has ${used.map((k) => `${k}=${String(attrs[k])}`).join(", ")}`);
+    if (rows.length > 1) throw new HttpError(409, `${rows.length} objects match; add an attribute`, { candidates: rows });
+    return { ...rows[0], by: used.join(",") };
+  }
+
+  // ── classes ───────────────────────────────────────────────────────────
+
+  classes(): Obj[] {
+    return [...this.mm.classes.values()].map((c) => ({
+      name: c.name,
+      parent: c.parent,
+      abstract: c.abstract,
+      physical: c.physical,
+      depth: this.mm.ancestors(c.name).length - 1,
+      description: c.description,
+    }));
+  }
+
+  classInfo(name: string): Obj {
+    const c = this.mm.classes.get(name);
+    if (!c) throw new HttpError(404, `no class ${name}`);
+    return {
+      name,
+      parent: c.parent,
+      abstract: c.abstract,
+      physical: c.physical,
+      description: c.description,
+      ancestors: this.mm.ancestors(name),
+      subclasses: this.mm.descendants(name).filter((d) => d !== name),
+      keys: this.mm.keys(name),
+      keyScope: this.mm.keyScope(name),
+      fields: [...this.mm.fields(name).values()],
+      relations: this.mm.relations.filter((r) => this.mm.isA(name, r.from) || this.mm.isA(name, r.to)),
+    };
+  }
+
+  async counts(): Promise<Obj> {
+    const r = (await this.pg.query("SELECT (SELECT count(*) FROM object) AS objects, (SELECT count(*) FROM change) AS changes")).rows[0];
+    return { classes: this.mm.classes.size, objects: r.objects, changes: r.changes };
+  }
+}
+
+// ── one report, in its transaction ─────────────────────────────────────────
+
+class ReportRun {
+  change = 0;
+  problems: Problem[] = [];
+  touched = new Set<string>();
+  relationIds = new Set<number>();
+  drift = false;
+  results: ReportResult["objects"] = [];
+  private refs = new Map<string, Target>();
+
+  constructor(
+    private readonly mm: Metamodel,
+    private readonly q: Query,
+    private readonly source: string,
+    private readonly kind: "observation" | "change",
+    readonly t: string,
+  ) {}
+
+  private problem(at: string, error: string, candidates?: Problem["candidates"]): void {
+    this.problems.push(candidates ? { at, error, candidates } : { at, error });
+  }
+
+  // A reference to an object: in this report, by id, or by class and name.
+  private async target(at: string, ref: Ref, classes: string[] | null): Promise<Target | null> {
+    let id: string | undefined;
+    let cls: string | undefined;
+    let name: string | undefined;
+    if (typeof ref === "string") {
+      const local = this.refs.get(ref);
+      if (local) return local;
+      if (UUID_RE.test(ref)) id = ref;
+      else name = ref;
+    } else if (isObj(ref)) {
+      if (typeof ref.ref === "string") {
+        const local = this.refs.get(ref.ref);
+        if (!local) {
+          this.problem(at, `ref ${ref.ref} is not an object earlier in this report`);
+          return null;
+        }
+        return local;
+      }
+      id = typeof ref.id === "string" ? ref.id : undefined;
+      cls = typeof ref.class === "string" ? ref.class : undefined;
+      name = typeof ref.name === "string" ? ref.name : undefined;
+    }
+    if (id) {
+      const r = (await this.q("SELECT id, class, name FROM object WHERE id = $1 AND ended IS NULL", [id])).rows;
+      if (!r.length) {
+        this.problem(at, `no live object ${id}`);
+        return null;
+      }
+      return { id: String(r[0].id), class: String(r[0].class), name: String(r[0].name) };
+    }
+    if (!name) {
+      this.problem(at, "a reference is a ref, an id, or a class and a name");
+      return null;
+    }
+    const within = cls ? (this.mm.has(cls) ? this.mm.descendants(cls) : []) : classes;
+    const r = (
+      await this.q(
+        `SELECT id, class, name FROM object WHERE name = $1 AND ended IS NULL
+            AND ($2::jsonb IS NULL OR class IN (SELECT jsonb_array_elements_text($2::jsonb)))`,
+        [name, within === null ? null : JSON.stringify(within)],
+      )
+    ).rows;
+    if (r.length !== 1) {
+      this.problem(
+        at,
+        r.length ? `${name} matches ${r.length} objects` : `no live ${cls ?? "object"} named ${name}`,
+        r.length ? r.map((x) => ({ id: String(x.id), class: String(x.class), name: String(x.name) })) : undefined,
+      );
+      return null;
+    }
+    return { id: String(r[0].id), class: String(r[0].class), name: String(r[0].name) };
+  }
+
+  async object(i: number, o: ReportObject): Promise<void> {
+    const at = `objects[${i}]${isObj(o) && o.name ? ` (${String(o.class)} ${String(o.name)})` : ""}`;
+    if (!isObj(o) || typeof o.class !== "string" || typeof o.name !== "string" || !o.name) {
+      this.problem(at, "an object has a class and a name");
+      return;
+    }
+    const cls = this.mm.classes.get(o.class);
+    if (!cls) return this.problem(at, `no class ${o.class}`);
+    if (cls.abstract) return this.problem(at, `${o.class} is abstract; report one of ${this.mm.descendants(o.class).filter((c) => !this.mm.classes.get(c)!.abstract).join(", ")}`);
+    const fields = this.mm.fields(o.class);
+    const attrs = isObj(o.attributes) ? o.attributes : {};
+    const before = this.problems.length;
+
+    // 1. Every attribute against the field its class (or an ancestor) declares.
+    const values = new Map<string, unknown>(); // plain fields; null unsets
+    const targets = new Map<string, Target | null>(); // relation fields; null ends
+    for (const [k, v] of Object.entries(attrs)) {
+      const f = fields.get(k);
+      if (!f) {
+        this.problem(at, `${o.class} has no field ${k}`);
+        continue;
+      }
+      if (k === "name") {
+        this.problem(at, "name is the object's own, not an attribute");
+        continue;
+      }
+      if (f.spec.derived === true) {
+        this.problem(at, `${k} is kept by cmdb-controller, not reported`);
+        continue;
+      }
+      if (v === null) {
+        if (f.required) this.problem(at, `${k} is required and cannot be unset`);
+        else if (f.type === "relation") targets.set(k, null);
+        else values.set(k, null);
+        continue;
+      }
+      if (f.type === "relation") {
+        const rel = String(f.spec.relation);
+        const dir = f.spec.direction === "in" ? "in" : "out";
+        const tg = await this.target(`${at}.${k}`, v as Ref, this.mm.targetClasses(rel, o.class, dir));
+        if (!tg) continue;
+        const ok = dir === "out" ? this.mm.allows(rel, o.class, tg.class) : this.mm.allows(rel, tg.class, o.class);
+        if (!ok) {
+          this.problem(at, `${k}: ${rel} does not join ${dir === "out" ? `${o.class} to ${tg.class}` : `${tg.class} to ${o.class}`}`);
+          continue;
+        }
+        targets.set(k, tg);
+        continue;
+      }
+      const want = typeOk(f, v);
+      if (want) this.problem(at, `${k} must be ${want}`);
+      else values.set(k, v);
+    }
+    if (this.problems.length > before) return;
+
+    // 2. Which object is it (D5)?
+    const match = await this.match(at, o.class, o.name, values, targets);
+    if (match === undefined) return;
+    let id: string;
+    let created = false;
+    const current = new Map<string, Current>();
+    const currentTargets = new Map<string, { id: number; to: string; from: string }>();
+    if (match === null) {
+      if (o.end) return this.problem(at, "there is no such object to end");
+      for (const f of fields.values()) {
+        if (!f.required || f.name === "name") continue;
+        if (f.type === "relation" ? !targets.get(f.name) : values.get(f.name) === undefined || values.get(f.name) === null) {
+          this.problem(at, `${f.name} is required`);
+        }
+      }
+      if (this.problems.length > before) return;
+      const r = await this.q(
+        `INSERT INTO object (class, name, display_name, created, last_seen, seen)
+         VALUES ($1, $2, $3, $4, $4, $5::jsonb) RETURNING id`,
+        [o.class, o.name, typeof values.get("displayName") === "string" ? String(values.get("displayName")) : null, this.t, { [this.source]: this.t }],
+      );
+      id = String(r.rows[0].id);
+      created = true;
+      this.touched.add(id);
+    } else {
+      id = match.id;
+      if (match.class !== o.class) {
+        return this.problem(at, `conflict: the key matches ${match.class} ${match.name}, not a ${o.class}`, [match]);
+      }
+      if (match.name !== o.name) {
+        // A name is immutable: a renamed CI is a new one (D7).
+        return this.problem(at, `conflict: the key matches ${match.class} ${match.name}, named ${o.name} here`, [match]);
+      }
+      for (const r of (await this.q(`SELECT id, name, value, lower(validity) AS "from" FROM attribute WHERE object = $1 AND upper_inf(validity)`, [id])).rows) {
+        current.set(String(r.name), { id: Number(r.id), value: r.value, from: String(r.from) });
+      }
+      for (const [k, f] of fields) {
+        if (f.type !== "relation") continue;
+        const cur = await this.currentTarget(id, String(f.spec.relation), f.spec.direction === "in" ? "in" : "out");
+        if (cur) currentTargets.set(k, cur);
+      }
+    }
+
+    // 3. What may not change, and what one field allows of another.
+    for (const [k, v] of values) {
+      const f = fields.get(k)!;
+      const cur = current.get(k);
+      if (f.immutable && cur && !same(cur.value, v)) this.problem(at, `${k} is immutable (${JSON.stringify(cur.value)} → ${JSON.stringify(v)}): conflict`);
+    }
+    for (const [k, tg] of targets) {
+      const f = fields.get(k)!;
+      const cur = currentTargets.get(k);
+      if (f.immutable && cur && (!tg || (f.spec.direction === "in" ? cur.from : cur.to) !== tg.id)) this.problem(at, `${k} is immutable: conflict`);
+    }
+    const merged = new Map<string, unknown>([...[...current].map(([k, c]) => [k, c.value] as [string, unknown]), ...values]);
+    for (const [k, f] of fields) {
+      const v = merged.get(k);
+      if (v === undefined || v === null || !isObj(f.spec.allowedBy)) continue;
+      for (const [ctl, table] of Object.entries(f.spec.allowedBy)) {
+        const cv = merged.get(ctl);
+        const allowed = isObj(table) && typeof cv === "string" ? table[cv] : undefined;
+        if (!Array.isArray(allowed)) this.problem(at, `${k} does not apply to a ${o.class} whose ${ctl} is ${JSON.stringify(cv ?? null)}`);
+        else if (allowed.length && !(Array.isArray(v) ? v : [v]).every((x) => allowed.includes(x))) {
+          this.problem(at, `${k} of a ${ctl} ${String(cv)} ${o.class} is one of ${allowed.join(", ")}`);
+        }
+      }
+    }
+    if (this.problems.length > before) return;
+
+    // 4. Write: a value that differs closes its row and opens one (D6).
+    const changed: string[] = [];
+    const drifted: Record<string, { was: unknown; now: unknown }> = {};
+    for (const [k, v] of values) {
+      const cur = current.get(k);
+      if (cur && same(cur.value, v)) continue;
+      if (!cur && v === null) continue;
+      const t = cur ? later(this.t, cur.from) : this.t;
+      if (cur) await this.q("UPDATE attribute SET validity = tstzrange(lower(validity), $2) WHERE id = $1", [cur.id, t]);
+      if (v !== null) {
+        await this.q(
+          "INSERT INTO attribute (object, name, value, source, change, validity) VALUES ($1, $2, $3::jsonb, $4, $5, tstzrange($6, NULL))",
+          [id, k, JSON.stringify(v), this.source, this.change, t],
+        );
+      }
+      if (k === "displayName") await this.q("UPDATE object SET display_name = $2 WHERE id = $1", [id, typeof v === "string" ? v : null]);
+      changed.push(k);
+      if (cur && this.kind === "observation") drifted[k] = { was: cur.value, now: v };
+    }
+    for (const [k, tg] of targets) {
+      const f = fields.get(k)!;
+      const rel = String(f.spec.relation);
+      const dir = f.spec.direction === "in" ? "in" : "out";
+      const cur = currentTargets.get(k);
+      const curOther = cur ? (dir === "out" ? cur.to : cur.from) : null;
+      if (tg && curOther === tg.id) continue;
+      if (!tg && !cur) continue;
+      if (cur) await this.closeRelation(cur.id);
+      if (tg) {
+        const [from, to] = dir === "out" ? [id, tg.id] : [tg.id, id];
+        await this.putRelation(rel, from, to, {});
+      }
+      changed.push(k);
+      if (cur && this.kind === "observation") drifted[k] = { was: curOther, now: tg ? tg.id : null };
+    }
+
+    // 5. Drift: an observation that differs from the last with nothing
+    // behind it (D6). A change clears it.
+    const drift = current.get("drift");
+    const driftNames = Object.keys(drifted);
+    if (driftNames.length) {
+      const was = drift && isObj(drift.value) ? drift.value : null;
+      const value = {
+        since: was?.since ?? this.t,
+        source: this.source,
+        attributes: { ...(isObj(was?.attributes) ? was!.attributes : {}), ...drifted },
+        desired: current.get("desired")?.value ?? null,
+      };
+      if (drift) await this.q("UPDATE attribute SET validity = tstzrange(lower(validity), $2) WHERE id = $1", [drift.id, later(this.t, drift.from)]);
+      await this.q(
+        "INSERT INTO attribute (object, name, value, source, change, validity) VALUES ($1, 'drift', $2::jsonb, $3, $4, tstzrange($5, NULL))",
+        [id, JSON.stringify(value), CONTROLLER_SOURCE, this.change, drift ? later(this.t, drift.from) : this.t],
+      );
+      this.drift = true;
+    } else if (drift && this.kind === "change") {
+      await this.q("UPDATE attribute SET validity = tstzrange(lower(validity), $2) WHERE id = $1", [drift.id, later(this.t, drift.from)]);
+      changed.push("drift");
+    }
+
+    // 6. Seen; ended.
+    await this.q(
+      `UPDATE object SET last_seen = GREATEST(last_seen, $2::timestamptz), seen = seen || $3::jsonb WHERE id = $1`,
+      [id, this.t, { [this.source]: this.t }],
+    );
+    let ended = false;
+    if (o.end) {
+      await this.end(id, o.class, current);
+      ended = true;
+    }
+    if (changed.length || ended) this.touched.add(id);
+    const target = { id, class: o.class, name: o.name };
+    if (typeof o.ref === "string") this.refs.set(o.ref, target);
+    this.results.push({ ref: o.ref, id, class: o.class, name: o.name, created, changed, drift: driftNames, ended });
+  }
+
+  // The object a report means, by its class's keys, strongest first (D5).
+  // undefined: refused (a problem is recorded); null: a new object.
+  private async match(
+    at: string,
+    cls: string,
+    name: string,
+    values: Map<string, unknown>,
+    targets: Map<string, Target | null>,
+  ): Promise<Target | null | undefined> {
+    const keys = this.mm.keys(cls);
+    const fields = this.mm.fields(cls);
+    const tried = keys.length ? keys : [{ rank: 0, components: ["name"] }];
+    let found: Target | null = null;
+    let complete = 0;
+    for (const key of tried) {
+      const params: Param[] = [JSON.stringify(this.mm.keyClasses(cls, key))];
+      const conds = ["o.ended IS NULL", "o.class IN (SELECT jsonb_array_elements_text($1::jsonb))"];
+      let usable = true;
+      for (const c of key.components) {
+        const f = fields.get(c)!;
+        if (c === "name") {
+          params.push(name);
+          conds.push(`o.name = $${params.length}`);
+        } else if (f.type === "relation") {
+          const tg = targets.get(c);
+          if (!tg) {
+            usable = false;
+            break;
+          }
+          params.push(String(f.spec.relation), tg.id);
+          conds.push(
+            f.spec.direction === "in"
+              ? `EXISTS (SELECT 1 FROM relation r WHERE r.type = $${params.length - 1} AND r.to_object = o.id AND r.from_object = $${params.length} AND upper_inf(r.validity))`
+              : `EXISTS (SELECT 1 FROM relation r WHERE r.type = $${params.length - 1} AND r.from_object = o.id AND r.to_object = $${params.length} AND upper_inf(r.validity))`,
+          );
+        } else {
+          const v = values.get(c);
+          if (v === undefined || v === null) {
+            usable = false;
+            break;
+          }
+          params.push(c, JSON.stringify(v));
+          conds.push(
+            `EXISTS (SELECT 1 FROM attribute a WHERE a.object = o.id AND a.name = $${params.length - 1} AND a.value = $${params.length}::jsonb AND upper_inf(a.validity))`,
+          );
+        }
+      }
+      if (!usable) continue;
+      complete++;
+      const rows = (await this.q(`SELECT o.id, o.class, o.name FROM object o WHERE ${conds.join(" AND ")}`, params)).rows;
+      const hits = rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name) }));
+      if (hits.length > 1) {
+        this.problem(at, `conflict: key (${key.components.join(", ")}) matches ${hits.length} objects`, hits);
+        return undefined;
+      }
+      if (hits.length === 1) {
+        if (found && found.id !== hits[0].id) {
+          this.problem(at, `conflict: key (${key.components.join(", ")}) matches ${hits[0].class} ${hits[0].name}, a stronger key ${found.class} ${found.name}`, [found, hits[0]]);
+          return undefined;
+        }
+        found = hits[0];
+      }
+    }
+    if (!complete) {
+      this.problem(at, `no key: a ${cls} is known by ${tried.map((k) => `(${k.components.join(", ")})`).join(" or ")}`);
+      return undefined;
+    }
+    return found;
+  }
+
+  private async currentTarget(id: string, rel: string, dir: "out" | "in"): Promise<{ id: number; from: string; to: string } | null> {
+    const r = (
+      await this.q(
+        `SELECT id, from_object, to_object FROM relation WHERE type = $1 AND ${dir === "out" ? "from_object" : "to_object"} = $2 AND upper_inf(validity) ORDER BY id DESC LIMIT 1`,
+        [rel, id],
+      )
+    ).rows;
+    return r.length ? { id: Number(r[0].id), from: String(r[0].from_object), to: String(r[0].to_object) } : null;
+  }
+
+  private async closeRelation(rid: number): Promise<void> {
+    await this.q("UPDATE relation SET validity = tstzrange(lower(validity), GREATEST(lower(validity), $2::timestamptz)) WHERE id = $1", [rid, this.t]);
+    this.relationIds.add(rid);
+  }
+
+  // Open (type, from, to) with these attributes, closing what the type's
+  // cardinality says a new one replaces.
+  private async putRelation(type: string, from: string, to: string, attributes: Obj): Promise<number> {
+    const open = (
+      await this.q(
+        "SELECT id, attributes, lower(validity) AS since FROM relation WHERE type = $1 AND from_object = $2 AND to_object = $3 AND upper_inf(validity)",
+        [type, from, to],
+      )
+    ).rows;
+    if (open.length && same(open[0].attributes, attributes)) return Number(open[0].id);
+    let t = this.t;
+    if (open.length) {
+      t = later(this.t, String(open[0].since));
+      await this.closeRelation(Number(open[0].id));
+    }
+    const card = this.mm.relationEnds(type)[0]?.cardinality ?? "n:m";
+    const replace: string[] = [];
+    if (card === "n:1" || card === "1:1") replace.push("from_object = $2 AND to_object <> $3");
+    if (card === "1:n" || card === "1:1") replace.push("to_object = $3 AND from_object <> $2");
+    if (replace.length) {
+      for (const r of (await this.q(`SELECT id FROM relation WHERE type = $1 AND upper_inf(validity) AND ((${replace.join(") OR (")}))`, [type, from, to])).rows) {
+        await this.closeRelation(Number(r.id));
+      }
+    }
+    const r = await this.q(
+      `INSERT INTO relation (type, from_object, to_object, attributes, source, change, validity)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, tstzrange($7, NULL)) RETURNING id`,
+      [type, from, to, JSON.stringify(attributes), this.source, this.change, t],
+    );
+    const rid = Number(r.rows[0].id);
+    this.relationIds.add(rid);
+    this.touched.add(from);
+    this.touched.add(to);
+    return rid;
+  }
+
+  // Retired (a CI) or disposed (a resource): its relations end, its rows stay.
+  private async end(id: string, cls: string, current: Map<string, Current>): Promise<void> {
+    await this.q("UPDATE object SET ended = $2 WHERE id = $1 AND ended IS NULL", [id, this.t]);
+    for (const r of (await this.q("SELECT id FROM relation WHERE (from_object = $1 OR to_object = $1) AND upper_inf(validity)", [id])).rows) {
+      await this.closeRelation(Number(r.id));
+    }
+    const stage = this.mm.isA(cls, "ci") ? "retired" : this.mm.isA(cls, "resource") ? "disposed" : null;
+    const cur = current.get("stage");
+    if (stage && this.mm.fields(cls).has("stage") && !(cur && cur.value === stage)) {
+      const t = cur ? later(this.t, cur.from) : this.t;
+      if (cur) await this.q("UPDATE attribute SET validity = tstzrange(lower(validity), $2) WHERE id = $1", [cur.id, t]);
+      await this.q(
+        "INSERT INTO attribute (object, name, value, source, change, validity) VALUES ($1, 'stage', $2::jsonb, $3, $4, tstzrange($5, NULL))",
+        [id, JSON.stringify(stage), this.source, this.change, t],
+      );
+    }
+  }
+
+  async relation(i: number, r: ReportRelation): Promise<void> {
+    const at = `relations[${i}]${isObj(r) && r.type ? ` (${String(r.type)})` : ""}`;
+    if (!isObj(r) || typeof r.type !== "string") return this.problem(at, "a relation has a type, a from and a to");
+    if (!this.mm.relationEnds(r.type).length) return this.problem(at, `no relation type ${r.type}`);
+    const from = await this.target(`${at}.from`, r.from, null);
+    const to = await this.target(`${at}.to`, r.to, null);
+    if (!from || !to) return;
+    if (!this.mm.allows(r.type, from.class, to.class)) return this.problem(at, `${r.type} does not join ${from.class} to ${to.class}`);
+    if (r.end) {
+      const open = (
+        await this.q("SELECT id FROM relation WHERE type = $1 AND from_object = $2 AND to_object = $3 AND upper_inf(validity)", [r.type, from.id, to.id])
+      ).rows;
+      for (const x of open) await this.closeRelation(Number(x.id));
+      if (open.length) {
+        this.touched.add(from.id);
+        this.touched.add(to.id);
+      }
+      return;
+    }
+    await this.putRelation(r.type, from.id, to.id, isObj(r.attributes) ? r.attributes : {});
+  }
+}
