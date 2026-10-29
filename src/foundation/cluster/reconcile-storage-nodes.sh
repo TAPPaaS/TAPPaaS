@@ -11,7 +11,10 @@
 # `pvesm set`, a cluster config restore. Symptom: `pvesm status` shows the
 # pool 'disabled' on a node that has it ONLINE in zfs.
 #
-# Converge rule (mirrors the site-manager reconcile doctrine):
+# Also: an lvmthin storage (the installer's local-lvm) covers exactly the nodes
+# that have its thin pool — see below.
+#
+# Converge rule for the data pools (mirrors the site-manager reconcile doctrine):
 #   - a node that declares the pool but is MISSING from its list is ADDED;
 #   - an extra node in the list is WARNED about, never removed (operator
 #     hand-edits are legitimate; removal is an operator decision);
@@ -32,14 +35,58 @@ NODES_JSON="$(tappaas_cluster_nodes_json "${TAPPAAS_CONFIG:-${CONFIG_DIR:-/home/
 NODE1_FQDN="$(get_primary_node_fqdn)"
 SSH_OPTS=(-o BatchMode=yes -o StrictHostKeyChecking=accept-new)
 
+CHANGED=0
+
+# ── the installer's thin pool (local-lvm) ────────────────────────────
+# Proxmox's ext4/LVM install registers lvmthin storage `local-lvm` (pve/data)
+# for every node; a node installed on ZFS has no pve/data, so there it reads
+# inactive, and everything that walks the storages trips on it (a nightly
+# update's cloud-init sweep did). Its nodes list is set to the nodes that have
+# its thin pool — a node without it can hold nothing there. Left alone when
+# every node has it, and when none does (then it is warned about).
+mapfile -t NODE_NAMES < <(jq -r '.[].name' <<<"$NODES_JSON")
+storage_cfg="$(ssh -n "${SSH_OPTS[@]}" root@"$NODE1_FQDN" "cat /etc/pve/storage.cfg" 2>/dev/null)" || storage_cfg=""
+while read -r lv _vg _tp _nodes; do
+    [[ -n "$lv" ]] || continue
+    have=""
+    for n in "${NODE_NAMES[@]}"; do
+        if ssh -n "${SSH_OPTS[@]}" -o ConnectTimeout=10 root@"${n}.mgmt.internal" "lvs --noheadings ${_vg}/${_tp}" >/dev/null 2>&1; then
+            have="${have:+${have},}${n}"
+        fi
+    done
+    if [[ -z "$have" ]]; then
+        warn "  ${lv}: no node has its thin pool ${_vg}/${_tp} — the storage holds nothing (pvesm remove ${lv} if it is not wanted)"
+        continue
+    fi
+    if [[ "$have" == "$(IFS=,; echo "${NODE_NAMES[*]}")" && "$_nodes" == "-" ]]; then
+        debug "  ${lv}: every node has ${_vg}/${_tp}"
+        continue
+    fi
+    sorted() { tr ',' '\n' <<<"$1" | sort | paste -sd, -; }
+    [[ "$(sorted "$_nodes")" == "$(sorted "$have")" ]] && { debug "  ${lv}: nodes ${have}"; continue; }
+    info "  ${lv}: limited to the nodes with ${_vg}/${_tp} (${_nodes/#-/all} -> ${have})"
+    if ssh -n "${SSH_OPTS[@]}" root@"$NODE1_FQDN" "pvesm set '${lv}' --nodes '${have}'"; then
+        CHANGED=$((CHANGED + 1))
+    else
+        error "  pvesm set ${lv} --nodes ${have} failed on ${NODE1_FQDN}"
+        exit 1
+    fi
+done < <(awk '
+    /^[a-z]+: / { if (name != "" && type == "lvmthin") print name, vg, tp, (nodes == "" ? "-" : nodes)
+                  split($0, h, ": "); type = h[1]; name = h[2]; vg = ""; tp = ""; nodes = ""; next }
+    $1 == "vgname"   { vg = $2 }
+    $1 == "thinpool" { tp = $2 }
+    $1 == "nodes"    { nodes = $2 }
+    END { if (name != "" && type == "lvmthin") print name, vg, tp, (nodes == "" ? "-" : nodes) }' <<<"$storage_cfg")
+
 # All pools declared by any node.
 mapfile -t POOLS < <(jq -r '[.[].storagePools[]?] | unique | .[]' <<<"$NODES_JSON")
 if [[ "${#POOLS[@]}" -eq 0 ]]; then
     debug "no node declares a storage pool — nothing to reconcile"
+    [[ "$CHANGED" -gt 0 ]] && info "Storage nodes lists reconciled (${CHANGED} storage(s) updated)"
     exit 0
 fi
 
-CHANGED=0
 for pool in "${POOLS[@]}"; do
     desired="$(jq -r --arg p "$pool" \
         '[.[] | select(.storagePools | index($p)) | .name] | join(",")' <<<"$NODES_JSON")"

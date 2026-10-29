@@ -669,6 +669,14 @@ function joinAndCapture(
     else warn(`  could not register ${o.name}'s boot pool as 'local-zfs': ${r.out.trim()} — fix with: pvesm add zfspool local-zfs --pool rpool/data --content images,rootdir --nodes ${o.name}`);
     if (/created|added|already|unrestricted/.test(r.out) && capturedPools.length === 0) storageOk = true;
   }
+  // The installer's thin pool (local-lvm, pve/data) is on ext4/LVM nodes only:
+  // listed for a ZFS-installed node, it is an inactive storage there that
+  // every storage walk trips on. The reconcile scopes it (and the data pools)
+  // to the nodes that have them.
+  const scope = clusterScript("reconcile-storage-nodes.sh");
+  if (!scope || runStream("bash", [scope]) !== 0) {
+    warn(`  the storage nodes lists were not reconciled — the next cluster update does it (local-lvm may be listed for ${o.name})`);
+  }
 
   // The node baseline (cluster update, limited to this node): the provisioners,
   // the mothership's key cloud-init guests are given, the vendor-data snippet
