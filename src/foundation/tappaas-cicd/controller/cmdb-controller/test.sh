@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+#
+# test.sh — tests for cmdb-controller (ADR-040, implementation plan step 1).
+#
+# FAST (default, non-disruptive): a throwaway PostgreSQL in a temp directory
+# (initdb + pg_ctl, its socket in the temp dir, no TCP), the controller built
+# with tsc and started against it on a temp socket, the cmdb CLI against that.
+# Never the site's database or socket. Covers:
+#   - the schema: exactly the eight tables of D13, both exclusion constraints
+#     (and that an overlapping period is refused), the GIN index; a second
+#     start applies it again without harm
+#   - the metamodel loaded as data: class_ancestor's closure, attribute_def
+#   - a report: a server asset with an rj45 port, a machine CI the asset is
+#     allocated to, a vm on it
+#   - query: every asset (subclasses), every physical object, by attribute
+#   - history: a second observation changes an attribute; both periods are
+#     kept, and the object as of the first time shows the first value
+#   - drift: that observation had no change behind it, so the server is
+#     drifted; a change report clears it
+#   - refusals: two keys matching two objects (409), an immutable value
+#     changed (409), a field a port of that kind does not have (422), a field
+#     the class does not have (422); nothing of a refused batch is written
+#   - impact over two hops, and not beyond
+#   - resolve (D14): host.name, service.instance.id
+#   - an ended CI leaves key matching: the same name again is a new CI (D7)
+#   - the loopback listener wants the token; the change stream (SSE)
+#   - the client: a report the service cannot take is spooled and replayed;
+#     lib/cmdb.sh never fails its caller
+#
+# Needs pg_ctl/initdb/psql, node, tsc, curl and jq; without them on PATH it
+# re-enters itself under nix-shell. PostgreSQL will not run as root: as root
+# the database part is skipped (run it as tappaas).
+#
+# DEEP (TAPPAAS_TEST_DEEP=1): nothing more yet — the live service is checked
+# on the mothership (cmdb.service, its socket and the dump), see README.md.
+#
+# Prints "Results: N passed, M failed"; exits 1 on any failure.
+#
+set -uo pipefail
+for _a in "$@"; do [[ "${_a}" == "--deep" ]] && export TAPPAAS_TEST_DEEP=1; done
+
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CICD="$(cd "${HERE}/../.." && pwd)"
+
+_missing=""
+for _t in initdb pg_ctl psql createdb node tsc curl jq; do command -v "${_t}" >/dev/null 2>&1 || _missing+=" ${_t}"; done
+if [[ -n "${_missing}" && -z "${CMDB_TEST_IN_NIX:-}" ]] && command -v nix-shell >/dev/null 2>&1; then
+    exec env CMDB_TEST_IN_NIX=1 nix-shell -p postgresql_16 nodejs_22 typescript curl jq --run "bash '${HERE}/test.sh' $*"
+fi
+
+PASS=0
+FAIL=0
+ok()  { echo "  ok: $*";   PASS=$((PASS + 1)); }
+bad() { echo "  FAIL: $*"; FAIL=$((FAIL + 1)); }
+check() { if [[ "$2" == "$3" ]]; then ok "$1"; else bad "$1 — expected '$2', got '$3'"; fi; }
+results() { echo ""; echo "Results: ${PASS} passed, ${FAIL} failed"; [[ "${FAIL}" -eq 0 ]]; }
+
+if [[ -n "${_missing}" ]]; then
+    echo "  skip: no${_missing} here, and no nix-shell to bring them"
+    results; exit $?
+fi
+
+T="$(mktemp -d /tmp/cmdb-test.XXXXXX)"
+DIST="${HERE}/dist-test"
+SVC_PID=""
+cleanup() {
+    [[ -n "${SVC_PID}" ]] && kill "${SVC_PID}" 2>/dev/null && wait "${SVC_PID}" 2>/dev/null
+    [[ -d "${T}/pg" ]] && pg_ctl -D "${T}/pg" -m immediate stop >/dev/null 2>&1
+    rm -rf -- "${T}" "${DIST}"
+    return 0
+}
+trap cleanup EXIT INT TERM
+
+echo "== cmdb-controller TypeScript build =="
+rm -rf -- "${DIST}"
+if tsc -p "${HERE}/tsconfig.json" --outDir "${DIST}" >"${T}/tsc.log" 2>&1; then
+    ok "tsc build clean (src and lib/ts)"
+else
+    bad "tsc build failed: $(head -5 "${T}/tsc.log")"
+    results; exit $?
+fi
+MAIN="${DIST}/controller/cmdb-controller/src/main.js"
+CLI="${DIST}/controller/cmdb-controller/src/cli.js"
+
+if [[ "$(id -u)" -eq 0 ]]; then
+    echo "  skip: PostgreSQL does not run as root; run this as tappaas"
+    results; exit $?
+fi
+
+echo "== a throwaway PostgreSQL =="
+PGPORT_T=$(( 20000 + RANDOM % 20000 ))
+export PGHOST="${T}" PGPORT="${PGPORT_T}" PGUSER=tappaas PGDATABASE=cmdb
+if initdb -D "${T}/pg" -U tappaas --auth=trust -E UTF8 --no-locale >"${T}/initdb.log" 2>&1 \
+    && pg_ctl -D "${T}/pg" -o "-k ${T} -c listen_addresses='' -p ${PGPORT_T}" -w -l "${T}/pg.log" start >/dev/null 2>&1 \
+    && createdb cmdb; then
+    ok "PostgreSQL $(postgres --version | awk '{print $NF}') in ${T}"
+else
+    bad "could not start PostgreSQL: $(tail -3 "${T}/initdb.log" "${T}/pg.log" 2>/dev/null)"
+    results; exit $?
+fi
+sql() { psql -qtAX -c "$1" 2>&1; }
+
+export CMDB_PGHOST="${T}" CMDB_PGPORT="${PGPORT_T}" CMDB_PGDATABASE=cmdb CMDB_PGUSER=tappaas
+export CMDB_SHARE="${HERE}" CMDB_SOCKET="${T}/cmdb.sock" CMDB_TOKEN_FILE="${T}/token"
+export TAPPAAS_CONFIG="${T}/config"
+API_PORT=$(( 40000 + RANDOM % 20000 ))
+export CMDB_LISTEN="127.0.0.1:${API_PORT}"
+echo "test-token-$$" >"${CMDB_TOKEN_FILE}"
+mkdir -p "${TAPPAAS_CONFIG}"
+
+node "${MAIN}" serve >"${T}/svc.log" 2>&1 &
+SVC_PID=$!
+for _ in $(seq 1 100); do [[ -S "${CMDB_SOCKET}" ]] && break; sleep 0.1; done
+if [[ -S "${CMDB_SOCKET}" ]]; then ok "cmdb-controller serves ${CMDB_SOCKET}"; else bad "the service did not start: $(cat "${T}/svc.log")"; results; exit $?; fi
+
+cmdb() { node "${CLI}" "$@"; }
+
+echo "== the schema (D13) =="
+check "exactly the eight tables" "attribute,attribute_def,change,class,class_ancestor,object,relation,relation_type" \
+    "$(sql "SELECT string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables WHERE table_schema = 'public'")"
+check "the exclusion constraints on attribute and relation" "attribute_no_overlap,relation_no_overlap" \
+    "$(sql "SELECT string_agg(conname, ',' ORDER BY conname) FROM pg_constraint WHERE contype = 'x'")"
+check "a GIN index on attribute.value" "1" "$(sql "SELECT count(*) FROM pg_indexes WHERE tablename = 'attribute' AND indexdef ILIKE '%USING gin (value%'")"
+check "the store records its schema version" "cmdb schema 1" "$(sql "SELECT obj_description('object'::regclass, 'pg_class')")"
+if node "${MAIN}" schema >"${T}/schema2.log" 2>&1; then ok "applying the schema again is harmless (idempotent)"; else bad "second schema apply failed: $(cat "${T}/schema2.log")"; fi
+
+echo "== the metamodel, as data (D3, D13) =="
+check "class_ancestor: a server is a server, an asset, a resource, an object" "asset:1,object:3,resource:2,server:0" \
+    "$(sql "SELECT string_agg(ancestor || ':' || depth, ',' ORDER BY ancestor) FROM class_ancestor WHERE class = 'server'")"
+check "attribute_def: a port's kind is required, one of the D9 connectors" "string|true|[\"rj45\", \"sfp\", \"wifi\", \"usb-a\", \"usb-c\"]" \
+    "$(sql "SELECT type || '|' || required || '|' || (spec->'enum')::text FROM attribute_def WHERE class = 'port' AND name = 'kind'")"
+check "faulty is a flag on resource" "boolean" "$(sql "SELECT type FROM attribute_def WHERE class = 'resource' AND name = 'faulty'")"
+check "a physical class: asset's subclasses inherit it" "t" "$(sql "SELECT physical FROM class WHERE name = 'server'")"
+check "cmdb class show: an asset's keys" "serial,vendor|name" "$(cmdb class show server --json | jq -r '[.keys[].components | join(",")] | join("|")')"
+cmdb class list >"${T}/classes.txt" 2>&1 && grep -q "^      server" "${T}/classes.txt" && ok "cmdb class list draws the tree" || bad "class list: $(head -5 "${T}/classes.txt")"
+
+echo "== a report: a server, its rj45 port, a machine on it, a vm on that =="
+cat >"${T}/r1.json" <<'JSON'
+{ "source": "site-manager", "kind": "observation", "time": "2026-10-01T10:00:00Z",
+  "objects": [
+    { "ref": "srv", "class": "server", "name": "srv-01",
+      "attributes": { "vendor": "hp", "serial": "CZC1234", "model": "hp/z840", "displayName": "tappaas1",
+                      "cpu": "E5-2680v4", "memory": 131072, "stage": "operational" } },
+    { "class": "port", "name": "eno1",
+      "attributes": { "asset": { "ref": "srv" }, "kind": "rj45", "speed": "1g", "mac": "aa:bb:cc:00:00:01", "role": "lan" } },
+    { "ref": "m", "class": "machine", "name": "tappaas1",
+      "attributes": { "hostname": "tappaas1", "clusterMember": true, "asset": { "ref": "srv" } } },
+    { "class": "vm", "name": "nextcloud", "attributes": { "vmid": 200, "cores": 4, "memory": 8192, "onNode": { "ref": "m" } } }
+  ] }
+JSON
+out="$(cmdb report --json <"${T}/r1.json")"
+check "delivered, four objects created" "true 4" "$(jq -r '"\(.delivered) \([.result.objects[] | select(.created)] | length)"' <<<"${out}")"
+SRV_ID="$(jq -r '.result.objects[0].id' <<<"${out}")"
+check "the asset is allocated to the machine (allocated-to)" "machine/tappaas1" \
+    "$(cmdb show srv-01 --json | jq -r '.relations[] | select(.type == "allocated-to") | "\(.other.class)/\(.other.name)"')"
+out="$(cmdb report --json <"${T}/r1.json")"
+check "the same report again changes nothing" "null 0" "$(jq -r '"\(.result.change) \([.result.objects[] | select(.created)] | length)"' <<<"${out}")"
+
+echo "== query =="
+check "every asset: the server (a subclass)" "server/srv-01" "$(cmdb query asset --json | jq -r '[.[] | "\(.class)/\(.name)"] | join(",")')"
+check "every physical object: the server and its port" "port/eno1,server/srv-01" "$(cmdb query --physical --json | jq -r '[.[] | "\(.class)/\(.name)"] | join(",")')"
+check "every node: the machine and the vm" "machine/tappaas1,vm/nextcloud" "$(cmdb query node --json | jq -r '[.[] | "\(.class)/\(.name)"] | join(",")')"
+check "by attribute: vendor=hp" "srv-01" "$(cmdb query --where vendor=hp --json | jq -r '[.[].name] | join(",")')"
+check "by attribute: a number" "nextcloud" "$(cmdb query vm --where vmid=200 --json | jq -r '[.[].name] | join(",")')"
+
+echo "== history and drift (D6) =="
+cat >"${T}/r2.json" <<'JSON'
+{ "source": "health-manager", "time": "2026-10-02T10:00:00Z",
+  "objects": [ { "class": "server", "name": "srv-01", "attributes": { "cpu": "E5-2690v4" } } ] }
+JSON
+out="$(cmdb report --json <"${T}/r2.json")"
+check "the second observation changed cpu and marked drift" "cpu cpu" "$(jq -r '.result.objects[0] | "\(.changed | join(",")) \(.drift | join(","))"' <<<"${out}")"
+check "history keeps both periods of cpu" "E5-2680v4 2026-10-01T10:00:00.000Z 2026-10-02T10:00:00.000Z|E5-2690v4 2026-10-02T10:00:00.000Z null" \
+    "$(cmdb history srv-01 --json | jq -r '[.attributes[] | select(.name == "cpu") | "\(.value) \(.from) \(.to)"] | join("|")')"
+check "the server as of 2026-10-01 had the first cpu" "E5-2680v4" "$(cmdb history srv-01 --at 2026-10-01T12:00:00Z --json | jq -r '.attributes.cpu.value')"
+check "a query as of 2026-10-01 sees the first cpu" "E5-2680v4" "$(cmdb query server --at 2026-10-01T12:00:00Z --json | jq -r '.[0].attributes.cpu')"
+check "drift on the server: what cpu was, from whom" "E5-2680v4 health-manager" "$(cmdb show srv-01 --json | jq -r '"\(.drift.attributes.cpu.was) \(.drift.source)"')"
+cmdb history srv-01 >"${T}/hist.txt" 2>&1 && grep -q "E5-2690v4" "${T}/hist.txt" && ok "cmdb history prints a table" || bad "history text: $(head -3 "${T}/hist.txt")"
+cat >"${T}/r3.json" <<'JSON'
+{ "source": "asset-manager", "kind": "change", "verb": "asset modify", "job": "J-1", "actor": "lars", "time": "2026-10-03T10:00:00Z",
+  "objects": [ { "class": "server", "name": "srv-01", "attributes": { "assetTag": "T-0001" } },
+               { "class": "server", "name": "srv-02", "attributes": { "vendor": "dell", "serial": "X2" } } ] }
+JSON
+cmdb report --json <"${T}/r3.json" >/dev/null
+check "a change clears the drift" "null" "$(cmdb show srv-01 --json | jq -r '.drift')"
+check "the change is recorded with its job and verb" "change J-1 asset modify" \
+    "$(sql "SELECT kind || ' ' || job || ' ' || verb FROM change WHERE job = 'J-1'")"
+
+echo "== refusals: conflicts and the metamodel =="
+before="$(sql "SELECT (SELECT count(*) FROM object) || '/' || (SELECT count(*) FROM attribute)")"
+refuse() { # <what> <expected rc> <expected text> <report json>
+    local o rc
+    o="$(cmdb report --json <<<"$4" 2>&1)"; rc=$?
+    if [[ "${rc}" == "$2" ]] && grep -q -- "$3" <<<"${o}"; then ok "$1"; else bad "$1 — rc ${rc}: ${o}"; fi
+}
+refuse "two keys matching two objects is a conflict (409)" 4 "conflict" \
+    '{"source":"t","objects":[{"class":"server","name":"srv-02","attributes":{"vendor":"hp","serial":"CZC1234"}}]}'
+refuse "an immutable value changed is a conflict" 4 "immutable" \
+    '{"source":"t","objects":[{"class":"server","name":"srv-01","attributes":{"vendor":"hp","serial":"OTHER"}}]}'
+refuse "speed is no field of a wifi port (422)" 4 "speed does not apply" \
+    '{"source":"t","objects":[{"class":"port","name":"wlan0","attributes":{"asset":"srv-01","kind":"wifi","speed":"1g"}}]}'
+refuse "an sfp port's speed is an sfp speed" 4 "one of 1g, 10g, 25g" \
+    '{"source":"t","objects":[{"class":"port","name":"sfp0","attributes":{"asset":"srv-01","kind":"sfp","speed":"2.5g"}}]}'
+refuse "a field the class does not have" 4 "has no field" \
+    '{"source":"t","objects":[{"class":"server","name":"srv-01","attributes":{"colour":"red"}}]}'
+refuse "an abstract class cannot be reported" 4 "abstract" \
+    '{"source":"t","objects":[{"class":"asset","name":"x"}]}'
+refuse "the whole batch is refused: the good object is not written either" 4 "no class" \
+    '{"source":"t","objects":[{"class":"zone","name":"lan","attributes":{"vlan":10}},{"class":"nope","name":"x"}]}'
+check "nothing of the refused batches was written" "${before}" "$(sql "SELECT (SELECT count(*) FROM object) || '/' || (SELECT count(*) FROM attribute)")"
+
+echo "== impact (recursive over relation) =="
+check "two hops from the server: its port and machine, then the vm" "1:machine/tappaas1,1:port/eno1,2:vm/nextcloud" \
+    "$(cmdb impact srv-01 --hops 2 --json | jq -r '[.impact[] | "\(.depth):\(.class)/\(.name)"] | sort | join(",")')"
+check "one hop does not reach the vm" "0" "$(cmdb impact srv-01 --hops 1 --json | jq '[.impact[] | select(.name == "nextcloud")] | length')"
+check "from the vm, in only: nothing depends on it" "0" "$(cmdb impact vm/nextcloud --direction in --json | jq '.impact | length')"
+
+echo "== resolve (D14) =="
+check "host.name=nextcloud is the vm" "vm nextcloud" "$(cmdb resolve host.name=nextcloud --json | jq -r '"\(.class) \(.name)"')"
+check "service.instance.id is the CI id" "srv-01" "$(cmdb resolve "service.instance.id=${SRV_ID}" --json | jq -r '.name')"
+
+echo "== an ended CI is kept, and leaves key matching (D5, D7) =="
+OLD_VM="$(cmdb show vm/nextcloud --json | jq -r '.id')"
+cmdb report --json >/dev/null <<'JSON'
+{ "source": "module-manager", "kind": "change", "verb": "module delete", "time": "2026-10-04T10:00:00Z",
+  "objects": [ { "class": "vm", "name": "nextcloud", "attributes": { "vmid": 200 }, "end": true } ] }
+JSON
+check "a query no longer lists it" "0" "$(cmdb query vm --json | jq 'length')"
+check "…with --all it is there, retired" "retired" "$(cmdb query vm --all --json | jq -r '.[0].attributes.stage')"
+check "its runs-on ended with it" "0" "$(cmdb show vm/nextcloud --json | jq '.relations | length')"
+NEW_VM="$(cmdb report --json <<<'{"source":"module-manager","kind":"change","objects":[{"class":"vm","name":"nextcloud","attributes":{"vmid":200,"onNode":"tappaas1"}}]}' | jq -r '.result.objects[0].id')"
+[[ -n "${NEW_VM}" && "${NEW_VM}" != "null" && "${NEW_VM}" != "${OLD_VM}" ]] && ok "the same name again is a new CI" || bad "nextcloud again: ${NEW_VM} (old ${OLD_VM})"
+
+echo "== the listeners =="
+check "loopback without the token: 401" "401" "$(curl -s -o /dev/null -w '%{http_code}' "http://${CMDB_LISTEN}/v1/health")"
+check "loopback with the token: 200" "200" "$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $(cat "${CMDB_TOKEN_FILE}")" "http://${CMDB_LISTEN}/v1/health")"
+check "the socket is not world-accessible" "660" "$(stat -c '%a' "${CMDB_SOCKET}" 2>/dev/null || stat -f '%Lp' "${CMDB_SOCKET}")"
+curl -sN --max-time 3 --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/stream >"${T}/sse.txt" 2>/dev/null &
+_sse=$!
+sleep 0.5
+cmdb report --json >/dev/null <<<'{"source":"network-manager","objects":[{"class":"zone","name":"lan","attributes":{"vlan":10}}]}'
+wait "${_sse}" 2>/dev/null
+grep -q '^event: change' "${T}/sse.txt" && grep -q '"source":"network-manager"' "${T}/sse.txt" \
+    && ok "the change stream sends the change (SSE)" || bad "no change on the stream: $(cat "${T}/sse.txt")"
+
+echo "== the client: spool and replay; lib/cmdb.sh =="
+out="$(CMDB_SOCKET="${T}/down.sock" cmdb report --json <<<'{"source":"switch-manager","objects":[{"class":"zone","name":"iot","attributes":{"vlan":20}}]}')"
+check "the service down: the report is spooled, not lost" "false 1" "$(jq -r '.delivered' <<<"${out}") $(ls "${TAPPAAS_CONFIG}/.cmdb-spool/"*.json 2>/dev/null | wc -l | tr -d ' ')"
+cmdb report --json >/dev/null <<<'{"source":"switch-manager","objects":[{"class":"zone","name":"dmz","attributes":{"vlan":30}}]}'
+check "the next report replays the spool first" "0 iot" "$(ls "${TAPPAAS_CONFIG}/.cmdb-spool/"*.json 2>/dev/null | wc -l | tr -d ' ') $(cmdb show zone/iot --json | jq -r '.name')"
+printf '#!/usr/bin/env bash\nexec node %q "$@"\n' "${CLI}" >"${T}/cmdb-bin"; chmod +x "${T}/cmdb-bin"
+_lib_out="$(CMDB_BIN="${T}/cmdb-bin" bash -c '. "'"${CICD}"'/lib/cmdb.sh"
+    cmdb_available || echo unavailable
+    echo "{\"source\":\"t\",\"objects\":[{\"class\":\"nope\",\"name\":\"x\"}]}" | cmdb_report; echo "rc=$?"
+    cmdb_query asset | jq -r "length"' 2>"${T}/lib.err")"
+check "cmdb.sh: a refused report does not fail the caller; query answers" "rc=0 2" "$(tr '\n' ' ' <<<"${_lib_out}" | sed 's/ $//')"
+grep -q "report not recorded" "${T}/lib.err" && ok "cmdb.sh: …and warns" || bad "cmdb.sh did not warn: $(cat "${T}/lib.err")"
+
+echo "== the store's invariant =="
+_ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)
+            SELECT object, name, value, 'test', tstzrange(lower(validity) - interval '1 hour', NULL) FROM attribute
+             WHERE name = 'cpu' AND upper_inf(validity) LIMIT 1")"
+grep -q "attribute_no_overlap" <<<"${_ov}" && ok "an overlapping period is refused by the exclusion constraint" || bad "overlap not refused: ${_ov}"
+
+results
