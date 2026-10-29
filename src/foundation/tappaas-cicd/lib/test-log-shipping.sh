@@ -36,7 +36,7 @@ grep -q 'host = "web"' "${T}/config.alloy" && grep -q 'zone = "dmz"' "${T}/confi
 grep -q 'CREDENTIALS_DIRECTORY' "${T}/config.alloy" && ok || no "the push secret is not read from the systemd credential"
 # The pipeline goes into a Nix '' string: it must not carry an interpolation or
 # the string's own terminator.
-if _ls_alloy_pipeline web dmz "${drop}" | grep -qE "\\\$\\{|''"; then no "pipeline carries \${ or '' (breaks the Nix string)"; else ok; fi
+if _ls_alloy_pipeline web dmz "${drop}" | grep -cE "\\\$\\{|''" >/dev/null; then no "pipeline carries \${ or '' (breaks the Nix string)"; else ok; fi
 
 render_logging_alloy 'bad host' dmz >/dev/null 2>&1 && no "a bad host was accepted" || ok
 render_logging_alloy web 'bad;zone' >/dev/null 2>&1 && no "a bad zone was accepted" || ok
@@ -60,8 +60,8 @@ pw="$(cat "${T}/cred/site1" 2>/dev/null)"
 grep -qF "${pw}" "${S}" && no "the push secret is in the script in clear" || ok
 dec() { grep "^put $1 " "${S}" | sed "s/^put [^ ]* [0-7]* '//; s/'\$//" | base64 -d; }
 [[ "$(dec /etc/secrets/tappaas-logging-push)" == "${pw}" ]] && ok || no "the secret file does not decode to the secret"
-dec /etc/alloy/config.alloy | grep -q 'host = "site1"' && ok || no "config.alloy is not site1's"
-dec /etc/apt/keyrings/tappaas-grafana.asc | head -1 | grep -q 'BEGIN PGP PUBLIC KEY BLOCK' && ok || no "the Grafana key is not shipped"
+dec /etc/alloy/config.alloy | grep -c 'host = "site1"' >/dev/null && ok || no "config.alloy is not site1's"
+dec /etc/apt/keyrings/tappaas-grafana.asc | head -1 | grep -c 'BEGIN PGP PUBLIC KEY BLOCK' >/dev/null && ok || no "the Grafana key is not shipped"
 grep -q "alloy=${LOG_SHIPPING_ALLOY_DEB}" "${S}" && grep -q 'apt-mark hold alloy' "${S}" && ok || no "Alloy is not pinned and held"
 grep -q '\.tappaas-managed' "${S}" && ok || no "the install does not mark what it owns"
 # A module that does not declare logging:logs gets the removal, and only of

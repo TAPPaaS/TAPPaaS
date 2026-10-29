@@ -53,3 +53,29 @@ as a warning, not a failure.
 | Field | What it does |
 |---|---|
 | `gateGroups` | The Authentik groups whose members pass the gate. Unset: `users`, added to whatever else is bound. Set: exactly these groups (others are unbound; a service account's binding stays). NOMAD sets `["admin"]`: its Command Center starts containers. |
+
+<!-- BEGIN GENERATED FIELDS -- edit the manifest, not this block -->
+
+## Fields
+
+`identity:accessControl` owns **1** declared field(s). Each table below carries the field's full definition and, where the service applies it, its ADR-020 change semantics.
+
+### `gateGroups`
+
+The Authentik groups whose members pass the module's gate. Unset: the team group `users` is bound, and other bindings an operator made on the gate's application are left as they are. Set: exactly these groups are bound — a binding to any other group is removed, a binding to a user (a service account, ADR-032) stays.
+
+| Attribute | Value |
+|---|---|
+| Type | `array` |
+| Default | `<unset: users, additive>` |
+| Example | `admin` |
+| Required by | *(none)* |
+| Used by | `identity:accessControl` |
+| Change class | `in-place` |
+| Apply mode | `reconcile` |
+
+**About the field.** A role reaches Authentik as a group of the same name (identity/USERS.md), so `admin` is everyone with the admin role. Use it for a module whose UI can change the machine it runs on (NOMAD's Command Center starts containers).
+
+**Why this change class.** Who may sign in to the module. Applied on the module's next update; members of a group that is no longer bound are refused at the gate from then on.
+
+<!-- END GENERATED FIELDS -->

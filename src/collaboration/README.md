@@ -11,7 +11,7 @@ editing, and the Talk call stack (signalling and TURN). On the website:
 | Module | What it is | Status |
 |---|---|---|
 | [lazysite](lazysite/README.md) | lazysite — the site owner's public website: Markdown pages in a Forgejo repository, served as HTML, with no build step or database. | Development |
-| [nextcloud](nextcloud/README.md) | Nextcloud file sharing and collaboration platform with Authentik SSO support. | Testing |
+| [nextcloud](nextcloud/README.md) | Nextcloud file sharing and collaboration platform with Authentik SSO support. | Production |
 | [coturn](coturn/README.md) | coturn TURN/STUN server for Nextcloud Talk WebRTC audio/video calls. | Testing |
 | [euro-office](euro-office/README.md) | Euro-Office DocumentServer — collaborative document editing for Nextcloud. | Testing |
 | [nextcloud-hpb](nextcloud-hpb/README.md) | Nextcloud Talk High-Performance Backend - dedicated WebSocket signaling server (nextcloud-spreed-signaling) with a Janus SFU for group calls. | Testing |

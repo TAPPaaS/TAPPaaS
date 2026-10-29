@@ -88,6 +88,9 @@ rm -rf "${CFG}"; mkdir -p "${CFG}"; run >/dev/null; ck "an empty config/ is noth
 # ── the chain it exists for, against the REAL 3-way merge ───────────────────
 # deployed: the stamped marker; .orig: the release before #611 (no kind);
 # release: now authors kind "vm". Needs the composed schema and the converter.
+# Since #488 the merge itself adopts a release value for a field .orig never had,
+# unless the operator set it (<module>.json.operator): the marker goes either way,
+# and 0004 is what removes it on a site whose merge predates that.
 if SCHEMA="$(mktemp)" && "${CICD}/scripts/compose-fields.sh" "${FOUNDATION}" > "${SCHEMA}" 2>/dev/null \
    && [[ -f "${CICD}/manager/site-manager/convert-json-to-config.sh" ]]; then
     merge_kind() {   # merge_kind <migrate: yes|no> → the kind after the merge
@@ -111,7 +114,7 @@ if SCHEMA="$(mktemp)" && "${CICD}/scripts/compose-fields.sh" "${FOUNDATION}" > "
     if [[ "${without}" == no-converter ]]; then
         echo "  - merge chain: the merge library's converter is not installed here (mothership only) — skipped"
     else
-        ck "without 0004 the merge keeps the marker (rule 5)"  module "${without}"
+        ck "without 0004 the merge adopts the authored kind too (#488)" vm "${without}"
         ck "with 0004 the merge adopts the authored kind"      vm     "${with}"
     fi
     rm -f "${SCHEMA}"

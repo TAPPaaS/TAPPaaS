@@ -133,12 +133,12 @@ tpl="$(jq -c '.alerts[0].annotations.mailSubject = "{state}: {title} for site {l
 ck "a template fills the subject" "Subject: ALERT: Release signature rejected for site shop (hosting)" \
    "$(python3 "${R}" --render <<<"${tpl}" | head -1)"
 ck "…and the body" "Site shop on site1: A release was refused." "$(python3 "${R}" --render <<<"${tpl}" | sed -n 3p)"
-ck "…and the Explore query is still in it" "yes" "$(python3 "${R}" --render <<<"${tpl}" | grep -q 'Explore, Loki): {host=~' && echo yes || echo no)"
+ck "…and the Explore query is still in it" "yes" "$(python3 "${R}" --render <<<"${tpl}" | grep -c 'Explore, Loki): {host=~' >/dev/null && echo yes || echo no)"
 odd="$(jq -c '.alerts[0].annotations.mailSubject = "{nope} {title}"' <<<"${modwh}")"
 ck "an unknown placeholder is left as written, never evaluated" "Subject: {nope} Release signature rejected" "$(python3 "${R}" --render <<<"${odd}" | head -1)"
 lw="$(jq -c '.alerts[0].labels.lines = "true"' <<<"${modwh}")"
 ck "lines=true without lines to give: the body says so" "yes" \
-   "$(python3 "${R}" --render <<<"${lw}" | grep -qF '(log lines not mailed on this site' && echo yes || echo no)"
+   "$(python3 "${R}" --render <<<"${lw}" | grep -cF '(log lines not mailed on this site' >/dev/null && echo yes || echo no)"
 printf 'GET /shop from 203.0.113.9 by person-1\n' > "${TMP}/lines"
 ck "lines=true with lines: under Log lines (anonymized)" "GET /shop from 203.0.113.9 by person-1" \
    "$(python3 "${R}" --render --lines-file "${TMP}/lines" <<<"${lw}" | sed -n '/^Log lines (anonymized):/{n;p;}')"
@@ -177,13 +177,13 @@ ck "a state alert names its condition" "yes" "$(grep -q -- '--key grafana:HostSi
 post rotated "$(wh resolved state HostSilent tappaas3)" >/dev/null
 ck "…and its resolve closes it" "yes" "$(grep -q -- '--key grafana:HostSilent:tappaas3 --resolve' "${TMP}/args" && echo yes || echo no)"
 post rotated "$(wh firing event QuorumLost tappaas1)" >/dev/null
-ck "an event has no condition to close" "no" "$(tail -1 "${TMP}/args" | grep -q -- --key && echo yes || echo no)"
+ck "an event has no condition to close" "no" "$(tail -1 "${TMP}/args" | grep -c -- --key >/dev/null && echo yes || echo no)"
 ck "…and no bundle without the label" "no" "$([[ -s "${TMP}/bundle-args" ]] && echo yes || echo no)"
 bw="$(wh firing event QuorumLost tappaas2 | sed 's/"kind":"event"/"kind":"event","bundle":"true"/')"
 ck "a bundle alert is acknowledged at once" "200" "$(post rotated "${bw}")"
 for _ in $(seq 1 50); do grep -q 'QuorumLost on tappaas2' "${TMP}/args" 2>/dev/null && break; sleep 0.1; done
 ck "…the bundle starts half an hour before it fired" "yes" "$(grep -q -- '--since 2026-10-04 17:30:00 UTC' "${TMP}/bundle-args" && echo yes || echo no)"
-ck "…and the mail carries it" "yes" "$(grep 'QuorumLost on tappaas2' "${TMP}/args" | grep -q -- "--attach ${TMP}/b.tar.gz" && echo yes || echo no)"
+ck "…and the mail carries it" "yes" "$(grep 'QuorumLost on tappaas2' "${TMP}/args" | grep -c -- "--attach ${TMP}/b.tar.gz" >/dev/null && echo yes || echo no)"
 ck "…and its subject does not show the bundle label" "ALERT: QuorumLost on tappaas2" "$(tail -1 "${TMP}/subjects")"
 
 # A node down is one notice: tappaas2 dies with two plain guests, one HA guest

@@ -9,7 +9,7 @@ hardware.
 | Module | What it is | Status |
 |---|---|---|
 | [forgejo](forgejo/README.md) | Forgejo — self-hosted Git service and DevOps platform (Gitea fork) | Testing |
-| [woodpecker](woodpecker/README.md) | Woodpecker CI — runs the pipelines of the site's Forgejo repositories, sign-in with Forgejo. | Development |
+| [woodpecker](woodpecker/README.md) | Woodpecker CI — runs the pipelines of the site's Forgejo repositories, sign-in with Forgejo. | Testing |
 
 Install them as [INSTALL.md](INSTALL.md) says.
 
