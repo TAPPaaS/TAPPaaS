@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "console-fields.json",
+  "title": "TAPPaaS Module Console File",
+  "description": "Schema for console.json, which a module may ship beside its module JSON: the sections it adds to its page in the console, and the operations it offers there. A section reads a manager or controller verb with --json and names how to draw the answer. The console reads the file with each page and shows a bad section as an error in its place.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string", "description": "Relative path back to this file, for editor completion." },
+    "description": { "type": "string", "description": "One-line human summary." },
+    "sections": {
+      "type": "array",
+      "description": "The module's sections. An id the page already has replaces that section in its place; a new id is added before Operate. before and after move either.",
+      "items": { "$ref": "#/$defs/section" }
+    },
+    "operations": {
+      "type": "array",
+      "description": "Verbs that carry a manifest, shown through the operate dialog (Change, Preview, Apply). A verb no manifest declares is shown as an error.",
+      "items": { "$ref": "#/$defs/operation" }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{0,62}$" },
+    "path": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_-]+(\\.[A-Za-z0-9_-]+)*$",
+      "description": "A JSON path in the verb's answer, dotted: node.memory, disks.0.size."
+    },
+    "format": {
+      "type": "string",
+      "enum": ["text", "bytes", "mib", "percent", "module", "status"],
+      "description": "How a value reads: bytes and mib as a size, percent with its sign, module as a link to that module's page, status as a coloured word."
+    },
+    "read": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bin", "verb"],
+      "properties": {
+        "bin": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,62}$", "description": "The manager or controller. A verb its manifest does not declare as a read is refused." },
+        "verb": { "type": "string", "pattern": "^[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*$", "description": "The verb's words, run with --json." },
+        "args": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Its arguments; $module stands for the module's name."
+        }
+      }
+    },
+    "column": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "label"],
+      "properties": {
+        "path": { "$ref": "#/$defs/path" },
+        "label": { "type": "string", "minLength": 1 },
+        "format": { "$ref": "#/$defs/format" }
+      }
+    },
+    "field": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": { "type": "string", "minLength": 1, "description": "The row's or gauge's name." },
+        "labelPath": { "$ref": "#/$defs/path", "description": "A gauge per row: the path of its name." },
+        "path": { "$ref": "#/$defs/path", "description": "kv: the value's path." },
+        "value": { "$ref": "#/$defs/path", "description": "gauges: the path of how much is used." },
+        "max": { "$ref": "#/$defs/path", "description": "gauges: the path of the whole." },
+        "format": { "$ref": "#/$defs/format" }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "read": { "$ref": "#/$defs/read" },
+        "render": { "type": "string", "enum": ["kv", "table", "gauges"] },
+        "rows": { "$ref": "#/$defs/path", "description": "Where the rows are in the answer. Without it the answer itself: an array for a table, an object for kv." },
+        "columns": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/column" }, "description": "table: its columns." },
+        "fields": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/field" }, "description": "gauges: each gauge. kv: each row; without it, the answer's plain values." },
+        "before": { "$ref": "#/$defs/id", "description": "Move this section before that one." },
+        "after": { "$ref": "#/$defs/id", "description": "Move this section after that one." }
+      },
+      "if": { "required": ["render"] },
+      "then": {
+        "required": ["title", "read"],
+        "allOf": [
+          { "if": { "properties": { "render": { "const": "table" } } }, "then": { "required": ["columns"] } },
+          {
+            "if": { "properties": { "render": { "const": "gauges" } } },
+            "then": { "required": ["fields"], "properties": { "fields": { "items": { "required": ["value", "max"] } } } }
+          },
+          {
+            "if": { "properties": { "render": { "const": "kv" } } },
+            "then": { "properties": { "fields": { "items": { "required": ["label", "path"] } } } }
+          }
+        ]
+      },
+      "else": {
+        "description": "No render: this entry only moves a section the page already has.",
+        "anyOf": [{ "required": ["before"] }, { "required": ["after"] }],
+        "properties": { "title": false, "read": false, "rows": false, "columns": false, "fields": false }
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "bin", "verb"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "bin": { "type": "string", "pattern": "^[a-z][a-z0-9.-]{0,62}$" },
+        "verb": { "type": "string", "pattern": "^[a-z][a-z0-9-]*( [a-z][a-z0-9-]*)*$", "description": "The verb's words." },
+        "args": { "type": "array", "items": { "type": "string", "minLength": 1 }, "description": "The positionals the page fixes; $module stands for the module's name." },
+        "note": { "type": "string", "description": "A line under the button." },
+        "kind": { "type": "string", "enum": ["danger"] }
+      }
+    }
+  }
+}

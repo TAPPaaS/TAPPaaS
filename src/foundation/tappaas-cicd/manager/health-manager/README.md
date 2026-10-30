@@ -167,6 +167,14 @@ had actually been promised 60G.
 PVE **templates are excluded**: a template is the image a module is cloned from,
 holds no memory, and listing it as a stopped guest is noise.
 
+### `guests [<node>] [--json]` — what uses a node, by module
+
+Each guest's memory, declared, used and available as the `guest-memory` gate reads it from the
+balloon, and the ZFS volumes behind it (`zfs list` on the node, `vm-<id>-*` and `subvol-<id>-*`),
+each with the module of that vmid. A volume of a guest running on another node is its replica
+(`replica: true`). `--json` prints the node's document, or `{ nodes: [...] }` for every node. The
+console's module pages read it. Changes nothing.
+
 ### `ipv6-egress` — the site reaches the internet over IPv6
 
 When a site runs IPv6 every guest prefers it, and a broken IPv6 path hides behind

@@ -34,6 +34,13 @@ This directory holds the JSON-Schema (draft 2020-12) field definitions for every
 | **Shares** | `shares-fields.json` | `shares.json` | **storage-manager** — `nfs show`; `nfs share add`/`modify`/`delete`/`purge`; `nfs grant`/`revoke`; `nfs converge`; `validate` (ADR-029 v0.9) |
 | **Positions** | `positions-fields.json` | `positions.json` | **asset-manager** — `room …`, `rack list`/`show`/`add`/`modify`/`delete`; `asset list`/`show`/`add`/`record`/`modify`/`remove`/`receive`/`fault`/`repaired`/`dispose`/`allocate`/`release` (`device …` their old names); `port add`/`modify`/`remove`; `place`, `place list`/`show`/`modify`, `unplace`; `cable list`/`add`/`remove`/`split`/`join`; `faceplates list`/`show`; `validate`. The site's physical assets and where they are: rooms in the site's locations, racks, placements, every box as an asset with its ports (ADR-040 D9), stage and role (D7; interim, until the CMDB); the device records of other managers are not touched |
 
+### Module console files (`console-fields.json`)
+
+Like `service-fields.json`, `console-fields.json` describes a file in a module's SOURCE tree, not a
+`~/config/` object: **`<module>/console.json`**, the sections and operations the module adds to its
+page in the console. The console checks it when it reads a page and shows a bad entry as an error in
+its place. The console's README describes what each key does.
+
 ### Service field manifests (`service-fields.json`)
 
 `service-fields.json` is the odd one out: it does not describe a `~/config/`

@@ -877,3 +877,45 @@ export interface HealthObject {
   rootCauses: { id: string; class: string; label: string; reason: string | null }[];
   impacts: { id: string; class: string; label: string; status: HealthStatus }[];
 }
+
+// GET modules/<m>/sections (the backend's sections.ts): a module's page as the
+// layers composed it, each section with its data.
+export type SectionFormat = "text" | "bytes" | "mib" | "percent" | "module" | "status";
+export interface SectionColumn {
+  key: string;
+  label: string;
+  format?: SectionFormat;
+}
+export interface SectionGauge {
+  label: string;
+  value: number;
+  max: number;
+  format?: SectionFormat;
+  level?: "pass" | "warn" | "fail" | "skip";
+}
+export type SectionBlock =
+  | { kind: "kv"; title?: string; rows: { label: string; value: unknown; format?: SectionFormat }[] }
+  | { kind: "table"; title?: string; columns: SectionColumn[]; rows: Record<string, unknown>[]; empty?: string }
+  | { kind: "gauges"; title?: string; gauges: SectionGauge[]; empty?: string }
+  | { kind: "text"; title?: string; text: string }
+  | { kind: "note"; text: string };
+export interface SectionOperation {
+  label: string;
+  bin: string;
+  verb: string;
+  fixed: string[];
+  note: string | null;
+  kind: "danger" | null;
+}
+export interface ModuleSection {
+  id: string;
+  title: string;
+  layer: "generic" | "kind" | "module";
+  generic: boolean;
+  source: string | null;
+  at: string | null;
+  error: string | null;
+  blocks: SectionBlock[];
+  operations: SectionOperation[];
+  operationErrors: string[];
+}

@@ -100,6 +100,8 @@ async function main(): Promise<void> {
   check(r.status === 200 && r.headers["content-type"] === "image/svg+xml" && /sandbox/.test(r.headers["content-security-policy"] ?? "") && r.body.startsWith("<svg"), "/api/v1/modules/immich/icon: its icon.svg, sandboxed");
   r = await call("GET", "/api/v1/modules/jellyfin/icon");
   check(r.status === 404, "a module without an icon: 404 (the page draws its initial)");
+  r = await call("GET", "/api/v1/modules/immich/sections");
+  check(r.status === 200 && (r.json().data as { id: string }[]).map((x) => x.id).join(" ") === "health resources backups operate about", "/api/v1/modules/immich/sections: a vm's sections in their order");
   r = await call("GET", "/api/v1/modules/immich/fields");
   const mf = r.json().data as { fields: { field: string; service: string; settable: boolean }[] };
   check(r.status === 200 && mf.fields[0].field === "memory" && mf.fields[0].service === "cluster:vm" && mf.fields[0].settable, "/api/v1/modules/immich/fields: the Modify form's rows");

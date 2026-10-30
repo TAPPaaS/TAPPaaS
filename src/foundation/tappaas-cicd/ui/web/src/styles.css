@@ -435,6 +435,8 @@ ol.setup { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px
 .scard .cf-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fillbar { height: 7px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 4px 0 3px; }
 .fillbar i { display: block; height: 100%; border-radius: 4px; }
+.section-gauge { display: grid; grid-template-columns: minmax(120px, 240px) 1fr auto; gap: 10px; align-items: center; margin: 4px 0; }
+.section-gauge .fillbar { margin: 0; }
 /* A vdev's disks: its label on the first, a bracket down their right side. */
 .vdev-text { font-size: 11px; color: var(--muted); font-family: ui-monospace, Menlo, monospace; white-space: nowrap; border-bottom: 1px dashed var(--line); margin-bottom: 3px; }
 .gcard.in-vdev { border-right: 3px solid #8a94a6; }

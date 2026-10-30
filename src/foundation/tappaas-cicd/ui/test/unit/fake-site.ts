@@ -38,6 +38,12 @@ export function fakeSite(): FakeSite {
         return ok(JSON.stringify({ module: args[1], fields: [{ field: "memory", coordinate: "cluster:vm", class: "in-place", settable: true, reason: null, value: "8192" }], warnings: [] }));
       case "module-manager drift":
         return ok(JSON.stringify({ module: args[1], services: {} }));
+      case "health-manager guests": {
+        const doc = JSON.parse(file("guests.json")) as { nodes: { node: string }[] };
+        return ok(JSON.stringify(args[1] === "--json" ? doc : doc.nodes.find((n) => n.node === args[1])));
+      }
+      case "module-manager snapshot-vm":
+        return ok("\x1b[32mtappaas-20261030\x1b[0m  2026-10-30\n");
       case "backup-manager list":
         return ok(file("backup.json"));
       case "backup-manager key":

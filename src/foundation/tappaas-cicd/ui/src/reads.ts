@@ -23,7 +23,11 @@ import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
 import { HealthGraph, HealthObject, HealthRoot, RelationType, buildHealth, healthObject } from "./health";
 import { ModuleIcon, moduleIcon } from "./icons";
-import { BackupRow, BackupRunsDoc, EnvironmentRow, HealthDoc, ModuleList, StorageDoc, TopologyDoc } from "./model";
+import { CONSOLE_SCHEMA, readConsoleFile } from "./consolefile";
+import { CmdbView, KindInput, NodeLive, kindSections } from "./kindsections";
+import { Manifests } from "./manifest";
+import { GENERIC, Placed, Section, compose, moduleLayer } from "./sections";
+import { BackupRow, BackupRunsDoc, EnvironmentRow, HealthDoc, ModuleList, ModuleRow, StorageDoc, TopologyDoc } from "./model";
 
 // The positions the topology carries (network-manager topology .positions), the parts read here.
 export interface PositionsRead {
@@ -94,6 +98,9 @@ export const TTL = {
   nodeNetwork: 10_000, // a node's uplinks, while Add node's stage 5 looks
   media: 10_000, // the boot medium on the mothership, while Add a node looks
   drift: 0, // on demand
+  guests: 5 * MIN, // one ssh per node; no timer of its own: read when a module page looks
+  sectionRead: 60_000, // a console.json's verb, and what a module page reads of the CMDB
+  snapshots: 5 * MIN,
   healthGraph: 0, // until the change stream says something changed (healthlive.ts)
 };
 
@@ -245,6 +252,10 @@ export class Reads {
   readonly setup: Cached<SetupInputs>;
   readonly ipv6: Cached<Ipv6Read>;
   readonly healthGraph: Cached<HealthGraph>;
+  readonly guests: Cached<NodeLive[]>;
+  readonly sectionReads: CachedMap<unknown>;
+  readonly moduleSnapshots: CachedMap<string>;
+  readonly moduleCmdb: CachedMap<CmdbView | null>;
   private classRows: CmdbClassRow[] | null = null;
   private relationTypes: RelationType[] | null = null;
 
@@ -380,6 +391,24 @@ export class Reads {
         },
       }), now);
     this.healthGraph = new Cached("health-graph", TTL.healthGraph, () => this.loadHealthGraph(null), now);
+    // Each guest's memory and volumes (health-manager guests --json), by node.
+    this.guests = new Cached("guests", TTL.guests, async () => {
+      const d = await j<{ nodes?: NodeLive[] }>("health-manager", ["guests", "--json"], [0], 90_000);
+      if (!Array.isArray(d?.nodes)) throw new Error("health-manager guests --json gave no nodes");
+      return d.nodes;
+    }, now);
+    // A console.json's read, its argv the key (argv checked by sections.ts readArgv).
+    this.sectionReads = new CachedMap("section", TTL.sectionRead, (key) => {
+      const [bin, ...args] = JSON.parse(key) as string[];
+      return j<unknown>(bin, args, [0], 60_000);
+    }, now);
+    // snapshot-vm has no --json: its list as it prints it.
+    this.moduleSnapshots = new CachedMap("snapshots", TTL.snapshots, async (m) => {
+      const r = await run("module-manager", ["snapshot-vm", m, "--list"], 60_000);
+      if (!r.ran || r.rc !== 0) throw new Error((r.stderr || r.stdout).trim().split("\n").pop() || `exit ${r.rc}`);
+      return r.stdout.replace(/\x1b\[[0-9;]*m/g, "");
+    }, now);
+    this.moduleCmdb = new CachedMap("module-cmdb", TTL.sectionRead, (key) => this.loadModuleCmdb(key), now);
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
   }
 
@@ -721,6 +750,9 @@ export class Reads {
       this.moduleBackup.clear();
       this.moduleDrift.clear();
       this.moduleFields.clear();
+      this.sectionReads.clear();
+      this.moduleSnapshots.clear();
+      this.moduleCmdb.clear();
       // health first: the topology places its findings
       await this.health.refresh();
       // the storage inventory (SMART on every disk), the backup runs and the
@@ -729,6 +761,7 @@ export class Reads {
       await Promise.all(Object.entries(all).filter(([k]) => k !== "health" && looked(k)).map(([, c]) => c.refresh()));
       if (this.catalogs.peek().at !== null) await this.catalogs.refresh();
       if (this.healthGraph.peek().at !== null) await this.healthGraph.refresh();
+      if (this.guests.peek().at !== null) await this.guests.refresh();
       return Object.keys(all);
     }
     const c = all[what];
@@ -762,6 +795,9 @@ export class Reads {
     this.moduleBackup.clear();
     this.moduleDrift.clear();
     this.moduleFields.clear();
+    this.sectionReads.clear();
+    this.moduleSnapshots.clear();
+    this.moduleCmdb.clear();
     // The Setup checklist is records only (no module test runs here, ever):
     // re-read if someone has looked, so the step a job just completed shows.
     const setup = this.setup.peek().at !== null ? [this.setup] : [];
@@ -771,7 +807,7 @@ export class Reads {
     const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
     // A faceplate added or changed: the forms' plates follow.
     const plates = this.faceplates.peek().at !== null ? [this.faceplates] : [];
-    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.ssids.peek().at !== null ? [this.ssids] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), ...(this.healthGraph.peek().at !== null ? [this.healthGraph] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.ssids.peek().at !== null ? [this.ssids] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), ...(this.healthGraph.peek().at !== null ? [this.healthGraph] : []), ...(this.guests.peek().at !== null ? [this.guests] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
   }
 
   private cmdbClient(): Cmdb {
@@ -820,6 +856,84 @@ export class Reads {
       const g = await this.healthGraph.get();
       return { roots: (g.value?.roots ?? []) as HealthRoot[], from: "graph", error: (e as Error).message };
     }
+  }
+
+  // A module's node object and what its relations reach ("<class>/<name>").
+  private async loadModuleCmdb(key: string): Promise<CmdbView | null> {
+    const cmdb = this.cmdbClient();
+    const [cls, name] = key.split("/");
+    const self = (await cmdb.query({ class: cls, where: { name }, limit: 1 })).find((o) => o.class === cls && o.name === name);
+    if (!self) return null;
+    const show = await cmdb.show(self.id);
+    const assetEnd = show.relations.find((r) => r.type === "allocated-to" && r.direction === "in")?.other ?? null;
+    const assetShow = assetEnd ? await cmdb.show(assetEnd.id) : null;
+    const portEnds = (assetShow?.relations ?? []).filter((r) => r.type === "part-of" && r.direction === "in").map((r) => r.other);
+    const ids = new Set(portEnds.map((p) => p.id));
+    const connects = ids.size ? (await cmdb.relations({ type: "connects" })).filter((r) => ids.has(r.from.id) || ids.has(r.to.id)) : [];
+    const owners = new Map((ids.size ? await cmdb.relations({ type: "part-of" }) : []).map((r) => [r.from.id, r.to.name]));
+    const ends = [...show.relations.map((r) => r.other), ...(assetEnd ? [assetEnd] : []), ...portEnds, ...connects.flatMap((c) => [c.from, c.to])];
+    const classes = [...new Set(ends.map((e) => e.class))];
+    const wanted = new Set(ends.map((e) => e.id));
+    const rows = (await Promise.all(classes.map((c) => cmdb.query({ class: c })))).flat().filter((o) => wanted.has(o.id));
+    const objects = new Map(rows.map((o) => [o.id, o]));
+    const clusterEnd = show.relations.find((r) => r.type === "member-of" && r.direction === "out" && r.other.class === "cluster")?.other;
+    const members = clusterEnd ? (await cmdb.relations({ type: "member-of", to: clusterEnd.id })).filter((r) => r.to.id === clusterEnd.id).map((r) => r.from) : [];
+    return {
+      self,
+      relations: show.relations,
+      objects,
+      asset: assetEnd ? objects.get(assetEnd.id) ?? null : null,
+      ports: portEnds.map((p) => objects.get(p.id) ?? { id: p.id, class: p.class, name: p.name, attributes: {} }),
+      connects,
+      owners,
+      members,
+    };
+  }
+
+  // A module's page (ADR-034 D11): the generic sections, its kind's over them,
+  // its console.json's over those. Every read behind it is cached on its own.
+  async moduleSections(m: ModuleRow, manifests: Manifests | null): Promise<Section[]> {
+    const kind = kindSections(await this.kindInputs(m));
+    const file = readConsoleFile(moduleSourceOf(this.cfg.configDir, m.name), this.schemaFile(CONSOLE_SCHEMA));
+    const declared = await moduleLayer(file, m.name, manifests, async (argv) => {
+      const e = await this.sectionReads.of(JSON.stringify(argv)).get();
+      return { value: e.value, at: e.at, error: e.error };
+    });
+    const kinds: Placed<Section>[] = kind.map((s) => ({ id: s.id, item: s }));
+    return compose(GENERIC, [kinds, declared]);
+  }
+
+  // What the kind's sections read, and nothing a kind has no use for.
+  private async kindInputs(m: ModuleRow): Promise<KindInput> {
+    const none = <T>(): Promise<Entry<T>> => Promise.resolve({ value: null, at: null, error: null, loading: false });
+    const guest = m.kind === "vm" || m.kind === "lxc";
+    const hasCmdb = !!this.cfg.cmdb && (guest || m.kind === "machine" || m.kind === "device");
+    const [cmdb, live, modules, topology, storage, backup, runs, snapshots, ssids] = await Promise.all([
+      hasCmdb ? this.moduleCmdb.of(`${m.kind}/${m.name}`).get() : none<CmdbView | null>(),
+      guest || m.kind === "machine" ? this.guests.get() : none<NodeLive[]>(),
+      this.modules.get(),
+      m.kind === "machine" || m.kind === "device" ? this.topology.get() : none<TopologyDoc & Record<string, unknown>>(),
+      m.kind === "machine" ? this.storage.get() : none<StorageDoc>(),
+      guest ? this.moduleBackup.of(m.name).get() : none<Record<string, unknown>>(),
+      guest ? this.backupRuns.get() : none<BackupRunsDoc>(),
+      guest ? this.moduleSnapshots.of(m.name).get() : none<string>(),
+      m.kind === "device" ? this.ssids.get() : none<Record<string, unknown>[]>(),
+    ]);
+    return {
+      module: m,
+      cmdb: cmdb.value,
+      cmdbError: cmdb.error ?? (this.cfg.cmdb ? null : "this console has no CMDB client"),
+      live: live.value,
+      liveError: live.error,
+      modules: modules.value?.modules ?? [],
+      topology: topology.value,
+      storage: storage.value,
+      backup: backup.value,
+      runs: runs.value,
+      snapshots: snapshots.value,
+      snapshotsError: snapshots.error,
+      ssids: ssids.value,
+    };
   }
 
   private async loadStorage(): Promise<StorageDoc> {

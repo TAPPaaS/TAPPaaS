@@ -1,6 +1,6 @@
-// A module's page (mockup ui-04): the badges, then the tabs — Overview (the
-// gates that mention it and the operate column, every module-manager verb as a
-// job), Config (the module and its services as a tree of cards, each with its
+// A module's page (mockup ui-04): the badges, then the tabs — Overview (its
+// sections: generic, by kind and from its console.json, composed by the backend
+// and drawn in that order; Health, Operate and About are drawn here), Config (the module and its services as a tree of cards, each with its
 // Modify), Drift (module drift, on demand), Backup (its policy and PBS
 // coverage), Activity (the console's jobs and the sweep's lines that name it) —
 // and the Open-in links.
@@ -9,12 +9,13 @@ import { ReactNode, useEffect, useState } from "react";
 import { useOpenRequest } from "../opener";
 import { AskAbout } from "../assistant";
 import { get, useRead } from "../api";
-import { Envelope, ModuleDetail, Topology } from "../types";
+import { Envelope, ModuleDetail, ModuleSection as ModuleSectionDoc, Topology } from "../types";
 import { Badge, Dot, KV, Link, OpenIn, ReadState, Section, Tag, canOperate, levelOf, since, useMe, when } from "../ui";
 import { ModuleBadges } from "./Modules";
 import { JobList } from "../jobs";
 import { ModuleConfig } from "./ModuleConfig";
 import { ModuleOperate } from "./ModuleOperate";
+import { SectionView } from "./ModuleSections";
 import { LocationLine, PlacementLine, useSiteLocations } from "../locations";
 import { PlaceActions } from "../physical/rackops";
 
@@ -147,6 +148,79 @@ function ActivityTab({ d }: { d: ModuleDetail }) {
   );
 }
 
+function HealthSection({ d }: { d: ModuleDetail }) {
+  const c = d.summary.condition;
+  if (c) {
+    return (
+      <Section title="Health — the conditions of this module's objects" aside={<Link to="/health">the Health view</Link>}>
+        {c.issues.length === 0 ? <p className="muted">Every condition on its {c.objects} object{c.objects === 1 ? "" : "s"} is ok.</p> : null}
+        <ul className="attention">
+          {c.issues.map((i) => (
+            <li key={`${i.object}-${i.type}`} className={`att att-${levelOf(i.status)}`}>
+              <Tag level={levelOf(i.status)} />
+              <span className="att-gate">{i.type}</span>
+              <span className="att-text"><b>{i.label}</b> {i.message ?? i.reason ?? ""}{i.since ? <span className="muted small"> · since {when(i.since)}</span> : null}{i.acknowledged ? <span className="muted small"> · acknowledged</span> : null}{i.maintenance ? <span className="muted small"> · maintenance</span> : null}</span>
+              <span className="att-where"><Link to={`/health?select=${encodeURIComponent(i.object)}`} className="jump jump-in">Health</Link></span>
+            </li>
+          ))}
+        </ul>
+      </Section>
+    );
+  }
+  return (
+    <Section title="Health — the gates that mention this module" aside="health-manager validate">
+      {d.findings.length === 0 ? <p className="muted">No gate names {d.summary.name}: every gate that looks at it passes.</p> : null}
+      <ul className="attention">
+        {d.findings.map((f, i) => (
+          <li key={i} className={`att att-${levelOf(f.status)}`}>
+            <Tag level={f.status} />
+            <span className="att-gate">{f.gate}</span>
+            <span className="att-text mono">{f.text.replace(/\s+/g, " ")}</span>
+          </li>
+        ))}
+      </ul>
+    </Section>
+  );
+}
+
+function About({ d }: { d: ModuleDetail }) {
+  const name = d.summary.name;
+  const m = d.summary;
+  const show_ = d.show.data ?? {};
+  const locations = useSiteLocations();
+  // A machine is at a location of the site (ADR-036 D2); a value with a '/' is
+  // the module directory's old field, never a place.
+  const machine = show_.kind === "machine" || m.kind === "machine";
+  const at = typeof show_.location === "string" && show_.location !== "" && !show_.location.includes("/") ? show_.location : null;
+  // A machine's placement is asset-manager's, read from the topology.
+  const positions = useRead<Topology>(machine ? "topology" : null).env?.data?.positions;
+  const operator = canOperate(useMe());
+  return (
+    <Section title="About">
+      <KV
+        rows={[
+          ["description", show(show_.description)],
+          ["version", `${show(show_.version)}${show_.releaseDate ? ` · released ${show(show_.releaseDate)}` : ""}`],
+          ["maturity", show(show_.status)],
+          ["maintainer", show(show_.maintainer)],
+          ...(machine
+            ? ([
+                ["location", <LocationLine name={at} locations={locations} />],
+                ["placement", <span className="kv-with-actions"><span><PlacementLine v={positions} device={name} location={at ?? locations.find((l) => l.primary)?.name ?? null} /></span>{operator && positions ? <span className="toolbar"><PlaceActions device={name} v={positions} /></span> : null}</span>],
+              ] as [string, ReactNode][])
+            : []),
+          ["installed", show(show_.installTime)],
+          ["updated", show(show_.updateTime)],
+          ["source", <span className="mono">{show(show_.moduleSource)}</span>],
+        ]}
+      />
+    </Section>
+  );
+}
+
+// While the sections are read, and if they cannot be: the generic ones.
+const GENERIC_SECTIONS = ["health", "operate", "about"].map((id): ModuleSectionDoc => ({ id, title: id, layer: "generic", generic: true, source: null, at: null, error: null, blocks: [], operations: [], operationErrors: [] }));
+
 export function ModulePage({ name }: { name: string }) {
   const r = useRead<ModuleDetail>(`modules/${encodeURIComponent(name)}`);
   const [tab, setTab] = useState<TabName>("Overview");
@@ -157,15 +231,7 @@ export function ModulePage({ name }: { name: string }) {
   }, [modify?.n]);
   const d = r.env?.data;
   const m = d?.summary;
-  const show_ = d?.show.data ?? {};
-  const locations = useSiteLocations();
-  // A machine is at a location of the site (ADR-036 D2); a value with a '/' is
-  // the module directory's old field, never a place.
-  const machine = show_.kind === "machine" || m?.kind === "machine";
-  const at = typeof show_.location === "string" && show_.location !== "" && !show_.location.includes("/") ? show_.location : null;
-  // A machine's placement is asset-manager's, read from the topology.
-  const positions = useRead<Topology>(machine ? "topology" : null).env?.data?.positions;
-  const operator = canOperate(useMe());
+  const sections = useRead<ModuleSectionDoc[]>(`modules/${encodeURIComponent(name)}/sections`);
   return (
     <div className="page">
       <div className="page-head">
@@ -197,54 +263,13 @@ export function ModulePage({ name }: { name: string }) {
       </div>
       {d && tab === "Overview" ? (
         <>
-          {d.summary.condition ? (
-            <Section title="Health — the conditions of this module's objects" aside={<Link to="/health">the Health view</Link>}>
-              {d.summary.condition.issues.length === 0 ? <p className="muted">Every condition on its {d.summary.condition.objects} object{d.summary.condition.objects === 1 ? "" : "s"} is ok.</p> : null}
-              <ul className="attention">
-                {d.summary.condition.issues.map((c) => (
-                  <li key={`${c.object}-${c.type}`} className={`att att-${levelOf(c.status)}`}>
-                    <Tag level={levelOf(c.status)} />
-                    <span className="att-gate">{c.type}</span>
-                    <span className="att-text"><b>{c.label}</b> {c.message ?? c.reason ?? ""}{c.since ? <span className="muted small"> · since {when(c.since)}</span> : null}{c.acknowledged ? <span className="muted small"> · acknowledged</span> : null}{c.maintenance ? <span className="muted small"> · maintenance</span> : null}</span>
-                    <span className="att-where"><Link to={`/health?select=${encodeURIComponent(c.object)}`} className="jump jump-in">Health</Link></span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          ) : (
-          <Section title="Health — the gates that mention this module" aside="health-manager validate">
-            {d.findings.length === 0 ? <p className="muted">No gate names {name}: every gate that looks at it passes.</p> : null}
-            <ul className="attention">
-              {d.findings.map((f, i) => (
-                <li key={i} className={`att att-${levelOf(f.status)}`}>
-                  <Tag level={f.status} />
-                  <span className="att-gate">{f.gate}</span>
-                  <span className="att-text mono">{f.text.replace(/\s+/g, " ")}</span>
-                </li>
-              ))}
-            </ul>
-          </Section>
-          )}
-          <ModuleOperate m={d.summary} onConfig={() => setTab("Config")} />
-          <Section title="About">
-            <KV
-              rows={[
-                ["description", show(show_.description)],
-                ["version", `${show(show_.version)}${show_.releaseDate ? ` · released ${show(show_.releaseDate)}` : ""}`],
-                ["maturity", show(show_.status)],
-                ["maintainer", show(show_.maintainer)],
-                ...(machine
-                  ? ([
-                      ["location", <LocationLine name={at} locations={locations} />],
-                      ["placement", <span className="kv-with-actions"><span><PlacementLine v={positions} device={name} location={at ?? locations.find((l) => l.primary)?.name ?? null} /></span>{operator && positions ? <span className="toolbar"><PlaceActions device={name} v={positions} /></span> : null}</span>],
-                    ] as [string, ReactNode][])
-                  : []),
-                ["installed", show(show_.installTime)],
-                ["updated", show(show_.updateTime)],
-                ["source", <span className="mono">{show(show_.moduleSource)}</span>],
-              ]}
-            />
-          </Section>
+          {sections.failure ? <ReadState env={null} failure={sections.failure} what="this module's sections" /> : null}
+          {(sections.env?.data ?? GENERIC_SECTIONS).map((sec) => {
+            if (!sec.generic) return <SectionView key={sec.id} s={sec} />;
+            if (sec.id === "health") return <HealthSection key={sec.id} d={d} />;
+            if (sec.id === "operate") return <ModuleOperate key={sec.id} m={d.summary} onConfig={() => setTab("Config")} />;
+            return <About key={sec.id} d={d} />;
+          })}
         </>
       ) : null}
       {d && tab === "Config" ? <ModuleConfig d={d} /> : null}

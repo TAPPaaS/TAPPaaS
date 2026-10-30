@@ -1,0 +1,54 @@
+{
+  "$schema": "../schemas/console-fields.json",
+  "description": "What a Proxmox host shows beyond a plain machine: what uses its memory and storage, and its operations.",
+  "sections": [
+    {
+      "id": "memory-by-module",
+      "title": "Memory by module",
+      "read": { "bin": "health-manager", "verb": "guests", "args": ["$module"] },
+      "render": "table",
+      "rows": "guests",
+      "columns": [
+        { "path": "module", "label": "module", "format": "module" },
+        { "path": "name", "label": "guest" },
+        { "path": "status", "label": "state", "format": "status" },
+        { "path": "declaredMem", "label": "declared", "format": "bytes" },
+        { "path": "residentMem", "label": "allocated", "format": "bytes" },
+        { "path": "usedMem", "label": "used", "format": "bytes" },
+        { "path": "measured", "label": "reported by the guest" },
+        { "path": "availableMem", "label": "available", "format": "bytes" }
+      ]
+    },
+    {
+      "id": "storage-by-module",
+      "title": "Storage used by modules",
+      "read": { "bin": "health-manager", "verb": "guests", "args": ["$module"] },
+      "render": "table",
+      "rows": "volumes",
+      "columns": [
+        { "path": "module", "label": "module", "format": "module" },
+        { "path": "pool", "label": "pool" },
+        { "path": "volume", "label": "volume" },
+        { "path": "used", "label": "used", "format": "bytes" },
+        { "path": "size", "label": "size", "format": "bytes" },
+        { "path": "replica", "label": "replica" }
+      ]
+    }
+  ],
+  "operations": [
+    {
+      "label": "Migrate guests…",
+      "bin": "site-manager",
+      "verb": "evacuate",
+      "args": ["$module"],
+      "note": "moves every guest off this node, by module"
+    },
+    {
+      "label": "Reboot node…",
+      "bin": "site-manager",
+      "verb": "node reboot",
+      "args": ["$module"],
+      "note": "preview = which HA services drain where; apply = drain, reboot, rejoin, fail back"
+    }
+  ]
+}

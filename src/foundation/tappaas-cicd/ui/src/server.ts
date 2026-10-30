@@ -436,6 +436,12 @@ export class ConsoleServer {
       return sendJson(res, 200, envelope(await c.get()));
     }
     if (sub === "fields") return sendJson(res, 200, envelope(await r.moduleFieldsOf(name)));
+    if (sub === "sections") {
+      const row = (m.value?.modules ?? []).find((x) => x.name === name);
+      if (!row) return sendJson(res, 404, { error: `no deployed module '${name}'` });
+      const value = await r.moduleSections(row, this.manifests);
+      return sendJson(res, 200, envelope({ value, at: Date.now(), error: null, loading: false }));
+    }
     if (sub === "icon") {
       // The module's icon (icons.ts), or 404: the page draws its initial.
       const icon = (await r.moduleIcons.of(name).get()).value;
