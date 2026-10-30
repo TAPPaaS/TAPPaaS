@@ -76,6 +76,7 @@ In Authentik a *role* is a group marked as a role; the CLI offers both spellings
 | `delete-role --name <n>` | Delete a role-marked group (idempotent). Refuses an ordinary group. |
 | `list-groups` | JSON array of `{name, uuid, displayName}` (excludes roles). |
 | `list-roles` | JSON array of role-marked groups, `{name, uuid, displayName}`. |
+| `discover` | JSON of the flows, providers (with their flows), applications and outposts (ADR-040 D15). Named fields only: a client secret never leaves. |
 | `add-member --user <u> --group <g>` | Add a user to a group. |
 | `remove-member --user <u> --group <g>` | Remove a user from a group. |
 | `assign-role --user <u> --role <r>` | Assign a role to a user directly. |
@@ -110,7 +111,8 @@ authentik-controller app-bind-groups wiki --group editors
 ## The CMDB
 
 `list-users`, `list-groups` and `list-roles` carry Authentik's `uuid`: the key
-identity-manager reports a user or group by (ADR-040 D5).
+identity-manager reports a user or group by (ADR-040 D5). `discover` is the rest
+of the sweep's depth (D15), for `identity-manager report --discover`.
 
 
 ## Who calls it

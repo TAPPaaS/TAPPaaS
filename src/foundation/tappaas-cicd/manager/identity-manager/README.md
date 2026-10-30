@@ -240,6 +240,11 @@ report what they touched (a deleted user or group ends by its uuid, an
 organization or role by name); `bootstrap` reports the seeded organizations
 and roles.
 
+**`report --discover`** (ADR-040 D15) adds what Authentik holds beyond people,
+from `authentik-controller discover`: `authentik: {providers[], applications[],
+outposts[], flows[]}` on the identity module's `vm`, a provider naming its flows
+by slug. Named fields only: no secret leaves Authentik.
+
 A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`)
 and the actor (`TAPPAAS_ACTOR`, else the OS user; lib/ts `job.ts`). A report
 the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)

@@ -94,6 +94,28 @@ const spooled = (root: string): Obj[] => {
   check(r.relations?.some((x: Obj) => x.type === "member-of" && x.from?.ref === u?.ref && x.to?.ref === g?.ref), "user member-of group");
 }
 
+// ── report --discover: Authentik's rest, on the identity module's CI ───
+{
+  const { dir } = seed();
+  const c = liveClient();
+  c.discovery = {
+    flows: [{ slug: "default-authentication-flow", name: "Welcome", designation: "authentication" }],
+    providers: [{ name: "nextcloud", type: "OAuth2/OpenID Provider", application: "nextcloud", flows: { authorization: "default-provider-authorization-implicit-consent" } }],
+    applications: [{ slug: "nextcloud", name: "Nextcloud", provider: "nextcloud" }],
+    outposts: [{ name: "authentik Embedded Outpost", type: "proxy", providers: ["nextcloud"] }],
+  };
+  const plain = JSON.parse(capture(() => run(["report", "--json", "--config-dir", dir], c)).join("\n")) as Obj;
+  check(!plain.objects.some((o: Obj) => o.class === "vm"), "without --discover the report stays as it is");
+  const r = JSON.parse(capture(() => run(["report", "--json", "--discover", "--config-dir", dir], c)).join("\n")) as Obj;
+  const vm = r.objects.find((o: Obj) => o.class === "vm" && o.name === "identity");
+  const a = vm?.attributes?.authentik;
+  check(a?.providers?.[0]?.flows?.authorization !== undefined && a?.applications?.[0]?.slug === "nextcloud" && a?.outposts?.length === 1 && a?.flows?.length === 1, "providers with their flows, applications, outposts");
+  check(r.objects.some((o: Obj) => o.class === "user"), "beside everything report sends");
+  // `authentik` is a field the metamodel does not have yet (D15): nothing else may be refused.
+  const left = cmdbProblems(r).filter((p) => !/vm has no field authentik$/.test(p));
+  check(left.length === 0, `the metamodel takes the rest: ${left.join("; ")}`);
+}
+
 // ── Authentik down: organizations and roles only ───────────────────────
 {
   const { dir } = seed();

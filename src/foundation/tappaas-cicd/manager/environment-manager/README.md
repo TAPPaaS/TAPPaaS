@@ -231,6 +231,9 @@ identity-manager's; here they are only named.
 Changes: `add`, `modify` and `delete` (the environment ends); `--check`
 reports nothing.
 
+`report --discover` (ADR-040 D15) is accepted and reports the same: this plane
+has nothing deeper.
+
 A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`)
 and the actor (`TAPPAAS_ACTOR`, else the OS user; lib/ts `job.ts`). A report
 the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)

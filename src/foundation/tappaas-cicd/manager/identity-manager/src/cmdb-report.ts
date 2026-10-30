@@ -13,7 +13,7 @@
 
 import { CmdbObject, CmdbRelation, CmdbReport } from "../../../lib/ts/src/cmdb";
 import { compact } from "../../../lib/ts/src/cmdb-source";
-import { AkNamed, AkUser, Action, PeopleModel } from "./types";
+import { AkDiscovery, AkNamed, AkUser, Action, PeopleModel } from "./types";
 
 export const SOURCE = "identity-manager";
 
@@ -140,4 +140,12 @@ export function endsOf(deleted: { kind: string; name: string }[], before: Identi
     }
   }
   return out;
+}
+
+/** `report --discover` (D15): what Authentik holds beyond people, on the CI of
+ *  the identity module — keep classes to the metamodel. The vm is named by
+ *  its instance, as module-manager and site-manager report it. */
+export function identityDiscovery(report: CmdbReport, d: AkDiscovery, instance = "identity"): CmdbReport {
+  const authentik = { providers: d.providers, applications: d.applications, outposts: d.outposts, flows: d.flows };
+  return { ...report, objects: [...(report.objects ?? []), { class: "vm", name: instance, attributes: { authentik } }] };
 }

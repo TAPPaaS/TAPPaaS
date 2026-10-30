@@ -309,9 +309,12 @@ export const HELP: HelpSpec = {
         ["--no-git-pull", "Update whatever is checked out; skip pulling each repository (test local, not-yet-pushed changes)."],
         ["--stop", "Stop the running update gracefully: the module in progress finishes, the rest are skipped (the next update takes them), and the run is recorded as interrupted. Ctrl-C only stops following a run; `sudo systemctl stop update-tappaas.service` stops it at once, without rolling back the module in progress."],
       ] },
-    { usage: "report [--json]",
+    { usage: "report [--json] [--discover]",
       note: "(ADR-040: send the site, its locations, the cluster, its nodes and guests to the CMDB)",
-      options: [["--json", "Print the report instead of sending it."]] },
+      options: [
+        ["--json", "Print the report instead of sending it."],
+        ["--discover", "Full depth (D15), one more read per node: every NIC and disk, ZFS layouts, storages, PCI devices, guests' NICs, corosync links."],
+      ] },
     { usage: "test [--deep] [--verbose]",
       note: "(run every deployed module's tests, from every repository; one line per module, each module's output in ~/logs/site-test-<time>/)",
       options: [
@@ -355,7 +358,7 @@ interface Opts {
 const NOARG = new Set(["--apply", "--deep", "--force", "--json",
   "--install", "--pxe", "--provision", "--config-only", "--yes", "--no-wan", "--no-reboot", "--wipe",
   "--dry-run", "--no-git-pull", "--allow-disruption", "--shutdown", "--erase", "--unsigned", "--primary", "--check",
-  "--verbose", "--stop"]);
+  "--verbose", "--stop", "--discover"]);
 
 function parseOpts(args: string[]): Opts {
   const o: Opts = {
@@ -1453,11 +1456,12 @@ function cmdValidate(o: Opts, client: SiteClient): void {
 // is reported all the same.
 function cmdReport(o: Opts, client: SiteClient): number {
   const configDir = dirname(siteFileOf(o));
-  const live = client.readCluster(clusterNodes(configDir).map((n) => n.name));
+  const discover = o.boolFlags.has("--discover");
+  const live = client.readCluster(clusterNodes(configDir).map((n) => n.name), discover);
   if (live === null) warn("no cluster node answered — reporting what config/ says, without guests");
   const site = existsSync(siteFileOf(o)) ? (loadRaw(siteFileOf(o)) as { repositories?: { name?: string; path?: string }[] }) : {};
   const repo = (site.repositories ?? []).find((r) => r.name === "TAPPaaS")?.path ?? "/home/tappaas/TAPPaaS";
-  return sendObservation(siteObservation(configDir, live, runningVersion(repo)), o.json, configDir, info);
+  return sendObservation(siteObservation(configDir, live, runningVersion(repo), discover), o.json, configDir, info);
 }
 
 // What the node slice of a reconcile read, reported as a side effect.

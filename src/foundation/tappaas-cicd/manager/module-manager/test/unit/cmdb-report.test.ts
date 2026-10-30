@@ -119,6 +119,16 @@ function fixture(): string {
   check(!JSON.stringify(r).includes("null"), "no attribute is null");
 }
 
+// report --discover: nothing deeper exists for this plane (D15).
+{
+  const cfg = fixture();
+  const fake = new FakeModuleClient();
+  let rc = -1;
+  const a = capture(() => (rc = run(["report", "--json", "--discover", "--config-dir", cfg], fake))).join("\n");
+  const b = capture(() => run(["report", "--json", "--config-dir", cfg], fake)).join("\n");
+  check(rc === 0 && a === b, "--discover is accepted and reports the same");
+}
+
 // ── a verb's change, with the console job ──────────────────────────────
 class WritingClient extends FakeModuleClient {
   constructor(private cfg: string) {
