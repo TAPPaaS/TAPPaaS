@@ -164,6 +164,35 @@ network or the USB stick by hand, the install and join watched live (`GET
 membership, the node's `pvehost` record; every 10 s), then `node network set` and `node network test`, previewed. **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
 result. Security is a later phase.
 
+**Health** (ADR-041 D5; in the menu under Day 2 wizards, above Site, at `/health`) — one page, the
+graph of every CMDB object coloured by its worst condition and centred on the root causes.
+Cards carry the class (or module) icon, the name and the one-line reason; red critical, amber
+warning, grey unknown, green ok, hatched acknowledged, dotted in a maintenance window, ↯ flapping.
+Lines are the relations that carry impact (`runs-on`, `depends-on`, `member-of`, `connects`,
+`allocated-to`, `serves`). The layout is dagre pressed into rows by dependency (`web/src/tiers.ts`):
+places, assets and ports at the bottom, machines and switches, storage, guests, software, the
+network and identity objects, clusters, environments, the site on top. It is computed once per
+change of the topology or of the open groups; a colour is patched over it, so a filter or the time
+slider never moves a card. **Groups** are collapsed by default, one card with a count and the worst
+colour: an environment's guests and their software, an asset's ports, a zone's addresses, the
+software on a host, and users, DNS names and the like by class. A click opens one as a sub-flow. **The page opens on the roots:** they are ringed, their
+symptoms have a halo, the impact lines are drawn strong and the rest is dimmed; a group holding a root
+opens by itself (not on a phone). The side list (a sheet on a phone) orders the roots by what they
+impact; each is a link into the graph. A healthy site opens on the site card. A click on an
+object opens its **CI panel**: conditions with their `since`, the root cause or what it impacts,
+drift, the conditions' history, the changes to it, relations both ways, and the verbs that apply
+as jobs: Ack…, Unack…, Maintenance… (health-manager's own, offered once its manifest declares them),
+and Reboot, Update, Reconcile, Reboot node where the class has them. **Filters** (condition type,
+class, environment) dim what they leave out, and a type recolours by that type; the slider replays
+a week of colours from the attribute history (`health/graph?at=`). **Live:** colours follow
+`health/stream` without a reload, and a new root recentres unless the view is pinned. A site that
+has not run `assess` gets the graph in grey and says so. `/health?select=<id>` opens on one object.
+
+The Overview's health line (which links here) and Attention, its Backups card, the Backup page's
+Health section, the Modules list's health badge and a module page's Health section read
+the worst condition of their objects from `health/summary` and `modules`, so every page agrees with the
+graph; each falls back to `health` (validate) while the CMDB holds no conditions or does not answer.
+
 Every change is the operate dialog (`web/src/operate.tsx`, spike §5.4): a form built from the
 verb's manifest, the exact command (copyable), Preview (the verb's own dry run, streamed), Apply
 (with no preview of its own, one job runs the dry run first and goes on only on a clean one —
@@ -201,6 +230,8 @@ Only through the managers' `--json` (and `lib/ts`), never `pvesh` or `ssh` of it
 | security | `health-manager report security --json` | every 10 min |
 | peers | `backup-manager peers --json` | every 10 min |
 | activity | `journalctl -u update-tappaas.service -o short-iso` (7 days), `config/update-tappaas.failures` | every 5 min |
+| the health graph (`health/*`, the Health view and the worst condition on the other pages) | the CMDB's API on `127.0.0.1:9098` with the token (`src/cmdb.ts`: `query`, `relations`, `classes`, `show`, `history`) | when the change stream says something changed; every 5 min while the stream is down |
+| the current root causes (`health/roots`) | `health-manager roots --json`, else the graph's | when asked |
 
 A page is served from the last answer with its age; a failed refresh keeps the last good
 answer and says why. `POST /api/v1/refresh[?what=<read>]` refreshes the console's own cache
@@ -213,6 +244,22 @@ Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `mo
 `activity[?module=<m>]` (the sweep's runs, and `jobs`) · `manifests` ·
 `modules/<m>/icon` (SVG or PNG, 404 when it has none) · `jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site;
 disk and pool, whose id is the node: its Disks and ZFS panels in Proxmox).
+
+The Health view's reads (`src/health.ts` builds them; `src/healthlive.ts` keeps them fresh; a
+change is a job as ever, `health-manager ack|unack|maintenance`, taken from its manifest):
+
+| Route | Answers |
+|---|---|
+| `health/graph[?at=<time>]` | `{generated, at, topology, hasConditions, site, nodes[], edges[], groups[], roots[], counts}`: a node is `{id, class, name, label, tier, group, environment, module, rootCause[], isRoot, types{}, issues[], status, type, reason, since, acknowledged, maintenance, flapping}`, an edge `{id, type, from, to}`, a root `{id, class, label, type, status, reason, message, since, acknowledged, flapping, impactedCount, impacted[], environments[]}`. `topology` changes with an object, a group or an edge. With `at`, the CMDB as of that moment, not cached |
+| `health/object/<id>` | the CI panel: `{id, class, ancestors, name, label, module, view, conditions[], drift, relations[], history[], changes[], rootCauses[], impacts[]}` |
+| `health/roots` | `{roots, from: "health-manager"\|"graph", error}` |
+| `health/summary` | the worst per page: `{available, generated, site, counts, roots, byType{}, attention[]}`; `available` false: keep `health` |
+| `health/stream` | server-sent events: `hello`, then `health` `{topology, relayout, generated, patches[], roots, counts, hasConditions}`, one read per burst of CMDB changes; `relayout` true: read the graph again |
+
+`modules` and `modules/<m>` add `condition` to a module's summary (the worst of its node and the
+services it provides) and take `badges.health` from it, a silenced condition counting as passing.
+The client's address and token: `CMDB_URL`, `CMDB_TOKEN_FILE` (default `http://127.0.0.1:9098`,
+`/etc/secrets/cmdb-token`).
 Each answers `{data, at, ageSeconds, refreshing, error}`.
 
 ## Jobs — every change (ADR-034 D4)
@@ -360,7 +407,11 @@ from the laptop.
 
 ## Tests
 
-`test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — the assistant
+`test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — the Health view over
+`test/fixtures/health-site.json` (`fake-cmdb.ts`: one node down with its guests impacted, one
+acknowledged root, one flapping condition, a guest in a window): `health` the document, the client,
+the live feed and the routes, `healthgraph` the cards and lines a page draws (there is no DOM here);
+the assistant
 against a fake LiteLLM streaming the recorded exchanges of `test/fixtures/litellm-exchange.json`
 (the loop, the allow-list, ADR-034 T5: asked to run a change it proposes a card and applies
 nothing, and the card's job carries the turn; the context in the prompt, the store's caps), the connection
