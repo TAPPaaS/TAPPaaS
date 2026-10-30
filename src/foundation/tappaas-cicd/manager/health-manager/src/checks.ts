@@ -83,6 +83,7 @@ export function checkDiskThreshold(
   const modules = loadConfigModules(configDir, defaultNode).filter(isManaged);
   const over: string[] = [];
   const findings: CheckRow[] = [];
+  const judged: CheckSubject[] = [];
   let probed = 0;
   for (const m of modules) {
     const target = probeTarget(client, configDir, m);
@@ -90,6 +91,7 @@ export function checkDiskThreshold(
     const pct = client.diskUsagePct(target);
     if (pct === null) continue; // unreachable → skip this guest
     probed++;
+    judged.push(mod(m.module));
     if (pct >= threshold) {
       over.push(`${m.module} (${pct}%)`);
       findings.push({ status: "fail", text: `/ at ${pct}%, over ${threshold}%`, subject: mod(m.module) });
@@ -104,12 +106,14 @@ export function checkDiskThreshold(
       status: "fail",
       detail: `over ${threshold}%: ${over.join(", ")}`,
       findings,
+      judged,
     };
   }
   return {
     name: "disk-threshold",
     status: "pass",
     detail: `${probed} guest(s) under ${threshold}%`,
+    judged,
   };
 }
 
@@ -229,8 +233,9 @@ export function checkServiceLiveness(
         : { status: "skip", text: "suspended", subject: mod(m) };
     }),
   ];
+  const judged = all.map((m) => mod(m.module));
   if (down.length > 0) {
-    return { name: "service-liveness", status: "fail", detail: `not running: ${down.join(", ")}${paused}`, findings };
+    return { name: "service-liveness", status: "fail", detail: `not running: ${down.join(", ")}${paused}`, findings, judged };
   }
   if (stale.length > 0) {
     return {
@@ -238,6 +243,7 @@ export function checkServiceLiveness(
       status: "warn",
       detail: `${managed.length} managed module(s) running${paused}; not patched for over ${SUSPENDED_STALE_DAYS} days: ${stale.map((m) => m.module).join(", ")}`,
       findings,
+      judged,
     };
   }
   // Report the population, not just the verdict: a bare "all managed modules
@@ -250,6 +256,7 @@ export function checkServiceLiveness(
     status: "pass",
     detail: `${managed.length} managed module(s) running${paused}`,
     ...(findings.length > 0 ? { findings } : {}),
+    judged,
   };
 }
 
@@ -578,6 +585,7 @@ export function checkPendingReboot(
 ): CheckResult {
   const modules = loadConfigModules(configDir, defaultNode).filter(isManaged);
   const rows: CheckRow[] = [];
+  const judged: CheckSubject[] = [];
   let probed = 0;
   for (const m of modules) {
     const target = probeTarget(client, configDir, m);
@@ -585,6 +593,7 @@ export function checkPendingReboot(
     const p = client.pendingReboot(target);
     if (p === null) continue; // unreachable → skip this guest
     probed++;
+    judged.push(mod(m.module));
     if (!p.pending) continue;
     const from = release(p.booted);
     const to = release(p.next);
@@ -602,13 +611,14 @@ export function checkPendingReboot(
     return { name: "pending-reboot", status: "skip", detail: "no reachable guests probed" };
   }
   if (rows.length === 0) {
-    return { name: "pending-reboot", status: "pass", detail: `${probed} guest(s) booted on their current system` };
+    return { name: "pending-reboot", status: "pass", detail: `${probed} guest(s) booted on their current system`, judged };
   }
   return {
     name: "pending-reboot",
     status: "warn",
     detail: `${rows.length} of ${probed} guest(s) waiting for a reboot — health-manager reboot <module>`,
     rows,
+    judged,
   };
 }
 
@@ -920,15 +930,17 @@ export function pulseSubject(id: string): CheckSubject {
 export function checkQuorum(client: ClusterClient): CheckResult {
   const q = client.quorum();
   if (!q) return { name: "quorum", status: "skip", detail: "no node answered pvecm status" };
+  const judged: CheckSubject[] = [{ kind: "site", name: "quorum" }];
   if (q.expectedVotes === 2 && !q.qdevice) {
     return {
       name: "quorum",
       status: "warn",
       detail: "two votes, no QDevice: one node down and the other loses quorum and is fenced — add one: site-manager node qdevice add <host> — or a third node",
       findings: [{ status: "warn", text: "two votes, no QDevice", subject: { kind: "site", name: "quorum" } }],
+      judged,
     };
   }
-  return { name: "quorum", status: "pass", detail: `${q.expectedVotes} vote(s)${q.qdevice ? " incl. a QDevice" : ""}` };
+  return { name: "quorum", status: "pass", detail: `${q.expectedVotes} vote(s)${q.qdevice ? " incl. a QDevice" : ""}`, judged };
 }
 
 // ── lan-uplink gate (#40) ──────────────────────────────────────────────
@@ -940,6 +952,7 @@ export function checkQuorum(client: ClusterClient): CheckResult {
 // WARN, never FAIL: every one of them is a running node one failure from down.
 export function checkLanUplink(client: ClusterClient): CheckResult {
   const rows: CheckRow[] = [];
+  const judged: CheckSubject[] = [];
   let probed = 0;
   let warned = 0;
   const modes: string[] = [];
@@ -947,6 +960,7 @@ export function checkLanUplink(client: ClusterClient): CheckResult {
     const u = client.lanUplink(node);
     if (!u) continue;
     probed++;
+    judged.push(nodeOf(node));
     modes.push(`${node} ${u.mode}${u.ports.length > 1 ? ` (${u.ports.join("+")})` : ""}`);
     for (const f of u.findings) {
       if (f.level === "warn") warned++;
@@ -955,13 +969,14 @@ export function checkLanUplink(client: ClusterClient): CheckResult {
   }
   if (probed === 0) return { name: "lan-uplink", status: "skip", detail: "no node's lan uplink could be read (lan-uplink.sh)" };
   if (warned === 0) {
-    return { name: "lan-uplink", status: "pass", detail: modes.join(", "), ...(rows.length > 0 ? { rows } : {}) };
+    return { name: "lan-uplink", status: "pass", detail: modes.join(", "), judged, ...(rows.length > 0 ? { rows } : {}) };
   }
   return {
     name: "lan-uplink",
     status: "warn",
     detail: `${warned} finding(s) on ${probed} node(s) — site-manager node network show <node>`,
     rows,
+    judged,
   };
 }
 
@@ -984,11 +999,13 @@ export function checkSiteTimezone(client: ClusterClient, configDir: string, defa
     };
   }
   const rows: CheckRow[] = [];
+  const judged: CheckSubject[] = [];
   let probed = 0;
   for (const node of client.reachableNodes()) {
     const tz = client.nodeTimezone(node);
     if (tz === null) continue;
     probed++;
+    judged.push(nodeOf(node));
     if (tz !== want) {
       rows.push({ status: "warn", text: `${`node ${node}`.padEnd(16)}${tz} — the next cluster update sets ${want}`, subject: nodeOf(node) });
     }
@@ -999,17 +1016,19 @@ export function checkSiteTimezone(client: ClusterClient, configDir: string, defa
     const tz = client.guestTimezone(target);
     if (tz === null) continue;
     probed++;
+    judged.push(mod(m.module));
     if (tz !== want) {
       rows.push({ status: "warn", text: `${m.module.padEnd(16)}${tz} — the next update of ${m.module} sets ${want}`, subject: mod(m.module) });
     }
   }
   if (probed === 0) return { name: "site-timezone", status: "skip", detail: "no node or guest answered" };
-  if (rows.length === 0) return { name: "site-timezone", status: "pass", detail: `${probed} node(s)/guest(s) on ${want}` };
+  if (rows.length === 0) return { name: "site-timezone", status: "pass", detail: `${probed} node(s)/guest(s) on ${want}`, judged };
   return {
     name: "site-timezone",
     status: "warn",
     detail: `${rows.length} of ${probed} not on the site's ${want}; if the site's own is wrong: ${fix}`,
     rows,
+    judged,
   };
 }
 

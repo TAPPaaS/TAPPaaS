@@ -1,0 +1,226 @@
+// assess-sources.ts — what `assess` gathers (ADR-041 D2), each source turning
+// what it knows into findings on the objects it is about:
+//
+//   gates        the checks of checks.ts, each row on the object it judged
+//   alerts       Grafana's open alerts and the receiver's record (ADR-039 D8)
+//   sweep        the last sweep record's lists, as `drift`
+//   thresholds   over observations already in the CMDB, never from the plane
+//   cve          the CVE scan's cve-status.json, as `security`
+//
+// A finding about something the CMDB does not have lands on the site, so nothing
+// a gate said is lost. Pure over its inputs: the reads are in assess.ts's AssessIO.
+
+import { AlertItem } from "./alerts";
+import { CmdbItem, SiteIndex } from "./assess-model";
+import { POOL_FAIL, POOL_WARN } from "./checks";
+import { SWEEP_MAX_AGE_MS, SweepRecord } from "./cmdbsweep";
+import { STALE_DAYS, ScanStatus, TargetStatus, targetSubject } from "./security";
+import { CheckResult, CheckRow, CheckStatus, CheckSubject } from "./types";
+import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
+
+/** One thing a source said about one object. */
+export interface Finding {
+  object: string;
+  type: ConditionType;
+  status: ConditionStatus;
+  reason: string; // "ok" when it is
+  message: string;
+  owner: string; // the gate or source, which alone can take a failure back
+}
+
+// Each gate's condition: the type it feeds and the reason a failure carries. The
+// three gates a source below reads at its root are not mapped: open-alerts,
+// cve-status and cmdb.
+export interface GateMap { type: ConditionType; reason: string; skip?: "ok" }
+export const GATES: Record<string, GateMap> = {
+  "service-liveness": { type: "operational", reason: "guest-stopped", skip: "ok" }, // a skip is a suspended module: stopped on purpose
+  "disk-threshold": { type: "capacity", reason: "disk-full" },
+  "memory-commitment": { type: "capacity", reason: "memory-overcommitted" },
+  "guest-memory": { type: "capacity", reason: "guest-memory-short" },
+  "storage-pools": { type: "capacity", reason: "pool-usage" },
+  "storage-disks": { type: "operational", reason: "disk-failing" },
+  "cpu-impact": { type: "maintenance", reason: "cpu-level-loss" },
+  "backup-status": { type: "backup", reason: "backup-not-covered" },
+  "backup-keys": { type: "maintenance", reason: "backup-key-not-escrowed" },
+  "pending-reboot": { type: "maintenance", reason: "reboot-pending" },
+  "site-timezone": { type: "maintenance", reason: "timezone-off" },
+  quorum: { type: "operational", reason: "quorum-at-risk" },
+  "lan-uplink": { type: "operational", reason: "lan-uplink", skip: "ok" }, // a skip is an informational line
+  "ipv6-egress": { type: "operational", reason: "ipv6-egress" },
+  "switch-ports": { type: "operational", reason: "switch-port" },
+  "mlag-pairs": { type: "operational", reason: "mlag-pair" },
+  pulse: { type: "operational", reason: "pulse" },
+  "signature-status": { type: "security", reason: "repository-unverified" },
+  "control-plane-trust": { type: "security", reason: "controller-unverified" },
+};
+
+const STATUS: Record<CheckStatus, ConditionStatus> = { pass: "ok", warn: "warning", fail: "critical", skip: "unknown" };
+const tidy = (t: string): string => t.replace(/\s+/g, " ").trim();
+const ok = (s: ConditionStatus, reason: string): string => (s === "ok" ? "ok" : reason);
+
+/** The rows of a gate that speak about something: its rows and its findings. */
+export function gateRows(c: CheckResult): CheckRow[] {
+  return [...(c.findings ?? []), ...(c.rows ?? [])];
+}
+
+export function fromGates(checks: CheckResult[], idx: SiteIndex): { findings: Finding[]; ran: Set<string>; unjudged: Map<string, Set<string>> } {
+  const out: Finding[] = [];
+  const ran = new Set<string>();
+  const unjudged = new Map<string, Set<string>>(); // gate → the object ids it did judge
+  for (const c of checks) {
+    const g = GATES[c.name];
+    if (!g || c.status === "skip") continue;
+    ran.add(c.name);
+    const place = (s: CheckSubject | undefined): CmdbItem | null => (s ? idx.resolve(s) : null);
+    const add = (o: CmdbItem, status: ConditionStatus, message: string): void => {
+      out.push({ object: o.id, type: g.type, status, reason: ok(status, g.reason), message, owner: c.name });
+    };
+    for (const r of gateRows(c)) {
+      const status = r.status === "skip" && g.skip ? g.skip : STATUS[r.status];
+      const o = place(r.subject) ?? (status === "critical" || status === "warning" ? idx.site : null);
+      if (o) add(o, status, tidy(r.text));
+    }
+    for (const s of c.judged ?? []) {
+      const o = place(s);
+      if (o) add(o, "ok", "");
+    }
+    if (c.judged) unjudged.set(c.name, new Set(c.judged.map((s) => place(s)?.id ?? "").filter(Boolean)));
+    // A verdict with nothing beneath it is about the site.
+    if (!gateRows(c).some((r) => r.status === c.status) && (c.status === "warn" || c.status === "fail") && idx.site) add(idx.site, STATUS[c.status], tidy(c.detail));
+  }
+  return { findings: out, ran, unjudged };
+}
+
+// ── alerts (ADR-039 D8, ADR-040 D14) ─────────────────────────────────
+// The rules that say something is exposed; every other alert is operational.
+const SECURITY_ALERTS = new Set(["RootKeyChanged", "FirewallCertChanged"]);
+const CI_LABELS = ["tappaas_ci_id", "tappaas.ci.id", "service_instance_id", "service.instance.id", "host_id", "host.id"];
+const kebab = (s: string): string => s.replace(/([a-z0-9])([A-Z])/g, "$1-$2").toLowerCase();
+
+export function fromAlerts(alerts: AlertItem[], idx: SiteIndex): Finding[] {
+  const out: Finding[] = [];
+  for (const a of [...alerts].sort((x, y) => x.alertname.localeCompare(y.alertname))) {
+    const id = CI_LABELS.map((k) => a.labels[k]).find((v) => v && idx.byId.has(v));
+    const o = (id ? idx.byId.get(id) : null) ?? (a.subject ? idx.resolve(a.subject) : null) ?? idx.site;
+    if (!o) continue;
+    out.push({
+      object: o.id,
+      type: SECURITY_ALERTS.has(a.alertname) ? "security" : "operational",
+      status: "warning", // the mail went; a rule never fails the site (ADR-039 D8)
+      reason: `alert-${kebab(a.alertname)}`,
+      message: `${a.alertname}${a.host ? ` on ${a.host}` : ""} since ${a.since}`,
+      owner: "alerts",
+    });
+  }
+  return out;
+}
+
+// ── the sweep's lists (ADR-040 D15) ──────────────────────────────────
+const WORD: Record<string, string> = { missing: "desired without actual", unmanaged: "actual without desired", desired: "differs from desired", unread: "could not be compared" };
+
+export function fromSweep(rec: SweepRecord | null, nowMs: number, idx: SiteIndex): Finding[] {
+  const out: Finding[] = [];
+  const site = idx.site;
+  const onSite = (status: ConditionStatus, reason: string, message: string): void => {
+    if (site) out.push({ object: site.id, type: "drift", status, reason, message, owner: "sweep" });
+  };
+  if (!rec) {
+    onSite("critical", "sweep-none", "no sweep has run — cmdb sweep");
+    return out;
+  }
+  if (!(nowMs - Date.parse(rec.time) <= SWEEP_MAX_AGE_MS)) onSite("critical", "sweep-stale", `the last sweep is from ${rec.time} — is cmdb-sweep.timer running?`);
+  for (const s of (rec.sources ?? []).filter((x) => !x.ok)) onSite("critical", "sweep-source-failed", `source ${s.source} failed`);
+  for (const d of rec.differences ?? []) {
+    if (d.expected) continue;
+    const message = `${d.class}/${d.name}: ${WORD[d.kind] ?? `drift: ${d.kind}`}${d.attribute ? ` ${d.attribute}` : ""}`;
+    const status: ConditionStatus = d.kind === "missing" ? "critical" : "warning";
+    const o = idx.named(d.name, [d.class]) ?? site;
+    if (o) out.push({ object: o.id, type: "drift", status, reason: `sweep-${d.kind}`, message, owner: "sweep" });
+  }
+  return out;
+}
+
+// ── thresholds over the CMDB's observations ──────────────────────────
+export const VPN_STALE_DAYS = 7;
+export const CERT_WARN_DAYS = 30;
+export const CERT_CRITICAL_DAYS = 7;
+const DAY = 86_400_000;
+
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+// A time as a source gives it: an ISO date, epoch seconds, or an age in seconds.
+function timeOf(v: unknown, nowMs: number): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = Number(v);
+  if (Number.isFinite(n)) return n <= 0 ? null : n >= 1e9 ? n * 1000 : nowMs - n * 1000;
+  const t = Date.parse(String(v));
+  return Number.isNaN(t) ? null : t;
+}
+
+export function fromThresholds(idx: SiteIndex, nowMs: number): Finding[] {
+  const out: Finding[] = [];
+  const add = (o: CmdbItem, type: ConditionType, status: ConditionStatus, reason: string, message: string): void => {
+    out.push({ object: o.id, type, status, reason: ok(status, reason), message, owner: "thresholds" });
+  };
+  const cabled = new Set(idx.relations.filter((r) => r.type === "connects" && r.to.class === "port").flatMap((r) => [r.from.id, r.to.id]));
+  for (const o of idx.objects) {
+    const a = o.attributes;
+    if (o.class === "storage-pool" || o.class === "datastore") {
+      const used = num(a.used);
+      const size = num(a.size);
+      if (used === null || size === null || size <= 0) continue;
+      const pct = (100 * used) / size;
+      const status: ConditionStatus = pct >= POOL_FAIL ? "critical" : pct >= POOL_WARN ? "warning" : "ok";
+      add(o, "capacity", status, o.class === "datastore" ? "datastore-usage" : "pool-usage", `${o.name}: ${pct.toFixed(0)}% used`);
+    } else if (o.class === "port" && cabled.has(o.id) && typeof a.link === "string") {
+      add(o, "operational", a.link === "down" ? "critical" : "ok", "link-down", `${o.name}: cabled, link ${a.link}`);
+    } else if (o.class === "vpn-peer") {
+      const t = timeOf(a.lastHandshake, nowMs);
+      if (t === null) continue;
+      const days = (nowMs - t) / DAY;
+      add(o, "operational", days > VPN_STALE_DAYS ? "warning" : "ok", "vpn-handshake-stale", `last handshake ${days.toFixed(0)} day(s) ago`);
+    } else if (o.class === "vm" && a.firewall && typeof a.firewall === "object") {
+      certificates(o, (a.firewall as { certificates?: unknown }).certificates, nowMs, add);
+    }
+  }
+  return out;
+}
+
+// Per common name its newest certificate: a renewal leaves the old one behind.
+function certificates(o: CmdbItem, certs: unknown, nowMs: number, add: (o: CmdbItem, t: ConditionType, s: ConditionStatus, r: string, m: string) => void): void {
+  const newest = new Map<string, { name: string; to: number }>();
+  for (const c of Array.isArray(certs) ? (certs as Record<string, unknown>[]) : []) {
+    const to = timeOf(c.validTo, nowMs);
+    if (to === null) continue;
+    const key = String(c.commonName || c.name || "");
+    const had = newest.get(key);
+    if (!had || to > had.to) newest.set(key, { name: String(c.name || key), to });
+  }
+  for (const { name, to } of newest.values()) {
+    const days = (to - nowMs) / DAY;
+    const status: ConditionStatus = days < CERT_CRITICAL_DAYS ? "critical" : days < CERT_WARN_DAYS ? "warning" : "ok";
+    add(o, "security", status, "certificate-expiry", `certificate ${name}: ${days < 0 ? "expired" : `${days.toFixed(0)} day(s) left`}`);
+  }
+}
+
+// ── the CVE scan (ADR-011) ───────────────────────────────────────────
+// WARN, never FAIL, as its gate: a CVE published upstream never fails a sweep.
+export function fromCve(s: ScanStatus | null, nowMs: number, idx: SiteIndex): Finding[] {
+  if (!s) return [];
+  const out: Finding[] = [];
+  const line = (t: TargetStatus): Finding | null => {
+    const bad = t.verdict === "act" || t.verdict === "failed";
+    const o = idx.resolve(targetSubject(t)) ?? (bad ? idx.site : null);
+    if (!o) return null;
+    return bad
+      ? { object: o.id, type: "security", status: "warning", reason: t.verdict === "act" ? "cve-act" : "cve-scan-failed", message: `${t.name}: ${t.verdict === "act" ? `${t.critHighFixable ?? t.fixable ?? 0} fixable` : t.note}`, owner: "cve" }
+      : { object: o.id, type: "security", status: "ok", reason: "ok", message: "", owner: "cve" };
+  };
+  for (const t of s.targets) {
+    const f = line(t);
+    if (f) out.push(f);
+  }
+  const days = Math.floor((nowMs - Date.parse(s.generated)) / DAY);
+  if (days > STALE_DAYS && idx.site) out.push({ object: idx.site.id, type: "security", status: "warning", reason: "cve-scan-stale", message: `the last scan is ${days} days old`, owner: "cve" });
+  return out;
+}

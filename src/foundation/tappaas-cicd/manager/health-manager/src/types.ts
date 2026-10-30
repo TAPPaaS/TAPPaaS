@@ -254,6 +254,9 @@ export interface CheckResult {
   // Per-object findings of a gate that prints none beneath its line (its detail
   // carries them): validate --json reports these, the text output does not.
   findings?: CheckRow[];
+  // Every object the gate actually judged, findings or not (ADR-041 D2): one it
+  // could not reach is not in it, so its last condition stands. Absent: everything.
+  judged?: CheckSubject[];
 }
 
 export interface HealthReport {

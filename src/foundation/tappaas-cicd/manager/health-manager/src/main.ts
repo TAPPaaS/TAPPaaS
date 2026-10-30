@@ -10,9 +10,12 @@
 // the OS-patch action.
 //
 // Standardized verbs (ADR-007 §Health):
-//   health-manager validate [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]
-//                            (special: ASSERTS the live system is healthy —
-//                             aggregates the health gates; exit 1 if any fail)
+//   health-manager validate [--live] [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]
+//                            (special: ASSERTS the system is healthy — reads the
+//                             conditions; exit 1 on one that counts, ADR-041 D2)
+//   health-manager assess [--only <ci>] [--json] [--dry-run]
+//                            (writes the conditions; the only writer, ADR-041)
+//   health-manager rules list|check [--file F]
 //   health-manager update-os <name> <vmid> <node>        (special action; shells
 //                            out to update-os.sh — see the update-os case)
 //   health-manager reboot <module>                       (special action; the
@@ -42,12 +45,16 @@ import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
   sweepIsNewer, writeScan,
 } from "./security";
-import { CheckStatus, ClusterClient, HealthReport } from "./types";
+import { CheckResult, CheckStatus, ClusterClient, HealthReport } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
-import { cmdbQuery } from "../../../lib/ts/src/cmdb";
-import { printOrSend, sendReport } from "../../../lib/ts/src/cmdb-reporter";
-import { ValidateDoc, buildHealthReport, cmdbClass, configClass, subjectHealth } from "./cmdbreport";
+import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmdbRequest } from "../../../lib/ts/src/cmdb";
+import { pruneRefused } from "../../../lib/ts/src/cmdb-reporter";
+import { AssessIO, AssessResult, assess } from "./assess";
+import { CmdbItem, CmdbRel, SiteIndex } from "./assess-model";
+import { assessmentOf, readValidate } from "./assess-validate";
+import { readLastSweep } from "./cmdbsweep";
+import { cmdRules, readRules } from "./rules";
 
 const VERSION = "0.1.0";
 
@@ -69,8 +76,13 @@ export const HELP: HelpSpec = {
   tagline: "TAPPaaS cluster health manager (read-only)",
   verbs: [
     {
-      usage: "validate [--threshold PCT] [--memory-threshold PCT] [--json] [--config-dir DIR]",
+      usage: "validate [--live] [--threshold PCT] [--memory-threshold PCT] [--json] [--config-dir DIR]",
+      details:
+        "Reads the conditions the last assess wrote (ADR-041): the gates' table, and exit 1 on any critical\n" +
+        "condition that is neither derived, acknowledged nor in maintenance. With no recent assess, or a\n" +
+        "threshold given, it assesses first; with no CMDB it runs the gates itself.",
       options: [
+        ["--live", "Run assess first: the planes as they are now, not as of the last run."],
         ["--threshold PCT", `Disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).`],
         ["--memory-threshold PCT", `Committed-memory percent of a node's physical RAM before the gate fails (default ${DEFAULT_MEMORY_THRESHOLD}).`],
         ["--json", "Print every gate as JSON: status, detail and its findings, each with the module, node, pool, disk or peer it is about."],
@@ -134,17 +146,39 @@ export const HELP: HelpSpec = {
     },
     {
       usage: "report [--json] [--from <file>] [--discover]", effect: "read",
-      name: "report (health to the CMDB, ADR-040)",
+      name: "report (assess, for the CMDB's rescan and sweep)",
       options: [
-        ["--json", "Print the report instead of sending it (each subject's class as config/ says)."],
+        ["--json", "Print the report instead of sending it."],
         ["--from <file>", "Take the gates from this `validate --json` output instead of running them."],
         ["--discover", "Accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth."],
       ],
-      details:
-        "Runs the validate gates (or reads --from) and writes each CI's health on it in the CMDB:\n" +
-        "ok, warning, critical or unknown — the worst any gate gave the module, node, pool, switch or\n" +
-        "peer it names. Only CIs the CMDB already has get one. `validate` sends the same after its run.",
+      details: "`assess` under the name every cmdbSource answers to.",
     },
+    // ── ADR-041 D2, D3: the assessing half ──
+    {
+      usage: "assess [--only <ci>] [--json] [--dry-run] [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]", effect: "read",
+      options: [
+        ["--only <ci>", "One object, by id or name: alerts, sweep, thresholds and the scan speak for it and no gate runs; impact and root causes are worked out again. The alert receiver's call."],
+        ["--json", "Print the objects' conditions, the root causes and the transitions."],
+        ["--dry-run", "Work it all out and write nothing."],
+        ["--threshold PCT", `Disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).`],
+        ["--memory-threshold PCT", `Committed-memory percent of a node's physical RAM (default ${DEFAULT_MEMORY_THRESHOLD}).`],
+      ],
+      details:
+        "Gathers what the gates, Grafana's open alerts, the last sweep, thresholds over the CMDB's\n" +
+        "observations and the CVE scan say, derives impact and root causes along the relations, and\n" +
+        "writes conditions on every object in one report. The only writer of conditions. Each failure\n" +
+        "stands until the source that raised it has looked again.",
+    },
+    {
+      usage: "rules list|check [--file F] [--json]", effect: "read",
+      options: [
+        ["--file F", "check: this candidate file instead of the rules in use."],
+        ["--json", "Print the rules, or the problems."],
+      ],
+      details: "The correlation rules of metamodel/health-rules.json (ADR-041 D3). check exits 1 on a rule it cannot place.",
+    },
+    // ── end ADR-041 assess ──
     {
       usage: "report security [--all] [--json]", effect: "read",
       options: [
@@ -253,45 +287,6 @@ export function validateDoc(report: HealthReport, now: Date): Record<string, unk
   };
 }
 
-// ── health to the CMDB (ADR-040 D11) ─────────────────────────────────
-// Only CIs the CMDB has get a health: the subjects are matched to its objects
-// first. A CMDB that does not answer records nothing — health is now, and a
-// spooled one would land stale, and could create what it names.
-function sendHealth(doc: ValidateDoc): void {
-  if ((process.env.TAPPAAS_CMDB ?? "").toLowerCase() === "off") return;
-  let objects: { class: string; name: string }[];
-  try {
-    objects = cmdbQuery({ class: "ci", limit: 100000 }) as unknown as { class: string; name: string }[];
-  } catch (e) {
-    process.stderr.write(`[Warning] cmdb: health not recorded: ${(e as Error).message}\n`);
-    return;
-  }
-  const b = buildHealthReport(doc, cmdbClass(objects));
-  if (!b.objects.length) return;
-  const sent = sendReport(b.report());
-  if (sent.error) process.stderr.write(`[Warning] cmdb: health not recorded: ${sent.error}\n`);
-}
-
-function cmdReportHealth(opts: Opts, client: ClusterClient): number {
-  const fi = opts.rest.indexOf("--from");
-  const extra = opts.rest.filter((a, i) => a !== "--json" && a !== "--discover" && i !== fi && (fi < 0 || i !== fi + 1));
-  if (extra.length) die(`report: unexpected argument ${extra[0]}`);
-  let doc: ValidateDoc;
-  if (fi >= 0) {
-    const f = opts.rest[fi + 1];
-    if (!f) die("report: --from needs a file");
-    try {
-      doc = JSON.parse(readFileSync(f, "utf8")) as ValidateDoc;
-    } catch (e) {
-      die(`report: --from ${f}: ${(e as Error).message}`);
-    }
-  } else doc = validateDoc(gates(opts, client), new Date()) as unknown as ValidateDoc;
-  if (opts.rest.includes("--json")) return printOrSend(buildHealthReport(doc!, configClass(opts.configDir)), true);
-  sendHealth(doc!);
-  info(`health-manager: health of ${subjectHealth(doc!).length} subject(s) sent to the CMDB (the ones it has)`);
-  return 0;
-}
-
 const gates = (opts: Opts, client: ClusterClient): HealthReport =>
   runHealthGates(client, {
     configDir: opts.configDir,
@@ -300,10 +295,129 @@ const gates = (opts: Opts, client: ClusterClient): HealthReport =>
     memoryThreshold: opts.memoryThreshold,
   });
 
+// ── ADR-041 D2, D3: assess, rules, validate as a read ─────────────────
+const cmdbOff = (): boolean => (process.env.TAPPAAS_CMDB ?? "").toLowerCase() === "off";
+
+// A report that is not worth keeping: conditions are now, and a spooled one would
+// land stale, so an outage just fails this run and the next one writes.
+function writeAssessment(report: CmdbReport): void {
+  let r = report;
+  for (let round = 0; round < 5; round++) {
+    try {
+      cmdbRequest("POST", "/v1/report", r);
+      return;
+    } catch (e) {
+      if (!(e instanceof CmdbRefused)) throw e;
+      const pruned = pruneRefused(r, e.body.problems);
+      if (!pruned) throw e;
+      for (const d of pruned.dropped) warn(`assess: left out (refused): ${d}`);
+      r = pruned.report;
+    }
+  }
+}
+
+function assessIO(opts: Opts, client: ClusterClient): AssessIO {
+  return {
+    objects: () => cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[],
+    relations: () => cmdbRelations({}) as unknown as CmdbRel[],
+    rules: readRules,
+    sweep: readLastSweep,
+    gates: () => gates(opts, client).checks,
+    alerts: () => {
+      const raw = fetchGrafanaAlerts(opts.configDir);
+      return { open: raw ? openAlerts(raw, opts.configDir) : null, recent: recentEvents(ALERTS_LOG, opts.configDir, Date.now()) };
+    },
+    cve: () => readStatus(join(sbomDir(opts.configDir), STATUS_FILE)),
+    write: writeAssessment,
+  };
+}
+
+function assessLine(r: AssessResult): string {
+  const failing = r.objects.filter((o) => o.conditions.some((c) => c.status === "critical" || c.status === "warning")).length;
+  return `assessed ${r.objects.length} object(s): ${failing} failing, ${r.rootCauses.length} root cause(s), ${r.transitions.length} transition(s)`;
+}
+
+function cmdAssess(opts: Opts, client: ClusterClient): number {
+  const val = (flag: string): string | undefined => {
+    const i = opts.rest.indexOf(flag);
+    return i < 0 ? undefined : opts.rest[i + 1];
+  };
+  if (opts.rest.includes("--only") && !val("--only")) die("assess: --only needs an object");
+  if (cmdbOff()) {
+    info("assess: the CMDB is off here (TAPPAAS_CMDB=off) — nothing to write");
+    return 0;
+  }
+  const r = assess(assessIO(opts, client), { only: val("--only"), dryRun: opts.rest.includes("--dry-run") }, new Date());
+  if (opts.rest.includes("--json")) {
+    process.stdout.write(JSON.stringify({ time: r.time, objects: r.objects, rootCauses: r.rootCauses, transitions: r.transitions }, null, 1) + "\n");
+    return 0;
+  }
+  for (const t of r.transitions) info(`  ${t.class}/${t.name} ${t.type}: ${t.from ?? "new"} → ${t.to}${t.reason === "ok" ? "" : ` (${t.reason})`}`);
+  info(assessLine(r));
+  return 0;
+}
+
+// `report`: assess, for the sources' verb; --from takes the gates of a saved run.
+function cmdReportHealth(opts: Opts, client: ClusterClient): number {
+  const fi = opts.rest.indexOf("--from");
+  const extra = opts.rest.filter((a, i) => a !== "--json" && a !== "--discover" && i !== fi && (fi < 0 || i !== fi + 1));
+  if (extra.length) die(`report: unexpected argument ${extra[0]}`);
+  if (cmdbOff()) return 0;
+  let from: CheckResult[] | undefined;
+  if (fi >= 0) {
+    const f = opts.rest[fi + 1];
+    if (!f) die("report: --from needs a file");
+    try {
+      from = (JSON.parse(readFileSync(f, "utf8")) as { gates: CheckResult[] }).gates;
+    } catch (e) {
+      die(`report: --from ${f}: ${(e as Error).message}`);
+    }
+  }
+  const json = opts.rest.includes("--json");
+  try {
+    const r = assess(assessIO(opts, client), { dryRun: json }, new Date(), from);
+    if (json) process.stdout.write(JSON.stringify(r.report, null, 1) + "\n");
+    else info(`health-manager: ${assessLine(r)}`);
+  } catch (e) {
+    if (!(e instanceof CmdbUnavailable || e instanceof CmdbRefused)) throw e;
+    warn(`cmdb: conditions not recorded: ${e.message}`);
+  }
+  return 0;
+}
+
+// How old an assessment may be and still be read: the timer has missed a few.
+function assessMaxAgeMs(configDir: string): number {
+  const site = readModuleJson(join(configDir, "site.json"));
+  const minutes = Number((site?.health as { assessInterval?: unknown } | undefined)?.assessInterval ?? 5);
+  return Math.max(3 * (Number.isFinite(minutes) && minutes > 0 ? minutes : 5), 30) * 60_000;
+}
+
+// The verdict from the CMDB; null when it cannot give one (then the gates do).
+function readVerdict(opts: Opts, client: ClusterClient): HealthReport | null {
+  if (cmdbOff()) return null;
+  const nowMs = Date.now();
+  const given = opts.threshold !== DEFAULT_THRESHOLD || opts.memoryThreshold !== DEFAULT_MEMORY_THRESHOLD;
+  try {
+    const io = assessIO(opts, client);
+    let objects = io.objects();
+    const last = assessmentOf(objects);
+    if (opts.rest.includes("--live") || given || !last || !(nowMs - Date.parse(last.time) <= assessMaxAgeMs(opts.configDir))) {
+      assess(io, {}, new Date());
+      objects = io.objects();
+    }
+    const a = assessmentOf(objects);
+    return a ? readValidate(new SiteIndex(objects, io.relations()), a, nowMs) : null;
+  } catch (e) {
+    if (e instanceof CmdbUnavailable || e instanceof CmdbRefused) {
+      warn(`cmdb: ${e.message} — running the gates instead`);
+      return null;
+    }
+    throw e;
+  }
+}
+
 function cmdValidate(opts: Opts, client: ClusterClient): number {
-  const report = gates(opts, client);
-  // The health it found goes on the CIs it names (ADR-040 D11).
-  sendHealth(validateDoc(report, new Date()) as unknown as ValidateDoc);
+  const report = readVerdict(opts, client) ?? gates(opts, client);
   if (opts.rest.includes("--json")) {
     process.stdout.write(JSON.stringify(validateDoc(report, new Date()), null, 1) + "\n");
     return report.failed === 0 ? 0 : 1;
@@ -331,6 +445,7 @@ function cmdValidate(opts: Opts, client: ClusterClient): number {
   console.error(`${RD}[Error]${CL} ${report.failed} health gate(s) failed`);
   return 1;
 }
+// ── end ADR-041 assess ────────────────────────────────────────────────
 
 // The VEX the nightly scan applies (loadVex: <module>-vex.json in every registered
 // module directory), so a triage decision counts the same in both (#788).
@@ -588,6 +703,12 @@ export function run(argv: string[], client: ClusterClient): number {
       case "report":
         if (opts.rest[0] === "security") return cmdReportSecurity({ ...opts, rest: opts.rest.slice(1) });
         return cmdReportHealth(opts, client);
+      // ADR-041 assess verbs
+      case "assess":
+        return cmdAssess(opts, client);
+      case "rules":
+        return cmdRules(opts.rest, readRules(), info);
+      // end ADR-041 assess verbs
       default:
         usage();
         die(`Unknown command: ${cmd}`);
