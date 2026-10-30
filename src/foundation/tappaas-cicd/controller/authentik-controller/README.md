@@ -107,6 +107,12 @@ authentik-controller proxy-app-ensure wiki --external-host https://wiki.example.
 authentik-controller app-bind-groups wiki --group editors
 ```
 
+## The CMDB
+
+`list-users`, `list-groups` and `list-roles` carry Authentik's `uuid`: the key
+identity-manager reports a user or group by (ADR-040 D5).
+
+
 ## Who calls it
 
 The TAPPaaS people/identity manager invokes `authentik-controller` to reconcile

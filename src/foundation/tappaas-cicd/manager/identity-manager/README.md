@@ -217,3 +217,32 @@ back-compat and schema-level checks:
 ```
 validate-people.sh [DIR] [--schema-dir <path>] [--quiet]
 ```
+
+## Reports to the CMDB
+
+identity-manager is a source of the CMDB (ADR-040 D4; `cmdbSource` in
+`components.json`). `identity-manager report [--json]` sends:
+
+| Class | Key | What |
+|---|---|---|
+| `organization` | name | `displayName`, `desired` |
+| `role` | name | `displayName`, `description`, `desired` |
+| `group` | Authentik uuid | `displayName`, `roles`, `desired` |
+| `user` | Authentik uuid | `username`, `email`, `enabled`, `displayName`, `desired`; `member-of` its groups |
+
+Users and groups are reported only when Authentik answers (their key is its
+uuid, from authentik-controller's `list-*`); without it, organizations and
+roles only. A group's owning organization is not reported: the metamodel has
+no relation for it yet.
+
+`reconcile` reports what it read; `reconcile --apply` and the write verbs
+report what they touched (a deleted user or group ends by its uuid, an
+organization or role by name); `bootstrap` reports the seeded organizations
+and roles.
+
+A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`,
+else `TAPPAAS_JOB`) and the actor (`TAPPAAS_ACTOR`, else `$USER`). A report
+the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)
+and never fails the verb; `TAPPAAS_CMDB=off` turns reporting off (the tests
+do). The tests check every payload against cmdb-controller's metamodel
+(`lib/ts/test/cmdb-check.ts`).

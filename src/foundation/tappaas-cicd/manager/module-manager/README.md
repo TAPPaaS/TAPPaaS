@@ -400,6 +400,34 @@ module-manager module reconcile nextcloud --apply        # converge to the curre
 module-manager module list --diff --services             # fleet rollup, services included
 ```
 
+## Reports to the CMDB
+
+module-manager is a source of the CMDB (ADR-040 D3, D4; `cmdbSource` in
+`components.json`). `module-manager report [--json]` sends every installed
+instance — refined by the live cluster where it answers — as one observation:
+
+| Class | What |
+|---|---|
+| `vm`, `lxc`, `machine`, `device` | an instance of that kind: `desired` config/<name>.json, `release` module + version, `stack`, `management`, `environment` (`member-of`), a guest's `vmid`, `onNode` (the live node) and `stage` (operational when the cluster runs it, created when not) |
+| `app` | an instance of kind `application`, on the node it names (`node`); one that names none (`cluster`) on the primary node |
+| `service` | `<module>:<service>` per `services/<service>/` of the source, `provider`, on the provider's node; the node `provides` it |
+| `controller`, `manager` | each entry of `config/control-plane.json`, on the instance that brings it, with its `registry` entry and `aliases` |
+
+`depends-on` joins a node (an application's host) to each service of its
+`dependsOn` that an installed instance provides. An archived instance is not
+reported.
+
+Changes: `add`, `add-stack`, `adopt`, `modify`/`update`, `delete`, `migrate`,
+`suspend`/`resume` report every instance whose config/<name>.json they wrote
+(an archived or removed one ends), after they succeed.
+
+A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`,
+else `TAPPAAS_JOB`) and the actor (`TAPPAAS_ACTOR`, else `$USER`). A report
+the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)
+and never fails the verb; `TAPPAAS_CMDB=off` turns reporting off (the tests
+do). The tests check every payload against cmdb-controller's metamodel
+(`lib/ts/test/cmdb-check.ts`).
+
 ## Underlying scripts
 
 All bash, linked onto `PATH` by `install.sh`. These remain the source of truth
