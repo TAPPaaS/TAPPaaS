@@ -171,6 +171,15 @@ export interface StoragePool {
   provisioned: number; // bytes, -1 = unknown
 }
 
+// A guest's ZFS volume on a node (guests.ts).
+export interface GuestVolume {
+  pool: string;
+  volume: string; // vm-110-disk-0, subvol-200-disk-0
+  vmid: number;
+  used: number; // bytes
+  size: number; // bytes; 0: a filesystem, which has no fixed size
+}
+
 export interface ClusterClient {
   // Hostnames of the reachable Proxmox nodes (ping-probed).
   reachableNodes(): string[];
@@ -186,6 +195,8 @@ export interface ClusterClient {
   diskUsagePct(target: string): number | null;
   // Per-node physical/used/committed memory and the guests behind it (#569).
   nodeCapacity(): NodeCapacity[];
+  // The guests' ZFS volumes on one node; empty if it does not answer.
+  nodeVolumes(node: string): GuestVolume[];
   // Whether a guest is waiting for a reboot (via SSH); null if unreachable (#730).
   pendingReboot(target: string): PendingReboot | null;
   // Every active guest-disk pool on every node (#100); backup stores excluded.

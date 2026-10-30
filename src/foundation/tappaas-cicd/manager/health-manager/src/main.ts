@@ -36,11 +36,12 @@ import { spawnSync } from "child_process";
 import { readFileSync } from "fs";
 import { hostname } from "os";
 import { join } from "path";
-import { defaultConfigDir, readModuleJson } from "./config";
+import { defaultConfigDir, loadConfigModules, readModuleJson } from "./config";
 import { CliClusterClient } from "./client";
 import { checkUpdateCapacity, probeTarget, runHealthGates } from "./checks";
 import { ALERTS_LOG, alertLine, fetchGrafanaAlerts, filterAlerts, openAlerts, recentEvents } from "./alerts";
 import { checkRoom } from "./room";
+import { nodeGuests } from "./guests";
 import {
   CliSecurityIO, loadVex, scanComponentList, scanImageRefs, PREVIOUS_FILE, SITE_CDX_FILE, STATUS_FILE, notify, readStatus, renderReport, runScan, sbomDir,
   sweepIsNewer, writeScan,
@@ -101,6 +102,11 @@ export const HELP: HelpSpec = {
         ["--install <instance>", "Count this deployed config's memory as new on its node (install-module, before the guest exists)."],
         ["--memory-threshold PCT", `Percent of a node's RAM the projected commitment must stay under (default ${DEFAULT_MEMORY_THRESHOLD}).`],
       ],
+    },
+    {
+      usage: "guests [<node>] [--json] [--config-dir DIR]",
+      details: "Each guest's memory, declared and used as the balloon reports it, and the ZFS volumes behind it, by module. One node, or every node.",
+      options: [["--json", "Print the node's document, or { nodes: [...] } for every node."]],
     },
     {
       usage: "update-os <name> <vmid> <node>", effect: { noPreview: "patches the guest's OS packages and reboots it if they need it" },
@@ -630,6 +636,28 @@ function cmdReboot(opts: Opts, client: ClusterClient): number {
   return 0;
 }
 
+function cmdGuests(opts: Opts, client: ClusterClient): number {
+  const node = opts.rest.find((a) => !a.startsWith("-"));
+  // Every node's guests, even for one node: a replica's home is on another.
+  const caps = client.nodeCapacity();
+  if (node && !caps.some((c) => c.node === node)) die(`guests: no node '${node}'`);
+  const shown = caps.filter((c) => !node || c.node === node);
+  const modules = new Map(loadConfigModules(opts.configDir, DEFAULT_NODE).map((m) => [m.vmid, m.module]));
+  const volumes = new Map(shown.map((c) => [c.node, client.nodeVolumes(c.node)]));
+  const docs = nodeGuests(caps, volumes, modules).filter((d) => !node || d.node === node);
+  if (opts.rest.includes("--json")) {
+    info(JSON.stringify(node ? docs[0] : { nodes: docs }, null, 2));
+    return 0;
+  }
+  const gib = (b: number): string => (b / 1024 ** 3).toFixed(1);
+  for (const d of docs) {
+    info(`${d.node}: ${gib(d.usedMem)} of ${gib(d.physicalMem)} GiB in use`);
+    for (const g of d.guests) info(`  ${g.module ?? g.name} (${g.vmid}) ${g.status}: ${gib(g.usedMem)} of ${gib(g.declaredMem)} GiB`);
+    for (const v of d.volumes) info(`  ${v.module ?? v.vmid} ${v.pool}/${v.volume}: ${gib(v.used)} GiB${v.replica ? " (replica)" : ""}`);
+  }
+  return 0;
+}
+
 export function run(argv: string[], client: ClusterClient): number {
   if (argv.length === 0) {
     usage();
@@ -682,6 +710,8 @@ export function run(argv: string[], client: ClusterClient): number {
         for (const row of r.rows ?? []) info(`    ${row.text}`);
         return r.status === "fail" ? 1 : 0;
       }
+      case "guests":
+        return cmdGuests(opts, client);
       case "update-os": {
         // update-os STAYS a special action verb (ADR-007). The OS-patch logic
         // (NixOS rebuild / apt, reboot guards, controller-self-reboot protection)

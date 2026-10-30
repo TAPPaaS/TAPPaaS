@@ -28,7 +28,8 @@ import { existsSync } from "fs";
 import { applyBalloonStats, balloonProbe, parseBalloonStats } from "./balloon";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
 import { countedMem } from "./memcount";
-import { Avx512Use, ClusterClient, LanUplink, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
+import { parseVolumes } from "./guests";
+import { Avx512Use, ClusterClient, GuestVolume, LanUplink, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
 
 // `lxc:<node>:<vmid>` (checks.ts probeTarget): an LXC module, reached through
 // `pct exec` on its node rather than SSH of its own (#901).
@@ -224,6 +225,11 @@ export class CliClusterClient implements ClusterClient {
       for (const g of cap.guests) if (g.type === "qemu") applyBalloonStats(g, balloon.get(g.vmid));
     }
     return [...caps.values()].sort((a, b) => a.node.localeCompare(b.node));
+  }
+
+  nodeVolumes(node: string): GuestVolume[] {
+    const r = ssh("root", `${node}.${mgmtDomain()}`, "zfs list -Hp -t filesystem,volume -o name,used,volsize");
+    return r.rc === 0 ? parseVolumes(r.stdout) : [];
   }
 
   diskUsagePct(target: string): number | null {
