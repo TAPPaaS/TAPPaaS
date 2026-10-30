@@ -10,7 +10,7 @@
 //   GET  /v1/objects/<id|name>/history[?class=&at=]  every period; or as of a time
 //   GET  /v1/objects/<id|name>/impact[?hops=&direction=]
 //   POST /v1/resolve                       OpenTelemetry resource attributes → object
-//   POST /v1/rescan                        ask the registered sources again
+//   POST /v1/rescan                        ask every cmdbSource component to report again
 //   GET  /v1/classes, /v1/classes/<name>   the metamodel
 //   GET  /v1/stream                        server-sent events, one per change
 //

@@ -1,46 +1,102 @@
 // rescan.ts — `cmdb rescan` (ADR-040 D2): ask every source again, so the
-// actual state can be recreated from what the sources see. A source is a verb
-// that interrogates and reports what it saw back to this service, as it does
-// after its own validate or reconcile (D4).
+// actual state can be recreated from what the sources see. A source is a
+// component that answers `<component> report`: it interrogates its plane
+// (read-only, as its validate or reconcile already does) and reports what it
+// saw back to this service (D4).
 //
-// The list is empty until the managers report (implementation plan step 2);
-// each then adds its read-only verb here. The sources run one at a time and
-// asynchronously: each reports to this same service while it runs.
+// The sources are the components components.json marks "cmdbSource": true,
+// read at each rescan, so a manager that gains a report verb is asked from the
+// next rescan on. They run one at a time and asynchronously — each reports to
+// this same service while it runs — as the service's user (tappaas), with the
+// PATH the managers get from ~/bin.
 
 import { ChildProcess, spawn } from "child_process";
+import { existsSync, readFileSync } from "fs";
 
 export interface RescanSource {
-  name: string; // the reporter, as it names itself in its reports
-  argv: string[]; // its read-only verb, e.g. ["site-manager", "node", "reconcile"]
+  name: string; // the component, as components.json names it
+  argv: string[]; // its report verb: [name, "report"]
 }
-
-export const RESCAN_SOURCES: RescanSource[] = [];
 
 export interface RescanResult {
   source: string;
   ok: boolean;
   exitCode: number | null;
+  seconds: number;
   error?: string;
+  stderr?: string; // the last lines it wrote, when it failed
 }
 
-function run(src: RescanSource): Promise<RescanResult> {
+const env = process.env;
+
+export const DEFAULT_COMPONENTS = "/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/components.json";
+
+// What a login shell of tappaas has: ~/bin first, then the NixOS profiles.
+const MANAGER_PATH = [
+  "/home/tappaas/bin",
+  "/run/wrappers/bin",
+  "/home/tappaas/.nix-profile/bin",
+  "/etc/profiles/per-user/tappaas/bin",
+  "/nix/var/nix/profiles/default/bin",
+  "/run/current-system/sw/bin",
+].join(":");
+
+/** The components marked cmdbSource in components.json. A missing or broken
+ *  file is an error the caller sees: a rescan that silently asked no one
+ *  would look like an empty site. */
+export function rescanSources(file: string = env.CMDB_COMPONENTS ?? DEFAULT_COMPONENTS): RescanSource[] {
+  if (!existsSync(file)) throw new Error(`no components list at ${file} (CMDB_COMPONENTS)`);
+  let doc: unknown;
+  try {
+    doc = JSON.parse(readFileSync(file, "utf8"));
+  } catch (e) {
+    throw new Error(`${file}: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  const list = doc !== null && typeof doc === "object" ? (doc as { components?: unknown }).components : undefined;
+  if (!Array.isArray(list)) throw new Error(`${file}: no components[]`);
+  return list
+    .filter((c): c is { name: string; cmdbSource: true } => c !== null && typeof c === "object" && c.cmdbSource === true && typeof c.name === "string")
+    .map((c) => ({ name: c.name, argv: [c.name, "report"] }));
+}
+
+function run(src: RescanSource, timeoutSeconds: number): Promise<RescanResult> {
+  const started = Date.now();
+  const secs = (): number => Math.round((Date.now() - started) / 100) / 10;
   return new Promise((resolve) => {
     let child: ChildProcess;
+    let tail = "";
+    const done = (r: Omit<RescanResult, "source" | "seconds">): void => {
+      clearTimeout(timer);
+      resolve({ source: src.name, seconds: secs(), ...r, ...(r.ok ? {} : { stderr: tail.trim().split("\n").slice(-10).join("\n") }) });
+    };
+    const timer = setTimeout(() => {
+      child?.kill("SIGTERM");
+      done({ ok: false, exitCode: null, error: `no answer within ${timeoutSeconds}s` });
+    }, timeoutSeconds * 1000);
     try {
-      child = spawn(src.argv[0], src.argv.slice(1), { stdio: "ignore" });
+      child = spawn(src.argv[0], src.argv.slice(1), {
+        stdio: ["ignore", "ignore", "pipe"],
+        env: { ...env, PATH: env.CMDB_SOURCE_PATH ?? `${MANAGER_PATH}:${env.PATH ?? ""}`, HOME: env.HOME ?? "/home/tappaas" },
+      });
     } catch (e) {
-      return resolve({ source: src.name, ok: false, exitCode: null, error: e instanceof Error ? e.message : String(e) });
+      return done({ ok: false, exitCode: null, error: e instanceof Error ? e.message : String(e) });
     }
-    child.on("error", (e) => resolve({ source: src.name, ok: false, exitCode: null, error: e.message }));
-    child.on("close", (code) => resolve({ source: src.name, ok: code === 0, exitCode: code }));
+    child.stderr?.on("data", (c) => {
+      tail = (tail + c.toString("utf8")).slice(-4000);
+    });
+    child.on("error", (e) => done({ ok: false, exitCode: null, error: e.message }));
+    child.on("close", (code) => done({ ok: code === 0, exitCode: code }));
   });
 }
 
-export async function rescan(log: (line: string) => void, sources: RescanSource[] = RESCAN_SOURCES): Promise<{ asked: RescanResult[] }> {
+export async function rescan(log: (line: string) => void, sources: RescanSource[] = rescanSources()): Promise<{ asked: RescanResult[] }> {
+  const timeout = Number(env.CMDB_RESCAN_TIMEOUT_SECONDS ?? "900");
   const asked: RescanResult[] = [];
   for (const src of sources) {
     log(`rescan: asking ${src.name} (${src.argv.join(" ")})`);
-    asked.push(await run(src));
+    const r = await run(src, timeout);
+    if (!r.ok) log(`rescan: ${src.name} failed (${r.error ?? `exit ${String(r.exitCode)}`})`);
+    asked.push(r);
   }
   return { asked };
 }

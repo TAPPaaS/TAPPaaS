@@ -92,6 +92,7 @@ declare class URL {
 // A rescan source runs alongside the server: it reports back to it.
 declare module "child_process" {
   export interface ChildProcess {
+    stderr: { on(event: "data", cb: (chunk: NodeBuffer) => void): void } | null;
     on(event: "close", cb: (code: number | null) => void): void;
     on(event: "error", cb: (e: Error) => void): void;
   }

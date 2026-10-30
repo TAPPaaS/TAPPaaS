@@ -557,6 +557,11 @@ in
       RuntimeDirectory = "cmdb";
       RuntimeDirectoryMode = "0750";
       Environment = [
+        # `cmdb rescan` runs `<component> report` for each cmdbSource
+        # component in components.json, as tappaas, with the managers' PATH.
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
         "CMDB_SOCKET=/run/cmdb/cmdb.sock"
         "CMDB_LISTEN=127.0.0.1:9098"
         "CMDB_TOKEN_FILE=/etc/secrets/cmdb-token"
@@ -564,8 +569,10 @@ in
         "CMDB_PGDATABASE=cmdb"
         "CMDB_PGUSER=tappaas"
       ];
-      # It writes nothing but its socket. The rescan sources (step 2 of the
-      # ADR's plan) run as its children and will need config/ writable.
+      # It writes nothing but its socket. Its rescan sources run as its
+      # children, in this sandbox: a report verb only reads config/ and the
+      # live planes, and sends to the socket. What they would write here is
+      # refused (read-only home): the report spool, ~/.ssh/known_hosts.
       ProtectSystem = "strict";
       ProtectHome = "read-only";
       PrivateTmp = true;

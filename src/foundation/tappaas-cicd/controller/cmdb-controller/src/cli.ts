@@ -18,7 +18,7 @@ const HELP = `cmdb — the CMDB: the actual state of the site (ADR-040)
                                                       everything within N relations (default 2, both)
   cmdb report [--file F]                              a report (JSON) from stdin; spooled if the
                                                       service is down
-  cmdb rescan                                         ask every source to report again
+  cmdb rescan                                         ask every cmdbSource component to report again
   cmdb class list                                     the class tree
   cmdb class show <class>                             a class: fields, keys, relations
   cmdb resolve <otel-attr>=<value>...                 OpenTelemetry resource attributes → object
@@ -208,10 +208,11 @@ function run(argv: string[]): number {
     }
     case "rescan": {
       const replay = replaySpool();
-      const d = cmdbRequest("POST", "/v1/rescan", {}) as Obj;
+      // The sources run one after the other, each a full interrogation of its plane.
+      const d = cmdbRequest("POST", "/v1/rescan", {}, { timeoutSeconds: 3600 }) as Obj;
       const asked = d.asked as Obj[];
       print(json, { ...d, spool: replay }, () =>
-        (asked.length ? table(asked.map((x) => [String(x.source), x.ok ? "ok" : `failed ${cell(x.exitCode ?? x.error)}`]), ["SOURCE", "RESULT"]) : "no sources are registered yet") +
+        (asked.length ? table(asked.map((x) => [String(x.source), x.ok ? "ok" : `failed ${cell(x.exitCode ?? x.error)}`]), ["SOURCE", "RESULT"]) : "no component is marked cmdbSource in components.json") +
         (replay.replayed || replay.refused ? `\nspool: ${replay.replayed} replayed, ${replay.refused} refused` : ""),
       );
       return 0;
