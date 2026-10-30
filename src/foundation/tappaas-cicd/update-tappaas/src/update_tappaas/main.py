@@ -136,6 +136,25 @@ WEEKDAYS = {
 UNDER_SYSTEMD = bool(os.environ.get("JOURNAL_STREAM") or os.environ.get("INVOCATION_ID"))
 
 
+def stdout_is_journal() -> bool:
+    """True only when stdout IS the journal stream systemd handed us.
+
+    JOURNAL_STREAM names it as "<dev>:<inode>". A process started by a service
+    (a console job, say) inherits the variable while its stdout is a pipe to
+    the console: the `<N>` priority codes journald strips would then reach the
+    reader as text.
+    """
+    js = os.environ.get("JOURNAL_STREAM", "")
+    if ":" not in js:
+        return False
+    try:
+        dev, ino = (int(x) for x in js.split(":", 1))
+        st = os.fstat(sys.stdout.fileno())
+    except (ValueError, OSError):
+        return False
+    return (st.st_dev, st.st_ino) == (dev, ino)
+
+
 class SystemdPriorityFormatter(logging.Formatter):
     """Tag records [Info]/[Debug]/… like the bash helpers.
 
@@ -180,9 +199,10 @@ class SystemdPriorityFormatter(logging.Formatter):
         color = self.LABEL_COLOR.get(record.levelno)
         # Colorize on a real TTY, and in the journal, where the bash steps of
         # the same unit write colored labels too; piped runs stay plain text.
-        if color and (UNDER_SYSTEMD or sys.stdout.isatty()):
+        journal = stdout_is_journal()
+        if color and (journal or sys.stdout.isatty()):
             label = f"{color}{label}{self._CLEAR}"
-        prio = self.PRIORITY.get(record.levelno, "<6>") if UNDER_SYSTEMD else ""
+        prio = self.PRIORITY.get(record.levelno, "<6>") if journal else ""
         return f"{prio}{label} {body}"
 
 

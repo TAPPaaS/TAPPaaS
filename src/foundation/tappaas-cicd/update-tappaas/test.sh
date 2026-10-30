@@ -740,6 +740,17 @@ del os.environ["INVOCATION_ID"]
 m.update_module = lambda name: True
 ask("run-1"); dep = newdep()
 assert m.run_update_phase(["a"], "app", [], dep) == [] and "stop" not in dep
+
+# The <N> priority code only when stdout IS the journal stream: a console job
+# inherits JOURNAL_STREAM from the console's unit while its stdout is a pipe.
+import logging as _lg, sys as _sys
+rec = _lg.LogRecord("x", _lg.INFO, "", 0, "hello", None, None)
+os.environ["JOURNAL_STREAM"] = "1:2"; os.environ["INVOCATION_ID"] = "run-1"
+line = m.SystemdPriorityFormatter("%(message)s").format(rec)
+assert not line.startswith("<6>") and line.endswith("hello"), f"a pipe gets no priority code: {line!r}"
+st = os.fstat(_sys.stdout.fileno()); os.environ["JOURNAL_STREAM"] = f"{st.st_dev}:{st.st_ino}"
+assert m.SystemdPriorityFormatter("%(message)s").format(rec).startswith("<6>"), "the journal stream does"
+del os.environ["JOURNAL_STREAM"]; del os.environ["INVOCATION_ID"]
 PY
     then
         passed=$((passed + 1))
