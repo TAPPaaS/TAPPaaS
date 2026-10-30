@@ -17,6 +17,8 @@
 # Prints "Results: N passed, M failed"; exits 1 on any failure.
 #
 set -uo pipefail
+# The verbs under test report to the CMDB (ADR-040); never the live one.
+export TAPPAAS_CMDB=off
 
 # Accept --deep as well as TAPPAAS_TEST_DEEP=1. Every gate below reads the
 # variable, so exporting it here is all a flag needs to do — and exporting (not

@@ -8,6 +8,8 @@
 # The end-to-end suite against a real node is the storage module's
 # (src/foundation/storage/test.sh --deep).
 set -uo pipefail
+# The verbs under test report to the CMDB (ADR-040); never the live one.
+export TAPPAAS_CMDB=off
 for _a in "$@"; do [[ "${_a}" == "--deep" ]] && export TAPPAAS_TEST_DEEP=1; done
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

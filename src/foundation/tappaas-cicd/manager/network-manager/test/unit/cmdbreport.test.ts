@@ -91,6 +91,7 @@ if (MAIN) {
       CMDB_SOCKET: join(tmp, "no.sock"),
       TAPPAAS_JOB_ID: "job-42",
       TAPPAAS_ACTOR: "tester",
+      TAPPAAS_CMDB: "",
     };
     const nm = (...a: string[]) => spawnSync("node", [MAIN, ...a, "--zones", join(tmp, "zones.json")], { encoding: "utf8", env });
     const rep = nm("report", "--json");

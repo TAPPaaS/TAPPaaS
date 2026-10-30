@@ -7,6 +7,8 @@
 #      (FakeClusterClient; no SSH / no Proxmox). Mirrors identity-manager/test.sh.
 # Exit non-zero on any failure.
 set -uo pipefail
+# The verbs under test report to the CMDB (ADR-040); never the live one.
+export TAPPAAS_CMDB=off
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 rc=0
 
