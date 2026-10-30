@@ -65,7 +65,7 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
           | .key as $p | .value as $v
           | ([ ($rec.value.ports // [])[] | select(.name == $p) ][0] // {}) as $rp
           | (if (["rj45", "sfp", "wifi", "usb-a", "usb-c"] | index($v.kind // "")) then $v.kind
-             elif (($v.media // "") | test("sfp"; "i")) then "sfp"
+             elif (($v.media // "") + " " + $p | test("sfp"; "i")) then "sfp"
              else ($rp.kind // "rj45") end) as $kind
           | ([($v.maxSpeed // $v.speedMax | speedword), ($rp.speed // null)]
              | map(select(. != null and (speeds($kind) | index(.)))) | .[0]) as $speed
