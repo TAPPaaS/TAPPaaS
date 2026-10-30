@@ -1,0 +1,8 @@
+{
+  "version": "2.0",
+  "switches": {"core": {"vendor": "unifi", "ports": {"9": {"type": "ap", "target": "Nano HD"}}}},
+  "accessPoints": {
+    "Nano HD": {"vendor": "unifi", "model": "U7NHD", "managementIp": "10.0.0.184", "firmware": "6.6.77", "controller": "unifi-controller",
+                "ssids": {"Home": {"vlan": 310}}, "clients": [{"mac": "aa:bb:cc:dd:ee:99", "ssid": "Home"}]}
+  }
+}

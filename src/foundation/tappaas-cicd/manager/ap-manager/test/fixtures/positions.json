@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "assets": {
+    "ap-01": {"kind": "access-point", "vendor": "ubiquiti", "model": "u7-nhd", "serial": "AP0001", "stage": "placed", "role": "Nano HD",
+              "ports": [{"name": "eth0", "kind": "rj45", "speed": "1g"}, {"name": "radio", "kind": "wifi", "standard": "wifi5", "bands": ["2.4", "5"]}]},
+    "sw-01": {"kind": "switch", "vendor": "ubiquiti", "serial": "F4E2C6000001", "stage": "placed", "role": "core"}
+  }
+}
