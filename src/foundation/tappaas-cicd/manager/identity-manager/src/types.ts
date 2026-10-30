@@ -48,6 +48,7 @@ export interface PeopleModel {
 // Shape returned by `authentik-controller list-users`.
 export interface AkUser {
   name: string;
+  uuid?: string; // Authentik's: the user's key in the CMDB (ADR-040 D5)
   active: boolean;
   email: string;
   displayName: string;
@@ -58,6 +59,7 @@ export interface AkUser {
 // Shape returned by list-groups / list-roles.
 export interface AkNamed {
   name: string;
+  uuid?: string; // the group's pk
   displayName: string;
 }
 

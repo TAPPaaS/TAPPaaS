@@ -29,6 +29,8 @@ set -uo pipefail
 # just setting) is what carries it into any suite this one dispatches. Without
 # this, `test.sh --deep` silently ran the fast path.
 for _a in "$@"; do [[ "${_a}" == "--deep" ]] && export TAPPAAS_TEST_DEEP=1; done
+# No test reports to a live CMDB (ADR-040): the ones about reporting say so.
+export TAPPAAS_CMDB=off
 
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -247,6 +249,11 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
             ok "TypeScript write-verb push unit tests pass (#482)"
         else
             bad "TypeScript write-verb push unit tests FAILED (#482)"
+        fi
+        if run_ts "node '${DIST_TEST}/manager/identity-manager/test/unit/cmdb-report.test.js'"; then
+            ok "TypeScript CMDB report unit tests pass (ADR-040)"
+        else
+            bad "TypeScript CMDB report unit tests FAILED (ADR-040)"
         fi
 
         # Compiled-CLI drive of the bootstrap verb (the retired user-setup.sh —

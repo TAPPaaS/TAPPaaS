@@ -46,6 +46,9 @@ import {
 import { NOT_INSTALLABLE, StackModule, hasHandSteps, planStack } from "./stack";
 import { defaultNodeCandidates, queryClusterGuests, reachableNodes as clusterReachableNodes } from "../../../lib/ts/src/cluster";
 import { moduleScope } from "../../../lib/ts/src/scope";
+import { CmdbObject, CmdbRelation } from "../../../lib/ts/src/cmdb";
+import { reportChange, sendObservation } from "../../../lib/ts/src/cmdb-source";
+import { SOURCE as REPORT_SOURCE, moduleChangeObjects, moduleObservation, moduleStamps } from "./cmdb-report";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import {
@@ -277,6 +280,12 @@ export const HELP: HelpSpec = {
         ["--vmid ID", "Target a specific VM id."],
         ["--zone0 ZONE", "Override the primary network zone under test."],
       ],
+    },
+    {
+      usage: "report [--json]",
+      name: "report",
+      note: "(ADR-040: send every installed instance, its services, dependencies and the control plane's components to the CMDB)",
+      options: [["--json", "Print the report instead of sending it."]],
     },
     {
       usage: "snapshot-vm <module> [--list|--cleanup N|--restore N]", effect: { noPreview: "takes a snapshot of the VM (--restore rolls it back, --cleanup prunes old ones)" }, readWhen: ["--list"], destructive: ["--restore", "--cleanup"],
@@ -1490,7 +1499,45 @@ function cmdSnapshot(opts: Opts, client: ModuleClient): number {
 // keyword is optional (it is the only entity) so `module-manager list` also
 // works — matching how identity-manager/network-manager keep the common verbs
 // reachable.
+// ── the CMDB (ADR-040 D4) ──────────────────────────────────────────────
+
+// `report`: the instances config/ has, refined by the live cluster where it
+// answers (a guest's node, whether it runs).
+function cmdReport(opts: Opts, client: ModuleClient): number {
+  return sendObservation(moduleObservation(opts.configDir, client.clusterResources()), opts.json, opts.configDir, info);
+}
+
+// The verbs that change an instance: each reports the instances whose
+// config/<name>.json it wrote, added or removed — the one it names first —
+// after it succeeded. A dry run writes nothing, so reports nothing.
+const CHANGE_VERBS = new Set(["add", "add-stack", "adopt", "update", "modify", "delete", "migrate", "suspend", "resume"]);
+
+function withChangeReport(verb: string, opts: Opts, fn: () => number): number {
+  if (!CHANGE_VERBS.has(verb)) return fn();
+  const before = moduleStamps(opts.configDir);
+  const rc = fn();
+  if (rc !== 0) return rc;
+  const after = moduleStamps(opts.configDir);
+  const touched = new Set<string>();
+  for (const [name, a] of after) if (before.get(name)?.mtime !== a.mtime) touched.add(name);
+  for (const name of before.keys()) if (!after.has(name)) touched.add(name);
+  if ((verb === "migrate" || verb === "suspend" || verb === "resume") && opts.rest[0] && after.has(opts.rest[0])) touched.add(opts.rest[0]);
+  const objects: CmdbObject[] = [];
+  const relations: CmdbRelation[] = [];
+  for (const name of touched) {
+    const c = moduleChangeObjects(opts.configDir, name, before.get(name)?.m ?? null);
+    objects.push(...c.objects.filter((o) => !objects.some((x) => x.class === o.class && x.name === o.name)));
+    relations.push(...c.relations);
+  }
+  reportChange({ source: REPORT_SOURCE, verb: [verb, ...opts.rest].join(" "), objects, relations, configDir: opts.configDir });
+  return rc;
+}
+
 function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
+  return withChangeReport(verb, opts, () => dispatchVerb(verb, opts, client));
+}
+
+function dispatchVerb(verb: string, opts: Opts, client: ModuleClient): number {
   // --dry-run belongs to one change only: the instance rename (#566). Accepting
   // it silently elsewhere would promise a preview no other verb can give.
   // add-stack's preview is the plan it prints (#763).
@@ -1538,6 +1585,8 @@ function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
     }
     case "snapshot-vm":
       return cmdSnapshot(opts, client);
+    case "report":
+      return cmdReport(opts, client);
     default:
       usage();
       die(`Unknown verb: ${verb}`);

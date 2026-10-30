@@ -15,6 +15,8 @@
 # Prints "Results: N passed, M failed"; exits 1 on any failure.
 #
 set -uo pipefail
+# No test reports to a live CMDB (ADR-040): the ones about reporting say so.
+export TAPPAAS_CMDB=off
 
 # Accept --deep as well as TAPPAAS_TEST_DEEP=1. Every gate below reads the
 # variable, so exporting it here is all a flag needs to do — and exporting (not
@@ -74,7 +76,7 @@ if run_ts "tsc -p '${UNIT_TSCONFIG}'" >/dev/null 2>&1; then
     TS_OK=1
     # tsconfig rootDir is the tappaas-cicd root (shared lib/ts base), so the
     # compiled tree mirrors manager/environment-manager/ under dist-test.
-    for t in config reconcile validate main; do
+    for t in config reconcile validate main cmdb-report; do
         if run_ts "node '${DIST_TEST}/manager/environment-manager/test/unit/${t}.test.js'" >/dev/null 2>&1; then
             ok "TypeScript ${t} unit tests pass"
         else

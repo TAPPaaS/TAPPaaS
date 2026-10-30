@@ -46,6 +46,8 @@ import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfields";
 import { RD, GN, CL, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from "fs";
+import { reportChange, sendObservation } from "../../../lib/ts/src/cmdb-source";
+import { SOURCE, environmentObservation } from "./cmdb-report";
 import { join } from "path";
 
 // The two always-required bootstrap environments are protected from delete:
@@ -124,6 +126,11 @@ export const HELP: HelpSpec = {
         ["--force", "Delete even mgmt, the default environment, or one modules still use."],
         ["--check", "Show what would be removed; change nothing."],
       ],
+    },
+    {
+      usage: "report [--json]",
+      note: "(ADR-040: send every environment, its owner and the zones serving it to the CMDB)",
+      options: [["--json", "Print the report instead of sending it."]],
     },
     {
       usage: "reconcile <env> [--deep] [--apply] [--skip-network]",
@@ -763,6 +770,18 @@ function expandModify(argv: string[]): string[] {
   return expandSet(argv, MODIFY_SHORTCUTS.environment, "environment modify", { unset: "no" });
 }
 
+// ── the CMDB (ADR-040 D4) ──────────────────────────────────────────────
+
+// add, modify and delete report the environment as they left it (add without a
+// name: every environment the bootstrap wrote); a deleted one ends. --check
+// writes nothing, so reports nothing.
+function reportEnvironmentChange(opts: Opts, verb: string): void {
+  if (opts.check) return;
+  const name = opts.rest[0];
+  const now = verb === "delete" && name ? { objects: [{ class: "environment", name, end: true }], relations: [] } : environmentObservation(opts.configDir, name ? [name] : undefined);
+  reportChange({ source: SOURCE, verb: [verb, name].filter(Boolean).join(" "), objects: now.objects ?? [], relations: now.relations, configDir: opts.configDir });
+}
+
 export function run(argv: string[], net: NetworkClient, mod: ModuleClient, dt: DnsTlsClient): number {
   if (argv.length === 0) {
     usage();
@@ -797,13 +816,18 @@ export function run(argv: string[], net: NetworkClient, mod: ModuleClient, dt: D
         return 0;
       case "add":
         cmdAdd(opts, net);
+        reportEnvironmentChange(opts, cmd);
         return 0;
       case "modify":
         cmdModify(opts, net);
+        reportEnvironmentChange(opts, cmd);
         return 0;
       case "delete":
         cmdDelete(opts, net, mod, dt);
+        reportEnvironmentChange(opts, cmd);
         return 0;
+      case "report":
+        return sendObservation(environmentObservation(opts.configDir), opts.json, opts.configDir, info);
       case "reconcile":
         return cmdReconcile(opts, net, mod, dt);
       default:

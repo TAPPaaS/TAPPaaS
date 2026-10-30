@@ -218,6 +218,26 @@ This is the single owner of the two bootstrap files (`install.sh` calls
 it) — downstream steps consume, they do not
 re-author them.
 
+## Reports to the CMDB
+
+environment-manager is a source of the CMDB (ADR-040 D4; `cmdbSource` in
+`components.json`). `environment-manager report [--json]` sends every
+`environment`: `domain` (the primary), `updateWindow` (the site's update
+schedule, ADR-017), `displayName`, `desired`, `organization` (`owned-by` its
+`ownerOrg`; mgmt has none), and `serves` from every zone in zones.json that
+names it. The zone and organization CIs are network-manager's and
+identity-manager's; here they are only named.
+
+Changes: `add`, `modify` and `delete` (the environment ends); `--check`
+reports nothing.
+
+A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`,
+else `TAPPAAS_JOB`) and the actor (`TAPPAAS_ACTOR`, else `$USER`). A report
+the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)
+and never fails the verb; `TAPPAAS_CMDB=off` turns reporting off (the tests
+do). The tests check every payload against cmdb-controller's metamodel
+(`lib/ts/test/cmdb-check.ts`).
+
 ## Retired tooling (ADR-007 Phase D)
 
 The legacy ADR-005 variant registry is retired. The following scripts have been

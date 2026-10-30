@@ -487,6 +487,40 @@ Built by `default.nix` into `result/bin/site-manager` — mirroring
 `identity-manager` / `network-manager`. `install.sh` is **not** yet wired to build
 it (the bash tools below remain the installed entry points for now).
 
+## Reports to the CMDB
+
+site-manager is a source of the CMDB (ADR-040 D4; `cmdbSource` in
+`components.json`, so `cmdb rescan` runs its `report`).
+
+`site-manager report [--json]` interrogates the cluster — one ssh to the first
+node that answers (`/cluster/status`, `/cluster/resources`, the HA resources,
+every guest's config from `/etc/pve`) and one per node (os, addresses, pve
+version, tank pools) — and sends one observation; `--json` prints it instead.
+
+| Class | Name (key) | What |
+|---|---|---|
+| `site` | the site code | `code`, `displayName`, `version` (the running TAPPaaS release), `primaryLocation` (`at`), `desired` site.json |
+| `location` | its name | kind, country, city, address, timezone, latitude, longitude |
+| `cluster` | the site code (`pvecm create <site-code>`) | `quorum` |
+| `machine` | the node name | its pvehost instance: `desired`, `release` pvehost + version, `hostname`, `os`, `osVersion`, `addresses`, `clusterMember`, `storagePools`, `management`, `environment` mgmt; `member-of` the cluster, `at` its location (else the primary) |
+| `app` `pve` | on its machine | `version` |
+| `vm`, `lxc` | the module instance, else the guest's name (key: vmid) | `vmid`, `cores`, `memory`, `disks` / `rootfs`, `unprivileged`, `template`, `haPolicy`, `onNode`; a module's guest also `desired` and `release` |
+
+A cluster that does not answer is a warning: the site, locations, cluster and
+nodes are reported from config/, without guests. An archived module is not
+reported.
+
+Changes: `node add`, `node delete` (the machine ends), `site modify` and the
+`location` verbs (a deleted location ends). `node reconcile` and `reconcile`
+report the membership and pools they read, as a side effect.
+
+A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`,
+else `TAPPAAS_JOB`) and the actor (`TAPPAAS_ACTOR`, else `$USER`). A report
+the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)
+and never fails the verb; `TAPPAAS_CMDB=off` turns reporting off (the tests
+do). The tests check every payload against cmdb-controller's metamodel
+(`lib/ts/test/cmdb-check.ts`).
+
 ## Commands (legacy bash tools — kept live until cutover)
 
 All scripts are bash, linked onto `PATH` by `install.sh`. `repository.sh` and

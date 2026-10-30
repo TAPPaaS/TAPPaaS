@@ -26,6 +26,8 @@ set -uo pipefail
 # just setting) is what carries it into any suite this one dispatches. Without
 # this, `test.sh --deep` silently ran the fast path.
 for _a in "$@"; do [[ "${_a}" == "--deep" ]] && export TAPPAAS_TEST_DEEP=1; done
+# No test reports to a live CMDB (ADR-040): the ones about reporting say so.
+export TAPPAAS_CMDB=off
 
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

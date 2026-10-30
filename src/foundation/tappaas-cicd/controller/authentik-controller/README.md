@@ -48,7 +48,7 @@ the desired state).
 | `user-ensure <username> [--email <e>] [--name <display>] [--group <g> ...] [--attr k=v ...]` | Create/update a user; group membership is additive; `--group`/`--attr` repeatable. |
 | `ensure-user --name <n> --email <e> --display <d> [--inactive]` | Create user if missing; reconciles only the active flag. |
 | `get-user --name <n>` | Print one user object as JSON (or `null`). |
-| `list-users` | JSON array of users (name/active/email/displayName/groups/roles). |
+| `list-users` | JSON array of users (name/uuid/active/email/displayName/groups/roles). |
 | `user-add-to-groups <username> --group <g> ...` | Add an existing user to groups (additive; `--group` required, repeatable). |
 | `user-remove-from-groups <username> --group <g> ...` | Remove a user from groups. |
 | `disable-user --name <n>` | Set `is_active=false`. |
@@ -74,8 +74,8 @@ In Authentik a *role* is a group marked as a role; the CLI offers both spellings
 | `ensure-role --name <n> --display <d>` | Create a role-marked group if missing. |
 | `delete-group --name <n>` | Delete a group (idempotent; no-op if absent). Refuses a role-marked group. |
 | `delete-role --name <n>` | Delete a role-marked group (idempotent). Refuses an ordinary group. |
-| `list-groups` | JSON array of `{name, displayName}` (excludes roles). |
-| `list-roles` | JSON array of role-marked groups. |
+| `list-groups` | JSON array of `{name, uuid, displayName}` (excludes roles). |
+| `list-roles` | JSON array of role-marked groups, `{name, uuid, displayName}`. |
 | `add-member --user <u> --group <g>` | Add a user to a group. |
 | `remove-member --user <u> --group <g>` | Remove a user from a group. |
 | `assign-role --user <u> --role <r>` | Assign a role to a user directly. |
@@ -106,6 +106,12 @@ authentik-controller user-ensure alice --email alice@example.org --group editors
 authentik-controller proxy-app-ensure wiki --external-host https://wiki.example.org --attach-outpost
 authentik-controller app-bind-groups wiki --group editors
 ```
+
+## The CMDB
+
+`list-users`, `list-groups` and `list-roles` carry Authentik's `uuid`: the key
+identity-manager reports a user or group by (ADR-040 D5).
+
 
 ## Who calls it
 

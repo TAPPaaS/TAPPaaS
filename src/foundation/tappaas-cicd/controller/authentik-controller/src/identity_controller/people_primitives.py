@@ -79,7 +79,8 @@ def _set_role_marker(attributes: dict | None, *, role: bool, display: str | None
 def list_users(mgr: "AuthentikManager") -> list[dict]:
     """Return all users as primitive dicts.
 
-    Each: ``{name, active, email, displayName, groups:[name], roles:[name]}``.
+    Each: ``{name, uuid, active, email, displayName, groups:[name], roles:[name]}``
+    — ``uuid`` is Authentik's, the user's key in the CMDB (ADR-040 D5).
     ``groups`` excludes role-marked groups; ``roles`` is exactly the
     role-marked groups the user is a member of.
     """
@@ -94,6 +95,7 @@ def list_users(mgr: "AuthentikManager") -> list[dict]:
             roles = []  # cannot resolve names without groups_obj
         out.append({
             "name": u.get("username"),
+            "uuid": u.get("uuid"),
             "active": bool(u.get("is_active")),
             "email": u.get("email", ""),
             "displayName": u.get("name", ""),
@@ -104,18 +106,20 @@ def list_users(mgr: "AuthentikManager") -> list[dict]:
 
 
 def list_groups(mgr: "AuthentikManager") -> list[dict]:
-    """Return ordinary (non-role) groups as ``{name, displayName}``."""
+    """Return ordinary (non-role) groups as ``{name, uuid, displayName}``.
+
+    A group's ``pk`` is its UUID: its key in the CMDB (ADR-040 D5)."""
     return [
-        {"name": g["name"], "displayName": _display_name(g)}
+        {"name": g["name"], "uuid": str(g.get("pk")), "displayName": _display_name(g)}
         for g in mgr.groups_list()
         if not _is_role_group(g)
     ]
 
 
 def list_roles(mgr: "AuthentikManager") -> list[dict]:
-    """Return role-marked groups as ``{name, displayName}``."""
+    """Return role-marked groups as ``{name, uuid, displayName}``."""
     return [
-        {"name": g["name"], "displayName": _display_name(g)}
+        {"name": g["name"], "uuid": str(g.get("pk")), "displayName": _display_name(g)}
         for g in mgr.groups_list()
         if _is_role_group(g)
     ]
