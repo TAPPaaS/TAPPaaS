@@ -58,6 +58,9 @@ readonly SCRIPT_DIR
 # A switch's location is one of the site's (ADR-036 D2).
 # shellcheck source=../../lib/locations.sh
 . "${SCRIPT_DIR}/../../lib/locations.sh"
+# The asset behind a switch (ADR-040 D8): allocated on add-switch, released on remove-switch.
+# shellcheck source=../../lib/asset-role.sh
+. "${SCRIPT_DIR}/../../lib/asset-role.sh"
 # What it reads and changes goes to the CMDB (ADR-040 D4).
 # shellcheck source=../../lib/cmdb-report.sh
 . "${SCRIPT_DIR}/../../lib/cmdb-report.sh"
@@ -89,6 +92,8 @@ Inventory (recorded in switch-configuration-actual.json):
   remove-controller <name>
   add-switch <name> --vendor <v> --managed auto|manual [--controller <c>]
         [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]
+        [--asset <a>]     the asset it is (asset-manager asset list); absent, a
+                          new one is recorded as sw-NN and allocated (ADR-040 D8)
   modify-switch <name> [--location <name>] [--description <d>] [--model <m>]
         [--ip <ip>] [--unset location,description]
                           --location is one of the site's locations
@@ -164,7 +169,7 @@ readonly PORT_OPTS='--type= --target= --target-port= --mode= --zone= --native= -
 readonly CLI_SPEC="
 add-controller: --vendor= --ip= --managed=
 remove-controller:
-add-switch: --vendor= --ip= --managed= --controller= --model= --location= --description=
+add-switch: --vendor= --ip= --managed= --controller= --model= --location= --description= --asset=
 modify-switch: --location= --description= --model= --ip= --unset=
 remove-switch:
 add-port: ${PORT_OPTS} --apply
@@ -276,9 +281,10 @@ cmd_remove_controller() {
 cmd_add_switch() {
     local name="$1"; shift || true
     [[ -n "${name}" ]] || die "add-switch requires a <name>"
-    local vendor="" ip="" model="" location="" description="" managed="" controller=""
+    local vendor="" ip="" model="" location="" description="" managed="" controller="" asset=""
     while [[ $# -gt 0 ]]; do case "$1" in
         --vendor) vendor="$2"; shift 2 ;;
+        --asset) asset="$2"; shift 2 ;;
         --ip) ip="$2"; shift 2 ;;
         --managed) managed="$2"; shift 2 ;;
         --controller) controller="$2"; shift 2 ;;
@@ -301,6 +307,7 @@ cmd_add_switch() {
         --arg n "${name}" --arg v "${vendor}" --arg mg "${managed}" --arg c "${controller}" \
         --arg ip "${ip}" --arg m "${model}" --arg loc "${location}" --arg d "${description}"
     info "${GN}✓${CL} added switch '${name}' (${vendor}, ${managed}${controller:+, controller=${controller}}${ip:+, ${ip}}${location:+, at ${location}})"
+    asset_role_begin "${name}" switch "${asset}" "${vendor}" "${model}"
     if [[ "${managed}" == "manual" ]]; then
         info "  add its uplink ports:  switch-manager add-port ${name} <port> --type node --target tappaasN --target-port ethX"
     elif [[ -z "${controller}" ]]; then
@@ -374,6 +381,7 @@ cmd_remove_switch() {
     jq -e --arg n "${name}" '.switches | has($n)' "${ACTUAL}" >/dev/null || die "Switch '${name}' not found"
     jq_actual 'del(.switches[$n])' --arg n "${name}"
     info "${GN}✓${CL} removed switch '${name}'"
+    asset_role_end "${name}"
 }
 
 # ── Port inventory (add/update/remove) ───────────────────────────────

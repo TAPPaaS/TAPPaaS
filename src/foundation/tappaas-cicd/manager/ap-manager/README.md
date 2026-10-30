@@ -31,10 +31,10 @@ ap-manager <command> [args]
 
 | Command | Purpose |
 |---------|---------|
-| `add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]` | Register an AP. `--location` is one of the site's locations (`site-manager location list`); unset, the primary one. Free text goes in `--description`. |
+| `add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <name>] [--description <d>] [--asset <a>]` | Register an AP. `--location` is one of the site's locations (`site-manager location list`); unset, the primary one. Free text goes in `--description`. `--asset` names the asset the box is (ADR-040 D8); without it a new asset is recorded as `ap-NN` and allocated. |
 | `modify <name> [--location <name>] [--description <d>] [--model <m>] [--ip <ip>] [--unset location,description]` | Change the AP's own record in `desired.json`; nothing on the AP changes. |
 | `validate` | Every AP's `location` is one of the site's locations. |
-| `remove <name>` | Remove an AP. |
+| `remove <name>` | Remove an AP. Its asset is released and keeps its placement under its own tag (ADR-040 D7). |
 | `list [--json]` | List access points, with their uplink port and SSIDs. |
 | `show <name>` | Show one AP. |
 | `link <ap> --switch <switch> --port <port>` | Associate an AP's uplink with a switch port. |

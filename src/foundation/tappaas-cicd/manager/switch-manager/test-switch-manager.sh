@@ -483,5 +483,35 @@ ck "update-port --apply on a switch that refuses (rc)" "2" "${rc}"
 ck "…says so"                                 "yes" "$(has "${out}" 'NSw: not programmed')"
 
 echo ""
+
+# ── the asset behind a switch (ADR-040 D8): asset-manager stubbed, its calls logged ──
+AMSTUB="${TMP}/am"; mkdir -p "${AMSTUB}"; echo '[]' > "${AMSTUB}/list.json"
+cat > "${AMSTUB}/asset-manager" <<'STUB'
+#!/usr/bin/env bash
+d="$(dirname "$0")"; echo "$*" >> "$d/calls.log"
+if [[ "$1 $2" == "asset list" ]]; then cat "$d/list.json"; exit 0; fi
+if [[ "$1 $2" == "asset add" ]]; then echo "✓ added asset '$3'"; exit 0; fi
+if [[ "$1 $2" == "asset allocate" ]]; then echo "✓ allocated asset '$3' to the role $5"; exit 0; fi
+if [[ "$1 $2" == "asset release" ]]; then echo "✓ released asset '$3' from its role (placed)"; exit 0; fi
+echo "stub: $*" >&2; exit 1
+STUB
+chmod +x "${AMSTUB}/asset-manager"
+: > "${AMSTUB}/calls.log"
+ASSET_MANAGER="${AMSTUB}/asset-manager" "${SM}" add-switch swA --vendor unifi --managed manual >/dev/null 2>&1
+ck "role first: a new sw-01 is recorded" "yes" "$(has "$(cat "${AMSTUB}/calls.log")" "asset add sw-01 --kind switch --display-name swA --vendor unifi")"
+ck "…and allocated to the role"             "yes" "$(has "$(cat "${AMSTUB}/calls.log")" "asset allocate sw-01 --role swA")"
+echo '[{"name":"sw-01","role":"swA"},{"name":"sw-07","role":null}]' > "${AMSTUB}/list.json"
+: > "${AMSTUB}/calls.log"
+ASSET_MANAGER="${AMSTUB}/asset-manager" "${SM}" add-switch swB --vendor unifi --managed manual --asset sw-07 >/dev/null 2>&1
+ck "asset first: --asset is allocated, nothing added" "yes" "$(has "$(cat "${AMSTUB}/calls.log")" "asset allocate sw-07 --role swB")"
+ck "…no asset add"                           "no"  "$(has "$(cat "${AMSTUB}/calls.log")" "asset add")"
+: > "${AMSTUB}/calls.log"
+ASSET_MANAGER="${AMSTUB}/asset-manager" "${SM}" remove-switch swA >/dev/null 2>&1
+ck "remove releases the asset playing it"   "yes" "$(has "$(cat "${AMSTUB}/calls.log")" "asset release sw-01")"
+: > "${AMSTUB}/calls.log"
+ASSET_MANAGER="${AMSTUB}/none" "${SM}" add-switch swC --vendor unifi --managed manual >/dev/null 2>&1
+ck "no asset-manager: add still works"      "0"   "$(rc_of jq -e '.switches["swC"]' "${ACT}")"
+ck "…and nothing was called"                ""    "$(cat "${AMSTUB}/calls.log")"
+
 echo "test-switch-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

@@ -38,6 +38,9 @@ readonly SCRIPT_DIR
 # is_placeholder, wlan_zones, the per-AP SSID ceiling — shared with setup-wlan-secrets.sh (#734).
 # shellcheck source=../../lib/wlan-lib.sh
 . "${SCRIPT_DIR}/../../lib/wlan-lib.sh"
+# The asset behind an access point (ADR-040 D8): allocated on add, released on remove.
+# shellcheck source=../../lib/asset-role.sh
+. "${SCRIPT_DIR}/../../lib/asset-role.sh"
 # The controllers: the registry's, plus (tests) every PLUGIN_DIR/*.sh.
 # shellcheck source=../../lib/controller-lib.sh
 . "${SCRIPT_DIR}/../../lib/controller-lib.sh"
@@ -63,6 +66,8 @@ Usage: ap-manager <command> [args]
 
 Inventory:
   add <name> --vendor <v> [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]
+        [--asset <a>]     the asset it is (asset-manager asset list); absent, a
+                          new one is recorded as ap-NN and allocated (ADR-040 D8)
   modify <name> [--location <name>] [--description <d>] [--model <m>] [--ip <ip>]
         [--unset location,description]
                           --location is one of the site's locations
@@ -105,7 +110,7 @@ EOF
 
 # What each verb accepts (lib/cli-gate.sh; '=' marks an option with a value).
 readonly CLI_SPEC='
-add: --vendor= --ip= --model= --location= --description=
+add: --vendor= --ip= --model= --location= --description= --asset=
 modify: --location= --description= --model= --ip= --unset=
 validate:
 remove:
@@ -155,10 +160,11 @@ jq_desired() {
 cmd_add() {
     local name="$1"; shift
     [[ -n "${name}" ]] || die "add requires a <name>"
-    local vendor="" ip="" model="" location="" description="" why
+    local vendor="" ip="" model="" location="" description="" why asset=""
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --vendor) vendor="$2"; shift 2 ;;
+            --asset) asset="$2"; shift 2 ;;
             --ip) ip="$2"; shift 2 ;;
             --model) model="$2"; shift 2 ;;
             --location) location="$2"; shift 2 ;;
@@ -176,6 +182,7 @@ cmd_add() {
         --arg n "${name}" --arg v "${vendor}" --arg m "${model}" --arg ip "${ip}" --arg loc "${location}" --arg d "${description}"
     derive_ap_ssids
     info "${GN}✓${CL} added AP '${name}' (${vendor}${location:+, at ${location}})$(jq -r --arg n "${name}" '.accessPoints[$n].ssids | keys | if length > 0 then ", broadcasting " + join(", ") else "" end' "${DESIRED}")"
+    asset_role_begin "${name}" access-point "${asset}" "${vendor}" "${model}"
 }
 
 # modify <name> [--location <n>] [--description <d>] [--model <m>] [--ip <ip>]
@@ -236,6 +243,7 @@ cmd_remove() {
     jq_desired 'del(.accessPoints[$n])
         | if has("ssids") then .ssids |= map_values(if (.broadcastOn | type) == "array" then .broadcastOn -= [$n] else . end) else . end' --arg n "${name}"
     info "${GN}✓${CL} removed AP '${name}'"
+    asset_role_end "${name}"
     jq -r '.ssids // {} | to_entries[] | select(.value.broadcastOn == []) | .key' "${DESIRED}" | while IFS= read -r s; do
         warn "  SSID '${s}' is now broadcast by no access point: ap-manager ssid modify '${s}' --broadcast-on all"
     done

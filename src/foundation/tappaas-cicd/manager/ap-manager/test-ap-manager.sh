@@ -217,5 +217,35 @@ ck "#734 a per-AP maxSsids accepts it"    "no"  "$(has "$(am2 delta 2>&1)" "AP '
 rm -rf "${T2}"
 
 echo ""
+
+# ── the asset behind a access point (ADR-040 D8): asset-manager stubbed, its calls logged ──
+AMSTUB="${TMP}/am"; mkdir -p "${AMSTUB}"; echo '[]' > "${AMSTUB}/list.json"
+cat > "${AMSTUB}/asset-manager" <<'STUB'
+#!/usr/bin/env bash
+d="$(dirname "$0")"; echo "$*" >> "$d/calls.log"
+if [[ "$1 $2" == "asset list" ]]; then cat "$d/list.json"; exit 0; fi
+if [[ "$1 $2" == "asset add" ]]; then echo "✓ added asset '$3'"; exit 0; fi
+if [[ "$1 $2" == "asset allocate" ]]; then echo "✓ allocated asset '$3' to the role $5"; exit 0; fi
+if [[ "$1 $2" == "asset release" ]]; then echo "✓ released asset '$3' from its role (placed)"; exit 0; fi
+echo "stub: $*" >&2; exit 1
+STUB
+chmod +x "${AMSTUB}/asset-manager"
+: > "${AMSTUB}/calls.log"
+ASSET_MANAGER="${AMSTUB}/asset-manager" "${AM}" add apA --vendor unifi >/dev/null 2>&1
+ck "role first: a new ap-01 is recorded" "yes" "$(has "$(cat "${AMSTUB}/calls.log")" "asset add ap-01 --kind access-point --display-name apA --vendor unifi")"
+ck "…and allocated to the role"             "yes" "$(has "$(cat "${AMSTUB}/calls.log")" "asset allocate ap-01 --role apA")"
+echo '[{"name":"ap-01","role":"apA"},{"name":"ap-07","role":null}]' > "${AMSTUB}/list.json"
+: > "${AMSTUB}/calls.log"
+ASSET_MANAGER="${AMSTUB}/asset-manager" "${AM}" add apB --vendor unifi --asset ap-07 >/dev/null 2>&1
+ck "asset first: --asset is allocated, nothing added" "yes" "$(has "$(cat "${AMSTUB}/calls.log")" "asset allocate ap-07 --role apB")"
+ck "…no asset add"                           "no"  "$(has "$(cat "${AMSTUB}/calls.log")" "asset add")"
+: > "${AMSTUB}/calls.log"
+ASSET_MANAGER="${AMSTUB}/asset-manager" "${AM}" remove apA >/dev/null 2>&1
+ck "remove releases the asset playing it"   "yes" "$(has "$(cat "${AMSTUB}/calls.log")" "asset release ap-01")"
+: > "${AMSTUB}/calls.log"
+ASSET_MANAGER="${AMSTUB}/none" "${AM}" add apC --vendor unifi >/dev/null 2>&1
+ck "no asset-manager: add still works"      "0"   "$(rc_of jq -e '.accessPoints["apC"]' "${DES}")"
+ck "…and nothing was called"                ""    "$(cat "${AMSTUB}/calls.log")"
+
 echo "test-ap-manager: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

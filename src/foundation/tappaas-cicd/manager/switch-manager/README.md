@@ -31,9 +31,9 @@ switch-manager <command> [args]
 |---------|---------|
 | `add-controller <name> --vendor <v> --ip <ip> [--managed auto]` | Register a controller (e.g. a UniFi controller). |
 | `remove-controller <name>` | Remove a controller. |
-| `add-switch <name> --vendor <v> --managed auto\|manual [--controller <c>] [--ip <ip>] [--model <m>] [--location <name>] [--description <d>]` | Register a switch. `--location` is one of the site's locations (`site-manager location list`); unset, the primary one. Free text — "rack 1, top" — goes in `--description`. |
+| `add-switch <name> --vendor <v> --managed auto\|manual [--controller <c>] [--ip <ip>] [--model <m>] [--location <name>] [--description <d>] [--asset <a>]` | Register a switch. `--location` is one of the site's locations (`site-manager location list`); unset, the primary one. Free text — "rack 1, top" — goes in `--description`. `--asset` names the asset the box is (ADR-040 D8, `asset-manager asset list`), allocated to the switch; without it a new asset is recorded as `sw-NN` with the switch's name as display name and allocated, to be placed in the Physical view. |
 | `modify-switch <name> [--location <name>] [--description <d>] [--model <m>] [--ip <ip>] [--unset location,description]` | Change the switch's own record, in `actual.json` and `desired.json`; nothing on the switch changes. |
-| `remove-switch <name>` | Remove a switch. |
+| `remove-switch <name>` | Remove a switch. Its asset is released and keeps its placement under its own tag (ADR-040 D7). |
 | `add-port <switch> <port> --type node\|switch\|ap\|device\|uplink [--target <t>] [--target-port <tp>] [--mode trunk\|access] [--zone <z>] [--native <vlan>] [--tagged 210,220] [--description <d>] [--apply]` | Register a port and what it connects to. It is set on the switch at the next `reconcile --apply`; `--apply` programs that switch at once (read, desired, its delta, confirmed). |
 | `update-port <switch> <port> [ ...same flags... ] [--apply]` | Change a port's settings. Giving a parked port a `--type` takes it into use (`add-port` may too). `--apply` as for `add-port`. |
 | `update-port <switch> <port> --park [--park-zone <zone>]` | Park the port: set it **on the switch, at once and alone**, as an access port in iotLocal, then record it parked. |
