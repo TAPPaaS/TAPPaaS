@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-18) — built: P1–P3 live on hrossen |
-| **Version** | 1.2 |
-| **Date** | 2026-10-27 |
+| **Version** | 1.3 |
+| **Date** | 2026-10-30 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | **#844** (the UI design spike and this ADR). Related: #839 (the UI, physical view first), #183 (service catalog), #91 (Backstage), #142 (agent access to `tappaas-cicd`), #843 (SIEM); caused #853, #854, #855 (switch-controller and console gaps) and #856 (the admin tunnel). Builds on ADR-007 (taxonomy, 007e Health, 007f managers and controllers), ADR-020 (declared-field changes), ADR-021 / ADR-023 / ADR-032 (reachability, routes, exposure), ADR-031 (pulse). |
-| **Changelog** | v1.2 (2026-10-27) — **D3 amended (#878):** the console is for the `installer` group only, and an installer may do everything (destructive verbs behind the typed name); `admin` and `users` get no access, the gate's application is bound to `installer` alone, service accounts follow the same rule by their groups, and `status.<domain>` is refused for everyone until differentiated roles come, a later step. D2's table, D8 and T1 follow. · v1.1 (2026-10-25) — **D2:** the backend verifies the gate's signed token (`X-Authentik-Jwt`) and takes the user and groups from it; the firewall's address alone is no longer believed. · v1.0 (2026-10-18) — **Accepted** by the operator with the console installed and in use on hrossen; #183 is folded into the Modules page (D6) and #91 is not adopted (A3), both closed with this acceptance. · v0.4 (2026-10-18) — **D2** says what a source outside the route's zones gets as installed on hrossen: Caddy runs the gate before the access list, so an anonymous request is redirected to the login and a signed-in one gets 403; the console is never reached; was "403 to the internet". · v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
+| **Changelog** | v1.3 (2026-10-30) — **D11 added (operator):** a module's page is composed of sections by kind and by module (`console.json`), and side panels show status with a jump to the module page, where the operations are; amends D5. The Site's Device tab is Assets. · v1.2 (2026-10-27) — **D3 amended (#878):** the console is for the `installer` group only, and an installer may do everything (destructive verbs behind the typed name); `admin` and `users` get no access, the gate's application is bound to `installer` alone, service accounts follow the same rule by their groups, and `status.<domain>` is refused for everyone until differentiated roles come, a later step. D2's table, D8 and T1 follow. · v1.1 (2026-10-25) — **D2:** the backend verifies the gate's signed token (`X-Authentik-Jwt`) and takes the user and groups from it; the firewall's address alone is no longer believed. · v1.0 (2026-10-18) — **Accepted** by the operator with the console installed and in use on hrossen; #183 is folded into the Modules page (D6) and #91 is not adopted (A3), both closed with this acceptance. · v0.4 (2026-10-18) — **D2** says what a source outside the route's zones gets as installed on hrossen: Caddy runs the gate before the access list, so an anonymous request is redirected to the login and a signed-in one gets 403; the console is never reached; was "403 to the internet". · v0.3 (2026-10-18) — as built through P3 and reviewed on hrossen: **D2** the route is `console.<domain>` through Caddy and the gate from `mgmt` and `admin` only, certificate by HTTP-01, 403 to the internet, `internet` refused in the zone list, the admin tunnel's DNS and routes (#856) a prerequisite; `status.<domain>` waits for gated `proxyRoutes`; **O1** closed (`console.<domain>`, passed as `--proxyDomain`), **O2** and **O3** closed as built; D1, D3, D4, D7 and D10 say where the build differs; *As built* added to the Implementation plan; Consequences gain #853 to #856; A15 (an `.internal` name with a site CA). · v0.2 (2026-10-17) — **D10 installation**: after `bootstrap.sh` the rest of the install is a Setup wizard over the same jobs, with a setup token before identity exists (operator agreed 2026-10-17); P1 and P2 amended. · v0.1 — first draft, from the design spike [`docs/design/ui-spike.md`](../design/ui-spike.md) and the operator's decisions of 2026-10-17 (homelable is inspiration, not the product; operators plus a read-only owner view; every verb reachable, destructive ones behind a typed name; the assistant proposes and never applies). |
 
 One web UI for a TAPPaaS site: it shows the site and its health, draws the site as it is cabled,
 operates it through the managers and nothing else, and carries an assistant one can talk to.
@@ -377,6 +377,39 @@ registration, `add-stack`. Therefore:
 - **The pre-mothership chain stays a script.** Later, a preparation wizard (a page that collects
   what `preparation.md` asks for and emits the answers the chain reads) removes its questions; an
   installer image with its own page on the first node is further out and not required.
+
+### D11. A module's page is composed of sections, by kind and by module; side panels show status
+
+D6 gave every module the same Overview: health, operate, about. A machine and a vm are not the
+same thing to look at, and a Proxmox host (`pvehost`) has more to show than a plain machine. The
+Overview becomes a **list of sections contributed by three layers**, each able to add, reorder or
+replace what the layer below put there:
+
+- **Generic** — every module: Health (its objects' conditions), Operate (D4's verbs with
+  manifests), About.
+- **Kind** — by the module's `kind`, built into the console: `vm` and `lxc` get Resources (memory
+  declared, allocated and used as the balloon reports it, disks and their pools, the node and its
+  HA state, snapshots) and Backups; `machine` gets Guests (what runs on it, with memory and run
+  state), Pools (fill, health), Ports and links, Cluster membership; `device` gets Ports and what
+  they connect, and for an access point its radios and SSIDs.
+- **Module** — declared, not coded: a module may ship `console.json` beside its module JSON with
+  `sections[]`, each a title, a read (a manager or controller verb with `--json`, with the
+  module's name as argument) and a renderer (`kv`, `table` with named columns, `gauges`), and
+  `operations[]` naming verbs that already carry a manifest (D4). pvehost declares Memory by
+  module and Storage used by modules over proxmox-controller's observations, and the operations
+  of a host: migrate its guests, drain, reboot node, update Proxmox. A community module gets a
+  tailored page by writing JSON; the console validates the file against a schema and shows a
+  bad section as an error in its place, never a blank page.
+
+**Where the data comes from.** A section reads the CMDB first (ADR-040: conditions, the `runs-on`
+and `member-of` relations, the controllers' recorded observations); only a section that needs a
+live number names a verb, and the console caches it as every read (D1).
+
+**Side panels show status, not operations.** A selected object's panel — in the Site views, the
+Assets view, the Health view and the CMDB browser — shows its conditions, its key facts and
+relations, and one **Open module** jump to the module's page, where the operations are. The
+asset record's own edits (place in a rack, attach a cable) stay in the Site panel: they belong to
+the asset, not the module. This amends D5's panel and ADR-040 D10's CI panel accordingly.
 
 ## Alternatives considered
 
