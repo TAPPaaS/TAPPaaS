@@ -64,8 +64,11 @@ function build(configDir: string, mods: ModuleConfig[], guests: RunningGuest[]):
     if (!cls) continue;
     const a: Obj = moduleNodeAttributes(m.name, m.raw, cls);
     if (cls === "vm" || cls === "lxc") {
+      // Where it runs is what the cluster says: without a live read (a
+      // change report) the config's node may be where it is not (a guest on
+      // its HANode), so it is left out.
       const g = m.vmid != null ? byVmid.get(m.vmid) : undefined;
-      const on = g?.node ?? m.node ?? undefined;
+      const on = g?.node ?? (live ? m.node ?? undefined : undefined);
       if (on) a.onNode = { class: "machine", name: on };
       if (live) a.stage = g ? "operational" : "created";
     }
