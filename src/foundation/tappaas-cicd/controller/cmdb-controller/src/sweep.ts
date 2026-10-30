@@ -165,6 +165,7 @@ export function desiredRecords(configDir: string): { class: string; name: string
   for (const f of list(configDir)) {
     const doc = readJson(join(configDir, f));
     const kind = doc?.kind;
+    if (doc?.status === "archived") continue; // no CI any more: its end was reported
     if (kind === "vm" || kind === "lxc" || kind === "machine" || kind === "device") out.push({ class: "node", name: f.slice(0, -5), file: f });
   }
   const zones = readJson(join(configDir, "zones.json"));

@@ -466,6 +466,7 @@ kill "${SVC_PID}" 2>/dev/null; wait "${SVC_PID}" 2>/dev/null
 SVC_PID=""
 dropdb cmdb && createdb cmdb || bad "could not make the sweep's store"
 SW="${T}/sweep"; mkdir -p "${SW}/config/environments" "${SW}/bin"
+echo '{"kind":"machine","status":"archived"}' >"${SW}/config/gone.json" # an archived record: desired of nothing
 cat >"${SW}/components.json" <<'JSON'
 { "version": 1, "components": [ { "name": "site-src", "cmdbSource": true }, { "name": "old-src", "cmdbSource": true } ] }
 JSON
