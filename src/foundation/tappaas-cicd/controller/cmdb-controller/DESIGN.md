@@ -149,6 +149,52 @@ pool's `used`, a lease. They get periods like any other value and never count
 as drift. `firmware` is deliberately not one: it does not change on every read,
 and a firmware nobody reported changing is what drift is for.
 
+## The sweep (D15)
+
+`sweep.ts`. It runs in the service, not the CLI: the sources report back to the
+service, and one sweep at a time is its call (a second gets 409). The sources,
+the differ and the journal are injected.
+
+**Expected or drift** is decided row by row, from the history. For each
+attribute and relation the window (last sweep, now] holds, the value at the
+start is compared with the value now; equal is no difference. Where a new row
+exists, it names the report that wrote it (`attribute.change`): a `change` row
+makes it expected, with its verb and job; an observation makes it drift, even
+if a verb touched the same object for another attribute. A value or relation
+that **went** has no row of its own, and neither does an object that appeared
+or ended, so those fall back to the object: expected if a `change` row in the
+window lists it.
+
+So a change is explained only if the verb reported it itself. A verb that
+changes something and says nothing shows as drift the next sweep: that is the
+reporter's bug, and the sweep is what finds it.
+
+The first sweep has no window. Listing the site as "appeared" would be noise,
+so it is the baseline: only the differences from desired count.
+
+**Which differences from desired.** ADR-020's differ needs a service's reporter
+and manifest, so it answers for module records only (`module-manager drift`, one
+per module, a read). A zone's or a user's record is checked for being there
+(missing, unmanaged), not field by field: no differ exists for it yet. A module
+the differ cannot read is `unread`, exit 1: unknown is not clean, and it is not
+"desired without actual" either.
+
+**Unmanaged** means a class that can have a record (`desiredRecord` in the
+metamodel: nodes, zones, shares, identities, environments, the site). D15's list
+is "a guest, a VLAN, a firewall rule, a share, a user". The other classes never
+carry a `desired` (a lease, a service derived from its module, a DNS name), so
+flagging them would make every sweep exit 1 and hide what matters. A firewall
+rule has no class yet; when a controller reports them, the class says so.
+
+**Missing** is `last_seen` before this sweep's start, so a failed source also
+makes everything only it reports missing. That is true and is exit 2 either way.
+Records are enumerated from `config/` (`desiredRecords`): modules, zones, shares,
+environments, identities. A switch's or AP's record comes in through its CI's
+`desired`, so a switch never reported at all is not seen.
+
+**The timer** is rendered, not declared, because its hour is `site.json`'s. The
+sweep is nightly even for a weekly update, and `Persistent`, unlike the update.
+
 ## Impact
 
 A recursive CTE over current relations, both directions by default, each object

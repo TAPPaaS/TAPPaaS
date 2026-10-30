@@ -37,6 +37,10 @@
 #     owner's report merges into (also when it was named by an abstract class,
 #     and when a stronger key finds another object); an unknown class is refused
 #   - recorded on objects and relations; the relations verb; owned-by's pairs
+#   - volatile attributes never drift; health is an object; --where on a path;
+#     a pool's key is its name on its node; a service resolves by name
+#   - the discovery sweep over a fixture site: baseline, expected, drift, the
+#     differ, unmanaged, missing, the journal lines, exit codes 0/1/2
 #
 # Needs pg_ctl/initdb/psql, node, tsc, curl and jq; without them on PATH it
 # re-enters itself under nix-shell. PostgreSQL will not run as root: as root
@@ -153,7 +157,7 @@ check "exactly the eight tables" "attribute,attribute_def,change,class,class_anc
 check "the exclusion constraints on attribute and relation" "attribute_no_overlap,relation_no_overlap" \
     "$(sql "SELECT string_agg(conname, ',' ORDER BY conname) FROM pg_constraint WHERE contype = 'x'")"
 check "a GIN index on attribute.value" "1" "$(sql "SELECT count(*) FROM pg_indexes WHERE tablename = 'attribute' AND indexdef ILIKE '%USING gin (value%'")"
-check "the store records its schema version" "cmdb schema 3" "$(sql "SELECT obj_description('object'::regclass, 'pg_class')")"
+check "the store records its schema version" "cmdb schema 4" "$(sql "SELECT obj_description('object'::regclass, 'pg_class')")"
 if node "${MAIN}" schema >"${T}/schema2.log" 2>&1; then ok "applying the schema again is harmless (idempotent)"; else bad "second schema apply failed: $(cat "${T}/schema2.log")"; fi
 
 echo "== the metamodel, as data (D3, D13) =="
@@ -414,10 +418,100 @@ check "a proxy-route serves <module>:<service> by name; no placeholder; one serv
 check "a buddy that pulls ours is pulled-by" "pulled-by" "$(cmdb report --json <<<'{"source":"backup-manager","objects":[{"class":"backup-peer","name":"bud","attributes":{"direction":"pulled-by"}}]}' >/dev/null; cmdb show backup-peer/bud --json | jq -r '.attributes.direction.value')"
 check "a network device has a management MAC" "aa:aa" "$(cmdb report --json <<<'{"source":"switch-manager","objects":[{"class":"network-device","name":"sw-01","attributes":{"mac":"aa:aa"}}]}' >/dev/null; cmdb show network-device/sw-01 --json | jq -r '.attributes.mac.value')"
 
+echo "== the discovery sweep (D15) =="
+# A clean store and config/ of its own: the fixture site. The sources are stubs
+# that report from files the test rewrites, module-manager drift a stub too, the
+# journal a file. A sweep is read-only for the planes; only the stubs report.
+kill "${SVC_PID}" 2>/dev/null; wait "${SVC_PID}" 2>/dev/null
+SVC_PID=""
+dropdb cmdb && createdb cmdb || bad "could not make the sweep's store"
+SW="${T}/sweep"; mkdir -p "${SW}/config/environments" "${SW}/bin"
+cat >"${SW}/components.json" <<'JSON'
+{ "version": 1, "components": [ { "name": "site-src", "cmdbSource": true }, { "name": "old-src", "cmdbSource": true } ] }
+JSON
+# site-src reports what its file says, and records that --discover was asked.
+printf '#!/usr/bin/env bash\necho "$*" >>%q\nnode %q report --json <%q >/dev/null\n' "${SW}/asked" "${CLI}" "${SW}/site.json" >"${SW}/bin/site-src"
+# old-src's report verb predates --discover.
+cat >"${SW}/bin/old-src" <<BASH
+#!/usr/bin/env bash
+if [[ " \$* " == *" --discover "* ]]; then echo "[Error] old-src report: unknown option '--discover'" >&2; exit 1; fi
+echo plain >>"${SW}/old-asked"
+BASH
+# module-manager drift: nextcloud's cores differ from desired once told to.
+cat >"${SW}/bin/module-manager" <<BASH
+#!/usr/bin/env bash
+if [[ -e "${SW}/differ" && "\$2" == nextcloud ]]; then
+  echo '{"module":"nextcloud","services":{"cluster:vm":{"units":[{"fields":[{"field":"cores","desired":"4","actual":"6"}]}],"unreconciled":[],"adopt":[]}}}'
+else echo '{"module":"'\$2'","services":{}}'; fi
+BASH
+chmod +x "${SW}/bin/"*
+cat >"${SW}/site.json" <<'JSON'
+{ "source": "site-src", "objects": [
+  { "ref": "m", "class": "machine", "name": "tappaas1", "attributes": { "desired": { "file": "tappaas1.json" }, "stage": "operational" } },
+  { "class": "vm", "name": "nextcloud", "attributes": { "vmid": 200, "cores": 4, "desired": { "file": "nextcloud.json" }, "onNode": { "ref": "m" } } },
+  { "class": "zone", "name": "lan", "attributes": { "vlan": 10, "desired": { "file": "zones.json", "key": "lan" } } } ] }
+JSON
+echo '{"kind":"machine"}' >"${SW}/config/tappaas1.json"; echo '{"kind":"vm"}' >"${SW}/config/nextcloud.json"; echo '{"kind":"application"}' >"${SW}/config/backup.json"
+echo '{"_comment":"x","lan":{"vlan":10}}' >"${SW}/config/zones.json"
+: >"${SW}/journal"
+export CMDB_COMPONENTS="${SW}/components.json" CMDB_SOURCE_PATH="${SW}/bin:${PATH}" CMDB_SWEEP_JOURNAL="${SW}/journal"
+TAPPAAS_CONFIG="${SW}/config" node "${MAIN}" serve >"${T}/svc2.log" 2>&1 &
+SVC_PID=$!
+sleep 0.2
+for _ in $(seq 1 100); do curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/health >/dev/null 2>&1 && break; sleep 0.1; done
+sweep() { cmdb sweep --json; echo "rc=$?" >"${SW}/rc"; }
+
+out="$(sweep)"
+check "the first sweep is the baseline: nothing to compare, nothing wrong" "null healthy 0 rc=0" "$(jq -r '"\(.since) \(.status) \(.differences | length)"' <<<"${out}") $(cat "${SW}/rc")"
+check "every source was asked for full depth" "report --discover" "$(cat "${SW}/asked")"
+check "a source that does not know the flag is asked plainly" "true old-src ok plain" "$(jq -r '.sources[] | select(.source == "old-src") | "\(.fallback) old-src \(if .ok then "ok" else "failed" end)"' <<<"${out}") $(cat "${SW}/old-asked")"
+check "the record is a change row, verb sweep" "1" "$(sql "SELECT count(*) FROM change WHERE verb = 'sweep' AND body ? 'counts'")"
+check "cmdb sweep --last reads it" "healthy" "$(cmdb sweep --last --json | jq -r '.status')"
+
+# One expected change (a verb reports it), one drift (cores, no verb behind it),
+# one unmanaged guest, one missing record.
+cmdb report --json >/dev/null <<<'{"source":"module-manager","kind":"change","verb":"module modify","job":"J-9","objects":[{"class":"zone","name":"lan","attributes":{"vlan":11}}]}'
+sed -i.bak 's/"vlan": 10/"vlan": 11/; s/"cores": 4/"cores": 6/' "${SW}/site.json"
+stray="$(jq '.objects += [{"class":"vm","name":"stray","attributes":{"vmid":999}}]' "${SW}/site.json")"; echo "${stray}" >"${SW}/site.json"
+echo '{"gone":{"vlan":30}}' | jq -s '.[0] + {"lan":{"vlan":11}}' >"${SW}/config/zones.json"
+touch "${SW}/differ"
+out="$(sweep)"
+pick() { jq -r --arg k "$1" '[.differences[] | select(.kind == $k) | "\(.class)/\(.name) \(.attribute // "-")"] | join(",")' <<<"${out}"; }
+check "the verb's change is expected, with its verb" "zone/lan vlan true module modify" \
+    "$(jq -r '.differences[] | select(.name == "lan" and .attribute == "vlan") | "\(.class)/\(.name) \(.attribute) \(.expected) \(.verb)"' <<<"${out}")"
+check "the change no verb explains is drift" "vm/nextcloud cores false site-src" \
+    "$(jq -r '.differences[] | select(.kind == "changed" and .attribute == "cores") | "\(.class)/\(.name) \(.attribute) \(.expected) \(.source)"' <<<"${out}")"
+check "the differ's answer is listed" "vm/nextcloud cluster:vm.cores 4 6" \
+    "$(jq -r '.differences[] | select(.kind == "desired") | "\(.class)/\(.name) \(.attribute) \(.before) \(.after)"' <<<"${out}")"
+check "a guest nothing declares is unmanaged" "vm/stray -" "$(pick unmanaged)"
+check "a record no source saw is missing" "zone/gone -" "$(pick missing)"
+check "a missing record is exit 2, critical" "critical rc=2" "$(jq -r '.status' <<<"${out}") $(cat "${SW}/rc")"
+check "the counts: the stray guest is drift (it appeared) and unmanaged" "1 2 1 1 1 0" "$(jq -r '.counts | "\(.expected) \(.drift) \(.desired) \(.unmanaged) \(.missing) \(.sourcesFailed)"' <<<"${out}")"
+check "the drifted object is marked, as D6 does" "true" "$(cmdb show vm/nextcloud --json | jq '.drift.attributes | has("cores")')"
+check "one journal line per difference" "$(jq '.differences | length' <<<"${out}")" "$(jq -s 'length' "${SW}/journal")"
+check "a journal line has the fields" "changed vm nextcloud site-src cores 4 6 false" \
+    "$(jq -r 'select(.attribute == "cores" and .kind == "changed") | "\(.kind) \(.class) \(.name) \(.source) \(.attribute) \(.before) \(.after) \(.expected)"' "${SW}/journal")"
+cmdb sweep --last >"${SW}/text" 2>&1; grep -q "DRIFT" "${SW}/text" && grep -q "expected (module modify)" "${SW}/text" && ok "the report, for people, says which is which" || bad "sweep text: $(head -8 "${SW}/text")"
+
+# Fix the record and the guest: drift alone is exit 1.
+echo '{"lan":{"vlan":11}}' >"${SW}/config/zones.json"; rm -f "${SW}/differ"
+jq '.objects |= map(select(.name != "stray"))' "${SW}/site.json" >"${SW}/s2"; mv "${SW}/s2" "${SW}/site.json"
+sed -i.bak 's/"cores": 6/"cores": 8/' "${SW}/site.json"
+cmdb report --json >/dev/null <<<'{"source":"module-manager","kind":"change","verb":"module delete","objects":[{"class":"vm","name":"stray","attributes":{"vmid":999},"end":true}]}'
+out="$(sweep)"
+check "drift alone is exit 1, a warning" "warning rc=1" "$(jq -r '.status' <<<"${out}") $(cat "${SW}/rc")"
+check "a CI retired by a verb went as expected" "true" "$(jq -r '.differences[] | select(.name == "stray" and .attribute == null) | .expected' <<<"${out}")"
+out="$(sweep)"
+check "nothing changed: exit 0, healthy" "healthy rc=0 0" "$(jq -r '.status' <<<"${out}") $(cat "${SW}/rc") $(jq '.counts.drift' <<<"${out}")"
+printf '#!/usr/bin/env bash\necho "pve refused" >&2\nexit 7\n' >"${SW}/bin/site-src"
+out="$(sweep)"
+check "a source that fails is exit 2, and named" "critical rc=2 site-src" "$(jq -r '.status' <<<"${out}") $(cat "${SW}/rc") $(jq -r '.sources[] | select(.ok | not) | .source' <<<"${out}")"
+check "…and what only it saw is missing, not silently fine" "true" "$(jq '.counts.missing >= 3' <<<"${out}")"
+
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)
             SELECT object, name, value, 'test', tstzrange(lower(validity) - interval '1 hour', NULL) FROM attribute
-             WHERE name = 'cpu' AND upper_inf(validity) LIMIT 1")"
+             WHERE name = 'cores' AND upper_inf(validity) LIMIT 1")"
 grep -q "attribute_no_overlap" <<<"${_ov}" && ok "an overlapping period is refused by the exclusion constraint" || bad "overlap not refused: ${_ov}"
 
 results

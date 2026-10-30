@@ -37,6 +37,7 @@ Every verb takes `--json` (the API's data as is); otherwise a table.
 | `cmdb history <object> [--at TIME]` | every period of every attribute and relation, with its source; with `--at`, the object as it was then |
 | `cmdb impact <object> [--hops N] [--direction in\|out\|both]` | everything within N current relations (default 2, both ways), each at its shortest distance with the relation it was reached by |
 | `cmdb report [--file F]` | a report (below) from stdin or a file; spooled when the service does not answer |
+| `cmdb sweep [--last]` | the discovery sweep (below); `--last` prints the last record and runs nothing |
 | `cmdb rescan` | after replaying the spool, run `<component> report` for every component `components.json` marks `"cmdbSource": true`, one at a time; prints what each answered (and the last lines of one that failed) |
 | `cmdb class list` / `cmdb class show <class>` | the class tree; a class's fields (own and inherited), keys and relations |
 | `cmdb resolve <otel-attr>=<value>…` | OpenTelemetry resource attributes → the object (D14): `service.instance.id`, `host.id` or `tappaas.ci.id` are the id; `host.name`, `service.name`, `service.version` match the fields declared `identifying`; `service.namespace` the node or environment; `tappaas.ci.class` the class |
@@ -144,6 +145,7 @@ not fit the metamodel).
 | `GET /v1/objects/<id\|name>/impact` | `?hops=&direction=` | the objects within reach |
 | `POST /v1/resolve` | `{ attributes: { "host.name": … } }` | the object |
 | `POST /v1/rescan` | | what each source answered |
+| `POST /v1/sweep`, `GET /v1/sweep` | | a sweep and its record (409 while one runs); the last record (404 when none has) |
 | `GET /v1/classes`, `GET /v1/classes/<name>` | | the metamodel |
 | `GET /v1/stream` | | server-sent events: `event: change` with the change's id, kind, source, job, verb, time, objects, relations, drift |
 
@@ -151,6 +153,45 @@ not fit the metamodel).
 curl -s --unix-socket /run/cmdb/cmdb.sock -X POST http://cmdb/v1/query \
   -d '{"class": "asset", "where": {"vendor": "hp"}}'
 ```
+
+## The discovery sweep
+
+A report is what a manager sees while it does something else. `cmdb sweep`
+(ADR-040 D15) asks every source for everything, and says whether the site is
+still what `config/` says it is. It is read-only for every plane; it writes
+only the CMDB.
+
+1. Runs `<component> report --discover` for every `cmdbSource` component. A
+   source whose verb refuses the flag is asked plainly, and the report says so.
+2. Lists every attribute and relation that changed, appeared or went since the
+   last sweep, by object, with its source: **expected** when a change report
+   explains it, **drift** when nothing does. Volatile fields are left out. The
+   first sweep has nothing to compare: it is the baseline.
+3. Lists what differs from `config/`: `module-manager drift` for each module
+   record (ADR-020's resolver and differ), **actual without desired** (an object
+   of a class a record can declare, with none: `unmanaged`) and **desired
+   without actual** (a record no CI answers for, a CI with a record no source
+   saw in this sweep, or an `unseen` one: `missing`).
+4. Writes one `change` row, verb `sweep`, with the counts and differences as its
+   body; one JSON line per difference to the journal, identifier `cmdb-sweep`
+   (`kind`, `class`, `name`, `source`, `attribute`, `before`, `after`,
+   `expected`); and the report to stdout (`--json` too). Objects with
+   unexplained differences are marked drifted until a change clears them.
+
+| Exit | Status | When |
+|---|---|---|
+| 0 | healthy | nothing but expected changes |
+| 1 | warning | drift, unmanaged things, a difference from desired, a module the differ could not read |
+| 2 | critical | desired without actual, or a source that failed |
+
+```bash
+journalctl -t cmdb-sweep --since today -o cat | jq -r 'select(.expected | not) | "\(.kind) \(.class)/\(.name) \(.attribute)"'
+```
+
+`cmdb-sweep.timer` runs it every night, an hour before the site's update hour
+(`updateSchedule`; 01:00 with none), rendered with the update's timer by
+`update-tappaas-schedule.sh`. health-manager's gate `cmdb` reads the last record
+by the same thresholds, and is critical when there has been no sweep for 48 hours.
 
 ## The metamodel files
 
@@ -176,7 +217,8 @@ one — `type`, `required`, `immutable`, `description`, `enum` — plus:
   `lastSeen`, `stage`, `state`, `quorum`): it has history like any other, and
   never counts as drift.
 
-On a class: `expiry` (`7d` on `ci`, inherited) — how long a CI may go
+On a class: `desiredRecord` — a `config/` record can declare it, so a sweep calls
+one without a record unmanaged; `expiry` (`7d` on `ci`, inherited) — how long a CI may go
 unreported before it is unseen; `keyVia` — a key that is a field of a related
 object (an asset's ports' MACs, rank 2).
 
