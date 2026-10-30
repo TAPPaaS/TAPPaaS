@@ -534,6 +534,21 @@ in
     };
   };
 
+  # What cmdb.service's sandbox leaves writable has to exist before it starts.
+  # As tappaas, so a fresh install's config/ and ~/.ssh are tappaas's.
+  systemd.services.cmdb-paths = {
+    description = "Make the two paths a rescan source may write (ADR-040 D2)";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+    };
+    script = ''
+      ${pkgs.coreutils}/bin/mkdir -p /home/tappaas/config/.cmdb-spool
+      ${pkgs.coreutils}/bin/install -d -m 0700 /home/tappaas/.ssh
+      ${pkgs.coreutils}/bin/touch /home/tappaas/.ssh/known_hosts
+    '';
+  };
+
   systemd.paths.cmdb = {
     description = "Start cmdb-controller once its bin is built (ADR-040)";
     wantedBy = [ "multi-user.target" ];
@@ -542,9 +557,9 @@ in
 
   systemd.services.cmdb = {
     description = "cmdb-controller — the CMDB, the actual state of the site (ADR-040)";
-    after = [ "postgresql.service" "cmdb-db.service" "cmdb-token.service" ];
+    after = [ "postgresql.service" "cmdb-db.service" "cmdb-token.service" "cmdb-paths.service" ];
     requires = [ "postgresql.service" "cmdb-db.service" ];
-    wants = [ "cmdb-token.service" ];
+    wants = [ "cmdb-token.service" "cmdb-paths.service" ];
     unitConfig.ConditionPathExists = "/home/tappaas/bin/cmdb-controller";
     serviceConfig = {
       User = "tappaas";
@@ -570,11 +585,16 @@ in
         "CMDB_PGUSER=tappaas"
       ];
       # It writes nothing but its socket. Its rescan sources run as its
-      # children, in this sandbox: a report verb only reads config/ and the
-      # live planes, and sends to the socket. What they would write here is
-      # refused (read-only home): the report spool, ~/.ssh/known_hosts.
+      # children, in this sandbox: a report verb reads config/ and the live
+      # planes and sends to the socket; the two things it may write are the
+      # report spool and a new host's key. cmdb-paths makes sure both exist:
+      # a path that is missing here is left read-only.
       ProtectSystem = "strict";
       ProtectHome = "read-only";
+      ReadWritePaths = [
+        "-/home/tappaas/config/.cmdb-spool"
+        "-/home/tappaas/.ssh/known_hosts"
+      ];
       PrivateTmp = true;
       NoNewPrivileges = true;
     };
