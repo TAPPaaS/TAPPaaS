@@ -3,6 +3,7 @@
 // file permissions decide who may call), and on loopback with a bearer token
 // for the console and the agents behind it. Both serve the same routes.
 //
+//   GET  /v1/rules                         the correlation rules (ADR-041 D3)
 //   GET  /v1/health                        the store answers; counts
 //   POST /v1/report                        observations and changes, in a batch
 //   POST /v1/query                         by class (and subclasses), physical, attributes, at
@@ -137,7 +138,7 @@ export class Api {
     const [, what, ref, sub] = parts;
 
     if (method === "GET" && what === "health" && !ref) {
-      return send(res, 200, { ok: true, data: { schema: 4, ...(await s.counts()) } });
+      return send(res, 200, { ok: true, data: { schema: 5, ...(await s.counts()) } });
     }
     if (method === "POST" && what === "report" && !ref) {
       const body = await readBody(req);
@@ -181,6 +182,9 @@ export class Api {
     }
     if (method === "GET" && what === "classes") {
       return send(res, 200, { ok: true, data: ref ? s.classInfo(ref) : s.classes() });
+    }
+    if (method === "GET" && what === "rules" && !ref) {
+      return send(res, 200, { ok: true, data: s.rules() });
     }
     if (method === "GET" && what === "stream" && !ref) {
       res.statusCode = 200;

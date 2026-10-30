@@ -1,18 +1,21 @@
 {
-  "description": "The relation types of ADR-040 D3. ends: the [from, to] class pairs a relation may join; a subclass of either end may stand in it (placed-in for asset holds for a server). cardinality: n:1 — a from object has one current relation of the type (a new one closes the old); 1:n — a to object has one; 1:1 — both; n:m — neither.",
+  "description": "The relation types of ADR-040 D3. ends: the [from, to] class pairs a relation may join; a subclass of either end may stand in it (placed-in for asset holds for a server). cardinality: n:1 — a from object has one current relation of the type (a new one closes the old); 1:n — a to object has one; 1:1 — both; n:m — neither. dependant (ADR-041 D3): the end that is hurt when the other fails: from, to, or both for a cable; a type without one carries no health. required (default false): a dependant needs the provider. A relation row may say otherwise in its attributes: required (boolean), and redundancyGroup (string): relations of one dependant in one group are satisfied while any one provider is healthy.",
   "relations": {
     "allocated-to": {
       "description": "A resource is allocated to a CI: the box a node runs on, for now. Later a pool's allocation (O10).",
+      "dependant": "to", "required": true,
       "cardinality": "1:1",
       "ends": [["asset", "node"]]
     },
     "runs-on": {
       "description": "A guest on its machine; software on the node it runs in; a pool or datastore on its node.",
+      "dependant": "from", "required": true,
       "cardinality": "n:1",
       "ends": [["vm", "machine"], ["lxc", "machine"], ["software", "node"], ["storage-pool", "node"], ["datastore", "node"]]
     },
     "part-of": {
       "description": "A port is part of its asset (D9).",
+      "dependant": "from", "required": true,
       "cardinality": "n:1",
       "ends": [["port", "asset"]]
     },
@@ -28,16 +31,19 @@
     },
     "connects": {
       "description": "A cable between two ports (seen or recorded; kind, label, origin, side and the observed link speed are its attributes); a wifi port to an SSID.",
+      "dependant": "both", "required": true,
       "cardinality": "n:m",
       "ends": [["port", "port"], ["port", "ssid"]]
     },
     "member-of": {
       "description": "A node in a cluster or an environment; a user in a group; an address in a zone.",
+      "dependant": "from", "required": true,
       "cardinality": "n:m",
       "ends": [["node", "cluster"], ["node", "environment"], ["user", "group"], ["address", "zone"]]
     },
     "depends-on": {
       "description": "A node depends on a service (the module's dependsOn).",
+      "dependant": "from", "required": true,
       "cardinality": "n:m",
       "ends": [["node", "service"]]
     },
@@ -48,6 +54,7 @@
     },
     "serves": {
       "description": "A zone serves an environment; a proxy route a service.",
+      "dependant": "to", "required": false,
       "cardinality": "n:m",
       "ends": [["zone", "environment"], ["proxy-route", "service"]]
     },
@@ -58,6 +65,7 @@
     },
     "backs-up": {
       "description": "A datastore backs up a guest or a machine; a backup peer the site.",
+      "dependant": "to", "required": false,
       "cardinality": "n:m",
       "ends": [["datastore", "node"], ["backup-peer", "site"]]
     }

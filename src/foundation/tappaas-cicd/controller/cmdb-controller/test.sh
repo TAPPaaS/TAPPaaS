@@ -37,7 +37,7 @@
 #     owner's report merges into (also when it was named by an abstract class,
 #     and when a stronger key finds another object); an unknown class is refused
 #   - recorded on objects and relations; the relations verb; owned-by's pairs
-#   - volatile attributes never drift; health is an object; --where on a path;
+#   - volatile attributes never drift; conditions and their checks; --where on a path;
 #     a pool's key is its name on its node; a service resolves by name
 #   - the discovery sweep over a fixture site: baseline, expected, drift, the
 #     differ, unmanaged, missing, the journal lines, exit codes 0/1/2
@@ -157,7 +157,7 @@ check "exactly the eight tables" "attribute,attribute_def,change,class,class_anc
 check "the exclusion constraints on attribute and relation" "attribute_no_overlap,relation_no_overlap" \
     "$(sql "SELECT string_agg(conname, ',' ORDER BY conname) FROM pg_constraint WHERE contype = 'x'")"
 check "a GIN index on attribute.value" "1" "$(sql "SELECT count(*) FROM pg_indexes WHERE tablename = 'attribute' AND indexdef ILIKE '%USING gin (value%'")"
-check "the store records its schema version" "cmdb schema 4" "$(sql "SELECT obj_description('object'::regclass, 'pg_class')")"
+check "the store records its schema version" "cmdb schema 5" "$(sql "SELECT obj_description('object'::regclass, 'pg_class')")"
 if node "${MAIN}" schema >"${T}/schema2.log" 2>&1; then ok "applying the schema again is harmless (idempotent)"; else bad "second schema apply failed: $(cat "${T}/schema2.log")"; fi
 
 echo "== the metamodel, as data (D3, D13) =="
@@ -400,18 +400,32 @@ echo "== owned-by's pairs =="
 out="$(cmdb report --json <<<'{"source":"identity-manager","objects":[{"ref":"o","class":"organization","name":"acme"},{"ref":"g","class":"group","name":"staff","attributes":{"uuid":"u-1"}},{"class":"organization","name":"acme-nl"}],"relations":[{"type":"owned-by","from":{"ref":"g"},"to":{"ref":"o"}},{"type":"owned-by","from":{"class":"organization","name":"acme-nl"},"to":{"ref":"o"}}]}' 2>&1)"
 check "a group and an organization are owned by an organization" "2" "$(jq '.result.relations | length' <<<"${out}" 2>/dev/null || echo "${out}")"
 
-echo "== volatile attributes, health as an object, and the keys of pools and services =="
-cmdb report --json >/dev/null <<<'{"source":"storage-manager","objects":[{"class":"storage-pool","name":"tanka1","attributes":{"onNode":"tappaas1","used":100,"size":1000,"health":{"status":"ok","check":"zfs ONLINE","time":"2026-10-30T00:00:00Z"}}},{"class":"storage-pool","name":"tanka1","attributes":{"onNode":"ph-node","used":5}}]}'
+echo "== volatile attributes, conditions, and the keys of pools and services =="
+cmdb report --json >/dev/null <<<'{"source":"storage-manager","objects":[{"class":"storage-pool","name":"tanka1","attributes":{"onNode":"tappaas1","used":100,"size":1000,"conditions":[{"type":"capacity","status":"ok","since":"2026-10-30T00:00:00Z"}]}},{"class":"storage-pool","name":"tanka1","attributes":{"onNode":"ph-node","used":5}}]}'
 check "one pool name on two nodes is two CIs" "2" "$(cmdb query storage-pool --json | jq 'length')"
-out="$(cmdb report --json <<<'{"source":"storage-manager","objects":[{"class":"storage-pool","name":"tanka1","attributes":{"onNode":"tappaas1","used":200,"health":{"status":"critical","check":"zfs FAULTED","time":"2026-10-30T01:00:00Z"}}}]}')"
-check "a volatile change is stored and is no drift" "health,used none" "$(jq -r '.result.objects[0] | "\(.changed | sort | join(",")) \(if (.drift | length) == 0 then "none" else (.drift | join(",")) end)"' <<<"${out}")"
+out="$(cmdb report --json <<<'{"source":"storage-manager","objects":[{"class":"storage-pool","name":"tanka1","attributes":{"onNode":"tappaas1","used":200,"conditions":[{"type":"capacity","status":"critical","since":"2026-10-30T01:00:00Z"}]}}]}')"
+check "a volatile change is stored and is no drift" "conditions,used none" "$(jq -r '.result.objects[0] | "\(.changed | sort | join(",")) \(if (.drift | length) == 0 then "none" else (.drift | join(",")) end)"' <<<"${out}")"
 check "…it has history" "2" "$(cmdb history "$(jq -r '.result.objects[0].id' <<<"${out}")" --json | jq '[.attributes[] | select(.name == "used")] | length')"
 check "attribute_def carries the flag" "t" "$(sql "SELECT volatile FROM attribute_def WHERE class = 'storage-pool' AND name = 'used'")"
-check "--where on a path into the value" "tanka1" "$(cmdb query --where health.status=critical --json | jq -r '[.[].name] | join(",")')"
-refuse "health is an object with a known status" 4 "whose status is one of" \
-    '{"source":"t","objects":[{"class":"zone","name":"lan","attributes":{"health":{"status":"sick"}}}]}'
-refuse "a string is no longer a health" 4 "health must be an object" \
-    '{"source":"t","objects":[{"class":"zone","name":"lan","attributes":{"health":"ok"}}]}'
+check "--where on a path into the value" "tanka1" "$(cmdb query --where conditions.status=critical --json | jq -r '[.[].name] | join(",")')"
+refuse "a condition has a known status" 4 "whose status is one of" \
+    '{"source":"t","objects":[{"class":"zone","name":"lan","attributes":{"conditions":[{"type":"drift","status":"sick"}]}}]}'
+refuse "conditions are an array" 4 "conditions must be an array" \
+    '{"source":"t","objects":[{"class":"zone","name":"lan","attributes":{"conditions":"ok"}}]}'
+refuse "health is gone: conditions replaced it" 4 "has no field health" \
+    '{"source":"t","objects":[{"class":"zone","name":"lan","attributes":{"health":{"status":"ok"}}}]}'
+_pid="$(cmdb query storage-pool --where conditions.status=critical --json | jq -r '.[0].id')"
+_seen="$(cmdb query storage-pool --json | jq -r --arg i "${_pid}" '.[] | select(.id == $i) | .lastSeen')"
+_rows() { sql "SELECT count(*) FROM attribute WHERE object = '${_pid}' AND name = 'conditions'"; }
+_before="$(_rows)"
+out="$(cmdb report --json <<<'{"source":"health-manager","assessment":true,"objects":[{"id":"'"${_pid}"'","class":"storage-pool","name":"tanka1","attributes":{"conditions":[{"type":"capacity","status":"critical","since":"2026-10-30T01:00:00Z","lastChecked":"2026-10-30T02:00:00Z"}]}}]}')"
+_c="$(cmdb report --json <<<'{"source":"health-manager","assessment":true,"objects":[{"id":"'"${_pid}"'","class":"storage-pool","name":"tanka1","attributes":{"conditions":[{"type":"capacity","status":"critical","since":"2026-10-30T01:00:00Z","lastChecked":"2026-10-30T03:00:00Z"}]}}]}' | jq -r '.result.change')"
+check "only lastChecked moved: no change, no new period" "null ${_before}" "${_c} $(_rows)"
+check "…and it was rewritten in place" "2026-10-30T03:00:00Z" "$(cmdb show "${_pid}" --json | jq -r '.attributes.conditions.value[0].lastChecked')"
+check "an assessment is no sighting: lastSeen stands" "${_seen}" "$(cmdb show "${_pid}" --json | jq -r '.lastSeen')"
+refuse "an assessment names objects by id" 4 "by id" \
+    '{"source":"health-manager","assessment":true,"objects":[{"class":"zone","name":"nope","attributes":{"conditions":[]}}]}'
+check "the rules are served: runs-on's dependant, the shipped set" "from 4" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.rules | length)"')"
 refuse "a pool needs its node" 4 "no key" '{"source":"t","objects":[{"class":"storage-pool","name":"tanka1"}]}'
 cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"class":"service","name":"nextcloud:web","attributes":{"onNode":"tappaas1","version":"1"}}]}'
 _svc="$(cmdb show service/nextcloud:web --json | jq -r '.id')"
