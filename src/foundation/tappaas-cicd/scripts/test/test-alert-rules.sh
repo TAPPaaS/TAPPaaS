@@ -128,6 +128,25 @@ ck(len(grp["rules"]) == 1 and "tappaas1" in grp["rules"][0]["data"][0]["model"][
 grp = ar.render_group("nobody", rules(ok), lambda m: ar.scope_hosts(cfg, m))
 ck(grp["rules"] == [], "a module with no instance renders no rule")
 
+# ── the mothership's rules (ADR-041 D4): the journal lines they read ──
+import os, re
+root = os.path.join(os.path.dirname(sys.argv[1]), "..")
+hm = json.load(open(os.path.join(root, "tappaas-cicd-alerts.json")))
+ck(ar.validate(hm, True) == [], f"tappaas-cicd-alerts.json validates as foundation ({ar.validate(hm, True)})")
+hg = ar.render_group("tappaas-cicd", hm, lambda m: ["tappaas-cicd"])
+ck(ar.validate(hm, False) == [], "…and needs nothing a foundation rule alone may do")
+ck([r["title"] for r in hg["rules"]] == ["HealthRootCause", "HealthRootRecovered"], "the two rules render")
+line = lambda **k: json.dumps({"event": "transition", "name": "tappaas2", "reason": "node-down", "kind": k["kind"], "root": k["root"], "symptoms": 6, "silenced": k["silenced"]}, separators=(",", ":"))
+cause, back = [re.compile(r["match"]) for r in hm["rules"]]
+ck(cause.search(line(kind="causal", root=True, silenced=False)), "a root's causal line matches")
+ck(not cause.search(line(kind="symptom", root=False, silenced=False)), "a symptom never does")
+ck(not cause.search(line(kind="causal", root=True, silenced=True)), "a silenced root does not")
+ck(back.search(line(kind="recovery", root=True, silenced=False)), "a root's recovery matches")
+ck(not back.search(line(kind="recovery", root=False, silenced=False)), "a symptom's recovery does not")
+for r in hm["rules"]:
+    for lbl, rx in r["capture"].items():
+        ck(re.search(rx, line(kind="causal", root=True, silenced=False)), f"{r['name']}: {lbl} is read from the line")
+
 # ── the core rules, moved out of logging.nix into their modules (ADR-039 D6) ──
 import os
 root = os.path.join(os.path.dirname(sys.argv[1]), "..", "..")

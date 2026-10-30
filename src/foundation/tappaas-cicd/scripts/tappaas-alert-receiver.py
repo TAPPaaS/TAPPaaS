@@ -52,6 +52,14 @@ its matching log lines, fetched from Loki for the alert's host and put through
 support-anonymize.py's scrubbing, as a bundle's journals are, but only on a
 site that opted in: site.json `alerts.includeLines` (default false).
 
+Every alert that arrives, ALERT or RESOLVED, also moves the site's health
+(ADR-041 D2): the host or module it is about is resolved as health-manager's
+alerts.ts places it, and a worker thread runs `health-manager assess --only
+<ci>` and then `health-manager emit`, so a webhook never waits for them. A burst
+is one worker: what arrives while it runs joins its next round. An alert about
+no object assesses the site. The rule that mails root causes is not assessed
+again: it reads what emit wrote.
+
 Every request is authenticated with a bearer token both sides read from a file
 (the receiver's, and Grafana's copy that logging/update.sh delivers). Every
 notice, sent or not, is a line in the breadcrumb file.
@@ -59,6 +67,7 @@ notice, sent or not, is a line in the breadcrumb file.
 Usage: tappaas-alert-receiver.py [--listen ADDR:PORT] [--token-file F]
                                  [--notify CMD] [--bundle CMD] [--breadcrumb F]
                                  [--cluster CMD] [--node-down-dir D]
+                                 [--health CMD]
        tappaas-alert-receiver.py --render < webhook.json   (print the mail; tests)
 """
 
@@ -89,6 +98,7 @@ DEFAULTS = {
     "loki": "http://logging.mgmt.internal:3100",
     "loki_admin_file": "/home/tappaas/.loki-admin-password",
     "alerts_log": "/var/lib/tappaas/alerts.jsonl",
+    "health": "/home/tappaas/bin/health-manager",
 }
 ALERTS_LOG_MAX = 2 << 20  # past 2 MB the record keeps its newer half
 MAX_LINES = 20
@@ -625,6 +635,82 @@ def record(args, payload):
         print(f"alert record NOT written: {e}", flush=True)
 
 
+# ── the health hook (ADR-041 D2) ─────────────────────────────────────────
+HEALTH_RULES = {"HealthRootCause", "HealthRootRecovered"}  # health-manager's own
+HEALTH_TIMEOUT = 300
+_health_lock = threading.Lock()
+_health_pending = set()
+_health_running = [False]
+
+
+def place_alert(host, module, config_dir):
+    """The object an alert is about, as alerts.ts's placeAlert: the instance
+    whose vmname (or config name) is its host, else the rule's module."""
+    short = host.split(".")[0]
+    if short and re.match(r"^[A-Za-z0-9][A-Za-z0-9-]*$", short):
+        for path in sorted(glob.glob(f"{config_dir}/*.json")):
+            inst = os.path.basename(path)[:-5]
+            try:
+                with open(path, encoding="utf-8") as f:
+                    raw = json.load(f)
+            except (OSError, ValueError):
+                continue
+            if not isinstance(raw, dict) or str(raw.get("status") or "").lower() == "archived":
+                continue
+            if (raw.get("vmname") or inst) == short and (raw.get("moduleSource") or raw.get("location")):
+                return inst
+    return module or None
+
+
+def health_targets(payload, config_dir):
+    """What the webhook's alerts are about; None stands for the whole site."""
+    out = set()
+    for a in payload.get("alerts") or []:
+        labels = a.get("labels") or {}
+        if is_heartbeat(a) or labels.get("alertname") in HEALTH_RULES:
+            continue
+        out.add(place_alert(labels.get("host", ""), labels.get("module", ""), config_dir))
+    return out
+
+
+def _health_run(cmd):
+    try:
+        r = subprocess.run(cmd, text=True, capture_output=True, timeout=HEALTH_TIMEOUT)
+        if r.returncode != 0:
+            print(f"health hook: {' '.join(cmd[1:])} exited {r.returncode}: {r.stderr.strip()[-300:]}", flush=True)
+        return r.returncode == 0
+    except (OSError, subprocess.TimeoutExpired) as e:
+        print(f"health hook: {' '.join(cmd[1:])} NOT run: {e}", flush=True)
+        return False
+
+
+def _health_worker(args):
+    while True:
+        with _health_lock:
+            if not _health_pending:
+                _health_running[0] = False
+                return
+            batch = set(_health_pending)
+            _health_pending.clear()
+        # The whole site covers every object in the round.
+        rounds = [[]] if None in batch else [["--only", ci] for ci in sorted(batch)]
+        ok = [_health_run([args.health, "assess"] + r) for r in rounds]
+        if any(ok):
+            _health_run([args.health, "emit"])
+
+
+def health_hook(args, payload):
+    targets = health_targets(payload, args.config_dir)
+    if not targets or not os.path.exists(args.health):
+        return
+    with _health_lock:
+        _health_pending.update(targets)
+        if _health_running[0]:
+            return
+        _health_running[0] = True
+    threading.Thread(target=_health_worker, args=(args,), daemon=True).start()
+
+
 def make_handler(args):
     def token():
         try:
@@ -672,6 +758,7 @@ def make_handler(args):
                 except OSError as e:
                     print(f"heartbeat NOT recorded: {e}", flush=True)
             record(args, payload)
+            health_hook(args, payload)
             payload = fold_node_down(args, payload)
             if payload is None:
                 self.reply(200, "folded into a node-down notice")
@@ -712,6 +799,7 @@ def main():
     p.add_argument("--alerts-log", default=DEFAULTS["alerts_log"])
     p.add_argument("--loki", default=DEFAULTS["loki"])
     p.add_argument("--loki-admin-file", default=DEFAULTS["loki_admin_file"])
+    p.add_argument("--health", default=DEFAULTS["health"], help="health-manager, or nothing to run")
     p.add_argument("--render", action="store_true", help="read one webhook on stdin, print the mail")
     p.add_argument("--lines-file", help="--render only: the log lines a lines=\"true\" alert gets (tests)")
     args = p.parse_args()

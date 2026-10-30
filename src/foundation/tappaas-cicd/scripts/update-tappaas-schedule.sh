@@ -12,6 +12,9 @@
 # runs every night, an hour before the update window's hour, so an update runs
 # against a fresh actual; 01:00 for a site with no scheduled update.
 #
+# And health-assess.timer (ADR-041 D2), every site.json health.assessInterval
+# minutes (1 to 60, default 5), whatever the update's schedule says.
+#
 # Usage: update-tappaas-schedule.sh [--dry-run]    (--dry-run prints the unit)
 #
 # Environment (tests): TAPPAAS_SITE_JSON, TAPPAAS_TIMER_FILE, TAPPAAS_NO_SYSTEMCTL=1
@@ -27,16 +30,45 @@ _here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 SITE="${TAPPAAS_SITE_JSON:-/home/tappaas/config/site.json}"
 TIMER="${TAPPAAS_TIMER_FILE:-/run/systemd/system/update-tappaas.timer}"
 SWEEP_TIMER="$(dirname "${TIMER}")/cmdb-sweep.timer"
+HEALTH_TIMER="$(dirname "${TIMER}")/health-assess.timer"
 DRY_RUN=0
 for a in "$@"; do
     case "${a}" in
         --dry-run) DRY_RUN=1 ;;
-        -h|--help) sed -n '2,14p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,17p' "$0"; exit 0 ;;
         *) echo "update-tappaas-schedule: unknown option: ${a}" >&2; exit 2 ;;
     esac
 done
 
 sysctl_() { [[ "${TAPPAAS_NO_SYSTEMCTL:-0}" == "1" ]] || systemctl "$@"; }
+
+# health-assess.timer: first, so a broken update schedule leaves the site's
+# health running. An interval that cannot be used is the default, and says so.
+render_health_timer() {
+    local minutes
+    minutes="$(jq -r '.health.assessInterval // 5' "${SITE}" 2>/dev/null || echo 5)"
+    if ! [[ "${minutes}" =~ ^[0-9]+$ ]] || (( 10#${minutes} < 1 || 10#${minutes} > 60 )); then
+        echo "update-tappaas-schedule: health.assessInterval ${minutes} is unusable — using 5 minutes" >&2
+        minutes=5
+    fi
+    minutes=$((10#${minutes}))
+    mkdir -p "$(dirname "${HEALTH_TIMER}")"
+    cat > "${HEALTH_TIMER}.tmp" <<UNIT
+# Rendered by update-tappaas-schedule.sh (ADR-041 D2). Do not edit.
+[Unit]
+Description=Assess the site's health every ${minutes} minutes
+
+[Timer]
+OnCalendar=*:0/${minutes}
+Persistent=false
+Unit=health-assess.service
+UNIT
+    mv -f "${HEALTH_TIMER}.tmp" "${HEALTH_TIMER}"
+    sysctl_ daemon-reload
+    sysctl_ restart health-assess.timer
+    echo "update-tappaas-schedule: health-assess.timer → every ${minutes} minutes"
+}
+[[ "${DRY_RUN}" -eq 1 ]] || render_health_timer
 
 schedule="$(jq -c '.updateSchedule // null' "${SITE}" 2>/dev/null || echo null)"
 if ! calendar="$(update_schedule_oncalendar "${schedule}")"; then

@@ -371,8 +371,9 @@ in
           + ":/run/current-system/sw/bin")
       ];
       ProtectSystem = "strict";
-      # config/ for the breadcrumb, /var/lib/tappaas for the heartbeat file.
-      ReadWritePaths = [ "/home/tappaas/config" "/var/lib/tappaas" ];
+      # config/ for the breadcrumb, /var/lib/tappaas for the heartbeat file; the
+      # health hook (ADR-041 D2) runs assess, which may meet a new host's key.
+      ReadWritePaths = [ "/home/tappaas/config" "/var/lib/tappaas" "-/home/tappaas/.ssh/known_hosts" ];
     };
   };
 
@@ -620,6 +621,40 @@ in
       Environment = [ "CMDB_SOCKET=/run/cmdb/cmdb.sock" ];
       ProtectSystem = "strict";
       ProtectHome = "read-only";
+      NoNewPrivileges = true;
+    };
+  };
+
+  # The site's health (ADR-041 D2): assess writes conditions to the CMDB, emit
+  # tells what changed. update-tappaas-schedule.sh renders health-assess.timer
+  # into /run/systemd/system beside the sweep's, as the interval is site.json's;
+  # this unit also follows every sweep. The sandbox is cmdb.service's: the
+  # checks run the same reads as its rescan, and config/ holds emit's cursor.
+  systemd.services.health-assess = {
+    description = "Assess the site's health and emit its events (ADR-041)";
+    after = [ "cmdb.service" "cmdb-sweep.service" ];
+    wants = [ "cmdb.service" ];
+    wantedBy = [ "cmdb-sweep.service" ];
+    unitConfig.ConditionPathExists = "/home/tappaas/bin/health-manager";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = pkgs.writeShellScript "health-assess" ''
+        /home/tappaas/bin/health-manager assess && /home/tappaas/bin/health-manager emit
+      '';
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+        "CMDB_SOCKET=/run/cmdb/cmdb.sock"
+      ];
+      ProtectSystem = "strict";
+      ProtectHome = "read-only";
+      ReadWritePaths = [
+        "/home/tappaas/config"
+        "-/home/tappaas/.ssh/known_hosts"
+      ];
+      PrivateTmp = true;
       NoNewPrivileges = true;
     };
   };
