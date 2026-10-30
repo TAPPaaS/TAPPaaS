@@ -1,5 +1,5 @@
 {
-  "_comment": "The control plane's standard components (ADR-035): every manager and controller tappaas-cicd ships, and the two services built beside them. One list: scripts/control-plane-registry.sh writes it into config/control-plane.json, the registry the self-check and the console read, and scripts/test/test-control-plane-registry.sh keeps it equal to the directories and to flake.nix's packages. A manager with manifest 'help-json' answers --help --json and appears in the console. kind: manager | controller | service. package: the flake package that builds it; null for bash, which needs no build. aliases: old names a component also answers to, linked beside it for one release (ADR-035 P2). plugsInto: the managers a controller plugs into (ADR-035 D3, D5).",
+  "_comment": "The control plane's standard components (ADR-035): every manager and controller tappaas-cicd ships, and the two services built beside them. One list: scripts/control-plane-registry.sh writes it into config/control-plane.json, the registry the self-check and the console read, and scripts/test/test-control-plane-registry.sh keeps it equal to the directories and to flake.nix's packages. A manager with manifest 'help-json' answers --help --json and appears in the console. kind: manager | controller | service. package: the flake package that builds it; null for bash, which needs no build. aliases: old names a component also answers to, linked beside it for one release (ADR-035 P2). plugsInto: the managers a controller plugs into (ADR-035 D3, D5). cmdbSource: the component has a read-only `report` verb that sends what it sees to the CMDB; cmdb rescan runs it (ADR-040 D2, D4).",
   "version": 1,
   "components": [
     {
@@ -8,7 +8,8 @@
       "path": "manager/module-manager",
       "language": "typescript",
       "package": "module-manager",
-      "manifest": "help-json"
+      "manifest": "help-json",
+      "cmdbSource": true
     },
     {
       "name": "site-manager",
@@ -16,7 +17,8 @@
       "path": "manager/site-manager",
       "language": "typescript",
       "package": "site-manager",
-      "manifest": "help-json"
+      "manifest": "help-json",
+      "cmdbSource": true
     },
     {
       "name": "network-manager",
@@ -32,7 +34,8 @@
       "path": "manager/environment-manager",
       "language": "typescript",
       "package": "environment-manager",
-      "manifest": "help-json"
+      "manifest": "help-json",
+      "cmdbSource": true
     },
     {
       "name": "identity-manager",
@@ -40,7 +43,8 @@
       "path": "manager/identity-manager",
       "language": "typescript",
       "package": "identity-manager",
-      "manifest": "help-json"
+      "manifest": "help-json",
+      "cmdbSource": true
     },
     {
       "name": "backup-manager",
