@@ -55,6 +55,7 @@ export interface HostRead {
   addresses?: string[];
   pools?: string[];
   discovery?: NodeDiscovery; // --discover (D15)
+  network?: Obj; // `node network show --json`: what network-manager topology reads
 }
 
 export interface ClusterRead {
@@ -238,6 +239,7 @@ export function siteObservation(configDir: string, live: ClusterRead | null, tap
 
   // Locations, then the site at its primary one.
   const { locations, primary } = readLocations(site);
+  const net = (site.network ?? {}) as Obj;
   for (const l of Object.values(locations)) {
     objects.push({
       ref: `location/${l.name}`,
@@ -255,6 +257,9 @@ export function siteObservation(configDir: string, live: ClusterRead | null, tap
       displayName: typeof site.displayName === "string" ? site.displayName : undefined,
       code,
       version: tappaasVersion ?? undefined,
+      publicIp: typeof net.publicIp === "string" && net.publicIp ? net.publicIp : undefined,
+      isp: typeof net.isp === "string" && net.isp ? net.isp : undefined,
+      ipv6: typeof site.ipv6 === "boolean" ? site.ipv6 : undefined,
       primaryLocation: primary && locations[primary] ? { ref: `location/${primary}` } : undefined,
       stage: "operational",
     }),
@@ -280,6 +285,7 @@ export function siteObservation(configDir: string, live: ClusterRead | null, tap
       addresses: host?.addresses ?? (ip ? [ip] : cfg ? [cfg.address] : undefined),
       clusterMember: live ? members.has(name) : true,
       storagePools: host?.pools ?? cfg?.storagePools,
+      network: host?.network,
       environment: { class: "environment", name: "mgmt" },
       management: "managed",
       stage: "operational",
@@ -314,6 +320,7 @@ export function siteObservation(configDir: string, live: ClusterRead | null, tap
         cores: g.cores,
         memory: g.memory,
         haPolicy: g.haPolicy,
+        state: g.template ? "template" : g.status,
         onNode: g.node ? { class: "machine", name: g.node } : undefined,
         stage: "operational",
       };

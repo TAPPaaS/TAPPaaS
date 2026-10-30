@@ -98,6 +98,8 @@
       "physical": true,
       "description": "A connector on an asset (D9): its name within its asset is its key.",
       "fields": {
+        "plate": { "type": "boolean", "description": "It comes from the asset's faceplate: the asset's record does not list it." },
+        "assignment": { "type": "object", "volatile": true, "description": "`switch-manager list-ports`: what a switch port is for, its VLANs against desired, its LAG and neighbours; `switch` names the switch, `actual` the MLAG facts." },
         "name": { "key": 1, "description": "The label on the case or the OS's name." },
         "asset": { "type": "relation", "relation": "part-of", "required": true, "immutable": true, "key": 1, "description": "The asset it is part of." },
         "kind": { "type": "string", "required": true, "enum": ["rj45", "sfp", "wifi", "usb-a", "usb-c"], "description": "The connector (D9)." },

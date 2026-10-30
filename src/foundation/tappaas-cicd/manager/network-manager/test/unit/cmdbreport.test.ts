@@ -47,6 +47,7 @@ check(s.errors.length === 0, "every fixture source answered");
 check(obj("zone", "srv")?.attributes?.vlan === 200 && obj("zone", "srv")?.attributes?.subnet === "10.2.0.0/24", "zone srv: vlan and subnet");
 check(JSON.stringify(obj("zone", "srv")?.attributes?.dhcp) === JSON.stringify({ start: "10.2.0.100", end: "10.2.0.250" }), "zone srv: the DHCP range, with its own DHCP-start");
 check(obj("zone", "guest")?.attributes?.dhcp === undefined, "an inactive zone has no DHCP range");
+check(typeof obj("zone", "srv")?.attributes?.state === "string", "a zone carries its state, for the topology");
 check(obj("zone", "mgmt")?.attributes?.tier === "0" && obj("zone", "mgmt")?.attributes?.ipv6Subnet === "0", "tier and ipv6Subnet are strings, as the metamodel declares");
 check(rel("serves", "zone:srv", { class: "environment", name: "home" }), "zone srv serves environment home (by name)");
 check(rel("serves", "zone:guest", { class: "environment", name: "work" }), "a zone serving several environments serves each");

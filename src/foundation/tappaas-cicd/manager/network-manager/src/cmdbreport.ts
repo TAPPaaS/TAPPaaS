@@ -109,6 +109,9 @@ export function putZone(b: CmdbBatch, name: string, z: Zone): string {
     tier: typeof z.tier === "number" ? String(z.tier) : undefined,
     dhcp: start && end ? { start, end } : undefined,
     description: typeof z.description === "string" ? z.description : undefined,
+    state: typeof z.state === "string" && z.state ? z.state : undefined,
+    type: typeof z.type === "string" && z.type ? z.type : undefined,
+    bridge: typeof z.bridge === "string" && z.bridge ? z.bridge : undefined,
     desired: { file: "zones.json", key: name },
   });
   for (const env of zoneEnvironments(z)) b.relate("serves", ref, { class: "environment", name: env });

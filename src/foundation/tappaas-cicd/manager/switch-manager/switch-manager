@@ -951,10 +951,19 @@ switch_reports() {
     if [[ -n "${verb}" ]]; then head="$(cmdb_change_head "${verb}")"; else head='{"kind":"observation"}'; fi
     local -a deep=()
     [[ "${DISCOVER}" == 1 ]] && deep=(--argjson discover true --argjson zones "$(jq -c . "${ZONES_FILE}")")
+    # What network-manager topology reads (ADR-040 step 4): on an observation
+    # and a change alike, as files, for no report grows into the argument limit.
+    local rows lags rc=0
+    rows="$(mktemp)"; lags="$(mktemp)"
+    JSON=1 cmd_list_ports "" >"${rows}" 2>/dev/null || echo '[]' >"${rows}"
+    JSON=1 cmd_lag list >"${lags}" 2>/dev/null || echo '[]' >"${lags}"
     jq --argjson pos "${pos}" --arg only "${only}" --argjson ended "${ended}" --arg source switch-manager \
         --arg kind "$(jq -r .kind <<<"${head}")" --arg verb "${verb}" \
         --arg job "$(jq -r '.job // ""' <<<"${head}")" --arg actor "$(jq -r '.actor // ""' <<<"${head}")" \
-        ${deep[@]+"${deep[@]}"} -f "${SCRIPT_DIR}/cmdb-report.jq" "${ACTUAL}"
+        --slurpfile rows "${rows}" --slurpfile lags "${lags}" \
+        ${deep[@]+"${deep[@]}"} -f "${SCRIPT_DIR}/cmdb-report.jq" "${ACTUAL}" || rc=$?
+    rm -f "${rows}" "${lags}"
+    return "${rc}"
 }
 
 # report [--json] [--discover]: every switch, as one observation (--json prints

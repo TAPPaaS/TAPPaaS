@@ -96,6 +96,7 @@ function fixture(): string {
   check(id?.attributes?.onNode?.ref === m?.ref, "a vm runs-on its machine (the instance in the batch)");
   check(id?.attributes?.environment?.ref === one("environment", "mgmt")?.ref, "a vm is member-of its environment (stubbed)");
   check(one("vm", "nextcloud")?.attributes?.stage === "created", "a configured guest the cluster does not run is created");
+  check(id?.attributes?.state === "running" && one("vm", "nextcloud")?.attributes?.state === "stopped", "a guest's run state, for the topology");
   check(!objs.some((o) => o.name === "old"), "an archived instance is not reported");
 
   const cl = one("app", "cluster");

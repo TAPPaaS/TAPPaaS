@@ -134,6 +134,9 @@ function problems(r: CmdbReport, extra: Map<string, string> = new Map()): string
   check(report.source === SOURCE && SOURCE === "asset-manager" && report.kind === "observation", "report: source asset-manager, an observation");
   check([...(report.objects ?? []), ...(report.relations ?? [])].every((x) => (x as { recorded?: boolean }).recorded === true), "report: every object and relation marked recorded");
   check(v.skipped.length === 0, `report: nothing of hrossen's left out${v.skipped.length ? ` (${v.skipped.join("; ")})` : ""}`);
+  const nic = viewOf({ ...doc0, cables: [...(doc0.cables ?? []), { from: { device: "patchpanel1", port: "9", side: "rear" }, to: { device: "tappaas2", port: "enp97s0" }, kind: "patch" as const }] });
+  check(nic.skipped.length === 0 && nic.objects.some((x) => x.class === "port" && x.name === "enp97s0" && x.attributes.kind === undefined) && nic.relations.some((r) => r.type === "connects" && (r.to as { ref?: string }).ref?.endsWith(":enp97s0")), "report: a cable to a NIC its server does not list makes it a port");
+  check(!positionsFromCmdb(cmdbAnswer(nic)).assets!["srv-02"].ports?.some((x) => x.name === "enp97s0"), "report: …which the asset's own ports do not take up");
   const p = problems(report);
   check(p.length === 0, `report: every object fits cmdb-controller's metamodel${p.length ? ` — ${p.slice(0, 5).join("; ")}` : ""}`);
   const objs = report.objects ?? [];

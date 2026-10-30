@@ -28,6 +28,9 @@ const DIRECTION: Record<string, "pull" | "receive" | "pulled-by"> = { pull: "pul
 export function putPeer(b: CmdbBatch, p: Peer, lastSeen?: string): string {
   const ref = b.put("backup-peer", p.name, {
     direction: DIRECTION[p.role],
+    role: p.role,
+    remoteHost: p.remoteHost ?? undefined,
+    tunnel: p.tunnel ?? undefined,
     lastSeen,
     description: p.remoteHost ?? undefined,
   });

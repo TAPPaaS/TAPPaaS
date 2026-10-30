@@ -20,6 +20,7 @@ import {
 import { nodeDiscoveryProbe, parseNodeDiscovery } from "./cmdb-discover";
 import { CLUSTER_DISCOVERY, CLUSTER_PROBE, ClusterRead, HOST_PROBE, parseClusterProbe, parseHostProbe } from "./cmdb-report";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
+import { clusterScript } from "./config";
 import { capture as run, captureResult, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
 import { setNodeStoragePools } from "../../../lib/ts/src/nodes";
 import { RepositoryTrust, SiteClient } from "./types";
@@ -154,6 +155,17 @@ export class CliSiteClient implements SiteClient {
     return all
       .filter((g) => g.node === node && !g.template)
       .map((g) => ({ vmid: g.vmid, name: g.name, type: g.type }));
+  }
+
+  nodeNetwork(node: string): Record<string, unknown> | null {
+    const script = clusterScript("lan-uplink.sh");
+    if (!script) return null;
+    try {
+      const doc = JSON.parse(captureResult(script, ["show", node, "--json"]).stdout) as Record<string, unknown>;
+      return doc.live ? doc : null;
+    } catch {
+      return null;
+    }
   }
 
   readCluster(candidates: string[], discover = false): ClusterRead | null {

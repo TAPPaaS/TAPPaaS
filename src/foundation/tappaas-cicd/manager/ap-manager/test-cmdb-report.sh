@@ -42,7 +42,11 @@ ck "a radio connects to each SSID its AP broadcasts" '["ssid:Guest","ssid:Home"]
    "$(core '[.relations[] | select(.type == "connects" and .from == "port:Attic/wifi") | .to] | sort')"
 ck "…and not to one it does not"                 'false' "$(core 'any(.relations[]; .from == "port:ap-01/radio" and .to == "ssid:Guest")')"
 ck "Wi-Fi clients are not reported (no MAC resolution yet)" 'false' "$(jq -c 'tostring | test("aa:bb:cc:dd:ee:99")' <<<"${R}")"
-ck "the uplink cable is a report of its own"     '2' "$(jq -c 'length' <<<"${R}")"
+ck "the uplink cable and the location are reports of their own" '3' "$(jq -c 'length' <<<"${R}")"
+ck "…an AP at the location it names"              '["at","device:Nano HD","home"]' \
+   "$(jq -c '.[2] | [.relations[0].type, .relations[0].from, (.objects[] | select(.ref == "loc") | .name)]' <<<"${R}")"
+ck "an AP carries what topology reads"            '["access-point","core","9"]' \
+   "$(core '.objects[] | select(.ref == "device:Nano HD") | .attributes | [.deviceType, .uplink.switch, .uplink.port]')"
 ck "…to the switch's port on its asset (by tag)" '["9","sw-01"]' \
    "$(jq -c '.[1] | [(.objects[] | select(.ref == "swport") | .name), (.objects[] | select(.ref == "swasset") | .name)]' <<<"${R}")"
 

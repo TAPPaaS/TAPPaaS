@@ -659,6 +659,49 @@ in
     };
   };
 
+  # What network-manager topology reads and what changes by itself: the node
+  # links and run states the console's Physical view shows, and the switches'
+  # actual file (ADR-040 step 4). The console's own 5-minute topology no longer
+  # asks the nodes, so the planes see the same reads, once.
+  systemd.timers.cmdb-refresh = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*:2/5";
+      Unit = "cmdb-refresh.service";
+    };
+  };
+  systemd.services.cmdb-refresh = {
+    description = "Refresh what the topology reads from the CMDB (ADR-040)";
+    after = [ "cmdb.service" ];
+    wants = [ "cmdb.service" ];
+    unitConfig.ConditionPathExists = "/home/tappaas/bin/site-manager";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = pkgs.writeShellScript "cmdb-refresh" ''
+        /home/tappaas/bin/site-manager report
+        /home/tappaas/bin/module-manager report
+        /home/tappaas/bin/switch-manager report
+        /home/tappaas/bin/ap-manager report
+        /home/tappaas/bin/asset-manager report
+      '';
+      Environment = [
+        ("PATH=/home/tappaas/bin:/run/wrappers/bin:/home/tappaas/.nix-profile/bin"
+          + ":/etc/profiles/per-user/tappaas/bin:/nix/var/nix/profiles/default/bin"
+          + ":/run/current-system/sw/bin")
+        "CMDB_SOCKET=/run/cmdb/cmdb.sock"
+      ];
+      ProtectSystem = "strict";
+      ProtectHome = "read-only";
+      ReadWritePaths = [
+        "/home/tappaas/config"
+        "-/home/tappaas/.ssh/known_hosts"
+      ];
+      PrivateTmp = true;
+      NoNewPrivileges = true;
+    };
+  };
+
   # The store is in tappaas-cicd's file backup as a dump (D12): taken just
   # before each capture, so the two describe the same moment whatever the
   # backup schedule is. /var/lib/cmdb/dump is in tappaas-cicd.json's
