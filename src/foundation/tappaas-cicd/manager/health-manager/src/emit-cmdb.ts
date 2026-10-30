@@ -10,7 +10,8 @@
 
 import { cmdbQuery, cmdbReport, cmdbRequest, cmdbShow, objectPath } from "../../../lib/ts/src/cmdb";
 import { changeJob } from "../../../lib/ts/src/job";
-import { SOURCE } from "./cmdbreport";
+
+const SOURCE = "health-manager";
 
 export type Status = "ok" | "warning" | "critical" | "unknown";
 const RANK: Record<Status, number> = { ok: 0, unknown: 1, warning: 2, critical: 3 };
