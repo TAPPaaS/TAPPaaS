@@ -93,6 +93,7 @@ passes over it.
 | [`opnsense-controller`](opnsense-controller/) | Python package | The OPNsense firewall: VLANs/zones, DHCP, split-horizon DNS, the Caddy reverse proxy, NAT port-forwards, firewall rules, ACME/TLS, and syslog. Exposes a family of `*-manager` CLIs. |
 | [`proxmox-controller`](proxmox-controller/) | Bash | The Proxmox hypervisor L2 layer: per-VM NIC trunk lists and node `lan` bridge VLAN sets, plus VM/node migration and disk resize helpers. |
 | [`authentik-controller`](authentik-controller/) | Python package | The Authentik identity server (admin REST API): users, groups/roles and membership, proxy/OIDC applications, and the forward-auth outpost. |
+| [`cmdb-controller`](cmdb-controller/) | TypeScript | The CMDB (ADR-040): the actual state of the site in PostgreSQL, behind `cmdb.service`'s API and the `cmdb` CLI. Every manager reports what it sees and changes to it; it is a record, never a gate. |
 | [`pbs-controller`](pbs-controller/) | Bash (reuses foundation PBS libs) | The Proxmox Backup Server: shared-job status, per-module snapshot listing, verify, and datastore namespaces. Reuses `backup/lib/pbs-job.sh` + `pbs-namespace.sh` rather than reimplementing the PBS API; degrades gracefully when PBS is unreachable. |
 
 A controller can also come with the module that runs its application (ADR-035): installing

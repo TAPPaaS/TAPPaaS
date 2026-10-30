@@ -45,6 +45,7 @@
       authentik-controller = component ./controller/authentik-controller;
       node-provisioner    = component ./controller/node-provisioner;
       opnsense-controller = component ./controller/opnsense-controller;
+      cmdb-controller     = component ./controller/cmdb-controller;
       update-tappaas      = component ./update-tappaas;
       console             = component ./ui;
     };
