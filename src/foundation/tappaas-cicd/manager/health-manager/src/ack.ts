@@ -89,7 +89,8 @@ export function reconcileAcks(objects: HealthObject[], roots: RootEntry[], now: 
       const all = rs.length > 0 && acks.every(Boolean);
       if (c.acknowledged && !c.acknowledged.via) continue; // its own
       if (all && !c.acknowledged) {
-        c.acknowledged = { by: acks[0]!.by, note: acks[0]!.note, until: acks[0]!.until ?? null, at, via: rs };
+        // Sticky, so assess leaves it: it lasts as long as the root's, decided here.
+        c.acknowledged = { by: acks[0]!.by, note: acks[0]!.note, until: acks[0]!.until ?? null, sticky: true, at, via: rs };
         dirty.add(o.id);
       } else if (c.acknowledged && (!all || c.acknowledged.via!.join() !== rs.join())) {
         c.acknowledged = all ? { ...c.acknowledged, via: rs } : null;
@@ -98,6 +99,34 @@ export function reconcileAcks(objects: HealthObject[], roots: RootEntry[], now: 
     }
   }
   return { dirty, events };
+}
+
+/** assess drops an ack or a window that has ended, so emit sees it gone, not
+ *  ending: what the object held at the cursor and holds no more is told here.
+ *  One gone for no such reason was the operator's verb, which told its own. */
+export function endedBeforeEmit(before: HealthObject[], objects: HealthObject[], now: Date): HealthEvent[] {
+  const at = now.toISOString();
+  const events: HealthEvent[] = [];
+  const current = new Map(objects.map((o) => [o.id, o]));
+  for (const o of before) {
+    const cur = current.get(o.id);
+    if (!cur) continue;
+    let ended = false;
+    for (const c of conditionsOf(o)) {
+      const n = conditionsOf(cur).find((x) => x.type === c.type);
+      const a = c.acknowledged;
+      if (a && !a.via && !n?.acknowledged) {
+        const why = !liveUntil(a.until, now) ? "expired" : !n || n.status === "ok" ? "recovered" : n.status !== c.status || n.since !== c.since ? "changed" : null;
+        if (why) events.push(ackEvent("unack", cur, c.type, a, at, why));
+      }
+      const m = c.maintenance;
+      if (m && !n?.maintenance && !liveUntil(m.until, now) && !ended) {
+        ended = true;
+        events.push(maintenanceEvent("end", cur, m, at, "expired"));
+      }
+    }
+  }
+  return events;
 }
 
 export interface VerbContext {

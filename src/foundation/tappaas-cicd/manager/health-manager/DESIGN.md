@@ -117,9 +117,15 @@ a full one shows up as the placement problem it is.
   and the history holds changes only, so "the last 20 transitions" would always be 100 %. Twenty
   intervals give the same ratio, with `health.assessInterval` as the check period, and let a
   condition stop flapping with no further transition.
-- **`conditions` is one attribute**, so an ack is a read-modify-write of the array and can lose to
-  an `assess` that read before it and writes after; the next `ack` shows it. The members emit
-  owns (`acknowledged`, `maintenance`, `flapping`, `flappingHeld`) are carried by assess.
+- **`conditions` is one attribute**, so an ack is a read-modify-write of the array, and `assess`
+  rewrites it from what it read at its start: an ack made during an assess run is lost. `assess &&
+  emit` is safe; an ack from the console during a run is the exposed case. The members emit owns
+  (`acknowledged`, `maintenance`, `flapping`, `flappingHeld`) are carried by assess.
+- **Every write is an assessment** (`assessment: true`, the object by id): no sighting, so it
+  neither holds off a CI's expiry nor revives an unseen one.
+- **assess drops an ack or window that has ended**, so emit often sees it gone rather than ending:
+  `endedBeforeEmit` compares with the objects as of the cursor and tells the `unack` or `maintenance`
+  end. A root's ack on a symptom is sticky to assess: `reconcileAcks` alone decides it.
 - **`reconcileAcks` is the one place** that ends acks and windows and spreads a root's ack, run by
   the verbs and by every emit, so a symptom that appears after the ack is silenced too.
 - **The mail needs `root` and `silenced` on the line**: a rule has only the line, and a recovered

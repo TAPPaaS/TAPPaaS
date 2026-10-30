@@ -21,7 +21,7 @@
 
 import { closeSync, existsSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
-import { cloneObjects, reconcileAcks, silenced } from "./ack";
+import { cloneObjects, endedBeforeEmit, reconcileAcks, silenced } from "./ack";
 import { Condition, HealthCmdb, HealthObject, Period, RootEntry, Status, conditionsOf, rootsOf, rootsOfSite, worse } from "./emit-cmdb";
 import { EventKind, HealthEvent, Journal, RootCauseEvent, TransitionEvent, eventLine } from "./events";
 
@@ -202,17 +202,18 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
   const roots = rootsOfSite(objects);
   const seen = cursor?.roots ?? {};
   const now = rootSet(objects, roots);
+  const from = input.since ?? cursor?.time;
+  const before = from ? cmdb.objects(from) : [];
+  const gone = endedBeforeEmit(before, objects, input.now);
   const r = reconcileAcks(objects, roots, input.now);
   const dirty = new Set(r.dirty);
   const told: TransitionEvent[] = [];
   let change = cursor?.change ?? null;
 
-  const from = input.since ?? cursor?.time;
   if (from) {
     const fromMs = Date.parse(from);
     const isNew = (t: Transition): boolean =>
       input.since !== undefined || cursor?.change === null || cursor === null ? Date.parse(t.at) > fromMs : t.change > cursor.change!;
-    const before = cmdb.objects(from);
     for (const o of candidates(objects, before, fromMs)) {
       const periods = cmdb.periods(o.id);
       for (const p of periods) change = Math.max(change ?? 0, Number(p.change));
@@ -274,7 +275,7 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
     correlate(told);
   }
 
-  const events: HealthEvent[] = [...r.events, ...told, ...rootEvents(seen, now, at)];
+  const events: HealthEvent[] = [...gone, ...r.events, ...told, ...rootEvents(seen, now, at)];
   return { events, cursor: { time: at, change, roots: now }, writes: dirty, objects };
 }
 

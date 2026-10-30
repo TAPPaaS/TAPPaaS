@@ -5,7 +5,8 @@
 //
 // `conditions` is one attribute: every write replaces the array. assess carries
 // `acknowledged`, `maintenance`, `flapping` and `flappingHeld` over when it
-// rewrites one; here they are read, changed and written back whole.
+// rewrites one, and drops an ack or window that has ended; here they are read,
+// changed and written back whole.
 
 import { cmdbQuery, cmdbReport, cmdbRequest, cmdbShow, objectPath } from "../../../lib/ts/src/cmdb";
 import { changeJob } from "../../../lib/ts/src/job";
@@ -100,14 +101,7 @@ export function splitRef(ref: string): { ref: string; class?: string } {
   return slash > 0 ? { ref: ref.slice(slash + 1), class: ref.slice(0, slash) } : { ref };
 }
 
-interface ClassKeys {
-  keys: { components: string[] }[];
-  fields: { name: string; type: string; spec: Record<string, unknown> }[];
-}
-
 export class LiveHealthCmdb implements HealthCmdb {
-  private readonly classes = new Map<string, ClassKeys>();
-
   objects(at?: string): HealthObject[] {
     return cmdbQuery({ class: "object", limit: 100000, ...(at ? { at } : {}) }) as unknown as HealthObject[];
   }
@@ -133,37 +127,15 @@ export class LiveHealthCmdb implements HealthCmdb {
     return h.attributes.filter((a) => a.name === "conditions");
   }
 
-  // A report finds its object by the class's keys, and a key may be more than
-  // the name (a port is a name on an asset): each key field goes with the write.
-  private keyAttributes(o: HealthObject): Record<string, unknown> {
-    let info = this.classes.get(o.class);
-    if (!info) {
-      info = cmdbRequest("GET", `/v1/classes/${encodeURIComponent(o.class)}`) as ClassKeys;
-      this.classes.set(o.class, info);
-    }
-    const names = new Set(info.keys.flatMap((k) => k.components).filter((c) => c !== "name"));
-    if (!names.size) return {};
-    const s = cmdbShow(o.id);
-    const attrs = (s.attributes ?? {}) as Record<string, { value: unknown }>;
-    const rels = (s.relations ?? []) as { type: string; direction: string; other: { id: string } }[];
-    const out: Record<string, unknown> = {};
-    for (const f of info.fields) {
-      if (!names.has(f.name)) continue;
-      if (f.type === "relation") {
-        const dir = f.spec.direction === "in" ? "in" : "out";
-        const rel = rels.find((r) => r.type === f.spec.relation && r.direction === dir);
-        if (rel) out[f.name] = { id: rel.other.id };
-      } else if (attrs[f.name]) out[f.name] = attrs[f.name].value;
-    }
-    return out;
-  }
-
+  // An assessment: the object by id, no sighting, so a write here neither holds
+  // off a CI's expiry nor revives an unseen one (ADR-041 D2).
   write(o: HealthObject, conditions: Condition[], meta: WriteMeta): void {
     cmdbReport({
       source: SOURCE,
       kind: meta.kind,
+      assessment: true,
       ...(meta.kind === "change" ? { verb: meta.verb, ...changeJob() } : {}),
-      objects: [{ class: o.class, name: o.name, attributes: { conditions, ...this.keyAttributes(o) } }],
+      objects: [{ id: o.id, class: o.class, name: o.name, attributes: { conditions } }],
     });
   }
 }

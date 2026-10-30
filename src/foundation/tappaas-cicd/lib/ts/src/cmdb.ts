@@ -46,6 +46,7 @@ export class CmdbRefused extends Error {
  *  an id, or a name. */
 export interface CmdbObject {
   ref?: string;
+  id?: string; // this object by id, instead of its keys
   class: string;
   name: string;
   attributes?: Obj;
@@ -71,6 +72,7 @@ export interface CmdbReport {
   job?: string;
   verb?: string;
   actor?: string;
+  assessment?: boolean; // conclusions about objects named by id, not a sighting of them (ADR-041 D2)
   objects?: CmdbObject[];
   relations?: CmdbRelation[];
 }

@@ -4,7 +4,7 @@
 import { mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-import { ack, maintenanceStart, maintenanceStop, reconcileAcks, silenced, unack } from "../../src/ack";
+import { ack, endedBeforeEmit, maintenanceStart, maintenanceStop, reconcileAcks, silenced, unack } from "../../src/ack";
 import { Condition, HealthCmdb, HealthObject, Period, conditionsOf, splitRef } from "../../src/emit-cmdb";
 import { Cursor, assessInterval, emit, flapPercent, flappingNow, readCursor, runEmit, transitions, withEmitLock } from "../../src/emit";
 import { historyLines, historyRows, listLines, listRows, rootDocs, rootLines, showDoc, showLines } from "../../src/emit-read";
@@ -212,6 +212,7 @@ console.log("ack and unack");
   const impact = (): Condition => conditionsOf(vm).find((c) => c.type === "impact")!;
   check(silenced(conditionsOf(node)[0], NOW), "the root is silenced");
   check(impact().acknowledged?.via?.join() === "node1" && silenced(impact(), NOW), "its impact condition with it");
+  check(impact().acknowledged?.sticky === true, "sticky, so assess leaves it to emit");
   check(!conditionsOf(vm).find((c) => c.type === "operational")!.acknowledged, "not the guest's other condition");
 
   // A symptom that gets a root of its own is heard again.
@@ -243,6 +244,21 @@ console.log("acks end by themselves");
   check((run(mk({ acknowledged: by }, "warning", T(-5)))[0] as AckEvent).why === "changed", "not sticky: at the next status change");
   check(run(mk({ acknowledged: { ...by, sticky: true } }, "warning", T(-5))).length === 0, "sticky: not at a status change");
   check(run(mk({ acknowledged: { ...by, until: T(10) } })).length === 0, "before its until, nothing");
+}
+
+console.log("what assess ended before emit ran");
+{
+  const by = { by: "lars", at: T(-20) };
+  const was = (a: Partial<Condition>): HealthObject[] => [object("x", "vm", [cond("operational", "critical", T(-30), a)])];
+  const now = (status: Condition["status"] = "critical", since = T(-30)): HealthObject[] => [object("x", "vm", [cond("operational", status, since)])];
+  const ended = (b: HealthObject[], n: HealthObject[]): HealthEvent[] => endedBeforeEmit(b, n, NOW);
+  check((ended(was({ acknowledged: { ...by, until: T(-1) } }), now())[0] as AckEvent).why === "expired", "an ack past its until is told");
+  check((ended(was({ acknowledged: by }), now("warning", T(-2)))[0] as AckEvent).why === "changed", "one ended by a status change");
+  check((ended(was({ acknowledged: { ...by, sticky: true } }), now("ok", T(-2)))[0] as AckEvent).why === "recovered", "one ended by recovery");
+  check(ended(was({ acknowledged: by }), now()).length === 0, "the operator's unack told its own");
+  check(ended(was({ acknowledged: { ...by, via: ["r"] } }), now("ok")).length === 0, "a root's ack on a symptom is not told apart");
+  check((ended(was({ maintenance: { until: T(-1) } }), now())[0] as MaintenanceEvent).phase === "end", "a window past its until is told");
+  check(ended(was({ maintenance: { until: T(30) } }), now()).length === 0, "one ended early was the operator's");
 }
 
 console.log("maintenance");
