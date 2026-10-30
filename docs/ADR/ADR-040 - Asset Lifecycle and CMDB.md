@@ -327,7 +327,7 @@ new one (D7):
 | machine | Proxmox node name within the cluster, then its asset |
 | vm, lxc | VMID + cluster, then the module name (the `config/` file) |
 | device | the switch configuration's name, then its asset |
-| software | name + version within its node |
+| software | name within its node; `version` is an attribute whose history is the upgrades |
 | user, group | Authentik UUID |
 | others | their name within their parent (a zone in the site, a port on its asset) |
 
