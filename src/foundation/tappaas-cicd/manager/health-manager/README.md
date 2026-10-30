@@ -25,6 +25,15 @@ health-manager validate [--threshold PCT] [--memory-threshold PCT] [--json] [--c
 health-manager capacity [--install <instance>] [--memory-threshold PCT] [--json] [--config-dir DIR]
 health-manager update-os <name> <vmid> <node>
 health-manager reboot <module>
+health-manager emit [--since <time>] [--json]
+health-manager ack <ci> [--type <t>] --note <n> [--until <time>] [--sticky]
+health-manager unack <ci> [--type <t>]
+health-manager maintenance <ci> --until <time> --note <n>
+health-manager maintenance end|cancel <ci>
+health-manager show <ci> [--json]
+health-manager list [--type <t>] [--status <s>] [--class <c>] [--root-causes] [--json]
+health-manager roots [--json]
+health-manager history <ci> [--since <time>] [--json]
 health-manager scan security [--if-new-sweep] [--notify]
 health-manager report security [--all] [--json]
 health-manager scan nix-list --components <file> [--nixpkgs <path>] [--no-db-update] [--no-vex]
@@ -410,6 +419,89 @@ guest's pending state before and after, and hands the reboot to
   and a module with no VM.
 - The reboot is the operator's explicit act, so it needs no `automaticReboot` or
   `rebootOk` — that is what separates it from the update sweep.
+
+## Emit — health events, acknowledgements, maintenance (ADR-041 D2, D4)
+
+`assess` writes conditions to the CMDB; everything here reads them. `<ci>` is an id, a name or
+`<class>/<name>`; a `<time>` is an ISO time or a span (`30m`, `2h`, `7d`).
+
+### `emit`
+
+One event per condition transition since the last run, as one JSON line in the journal,
+identifier `tappaas-health`, which Loki holds and ADR-039's rules read:
+
+```bash
+journalctl -t tappaas-health --since today -o cat | jq -r 'select(.event == "transition") | "\(.name) \(.type) \(.from)->\(.to) \(.kind)"'
+```
+
+| `event` | Fields |
+|---|---|
+| `transition` | `id`, `ci`, `class`, `name`, `type`, `from`, `to`, `reason`, `message`, `kind`, `rootCause`, `correlated[]`, `since`, `at`, `flapping`, `root`, `symptoms`, `silenced` |
+| `flapping` | the same, with `phase` `start` or `end` |
+| `ack`, `unack` | `ci`, `class`, `name`, `type`, `by`, `note`, `sticky`, `until`, `why`, `symptoms[]` (ids), `at` |
+| `maintenance` | `phase` `start`, `end` or `cancel`, `ci`, `class`, `name`, `by`, `note`, `until`, `why`, `at` |
+| `rootcause` | `ci`, `class`, `name`, `type`, `symptoms[]` (ids), `cleared`, `at`; once per change of a root's set |
+
+- `kind`: `recovery` on a return to ok; `symptom` for an `impact` or derived condition; `causal`
+  when the object is in the site's `rootCauses` for that type; any other failure is a `symptom`.
+- `root` says the object is a root cause, or was one until this recovery; `symptoms` is how many
+  objects it impacts; `silenced` is acknowledged or in maintenance: told, never mailed.
+- `correlated` lists the events of the same run with the same root.
+- **Flapping** is judged over the last 20 assess intervals, each changed or not, the oldest
+  weighted 0.8 and the newest 1.15: above 30 % it starts, below 25 % it ends. While it flaps one
+  `flapping` start, at the worse status, and one end replace the transitions; the condition
+  carries `flapping: true` and `flappingHeld`.
+
+The cursor is `config/.health-emit-cursor`: the CMDB change id read up to, the time, and the roots
+last told. Without one, a run tells only the current roots and starts from there. `--since` tells
+a period again, mails included. Runs overlap under `config/.health-emit.lock`; a run that finds it
+held leaves the work to the next. A CMDB that does not answer tells nothing, moves no cursor and
+exits 0.
+
+The console's change stream takes nothing from a client: it shows the change report `assess`
+wrote, and the console reads the conditions, or these lines through Loki.
+
+### `ack`, `unack`
+
+An acknowledged condition keeps its status and stops counting for `validate`, mails and the
+Overview. Without `--type`, every condition of the object that is not ok. It ends at `--until`, on
+a return to ok, and at the next status change unless `--sticky`; emit tells the `unack` with its
+`why`. An ack on a root cause (its condition of the type in `rootCauses`) silences every `impact`
+condition naming that root, as an ack with `via: [<root ids>]`, while the root's holds: a symptom
+that gets a root of its own is heard again, and `unack` restores them. Written as a change, with
+the console's job id. Like any change on an object, it clears the object's drift mark (ADR-040 D6).
+
+### `maintenance`
+
+A window on every condition of the object, and on any that appears during it: transitions are told
+with `silenced: true`. It ends at `--until`, or by `maintenance end` (done early) or `cancel`
+(withdrawn). An object with no conditions yet is refused: run `assess` first.
+
+### `show`, `list`, `roots`, `history`
+
+`show`: an object's conditions, since when, its root cause or what it impacts, its acks. `list`: a
+row per condition, worst first, everything not ok unless `--status` says otherwise. `roots`: the
+site's root causes, most impact first, each with its objects. `history`: an object's transitions,
+from the CMDB's attribute history. Each takes `--json`.
+
+### The timer and the hooks
+
+`health-assess.service` runs `health-manager assess && health-manager emit` as `tappaas`, after
+every `cmdb-sweep.service` and on `health-assess.timer`, every `health.assessInterval` minutes of
+`site.json` (1 to 60, default 5). `update-tappaas-schedule.sh` renders the timer; after editing
+the setting:
+
+```bash
+sudo systemctl start update-tappaas-schedule.service
+```
+
+`tappaas-alert-receiver` runs `assess --only <ci>` and `emit` for each ALERT or RESOLVED it gets,
+on a worker thread, placing the alert as `alerts` does; one about no known object assesses the site.
+
+`tappaas-cicd-alerts.json` holds the two rules over these lines. `HealthRootCause` mails a causal
+event that is not silenced, with its symptom count; `HealthRootRecovered` mails the RESOLVED of a
+root's recovery. Nothing mails a symptom. Both are `event` rules: a log rule's own resolve follows
+its window, not the recovery, so the RESOLVED is a mail of its own and not a reply to the ALERT.
 
 ## Reports to the CMDB
 
