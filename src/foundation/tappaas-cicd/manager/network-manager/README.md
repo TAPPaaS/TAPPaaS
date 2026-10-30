@@ -57,7 +57,7 @@ network-manager enable|disable|manual <name> [--force]
 network-manager bind <zone>         --environment <env> [--add] | --unbind [--environment <env> [--own]]
 network-manager set-ssid <zone>     <ssid> | --clear     (ap-manager's writer; use ap-manager ssid)
 network-manager reconcile           [--apply] [--only opnsense|proxmox|switch|ap]
-network-manager topology            [--json] [--health <file> | --no-health] [--no-positions]
+network-manager topology            [--json] [--live | --diff] [--health <file> | --no-health] [--no-positions]
 network-manager init  [<profile>] --name <N> [--from <tpl>] [--out <f>] [--force]
 network-manager retire      [--apply]
 network-manager validate    [--zones <file>] [--config-dir <dir>] [--strict]
@@ -341,10 +341,22 @@ network-manager distribute --dry-run  # list target nodes, no copy
 
 ### `topology` — the physical site, derived (ADR-034 D5)
 
+The document is read from the CMDB (ADR-040 D10, plan step 4;
+[where each field comes from](../../../../../docs/plans/adr-040-step4-topology-from-cmdb.md)): the
+same `buildTopology()` as the live join, fed by `sourcesFromCmdb()` (`src/topology-cmdb.ts`), so the
+health findings are those the last `health-manager assess` stored, and `validate` is not run. Two
+things stay read: `wan-address.json`, this manager's own record, and asset-manager's faceplate
+catalog. When the CMDB does not answer, or does not yet hold what the document needs, the live join
+runs and stderr says why. `sources` names a store whose node or switch reports are over 30 minutes
+old; `cmdb-refresh` runs those reports every 5 minutes. A node that cannot be read keeps its last
+`network`, where the live join shows no uplinks. The rest of this section is the join, either way.
+
 ```bash
 network-manager topology                      # the WAN path, nodes, switch ports, LAGs, findings
 network-manager topology --json               # the document the console's Physical view draws
 network-manager topology --json --health v.json   # reuse a `health-manager validate --json`
+network-manager topology --live               # join the planes instead of reading the CMDB
+network-manager topology --diff               # build both, list what differs: exit 1 if anything does
 ```
 
 One read-only document joined from what the other verbs already report: `site.json`,

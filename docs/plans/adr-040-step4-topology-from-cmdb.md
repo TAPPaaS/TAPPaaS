@@ -123,6 +123,7 @@ Each is a richer report from the owner unless it is listed under exceptions.
 | AP uplink and SSIDs per AP | ap-manager | `device.uplink`, `ssids` |
 | Zone state, type, bridge | network-manager | `zone` fields |
 | Peer role, host, tunnel | backup-manager | `backup-peer` fields |
+| Which ports are the plate's, switch order | asset-manager, switch-manager | `port.plate`, `device.order` |
 
 ### Exceptions: what keeps being read
 
@@ -141,6 +142,18 @@ Each is a richer report from the owner unless it is listed under exceptions.
 - The sweep marks `allocated-to` drift on switches because asset-manager's relation replaces
   switch-manager's. Neither is used for ports or APs here, for that reason. A separate fix.
 
+### Found by the comparison on hrossen
+
+- A gate of the stored assessment holds its findings in `rows`, `findings` or both, and neither when
+  it passed. `validate --json` prints them together; the reader does the same.
+- A recorded cable to a NIC the server does not list (hrossen's panel to `tappaas2`) was skipped by
+  asset-manager's report, so panel chains lost their second half. The cable now makes the port.
+- The CMDB holds an asset's plate ports as well as its own, and positions.json only the own: **new**
+  `port.plate` (asset-manager) tells them apart.
+- Which end a cable between two switches starts at, and so which LAG name it shows, follows the
+  inventory's order, which a CMDB answer does not keep: **new** `device.order` (switch-manager).
+- `asset-manager report` joins `cmdb-refresh`: it also ends the stale `allocated-to` above.
+
 ## Freshness
 
 The live join is as fresh as its last read. The CMDB is as fresh as its last report, and the two
@@ -149,14 +162,25 @@ at the nightly sweep. A link going down, or a guest stopping, would reach the Ph
 day late, where the console sees it within 5 minutes today.
 
 So a new unit, `cmdb-refresh`, runs `site-manager report`, `module-manager report`,
-`switch-manager report` and `ap-manager report` every 5 minutes. D4's "no new polling" holds in
+`switch-manager report`, `ap-manager report` and `asset-manager report` every 5 minutes. D4's "no new polling" holds in
 substance: the console's 5-minute `topology` stops doing the same ssh per node, so the planes see
-the same load, once. The switch reports read the actual file, as `list-ports` does, and need no
+the same load, once. The switch and asset reports read files, as `list-ports` does, and need no
 switch traffic. The stale rows in `sources` say when the unit is not doing its job.
 
 A node that cannot be read keeps its last `network`: the health findings say it is down, the
 uplinks show how it was. The live join shows it with no uplinks instead. This is a change, and
 `--diff` shows it.
+
+## The comparison, 2026-10-30
+
+Nothing here was deployed, so the live CMDB lacks the new fields and `topology --diff` on hrossen
+exits 2, naming them; `topology` falls back as designed. For the comparison, a scratch build printed
+every report with `report --json` (read-only), overlaid them in memory on the live CMDB's answer,
+and built both documents: **no difference** in nodes, switches, ports, LAGs, access points, zones,
+WAN, outside, devices, positions or findings, on hrossen's real data (`generated` and `sources`
+aside). One line remained, the primary location's `displayName`, caused by the overlay dropping a
+location object: not a report's or the reader's. Zones were overlaid from zones.json, not from
+network-manager's report, which asks the firewall. The real `--diff` is step 4 below.
 
 ## Migration order
 
