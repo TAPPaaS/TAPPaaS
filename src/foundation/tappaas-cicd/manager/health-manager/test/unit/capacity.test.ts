@@ -6,11 +6,12 @@
 // host overhead live outside any guest — which is why the gate must not be
 // written against `used`.
 
-import { mkdtempSync, writeFileSync } from "fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
+import { applyBalloonStats, parseBalloonStats } from "../../src/balloon";
 import { checkGuestMemory, checkMemoryCommitment, checkUpdateCapacity } from "../../src/checks";
-import { NodeCapacity } from "../../src/types";
+import { GuestMemory, NodeCapacity } from "../../src/types";
 import { countedMem } from "../../src/memcount";
 import { FakeClusterClient } from "./fake-client";
 
@@ -138,6 +139,58 @@ const withGuests = (gs: ReturnType<typeof guest>[]): NodeCapacity => ({
   check(/reclaimable 0\.0G/.test(rows), "…and is never counted as a reclaimable gap");
   check(r.detail === "declared / allocated / used, largest gap first",
     `the header names the columns and nothing else (got: ${r.detail})`);
+}
+
+{
+  // Page cache is not use. Taken from the node: tappaas-cicd reports its stats,
+  // network (FreeBSD) has every stat at 2^64-1, a Windows-like guest has total
+  // and free but no available figure, and 999 has no balloon device at all.
+  // __dirname is under dist-test here; the fixture stays in the source tree.
+  const fixture = ["..", "../../../../.."]
+    .map((up) => join(__dirname, up, up === ".." ? "fixtures" : "test/fixtures", "balloon-stats.txt"))
+    .find(existsSync) as string;
+  const stats = parseBalloonStats(readFileSync(fixture, "utf8"));
+  check(stats.get(130)?.available === 15594807296, "the probe's lines parse to bytes");
+  check(stats.get(110) === undefined, "2^64-1 is no statistic at all, not 16 EiB");
+  check(stats.get(999) === undefined, "a guest with no balloon device has no entry");
+
+  const m = (vmid: number, name: string, used: number, resident: number, measured: boolean): GuestMemory =>
+    ({ ...guest(name, 16, resident, used, measured), vmid });
+  const cicd = m(130, "tappaas-cicd", 14.8, 15.8, true);
+  const net = m(110, "network", 7.5, 7.9, false);
+  const win = m(500, "windows", 14.8, 15.8, true);
+  const none = m(999, "nodriver", 14.8, 15.8, true);
+  for (const g of [cicd, net, win, none]) applyBalloonStats(g, stats.get(g.vmid));
+
+  check(cicd.usedMem === 16765427712 - 15594807296, "used is total minus available");
+  check(cicd.measured, "…and the guest stays measured");
+  check(net.usedMem === 7.5 * G && !net.measured, "no statistics: the firewall stays unmeasured");
+  check(win.usedMem === 14.8 * G && win.measured && win.availableMem === undefined,
+    "no available figure: Proxmox's figure stands");
+  const bad = m(998, "bad", 3, 4, true);
+  applyBalloonStats(bad, { total: 1 * G, available: 2 * G });
+  check(bad.usedMem === 3 * G, "available above total is not believed");
+
+  const c = new FakeClusterClient();
+  c.capacity = [withGuests([cicd])];
+  const r = checkGuestMemory(c);
+  const rows = (r.rows ?? []).map((x) => x.text).join("\n");
+  check(r.status === "pass", `a builder full of cache is not short of memory (got: ${rows})`);
+  check(/tappaas-cicd\s+16\.0G\s+15\.8G\s+1\.1G\s+7% of declared, gap 14\.7G, cache 11\.9G/.test(rows),
+    `the row reads its real use and shows the cache (got: ${rows})`);
+
+  const f = new FakeClusterClient();
+  f.capacity = [withGuests([win, none])];
+  const fr = checkGuestMemory(f);
+  const frows = (fr.rows ?? []).map((x) => x.text).join("\n");
+  check(fr.status === "fail", `the thresholds still apply to the fallback figure (got: ${frows})`);
+  check((fr.rows ?? []).filter((x) => x.text.includes("cache counts as used")).length === 2,
+    `…and each row says cache counts as used (got: ${frows})`);
+
+  const l = new FakeClusterClient();
+  l.capacity = [withGuests([guest("vllm", 46, 0, 2.1, true, "lxc")])];
+  check(!(checkGuestMemory(l).rows ?? []).some((x) => x.text.includes("cache")),
+    "a container's figure leaves out file cache: no note");
 }
 
 {

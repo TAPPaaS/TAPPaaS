@@ -45,7 +45,7 @@ non-zero on a critical one that counts** (see *Assess* below).
 | `service-liveness` | `pvesh /cluster/resources` | a managed config module's VM is not `running` | — |
 | `disk-threshold` | SSH `df /` per managed guest | reachable guest `/` usage ≥ threshold (default **80%**) | no guest reachable |
 | `memory-commitment` | one `pvesh /cluster/resources` | a node's memory committed to RUNNING guests ≥ threshold of its physical RAM (default **100%**) | cluster unreachable / no nodes |
-| `guest-memory` | `pvesh` + one `ps` / `qm status` per node | a module using ≥ 90% of its declared memory (WARN ≥ 75%), or allocated above the declared limit | cluster unreachable / nothing running |
+| `guest-memory` | `pvesh` + one SSH per node (`ps`, `qm status`, balloon statistics) | a module using ≥ 90% of its declared memory (WARN ≥ 75%), or allocated above the declared limit | cluster unreachable / nothing running |
 | `backup-status` | `backup-manager list --json` | a module disabled, or enabled-but-not-in-PBS-job | backup tooling absent / unparseable |
 | `pending-reboot` | one SSH probe per guest (booted system vs profile; Debian `reboot-required`) | never — **WARN** per waiting guest (#730) | no reachable guest |
 | `site-timezone` | the primary location's timezone (`site.json` `locations[primaryLocation].timezone`) + one `timedatectl` per node and per guest | never — **WARN** per node or guest on another zone, or when site.json has none (#837) | nothing answered |
@@ -68,7 +68,9 @@ ordered by reclaimable gap and totalled per column. Its row status measures a
 module against ITS OWN declaration — short of memory is a fault, over-declared is
 not — while the gap column measures what ballooning could return. Those are
 different questions and a single number cannot answer both. `warn` is a status
-that reports without failing the assertion.
+that reports without failing the assertion. Used is total minus available from
+the balloon statistics (`src/balloon.ts`), because Proxmox's `mem` counts page
+cache as used; a VM with no available figure keeps Proxmox's and says so.
 
 **Why the two thresholds differ.** A full disk stops a guest, so 80% leaves
 runway to act. Committed memory at 100% is not yet a fault: a node may promise

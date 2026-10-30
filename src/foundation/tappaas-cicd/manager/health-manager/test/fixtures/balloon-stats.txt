@@ -1,0 +1,10 @@
+rss 130 16568320
+stats 130 1
+stats 110 0
+balloon 130 stat-available-memory 15594807296
+balloon 130 stat-total-memory 16765427712
+balloon 130 stat-disk-caches 12744593408
+balloon 110 stat-available-memory 18446744073709551615
+balloon 110 stat-total-memory 18446744073709551615
+balloon 110 stat-disk-caches 18446744073709551615
+balloon 500 stat-total-memory 16765427712

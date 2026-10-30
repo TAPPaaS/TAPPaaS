@@ -25,6 +25,7 @@ import {
 } from "../../../lib/ts/src/cluster";
 import { spawnSync } from "child_process";
 import { existsSync } from "fs";
+import { applyBalloonStats, balloonProbe, parseBalloonStats } from "./balloon";
 import { defaultConfigDir, siteNodeHostnames } from "./config";
 import { countedMem } from "./memcount";
 import { Avx512Use, ClusterClient, LanUplink, NodeCapacity, PendingReboot, RunningGuest, StoragePool } from "./types";
@@ -172,10 +173,11 @@ export class CliClusterClient implements ClusterClient {
       };
       cap.guests.push(g);
     }
-    // Per node, ONE ssh answers both remaining questions: how much the host has
-    // actually backed for each guest (RSS of its kvm process), and whether a
-    // guest agent is answering at all. Without the second, `usedMem` is the
-    // host's own view wearing the guest's clothes.
+    // Per node, ONE ssh answers the remaining questions: how much the host has
+    // actually backed for each guest (RSS of its kvm process), whether a guest
+    // agent is answering at all, and what the guest could still use. Without the
+    // second, `usedMem` is the host's own view wearing the guest's clothes;
+    // without the third, page cache counts as used.
     for (const cap of caps.values()) {
       // A container's limit is a ceiling, not memory set aside (#891): what it
       // commits is read from its week of use — one pvesh per container, on its node.
@@ -206,6 +208,7 @@ export class CliClusterClient implements ClusterClient {
             (v) =>
               `(qm status ${v} --verbose 2>/dev/null | grep -qE '^[[:space:]]*free_mem' && echo "stats ${v} 1" || echo "stats ${v} 0")`,
           )
+          .concat(vmids.map(balloonProbe))
           .join("; ");
       const r = ssh("root", `${cap.node}.${mgmtDomain()}`, probe);
       if (r.rc !== 0) continue; // a node we cannot reach leaves its guests unmeasured
@@ -217,6 +220,8 @@ export class CliClusterClient implements ClusterClient {
         if (f[0] === "rss") g.residentMem = Number(f[2]) * 1024; // ps reports KiB
         else if (f[0] === "stats") g.measured = f[2] === "1";
       }
+      const balloon = parseBalloonStats(r.stdout);
+      for (const g of cap.guests) if (g.type === "qemu") applyBalloonStats(g, balloon.get(g.vmid));
     }
     return [...caps.values()].sort((a, b) => a.node.localeCompare(b.node));
   }

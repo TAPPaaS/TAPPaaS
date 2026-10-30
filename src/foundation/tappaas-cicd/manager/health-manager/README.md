@@ -96,7 +96,7 @@ critical condition that counts (see [Assess](#assess)):
 | `storage-pools` | `pvesh /cluster/resources` + one `zfs list` per node | a guest-disk pool **≥ 90%** used (**WARN** at 80%, the ceiling automatic disk growth stops at), or **WARN** when a pool's disks add up to more than it holds (thin disks); `storage-manager inventory` shows what each pool holds, guest by guest |
 | `storage-disks` | `storage-manager inventory --json` | never — **WARN** when a disk's SMART health is FAILED or it shows reallocated, pending or uncorrectable sectors, media errors, wear or heat; when ZFS has degraded or faulted a disk; when a pool is not ONLINE; or when a replication job (an HA guest's copy on its other node) is in error or behind its schedule. Each row names the node and the disk (`<node>:<device>`), the pool (`<node>/<pool>`) or the module |
 | `cpu-impact` | `config/cluster-cpu.json` + one SSH probe per HA guest | never — **WARN** when an HA guest's processes use AVX-512 that its shared CPU level (`haCpu: common`) drops (see below) |
-| `guest-memory` | `pvesh` + one `ps`/`qm status` per node | a module **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose allocated memory exceeds its declared limit |
+| `guest-memory` | `pvesh` + one SSH per node (`ps`, `qm status`, the balloon statistics by `qom-get`) | a module **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose allocated memory exceeds its declared limit. Used is total minus available, so page cache does not count; a VM that reports no available figure keeps Proxmox's and its row says `cache counts as used` |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
 | `backup-keys` | `backup-manager key status --json` | never — **WARN** when the backup encryption keys changed after the last USB key stick was written, or no stick has been written; it stays until `backup-manager key export --usb` writes one |
 | `pending-reboot` | one probe per guest (SSH, or `pct exec` for an LXC module) | never — **WARN** when a guest is waiting for a reboot (see below) |
@@ -121,8 +121,8 @@ Per module it reports **declared → allocated → used**:
 
 - `declared − allocated` is memory the guest has **never touched**. QEMU backs a
   page on first write, so this costs nothing and there is nothing to reclaim.
-- `allocated − used` is memory the guest **touched and then freed**. The host was
-  never told, so it still holds it. This — and only this — is what a balloon
+- `allocated − used` is memory the guest **touched and then freed**, or keeps as
+  page cache. The host still holds it. This — and only this — is what a balloon
   driver could give back.
 
 Measured on a live estate: 60G declared, 31.9G allocated, ~20G used. A report
@@ -135,6 +135,19 @@ module short of memory?** — `used` against its own declaration, WARN at 75% an
 FAIL at 90%. Over-declaring is waste and never fails; running out is a fault and
 does. The first live run found `litellm` at 93% of 4G, which no amount of
 looking at the reclaimable column would have surfaced.
+
+**Used excludes page cache.** Proxmox computes a running VM's `mem` as the
+balloon's total minus free, and free is Linux's MemFree, near zero on any busy
+guest: a Nix builder with 1G in use and 14.6G of page cache read 93% of 16G. The
+balloon's own statistics carry the right figure, `stat-available-memory`, but
+Proxmox does not expose it, so the gate reads it on the node
+(`qom-get /machine/peripheral/balloon0 guest-stats`, batched with the rest of the
+node's probe) and sets used to total minus available. The row shows
+`cache 12.7G`: that memory is in the gap, not in `used`, because the guest gives
+it up as soon as anything asks. A guest with a balloon driver but no available
+figure (Windows) keeps Proxmox's number and the row says `cache counts as used`,
+so a high figure there is not yet a shortage. A container's `mem` leaves out file
+cache already.
 
 **Unmeasured guests are named, never numbered.** The signal is whether the
 balloon statistics carry `free_mem`, *not* whether a guest agent answers: the
