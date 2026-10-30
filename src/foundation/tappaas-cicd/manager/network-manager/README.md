@@ -444,6 +444,32 @@ satellite with the `admin-vpn` role, else a placeholder. The tool is bash
 (`wgvpn/wgvpn.sh`, linked as `network-manager-wgvpn`); it was `satellite-manager
 admin`. Runbook for Mac and Linux devices: [ADMIN-VPN.md](./ADMIN-VPN.md).
 
+## Reports to the CMDB
+
+ADR-040 D4: `network-manager report` sends what the network is to the CMDB
+(cmdb-controller) as one observation; `--json` prints it instead.
+
+| Class | From | Attributes | Relations |
+|---|---|---|---|
+| `zone` | `zones.json` | vlan, subnet, ipv6Subnet (the zone's /64 number), tier, dhcp {start, end} (an Active or Mandatory zone, `.50`–`.250` unless DHCP-start/-end say), desired | `serves` each environment it names |
+| `address` | `dns-manager leases --json`, `dns-manager list --json` | ip, family, reservation (the reserved MAC), leaseUntil | `member-of` the zone its IP is in |
+| `dns-name` | host entries (internal), Caddy domains (public) | fqdn, target, public | |
+| `proxy-route` | `caddy-manager list --json` | host, path, target, gate (forward auth), allowedZones (the zones its access list allows) | `serves` `<module>:<service>` for each service the module's JSON `provides` |
+| `vpn-peer` | `network-manager wgvpn peers` | publicKey, endpoint, allowedIps | |
+
+A source that does not answer is named on stderr and its part left out. A
+reference the CMDB cannot resolve (an environment or service nobody has
+reported yet) is dropped from the batch and the rest sent.
+
+Changes: `add`, `delete`, `enable`/`disable`/`manual`, `bind`, `modify`,
+`set-ssid`, `merge`, `retire --apply`, `reconcile --apply` and `wgvpn
+add-peer`/`remove-peer` report the zones (or peer) they touched as a change,
+with the console's job id (`TAPPAAS_JOB_ID`) and the actor; a deleted zone or
+removed peer is ended. `reconcile` without `--apply` reports the zones as an
+observation. Nothing is polled for the CMDB; a report the CMDB cannot take is
+spooled under `config/.cmdb-spool/` and never fails the verb. `TAPPAAS_CMDB=off`
+sends nothing.
+
 ## Legacy bash tools
 
 Only `zone-reconcile` is still linked onto `PATH` during the transition (plus

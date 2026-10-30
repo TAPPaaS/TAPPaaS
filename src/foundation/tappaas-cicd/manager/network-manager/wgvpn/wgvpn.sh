@@ -32,6 +32,7 @@ readonly CLI_SPEC='
 setup:
 list:
 status:
+peers:
 add-peer: --name= --pubkey= --ip= --endpoint=
 remove-peer:
 config:
@@ -50,6 +51,8 @@ Usage: ${CLI} <sub>
   remove-peer <name>                               remove an admin device
   list                                             show server pubkey, rule status, peers and the
                                                    config version each peer was last given
+  peers                                            the peers as a JSON array (what network-manager
+                                                   report sends to the CMDB)
   config <name|ip/32> [host:port] [privkey]        re-print a client config for an existing peer (the
                                                    Endpoint as add-peer finds it when not given)
 
@@ -64,6 +67,7 @@ main() {
     case "${sub}" in
         setup)   av_setup ;;
         list|status) av_list ;;
+        peers)   av_peers_json ;;
         add-peer)
             local name="" pub="" ip="" endpoint=""
             while [[ $# -gt 0 ]]; do case "$1" in
@@ -103,7 +107,7 @@ main() {
             av_config_cmd "$1" "${2:-}" "${3:-}"
             ;;
         ""|-h|--help|help) usage ;;
-        *) usage; die "unknown sub-verb '${sub}' (setup|add-peer|remove-peer|list|config)" ;;
+        *) usage; die "unknown sub-verb '${sub}' (setup|add-peer|remove-peer|list|peers|config)" ;;
     esac
 }
 

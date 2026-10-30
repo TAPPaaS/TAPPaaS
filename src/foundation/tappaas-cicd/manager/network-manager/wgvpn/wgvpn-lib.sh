@@ -372,6 +372,15 @@ av_peers() {
         | jq -c --arg net "${AV_PEER_SUBNET%.*/*}." '.rows[]? | select((.tunneladdress//"")|startswith($net)) | {name, tunneladdress}'
 }
 
+# The admin peers as one JSON array {name, publicKey, tunneladdress, endpoint}
+# (`network-manager wgvpn peers`; network-manager report, ADR-040).
+av_peers_json() {
+    _ow_api /api/wireguard/client/searchClient \
+        | jq -c --arg net "${AV_PEER_SUBNET%.*/*}." '[.rows[]? | select((.tunneladdress//"")|startswith($net))
+            | {name, publicKey: (.pubkey // ""), tunneladdress,
+               endpoint: (if (.serveraddress // "") != "" then "\(.serveraddress):\(.serverport // "")" else "" end)}]'
+}
+
 # Record that <name> was given a config of this version. Args: <name> <ip/32>
 av_record_issued() {
     local f tmp; f="$(av_issued_file)"

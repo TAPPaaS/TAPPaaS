@@ -1,0 +1,8 @@
+{
+  "domains": [{"uuid": "d1", "domain": "cloud.example.org", "description": "TAPPaaS: nextcloud", "enabled": true}],
+  "handlers": [
+    {"uuid": "x1", "domain_uuid": "d1", "upstream_domain": "nextcloud.srv.internal", "upstream_port": "80", "description": "TAPPaaS: nextcloud",
+     "enabled": true, "directive": "reverse_proxy", "upstream_tls": false, "upstream_http_version": "", "access_list_uuid": "a1", "forward_auth": true, "path": ""}
+  ],
+  "accessLists": [{"uuid": "a1", "name": "tappaas-nextcloud", "description": "", "client_ips": ["10.0.0.0/24"], "invert": false}]
+}

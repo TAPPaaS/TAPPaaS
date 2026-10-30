@@ -1,0 +1,4 @@
+[
+  {"ip": "10.0.0.50", "hostname": "lars-mac", "mac": "aa:bb:cc:00:00:50", "zone": "mgmt", "interface": "lan", "expire": 1793000000},
+  {"ip": "10.0.0.20", "hostname": "tappaas1", "mac": "aa:bb:cc:00:00:20", "zone": "mgmt", "interface": "lan", "expire": 1793000100}
+]

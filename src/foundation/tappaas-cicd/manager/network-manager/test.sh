@@ -78,6 +78,13 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
             bad "TypeScript topology unit tests FAILED"
         fi
 
+        # ADR-040 D4: what `report` sends to the CMDB, and a change's job id.
+        if run_ts "NM_FIXTURE_DIR='${FIXTURE_DIR}' NM_MAIN='${DIST_TEST}/manager/network-manager/src/main.js' node '${DIST_TEST}/manager/network-manager/test/unit/cmdbreport.test.js'"; then
+            ok "TypeScript CMDB report unit tests pass"
+        else
+            bad "TypeScript CMDB report unit tests FAILED"
+        fi
+
         # The CLI checks below are offline: init asks the live firewall which VLAN
         # tags and subnets it already carries, and on a site that runs these zones
         # that answer changes what init writes. A firewall that cannot be asked

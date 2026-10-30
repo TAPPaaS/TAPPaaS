@@ -1,0 +1,4 @@
+[
+  {"uuid": "h1", "host": "tappaas1", "domain": "mgmt.internal", "ip": "10.0.0.20", "hardware_addr": "AA:BB:CC:00:00:20", "description": "TAPPaaS node tappaas1"},
+  {"uuid": "h2", "host": "nextcloud", "domain": "srv.internal", "ip": "10.2.0.10", "hardware_addr": "", "description": "TAPPaaS: nextcloud"}
+]
