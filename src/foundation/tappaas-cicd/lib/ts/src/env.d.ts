@@ -119,6 +119,8 @@ declare module "os" {
   export function tmpdir(): string;
   export function hostname(): string;
   export function homedir(): string;
+  // The OS user a verb runs as: a change report's actor outside the console (job.ts).
+  export function userInfo(): { username: string };
 }
 
 // ── node:child_process (the manager → controller/bash FFI boundary) ────

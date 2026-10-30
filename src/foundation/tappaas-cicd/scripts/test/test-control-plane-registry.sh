@@ -7,7 +7,8 @@
 #   2. its packages are exactly flake.nix's packages
 #   3. its help-json managers are the console's fallback list (ui/src/manifest.ts)
 #   4. control-plane-registry.sh writes the standard entries, keeps a module's,
-#      replaces stale standard ones, and --check writes nothing
+#      replaces stale standard ones, carries the cmdbSource flag, and --check
+#      writes nothing
 #
 # Exits 1 if any assertion fails.
 set -uo pipefail
@@ -69,6 +70,8 @@ ck "an entry carries its source directory" "${CICD}/manager/module-manager" "$(j
 ck "…and its manifest kind" "help-json" "$(jq -r '.components[] | select(.name == "module-manager") | .manifest' "${REG}")"
 ck "…a module's controller keeps what it plugs into" "switch-manager" "$(jq -r '.components[] | select(.name == "foo-controller") | .plugsInto | join(",")' "${REG}")"
 ck "…and a renamed component's old names" "switch-controller" "$(jq -r '.components[] | select(.name == "switch-manager") | .aliases | join(",")' "${REG}")"
+ck "…and components.json's cmdbSource flag" "$(jq -r '[.components[] | select(.cmdbSource == true) | .name] | sort | join(",")' "${C}")" "$(jq -r '[.components[] | select(.module == "tappaas-cicd" and .cmdbSource == true) | .name] | sort | join(",")' "${REG}")"
+ck "…false where components.json has none" "$(jq '[.components[] | select(.cmdbSource != true)] | length' "${C}")" "$(jq '[.components[] | select(.module == "tappaas-cicd" and .cmdbSource == false)] | length' "${REG}")"
 ck "the lock file is beside it" "yes" "$([[ -e "${REG}.lock" ]] && echo yes || echo no)"
 printf '{not json' > "${T}/components.json"
 ck "a broken components.json is refused (rc)" "1" "$(CICD_DIR="${T}" CONFIG_DIR="${T}" bash "${CICD}/scripts/control-plane-registry.sh" >/dev/null 2>&1; echo $?)"

@@ -45,16 +45,25 @@ export const runAsync: Runner = (bin, args, timeoutMs = 120_000) =>
     );
   });
 
+// The environment a job's verb runs with (ADR-040 D4, D6): its Activity id
+// and the console user who asked for it, so the change it reports to the CMDB
+// names its job (lib/ts job.ts currentJob reads them).
+export type JobEnv = { TAPPAAS_JOB_ID: string; TAPPAAS_ACTOR: string };
+
+export function jobEnv(id: string, who: { user: string | null; name: string | null; via: string }): JobEnv {
+  return { TAPPAAS_JOB_ID: id, TAPPAAS_ACTOR: who.user || who.name || who.via };
+}
+
 // A verb that reads a secret on stdin (ap-manager ssid set-passphrase, #889):
 // the secret never reaches argv, where the process list and the logs see it.
 // stdin is written once and closed; the output is captured as for runAsync.
-export type StdinRunner = (bin: string, args: string[], input: string, timeoutMs?: number) => Promise<ExecResult>;
+export type StdinRunner = (bin: string, args: string[], input: string, timeoutMs?: number, env?: JobEnv) => Promise<ExecResult>;
 
-export const runWithStdin: StdinRunner = (bin, args, input, timeoutMs = 60_000) =>
+export const runWithStdin: StdinRunner = (bin, args, input, timeoutMs = 60_000, env) =>
   new Promise((resolve) => {
     let child: ChildProcess;
     try {
-      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb" }, stdio: ["pipe", "pipe", "pipe"] });
+      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb", ...env }, stdio: ["pipe", "pipe", "pipe"] });
     } catch (e) {
       resolve({ rc: -1, stdout: "", stderr: (e as Error).message, ran: false });
       return;
@@ -102,10 +111,12 @@ export async function runJson<T>(run: Runner, bin: string, args: string[], opts:
 // A job's child: its output as it comes (stdout and stderr in one stream, the
 // order the child wrote them), its exit code at the end. stdin is closed, so a
 // script that would prompt fails rather than waits. `ctl.onSpawn` is handed
-// the way to signal it (a job's Stop, jobs.ts).
+// the way to signal it (a job's Stop, jobs.ts); `ctl.env` is the job's
+// (jobEnv), added to the config-root environment.
 export type StopSignal = "SIGINT" | "SIGTERM";
 export interface StreamControl {
   onSpawn?: (signal: (s: StopSignal) => boolean) => void;
+  env?: JobEnv;
 }
 export type Streamer = (bin: string, args: string[], onOutput: (chunk: string) => void, timeoutMs?: number, ctl?: StreamControl) => Promise<{ rc: number; ran: boolean; error: string | null }>;
 
@@ -116,7 +127,7 @@ export const streamAsync: Streamer = (bin, args, onOutput, timeoutMs = 4 * 3600_
   new Promise((resolve) => {
     let child: ChildProcess;
     try {
-      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb" }, stdio: ["ignore", "pipe", "pipe"], detached: true });
+      child = spawn(bin, args, { env: { ...configEnv(), NO_COLOR: "1", TERM: "dumb", ...ctl?.env }, stdio: ["ignore", "pipe", "pipe"], detached: true });
     } catch (e) {
       resolve({ rc: -1, ran: false, error: (e as Error).message });
       return;

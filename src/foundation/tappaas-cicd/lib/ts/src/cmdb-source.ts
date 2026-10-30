@@ -8,22 +8,15 @@
 // manager's own config dir's, so a verb run against --config-dir keeps its
 // reports there.
 //
-// The console's job: TAPPAAS_JOB_ID, else TAPPAAS_JOB (the console sets
-// neither yet — ADR-040 step 4); the actor TAPPAAS_ACTOR, else $USER.
+// A change carries the console's job and its actor (job.ts currentJob).
 
 import { join } from "path";
 import { CmdbObject, CmdbOptions, CmdbRefused, CmdbRelation, CmdbReport, cmdbReport } from "./cmdb";
 import { defaultConfigDir } from "./config-io";
+import { changeJob } from "./job";
 import { moduleOfLocation, moduleSourceOf } from "./instance";
 
 type Obj = Record<string, unknown>;
-
-/** The console job and actor a verb runs for, from its environment. */
-export function cmdbJob(env: Record<string, string | undefined> = process.env): { job?: string; actor?: string } {
-  const job = env.TAPPAAS_JOB_ID || env.TAPPAAS_JOB || undefined;
-  const actor = env.TAPPAAS_ACTOR || env.USER || undefined;
-  return { job, actor };
-}
 
 /** The client options for a manager working on <configDir>. */
 export function cmdbOptions(configDir: string = defaultConfigDir()): CmdbOptions {
@@ -72,7 +65,7 @@ export interface Change {
  *  TAPPAAS_CMDB=off. Returns the report it made (null when none). */
 export function reportChange(c: Change, env: Record<string, string | undefined> = process.env): CmdbReport | null {
   if (c.objects.length === 0) return null;
-  return deliver({ source: c.source, kind: "change", verb: c.verb, ...cmdbJob(env), objects: c.objects, relations: c.relations }, c.configDir, env);
+  return deliver({ source: c.source, kind: "change", verb: c.verb, ...changeJob(env), objects: c.objects, relations: c.relations }, c.configDir, env);
 }
 
 /** Report what a validate or reconcile read anyway, as a side effect (D4):

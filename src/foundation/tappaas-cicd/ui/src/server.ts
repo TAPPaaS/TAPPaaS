@@ -20,7 +20,7 @@ import { Manifests } from "./manifest";
 import { MODULE_NAME, NODE_NAME, OBJECT_NAME, Reads } from "./reads";
 import { ownerSummary, readConfigs } from "./owner";
 import { SECRETS, isSecretName, secretCommand, secretStatus, writeSecret } from "./secrets";
-import { StdinRunner, runWithStdin } from "./run";
+import { StdinRunner, jobEnv, runWithStdin } from "./run";
 import { closeSetupToken, setupComplete, setupSteps } from "./setup";
 import { FIELD_KINDS, FieldKind } from "./fieldmanifest";
 
@@ -518,7 +518,9 @@ export class ConsoleServer {
     if (typeof cmd === "string") return sendJson(res, 400, { error: cmd });
     if (cmd) {
       const run = this.cfg.runStdin ?? runWithStdin;
-      const out = await run(cmd.bin, cmd.args, cmd.input, cmd.timeoutMs);
+      // The verb runs as the job its Activity record will be (its CMDB change names it).
+      const jobId = this.jobs?.newJobId();
+      const out = await run(cmd.bin, cmd.args, cmd.input, cmd.timeoutMs, jobId ? jobEnv(jobId, me) : undefined);
       if (!out.ran || out.rc !== 0) {
         const secret = cmd.input.replace(/\n$/, "");
         const last = (out.stderr || out.stdout).replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").slice(-1)[0] ?? "";
@@ -527,7 +529,7 @@ export class ConsoleServer {
       }
       const spec = SECRETS[name];
       const file = spec.file !== null ? join(home, spec.file) : cmd.where ?? "its owner";
-      if (this.jobs) this.jobs.recordSecret(me, name, file, cmd.keys, `${cmd.bin} ${cmd.args.join(" ")}`);
+      if (this.jobs) this.jobs.recordSecret(me, name, file, cmd.keys, `${cmd.bin} ${cmd.args.join(" ")}`, jobId);
       this.cfg.log(`secret ${name} set by ${me.user ?? "?"} (${me.via}) through ${cmd.bin} ${cmd.args.join(" ")}`);
       if (name === "wlan") void this.reads.ssids.refreshAfterChange();
       if (name === "backup-keys") {

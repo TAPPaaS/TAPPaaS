@@ -323,13 +323,13 @@ if grep -qE 'MIGRATE-WHILE-stopped' "${MV_TEST_DIR}/log"; then ok
 else no "--force must authorize the OFFLINE move (stop, migrate, start)"; fi
 
 # ── ADR-040: a move is a change in the CMDB ──────────────────────────
-# lib/cmdb.sh hands the report to the cmdb CLI; a stub keeps what it was given.
+# lib/cmdb-report.sh hands the report to the cmdb CLI; a stub keeps what it was given.
 printf '#!/usr/bin/env bash\ncat > "%s/cmdb-report.json"\n' "${W}" > "${W}/cmdb"
 chmod +x "${W}/cmdb"
-( export CMDB_BIN="${W}/cmdb" TAPPAAS_CMDB="" TAPPAAS_JOB_ID="20261030140000-abcdef"
+( export CMDB_BIN="${W}/cmdb" TAPPAAS_CMDB="" TAPPAAS_JOB_ID="20261030140000-abcdef" TAPPAAS_ACTOR="lars"
   run_migrate report_moved testvm 130 tappaas2 ) >/dev/null 2>&1
-check "ADR-040: the move is a change, with its verb and job" \
-    "$(jq -r '.kind + " " + .verb + " " + .job' "${W}/cmdb-report.json" 2>/dev/null)" "change migrate-vm testvm 20261030140000-abcdef"
+check "ADR-040: the move is a change, with its verb, job and actor" \
+    "$(jq -r '.kind + " " + .verb + " " + .job + " " + .actor' "${W}/cmdb-report.json" 2>/dev/null)" "change migrate-vm testvm 20261030140000-abcdef lars"
 check "ADR-040: the vm, by its vmid, runs-on the target machine" \
     "$(jq -c '[.objects[0].name, .objects[1].attributes]' "${W}/cmdb-report.json" 2>/dev/null)" '["tappaas2",{"vmid":130,"onNode":{"ref":"m"}}]'
 

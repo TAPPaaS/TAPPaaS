@@ -140,20 +140,19 @@ check_node_reachable() {
 # Record the move in the CMDB (ADR-040 D4): the guest now runs on <node>. A
 # report the CMDB cannot take is spooled or warned about; it never fails the
 # migration. The guest is named as the CMDB knows it: its module instance.
-CMDB_LIB="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/cmdb.sh"
-[[ -r "${CMDB_LIB}" ]] || CMDB_LIB="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/cmdb.sh"
+CMDB_LIB="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/cmdb-report.sh"
+[[ -r "${CMDB_LIB}" ]] || CMDB_LIB="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/cmdb-report.sh"
 report_moved() {
     local module="$1" vmid="$2" node="$3"
     [[ "${TAPPAAS_CMDB:-}" == "off" || ! -r "${CMDB_LIB}" ]] && return 0
-    # shellcheck source=../../lib/cmdb.sh disable=SC1091
+    # shellcheck source=../../lib/cmdb-report.sh disable=SC1091
     . "${CMDB_LIB}"
     jq -n --arg m "${module}" --argjson id "${vmid}" --arg n "${node}" \
-        --arg job "${TAPPAAS_JOB_ID:-${TAPPAAS_JOB:-}}" --arg actor "${TAPPAAS_ACTOR:-${USER:-}}" \
+        --argjson j "$(cmdb_current_job)" \
         '{source: "proxmox-controller", kind: "change", verb: ("migrate-vm " + $m),
           objects: [{ref: "m", class: "machine", name: $n},
                     {class: "vm", name: $m, attributes: {vmid: $id, onNode: {ref: "m"}}}]}
-         + (if $job != "" then {job: $job} else {} end)
-         + (if $actor != "" then {actor: $actor} else {} end)' | cmdb_report
+         + $j' | cmdb_report
 }
 
 # Attempt live migration of a VM.
