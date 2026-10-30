@@ -97,6 +97,16 @@ fi
 MAIN="${DIST}/controller/cmdb-controller/src/main.js"
 CLI="${DIST}/controller/cmdb-controller/src/cli.js"
 
+echo "== the metamodel loader: a relation's tree end =="
+mkdir -p "${T}/mm"
+cp "${HERE}"/metamodel/*.json "${T}/mm/"
+jq '.relations["runs-on"].tree = "sideways"' "${HERE}/metamodel/relations.json" >"${T}/mm/relations.json"
+if node -e "require('${DIST}/controller/cmdb-controller/src/metamodel.js').Metamodel.fromDir('${T}/mm')" 2>&1 | grep -q "relation runs-on: tree sideways"; then
+    ok "a tree end that is none of from, to, both stops the load"
+else
+    bad "a wrong tree end was loaded"
+fi
+
 if [[ "$(id -u)" -eq 0 ]]; then
     echo "  skip: PostgreSQL does not run as root; run this as tappaas"
     results; exit $?
@@ -426,6 +436,7 @@ check "an assessment is no sighting: lastSeen stands" "${_seen}" "$(cmdb show "$
 refuse "an assessment names objects by id" 4 "by id" \
     '{"source":"health-manager","assessment":true,"objects":[{"class":"zone","name":"nope","attributes":{"conditions":[]}}]}'
 check "the rules are served: runs-on's dependant, the shipped set" "from 4" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.rules | length)"')"
+check "the containment is served: each relation type's tree end" "to from both null" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '[.data.relations[] | select(.name == ("allocated-to", "runs-on", "connects", "depends-on")) | .tree | tostring] | join(" ")')"
 refuse "a pool needs its node" 4 "no key" '{"source":"t","objects":[{"class":"storage-pool","name":"tanka1"}]}'
 cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"class":"service","name":"nextcloud:web","attributes":{"onNode":"tappaas1","version":"1"}}]}'
 _svc="$(cmdb show service/nextcloud:web --json | jq -r '.id')"

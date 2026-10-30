@@ -147,7 +147,7 @@ not fit the metamodel).
 | `POST /v1/rescan` | | what each source answered |
 | `POST /v1/sweep`, `GET /v1/sweep` | | a sweep and its record (409 while one runs); the last record (404 when none has) |
 | `GET /v1/classes`, `GET /v1/classes/<name>` | | the metamodel |
-| `GET /v1/rules` | | the correlation rules, each relation type's `dependant` and `required`, each class's ancestors |
+| `GET /v1/rules` | | the correlation rules, each relation type's `dependant`, `required` and `tree`, each class's ancestors |
 | `GET /v1/stream` | | server-sent events: `event: change` with the change's id, kind, source, job, verb, time, objects, relations, drift |
 
 ```bash
@@ -237,6 +237,8 @@ from unseen). The `site` carries `rootCauses[]` and the last run's `assessment`.
 On a relation type (`relations.json`): `dependant`, the end hurt when the other
 fails (`from`, `to`, `both`; none: it carries no health), and `required`. A
 relation row may set `required` and a `redundancyGroup` in its attributes.
+`tree` is the end the console's Health tree nests under the other (`from`, `to`,
+`both` when each end lists the other as a leaf, as a cable; none: no containment).
 [`health-rules.json`](./metamodel/health-rules.json) holds the correlation rules
 (ADR-041 D3); a rule the controller cannot place stops the load like any
 metamodel error, and `GET /v1/rules` serves them with what a reader needs.

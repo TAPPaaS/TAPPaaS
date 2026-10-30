@@ -324,10 +324,10 @@ export class Store {
   }
 
   /** The correlation rules, and what a reader of them needs of the metamodel
-   *  (ADR-041 D3): each relation type's dependant end and whether it is required,
-   *  each class's ancestors. */
+   *  (ADR-041 D3): each relation type's dependant end, whether it is required and
+   *  the end the Health view's tree nests (D5), each class's ancestors. */
   rules(): Obj {
-    const relations = new Map(this.mm.relations.map((r) => [r.name, { name: r.name, dependant: r.dependant, required: r.required }]));
+    const relations = new Map(this.mm.relations.map((r) => [r.name, { name: r.name, dependant: r.dependant, required: r.required, tree: r.tree }]));
     return {
       rules: this.mm.rules,
       relations: [...relations.values()],

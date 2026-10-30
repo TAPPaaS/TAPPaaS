@@ -1,42 +1,49 @@
 {
-  "description": "The relation types of ADR-040 D3. ends: the [from, to] class pairs a relation may join; a subclass of either end may stand in it (placed-in for asset holds for a server). cardinality: n:1 — a from object has one current relation of the type (a new one closes the old); 1:n — a to object has one; 1:1 — both; n:m — neither. dependant (ADR-041 D3): the end that is hurt when the other fails: from, to, or both for a cable; a type without one carries no health. required (default false): a dependant needs the provider. A relation row may say otherwise in its attributes: required (boolean), and redundancyGroup (string): relations of one dependant in one group are satisfied while any one provider is healthy.",
+  "description": "The relation types of ADR-040 D3. ends: the [from, to] class pairs a relation may join; a subclass of either end may stand in it (placed-in for asset holds for a server). cardinality: n:1 — a from object has one current relation of the type (a new one closes the old); 1:n — a to object has one; 1:1 — both; n:m — neither. dependant (ADR-041 D3): the end that is hurt when the other fails: from, to, or both for a cable; a type without one carries no health. tree (ADR-041 D5): the end the Health view's tree nests under the other: from, to, or both when each end lists the other as a leaf (a cable); a type without one is no containment. required (default false): a dependant needs the provider. A relation row may say otherwise in its attributes: required (boolean), and redundancyGroup (string): relations of one dependant in one group are satisfied while any one provider is healthy.",
   "relations": {
     "allocated-to": {
       "description": "A resource is allocated to a CI: the box a node runs on, for now. Later a pool's allocation (O10).",
+      "tree": "to",
       "dependant": "to", "required": true,
       "cardinality": "1:1",
       "ends": [["asset", "node"]]
     },
     "runs-on": {
       "description": "A guest on its machine; software on the node it runs in; a pool or datastore on its node.",
+      "tree": "from",
       "dependant": "from", "required": true,
       "cardinality": "n:1",
       "ends": [["vm", "machine"], ["lxc", "machine"], ["software", "node"], ["storage-pool", "node"], ["datastore", "node"]]
     },
     "part-of": {
       "description": "A port is part of its asset (D9).",
+      "tree": "from",
       "dependant": "from", "required": true,
       "cardinality": "n:1",
       "ends": [["port", "asset"]]
     },
     "placed-in": {
       "description": "An asset stands in a rack or a room; a rack in a room.",
+      "tree": "from",
       "cardinality": "n:1",
       "ends": [["asset", "rack"], ["asset", "room"], ["rack", "room"]]
     },
     "at": {
       "description": "A room is at a location; a CI is at one (a satellite's, recorded; a site's primary).",
+      "tree": "from",
       "cardinality": "n:1",
       "ends": [["room", "location"], ["ci", "location"]]
     },
     "connects": {
       "description": "A cable between two ports (seen or recorded; kind, label, origin, side and the observed link speed are its attributes); a wifi port to an SSID.",
+      "tree": "both",
       "dependant": "both", "required": true,
       "cardinality": "n:m",
       "ends": [["port", "port"], ["port", "ssid"]]
     },
     "member-of": {
       "description": "A node in a cluster or an environment; a user in a group; an address in a zone.",
+      "tree": "from",
       "dependant": "from", "required": true,
       "cardinality": "n:m",
       "ends": [["node", "cluster"], ["node", "environment"], ["user", "group"], ["address", "zone"]]
@@ -49,17 +56,20 @@
     },
     "provides": {
       "description": "A node provides a service (the module's provides).",
+      "tree": "to",
       "cardinality": "n:m",
       "ends": [["node", "service"]]
     },
     "serves": {
       "description": "A zone serves an environment; a proxy route a service.",
+      "tree": "from",
       "dependant": "to", "required": false,
       "cardinality": "n:m",
       "ends": [["zone", "environment"], ["proxy-route", "service"]]
     },
     "owned-by": {
       "description": "An environment or a group is owned by an organization; an organization by its parent; an asset by the site.",
+      "tree": "from",
       "cardinality": "n:1",
       "ends": [["environment", "organization"], ["group", "organization"], ["organization", "organization"], ["asset", "site"]]
     },
