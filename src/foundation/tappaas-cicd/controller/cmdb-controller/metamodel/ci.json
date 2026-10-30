@@ -1,5 +1,5 @@
 {
-  "description": "The root of the class tree and its ci branch (ADR-040 D3): what IT4IT's Actual Product Instance is made of. A field is declared as a service's field is (ADR-020 fields.json: type, required, immutable, description), plus key — the rank of the identity key it is part of (D5; fields with one rank form one key, the lowest rank is tried first) — and identifying with otel — which OpenTelemetry resource attributes name the CI (D14). volatile: the value changes by itself (a pool's used, a lease): it has history like any other, and never counts as drift. A class's expiry (on ci, inherited; a number and s, m, h or d) is how long a CI may go unreported before it is marked unseen (D5); it is never deleted. A field a subclass declares again with only some properties refines the inherited one (a key on name). type relation: the value is another object, kept as a row in relation, not in attribute.",
+  "description": "The root of the class tree and its ci branch (ADR-040 D3): what IT4IT's Actual Product Instance is made of. A field is declared as a service's field is (ADR-020 fields.json: type, required, immutable, description), plus key — the rank of the identity key it is part of (D5; fields with one rank form one key, the lowest rank is tried first) — and identifying with otel — which OpenTelemetry resource attributes name the CI (D14). volatile: the value changes by itself (a pool's used, a lease): it has history like any other, and never counts as drift. desiredRecord on a class: a config/ record can declare it, so one without is unmanaged in a sweep (D15). A class's expiry (on ci, inherited; a number and s, m, h or d) is how long a CI may go unreported before it is marked unseen (D5); it is never deleted. A field a subclass declares again with only some properties refines the inherited one (a key on name). type relation: the value is another object, kept as a row in relation, not in attribute.",
   "classes": {
     "object": {
       "parent": null,
@@ -37,6 +37,7 @@
     "node": {
       "parent": "ci",
       "abstract": true,
+      "desiredRecord": true,
       "description": "What runs software (ArchiMate Node, ADR-022c): a module of kind vm, lxc, machine or device (ADR-022d).",
       "fields": {
         "os": { "type": "string" },
@@ -144,6 +145,7 @@
     "network-element": { "parent": "ci", "abstract": true, "description": "What the network is made of.", "fields": {} },
     "zone": {
       "parent": "network-element",
+      "desiredRecord": true,
       "description": "A zone of zones.json.",
       "fields": {
         "vlan": { "type": "integer" },
@@ -215,6 +217,7 @@
     },
     "share": {
       "parent": "storage-element",
+      "desiredRecord": true,
       "description": "An NFS or SMB share.",
       "fields": {
         "path": { "type": "string" },
@@ -240,7 +243,7 @@
         "lastSeen": { "type": "string", "volatile": true }
       }
     },
-    "identity": { "parent": "ci", "abstract": true, "description": "ADR-007a's objects, identity-manager's.", "fields": {} },
+    "identity": { "parent": "ci", "abstract": true, "desiredRecord": true, "description": "ADR-007a's objects, identity-manager's.", "fields": {} },
     "organization": {
       "parent": "identity",
       "description": "An organization.",
@@ -276,6 +279,7 @@
     "collection": { "parent": "ci", "abstract": true, "description": "What groups other CIs.", "fields": {} },
     "site": {
       "parent": "collection",
+      "desiredRecord": true,
       "description": "The site.",
       "fields": {
         "code": { "type": "string" },
@@ -292,6 +296,7 @@
     },
     "environment": {
       "parent": "collection",
+      "desiredRecord": true,
       "description": "An environment.",
       "fields": {
         "domain": { "type": "string" },

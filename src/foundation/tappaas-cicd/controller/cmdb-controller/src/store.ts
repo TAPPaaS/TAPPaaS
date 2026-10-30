@@ -188,6 +188,10 @@ export class Store {
     readonly mm: Metamodel,
   ) {}
 
+  publish(e: ChangeEvent): void {
+    for (const fn of this.listeners) fn(e);
+  }
+
   onChange(fn: (e: ChangeEvent) => void): () => void {
     this.listeners.add(fn);
     return () => this.listeners.delete(fn);

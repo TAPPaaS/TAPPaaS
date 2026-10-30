@@ -20,6 +20,10 @@ const HELP = `cmdb — the CMDB: the actual state of the site (ADR-040)
                                                       everything within N relations (default 2, both)
   cmdb report [--file F]                              a report (JSON) from stdin; spooled if the
                                                       service is down
+  cmdb sweep [--last]                                 discovery sweep (D15): rescan to full depth, what
+                                                      changed, what differs from config/; exit 0 clean,
+                                                      1 drift or unmanaged, 2 missing or a source failed.
+                                                      --last prints the last record, runs nothing
   cmdb rescan                                         ask every cmdbSource component to report again
   cmdb class list                                     the class tree
   cmdb class show <class>                             a class: fields, keys, relations
@@ -33,7 +37,7 @@ interface Args {
   opts: Map<string, string[]>;
 }
 
-const FLAGS = new Set(["json", "physical", "recorded", "all", "help"]);
+const FLAGS = new Set(["json", "physical", "recorded", "all", "help", "last"]);
 
 function parse(argv: string[]): Args {
   const pos: string[] = [];
@@ -107,6 +111,28 @@ function showText(d: Obj): string {
         ["RELATION", "OBJECT", "SOURCE", "SINCE"],
       ),
     );
+  }
+  return lines.join("\n");
+}
+
+const KIND_WORD: Record<string, string> = { changed: "changed", appeared: "appeared", gone: "gone", desired: "differs from desired", unmanaged: "actual without desired", missing: "desired without actual", unread: "could not be compared" };
+
+// Grouped by object, each difference with its source and verdict.
+function sweepText(d: Obj): string {
+  const c = (d.counts ?? {}) as Record<string, number>;
+  const lines = [
+    `sweep ${String(d.id)} at ${String(d.time)}: ${String(d.status)}${d.since ? ` (since ${String(d.since)})` : " (the baseline: the next one lists what changed)"}`,
+    `  ${c.expected} expected, ${c.drift} drift, ${c.desired} from desired, ${c.unmanaged} unmanaged, ${c.missing} missing, ${c.unread} unread, ${c.sourcesFailed} source(s) failed`,
+  ];
+  for (const s of (d.sources ?? []) as Obj[]) if (!s.ok || s.fallback) lines.push(`  source ${String(s.source)}: ${s.ok ? "no --discover yet, asked plainly" : `FAILED ${String(s.error ?? `exit ${String(s.exitCode)}`)}`}`);
+  let last = "";
+  for (const x of (d.differences ?? []) as Obj[]) {
+    const head = `${String(x.class)} ${String(x.name)}`;
+    if (head !== last) lines.push("", head);
+    last = head;
+    const what = x.attribute ? `${String(x.attribute)}: ${x.kind === "appeared" ? cell(x.after) : x.kind === "gone" ? cell(x.before) : `${cell(x.before)} → ${cell(x.after)}`}` : "";
+    const verdict = x.expected ? `expected${x.verb ? ` (${String(x.verb)})` : ""}` : ["changed", "appeared", "gone"].includes(String(x.kind)) ? "DRIFT" : "";
+    lines.push(`  ${KIND_WORD[String(x.kind)] ?? String(x.kind)}${what ? ` ${what}` : ""}  [${String(x.source)}]${verdict ? ` ${verdict}` : ""}`);
   }
   return lines.join("\n");
 }
@@ -233,6 +259,12 @@ function run(argv: string[]): number {
         );
       });
       return 0;
+    }
+    case "sweep": {
+      // A sweep is every source's full read, then the differ per module.
+      const d = (a.opts.has("last") ? cmdbRequest("GET", "/v1/sweep") : cmdbRequest("POST", "/v1/sweep", {}, { timeoutSeconds: 4 * 3600 })) as Obj;
+      print(json, d, () => sweepText(d));
+      return a.opts.has("last") ? 0 : Number(d.exitCode ?? 0);
     }
     case "rescan": {
       const replay = replaySpool();

@@ -25,6 +25,16 @@ export interface RescanResult {
   seconds: number;
   error?: string;
   stderr?: string; // the last lines it wrote, when it failed
+  fallback?: boolean; // its report verb does not know --discover (D15): asked plainly
+}
+
+export interface CommandResult {
+  ok: boolean;
+  exitCode: number | null;
+  seconds: number;
+  error?: string;
+  stdout: string;
+  stderr: string;
 }
 
 const env = process.env;
@@ -59,28 +69,33 @@ export function rescanSources(file: string = env.CMDB_COMPONENTS ?? DEFAULT_COMP
     .map((c) => ({ name: c.name, argv: [c.name, "report"] }));
 }
 
-function run(src: RescanSource, timeoutSeconds: number): Promise<RescanResult> {
+/** A verb, alongside the server, with the managers' PATH. */
+export function runCommand(argv: string[], timeoutSeconds: number): Promise<CommandResult> {
   const started = Date.now();
   const secs = (): number => Math.round((Date.now() - started) / 100) / 10;
   return new Promise((resolve) => {
     let child: ChildProcess;
     let tail = "";
-    const done = (r: Omit<RescanResult, "source" | "seconds">): void => {
+    let out = "";
+    const done = (r: Pick<CommandResult, "ok" | "exitCode" | "error">): void => {
       clearTimeout(timer);
-      resolve({ source: src.name, seconds: secs(), ...r, ...(r.ok ? {} : { stderr: tail.trim().split("\n").slice(-10).join("\n") }) });
+      resolve({ seconds: secs(), ...r, stdout: out, stderr: tail.trim().split("\n").slice(-10).join("\n") });
     };
     const timer = setTimeout(() => {
       child?.kill("SIGTERM");
       done({ ok: false, exitCode: null, error: `no answer within ${timeoutSeconds}s` });
     }, timeoutSeconds * 1000);
     try {
-      child = spawn(src.argv[0], src.argv.slice(1), {
-        stdio: ["ignore", "ignore", "pipe"],
+      child = spawn(argv[0], argv.slice(1), {
+        stdio: ["ignore", "pipe", "pipe"],
         env: { ...env, PATH: env.CMDB_SOURCE_PATH ?? `${MANAGER_PATH}:${env.PATH ?? ""}`, HOME: env.HOME ?? "/home/tappaas" },
       });
     } catch (e) {
       return done({ ok: false, exitCode: null, error: e instanceof Error ? e.message : String(e) });
     }
+    child.stdout?.on("data", (c) => {
+      out += c.toString("utf8");
+    });
     child.stderr?.on("data", (c) => {
       tail = (tail + c.toString("utf8")).slice(-4000);
     });
@@ -89,12 +104,34 @@ function run(src: RescanSource, timeoutSeconds: number): Promise<RescanResult> {
   });
 }
 
-export async function rescan(log: (line: string) => void, sources: RescanSource[] = rescanSources()): Promise<{ asked: RescanResult[] }> {
+async function run(src: RescanSource, timeoutSeconds: number, discover: boolean): Promise<RescanResult> {
+  const argv = discover ? [...src.argv, "--discover"] : src.argv;
+  let r = await runCommand(argv, timeoutSeconds);
+  // A source that does not know the flag reports as it does today (D15): the
+  // argument gates refuse it by name before anything runs.
+  const fallback = discover && !r.ok && /unknown option.*--discover/.test(r.stderr);
+  if (fallback) r = await runCommand(src.argv, timeoutSeconds);
+  return {
+    source: src.name,
+    ok: r.ok,
+    exitCode: r.exitCode,
+    seconds: r.seconds,
+    ...(r.error ? { error: r.error } : {}),
+    ...(r.ok ? {} : { stderr: r.stderr }),
+    ...(fallback ? { fallback: true } : {}),
+  };
+}
+
+export async function rescan(
+  log: (line: string) => void,
+  sources: RescanSource[] = rescanSources(),
+  opts: { discover?: boolean } = {},
+): Promise<{ asked: RescanResult[] }> {
   const timeout = Number(env.CMDB_RESCAN_TIMEOUT_SECONDS ?? "900");
   const asked: RescanResult[] = [];
   for (const src of sources) {
-    log(`rescan: asking ${src.name} (${src.argv.join(" ")})`);
-    const r = await run(src, timeout);
+    log(`rescan: asking ${src.name} (${src.argv.join(" ")}${opts.discover ? " --discover" : ""})`);
+    const r = await run(src, timeout, opts.discover === true);
     if (!r.ok) log(`rescan: ${src.name} failed (${r.error ?? `exit ${String(r.exitCode)}`})`);
     asked.push(r);
   }

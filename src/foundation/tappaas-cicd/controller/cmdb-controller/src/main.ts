@@ -23,6 +23,7 @@
 
 import { chmodSync, existsSync, readFileSync, readdirSync, unlinkSync } from "fs";
 import { dirname, join } from "path";
+import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { Metamodel } from "./metamodel";
 import { Pg } from "./pg";
 import { Api } from "./server";
@@ -100,7 +101,7 @@ async function serve(): Promise<void> {
   };
   const tokenFile = env.CMDB_TOKEN_FILE ?? "/etc/secrets/cmdb-token";
   const token = readToken(tokenFile);
-  const api = new Api({ store, token, log });
+  const api = new Api({ store, token, log, configDir: defaultConfigDir() });
 
   const sock = env.CMDB_SOCKET ?? "/run/cmdb/cmdb.sock";
   if (existsSync(sock)) unlinkSync(sock); // a socket the last run left behind

@@ -39,6 +39,7 @@ export interface ClassDef {
   description: string;
   declared: Record<string, Partial<FieldDef> & { spec?: Record<string, unknown> }>;
   expiry: string | null; // as declared ("7d"); inherited, see expirySeconds()
+  desiredRecord: boolean; // a config/ record can declare it; inherited, see hasDesiredRecord()
   keyVia: KeyVia[]; // as declared; inherited, see keyVia()
 }
 
@@ -136,6 +137,7 @@ export class Metamodel {
         description: typeof raw.description === "string" ? raw.description : "",
         declared,
         expiry: typeof raw.expiry === "string" ? raw.expiry : null,
+        desiredRecord: raw.desiredRecord === true,
         keyVia: Array.isArray(raw.keyVia)
           ? raw.keyVia.filter(isObj).map((k) => ({
               rank: Number(k.rank),
@@ -215,6 +217,12 @@ export class Metamodel {
       if (e !== null) return parseDuration(e);
     }
     return DEFAULT_EXPIRY_SECONDS;
+  }
+
+  /** Can a config/ record declare this class? What a sweep calls unmanaged
+   *  when it has none (D15). A lease or a service never has one of its own. */
+  hasDesiredRecord(name: string): boolean {
+    return this.ancestors(name).some((a) => this.classes.get(a)!.desiredRecord);
   }
 
   /** The keys of a class that are fields of related objects, own and inherited. */

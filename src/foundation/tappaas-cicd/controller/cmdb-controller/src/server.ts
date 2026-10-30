@@ -11,6 +11,7 @@
 //   GET  /v1/objects/<id|name>/history[?class=&at=]  every period; or as of a time
 //   GET  /v1/objects/<id|name>/impact[?hops=&direction=]
 //   POST /v1/resolve                       OpenTelemetry resource attributes → object
+//   POST /v1/sweep                         the discovery sweep; GET: the last record
 //   POST /v1/rescan                        ask every cmdbSource component to report again
 //   GET  /v1/classes, /v1/classes/<name>   the metamodel
 //   GET  /v1/stream                        server-sent events, one per change
@@ -21,6 +22,7 @@ import { createServer, IncomingMessage, Server, ServerResponse } from "http";
 import { timingSafeEqual } from "crypto";
 import { ChangeEvent, HttpError, ReportError, Store } from "./store";
 import { rescan } from "./rescan";
+import { Sweep } from "./sweep";
 import { PgError } from "./pg";
 
 const JSON_TYPE = "application/json; charset=utf-8";
@@ -31,6 +33,7 @@ type Obj = Record<string, unknown>;
 export interface ServeOptions {
   store: Store;
   token: string | null; // required on the loopback listener; never on the socket
+  configDir: string; // what a sweep compares with
   log: (line: string) => void;
 }
 
@@ -76,9 +79,11 @@ function authorized(req: IncomingMessage, token: string): boolean {
 export class Api {
   private streams = new Set<ServerResponse>();
   private heartbeat: unknown = null;
+  private readonly sweeper: Sweep;
 
   constructor(private readonly o: ServeOptions) {
     o.store.onChange((e) => this.publish(e));
+    this.sweeper = new Sweep(o.store, { configDir: o.configDir, log: o.log });
   }
 
   private publish(e: ChangeEvent): void {
@@ -132,7 +137,7 @@ export class Api {
     const [, what, ref, sub] = parts;
 
     if (method === "GET" && what === "health" && !ref) {
-      return send(res, 200, { ok: true, data: { schema: 3, ...(await s.counts()) } });
+      return send(res, 200, { ok: true, data: { schema: 4, ...(await s.counts()) } });
     }
     if (method === "POST" && what === "report" && !ref) {
       const body = await readBody(req);
@@ -161,6 +166,15 @@ export class Api {
     if (method === "POST" && what === "resolve" && !ref) {
       const body = (await readBody(req)) as Obj;
       return send(res, 200, { ok: true, data: await s.resolve((body.attributes ?? body) as Obj) });
+    }
+    if (what === "sweep" && !ref && method === "POST") {
+      if (this.sweeper.busy) throw new HttpError(409, "a sweep is already running");
+      return send(res, 200, { ok: true, data: await this.sweeper.run() });
+    }
+    if (what === "sweep" && !ref && method === "GET") {
+      const last = await this.sweeper.last();
+      if (!last) throw new HttpError(404, "no sweep has run yet");
+      return send(res, 200, { ok: true, data: last });
     }
     if (method === "POST" && what === "rescan" && !ref) {
       return send(res, 200, { ok: true, data: await rescan(this.o.log) });
