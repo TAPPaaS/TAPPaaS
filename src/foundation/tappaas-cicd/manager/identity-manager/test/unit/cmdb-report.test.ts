@@ -115,14 +115,14 @@ const spooled = (root: string): Obj[] => {
   const saved = { ...process.env };
   process.env.TAPPAAS_CMDB = "";
   process.env.CMDB_SOCKET = join(root, "no.sock");
-  delete process.env.TAPPAAS_JOB_ID;
-  process.env.TAPPAAS_JOB = "20261030120000-ffeedd"; // asset-reports' spelling, read too
+  process.env.TAPPAAS_JOB_ID = "20261030120000-ffeedd";
+  process.env.TAPPAAS_ACTOR = "lars";
   try {
     const c = liveClient();
     capture(() => run(["user", "add", "bob", "--email", "bob@acme.test", "--groups", "acme__users", "--config-dir", dir], c));
     capture(() => run(["user", "delete", "bob", "--config-dir", dir], c));
   } finally {
-    for (const k of ["TAPPAAS_CMDB", "CMDB_SOCKET", "TAPPAAS_JOB", "TAPPAAS_JOB_ID"]) {
+    for (const k of ["TAPPAAS_CMDB", "CMDB_SOCKET", "TAPPAAS_JOB_ID", "TAPPAAS_ACTOR"]) {
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     }
@@ -133,7 +133,7 @@ const spooled = (root: string): Obj[] => {
   check(changes.length === 2, `two changes (${changes.length})`);
   for (const x of reports) check(cmdbProblems(x).length === 0, `the metamodel takes the ${x.kind} ${x.verb ?? ""}: ${cmdbProblems(x).join("; ")}`);
   const add = changes[0];
-  check(add?.verb === "user add bob" && add?.job === "20261030120000-ffeedd", `the change carries its verb and job (${add?.verb}, ${add?.job})`);
+  check(add?.verb === "user add bob" && add?.job === "20261030120000-ffeedd" && add?.actor === "lars", `the change carries its verb, job and actor (${add?.verb}, ${add?.job}, ${add?.actor})`);
   const bob = add?.objects?.find((o: Obj) => o.class === "user" && o.name === "bob");
   check(bob?.attributes?.uuid === "uuid-user-bob", "the added user, with the uuid Authentik gave it");
   check(add?.relations?.some((x: Obj) => x.type === "member-of" && x.from?.ref === bob?.ref), "and its membership");

@@ -6,9 +6,12 @@
 #
 # Source it:   . "${TAPPAAS_CICD:-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd}/lib/cmdb-report.sh"
 #
-#   cmdb_change_head <verb>     {kind: "change", verb, job, actor} as JSON:
-#                               job is TAPPAAS_JOB_ID (the console's Activity
-#                               id), actor TAPPAAS_ACTOR, else $USER
+#   cmdb_current_job            {job, actor} as JSON, the console job a verb
+#                               runs in (lib/ts job.ts currentJob): job is
+#                               TAPPAAS_JOB_ID (the console's Activity id),
+#                               absent outside a job; actor TAPPAAS_ACTOR (the
+#                               console user), else the OS user
+#   cmdb_change_head <verb>     {kind: "change", verb, job, actor} as JSON
 #   cmdb_send_reports           a JSON array of reports on stdin, each sent
 #                               with cmdb_report. Never fails the caller.
 #                               TAPPAAS_CMDB=off sends nothing.
@@ -19,9 +22,16 @@ _cmdb_report_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=cmdb.sh
 . "${_cmdb_report_here}/cmdb.sh"
 
+cmdb_current_job() {
+    local actor="${TAPPAAS_ACTOR:-}"
+    [[ -n "${actor}" ]] || actor="$(id -un 2>/dev/null)" || true
+    [[ -n "${actor}" ]] || actor="${USER:-unknown}"
+    jq -cn --arg job "${TAPPAAS_JOB_ID:-}" --arg actor "${actor}" \
+        '(if $job != "" then {job: $job} else {} end) + {actor: $actor}'
+}
+
 cmdb_change_head() {
-    jq -cn --arg verb "$1" --arg job "${TAPPAAS_JOB_ID:-}" --arg actor "${TAPPAAS_ACTOR:-${USER:-}}" \
-        '{kind: "change", verb: $verb} + (if $job != "" then {job: $job} else {} end) + (if $actor != "" then {actor: $actor} else {} end)'
+    jq -cn --arg verb "$1" --argjson j "$(cmdb_current_job)" '{kind: "change", verb: $verb} + $j'
 }
 
 cmdb_send_reports() {
