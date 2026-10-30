@@ -14,14 +14,14 @@ import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan
 import { environmentZoneIn, readZonesFile, sharedZonesIn } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
-import { Cmdb, CmdbClassRow, CmdbError, CmdbRelationRow } from "./cmdb";
+import { Cmdb, CmdbClassRow, CmdbError } from "./cmdb";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { composeFields } from "../../lib/ts/src/compose-fields";
 import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, environmentDefaults, environmentDefs, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
-import { HealthGraph, HealthObject, HealthRoot, IMPACT_RELATIONS, buildHealth, healthObject } from "./health";
+import { HealthGraph, HealthObject, HealthRoot, RelationType, buildHealth, healthObject } from "./health";
 import { ModuleIcon, moduleIcon } from "./icons";
 import { BackupRow, BackupRunsDoc, EnvironmentRow, HealthDoc, ModuleList, StorageDoc, TopologyDoc } from "./model";
 
@@ -96,10 +96,6 @@ export const TTL = {
   drift: 0, // on demand
   healthGraph: 0, // until the change stream says something changed (healthlive.ts)
 };
-
-// The relations a health graph reads: those that carry impact, and those that
-// say which group an object collapses into.
-const GRAPH_RELATIONS = [...IMPACT_RELATIONS, "part-of"];
 
 export interface ReadsConfig {
   // Cluster membership for the Setup checklist (lib/ts cluster.ts by default).
@@ -250,6 +246,7 @@ export class Reads {
   readonly ipv6: Cached<Ipv6Read>;
   readonly healthGraph: Cached<HealthGraph>;
   private classRows: CmdbClassRow[] | null = null;
+  private relationTypes: RelationType[] | null = null;
 
   constructor(private readonly cfg: ReadsConfig) {
     const run = cfg.run;
@@ -783,21 +780,23 @@ export class Reads {
   }
 
   // Every object with its conditions, and the relations between them (now, or
-  // as of a moment: the time slider). The metamodel is read once; a CMDB that
-  // does not say leaves the tree the console ships.
+  // as of a moment: the time slider). The metamodel is read until it answers; a
+  // CMDB that does not say leaves the class tree the console ships, and no
+  // containment or dependency to walk.
   async loadHealthGraph(at: string | null): Promise<HealthGraph> {
     const cmdb = this.cmdbClient();
     const when = at ? { at } : {};
     if (!this.classRows) this.classRows = await cmdb.classes().catch(() => null);
-    const [objects, relations, modules] = await Promise.all([
-      cmdb.query({ ...when, limit: 100000 }),
-      Promise.all(GRAPH_RELATIONS.map((type) => cmdb.relations({ type, ...when }))),
-      this.modules.get(),
-    ]);
+    if (!this.relationTypes) {
+      const rules = await cmdb.rules().catch(() => null);
+      this.relationTypes = rules?.relations.map((r) => ({ name: r.name, dependant: r.dependant ?? null, tree: r.tree ?? null })) ?? null;
+    }
+    const [objects, relations, modules] = await Promise.all([cmdb.query({ ...when, limit: 100000 }), cmdb.relations({ ...when }), this.modules.get()]);
     return buildHealth({
       objects,
-      relations: relations.flat() as CmdbRelationRow[],
+      relations,
       classes: this.classRows ?? [],
+      relationTypes: this.relationTypes ?? [],
       modules: (modules.value?.modules ?? []).map((m) => m.name),
       now: at ? Date.parse(at) : (this.cfg.now ?? Date.now)(),
       at,

@@ -17,6 +17,7 @@ export const FIELD_TYPES = ["string", "integer", "number", "boolean", "array", "
 export type FieldType = (typeof FIELD_TYPES)[number];
 export type Cardinality = "1:1" | "n:1" | "1:n" | "n:m";
 export type Dependant = "from" | "to" | "both";
+export type TreeEnd = "from" | "to" | "both";
 
 export interface FieldDef {
   class: string; // the class that declares (or refines) it
@@ -64,6 +65,7 @@ export interface RelationEnd {
   description: string;
   dependant: Dependant | null; // the end hurt when the other fails (ADR-041 D3); null: carries no health
   required: boolean; // a dependant needs the provider; a relation row may say otherwise
+  tree: TreeEnd | null; // the end the Health view's tree nests under the other (ADR-041 D5); null: no containment
 }
 
 export interface Key {
@@ -177,6 +179,8 @@ export class Metamodel {
       if (!["1:1", "n:1", "1:n", "n:m"].includes(card)) throw new Error(`metamodel/${file}: relation ${name}: cardinality ${card}`);
       const dependant = raw.dependant === undefined ? null : (String(raw.dependant) as Dependant);
       if (dependant !== null && !["from", "to", "both"].includes(dependant)) throw new Error(`metamodel/${file}: relation ${name}: dependant ${dependant}`);
+      const tree = raw.tree === undefined ? null : (String(raw.tree) as TreeEnd);
+      if (tree !== null && !["from", "to", "both"].includes(tree)) throw new Error(`metamodel/${file}: relation ${name}: tree ${tree}`);
       for (const end of raw.ends) {
         if (!Array.isArray(end) || end.length !== 2) throw new Error(`metamodel/${file}: relation ${name}: an end is [from, to]`);
         this.relations.push({
@@ -188,6 +192,7 @@ export class Metamodel {
           description: typeof raw.description === "string" ? raw.description : "",
           dependant,
           required: raw.required === true,
+          tree,
         });
       }
     }

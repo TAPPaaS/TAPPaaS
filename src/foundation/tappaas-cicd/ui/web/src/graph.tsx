@@ -7,7 +7,6 @@ import dagre from "@dagrejs/dagre";
 import { BaseEdge, Background, Controls, Edge, EdgeProps, Handle, MarkerType, Node, NodeProps, Position, ReactFlow, getBezierPath } from "@xyflow/react";
 import { ReactNode, useMemo } from "react";
 import { Route, columnPositions, routeEdges } from "./columns";
-import { tierPositions } from "./tiers";
 
 export interface GNode {
   id: string;
@@ -21,7 +20,6 @@ export interface GNode {
   order?: number; // the starting row within its column (ascending), then the id (columns.ts reorders)
   head?: boolean; // the column's title: pinned to the top
   after?: string; // kept directly below this node of its column
-  tier?: number; // when every top-level node has one: dagre's order, pressed into rows (tiers.ts), 0 at the bottom
   parent?: string; // a sub-flow: drawn inside that node, at `at`, which is sized to hold it
   at?: { x: number; y: number };
 }
@@ -126,14 +124,12 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
   const bus = !!grid; // a tree's lines; dagre keeps React Flow's own
   const routes = columns && fixed ? routeEdges(nodes, fixed, live) : null;
   if (!fixed) dagre.layout(g);
-  const tiered = !fixed && top.length > 0 && top.every((n) => n.tier !== undefined);
-  const rows = tiered ? tierPositions(top.map((n) => ({ id: n.id, w: n.w, h: n.h, tier: n.tier as number, x: (g.node(n.id) as { x: number }).x })), nodesep, ranksep) : null;
   const vertical = rankdir === "TB";
   return {
     // A parent before its children, as React Flow needs them.
     nodes: [...top, ...nodes.filter((n) => n.parent)].map((n) => {
       if (n.parent) return { id: n.id, type: "box", position: n.at ?? { x: 0, y: 0 }, parentId: n.parent, extent: "parent" as const, data: { g: n, vertical } };
-      const at = fixed?.get(n.id) ?? rows?.get(n.id);
+      const at = fixed?.get(n.id);
       if (at || fixed) return { id: n.id, type: "box", position: at ?? { x: 0, y: 0 }, data: { g: n, vertical } };
       const p = g.node(n.id) as { x: number; y: number };
       return { id: n.id, type: "box", position: { x: p.x - n.w / 2, y: p.y - n.h / 2 }, data: { g: n, vertical } };

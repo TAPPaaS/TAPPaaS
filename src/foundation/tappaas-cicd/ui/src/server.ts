@@ -12,7 +12,7 @@ import { linesNaming } from "./activity";
 import { attention, findingsFor, moduleSummaries, withConditions } from "./badges";
 import { Entry, envelope } from "./cache";
 import { SCHEMAS } from "./fields";
-import { HealthGraph, healthSummary, moduleHealth } from "./health";
+import { HealthGraph, TREE_FACETS, healthEgo, healthPath, healthSummary, healthTree, moduleHealth, treeChildren, treePath, treeSearch } from "./health";
 import { HealthLive } from "./healthlive";
 import { JumpKind, jumpsFor } from "./jumps";
 import { Assistant, AssistantEvent } from "./assistant";
@@ -36,7 +36,7 @@ export interface ServerConfig {
   runStdin?: StdinRunner; // the verb that takes a secret on stdin (wlan: ap-manager ssid set-passphrase)
   litellm?: LiteLLM | null; // the assistant's LiteLLM (ADR-034 D7); absent: no assistant
   assistant?: Assistant | null; // its agent loop (assistant.ts)
-  healthLive?: HealthLive | null; // the graph read's freshness and live feed (healthlive.ts)
+  healthLive?: HealthLive | null; // the health document's freshness and live feed (healthlive.ts)
 }
 
 const JSON_TYPE = "application/json; charset=utf-8";
@@ -198,7 +198,7 @@ export class ConsoleServer {
         });
       }
       case "health": {
-        if (a !== undefined) return this.healthApi(a, b, parts.length, url, res, req);
+        if (a !== undefined) return this.healthApi(a, b, parts[3], parts.length, url, res, req);
         const h = await r.health.get();
         return sendJson(res, 200, env(h, h.value ? { ...h.value, attention: attention(h.value) } : null));
       }
@@ -344,20 +344,48 @@ export class ConsoleServer {
   }
 
   // ── the Health view (ADR-041 D5) ──────────────────────────────────
-  //   GET /health/graph[?at=<time>]  every object with its worst condition, the
-  //                                  impact-carrying relations, groups and roots
-  //   GET /health/object/<id>        the CI panel's data
-  //   GET /health/roots              health-manager roots, else the graph's
-  //   GET /health/summary            the worst per page: counts, types, Attention
-  //   GET /health/stream             what moved, as server-sent events
-  private async healthApi(sub: string, id: string | undefined, depth: number, url: URL, res: ServerResponse, req?: IncomingMessage): Promise<void> {
+  //   GET /health/tree[?q=<text>]         the facets, or what a search finds
+  //   GET /health/tree/<id>/children      one level of the tree
+  //   GET /health/tree/<id>/path          the way down to an object
+  //   GET /health/ego/<id>[?depth=&at=]   an object and its neighbours by relation
+  //   GET /health/ego/<id>/path?to=root|impact[&at=]  the chain of the derivation
+  //   GET /health/object/<id>             the CI panel's data
+  //   GET /health/roots                   health-manager roots, else the document's
+  //   GET /health/summary                 the worst per page: counts, types, Attention
+  //   GET /health/stream                  what moved, as server-sent events
+  private async healthApi(sub: string, id: string | undefined, tail: string | undefined, depth: number, url: URL, res: ServerResponse, req?: IncomingMessage): Promise<void> {
     const r = this.reads;
     const failed = (e: Error): void => sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: e.message });
-    if (sub === "graph" && depth === 2) {
+    if (sub === "tree") {
+      const g = await this.graph();
+      const doc = g.value;
+      const q = url.searchParams.get("q");
+      if (depth === 2) return sendJson(res, 200, { ...envelope(g), data: doc ? (q !== null ? treeSearch(doc, q) : healthTree(doc)) : null });
+      if (depth === 4 && id && (tail === "children" || tail === "path")) {
+        if (!OBJECT_ID.test(id) && !TREE_FACETS.includes(id)) return sendJson(res, 400, { error: "not an object id" });
+        if (!doc) return sendJson(res, 200, { ...envelope(g), data: null });
+        const data = tail === "children" ? treeChildren(doc, id) : treePath(doc, id);
+        return data ? sendJson(res, 200, { ...envelope(g), data }) : sendJson(res, 404, { error: `no object ${id}` });
+      }
+    }
+    if (sub === "ego" && id && (depth === 3 || (depth === 4 && tail === "path"))) {
+      if (!OBJECT_ID.test(id)) return sendJson(res, 400, { error: "not an object id" });
       const at = url.searchParams.get("at");
-      if (at === null) return sendJson(res, 200, envelope(await this.graph()));
-      if (Number.isNaN(Date.parse(at))) return sendJson(res, 400, { error: `at ${at} is not a date` });
-      return r.loadHealthGraph(new Date(at).toISOString()).then((d) => sendJson(res, 200, { data: d, at: d.generated, ageSeconds: 0, refreshing: false, error: null }), failed);
+      if (at !== null && Number.isNaN(Date.parse(at))) return sendJson(res, 400, { error: `at ${at} is not a date` });
+      const to = url.searchParams.get("to");
+      if (depth === 4 && to !== "root" && to !== "impact") return sendJson(res, 400, { error: "to is root or impact" });
+      const hops = Number(url.searchParams.get("depth") ?? 1);
+      if (!Number.isInteger(hops) || hops < 1 || hops > 3) return sendJson(res, 400, { error: "depth is 1 to 3" });
+      try {
+        const g = at === null ? await this.graph() : null;
+        const doc = g ? g.value : await r.loadHealthGraph(new Date(at as string).toISOString());
+        if (!doc) return sendJson(res, 200, { ...(g ? envelope(g) : {}), data: null });
+        const data = depth === 4 ? healthPath(doc, id, to as "root" | "impact") : healthEgo(doc, id, hops);
+        if (!data) return sendJson(res, 404, { error: `no object ${id}` });
+        return sendJson(res, 200, g ? { ...envelope(g), data } : { data, at: doc.generated, ageSeconds: 0, refreshing: false, error: null });
+      } catch (e) {
+        return failed(e as Error);
+      }
     }
     if (sub === "object" && depth === 3 && id) {
       if (!OBJECT_ID.test(id)) return sendJson(res, 400, { error: "not an object id" });
@@ -372,7 +400,7 @@ export class ConsoleServer {
       return sendJson(res, 200, { ...envelope(g), data: healthSummary(g.value) });
     }
     if (sub === "stream" && depth === 2 && req) return this.streamHealth(req, res);
-    return sendJson(res, 404, { error: "health | health/graph | health/object/<id> | health/roots | health/summary | health/stream" });
+    return sendJson(res, 404, { error: "health | health/tree | health/ego/<id> | health/object/<id> | health/roots | health/summary | health/stream" });
   }
 
   // As a job's output: an event per thing that moved, and a comment now and

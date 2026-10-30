@@ -523,6 +523,54 @@
    "displayName": null,
    "physical": false,
    "attributes": {}
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000017",
+   "class": "location",
+   "name": "HQ",
+   "displayName": null,
+   "physical": false,
+   "attributes": {}
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000018",
+   "class": "room",
+   "name": "Server room",
+   "displayName": null,
+   "physical": false,
+   "attributes": {}
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000019",
+   "class": "rack",
+   "name": "Rack A",
+   "displayName": null,
+   "physical": false,
+   "attributes": {}
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000001a",
+   "class": "organization",
+   "name": "rossen",
+   "displayName": null,
+   "physical": false,
+   "attributes": {}
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000001b",
+   "class": "group",
+   "name": "admins",
+   "displayName": null,
+   "physical": false,
+   "attributes": {}
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000001c",
+   "class": "software",
+   "name": "nginx",
+   "displayName": null,
+   "physical": false,
+   "attributes": {}
   }
  ],
  "relations": [
@@ -855,6 +903,156 @@
     "name": "home"
    },
    "attributes": null
+  },
+  {
+   "id": 23,
+   "type": "placed-in",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000006",
+    "class": "server",
+    "name": "srv-01"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000019",
+    "class": "rack",
+    "name": "Rack A"
+   },
+   "attributes": null
+  },
+  {
+   "id": 24,
+   "type": "placed-in",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000019",
+    "class": "rack",
+    "name": "Rack A"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000018",
+    "class": "room",
+    "name": "Server room"
+   },
+   "attributes": null
+  },
+  {
+   "id": 25,
+   "type": "at",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000018",
+    "class": "room",
+    "name": "Server room"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000017",
+    "class": "location",
+    "name": "HQ"
+   },
+   "attributes": null
+  },
+  {
+   "id": 26,
+   "type": "at",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000003",
+    "class": "site",
+    "name": "rossen"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000017",
+    "class": "location",
+    "name": "HQ"
+   },
+   "attributes": null
+  },
+  {
+   "id": 27,
+   "type": "owned-by",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000007",
+    "class": "server",
+    "name": "srv-02"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000003",
+    "class": "site",
+    "name": "rossen"
+   },
+   "attributes": null
+  },
+  {
+   "id": 28,
+   "type": "owned-by",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000005",
+    "class": "environment",
+    "name": "home"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000001a",
+    "class": "organization",
+    "name": "rossen"
+   },
+   "attributes": null
+  },
+  {
+   "id": 29,
+   "type": "owned-by",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000001b",
+    "class": "group",
+    "name": "admins"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000001a",
+    "class": "organization",
+    "name": "rossen"
+   },
+   "attributes": null
+  },
+  {
+   "id": 30,
+   "type": "member-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000015",
+    "class": "user",
+    "name": "lars"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000001b",
+    "class": "group",
+    "name": "admins"
+   },
+   "attributes": null
+  },
+  {
+   "id": 31,
+   "type": "provides",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000c",
+    "class": "vm",
+    "name": "nextcloud"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000011",
+    "class": "service",
+    "name": "nextcloud:nextcloud"
+   },
+   "attributes": null
+  },
+  {
+   "id": 32,
+   "type": "runs-on",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000001c",
+    "class": "software",
+    "name": "nginx"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000010",
+    "class": "vm",
+    "name": "logging"
+   },
+   "attributes": null
   }
  ],
  "ids": {
@@ -879,7 +1077,13 @@
   "a1": "00000000-0000-4000-8000-000000000013",
   "a2": "00000000-0000-4000-8000-000000000014",
   "u1": "00000000-0000-4000-8000-000000000015",
-  "u2": "00000000-0000-4000-8000-000000000016"
+  "u2": "00000000-0000-4000-8000-000000000016",
+  "location": "00000000-0000-4000-8000-000000000017",
+  "room": "00000000-0000-4000-8000-000000000018",
+  "rack": "00000000-0000-4000-8000-000000000019",
+  "org": "00000000-0000-4000-8000-00000000001a",
+  "admins": "00000000-0000-4000-8000-00000000001b",
+  "svc": "00000000-0000-4000-8000-00000000001c"
  },
  "history": [
   {

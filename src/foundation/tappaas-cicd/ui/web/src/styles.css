@@ -314,7 +314,7 @@ ol.setup { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px
 
 /* ── graphs of cards (graph.tsx): config tree, zones, identity ───────── */
 .graph { border: 1px solid var(--line); border-radius: 8px; background: #fbfcfd; margin: 6px 0; }
-.gcard { overflow: hidden; box-sizing: border-box; }
+.gcard { position: relative; overflow: hidden; box-sizing: border-box; }
 .gcard-static { cursor: default; }
 .mcard { display: flex; flex-direction: column; height: 100%; }
 .mcard-rows { border-collapse: collapse; margin-top: 4px; width: 100%; table-layout: fixed; }
@@ -547,9 +547,33 @@ button.mod-tile:hover { background: var(--info-bg); }
 
 /* the Health view (ADR-041 D5) */
 .health-view { display: flex; gap: 12px; height: calc(100vh - 215px); min-height: 480px; }
-.health-side { width: 270px; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow: auto; }
+.health-side { width: 290px; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow: auto; }
 .health-side h3 { margin: 2px 0 8px; font-size: 13.5px; }
-.health-canvas { flex: 1; min-width: 0; height: auto; margin: 0; }
+.health-centre { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.health-chain { margin: 0; }
+.health-canvas { flex: 1; min-width: 0; min-height: 0; height: auto; margin: 0; }
+.ht-search { width: 100%; box-sizing: border-box; margin-bottom: 8px; font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; }
+.ht-list { list-style: none; margin: 0; padding: 0; }
+.ht-top { margin-top: 6px; }
+.ht-row { display: flex; align-items: center; gap: 2px; border-radius: 4px; min-height: 26px; }
+.ht-row:hover { background: rgba(148, 163, 184, .14); }
+.ht-on, .ht-on:hover { background: rgba(37, 99, 235, .13); }
+.ht-dim { opacity: .35; }
+.ht-caret { flex: none; width: 18px; height: 22px; padding: 0; font: inherit; font-size: 11px; color: var(--muted); background: none; border: 0; cursor: pointer; }
+span.ht-caret { cursor: default; }
+.ht-name { display: flex; align-items: center; gap: 5px; flex: 1; min-width: 0; padding: 2px 0; font: inherit; font-size: 13px; text-align: left; white-space: nowrap; color: inherit; background: none; border: 0; cursor: pointer; }
+.ht-facet { font-weight: 600; }
+.ht-root { flex: none; color: var(--fail); }
+.ht-count { flex: none; min-width: 18px; padding: 0 5px; border-radius: 9px; font-size: 11px; line-height: 18px; text-align: center; color: #fff; background: #64748b; }
+.ht-count-critical { background: var(--fail); }
+.ht-count-warning { background: var(--warn); }
+.ht-match { display: flex; flex-direction: column; gap: 1px; width: 100%; padding: 4px 6px; font: inherit; text-align: left; background: none; border: 0; border-radius: 4px; cursor: pointer; }
+.ht-match:hover { background: rgba(148, 163, 184, .14); }
+.hc-more { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; padding: 0; font: inherit; font-weight: 700; line-height: 18px; color: #334155; background: #fff; border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
+.hc-more:hover { border-color: var(--accent); color: var(--accent); }
+.hc-pill { display: flex; align-items: center; justify-content: center; gap: 6px; height: 100%; font-size: 12px; white-space: nowrap; }
+.hc-pill .hc-name { min-width: 0; }
+.hc-pill .muted { flex: none; }
 .health-panel { flex: none; }
 .health-panel .att { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .health-panel .att-text { flex: 1 1 100%; }
@@ -576,9 +600,7 @@ button.mod-tile:hover { background: var(--info-bg); }
 .gcard.hc-maint, .hl.hc-maint { background-image: radial-gradient(rgba(100, 116, 139, .32) 1.2px, transparent 1.3px); background-size: 8px 8px; border-style: dotted; }
 .gcard.hc-dim { opacity: .28; }
 .gcard.hc-root { box-shadow: 0 0 0 3px rgba(214, 69, 69, .42); }
-.gcard.hc-halo { box-shadow: 0 0 0 2px rgba(214, 69, 69, .18), 0 0 10px 2px rgba(214, 69, 69, .22); }
-.gcard.hgroup { background-color: rgba(241, 245, 249, .55); overflow: visible; }
-.gcard.hgroup.hc-dim { opacity: 1; }
+.gcard.hgroup { padding: 0 8px; background-color: rgba(241, 245, 249, .85); border-radius: 18px; }
 .hl { padding: 2px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
 @media (max-width: 700px) {
   /* A phone: the menu is a strip along the top, the page gets the width. */
@@ -593,7 +615,6 @@ button.mod-tile:hover { background: var(--info-bg); }
   .health-sheet-btn { display: inline-block; }
   .health-side { display: none; position: fixed; left: 0; right: 0; bottom: 0; width: auto; max-height: 60vh; z-index: 30; border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px rgba(15, 23, 42, .18); }
   .health-side-open { display: block; }
-  .health-panel { position: fixed; inset: 0; width: auto; z-index: 35; border-radius: 0; }
-  .health-map { display: none; }
+  .health-panel { position: fixed; top: 0; bottom: 0; right: 0; left: 12%; width: auto; z-index: 35; border-radius: 12px 0 0 12px; box-shadow: -8px 0 24px rgba(15, 23, 42, .18); }
   .health-time input { width: 130px; }
 }

@@ -94,6 +94,11 @@ export interface CmdbClassRow {
   parent: string | null;
 }
 
+// GET /v1/rules: what a reader needs of the relation types.
+export interface CmdbRules {
+  relations: { name: string; dependant?: "from" | "to" | "both" | null; tree?: "from" | "to" | "both" | null }[];
+}
+
 export interface CmdbConfig {
   url?: string; // default CMDB_URL, else http://127.0.0.1:9098
   tokenFile?: string; // default CMDB_TOKEN_FILE, else /etc/secrets/cmdb-token
@@ -179,6 +184,10 @@ export class Cmdb {
 
   classes(): Promise<CmdbClassRow[]> {
     return this.request("GET", "/v1/classes");
+  }
+
+  rules(): Promise<CmdbRules> {
+    return this.request("GET", "/v1/rules");
   }
 
   // The verb's answer, a list or { roots: [...] }; health-emit's verb. The
