@@ -244,6 +244,13 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   io.checks = () => [gate("disk-threshold", "fail", [], { findings: [{ status: "fail", text: "t", subject: mod }], judged: [mod] })];
   const r = assess(io, {}, NOW);
   check(got(r, nc, "capacity")?.acknowledged?.by === "lars", "an acknowledgement survives a run");
+  vm.attributes.conditions = [cond("capacity", "critical", "disk-full", { flapping: true, flappingHeld: "critical", acknowledged: { by: "lars", note: "n", until: null, sticky: false, at: T0, via: ["machine/x"] } })];
+  const kept = got(assess(io, {}, NOW), nc, "capacity")!;
+  check(kept.flapping === true && kept.flappingHeld === "critical" && kept.acknowledged?.at === T0 && kept.acknowledged?.via?.[0] === "machine/x", "emit's members survive a run");
+  io.checks = () => [gate("disk-threshold", "pass", [], { judged: [mod] })];
+  check(got(assess(io, {}, later(1)), nc, "capacity")?.flapping === true, "…also across a change of status");
+  io.checks = () => [gate("disk-threshold", "fail", [], { findings: [{ status: "fail", text: "t", subject: mod }], judged: [mod] })];
+  vm.attributes.conditions = [cond("capacity", "critical", "disk-full", { acknowledged: { by: "lars", note: "n", until: null, sticky: false } })];
   check(got(r, nc, "capacity")?.maintenance === null, "…a window past its until does not");
   io.checks = () => [gate("disk-threshold", "warn", [], { findings: [{ status: "warn", text: "t", subject: mod }], judged: [mod] })];
   check(got(assess(io, {}, later(5)), nc, "capacity")?.acknowledged === null, "a plain acknowledgement ends with the status");

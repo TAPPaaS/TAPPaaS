@@ -8,7 +8,8 @@
 // with its old lastChecked. A condition whose status and reason hold keeps its
 // since and message, and only lastChecked moves, which the store rewrites in
 // place. What the operator set — acknowledged, maintenance — is carried over: a
-// plain acknowledgement ends when the status changes, a sticky one at ok.
+// plain acknowledgement ends when the status changes, a sticky one at ok. So is
+// what emit keeps on a condition (flapping, flappingHeld).
 
 import { AlertItem } from "./alerts";
 import { CmdbItem, CmdbRel, Condition, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing } from "./assess-model";
@@ -115,6 +116,8 @@ function stamp(c: Condition, p: Condition | undefined, now: string, nowMs: numbe
     message: held ? p.message : c.message,
     acknowledged: ack,
     maintenance: mnt,
+    ...(p.flapping !== undefined ? { flapping: p.flapping } : {}),
+    ...(p.flappingHeld !== undefined ? { flappingHeld: p.flappingHeld } : {}),
   };
 }
 

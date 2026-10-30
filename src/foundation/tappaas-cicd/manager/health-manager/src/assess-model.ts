@@ -5,7 +5,7 @@
 import { CheckSubject } from "./types";
 import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
 
-export interface Acknowledged { by: string; note: string; until: string | null; sticky: boolean }
+export interface Acknowledged { by: string; note: string; until: string | null; sticky: boolean; at?: string; via?: string[] }
 export interface Maintenance { until: string | null; note: string }
 
 export interface Condition {
@@ -20,6 +20,8 @@ export interface Condition {
   rootCause: string | null;
   acknowledged: Acknowledged | null;
   maintenance: Maintenance | null;
+  flapping?: unknown; // emit's, carried over as they are
+  flappingHeld?: unknown;
 }
 
 export interface CmdbItem {

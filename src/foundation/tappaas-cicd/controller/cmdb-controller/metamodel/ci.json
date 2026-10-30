@@ -27,7 +27,9 @@
               "derived": { "type": "boolean", "description": "It follows from another object's failure (rootCause), or is a roll-up: not a failure of its own." },
               "rootCause": { "type": ["string", "null"], "description": "The id of the object it follows from." },
               "acknowledged": { "type": ["object", "null"], "properties": { "by": { "type": "string" }, "note": { "type": "string" }, "until": { "type": "string" }, "sticky": { "type": "boolean" } }, "description": "An operator's acknowledgement: it keeps its status and stops counting." },
-              "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" } }, "description": "A maintenance window: transitions are recorded, not counted." }
+              "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" } }, "description": "A maintenance window: transitions are recorded, not counted." },
+              "flapping": { "description": "health-manager emit's (ADR-041 D4): assess carries it over." },
+              "flappingHeld": { "description": "health-manager emit's (ADR-041 D4): assess carries it over." }
             }
           },
           "description": "Its health, one per kind (ADR-041 D1), as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."
