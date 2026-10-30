@@ -148,7 +148,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const [stickDevice, setStickDevice] = useState("");
   const [stickWritten, setStickWritten] = useState(false);
   const [prepared, setPrepared] = useState(false);
-  const [skipMedium, setSkipMedium] = useState(false); // the machine network-boots: no stick
+  const [skipMedium, setSkipMedium] = useState(false); // Continue: a network boot, or a stick made earlier
   // The boot medium on the mothership, read again every ten seconds while the
   // wizard is open: a prepare that ran shows up without a reload.
   const mediaRead = useRead<BootMedia>("media", 10_000);
@@ -255,7 +255,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
     // Optional, and open until the operator writes a stick or skips: a
     // machine that network-boots needs no stick (then the medium must only be
     // there, which stage 1's job checks again).
-    { id: "medium", title: "0 · Prepare boot medium", required: false, done: stickWritten || skipMedium ? true : mediaReady === false && !prepared ? false : null, detail: "The netboot assets and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick. Skip it for a machine that network-boots." },
+    { id: "medium", title: "0 · Prepare boot medium", required: false, done: stickWritten || skipMedium ? true : mediaReady === false && !prepared ? false : null, detail: "The netboot assets and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick. Continue when the machine network-boots or you have a stick already." },
     { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. Apply records its install answer on the mothership and opens the boot window; stage 2 says how to boot the machine." },
     { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto a ZFS boot pool, the node joins the cluster, is patched and rebooted, and is registered as a pvehost instance." },
@@ -338,8 +338,8 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           </div>
           {!stickWritten && !skipMedium ? (
             <div className="actions">
-              <button className="btn" onClick={() => setSkipMedium(true)}>Skip: the machine network-boots</button>
-              <span className="muted small">No stick is needed then; stage 1 opens the network-boot window.</span>
+              <button className="btn btn-primary" onClick={() => setSkipMedium(true)}>Continue →</button>
+              <span className="muted small">For a network boot, or with a stick you already have, nothing more is needed here.</span>
             </div>
           ) : null}
         </StepRow>
