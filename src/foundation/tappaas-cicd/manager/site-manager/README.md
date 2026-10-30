@@ -303,7 +303,8 @@ The cluster's nodes are not listed in `site.json`: each is a `pvehost` module in
 `config/<node>.json`, with its `address`, `uplinks`, `location` and `storagePools` (the
 tankXY zpools it carries). `node list` lists them (`--json`: name, address, storagePools,
 location), in node order — by name, numbers as numbers; the first is the primary node.
-`node add` registers one, `node delete` archives it, `node reconcile` registers a cluster
+`node add` registers one (and allocates its asset, below), `node delete` archives it (and
+releases the asset), `node reconcile` registers a cluster
 member that has no instance yet and fills a record's empty pools from the node. Every
 manager and the bash layer list the nodes the same way (`lib/ts/src/nodes.ts`,
 `lib/cluster-nodes.sh`), and `validate` refuses a `site.json` that still carries
@@ -361,6 +362,21 @@ every active zone's VLAN tagged — and takes `--mac`. With neither a switch por
 MAC, the first machine that asks for an install answer while the window is open gets it;
 keep `--ttl` short then. A registration that names no MAC never answers a machine that is
 a cluster node. `--mac` takes a MAC only.
+
+**The asset behind the node (ADR-040 D8).** A node is a role an asset plays for a while;
+the asset is the box, in asset-manager's register. `--asset <a>` names it when it was
+recorded before (bought, racked, cabled): node add checks it before anything is installed
+(a server, in stock or placed, in no role) and takes `--switch-port` and `--mac` from its
+recorded cable and the cabled port's MAC when they are not given. Without `--asset`, once
+the node has joined, its DMI serial and its NICs' MACs are read over ssh and matched
+against the free server assets — serial first, then any port's MAC; two matches are a
+conflict and nothing is allocated — and when none matches a new asset is recorded for it
+(`srv-NN`, the node's name as its display name, vendor, model and serial from the
+machine). Either way the asset is allocated to the node, and a placement the operator made
+under the node's name is the asset's from then on. A failure here is a warning naming the
+`asset-manager` command to run, never a failed join. `node delete` releases the asset:
+it keeps its placement, ports and cables under its own name and goes back to placed or
+stock, ready for the next role.
 
 **Boot disks: two fields, blank is the default.** `--boot-disk` and `--boot-mirror`
 each take a size (`2TB`, `1.92T`, `500GB`: within 10 %), a model (`"Samsung 990"`) or

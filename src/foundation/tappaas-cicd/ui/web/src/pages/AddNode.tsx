@@ -63,7 +63,7 @@ export function firstFreeNode(known: string[]): string {
 
 // In the order the operator has the answers (ADR-037 D4): where it is cabled,
 // its MAC, its boot disks; every one may stay blank, and says what blank does.
-const DECLARE_OPTIONS = ["--switch-port", "--mac", "--boot-disk", "--boot-mirror", "--ttl", "--no-reboot"];
+const DECLARE_OPTIONS = ["--asset", "--switch-port", "--mac", "--boot-disk", "--boot-mirror", "--ttl", "--no-reboot"];
 
 function Check({ ok, label, detail }: { ok: boolean | null; label: string; detail?: string }) {
   return (
@@ -166,6 +166,8 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const topo = useRead<Topology>("topology").env?.data;
   const zones = useRead<ZoneRead[]>("zones").env?.data ?? [];
   const ports = useMemo(() => switchPortChoices(topo?.switches ?? [], name), [topo, name]);
+  // The server assets the machine could be (ADR-040 D8): in stock or placed, in no role.
+  const assets = useMemo(() => (topo?.positions?.assets ?? []).filter((a) => a.kind === "server" && !a.role && (a.stage === "stock" || a.stage === "placed")), [topo]);
   const trunk = manualTrunkText(nodeTrunkVlans(zones));
   const declare: Step = useMemo(
     () => ({
@@ -175,6 +177,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
       fixed: valid ? [name] : [],
       only: DECLARE_OPTIONS,
       placeholders: {
+        "--asset": "blank: matched by the machine's serial and MACs once it has joined, or a new asset (srv-NN) is recorded",
         "--switch-port": "none: the port is configured by hand",
         "--mac": "e.g. 58:47:ca:7a:12:34 — blank: learned on the switch port; with none, the first machine that asks",
         "--boot-disk": "blank: the smallest SSD/NVMe",
@@ -182,8 +185,11 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         "--ttl": "7200",
       },
       // The free ports on the switches TAPPaaS programs (and this node's own).
-      choices: { "--switch-port": ports.map((c) => c.value) },
-      suggestNotes: { "--switch-port": Object.fromEntries(ports.map((c) => [c.value, c.label])) },
+      choices: { "--switch-port": ports.map((c) => c.value), "--asset": assets.map((a) => a.name) },
+      suggestNotes: {
+        "--switch-port": Object.fromEntries(ports.map((c) => [c.value, c.label])),
+        "--asset": Object.fromEntries(assets.map((a) => [a.name, [a.displayName, a.model, a.serial ? `serial ${a.serial}` : null, a.stage].filter(Boolean).join(" · ")])),
+      },
       // The node joins with no WAN port and its one detected lan port; stage 5
       // declares the lan ports and the WAN port (node network set). --yes only
       // skips node add's lan-port question, which --no-wan skips already.
@@ -195,6 +201,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
       jobShownIn: "stage 3, where the install is watched",
       note: (
         <>
+          <p><b>The asset</b> — the physical machine in the asset register. Pick it when it was recorded before (bought, racked, cabled): its recorded cable and MAC fill in below. Blank: once the node has joined, its serial and MACs are matched against the free server assets, and when none matches a new asset is recorded for it, named srv-NN, to be placed in stage 6.</p>
           <p><b>Where it is cabled</b> — one of two:</p>
           <ul>
             <li><b>Connected to a TAPPaaS-managed switch:</b> pick its port (the free ones are listed). TAPPaaS makes it a node trunk and learns the machine's MAC there; the MAC field may stay blank.</li>
@@ -217,7 +224,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         </label>
       ),
     }),
-    [name, valid, options, ports, trunk, known, job, busyName],
+    [name, valid, options, ports, assets, trunk, known, job, busyName],
   );
   // Stage 0: the medium built on the mothership when it is missing or stale.
   const prepare: Step = useMemo(
@@ -263,7 +270,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
     { id: "storage", title: "4 · Define data pools", required: false, done: pooled ? true : null, detail: "Until it has one, its guests go to the boot pool. Proposed from its free disks." },
     { id: "lan", title: "5a · A second lan port (bond, then the failover test)", required: false, done: lanDone ? true : null, detail: "lan carries management, the cluster link and every guest: a second port, bonded, keeps the node reachable when one fails. Its switch port is set up with it, and the failover test proves it." },
     { id: "wan", title: "5b · The WAN port", required: false, done: wanDone ? true : null, detail: "Only for a node that may carry the firewall: the port, and optionally the switch port, for its WAN." },
-    { id: "done", title: "6 · Place the machine correctly in the physical view", required: false, done: joined, detail: "Its location, room and rack: where the machine actually stands." },
+    { id: "done", title: "6 · Place the machine correctly in the physical view", required: false, done: joined, detail: "Its asset — the one picked in stage 1, or the one node add matched or recorded for it (srv-NN) — and its location, room and rack: where the machine actually stands." },
   ];
   const current = addNodeStage({ job: job !== null, jobLive: jobLive(running), progress, pooled: pooled || skipPools, lan: lanDone, wan: wanDone });
   // Closing mid-way: the install job keeps running, and reopening finds the
@@ -429,7 +436,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         <StepRow s={steps[7]} open={current === "done"}>
           {valid ? (
             <p className="small">
-              <Link to={viewLink("rack", `node:${name}`)}>Open {name} in the physical view →</Link> — select it there and use <b>Place…</b> to put it in its room and rack. {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}
+              <Link to={viewLink("rack", `node:${name}`)}>Open {name} in the physical view →</Link> — select it there and use <b>Place…</b> to put it in its room and rack. The asset behind it is in Site → Assets, under its own tag, playing {name}. {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}
             </p>
           ) : null}
         </StepRow>

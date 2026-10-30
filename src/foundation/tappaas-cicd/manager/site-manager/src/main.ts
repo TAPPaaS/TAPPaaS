@@ -35,6 +35,8 @@ import { evacuateNode, evacuateExitCode } from "./evacuate";
 import { DieError, GN, RD, YW, CL, debug, die, guarded, info, infoTagged, preflightGuard, refused, warn } from "../../../lib/ts/src/cli";
 import { applyPlan, computePlan } from "./reconcile";
 import { adoptNode, provisionNode } from "./provision";
+import { assetCabling, assetProblem } from "./asset";
+import { allocateNodeAsset, readPositions, releaseNodeAsset } from "./nodeasset";
 import { addNodeStorage, listNodeStorage } from "./storage";
 import { parseSwitchPort, prepareUplinkPort } from "./port";
 import { listNodeUsb, writeNodeUsb } from "./usb";
@@ -147,11 +149,12 @@ export const HELP: HelpSpec = {
       note: "(refused for the primary location and for one a peer, room or device names)",
       options: [["--check", "say whether it can go, in one line; write nothing."], ["--json", "with --check: the whole resulting site.json, for machines."]] },
     { usage: "node list [--json]", note: "(the cluster's nodes: their pvehost instances, with their storage pools)" },
-    { usage: "node add <N> [--adopt <ipv4>] [--switch-port <sw>:<p>] [--mac <m>] [--boot-disk <d>] [--boot-mirror <d>] [--boot-filesystem zfs|ext4] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]", effect: { noPreview: "joins a node: installs it on a ZFS boot pool (network boot or the USB stick), adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add" },
+    { usage: "node add <N> [--adopt <ipv4>] [--asset <a>] [--switch-port <sw>:<p>] [--mac <m>] [--boot-disk <d>] [--boot-mirror <d>] [--boot-filesystem zfs|ext4] [--wan-port <if>|--no-wan] [--lan-ports <a,b>] [--lan-mode <m>] [--lan-primary <if>] [--ttl <s>] [--no-reboot] [--config-only [--storage-pools <a,b>]] [--yes]", effect: { noPreview: "joins a node: installs it on a ZFS boot pool (network boot or the USB stick), adds it to the cluster and registers it as a pvehost instance; its data pools are node storage add" },
       hidden: ["--name <N>", "--install", "--pxe", "--provision", "--pool <p>"],
       options: [
         ["(default)", "Install Proxmox on the machine: TAPPaaS serves the installer's answer and opens the boot window, and the machine boots the installer from the network (PXE) or from the USB stick image."],
         ["--adopt <ipv4>", "Do not install: join a Proxmox installed by hand, reached as root over ssh at <ipv4> with the cicd key authorized; it moves to the node's management address in the join. The install options (--switch-port, --mac, --boot-*, --ttl) do not apply."],
+        ["--asset <a>", "The asset the machine is (asset-manager asset list: a server in stock or placed, in no role): checked before anything is installed, and its recorded cable and MAC stand in for --switch-port and --mac. Blank: once the node has joined, its serial and MACs are matched against the free server assets, and an asset is created (srv-NN) when none matches (ADR-040 D8)."],
         ["--switch-port <sw>:<p>", "The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up as a trunk port, and the machine's MAC is learned there when it boots the installer (blank MAC). On a switch TAPPaaS does not program, configure the port by hand as a trunk port that also carries all the VLAN tagged traffic, and give --mac (blank: the first machine that asks gets the answer)."],
         ["--mac <m>", "The MAC of the cabled card (aa:bb:cc:dd:ee:ff), from the machine's label, its BIOS or its BMC. Blank: learned on --switch-port; with no switch port either, the first machine that asks for an install answer while the boot window is open gets it (a cluster node never does) — keep --ttl short then."],
         ["--boot-disk <d>", "The disk to install Proxmox on (wiped), can be the model name or size if it is unique. Blank: the smallest SSD or NVMe disk, and both when the smallest two are alike (mirrored). ask: chosen on the node's console."],
@@ -939,6 +942,24 @@ function cmdNode(o: Opts, client: SiteClient): void {
     // --pool may be given multiple times; parseOpts keeps only the last, so we
     // also accept trailing positionals after the name as pools.
     const pools = collectPools(o, name);
+    // ADR-040 D8, asset first: the asset is checked before anything is
+    // installed, and what its records say about its cabling fills in.
+    const asset = o.flags.get("--asset");
+    if (asset !== undefined) {
+      const pdoc = readPositions();
+      if (!pdoc) die(`node add: --asset needs config/positions.json (asset-manager asset add --kind server …)`);
+      const bad = assetProblem(pdoc, asset);
+      if (bad) die(`node add: ${bad}`);
+      const cab = assetCabling(pdoc, asset);
+      if (!o.flags.has("--switch-port") && cab.switchPort) {
+        o.flags.set("--switch-port", cab.switchPort);
+        info(`asset ${asset}'s recorded cable: port ${cab.port} to ${cab.switchPort} (--switch-port)`);
+      }
+      if (!o.flags.has("--mac") && cab.mac) {
+        o.flags.set("--mac", cab.mac);
+        info(`asset ${asset}'s MAC: ${cab.mac} (--mac)`);
+      }
+    }
     if (o.boolFlags.has("--config-only")) {
       // Just write the node's pvehost record (no machine contact).
       if (!existsSync(siteFile)) die(`site.json not found: ${siteFile}`);
@@ -947,6 +968,8 @@ function cmdNode(o: Opts, client: SiteClient): void {
       writeNodeRecord(nodesDir, name, pools);
       info(`${GN}✓${CL} node '${name}' added as a pvehost instance (pools: ${pools.join(", ") || "none"})`);
       reportChange({ source: SOURCE, verb: `node add ${name}`, objects: [nodeObject(nodesDir, name)], configDir: nodesDir });
+      // No machine to identify: only an asset named here is allocated.
+      if (asset !== undefined) allocateNodeAsset(name, null, asset);
       return;
     }
     // Install is the default; --adopt <ipv4> joins a Proxmox installed by hand.
@@ -999,6 +1022,10 @@ function cmdNode(o: Opts, client: SiteClient): void {
     }
     if (existsSync(`${nodesDir}/${name}.json`)) {
       reportChange({ source: SOURCE, verb: `node add ${name}`, objects: [nodeObject(nodesDir, name)], configDir: nodesDir });
+      // The asset behind the node (ADR-040 D8): matched by what the machine
+      // says of itself, or made; then allocated to this role.
+      info(`${name}'s asset:`);
+      allocateNodeAsset(name, `${name}.${mgmtDomain()}`, asset);
     }
     return;
   }
@@ -1052,6 +1079,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
       if (!inSite) die(`node '${name}' not found (site-manager node list)`);
       unregisterNodeModule(name, nodesDir, remove);
       reportChange({ source: SOURCE, verb: `node delete ${name}`, objects: [{ class: "machine", name, end: true }], configDir: nodesDir });
+      releaseNodeAsset(name, true);
       return;
     }
 
@@ -1073,10 +1101,13 @@ function cmdNode(o: Opts, client: SiteClient): void {
     if (rc !== 0) die(`remove-node.sh exited ${rc} — the node's pvehost module is unchanged`);
     if (!o.apply) {
       if (inSite) info(`  then: its pvehost module '${name}' is ${remove ? "deleted (--remove)" : "archived"}`);
+      releaseNodeAsset(name, false);
       return;
     }
     unregisterNodeModule(name, nodesDir, remove);
     reportChange({ source: SOURCE, verb: `node delete ${name}`, objects: [{ class: "machine", name, end: true }], configDir: nodesDir });
+    // The role ends; the asset keeps its place under its own name (ADR-040 D7).
+    releaseNodeAsset(name, true);
     // A node rebuilt under this name brings a new host key: no stale pin here.
     for (const h of [name, `${name}.mgmt.internal`]) spawnSync("ssh-keygen", ["-R", h], { stdio: "ignore" });
     return;

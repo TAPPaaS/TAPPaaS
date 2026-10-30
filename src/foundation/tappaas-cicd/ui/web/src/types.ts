@@ -416,7 +416,20 @@ export interface LocationInfo {
   rooms: string[];
   unplaced: string[];
 }
+// An asset as the positions view lists it (lib/ts positions.ts AssetView).
+export interface AssetInfo {
+  name: string;
+  kind: string;
+  displayName: string | null;
+  vendor: string | null;
+  model: string | null;
+  serial: string | null;
+  stage: string;
+  role: string | null;
+  placed: boolean;
+}
 export interface PositionsView {
+  assets?: AssetInfo[];
   locations?: LocationInfo[];
   racks: RackInfo[];
   rooms?: RoomInfo[];
