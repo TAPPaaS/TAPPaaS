@@ -282,10 +282,13 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "report [--json]",
+      usage: "report [--json] [--discover]",
       name: "report",
       note: "(ADR-040: send every installed instance, its services, dependencies and the control plane's components to the CMDB)",
-      options: [["--json", "Print the report instead of sending it."]],
+      options: [
+        ["--json", "Print the report instead of sending it."],
+        ["--discover", "Accepted for the sweep (D15): what this plane holds is all report sends."],
+      ],
     },
     {
       usage: "snapshot-vm <module> [--list|--cleanup N|--restore N]", effect: { noPreview: "takes a snapshot of the VM (--restore rolls it back, --cleanup prunes old ones)" }, readWhen: ["--list"], destructive: ["--restore", "--cleanup"],
@@ -423,6 +426,8 @@ function parseOpts(args: string[]): Opts {
       o.snapCleanup = parseIntStrict(next(), "--cleanup");
     } else if (a === "--restore") {
       o.snapRestore = parseIntStrict(next(), "--restore");
+    } else if (a === "--discover") {
+      // D15: the sweep asks every source; this plane has no deeper read.
     } else if (a === "--json") {
       o.json = true;
     } else if (a === "--diff") {

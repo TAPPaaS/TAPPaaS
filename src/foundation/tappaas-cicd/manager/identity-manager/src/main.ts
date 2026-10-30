@@ -33,7 +33,7 @@ import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfi
 import { CL, DieError, GN, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { CmdbObject } from "../../../lib/ts/src/cmdb";
 import { reportChange, reportObservation, sendObservation } from "../../../lib/ts/src/cmdb-source";
-import { IdentityRead, SOURCE, endsOf, identityObservation, touchedBy } from "./cmdb-report";
+import { IdentityRead, SOURCE, endsOf, identityDiscovery, identityObservation, touchedBy } from "./cmdb-report";
 import { dirname } from "path";
 import { AkSnapshot } from "./reconcile";
 
@@ -82,9 +82,12 @@ export const HELP: HelpSpec = {
     },
     { usage: "validate" },
     {
-      usage: "report [--json]",
+      usage: "report [--json] [--discover]",
       note: "(ADR-040: send the organizations, roles, groups and users to the CMDB)",
-      options: [["--json", "Print the report instead of sending it."]],
+      options: [
+        ["--json", "Print the report instead of sending it."],
+        ["--discover", "Full depth (D15): also Authentik's providers, applications, outposts and flows, on the identity module's CI."],
+      ],
     },
     {
       usage: "<kind> list [--json] [--deep]",
@@ -155,6 +158,7 @@ interface Opts {
   json: boolean;
   deep: boolean;
   noReconcile: boolean;
+  discover: boolean;
   rest: string[];
 }
 function parseOpts(args: string[]): Opts {
@@ -164,6 +168,7 @@ function parseOpts(args: string[]): Opts {
   let json = false;
   let deep = false;
   let noReconcile = false;
+  let discover = false;
   const rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -174,6 +179,8 @@ function parseOpts(args: string[]): Opts {
       // with --apply, matching the other managers). --dry-run still forces
       // preview, so an old caller keeps working.
       dryRun = true;
+    } else if (a === "--discover") {
+      discover = true;
     } else if (a === "--json") {
       json = true;
     } else if (a === "--deep") {
@@ -189,7 +196,7 @@ function parseOpts(args: string[]): Opts {
       rest.push(a);
     }
   }
-  return { configDir, apply, dryRun, json, deep, noReconcile, rest };
+  return { configDir, apply, dryRun, json, deep, noReconcile, discover, rest };
 }
 
 // `bootstrap` — seed the minimal Identity domain from the minimal-org/ templates
@@ -644,7 +651,15 @@ function cmdReport(opts: Opts, client: PrimitiveClient): number {
     if (!(e instanceof AuthentikUnreachable)) throw e;
     warn(`Authentik unreachable (${e.message}) — reporting organizations and roles only`);
   }
-  return sendObservation(identityObservation(model, live), opts.json, cmdbConfigDir(opts), info);
+  let report = identityObservation(model, live);
+  if (opts.discover && live) {
+    try {
+      report = identityDiscovery(report, client.discover());
+    } catch (e) {
+      warn(`Authentik's providers and applications were not read: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  return sendObservation(report, opts.json, cmdbConfigDir(opts), info);
 }
 
 // What a write or a reconcile --apply changed: the objects its actions and

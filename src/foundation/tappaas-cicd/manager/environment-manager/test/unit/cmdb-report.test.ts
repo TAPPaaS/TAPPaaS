@@ -92,6 +92,15 @@ const clients = (): [FakeNetworkClient, FakeModuleClient, FakeDnsTlsClient] => [
   check(!one("zone", "lab"), "a zone serving no reported environment is not named");
 }
 
+// report --discover: nothing deeper exists for this plane (D15).
+{
+  const d = setup();
+  let rc = -1;
+  const a = capture(() => (rc = run(["report", "--json", "--discover", "--config-dir", d], ...clients()))).join("\n");
+  const b = capture(() => run(["report", "--json", "--config-dir", d], ...clients())).join("\n");
+  check(rc === 0 && a === b, "--discover is accepted and reports the same");
+}
+
 // ── add and delete report their change, with the job ───────────────────
 {
   const d = setup();

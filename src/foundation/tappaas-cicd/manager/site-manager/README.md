@@ -514,6 +514,26 @@ Changes: `node add`, `node delete` (the machine ends), `site modify` and the
 `location` verbs (a deleted location ends). `node reconcile` and `reconcile`
 report the membership and pools they read, as a side effect.
 
+**`report --discover`** (ADR-040 D15, what `cmdb sweep` asks for) goes to the full
+depth, one more ssh per node and nothing polled; without it `report` is as above:
+
+- **NICs, used or not:** name, MAC (the permanent one: a bond slave shows the
+  bond's), D9 kind and speed (the fastest mode `ethtool` lists, where D9 has a
+  value for it; `maxMbps` either way), link, the bond and bridge it is in, or none.
+- **Disks:** by-id name, model, serial, size, type, bus, SMART health, and each
+  partition with what it holds (`zfs` and its pool, `efi`, `bios-boot`, `lvm`,
+  `swap`, a filesystem, `nothing`).
+- `nics[]` and `disks[]`, `cpu` and `memory` go on the `server` the node is
+  allocated to (positions.json: the asset whose role is the node), else on the
+  `machine`, so nothing is lost. Each NIC is a `port` of that server; with no
+  asset there are no ports, a port having no meaning without one, and a sweep
+  invents no asset. A port the asset records keeps its name, kind and speed.
+- **ZFS:** a `storage-pool` per pool, named `<node>/<pool>` as storage-manager
+  names it: `health`, `size`, `used`, and `vdevs[]` with members by serial.
+- On the `machine`: `storages[]` (what the node knows, `pvesh …/storage`),
+  `pciDevices[]`, `cpus`. On each guest: `nics[]`, and `disks[]` with their
+  storage (an lxc's mount points). On the `cluster`: `corosyncLinks[]`.
+
 A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`,
 else `TAPPAAS_JOB`) and the actor (`TAPPAAS_ACTOR`, else `$USER`). A report
 the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)

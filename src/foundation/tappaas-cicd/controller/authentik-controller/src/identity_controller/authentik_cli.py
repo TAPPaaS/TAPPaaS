@@ -30,6 +30,7 @@ Subcommands:
 
 People PRIMITIVES (S2b-2 — JSON to stdout, for the TypeScript identity-manager):
   list-users | list-groups | list-roles    — JSON arrays
+  discover                                 — JSON: flows, providers, applications, outposts
   get-user --name                           — one user object (or null)
   ensure-user --name --email --display [--inactive]
   disable-user --name | delete-user --name
@@ -383,6 +384,10 @@ def cmd_list_roles(mgr: AuthentikManager, _args: argparse.Namespace) -> int:
     return _emit(pp.list_roles(mgr))
 
 
+def cmd_discover(mgr: AuthentikManager, _args: argparse.Namespace) -> int:
+    return _emit(pp.discover(mgr))
+
+
 def cmd_get_user(mgr: AuthentikManager, args: argparse.Namespace) -> int:
     return _emit(pp.get_user(mgr, args.name))
 
@@ -604,6 +609,8 @@ def main(argv: list[str] | None = None) -> int:
     # ── People PRIMITIVES (S2b-2) — JSON to stdout for the TS identity-manager ─
     sub.add_parser("list-users", help="JSON array of users (name/uuid/active/email/displayName/groups/roles)")\
        .set_defaults(handler=cmd_list_users)
+    sub.add_parser("discover", help="JSON of the flows, providers, applications and outposts (ADR-040 D15)")\
+       .set_defaults(handler=cmd_discover)
     sub.add_parser("list-groups", help="JSON array of {name, uuid, displayName} (excludes roles)")\
        .set_defaults(handler=cmd_list_groups)
     sub.add_parser("list-roles", help="JSON array of {name, uuid, displayName} (role-marked groups)")\

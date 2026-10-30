@@ -104,7 +104,7 @@ Resizes the disk in Proxmox and then grows the filesystem inside the guest.
 ## Reports to the CMDB
 
 The cluster's actual state reaches the CMDB through `site-manager report`
-(ADR-040 D4). `migrate-vm.sh` reports each move it makes as a change — the vm,
+(ADR-040 D4), and to its full depth through `report --discover` (D15). `migrate-vm.sh` reports each move it makes as a change — the vm,
 by its vmid, `runs-on` its new machine — through `lib/cmdb.sh`, with the
 console's job; a report the CMDB cannot take never fails the migration.
 

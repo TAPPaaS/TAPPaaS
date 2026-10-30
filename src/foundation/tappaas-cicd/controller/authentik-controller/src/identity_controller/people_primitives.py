@@ -125,6 +125,56 @@ def list_roles(mgr: "AuthentikManager") -> list[dict]:
     ]
 
 
+def discover(mgr: "AuthentikManager") -> dict:
+    """What the identity service holds beyond people (ADR-040 D15).
+
+    ``{flows, providers, applications, outposts}``, a provider naming its flows
+    by slug. Only the fields listed here leave: a provider row can carry a
+    client secret, which never reaches the CMDB.
+    """
+    rows = lambda path: mgr._get_json(path, page_size=1000).get("results", [])  # noqa: E731
+    flows = rows("/flows/instances/")
+    slug = {f.get("pk"): f.get("slug") for f in flows}
+    return {
+        "flows": [
+            {"slug": f.get("slug"), "name": f.get("name"), "designation": f.get("designation")}
+            for f in flows
+        ],
+        "providers": [
+            {
+                "name": p.get("name"),
+                "type": p.get("verbose_name") or p.get("component"),
+                "application": p.get("assigned_application_slug"),
+                "flows": {
+                    k: slug.get(p.get(f"{k}_flow"), p.get(f"{k}_flow"))
+                    for k in ("authentication", "authorization", "invalidation")
+                    if p.get(f"{k}_flow")
+                },
+            }
+            for p in rows("/providers/all/")
+        ],
+        "applications": [
+            {
+                "slug": a.get("slug"),
+                "name": a.get("name"),
+                "group": a.get("group"),
+                "provider": (a.get("provider_obj") or {}).get("name"),
+            }
+            for a in mgr._applications()
+        ],
+        "outposts": [
+            {
+                "name": o.get("name"),
+                "type": o.get("type"),
+                "providers": [
+                    p.get("name") for p in (o.get("providers_obj") or [])
+                ],
+            }
+            for o in rows("/outposts/instances/")
+        ],
+    }
+
+
 def get_user(mgr: "AuthentikManager", name: str) -> dict | None:
     """Return the primitive dict for one user, or ``None`` if absent."""
     for u in list_users(mgr):
