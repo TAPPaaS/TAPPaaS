@@ -50,8 +50,10 @@ const d = parseNodeDiscovery(FIXTURE);
   check(eno1?.mac === "aa:bb:cc:00:00:01", `a bond slave's own MAC, not the bond's (${eno1?.mac})`);
   check(eno1?.kind === "rj45" && eno1?.speed === "1g" && eno1?.link === true, "kind, D9 speed, link");
   check(eno1?.bond === "bond0" && eno1?.bridge === "lan", "the bond it is in and that bond's bridge");
+  check(eno1?.linkSpeed === "1g", "the speed negotiated now");
   const sfp = nic("enp2s0f0");
   check(sfp?.kind === "sfp" && sfp?.speed === "10g", "a fibre port is an sfp at its fastest mode");
+  check(sfp?.linkSpeed === undefined, "no link, no negotiated speed");
   check(sfp?.link === false && sfp?.bond === undefined && sfp?.bridge === undefined, "a NIC with no link, in nothing");
   const slow = nic("enp3s0");
   check(slow?.speed === undefined && slow?.maxMbps === 100 && slow?.bridge === "wan", "100M: no D9 speed, the maximum kept");
@@ -142,6 +144,8 @@ function report(extra: string[], cfg: string): Obj {
   check(lan1?.attributes?.mac === "aa:bb:cc:00:00:01" && lan1?.attributes?.speed === undefined, "a recorded port keeps its name; asset-manager's speed stands");
   check(ports.some((p) => p.name === "enp2s0f0" && p.attributes.kind === "sfp" && p.attributes.speed === "10g"), "the NIC with no link is a port");
   check(!ports.some((p) => p.name === "eno1"), "no second port for the same MAC");
+  check(lan1?.attributes?.link === "up" && lan1?.attributes?.linkSpeed === "1g", "a port carries its link, for health-manager to judge");
+  check(ports.find((p) => p.name === "enp2s0f0")?.attributes?.link === "down", "…down too");
 
   const pools = objs.filter((o) => o.class === "storage-pool");
   const pool = pools.find((p) => p.name === "rpool" && p.attributes.onNode.ref === m1?.ref);
