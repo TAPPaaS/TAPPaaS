@@ -30,6 +30,7 @@
         { "path": "pool", "label": "pool" },
         { "path": "volume", "label": "volume" },
         { "path": "used", "label": "used", "format": "bytes" },
+        { "path": "snapshots", "label": "snapshots", "format": "bytes" },
         { "path": "size", "label": "size", "format": "bytes" },
         { "path": "replica", "label": "replica" }
       ]

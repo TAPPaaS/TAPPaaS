@@ -31,7 +31,8 @@ export interface VolumeLive {
   vmid: number;
   pool: string;
   volume: string;
-  used: number;
+  used: number; // bytes on disk, snapshots and reservation apart
+  snapshots?: number; // bytes its snapshots hold
   size: number | null;
   replica: boolean;
 }
@@ -127,8 +128,8 @@ function resources(i: KindInput): Section {
       ? {
           kind: "table",
           title: "Disks and their pools",
-          columns: [{ key: "pool", label: "pool" }, { key: "volume", label: "volume" }, { key: "node", label: "on" }, { key: "size", label: "size", format: "bytes" }, { key: "used", label: "used", format: "bytes" }, { key: "copy", label: "" }],
-          rows: volumes.map((v) => ({ pool: v.pool, volume: v.volume, node: v.node, size: v.size, used: v.used, copy: v.replica ? "replica" : "" })),
+          columns: [{ key: "pool", label: "pool" }, { key: "volume", label: "volume" }, { key: "node", label: "on" }, { key: "size", label: "size", format: "bytes" }, { key: "used", label: "used", format: "bytes" }, { key: "snapshots", label: "snapshots", format: "bytes" }, { key: "copy", label: "" }],
+          rows: volumes.map((v) => ({ pool: v.pool, volume: v.volume, node: v.node, size: v.size, used: v.used, snapshots: v.snapshots ?? 0, copy: v.replica ? "replica" : "" })),
         }
       : {
           kind: "table",

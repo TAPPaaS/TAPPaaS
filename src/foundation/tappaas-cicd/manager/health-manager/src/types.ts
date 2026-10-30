@@ -176,7 +176,8 @@ export interface GuestVolume {
   pool: string;
   volume: string; // vm-110-disk-0, subvol-200-disk-0
   vmid: number;
-  used: number; // bytes
+  used: number; // bytes the dataset holds on disk (usedbydataset), snapshots and reservation apart
+  snapshots: number; // bytes its snapshots hold (usedbysnapshots)
   size: number | null; // bytes; null: a filesystem, which has no fixed size
 }
 

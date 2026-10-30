@@ -24,16 +24,19 @@ export interface NodeGuests {
   volumes: VolumeRow[];
 }
 
-// `zfs list -Hp -t filesystem,volume -o name,used,volsize`: the datasets Proxmox
-// names after a vmid (vm-110-disk-0, subvol-200-disk-0, vm-110-cloudinit); a
-// filesystem's volsize is "-".
+// `zfs list -Hp -t filesystem,volume -o name,usedbydataset,usedbysnapshots,volsize`:
+// the datasets Proxmox names after a vmid (vm-110-disk-0, subvol-200-disk-0,
+// vm-110-cloudinit); a filesystem's volsize is "-". `used` is what the dataset
+// itself holds on disk (after compression), not ZFS's `used`, which adds the
+// snapshots and, on a thick zvol, the whole refreservation — a 64 GiB disk
+// with 37 GiB written read 107 GiB that way. Snapshots are a column of their own.
 export function parseVolumes(text: string): GuestVolume[] {
   const out: GuestVolume[] = [];
   for (const line of text.split("\n")) {
-    const [name, used, size] = line.trim().split(/\s+/);
+    const [name, used, snaps, size] = line.trim().split(/\s+/);
     const m = /^([^/]+)\/(?:.*\/)?((?:vm|subvol)-(\d+)-[^/]+)$/.exec(name ?? "");
     if (!m || !/^\d+$/.test(used ?? "")) continue;
-    out.push({ pool: m[1], volume: m[2], vmid: Number(m[3]), used: Number(used), size: /^\d+$/.test(size ?? "") ? Number(size) : null });
+    out.push({ pool: m[1], volume: m[2], vmid: Number(m[3]), used: Number(used), snapshots: /^\d+$/.test(snaps ?? "") ? Number(snaps) : 0, size: /^\d+$/.test(size ?? "") ? Number(size) : null });
   }
   return out;
 }

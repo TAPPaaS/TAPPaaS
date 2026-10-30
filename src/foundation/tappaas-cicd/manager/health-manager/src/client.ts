@@ -228,7 +228,7 @@ export class CliClusterClient implements ClusterClient {
   }
 
   nodeVolumes(node: string): GuestVolume[] {
-    const r = ssh("root", `${node}.${mgmtDomain()}`, "zfs list -Hp -t filesystem,volume -o name,used,volsize");
+    const r = ssh("root", `${node}.${mgmtDomain()}`, "zfs list -Hp -t filesystem,volume -o name,usedbydataset,usedbysnapshots,volsize");
     return r.rc === 0 ? parseVolumes(r.stdout) : [];
   }
 
