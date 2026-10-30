@@ -544,3 +544,56 @@ button.mod-tile:hover { background: var(--info-bg); }
 .faceplate-examples .btn { white-space: nowrap; }
 @media (max-width: 640px) { .faceplate-examples { grid-column: 1; } }
 .table tr.row-used td:first-child, .table tr.row-used td:first-child button { font-weight: 700; }
+
+/* the Health view (ADR-041 D5) */
+.health-view { display: flex; gap: 12px; height: calc(100vh - 215px); min-height: 480px; }
+.health-side { width: 270px; flex: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow: auto; }
+.health-side h3 { margin: 2px 0 8px; font-size: 13.5px; }
+.health-canvas { flex: 1; min-width: 0; height: auto; margin: 0; }
+.health-panel { flex: none; }
+.health-panel .att { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
+.health-panel .att-text { flex: 1 1 100%; }
+.health-filters { flex-wrap: wrap; margin: 6px 0 10px; }
+.health-time { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.health-time input { width: 190px; }
+.health-sheet-btn { display: none; }
+.health-roots { list-style: none; margin: 0; padding: 0; }
+.hroot { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; font: inherit; background: #fff; border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; margin-bottom: 6px; cursor: pointer; }
+.hroot:hover { border-color: #94a3b8; }
+.hroot-on { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hroot-ack { opacity: .7; }
+.hroot-head { display: flex; align-items: center; gap: 6px; }
+.hlink { font: inherit; background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; }
+.hlink:hover { text-decoration: underline; }
+.hc-name { overflow: hidden; text-overflow: ellipsis; }
+.hc-mark { flex: none; font-weight: 400; color: var(--muted); }
+.hc-count { flex: none; min-width: 22px; height: 20px; padding: 0 5px; border-radius: 10px; background: #334155; color: #fff; font-size: 11.5px; line-height: 20px; text-align: center; }
+.gcard.hc-critical, .hl.hc-critical { background: var(--fail-bg); border-color: var(--fail); border-left: 4px solid var(--fail); }
+.gcard.hc-warning, .hl.hc-warning { background: var(--warn-bg); border-color: var(--warn); border-left: 4px solid var(--warn); }
+.gcard.hc-unknown, .hl.hc-unknown { background: #f3f4f6; border-color: #cfd6de; border-left: 4px solid var(--skip); }
+.gcard.hc-ok, .hl.hc-ok { background: #fff; border-left: 4px solid var(--pass); }
+.gcard.hc-ack, .hl.hc-ack { background-image: repeating-linear-gradient(45deg, rgba(100, 116, 139, .16) 0 6px, transparent 6px 12px); }
+.gcard.hc-maint, .hl.hc-maint { background-image: radial-gradient(rgba(100, 116, 139, .32) 1.2px, transparent 1.3px); background-size: 8px 8px; border-style: dotted; }
+.gcard.hc-dim { opacity: .28; }
+.gcard.hc-root { box-shadow: 0 0 0 3px rgba(214, 69, 69, .42); }
+.gcard.hc-halo { box-shadow: 0 0 0 2px rgba(214, 69, 69, .18), 0 0 10px 2px rgba(214, 69, 69, .22); }
+.gcard.hgroup { background-color: rgba(241, 245, 249, .55); overflow: visible; }
+.gcard.hgroup.hc-dim { opacity: 1; }
+.hl { padding: 2px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 12px; }
+@media (max-width: 700px) {
+  /* A phone: the menu is a strip along the top, the page gets the width. */
+  .shell { flex-direction: column; }
+  .nav { width: 100%; height: auto; position: static; padding: 8px 10px; }
+  .brand, .nav-foot { display: none; }
+  .nav ul { display: flex; gap: 2px; overflow-x: auto; }
+  .nav-item { white-space: nowrap; margin-bottom: 0; }
+  .page { padding: 12px 12px 28px; }
+  .topbar { padding: 8px 12px; }
+  .health-view { height: calc(100vh - 250px); min-height: 380px; }
+  .health-sheet-btn { display: inline-block; }
+  .health-side { display: none; position: fixed; left: 0; right: 0; bottom: 0; width: auto; max-height: 60vh; z-index: 30; border-radius: 12px 12px 0 0; box-shadow: 0 -8px 24px rgba(15, 23, 42, .18); }
+  .health-side-open { display: block; }
+  .health-panel { position: fixed; inset: 0; width: auto; z-index: 35; border-radius: 0; }
+  .health-map { display: none; }
+  .health-time input { width: 130px; }
+}

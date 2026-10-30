@@ -4,7 +4,7 @@
 // re-run its reads now.
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Envelope, Job, JobSummary, Jump, Manifest, ManifestVerb, SweepState } from "./types";
+import { Envelope, HealthPatch, HealthSummary, Job, JobSummary, Jump, Manifest, ManifestVerb, SweepState } from "./types";
 
 export class ApiError extends Error {
   constructor(readonly status: number, message: string) {
@@ -169,6 +169,25 @@ export function useJob(id: string | null): Job | null {
     return () => es.close();
   }, [id]);
   return job;
+}
+
+// What moved in the CMDB, as it moves (health/stream). The browser reconnects
+// by itself; `onOpen` on every connect, as what passed while away is unknown.
+export function useHealthStream(onPatch: (p: HealthPatch) => void, onOpen: () => void): void {
+  const latest = useRef({ onPatch, onOpen });
+  latest.current = { onPatch, onOpen };
+  useEffect(() => {
+    const es = new EventSource("/api/v1/health/stream", { withCredentials: true });
+    es.addEventListener("hello", () => latest.current.onOpen());
+    es.addEventListener("health", (e) => latest.current.onPatch(JSON.parse((e as MessageEvent).data) as HealthPatch));
+    return () => es.close();
+  }, []);
+}
+
+// The worst condition per page (health/summary); `available` false: the page
+// keeps its `health` read, on a site that has not run assess.
+export function useHealthSummary(): Read<HealthSummary> {
+  return useRead<HealthSummary>("health/summary");
 }
 
 let manifestsP: Promise<Manifest[]> | null = null;

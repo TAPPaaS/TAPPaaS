@@ -9,6 +9,7 @@ import { AssistantApi, AssistantContext, AssistantDrawer, Focus, focusOf } from 
 import { Activity } from "./pages/Activity";
 import { Backup } from "./pages/Backup";
 import { Environments } from "./pages/Environments";
+import { Health } from "./pages/Health";
 import { ZonesPage } from "./pages/Zones";
 import { Identity } from "./pages/Identity";
 import { Setup } from "./pages/Setup";
@@ -25,6 +26,7 @@ const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/", label: "Overview", live: true },
   { to: "/setup/day1", label: "Day 1 setup wizard", live: true },
   { to: "/setup/day2", label: "Day 2 wizards", live: true },
+  { to: "/health", label: "Health", live: true },
   { to: "/site", label: "Site", live: true },
   { to: "/environments", label: "Environments", live: true },
   { to: "/zones", label: "Network", live: true },
@@ -78,6 +80,7 @@ export function App() {
   else if (path === "/setup") page = <Setup />;
   else if (path === "/setup/day1") page = <Setup tab="Day 1" />;
   else if (path === "/setup/day2") page = <Setup tab="Day 2" />;
+  else if (path === "/health") page = <Health />;
   else if (view) page = <Site view={view} />;
   else if (path === "/modules") page = <Modules />;
   else if (path.startsWith("/modules/")) page = <ModulePage name={decodeURIComponent(path.slice("/modules/".length))} />;
