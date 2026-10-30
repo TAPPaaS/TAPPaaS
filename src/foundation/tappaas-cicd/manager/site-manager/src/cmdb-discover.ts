@@ -27,6 +27,7 @@ export interface Nic {
   speed?: string; // the D9 value for its kind; absent where D9 has none
   maxMbps?: number;
   link: boolean;
+  linkSpeed?: string; // negotiated now, in D9's words; absent with no link
   operstate?: string;
   bond?: string;
   bridge?: string;
@@ -134,6 +135,8 @@ function d9Speed(kind: Nic["kind"], mbps: number | undefined): string | undefine
   return mbps === undefined ? undefined : allowed[kind]?.[mbps];
 }
 
+const LINK_SPEED: Record<number, string> = { 100: "100m", 1000: "1g", 2500: "2.5g", 5000: "5g", 10000: "10g", 25000: "25g" };
+
 /** The `nics` section: one `== <name>` block per physical NIC, sysfs then
  *  ethtool. A bond's slave shows the bond's MAC in sysfs: the permanent one
  *  is ethtool's. */
@@ -170,6 +173,7 @@ export function parseNics(text: string): Nic[] {
         speed: d9Speed(kind, maxMbps),
         maxMbps,
         link: carrier,
+        linkSpeed: carrier && mbpsNow ? LINK_SPEED[Number(mbpsNow)] : undefined,
         operstate: kv.get("operstate") || undefined,
         bond: isBond ? master : undefined,
         bridge: isBond ? kv.get("upper") || undefined : master,
@@ -343,10 +347,11 @@ export function discoveryObjects(configDir: string, machine: string, machineRef:
     const recorded = server.asset.ports ?? [];
     for (const n of d.nics) {
       const known = recorded.find((p) => (n.mac && p.mac?.toLowerCase() === n.mac) || p.name === n.name);
-      // A port the asset records is asset-manager's: only its MAC is news.
+      // A port the asset records is asset-manager's: only its MAC and link are news.
+      const seen = { link: n.link ? "up" : "down", linkSpeed: n.linkSpeed }; // what health-manager judges a NIC by
       const attributes = known
-        ? compact({ asset: { ref }, kind: known.kind, mac: n.mac })
-        : compact({ asset: { ref }, kind: n.kind, speed: n.speed, mac: n.mac });
+        ? compact({ asset: { ref }, kind: known.kind, mac: n.mac, ...seen })
+        : compact({ asset: { ref }, kind: n.kind, speed: n.speed, mac: n.mac, ...seen });
       objects.push({ class: "port", name: known?.name ?? n.name, attributes });
     }
   } else Object.assign(attrs, own);

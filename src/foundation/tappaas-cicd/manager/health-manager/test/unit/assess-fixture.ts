@@ -19,6 +19,7 @@ const CLASSES: Record<string, string[]> = {
   "backup-peer": ["backup-peer", "storage-element", "ci", "object"], "vpn-peer": ["vpn-peer", "network-element", "ci", "object"],
   site: ["site", "collection", "ci", "object"], cluster: ["cluster", "collection", "ci", "object"], environment: ["environment", "collection", "ci", "object"],
   server: ["server", "asset", "resource", "object"], "network-device": ["network-device", "asset", "resource", "object"],
+  appliance: ["appliance", "asset", "resource", "object"], "passive-device": ["passive-device", "asset", "resource", "object"],
   port: ["port", "resource", "object"], rack: ["rack", "place", "object"], room: ["room", "place", "object"],
 };
 
@@ -55,6 +56,7 @@ export class StubIO implements AssessIO {
   recent: ReturnType<AssessIO["alerts"]>["recent"] = [];
   sweepRecord: ReturnType<AssessIO["sweep"]> = { time: NOW.toISOString(), counts: { expected: 0, drift: 0, desired: 0, unmanaged: 0, missing: 0, unread: 0, sourcesFailed: 0 } };
   scan: ReturnType<AssessIO["cve"]> = null;
+  retired: CmdbItem[] = [];
 
   constructor(
     public items: CmdbItem[],
@@ -63,6 +65,7 @@ export class StubIO implements AssessIO {
   ) {}
 
   objects(): CmdbItem[] { return this.items; }
+  ended(): CmdbItem[] { return this.retired; }
   relations(): CmdbRel[] { return this.rels; }
   rules(): RulesDoc { return this.model; }
   sweep(): ReturnType<AssessIO["sweep"]> { return this.sweepRecord; }

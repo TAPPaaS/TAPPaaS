@@ -331,6 +331,7 @@ function writeAssessment(report: CmdbReport): void {
 function assessIO(opts: Opts, client: ClusterClient): AssessIO {
   return {
     objects: () => cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[],
+    ended: () => (cmdbQuery({ class: "ci", includeEnded: true, limit: 100000 }) as unknown as (CmdbItem & { ended?: string | null })[]).filter((o) => o.ended),
     relations: () => cmdbRelations({}) as unknown as CmdbRel[],
     rules: readRules,
     sweep: readLastSweep,

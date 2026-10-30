@@ -546,6 +546,7 @@ gathers what the sources say and writes everything in one report:
 | The last sweep's lists | `drift` on each object named: `critical` when missing, else `warning`. No sweep in 48 hours, or a source that failed: `critical` on the site |
 | Thresholds over the CMDB's observations, never the plane | a `storage-pool`'s and `datastore`'s used/size (warning 80%, critical 90%) → `capacity`; a pool's `zfsState` (DEGRADED warning, FAULTED and worse critical) → `operational`; a cabled port's `link` down → `operational` critical; a `vpn-peer`'s `lastHandshake` over 7 days → `operational` warning; a certificate on the firewall's `discover` data, the newest per common name, under 30 days warning, under 7 critical → `security` |
 | `cve-status.json` | `security` on the module or node: a `warning` on `act` or a failed scan, as its gate |
+| Observations in the CMDB, class by class (`assess-observations.ts`) | see [What judges which class](#what-judges-which-class): the managers report, this judges, no plane is asked |
 
 Then it derives impact, root causes and roll-ups (below). `open-alerts`,
 `cve-status` and `cmdb` still print in `validate`; their conditions come from
@@ -588,6 +589,46 @@ least): a verdict is never read from a timer that stopped. With no CMDB the gate
 run as they always did.
 
 The interval is `health.assessInterval` in `site.json` (minutes, default 5).
+
+### What judges which class
+
+Every class, what gives it a colour, and what a failure means. The managers report
+observations and `assess` judges them (ADR-041 O3's direction): none of these asks a
+plane. *Seen* is the lifecycle judgement: `operational` is `ok` while a source reports
+the CI within its class's expiry, `warning` (`unseen`) once it does not.
+
+| Class | Judged by | Failure, as `reason` |
+|---|---|---|
+| `vm`, `lxc` | gates (liveness, disk, memory, backup, reboot, timezone), alerts, CVE, sweep, seen; the newest restore point, 3 days → `backup` | `guest-stopped` and the gates' reasons, `restore-point-stale`, `unseen` |
+| `machine` | gates (memory, disks, uplink, timezone), alerts, CVE, sweep, seen; a file backup's restore point | the gates' reasons, `restore-point-stale`, `unseen` |
+| `device` | `switch-ports`, `mlag-pairs`, sweep, seen; a VLAN no zone declares, VLAN 1 aside → `drift` | `switch-port`, `vlan-undeclared`, `unseen` |
+| `app`, `service`, `controller`, `manager` | its `runs-on` node; `version` against `release.version` → `maintenance` | `software-no-node` (none: a retired node ends the relation), `software-node-unseen`, `version-off-pin` |
+| `zone` | its firewall `interface` and DHCP range; its VLAN against the switches' `vlans` | `zone-interface-disabled` (critical), `zone-no-interface`, `zone-vlan-uncarried` |
+| `ssid` | its zone exists, an AP broadcasts it | `ssid-no-zone`, `ssid-not-broadcast` |
+| `address` | who holds it: a node's addresses, a device's management address, a private name `<node>.<zone>.internal`; a reservation's MAC against NICs, ports and what they see | `address-holder-unseen`, `address-holder-retired`, `address-no-ci`. A lease nobody holds is `ok`: it carries no MAC yet, so a client is not told from a guest |
+| `dns-name` | its target: an address, a node, another name. A public name's target is the WAN's: `ok` | `dns-no-target`, `dns-target-unknown`, `dns-target-unseen`, `dns-target-retired` |
+| `proxy-route` | the node of its upstream | `route-target-unknown`, `route-target-unseen`, `route-target-retired` |
+| `vpn-peer` | `lastHandshake`, 7 days; seen | `vpn-handshake-stale` |
+| `storage-pool` | `zfsState`, used/size, `storage-pools`, `storage-disks`; seen | `pool-state`, `pool-usage`, `disk-failing` |
+| `datastore` | used/size; `gc` last run → `maintenance`; seen | `datastore-usage`, `gc-failed` |
+| `backup-peer` | `pulse`, `lastSeen` 3 days → `backup`; seen | `pulse`, `peer-stale` |
+| `share` | every grant's consumer is a node | `share-consumer-gone` |
+| `port` | cabled: `link`, and `linkSpeed` under the cable's recorded speed, else the slower end's. Not cabled: `link` against a declared `role`, `switch-ports`. **No link data: follows its asset** | `link-down` (critical), `link-slow`, `role-port-down`, `switch-port` |
+| `server`, `network-device`, `appliance`, `passive-device`, `other-device` | `faulty` → `maintenance`. **`operational` follows its node** where it is allocated to one | `asset-faulty` |
+| `organization`, `group`, `user`, `role` | seen only: nothing observes more | `unseen` |
+| `site`, `cluster`, `environment` | seen, and the roll-up of their members; `quorum` on the cluster | `quorum-at-risk`, `roll-up` |
+| `location`, `room`, `rack` | the roll-up of what is in them. **Not assessed by design** when empty: grey says nothing is there | `roll-up` |
+| `node` | a placeholder's class: **not assessed by design**, a placeholder gets no conditions | — |
+
+**Follows.** `FOLLOWS` in `lib/ts/src/health-rules.ts` names what nothing judges:
+a port its asset, an asset its node. Such an object gets a `derived` `operational`
+condition, reason `follows`, with the worst of the parent's `operational` and `impact`
+(`ok` when the parent is judged only in other types). It is worked out on every run,
+names the parent or its root as `rootCause`, and is never a failure or a root of its own.
+
+A port's `link` with no declared role is never a failure: an operator's record of a
+switch lists every free port. `linkSpeed` reaches the CMDB from a node's NICs
+(`site-manager report --discover`) and from a switch whose controller gives it.
 
 ### Root causes
 

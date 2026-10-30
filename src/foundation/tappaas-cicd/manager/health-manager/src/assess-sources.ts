@@ -6,6 +6,7 @@
 //   sweep        the last sweep record's lists, as `drift`
 //   thresholds   over observations already in the CMDB, never from the plane
 //   cve          the CVE scan's cve-status.json, as `security`
+//   observations class by class over the same data (assess-observations.ts)
 //
 // A finding about something the CMDB does not have lands on the site, so nothing
 // a gate said is lost. Pure over its inputs: the reads are in assess.ts's AssessIO.
@@ -56,7 +57,7 @@ export const GATES: Record<string, GateMap> = {
 
 const STATUS: Record<CheckStatus, ConditionStatus> = { pass: "ok", warn: "warning", fail: "critical", skip: "unknown" };
 const tidy = (t: string): string => t.replace(/\s+/g, " ").trim();
-const ok = (s: ConditionStatus, reason: string): string => (s === "ok" ? "ok" : reason);
+export const ok = (s: ConditionStatus, reason: string): string => (s === "ok" ? "ok" : reason);
 
 /** The rows of a gate that speak about something: its rows and its findings. */
 export function gateRows(c: CheckResult): CheckRow[] {
@@ -144,7 +145,7 @@ export function fromSweep(rec: SweepRecord | null, nowMs: number, idx: SiteIndex
 export const VPN_STALE_DAYS = 7;
 export const CERT_WARN_DAYS = 30;
 export const CERT_CRITICAL_DAYS = 7;
-const DAY = 86_400_000;
+export const DAY = 86_400_000;
 
 // ZFS's word for a pool. A pool that lost a mirror still serves: a warning.
 const ZFS_STATE: Record<string, ConditionStatus> = { ONLINE: "ok", DEGRADED: "warning", FAULTED: "critical", UNAVAIL: "critical", SUSPENDED: "critical", OFFLINE: "critical", REMOVED: "critical" };
@@ -152,7 +153,7 @@ const ZFS_STATE: Record<string, ConditionStatus> = { ONLINE: "ok", DEGRADED: "wa
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 // A time as a source gives it: an ISO date, epoch seconds, or an age in seconds.
-function timeOf(v: unknown, nowMs: number): number | null {
+export function timeOf(v: unknown, nowMs: number): number | null {
   if (v === null || v === undefined || v === "") return null;
   const n = Number(v);
   if (Number.isFinite(n)) return n <= 0 ? null : n >= 1e9 ? n * 1000 : nowMs - n * 1000;

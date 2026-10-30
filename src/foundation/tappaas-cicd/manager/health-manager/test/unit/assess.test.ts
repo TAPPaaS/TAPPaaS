@@ -185,7 +185,7 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   check(got(r, pool, "operational")?.reason === "pool-state" && got(r, pool, "operational")?.status === "warning", "ZFS's word for a pool");
   check(got(r, ds, "capacity")?.status === "critical" && got(r, ds, "capacity")?.reason === "datastore-usage", "…and a datastore's");
   check(got(r, pa, "operational")?.reason === "link-down" && got(r, pb, "operational")?.status === "ok", "a cabled port's link");
-  check(got(r, pc, "operational") === undefined, "…a port with no cable is no finding");
+  check(got(r, pc, "operational")?.status === "ok", "…a port with no cable that is down is no failure");
   check(got(r, wg, "operational")?.reason === "vpn-handshake-stale" && got(r, wg2, "operational")?.status === "ok", "a peer's last handshake");
   check(got(r, net, "security")?.reason === "certificate-expiry" && got(r, net, "security")?.status === "warning", "a certificate: the newest of its name");
   check(got(r, nc, "impact") === undefined, "…no plane was asked: the sources are the CMDB's");
