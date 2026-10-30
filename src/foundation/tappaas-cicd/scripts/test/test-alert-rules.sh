@@ -135,16 +135,25 @@ hm = json.load(open(os.path.join(root, "tappaas-cicd-alerts.json")))
 ck(ar.validate(hm, True) == [], f"tappaas-cicd-alerts.json validates as foundation ({ar.validate(hm, True)})")
 hg = ar.render_group("tappaas-cicd", hm, lambda m: ["tappaas-cicd"])
 ck(ar.validate(hm, False) == [], "…and needs nothing a foundation rule alone may do")
-ck([r["title"] for r in hg["rules"]] == ["HealthRootCause", "HealthRootRecovered"], "the two rules render")
-line = lambda **k: json.dumps({"event": "transition", "name": "tappaas2", "reason": "node-down", "kind": k["kind"], "root": k["root"], "symptoms": 6, "silenced": k["silenced"]}, separators=(",", ":"))
-cause, back = [re.compile(r["match"]) for r in hm["rules"]]
-ck(cause.search(line(kind="causal", root=True, silenced=False)), "a root's causal line matches")
+ck([r["title"] for r in hg["rules"]] == ["HealthRootCause", "HealthRootRecovered", "HealthDailyDigest"], "the three rules render")
+line = lambda **k: json.dumps({"event": "transition", "name": "tappaas2", "from": k.get("frm", "ok"), "to": k.get("to", "critical"), "reason": "node-down", "kind": k["kind"], "root": k["root"], "symptoms": 6, "silenced": k["silenced"]}, separators=(",", ":"))
+sweep = lambda expected: json.dumps({"kind": "changed", "class": "node", "name": "tappaas2", "source": "site-manager", "attribute": "memory", "before": 1, "after": 2, "expected": expected}, separators=(",", ":"))
+cause, back, digest = [re.compile(r["match"]) for r in hm["rules"]]
+ck(cause.search(line(kind="causal", root=True, silenced=False)), "a critical root's causal line matches")
+ck(not cause.search(line(kind="causal", root=True, silenced=False, to="warning")), "a warning root waits for the digest")
 ck(not cause.search(line(kind="symptom", root=False, silenced=False)), "a symptom never does")
 ck(not cause.search(line(kind="causal", root=True, silenced=True)), "a silenced root does not")
-ck(back.search(line(kind="recovery", root=True, silenced=False)), "a root's recovery matches")
-ck(not back.search(line(kind="recovery", root=False, silenced=False)), "a symptom's recovery does not")
+ck(back.search(line(kind="recovery", root=True, silenced=False, frm="critical", to="ok")), "a critical root's recovery matches")
+ck(not back.search(line(kind="recovery", root=True, silenced=False, frm="warning", to="ok")), "a warning root's recovery does not")
+ck(not back.search(line(kind="recovery", root=False, silenced=False, frm="critical", to="ok")), "a symptom's recovery does not")
+ck(digest.search(line(kind="causal", root=True, silenced=False, to="warning")), "the digest takes a warning root")
+ck(not digest.search(line(kind="causal", root=True, silenced=True, to="warning")), "…not a silenced one")
+ck(not digest.search(line(kind="symptom", root=False, silenced=False, to="warning")), "…not a symptom")
+ck(digest.search(sweep(False)), "the digest takes a sweep difference nothing explains")
+ck(not digest.search(sweep(True)), "…not an expected one")
+ck(hm["rules"][2]["repeat"] == "24h" and hm["rules"][2]["window"] == 86400, "the digest is one mail a day")
 for r in hm["rules"]:
-    for lbl, rx in r["capture"].items():
+    for lbl, rx in r.get("capture", {}).items():
         ck(re.search(rx, line(kind="causal", root=True, silenced=False)), f"{r['name']}: {lbl} is read from the line")
 
 # ── the core rules, moved out of logging.nix into their modules (ADR-039 D6) ──

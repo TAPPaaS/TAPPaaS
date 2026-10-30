@@ -500,10 +500,15 @@ sudo systemctl start update-tappaas-schedule.service
 `tappaas-alert-receiver` runs `assess --only <ci>` and `emit` for each ALERT or RESOLVED it gets,
 on a worker thread, placing the alert as `alerts` does; one about no known object assesses the site.
 
-`tappaas-cicd-alerts.json` holds the two rules over these lines. `HealthRootCause` mails a causal
-event that is not silenced, with its symptom count; `HealthRootRecovered` mails the RESOLVED of a
-root's recovery. Nothing mails a symptom. Both are `event` rules: a log rule's own resolve follows
-its window, not the recovery, so the RESOLVED is a mail of its own and not a reply to the ALERT.
+`tappaas-cicd-alerts.json` holds the three rules over these lines, and over `cmdb sweep`'s.
+`HealthRootCause` mails a causal event that is not silenced and whose status is **critical**, with
+its symptom count; `HealthRootRecovered` mails the RESOLVED of a critical root's recovery.
+`HealthDailyDigest` collects the rest once a day: a warning that became a root cause, and every
+sweep difference nothing explains (drift, unmanaged, missing, differing from `config/`) — one mail
+while the last 24 hours hold anything new, none on a quiet day, the lines in it where
+`site.json` `alerts.includeLines` allows. Nothing mails a symptom. All are `event` rules: a log
+rule's own resolve follows its window, not the recovery, so the RESOLVED is a mail of its own and
+not a reply to the ALERT. Which events leave the site is the rule file's choice (ADR-039 D1).
 
 ## Reports to the CMDB
 

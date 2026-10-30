@@ -1,38 +1,53 @@
 {
-  "_comment": "The platform's rules over the mothership's own logs. health-manager emit writes one JSON line per health event, identifier tappaas-health (ADR-041 D4). A root cause is mailed; a symptom never is; a silenced event (acknowledged, in maintenance) is recorded and not mailed. Both rules are events: an alert over a log line resolves when its window moves on, not when the root recovers, so the recovery is a line of its own and a mail of its own.",
+  "_comment": "The platform's rules over the mothership's own logs. health-manager emit writes one JSON line per health event, identifier tappaas-health (ADR-041 D4); cmdb sweep writes one per difference, identifier cmdb-sweep (ADR-040 D15). A critical root cause is mailed at once; a warning, a symptom, or a sweep finding waits for the daily digest; a silenced event (acknowledged, in maintenance) is recorded and not mailed. All three are event rules: an alert over a log line resolves when its window moves on, not when the root recovers, so the recovery is a line of its own and a mail of its own. Which events leave the site is this file's choice, as ADR-039 D1 intends: edit the match.",
   "rules": [
     {
       "name": "health-root-cause",
       "title": "HealthRootCause",
-      "headline": "Root cause",
+      "headline": "Critical root cause",
       "kind": "event",
-      "match": "\"kind\":\"causal\".*\"silenced\":false",
+      "match": "\"to\":\"critical\".*\"kind\":\"causal\".*\"silenced\":false",
       "capture": {
         "name": "\"name\":\"(?P<name>[^\"]+)\"",
         "reason": "\"reason\":\"(?P<reason>[^\"]*)\"",
         "symptoms": "\"symptoms\":(?P<symptoms>[0-9]+)"
       },
       "window": 300,
-      "summary": "A condition became a root cause: the failure nothing else explains (ADR-041 D3). What it impacts is not mailed separately.",
+      "summary": "A condition became a critical root cause: the failure nothing else explains (ADR-041 D3). What it impacts is not mailed separately; a warning root waits for the daily digest.",
       "mail": {
-        "subject": "{state}: root cause {label.name} ({label.symptoms} impacted)",
-        "body": "== Root cause: {label.name}\nreason: {label.reason}\nimpacted objects: {label.symptoms}\nsince: {since}\n\nhealth-manager roots shows what it impacts; health-manager ack {label.name} --note <why> silences it and its symptoms.\nIn Grafana (Explore, Loki): {query}"
+        "subject": "{state}: critical root cause {label.name} ({label.symptoms} impacted)",
+        "body": "== Critical root cause: {label.name}\nreason: {label.reason}\nimpacted objects: {label.symptoms}\nsince: {since}\n\nhealth-manager roots shows what it impacts; health-manager ack {label.name} --note <why> silences it and its symptoms.\nIn Grafana (Explore, Loki): {query}"
       }
     },
     {
       "name": "health-root-recovered",
       "title": "HealthRootRecovered",
-      "headline": "Root cause recovered",
+      "headline": "Critical root cause recovered",
       "kind": "event",
-      "match": "\"kind\":\"recovery\".*\"root\":true.*\"silenced\":false",
+      "match": "\"from\":\"critical\".*\"kind\":\"recovery\".*\"root\":true.*\"silenced\":false",
       "capture": {
         "name": "\"name\":\"(?P<name>[^\"]+)\""
       },
       "window": 300,
-      "summary": "A root cause returned to ok.",
+      "summary": "A critical root cause returned to ok. A root that eased to warning first recovers in the digest, not here.",
       "mail": {
-        "subject": "RESOLVED: root cause {label.name}",
-        "body": "== Root cause recovered: {label.name}\nsince: {since}\n\nhealth-manager list shows what is still not ok.\nIn Grafana (Explore, Loki): {query}"
+        "subject": "RESOLVED: critical root cause {label.name}",
+        "body": "== Critical root cause recovered: {label.name}\nsince: {since}\n\nhealth-manager list shows what is still not ok.\nIn Grafana (Explore, Loki): {query}"
+      }
+    },
+    {
+      "name": "health-daily-digest",
+      "title": "HealthDailyDigest",
+      "headline": "Daily digest: new warnings and sweep findings",
+      "kind": "event",
+      "match": "(\"to\":\"warning\".*\"kind\":\"causal\".*\"silenced\":false|\"expected\":false)",
+      "window": 86400,
+      "repeat": "24h",
+      "include": ["lines"],
+      "summary": "In the last 24 hours a condition became a warning root cause, or the discovery sweep found drift, something unmanaged, missing, or differing from config/ (ADR-040 D15). One mail a day while there is anything new; nothing when a day passes quietly.",
+      "mail": {
+        "subject": "{state}: daily digest, new warnings or sweep findings",
+        "body": "== Daily digest: what the last 24 hours brought\n\nhealth-manager list shows every condition that is not ok; cmdb sweep --last the last sweep's differences, drift and unmanaged objects first.\nA warning that matters more belongs in health-rules.json; one that is known, health-manager ack <ci> --note <why>.\n\nLines (anonymized, only where site.json alerts.includeLines is true):\n{lines}\n\nIn Grafana (Explore, Loki): {query}"
       }
     }
   ]

@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-30; O3, O5 and O6 still open) |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Date** | 2026-10-30 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #908. Amends ADR-007e (Health as a lens: the lens now reads and writes the CMDB), ADR-040 D10 and D11 (the `health` attribute becomes conditions; the Operations view becomes the Health view), ADR-039 D8 (open alerts are one source of a condition). Related: ADR-034 (console), ADR-031 (the pulse), ADR-011 (the CVE scan), ADR-017 (the update sweep's capacity checks), IT4IT 3.0.1 Event (§9.2.3.1: Type causal or symptom, Is Correlated) and the Configuration component's duty to "calculate and provide the business impact of the Event". |
-| **Changelog** | v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
+| **Changelog** | v1.1 (2026-10-30) — **critical roots only (operator):** `HealthRootCause` mails a critical root at once; warnings and the sweep's findings go to a daily digest rule (D4). · v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
 
 Health in TAPPaaS today is a verdict computed on demand and forgotten: `health-manager validate`
 runs its gates against the live cluster, prints a table, exits 0 or 1, and the console caches the
@@ -226,10 +226,12 @@ Beside the transition there are four more event kinds, the set every tool has: `
 (who, sticky or not, expiry), `maintenance` start, end and cancel, and `rootcause` (the root's id
 and its symptoms' ids, written once per `assess` run that changes the set).
 
-ADR-039's rules and the alert receiver work on these lines as on any log line: one rule
-(`HealthRootCause`) mails a causal event's root with the count of its symptoms, and nothing mails
-a symptom — which is how three mails about one node become one. A RESOLVED follows the recovery
-event. An operator may **acknowledge** a condition (`health-manager ack <ci> --type … --until …
+ADR-039's rules and the alert receiver work on these lines as on any log line, and the rule file
+is where the operator says which events leave the site (ADR-039 D1): `HealthRootCause` mails a
+**critical** root cause with the count of its symptoms, at once; `HealthRootRecovered` its
+recovery; `HealthDailyDigest` collects warning roots and the sweep's unexplained differences
+(ADR-040 D15: drift, new discoveries, unmanaged, missing) into one mail a day, none on a quiet
+day. Nothing mails a symptom — which is how three mails about one node become one. An operator may **acknowledge** a condition (`health-manager ack <ci> --type … --until …
 --note …`, a job from the console): the condition keeps its status but stops counting for
 `validate`, mails and the Overview, and the acknowledgement is an attribute with history.
 Acknowledging a **root cause** acknowledges its symptoms with it: every `impact` condition that
