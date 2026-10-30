@@ -28,6 +28,7 @@
 // The engine depends only on PrimitiveClient (injected) — pure planning + apply.
 
 import {
+  AkNamed,
   AkUser,
   Action,
   Group,
@@ -68,6 +69,8 @@ export interface AkSnapshot {
   users: AkUser[];
   groupNames: string[]; // from list-groups (excludes role-marked groups)
   roleNames: string[]; // from list-roles
+  groups?: AkNamed[]; // the same, whole: their uuids (the CMDB report)
+  roles?: AkNamed[];
 }
 
 export function computePlan(m: PeopleModel, snap: AkSnapshot): Plan {
@@ -287,10 +290,14 @@ export function pushEntityDeletion(
 
 // Fetch the Authentik snapshot the planner needs, via the list-* primitives.
 export function snapshot(client: PrimitiveClient): AkSnapshot {
+  const groups = client.listGroups();
+  const roles = client.listRoles();
   return {
     users: client.listUsers(),
-    groupNames: client.listGroups().map((g) => g.name),
-    roleNames: client.listRoles().map((r) => r.name),
+    groupNames: groups.map((g) => g.name),
+    roleNames: roles.map((r) => r.name),
+    groups,
+    roles,
   };
 }
 

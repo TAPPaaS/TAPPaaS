@@ -40,16 +40,17 @@ export class FakeClient implements PrimitiveClient {
 
   listUsers(): AkUser[] {
     return Array.from(this.users.values()).map((u) => ({
+      uuid: `uuid-user-${u.name}`,
       ...u,
       groups: [...u.groups],
       roles: [...u.roles],
     }));
   }
   listGroups(): AkNamed[] {
-    return Array.from(this.groups).map((n) => ({ name: n, displayName: n }));
+    return Array.from(this.groups).map((n) => ({ name: n, uuid: `uuid-group-${n}`, displayName: n }));
   }
   listRoles(): AkNamed[] {
-    return Array.from(this.roles).map((n) => ({ name: n, displayName: n }));
+    return Array.from(this.roles).map((n) => ({ name: n, uuid: `uuid-role-${n}`, displayName: n }));
   }
   ensureUser(name: string, email: string, display: string, inactive: boolean): void {
     this.log.push(`ensure-user ${name} ${inactive ? "inactive" : "active"}`);

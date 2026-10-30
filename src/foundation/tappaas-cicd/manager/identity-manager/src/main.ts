@@ -26,11 +26,16 @@ import { resetModeOf, resetPassword } from "./password";
 import { childOrgs, deepGroup, deepOrg, groupsOfOrg, orgRoots, usersOfGroup } from "./queries";
 import { applyPlan, computePlan, pushEntityDeletion, snapshot } from "./reconcile";
 import { revokeSessions, sessionRevokers, usersLosingAccess } from "./sessions";
-import { PeopleModel, PrimitiveClient } from "./types";
+import { Action, PeopleModel, PrimitiveClient } from "./types";
 import { readFileSync as readFd } from "fs";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { MODIFY_SHORTCUTS, SetError, expandSet } from "../../../lib/ts/src/setfields";
 import { CL, DieError, GN, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
+import { CmdbObject } from "../../../lib/ts/src/cmdb";
+import { reportChange, reportObservation, sendObservation } from "../../../lib/ts/src/cmdb-source";
+import { IdentityRead, SOURCE, endsOf, identityObservation, touchedBy } from "./cmdb-report";
+import { dirname } from "path";
+import { AkSnapshot } from "./reconcile";
 
 const VERSION = "0.1.0";
 
@@ -76,6 +81,11 @@ export const HELP: HelpSpec = {
       ],
     },
     { usage: "validate" },
+    {
+      usage: "report [--json]",
+      note: "(ADR-040: send the organizations, roles, groups and users to the CMDB)",
+      options: [["--json", "Print the report instead of sending it."]],
+    },
     {
       usage: "<kind> list [--json] [--deep]",
       verb: `${KINDS} list`,
@@ -301,6 +311,7 @@ function cmdSync(opts: Opts, client: PrimitiveClient): void {
     throw e;
   }
 
+  reportObservation(identityObservation(model, readOf(snap)), cmdbConfigDir(opts));
   const plan = computePlan(model, snap);
 
   // Preview by default; commit only with --apply (matches site/network/... managers).
@@ -315,6 +326,7 @@ function cmdSync(opts: Opts, client: PrimitiveClient): void {
   if (plan.actions.length === 0) {
     info("");
     info(`${GN}In sync — Authentik already matches config. Nothing to do.${CL}`);
+    if (doApply && entityChange) reportIdentityChange(opts, model, client, [], snap);
     return;
   }
 
@@ -354,6 +366,7 @@ function cmdSync(opts: Opts, client: PrimitiveClient): void {
   }
   const res = applyPlan(client, plan);
   endSessions(usersLosingAccess(plan.actions));
+  reportIdentityChange(opts, model, client, plan.actions, snap);
   if (res.failures.length > 0) {
     for (const f of res.failures) warn(`failed ${f.target} — ${f.message}`);
     die(`applied ${res.applied} of ${res.total} action(s); ${res.failures.length} failed`);
@@ -426,11 +439,19 @@ function pushAfterWrite(
       `Config written (--no-reconcile). Run '${GN}identity-manager reconcile --apply${CL}' ` +
         `to push to the identity service.`,
     );
+    // Only what config/ alone names: an organization or role (a user or group
+    // is known by the uuid Authentik gives it).
+    reportIdentityChange(opts, loadPeople(opts.configDir), null, [], null);
     return;
   }
 
   try {
     if (push) {
+      try {
+        deletedBefore = readOf(snapshot(client));
+      } catch {
+        deletedBefore = null;
+      }
       const res = pushEntityDeletion(client, push.kind, push.name);
       if (res.pushed) info(`Removed ${push.kind} '${push.name}' from the identity service.`);
       if (res.pushed && push.kind === "user") endSessions([push.name]);
@@ -589,11 +610,66 @@ function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
       if (e instanceof EntityError) die(e.message);
       throw e;
     }
+    entityChange = { kind, name, deleted };
     pushAfterWrite(opts, client, deleted ? { kind, name } : undefined);
     return;
   }
 
   die(`${kind} ${sub}: unknown verb (use list|show|add|modify|delete)`);
+}
+
+// ── the CMDB (ADR-040 D4) ──────────────────────────────────────────────
+
+// The verb being run, and the entity an add/modify/delete wrote: what its
+// change report names.
+let changeVerb = "";
+let entityChange: { kind: string; name: string; deleted: boolean } | null = null;
+// Authentik before an entity's deletion was pushed: the deleted one's uuid.
+let deletedBefore: IdentityRead | null = null;
+
+// The spool lives in config/, the identities' parent.
+const cmdbConfigDir = (opts: Opts): string => dirname(opts.configDir.replace(/\/+$/, ""));
+
+function readOf(snap: AkSnapshot): IdentityRead {
+  return { users: snap.users, groups: snap.groups ?? [], roles: snap.roles ?? [] };
+}
+
+// `report`: config/identities, and Authentik where it answers.
+function cmdReport(opts: Opts, client: PrimitiveClient): number {
+  const model = loadPeople(opts.configDir);
+  let live: IdentityRead | null = null;
+  try {
+    live = readOf(snapshot(client));
+  } catch (e) {
+    if (!(e instanceof AuthentikUnreachable)) throw e;
+    warn(`Authentik unreachable (${e.message}) — reporting organizations and roles only`);
+  }
+  return sendObservation(identityObservation(model, live), opts.json, cmdbConfigDir(opts), info);
+}
+
+// What a write or a reconcile --apply changed: the objects its actions and
+// its entity name, as Authentik has them now (client null: config only), and
+// the ends of what it deleted.
+function reportIdentityChange(opts: Opts, model: PeopleModel, client: PrimitiveClient | null, actions: Action[], before: AkSnapshot | null): void {
+  const only = touchedBy(actions);
+  const deleted: { kind: string; name: string }[] = actions.filter((a) => a.kind === "delete-user").map((a) => ({ kind: "user", name: a.target.split(" ")[1] }));
+  const e = entityChange;
+  if (e) {
+    const k = e.kind === "organization" ? "org" : e.kind;
+    if (e.deleted) deleted.push({ kind: k, name: e.name });
+    else ({ org: only.organizations, role: only.roles, group: only.groups, user: only.users } as Record<string, Set<string>>)[k]?.add(e.name);
+  }
+  let after: IdentityRead | null = null;
+  if (client) {
+    try {
+      after = readOf(snapshot(client));
+    } catch {
+      after = before ? readOf(before) : null;
+    }
+  }
+  const seen = identityObservation(model, after, only);
+  const objects: CmdbObject[] = [...(seen.objects ?? []), ...endsOf(deleted, deletedBefore ?? (before ? readOf(before) : null))];
+  reportChange({ source: SOURCE, verb: changeVerb, objects, relations: seen.relations, configDir: cmdbConfigDir(opts) });
 }
 
 export function run(argv: string[], client: PrimitiveClient): number {
@@ -608,12 +684,20 @@ export function run(argv: string[], client: PrimitiveClient): number {
   if (gate !== undefined) return gate;
   const cmd = argv[0];
   const opts = parseOpts(argv.slice(1));
+  changeVerb = argv.filter((a) => !a.startsWith("-")).slice(0, 3).join(" ");
+  entityChange = null;
+  deletedBefore = null;
 
   return guarded(() => {
     switch (cmd) {
       case "bootstrap":
         cmdBootstrap(opts);
+        // The seeded organizations and roles (users and groups get their uuid
+        // from Authentik at the first reconcile --apply).
+        reportChange({ source: SOURCE, verb: "bootstrap", objects: identityObservation(loadPeople(opts.configDir), null).objects ?? [], configDir: cmdbConfigDir(opts) });
         return 0;
+      case "report":
+        return cmdReport(opts, client);
       case "reconcile":
         cmdSync(opts, client);
         return 0;
