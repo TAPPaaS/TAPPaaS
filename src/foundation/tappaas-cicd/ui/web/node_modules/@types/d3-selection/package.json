@@ -1,0 +1,56 @@
+{
+    "name": "@types/d3-selection",
+    "version": "3.0.12",
+    "description": "TypeScript definitions for d3-selection",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/d3-selection",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Tom Wanzek",
+            "githubUsername": "tomwanzek",
+            "url": "https://github.com/tomwanzek"
+        },
+        {
+            "name": "Alex Ford",
+            "githubUsername": "gustavderdrache",
+            "url": "https://github.com/gustavderdrache"
+        },
+        {
+            "name": "Boris Yankov",
+            "githubUsername": "borisyankov",
+            "url": "https://github.com/borisyankov"
+        },
+        {
+            "name": "denisname",
+            "githubUsername": "denisname",
+            "url": "https://github.com/denisname"
+        },
+        {
+            "name": "Nathan Bierema",
+            "githubUsername": "Methuselah96",
+            "url": "https://github.com/Methuselah96"
+        },
+        {
+            "name": "Ambar Mutha",
+            "githubUsername": "ambar-arkin",
+            "url": "https://github.com/ambar-arkin"
+        },
+        {
+            "name": "Kyle Hensel",
+            "githubUsername": "k-yle",
+            "url": "https://github.com/k-yle"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/d3-selection"
+    },
+    "scripts": {},
+    "dependencies": {},
+    "peerDependencies": {},
+    "typesPublisherContentHash": "23b443f07aa60a1cda5d8288f11a963dfeec89ccee1ef766ec9930156a7b806d",
+    "typeScriptVersion": "5.6"
+}

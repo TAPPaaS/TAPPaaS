@@ -1,8 +1,8 @@
 // HealthPanel.tsx — one object in the Health view (ADR-041 D5): the CI panel,
 // beside the graph, a drawer on a phone. Its conditions and since when,
 // what caused it or what it impacts, its drift against the record, its history,
-// its relations both ways, and the verbs that apply as jobs: ack, maintenance,
-// and the reboot, update and reconcile of the classes that have them.
+// its relations both ways, and the health verbs as jobs: ack and maintenance;
+// a module's operations are on its page, behind the Open module jump (ADR-034 D11).
 
 import { useRead, useVerb } from "../api";
 import { OperateButton, Step } from "../operate";
@@ -46,17 +46,12 @@ function ConditionRow({ o, c, canAck, canUnack }: { o: HealthObject; c: HealthCo
 }
 
 function Verbs({ o }: { o: HealthObject }) {
+  // Status, not operations (ADR-034 D11): the health verbs on the object stay
+  // here; a module's operations are on its page, behind the Open module jump.
   const maint = useVerb("health-manager", "maintenance");
-  const guest = o.class === "vm" || o.class === "lxc";
-  const m = o.module;
-  const mm = (title: string, verb: string): Step => ({ title, bin: "module-manager", verb, fixed: [m ?? ""], hide: ["--environment", "--vmid", "--fail-fast"] });
   return (
     <div className="toolbar">
       <OperateButton label="Maintenance…" disabled={!maint} hint={maint ? undefined : "health-manager on this site has no maintenance verb"} title={`A maintenance window on ${o.label}`} steps={[hm(`health-manager maintenance ${o.label}`, "maintenance", o.id, { note: "During the window transitions are recorded but neither mailed nor counted." })]} />
-      {m && guest ? <OperateButton label="Reboot" title={`Reboot ${m}`} steps={[hm(`health-manager reboot ${m}`, "reboot", m)]} /> : null}
-      {m ? <OperateButton label="Update" title={`Update ${m} to its release`} steps={[mm(`module-manager update ${m}`, "update")]} /> : null}
-      {m ? <OperateButton label="Reconcile" title={`Reconcile ${m}`} steps={[mm(`Reconcile ${m}: the drift, then the converge`, "reconcile")]} /> : null}
-      {o.class === "machine" ? <OperateButton label="Reboot node" title={`Reboot ${o.name}`} steps={[{ title: `site-manager node reboot ${o.name}`, bin: "site-manager", verb: "node reboot", fixed: [o.name] }]} /> : null}
     </div>
   );
 }
@@ -81,8 +76,8 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
       {o ? (
         <>
           <p>
-            {o.module ? <Link to={`/modules/${encodeURIComponent(o.module)}`} className="jump jump-in">module {o.module}</Link> : null}
-            {o.class === "machine" ? <Link to={`/site/device?select=node:${encodeURIComponent(o.name)}`} className="jump jump-in">Device · {o.name}</Link> : null}
+            {o.module ? <Link to={`/modules/${encodeURIComponent(o.module)}`} className="jump jump-in">Open module {o.module}</Link> : null}
+            {o.class === "machine" ? <Link to={`/site/assets?select=node:${encodeURIComponent(o.name)}`} className="jump jump-in">Asset · {o.name}</Link> : null}
             <button className="hlink" onClick={showInTree}>Show in tree</button>
           </p>
           <Verbs o={o} />

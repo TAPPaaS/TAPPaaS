@@ -1,0 +1,65 @@
+/*
+  @license
+	Rollup.js v4.64.9
+	Sat, 17 Oct 2026 18:30:26 GMT - commit 6278729a94e091b2b5f4cb8250852caaf21a2b62
+
+	https://github.com/rollup/rollup
+
+	Released under the MIT License.
+*/
+const getLogFilter = filters => {
+    if (filters.length === 0)
+        return () => true;
+    const normalizedFilters = filters.map(filter => filter.split('&').map(subFilter => {
+        const inverted = subFilter[0] === '!';
+        if (inverted)
+            subFilter = subFilter.slice(1);
+        const [key, ...value] = subFilter.split(':');
+        return { inverted, key: key.split('.'), parts: value.join(':').split('*') };
+    }));
+    return (log) => {
+        nextIntersectedFilter: for (const intersectedFilters of normalizedFilters) {
+            for (const { inverted, key, parts } of intersectedFilters) {
+                const isFilterSatisfied = testFilter(log, key, parts);
+                if (inverted ? isFilterSatisfied : !isFilterSatisfied) {
+                    continue nextIntersectedFilter;
+                }
+            }
+            return true;
+        }
+        return false;
+    };
+};
+const testFilter = (log, key, parts) => {
+    let rawValue = log;
+    for (let index = 0; index < key.length; index++) {
+        if (rawValue === null || (typeof rawValue !== 'object' && typeof rawValue !== 'function')) {
+            return false;
+        }
+        const part = key[index];
+        if (!(part in rawValue)) {
+            return false;
+        }
+        rawValue = rawValue[part];
+    }
+    let value = typeof rawValue === 'object' ? JSON.stringify(rawValue) : String(rawValue);
+    if (parts.length === 1) {
+        return value === parts[0];
+    }
+    if (!value.startsWith(parts[0])) {
+        return false;
+    }
+    value = value.slice(parts[0].length);
+    const lastPartIndex = parts.length - 1;
+    for (let index = 1; index < lastPartIndex; index++) {
+        const part = parts[index];
+        const position = value.indexOf(part);
+        if (position === -1) {
+            return false;
+        }
+        value = value.slice(position + part.length);
+    }
+    return value.endsWith(parts[lastPartIndex]);
+};
+
+export { getLogFilter };

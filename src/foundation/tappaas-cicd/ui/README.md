@@ -214,10 +214,10 @@ laid out once per shape; a colour is patched over it, so a filter, the time slid
 the CMDB never moves a card.
 
 **The CI panel (right)**: conditions with their `since`, the root cause or what it impacts, drift,
-the conditions' history, the changes to it, relations both ways, the verbs that apply as jobs (Ack…,
-Unack…, Maintenance…, health-manager's own, offered once its manifest declares them; Reboot, Update,
-Reconcile, Reboot node where the class has them), and **Show in tree**, which opens the tree down to
-it.
+the conditions' history, the changes to it, relations both ways, the health verbs as jobs (Ack…,
+Unack…, Maintenance…, health-manager's own, offered once its manifest declares them), **Open module**,
+the jump to the module's page where its operations are, and **Show in tree**, which opens the tree
+down to it. A panel shows status, not operations.
 
 **Entry.** `/health?select=<id>` opens on one object; a root opens with its symptoms expanded, so the
 Overview's Attention links land there. With nothing asked for the page opens on the worst root, and
