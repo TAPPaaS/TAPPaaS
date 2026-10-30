@@ -25,7 +25,7 @@ import { useOpenedBy } from "../opener";
 import { JobSummary, SiteRead, StorageInventory, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
-import { AddNodeStage, NodeNetwork, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, switchPortChoices, writeProgress } from "../nodeadd";
+import { AddNodeStage, NodeNetwork, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, switchPortChoices, writeProgress, setupFromOutput } from "../nodeadd";
 import { Wizard, jobLabel, jobLive } from "../wizard";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
@@ -159,6 +159,11 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const progress = useRead<NodeProgress>(valid ? `nodes/${encodeURIComponent(name)}/progress` : null, 10_000).env?.data ?? null;
   const underway = addNodeUnderway({ job: job !== null, progress });
   const running = useJob(job);
+  // Stage 2 opens the moment Apply is pressed: until node add says the machine
+  // can boot, it says it is getting ready, from the job's own output.
+  const live = running?.state === "running" || running?.state === "queued";
+  const setup = setupFromOutput(running?.output ?? "");
+  const settingUp = live && !setup.ready;
   const joined = addNodeJoined(progress);
   const endedOk = ended ?? (running?.state === "done" ? running.exit === 0 : null);
 
@@ -356,6 +361,8 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           )}
         </StepRow>
         <StepRow s={steps[2]} open={current === "boot"}>
+          {settingUp ? <p className="readstate readstate-warn">Getting ready — do not boot yet. Stage 1's job is on: {setup.step ?? "starting"}…</p> : null}
+          {live && setup.ready && progress?.registration !== "answered" ? <p className="readstate">Ready: boot the machine now.{setup.port ? ` ${setup.port}.` : ""}</p> : null}
           <p className="small">Once stage 1's job is running, boot the machine one of two ways. Either way the installer asks the mothership for its answer over the network, so the machine must be cabled as stage 1 says; only if the boot-disk fields match no disk does the node's screen ask for one (from the network; a stick stops with the list of the machine's disks instead).</p>
           <div className="two">
             <div className="explain">
@@ -376,8 +383,8 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           </div>
           {progress && underway ? (
             <ul className="plain checks">
-              <Check ok={progress.registration !== "none"} label="registered for a network install" detail={progress.registration === "pending" ? "waiting for the machine to ask" : progress.registration === "answered" ? "the installer has fetched its answer" : "no registration (the job has not reached it, or it ended)"} />
-              <Check ok={progress.pxe.enabled} label="the network-boot window on the mothership" detail={progress.pxe.enabled ? "open" : "closed"} />
+              <Check ok={progress.registration !== "none" ? true : settingUp ? null : false} label="registered for a network install" detail={progress.registration === "pending" ? "waiting for the machine to ask" : progress.registration === "answered" ? "the installer has fetched its answer" : settingUp ? "being registered…" : "no registration (the job has not reached it, or it ended)"} />
+              <Check ok={progress.pxe.enabled || setup.ready ? true : settingUp ? null : false} label="the network-boot window on the mothership" detail={progress.pxe.enabled || setup.ready ? "open" : settingUp ? "being opened…" : "closed"} />
             </ul>
           ) : underway ? <p className="muted small">reading the provisioning state…</p> : null}
         </StepRow>

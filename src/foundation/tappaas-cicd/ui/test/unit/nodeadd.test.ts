@@ -2,7 +2,7 @@
 // D4): the switch ports a new node can be cabled to, the trunk a hand-configured
 // port needs, and the data pool proposed from the node's free disks.
 
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing } from "../../web/src/nodeadd";
+import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing, setupFromOutput } from "../../web/src/nodeadd";
 import { StorageDisk, TopoPort, TopoSwitch } from "../../web/src/types";
 import { check, done } from "./check";
 
@@ -112,6 +112,14 @@ check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && h
   check(addNodeStage(f({ jobLive: false, progress: joined })) === "storage" && addNodeStage(f({ progress: joined, pooled: true })) === "lan" && addNodeStage(f({ progress: joined, pooled: true, lan: true })) === "wan", "joined: the pools, then lan, then the WAN");
   check(STAGE_NUMBER.lan === "5a" && STAGE_NUMBER.wait === "3", "stages are numbered as the wizard shows them");
   check(addNodeUnderway({ job: false, progress: joined }) && !addNodeUnderway({ job: false, progress: { registration: "none", inCluster: false, inSite: false } }), "underway: a job, or the records say so");
+}
+
+{
+  const out = "[node add 1] the switch port: USW port 1\n  ✓ USW port 1 is tappaas4's: a node trunk, on the switch\n\n[node add 2] register 'tappaas4'\n";
+  check(!setupFromOutput(out).ready && setupFromOutput(out).step === "register 'tappaas4'", "still setting up: the step it is on");
+  check(setupFromOutput(out).port === "USW port 1 is tappaas4's: a node trunk, on the switch", "the switch port it set up");
+  check(setupFromOutput(out + "[node add 3] boot the machine now: from the network\n").ready, "ready once it says to boot");
+  check(setupFromOutput("").step === null, "no output yet: no step");
 }
 
 done("nodeadd");

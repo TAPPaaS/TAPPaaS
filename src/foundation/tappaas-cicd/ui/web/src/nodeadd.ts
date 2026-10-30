@@ -264,3 +264,12 @@ export function nodeAddOngoing(job: NodeAddJob, now: number, rec: { progress: Ad
   if (rec.dataPool === false || (rec.lanPorts !== null && rec.lanPorts <= 1)) return true;
   return rec.dataPool === null || rec.lanPorts === null ? null : false;
 }
+
+// How far node add's own output has come, before the records say so (they are
+// read every ten seconds): the step it is on, the switch port it set up, and
+// whether the machine can be booted now.
+export function setupFromOutput(output: string): { ready: boolean; step: string | null; port: string | null } {
+  const steps = [...output.matchAll(/^\[node add \d+\] (.+)$/gm)].map((m) => m[1]);
+  const port = /^\s*✓ (.+ port .+ is .+: a node trunk.*)$/m.exec(output)?.[1] ?? null;
+  return { ready: steps.some((s) => s.startsWith("boot the machine now")), step: steps[steps.length - 1] ?? null, port };
+}
