@@ -2,7 +2,7 @@
 // what ran, copyable), who ran it from where, its state, and its output.
 // Activity lists them beside the sweep; a module's page lists its own.
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { cancelJob, reloadAll, useJob } from "./api";
 import { JobSummary } from "./types";
 import { Tag, canOperate, useMe, when } from "./ui";
@@ -69,8 +69,34 @@ export function phaseOutputs(j: { output: string; previewPhase?: JobSummary["pre
   return { preview: j.output.slice(0, pp.outputLength), apply: j.output.slice(pp.outputLength) };
 }
 
-export function Output({ text, live }: { text: string; live?: boolean }) {
-  return <pre className={`output${live ? " output-live" : ""}`}>{stripAnsi(text) || (live ? "…" : "(no output)")}</pre>;
+// The last line stays in view while output arrives, unless the operator has
+// scrolled up to read (then the pane stays where they put it until they
+// scroll back down). `collapsed`: a phase that is over (a preview once the
+// apply runs) folds to its last lines, with the rest a click away.
+const FOLD_LINES = 4;
+export function Output({ text, live, collapsed }: { text: string; live?: boolean; collapsed?: boolean }) {
+  const ref = useRef<HTMLPreElement>(null);
+  const stick = useRef(true);
+  const [open, setOpen] = useState(false);
+  const shown = stripAnsi(text) || (live ? "…" : "(no output)");
+  const lines = shown.split("\n");
+  const fold = !!collapsed && !open && lines.length > FOLD_LINES;
+  useEffect(() => {
+    const el = ref.current;
+    if (el && stick.current) el.scrollTop = el.scrollHeight;
+  }, [shown, live, fold]);
+  const onScroll = () => {
+    const el = ref.current;
+    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+  };
+  return (
+    <div className="output-box">
+      {collapsed && lines.length > FOLD_LINES ? (
+        <button className="btn btn-small output-fold" onClick={() => setOpen(!open)}>{fold ? `▸ ${lines.length - FOLD_LINES} earlier lines` : "▾ fold"}</button>
+      ) : null}
+      <pre ref={ref} onScroll={onScroll} className={`output${live ? " output-live" : ""}`}>{fold ? lines.slice(-FOLD_LINES).join("\n") : shown}</pre>
+    </div>
+  );
 }
 
 // Cancel (queued: it never runs) or Stop (running: SIGINT to its process
@@ -117,7 +143,7 @@ function JobDetail({ id }: { id: string }) {
       {job.previewPhase ? (
         <>
           <Command argv={job.previewPhase.ran} label="preview ran" />
-          <Output text={phaseOutputs(job).preview ?? ""} live={job.state === "running" && job.previewPhase.exit === null} />
+          <Output text={phaseOutputs(job).preview ?? ""} live={job.state === "running" && job.previewPhase.exit === null} collapsed={job.previewPhase.exit !== null && !!job.ran && !job.previewPhase.stopped} />
           {job.previewPhase.stopped ? <p className="readstate readstate-warn">{job.previewPhase.stopped}.</p> : null}
           {job.ran && !job.previewPhase.stopped ? (
             <>

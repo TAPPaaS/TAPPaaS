@@ -167,13 +167,13 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
 }
 
 // Also a continued wizard's view of the job it found again (wizard.tsx useJobSession).
-export function JobView({ id, label }: { id: string; label: string }) {
+export function JobView({ id, label, collapsed }: { id: string; label: string; collapsed?: boolean }) {
   const job = useJob(id);
   if (!job) return <p className="muted">starting {label}…</p>;
-  return <JobPart job={job} label={label} state={jobResult(job)} level={job.state === "refused" ? "fail" : job.state !== "done" ? "skip" : job.exit === 0 ? "pass" : "warn"} ms={job.durationMs} text={job.output} live={job.state === "running" || job.state === "queued"} />;
+  return <JobPart job={job} label={label} state={jobResult(job)} level={job.state === "refused" ? "fail" : job.state !== "done" ? "skip" : job.exit === 0 ? "pass" : "warn"} ms={job.durationMs} text={job.output} live={job.state === "running" || job.state === "queued"} collapsed={collapsed} />;
 }
 
-function JobPart({ job, label, state, level, ms, text, live }: { job: Job; label: string; state: string; level: string; ms: number | null; text: string; live: boolean }) {
+function JobPart({ job, label, state, level, ms, text, live, collapsed }: { job: Job; label: string; state: string; level: string; ms: number | null; text: string; live: boolean; collapsed?: boolean }) {
   return (
     <div className="jobview">
       <p>
@@ -183,7 +183,7 @@ function JobPart({ job, label, state, level, ms, text, live }: { job: Job; label
         {live ? <> <JobControl job={job} /></> : null}
       </p>
       {job.refused ? <p className="readstate readstate-fail">{job.refused}</p> : null}
-      <Output text={text} live={live} />
+      <Output text={text} live={live} collapsed={collapsed} />
     </div>
   );
 }
@@ -198,7 +198,7 @@ function TwoPhaseView({ job }: { job: Job }) {
   const pLevel = job.state === "refused" ? "fail" : inPreview ? "skip" : pp.stopped ? "warn" : "pass";
   return (
     <>
-      <JobPart job={job} label="preview" state={pState} level={pLevel} ms={pp.durationMs} text={out.preview ?? ""} live={inPreview && job.state !== "refused" && job.state !== "done"} />
+      <JobPart job={job} label="preview" state={pState} level={pLevel} ms={pp.durationMs} text={out.preview ?? ""} live={inPreview && job.state !== "refused" && job.state !== "done"} collapsed={!inPreview && !pp.stopped} />
       {pp.stopped ? <p className="readstate readstate-warn">{pp.stopped[0].toUpperCase() + pp.stopped.slice(1)}.</p> : null}
       {!inPreview && !pp.stopped ? (
         <JobPart job={{ ...job, refused: null }} label="apply" state={jobResult(job)} level={job.state !== "done" ? "skip" : job.exit === 0 ? "pass" : "warn"} ms={job.durationMs !== null && pp.durationMs !== null ? job.durationMs - pp.durationMs : null} text={out.apply} live={job.state === "running"} />
@@ -337,7 +337,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       {error ? <p className="readstate readstate-fail">{error}</p> : null}
       {writeMark ? <p className="readstate readstate-warn">{writeMark.flag} makes this a change: it {writeMark.touches}. It is previewed and queued like any change, never beside the sweep.</p> : null}
       {preview && step.previewNote ? <div className="note preview-head">{step.previewNote(values)}</div> : null}
-      {preview ? <JobView id={preview.id} label={isRead ? "result" : previewKind === "none" ? "preview (no dry run)" : "preview"} /> : null}
+      {preview ? <JobView id={preview.id} label={isRead ? "result" : previewKind === "none" ? "preview (no dry run)" : "preview"} collapsed={applied !== null} /> : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to apply.</p> : null}
       {step.progress && appliedJob && inApply ? <ProgressBar at={step.progress(appliedJob.output)} done={appliedJob.state === "done"} /> : null}
       {step.jobShownIn && appliedJob && appliedJob.state !== "refused" && !stopped ? (
