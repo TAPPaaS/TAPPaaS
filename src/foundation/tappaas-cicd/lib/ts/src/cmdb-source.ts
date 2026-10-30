@@ -200,7 +200,8 @@ export function moduleNodeAttributes(name: string, raw: Obj, cls: string): Obj {
   const env = str(raw.environment);
   if (env) a.environment = { class: "environment", name: env };
   const addr = str(raw.address);
-  if (addr) a.addresses = [addr];
+  // A machine's addresses are what the node itself says (site-manager).
+  if (addr && cls !== "machine") a.addresses = [addr];
   if (cls === "machine") a.hostname = addr;
   if (cls === "device") a.managementAddress = addr;
   return compact(a);
