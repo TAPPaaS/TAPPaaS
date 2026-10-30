@@ -1,0 +1,20 @@
+{
+  "version": 1, "generated": "2026-10-17T18:35:36.476Z", "status": "fail", "failed": 1, "warned": 1,
+  "gates": [
+    {"name": "service-liveness", "status": "pass", "detail": "", "findings": [
+      {"status": "pass", "text": "nextcloud running", "subject": {"kind": "module", "name": "nextcloud"}},
+      {"status": "pass", "text": "dns running", "subject": {"kind": "module", "name": "dns"}},
+      {"status": "pass", "text": "backup", "subject": {"kind": "module", "name": "backup"}}]},
+    {"name": "guest-memory", "status": "fail", "detail": "", "findings": [
+      {"status": "fail", "text": "nextcloud at 97%", "subject": {"kind": "module", "name": "nextcloud"}}]},
+    {"name": "storage-pools", "status": "warn", "detail": "", "findings": [
+      {"status": "warn", "text": "tankc1 85%", "subject": {"kind": "pool", "name": "tappaas3/tankc1"}},
+      {"status": "pass", "text": "tanka1 40%", "subject": {"kind": "pool", "name": "tappaas3/tanka1"}}]},
+    {"name": "memory-commitment", "status": "pass", "detail": "", "findings": [
+      {"status": "pass", "text": "tappaas3 60%", "subject": {"kind": "node", "name": "tappaas3"}}]},
+    {"name": "buddy-reach", "status": "skip", "detail": "", "findings": [
+      {"status": "skip", "text": "no answer", "subject": {"kind": "peer", "name": "aunt"}},
+      {"status": "pass", "text": "site", "subject": {"kind": "site", "name": "home"}},
+      {"status": "warn", "text": "total", "subject": null}]}
+  ]
+}
