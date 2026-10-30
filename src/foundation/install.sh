@@ -37,7 +37,7 @@
 #   install.sh [REPO] [BRANCH] --name <site-code> [--organization <org>] [--domain <d>]
 #              [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]
 #              [--lan-port <if>[,<if>...]] [--lan-mode active-backup|lacp] [--lan-primary <if>]
-#              [--wan-port <if>] [--pool <name=topo:disks>]...
+#              [--wan-port <if> | --no-wan] [--pool <name=topo:disks>]...
 #              [--skip-firewall] [--skip-platform] [--non-interactive]
 #
 # For a fully UNATTENDED first-node install pass --non-interactive together with
@@ -122,12 +122,13 @@ while [ $# -gt 0 ]; do
     # be repeated. Without these, --non-interactive auto-detects NICs and creates
     # NO pools, so a hands-off first-node install needs them.
     --lan-port|--wan-port|--lan-mode|--lan-primary) NODE_ARGS+=("$1" "${2:-}"); shift ;;
+    --no-wan) NODE_ARGS+=("$1") ;;
     --pool)                NODE_ARGS+=("$1" "${2:-}"); shift ;;
     -h|--help)
       echo "Usage: install.sh [REPO] [BRANCH] --name <site-code> [--organization <org>] [--domain <d>]"
       echo "                  [--cluster|--join|--no-cluster] [--skip-network] [--skip-storage]"
       echo "                  [--lan-port <if>[,<if>...]] [--lan-mode active-backup|lacp] [--lan-primary <if>]"
-      echo "                  [--wan-port <if>] [--pool <name=topo:disks>]..."
+      echo "                  [--wan-port <if> | --no-wan] [--pool <name=topo:disks>]..."
       echo "                  [--skip-firewall] [--skip-platform] [--non-interactive]"
       echo ""
       echo "The first-node entry point. Runs the 5-step chain: node → firewall →"

@@ -1598,6 +1598,17 @@ else
     skip "storage drift test (use TAPPAAS_TEST_DEEP=1 to run)"
 fi
 
+# ── Test: the node step's flags reach it ────────────────────────────
+# site-manager node add runs the top-level install.sh, which refuses what it
+# does not know: a flag only cluster/install.sh takes stops the join.
+for flag in --wan-port --no-wan --lan-port --lan-mode --lan-primary; do
+    if grep -q -- "${flag}" "${SCRIPT_DIR}/../install.sh" && grep -q -- "${flag}" "${SCRIPT_DIR}/install.sh"; then
+        pass "install.sh and cluster/install.sh both take ${flag}"
+    else
+        fail "${flag} is not taken by both install.sh and cluster/install.sh"
+    fi
+done
+
 # ── Test: cloud-init orphan sweep (#146) ────────────────────────────
 #
 # A cloud-init volume stranded on a node by an HA recovery aborts every
