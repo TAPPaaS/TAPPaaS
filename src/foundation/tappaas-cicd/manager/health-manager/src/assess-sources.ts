@@ -146,6 +146,9 @@ export const CERT_WARN_DAYS = 30;
 export const CERT_CRITICAL_DAYS = 7;
 const DAY = 86_400_000;
 
+// ZFS's word for a pool. A pool that lost a mirror still serves: a warning.
+const ZFS_STATE: Record<string, ConditionStatus> = { ONLINE: "ok", DEGRADED: "warning", FAULTED: "critical", UNAVAIL: "critical", SUSPENDED: "critical", OFFLINE: "critical", REMOVED: "critical" };
+
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 // A time as a source gives it: an ISO date, epoch seconds, or an age in seconds.
@@ -165,6 +168,9 @@ export function fromThresholds(idx: SiteIndex, nowMs: number): Finding[] {
   const cabled = new Set(idx.relations.filter((r) => r.type === "connects" && r.to.class === "port").flatMap((r) => [r.from.id, r.to.id]));
   for (const o of idx.objects) {
     const a = o.attributes;
+    if (o.class === "storage-pool" && typeof a.zfsState === "string") {
+      add(o, "operational", ZFS_STATE[a.zfsState] ?? "unknown", "pool-state", `${o.name}: zfs ${a.zfsState}`);
+    }
     if (o.class === "storage-pool" || o.class === "datastore") {
       const used = num(a.used);
       const size = num(a.size);

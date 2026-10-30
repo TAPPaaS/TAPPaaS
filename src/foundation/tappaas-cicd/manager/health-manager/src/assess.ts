@@ -54,7 +54,7 @@ function ownerOf(reason: string): string {
   if (reason.startsWith("alert-")) return "alerts";
   if (reason.startsWith("sweep-")) return "sweep";
   if (reason.startsWith("cve-")) return "cve";
-  if (["pool-usage", "datastore-usage", "link-down", "vpn-handshake-stale", "certificate-expiry"].includes(reason)) return "thresholds";
+  if (["pool-usage", "pool-state", "datastore-usage", "link-down", "vpn-handshake-stale", "certificate-expiry"].includes(reason)) return "thresholds";
   return Object.entries(GATES).find(([, g]) => g.reason === reason)?.[0] ?? reason;
 }
 

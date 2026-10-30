@@ -35,7 +35,7 @@ const ct = obj("lxc", "dns");
 const sw = obj("device", "sw1");
 const swa = obj("network-device", "sw-01");
 const port = obj("port", "7");
-const pool = obj("storage-pool", "tanka1", { used: 85, size: 100 });
+const pool = obj("storage-pool", "tanka1", { used: 85, size: 100, zfsState: "DEGRADED" });
 const ds = obj("datastore", "main", { used: 95, size: 100 });
 const peer = obj("backup-peer", "aunt");
 const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
@@ -182,6 +182,7 @@ const fresh = (): { items: CmdbItem[]; rels: ReturnType<typeof rel>[] } => {
   const io = new StubIO(s.items, s.rels);
   const r = assess(io, {}, NOW);
   check(got(r, pool, "capacity")?.status === "warning" && got(r, pool, "capacity")?.message.includes("85%") === true, "a threshold over a pool's used");
+  check(got(r, pool, "operational")?.reason === "pool-state" && got(r, pool, "operational")?.status === "warning", "ZFS's word for a pool");
   check(got(r, ds, "capacity")?.status === "critical" && got(r, ds, "capacity")?.reason === "datastore-usage", "…and a datastore's");
   check(got(r, pa, "operational")?.reason === "link-down" && got(r, pb, "operational")?.status === "ok", "a cabled port's link");
   check(got(r, pc, "operational") === undefined, "…a port with no cable is no finding");

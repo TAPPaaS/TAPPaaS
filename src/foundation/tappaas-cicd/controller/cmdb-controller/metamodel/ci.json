@@ -240,6 +240,7 @@
         "type": { "type": "string", "description": "zfs, …" },
         "size": { "type": "integer" },
         "used": { "type": "integer", "volatile": true },
+        "zfsState": { "type": "string", "volatile": true, "description": "ZFS's word for it: ONLINE, DEGRADED, FAULTED, … health-manager assess makes it a condition." },
         "onNode": { "type": "relation", "relation": "runs-on", "required": true, "key": 1 },
         "vdevs": { "type": "array", "description": "Its layout (D15): vdevs with state, members by serial." }
       }
@@ -325,6 +326,7 @@
         },
         "assessment": {
           "type": "object",
+          "volatile": true,
           "properties": { "time": { "type": "string", "volatile": true }, "gates": { "type": "array", "volatile": true } },
           "description": "The last health-manager assess: when, and each gate's line as validate prints it. Rewritten in place, never history."
         }

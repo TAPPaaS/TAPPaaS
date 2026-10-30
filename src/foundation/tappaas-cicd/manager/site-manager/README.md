@@ -529,7 +529,7 @@ depth, one more ssh per node and nothing polled; without it `report` is as above
   asset there are no ports, a port having no meaning without one, and a sweep
   invents no asset. A port the asset records keeps its name, kind and speed.
 - **ZFS:** a `storage-pool` per pool, named `<node>/<pool>` as storage-manager
-  names it: `health`, `size`, `used`, and `vdevs[]` with members by serial.
+  names it: `zfsState`, `size`, `used`, and `vdevs[]` with members by serial.
 - On the `machine`: `storages[]` (what the node knows, `pvesh …/storage`),
   `pciDevices[]`, `cpus`. On each guest: `nics[]`, and `disks[]` with their
   storage (an lxc's mount points). On the `cluster`: `corosyncLinks[]`.
