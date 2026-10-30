@@ -51,7 +51,7 @@ for one the site does not have yet.
 **Overview** — the strip (gates, pulse, last sweep, backups, release, security) and Attention:
 every FAIL and WARN with the object it names, a link to it in the console and its "Open in"
 jumps. **Site** — the site as built, in four tabs, each at its own address: Overview
-(`/site/overview`, also `/site`), Physical (`/site/physical`), Device (`/site/device`) and Storage
+(`/site/overview`, also `/site`), Physical (`/site/physical`), Assets (`/site/assets`) and Storage
 (`/site/storage`); the earlier addresses (`/physical`, `/site/physical/<view>`) redirect to them.
 **Overview** sums the other three: the site in one line (nodes, switches, APs, racks, pools,
 disks, the public address) with Add node and Register joined nodes (`site-manager node
@@ -92,7 +92,7 @@ lines — the location a link to its row on the Site page, the placement to its 
 Physical view, from any view — and Place… (the rooms and racks at the device's own location only;
 with none there, Add a room… at it), Move to…, Change placement… and Unplace… besides the
 object's own changes; a machine module's page shows the same two lines with the same actions; a seen device's card shows the port it is seen at, its MAC, what LLDP and
-the lease say, and Record…. **Device** (`/site/device`) — every physical device (the cluster nodes, the
+the lease say, and Record…. **Assets** (`/site/assets`, formerly `/site/device`) — every physical asset (the cluster nodes, the
 switches, the access points, the machines and devices a placement or a cable record names, the devices a switch port sees (marked as seen), the internet
 and the backup buddies) as a card with its kind's icon and its name and nothing else, coloured by
 its state as the Storage view colours its cards (its findings' worst level; a drifting port, a

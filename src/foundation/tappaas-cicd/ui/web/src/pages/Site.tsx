@@ -6,7 +6,7 @@
 // schedule, `site update` (Update now: the sweep's plan first, then the
 // sweep), the release train's preview and status (tappaas-train.sh, text: it
 // has no --json), and the repositories (hold / release / sync / stashes).
-// Physical (/site/physical): the racks. Device (/site/device): every physical
+// Physical (/site/physical): the racks. Assets (/site/assets): every physical
 // device and its connections, a node's uplinks on its card. Storage
 // (/site/storage): the nodes, their pools and disks.
 
@@ -158,7 +158,7 @@ function SiteTop({ r }: { r: Read<SiteRead> }) {
               <tbody>
                 {nodes.map((n) => (
                   <tr key={n.name}>
-                    <td className="mono"><Link to={`/site/device?select=node:${encodeURIComponent(n.name)}`}>{n.name}</Link></td>
+                    <td className="mono"><Link to={`/site/assets?select=node:${encodeURIComponent(n.name)}`}>{n.name}</Link></td>
                     <td className="mono">{n.address ?? ""}</td>
                     <td className="mono">{(n.storagePools ?? []).join(", ") || <span className="muted">none</span>}</td>
                     <td>{n.location ?? <span className="muted">{primary ? primary.name : "the primary"}</span>}</td>
