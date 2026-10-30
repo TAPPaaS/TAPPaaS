@@ -125,8 +125,29 @@ first) and one per registered repository (`GET /api/v1/catalogs`: `site-manager 
 repository's module-catalog.json and each module's own JSON; installed = a deployed instance whose
 `moduleSource` is the module's directory, with the instances named and linked; Install = `module-manager
 add <m>`, previewed then applied; a catalogue that cannot be read says why); a module's page has
-Overview (with the operate column: update, reconcile, test, snapshot, suspend/resume, delete
-with the typed name), Config, Drift (on demand), Backup and Activity. Config draws the module as
+Overview, Config, Drift (on demand), Backup and Activity. Overview is a list of sections, composed
+by the backend (`GET /api/v1/modules/<m>/sections`) from three layers, each able to add, reorder or
+replace what the layer below put there, by section id. Generic, every module: `health`, `operate`
+(update, reconcile, test, snapshot, suspend/resume, delete with the typed name), `about`. Kind, built
+into the console (`src/kindsections.ts`): a vm or lxc has `resources` (memory declared, allocated and
+used as the balloon reports it, disks and their pools, node and HA state, snapshots) and `backups`; a
+machine `guests` (what runs on it, with memory and run state), `pools` (fill and health), `ports`
+(ports and links), `cluster` (membership); a device `ports` (what each connects) and, for an access
+point, `radios` (radios and SSIDs). Module, declared: a module's `console.json` beside its module JSON
+(`src/consolefile.ts`, `schemas/console-fields.json`). Its `sections[]` each name an `id`, a `title`, a
+`read` (`{bin, verb, args[]}`, `$module` for the module's name, run with `--json` through the cached
+runner) and a `render`: `kv`, `table` with `columns[]`, `gauges` with `fields[]` naming the JSON paths;
+`rows` says where the rows are in the answer. An entry with an id the page already has replaces that
+section, a new id goes before Operate, and `before`/`after` move either; an entry with only those moves
+a section. Its `operations[]` name verbs that carry a manifest, shown through the operate dialog.
+A declared read runs only if the bin's manifest declares it as a read, so a module's file never names
+a command of its own. A section the schema refuses, a read that fails and an operation with no
+manifest are each an error in their place; the rest of the page stands, and the generic three show
+while the list is read. A kind section reads the CMDB first (conditions, `runs-on`, `member-of`, the
+observations the controllers recorded), `health-manager guests --json` gives its live numbers, and the
+topology and storage inventory stand in where the CMDB has no record; each says what it could not read.
+pvehost declares Memory by module and Storage used by modules, and migrating its guests and rebooting
+the node. Config draws the module as
 a tree of cards: the module's own (kind, node, environment, zone and the fields no service owns)
 on top, one per service in dependsOn below. Each card's Modify lists every field it owns, typed
 from the field schema, its value configured or default, its change class; the fields changed go
@@ -240,7 +261,7 @@ now (it changes nothing on the site).
 ## API (`/api/v1`)
 
 Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
-`modules/<m>/drift[?refresh=1]` · `zones` · `ipv6` · `environments` · `topology` · `storage` · `security` ·
+`modules/<m>/drift[?refresh=1]` · `modules/<m>/sections` (its page's sections with their data) · `zones` · `ipv6` · `environments` · `topology` · `storage` · `security` ·
 `activity[?module=<m>]` (the sweep's runs, and `jobs`) · `manifests` ·
 `modules/<m>/icon` (SVG or PNG, 404 when it has none) · `jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site;
 disk and pool, whose id is the node: its Disks and ZFS panels in Proxmox).

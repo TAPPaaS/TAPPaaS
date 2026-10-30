@@ -170,6 +170,40 @@ module that is still starting and calls it broken (#468, #700).
   tokens needs none
 - Example: `src/home/jellyfin/revoke-sessions.sh`
 
+### console.json (optional)
+
+A module can tailor its page in the console by shipping a `console.json` beside its module JSON,
+without writing code. `sections[]` adds a section to the page: an `id`, a `title`, a `read` (a manager
+or controller verb, run with `--json`; `$module` in its `args` stands for the module's name) and a
+`render` (`kv`, `table` with `columns[]`, or `gauges` with `fields[]`, each naming JSON paths in the
+verb's answer). An `id` the page already has replaces that section, and `before` or `after` place a
+section beside another. `operations[]` names verbs that carry a manifest, offered through the same
+Change, Preview, Apply dialog as every other change. The verb must be a read its manifest declares,
+and the console shows a bad entry as an error in its place. The schema is
+[`console-fields.json`](../../foundation/schemas/console-fields.json); `src/foundation/pvehost/console.json`
+is a worked example.
+
+```json
+{
+  "sections": [
+    {
+      "id": "memory-by-module",
+      "title": "Memory by module",
+      "read": { "bin": "health-manager", "verb": "guests", "args": ["$module"] },
+      "render": "table",
+      "rows": "guests",
+      "columns": [
+        { "path": "module", "label": "module", "format": "module" },
+        { "path": "declaredMem", "label": "declared", "format": "bytes" }
+      ]
+    }
+  ],
+  "operations": [
+    { "label": "Reboot node…", "bin": "site-manager", "verb": "node reboot", "args": ["$module"] }
+  ]
+}
+```
+
 ### myModule.nix
 
 NixOS configuration file for NixOS-based modules.
