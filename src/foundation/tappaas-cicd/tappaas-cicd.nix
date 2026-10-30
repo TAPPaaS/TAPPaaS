@@ -600,6 +600,30 @@ in
     };
   };
 
+  # The discovery sweep (D15): `cmdb sweep` asks the service for one; it reads
+  # every plane and changes nothing but the CMDB. Exit 1 (drift, unmanaged) and
+  # 2 (missing, a failed source) are its answer, not this unit's failure:
+  # health-manager's `cmdb` gate and the journal (cmdb-sweep) carry them.
+  # update-tappaas-schedule.sh renders cmdb-sweep.timer into /run/systemd/system
+  # beside update-tappaas.timer, an hour before the site's update hour: the
+  # hour is site.json's, which this file cannot read at build time.
+  systemd.services.cmdb-sweep = {
+    description = "CMDB discovery sweep (ADR-040 D15)";
+    after = [ "cmdb.service" ];
+    wants = [ "cmdb.service" ];
+    unitConfig.ConditionPathExists = "/home/tappaas/bin/cmdb";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "tappaas";
+      ExecStart = "/home/tappaas/bin/cmdb sweep";
+      SuccessExitStatus = "1 2";
+      Environment = [ "CMDB_SOCKET=/run/cmdb/cmdb.sock" ];
+      ProtectSystem = "strict";
+      ProtectHome = "read-only";
+      NoNewPrivileges = true;
+    };
+  };
+
   # The store is in tappaas-cicd's file backup as a dump (D12): taken just
   # before each capture, so the two describe the same moment whatever the
   # backup schedule is. /var/lib/cmdb/dump is in tappaas-cicd.json's

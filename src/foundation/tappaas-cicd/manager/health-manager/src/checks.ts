@@ -33,6 +33,7 @@ import { checkCveStatus } from "./security";
 import { checkSignatureStatus } from "./signatures";
 import { checkOpenAlerts } from "./alerts";
 import { checkControlPlaneTrust } from "./controlplane";
+import { checkCmdb } from "./cmdbsweep";
 import { checkMlagPairs } from "./mlag";
 import { checkIpv6Egress } from "./ipv6egress";
 import { primaryLocation } from "../../../lib/ts/src/locations";
@@ -1143,6 +1144,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     checkCveStatus(opts.configDir, Date.now()),
     checkSignatureStatus(opts.configDir, Date.now()),
     checkControlPlaneTrust(opts.configDir),
+    checkCmdb(Date.now()),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;
   return { checks, failed };

@@ -67,8 +67,13 @@ bash "${R}" >/dev/null 2>&1
 ck "renders OnCalendar"   'OnCalendar=Tue *-*-* 04:00:00' "$(grep '^OnCalendar=' "${TAPPAAS_TIMER_FILE}")"
 ck "Persistent=false"     'Persistent=false'              "$(grep '^Persistent=' "${TAPPAAS_TIMER_FILE}")"
 ck "drives the service"   'Unit=update-tappaas.service'   "$(grep '^Unit=' "${TAPPAAS_TIMER_FILE}")"
+ck "the sweep runs nightly, an hour before the update's hour" 'OnCalendar=*-*-* 03:00:00' "$(grep '^OnCalendar=' "${d}/cmdb-sweep.timer")"
+ck "…and drives its service" 'Unit=cmdb-sweep.service' "$(grep '^Unit=' "${d}/cmdb-sweep.timer")"
+echo '{"updateSchedule": {"frequency": "daily", "hour": 0}}' > "${TAPPAAS_SITE_JSON}"; bash "${R}" >/dev/null 2>&1
+ck "an update at midnight: the sweep at 23:00" 'OnCalendar=*-*-* 23:00:00' "$(grep '^OnCalendar=' "${d}/cmdb-sweep.timer")"
 echo '{"updateSchedule": ["none", null, 2]}' > "${TAPPAAS_SITE_JSON}"
 bash "${R}" >/dev/null 2>&1
+ck "no scheduled update: the sweep still runs, at 01:00" 'OnCalendar=*-*-* 01:00:00' "$(grep '^OnCalendar=' "${d}/cmdb-sweep.timer")"
 [[ ! -e "${TAPPAAS_TIMER_FILE}" ]] && ck "none removes the timer" ok ok || ck "none removes the timer" ok present
 echo '{"updateSchedule": ["daily", null, 2]}' > "${TAPPAAS_SITE_JSON}"; bash "${R}" >/dev/null 2>&1
 echo '{"updateSchedule": ["daily", null, 99]}' > "${TAPPAAS_SITE_JSON}"

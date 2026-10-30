@@ -8,6 +8,10 @@
 # drift from it. A schedule of "none" removes the timer. An unusable schedule
 # leaves the current timer as it is and fails this unit, so it shows.
 #
+# It also renders cmdb-sweep.timer beside it (ADR-040 D15): the discovery sweep
+# runs every night, an hour before the update window's hour, so an update runs
+# against a fresh actual; 01:00 for a site with no scheduled update.
+#
 # Usage: update-tappaas-schedule.sh [--dry-run]    (--dry-run prints the unit)
 #
 # Environment (tests): TAPPAAS_SITE_JSON, TAPPAAS_TIMER_FILE, TAPPAAS_NO_SYSTEMCTL=1
@@ -22,6 +26,7 @@ _here="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 
 SITE="${TAPPAAS_SITE_JSON:-/home/tappaas/config/site.json}"
 TIMER="${TAPPAAS_TIMER_FILE:-/run/systemd/system/update-tappaas.timer}"
+SWEEP_TIMER="$(dirname "${TIMER}")/cmdb-sweep.timer"
 DRY_RUN=0
 for a in "$@"; do
     case "${a}" in
@@ -38,6 +43,31 @@ if ! calendar="$(update_schedule_oncalendar "${schedule}")"; then
     echo "update-tappaas-schedule: updateSchedule ${schedule} is unusable — timer left as it is" >&2
     exit 1
 fi
+
+# cmdb-sweep.timer: nightly, whatever the update's frequency, an hour before
+# its hour (the calendar's last field). Persistent, unlike the update: a night
+# the mothership was down is made up, and a sweep changes nothing.
+render_sweep_timer() {
+    local hour=2 at
+    [[ "${calendar}" =~ ([0-9]{2}):00:00$ ]] && hour=$((10#${BASH_REMATCH[1]}))
+    at="$(printf '%02d:00:00' $(( (hour + 23) % 24 )))"
+    mkdir -p "$(dirname "${SWEEP_TIMER}")"
+    cat > "${SWEEP_TIMER}.tmp" <<UNIT
+# Rendered by update-tappaas-schedule.sh (ADR-040 D15). Do not edit.
+[Unit]
+Description=Nightly CMDB discovery sweep (${at})
+
+[Timer]
+OnCalendar=*-*-* ${at}
+Persistent=true
+Unit=cmdb-sweep.service
+UNIT
+    mv -f "${SWEEP_TIMER}.tmp" "${SWEEP_TIMER}"
+    sysctl_ daemon-reload
+    sysctl_ restart cmdb-sweep.timer
+    echo "update-tappaas-schedule: cmdb-sweep.timer → OnCalendar=*-*-* ${at}"
+}
+[[ "${DRY_RUN}" -eq 1 ]] || render_sweep_timer
 
 if [[ -z "${calendar}" ]]; then
     echo "update-tappaas-schedule: updateSchedule ${schedule} — no scheduled update; timer removed"
