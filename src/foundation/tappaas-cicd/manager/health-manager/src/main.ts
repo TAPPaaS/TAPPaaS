@@ -104,7 +104,7 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "guests [<node>] [--json] [--config-dir DIR]",
+      usage: "guests [<node>] [--json] [--config-dir DIR]", effect: "read",
       details: "Each guest's memory, declared and used as the balloon reports it, and the ZFS volumes behind it, by module. One node, or every node.",
       options: [["--json", "Print the node's document, or { nodes: [...] } for every node."]],
     },
