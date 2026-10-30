@@ -215,9 +215,9 @@ code makes today:
 ```mermaid
 flowchart LR
   subgraph planes[Planes]
-    pve[(Proxmox)]
+    pve[("Proxmox")]
     opn[(OPNsense)]
-    sw[(switches, APs)]
+    sw[("switches, APs")]
     ak[(Authentik)]
     pbs[(PBS)]
   end
@@ -225,16 +225,16 @@ flowchart LR
   subgraph ctl[Controllers]
     pc[proxmox-controller]
     oc[opnsense-controller]
-    sc[UniFi / MikroTik\ncontrollers\n(Community)]
+    sc["UniFi / MikroTik controllers (Community)"]
     ac[authentik-controller]
     bc[pbs-controller]
   end
 
-  subgraph mgr[Managers · report / report --discover · change]
+  subgraph mgr["Managers: report, report --discover, change"]
     sm[site-manager]
     mm[module-manager]
     nm[network-manager]
-    swm[switch-manager\nap-manager]
+    swm["switch-manager, ap-manager"]
     im[identity-manager]
     em[environment-manager]
     stm[storage-manager]
@@ -250,28 +250,28 @@ flowchart LR
   pbs --> bc --> bm
   pos[(positions.json)] --> am
 
-  lib[lib/ts cmdb.ts · cmdb-reporter.ts\nlib/cmdb-report.sh\nspool config/.cmdb-spool]
+  lib["lib/ts cmdb.ts, cmdb-reporter.ts; lib/cmdb-report.sh; spool config/.cmdb-spool"]
   sm & mm & nm & swm & im & em & stm & bm & am & hm --> lib
-  lib -- "POST /v1/report\n(unix socket)" --> svc
+  lib -- "POST /v1/report (unix socket)" --> svc
 
-  subgraph svc[cmdb-controller · cmdb.service]
-    api[server.ts\nreport · query · show · relations\nhistory · impact · resolve · SSE]
-    store[store.ts\nkeys · placeholders · drift · expiry]
-    sweep[sweep · rescan]
+  subgraph svc["cmdb-controller: cmdb.service"]
+    api["server.ts: report, query, show, relations, history, impact, resolve, SSE"]
+    store["store.ts: keys, placeholders, drift, expiry"]
+    sweep["sweep, rescan"]
     api --> store
     sweep --> store
   end
   store --> pg[(PostgreSQL cmdb)]
 
-  sweep -. "<component> report --discover" .-> sm & mm & nm & swm & im & em & stm & bm & am & hm
-  timer[cmdb-sweep.timer\nnightly, before the update window] --> sweep
+  sweep -. "component report --discover" .-> sm & mm & nm & swm & im & em & stm & bm & am & hm
+  timer["cmdb-sweep.timer: nightly, before the update window"] --> sweep
   sweep -- "sweep record" --> store
-  sweep -- "journal: cmdb-sweep lines" --> loki[(Loki · ADR-039 rules)]
+  sweep -- "journal: cmdb-sweep lines" --> loki[("Loki, ADR-039 rules")]
   hm -- "gate cmdb: last sweep" --> api
 
-  console[console · ui/\njobs set TAPPAAS_JOB_ID, TAPPAAS_ACTOR] -- "127.0.0.1:9098 + token\nquery · show · history · impact · SSE" --> api
+  console["console (ui/): jobs set TAPPAAS_JOB_ID, TAPPAAS_ACTOR"] -- "127.0.0.1:9098 + token: query, show, history, impact, SSE" --> api
   console -- "runs a verb as a job" --> sm & mm & nm & swm & im & em & stm & bm & am
-  cli[cmdb CLI · bash layer] --> api
+  cli["cmdb CLI, bash layer"] --> api
 ```
 
 ### Who reports what
@@ -309,7 +309,7 @@ sequenceDiagram
 
   U->>C: Apply (job 1234)
   C->>M: verb, env TAPPAAS_JOB_ID=1234 TAPPAAS_ACTOR=lars
-  M->>M: write config/<record>.json (desired)
+  M->>M: write the desired record in config/
   M->>P: change the plane
   P-->>M: result
   M->>S: POST /v1/report {change: verb, job, actor, objects}
@@ -333,7 +333,7 @@ sequenceDiagram
 
   T->>S: nightly, before the update window
   loop each component
-    S->>M: <component> report --discover
+    S->>M: component report --discover
     M-->>S: observations at full depth
     S->>D: upsert, validity, placeholders
   end
