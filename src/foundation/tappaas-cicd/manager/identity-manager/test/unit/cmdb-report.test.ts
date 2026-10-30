@@ -112,7 +112,7 @@ const spooled = (root: string): Obj[] => {
   check(a?.providers?.[0]?.flows?.authorization !== undefined && a?.applications?.[0]?.slug === "nextcloud" && a?.outposts?.length === 1 && a?.flows?.length === 1, "providers with their flows, applications, outposts");
   check(r.objects.some((o: Obj) => o.class === "user"), "beside everything report sends");
   // `authentik` is a field the metamodel does not have yet (D15): nothing else may be refused.
-  const left = cmdbProblems(r).filter((p) => !/vm has no field authentik$/.test(p));
+  const left = cmdbProblems(r);
   check(left.length === 0, `the metamodel takes the rest: ${left.join("; ")}`);
 }
 

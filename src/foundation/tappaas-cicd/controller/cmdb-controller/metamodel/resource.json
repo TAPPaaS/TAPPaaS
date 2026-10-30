@@ -55,7 +55,9 @@
       "fields": {
         "bootDisks": { "type": "array", "items": { "type": "string" }, "description": "Serials (O4: disks are attributes for now)." },
         "cpu": { "type": "string" },
-        "memory": { "type": "integer", "description": "MiB." }
+        "memory": { "type": "integer", "description": "MiB." },
+        "nics": { "type": "array", "volatile": true, "description": "Every physical NIC, used or not (D15): name, MAC, kind, speed, link, bond or bridge. Volatile: its link state moves." },
+        "disks": { "type": "array", "description": "Every disk in it (D15, O4): by-id name, model, serial, size, type, bus, SMART health, partitions." }
       }
     },
     "network-device": {
@@ -109,7 +111,15 @@
         "bands": { "type": "array", "items": { "type": "string", "enum": ["2.4", "5", "6"] }, "allowedBy": { "kind": { "wifi": [] } }, "description": "Wi-Fi 6E is wifi6 with band 6." },
         "mac": { "type": "string", "description": "Unique across all ports (D9)." },
         "role": { "type": "string", "enum": ["lan", "wan", "bmc"], "description": "What the node uses it for." },
-        "side": { "type": "string", "enum": ["front", "rear"], "description": "On a patch panel." }
+        "side": { "type": "string", "enum": ["front", "rear"], "description": "On a patch panel." },
+        "link": { "type": "string", "volatile": true, "description": "Its link state (D15)." },
+        "linkSpeed": { "type": "string", "volatile": true, "description": "The negotiated speed." },
+        "poe": { "type": "object", "volatile": true, "description": "PoE state and draw." },
+        "stp": { "type": "string", "volatile": true },
+        "vlans": { "type": "object", "description": "How it is set: mode, native, tagged." },
+        "seen": { "type": "array", "volatile": true, "description": "What is behind it: MAC, LLDP neighbour, lease." },
+        "channel": { "type": "integer", "volatile": true },
+        "power": { "type": "number", "volatile": true }
       }
     },
     "pool": {

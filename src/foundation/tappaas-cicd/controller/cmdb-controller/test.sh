@@ -418,6 +418,28 @@ check "a proxy-route serves <module>:<service> by name; no placeholder; one serv
 check "a buddy that pulls ours is pulled-by" "pulled-by" "$(cmdb report --json <<<'{"source":"backup-manager","objects":[{"class":"backup-peer","name":"bud","attributes":{"direction":"pulled-by"}}]}' >/dev/null; cmdb show backup-peer/bud --json | jq -r '.attributes.direction.value')"
 check "a network device has a management MAC" "aa:aa" "$(cmdb report --json <<<'{"source":"switch-manager","objects":[{"class":"network-device","name":"sw-01","attributes":{"mac":"aa:aa"}}]}' >/dev/null; cmdb show network-device/sw-01 --json | jq -r '.attributes.mac.value')"
 
+echo "== what report --discover sends (D15) =="
+out="$(cmdb report --json 2>&1 <<'JSON'
+{ "source": "site-manager", "objects": [
+  { "ref": "m", "class": "machine", "name": "deep1", "attributes": { "cpu": "Xeon", "cpus": 8, "memory": 1024, "storages": [{"storage":"local"}], "pciDevices": [{"id":"01:00"}],
+    "nics": [{"name":"eno1","link":true}], "disks": [{"serial":"S1"}] } },
+  { "class": "vm", "name": "firewall", "attributes": { "vmid": 410, "nics": [{"name":"net0"}], "firewall": {"rules":[]}, "authentik": {"flows":[]} } },
+  { "class": "lxc", "name": "dns1", "attributes": { "vmid": 411, "nics": [], "disks": [] } },
+  { "class": "cluster", "name": "c1", "attributes": { "corosyncLinks": [{"link":0}] } },
+  { "class": "storage-pool", "name": "deep-pool", "attributes": { "onNode": {"ref":"m"}, "vdevs": [{"name":"mirror-0"}] } },
+  { "ref": "s", "class": "server", "name": "deep-srv", "attributes": { "nics": [], "disks": [] } },
+  { "class": "port", "name": "wl0", "attributes": { "asset": {"ref":"s"}, "kind": "wifi", "standard": "wifi6", "bands": ["5"], "channel": 36, "power": 20.5 } },
+  { "class": "port", "name": "p1", "attributes": { "asset": {"ref":"s"}, "kind": "rj45", "link": "up", "linkSpeed": "1g", "poe": {"draw":3}, "stp": "forwarding", "vlans": {"mode":"access"}, "seen": [{"mac":"aa"}] } },
+  { "class": "device", "name": "sw9", "attributes": { "uptime": 100, "vlans": [{"tag":10,"declared":true}], "clients": [] } },
+  { "class": "zone", "name": "deepz", "attributes": { "interface": {"device":"vlan0.10"}, "dhcp": {"start":"a","end":"b"} } },
+  { "class": "vpn-peer", "name": "phone", "attributes": { "lastHandshake": "1" } },
+  { "class": "datastore", "name": "ds1", "attributes": { "gc": {"state":"ok"}, "restorePoints": [{"id":"100"}], "syncJobs": [] } } ] }
+JSON
+)"
+check "every field a discover report sends is declared" "true" "$(jq -r '.delivered' <<<"${out}" 2>/dev/null || echo "${out}")"
+out="$(cmdb report --json <<<'{"source":"switch-manager","objects":[{"class":"port","name":"p1","attributes":{"asset":"deep-srv","link":"down","seen":[],"poe":{"draw":0}}},{"class":"device","name":"sw9","attributes":{"uptime":200,"clients":[{"mac":"bb"}]}}]}')"
+check "what moves on every read is no drift" "0" "$(jq '[.result.objects[].drift[]] | length' <<<"${out}")"
+
 echo "== the discovery sweep (D15) =="
 # A clean store and config/ of its own: the fixture site. The sources are stubs
 # that report from files the test rewrites, module-manager drift a stub too, the

@@ -117,13 +117,12 @@ function report(extra: string[], cfg: string): Obj {
 
 // The fields D15 needs and cmdb-controller's metamodel does not have yet; the
 // store refuses these until they are added. Anything else is a bug here.
-const AWAITING = /(machine|server|vm|lxc) has no field (nics|disks|cpu|cpus|memory|storages|pciDevices)$|cluster has no field corosyncLinks$|storage-pool has no field vdevs$/;
 
 {
   const r = report(["--discover"], fixture());
   const objs: Obj[] = r.objects;
   const one = (c: string, n: string): Obj | undefined => objs.find((o) => o.class === c && o.name === n);
-  const left = cmdbProblems(r).filter((p) => !AWAITING.test(p));
+  const left = cmdbProblems(r);
   check(left.length === 0, `the metamodel takes the rest: ${left.join("; ")}`);
 
   const srv = one("server", "srv-01");
@@ -142,9 +141,11 @@ const AWAITING = /(machine|server|vm|lxc) has no field (nics|disks|cpu|cpus|memo
   check(ports.some((p) => p.name === "enp2s0f0" && p.attributes.kind === "sfp" && p.attributes.speed === "10g"), "the NIC with no link is a port");
   check(!ports.some((p) => p.name === "eno1"), "no second port for the same MAC");
 
-  const pool = one("storage-pool", "tappaas1/rpool");
-  check(pool?.attributes?.onNode?.ref === m1?.ref && pool?.attributes?.vdevs?.[0]?.members?.length === 2, "a pool, named as storage-manager names it, with its layout");
-  check(!!one("storage-pool", "tappaas2/tanka1"), "per node");
+  const pools = objs.filter((o) => o.class === "storage-pool");
+  const pool = pools.find((p) => p.name === "rpool" && p.attributes.onNode.ref === m1?.ref);
+  check(pool?.attributes?.onNode?.ref === m1?.ref && pool?.attributes?.vdevs?.[0]?.members?.length === 2, "a pool, on its node, with its layout");
+  check(pool?.attributes?.health?.status === "ok" && pool?.attributes?.health?.check === "zfs ONLINE", "its ZFS state as a CI's health");
+  check(pools.filter((p) => p.name === "tanka1").length === 2, "per node");
   check(one("cluster", "hrossen")?.attributes?.corosyncLinks?.[0]?.connected === true, "corosync links on the cluster");
   const vm = one("vm", "identity");
   check(vm?.attributes?.nics?.[0]?.bridge === "lan" && vm?.attributes?.nics?.[0]?.tag === 200 && vm?.attributes?.nics?.[0]?.mac === "bc:24:11:00:00:01", "a guest's NICs");

@@ -145,7 +145,10 @@ differ (step 6) will supply the comparison with desired state; until then
 "no change behind it" means: not reported as a change.
 
 **Volatile fields** (`attribute_def.volatile`, schema v3) change by themselves: a
-pool's `used`, a lease. They get periods like any other value and never count
+pool's `used`, a lease, a port's link, what is seen behind it. A whole attribute
+is one value, so `nics[]` and `storages[]` are volatile because of what moves
+inside them; a NIC that is added shows through its port. `disks[]`, `vdevs[]`
+and `firewall` are not: a change there is what a sweep is for. They get periods like any other value and never count
 as drift. `firmware` is deliberately not one: it does not change on every read,
 and a firmware nobody reported changing is what drift is for.
 

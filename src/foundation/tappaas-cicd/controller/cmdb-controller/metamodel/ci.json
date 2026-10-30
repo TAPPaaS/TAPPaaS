@@ -59,7 +59,10 @@
         "disks": { "type": "array", "items": { "type": "object", "properties": { "storage": { "type": "string" }, "size": { "type": "string" } } } },
         "template": { "type": "string" },
         "haPolicy": { "type": "string" },
-        "onNode": { "type": "relation", "relation": "runs-on", "description": "The machine it runs on." }
+        "onNode": { "type": "relation", "relation": "runs-on", "description": "The machine it runs on." },
+        "nics": { "type": "array", "description": "Its network devices, as the guest's config has them (D15)." },
+        "firewall": { "type": "object", "description": "The firewall VM's plane at full depth (D15): rules in live order, aliases, nat, routes, certificates, packages, dhcpRanges, dhcpHosts, interfaces, vlans." },
+        "authentik": { "type": "object", "description": "The identity VM's Authentik at full depth (D15): providers, applications, outposts, flows." }
       }
     },
     "lxc": {
@@ -72,7 +75,9 @@
         "memory": { "type": "integer", "description": "MiB." },
         "rootfs": { "type": "string" },
         "unprivileged": { "type": "boolean" },
-        "onNode": { "type": "relation", "relation": "runs-on" }
+        "onNode": { "type": "relation", "relation": "runs-on" },
+        "nics": { "type": "array", "description": "Its network devices (D15)." },
+        "disks": { "type": "array", "description": "Its mountpoints (D15)." }
       }
     },
     "machine": {
@@ -83,7 +88,14 @@
         "hostname": { "type": "string" },
         "clusterMember": { "type": "boolean" },
         "storagePools": { "type": "array", "items": { "type": "string" } },
-        "asset": { "type": "relation", "relation": "allocated-to", "direction": "in", "key": 2, "description": "The box it runs on, for now (an asset allocated-to this machine)." }
+        "asset": { "type": "relation", "relation": "allocated-to", "direction": "in", "key": 2, "description": "The box it runs on, for now (an asset allocated-to this machine)." },
+        "cpu": { "type": "string" },
+        "cpus": { "type": "integer" },
+        "memory": { "type": "integer", "description": "MiB." },
+        "nics": { "type": "array", "volatile": true, "description": "Every physical NIC, used or not (D15): name, MAC, kind, speed, link, bond or bridge. Volatile: its link state moves." },
+        "disks": { "type": "array", "description": "Every disk (D15), when no asset holds them: by-id name, model, serial, size, type, bus, SMART health, partitions." },
+        "storages": { "type": "array", "volatile": true, "description": "Every storage the node knows (pvesm). Volatile: it carries usage." },
+        "pciDevices": { "type": "array", "description": "PCI devices a guest could take (D15)." }
       }
     },
     "device": {
@@ -95,7 +107,10 @@
         "firmware": { "type": "string" },
         "managementAddress": { "type": "string" },
         "controller": { "type": "string", "description": "The controller that manages it, if one." },
-        "asset": { "type": "relation", "relation": "allocated-to", "direction": "in", "key": 2 }
+        "asset": { "type": "relation", "relation": "allocated-to", "direction": "in", "key": 2 },
+        "uptime": { "type": "integer", "volatile": true, "description": "Seconds." },
+        "vlans": { "type": "array", "description": "Every VLAN it has, each marked declared in zones.json or not (D15)." },
+        "clients": { "type": "array", "volatile": true, "description": "An AP's clients: MAC, SSID, signal (D15)." }
       }
     },
     "software": {
@@ -152,7 +167,8 @@
         "subnet": { "type": "string" },
         "ipv6Subnet": { "type": "string" },
         "tier": { "type": "string" },
-        "dhcp": { "type": "object", "description": "The range." }
+        "dhcp": { "type": "object", "description": "The range." },
+        "interface": { "type": "object", "description": "The firewall interface that carries it (D15): identifier, device, tag, ipv4, enabled." }
       }
     },
     "ssid": {
@@ -200,7 +216,8 @@
       "fields": {
         "publicKey": { "type": "string", "immutable": true },
         "endpoint": { "type": "string" },
-        "allowedIps": { "type": "array", "items": { "type": "string" } }
+        "allowedIps": { "type": "array", "items": { "type": "string" } },
+        "lastHandshake": { "type": "string", "volatile": true }
       }
     },
     "storage-element": { "parent": "ci", "abstract": true, "description": "What storage is made of.", "fields": {} },
@@ -212,7 +229,8 @@
         "type": { "type": "string", "description": "zfs, …" },
         "size": { "type": "integer" },
         "used": { "type": "integer", "volatile": true },
-        "onNode": { "type": "relation", "relation": "runs-on", "required": true, "key": 1 }
+        "onNode": { "type": "relation", "relation": "runs-on", "required": true, "key": 1 },
+        "vdevs": { "type": "array", "description": "Its layout (D15): vdevs with state, members by serial." }
       }
     },
     "share": {
@@ -231,7 +249,10 @@
         "size": { "type": "integer" },
         "used": { "type": "integer", "volatile": true },
         "retention": { "type": "object" },
-        "onNode": { "type": "relation", "relation": "runs-on" }
+        "onNode": { "type": "relation", "relation": "runs-on" },
+        "gc": { "type": "object", "volatile": true, "description": "The last garbage collection (D15)." },
+        "restorePoints": { "type": "array", "volatile": true, "description": "Per group: ns, type, id, snapshots, newest, ageSeconds (D15)." },
+        "syncJobs": { "type": "array", "volatile": true, "description": "Its sync jobs with their last run (D15)." }
       }
     },
     "backup-peer": {
@@ -291,7 +312,8 @@
       "parent": "collection",
       "description": "The Proxmox cluster.",
       "fields": {
-        "quorum": { "type": "boolean", "volatile": true }
+        "quorum": { "type": "boolean", "volatile": true },
+        "corosyncLinks": { "type": "array", "volatile": true, "description": "The corosync links and their state (D15)." }
       }
     },
     "environment": {
