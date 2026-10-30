@@ -119,7 +119,9 @@ export interface GuestMemory {
   status: string;
   type: "qemu" | "lxc" | string;
   declaredMem: number; // bytes the guest is configured for (a LIMIT for lxc)
-  usedMem: number; // bytes the guest reports using — only meaningful if `measured`
+  // Bytes the guest is using, page cache excluded when availableMem is set —
+  // only meaningful if `measured`.
+  usedMem: number;
   residentMem: number; // bytes the HOST actually has backed for it (0 = unknown)
   // True only when the balloon statistics carry `free_mem` — i.e. the usage
   // figure genuinely came from inside the guest. NOT the same as "an agent
@@ -128,6 +130,13 @@ export interface GuestMemory {
   // the HOST's view as the guest's. That is how a firewall using 1.15G read as
   // 8.0G of 8.0G — its `mem` even exceeded its `maxmem`.
   measured: boolean;
+  // From the balloon statistics: what the guest could use without swapping, and
+  // how much of its memory is page cache. Unset when it reports no available
+  // figure (Windows, no balloon driver); `usedMem` is then Proxmox's total minus
+  // free, which counts cache as used. Unused for a container: Proxmox's figure
+  // leaves out file cache already.
+  availableMem?: number;
+  cacheMem?: number;
   // A container's highest memory use over the last 7 days (Proxmox rrddata,
   // MAX); 0 or absent: no history yet. Unused for a VM.
   peakMem?: number;

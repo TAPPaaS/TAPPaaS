@@ -27,7 +27,7 @@
 import { spawnSync } from "child_process";
 import { join } from "path";
 import { isManaged, loadConfigModules, readModuleJson, siteNodeHostnames } from "./config";
-import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient, ConfigModule, HealthReport, NodeCapacity, StoragePool } from "./types";
+import { CheckResult, CheckRow, CheckStatus, CheckSubject, ClusterClient, ConfigModule, GuestMemory, HealthReport, NodeCapacity, StoragePool } from "./types";
 import { existsSync, readFileSync } from "fs";
 import { checkCveStatus } from "./security";
 import { checkSignatureStatus } from "./signatures";
@@ -466,8 +466,8 @@ export function checkUpdateCapacity(
 //   declared - allocated memory the guest has NEVER TOUCHED. QEMU backs a page
 //                        on first write, so this costs nothing and ballooning
 //                        has nothing to reclaim from it.
-//   allocated - used     memory the guest touched and then freed. The host was
-//                        never told, so it still holds it. THIS is the only
+//   allocated - used     memory the guest touched and then freed, or keeps as
+//                        page cache. The host still holds it. THIS is the only
 //                        part a balloon driver could give back.
 //
 // Measured on hrossen: 60G declared, 31.9G allocated, ~20G used. A two-column
@@ -479,6 +479,14 @@ export function checkUpdateCapacity(
 // firewall using 1.15G of 8G read as 8.0G of 8.0G — "full", and precisely
 // backwards. Printing that figure would send an operator away from the one VM
 // on the system with real memory to reclaim.
+//
+// `used` is what the guest cannot give up: total minus available from the
+// balloon statistics (balloon.ts). Proxmox's own figure is total minus MemFree,
+// which counts page cache as used, so every busy Linux guest read about 90% and
+// a Nix builder with 1G in use read 93% of 16G. The row shows the cache, because
+// that is the part the guest gives up the moment anything asks: it counts in the
+// gap and not in `used`. A VM with no available figure (Windows) keeps Proxmox's
+// and the row says so. A container's figure leaves out file cache already.
 export function checkGuestMemory(client: ClusterClient): CheckResult {
   let caps: NodeCapacity[];
   try {
@@ -498,7 +506,10 @@ export function checkGuestMemory(client: ClusterClient): CheckResult {
   const pad = (t: string, n: number): string => (t.length >= n ? t : t + " ".repeat(n - t.length));
   const col = (b: number): string => pad(`${gib(b)}G`, 8);
 
-  type Row = { g: (typeof guests)[number]; gap: number; pct: number; status: CheckStatus };
+  const cacheNote = (g: GuestMemory): string =>
+    g.availableMem === undefined ? ", cache counts as used" : g.cacheMem === undefined ? "" : `, cache ${gib(g.cacheMem)}G`;
+
+  type Row = { g: GuestMemory; gap: number; pct: number; status: CheckStatus };
   const rows: Row[] = guests.map((g) => {
     const running = g.status === "running";
     const gap = running && g.measured && g.residentMem > g.usedMem ? g.residentMem - g.usedMem : 0;
@@ -523,7 +534,7 @@ export function checkGuestMemory(client: ClusterClient): CheckResult {
       ? "  usage figure is the host's, not the guest's"
       : g.type === "lxc"
         ? `  ${pct.toFixed(0)}% of its LXC limit`
-        : `  ${pct.toFixed(0)}% of declared, gap ${gib(gap)}G`;
+        : `  ${pct.toFixed(0)}% of declared, gap ${gib(gap)}G${cacheNote(g)}`;
     return { status, text: `${name}${col(g.declaredMem)}${col(g.residentMem)}${used}${note}`, ...subject };
   });
 
