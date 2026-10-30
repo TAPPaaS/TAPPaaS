@@ -1,0 +1,5 @@
+{
+  "mgmt": {"type": "Management", "environment": "mgmt", "vlantag": 0, "state": "Mandatory", "tier": 0, "bridge": "lan", "ip": "10.0.0.0/24", "ipv6Subnet": 0},
+  "srv": {"type": "Service", "environment": "home", "vlantag": 200, "state": "Active", "tier": 1, "bridge": "lan", "ip": "10.2.0.0/24", "DHCP-start": 100},
+  "guest": {"type": "Guest", "environment": ["home", "work"], "vlantag": 600, "state": "Inactive", "tier": 5, "bridge": "lan", "ip": "10.6.0.0/24"}
+}

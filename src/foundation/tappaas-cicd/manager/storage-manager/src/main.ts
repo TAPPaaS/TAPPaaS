@@ -18,6 +18,8 @@ import { Store } from "./store";
 import { buildInventory, collectSources, renderInventory } from "./inventory";
 import { AddSpec, Result, addShare, deleteShare, grant, modifyShare, revoke } from "./verbs";
 import { join } from "path";
+import { CmdbBatch, printOrSend, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
+import { SOURCE as CMDB_SOURCE, buildStorageReport, putShare } from "./cmdbreport";
 
 const VERSION = "0.1.0";
 
@@ -41,6 +43,19 @@ export const HELP: HelpSpec = {
         "their vdevs and disks, what each pool holds (the guests' own volumes, the HA mirror copies of\n" +
         "guests running on another node, the backup datastore, NFS shares) and its free space, and the\n" +
         "replication jobs. Every disk, pool and job carries a state — ok, warn or fail — and why.",
+    },
+    {
+      usage: "report [--json] [--no-smart]",
+      name: "report (to the CMDB, ADR-040)",
+      effect: "read",
+      options: [
+        ["--json", "report: print it instead of sending it."],
+        ["--no-smart", "report: skip the SMART reads of the inventory it makes."],
+      ],
+      details:
+        "Sends the storage to the CMDB (cmdb-controller) as one observation: each ZFS pool `inventory` reads\n" +
+        "(storage-pool <node>/<pool>: size, used, health; runs-on its machine) and each share of\n" +
+        "config/shares.json (its export path and grants). `inventory` sends its pools as it reads them.",
     },
     {
       usage: "nfs show [<share>] [--server <instance>] [--json]",
@@ -128,8 +143,18 @@ function converge(store: Store, args: string[]): number {
   return stream(join(dir, "lib", "nfs-converge.sh"), args);
 }
 
+// A changing verb's share, reported to the CMDB once written (ADR-040 D4); a
+// share no longer declared is ended. Never fails the verb.
+function shareChanged(verb: string, name: string, doc: SharesDoc): void {
+  const b = new CmdbBatch(CMDB_SOURCE);
+  const s = sharesOf(doc)[name];
+  if (s) putShare(b, name, s);
+  else b.end("share", name);
+  reportChange(b, `storage-manager ${verb}`);
+}
+
 // change — the shared sequence of every changing verb.
-function change(store: Store, check: boolean, fn: (doc: SharesDoc) => Result, after: (doc: SharesDoc) => number): number {
+function change(store: Store, check: boolean, fn: (doc: SharesDoc) => Result, after: (doc: SharesDoc) => number, touched?: { verb: string; share: string }): number {
   return store.withLock(() => {
     const r = fn(store.load());
     if ("refused" in r) die(r.refused);
@@ -142,6 +167,7 @@ function change(store: Store, check: boolean, fn: (doc: SharesDoc) => Result, af
     }
     store.save(r.doc);
     info(`${GN}✓${CL} ${r.summary}`);
+    if (touched) shareChanged(touched.verb, touched.share, r.doc);
     return after(r.doc);
   });
 }
@@ -182,6 +208,9 @@ function inventory(args: string[]): number {
   if (args.includes("--node") && !node) die("inventory --node <n>");
   const inv = buildInventory(collectSources({ configDir: defaultConfigDir(), only: node ?? null, smart: !args.includes("--no-smart") }));
   if (node && inv.nodes.length === 0) die(`${node} is not one of the cluster's nodes (site-manager node list)`);
+  // What it read goes to the CMDB as it was read (ADR-040 D4): the pools.
+  const sent = sendReport(buildStorageReport(null, inv).report());
+  if (sent.error) process.stderr.write(`[Warning] cmdb: report not recorded: ${sent.error}\n`);
   if (args.includes("--json")) process.stdout.write(JSON.stringify(inv, null, 1) + "\n");
   else for (const l of renderInventory(inv)) info(l);
   return 0;
@@ -211,6 +240,13 @@ export function run(argv: string[]): number {
     return 0;
   }
   if (args[0] === "inventory") return inventory(args);
+  if (args[0] === "report") {
+    const extra = positional(args, 1, []);
+    if (extra.length) die(`report: unexpected argument ${extra[0]}`);
+    const inv = buildInventory(collectSources({ configDir: defaultConfigDir(), only: null, smart: !args.includes("--no-smart") }));
+    for (const s of inv.sources.filter((x) => !x.ok)) process.stderr.write(`[Warning] report: ${s.name}: ${s.error ?? "did not answer"} — left out\n`);
+    return printOrSend(buildStorageReport(store.load(), inv), args.includes("--json"));
+  }
   if (args[0] !== "nfs") die(`unknown verb '${args[0]}' — see 'storage-manager --help'`);
   if (args[1] === "show") return show(store, args);
   requireOperator();
@@ -246,7 +282,7 @@ export function run(argv: string[]): number {
       version: opt(args, "--version"),
       v3Ports,
     };
-    return change(store, check, (d) => addShare(d, name, spec, store.managed(server)), () => converge(store, ["share", name, "--notify"]));
+    return change(store, check, (d) => addShare(d, name, spec, store.managed(server)), () => converge(store, ["share", name, "--notify"]), { verb: "nfs share add", share: name });
   }
   if (verb.startsWith("nfs share modify")) {
     const [name] = positional(args, 3, ["--set"]);
@@ -257,13 +293,13 @@ export function run(argv: string[]): number {
       return [kv.slice(0, i), kv.slice(i + 1)];
     });
     if (!sets.length) die("nothing to change — give --set <field>=<value>");
-    return change(store, check, (d) => modifyShare(d, name, sets), () => converge(store, ["share", name]));
+    return change(store, check, (d) => modifyShare(d, name, sets), () => converge(store, ["share", name]), { verb: "nfs share modify", share: name });
   }
   if (verb.startsWith("nfs share delete")) {
     const [name] = positional(args, 3, []);
     if (!name) die("nfs share delete <name>");
     const server = sharesOf(store.load())[name]?.server ?? "";
-    return change(store, check, (d) => deleteShare(d, name, store.mountedBy(name)), () => converge(store, ["drop", name, server]));
+    return change(store, check, (d) => deleteShare(d, name, store.mountedBy(name)), () => converge(store, ["drop", name, server]), { verb: "nfs share delete", share: name });
   }
   if (verb.startsWith("nfs share purge")) {
     const [name] = positional(args, 3, ["--server"]);
@@ -277,12 +313,12 @@ export function run(argv: string[]): number {
     const [share, consumer, access] = positional(args, 2, []);
     if (!share || !consumer || !access) die("nfs grant <share> <consumer> ro|rw");
     if (!store.read(consumer)) warn(`${consumer} is not deployed — the grant takes effect when it is`);
-    return change(store, check, (d) => grant(d, share, consumer, access), () => converge(store, ["share", share, "--notify-only", consumer]));
+    return change(store, check, (d) => grant(d, share, consumer, access), () => converge(store, ["share", share, "--notify-only", consumer]), { verb: "nfs grant", share });
   }
   if (verb.startsWith("nfs revoke")) {
     const [share, consumer] = positional(args, 2, []);
     if (!share || !consumer) die("nfs revoke <share> <consumer>");
-    return change(store, check, (d) => revoke(d, share, consumer, store.mountedBy(share).includes(consumer)), () => converge(store, ["share", share]));
+    return change(store, check, (d) => revoke(d, share, consumer, store.mountedBy(share).includes(consumer)), () => converge(store, ["share", share]), { verb: "nfs revoke", share });
   }
   if (args[1] === "converge") {
     const [name] = positional(args, 2, ["--server"]);

@@ -126,6 +126,35 @@ switch-manager reconcile
 switch-manager reconcile --apply
 ```
 
+## Reports to the CMDB
+
+ADR-040 D4: `switch-manager report` sends what the switch configuration
+knows to the CMDB (cmdb-controller); `--json` prints the reports instead.
+[`cmdb-report.jq`](./cmdb-report.jq) builds them from
+`switch-configuration-actual.json` and `positions.json`:
+
+| Class | Name | Attributes | Relations |
+|---|---|---|---|
+| `device` | the switch's name | model, firmware, managementAddress, controller, desired | |
+| `network-device` (asset) | the tag of the positions.json asset whose role is the switch, else the switch's name | vendor, model, serial (the record's where it has them, else the actual's), deviceType `switch`, controller, ports | `allocated-to` the device |
+| `port` | the port id | kind, speed (the actual's where the controller says, else the asset record's, else `rj45`/`1g`), module, mac | `part-of` the asset |
+
+Cables are `connects` between two ports, with `origin` (`recorded`, `lldp`,
+`mlag-peer`) and the observed `linkSpeed`: between two switches' ports in the
+first report; to a node's NIC (a port on the server asset positions.json
+records for that node) each in a report of its own, so a port the CMDB does
+not have yet refuses only that cable. A port toward an AP is ap-manager's to
+report. MACs seen behind a port stay in the actual: the CMDB resolves no MAC
+yet (ADR-040 D5), and the controllers report no serial, MAC or speed today.
+
+`interrogate` and `reconcile` report what they read as an observation; the
+verbs that change a switch (`add-switch`, `modify-switch`, `remove-switch`,
+`add-port`, `update-port`, `remove-port`, `lag set|remove`, `mlag-pair
+set|remove`, `apply`, `confirm`, `reconcile --apply`) report a change with the
+console's job id (`TAPPAAS_JOB_ID`); a removed switch's device is ended. A
+report the CMDB cannot take is spooled by the `cmdb` CLI and never fails the
+verb. `TAPPAAS_CMDB=off` sends nothing. Tests: `./test-cmdb-report.sh`.
+
 ## Setup helper: `setup-switches.sh`
 
 Interactive registration walk-through, normally run at the end of the platform

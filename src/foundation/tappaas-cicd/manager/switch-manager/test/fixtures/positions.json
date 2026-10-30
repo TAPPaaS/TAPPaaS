@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "assets": {
+    "sw-01": {"kind": "switch", "vendor": "ubiquiti", "model": "usw-pro-xg-10-poe", "serial": "F4E2C6000001", "stage": "placed", "role": "core",
+              "ports": [{"name": "1", "kind": "rj45", "speed": "10g"}, {"name": "11", "kind": "sfp", "speed": "10g"}]},
+    "srv-01": {"kind": "server", "vendor": "hp", "serial": "CZC1", "stage": "placed", "role": "tappaas1"},
+    "srv-02": {"kind": "server", "vendor": "hp", "serial": "CZC2", "stage": "placed", "role": "tappaas2"},
+    "sw-old": {"kind": "switch", "stage": "disposed", "role": "edge"}
+  }
+}

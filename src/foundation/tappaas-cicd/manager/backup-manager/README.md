@@ -186,6 +186,29 @@ The single entry point is the `backup-manager` bin (linked onto `PATH` by
 | `validate-backup.sh` | `backup-manager validate` (also via `validate.sh`, P10) |
 | `lib-cascade.sh`     | `src/config.ts` `resolvePolicy` (the cascade source of truth) |
 
+## Reports to the CMDB
+
+ADR-040 D4: `backup-manager report [--json]` sends the backups to the CMDB
+(cmdb-controller) as one observation; `--json` prints it instead. It reads what
+`restore list-all` reads (`pbs-controller runs --json`) and the peer records in
+`config/`:
+
+| Class | Name | Attributes | Relations |
+|---|---|---|---|
+| `datastore` | the PBS datastore | size, used (bytes, the datastore's status), retention (its prune job's keep-*) | `runs-on` the machine PBS runs on; `backs-up` every guest (`vm`/`lxc` by module) and machine (file backups) of this site it holds restore points for |
+| `backup-peer` | the buddy | direction (`pull`, `receive`; a buddy that pulls ours has none in the metamodel's enum), lastSeen (its sync's last run), description (its host) | `at` the location it names |
+
+Other sites' copies pulled or pushed here are not this site's restore points
+and get no `backs-up`. `restore list-all --json` sends the same as a side
+effect. `peer add`, `peer modify` and `peer delete` report the buddy as a
+change with the console's job id (`TAPPAAS_JOB_ID`) — ended when no
+relationship with it is left; `purge` ends the datastore's `backs-up` of the
+guest; the `placement` verbs report the datastore they point at. A reference
+the CMDB does not have yet (a machine, a module's guest, a location) drops
+only that relation. A report the CMDB cannot take is spooled under
+`config/.cmdb-spool/` and never fails the verb; `TAPPAAS_CMDB=off` sends
+nothing.
+
 ## Controllers it calls
 
 - [`pbs-controller`](../../controller/pbs-controller/) — PBS job status,

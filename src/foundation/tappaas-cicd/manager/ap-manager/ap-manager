@@ -44,9 +44,14 @@ readonly SCRIPT_DIR
 # An AP's location is one of the site's (ADR-036 D2).
 # shellcheck source=../../lib/locations.sh
 . "${SCRIPT_DIR}/../../lib/locations.sh"
+# What it reads and changes goes to the CMDB (ADR-040 D4).
+# shellcheck source=../../lib/cmdb-report.sh
+. "${SCRIPT_DIR}/../../lib/cmdb-report.sh"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
+readonly POSITIONS="${CONFIG_DIR}/positions.json"
+JSON=0
 
 # ── Usage ────────────────────────────────────────────────────────────
 
@@ -82,6 +87,8 @@ SSIDs (site-wide: every access point broadcasts each one, on its zone's VLAN):
 
 Reconciliation (five-verb provider contract):
   update-desired          zones.json -> SSID vlan tracking
+  report [--json]         send the APs, their assets, radios, uplinks and the SSIDs to
+                          the CMDB (ADR-040); --json prints the reports instead
   interrogate             live APs -> actual.json (via its controller)
   delta                   show desired-vs-actual + zone/SSID/uplink validations
   apply                   push delta via the controller (manual prints steps)
@@ -109,6 +116,7 @@ ssid set-passphrase: --file=
 ssid * add: --zone= --security= --vlan= --radius= --captive --disabled
 ssid * remove:
 ssid * list:
+report: --json
 update-desired:
 interrogate:
 delta:
@@ -747,6 +755,43 @@ cmd_interrogate() {
     return 0
 }
 
+# ── Reports to the CMDB (ADR-040 D4) ─────────────────────────────────
+
+# The reports cmdb-report.jq builds: ap_reports <only> <ended-aps> <ended-ssids> [<verb>]
+# (<only> "" is every AP and SSID; a verb makes it a change).
+ap_reports() {
+    local only="$1" ended="$2" endedSsids="$3" verb="${4:-}" pos='{}' actual='{}' head
+    [[ -s "${POSITIONS}" ]] && pos="$(jq -c . "${POSITIONS}" 2>/dev/null || echo '{}')"
+    [[ -s "${ACTUAL}" ]] && actual="$(jq -c . "${ACTUAL}" 2>/dev/null || echo '{}')"
+    if [[ -n "${verb}" ]]; then head="$(cmdb_change_head "${verb}")"; else head='{"kind":"observation"}'; fi
+    jq --argjson actual "${actual}" --argjson pos "${pos}" --arg only "${only}" \
+        --argjson ended "${ended}" --argjson endedSsids "${endedSsids}" --arg source ap-manager \
+        --arg kind "$(jq -r .kind <<<"${head}")" --arg verb "${verb}" \
+        --arg job "$(jq -r '.job // ""' <<<"${head}")" --arg actor "$(jq -r '.actor // ""' <<<"${head}")" \
+        -f "${SCRIPT_DIR}/cmdb-report.jq" "${DESIRED}"
+}
+
+# report [--json]: every AP and SSID, as one observation (--json prints it).
+cmd_report() {
+    local reports
+    reports="$(ap_reports "" '[]' '[]')" || die "report: could not build the report from ${DESIRED}"
+    if [[ "${JSON}" == 1 ]]; then printf '%s\n' "${reports}"; return 0; fi
+    cmdb_send_reports <<<"${reports}"
+    info "ap-manager: reported $(cmdb_report_count <<<"${reports}") to the CMDB"
+}
+
+# The APs and SSIDs in desired, as {aps, ssids} — before a verb, to tell what it removed.
+ap_names() { jq -c '{aps: (.accessPoints // {} | keys), ssids: (.ssids // {} | keys)}' "${DESIRED}" 2>/dev/null || echo '{"aps":[],"ssids":[]}'; }
+
+# After a verb that changed APs or SSIDs: ap_changed <verb> <ap|""> <names-before>.
+# What the verb removed is ended. Never fails the verb: the CMDB is a record.
+ap_changed() {
+    local now; now="$(ap_names)"
+    ap_reports "$2" "$(jq -cn --argjson b "$3" --argjson a "${now}" '$b.aps - $a.aps')" \
+        "$(jq -cn --argjson b "$3" --argjson a "${now}" '$b.ssids - $a.ssids')" "ap-manager $1" 2>/dev/null \
+        | cmdb_send_reports || true
+}
+
 # ── Phase 2: delta (desired vs actual + zone/uplink validations) ────
 
 compute_delta() {
@@ -971,24 +1016,33 @@ main() {
     export UNIFI_SESSION
     trap 'rm -rf "${UNIFI_SESSION}"' EXIT
 
+    local before; before="$(ap_names)"
     case "${cmd}" in
-        add)            cmd_add "$@" ;;
-        modify)         cmd_modify "$@" ;;
+        add)            cmd_add "$@"; ap_changed "${cmd}" "${1:-}" "${before}" ;;
+        modify)         cmd_modify "$@"; ap_changed "${cmd}" "${1:-}" "${before}" ;;
         validate)       cmd_validate ;;
-        remove)         cmd_remove "${1:-}" ;;
+        remove)         cmd_remove "${1:-}"; ap_changed "${cmd}" "" "${before}" ;;
         list)           cmd_list "${1:-}" ;;
         show)           cmd_show "${1:-}" ;;
-        link)           cmd_link "$@" ;;
-        ssid)           cmd_ssid "$@" ;;
+        link)           cmd_link "$@"; ap_changed "${cmd}" "${1:-}" "${before}" ;;
+        ssid)           cmd_ssid "$@"
+                        case "${1:-}" in list) ;; *) [[ "${2:-}" == list ]] || ap_changed "ssid ${1:-}" "" "${before}" ;; esac ;;
+        report)         [[ "${1:-}" == --json ]] && JSON=1; cmd_report ;;
         update-desired) cmd_update_desired ;;
-        interrogate)    cmd_interrogate ;;
+        # What interrogate read is reported as it was read (an observation).
+        interrogate)    local irc=0; cmd_interrogate || irc=$?
+                        ap_reports "" '[]' '[]' 2>/dev/null | cmdb_send_reports || true
+                        return "${irc}" ;;
         delta)          cmd_delta ;;
-        apply)          cmd_apply ;;
-        confirm)        cmd_confirm ;;
+        apply)          cmd_apply; ap_changed "${cmd}" "" "${before}" ;;
+        confirm)        cmd_confirm; ap_changed "${cmd}" "" "${before}" ;;
         reconcile)
-            local apply=0
+            local apply=0 rrc=0
             [[ "${1:-}" == "--apply" ]] && apply=1
-            cmd_reconcile "${apply}"
+            cmd_reconcile "${apply}" || rrc=$?
+            if [[ "${apply}" == 1 ]]; then ap_changed "reconcile --apply" "" "${before}"
+            else ap_reports "" '[]' '[]' 2>/dev/null | cmdb_send_reports || true; fi
+            return "${rrc}"
             ;;
         *) die "Unknown command: ${cmd} (try --help)" ;;
     esac

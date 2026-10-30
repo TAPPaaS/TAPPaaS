@@ -249,17 +249,21 @@ def release_machine_host(
         return False
 
 
-def list_dns_hosts(manager: DhcpManager) -> bool:
+def list_dns_hosts(manager: DhcpManager, as_json: bool = False) -> bool:
     """List all DNS host entries.
 
     Args:
         manager: DhcpManager instance
+        as_json: print the host rows as a JSON array (network-manager report, ADR-040)
 
     Returns:
         True if successful, False otherwise
     """
     try:
         hosts = manager.list_hosts()
+        if as_json:
+            print(json.dumps(hosts, indent=2))
+            return True
         if not hosts:
             print("No DNS host entries found")
             return True
@@ -504,7 +508,8 @@ Examples:
     )
 
     # List command
-    subparsers.add_parser("list", parents=[gp], help="List all DNS host entries")
+    list_parser = subparsers.add_parser("list", parents=[gp], help="List all DNS host entries")
+    list_parser.add_argument("--json", action="store_true", help="Emit JSON")
 
     # Alias command (ADR-012 §2.7, #612) — CNAMEs on a Host's own entry
     alias_parser = subparsers.add_parser(
@@ -603,7 +608,7 @@ Examples:
                     placeholder=args.placeholder,
                 )
             elif args.command == "list":
-                success = list_dns_hosts(manager)
+                success = list_dns_hosts(manager, as_json=args.json)
             elif args.command == "alias":
                 success = run_alias(manager, args)
             elif args.command == "check-range":

@@ -1,0 +1,12 @@
+{
+  "version": "2.0",
+  "switches": {},
+  "accessPoints": {
+    "Nano HD": {"vendor": "unifi", "model": "U7NHD", "managementIp": "10.0.0.184", "uplinkSwitch": "core", "uplinkPort": "9", "location": "home", "ssids": {}},
+    "Attic": {"vendor": "unifi", "model": "U6LR", "managementIp": "10.0.0.185", "ssids": {}}
+  },
+  "ssids": {
+    "Home": {"zone": "home", "security": "wpa3-personal", "broadcastOn": "all"},
+    "Guest": {"zone": "guest", "security": "open", "captive": true, "broadcastOn": ["Attic"]}
+  }
+}

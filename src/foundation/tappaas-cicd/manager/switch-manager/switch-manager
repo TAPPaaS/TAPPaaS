@@ -58,9 +58,13 @@ readonly SCRIPT_DIR
 # A switch's location is one of the site's (ADR-036 D2).
 # shellcheck source=../../lib/locations.sh
 . "${SCRIPT_DIR}/../../lib/locations.sh"
+# What it reads and changes goes to the CMDB (ADR-040 D4).
+# shellcheck source=../../lib/cmdb-report.sh
+. "${SCRIPT_DIR}/../../lib/cmdb-report.sh"
 readonly ZONES_FILE="${CONFIG_DIR}/zones.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
 readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
+readonly POSITIONS="${CONFIG_DIR}/positions.json"
 
 readonly PORT_TYPES="node switch ap device uplink"
 JSON=0
@@ -113,6 +117,8 @@ Inventory (recorded in switch-configuration-actual.json):
   mlag-pair remove <a> <b>
   mlag-pair list [--json] each pair, its live state and its LAGs
   list [--json]
+  report [--json]         send the switches, their assets, ports and cables to the
+                          CMDB (ADR-040); --json prints the reports instead
   list-ports [<switch>] [--json]
                           one line per port: actual config + drift vs zones.json
   port-neighbors <switch> <port> [--refresh] [--json]
@@ -166,6 +172,7 @@ list: --json
 list-ports: --json
 show:
 validate:
+report: --json
 interrogate: --park-zone= --no-park
 update-desired:
 delta:
@@ -921,6 +928,37 @@ cmd_list_ports() {
     return 0
 }
 
+# ── Reports to the CMDB (ADR-040 D4) ─────────────────────────────────
+
+# The reports cmdb-report.jq builds from actual: switch_reports <only> <ended-json> [<verb>]
+# (<only> "" is every switch; a verb makes it a change).
+switch_reports() {
+    local only="$1" ended="$2" verb="${3:-}" pos='{}' head
+    [[ -s "${POSITIONS}" ]] && pos="$(jq -c . "${POSITIONS}" 2>/dev/null || echo '{}')"
+    if [[ -n "${verb}" ]]; then head="$(cmdb_change_head "${verb}")"; else head='{"kind":"observation"}'; fi
+    jq --argjson pos "${pos}" --arg only "${only}" --argjson ended "${ended}" --arg source switch-manager \
+        --arg kind "$(jq -r .kind <<<"${head}")" --arg verb "${verb}" \
+        --arg job "$(jq -r '.job // ""' <<<"${head}")" --arg actor "$(jq -r '.actor // ""' <<<"${head}")" \
+        -f "${SCRIPT_DIR}/cmdb-report.jq" "${ACTUAL}"
+}
+
+# report [--json]: every switch, as one observation (--json prints it).
+cmd_report() {
+    local reports
+    reports="$(switch_reports "" '[]')" || die "report: could not build the report from ${ACTUAL}"
+    if [[ "${JSON}" == 1 ]]; then printf '%s\n' "${reports}"; return 0; fi
+    cmdb_send_reports <<<"${reports}"
+    info "switch-manager: reported $(cmdb_report_count <<<"${reports}") to the CMDB"
+}
+
+# After a verb that changed a switch: switch_changed <verb> <switch|""> [ended]
+# Never fails the verb: the CMDB is a record.
+switch_changed() {
+    local ended='[]'
+    [[ -n "${3:-}" ]] && ended="$(jq -cn --arg n "$3" '[$n]')"
+    switch_reports "$2" "${ended}" "switch-manager $1" 2>/dev/null | cmdb_send_reports || true
+}
+
 # ── Controller selection ─────────────────────────────────────────────
 
 # The controller for an inventory switch: managed:manual is always the manual
@@ -1298,28 +1336,37 @@ main() {
     case "${cmd}" in
         add-controller)    cmd_add_controller "$@" ;;
         remove-controller) cmd_remove_controller "${1:-}" ;;
-        add-switch)        cmd_add_switch "$@" ;;
-        modify-switch)     cmd_modify_switch "$@" ;;
+        add-switch)        cmd_add_switch "$@"; switch_changed "${cmd}" "${1:-}" ;;
+        modify-switch)     cmd_modify_switch "$@"; switch_changed "${cmd}" "${1:-}" ;;
         validate)          cmd_validate ;;
-        remove-switch)     cmd_remove_switch "${1:-}" ;;
-        add-port)          cmd_add_port "$@" ;;
-        update-port)       cmd_update_port "$@" ;;
-        remove-port)       cmd_remove_port "${1:-}" "${2:-}" ;;
-        lag)               cmd_lag "$@" ;;
-        mlag-pair)         cmd_mlag_pair "$@" ;;
+        remove-switch)     cmd_remove_switch "${1:-}"; switch_changed "${cmd}" "${1:-}" "${1:-}" ;;
+        add-port)          cmd_add_port "$@"; switch_changed "${cmd}" "${1:-}" ;;
+        update-port)       cmd_update_port "$@"; switch_changed "${cmd}" "${1:-}" ;;
+        remove-port)       cmd_remove_port "${1:-}" "${2:-}"; switch_changed "${cmd}" "${1:-}" ;;
+        lag)               cmd_lag "$@"
+                           [[ "${1:-}" == list ]] || switch_changed "lag ${1:-}" "${2:-}" ;;
+        mlag-pair)         cmd_mlag_pair "$@"
+                           [[ "${1:-}" == list ]] || switch_changed "mlag-pair ${1:-}" "" ;;
         list)              cmd_list ;;
         list-ports|--list-ports) cmd_list_ports "${1:-}" ;;
         port-neighbors)    cmd_port_neighbors "$@" ;;
         show)              cmd_show "${1:-}" ;;
-        interrogate)       cmd_interrogate; [[ "${PARK_REFUSED}" == 0 ]] || exit 1 ;;
+        report)            cmd_report ;;
+        # What interrogate read is reported as it was read (an observation).
+        interrogate)       local irc=0; cmd_interrogate || irc=$?
+                           switch_reports "" '[]' 2>/dev/null | cmdb_send_reports || true
+                           [[ "${irc}" == 0 && "${PARK_REFUSED}" == 0 ]] || exit 1 ;;
         update-desired)    cmd_update_desired ;;
         delta)             cmd_delta ;;
-        apply)             cmd_apply ;;
-        confirm)           cmd_confirm "$@" ;;
+        apply)             cmd_apply; switch_changed "${cmd}" "" ;;
+        confirm)           cmd_confirm "$@"; switch_changed "${cmd}" "" ;;
         reconcile)
-            local apply=0
+            local apply=0 rrc=0
             [[ "${1:-}" == "--apply" ]] && apply=1
-            cmd_reconcile "${apply}"
+            cmd_reconcile "${apply}" || rrc=$?
+            if [[ "${apply}" == 1 ]]; then switch_changed "reconcile --apply" ""
+            else switch_reports "" '[]' 2>/dev/null | cmdb_send_reports || true; fi
+            return "${rrc}"
             ;;
         *) die "Unknown command: ${cmd} (try --help)" ;;
     esac

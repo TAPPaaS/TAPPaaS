@@ -45,6 +45,9 @@ import {
 import { CheckStatus, ClusterClient, HealthReport } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
+import { cmdbQuery } from "../../../lib/ts/src/cmdb";
+import { printOrSend, sendReport } from "../../../lib/ts/src/cmdb-reporter";
+import { ValidateDoc, buildHealthReport, cmdbClass, configClass, subjectHealth } from "./cmdbreport";
 
 const VERSION = "0.1.0";
 
@@ -128,6 +131,18 @@ export const HELP: HelpSpec = {
         "release preview compares a past release's images with the next one's. trivy fetches each\n" +
         "image (layers are cached). Same VEX as `scan security`. Writes nothing. Prints\n" +
         "{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
+    },
+    {
+      usage: "report [--json] [--from <file>]", effect: "read",
+      name: "report (health to the CMDB, ADR-040)",
+      options: [
+        ["--json", "Print the report instead of sending it (each subject's class as config/ says)."],
+        ["--from <file>", "Take the gates from this `validate --json` output instead of running them."],
+      ],
+      details:
+        "Runs the validate gates (or reads --from) and writes each CI's health on it in the CMDB:\n" +
+        "ok, warning, critical or unknown — the worst any gate gave the module, node, pool, switch or\n" +
+        "peer it names. Only CIs the CMDB already has get one. `validate` sends the same after its run.",
     },
     {
       usage: "report security [--all] [--json]", effect: "read",
@@ -237,13 +252,57 @@ export function validateDoc(report: HealthReport, now: Date): Record<string, unk
   };
 }
 
-function cmdValidate(opts: Opts, client: ClusterClient): number {
-  const report = runHealthGates(client, {
+// ── health to the CMDB (ADR-040 D11) ─────────────────────────────────
+// Only CIs the CMDB has get a health: the subjects are matched to its objects
+// first. A CMDB that does not answer records nothing — health is now, and a
+// spooled one would land stale, and could create what it names.
+function sendHealth(doc: ValidateDoc): void {
+  if ((process.env.TAPPAAS_CMDB ?? "").toLowerCase() === "off") return;
+  let objects: { class: string; name: string }[];
+  try {
+    objects = cmdbQuery({ class: "ci", limit: 100000 }) as unknown as { class: string; name: string }[];
+  } catch (e) {
+    process.stderr.write(`[Warning] cmdb: health not recorded: ${(e as Error).message}\n`);
+    return;
+  }
+  const b = buildHealthReport(doc, cmdbClass(objects));
+  if (!b.objects.length) return;
+  const sent = sendReport(b.report());
+  if (sent.error) process.stderr.write(`[Warning] cmdb: health not recorded: ${sent.error}\n`);
+}
+
+function cmdReportHealth(opts: Opts, client: ClusterClient): number {
+  const fi = opts.rest.indexOf("--from");
+  const extra = opts.rest.filter((a, i) => a !== "--json" && i !== fi && i !== fi + 1);
+  if (extra.length) die(`report: unexpected argument ${extra[0]}`);
+  let doc: ValidateDoc;
+  if (fi >= 0) {
+    const f = opts.rest[fi + 1];
+    if (!f) die("report: --from needs a file");
+    try {
+      doc = JSON.parse(readFileSync(f, "utf8")) as ValidateDoc;
+    } catch (e) {
+      die(`report: --from ${f}: ${(e as Error).message}`);
+    }
+  } else doc = validateDoc(gates(opts, client), new Date()) as unknown as ValidateDoc;
+  if (opts.rest.includes("--json")) return printOrSend(buildHealthReport(doc!, configClass(opts.configDir)), true);
+  sendHealth(doc!);
+  info(`health-manager: health of ${subjectHealth(doc!).length} subject(s) sent to the CMDB (the ones it has)`);
+  return 0;
+}
+
+const gates = (opts: Opts, client: ClusterClient): HealthReport =>
+  runHealthGates(client, {
     configDir: opts.configDir,
     defaultNode: DEFAULT_NODE,
     threshold: opts.threshold,
     memoryThreshold: opts.memoryThreshold,
   });
+
+function cmdValidate(opts: Opts, client: ClusterClient): number {
+  const report = gates(opts, client);
+  // The health it found goes on the CIs it names (ADR-040 D11).
+  sendHealth(validateDoc(report, new Date()) as unknown as ValidateDoc);
   if (opts.rest.includes("--json")) {
     process.stdout.write(JSON.stringify(validateDoc(report, new Date()), null, 1) + "\n");
     return report.failed === 0 ? 0 : 1;
@@ -526,8 +585,8 @@ export function run(argv: string[], client: ClusterClient): number {
         if (opts.rest[0] !== "security") die("scan: expected 'security' or 'nix-list'");
         return cmdScanSecurity({ ...opts, rest: opts.rest.slice(1) }, client);
       case "report":
-        if (opts.rest[0] !== "security") die("report: expected 'security'");
-        return cmdReportSecurity({ ...opts, rest: opts.rest.slice(1) });
+        if (opts.rest[0] === "security") return cmdReportSecurity({ ...opts, rest: opts.rest.slice(1) });
+        return cmdReportHealth(opts, client);
       default:
         usage();
         die(`Unknown command: ${cmd}`);

@@ -83,6 +83,8 @@ import { cmdSnat } from "./snat";
 import { cmdWan } from "./wan";
 import { HealthDoc, buildTopology, collectSources, renderTopology } from "./topology";
 import { stream } from "../../../lib/ts/src/exec";
+import { CmdbBatch, printOrSend, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
+import { SOURCE as CMDB_SOURCE, buildNetworkReport, collectNetSources, putPeer, putZone } from "./cmdbreport";
 
 // The admin VPN's bash tool, linked onto PATH by install.sh (overridable for tests).
 const WGVPN_BIN = process.env.NM_WGVPN_BIN ?? "network-manager-wgvpn";
@@ -109,6 +111,17 @@ export const HELP: HelpSpec = {
         "the candidates.",
     },
     { usage: "exists <name>", details: "Exit 0 when the zone exists, non-zero when it does not." },
+    {
+      usage: "report [--json]",
+      name: "report (to the CMDB, ADR-040)",
+      effect: "read",
+      options: [["--json", "print the report instead of sending it"]],
+      details:
+        "Sends what the network is, as one observation, to the CMDB (cmdb-controller): the zones of\n" +
+        "zones.json, and from the firewall the DHCP leases and reservations, the DNS host entries,\n" +
+        "the reverse proxy's routes and the admin VPN's peers. A source that does not answer is\n" +
+        "left out and named on stderr. When the CMDB does not answer the report is spooled.",
+    },
     {
       usage: "topology [--json] [--health <file> | --no-health] [--no-positions]",
       name: "topology",
@@ -1501,6 +1514,57 @@ function cmdZonesMerge(opts: Opts): number {
   return rc;
 }
 
+// ── report (ADR-040 D4) ───────────────────────────────────────────────
+function cmdReport(opts: Opts): number {
+  if (opts.rest.length > 0) die(`report: unexpected argument ${opts.rest[0]}`);
+  const s = collectNetSources(loadZones(opts.zonesFile), opts.configDir);
+  for (const e of s.errors) process.stderr.write(`[Warning] report: ${e.source}: ${e.error} — left out\n`);
+  return printOrSend(buildNetworkReport(s), opts.json);
+}
+
+// A verb that wrote zones.json reports the zones it touched as a change; a
+// zone no longer there is ended. Never fails the verb (the CMDB is a record).
+function zonesChanged(verb: string, names: string[], opts: Opts): void {
+  if (opts.check || opts.dryRun) return;
+  let doc;
+  try {
+    doc = loadZones(opts.zonesFile);
+  } catch {
+    return;
+  }
+  const b = new CmdbBatch(CMDB_SOURCE);
+  for (const n of names) {
+    const z = getZone(doc, n);
+    if (z) putZone(b, n, z);
+    else b.end("zone", n);
+  }
+  reportChange(b, `network-manager ${verb}`);
+}
+
+const allZones = (opts: Opts): string[] => {
+  try {
+    return listZoneNames(loadZones(opts.zonesFile));
+  } catch {
+    return [];
+  }
+};
+
+// The admin VPN's peer verbs, reported once wgvpn has made them.
+function peerChanged(args: string[]): void {
+  const b = new CmdbBatch(CMDB_SOURCE);
+  if (args[0] === "add-peer") {
+    const val = (f: string): string | undefined => {
+      const i = args.indexOf(f);
+      return i > 0 ? args[i + 1] : undefined;
+    };
+    const name = val("--name");
+    if (!name) return;
+    putPeer(b, { name, publicKey: val("--pubkey"), tunneladdress: val("--ip"), endpoint: val("--endpoint") });
+  } else if (args[0] === "remove-peer" && args[1]) b.end("vpn-peer", args[1]);
+  else return;
+  reportChange(b, `network-manager wgvpn ${args[0]}`);
+}
+
 // ── topology (ADR-034 D5) ─────────────────────────────────────────────
 function cmdTopology(opts: Opts): number {
   if (opts.rest.length > 0) die(`topology: unexpected argument ${opts.rest[0]}`);
@@ -1530,7 +1594,11 @@ export function run(argv: string[], client?: PlaneClient): number {
   // `wgvpn` is the admin VPN's bash tool (ADR-010 §8.4.6): it takes its own
   // sub-verbs and options and prints its own help, so it is handed over before
   // this CLI's option gate and parser, which know neither.
-  if (args[0] === "wgvpn") return stream(WGVPN_BIN, args.slice(1));
+  if (args[0] === "wgvpn") {
+    const rc = stream(WGVPN_BIN, args.slice(1));
+    if (rc === 0) peerChanged(args.slice(1));
+    return rc;
+  }
   // #644: --help in any position prints help and runs nothing; an option the
   // verb does not take is refused before anything is parsed or run.
   const gate = checkArgs(HELP, args);
@@ -1547,27 +1615,45 @@ export function run(argv: string[], client?: PlaneClient): number {
         return 0;
       case "add":
         cmdZoneAdd(opts, client ?? new CliPlaneClient());
+        zonesChanged(cmd, opts.rest.slice(0, 1), opts);
         return 0;
       case "delete":
         cmdZoneDelete(opts, client ?? new CliPlaneClient());
+        zonesChanged(cmd, opts.rest.slice(0, 1), opts);
         return 0;
       case "enable":
       case "disable":
       case "manual":
         cmdZoneState(cmd, opts);
+        zonesChanged(cmd, opts.rest.slice(0, 1), opts);
         return 0;
       case "bind":
         cmdBind(opts);
+        zonesChanged(cmd, opts.rest.slice(0, 1), opts);
         return 0;
       case "modify":
         cmdModifyZone(opts);
+        zonesChanged(cmd, opts.rest.slice(0, 1), opts);
         return 0;
       case "set-ssid":
         cmdSetSsid(opts);
+        zonesChanged(cmd, opts.rest.slice(0, 1), opts);
         return 0;
-      case "reconcile":
+      case "reconcile": {
         cmdReconcile(opts, client ?? new CliPlaneClient());
+        // The zones reconcile just converged (or compared): a change with
+        // --apply, else what was seen. No further read of the planes.
+        if (opts.apply) zonesChanged("reconcile --apply", allZones(opts), opts);
+        else {
+          const b = new CmdbBatch(CMDB_SOURCE);
+          for (const [n, z] of loadZones(opts.zonesFile).zones) putZone(b, n, z);
+          const sent = sendReport(b.report());
+          if (sent.error) process.stderr.write(`[Warning] cmdb: report not recorded: ${sent.error}\n`);
+        }
         return 0;
+      }
+      case "report":
+        return cmdReport(opts);
       case "render":
         cmdRender(opts);
         return 0;
@@ -1575,11 +1661,19 @@ export function run(argv: string[], client?: PlaneClient): number {
       case "zones-init":
         cmdZonesInit(opts);
         return 0;
-      case "retire":
-        return cmdRetire(opts);
+      case "retire": {
+        const before = allZones(opts);
+        const rc = cmdRetire(opts);
+        if (rc === 0 && opts.apply) zonesChanged(cmd, before, opts);
+        return rc;
+      }
       case "merge": // primary verb; zones-merge kept as fall-through alias
-      case "zones-merge":
-        return cmdZonesMerge(opts);
+      case "zones-merge": {
+        const before = allZones(opts);
+        const rc = cmdZonesMerge(opts);
+        if (rc === 0 && !opts.diff) zonesChanged("merge", [...new Set([...before, ...allZones(opts)])], opts);
+        return rc;
+      }
       case "validate": // ADR-007 #4: the standard verb name for the config gate
       case "zones-check":
         return cmdZonesCheck(opts);

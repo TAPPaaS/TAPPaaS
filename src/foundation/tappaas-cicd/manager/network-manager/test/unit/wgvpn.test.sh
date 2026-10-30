@@ -156,6 +156,13 @@ av_relink_peers 52205096-3de4-4f54-bae8-a9bc74998380 >/dev/null
 [[ "$(grep -o '"port":"[0-9]*"' "${TMP}/setServer.args" 2>/dev/null)" == '"port":"51820"' ]] \
     && ok "relinking the peers keeps the instance's port" || bad "relink wrote: $(grep -o '"port":"[0-9]*"' "${TMP}/setServer.args" 2>/dev/null)"
 
+# ── peers as JSON (network-manager report, ADR-040) ──
+pj="$(av_peers_json 2>/dev/null)"
+[[ "$(jq -r '.[0].name + " " + .[0].tunneladdress' <<<"${pj}")" == "lars-mac 10.255.1.2/32" ]] \
+    && ok "peers: a JSON array of the admin peers, with their tunnel address" || bad "peers JSON: ${pj}"
+[[ "$(jq -r '.[0] | has("publicKey") and has("endpoint")' <<<"${pj}")" == true ]] \
+    && ok "peers: every peer carries publicKey and endpoint" || bad "peers JSON fields: ${pj}"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ "${FAIL}" -eq 0 ]]

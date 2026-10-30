@@ -26,7 +26,8 @@
       "path": "manager/network-manager",
       "language": "typescript",
       "package": "network-manager",
-      "manifest": "help-json"
+      "manifest": "help-json",
+      "cmdbSource": true
     },
     {
       "name": "environment-manager",
@@ -52,7 +53,8 @@
       "path": "manager/backup-manager",
       "language": "typescript",
       "package": "backup-manager",
-      "manifest": "help-json"
+      "manifest": "help-json",
+      "cmdbSource": true
     },
     {
       "name": "health-manager",
@@ -60,7 +62,8 @@
       "path": "manager/health-manager",
       "language": "typescript",
       "package": "health-manager",
-      "manifest": "help-json"
+      "manifest": "help-json",
+      "cmdbSource": true
     },
     {
       "name": "storage-manager",
@@ -68,7 +71,8 @@
       "path": "manager/storage-manager",
       "language": "typescript",
       "package": "storage-manager",
-      "manifest": "help-json"
+      "manifest": "help-json",
+      "cmdbSource": true
     },
     {
       "name": "asset-manager",
@@ -90,7 +94,8 @@
       "package": null,
       "aliases": [
         "ap-controller"
-      ]
+      ],
+      "cmdbSource": true
     },
     {
       "name": "switch-manager",
@@ -100,7 +105,8 @@
       "package": null,
       "aliases": [
         "switch-controller"
-      ]
+      ],
+      "cmdbSource": true
     },
     {
       "name": "pbs-controller",

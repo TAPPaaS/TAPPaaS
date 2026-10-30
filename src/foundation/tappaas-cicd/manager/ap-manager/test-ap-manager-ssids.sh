@@ -9,6 +9,8 @@
 # Usage: ./test-ap-manager-ssids.sh   — exit 0 all passed, 1 otherwise.
 
 set -uo pipefail
+# The verbs under test report to the CMDB (ADR-040); never the live one.
+export TAPPAAS_CMDB=off
 SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
 AM="${SCRIPT_DIR}/ap-manager"
 # shellcheck source=test-lib.bash

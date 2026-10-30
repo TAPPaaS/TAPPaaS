@@ -104,6 +104,32 @@ default); an AP that should carry more sets `maxSsids` on its entry in
 `switch-configuration-desired.json`. The rules shared with `setup-wlan-secrets.sh`
 (placeholders, active zones, the ceiling) live in `tappaas-cicd/lib/wlan-lib.sh`.
 
+## Reports to the CMDB
+
+ADR-040 D4: `ap-manager report` sends the access points and the site's SSIDs
+to the CMDB (cmdb-controller); `--json` prints the reports instead.
+[`cmdb-report.jq`](./cmdb-report.jq) builds them from the desired and actual
+switch configuration and `positions.json`:
+
+| Class | Name | Attributes | Relations |
+|---|---|---|---|
+| `device` | the AP's name | model, firmware, managementAddress, controller, desired | |
+| `network-device` (asset) | the tag of the positions.json access point whose role is the AP, else the AP's name | vendor, model, serial (the record's where it has them), deviceType `access-point`, controller | `allocated-to` the device |
+| `port` | the record's first `rj45` and `wifi` ports, else `uplink` (rj45, 1g) and `wifi` | kind, speed, standard, bands | `part-of` the asset |
+| `ssid` | the SSID | security, zone, broadcastOn (the APs) | the radio `connects` to each SSID its AP broadcasts |
+
+Each AP's cable from its switch port (uplinkSwitch/uplinkPort) is a report of
+its own, so a switch port the CMDB does not have yet refuses only that cable.
+Wi-Fi clients seen by an AP stay in the actual: the CMDB resolves no MAC yet
+(ADR-040 D5).
+
+`interrogate` and `reconcile` report what they read as an observation; `add`,
+`modify`, `remove`, `link`, the `ssid` verbs, `apply`, `confirm` and
+`reconcile --apply` report a change with the console's job id
+(`TAPPAAS_JOB_ID`), and end the APs and SSIDs the verb removed. A report the
+CMDB cannot take is spooled by the `cmdb` CLI and never fails the verb.
+`TAPPAAS_CMDB=off` sends nothing. Tests: `./test-cmdb-report.sh`.
+
 ## Setup helper: `setup-wlan-secrets.sh`
 
 Walks the active zones whose `SSID` is still a template placeholder (or names an

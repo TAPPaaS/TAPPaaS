@@ -17,6 +17,8 @@
 # Prints "Results: N passed, M failed"; exits 1 on any failure.
 #
 set -uo pipefail
+# The verbs under test report to the CMDB (ADR-040); never the live one.
+export TAPPAAS_CMDB=off
 
 # Accept --deep as well as TAPPAAS_TEST_DEEP=1. Every gate below reads the
 # variable, so exporting it here is all a flag needs to do — and exporting (not
@@ -76,6 +78,13 @@ if [[ -f "${UNIT_TSCONFIG}" ]]; then
             ok "TypeScript topology unit tests pass"
         else
             bad "TypeScript topology unit tests FAILED"
+        fi
+
+        # ADR-040 D4: what `report` sends to the CMDB, and a change's job id.
+        if run_ts "NM_FIXTURE_DIR='${FIXTURE_DIR}' NM_MAIN='${DIST_TEST}/manager/network-manager/src/main.js' node '${DIST_TEST}/manager/network-manager/test/unit/cmdbreport.test.js'"; then
+            ok "TypeScript CMDB report unit tests pass"
+        else
+            bad "TypeScript CMDB report unit tests FAILED"
         fi
 
         # The CLI checks below are offline: init asks the live firewall which VLAN

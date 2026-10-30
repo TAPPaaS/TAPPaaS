@@ -1,0 +1,31 @@
+{
+  "$schema": "switch-configuration-schema.json",
+  "version": "2.0",
+  "controllers": {"unifi-controller": {"vendor": "unifi", "managementIp": "https://unifi-os.mgmt.internal:11443", "managed": "auto"}},
+  "switches": {
+    "core": {
+      "vendor": "unifi", "model": "USWED77", "managementIp": "10.0.0.201", "firmware": "7.1.66", "controller": "unifi-controller", "managed": "auto",
+      "serial": "SER-CORE",
+      "ports": {
+        "1": {"type": "node", "target": "tappaas1", "targetPort": "enp1s0", "mode": "trunk", "taggedVlans": [200], "link": "up", "speed": 10000, "maxSpeed": 10000},
+        "2": {"type": "switch", "target": "edge", "targetPort": "ether1", "mode": "trunk", "taggedVlans": [200], "link": "up", "speed": 1000},
+        "9": {"type": "ap", "target": "Nano HD", "mode": "trunk", "taggedVlans": [200], "link": "up"},
+        "10": {"mode": "access", "nativeVlan": 410, "parked": true, "zone": "iotLocal",
+               "neighbors": [{"mac": "AA:BB:CC:DD:EE:01", "lldp": null, "lease": {"hostname": "printer", "address": "10.4.10.5"}}]},
+        "11": {"media": "SFP+", "mode": "trunk", "link": "down", "lag": "bond0"},
+        "peer": {"mode": "trunk", "kind": "sfp", "module": "dac"}
+      }
+    },
+    "edge": {
+      "vendor": "mikrotik", "model": "CRS326", "managementIp": "10.0.0.202", "firmware": "7.16.1", "managed": "auto",
+      "ports": {
+        "ether1": {"mode": "trunk", "link": "up", "speed": "1Gbps",
+                   "neighbors": [{"mac": "aa:bb:cc:00:00:01", "lldp": {"name": "Core", "port": "2"}}]},
+        "ether2": {"mode": "trunk", "link": "up", "neighbors": [{"mac": "aa:bb:cc:00:00:02", "lldp": {"name": "tappaas2", "port": "eno1"}}]},
+        "peer": {"mode": "trunk", "kind": "sfp"}
+      }
+    }
+  },
+  "mlagPairs": {"core+edge": {"switches": ["core", "edge"], "peerPort": {"core": "peer", "edge": "peer"}}},
+  "accessPoints": {}
+}

@@ -27,6 +27,11 @@ pbs-controller purge <vmid> [--yes] [--json]
                                         backup group + start GC. Refuses a
                                         deployed module's VMID, one a job lists,
                                         or when the cluster cannot be asked.
+pbs-controller runs [--json]         The datastore's snapshots, verify and sync
+                                        jobs, its status (total/used/avail) and
+                                        prune jobs, the cluster's backup jobs and
+                                        recent vzdump tasks (restore list-all,
+                                        backup-manager report to the CMDB).
 pbs-controller --selftest            Pure-function self-test (no cluster).
 ```
 

@@ -410,6 +410,29 @@ guest's pending state before and after, and hands the reboot to
 - The reboot is the operator's explicit act, so it needs no `automaticReboot` or
   `rebootOk` — that is what separates it from the update sweep.
 
+## Reports to the CMDB
+
+ADR-040 D11: health on the CI. After its gates run, `validate` writes each
+CI's health on it in the CMDB (cmdb-controller); `health-manager report`
+does the same on its own (`--from <file>` takes the gates from a saved
+`validate --json`; `--json` prints the payload instead of sending it). No
+check is added.
+
+| Subject a gate names | CMDB class | `health` |
+|---|---|---|
+| module | the node it is (`vm`, `lxc`, `machine`, `device`) | the worst over every gate naming it: `pass` → ok, `warn` → warning, `fail` → critical, `skip` → unknown |
+| node | `machine` | |
+| pool (`<node>/<storage>`) | `storage-pool` (storage-manager names ZFS pools the same) | |
+| switch | `device` | |
+| peer | `backup-peer` | |
+
+Only CIs the CMDB already has get a health: the subjects are matched to its
+objects by name first (offline, `--json` takes a module's class from its
+config `kind`). A CMDB that does not answer records nothing — health is now,
+and a spooled one would land stale. The metamodel's `health` is a string: the
+gate and the time are the report's source and time, not the attribute.
+`TAPPAAS_CMDB=off` sends nothing.
+
 ## Common options
 
 - `--config-dir DIR` — config root (default: `$CONFIG_DIR` or
