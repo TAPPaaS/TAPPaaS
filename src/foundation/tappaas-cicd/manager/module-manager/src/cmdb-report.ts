@@ -99,7 +99,7 @@ function build(configDir: string, mods: ModuleConfig[], guests: RunningGuest[]):
     for (const svc of serviceNames(m.moduleSource)) {
       const name = `${module}:${svc}`;
       const ref = svcRef(module, svc, m.name);
-      b.objects.push({ ref, class: "service", name, attributes: compact({ provider: m.name, version: versionOf(m), onNode: onRef, stack: m.stack ?? undefined }) });
+      b.objects.push({ ref, class: "service", name, attributes: compact({ provider: m.name, version: versionOf(m), onNode: onRef }) });
       b.relations.push({ type: "provides", from: onRef, to: { ref } });
       b.services.set(name, [...(b.services.get(name) ?? []), { provider: m.name, ref }]);
     }

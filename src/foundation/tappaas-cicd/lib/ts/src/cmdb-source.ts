@@ -130,9 +130,33 @@ export function withStubs(report: CmdbReport): CmdbReport {
     for (const [k, v] of Object.entries(o.attributes)) o.attributes[k] = resolve(v);
   }
   const relations = (report.relations ?? []).map((r) => ({ ...r, from: resolve(r.from) as CmdbRelation["from"], to: resolve(r.to) as CmdbRelation["to"] }));
-  const out: CmdbReport = { ...report, objects: [...stubs, ...objects] };
+  const out: CmdbReport = { ...report, objects: referencedFirst([...stubs, ...objects]) };
   if (relations.length) out.relations = relations;
   else delete out.relations;
+  return out;
+}
+
+/** The objects in their order, except that an object comes after every
+ *  object its attributes refer to (the store resolves a ref only to an object
+ *  earlier in the report). */
+function referencedFirst(objects: CmdbObject[]): CmdbObject[] {
+  const byRef = new Map(objects.filter((o) => o.ref).map((o) => [o.ref as string, o]));
+  const out: CmdbObject[] = [];
+  const placed = new Set<CmdbObject>();
+  const visiting = new Set<CmdbObject>();
+  const place = (o: CmdbObject): void => {
+    if (placed.has(o) || visiting.has(o)) return; // a cycle keeps the given order
+    visiting.add(o);
+    for (const v of Object.values(o.attributes ?? {})) {
+      const r = v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Ref).ref : undefined;
+      const target = r ? byRef.get(r) : undefined;
+      if (target) place(target);
+    }
+    visiting.delete(o);
+    placed.add(o);
+    out.push(o);
+  };
+  for (const o of objects) place(o);
   return out;
 }
 
@@ -162,14 +186,13 @@ export function moduleCiAttributes(name: string, raw: Obj): Obj {
     release: releaseOf(raw),
     displayName: str(raw.displayName),
     description: str(raw.description),
-    stack: str(raw.stack),
   });
 }
 
 /** A module's node attributes its config states (desired state the live
  *  reads refine): vmid, management, environment (by name), addresses. */
 export function moduleNodeAttributes(name: string, raw: Obj, cls: string): Obj {
-  const a: Obj = { ...moduleCiAttributes(name, raw) };
+  const a: Obj = { ...moduleCiAttributes(name, raw), stack: str(raw.stack) };
   if (cls === "vm" || cls === "lxc") a.vmid = num(raw.vmid);
   const mgmt = str(raw.management);
   if (mgmt === "managed" || mgmt === "unmanaged") a.management = mgmt;
