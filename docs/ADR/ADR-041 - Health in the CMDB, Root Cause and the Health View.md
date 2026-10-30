@@ -2,13 +2,13 @@
 
 | | |
 |---|---|
-| **Status** | **Draft** |
-| **Version** | 0.1 |
+| **Status** | **Accepted** (operator, 2026-10-30; O3, O5 and O6 still open) |
+| **Version** | 1.0 |
 | **Date** | 2026-10-30 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #908. Amends ADR-007e (Health as a lens: the lens now reads and writes the CMDB), ADR-040 D10 and D11 (the `health` attribute becomes conditions; the Operations view becomes the Health view), ADR-039 D8 (open alerts are one source of a condition). Related: ADR-034 (console), ADR-031 (the pulse), ADR-011 (the CVE scan), ADR-017 (the update sweep's capacity checks), IT4IT 3.0.1 Event (§9.2.3.1: Type causal or symptom, Is Correlated) and the Configuration component's duty to "calculate and provide the business impact of the Event". |
-| **Changelog** | v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
+| **Changelog** | v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
 
 Health in TAPPaaS today is a verdict computed on demand and forgotten: `health-manager validate`
 runs its gates against the live cluster, prints a table, exits 0 or 1, and the console caches the
@@ -133,7 +133,8 @@ like any reporter). It:
 - writes every condition whose status or reason changed, with `since`, in one report to the CMDB
   (an unchanged condition only moves `lastChecked`, which is volatile and never history).
 
-It runs from `health-assess.timer` every 5 minutes, after every `cmdb sweep`, and when the alert
+It runs from `health-assess.timer` every `health.assessInterval` minutes (a `site.json` setting,
+default 5; a one-box site may set 15), after every `cmdb sweep`, and when the alert
 receiver gets an ALERT or RESOLVED (the receiver already runs on the mothership; it calls
 `health-manager assess --only <ci>` for the one object). One run is a few seconds: everything it
 needs is in the CMDB or a cached plane read; it never polls what the sweep polls.
@@ -157,7 +158,16 @@ security` becomes one more source `assess` reads.
 ### D3 — Derivation: impact and root cause along the relations
 
 A failure travels along the CMDB's relations, and the direction is known per relation type
-(ADR-040 D3's table). Two words are added to the relation types that carry dependency:
+(ADR-040 D3's table). **How far it travels is not hardcoded:** the propagation is a set of
+**correlation rules**, data beside the metamodel (`metamodel/health-rules.json`, in the shape of
+ADR-020's declarations and extensible by a module the way classes are, ADR-040 D3): each rule
+names a relation type, optionally the class on either end, the source condition type and status
+that triggers it, and the impact status it produces — the shipped set says a `critical`
+`operational` condition crosses `runs-on`, `depends-on`, `member-of` and `connects` as `critical`
+impact, and a `warning` crosses nothing; a site or a module can add that a `warning` on a
+`machine` becomes a `warning` impact on its `vm`s, or that a `capacity` warning on a
+`storage-pool` reaches the guests whose disks are on it. `health-manager rules list|check` shows
+and validates them. Two words are added to the relation types that carry dependency:
 **`required`** (the default for `runs-on`, `depends-on` and `allocated-to`; false for a relation
 that only informs, such as `backs-up`) and an optional **`redundancyGroup`** — relations in one
 group are satisfied while any one of them is healthy (a node with two uplinks, a service with two
@@ -222,6 +232,9 @@ a symptom — which is how three mails about one node become one. A RESOLVED fol
 event. An operator may **acknowledge** a condition (`health-manager ack <ci> --type … --until …
 --note …`, a job from the console): the condition keeps its status but stops counting for
 `validate`, mails and the Overview, and the acknowledgement is an attribute with history.
+Acknowledging a **root cause** acknowledges its symptoms with it: every `impact` condition that
+names the root is silenced for as long as the root's acknowledgement holds, and a symptom that
+later gets a root of its own is heard again. A condition can also be acknowledged on its own.
 
 ### D5 — The Health view
 
@@ -293,16 +306,16 @@ correlated, and its root causes.
 
 ## Open questions
 
-- **O1** `warning` propagation: does a warning on a node impact its guests (as `warning`), or only
-  a critical?
-- **O2** The check interval (5 minutes?) against the cost of `assess` on a one-box site.
-- **O3** Whether the gates move out of health-manager into the managers that own the objects
+- **O1** *(closed 2026-10-30, operator)* No hardcoded propagation: correlation rules are data, per
+  relation type and class (D3); shipped, a warning crosses nothing.
+- **O2** *(closed 2026-10-30, operator)* A site setting, `health.assessInterval`, default 5 minutes (D2).
+- **O3** *(open; the operator asked for an explanation — see below)* Whether the gates move out of health-manager into the managers that own the objects
   (site-manager judging its nodes), with health-manager keeping only the derivation.
-- **O4** Acknowledgements: on a condition, or on a root cause (acknowledge the node, silence its
-  twelve symptoms)?
-- **O5** How much of the graph the assistant (ADR-034 D7) may read to explain a root cause in
+- **O4** *(closed 2026-10-30, operator)* Both: a condition on its own, and a root cause with its
+  symptoms (D4).
+- **O5** *(open; explanation asked)* How much of the graph the assistant (ADR-034 D7) may read to explain a root cause in
   words.
-- **O6** Which relations get `redundancyGroup` from the start: a node's bonded uplinks (ADR-019
+- **O6** *(open, to discuss)* Which relations get `redundancyGroup` from the start: a node's bonded uplinks (ADR-019
   v1.1), MLAG peers, a service with two providers — or none until a site has one.
 
 ## Implementation plan
