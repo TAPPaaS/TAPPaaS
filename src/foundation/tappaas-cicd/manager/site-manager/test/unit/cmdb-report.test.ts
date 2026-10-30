@@ -5,6 +5,7 @@
 import { run } from "../../src/main";
 import { parseClusterProbe, parseGuestConf, parseHostProbe } from "../../src/cmdb-report";
 import { FakeSiteClient } from "./fake-client";
+import { cmdbProblems } from "../../../../lib/ts/test/cmdb-check";
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -113,6 +114,8 @@ const CLUSTER_OUT = [
     (r.relations ?? []).some((x: Obj) => x.type === type && x.from?.ref === from && x.to?.ref === to);
 
   check(r.source === "site-manager" && r.kind === "observation", "an observation by site-manager");
+  const problems = cmdbProblems(r);
+  check(problems.length === 0, `cmdb-controller's metamodel takes it: ${problems.join("; ")}`);
   check(one("site", "hrossen")?.attributes?.code === "hrossen", "the site, by its code");
   check(one("site", "hrossen")?.attributes?.primaryLocation?.ref === refOf("location", "home"), "the site is at its primary location");
   check(one("location", "home")?.attributes?.timezone === "Europe/Copenhagen" && !!one("location", "buddy"), "both locations");
@@ -153,6 +156,7 @@ const CLUSTER_OUT = [
   const text = out.filter((l) => !l.includes("[Warning]")).join("\n");
   const r = JSON.parse(text) as Obj;
   check(rc === 0 && out.some((l) => l.includes("no cluster node answered")), "an unreachable cluster warns");
+  check(cmdbProblems(r).length === 0, `the metamodel takes the config-only report: ${cmdbProblems(r).join("; ")}`);
   check(r.objects.some((o: Obj) => o.class === "machine" && o.name === "tappaas2") && !r.objects.some((o: Obj) => o.class === "vm"), "config only: nodes, no guests");
 }
 
@@ -175,6 +179,7 @@ const CLUSTER_OUT = [
   check(files.length === 1, `node reconcile spools one report when the CMDB is down (${files.length})`);
   const r = JSON.parse(readFileSync(join(spool, files[0]), "utf8")) as Obj;
   check(r.kind === "observation" && r.source === "site-manager", "a side-effect observation");
+  check(cmdbProblems(r).length === 0, `the metamodel takes it: ${cmdbProblems(r).join("; ")}`);
   check(r.objects.some((o: Obj) => o.class === "machine" && o.name === "tappaas2" && o.attributes?.storagePools?.[0] === "tankb1"), "with the members and pools it read");
 }
 

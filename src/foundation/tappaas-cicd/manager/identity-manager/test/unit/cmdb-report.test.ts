@@ -10,6 +10,7 @@ import { run } from "../../src/main";
 import { AuthentikUnreachable } from "../../src/primitives";
 import { AkUser } from "../../src/types";
 import { FakeClient } from "./fake-client";
+import { cmdbProblems } from "../../../../lib/ts/test/cmdb-check";
 
 let passed = 0;
 let failed = 0;
@@ -80,6 +81,8 @@ const spooled = (root: string): Obj[] => {
   const r = JSON.parse(out.join("\n")) as Obj;
   const one = (cls: string, name: string): Obj | undefined => r.objects.find((o: Obj) => o.class === cls && o.name === name);
   check(r.source === "identity-manager" && r.kind === "observation", "an observation by identity-manager");
+  const problems = cmdbProblems(r);
+  check(problems.length === 0, `cmdb-controller's metamodel takes it: ${problems.join("; ")}`);
   check(one("organization", "acme")?.attributes?.displayName === "Acme", "the organization, by name");
   check(one("organization", "acme")?.attributes?.desired?.file === "identities/organizations/acme.json", "its desired record");
   check(!!one("role", "admin") && one("role", "user")?.attributes?.stage === "operational", "the roles");
@@ -128,6 +131,7 @@ const spooled = (root: string): Obj[] => {
   const changes = reports.filter((r) => r.kind === "change");
   check(reports.some((r) => r.kind === "observation"), "the reconcile a write pushes with reports what it read");
   check(changes.length === 2, `two changes (${changes.length})`);
+  for (const x of reports) check(cmdbProblems(x).length === 0, `the metamodel takes the ${x.kind} ${x.verb ?? ""}: ${cmdbProblems(x).join("; ")}`);
   const add = changes[0];
   check(add?.verb === "user add bob" && add?.job === "20261030120000-ffeedd", `the change carries its verb and job (${add?.verb}, ${add?.job})`);
   const bob = add?.objects?.find((o: Obj) => o.class === "user" && o.name === "bob");

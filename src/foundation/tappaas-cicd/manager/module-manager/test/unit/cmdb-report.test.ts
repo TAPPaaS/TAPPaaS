@@ -4,6 +4,7 @@
 
 import { run } from "../../src/main";
 import { FakeModuleClient } from "./fake-client";
+import { cmdbProblems } from "../../../../lib/ts/test/cmdb-check";
 import { DeleteOptions, ModifyOptions } from "../../src/types";
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -86,6 +87,8 @@ function fixture(): string {
     (r.relations ?? []).some((x: Obj) => x.type === type && x.from?.ref === from && x.to?.ref === to);
 
   check(r.source === "module-manager" && r.kind === "observation", "an observation by module-manager");
+  const problems = cmdbProblems(r);
+  check(problems.length === 0, `cmdb-controller's metamodel takes it: ${problems.join("; ")}`);
   const m = one("machine", "tappaas1");
   check(m?.attributes?.release?.module === "pvehost" && m?.attributes?.desired?.file === "tappaas1.json", "a machine instance: desired and release");
   const id = one("vm", "identity");
@@ -167,6 +170,7 @@ function spooled(cfg: string): Obj[] {
   const reports = spooled(cfg);
   check(reports.length === 2, `two changes spooled, none for the failed verb (${reports.length})`);
   const [mod, del] = reports;
+  for (const x of reports) check(cmdbProblems(x).length === 0, `the metamodel takes the ${x.verb} change: ${cmdbProblems(x).join("; ")}`);
   check(mod?.kind === "change" && mod?.verb === "modify nextcloud", `a change with its verb (${mod?.verb})`);
   check(mod?.job === "20261030101500-a1b2c3" && mod?.actor === "lars", "the change carries the console job and actor");
   check(mod?.objects?.some((o: Obj) => o.class === "vm" && o.name === "nextcloud" && o.attributes?.release?.version === "2.1.0"), "the instance as the verb left it");

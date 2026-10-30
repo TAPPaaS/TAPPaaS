@@ -8,6 +8,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { run } from "../../src/main";
 import { updateWindow } from "../../src/cmdb-report";
+import { cmdbProblems } from "../../../../lib/ts/test/cmdb-check";
 import { FakeDnsTlsClient, FakeModuleClient, FakeNetworkClient } from "./fake-clients";
 
 let passed = 0;
@@ -79,6 +80,8 @@ const clients = (): [FakeNetworkClient, FakeModuleClient, FakeDnsTlsClient] => [
   const rel = (type: string, from: string | undefined, to: string | undefined): boolean =>
     r.relations.some((x: Obj) => x.type === type && x.from?.ref === from && x.to?.ref === to);
   check(r.source === "environment-manager" && r.kind === "observation", "an observation by environment-manager");
+  const problems = cmdbProblems(r);
+  check(problems.length === 0, `cmdb-controller's metamodel takes it: ${problems.join("; ")}`);
   const acme = one("environment", "acme");
   check(acme?.attributes?.domain === "acme.example.org" && acme?.attributes?.updateWindow === "weekly Tuesday 02:00", "domain and update window");
   check(acme?.attributes?.desired?.file === "environments/acme.json", "its desired record");
@@ -113,6 +116,10 @@ const clients = (): [FakeNetworkClient, FakeModuleClient, FakeDnsTlsClient] => [
   check(add?.kind === "change" && add?.verb === "add lab" && add?.job === "20261030130000-0a0b0c", "the add's change, verb and job");
   check(add?.objects?.some((o: Obj) => o.class === "environment" && o.name === "lab" && o.attributes?.domain === "lab.example.org"), "the environment as added");
   check(!add?.objects?.some((o: Obj) => o.class === "environment" && o.name === "acme"), "only the environment the verb touched");
+  for (const x of reports) {
+    const p = cmdbProblems(x);
+    check(p.length === 0, `the metamodel takes the ${x.verb} change: ${p.join("; ")}`);
+  }
   check(del?.verb === "delete lab" && del?.objects?.some((o: Obj) => o.name === "lab" && o.end === true), "a deleted environment ends");
 }
 
