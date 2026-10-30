@@ -265,9 +265,11 @@ check_alert_rules() {
     # last state, the Heartbeat alone goes OK so it stops (#905). Want none.
     # Since ADR-039 the rest are the foundation modules' own (<module>-alerts.json),
     # one group each in the folder "TAPPaaS modules": as many as those files hold.
+    # A module rule's uid is <module>-<rule>, so tappaas-cicd's begin with
+    # "tappaas-" too: the core count is by uid outside the modules' folder.
     local here mods="" n_mod=0 m
     here="$(dirname "${BASH_SOURCE[0]}")"
-    for m in pvehost cluster network backup logging; do
+    for m in pvehost cluster network backup logging tappaas-cicd; do
         [[ -f "${here}/../${m}/${m}-alerts.json" ]] || continue
         n_mod=$((n_mod + $(jq '.rules | length' "${here}/../${m}/${m}-alerts.json")))
         mods+="${mods:+,}\\\"${m}\\\""
@@ -279,7 +281,7 @@ check_alert_rules() {
     out=$(ssh ${SSH_OPTS} "tappaas@${VM_HOST}" '
         pw=$(sudo cat /etc/secrets/grafana-admin-password 2>/dev/null)
         rules=$(curl -s --max-time 10 -u "admin:${pw}" http://127.0.0.1:3000/api/v1/provisioning/alert-rules)
-        r=$(jq -r "[.[] | select(.uid | startswith(\"tappaas-\"))] | length" <<<"${rules}")
+        r=$(jq -r "[.[] | select((.uid | startswith(\"tappaas-\")) and .folderUID != \"tappaas-modules\")] | length" <<<"${rules}")
         m=$(jq -r "[.[] | select(.folderUID == \"tappaas-modules\" and ([.labels.module] | inside(['"${mods}"'])))] | length" <<<"${rules}")
         e=$(jq -r "[.[] | select((.uid | startswith(\"tappaas-\")) or .folderUID == \"tappaas-modules\")
                    | select(.execErrState != (if .uid == \"tappaas-heartbeat\" then \"OK\" else \"KeepLast\" end))]
