@@ -1,7 +1,7 @@
 // provision.test.ts — boot disks named before a PXE install (ADR-037 D4; #729 §3:
 // nvme0n1 and nvme1n1 swapped between boots).
 
-import { bootDiskProblems, bootDiskWarnings, isKernelDiskName, quorumAdvice } from "../../src/provision";
+import { bootDiskProblems, bootDiskWarnings, isKernelDiskName, nodeLogLines, quorumAdvice } from "../../src/provision";
 
 let passed = 0;
 let failed = 0;
@@ -38,6 +38,21 @@ check(quorumAdvice(2, false).includes("loses quorum") && quorumAdvice(2, false).
   "two nodes without a QDevice: warned, with the way out");
 check(quorumAdvice(3, false) === "" && quorumAdvice(2, true) === "" && quorumAdvice(1, false) === "",
   "three votes, a QDevice, or a single node: nothing to say");
+
+// The node step's progress, as stage 3 shows it.
+{
+  const log = " - \x1b[33mConfiguring SSD lifecycle...\x1b[K \x1b[1;92m✓\x1b[m \x1b[1;92mConfigured SSD lifecycle\x1b[m\n" +
+    " - Updating Proxmox VE (Patience — a dot per package step)........\n" +
+    "......................................\n" +
+    "    |_/_/    \\_\\_|\n" +
+    " - Refreshing apt...\r\x1b[K ✓ Refreshed apt\n";
+  const shown = new Set<string>();
+  const first = nodeLogLines(log, shown);
+  check(first.join("|") === "✓ Configured SSD lifecycle|Updating Proxmox VE (Patience — a dot per package step)|✓ Refreshed apt",
+    `finished steps and the one under way, no dots, no art (${first.join("|")})`);
+  check(nodeLogLines(log, shown).length === 0, "each is said once over the polls");
+  check(nodeLogLines("✓ Updated Proxmox VE\n", shown).join() === "✓ Updated Proxmox VE", "a new step is said");
+}
 
 console.log(`provision: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);
