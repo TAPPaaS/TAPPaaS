@@ -3,7 +3,7 @@
 // with no link and a disk in no pool appear; the plain report is unchanged.
 
 import { run } from "../../src/main";
-import { parseNodeDiscovery, parseCorosync } from "../../src/cmdb-discover";
+import { parseNodeDiscovery, parseCorosync, stableById } from "../../src/cmdb-discover";
 import { parseClusterProbe } from "../../src/cmdb-report";
 import { FakeSiteClient } from "./fake-client";
 import { cmdbProblems } from "../../../../lib/ts/test/cmdb-check";
@@ -63,6 +63,8 @@ const d = parseNodeDiscovery(FIXTURE);
   check(a.partitions[2].pool === "rpool", "the ZFS member's pool");
   const nv = d.disks.find((x) => x.serial === "WD77")!;
   check(nv.health === "FAILED" && nv.partitions[0].holds === "swap" && nv.bus === "nvme", "SMART health, swap");
+  check(stableById("/dev/disk/by-id/nvme-AS806_8061TB_1") === "nvme-AS806_8061TB", "an NVMe namespace link is the disk's one name");
+  check(stableById("nvme-WD_BLACK_1TB_260923802321") === "nvme-WD_BLACK_1TB_260923802321", "…an all-digit serial is kept");
   const lone = d.disks.find((x) => x.serial === "ZA11")!;
   check(lone.holds === "nothing" && lone.partitions.length === 0, "a disk in no pool, holding nothing");
 

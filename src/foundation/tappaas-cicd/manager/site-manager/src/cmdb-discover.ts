@@ -195,7 +195,8 @@ function holdsOf(d: Obj): { holds: string; pool?: string } {
  *  partitions, the bus). A disk in no pool is one like any other. */
 // An NVMe disk has a by-id link per namespace, nvme-<model>_<serial> and the
 // same with _1, and pvesh answers with either: one name, or every read drifts.
-const stableById = (link: string): string => link.replace(/^.*\//, "").replace(/^(nvme-.*)_\d+$/, "$1");
+// A namespace number only: some serials are all digits.
+export const stableById = (link: string): string => link.replace(/^.*\//, "").replace(/^(nvme-.*)_\d{1,2}$/, "$1");
 
 export function parseDisks(listText: string | undefined, lsblkText: string | undefined): Disk[] {
   const rows = json(listText);
