@@ -193,6 +193,10 @@ function holdsOf(d: Obj): { holds: string; pool?: string } {
 
 /** `pvesh …/disks/list` (model, serial, health, by-id) and `lsblk -J` (the
  *  partitions, the bus). A disk in no pool is one like any other. */
+// An NVMe disk has a by-id link per namespace, nvme-<model>_<serial> and the
+// same with _1, and pvesh answers with either: one name, or every read drifts.
+const stableById = (link: string): string => link.replace(/^.*\//, "").replace(/^(nvme-.*)_\d+$/, "$1");
+
 export function parseDisks(listText: string | undefined, lsblkText: string | undefined): Disk[] {
   const rows = json(listText);
   const blk = ((json(lsblkText) as Obj | null)?.blockdevices ?? []) as Obj[];
@@ -207,7 +211,7 @@ export function parseDisks(listText: string | undefined, lsblkText: string | und
     const whole = b ? holdsOf(b) : { holds: str(r.used) ?? "nothing" };
     out.push(
       compact({
-        name: byId && byId !== "n/a" ? byId.replace(/^.*\//, "") : device,
+        name: byId && byId !== "n/a" ? stableById(byId) : device,
         device,
         model: str(r.model),
         serial: str(r.serial),
