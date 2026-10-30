@@ -10,8 +10,8 @@ bind-mounted over `/home/tappaas/TAPPaaS`, `tappaas-rebuild@tappaas-cicd` for th
 
 - **Migration 0027 on the real config, restored at teardown**, as before.
 - **Rollback at teardown**: the operator is away. Generation 114, `~/bin`, `positions.json`.
-- **A fresh CMDB store**: the database left by the ADR-040 run is dropped after the
-  rebuild, so `assess` starts from a real first rescan.
+- **The ADR-040 run's store is kept** for phase 3: its old `health` rows must not break
+  `assess`, `show` or the console now that the metamodel no longer declares `health`.
 - **Root-cause case: `tappaas4`.** `config/tappaas4.json` has no node behind it, already
   critical. No guest is stopped. Nothing touches `deconz-test` or any household service.
 - **The ADR-039 rule file is validated and dry-run only.** `HealthRootCause` would mail
@@ -56,6 +56,7 @@ empty `config/.cmdb-spool/`.
 | 3b | Objects | a vm, a machine, a pool, the cluster, the backup-peer | |
 | 3c | `validate` as a read | same verdict as `--live`, and as before | |
 | 3d | Second assess | changes only `lastChecked` | |
+| 3e | Old `health` rows | reads survive them; dropped or dead | |
 | 4a | `rootCauses[]` on the site | names tappaas4 | |
 | 4b | `impact` on dependants; `roots` | as derived | |
 | 4c | `ack` the root | symptoms silenced | |
