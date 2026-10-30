@@ -178,6 +178,9 @@ export interface RawRuns {
   syncJobs?: Record<string, unknown>[];
   backupJobs?: { id: string; comment: string; schedule: string; enabled: boolean; vmid: string; storage: string }[];
   tasks?: { node?: string; id?: string; starttime?: number; endtime?: number; status?: string }[];
+  // The datastore's usage and the prune jobs (bytes; keep-* per job), for the CMDB.
+  status?: { total?: number; used?: number; avail?: number } | null;
+  pruneJobs?: Record<string, unknown>[];
 }
 
 export type VerifyState = "ok" | "failed" | "unverified";

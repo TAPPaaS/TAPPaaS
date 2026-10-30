@@ -73,7 +73,9 @@ import { clusterNodeNames } from "../../../lib/ts/src/nodes";
 import { GN, CL, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { readJsonObject, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { ensureLocation, placeText as locationText, siteLocation } from "../../../lib/ts/src/locations";
-import { BackupPolicyStatus, Client, JobStatus, ScheduleBucket } from "./types";
+import { BackupPolicyStatus, Client, JobStatus, RawRuns, ScheduleBucket } from "./types";
+import { CmdbBatch, printOrSend, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
+import { SOURCE as CMDB_SOURCE, buildBackupReport, putPeer } from "./cmdbreport";
 
 const VERSION = "0.1.0";
 
@@ -183,6 +185,18 @@ export const HELP: HelpSpec = {
     },
     { usage: "coverage <module> [--json]", name: "coverage", note: "(every backup job covering the module's VM — TAPPaaS's own and any other, #554)" },
     { usage: "peers", name: "peers", note: "(the off-site PBS relationships this site has)" },
+    {
+      usage: "report [--json]",
+      name: "report (to the CMDB, ADR-040)",
+      effect: "read",
+      options: [["--json", "print the report instead of sending it"]],
+      details:
+        "Sends the backups to the CMDB (cmdb-controller) as one observation: the PBS datastore (size,\n" +
+        "used, retention; runs-on its machine) with a backs-up to every guest and machine of this site\n" +
+        "it holds restore points for, from what `restore list-all` reads (pbs-controller runs), and the\n" +
+        "backup peers of config/ (direction, at their location, lastSeen). `restore list-all --json`\n" +
+        "sends the same as a side effect.",
+    },
     {
       usage: "peer add pull|remote|receive <name> [--host H] [--store S] [--namespace NS] "
         + "[--port P] [--remote-namespace NS] [--max-depth N] "
@@ -1093,6 +1107,47 @@ function cmdReconcile(opts: Opts, client: Client): void {
   info(`${GN}Applied ${res.applied} action(s).${CL}`);
 }
 
+// ── reports to the CMDB (ADR-040 D4) ──────────────────────────────────
+function moduleOfVmid(configDir: string): (vmid: string) => string | null {
+  const vmids = new Map<string, string>();
+  for (const m of listModules(configDir)) {
+    const v = moduleVmid(configDir, m);
+    if (v && !vmids.has(v)) vmids.set(v, m);
+  }
+  return (v) => vmids.get(v) ?? null;
+}
+
+function backupReport(opts: Opts, raw: RawRuns): CmdbBatch {
+  return buildBackupReport(raw, shapeRuns(raw, moduleOfVmid(opts.configDir), Math.floor(Date.now() / 1000)), listPeers(opts.configDir));
+}
+
+function cmdReport(opts: Opts, client: Client): number {
+  const raw = client.runs();
+  if (!raw.reachable) process.stderr.write("[Warning] report: PBS did not answer — the datastore is left out\n");
+  return printOrSend(backupReport(opts, raw), opts.json);
+}
+
+// A peer verb's buddy, once written; a buddy with no relationship left is ended.
+function peerChanged(opts: Opts): void {
+  const name = opts.rest[2];
+  if (!name) return;
+  const b = new CmdbBatch(CMDB_SOURCE);
+  const left = listPeers(opts.configDir).filter((p) => p.name === name);
+  const order = { pull: 0, receive: 1, remote: 2 };
+  if (left.length) putPeer(b, left.sort((x, y) => order[x.role] - order[y.role])[0]);
+  else b.end("backup-peer", name);
+  reportChange(b, `backup-manager peer ${opts.rest[0]}`);
+}
+
+// A placement verb points the site's backups at a datastore.
+function placementChanged(opts: Opts, verb: string): void {
+  const p = readPlacement(opts.configDir);
+  if (!p.pbsStorageName) return;
+  const b = new CmdbBatch(CMDB_SOURCE);
+  b.put("datastore", p.pbsStorageName, { description: p.pbsUrl });
+  reportChange(b, `backup-manager placement ${verb}`);
+}
+
 function cmdRestore(opts: Opts, client: Client): number {
   const sub = opts.rest[0];
   const deps = { client, configDir: opts.configDir };
@@ -1116,7 +1171,11 @@ function cmdRestore(opts: Opts, client: Client): number {
         const v = moduleVmid(opts.configDir, m);
         if (v && !vmids.has(v)) vmids.set(v, m);
       }
-      info(JSON.stringify(shapeRuns(client.runs(), (v) => vmids.get(v) ?? null, Math.floor(Date.now() / 1000))));
+      const raw = client.runs();
+      info(JSON.stringify(shapeRuns(raw, (v) => vmids.get(v) ?? null, Math.floor(Date.now() / 1000))));
+      // What it read goes to the CMDB as it was read (ADR-040 D4).
+      const sent = sendReport(backupReport(opts, raw).report());
+      if (sent.error) process.stderr.write(`[Warning] cmdb: report not recorded: ${sent.error}\n`);
       return 0;
     }
     default:
@@ -1199,6 +1258,13 @@ function cmdPurge(opts: Opts, client: Client): number {
   const res = client.purge(vmid, true);
   if (!res.purged) die(`purge ${vmid}: not purged${res.refused.length ? ` (${res.refused.join("; ")})` : ""}`);
   info(`${GN}purge: deleted vm/${vmid} (${res.snapshots} restore point(s)); garbage collection started — the space is free when it finishes${CL}`);
+  // The datastore holds no restore point of the guest any more (ADR-040 D4).
+  const module = /^[0-9]+$/.test(arg) ? moduleOfVmid(opts.configDir)(vmid) : arg;
+  if (module && res.store) {
+    const b = new CmdbBatch(CMDB_SOURCE);
+    b.relations.push({ type: "backs-up", from: { class: "datastore", name: res.store }, to: { class: "vm", name: module }, end: true });
+    reportChange(b, "backup-manager purge");
+  }
   return 0;
 }
 
@@ -1303,14 +1369,18 @@ export function run(argv: string[], client: Client): number {
           yes: opts.yes,
           noUpdate: opts.noUpdate,
         };
-        if (sub === "reset") return placementReset(ro, RESET_DEPS);
-        if (sub === "finish-reset") return placementFinishReset(ro, RESET_DEPS);
+        const placed = (rc: number): number => {
+          if (rc === 0) placementChanged(opts, sub);
+          return rc;
+        };
+        if (sub === "reset") return placed(placementReset(ro, RESET_DEPS));
+        if (sub === "finish-reset") return placed(placementFinishReset(ro, RESET_DEPS));
         if (sub === "use-external") {
-          return placementUseExternal(
+          return placed(placementUseExternal(
             { configDir: opts.configDir, moduleDir: ro.moduleDir, url: opts.rest[1] ?? "",
               datastore: opts.datastore, namespace: opts.namespace, fingerprint: opts.fingerprint },
             RESET_DEPS,
-          );
+          ));
         }
         die(`placement: expected no argument, 'reset', 'finish-reset' or 'use-external', got '${sub}'`);
         return 1;
@@ -1320,8 +1390,13 @@ export function run(argv: string[], client: Client): number {
       case "peers":
         cmdPeers(opts);
         return 0;
-      case "peer":
-        return cmdPeer(opts);
+      case "peer": {
+        const rc = cmdPeer(opts);
+        if (rc === 0 && ["add", "delete", "remove", "modify"].includes(opts.rest[0] ?? "")) peerChanged(opts);
+        return rc;
+      }
+      case "report":
+        return cmdReport(opts, client);
       case "pulse":
         return cmdPulse(opts);
       case "reconcile":

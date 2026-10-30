@@ -74,6 +74,13 @@ else
     bad "TypeScript cascade unit tests FAILED"
 fi
 
+# ADR-040 D4: what report sends to the CMDB, and a peer verb's job id.
+if run_ts "node '${DIST_TEST}/manager/backup-manager/test/unit/cmdbreport.test.js'"; then
+    ok "TypeScript CMDB report unit tests pass"
+else
+    bad "TypeScript CMDB report unit tests FAILED"
+fi
+
 # The compiled CLI, exercised exactly as the retired bash entry points were.
 BM() { run_ts "node '${BM_JS}' $*"; }
 
