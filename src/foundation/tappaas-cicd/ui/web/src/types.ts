@@ -719,8 +719,6 @@ export interface HealthNode extends HealthView {
   class: string;
   name: string;
   label: string;
-  tier: number;
-  group: string | null;
   environment: string | null;
   module: string | null;
   rootCause: string[];
@@ -734,13 +732,6 @@ export interface HealthEdge {
   type: string;
   from: string;
   to: string;
-}
-
-export interface HealthGroup {
-  id: string;
-  label: string;
-  kind: "environment" | "ports" | "addresses" | "host" | "class";
-  members: number;
 }
 
 export interface HealthRoot {
@@ -762,17 +753,79 @@ export interface HealthRoot {
 
 export type HealthCounts = Record<HealthStatus | "acknowledged", number>;
 
-export interface HealthGraph {
+export interface TreeRollup {
+  status: HealthStatus;
+  notOk: number;
+  unknown: number;
+  acknowledged: boolean;
+  maintenance: boolean;
+  flapping: boolean;
+  types: Record<string, HealthStatus>;
+  classes: string[];
+  environments: string[];
+}
+
+export interface TreeNode extends TreeRollup {
+  id: string;
+  class: string;
+  name: string;
+  label: string;
+  isRoot: boolean;
+  children: number;
+}
+
+export interface TreeMatch extends TreeNode {
+  where: string;
+}
+
+export interface HealthTree {
   generated: string;
-  at: string | null;
-  topology: string;
   hasConditions: boolean;
   site: string | null;
-  nodes: HealthNode[];
-  edges: HealthEdge[];
-  groups: HealthGroup[];
-  roots: HealthRoot[];
   counts: HealthCounts;
+  roots: HealthRoot[];
+  facets: TreeNode[];
+}
+
+export interface EgoNode extends HealthNode {
+  more: boolean;
+}
+
+export interface EgoGroup {
+  key: string;
+  anchor: string;
+  type: string;
+  direction: "out" | "in";
+  side: "up" | "down";
+  label: string;
+  neighbours: string[];
+}
+
+export interface HealthEgo {
+  generated: string;
+  at: string | null;
+  id: string;
+  center: EgoNode;
+  nodes: EgoNode[];
+  groups: EgoGroup[];
+  edges: HealthEdge[];
+}
+
+export interface PathEdge {
+  id: string;
+  type: string;
+  provider: string;
+  dependant: string;
+  virtual: boolean;
+}
+
+export interface HealthPath {
+  generated: string;
+  at: string | null;
+  id: string;
+  to: "root" | "impact";
+  nodes: EgoNode[];
+  edges: PathEdge[];
 }
 
 export interface HealthPatch {
@@ -780,6 +833,7 @@ export interface HealthPatch {
   relayout: boolean;
   generated: string;
   patches: HealthNode[];
+  rollups: Record<string, TreeRollup>;
   roots: HealthRoot[];
   counts: HealthCounts;
   hasConditions: boolean;

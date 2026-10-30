@@ -1,5 +1,5 @@
 // HealthPanel.tsx — one object in the Health view (ADR-041 D5): the CI panel,
-// a drawer as the Physical view's device panel. Its conditions and since when,
+// beside the graph, a drawer on a phone. Its conditions and since when,
 // what caused it or what it impacts, its drift against the record, its history,
 // its relations both ways, and the verbs that apply as jobs: ack, maintenance,
 // and the reboot, update and reconcile of the classes that have them.
@@ -61,7 +61,7 @@ function Verbs({ o }: { o: HealthObject }) {
   );
 }
 
-export function HealthPanel({ id, close, pick }: { id: string; close: () => void; pick: (id: string) => void }) {
+export function HealthPanel({ id, close, pick, showInTree }: { id: string; close: () => void; pick: (id: string) => void; showInTree: () => void }) {
   const r = useRead<HealthObject>(`health/object/${encodeURIComponent(id)}`);
   const ack = useVerb("health-manager", "ack");
   const unack = useVerb("health-manager", "unack");
@@ -83,6 +83,7 @@ export function HealthPanel({ id, close, pick }: { id: string; close: () => void
           <p>
             {o.module ? <Link to={`/modules/${encodeURIComponent(o.module)}`} className="jump jump-in">module {o.module}</Link> : null}
             {o.class === "machine" ? <Link to={`/site/device?select=node:${encodeURIComponent(o.name)}`} className="jump jump-in">Device · {o.name}</Link> : null}
+            <button className="hlink" onClick={showInTree}>Show in tree</button>
           </p>
           <Verbs o={o} />
           <Section title="Conditions" aside={`${o.conditions.length}`}>
