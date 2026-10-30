@@ -37,7 +37,7 @@
 #     owner's report merges into (also when it was named by an abstract class,
 #     and when a stronger key finds another object); an unknown class is refused
 #   - recorded on objects and relations; the relations verb; owned-by's pairs
-#   - volatile attributes never drift; conditions and their checks; --where on a path;
+#   - volatile attributes never drift; conditions and their checks; an assessment; --where on a path;
 #     a pool's key is its name on its node; a service resolves by name
 #   - the discovery sweep over a fixture site: baseline, expected, drift, the
 #     differ, unmanaged, missing, the journal lines, exit codes 0/1/2

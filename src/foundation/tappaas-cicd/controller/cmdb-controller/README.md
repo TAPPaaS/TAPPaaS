@@ -147,6 +147,7 @@ not fit the metamodel).
 | `POST /v1/rescan` | | what each source answered |
 | `POST /v1/sweep`, `GET /v1/sweep` | | a sweep and its record (409 while one runs); the last record (404 when none has) |
 | `GET /v1/classes`, `GET /v1/classes/<name>` | | the metamodel |
+| `GET /v1/rules` | | the correlation rules, each relation type's `dependant` and `required`, each class's ancestors |
 | `GET /v1/stream` | | server-sent events: `event: change` with the change's id, kind, source, job, verb, time, objects, relations, drift |
 
 ```bash
@@ -191,14 +192,16 @@ journalctl -t cmdb-sweep --since today -o cat | jq -r 'select(.expected | not) |
 `cmdb-sweep.timer` runs it every night, an hour before the site's update hour
 (`updateSchedule`; 01:00 with none), rendered with the update's timer by
 `update-tappaas-schedule.sh`. health-manager's gate `cmdb` reads the last record
-by the same thresholds, and is critical when there has been no sweep for 48 hours.
+by the same thresholds, and is critical when there has been no sweep for 48 hours;
+`health-manager assess` turns its lists into `drift` conditions.
 
 ## The metamodel files
 
 [`metamodel/ci.json`](./metamodel/ci.json) (the root `object` and the `ci`
 branch), [`resource.json`](./metamodel/resource.json),
-[`place.json`](./metamodel/place.json) and
-[`relations.json`](./metamodel/relations.json) are loaded into the metamodel
+[`place.json`](./metamodel/place.json),
+[`relations.json`](./metamodel/relations.json) and
+[`health-rules.json`](./metamodel/health-rules.json) are loaded into the metamodel
 tables at every start. A field is declared as ADR-020's `fields.json` declares
 one — `type`, `required`, `immutable`, `description`, `enum` — plus:
 
@@ -213,14 +216,30 @@ one — `type`, `required`, `immutable`, `description`, `enum` — plus:
 - `allowedBy`: the values a field may take, by another field's value (a port's
   `speed` by its `kind`, D9).
 - `derived`: kept by the controller (`drift`), never reported.
-- `volatile`: the value changes by itself (`health`, `used`, `leaseUntil`,
+- `volatile`: the value changes by itself (`conditions`, `used`, `leaseUntil`,
   `lastSeen`, `stage`, `state`, `quorum`): it has history like any other, and
-  never counts as drift.
+  never counts as drift. On a member of an object or of an array's items (a
+  condition's `lastChecked`) it means no history at all: a value that differs
+  only there is rewritten in place.
 
 On a class: `desiredRecord` — a `config/` record can declare it, so a sweep calls
 one without a record unmanaged; `expiry` (`7d` on `ci`, inherited) — how long a CI may go
 unreported before it is unseen; `keyVia` — a key that is a field of a related
 object (an asset's ports' MACs, rank 2).
+
+`conditions[]` on `object` is health (ADR-041 D1): `type`, `status`, `reason`,
+`message`, `since`, `lastChecked`, `source`, `derived`, `rootCause`,
+`acknowledged`, `maintenance`, one per type. `health-manager assess` is its only
+writer, by an **assessment**: a report with `"assessment": true`, naming objects
+by `id`, which creates nothing and is no sighting (no `lastSeen`, no way back
+from unseen). The `site` carries `rootCauses[]` and the last run's `assessment`.
+
+On a relation type (`relations.json`): `dependant`, the end hurt when the other
+fails (`from`, `to`, `both`; none: it carries no health), and `required`. A
+relation row may set `required` and a `redundancyGroup` in its attributes.
+[`health-rules.json`](./metamodel/health-rules.json) holds the correlation rules
+(ADR-041 D3); a rule the controller cannot place stops the load like any
+metamodel error, and `GET /v1/rules` serves them with what a reader needs.
 
 A subclass that declares an inherited field again with only some properties
 refines it (`vm` makes `name` a key of rank 2). A new class goes through

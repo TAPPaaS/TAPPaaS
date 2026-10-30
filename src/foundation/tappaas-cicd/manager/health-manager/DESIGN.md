@@ -36,8 +36,9 @@ gate). `--json` emits the typed result object (`ClusterInspection` /
 ### `validate` — the health gate (special meaning)
 
 For the config managers `validate` means "config is well-formed". For **health**
-it means "**the live system is healthy**": `validate` aggregates gates against
-the running cluster and **exits non-zero if any FAIL**.
+it means "**the live system is healthy**": `assess` runs these gates against the
+running cluster, and `validate` reads the conditions they became, **exiting
+non-zero on a critical one that counts** (see *Assess* below).
 
 | Gate | Source | FAIL condition | SKIP condition |
 |------|--------|----------------|----------------|
@@ -96,10 +97,57 @@ a full one shows up as the placement problem it is.
 - `src/inspect.ts` — pure inspection logic: `inspectCluster` (`list vm`),
   `inspectVm` (`show vm` three-way), `clusterDiff` (`list vm --diff` rollup).
 - `src/checks.ts` — the health gates + `runHealthGates` aggregation.
+- `src/assess.ts` — `assess`: the sources' findings settled against what was
+  stored, then the one report. Its reads are `AssessIO`, so tests stub the CMDB.
+- `src/assess-sources.ts` — gates, alerts, sweep, thresholds and the scan as
+  findings; `GATES` maps each gate to its condition type and reason.
+- `src/assess-model.ts` — a condition, and `SiteIndex`: a gate's subject → its object.
+- `src/assess-validate.ts` — `validate` as a read.
+- `src/derive.ts` — impact, root causes and roll-ups. Pure.
+- `src/rules.ts` — the correlation rules from the service; `rules list|check`.
 - `src/client.ts` — `CliClusterClient`: the real `ssh`/`ping`/`pvesh`/`qm`
   shell-out FFI. Inspection + gate logic depend only on `ClusterClient`, so unit
   tests inject `FakeClusterClient` and never touch SSH.
 - `src/main.ts` — verb dispatch, option parsing, table/JSON rendering, entry guard.
+
+## Assess: what is expected, what is derived
+
+ADR-041 D2 and D3 decide the what. The decisions under them:
+
+**Who may take a failure back.** A condition has one writer but several sources.
+`settle()` applies one rule: a failure recovers only when its owner (found from
+its `reason`) ran and looked at that object. So a gate reports `judged`, the
+objects it actually reached; without that, a guest that stopped answering its
+disk probe would turn green. Skips are no judgement: below ok among findings.
+
+**Expected or derived.** A failure spreads from a provider to its dependant where
+a rule matches the failure, in a fixpoint, because a `redundancyGroup` is crossed
+only when all its providers are down and they may be reached in any order. A
+failing condition is **derived** when a failure reaches its object in its own type
+and no less severe: the same failure seen from below. A worse one stays its own,
+because a warning must not silence a critical. Another type on an impacted object
+is not derived (a backup that was missing before the node died still is), but it
+is no root either while the node is down.
+
+**Cycles.** `connects` has no direction, so both ends of a dead cable reach each
+other. Of two that reach each other the earlier `since` is the root.
+
+**The common ancestor.** A failing ancestor no rule crosses from (a warning)
+becomes the root of the dependants below it only when it covers two or more of
+them in the same type, and only for types a rule names as a source: one guest down
+under a node with a warning is two facts, not a cause. Lowest first, then earliest.
+They keep `derived: false`: the root may be a warning, and `validate` must still
+fail for what is critical beneath it.
+
+**Why `validate` keeps a stored table.** The console and scripts read each gate's
+rows, with detail no condition keeps (one condition per type per object, so two
+gates feeding `capacity` merge). The last run's lines go on the `site` object as
+`assessment`, whose members are volatile and never history; the verdict is the
+conditions'.
+
+**History.** `conditions` is one attribute, so any change but `lastChecked` opens
+a period. The store compares without the members marked `volatile` and rewrites a
+value that differs only there, which is why an unchanged site costs no rows.
 
 ## State it reads
 

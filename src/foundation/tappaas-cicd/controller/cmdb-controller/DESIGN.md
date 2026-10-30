@@ -287,7 +287,7 @@ flowchart LR
 | storage-manager | storage pools, shares | nfs share and grant verbs |
 | backup-manager (pbs-controller) | datastores, backup peers, `backs-up`; `--discover`: GC, restore points, sync jobs | peer add/delete, restore-point verbs |
 | asset-manager | rooms, racks, assets by subclass, ports, placements, recorded cables, allocations — all marked recorded | every verb that writes positions.json |
-| health-manager | `health` on each CI it checks; reads the last sweep for its `cmdb` gate | — |
+| health-manager | `conditions` on every object, and `rootCauses` on the site, as an assessment (ADR-041); reads the last sweep | — |
 
 Two rules hold them together. **A report is a side effect, never a gate:** a
 manager reports after it has done its work, through the client's spool, and no
