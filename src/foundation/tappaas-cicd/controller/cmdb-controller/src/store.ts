@@ -153,8 +153,20 @@ function typeOk(f: FieldDef, v: unknown): string | null {
       }
       return null;
     }
-    case "object":
-      return isObj(v) ? null : "an object";
+    case "object": {
+      if (!isObj(v)) return "an object";
+      // Enums and required members only: the rest of a shape is the reporter's.
+      for (const [k, p] of Object.entries(isObj(f.spec.properties) ? f.spec.properties : {})) {
+        if (!isObj(p)) continue;
+        if (v[k] === undefined) {
+          if (p.required === true) return `an object with ${k}`;
+          continue;
+        }
+        const e = enumOf(p);
+        if (e && !e.includes(v[k])) return `an object whose ${k} is one of ${e.join(", ")}`;
+      }
+      return null;
+    }
     default:
       return null;
   }
@@ -312,7 +324,10 @@ export class Store {
         conds.push(`o.name = $${params.length}`);
         continue;
       }
-      params.push(k, JSON.stringify(v));
+      // health.status=critical: a path into the value; containment, so the GIN
+      // index carries it.
+      const [attr, ...path] = k.split(".");
+      params.push(attr, JSON.stringify(path.reduceRight<unknown>((inner, key) => ({ [key]: inner }), v)));
       conds.push(`EXISTS (SELECT 1 FROM attribute a WHERE a.object = o.id AND a.name = $${params.length - 1} AND a.value @> $${params.length}::jsonb AND ${valid})`);
     }
     const limit = Number.isInteger(body.limit) ? Number(body.limit) : 10000;
@@ -1011,7 +1026,7 @@ class ReportRun {
       }
       if (k === "displayName") await this.q("UPDATE object SET display_name = $2 WHERE id = $1", [id, typeof v === "string" ? v : null]);
       changed.push(k);
-      if (cur && this.kind === "observation") drifted[k] = { was: cur.value, now: v };
+      if (cur && this.kind === "observation" && !fields.get(k)!.volatile) drifted[k] = { was: cur.value, now: v };
     }
     for (const [k, tg] of targets) {
       const f = fields.get(k)!;

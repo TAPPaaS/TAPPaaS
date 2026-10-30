@@ -9,8 +9,8 @@
 // objects by name (cmdbQuery), and one it does not have is left out. Offline
 // (--json) a subject's class is the one config/ says (a module's kind).
 //
-// The metamodel's `health` is a string: the gate that set it and when are the
-// report's source and time, not the attribute.
+// `health` is { status, check, time }: the status, the gate that set it (the
+// worst one), and the run's time.
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
@@ -33,6 +33,7 @@ export interface SubjectHealth {
   kind: string;
   name: string;
   health: Health;
+  check: string; // the gate that gave it
 }
 
 /** The worst health each subject got, over every gate that names it. */
@@ -44,7 +45,7 @@ export function subjectHealth(doc: ValidateDoc): SubjectHealth[] {
       const key = `${f.subject.kind}\u0000${f.subject.name}`;
       const h = HEALTH[f.status] ?? "unknown";
       const had = by.get(key);
-      if (!had || RANK[h] > RANK[had.health]) by.set(key, { kind: f.subject.kind, name: f.subject.name, health: h });
+      if (!had || RANK[h] > RANK[had.health]) by.set(key, { kind: f.subject.kind, name: f.subject.name, health: h, check: g.name });
     }
   }
   return [...by.values()].sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
@@ -78,6 +79,8 @@ export function configClass(configDir: string): (kind: string, name: string) => 
 /** A subject's class as the CMDB has it: the one object of the kind's classes by that name. */
 export function cmdbClass(objects: { class: string; name: string }[]): (kind: string, name: string) => string | null {
   return (kind, name) => {
+    // A pool's subject is <node>/<pool>; its object is named <pool>, on its node.
+    if (kind === "pool") return objects.some((o) => o.class === "storage-pool" && o.name === name.split("/").pop()) ? "storage-pool" : null;
     const hits = objects.filter((o) => o.name === name && (KIND_CLASSES[kind] ?? []).includes(o.class));
     return hits.length === 1 ? hits[0].class : null;
   };
@@ -85,9 +88,15 @@ export function cmdbClass(objects: { class: string; name: string }[]): (kind: st
 
 export function buildHealthReport(doc: ValidateDoc, classOf: (kind: string, name: string) => string | null): CmdbBatch {
   const b = new CmdbBatch(SOURCE);
+  const time = doc.generated ?? new Date().toISOString();
   for (const s of subjectHealth(doc)) {
     const cls = classOf(s.kind, s.name);
-    if (cls) b.put(cls, s.name, { health: s.health });
+    if (!cls) continue;
+    const health = { status: s.health, check: s.check, time };
+    const slash = s.name.indexOf("/");
+    if (cls === "storage-pool" && slash > 0) {
+      b.put(cls, s.name.slice(slash + 1), { health, onNode: { class: "machine", name: s.name.slice(0, slash) } }, `storage-pool:${s.name}`);
+    } else b.put(cls, s.name, { health });
   }
   return b;
 }

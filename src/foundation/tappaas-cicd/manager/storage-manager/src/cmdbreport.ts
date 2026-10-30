@@ -1,10 +1,9 @@
 // cmdbreport.ts — what storage-manager reports to the CMDB (ADR-040 D4): the
-// ZFS pools `inventory` reads (storage-pool, runs-on its machine) and the NFS
+// ZFS pools `inventory` reads (storage-pool, onNode its machine) and the NFS
 // shares of config/shares.json (share: its export path and grants).
 //
-// A pool is named <node>/<pool>: ZFS pool names repeat across the nodes
-// (replication needs the same name on each) and a storage-pool has no key on
-// its node, so the bare name would make the pools of three nodes one CI.
+// A pool's key is its name on its node: ZFS pool names repeat across the nodes
+// (replication needs the same name on each), so its node goes in every report.
 
 import { CmdbBatch } from "../../../lib/ts/src/cmdb-reporter";
 import { Share, SharesDoc, sharesOf } from "../../../lib/ts/src/nfs-shares";
@@ -14,7 +13,12 @@ export const SOURCE = "storage-manager";
 // lib/nfs-lib.sh's NFS_MOUNT_ROOT: where a managed Host exports each share.
 const NFS_MOUNT_ROOT = "/tappaas-nfs";
 
-export const poolName = (node: string, pool: string): string => `${node}/${pool}`;
+// ZFS's words for a pool's state, as a CI's health (ADR-040 D11).
+const ZFS_HEALTH: Record<string, string> = { ONLINE: "ok", DEGRADED: "warning", FAULTED: "critical", UNAVAIL: "critical", SUSPENDED: "critical", OFFLINE: "critical", REMOVED: "critical" };
+
+export function poolHealth(zfs: string | undefined, time: string): { status: string; check: string; time: string } {
+  return { status: ZFS_HEALTH[zfs ?? ""] ?? "unknown", check: `zfs ${zfs ?? "?"}`, time };
+}
 
 export function putShare(b: CmdbBatch, name: string, s: Share): string {
   return b.put("share", name, {
@@ -25,20 +29,19 @@ export function putShare(b: CmdbBatch, name: string, s: Share): string {
   });
 }
 
-export function buildStorageReport(shares: SharesDoc | null, inv: Inventory | null): CmdbBatch {
+export function buildStorageReport(shares: SharesDoc | null, inv: Inventory | null, time: string = new Date().toISOString()): CmdbBatch {
   const b = new CmdbBatch(SOURCE);
   for (const n of inv?.nodes ?? []) {
     if (!n.reachable) continue;
     for (const p of n.pools) {
       if (!p.present) continue;
-      const ref = b.put("storage-pool", poolName(n.name, p.name), {
-        displayName: p.name,
+      b.put("storage-pool", p.name, {
+        onNode: { class: "machine", name: n.name },
         type: "zfs",
         size: p.usable?.total ?? p.size,
         used: p.usable?.used ?? p.allocated,
-        health: p.health,
-      });
-      b.relate("runs-on", ref, { class: "machine", name: n.name });
+        health: poolHealth(p.health, time),
+      }, `storage-pool:${n.name}/${p.name}`);
     }
   }
   for (const [name, s] of Object.entries(sharesOf(shares))) putShare(b, name, s);

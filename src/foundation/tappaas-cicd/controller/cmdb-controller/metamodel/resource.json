@@ -6,7 +6,7 @@
       "abstract": true,
       "description": "A resource: allocated to a CI or free.",
       "fields": {
-        "stage": { "type": "string", "enum": ["ordered", "stock", "placed", "operational", "disposed"], "description": "The asset's lifecycle stage (D7)." },
+        "stage": { "type": "string", "volatile": true, "enum": ["ordered", "stock", "placed", "operational", "disposed"], "description": "The asset's lifecycle stage (D7)." },
         "faulty": { "type": "boolean", "description": "A flag beside the stage: a device can be operational and faulty (D7, O3)." },
         "faultNote": { "type": "string", "description": "Why it is faulty." },
         "allocatedTo": { "type": "relation", "relation": "allocated-to", "description": "The CI it is allocated to, or none." }
@@ -63,6 +63,7 @@
       "description": "A switch or an access point.",
       "fields": {
         "deviceType": { "type": "string", "enum": ["switch", "access-point"] },
+        "mac": { "type": "string", "description": "The management MAC; its ports have their own." },
         "controller": { "type": "string", "description": "The controller that manages it." },
         "ports": { "type": "integer", "description": "How many." }
       }
@@ -118,7 +119,7 @@
       "fields": {
         "capacity": { "type": "number" },
         "unit": { "type": "string" },
-        "allocated": { "type": "number" }
+        "allocated": { "type": "number", "volatile": true }
       }
     }
   }

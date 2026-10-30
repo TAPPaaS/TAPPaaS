@@ -32,7 +32,7 @@ Every verb takes `--json` (the API's data as is); otherwise a table.
 | Verb | What |
 |---|---|
 | `cmdb show <object> [--class C] [--at TIME]` | an object: its class and ancestors, its attributes with source and since, its relations, its drift |
-| `cmdb query [<class>] [--physical] [--recorded] [--where k=v]… [--at TIME] [--all]` | the objects of a class and all its subclasses (`cmdb query asset` lists servers and switches; `cmdb query --physical` is the Physical view); `--where` matches an attribute (a JSON value, or a bare word as a string; an array attribute matches when it contains the value); `--recorded` only what an operator recorded; `--at` as of a time; `--all` includes retired and disposed objects |
+| `cmdb query [<class>] [--physical] [--recorded] [--where k=v]… [--at TIME] [--all]` | the objects of a class and all its subclasses (`cmdb query asset` lists servers and switches; `cmdb query --physical` is the Physical view); `--where` matches an attribute (a JSON value, or a bare word as a string; an array attribute matches when it contains the value; `health.status=critical` is a path into an object value); `--recorded` only what an operator recorded; `--at` as of a time; `--all` includes retired and disposed objects |
 | `cmdb relations [--type T] [--from O] [--to O] [--from-class C] [--to-class C] [--recorded] [--at TIME]` | relations by type and either end (`O` as `<object>`), each with both ends, attributes, source and recorded; the classes include subclasses. What a topology is read from |
 | `cmdb history <object> [--at TIME]` | every period of every attribute and relation, with its source; with `--at`, the object as it was then |
 | `cmdb impact <object> [--hops N] [--direction in\|out\|both]` | everything within N current relations (default 2, both ways), each at its shortest distance with the relation it was reached by |
@@ -172,6 +172,9 @@ one — `type`, `required`, `immutable`, `description`, `enum` — plus:
 - `allowedBy`: the values a field may take, by another field's value (a port's
   `speed` by its `kind`, D9).
 - `derived`: kept by the controller (`drift`), never reported.
+- `volatile`: the value changes by itself (`health`, `used`, `leaseUntil`,
+  `lastSeen`, `stage`, `state`, `quorum`): it has history like any other, and
+  never counts as drift.
 
 On a class: `expiry` (`7d` on `ci`, inherited) — how long a CI may go
 unreported before it is unseen; `keyVia` — a key that is a field of a related

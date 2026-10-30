@@ -37,20 +37,24 @@ try {
   writeFileSync(join(tmp, "backup.json"), JSON.stringify({ kind: "application" }));
   const off = buildHealthReport(doc, configClass(tmp)).report();
   const o = (cls: string, name: string) => off.objects!.find((x) => x.class === cls && x.name === name);
+  const st = (x: { attributes?: Record<string, unknown> } | undefined) => (x?.attributes?.health as { status?: string } | undefined)?.status;
   check(off.source === "health-manager" && off.kind === "observation", "an observation from health-manager");
-  check(o("vm", "nextcloud")?.attributes?.health === "critical" && o("lxc", "dns")?.attributes?.health === "ok", "offline: a module is the node of its config kind");
+  check(st(o("vm", "nextcloud")) === "critical" && st(o("lxc", "dns")) === "ok", "offline: a module is the node of its config kind");
+  const hc = o("vm", "nextcloud")?.attributes?.health as { check?: string; time?: string };
+  check(typeof hc.check === "string" && hc.check !== "" && typeof hc.time === "string", "…health is { status, check, time }: the gate that set it and when");
   check(!off.objects!.some((x) => x.name === "backup"), "…an application module is no node: left out");
-  check(o("storage-pool", "tappaas3/tankc1")?.attributes?.health === "warning", "a pool is the storage-pool <node>/<pool>");
-  check(o("machine", "tappaas3")?.attributes?.health === "ok" && o("backup-peer", "aunt")?.attributes?.health === "unknown", "a node is a machine, a peer a backup-peer");
+  const pool = o("storage-pool", "tankc1");
+  check(st(pool) === "warning" && JSON.stringify(pool?.attributes?.onNode) === JSON.stringify({ class: "machine", name: "tappaas3" }), "a pool subject <node>/<pool> is the storage-pool on its machine");
+  check(st(o("machine", "tappaas3")) === "ok" && st(o("backup-peer", "aunt")) === "unknown", "a node is a machine, a peer a backup-peer");
   check(!off.objects!.some((x) => x.name === "home"), "the site is not given a health");
-  check(off.objects!.every((x) => Object.keys(x.attributes ?? {}).join() === "health"), "only health is written");
+  check(off.objects!.every((x) => Object.keys(x.attributes ?? {}).filter((k) => k !== "onNode").join() === "health"), "only health is written");
 
   const live = buildHealthReport(doc, cmdbClass([
     { class: "lxc", name: "nextcloud" }, // the CMDB knows better than a guess
-    { class: "storage-pool", name: "tappaas3/tankc1" },
+    { class: "storage-pool", name: "tankc1" },
     { class: "machine", name: "tappaas3" },
   ])).report();
-  check(live.objects!.map((x) => `${x.class}/${x.name}`).sort().join() === "lxc/nextcloud,machine/tappaas3,storage-pool/tappaas3/tankc1",
+  check(live.objects!.map((x) => `${x.class}/${x.name}`).sort().join() === "lxc/nextcloud,machine/tappaas3,storage-pool/tankc1",
     "against the CMDB: each subject as the class it has there, and none it does not have");
 
   let buf = "";

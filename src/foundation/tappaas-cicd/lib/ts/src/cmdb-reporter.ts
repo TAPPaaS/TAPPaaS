@@ -6,9 +6,9 @@
 // A stub is an object named but not described (a zone's environment, a
 // datastore's machine): the controller matches it by its key and writes
 // nothing, or creates it bare until its own reporter describes it. A reference
-// the controller cannot resolve at all (a proxy route's service, which software
-// keys on its node and version) refuses the whole batch; delivery then drops
-// what the refusal names, and what hangs off it, and sends the rest.
+// the controller cannot resolve at all (an id it does not have, a class that
+// does not exist) refuses the whole batch; delivery then drops what the refusal
+// names, and what hangs off it, and sends the rest.
 //
 // TAPPAAS_JOB_ID is the console's Activity id for the job that ran the verb,
 // TAPPAAS_ACTOR who ran it (else $USER). TAPPAAS_CMDB=off sends nothing

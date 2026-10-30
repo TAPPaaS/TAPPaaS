@@ -24,6 +24,7 @@ export interface FieldDef {
   immutable: boolean;
   key: number | null; // the rank of the identity key it is part of (D5)
   identifying: boolean; // names the CI in telemetry (D14)
+  volatile: boolean; // changes by itself: history, but never drift (D6)
   description: string;
   // The rest of the declaration: enum, values, items, properties, relation,
   // direction, otel, allowedBy, derived.
@@ -67,7 +68,7 @@ export interface Key {
 
 type Obj = Record<string, unknown>;
 
-const CORE_KEYS = new Set(["type", "required", "immutable", "key", "identifying", "description"]);
+const CORE_KEYS = new Set(["type", "required", "immutable", "key", "identifying", "volatile", "description"]);
 
 export const DEFAULT_EXPIRY_SECONDS = 7 * 24 * 3600;
 
@@ -123,6 +124,7 @@ export class Metamodel {
         if (fraw.immutable !== undefined) d.immutable = fraw.immutable === true;
         if (fraw.key !== undefined) d.key = typeof fraw.key === "number" ? fraw.key : null;
         if (fraw.identifying !== undefined) d.identifying = fraw.identifying === true;
+        if (fraw.volatile !== undefined) d.volatile = fraw.volatile === true;
         if (fraw.description !== undefined) d.description = String(fraw.description);
         declared[fname] = d;
       }
@@ -261,6 +263,7 @@ export class Metamodel {
           immutable: d.immutable ?? base?.immutable ?? false,
           key: d.key !== undefined ? d.key : base?.key ?? null,
           identifying: d.identifying ?? base?.identifying ?? false,
+          volatile: d.volatile ?? base?.volatile ?? false,
           description: d.description ?? base?.description ?? "",
           spec: { ...(base?.spec ?? {}), ...(d.spec ?? {}) },
         });
@@ -381,16 +384,17 @@ export class Metamodel {
           immutable: f.immutable,
           key: f.key,
           identifying: f.identifying,
+          volatile: f.volatile,
           description: f.description,
           spec: f.spec,
         };
       }),
     );
     await q(
-      `INSERT INTO attribute_def (class, name, type, required, immutable, key, identifying, description, spec)
-       SELECT x.class, x.name, x.type, x.required, x.immutable, x.key, x.identifying, x.description, x.spec
+      `INSERT INTO attribute_def (class, name, type, required, immutable, key, identifying, volatile, description, spec)
+       SELECT x.class, x.name, x.type, x.required, x.immutable, x.key, x.identifying, x.volatile, x.description, x.spec
          FROM jsonb_to_recordset($1::jsonb) AS x(class text, name text, type text, required boolean, immutable boolean,
-              key smallint, identifying boolean, description text, spec jsonb)`,
+              key smallint, identifying boolean, volatile boolean, description text, spec jsonb)`,
       [defs],
     );
     await q(

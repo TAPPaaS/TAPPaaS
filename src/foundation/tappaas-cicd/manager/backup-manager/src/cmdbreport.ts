@@ -23,7 +23,7 @@ export function retentionOf(raw: RawRuns, store: string): Record<string, number>
 
 // pull: we pull theirs; receive: they push into ours. A buddy that pulls ours
 // (remote) has no direction in the metamodel's enum: it is left unset.
-const DIRECTION: Record<string, "pull" | "receive" | undefined> = { pull: "pull", receive: "receive", remote: undefined };
+const DIRECTION: Record<string, "pull" | "receive" | "pulled-by"> = { pull: "pull", receive: "receive", remote: "pulled-by" };
 
 export function putPeer(b: CmdbBatch, p: Peer, lastSeen?: string): string {
   const ref = b.put("backup-peer", p.name, {

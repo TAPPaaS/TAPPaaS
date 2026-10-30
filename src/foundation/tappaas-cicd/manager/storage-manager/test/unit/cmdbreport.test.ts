@@ -37,12 +37,13 @@ const objs = r.objects ?? [];
 const obj = (cls: string, name: string) => objs.find((o) => o.class === cls && o.name === name);
 
 check(r.source === "storage-manager" && r.kind === "observation", "an observation from storage-manager");
-const pools = objs.filter((o) => o.class === "storage-pool").map((o) => o.name).sort();
-check(pools.join() === "tappaas1/tanka1,tappaas1/tankb1,tappaas2/tanka1,tappaas3/tanka1,tappaas3/tankc1", "one storage-pool per node and pool, named <node>/<pool>");
-const c1 = obj("storage-pool", "tappaas3/tankc1")?.attributes ?? {};
-check(c1.type === "zfs" && c1.health === "DEGRADED" && c1.displayName === "tankc1", "a pool: zfs, its ZFS health, the pool's own name to show");
+const pools = objs.filter((o) => o.class === "storage-pool").map((o) => `${(o.attributes!.onNode as { name: string }).name}/${o.name}`).sort();
+check(pools.join() === "tappaas1/tanka1,tappaas1/tankb1,tappaas2/tanka1,tappaas3/tanka1,tappaas3/tankc1", "one storage-pool per node and pool: its name, on its machine");
+const c1 = objs.find((o) => o.ref === "storage-pool:tappaas3/tankc1")?.attributes ?? {};
+const h1 = c1.health as { status?: string; check?: string };
+check(c1.type === "zfs" && h1.status === "warning" && h1.check === "zfs DEGRADED", "a pool: zfs, its ZFS health as a CI's health");
 check(typeof c1.size === "number" && typeof c1.used === "number" && (c1.used as number) <= (c1.size as number), "…its size and used, in bytes");
-check(r.relations!.some((x) => x.type === "runs-on" && x.from === "storage-pool:tappaas3/tankc1" && JSON.stringify(x.to) === JSON.stringify({ class: "machine", name: "tappaas3" })), "a pool runs-on its machine (by name)");
+check(JSON.stringify(c1.onNode) === JSON.stringify({ class: "machine", name: "tappaas3" }), "a pool is on its machine (by name)");
 const media = obj("share", "media")?.attributes ?? {};
 check(media.path === "/tappaas-nfs/media", "a managed share's path is where its Host exports it");
 check(JSON.stringify(media.grants) === JSON.stringify([{ consumer: "jellyfin", access: "rw" }]), "…and its grants");

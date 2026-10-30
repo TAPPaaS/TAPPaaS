@@ -144,6 +144,11 @@ and new value, and the object's `desired` reference. More drift merges into it
 differ (step 6) will supply the comparison with desired state; until then
 "no change behind it" means: not reported as a change.
 
+**Volatile fields** (`attribute_def.volatile`, schema v3) change by themselves: a
+pool's `used`, a lease. They get periods like any other value and never count
+as drift. `firmware` is deliberately not one: it does not change on every read,
+and a firmware nobody reported changing is what drift is for.
+
 ## Impact
 
 A recursive CTE over current relations, both directions by default, each object

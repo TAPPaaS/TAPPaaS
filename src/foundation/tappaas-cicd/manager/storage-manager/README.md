@@ -114,7 +114,7 @@ the CMDB (cmdb-controller) as one observation; `--json` prints it instead.
 
 | Class | Name | Attributes | Relations |
 |---|---|---|---|
-| `storage-pool` | `<node>/<pool>` (pool names repeat across nodes; the metamodel keys a pool by name only) | displayName (the pool), type `zfs`, size, used (the dataset view, bytes), health (ZFS's) | `runs-on` its machine |
+| `storage-pool` | the pool's name (its key is the name on its node: pool names repeat across nodes) | type `zfs`, size, used (the dataset view, bytes), health (`{status, check, time}` from ZFS's word) | `onNode`: `runs-on` its machine |
 | `share` | the share | path (`/tappaas-nfs/<share>` on a managed Host, else the registered path), grants [{consumer, access}], desired | |
 
 `inventory` sends the pools it read as a side effect. `nfs share add`,

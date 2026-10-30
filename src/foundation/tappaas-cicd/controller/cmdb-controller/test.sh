@@ -153,7 +153,7 @@ check "exactly the eight tables" "attribute,attribute_def,change,class,class_anc
 check "the exclusion constraints on attribute and relation" "attribute_no_overlap,relation_no_overlap" \
     "$(sql "SELECT string_agg(conname, ',' ORDER BY conname) FROM pg_constraint WHERE contype = 'x'")"
 check "a GIN index on attribute.value" "1" "$(sql "SELECT count(*) FROM pg_indexes WHERE tablename = 'attribute' AND indexdef ILIKE '%USING gin (value%'")"
-check "the store records its schema version" "cmdb schema 2" "$(sql "SELECT obj_description('object'::regclass, 'pg_class')")"
+check "the store records its schema version" "cmdb schema 3" "$(sql "SELECT obj_description('object'::regclass, 'pg_class')")"
 if node "${MAIN}" schema >"${T}/schema2.log" 2>&1; then ok "applying the schema again is harmless (idempotent)"; else bad "second schema apply failed: $(cat "${T}/schema2.log")"; fi
 
 echo "== the metamodel, as data (D3, D13) =="
@@ -391,6 +391,28 @@ cmdb relations --type part-of >"${T}/rels.txt" 2>&1 && grep -q "port/eno1" "${T}
 echo "== owned-by's pairs =="
 out="$(cmdb report --json <<<'{"source":"identity-manager","objects":[{"ref":"o","class":"organization","name":"acme"},{"ref":"g","class":"group","name":"staff","attributes":{"uuid":"u-1"}},{"class":"organization","name":"acme-nl"}],"relations":[{"type":"owned-by","from":{"ref":"g"},"to":{"ref":"o"}},{"type":"owned-by","from":{"class":"organization","name":"acme-nl"},"to":{"ref":"o"}}]}' 2>&1)"
 check "a group and an organization are owned by an organization" "2" "$(jq '.result.relations | length' <<<"${out}" 2>/dev/null || echo "${out}")"
+
+echo "== volatile attributes, health as an object, and the keys of pools and services =="
+cmdb report --json >/dev/null <<<'{"source":"storage-manager","objects":[{"class":"storage-pool","name":"tanka1","attributes":{"onNode":"tappaas1","used":100,"size":1000,"health":{"status":"ok","check":"zfs ONLINE","time":"2026-10-30T00:00:00Z"}}},{"class":"storage-pool","name":"tanka1","attributes":{"onNode":"ph-node","used":5}}]}'
+check "one pool name on two nodes is two CIs" "2" "$(cmdb query storage-pool --json | jq 'length')"
+out="$(cmdb report --json <<<'{"source":"storage-manager","objects":[{"class":"storage-pool","name":"tanka1","attributes":{"onNode":"tappaas1","used":200,"health":{"status":"critical","check":"zfs FAULTED","time":"2026-10-30T01:00:00Z"}}}]}')"
+check "a volatile change is stored and is no drift" "health,used none" "$(jq -r '.result.objects[0] | "\(.changed | sort | join(",")) \(if (.drift | length) == 0 then "none" else (.drift | join(",")) end)"' <<<"${out}")"
+check "…it has history" "2" "$(cmdb history "$(jq -r '.result.objects[0].id' <<<"${out}")" --json | jq '[.attributes[] | select(.name == "used")] | length')"
+check "attribute_def carries the flag" "t" "$(sql "SELECT volatile FROM attribute_def WHERE class = 'storage-pool' AND name = 'used'")"
+check "--where on a path into the value" "tanka1" "$(cmdb query --where health.status=critical --json | jq -r '[.[].name] | join(",")')"
+refuse "health is an object with a known status" 4 "whose status is one of" \
+    '{"source":"t","objects":[{"class":"zone","name":"lan","attributes":{"health":{"status":"sick"}}}]}'
+refuse "a string is no longer a health" 4 "health must be an object" \
+    '{"source":"t","objects":[{"class":"zone","name":"lan","attributes":{"health":"ok"}}]}'
+refuse "a pool needs its node" 4 "no key" '{"source":"t","objects":[{"class":"storage-pool","name":"tanka1"}]}'
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"class":"service","name":"nextcloud:web","attributes":{"onNode":"tappaas1","version":"1"}}]}'
+_svc="$(cmdb show service/nextcloud:web --json | jq -r '.id')"
+cmdb report --json >/dev/null <<<'{"source":"module-manager","kind":"change","objects":[{"class":"service","name":"nextcloud:web","attributes":{"onNode":"tappaas1","version":"2"}}]}'
+out="$(cmdb report --json <<<'{"source":"network-manager","objects":[{"ref":"r","class":"proxy-route","name":"nc.example"}],"relations":[{"type":"serves","from":{"ref":"r"},"to":{"class":"service","name":"nextcloud:web"}}]}')"
+check "a proxy-route serves <module>:<service> by name; no placeholder; one service over versions" "0 ${_svc}" \
+    "$(jq -r '.result.placeholders | length' <<<"${out}") $(cmdb relations --type serves --from proxy-route/nc.example --json | jq -r '.[0].to.id')"
+check "a buddy that pulls ours is pulled-by" "pulled-by" "$(cmdb report --json <<<'{"source":"backup-manager","objects":[{"class":"backup-peer","name":"bud","attributes":{"direction":"pulled-by"}}]}' >/dev/null; cmdb show backup-peer/bud --json | jq -r '.attributes.direction.value')"
+check "a network device has a management MAC" "aa:aa" "$(cmdb report --json <<<'{"source":"switch-manager","objects":[{"class":"network-device","name":"sw-01","attributes":{"mac":"aa:aa"}}]}' >/dev/null; cmdb show network-device/sw-01 --json | jq -r '.attributes.mac.value')"
 
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)

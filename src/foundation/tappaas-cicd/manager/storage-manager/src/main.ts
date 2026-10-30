@@ -54,7 +54,7 @@ export const HELP: HelpSpec = {
       ],
       details:
         "Sends the storage to the CMDB (cmdb-controller) as one observation: each ZFS pool `inventory` reads\n" +
-        "(storage-pool <node>/<pool>: size, used, health; runs-on its machine) and each share of\n" +
+        "(storage-pool on its machine: size, used, health) and each share of\n" +
         "config/shares.json (its export path and grants). `inventory` sends its pools as it reads them.",
     },
     {

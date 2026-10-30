@@ -132,7 +132,7 @@ export class Api {
     const [, what, ref, sub] = parts;
 
     if (method === "GET" && what === "health" && !ref) {
-      return send(res, 200, { ok: true, data: { schema: 2, ...(await s.counts()) } });
+      return send(res, 200, { ok: true, data: { schema: 3, ...(await s.counts()) } });
     }
     if (method === "POST" && what === "report" && !ref) {
       const body = await readBody(req);
