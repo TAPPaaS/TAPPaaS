@@ -1,0 +1,933 @@
+{
+ "objects": [
+  {
+   "id": "00000000-0000-4000-8000-000000000003",
+   "class": "site",
+   "name": "rossen",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "rootCauses": [
+     {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "type": "operational",
+      "impactedCount": 4
+     },
+     {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "type": "capacity",
+      "impactedCount": 1
+     }
+    ],
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "critical",
+      "reason": "rollup",
+      "message": "1 of 2 machines critical",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": true,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000004",
+   "class": "cluster",
+   "name": "tappaas",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000005",
+   "class": "environment",
+   "name": "home",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "impact",
+      "status": "critical",
+      "reason": "rollup",
+      "message": "2 of 3 vms critical",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": true,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000006",
+   "class": "server",
+   "name": "srv-01",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000007",
+   "class": "server",
+   "name": "srv-02",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000008",
+   "class": "port",
+   "name": "eno1",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "kind": "rj45",
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000009",
+   "class": "port",
+   "name": "eno2",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "kind": "rj45",
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000000a",
+   "class": "port",
+   "name": "eno1",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "kind": "rj45",
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000000b",
+   "class": "machine",
+   "name": "tappaas1",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000001",
+   "class": "machine",
+   "name": "tappaas2",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "critical",
+      "reason": "node-down",
+      "message": "tappaas2 does not answer",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000002",
+   "class": "datastore",
+   "name": "tappaas_backup",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "capacity",
+      "status": "critical",
+      "reason": "store-full",
+      "message": "tappaas_backup 96 % full",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": {
+       "by": "lars",
+       "note": "new disks on order",
+       "until": "2099-01-01T00:00:00Z",
+       "sticky": true
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000000c",
+   "class": "vm",
+   "name": "nextcloud",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "environment": "home",
+    "vmid": 200,
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "critical",
+      "reason": "guest-stopped",
+      "message": "VM 200 is stopped",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": true,
+      "rootCause": "00000000-0000-4000-8000-000000000001",
+      "acknowledged": null
+     },
+     {
+      "type": "impact",
+      "status": "critical",
+      "reason": "impacted",
+      "message": "node tappaas2 down",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": "00000000-0000-4000-8000-000000000001",
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000000d",
+   "class": "vm",
+   "name": "immich",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "environment": "home",
+    "vmid": 201,
+    "conditions": [
+     {
+      "type": "impact",
+      "status": "critical",
+      "reason": "impacted",
+      "message": "node tappaas2 down",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": "00000000-0000-4000-8000-000000000001",
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000000e",
+   "class": "vm",
+   "name": "gitea",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "environment": "home",
+    "vmid": 202,
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "warning",
+      "reason": "restarts",
+      "message": "gitea restarted 5 times in an hour",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null,
+      "flapping": true
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-00000000000f",
+   "class": "vm",
+   "name": "backup",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "environment": "mgmt",
+    "vmid": 104,
+    "conditions": [
+     {
+      "type": "impact",
+      "status": "critical",
+      "reason": "impacted",
+      "message": "tappaas_backup full",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": "00000000-0000-4000-8000-000000000002",
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000010",
+   "class": "vm",
+   "name": "logging",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "environment": "mgmt",
+    "vmid": 105,
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "warning",
+      "reason": "slow",
+      "message": "loki slow",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null,
+      "maintenance": {
+       "until": "2099-01-01T00:00:00Z",
+       "note": "moving disks"
+      }
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000011",
+   "class": "service",
+   "name": "nextcloud:nextcloud",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "provider": "nextcloud",
+    "conditions": [
+     {
+      "type": "impact",
+      "status": "critical",
+      "reason": "impacted",
+      "message": "node tappaas2 down",
+      "since": "2026-10-30T02:14:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": "00000000-0000-4000-8000-000000000001",
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000012",
+   "class": "zone",
+   "name": "home",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000013",
+   "class": "address",
+   "name": "10.1.0.5",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000014",
+   "class": "address",
+   "name": "10.1.0.6",
+   "displayName": null,
+   "physical": false,
+   "attributes": {
+    "conditions": [
+     {
+      "type": "operational",
+      "status": "ok",
+      "reason": null,
+      "message": null,
+      "since": "2026-10-01T00:00:00Z",
+      "lastChecked": "2026-10-30T08:00:00Z",
+      "source": "health-manager",
+      "derived": false,
+      "rootCause": null,
+      "acknowledged": null
+     }
+    ]
+   }
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000015",
+   "class": "user",
+   "name": "lars",
+   "displayName": null,
+   "physical": false,
+   "attributes": {}
+  },
+  {
+   "id": "00000000-0000-4000-8000-000000000016",
+   "class": "user",
+   "name": "erik",
+   "displayName": null,
+   "physical": false,
+   "attributes": {}
+  }
+ ],
+ "relations": [
+  {
+   "id": 1,
+   "type": "member-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000b",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "class": "cluster",
+    "name": "tappaas"
+   },
+   "attributes": null
+  },
+  {
+   "id": 2,
+   "type": "member-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "class": "machine",
+    "name": "tappaas2"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000004",
+    "class": "cluster",
+    "name": "tappaas"
+   },
+   "attributes": null
+  },
+  {
+   "id": 3,
+   "type": "allocated-to",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000006",
+    "class": "server",
+    "name": "srv-01"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000000b",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": null
+  },
+  {
+   "id": 4,
+   "type": "allocated-to",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000007",
+    "class": "server",
+    "name": "srv-02"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "class": "machine",
+    "name": "tappaas2"
+   },
+   "attributes": null
+  },
+  {
+   "id": 5,
+   "type": "part-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000008",
+    "class": "port",
+    "name": "eno1"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000006",
+    "class": "server",
+    "name": "srv-01"
+   },
+   "attributes": null
+  },
+  {
+   "id": 6,
+   "type": "part-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000009",
+    "class": "port",
+    "name": "eno2"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000006",
+    "class": "server",
+    "name": "srv-01"
+   },
+   "attributes": null
+  },
+  {
+   "id": 7,
+   "type": "part-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000a",
+    "class": "port",
+    "name": "eno1"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000007",
+    "class": "server",
+    "name": "srv-02"
+   },
+   "attributes": null
+  },
+  {
+   "id": 8,
+   "type": "connects",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000008",
+    "class": "port",
+    "name": "eno1"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000000a",
+    "class": "port",
+    "name": "eno1"
+   },
+   "attributes": null
+  },
+  {
+   "id": 9,
+   "type": "runs-on",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000c",
+    "class": "vm",
+    "name": "nextcloud"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "class": "machine",
+    "name": "tappaas2"
+   },
+   "attributes": null
+  },
+  {
+   "id": 10,
+   "type": "runs-on",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000d",
+    "class": "vm",
+    "name": "immich"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000001",
+    "class": "machine",
+    "name": "tappaas2"
+   },
+   "attributes": null
+  },
+  {
+   "id": 11,
+   "type": "runs-on",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000e",
+    "class": "vm",
+    "name": "gitea"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000000b",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": null
+  },
+  {
+   "id": 12,
+   "type": "runs-on",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000f",
+    "class": "vm",
+    "name": "backup"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000000b",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": null
+  },
+  {
+   "id": 13,
+   "type": "runs-on",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000010",
+    "class": "vm",
+    "name": "logging"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000000b",
+    "class": "machine",
+    "name": "tappaas1"
+   },
+   "attributes": null
+  },
+  {
+   "id": 14,
+   "type": "runs-on",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000002",
+    "class": "datastore",
+    "name": "tappaas_backup"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000000f",
+    "class": "vm",
+    "name": "backup"
+   },
+   "attributes": null
+  },
+  {
+   "id": 15,
+   "type": "runs-on",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000011",
+    "class": "service",
+    "name": "nextcloud:nextcloud"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-00000000000c",
+    "class": "vm",
+    "name": "nextcloud"
+   },
+   "attributes": null
+  },
+  {
+   "id": 16,
+   "type": "depends-on",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000d",
+    "class": "vm",
+    "name": "immich"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000011",
+    "class": "service",
+    "name": "nextcloud:nextcloud"
+   },
+   "attributes": null
+  },
+  {
+   "id": 17,
+   "type": "member-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000c",
+    "class": "vm",
+    "name": "nextcloud"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000005",
+    "class": "environment",
+    "name": "home"
+   },
+   "attributes": null
+  },
+  {
+   "id": 18,
+   "type": "member-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000d",
+    "class": "vm",
+    "name": "immich"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000005",
+    "class": "environment",
+    "name": "home"
+   },
+   "attributes": null
+  },
+  {
+   "id": 19,
+   "type": "member-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-00000000000e",
+    "class": "vm",
+    "name": "gitea"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000005",
+    "class": "environment",
+    "name": "home"
+   },
+   "attributes": null
+  },
+  {
+   "id": 20,
+   "type": "serves",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000012",
+    "class": "zone",
+    "name": "home"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000005",
+    "class": "environment",
+    "name": "home"
+   },
+   "attributes": null
+  },
+  {
+   "id": 21,
+   "type": "member-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000013",
+    "class": "address",
+    "name": "10.1.0.5"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000012",
+    "class": "zone",
+    "name": "home"
+   },
+   "attributes": null
+  },
+  {
+   "id": 22,
+   "type": "member-of",
+   "from": {
+    "id": "00000000-0000-4000-8000-000000000014",
+    "class": "address",
+    "name": "10.1.0.6"
+   },
+   "to": {
+    "id": "00000000-0000-4000-8000-000000000012",
+    "class": "zone",
+    "name": "home"
+   },
+   "attributes": null
+  }
+ ],
+ "ids": {
+  "tappaas2": "00000000-0000-4000-8000-000000000001",
+  "pbs-store": "00000000-0000-4000-8000-000000000002",
+  "site": "00000000-0000-4000-8000-000000000003",
+  "cluster": "00000000-0000-4000-8000-000000000004",
+  "env": "00000000-0000-4000-8000-000000000005",
+  "srv1": "00000000-0000-4000-8000-000000000006",
+  "srv2": "00000000-0000-4000-8000-000000000007",
+  "p1": "00000000-0000-4000-8000-000000000008",
+  "p2": "00000000-0000-4000-8000-000000000009",
+  "p3": "00000000-0000-4000-8000-00000000000a",
+  "tappaas1": "00000000-0000-4000-8000-00000000000b",
+  "nextcloud": "00000000-0000-4000-8000-00000000000c",
+  "immich": "00000000-0000-4000-8000-00000000000d",
+  "gitea": "00000000-0000-4000-8000-00000000000e",
+  "backup": "00000000-0000-4000-8000-00000000000f",
+  "logging": "00000000-0000-4000-8000-000000000010",
+  "nc-svc": "00000000-0000-4000-8000-000000000011",
+  "zone": "00000000-0000-4000-8000-000000000012",
+  "a1": "00000000-0000-4000-8000-000000000013",
+  "a2": "00000000-0000-4000-8000-000000000014",
+  "u1": "00000000-0000-4000-8000-000000000015",
+  "u2": "00000000-0000-4000-8000-000000000016"
+ },
+ "history": [
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "status": "ok",
+     "reason": null,
+     "message": null,
+     "since": "2026-10-01T00:00:00Z",
+     "lastChecked": "2026-10-30T08:00:00Z",
+     "source": "health-manager",
+     "derived": false,
+     "rootCause": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "from": "2026-10-01T00:00:00Z",
+   "to": "2026-10-30T02:14:00Z"
+  },
+  {
+   "name": "conditions",
+   "value": [
+    {
+     "type": "operational",
+     "status": "critical",
+     "reason": "node-down",
+     "message": "tappaas2 does not answer",
+     "since": "2026-10-30T02:14:00Z",
+     "lastChecked": "2026-10-30T08:00:00Z",
+     "source": "health-manager",
+     "derived": false,
+     "rootCause": null,
+     "acknowledged": null
+    }
+   ],
+   "source": "health-manager",
+   "from": "2026-10-30T02:14:00Z",
+   "to": null
+  },
+  {
+   "name": "memory",
+   "value": 64,
+   "source": "site-manager",
+   "from": "2026-10-01T00:00:00Z",
+   "to": null
+  }
+ ]
+}

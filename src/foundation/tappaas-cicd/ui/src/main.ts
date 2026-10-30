@@ -20,6 +20,8 @@ import { networkInterfaces } from "os";
 import { join } from "path";
 import { AccessConfig, addrMatches, setupState } from "./access";
 import { GateKeys, authentikKeyFetch } from "./gate";
+import { Cmdb } from "./cmdb";
+import { HealthLive } from "./healthlive";
 import { Jobs, takeRestartMarker } from "./jobs";
 import { KEY_FILE, LiteLLM } from "./litellm";
 import { Assistant } from "./assistant";
@@ -69,6 +71,7 @@ export const HELP: HelpSpec = {
       "CONSOLE_LITELLM_KEY_FILE (the assistant's LiteLLM key; default /etc/secrets/litellm-svckey.env),\n" +
       "CONSOLE_AUTHENTIK_CREDENTIALS (where the gate's provider keys are read; default\n" +
       "$HOME/.authentik-credentials.txt),\n" +
+      "CMDB_URL, CMDB_TOKEN_FILE (the CMDB's API; default http://127.0.0.1:9098, /etc/secrets/cmdb-token),\n" +
       "CONSOLE_LOKI_URL, CONSOLE_LOKI_PASSWORD_FILE (its logs tool), CONSOLE_REPO (the managers' READMEs;\n" +
       "default /home/tappaas/TAPPaaS), TAPPAAS_WAN_ADDRESS_FILE (what the WAN held at the last\n" +
       "network update; default /var/lib/tappaas/wan-address.json).",
@@ -214,7 +217,10 @@ async function serve(o: ServeOpts): Promise<number> {
     ),
   };
   const webDir = o.webDir ?? join(__dirname, "..", "..", "..", "web", "dist");
+  const log = (l: string): void => console.log(`[console] ${l}`);
+  const cmdb = new Cmdb({ run: runAsync, log });
   const reads = new Reads({
+    cmdb,
     configDir: o.configDir,
     repoRoot: process.env.CONSOLE_REPO ?? "/home/tappaas/TAPPaaS",
     stateDir: o.stateDir,
@@ -229,7 +235,7 @@ async function serve(o: ServeOpts): Promise<number> {
       return null;
     },
   });
-  const log = (l: string): void => console.log(`[console] ${l}`);
+  const healthLive = new HealthLive(reads.healthGraph, cmdb, log);
   let server: ConsoleServer | null = null;
   let assistant: Assistant | null = null;
   const jobs = new Jobs({
@@ -272,7 +278,7 @@ async function serve(o: ServeOpts): Promise<number> {
     },
     log,
   });
-  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? home, litellm, assistant }, reads, jobs);
+  server = new ConsoleServer({ access, webDir: existsSync(webDir) ? webDir : null, mgmtDomain: mgmtDomain(), version: VERSION, log, home: process.env.CONSOLE_SECRETS_DIR ?? home, litellm, assistant, healthLive }, reads, jobs);
   for (const l of listen) {
     await server.listen(l.host, l.port).catch((e: Error) => die(`listen ${l.host}:${l.port}: ${e.message}`));
     info(`console ${VERSION} listening on ${l.host}:${l.port}`);
@@ -283,6 +289,7 @@ async function serve(o: ServeOpts): Promise<number> {
   if (s.active) info(`  setup token active (${access.tokenFile}): also accepting ${access.setupAllow.join(", ")} with the token`);
   info(`  front end: ${existsSync(webDir) ? webDir : "not built (API only)"}`);
   reads.start();
+  healthLive.start();
   void litellm.status();
   // What a job may run: every manager's `--help --json` and the declared bash verbs.
   const bashFile = process.env.CONSOLE_MANIFEST_FILE ?? join(__dirname, "..", "..", "..", "manifest", "bash-verbs.json");

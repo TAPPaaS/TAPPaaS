@@ -9,9 +9,11 @@ import { existsSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 import { AccessConfig, Decision, Me, SETUP_COOKIE, addrMatches, decide, mayWrite, normalizeAddr, peerAllowed, routeHost, setupState } from "./access";
 import { linesNaming } from "./activity";
-import { attention, findingsFor, moduleSummaries } from "./badges";
+import { attention, findingsFor, moduleSummaries, withConditions } from "./badges";
 import { Entry, envelope } from "./cache";
 import { SCHEMAS } from "./fields";
+import { HealthGraph, healthSummary, moduleHealth } from "./health";
+import { HealthLive } from "./healthlive";
 import { JumpKind, jumpsFor } from "./jumps";
 import { Assistant, AssistantEvent } from "./assistant";
 import { LiteLLM } from "./litellm";
@@ -34,6 +36,7 @@ export interface ServerConfig {
   runStdin?: StdinRunner; // the verb that takes a secret on stdin (wlan: ap-manager ssid set-passphrase)
   litellm?: LiteLLM | null; // the assistant's LiteLLM (ADR-034 D7); absent: no assistant
   assistant?: Assistant | null; // its agent loop (assistant.ts)
+  healthLive?: HealthLive | null; // the graph read's freshness and live feed (healthlive.ts)
 }
 
 const JSON_TYPE = "application/json; charset=utf-8";
@@ -49,6 +52,9 @@ const TYPES: Record<string, string> = {
   map: "application/json; charset=utf-8",
   txt: "text/plain; charset=utf-8",
 };
+
+// A CMDB object's id, the only thing of a request that reaches its API.
+const OBJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const JUMP_KINDS = new Set<JumpKind>(["node", "module", "switch", "port", "lag", "ap", "zone", "peer", "site", "disk", "pool"]);
 
@@ -192,6 +198,7 @@ export class ConsoleServer {
         });
       }
       case "health": {
+        if (a !== undefined) return this.healthApi(a, b, parts.length, url, res, req);
         const h = await r.health.get();
         return sendJson(res, 200, env(h, h.value ? { ...h.value, attention: attention(h.value) } : null));
       }
@@ -332,10 +339,64 @@ export class ConsoleServer {
     }
   }
 
+  private graph(): Promise<Entry<HealthGraph>> {
+    return this.cfg.healthLive ? this.cfg.healthLive.read() : this.reads.healthGraph.get();
+  }
+
+  // ── the Health view (ADR-041 D5) ──────────────────────────────────
+  //   GET /health/graph[?at=<time>]  every object with its worst condition, the
+  //                                  impact-carrying relations, groups and roots
+  //   GET /health/object/<id>        the CI panel's data
+  //   GET /health/roots              health-manager roots, else the graph's
+  //   GET /health/summary            the worst per page: counts, types, Attention
+  //   GET /health/stream             what moved, as server-sent events
+  private async healthApi(sub: string, id: string | undefined, depth: number, url: URL, res: ServerResponse, req?: IncomingMessage): Promise<void> {
+    const r = this.reads;
+    const failed = (e: Error): void => sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: e.message });
+    if (sub === "graph" && depth === 2) {
+      const at = url.searchParams.get("at");
+      if (at === null) return sendJson(res, 200, envelope(await this.graph()));
+      if (Number.isNaN(Date.parse(at))) return sendJson(res, 400, { error: `at ${at} is not a date` });
+      return r.loadHealthGraph(new Date(at).toISOString()).then((d) => sendJson(res, 200, { data: d, at: d.generated, ageSeconds: 0, refreshing: false, error: null }), failed);
+    }
+    if (sub === "object" && depth === 3 && id) {
+      if (!OBJECT_ID.test(id)) return sendJson(res, 400, { error: "not an object id" });
+      return r.healthObjectOf(id).then((d) => sendJson(res, 200, { data: d, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null }), failed);
+    }
+    if (sub === "roots" && depth === 2) {
+      const d = await r.healthRoots();
+      return sendJson(res, 200, { data: d, at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null });
+    }
+    if (sub === "summary" && depth === 2) {
+      const g = await this.graph();
+      return sendJson(res, 200, { ...envelope(g), data: healthSummary(g.value) });
+    }
+    if (sub === "stream" && depth === 2 && req) return this.streamHealth(req, res);
+    return sendJson(res, 404, { error: "health | health/graph | health/object/<id> | health/roots | health/summary | health/stream" });
+  }
+
+  // As a job's output: an event per thing that moved, and a comment now and
+  // then so a proxy keeps the quiet stream open.
+  private streamHealth(req: IncomingMessage, res: ServerResponse): void {
+    const live = this.cfg.healthLive;
+    if (!live) return sendJson(res, 503, { error: "this console follows no change stream" });
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.setHeader("X-Accel-Buffering", "no");
+    res.write(`event: hello\ndata: ${JSON.stringify({ linked: live.linked })}\n\n`);
+    const off = live.subscribe((p) => res.write(`event: health\ndata: ${JSON.stringify(p)}\n\n`));
+    const beat = setInterval(() => res.write(": keepalive\n\n"), 25_000);
+    req.on("close", () => {
+      off();
+      clearInterval(beat);
+    });
+  }
+
   private async modules(name: string | undefined, sub: string | undefined, url: URL, res: ServerResponse): Promise<void> {
     const r = this.reads;
-    const [m, h, bk] = await Promise.all([r.modules.get(), r.health.get(), r.backup.get()]);
-    const list = moduleSummaries(m.value?.modules ?? [], h.value, bk.value);
+    const [m, h, bk, g] = await Promise.all([r.modules.get(), r.health.get(), r.backup.get(), this.graph()]);
+    const list = withConditions(moduleSummaries(m.value?.modules ?? [], h.value, bk.value), moduleHealth(g.value));
     if (!name) return sendJson(res, 200, { ...envelope(m), data: m.value ? list : null, orphans: m.value?.orphans ?? [], healthAt: envelope(h).at });
     // Only a module the list names reaches a manager's argv.
     if (!MODULE_NAME.test(name)) return sendJson(res, 400, { error: "not a module name" });

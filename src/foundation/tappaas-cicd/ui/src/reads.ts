@@ -14,12 +14,14 @@ import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan
 import { environmentZoneIn, readZonesFile, sharedZonesIn } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
+import { Cmdb, CmdbClassRow, CmdbError, CmdbRelationRow } from "./cmdb";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { composeFields } from "../../lib/ts/src/compose-fields";
 import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, environmentDefaults, environmentDefs, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
 import { Runner, runJson } from "./run";
 import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
+import { HealthGraph, HealthObject, HealthRoot, IMPACT_RELATIONS, buildHealth, healthObject } from "./health";
 import { ModuleIcon, moduleIcon } from "./icons";
 import { BackupRow, BackupRunsDoc, EnvironmentRow, HealthDoc, ModuleList, StorageDoc, TopologyDoc } from "./model";
 
@@ -92,7 +94,12 @@ export const TTL = {
   nodeNetwork: 10_000, // a node's uplinks, while Add node's stage 5 looks
   media: 10_000, // the boot medium on the mothership, while Add a node looks
   drift: 0, // on demand
+  healthGraph: 0, // until the change stream says something changed (healthlive.ts)
 };
+
+// The relations a health graph reads: those that carry impact, and those that
+// say which group an object collapses into.
+const GRAPH_RELATIONS = [...IMPACT_RELATIONS, "part-of"];
 
 export interface ReadsConfig {
   // Cluster membership for the Setup checklist (lib/ts cluster.ts by default).
@@ -108,6 +115,7 @@ export interface ReadsConfig {
   run: Runner;
   journalDays: number;
   now?: () => number;
+  cmdb?: Cmdb | null; // the CMDB's API (cmdb.ts); absent: no conditions, every page keeps `health`
 }
 
 // The site's IPv6 prefix, the one each zone's /64 is numbered in: site.json
@@ -240,6 +248,8 @@ export class Reads {
   readonly moduleIcons: CachedMap<ModuleIcon | null>;
   readonly setup: Cached<SetupInputs>;
   readonly ipv6: Cached<Ipv6Read>;
+  readonly healthGraph: Cached<HealthGraph>;
+  private classRows: CmdbClassRow[] | null = null;
 
   constructor(private readonly cfg: ReadsConfig) {
     const run = cfg.run;
@@ -372,6 +382,7 @@ export class Reads {
           return [...new Set((m.value?.modules ?? []).map((x) => x.stack).filter((x): x is string => !!x && x !== "foundation"))].sort();
         },
       }), now);
+    this.healthGraph = new Cached("health-graph", TTL.healthGraph, () => this.loadHealthGraph(null), now);
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
   }
 
@@ -720,6 +731,7 @@ export class Reads {
       const looked = (k: string) => !["storage", "backup-runs", "ipv6"].includes(k) || all[k].peek().at !== null;
       await Promise.all(Object.entries(all).filter(([k]) => k !== "health" && looked(k)).map(([, c]) => c.refresh()));
       if (this.catalogs.peek().at !== null) await this.catalogs.refresh();
+      if (this.healthGraph.peek().at !== null) await this.healthGraph.refresh();
       return Object.keys(all);
     }
     const c = all[what];
@@ -762,7 +774,53 @@ export class Reads {
     const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
     // A faceplate added or changed: the forms' plates follow.
     const plates = this.faceplates.peek().at !== null ? [this.faceplates] : [];
-    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.ssids.peek().at !== null ? [this.ssids] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.ssids.peek().at !== null ? [this.ssids] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), ...(this.healthGraph.peek().at !== null ? [this.healthGraph] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+  }
+
+  private cmdbClient(): Cmdb {
+    if (!this.cfg.cmdb) throw new CmdbError("this console has no CMDB client");
+    return this.cfg.cmdb;
+  }
+
+  // Every object with its conditions, and the relations between them (now, or
+  // as of a moment: the time slider). The metamodel is read once; a CMDB that
+  // does not say leaves the tree the console ships.
+  async loadHealthGraph(at: string | null): Promise<HealthGraph> {
+    const cmdb = this.cmdbClient();
+    const when = at ? { at } : {};
+    if (!this.classRows) this.classRows = await cmdb.classes().catch(() => null);
+    const [objects, relations, modules] = await Promise.all([
+      cmdb.query({ ...when, limit: 100000 }),
+      Promise.all(GRAPH_RELATIONS.map((type) => cmdb.relations({ type, ...when }))),
+      this.modules.get(),
+    ]);
+    return buildHealth({
+      objects,
+      relations: relations.flat() as CmdbRelationRow[],
+      classes: this.classRows ?? [],
+      modules: (modules.value?.modules ?? []).map((m) => m.name),
+      now: at ? Date.parse(at) : (this.cfg.now ?? Date.now)(),
+      at,
+    });
+  }
+
+  // The CI panel of one object: its record and history, and what the graph
+  // says about it.
+  async healthObjectOf(id: string): Promise<HealthObject> {
+    const cmdb = this.cmdbClient();
+    const [show, history, graph] = await Promise.all([cmdb.show(id), cmdb.history(id), this.healthGraph.get()]);
+    return healthObject(show, history.attributes, history.changes, graph.value, (this.cfg.now ?? Date.now)());
+  }
+
+  // health-manager roots --json; the graph's own list when the verb cannot
+  // answer (a site that has not installed it).
+  async healthRoots(): Promise<{ roots: unknown[]; from: "health-manager" | "graph"; error: string | null }> {
+    try {
+      return { roots: await this.cmdbClient().roots(), from: "health-manager", error: null };
+    } catch (e) {
+      const g = await this.healthGraph.get();
+      return { roots: (g.value?.roots ?? []) as HealthRoot[], from: "graph", error: (e as Error).message };
+    }
   }
 
   private async loadStorage(): Promise<StorageDoc> {

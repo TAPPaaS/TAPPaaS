@@ -2,6 +2,7 @@
 // mockups put on it (run state, health, backup, CVE, maturity) and the health
 // findings that name it, so its page and the Attention list agree.
 
+import { ModuleHealth } from "./health";
 import { BackupRow, Gate, GateFinding, HealthDoc, ModuleRow } from "./model";
 
 export type Level = "fail" | "warn" | "pass" | "unknown";
@@ -21,6 +22,7 @@ export interface ModuleSummary extends ModuleRow {
     maturity: string | null;
   };
   findings: ModuleFinding[];
+  condition?: ModuleHealth; // the worst condition of its objects (ADR-041), when the CMDB holds any
 }
 
 const rank: Record<string, number> = { fail: 2, warn: 1, pass: 0 };
@@ -66,6 +68,18 @@ export function moduleSummaries(modules: ModuleRow[], health: HealthDoc | null, 
       },
       findings,
     };
+  });
+}
+
+// A module's health badge from the worst condition of its objects (ADR-041
+// D5), so the list agrees with the graph. A module the CMDB has no conditions
+// for keeps the gates' badge; what is silenced does not count (D4).
+export function withConditions(list: ModuleSummary[], health: Map<string, ModuleHealth>): ModuleSummary[] {
+  return list.map((m) => {
+    const c = health.get(m.name);
+    if (!c) return m;
+    const level: Level = c.acknowledged || c.maintenance ? "pass" : c.status === "critical" ? "fail" : c.status === "warning" ? "warn" : c.status === "ok" ? "pass" : "unknown";
+    return { ...m, badges: { ...m.badges, health: level }, condition: c };
   });
 }
 
