@@ -155,6 +155,15 @@ console's job id (`TAPPAAS_JOB_ID`); a removed switch's device is ended. A
 report the CMDB cannot take is spooled by the `cmdb` CLI and never fails the
 verb. `TAPPAAS_CMDB=off` sends nothing. Tests: `./test-cmdb-report.sh`.
 
+`report --discover` (ADR-040 D15) first reads the switches (`interrogate
+--no-park`: nothing is parked or changed) and adds a last report: every port, used
+or not, with `link`, `linkSpeed`, `poe`, `stp`, `vlans` and `seen` (each MAC behind
+it with its LLDP neighbour and lease), and on the `device` its address, firmware,
+`uptime` and `vlans` (every VLAN the switch has, `declared` in zones.json or not).
+PoE, STP, negotiated speed, uptime and the switch's VLAN list are `switch/1`'s
+optional fields (ADR-035 D4): what a controller does not report is left out.
+Until the metamodel has its fields (``port.link|linkSpeed|poe|stp|vlans|seen`, `device.uptime|vlans``), cmdb-controller refuses these attributes; the plain report is sent on its own and stands.
+
 ## Setup helper: `setup-switches.sh`
 
 Interactive registration walk-through, normally run at the end of the platform

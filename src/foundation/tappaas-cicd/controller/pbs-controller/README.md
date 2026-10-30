@@ -32,6 +32,10 @@ pbs-controller runs [--json]         The datastore's snapshots, verify and sync
                                         prune jobs, the cluster's backup jobs and
                                         recent vzdump tasks (restore list-all,
                                         backup-manager report to the CMDB).
+pbs-controller discover [--json]     Everything the PBS holds, one read-only pass
+                                        (ADR-040 D15): every datastore's status and
+                                        GC state, each group's count and age, the
+                                        prune and sync jobs.
 pbs-controller --selftest            Pure-function self-test (no cluster).
 ```
 

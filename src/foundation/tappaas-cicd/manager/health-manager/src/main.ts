@@ -133,11 +133,12 @@ export const HELP: HelpSpec = {
         "{\"<ref>\": {\"findings\": [...], \"suppressed\": [...], \"error\": \"\"}}.",
     },
     {
-      usage: "report [--json] [--from <file>]", effect: "read",
+      usage: "report [--json] [--from <file>] [--discover]", effect: "read",
       name: "report (health to the CMDB, ADR-040)",
       options: [
         ["--json", "Print the report instead of sending it (each subject's class as config/ says)."],
         ["--from <file>", "Take the gates from this `validate --json` output instead of running them."],
+        ["--discover", "Accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth."],
       ],
       details:
         "Runs the validate gates (or reads --from) and writes each CI's health on it in the CMDB:\n" +
@@ -273,7 +274,7 @@ function sendHealth(doc: ValidateDoc): void {
 
 function cmdReportHealth(opts: Opts, client: ClusterClient): number {
   const fi = opts.rest.indexOf("--from");
-  const extra = opts.rest.filter((a, i) => a !== "--json" && i !== fi && i !== fi + 1);
+  const extra = opts.rest.filter((a, i) => a !== "--json" && a !== "--discover" && i !== fi && (fi < 0 || i !== fi + 1));
   if (extra.length) die(`report: unexpected argument ${extra[0]}`);
   let doc: ValidateDoc;
   if (fi >= 0) {

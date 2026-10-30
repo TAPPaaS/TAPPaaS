@@ -19,6 +19,12 @@
 # is the AP), else by the AP's name. Its uplink and radio are the record's
 # first rj45 and wifi ports where it has them, else `uplink` (rj45, 1g) and
 # `wifi`. Wi-Fi clients stay in the actual: the CMDB resolves no MAC yet (D5).
+#
+# With --argjson discover true (report --discover, D15) one more report follows:
+# each AP's firmware, uptime and clients (MAC, SSID, signal), every radio as a
+# `wifi` port (standard, band, channel, power), and an SSID the AP broadcasts
+# that desired does not declare. What the controller does not report (ap/1's
+# optional fields) is left out.
 
 def nonull: with_entries(select(.value != null and .value != ""));
 ($pos.assets // {}) as $assets
@@ -80,3 +86,24 @@ def nonull: with_entries(select(.value != null and .value != ""));
             {ref: "swasset", class: "network-device", name: $swtag},
             {ref: "swport", class: "port", name: .port, attributes: {asset: {ref: "swasset"}}} ],
           relations: [ {type: "connects", from: "swport", to: .from, attributes: {origin: "recorded"}} ] } ]
+  + (if ($ARGS.named.discover // false) then
+      [ head + (
+          [ $names[] as $ap | (($actual.accessPoints // {})[$ap] // {}) as $a | tag($ap; "access-point") as $tag
+            | ([ ($a.radios // [])[] | . + {port: (.name // "radio-\(.band // "0")")} ]) as $radios
+            | { objects: (
+                  [ {class: "device", name: $ap,
+                     attributes: (({managementAddress: ($a.managementIp // $aps[$ap].managementIp), firmware: $a.firmware, uptime: $a.uptime} | nonull)
+                       + {clients: [ ($a.clients // [])[] | {mac: (.mac | ascii_downcase), ssid: .ssid, signal: .signal} | nonull ]})},
+                    {ref: "asset:\($tag)", class: "network-device", name: $tag} ]
+                  + [ $radios[] | {ref: "port:\($tag)/\(.port)", class: "port", name: .port,
+                      attributes: (({asset: {ref: "asset:\($tag)"}, kind: "wifi",
+                                    standard: (.standard as $st | if (["wifi5", "wifi6", "wifi7"] | index($st)) then $st else null end),
+                                    channel: .channel, power: .power} | nonull)
+                        + (if .band then {bands: [.band | tostring]} else {} end))} ]
+                  + [ ($a.ssids // {}) | keys[] | select($ssids[.] == null)
+                      | {ref: "ssid:\(.)", class: "ssid", name: ., attributes: {broadcastOn: [$ap]}} ]),
+                relations: [ ($a.ssids // {}) | keys[] | . as $s | select($radios | length > 0) | $radios[]
+                  | {type: "connects", from: "port:\($tag)/\(.port)", to: {class: "ssid", name: $s}, attributes: {origin: "seen"}}
+                  | if $ssids[$s] == null then .to = "ssid:\($s)" else . end ] } ]
+          | {objects: [ .[].objects[] ], relations: [ .[].relations[] ]}) ]
+    else [] end)

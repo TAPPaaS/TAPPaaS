@@ -52,6 +52,19 @@ ck "…only the AP it touched, and its SSIDs"      '[["device","Nano HD"],["ssid
    "$(jq -c '[.[0].objects[] | select((.class == "device" or .class == "ssid") and (.end | not)) | [.class, .name]] | sort' <<<"${C}")"
 ck "…and ends what the verb removed"             '[["device","Old AP"],["ssid","Gone"]]' "$(jq -c '[.[0].objects[] | select(.end) | [.class, .name]]' <<<"${C}")"
 
+# ── report --discover (ADR-040 D15) ──
+D="$(jq --argjson actual "$(cat "${FX}/actual.json")" --argjson pos "$(cat "${FX}/positions.json")" --arg only "" \
+    --argjson ended '[]' --argjson endedSsids '[]' --arg source ap-manager --arg kind observation --arg verb "" --arg job "" --arg actor "" \
+    --argjson discover true -f "${HERE}/cmdb-report.jq" "${FX}/desired.json")"
+deep() { jq -c ".[-1] | $1" <<<"${D}"; }
+ck "--discover adds one report at the end"       "$(( $(jq 'length' <<<"${R}") + 1 ))" "$(jq 'length' <<<"${D}")"
+ck "a radio: standard, band, channel, power"     '["wifi5",["5"],36,20]' "$(deep '.objects[] | select(.name == "ra0") | .attributes | [.standard, .bands, .channel, .power]')"
+ck "a radio with no name is named by its band; an unknown standard is left out" '[["2.4"],null]' "$(deep '.objects[] | select(.name == "radio-2.4") | .attributes | [.bands, .standard]')"
+ck "a client: MAC, SSID, signal"                 '{"mac":"aa:bb:cc:dd:ee:99","ssid":"Home","signal":-61}' "$(deep '.objects[] | select(.class == "device" and .name == "Nano HD") | .attributes.clients[0]')"
+ck "an SSID desired does not declare is found"   '["Nano HD"]' "$(deep '.objects[] | select(.class == "ssid" and .name == "Rogue") | .attributes.broadcastOn')"
+ck "each radio connects to what it broadcasts"   '4' "$(deep '[.relations[] | select(.type == "connects")] | length')"
+ck "firmware and uptime"                         '["6.6.77",3600]' "$(deep '.objects[] | select(.class == "device" and .name == "Nano HD") | .attributes | [.firmware, .uptime]')"
+
 # ── the CLI (where ap-manager runs) ──
 if [[ -r /home/tappaas/bin/common-install-routines.sh ]]; then
     export CONFIG_DIR="${TMP}"

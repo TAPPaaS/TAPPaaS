@@ -164,6 +164,18 @@ export function printOrSend(batch: CmdbBatch, json: boolean, o: CmdbOptions = {}
   return 0;
 }
 
+/** `report --discover` (ADR-040 D15): the plain report, then what only the
+ *  sweep reads, each sent on its own so a refusal of one leaves the other.
+ *  `--json` prints them as an array. */
+export function printOrSendAll(batches: CmdbBatch[], json: boolean, o: CmdbOptions = {}): number {
+  if (json) {
+    process.stdout.write(JSON.stringify(batches.map((b) => b.report()), null, 1) + "\n");
+    return 0;
+  }
+  for (const b of batches) printOrSend(b, false, o);
+  return 0;
+}
+
 /** A changing verb's report: quiet when it goes, a warning on stderr when it
  *  is refused; never fails the verb. */
 export function reportChange(batch: CmdbBatch, verb: string, o: CmdbOptions = {}): SendOutcome {

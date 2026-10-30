@@ -2,7 +2,7 @@
 // no PBS, no cluster). Records calls so tests can assert exactly what the manager
 // asked the controller to do. Mirrors identity-manager/test/unit/fake-client.ts.
 
-import { JobCoverage, Client, JobStatus, PurgeResult, RawRuns, ScheduleBucket } from "../../src/types";
+import { JobCoverage, Client, JobStatus, PurgeResult, RawDiscover, RawRuns, ScheduleBucket } from "../../src/types";
 
 export class FakeClient implements Client {
   job: JobStatus = { jobId: null, vmids: [], storage: null, buckets: [], reachable: true };
@@ -50,6 +50,11 @@ export class FakeClient implements Client {
     return { ...p, refused: [...p.refused], purged: yes && p.refused.length === 0 && p.snapshots > 0 };
   }
   rawRuns: RawRuns = { reachable: false };
+  rawDiscover: RawDiscover = { reachable: false };
+  discover(): RawDiscover {
+    this.log.push("discover");
+    return this.rawDiscover;
+  }
   runs(): RawRuns {
     this.log.push("runs");
     return this.rawRuns;

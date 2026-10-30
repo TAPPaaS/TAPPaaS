@@ -433,6 +433,9 @@ and a spooled one would land stale. The metamodel's `health` is a string: the
 gate and the time are the report's source and time, not the attribute.
 `TAPPAAS_CMDB=off` sends nothing.
 
+`report --discover` (ADR-040 D15) is accepted and adds nothing: health is what
+the gates found.
+
 ## Common options
 
 - `--config-dir DIR` — config root (default: `$CONFIG_DIR` or

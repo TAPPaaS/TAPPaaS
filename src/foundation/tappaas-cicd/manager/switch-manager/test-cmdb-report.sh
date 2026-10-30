@@ -51,6 +51,24 @@ ck "a change carries the verb and the job"         '["change","switch-manager mo
 ck "…only the switch it touched"                   '["core"]' "$(jq -c '[.[0].objects[] | select(.class == "device" and (.end | not)) | .name]' <<<"${C}")"
 ck "…and ends a removed one"                       '["gone"]' "$(jq -c '[.[0].objects[] | select(.end) | .name]' <<<"${C}")"
 
+# ── report --discover (ADR-040 D15) ──
+D="$(jq --argjson pos "$(cat "${FX}/positions.json")" --arg only "" --argjson ended '[]' --arg source switch-manager \
+    --arg kind observation --arg verb "" --arg job "" --arg actor "" --argjson discover true \
+    --argjson zones '{"_doc": "x", "srv": {"vlantag": 200}, "mgmt": {"vlantag": 0}}' -f "${HERE}/cmdb-report.jq" "${FX}/actual.json")"
+deep() { jq -c ".[-1] | $1" <<<"${D}"; }
+ck "--discover adds one report at the end"          "$(( $(jq 'length' <<<"${R}") + 1 ))" "$(jq 'length' <<<"${D}")"
+ck "…the plain reports are unchanged"               "$(jq -c . <<<"${R}")" "$(jq -c '.[:-1]' <<<"${D}")"
+ck "every port is in it, an unused one too"         '9' "$(deep '[.objects[] | select(.class == "port")] | length')"
+ck "an unused port: its link state"                 '"down"' "$(deep '.objects[] | select(.class == "port" and .name == "11") | .attributes.link')"
+ck "a port's negotiated speed, PoE and STP state"   '["10g",7.5,"forwarding"]' "$(deep '.objects[] | select(.class == "port" and .name == "1") | .attributes | [.linkSpeed, .poe.watts, .stp]')"
+ck "the VLANs on a port"                            '{"mode":"trunk","tagged":[200]}' "$(deep '.objects[] | select(.class == "port" and .name == "1") | .attributes.vlans')"
+ck "the MAC seen behind a port, lowercased"         '"aa:bb:cc:dd:ee:01"' "$(deep '.objects[] | select(.class == "port" and .name == "10") | .attributes.seen[0].mac')"
+ck "the LLDP neighbour"                             '"Core"' "$(deep '.objects[] | select(.class == "port" and .name == "ether1") | .attributes.seen[0].lldp.name')"
+ck "an undeclared VLAN, the switch's and a port's"  '[{"tag":410,"declared":false},{"tag":999,"name":"forgotten","declared":false}]' \
+   "$(deep '.objects[] | select(.class == "device" and .name == "core") | .attributes.vlans | map(select(.declared | not))')"
+ck "a declared VLAN says so"                        'true' "$(deep '.objects[] | select(.class == "device" and .name == "core") | .attributes.vlans[] | select(.tag == 200) | .declared')"
+ck "the switch's address, firmware and uptime"      '["10.0.0.201","7.1.66",864000]' "$(deep '.objects[] | select(.class == "device" and .name == "core") | .attributes | [.managementAddress, .firmware, .uptime]')"
+
 # ── lib/cmdb-report.sh: the job id, and each report sent on its own ──
 (
     # shellcheck source=../../lib/cmdb-report.sh
