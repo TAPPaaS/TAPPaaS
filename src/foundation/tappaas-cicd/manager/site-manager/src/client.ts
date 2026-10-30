@@ -16,7 +16,8 @@ import {
   mgmtDomain,
   queryClusterNodes,
   queryNodeTankPools,
-  reachableNodes, queryClusterGuests} from "../../../lib/ts/src/cluster";
+  reachableNodes, queryClusterGuests, ssh} from "../../../lib/ts/src/cluster";
+import { CLUSTER_PROBE, ClusterRead, HOST_PROBE, parseClusterProbe, parseHostProbe } from "./report";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { capture as run, captureResult, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
 import { setNodeStoragePools } from "../../../lib/ts/src/nodes";
@@ -152,6 +153,20 @@ export class CliSiteClient implements SiteClient {
     return all
       .filter((g) => g.node === node && !g.template)
       .map((g) => ({ vmid: g.vmid, name: g.name, type: g.type }));
+  }
+
+  readCluster(candidates: string[]): ClusterRead | null {
+    const reach = reachableNodes(defaultNodeCandidates(candidates));
+    if (reach.length === 0) return null;
+    const r = ssh("root", `${reach[0]}.${mgmtDomain()}`, CLUSTER_PROBE);
+    if (!r.ran || r.rc !== 0) return null;
+    const read = parseClusterProbe(r.stdout);
+    for (const m of read.members) {
+      if (m.online === false) continue;
+      const h = ssh("root", `${m.name}.${mgmtDomain()}`, HOST_PROBE);
+      if (h.ran && h.rc === 0) read.hosts[m.name] = parseHostProbe(h.stdout);
+    }
+    return read;
   }
 
   migrateModule(module: string, force: boolean): number {

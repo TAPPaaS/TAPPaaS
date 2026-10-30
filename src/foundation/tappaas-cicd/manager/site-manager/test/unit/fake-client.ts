@@ -6,6 +6,7 @@
 
 import { appendFileSync } from "fs";
 import { RepositoryTrust, SiteClient } from "../../src/types";
+import { ClusterRead } from "../../src/report";
 
 export class FakeSiteClient implements SiteClient {
   // Live state.
@@ -79,6 +80,11 @@ export class FakeSiteClient implements SiteClient {
   guests = new Map<string, Array<{ vmid: number; name: string; type: string }>>();
   guestsUnreachable = false;
   migrateRc = new Map<string, number>();
+  // What readCluster answers (report); null = unreachable.
+  cluster: ClusterRead | null = null;
+  readCluster(_candidates: string[]): ClusterRead | null {
+    return this.cluster;
+  }
   guestsOn(node: string): Array<{ vmid: number; name: string; type: string }> | null {
     this.log.push(`guestsOn ${node}`);
     if (this.guestsUnreachable) return null;

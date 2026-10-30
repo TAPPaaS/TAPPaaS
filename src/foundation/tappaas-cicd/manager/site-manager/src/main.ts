@@ -49,6 +49,8 @@ import { duration, failingLines, runDirName } from "./testrun";
 import { locationErrors, placeText, readLocations } from "../../../lib/ts/src/locations";
 import { clusterNode, clusterNodes, nodeErrors } from "../../../lib/ts/src/nodes";
 import { mgmtDomain } from "../../../lib/ts/src/cluster";
+import { reportChange, reportObservation, sendObservation } from "../../../lib/ts/src/cmdb-source";
+import { SOURCE, membershipObservation, nodeObject, recordingClient, siteObjects, siteObservation } from "./report";
 
 const VERSION = "0.1.0";
 
@@ -307,6 +309,9 @@ export const HELP: HelpSpec = {
         ["--no-git-pull", "Update whatever is checked out; skip pulling each repository (test local, not-yet-pushed changes)."],
         ["--stop", "Stop the running update gracefully: the module in progress finishes, the rest are skipped (the next update takes them), and the run is recorded as interrupted. Ctrl-C only stops following a run; `sudo systemctl stop update-tappaas.service` stops it at once, without rolling back the module in progress."],
       ] },
+    { usage: "report [--json]",
+      note: "(ADR-040: send the site, its locations, the cluster, its nodes and guests to the CMDB)",
+      options: [["--json", "Print the report instead of sending it."]] },
     { usage: "test [--deep] [--verbose]",
       note: "(run every deployed module's tests, from every repository; one line per module, each module's output in ~/logs/site-test-<time>/)",
       options: [
@@ -892,12 +897,14 @@ function cmdNode(o: Opts, client: SiteClient): void {
     // node-provisioning.md N1): the scoped node slice of `reconcile`, exactly
     // as `repository reconcile` is the repo slice.
     const site: Site = loadSite(siteFile);
-    const plan = computePlan(site, client, {
+    const rec = recordingClient(client);
+    const plan = computePlan(site, rec.client, {
       deep: false,
       apply: o.apply,
       siteFile,
       scope: "nodes",
     });
+    reportMembership(nodesDir, rec);
     printPlan(plan, o.apply);
     if (o.apply && plan.actions.length > 0) {
       const res = applyPlan(client, plan);
@@ -936,6 +943,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
       if (existsSync(`${nodesDir}/${name}.json`)) die(`config/${name}.json already exists and is no pvehost instance — a node's instance is its node name`);
       writeNodeRecord(nodesDir, name, pools);
       info(`${GN}✓${CL} node '${name}' added as a pvehost instance (pools: ${pools.join(", ") || "none"})`);
+      reportChange({ source: SOURCE, verb: `node add ${name}`, objects: [nodeObject(nodesDir, name)], configDir: nodesDir });
       return;
     }
     // Install is the default; --adopt <ipv4> joins a Proxmox installed by hand.
@@ -985,6 +993,9 @@ function cmdNode(o: Opts, client: SiteClient): void {
       // A Proxmox installed by hand at <ipv4>: verify it and run the join
       // pipeline over ssh; the join moves it to the node's mgmt address.
       adoptNode(opts, adopt);
+    }
+    if (existsSync(`${nodesDir}/${name}.json`)) {
+      reportChange({ source: SOURCE, verb: `node add ${name}`, objects: [nodeObject(nodesDir, name)], configDir: nodesDir });
     }
     return;
   }
@@ -1037,6 +1048,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
     if (o.boolFlags.has("--config-only")) {
       if (!inSite) die(`node '${name}' not found (site-manager node list)`);
       unregisterNodeModule(name, nodesDir, remove);
+      reportChange({ source: SOURCE, verb: `node delete ${name}`, objects: [{ class: "machine", name, end: true }], configDir: nodesDir });
       return;
     }
 
@@ -1061,6 +1073,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
       return;
     }
     unregisterNodeModule(name, nodesDir, remove);
+    reportChange({ source: SOURCE, verb: `node delete ${name}`, objects: [{ class: "machine", name, end: true }], configDir: nodesDir });
     // A node rebuilt under this name brings a new host key: no stale pin here.
     for (const h of [name, `${name}.mgmt.internal`]) spawnSync("ssh-keygen", ["-R", h], { stdio: "ignore" });
     return;
@@ -1433,12 +1446,43 @@ function cmdValidate(o: Opts, client: SiteClient): void {
   die(`site.json has ${errs.length} validation error(s)`);
 }
 
+// ── the CMDB (ADR-040 D4) ──────────────────────────────────────────────
+
+// `report`: interrogate the cluster and send (or print) what config/ and the
+// cluster say. A cluster that does not answer is a warning: the config part
+// is reported all the same.
+function cmdReport(o: Opts, client: SiteClient): number {
+  const configDir = dirname(siteFileOf(o));
+  const live = client.readCluster(clusterNodes(configDir).map((n) => n.name));
+  if (live === null) warn("no cluster node answered — reporting what config/ says, without guests");
+  const site = existsSync(siteFileOf(o)) ? (loadRaw(siteFileOf(o)) as { repositories?: { name?: string; path?: string }[] }) : {};
+  const repo = (site.repositories ?? []).find((r) => r.name === "TAPPaaS")?.path ?? "/home/tappaas/TAPPaaS";
+  return sendObservation(siteObservation(configDir, live, runningVersion(repo)), o.json, configDir, info);
+}
+
+// What the node slice of a reconcile read, reported as a side effect.
+function reportMembership(configDir: string, rec: ReturnType<typeof recordingClient>): void {
+  const live = rec.live();
+  if (live !== null) reportObservation(membershipObservation(configDir, live, rec.pools), configDir);
+}
+
+// A site or location verb wrote site.json: the site and its locations as they
+// are now; a deleted location ends.
+function reportSiteChange(o: Opts, verb: string): void {
+  const configDir = dirname(siteFileOf(o));
+  const objects = siteObjects(configDir);
+  if (o.rest[0] === "delete" && o.rest[1]) objects.push({ class: "location", name: o.rest[1], end: true });
+  reportChange({ source: SOURCE, verb, objects, configDir });
+}
+
 // `reconcile` — converge site config → live (+ --deep cascade). Returns the
 // exit code: 1 when any action (notably a cascade) failed to converge.
 function cmdReconcile(o: Opts, client: SiteClient): number {
   const siteFile = siteFileOf(o);
   const site = loadSite(siteFile);
-  const plan = computePlan(site, client, { deep: o.deep, apply: o.apply, siteFile });
+  const rec = recordingClient(client);
+  const plan = computePlan(site, rec.client, { deep: o.deep, apply: o.apply, siteFile });
+  reportMembership(dirname(siteFile), rec);
   printPlan(plan, o.apply);
   if (!o.apply || plan.actions.length === 0) return 0;
 
@@ -1695,10 +1739,14 @@ export function run(argv: string[], client: SiteClient): number {
     switch (cmd) {
       case "site":
         cmdSite(o);
+        if (o.rest[0] === "modify" && !o.boolFlags.has("--check")) reportSiteChange(o, "site modify");
         return 0;
       case "location":
         cmdLocation(o, siteFileOf(o));
+        if (["add", "modify", "delete"].includes(o.rest[0] ?? "") && !o.boolFlags.has("--check")) reportSiteChange(o, `location ${o.rest[0]} ${o.rest[1] ?? ""}`.trim());
         return 0;
+      case "report":
+        return cmdReport(o, client);
       case "node":
         cmdNode(o, client);
         return 0;

@@ -4,6 +4,7 @@
 
 import { Location } from "../../../lib/ts/src/locations";
 import { ClusterNode } from "../../../lib/ts/src/nodes";
+import { ClusterRead } from "./report";
 
 // ── Site config entities (site.json) ──────────────────────────────────
 export interface SiteNetwork {
@@ -216,6 +217,11 @@ export interface SiteClient {
   // a guest may sit somewhere its config does not name — and those are exactly
   // the ones an evacuation must move.
   guestsOn(node: string): Array<{ vmid: number; name: string; type: string }> | null;
+
+  // `report` (ADR-040 D4): the cluster and its nodes as they are — members,
+  // quorum, guests with their configs, each node's own facts. null when no
+  // node answers.
+  readCluster(candidates: string[]): ClusterRead | null;
   // Move ONE module via module-manager (never the controller directly — the
   // layering is the point: module-manager owns per-module orchestration and the
   // HA rule reconciliation that goes with it). Returns its exit code, where 10
