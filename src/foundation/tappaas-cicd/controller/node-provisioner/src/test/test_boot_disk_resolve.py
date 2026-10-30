@@ -5,11 +5,12 @@ import os
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-from node_provisioner.assets import DISK_LIST_SH, RESOLVE_SH, boot_disk_lines, parse_posted_disks, resolve_posted_disks
+from node_provisioner.assets import BOOT_DISK_SH, DISK_LIST_SH, RESOLVE_SH, boot_disk_lines, parse_posted_disks, resolve_posted_disks
 
 GB = 1_000_000_000
 
@@ -178,6 +179,38 @@ class TestBootDiskLines(unittest.TestCase):
 
     def test_nothing_pending_is_auto(self):
         self.assertEqual(boot_disk_lines([]), "set tapdisk tappaas.bootdisk=auto\n")
+
+
+class ModeFileRelease(unittest.TestCase):
+    """The mode file bound over the ISO's copy keeps /cdrom busy: the installer's
+    unmount then retries for 25 s (#909). It is released once the answer is in."""
+
+    def _watcher(self) -> str:
+        start = BOOT_DISK_SH.index('mount --bind /tappaas-mode.toml "$_tap_mode"')
+        start = BOOT_DISK_SH.index("(\n", start)
+        end = BOOT_DISK_SH.index("&\n", start)
+        return BOOT_DISK_SH[start:end]
+
+    def test_released_after_the_answer_not_before(self) -> None:
+        with tempfile.TemporaryDirectory() as d:
+            answers = Path(d) / "answers"
+            done = Path(d) / "unmounted"
+            script = (
+                f'umount() {{ echo "$1" > {done}; }}\n_tap_mode=/cdrom/mode.toml\n'
+                + self._watcher().replace("/mnt/.installer-mp/run/automatic-installer-answers", str(answers)).replace("sleep 2", "sleep 0.1")
+            )
+            p = subprocess.Popen(["sh", "-c", script])
+            try:
+                time.sleep(0.5)
+                self.assertFalse(done.exists(), "released before any answer")
+                answers.write_text("")
+                time.sleep(0.5)
+                self.assertFalse(done.exists(), "an empty answers file is a fetch under way")
+                answers.write_text("[global]\n")
+                p.wait(timeout=5)
+                self.assertEqual(done.read_text().strip(), "/cdrom/mode.toml")
+            finally:
+                p.kill()
 
 
 if __name__ == "__main__":
