@@ -207,8 +207,7 @@ export function cmdbView(doc: PositionsDoc, catalog: Faceplate[], primary: strin
     const ref = refOf.asset(key);
     add({ ref, class: cls.class, name: key, attributes });
     if (where && has.has(where)) relations.push({ type: "placed-in", from: { ref }, to: { ref: where }, attributes: placementAttributes(m!), recorded: true });
-    // A recorded device plays itself: no CI stands for it.
-    if (a.role && a.role !== key) allocations.push({ type: "allocated-to", from: { ref }, to: { class: "node", name: a.role }, attributes: {}, recorded: true });
+    if (a.role) allocations.push({ type: "allocated-to", from: { ref }, to: { class: "node", name: a.role }, attributes: {}, recorded: true });
     const refs = new Map<string, string>();
     for (const p of portsOfAsset(doc, key, a, catalog)) {
       const pref = refOf.port(key, p.name);
