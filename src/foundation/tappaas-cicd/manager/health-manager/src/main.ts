@@ -49,13 +49,12 @@ import { CheckResult, CheckStatus, ClusterClient, HealthReport } from "./types";
 import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmdbRequest } from "../../../lib/ts/src/cmdb";
-import { printOrSend, pruneRefused, sendReport } from "../../../lib/ts/src/cmdb-reporter";
+import { pruneRefused } from "../../../lib/ts/src/cmdb-reporter";
 import { AssessIO, AssessResult, assess } from "./assess";
 import { CmdbItem, CmdbRel, SiteIndex } from "./assess-model";
 import { assessmentOf, readValidate } from "./assess-validate";
 import { readLastSweep } from "./cmdbsweep";
 import { cmdRules, readRules } from "./rules";
-import { ValidateDoc, buildHealthReport, cmdbClass, configClass, subjectHealth } from "./cmdbreport";
 // ── ADR-041 emit half ──
 import { EMIT_HELP, liveEmitContext, runEmitVerb } from "./emit-verbs";
 // ── end ADR-041 emit half ──
