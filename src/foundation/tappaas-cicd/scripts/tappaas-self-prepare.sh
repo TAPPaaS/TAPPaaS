@@ -49,11 +49,19 @@ mkdir -p "${RUN_DIR}"
 # jobs.ts: the job's id and argv, the console's pid) and removes it after. The
 # console refuses new jobs while this unit is active, so the wait ends.
 wait_for_console_job() {
-    local waited=0 pid what
+    local waited=0 pid what verb
     while [[ -f "${CONSOLE_LOCK}" ]]; do
         pid="$(jq -r '.pid // empty' "${CONSOLE_LOCK}" 2>/dev/null || true)"
         if [[ -n "${pid}" ]] && ! kill -0 "${pid}" 2>/dev/null; then
             warn "console job lock ${CONSOLE_LOCK} is held by pid ${pid}, which is gone: ignoring it"
+            return 0
+        fi
+        # The job that started this very run (`site-manager update` from the
+        # console) holds the lock while it follows the unit: waiting for it
+        # would wait for ourselves.
+        verb="$(jq -r '(.argv // [])[0:2] | join(" ")' "${CONSOLE_LOCK}" 2>/dev/null || true)"
+        if [[ "${verb}" == "site-manager update" ]]; then
+            info "the console job holding the lock is this run's requester (${verb}): not waiting for it"
             return 0
         fi
         if (( waited >= CONSOLE_WAIT )); then

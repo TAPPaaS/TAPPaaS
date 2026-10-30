@@ -199,7 +199,7 @@ export class Jobs {
   private hold(job: JobSummary): void {
     try {
       mkdirSync(this.cfg.stateDir, { recursive: true });
-      writeFileSync(this.lockFile, JSON.stringify({ id: job.id, kind: job.kind, argv: job.ran, started: job.started, pid: process.pid }) + "\n");
+      writeFileSync(this.lockFile, JSON.stringify({ id: job.id, kind: job.kind, argv: job.ran, started: job.started ?? new Date().toISOString(), pid: process.pid }) + "\n");
     } catch (e) {
       this.cfg.log?.(`could not write the job lock ${this.lockFile}: ${(e as Error).message}`);
     }

@@ -206,7 +206,7 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .command-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .05em; }
 .command .btn-small { background: #1e293b; color: #e2e8f0; border-color: #334155; }
 .btn-small { font-size: 12px; padding: 2px 8px; }
-.output { background: #0b1020; color: #d1d5db; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px 12px; border-radius: 6px; max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-word; margin: 6px 0; }
+.output { background: #0b1020; color: #d1d5db; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px 12px; border-radius: 6px; max-height: 420px; overflow: auto; white-space: pre; margin: 6px 0; }
 .output-live { border-left: 3px solid var(--warn); }
 .progress { position: relative; height: 22px; background: #e5e7eb; border-radius: 6px; overflow: hidden; margin: 8px 0; }
 .progress-bar { height: 100%; background: var(--pass); transition: width .6s ease; }

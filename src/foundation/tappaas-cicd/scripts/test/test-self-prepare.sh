@@ -130,6 +130,9 @@ SECONDS=0
 ck "a lock released during the wait: the step proceeds then" 0 "$(TAPPAAS_CONSOLE_JOB_WAIT=60 STUB_RC=0 run)"
 wait "${_rm}" 2>/dev/null
 ck "…well before the bound"           yes "$([[ ${SECONDS} -lt 20 ]] && echo yes || echo no)"
+printf '{"id":"j3","argv":["site-manager","update"],"started":"2026-10-30T15:47:00Z","pid":%s}\n' "$$" > "${d}/console-job.lock"
+ck "a lock held by site-manager update, this run's requester, is not waited for" 0 "$(TAPPAAS_CONSOLE_JOB_WAIT=60 STUB_RC=0 run)"
+rm -f "${d}/console-job.lock"
 printf '{"id":"j2","pid":4194305}\n' > "${d}/console-job.lock"
 SECONDS=0
 ck "a lock whose console is gone is ignored" 0 "$(TAPPAAS_CONSOLE_JOB_WAIT=60 STUB_RC=0 run)"
