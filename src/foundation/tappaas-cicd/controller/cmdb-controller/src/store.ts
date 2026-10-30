@@ -1193,11 +1193,11 @@ class ReportRun {
   // A field's `target` narrows a relation type that joins a class to several
   // others: a node's environment is one member-of, its cluster another.
   private async currentTarget(id: string, rel: string, dir: "out" | "in", target?: string): Promise<{ id: number; from: string; to: string } | null> {
-    const other = target ? `AND (SELECT class FROM object WHERE id = ${dir === "out" ? "to_object" : "from_object"}) = ANY($3::text[])` : "";
+    const other = target ? `AND (SELECT class FROM object WHERE id = ${dir === "out" ? "to_object" : "from_object"}) IN (SELECT jsonb_array_elements_text($3::jsonb))` : "";
     const r = (
       await this.q(
         `SELECT id, from_object, to_object FROM relation WHERE type = $1 AND ${dir === "out" ? "from_object" : "to_object"} = $2 AND upper_inf(validity) ${other} ORDER BY id DESC LIMIT 1`,
-        target ? [rel, id, this.mm.descendants(target)] : [rel, id],
+        target ? [rel, id, JSON.stringify(this.mm.descendants(target))] : [rel, id],
       )
     ).rows;
     return r.length ? { id: Number(r[0].id), from: String(r[0].from_object), to: String(r[0].to_object) } : null;
