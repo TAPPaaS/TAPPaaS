@@ -51,10 +51,20 @@ chmod +x "${TMP}/cluster"
 # No node down: the cluster as it is most of the time.
 echo '{"nodes":[{"name":"tappaas1","online":true},{"name":"tappaas2","online":true}],"quorate":true,"guests":[],"ha_log":[]}' > "${TMP}/cluster.json"
 
+cat > "${TMP}/health" <<EOF
+#!/usr/bin/env bash
+# fake health-manager: record each call
+printf '%s\n' "\$*" >> "${TMP}/health-calls"
+EOF
+chmod +x "${TMP}/health"
+mkdir -p "${TMP}/cfg"
+echo '{"vmname":"site1","moduleSource":"/c/hosting"}' > "${TMP}/cfg/shop.json"
+
 PORT="$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1])')"
 python3 "${R}" --listen "127.0.0.1:${PORT}" --token-file "${TMP}/token" \
     --notify "${TMP}/notify" --bundle "${TMP}/bundle" --breadcrumb "${TMP}/crumbs" --heartbeat-file "${TMP}/heartbeat" \
-    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down" --cluster-cache 0 --alerts-log "${TMP}/alerts.jsonl" > "${TMP}/log" 2>&1 &
+    --cluster "${TMP}/cluster" --node-down-dir "${TMP}/node-down" --cluster-cache 0 --alerts-log "${TMP}/alerts.jsonl" \
+    --health "${TMP}/health" --config-dir "${TMP}/cfg" > "${TMP}/log" 2>&1 &
 PID=$!
 for _ in $(seq 1 50); do curl -s "http://127.0.0.1:${PORT}/" >/dev/null 2>&1 && break; sleep 0.1; done
 
@@ -232,6 +242,19 @@ jq '.nodes |= map(if .name == "tappaas2" then .online = false else . end)' "${TM
 ck "the cluster cannot be asked: the host is mailed on its own, as before" "ALERT: HostSilent on forgejo" \
    "$(post rotated "$(wh firing state HostSilent forgejo)" >/dev/null; tail -1 "${TMP}/subjects")"
 rm -f "${TMP}/cluster-fails"
+
+# The health hook (ADR-041 D2): every alert, ALERT or RESOLVED, assesses what it
+# is about and then emits; the worker runs apart from the webhook.
+hooked() {  # hooked <webhook>: the calls it makes, one line
+    : > "${TMP}/health-calls"
+    post rotated "$1" >/dev/null
+    for _ in $(seq 1 20); do grep -q '^emit' "${TMP}/health-calls" && break; sleep 0.1; done
+    paste -sd'|' - < "${TMP}/health-calls"
+}
+ck "an alert assesses its object, then emits" "assess --only shop|emit" "$(hooked "$(wh firing state HostSilent site1)")"
+ck "…a RESOLVED too" "assess --only shop|emit" "$(hooked "$(wh resolved state HostSilent site1)")"
+ck "an alert about no known object assesses the site" "assess|emit" "$(hooked "$(wh firing event Oom elsewhere)")"
+ck "health-manager's own rule runs nothing" "" "$(hooked "$(wh firing event HealthRootCause tappaas-cicd)")"
 
 echo
 echo "── ${PASS} passed, ${FAIL} failed ──"

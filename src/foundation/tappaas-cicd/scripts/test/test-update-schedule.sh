@@ -74,6 +74,14 @@ ck "an update at midnight: the sweep at 23:00" 'OnCalendar=*-*-* 23:00:00' "$(gr
 echo '{"updateSchedule": ["none", null, 2]}' > "${TAPPAAS_SITE_JSON}"
 bash "${R}" >/dev/null 2>&1
 ck "no scheduled update: the sweep still runs, at 01:00" 'OnCalendar=*-*-* 01:00:00' "$(grep '^OnCalendar=' "${d}/cmdb-sweep.timer")"
+ck "the health timer's default" 'OnCalendar=*:0/5' "$(grep '^OnCalendar=' "${d}/health-assess.timer")"
+ck "…drives its service" 'Unit=health-assess.service' "$(grep '^Unit=' "${d}/health-assess.timer")"
+echo '{"updateSchedule":["none",null,2],"health":{"assessInterval":15}}' > "${d}/site-h.json"
+TAPPAAS_SITE_JSON="${d}/site-h.json" TAPPAAS_TIMER_FILE="${d}/update-tappaas.timer" TAPPAAS_NO_SYSTEMCTL=1 CONFIG_DIR="${d}" bash "${CICD}/scripts/update-tappaas-schedule.sh" >/dev/null 2>&1
+ck "health.assessInterval sets it" 'OnCalendar=*:0/15' "$(grep '^OnCalendar=' "${d}/health-assess.timer")"
+echo '{"updateSchedule":["none",null,2],"health":{"assessInterval":0}}' > "${d}/site-h.json"
+TAPPAAS_SITE_JSON="${d}/site-h.json" TAPPAAS_TIMER_FILE="${d}/update-tappaas.timer" TAPPAAS_NO_SYSTEMCTL=1 CONFIG_DIR="${d}" bash "${CICD}/scripts/update-tappaas-schedule.sh" >/dev/null 2>&1
+ck "an unusable interval is the default" 'OnCalendar=*:0/5' "$(grep '^OnCalendar=' "${d}/health-assess.timer")"
 [[ ! -e "${TAPPAAS_TIMER_FILE}" ]] && ck "none removes the timer" ok ok || ck "none removes the timer" ok present
 echo '{"updateSchedule": ["daily", null, 2]}' > "${TAPPAAS_SITE_JSON}"; bash "${R}" >/dev/null 2>&1
 echo '{"updateSchedule": ["daily", null, 99]}' > "${TAPPAAS_SITE_JSON}"

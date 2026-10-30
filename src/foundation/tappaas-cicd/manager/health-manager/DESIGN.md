@@ -109,6 +109,37 @@ a full one shows up as the placement problem it is.
   shell-out FFI. Inspection + gate logic depend only on `ClusterClient`, so unit
   tests inject `FakeClusterClient` and never touch SSH.
 - `src/main.ts` — verb dispatch, option parsing, table/JSON rendering, entry guard.
+- `src/emit.ts`, `events.ts`, `ack.ts`, `emit-read.ts`, `emit-verbs.ts`, `emit-cmdb.ts` — the
+  emitting half (ADR-041 D2, D4); see below. The CMDB is behind `HealthCmdb`, so the unit tests
+  run on a stub.
+
+## The emitting half (ADR-041 D2, D4)
+
+- **What changed is read from the attribute's periods**, not from `since`: two transitions between
+  runs, and a condition that went away, leave no trace in the current value. Reading every
+  object's history per run would be a request per object, so `candidates` picks those with a
+  recent `since`, a different status set from the object as of the cursor (`at`), or `flapping`.
+- **The cursor is a change id**, because a report's time is when its run began: a slow `assess
+  --only` can commit behind a time cursor that a faster run has already moved. Reports from two
+  overlapping assess runs can still commit out of id order; that window is one transaction.
+- **Flapping counts intervals, not transitions.** Nagios's percentage is of results that changed,
+  and the history holds changes only, so "the last 20 transitions" would always be 100 %. Twenty
+  intervals give the same ratio, with `health.assessInterval` as the check period, and let a
+  condition stop flapping with no further transition.
+- **`conditions` is one attribute**, so an ack is a read-modify-write of the array, and `assess`
+  rewrites it from what it read at its start: an ack made during an assess run is lost. `assess &&
+  emit` is safe; an ack from the console during a run is the exposed case. The members emit owns
+  (`acknowledged`, `maintenance`, `flapping`, `flappingHeld`) are carried by assess.
+- **Every write is an assessment** (`assessment: true`, the object by id): no sighting, so it
+  neither holds off a CI's expiry nor revives an unseen one.
+- **assess drops an ack or window that has ended**, so emit often sees it gone rather than ending:
+  `endedBeforeEmit` compares with the objects as of the cursor and tells the `unack` or `maintenance`
+  end. A root's ack on a symptom is sticky to assess: `reconcileAcks` alone decides it.
+- **`reconcileAcks` is the one place** that ends acks and windows and spreads a root's ack, run by
+  the verbs and by every emit, so a symptom that appears after the ack is silenced too.
+- **The mail needs `root` and `silenced` on the line**: a rule has only the line, and a recovered
+  root is no longer in `rootCauses`, so emit remembers the set in the cursor. Keys keep their
+  order, as the rule's `match` reads them in order.
 
 ## Assess: what is expected, what is derived
 

@@ -1,0 +1,39 @@
+{
+  "_comment": "The platform's rules over the mothership's own logs. health-manager emit writes one JSON line per health event, identifier tappaas-health (ADR-041 D4). A root cause is mailed; a symptom never is; a silenced event (acknowledged, in maintenance) is recorded and not mailed. Both rules are events: an alert over a log line resolves when its window moves on, not when the root recovers, so the recovery is a line of its own and a mail of its own.",
+  "rules": [
+    {
+      "name": "health-root-cause",
+      "title": "HealthRootCause",
+      "headline": "Root cause",
+      "kind": "event",
+      "match": "\"kind\":\"causal\".*\"silenced\":false",
+      "capture": {
+        "name": "\"name\":\"(?P<name>[^\"]+)\"",
+        "reason": "\"reason\":\"(?P<reason>[^\"]*)\"",
+        "symptoms": "\"symptoms\":(?P<symptoms>[0-9]+)"
+      },
+      "window": 300,
+      "summary": "A condition became a root cause: the failure nothing else explains (ADR-041 D3). What it impacts is not mailed separately.",
+      "mail": {
+        "subject": "{state}: root cause {label.name} ({label.symptoms} impacted)",
+        "body": "== Root cause: {label.name}\nreason: {label.reason}\nimpacted objects: {label.symptoms}\nsince: {since}\n\nhealth-manager roots shows what it impacts; health-manager ack {label.name} --note <why> silences it and its symptoms.\nIn Grafana (Explore, Loki): {query}"
+      }
+    },
+    {
+      "name": "health-root-recovered",
+      "title": "HealthRootRecovered",
+      "headline": "Root cause recovered",
+      "kind": "event",
+      "match": "\"kind\":\"recovery\".*\"root\":true.*\"silenced\":false",
+      "capture": {
+        "name": "\"name\":\"(?P<name>[^\"]+)\""
+      },
+      "window": 300,
+      "summary": "A root cause returned to ok.",
+      "mail": {
+        "subject": "RESOLVED: root cause {label.name}",
+        "body": "== Root cause recovered: {label.name}\nsince: {since}\n\nhealth-manager list shows what is still not ok.\nIn Grafana (Explore, Loki): {query}"
+      }
+    }
+  ]
+}
