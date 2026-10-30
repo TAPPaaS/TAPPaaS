@@ -6,6 +6,8 @@ domains and handlers on OPNsense.
 """
 
 import argparse
+import dataclasses
+import json
 import sys
 import time
 from urllib.parse import urlparse
@@ -537,11 +539,13 @@ def delete_handler_cmd(
     return False
 
 
-def list_all(manager: CaddyManager) -> bool:
+def list_all(manager: CaddyManager, as_json: bool = False) -> bool:
     """List all domains and handlers.
 
     Args:
         manager: CaddyManager instance.
+        as_json: print {domains, handlers, accessLists} as JSON, every field of
+            each (network-manager report, ADR-040).
 
     Returns:
         True if successful.
@@ -549,6 +553,14 @@ def list_all(manager: CaddyManager) -> bool:
     domains = manager.list_domains()
     handlers = manager.list_handlers()
     access_lists = manager.list_access_lists()
+
+    if as_json:
+        print(json.dumps({
+            "domains": [dataclasses.asdict(d) for d in domains],
+            "handlers": [dataclasses.asdict(h) for h in handlers],
+            "accessLists": [dataclasses.asdict(a) for a in access_lists],
+        }, indent=2))
+        return True
 
     if not domains and not handlers:
         print("No Caddy reverse proxy entries configured")
@@ -921,7 +933,8 @@ Examples:
                                    "Required with --description; may be omitted with --description-prefix to sweep every matching route.")
 
     # list
-    subparsers.add_parser("list", parents=[global_parser], help="List all domains and handlers")
+    list_parser = subparsers.add_parser("list", parents=[global_parser], help="List all domains and handlers")
+    list_parser.add_argument("--json", action="store_true", help="Emit {domains, handlers, accessLists} as JSON")
 
     # reconfigure
     subparsers.add_parser("reconfigure", parents=[global_parser], help="Reconfigure Caddy (apply changes)")
@@ -1018,7 +1031,7 @@ Examples:
                     check_mode=args.check_mode,
                 )
             elif args.command == "list":
-                success = list_all(manager)
+                success = list_all(manager, as_json=args.json)
             elif args.command == "reconfigure":
                 success = reconfigure_cmd(manager, args.check_mode)
             elif args.command == "status":

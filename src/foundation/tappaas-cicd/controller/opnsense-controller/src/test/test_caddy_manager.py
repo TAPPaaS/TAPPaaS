@@ -593,6 +593,19 @@ class TestListAllRendersScheme(unittest.TestCase):
             list_all(self._mgr([handler], access_lists))
         return buf.getvalue()
 
+    def test_json_carries_every_field(self):
+        # network-manager report (ADR-040) reads the routes from `list --json`.
+        import json as _json, io as _io, contextlib  # noqa: PLC0415
+        from opnsense_controller.caddy_cli import list_all  # noqa: PLC0415
+        buf = _io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            list_all(self._mgr([self._handler(forward_auth=True, path="/api")]), as_json=True)
+        doc = _json.loads(buf.getvalue())
+        self.assertEqual(doc["domains"][0]["domain"], "app.example.org")
+        self.assertTrue(doc["handlers"][0]["forward_auth"])
+        self.assertEqual(doc["handlers"][0]["path"], "/api")
+        self.assertEqual(doc["accessLists"], [])
+
     def test_plain_upstream_renders_http(self):
         self.assertIn("-> http://app.srv.internal:80", self._render(self._handler()))
 
