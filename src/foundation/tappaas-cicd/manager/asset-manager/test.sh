@@ -6,7 +6,9 @@
 # help manifest, the catalog), then drives the compiled CLI against a temp
 # config dir with hrossen's topology handed in (--topology) and a fixture
 # catalog — never the live config, the topology verb or a device. asset-manager
-# changes no device, so there is no deep tier.
+# changes no device, so there is no deep tier. The CMDB client is pointed at
+# a socket nobody serves, so every report is spooled under the temp config
+# (never the live cmdb-controller): what the verbs report is read from there.
 set -uo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -34,6 +36,8 @@ done
 # ── the CLI against a fixture config ─────────────────────────────────
 FIX="$(mktemp -d "${TMPDIR:-/tmp}/rm-fix.XXXXXX")"
 trap 'rm -rf "${FIX}" "${DIST}"' EXIT
+export CMDB_SOCKET="${FIX}/no-cmdb.sock"
+unset CMDB_URL TAPPAAS_JOB
 mkdir -p "${FIX}/cfg"
 TOPO="${HERE}/test/fixtures/topology-hrossen.json"
 USW="USW Pro XG 10 PoE"
@@ -114,7 +118,26 @@ RM room delete basement >/dev/null 2>&1 && ok "room delete: once empty" || bad "
 RM unplace tappaas1 >/dev/null 2>&1 && RM unplace "${USW}" >/dev/null 2>&1 && ok "unplace" || bad "unplace"
 RM rack delete rack1 >/dev/null 2>&1 && ok "rack delete: once empty" || bad "rack delete"
 [[ "$(jq -r '.racks | length' "${DOC}")" == "0" ]] && ok "rack delete: recorded" || bad "rack delete: recorded"
-[[ -z "$(ls -A "${FIX}/cfg" | grep -v '^positions.json$' | grep -v '^site.json$')" ]] && ok "no lock or temp file left behind" || bad "left behind: $(ls -A "${FIX}/cfg")"
+[[ -z "$(ls -A "${FIX}/cfg" | grep -v '^positions.json$' | grep -v '^site.json$' | grep -v '^.cmdb-spool$')" ]] && ok "no lock or temp file left behind" || bad "left behind: $(ls -A "${FIX}/cfg")"
+SPOOL="${FIX}/cfg/.cmdb-spool"
+[[ "$(cat "${SPOOL}"/*.json 2>/dev/null | jq -s '[.[] | select(.kind == "change" and .source == "asset-manager")] | length')" -gt 5 ]] && ok "the changing verbs' reports spooled (no cmdb-controller here), the verbs done" || bad "no change reports spooled"
+[[ "$(cat "${SPOOL}"/*.json | jq -rs '[.[] | select(.verb == "room add")][0].objects | map("\(.class) \(.name)") | join(",")')" == "location far,room shed" ]] && ok "room add: a change naming the room and its location (a room added before site.json named none: left to report)" || bad "room add's change: $(cat "${SPOOL}"/*.json | jq -cs '[.[] | select(.verb == "room add")][0]')"
+[[ "$(cat "${SPOOL}"/*.json | jq -rs '[.[] | select(.verb == "unplace")] | map(.relations[] | select(.end) | .type) | unique | join(",")')" == "placed-in" ]] && ok "unplace: the placed-in relation ended" || bad "unplace's change"
+[[ "$(cat "${SPOOL}"/*.json | jq -rs '[.[] | select(.verb | test("^faceplate"))] | length')" == "0" ]] && ok "faceplate verbs: nothing the CMDB holds, no report" || bad "a faceplate verb reported"
+# report: hrossen's positions.json as migration 0027 leaves it.
+RC="${FIX}/report"; mkdir -p "${RC}"
+cp "${HERE}/../../scripts/test/fixtures/0027-hrossen/positions-after.json" "${RC}/positions.json"
+cp "${HERE}/test/fixtures/site-hrossen.json" "${RC}/site.json"
+RR() { CONFIG_DIR="${RC}" TAPPAAS_CONFIG="${RC}" TAPPAAS_FACEPLATES="${HERE}/faceplates" run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
+_r="$(RR report --json 2>/dev/null)"
+[[ "$(jq -r '"\(.report.source) \(.report.kind) \(.report.objects | all(.recorded)) \(.skipped | length)"' <<<"${_r}")" == "asset-manager observation true 0" ]] && ok "report --json: one observation from asset-manager, every object recorded, nothing left out" || bad "report --json: ${_r:0:300}"
+[[ "$(jq -r '[.report.objects[] | select(.class != "port") | "\(.class)/\(.name)"] | sort | join(",")' <<<"${_r}")" == "appliance/ISP modem,location/knudanchersvej95,network-device/ap-01,network-device/sw-01,network-device/sw-02,network-device/sw-03,other-device/printer,passive-device/patchpanel1,rack/rack1,room/basement,room/stue,server/srv-01,server/srv-02,server/srv-03" ]] \
+    && ok "report --json: the rooms, the rack, each asset as its class" || bad "report --json classes: $(jq -c '[.report.objects[] | select(.class != "port") | .class]' <<<"${_r}")"
+[[ "$(jq -r '[.report.relations[].type] | group_by(.) | map("\(.[0]):\(length)") | join(",")' <<<"${_r}")" == "connects:2,placed-in:8" ]] && ok "report --json: 8 placements, 2 cables" || bad "report --json relations"
+[[ "$(jq -r '[.allocations[].relations[0] | "\(.from.name)>\(.to.class)/\(.to.name)"] | map(select(startswith("srv-01"))) | join(",")' <<<"${_r}")" == "srv-01>node/tappaas1" ]] && ok "report --json: srv-01 allocated to the node tappaas1" || bad "report --json allocations"
+RR report >/dev/null 2>&1 && [[ "$(ls "${RC}/.cmdb-spool"/*.json | wc -l | tr -d ' ')" == "11" ]] && ok "report: no cmdb-controller — the batch and its 10 allocations spooled, exit 0" || bad "report: spool $(ls "${RC}/.cmdb-spool" 2>&1)"
+_e="$(CONFIG_DIR="${RC}" TAPPAAS_CONFIG="${RC}" TAPPAAS_FACEPLATES="${HERE}/faceplates" run_ts "node '${DIST}/manager/asset-manager/src/main.js' export --json --cmdb" 2>/dev/null)"
+[[ "$(jq -r '"\(.objects | map(select(.class == "rack")) | length) \(.relations | map(select(.type == "allocated-to")) | length) \(.catalog | length > 5)"' <<<"${_e}")" == "1 10 true" ]] && ok "export --cmdb: the objects and relations as the CMDB answers, with the catalog" || bad "export --cmdb: ${_e:0:300}"
 # The catalog as shipped, through the CLI.
 RMC() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="${HERE}/faceplates" \
     run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
@@ -168,8 +191,9 @@ RML rack add r2 >/dev/null 2>&1 && bad "a write beside racks.json refused" || ok
 rm -rf -- "${LEG}"
 # ── assets: a box's life, ordered to disposed (ADR-040 D7-D9) ─────────
 AC="${FIX}/assets"; mkdir -p "${AC}"
-RA() { CONFIG_DIR="${AC}" TAPPAAS_CONFIG="${AC}" TAPPAAS_FACEPLATES="${HERE}/faceplates" \
+RA() { CONFIG_DIR="${AC}" TAPPAAS_CONFIG="${AC}" TAPPAAS_FACEPLATES="${HERE}/faceplates" TAPPAAS_JOB="${RA_JOB:-}" \
     run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
+ASP="${AC}/.cmdb-spool"
 AD="${AC}/positions.json"
 RA rack add rack1 >/dev/null 2>&1 || bad "assets: rack add"
 RA asset add --kind server --vendor HP --model "Z840" --serial CZC1 --stage ordered --supplier "Proshop" --purchase-date 2026-10-01 --ownership owned --topology "${TOPO}" >/dev/null 2>&1 \
@@ -201,6 +225,8 @@ RA asset allocate srv-01 --role tappaas9 --topology "${TOPO}" >/dev/null 2>&1 &&
 RA asset allocate srv-01 --role tappaas1 --topology "${TOPO}" >/dev/null 2>&1 \
     && [[ "$(jq -r '"\(.assets["srv-01"].role) \(.placements.tappaas1.u) \(.placements["srv-01"] // "moved")"' "${AD}")" == "tappaas1 1 moved" ]] \
     && ok "asset allocate: the role tappaas1, its placement now under the role's name" || bad "asset allocate"
+[[ "$(cat "${ASP}"/*.json | jq -rs '[.[] | select(.verb == "asset allocate")] | map("\(.kind) \(.objects // [] | map(.name) | join("+")) \(.relations // [] | map("\(.type):\(.to.class)/\(.to.name)") | join("+"))") | join(",")')" == "change srv-01 ,change  allocated-to:node/tappaas1" ]] \
+    && ok "asset allocate: a change (the asset, now operational) and the allocation to the node apart" || bad "asset allocate's reports: $(cat "${ASP}"/*.json | jq -cs '[.[] | select(.verb == "asset allocate")]')"
 [[ "$(RA asset list --json 2>/dev/null | jq -r '.[0] | "\(.stage) \(.placed)"')" == "operational rack1 U1-U2 front" ]] && ok "asset list: operational (it has a role), placed" || bad "asset list: stage"
 [[ "$(RA asset show tappaas1 --json 2>/dev/null | jq -r '.name')" == "srv-01" ]] && ok "asset show: by the role it plays" || bad "asset show <role>"
 RA cable add --from "${USW}:5" --to "srv-01:sfp1" --link-speed 1g --topology "${TOPO}" >/dev/null 2>&1 \
@@ -209,8 +235,10 @@ RA asset fault srv-01 --note "fan 2 failed" >/dev/null 2>&1 && [[ "$(RA asset li
     && ok "asset fault: faulty beside the stage, operational and faulty" || bad "asset fault"
 RA asset fault srv-01 >/dev/null 2>&1 && bad "asset fault: a note is required" || ok "asset fault: a note is required"
 RA asset dispose srv-01 --how sold >/dev/null 2>&1 && bad "asset dispose: refused while it has a role" || ok "asset dispose: refused while it has a role"
-RA asset release srv-01 >/dev/null 2>&1 && [[ "$(jq -r '"\(.assets["srv-01"].role // "none") \(.placements["srv-01"].u) \(.cables[0].to.device)"' "${AD}")" == "none 1 srv-01" ]] \
+RA_JOB=20261030101500-abc123 RA asset release srv-01 >/dev/null 2>&1 && [[ "$(jq -r '"\(.assets["srv-01"].role // "none") \(.placements["srv-01"].u) \(.cables[0].to.device)"' "${AD}")" == "none 1 srv-01" ]] \
     && ok "asset release: the role ends, the placement and its cable stay with the box under its name" || bad "asset release"
+[[ "$(cat "${ASP}"/*.json | jq -rs '[.[] | select(.verb == "asset release")] | map("\(.job) \(.objects | map("\(.name):\(.attributes.stage):\(.attributes.allocatedTo)") | join("+"))") | join(",")')" == "20261030101500-abc123 srv-01:placed:null" ]] \
+    && ok "asset release: one change with the console's job id, the asset placed and unallocated" || bad "asset release's report: $(cat "${ASP}"/*.json | jq -cs '[.[] | select(.verb == "asset release")]')"
 [[ "$(RA asset list --stage placed --json 2>/dev/null | jq -r 'map(.name) | join(",")')" == "srv-01" ]] && ok "asset list --stage placed: back to placed" || bad "asset list --stage"
 RA asset repaired srv-01 >/dev/null 2>&1 && [[ "$(jq -r '.assets["srv-01"] | "\(.faulty // "-") \(.faultNote // "-")"' "${AD}")" == "- -" ]] && ok "asset repaired: the flag and its note cleared" || bad "asset repaired"
 RA asset dispose srv-01 --how recycled >/dev/null 2>&1 && bad "asset dispose: refused while placed" || ok "asset dispose: refused while placed"

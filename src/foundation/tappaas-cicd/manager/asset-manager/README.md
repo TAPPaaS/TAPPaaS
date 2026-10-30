@@ -16,7 +16,8 @@ cables when its role ends and can take another (`asset release`, `asset allocate
 
 `assets{}` is **interim**: ADR-040 step 3 moves the assets, with the rooms, racks, placements
 and cables, into the CMDB that cmdb-controller keeps. Its shape is the CMDB's `asset` and
-`port` classes' attributes, so that migration is a copy.
+`port` classes' attributes, so that migration is a copy. Until then `positions.json` stays
+the record and asset-manager reports all of it to the CMDB ([below](#reports-to-the-cmdb)).
 
 A location is the site's (`site-manager location list`): a room is in one, a rack is in a
 room, a device is placed in a rack or loose in a room. A device with no placement is
@@ -165,6 +166,8 @@ which carries the positions resolved against the site.
 | `faceplate modify <vendor/model> --set <field>=<value>... --unset <field>...` | A site plate's units, width, ports, kind, passive, match, vendor, displayName or description. |
 | `faceplate delete <vendor/model>` | A site plate nothing places or records; one that replaced a shipped plate gives way to it. |
 | `export --json` | The document and the whole catalog: what `network-manager topology` reads. |
+| `export --json --cmdb` | The same as the CMDB would answer it (its objects and relations, with the catalog): the reference for reading the positions from the CMDB. Not used yet. |
+| `report [--json]` | Everything the record holds, to the CMDB ([Reports to the CMDB](#reports-to-the-cmdb)); `--json` prints the reports instead. |
 
 `mount add`, `mount modify`, `mount remove`, `mount list` and `mount show` are the old
 names of `place`, `place modify`, `unplace`, `place list` and `place show`; `device list`,
@@ -226,6 +229,46 @@ asset-manager asset record 'USW Pro XG 10 PoE:8' --name printer --kind other --c
 asset-manager asset record aa:bb:cc:00:11:22 --name printer --kind other
 asset-manager place printer --room office
 ```
+
+## Reports to the CMDB
+
+asset-manager is a CMDB source (ADR-040 D4; `"cmdbSource": true` in `components.json`).
+`config/positions.json` is still the record; the CMDB is told what it holds, as
+`source: asset-manager`, every object and relation marked `recorded: true`:
+
+| positions.json | CMDB |
+|---|---|
+| a room | `room`, `at` its location (by name; site-manager reports the location) |
+| a rack | `rack`, `placed-in` its room (`room` field); width in inches |
+| an asset | its D3 class: `server`; `network-device` (switch, access-point); `appliance` (modem, ont, ups); `passive-device` (patch-panel, pdu); `other-device` — with `deviceType`, vendor, model, serial, assetTag, stage (as derived: `placed`, `operational`), faulty, faultNote, procurement, disposal |
+| its ports (its own, merged over its model's plate, else the plate it is placed with) | `port`, `part-of` the asset; kind, speed, standard, bands, module, role, mac, side |
+| a placement | `placed-in` from the asset to its rack (u, height, width, slot, face, faceplate, label, description on the relation) or its room |
+| a recorded cable | `connects` port to port (kind, label, origin, side, linkSpeed) |
+| an asset's role | `allocated-to` the node of that name (`{class: node, name}`: the machine, vm or device CI another manager reports) |
+
+```
+asset-manager report               # all of it: one batch, and one report per allocation
+asset-manager report --json        # the reports, not sent
+asset-manager export --json --cmdb # the same, as the CMDB would answer a query for it
+```
+
+- **Every verb that writes `positions.json`** (the asset, port, place, cable, room and rack
+  verbs) reports what it changed, after writing it: a `change` with the verb, the console's
+  job id (`TAPPAAS_JOB`), the actor (`TAPPAAS_ACTOR`, else `$USER`), the objects and
+  relations that differ and what they name; what it removed is ended (`end: true`). A
+  faceplate verb changes nothing the CMDB holds and reports nothing. `--check` reports nothing.
+- **Never a gate.** A report cmdb-controller cannot take now is spooled under
+  `config/.cmdb-spool/` and replayed by the next report that reaches it (or `cmdb rescan`);
+  one it refuses is a warning. The verb is done either way.
+- **Allocations go apart**, one report each: the controller refuses a whole batch when a
+  reference does not resolve, and the node an asset plays may not be in the CMDB yet. A
+  refused allocation is a warning that names the node; the next `asset-manager report`
+  sends it again.
+- **Not reported** (printed by `report`, listed under `skipped` by `--json`): a room with no
+  location while site.json has no primary one; a rack in no recorded room (its placements
+  with it); a placement no asset is recorded for; a cable with an end that is no recorded
+  asset's port (a node's NIC on a `generic` plate). An asset's own `location` (a location
+  of site.json, with no room) has no relation in the metamodel yet.
 
 ## The faceplate catalog
 
@@ -318,4 +361,7 @@ neither has. To contribute a plate upstream, `faceplates show <key> --file` prin
 `install.sh` / `update.sh` build the flake package and link `asset-manager` (and
 `position-manager` and `rack-manager`, its old names, for one release) into `~/bin`; the package carries the
 catalog beside the compiled sources. `test.sh` is offline: the unit suite over hrossen's
-topology and the CLI against a temp config. `validate.sh` runs `asset-manager validate`.
+topology and the CLI against a temp config, its CMDB client pointed at a socket nobody serves
+(the reports land in the temp config's spool, where the suite reads them). `test/unit/cmdb.test.ts`
+checks `report` over hrossen's positions.json as migration 0027 leaves it against
+cmdb-controller's `metamodel/*.json`; what the controller does with it is cmdb-controller's test. `validate.sh` runs `asset-manager validate`.

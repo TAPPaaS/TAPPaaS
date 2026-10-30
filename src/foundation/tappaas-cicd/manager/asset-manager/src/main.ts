@@ -63,6 +63,8 @@ import {
   withSiteFaceplates,
 } from "../../../lib/ts/src/positions";
 import { Store, loadCatalog, readDevices } from "./store";
+import { CmdbRefused, CmdbReport, cmdbReport } from "../../../lib/ts/src/cmdb";
+import { View, changeReport, cmdbAnswer, cmdbView, fullReport } from "./cmdb";
 import {
   Result,
   changeLine,
@@ -312,7 +314,18 @@ export const HELP: HelpSpec = {
       options: [["--set F=V", "units, width, ports, kind, passive, match (a comma list), vendor, displayName, description (repeatable)."], ["--unset F", "Clear match, vendor, displayName or description (repeatable)."], CHECK, CHECK_JSON],
     },
     { usage: "faceplate delete <vendor/model> [--check]", options: [CHECK, CHECK_JSON], note: "(a site plate nothing uses; one that replaced a shipped plate gives way to it)" },
-    { usage: "export --json", effect: "read", options: [["--json", "The document and the whole catalog, for network-manager topology."]] },
+    {
+      usage: "export --json [--cmdb]",
+      effect: "read",
+      options: [["--json", "The document and the whole catalog, for network-manager topology."], ["--cmdb", "Instead of the document: its objects and relations as the CMDB would answer them (ADR-040), with the catalog."]],
+    },
+    {
+      usage: "report [--json]",
+      effect: { noPreview: "the CMDB's record of the rooms, racks, assets, ports, placements, cables and allocations" },
+      readWhen: ["--json"],
+      options: [["--json", "Print the reports instead of sending them."]],
+      note: "(everything config/positions.json records, to cmdb-controller; spooled when it does not answer)",
+    },
   ],
   notes: [
     "A placement names a device as `network-manager topology` does. A cable the switches or LLDP see is drawn from the topology and never recorded; record only what nothing can see — the ISP's modem, a patch panel, a PDU.",
@@ -404,12 +417,60 @@ function readCatalog(store: Store): Faceplate[] {
   return withSiteFaceplates(readShipped(), store.load()).catalog;
 }
 
+// ── the CMDB (ADR-040 step 3): positions.json stays the record, the CMDB
+// is told. A report never fails a verb: lib/ts cmdb.ts spools what it cannot
+// deliver; a refusal is a warning.
+
+// The verb being run, for the change it reports.
+let verbRun = "";
+
+function viewOf(store: Store, doc: PositionsDoc): View {
+  return cmdbView(doc, withSiteFaceplates(readShipped(), doc).catalog, siteLocs(store.configDir)?.primary ?? null);
+}
+
+// The console sets TAPPAAS_JOB to its job's id (ADR-040 D6: a change links
+// to its job); the actor is the operator.
+function changeCtx(): { verb: string; job?: string; actor?: string } {
+  const job = process.env.TAPPAAS_JOB;
+  const actor = process.env.TAPPAAS_ACTOR ?? process.env.USER;
+  return { verb: verbRun, ...(job ? { job } : {}), ...(actor ? { actor } : {}) };
+}
+
+// Send one report; say what became of it, never throw. An allocation the
+// CMDB refuses names a node no manager has reported yet: the next report
+// (asset-manager report) sends it again.
+function deliver(r: CmdbReport, allocation: boolean): "delivered" | "spooled" | "refused" {
+  try {
+    return cmdbReport(r).delivered ? "delivered" : "spooled";
+  } catch (e) {
+    const why = e instanceof CmdbRefused ? `${e.message}${Array.isArray(e.body.problems) ? `: ${(e.body.problems as { at: string; error: string }[]).map((p) => `${p.at} ${p.error}`).join("; ")}` : ""}` : (e as Error).message;
+    if (allocation) {
+      const rel = r.relations?.[0];
+      const to = rel && typeof rel.to === "object" ? rel.to.name : "?";
+      const from = rel && typeof rel.from === "object" ? rel.from.name : "?";
+      note(`the CMDB has no node ${to} yet: ${from}'s allocation to it waits for the next asset-manager report (${why})`);
+    } else note(`the CMDB did not take ${verbRun || "the report"} (${why}); config/positions.json has it`);
+    return "refused";
+  }
+}
+
+function reportChange(store: Store, before: View, doc: PositionsDoc): void {
+  try {
+    const c = changeReport(before, viewOf(store, doc), changeCtx());
+    if (c.report) deliver(c.report, false);
+    for (const a of c.allocations) deliver(a, true);
+  } catch (e) {
+    note(`the change was not reported to the CMDB (${(e as Error).message})`);
+  }
+}
+
 // change — the shared sequence of every changing verb. Devices are read only
 // for a verb that names one (a mount, a cable); a rack's own fields need none.
 function change(store: Store, check: boolean, devices: SiteDevice[] | null | undefined, fn: (doc: PositionsDoc) => Result): number {
   if (!check && store.legacy) die(`${store.legacy} is still there: migration 0020 makes it config/positions.json (the next update, or scripts/run-migrations.sh) — nothing was changed`);
   if (!check && store.load().devices) die(`config/positions.json still records devices{}: migration 0027 makes them assets{} (the next update, or scripts/run-migrations.sh) — nothing was changed`);
   return store.withLock(() => {
+    const before = check ? null : viewOf(store, store.load());
     const r = fn(store.load());
     if ("refused" in r) return check ? refuse(r.refused) : die(r.refused);
     const findings = checkPositions(r.doc, readShipped(), devices ?? null, siteLocs(store.configDir)).filter((f) => devices !== undefined || !f.message.startsWith("the topology could not be read"));
@@ -424,6 +485,7 @@ function change(store: Store, check: boolean, devices: SiteDevice[] | null | und
     if (report(findings)) die("config/positions.json would not be valid — nothing was changed");
     store.save(r.doc);
     info(`${GN}✓${CL} ${changeLine(r, false)}`);
+    if (before) reportChange(store, before, r.doc);
     return 0;
   });
 }
@@ -514,6 +576,7 @@ export function run(argv: string[]): number {
   // place <device> and unplace <device> are one word; every other verb two.
   const one = (args[0] === "place" && !["list", "show", "modify"].includes(args[1] ?? "")) || args[0] === "unplace";
   const verb = one ? args[0] : args.slice(0, 2).join(" ");
+  verbRun = verb;
 
   if (args[0] === "validate") {
     const findings = checkPositions(store.load(), readShipped(), devicesFor(args), siteLocs(store.configDir));
@@ -531,6 +594,13 @@ export function run(argv: string[]): number {
     const { catalog, errors } = loadCatalog();
     const doc = store.load();
     const merged = withSiteFaceplates(catalog, doc);
+    if (args.includes("--cmdb")) {
+      // What the topology would read from the CMDB once it is the record
+      // (positionsFromCmdb turns it back into a document); not wired yet.
+      const v = cmdbView(doc, merged.catalog, siteLocs(store.configDir)?.primary ?? null);
+      console.log(JSON.stringify({ ...cmdbAnswer(v), skipped: v.skipped, catalog: merged.catalog, catalogErrors: [...errors, ...merged.findings.filter((f) => f.severity === "error").map((f) => f.message)] }, null, 2));
+      return 0;
+    }
     console.log(JSON.stringify({ doc, catalog: merged.catalog, catalogErrors: [...errors, ...merged.findings.filter((f) => f.severity === "error").map((f) => f.message)] }, null, 2));
     return 0;
   }
@@ -673,6 +743,24 @@ export function run(argv: string[]): number {
   }
 
   requireOperator();
+  if (args[0] === "report") {
+    const doc = store.load();
+    if (doc.devices) die("config/positions.json still records devices{}: migration 0027 makes them assets{} (the next update, or scripts/run-migrations.sh) — nothing was reported");
+    const v = viewOf(store, doc);
+    const r = fullReport(v);
+    if (json) return out({ ...r, skipped: v.skipped });
+    for (const s of v.skipped) note(`not reported: ${s}`);
+    const main = deliver(r.report, false);
+    if (main === "refused") return 1;
+    const outcome = r.allocations.map((a) => deliver(a, true));
+    const n = (o: string) => outcome.filter((x) => x === o).length;
+    info(
+      `${main === "delivered" ? `${GN}✓${CL} reported to the CMDB` : `${YW}spooled${CL} (cmdb-controller did not answer; the next report replays it)`}: ` +
+        `${v.objects.filter((o) => o.class !== "location").length} object(s), ${v.relations.length} relation(s), ` +
+        `${r.allocations.length} allocation(s)${n("refused") ? ` (${n("refused")} waiting for their node)` : ""}`,
+    );
+    return 0;
+  }
   if (verb === "faceplate add") {
     const [key] = positional(args, 2);
     if (!key) die("faceplate add <vendor/model> --units <n> --ports <spec>");

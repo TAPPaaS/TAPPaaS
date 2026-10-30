@@ -81,6 +81,7 @@
       "language": "typescript",
       "package": "asset-manager",
       "manifest": "help-json",
+      "cmdbSource": true,
       "aliases": [
         "position-manager",
         "rack-manager"
