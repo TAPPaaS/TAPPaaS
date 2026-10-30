@@ -122,6 +122,7 @@ function normalizeUser(o: Record<string, unknown>): AkUser {
     Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
   return {
     name: typeof o.name === "string" ? o.name : "",
+    uuid: typeof o.uuid === "string" ? o.uuid : undefined,
     active: o.active === true,
     email: typeof o.email === "string" ? o.email : "",
     displayName: typeof o.displayName === "string" ? o.displayName : "",
@@ -136,6 +137,7 @@ function normalizeNamed(v: unknown): AkNamed[] {
     const o = x as Record<string, unknown>;
     return {
       name: typeof o.name === "string" ? o.name : "",
+      uuid: typeof o.uuid === "string" ? o.uuid : undefined,
       displayName: typeof o.displayName === "string" ? o.displayName : "",
     };
   });
