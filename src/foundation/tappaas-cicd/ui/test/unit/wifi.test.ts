@@ -52,13 +52,13 @@ async function main(): Promise<void> {
   const site = fakeSite();
   const reads = new Reads({ configDir: dir, stateDir: join(dir, "state"), run: site.run, journalDays: 7 });
   const jobs = new Jobs({ stateDir: join(dir, "state"), configDir: dir, manifests: () => ({ byBin: new Map(), errors: [], loadedAt: "" }), stream: async () => ({ rc: 0, ran: true, error: null }), run: site.run });
-  const ran: { bin: string; args: string[]; input: string }[] = [];
+  const ran: { bin: string; args: string[]; input: string; env?: Record<string, string> }[] = [];
   let answer: ExecResult = { rc: 0, stdout: "[Info] passphrase for 'rossen-home' stored\n", stderr: "", ran: true };
   const logs: string[] = [];
   const srv = new ConsoleServer({
     access, webDir: null, mgmtDomain: "mgmt.internal", version: "t", log: (l) => logs.push(l), home: dir,
-    runStdin: async (bin, args, input) => {
-      ran.push({ bin, args, input });
+    runStdin: async (bin, args, input, _t, env) => {
+      ran.push({ bin, args, input, env });
       return answer;
     },
   }, reads, jobs);
@@ -88,6 +88,7 @@ async function main(): Promise<void> {
   const act = jobs.list().find((x) => x.verb === "secret wlan");
   const out = act ? JSON.stringify(jobs.get(act.id)) : "";
   check(!!act && out.includes("ap-manager ssid set-passphrase rossen-home") && !out.includes(PASS), "…Activity records it by SSID and verb, without the passphrase");
+  check(!!act && ran[0].env?.TAPPAAS_JOB_ID === act.id && ran[0].env?.TAPPAAS_ACTOR === "lars", `…ap-manager ran as that job, for lars (${JSON.stringify(ran[0].env)})`);
 
   answer = { rc: 1, stdout: "", stderr: `\x1b[01;31m[Error]\x1b[m SSID 'nosuch' not found — declare it first: ap-manager ssid add 'nosuch' --zone <zone> --security wpa2-personal ${PASS}\n`, ran: true };
   r = await call("POST", "/api/v1/secrets/wlan", "installer", { ssid: "nosuch", passphrase: PASS });
