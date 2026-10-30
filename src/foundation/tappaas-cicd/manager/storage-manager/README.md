@@ -124,6 +124,9 @@ ended. A machine the CMDB does not have yet drops only that `runs-on`. A
 report the CMDB cannot take is spooled under `config/.cmdb-spool/` and never
 fails the verb; `TAPPAAS_CMDB=off` sends nothing.
 
+`report --discover` (ADR-040 D15) is accepted and adds nothing: the report is
+already storage-manager's depth; disks and pool layouts are proxmox-controller's.
+
 ## Files
 
 | Path | Role |
