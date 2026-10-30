@@ -52,9 +52,9 @@
       "ends": [["zone", "environment"], ["proxy-route", "service"]]
     },
     "owned-by": {
-      "description": "An environment is owned by an organization; an asset by the site.",
+      "description": "An environment or a group is owned by an organization; an organization by its parent; an asset by the site.",
       "cardinality": "n:1",
-      "ends": [["environment", "organization"], ["asset", "site"]]
+      "ends": [["environment", "organization"], ["group", "organization"], ["organization", "organization"], ["asset", "site"]]
     },
     "backs-up": {
       "description": "A datastore backs up a guest or a machine; a backup peer the site.",

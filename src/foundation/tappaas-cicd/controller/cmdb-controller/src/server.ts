@@ -6,6 +6,7 @@
 //   GET  /v1/health                        the store answers; counts
 //   POST /v1/report                        observations and changes, in a batch
 //   POST /v1/query                         by class (and subclasses), physical, attributes, at
+//   POST /v1/relations                     by type, either end, classes, recorded, at
 //   GET  /v1/objects/<id|name>[?class=&at=]          show
 //   GET  /v1/objects/<id|name>/history[?class=&at=]  every period; or as of a time
 //   GET  /v1/objects/<id|name>/impact[?hops=&direction=]
@@ -131,7 +132,7 @@ export class Api {
     const [, what, ref, sub] = parts;
 
     if (method === "GET" && what === "health" && !ref) {
-      return send(res, 200, { ok: true, data: { schema: 1, ...(await s.counts()) } });
+      return send(res, 200, { ok: true, data: { schema: 2, ...(await s.counts()) } });
     }
     if (method === "POST" && what === "report" && !ref) {
       const body = await readBody(req);
@@ -142,6 +143,10 @@ export class Api {
     if (method === "POST" && what === "query" && !ref) {
       const body = await readBody(req);
       return send(res, 200, { ok: true, data: await s.query((body ?? {}) as Obj) });
+    }
+    if (method === "POST" && what === "relations" && !ref) {
+      const body = await readBody(req);
+      return send(res, 200, { ok: true, data: await s.relations((body ?? {}) as Obj) });
     }
     if (method === "GET" && what === "objects" && ref) {
       const at = q("at");

@@ -14,6 +14,7 @@ import { Param, Pg, Query, Row } from "./pg";
 type Obj = Record<string, unknown>;
 
 export const CONTROLLER_SOURCE = "cmdb-controller";
+const NOT_PLACEHOLDER = "NOT EXISTS (SELECT 1 FROM attribute ph WHERE ph.object = o.id AND ph.name = 'placeholder' AND upper_inf(ph.validity))";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // ── the report's shape ──────────────────────────────────────────────────
@@ -28,6 +29,7 @@ export interface ReportObject {
   name: string;
   attributes?: Obj;
   end?: boolean; // retired (a CI) or disposed (a resource): kept, out of key matching
+  recorded?: boolean; // what no machine can see, recorded by an operator (D7)
 }
 
 export interface ReportRelation {
@@ -36,6 +38,7 @@ export interface ReportRelation {
   to: Ref;
   attributes?: Obj;
   end?: boolean;
+  recorded?: boolean;
 }
 
 export interface Report {
@@ -160,8 +163,9 @@ function typeOk(f: FieldDef, v: unknown): string | null {
 /** What a report wrote, for the reporter. */
 export interface ReportResult {
   change: number | null;
-  objects: { ref?: string; id: string; class: string; name: string; reportedAs?: string; created: boolean; changed: string[]; drift: string[]; ended: boolean }[];
+  objects: { ref?: string; id: string; class: string; name: string; reportedAs?: string; created: boolean; adopted?: boolean; changed: string[]; drift: string[]; ended: boolean }[];
   relations: number[];
+  placeholders: Target[]; // objects made for a reference to something not reported yet
 }
 
 export class Store {
@@ -191,7 +195,7 @@ export class Store {
     if (!Array.isArray(objects) || !Array.isArray(relations)) throw new HttpError(400, "objects and relations are arrays");
 
     const { result, event } = await this.pg.tx(async (q) => {
-      const run = new ReportRun(this.mm, q, r.source, kind, new Date(t).toISOString());
+      const run = new ReportRun(this.mm, q, r.source, kind, new Date(t).toISOString(), r.source === "recorded");
       const c = await q(
         `INSERT INTO change (kind, source, job, verb, actor, time) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
         [kind, r.source, r.job ?? null, r.verb ?? null, r.actor ?? null, run.t],
@@ -206,7 +210,7 @@ export class Store {
       const touched = [...run.touched];
       if (!touched.length && !run.relationIds.size) {
         await q("DELETE FROM change WHERE id = $1", [run.change]);
-        return { result: { change: null, objects: run.results, relations: [] }, event: null };
+        return { result: { change: null, objects: run.results, relations: [], placeholders: [] }, event: null };
       }
       const ev = await q(
         `UPDATE change SET objects = ARRAY(SELECT (jsonb_array_elements_text($2::jsonb))::uuid),
@@ -216,7 +220,7 @@ export class Store {
         [run.change, touched, [...run.relationIds], run.drift],
       );
       return {
-        result: { change: run.change, objects: run.results, relations: [...run.relationIds] },
+        result: { change: run.change, objects: run.results, relations: [...run.relationIds], placeholders: run.placeholders },
         event: ev.rows[0] as unknown as ChangeEvent,
       };
     });
@@ -289,8 +293,9 @@ export class Store {
     const at = body.at === undefined || body.at === null ? null : String(body.at);
     if (at !== null && Number.isNaN(Date.parse(at))) throw new HttpError(400, `at ${at} is not a date`);
     const where = isObj(body.where) ? body.where : {};
-    const params: Param[] = [cls, typeof body.physical === "boolean" ? body.physical : null];
+    const params: Param[] = [cls, typeof body.physical === "boolean" ? body.physical : null, typeof body.recorded === "boolean" ? body.recorded : null];
     const conds = [
+      "($3::boolean IS NULL OR o.recorded = $3)",
       "($1::text IS NULL OR EXISTS (SELECT 1 FROM class_ancestor ca WHERE ca.class = o.class AND ca.ancestor = $1))",
       "($2::boolean IS NULL OR c.physical = $2)",
     ];
@@ -313,7 +318,7 @@ export class Store {
     const limit = Number.isInteger(body.limit) ? Number(body.limit) : 10000;
     const rows = (
       await this.pg.query(
-        `SELECT o.id, o.class, o.name, o.display_name, o.created, o.ended, o.last_seen, c.physical
+        `SELECT o.id, o.class, o.name, o.display_name, o.created, o.ended, o.last_seen, o.recorded, c.physical
            FROM object o JOIN class c ON c.name = o.class
           WHERE ${conds.join(" AND ")}
           ORDER BY o.class, o.name LIMIT ${limit}`,
@@ -327,6 +332,7 @@ export class Store {
       name: r.name,
       displayName: r.display_name,
       physical: r.physical,
+      recorded: r.recorded,
       created: r.created,
       ended: r.ended,
       lastSeen: r.last_seen,
@@ -386,7 +392,7 @@ export class Store {
     const valid = at === null ? "upper_inf(r.validity)" : "r.validity @> $2::timestamptz";
     const rels = (
       await this.pg.query(
-        `SELECT r.id, r.type, r.attributes, r.source, lower(r.validity) AS since,
+        `SELECT r.id, r.type, r.attributes, r.source, r.recorded, lower(r.validity) AS since,
                 CASE WHEN r.from_object = $1 THEN 'out' ELSE 'in' END AS direction,
                 p.id AS other_id, p.class AS other_class, p.name AS other_name
            FROM relation r JOIN object p ON p.id = CASE WHEN r.from_object = $1 THEN r.to_object ELSE r.from_object END
@@ -404,6 +410,7 @@ export class Store {
       name: o.name,
       displayName: o.display_name,
       physical: o.physical,
+      recorded: o.recorded,
       created: o.created,
       ended: o.ended,
       lastSeen: o.last_seen,
@@ -418,9 +425,73 @@ export class Store {
         other: { id: r.other_id, class: r.other_class, name: r.other_name },
         attributes: r.attributes,
         source: r.source,
+        recorded: r.recorded,
         since: r.since,
       })),
     };
+  }
+
+  /** Relations by type, by either end (an id, a name, or class and name), by
+   *  the ends' classes (subclasses too), recorded or not, as of a time: what
+   *  a topology is read from. */
+  async relations(body: Obj): Promise<Obj[]> {
+    const at = body.at === undefined || body.at === null ? null : String(body.at);
+    if (at !== null && Number.isNaN(Date.parse(at))) throw new HttpError(400, `at ${at} is not a date`);
+    const params: Param[] = [];
+    const conds: string[] = [];
+    if (at !== null) {
+      params.push(new Date(at).toISOString());
+      conds.push(`r.validity @> $${params.length}::timestamptz`);
+    } else conds.push("upper_inf(r.validity)");
+    if (body.type !== undefined && body.type !== null) {
+      const type = String(body.type);
+      if (!this.mm.relationEnds(type).length) throw new HttpError(404, `no relation type ${type}`);
+      params.push(type);
+      conds.push(`r.type = $${params.length}`);
+    }
+    for (const [key, col] of [["from", "r.from_object"], ["to", "r.to_object"]] as const) {
+      const ref = body[key];
+      if (ref === undefined || ref === null) continue;
+      const o = isObj(ref)
+        ? await this.find(String(ref.id ?? ref.name ?? ""), typeof ref.class === "string" ? ref.class : null)
+        : await this.find(String(ref), null);
+      params.push(String(o.id));
+      conds.push(`${col} = $${params.length}`);
+    }
+    for (const [key, alias] of [["fromClass", "f"], ["toClass", "t"]] as const) {
+      const cls = body[key];
+      if (cls === undefined || cls === null) continue;
+      if (!this.mm.has(String(cls))) throw new HttpError(404, `no class ${String(cls)}`);
+      params.push(String(cls));
+      conds.push(`EXISTS (SELECT 1 FROM class_ancestor ca WHERE ca.class = ${alias}.class AND ca.ancestor = $${params.length})`);
+    }
+    if (typeof body.recorded === "boolean") {
+      params.push(body.recorded);
+      conds.push(`r.recorded = $${params.length}`);
+    }
+    const limit = Number.isInteger(body.limit) ? Number(body.limit) : 100000;
+    const rows = (
+      await this.pg.query(
+        `SELECT r.id, r.type, r.attributes, r.source, r.recorded, lower(r.validity) AS since, upper(r.validity) AS until,
+                f.id AS from_id, f.class AS from_class, f.name AS from_name,
+                t.id AS to_id, t.class AS to_class, t.name AS to_name
+           FROM relation r JOIN object f ON f.id = r.from_object JOIN object t ON t.id = r.to_object
+          WHERE ${conds.join(" AND ")}
+          ORDER BY r.type, f.name, t.name LIMIT ${limit}`,
+        params,
+      )
+    ).rows;
+    return rows.map((r) => ({
+      id: r.id,
+      type: r.type,
+      from: { id: r.from_id, class: r.from_class, name: r.from_name },
+      to: { id: r.to_id, class: r.to_class, name: r.to_name },
+      attributes: r.attributes,
+      source: r.source,
+      recorded: r.recorded,
+      since: r.since,
+      until: r.until,
+    }));
   }
 
   /** Every period of every attribute and relation of an object, and the
@@ -630,6 +701,7 @@ class ReportRun {
   // point at them (a port's asset), for the keys that are a related object's
   // field (an asset's ports' MACs, D5).
   private related = new Map<string, { class: string; relation: string; attributes: Obj }[]>();
+  placeholders: Target[] = [];
 
   constructor(
     private readonly mm: Metamodel,
@@ -637,6 +709,7 @@ class ReportRun {
     private readonly source: string,
     private readonly kind: "observation" | "change",
     readonly t: string,
+    private readonly allRecorded: boolean,
   ) {}
 
   prescan(objects: ReportObject[]): void {
@@ -708,15 +781,62 @@ class ReportRun {
         [name, within === null ? null : JSON.stringify(within)],
       )
     ).rows;
+    if (!r.length && cls && this.mm.has(cls)) return this.placeholder(cls, name);
     if (r.length !== 1) {
       this.problem(
         at,
-        r.length ? `${name} matches ${r.length} objects` : `no live ${cls ?? "object"} named ${name}`,
+        r.length ? `${name} matches ${r.length} objects` : cls ? `no class ${cls}` : `no live object named ${name}`,
         r.length ? r.map((x) => ({ id: String(x.id), class: String(x.class), name: String(x.name) })) : undefined,
       );
       return null;
     }
     return { id: String(r[0].id), class: String(r[0].class), name: String(r[0].name) };
+  }
+
+  // A name-only object for a reference to something its owner has not reported
+  // yet: no stage, never "seen", so it does not expire. The owner's report
+  // merges into it (below). An abstract class is kept until then: the owner
+  // says what it is.
+  private async placeholder(cls: string, name: string): Promise<Target> {
+    const r = await this.q("INSERT INTO object (class, name, created) VALUES ($1, $2, $3) RETURNING id", [cls, name, this.t]);
+    const id = String(r.rows[0].id);
+    await this.q(
+      `INSERT INTO attribute (object, name, value, source, change, validity) VALUES ($1, 'placeholder', 'true'::jsonb, $2, $3, tstzrange($4, NULL))`,
+      [id, this.source, this.change, this.t],
+    );
+    const target = { id, class: cls, name };
+    this.placeholders.push(target);
+    this.touched.add(id);
+    return target;
+  }
+
+  // The live placeholders a report of this object is the owner of: its name,
+  // in its class or an abstract class above it; the exact class first.
+  private async placeholdersFor(cls: string, name: string): Promise<Target[]> {
+    const rows = (
+      await this.q(
+        `SELECT o.id, o.class, o.name FROM object o
+          WHERE o.name = $1 AND o.ended IS NULL AND o.class IN (SELECT jsonb_array_elements_text($2::jsonb))
+            AND NOT ${NOT_PLACEHOLDER}
+          ORDER BY o.class = $3 DESC, o.created`,
+        [name, JSON.stringify(this.mm.ancestors(cls)), cls],
+      )
+    ).rows;
+    return rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name) }));
+  }
+
+  // A placeholder beside the object it turned out to be: its relations move
+  // over, and it ends.
+  private async absorb(ph: Target, into: string): Promise<void> {
+    const rows = (await this.q("SELECT id, type, from_object, to_object, attributes, recorded FROM relation WHERE (from_object = $1 OR to_object = $1) AND upper_inf(validity)", [ph.id])).rows;
+    for (const r of rows) {
+      await this.closeRelation(Number(r.id));
+      const from = r.from_object === ph.id ? into : String(r.from_object);
+      const to = r.to_object === ph.id ? into : String(r.to_object);
+      if (from !== to) await this.putRelation(String(r.type), from, to, r.attributes as Obj, r.recorded === true);
+    }
+    await this.q("UPDATE object SET ended = $2 WHERE id = $1", [ph.id, this.t]);
+    this.touched.add(ph.id);
   }
 
   async object(i: number, o: ReportObject): Promise<void> {
@@ -777,12 +897,15 @@ class ReportRun {
     // 2. Which object is it (D5)?
     const match = await this.match(at, o.class, o.name, o.ref, values, targets);
     if (match === undefined) return;
+    const recorded = this.allRecorded || o.recorded === true;
+    const placeholders = await this.placeholdersFor(o.class, o.name);
+    const adopted = match === null ? placeholders.shift() : undefined;
     let id: string;
     let created = false;
     const current = new Map<string, Current>();
     const currentTargets = new Map<string, { id: number; to: string; from: string }>();
     if (match === null) {
-      if (o.end) return this.problem(at, "there is no such object to end");
+      if (o.end && !adopted) return this.problem(at, "there is no such object to end");
       for (const f of fields.values()) {
         if (!f.required || f.name === "name") continue;
         if (f.type === "relation" ? !targets.get(f.name) : values.get(f.name) === undefined || values.get(f.name) === null) {
@@ -790,22 +913,28 @@ class ReportRun {
         }
       }
       if (this.problems.length > before) return;
+    }
+    if (match === null && !adopted) {
       const r = await this.q(
-        `INSERT INTO object (class, name, display_name, created, last_seen, seen)
-         VALUES ($1, $2, $3, $4, $4, $5::jsonb) RETURNING id`,
-        [o.class, o.name, typeof values.get("displayName") === "string" ? String(values.get("displayName")) : null, this.t, { [this.source]: this.t }],
+        `INSERT INTO object (class, name, display_name, created, last_seen, seen, recorded)
+         VALUES ($1, $2, $3, $4, $4, $5::jsonb, $6) RETURNING id`,
+        [o.class, o.name, typeof values.get("displayName") === "string" ? String(values.get("displayName")) : null, this.t, { [this.source]: this.t }, recorded],
       );
       id = String(r.rows[0].id);
       created = true;
       this.touched.add(id);
     } else {
-      id = match.id;
-      if (match.class !== o.class) {
-        return this.problem(at, `conflict: the key matches ${match.class} ${match.name}, not a ${o.class}`, [match]);
+      const known = (match ?? adopted)!;
+      id = known.id;
+      if (adopted) {
+        await this.q("UPDATE object SET class = $2 WHERE id = $1", [id, o.class]);
+        this.touched.add(id);
+      } else if (match!.class !== o.class) {
+        return this.problem(at, `conflict: the key matches ${match!.class} ${match!.name}, not a ${o.class}`, [match!]);
       }
-      if (match.name !== o.name && this.mm.isA(o.class, "ci")) {
+      if (known.name !== o.name && this.mm.isA(o.class, "ci")) {
         // A CI's name is immutable: a renamed CI is a new one (D7).
-        return this.problem(at, `conflict: the key matches ${match.class} ${match.name}, named ${o.name} here`, [match]);
+        return this.problem(at, `conflict: the key matches ${known.class} ${known.name}, named ${o.name} here`, [known]);
       }
       // A resource or place found by a stronger key (an asset by its serial or
       // a port's MAC) keeps the name it has: a reporter that does not know the
@@ -818,6 +947,12 @@ class ReportRun {
         const cur = await this.currentTarget(id, String(f.spec.relation), f.spec.direction === "in" ? "in" : "out");
         if (cur) currentTargets.set(k, cur);
       }
+      const ph = current.get("placeholder");
+      if (ph) {
+        await this.q("UPDATE attribute SET validity = tstzrange(lower(validity), $2) WHERE id = $1", [ph.id, later(this.t, ph.from)]);
+        current.delete("placeholder");
+      }
+      for (const other of placeholders) await this.absorb(other, id);
     }
 
     // 3. What may not change, and what one field allows of another.
@@ -884,12 +1019,15 @@ class ReportRun {
       const dir = f.spec.direction === "in" ? "in" : "out";
       const cur = currentTargets.get(k);
       const curOther = cur ? (dir === "out" ? cur.to : cur.from) : null;
-      if (tg && curOther === tg.id) continue;
+      if (tg && curOther === tg.id) {
+        if (recorded) await this.q("UPDATE relation SET recorded = true WHERE id = $1 AND NOT recorded", [cur!.id]);
+        continue;
+      }
       if (!tg && !cur) continue;
       if (cur) await this.closeRelation(cur.id);
       if (tg) {
         const [from, to] = dir === "out" ? [id, tg.id] : [tg.id, id];
-        await this.putRelation(rel, from, to, {});
+        await this.putRelation(rel, from, to, {}, recorded);
       }
       changed.push(k);
       if (cur && this.kind === "observation") drifted[k] = { was: curOther, now: tg ? tg.id : null };
@@ -920,8 +1058,8 @@ class ReportRun {
 
     // 6. Seen; ended.
     await this.q(
-      `UPDATE object SET last_seen = GREATEST(last_seen, $2::timestamptz), seen = seen || $3::jsonb WHERE id = $1`,
-      [id, this.t, { [this.source]: this.t }],
+      `UPDATE object SET last_seen = GREATEST(last_seen, $2::timestamptz), seen = seen || $3::jsonb, recorded = recorded OR $4 WHERE id = $1`,
+      [id, this.t, { [this.source]: this.t }, recorded],
     );
     let ended = false;
     if (o.end) {
@@ -932,7 +1070,7 @@ class ReportRun {
     const name = match ? match.name : o.name;
     const target = { id, class: o.class, name };
     if (typeof o.ref === "string") this.refs.set(o.ref, target);
-    this.results.push({ ref: o.ref, id, class: o.class, name, ...(name !== o.name ? { reportedAs: o.name } : {}), created, changed, drift: driftNames, ended });
+    this.results.push({ ref: o.ref, id, class: o.class, name, ...(name !== o.name ? { reportedAs: o.name } : {}), created, ...(adopted ? { adopted: true } : {}), changed, drift: driftNames, ended });
   }
 
   // The object a report means, by its class's keys, strongest first (D5).
@@ -981,7 +1119,7 @@ class ReportRun {
                JOIN object p ON p.id = r.from_object AND p.ended IS NULL
                JOIN class_ancestor ca ON ca.class = p.class AND ca.ancestor = $3
                JOIN attribute a ON a.object = p.id AND a.name = $4 AND upper_inf(a.validity)
-              WHERE o.ended IS NULL AND o.class IN (SELECT jsonb_array_elements_text($1::jsonb))
+              WHERE o.ended IS NULL AND ${NOT_PLACEHOLDER} AND o.class IN (SELECT jsonb_array_elements_text($1::jsonb))
                 AND lower(a.value #>> '{}') IN (SELECT lower(x) FROM jsonb_array_elements_text($5::jsonb) AS x)`,
             [JSON.stringify(this.mm.keyViaClasses(cls, kv)), kv.relation, kv.class, kv.field, JSON.stringify(vals)],
           )
@@ -990,7 +1128,7 @@ class ReportRun {
         continue;
       }
       const params: Param[] = [JSON.stringify(this.mm.keyClasses(cls, key))];
-      const conds = ["o.ended IS NULL", "o.class IN (SELECT jsonb_array_elements_text($1::jsonb))"];
+      const conds = ["o.ended IS NULL", NOT_PLACEHOLDER, "o.class IN (SELECT jsonb_array_elements_text($1::jsonb))"];
       let usable = true;
       for (const c of key.components) {
         const f = fields.get(c)!;
@@ -1050,14 +1188,21 @@ class ReportRun {
 
   // Open (type, from, to) with these attributes, closing what the type's
   // cardinality says a new one replaces.
-  private async putRelation(type: string, from: string, to: string, attributes: Obj): Promise<number> {
+  private async putRelation(type: string, from: string, to: string, attributes: Obj, recorded = false): Promise<number> {
     const open = (
       await this.q(
-        "SELECT id, attributes, lower(validity) AS since FROM relation WHERE type = $1 AND from_object = $2 AND to_object = $3 AND upper_inf(validity)",
+        "SELECT id, attributes, recorded, lower(validity) AS since FROM relation WHERE type = $1 AND from_object = $2 AND to_object = $3 AND upper_inf(validity)",
         [type, from, to],
       )
     ).rows;
-    if (open.length && same(open[0].attributes, attributes)) return Number(open[0].id);
+    if (open.length && same(open[0].attributes, attributes)) {
+      if (recorded && open[0].recorded !== true) {
+        await this.q("UPDATE relation SET recorded = true WHERE id = $1", [Number(open[0].id)]);
+        this.relationIds.add(Number(open[0].id));
+      }
+      return Number(open[0].id);
+    }
+    const keep = recorded || open[0]?.recorded === true;
     let t = this.t;
     if (open.length) {
       t = later(this.t, String(open[0].since));
@@ -1073,9 +1218,9 @@ class ReportRun {
       }
     }
     const r = await this.q(
-      `INSERT INTO relation (type, from_object, to_object, attributes, source, change, validity)
-       VALUES ($1, $2, $3, $4::jsonb, $5, $6, tstzrange($7, NULL)) RETURNING id`,
-      [type, from, to, JSON.stringify(attributes), this.source, this.change, t],
+      `INSERT INTO relation (type, from_object, to_object, attributes, source, change, validity, recorded)
+       VALUES ($1, $2, $3, $4::jsonb, $5, $6, tstzrange($7, NULL), $8) RETURNING id`,
+      [type, from, to, JSON.stringify(attributes), this.source, this.change, t, keep],
     );
     const rid = Number(r.rows[0].id);
     this.relationIds.add(rid);
@@ -1121,6 +1266,6 @@ class ReportRun {
       }
       return;
     }
-    await this.putRelation(r.type, from.id, to.id, isObj(r.attributes) ? r.attributes : {});
+    await this.putRelation(r.type, from.id, to.id, isObj(r.attributes) ? r.attributes : {}, this.allRecorded || r.recorded === true);
   }
 }

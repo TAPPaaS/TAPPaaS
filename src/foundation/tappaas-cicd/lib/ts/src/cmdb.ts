@@ -50,6 +50,7 @@ export interface CmdbObject {
   name: string;
   attributes?: Obj;
   end?: boolean;
+  recorded?: boolean; // what no machine can see, recorded by an operator (D7)
 }
 
 export type CmdbRef = string | { ref?: string; id?: string; class?: string; name?: string };
@@ -60,6 +61,7 @@ export interface CmdbRelation {
   to: CmdbRef;
   attributes?: Obj;
   end?: boolean;
+  recorded?: boolean;
 }
 
 export interface CmdbReport {
@@ -187,6 +189,7 @@ export function cmdbReport(report: CmdbReport, o: CmdbOptions = {}): ReportOutco
 export interface CmdbQuery {
   class?: string;
   physical?: boolean;
+  recorded?: boolean;
   where?: Obj;
   at?: string;
   includeEnded?: boolean;
@@ -196,6 +199,22 @@ export interface CmdbQuery {
 /** Objects of a class and its subclasses, by attribute, as of a time. */
 export function cmdbQuery(query: CmdbQuery, o: CmdbOptions = {}): Obj[] {
   return cmdbRequest("POST", "/v1/query", query, o) as Obj[];
+}
+
+export interface CmdbRelationQuery {
+  type?: string;
+  from?: CmdbRef; // an id, a name, or class and name
+  to?: CmdbRef;
+  fromClass?: string; // the end's class, subclasses too
+  toClass?: string;
+  recorded?: boolean;
+  at?: string;
+  limit?: number;
+}
+
+/** Current relations (or as of a time) by type and either end. */
+export function cmdbRelations(query: CmdbRelationQuery, o: CmdbOptions = {}): Obj[] {
+  return cmdbRequest("POST", "/v1/relations", query, o) as Obj[];
 }
 
 /** One object by id or name (class-qualified where a name is not unique). */

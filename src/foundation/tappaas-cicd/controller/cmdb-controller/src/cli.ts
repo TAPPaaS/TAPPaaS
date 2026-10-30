@@ -3,15 +3,17 @@
 // prints the API's data as it came, otherwise a table for people.
 
 import { readFileSync } from "fs";
-import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbReport, cmdbRequest, objectPath, replaySpool } from "../../../lib/ts/src/cmdb";
+import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmdbReport, cmdbRequest, objectPath, replaySpool } from "../../../lib/ts/src/cmdb";
 
 type Obj = Record<string, unknown>;
 
 const HELP = `cmdb — the CMDB: the actual state of the site (ADR-040)
 
   cmdb show <object> [--class C] [--at TIME]          an object: attributes, relations, drift
-  cmdb query [<class>] [--physical] [--where k=v]... [--at TIME] [--all]
+  cmdb query [<class>] [--physical] [--recorded] [--where k=v]... [--at TIME] [--all]
                                                       objects of a class and its subclasses
+  cmdb relations [--type T] [--from O] [--to O] [--from-class C] [--to-class C] [--recorded] [--at TIME]
+                                                      relations by type and either end
   cmdb history <object> [--class C] [--at TIME]       every period of every attribute and relation;
                                                       with --at, the object as it was then
   cmdb impact <object> [--class C] [--hops N] [--direction in|out|both]
@@ -31,7 +33,7 @@ interface Args {
   opts: Map<string, string[]>;
 }
 
-const FLAGS = new Set(["json", "physical", "all", "help"]);
+const FLAGS = new Set(["json", "physical", "recorded", "all", "help"]);
 
 function parse(argv: string[]): Args {
   const pos: string[] = [];
@@ -82,7 +84,7 @@ function print(json: boolean, data: unknown, human: () => string): void {
 function showText(d: Obj): string {
   const attrs = (d.attributes ?? {}) as Record<string, { value: unknown; source: string; since: string }>;
   const lines = [
-    `${String(d.class)} ${String(d.name)}${d.displayName ? ` (${String(d.displayName)})` : ""}${d.ended ? `  — ended ${String(d.ended)}` : ""}`,
+    `${String(d.class)} ${String(d.name)}${d.displayName ? ` (${String(d.displayName)})` : ""}${d.recorded ? "  [recorded]" : ""}${d.ended ? `  — ended ${String(d.ended)}` : ""}`,
     `  id        ${String(d.id)}`,
     `  is a      ${(d.ancestors as string[]).join(" < ")}`,
     `  created   ${String(d.created)}${d.lastSeen ? `   last seen ${String(d.lastSeen)}` : ""}`,
@@ -100,7 +102,7 @@ function showText(d: Obj): string {
       table(
         rels.map((r) => {
           const o = r.other as Obj;
-          return [r.direction === "out" ? `→ ${String(r.type)}` : `← ${String(r.type)}`, `${String(o.class)}/${String(o.name)}`, String(r.source), String(r.since)];
+          return [r.direction === "out" ? `→ ${String(r.type)}` : `← ${String(r.type)}`, `${String(o.class)}/${String(o.name)}`, `${String(r.source)}${r.recorded ? " (recorded)" : ""}`, String(r.since)];
         }),
         ["RELATION", "OBJECT", "SOURCE", "SINCE"],
       ),
@@ -141,6 +143,7 @@ function run(argv: string[]): number {
       const rows = cmdbQuery({
         class: a.pos[1],
         physical: a.opts.has("physical") ? true : undefined,
+        recorded: a.opts.has("recorded") ? true : undefined,
         where,
         at: opt(a, "at"),
         includeEnded: a.opts.has("all"),
@@ -152,6 +155,31 @@ function run(argv: string[]): number {
               ["CLASS", "NAME", "DISPLAY", "STATE", "ID"],
             ) + `\n${rows.length} object(s)`
           : "no objects",
+      );
+      return 0;
+    }
+    case "relations": {
+      const end = (raw: string | undefined): string | { class: string; name: string } | undefined => {
+        const slash = raw?.indexOf("/") ?? -1;
+        return raw && slash > 0 ? { class: raw.slice(0, slash), name: raw.slice(slash + 1) } : raw;
+      };
+      const rows = cmdbRelations({
+        type: opt(a, "type"),
+        from: end(opt(a, "from")),
+        to: end(opt(a, "to")),
+        fromClass: opt(a, "from-class"),
+        toClass: opt(a, "to-class"),
+        recorded: a.opts.has("recorded") ? true : undefined,
+        at: opt(a, "at"),
+      });
+      const label = (e: unknown): string => `${String((e as Obj).class)}/${String((e as Obj).name)}`;
+      print(json, rows, () =>
+        rows.length
+          ? table(
+              rows.map((r) => [String(r.type), label(r.from), label(r.to), Object.keys((r.attributes ?? {}) as Obj).length ? cell(r.attributes) : "", `${String(r.source)}${r.recorded ? " (recorded)" : ""}`]),
+              ["TYPE", "FROM", "TO", "ATTRIBUTES", "SOURCE"],
+            ) + `\n${rows.length} relation(s)`
+          : "no relations",
       );
       return 0;
     }
