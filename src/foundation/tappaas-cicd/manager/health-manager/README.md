@@ -72,12 +72,12 @@ the module's `moduleSource`), **Desired** (`config/<module>.json`), and **Actual
 drift. This pass covers the scalar fields (identity, cores, memory, disk,
 storage, BIOS, CPU type, tags). NIC drift rows are a deferred follow-up (below).
 
-### `validate` — assert the live system is healthy (special)
+### `validate [--live]` — assert the live system is healthy (special)
 
 Unlike the config managers (where `validate` = "config is well-formed"),
-**health `validate` asserts the *live* system is healthy**. It aggregates the
-health gates against the running cluster and **exits non-zero if any gate
-fails**:
+**health `validate` asserts the *live* system is healthy**. These are its gates;
+`assess` runs them, and `validate` reads the result, exiting non-zero on a
+critical condition that counts (see [Assess](#assess)):
 
 | Gate | Source | FAIL when |
 |------|--------|-----------|
@@ -411,31 +411,85 @@ guest's pending state before and after, and hands the reboot to
 - The reboot is the operator's explicit act, so it needs no `automaticReboot` or
   `rebootOk` — that is what separates it from the update sweep.
 
-## Reports to the CMDB
+## Assess
 
-ADR-040 D11: health on the CI. After its gates run, `validate` writes each
-CI's health on it in the CMDB (cmdb-controller); `health-manager report`
-does the same on its own (`--from <file>` takes the gates from a saved
-`validate --json`; `--json` prints the payload instead of sending it). No
-check is added.
+`health-manager assess [--only <ci>] [--json] [--dry-run]` (ADR-041 D2) is the
+calculating half, and the only writer of `conditions` on the CMDB's objects. It
+gathers what the sources say and writes everything in one report:
 
-| Subject a gate names | CMDB class | `health` |
-|---|---|---|
-| module | the node it is (`vm`, `lxc`, `machine`, `device`) | the worst over every gate naming it: `pass` → ok, `warn` → warning, `fail` → critical, `skip` → unknown |
-| node | `machine` | |
-| pool (`<node>/<storage>`) | `storage-pool` (storage-manager names ZFS pools the same) | |
-| switch | `device` | |
-| peer | `backup-peer` | |
+| Source | Becomes |
+|---|---|
+| The gates | a condition on the object each row judged: `service-liveness`, `storage-disks`, `quorum`, `lan-uplink`, `switch-ports`, `mlag-pairs`, `pulse`, `ipv6-egress` → `operational`; `disk-threshold`, `memory-commitment`, `guest-memory`, `storage-pools` → `capacity`; `backup-status` → `backup`; `pending-reboot`, `site-timezone`, `backup-keys`, `cpu-impact` → `maintenance`; `signature-status`, `control-plane-trust` → `security` |
+| Grafana's open alerts, the receiver's record | a `warning` on the alert's CI id, else where `alerts` places it: `security` for RootKeyChanged and FirewallCertChanged, `operational` for the rest |
+| The last sweep's lists | `drift` on each object named: `critical` when missing, else `warning`. No sweep in 48 hours, or a source that failed: `critical` on the site |
+| Thresholds over the CMDB's observations, never the plane | a `storage-pool`'s and `datastore`'s used/size (warning 80%, critical 90%) → `capacity`; a pool's `zfsState` (DEGRADED warning, FAULTED and worse critical) → `operational`; a cabled port's `link` down → `operational` critical; a `vpn-peer`'s `lastHandshake` over 7 days → `operational` warning; a certificate on the firewall's `discover` data, the newest per common name, under 30 days warning, under 7 critical → `security` |
+| `cve-status.json` | `security` on the module or node: a `warning` on `act` or a failed scan, as its gate |
 
-Only CIs the CMDB already has get a health: the subjects are matched to its
-objects by name first (offline, `--json` takes a module's class from its
-config `kind`). A CMDB that does not answer records nothing — health is now,
-and a spooled one would land stale. The metamodel's `health` is a string: the
-gate and the time are the report's source and time, not the attribute.
-`TAPPAAS_CMDB=off` sends nothing.
+Then it derives impact, root causes and roll-ups (below). `open-alerts`,
+`cve-status` and `cmdb` still print in `validate`; their conditions come from
+the sources above, which read the same data per object.
 
-`report --discover` (ADR-040 D15) is accepted and adds nothing: health is what
-the gates found.
+A condition is written in ADR-041 D1's shape, one per type per object:
+
+```json
+{ "type": "operational", "status": "critical", "reason": "guest-stopped",
+  "message": "not running", "since": "2026-10-30T02:14:00.000Z",
+  "lastChecked": "2026-10-30T08:00:00.000Z", "source": "health-manager",
+  "derived": false, "rootCause": null, "acknowledged": null, "maintenance": null }
+```
+
+- **Worst wins** over the sources for one type. A finding about something the
+  CMDB does not have lands on the `site` object, so nothing a gate said is lost.
+- **`since`** is when status or reason last changed. Unchanged, only
+  `lastChecked` moves, and the message stays the one of the transition.
+- **A failure stands until the source that raised it has looked again.** A gate
+  that skipped, a guest it could not reach, or Grafana not answering takes
+  nothing back, and `lastChecked` shows how old the verdict is.
+- **What the operator set is kept:** `acknowledged` until its `until`, and a
+  plain one until the status changes, a sticky one until ok; `maintenance` until
+  its `until`.
+- `--only <ci>` (the alert receiver's call) runs no gate: the other sources
+  speak for that one object, and impact and root causes are worked out again.
+- An assessment is no sighting: it writes by id, creates nothing, and neither
+  holds off a CI's expiry nor brings an unseen one back. Its report is not
+  spooled: conditions are now, and the next run writes them.
+- `health-manager report` is `assess` under the name every `cmdbSource` answers
+  to (`--from <file>` takes the gates from a saved `validate --json`, `--json`
+  prints the payload). `TAPPAAS_CMDB=off` writes nothing.
+
+`validate` reads the result: the gates' table as the last assess left it, with
+one more line, `conditions`, for what no gate prints. A row whose condition is
+derived, acknowledged or in maintenance stops failing and says why; exit 1 means
+a `critical` condition that is none of those. `--live`, or a threshold given,
+assesses first. So does an assessment older than three intervals (30 minutes at
+least): a verdict is never read from a timer that stopped. With no CMDB the gates
+run as they always did.
+
+The interval is `health.assessInterval` in `site.json` (minutes, default 5).
+
+### Root causes
+
+`metamodel/health-rules.json` says how a failure travels: each rule names a
+relation type, optionally the class of either end, the source condition and the
+impact it produces. Shipped: `operational critical` crosses `runs-on`,
+`depends-on`, `member-of` and `connects` as `critical` impact, and a warning
+crosses nothing. `health-manager rules list` shows them; `rules check [--file F]`
+validates them or a candidate, and exits 1 on what it cannot place.
+
+The relation types say which end is hurt (`dependant`) and whether it needs the
+other (`required`). A relation row may override `required`, and may name a
+`redundancyGroup`: relations of one dependant in one group are satisfied while any
+provider is healthy.
+
+The site object carries the result as `rootCauses[]`, most impact first:
+
+```json
+[{ "id": "<the object's id>", "type": "operational", "impactedCount": 7 }]
+```
+
+Roll-ups: a `collection` and a `place` carry the worst of their members per type,
+derived and counted (`3 of 12 critical`), leaving out what is acknowledged or in
+maintenance. A collection's own worse condition stands. A roll-up is never a root.
 
 ## Common options
 

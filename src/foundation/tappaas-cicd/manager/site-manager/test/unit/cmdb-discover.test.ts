@@ -144,7 +144,7 @@ function report(extra: string[], cfg: string): Obj {
   const pools = objs.filter((o) => o.class === "storage-pool");
   const pool = pools.find((p) => p.name === "rpool" && p.attributes.onNode.ref === m1?.ref);
   check(pool?.attributes?.onNode?.ref === m1?.ref && pool?.attributes?.vdevs?.[0]?.members?.length === 2, "a pool, on its node, with its layout");
-  check(pool?.attributes?.health?.status === "ok" && pool?.attributes?.health?.check === "zfs ONLINE", "its ZFS state as a CI's health");
+  check(pool?.attributes?.zfsState === "ONLINE", "ZFS's word for it");
   check(pools.filter((p) => p.name === "tanka1").length === 2, "per node");
   check(one("cluster", "hrossen")?.attributes?.corosyncLinks?.[0]?.connected === true, "corosync links on the cluster");
   const vm = one("vm", "identity");

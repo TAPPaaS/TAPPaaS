@@ -1,5 +1,5 @@
 {
-  "description": "The root of the class tree and its ci branch (ADR-040 D3): what IT4IT's Actual Product Instance is made of. A field is declared as a service's field is (ADR-020 fields.json: type, required, immutable, description), plus key — the rank of the identity key it is part of (D5; fields with one rank form one key, the lowest rank is tried first) — and identifying with otel — which OpenTelemetry resource attributes name the CI (D14). volatile: the value changes by itself (a pool's used, a lease): it has history like any other, and never counts as drift. desiredRecord on a class: a config/ record can declare it, so one without is unmanaged in a sweep (D15). A class's expiry (on ci, inherited; a number and s, m, h or d) is how long a CI may go unreported before it is marked unseen (D5); it is never deleted. A field a subclass declares again with only some properties refines the inherited one (a key on name). type relation: the value is another object, kept as a row in relation, not in attribute.",
+  "description": "The root of the class tree and its ci branch (ADR-040 D3): what IT4IT's Actual Product Instance is made of. A field is declared as a service's field is (ADR-020 fields.json: type, required, immutable, description), plus key — the rank of the identity key it is part of (D5; fields with one rank form one key, the lowest rank is tried first) — and identifying with otel — which OpenTelemetry resource attributes name the CI (D14). volatile: the value changes by itself (a pool's used, a lease): it has history like any other, and never counts as drift. A member of an object or of an array's items marked volatile (a condition's lastChecked) is not history at all: a value that differs only there is rewritten in place. desiredRecord on a class: a config/ record can declare it, so one without is unmanaged in a sweep (D15). A class's expiry (on ci, inherited; a number and s, m, h or d) is how long a CI may go unreported before it is marked unseen (D5); it is never deleted. A field a subclass declares again with only some properties refines the inherited one (a key on name). type relation: the value is another object, kept as a row in relation, not in attribute.",
   "classes": {
     "object": {
       "parent": null,
@@ -10,7 +10,30 @@
         "displayName": { "type": "string", "description": "A label for people; the role's name on a migrated asset (O5)." },
         "description": { "type": "string", "description": "Free text." },
         "placeholder": { "type": "boolean", "derived": true, "description": "Set on an object made because a report named it by class and name before its owner reported it: a name and nothing else. Its owner's report merges into it and clears this." },
-        "drift": { "type": "object", "derived": true, "description": "Set when an observation differs from the last with no change behind it (D6): since, source, the attributes with what they were and are. A change that touches the object clears it." }
+        "drift": { "type": "object", "derived": true, "description": "Set when an observation differs from the last with no change behind it (D6): since, source, the attributes with what they were and are. A change that touches the object clears it." },
+        "conditions": {
+          "type": "array",
+          "volatile": true,
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "required": true, "enum": ["operational", "drift", "capacity", "security", "maintenance", "backup", "impact"] },
+              "status": { "type": "string", "required": true, "enum": ["ok", "warning", "critical", "unknown"] },
+              "reason": { "type": "string", "description": "Why, as a word: guest-stopped." },
+              "message": { "type": "string" },
+              "since": { "type": "string", "description": "When the status or reason last changed." },
+              "lastChecked": { "type": "string", "volatile": true, "description": "When it was last confirmed: rewritten in place, never history." },
+              "source": { "type": "string" },
+              "derived": { "type": "boolean", "description": "It follows from another object's failure (rootCause), or is a roll-up: not a failure of its own." },
+              "rootCause": { "type": ["string", "null"], "description": "The id of the object it follows from." },
+              "acknowledged": { "type": ["object", "null"], "properties": { "by": { "type": "string" }, "note": { "type": "string" }, "until": { "type": "string" }, "sticky": { "type": "boolean" } }, "description": "An operator's acknowledgement: it keeps its status and stops counting." },
+              "maintenance": { "type": ["object", "null"], "properties": { "until": { "type": "string" }, "note": { "type": "string" } }, "description": "A maintenance window: transitions are recorded, not counted." },
+              "flapping": { "description": "health-manager emit's (ADR-041 D4): assess carries it over." },
+              "flappingHeld": { "description": "health-manager emit's (ADR-041 D4): assess carries it over." }
+            }
+          },
+          "description": "Its health, one per kind (ADR-041 D1), as Kubernetes gives a resource's status.conditions. health-manager assess is the only writer. Volatile: never drift. Every change but lastChecked opens a new period, so its history is the object's health history."
+        }
       }
     },
     "ci": {
@@ -21,17 +44,7 @@
       "fields": {
         "stage": { "type": "string", "volatile": true, "enum": ["created", "operational", "drifted", "unseen", "retired"], "description": "The CI's lifecycle stage (D7)." },
         "desired": { "type": "object", "properties": { "file": { "type": "string" }, "key": { "type": "string" } }, "description": "The desired record: config/<file>.json, and the key in it where the file holds several." },
-        "release": { "type": "object", "properties": { "module": { "type": "string" }, "version": { "type": "string" } }, "description": "The module and version this CI is an instance of (D1)." },
-        "health": {
-          "type": "object",
-          "volatile": true,
-          "properties": {
-            "status": { "type": "string", "required": true, "enum": ["ok", "warning", "critical", "unknown"] },
-            "check": { "type": "string", "description": "The gate or read that set it." },
-            "time": { "type": "string" }
-          },
-          "description": "The last health status, and what set it when (D11). query --where health.status=critical."
-        }
+        "release": { "type": "object", "properties": { "module": { "type": "string" }, "version": { "type": "string" } }, "description": "The module and version this CI is an instance of (D1)." }
       }
     },
     "node": {
@@ -229,6 +242,7 @@
         "type": { "type": "string", "description": "zfs, …" },
         "size": { "type": "integer" },
         "used": { "type": "integer", "volatile": true },
+        "zfsState": { "type": "string", "volatile": true, "description": "ZFS's word for it: ONLINE, DEGRADED, FAULTED, … health-manager assess makes it a condition." },
         "onNode": { "type": "relation", "relation": "runs-on", "required": true, "key": 1 },
         "vdevs": { "type": "array", "description": "Its layout (D15): vdevs with state, members by serial." }
       }
@@ -305,7 +319,19 @@
       "fields": {
         "code": { "type": "string" },
         "primaryLocation": { "type": "relation", "relation": "at" },
-        "version": { "type": "string", "description": "The TAPPaaS release." }
+        "version": { "type": "string", "description": "The TAPPaaS release." },
+        "rootCauses": {
+          "type": "array",
+          "volatile": true,
+          "items": { "type": "object", "properties": { "id": { "type": "string", "required": true }, "type": { "type": "string", "required": true }, "impactedCount": { "type": "integer", "required": true } } },
+          "description": "The current root causes, most impact first (ADR-041 D3): the object, the condition type, how many objects it explains. Written by health-manager assess."
+        },
+        "assessment": {
+          "type": "object",
+          "volatile": true,
+          "properties": { "time": { "type": "string", "volatile": true }, "gates": { "type": "array", "volatile": true } },
+          "description": "The last health-manager assess: when, and each gate's line as validate prints it. Rewritten in place, never history."
+        }
       }
     },
     "cluster": {

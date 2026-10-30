@@ -1,0 +1,9 @@
+{
+  "description": "The correlation rules of ADR-041 D3: how a failure travels along the relations. A rule names a relation type, optionally the class of its from and to ends (subclasses too), the source condition that triggers it (type and status) and the status of the impact it produces on the relation's dependant (relations.json). The controller refuses a rule it cannot place; health-manager rules list|check shows and validates them. Shipped: an operational critical crosses runs-on, depends-on, member-of and connects as critical impact; a warning crosses nothing.",
+  "rules": [
+    { "relation": "runs-on", "source": { "type": "operational", "status": "critical" }, "impact": "critical" },
+    { "relation": "depends-on", "source": { "type": "operational", "status": "critical" }, "impact": "critical" },
+    { "relation": "member-of", "source": { "type": "operational", "status": "critical" }, "impact": "critical" },
+    { "relation": "connects", "source": { "type": "operational", "status": "critical" }, "impact": "critical" }
+  ]
+}

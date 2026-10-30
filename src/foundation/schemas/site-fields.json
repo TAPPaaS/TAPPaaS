@@ -335,6 +335,22 @@
       },
       "changeClass": "in-place"
     },
+    "health": {
+      "description": "How the site's health is kept (ADR-041).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "assessInterval": {
+          "description": "Minutes between runs of health-manager assess (health-assess.timer). A one-box site may set 15.",
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1440,
+          "default": 5,
+          "changeClass": "in-place"
+        }
+      },
+      "changeClass": "in-place"
+    },
     "ipv6": {
       "description": "Whether this site runs IPv6 next to IPv4, applied by the network module's update. True: the firewall allows IPv6, takes a prefix from the WAN (network.wan.ipv6) and gives every zone with an ipv6Subnet its /64. False: no zone has IPv6, and the firewall drops all IPv6 and Unbound resolves over IPv4 only. See network-manager/IPV6.md.",
       "type": "boolean",

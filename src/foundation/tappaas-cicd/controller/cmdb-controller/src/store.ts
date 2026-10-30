@@ -25,6 +25,7 @@ export type Ref = string | { ref?: string; id?: string; class?: string; name?: s
 
 export interface ReportObject {
   ref?: string;
+  id?: string; // this object, by id, instead of its keys
   class: string;
   name: string;
   attributes?: Obj;
@@ -48,6 +49,11 @@ export interface Report {
   job?: string;
   verb?: string;
   actor?: string;
+  // What a source concluded about objects, not a sighting of them (ADR-041 D2):
+  // they are named by id, nothing is created, and it does not count as seen, so
+  // an assessment every few minutes neither holds off a CI's expiry nor revives
+  // an unseen one.
+  assessment?: boolean;
   objects?: ReportObject[];
   relations?: ReportRelation[];
 }
@@ -120,13 +126,39 @@ function canonical(v: unknown): string {
   return JSON.stringify(v);
 }
 
+// A value without its members marked volatile (a condition's lastChecked):
+// what history compares. A value that differs only there is rewritten in place.
+export function stable(f: FieldDef, v: unknown): unknown {
+  const props = isObj(f.spec.items) ? f.spec.items.properties : f.spec.properties;
+  if (!isObj(props)) return v;
+  const gone = Object.keys(props).filter((k) => isObj(props[k]) && (props[k] as Obj).volatile === true);
+  if (!gone.length) return v;
+  const strip = (x: unknown): unknown => (isObj(x) ? Object.fromEntries(Object.entries(x).filter(([k]) => !gone.includes(k))) : x);
+  return Array.isArray(v) ? v.map(strip) : strip(v);
+}
+
 function later(a: string, b: string): string {
   return Date.parse(a) >= Date.parse(b) ? a : b;
 }
 
-function typeOk(f: FieldDef, v: unknown): string | null {
-  const enumOf = (spec: Obj): unknown[] | null =>
-    Array.isArray(spec.enum) ? spec.enum : isObj(spec.values) ? Object.keys(spec.values) : null;
+const enumOf = (spec: Obj): unknown[] | null =>
+  Array.isArray(spec.enum) ? spec.enum : isObj(spec.values) ? Object.keys(spec.values) : null;
+
+// Enums and required members only: the rest of a shape is the reporter's.
+function membersOk(spec: Obj, v: Obj): string | null {
+  for (const [k, p] of Object.entries(isObj(spec.properties) ? spec.properties : {})) {
+    if (!isObj(p)) continue;
+    if (v[k] === undefined) {
+      if (p.required === true) return `with ${k}`;
+      continue;
+    }
+    const e = enumOf(p);
+    if (e && !e.includes(v[k])) return `whose ${k} is one of ${e.join(", ")}`;
+  }
+  return null;
+}
+
+export function typeOk(f: FieldDef, v: unknown): string | null {
   switch (f.type) {
     case "string": {
       if (typeof v !== "string") return "a string";
@@ -149,23 +181,16 @@ function typeOk(f: FieldDef, v: unknown): string | null {
           if (items.type === "integer" && !Number.isInteger(x)) return "an array of integers";
           if (items.type === "object" && !isObj(x)) return "an array of objects";
           if (e && !e.includes(x)) return `an array of ${e.join(", ")}`;
+          const m = isObj(x) ? membersOk(items, x) : null;
+          if (m) return `an array of objects ${m}`;
         }
       }
       return null;
     }
     case "object": {
       if (!isObj(v)) return "an object";
-      // Enums and required members only: the rest of a shape is the reporter's.
-      for (const [k, p] of Object.entries(isObj(f.spec.properties) ? f.spec.properties : {})) {
-        if (!isObj(p)) continue;
-        if (v[k] === undefined) {
-          if (p.required === true) return `an object with ${k}`;
-          continue;
-        }
-        const e = enumOf(p);
-        if (e && !e.includes(v[k])) return `an object whose ${k} is one of ${e.join(", ")}`;
-      }
-      return null;
+      const m = membersOk(f.spec, v);
+      return m ? `an object ${m}` : null;
     }
     default:
       return null;
@@ -211,7 +236,7 @@ export class Store {
     if (!Array.isArray(objects) || !Array.isArray(relations)) throw new HttpError(400, "objects and relations are arrays");
 
     const { result, event } = await this.pg.tx(async (q) => {
-      const run = new ReportRun(this.mm, q, r.source, kind, new Date(t).toISOString(), r.source === "recorded");
+      const run = new ReportRun(this.mm, q, r.source, kind, new Date(t).toISOString(), r.source === "recorded", r.assessment === true);
       const c = await q(
         `INSERT INTO change (kind, source, job, verb, actor, time) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
         [kind, r.source, r.job ?? null, r.verb ?? null, r.actor ?? null, run.t],
@@ -298,6 +323,18 @@ export class Store {
     return event.objects.length;
   }
 
+  /** The correlation rules, and what a reader of them needs of the metamodel
+   *  (ADR-041 D3): each relation type's dependant end and whether it is required,
+   *  each class's ancestors. */
+  rules(): Obj {
+    const relations = new Map(this.mm.relations.map((r) => [r.name, { name: r.name, dependant: r.dependant, required: r.required }]));
+    return {
+      rules: this.mm.rules,
+      relations: [...relations.values()],
+      ancestors: Object.fromEntries([...this.mm.classes.keys()].map((c) => [c, this.mm.ancestors(c)])),
+    };
+  }
+
   // ── query ─────────────────────────────────────────────────────────────
 
   /** Objects by class (its subclasses too, through class_ancestor), by
@@ -328,11 +365,12 @@ export class Store {
         conds.push(`o.name = $${params.length}`);
         continue;
       }
-      // health.status=critical: a path into the value; containment, so the GIN
-      // index carries it.
+      // conditions.status=critical: a path into the value, or into any member of
+      // an array value; containment, so the GIN index carries it.
       const [attr, ...path] = k.split(".");
-      params.push(attr, JSON.stringify(path.reduceRight<unknown>((inner, key) => ({ [key]: inner }), v)));
-      conds.push(`EXISTS (SELECT 1 FROM attribute a WHERE a.object = o.id AND a.name = $${params.length - 1} AND a.value @> $${params.length}::jsonb AND ${valid})`);
+      const value = path.reduceRight<unknown>((inner, key) => ({ [key]: inner }), v);
+      params.push(attr, JSON.stringify(value), JSON.stringify([value]));
+      conds.push(`EXISTS (SELECT 1 FROM attribute a WHERE a.object = o.id AND a.name = $${params.length - 2} AND (a.value @> $${params.length - 1}::jsonb OR a.value @> $${params.length}::jsonb) AND ${valid})`);
     }
     const limit = Number.isInteger(body.limit) ? Number(body.limit) : 10000;
     const rows = (
@@ -729,6 +767,7 @@ class ReportRun {
     private readonly kind: "observation" | "change",
     readonly t: string,
     private readonly allRecorded: boolean,
+    private readonly assessment: boolean,
   ) {}
 
   prescan(objects: ReportObject[]): void {
@@ -914,10 +953,11 @@ class ReportRun {
     if (this.problems.length > before) return;
 
     // 2. Which object is it (D5)?
-    const match = await this.match(at, o.class, o.name, o.ref, values, targets);
+    if (this.assessment && typeof o.id !== "string") return this.problem(at, "an assessment names its objects by id");
+    const match = typeof o.id === "string" ? await this.byId(at, o.id) : await this.match(at, o.class, o.name, o.ref, values, targets);
     if (match === undefined) return;
     const recorded = this.allRecorded || o.recorded === true;
-    const placeholders = await this.placeholdersFor(o.class, o.name);
+    const placeholders = typeof o.id === "string" ? [] : await this.placeholdersFor(o.class, o.name);
     const adopted = match === null ? placeholders.shift() : undefined;
     let id: string;
     let created = false;
@@ -1005,7 +1045,7 @@ class ReportRun {
     // A CI that was unseen and is reported again is operational (D7); the
     // controller says so, unless the report sets the stage itself.
     const stage = current.get("stage");
-    if (!o.end && stage && stage.value === "unseen" && !values.has("stage") && this.kind === "observation") {
+    if (!o.end && stage && stage.value === "unseen" && !values.has("stage") && this.kind === "observation" && !this.assessment) {
       const t = later(this.t, stage.from);
       await this.q("UPDATE attribute SET validity = tstzrange(lower(validity), $2) WHERE id = $1", [stage.id, t]);
       await this.q(
@@ -1020,6 +1060,10 @@ class ReportRun {
       const cur = current.get(k);
       if (cur && same(cur.value, v)) continue;
       if (!cur && v === null) continue;
+      if (cur && v !== null && same(stable(fields.get(k)!, cur.value), stable(fields.get(k)!, v))) {
+        await this.q("UPDATE attribute SET value = $2::jsonb WHERE id = $1", [cur.id, JSON.stringify(v)]);
+        continue;
+      }
       const t = cur ? later(this.t, cur.from) : this.t;
       if (cur) await this.q("UPDATE attribute SET validity = tstzrange(lower(validity), $2) WHERE id = $1", [cur.id, t]);
       if (v !== null) {
@@ -1076,10 +1120,12 @@ class ReportRun {
     }
 
     // 6. Seen; ended.
-    await this.q(
-      `UPDATE object SET last_seen = GREATEST(last_seen, $2::timestamptz), seen = seen || $3::jsonb, recorded = recorded OR $4 WHERE id = $1`,
-      [id, this.t, { [this.source]: this.t }, recorded],
-    );
+    if (!this.assessment) {
+      await this.q(
+        `UPDATE object SET last_seen = GREATEST(last_seen, $2::timestamptz), seen = seen || $3::jsonb, recorded = recorded OR $4 WHERE id = $1`,
+        [id, this.t, { [this.source]: this.t }, recorded],
+      );
+    }
     let ended = false;
     if (o.end) {
       await this.end(id, o.class, current);
@@ -1090,6 +1136,15 @@ class ReportRun {
     const target = { id, class: o.class, name };
     if (typeof o.ref === "string") this.refs.set(o.ref, target);
     this.results.push({ ref: o.ref, id, class: o.class, name, ...(name !== o.name ? { reportedAs: o.name } : {}), created, ...(adopted ? { adopted: true } : {}), changed, drift: driftNames, ended });
+  }
+
+  private async byId(at: string, id: string): Promise<Target | undefined> {
+    const r = (await this.q("SELECT id, class, name FROM object WHERE id = $1 AND ended IS NULL", [id])).rows;
+    if (!r.length) {
+      this.problem(at, `no live object ${id}`);
+      return undefined;
+    }
+    return { id: String(r[0].id), class: String(r[0].class), name: String(r[0].name) };
   }
 
   // The object a report means, by its class's keys, strongest first (D5).
@@ -1277,6 +1332,9 @@ class ReportRun {
     const to = await this.target(`${at}.to`, r.to, null);
     if (!from || !to) return;
     if (!this.mm.allows(r.type, from.class, to.class)) return this.problem(at, `${r.type} does not join ${from.class} to ${to.class}`);
+    const ra = isObj(r.attributes) ? r.attributes : {};
+    if (ra.required !== undefined && typeof ra.required !== "boolean") return this.problem(at, "required is true or false");
+    if (ra.redundancyGroup !== undefined && typeof ra.redundancyGroup !== "string") return this.problem(at, "redundancyGroup is a string");
     if (r.end) {
       const open = (
         await this.q("SELECT id FROM relation WHERE type = $1 AND from_object = $2 AND to_object = $3 AND upper_inf(validity)", [r.type, from.id, to.id])

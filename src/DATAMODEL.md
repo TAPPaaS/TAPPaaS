@@ -228,7 +228,8 @@ the shape of the `fields.json` files above, with each class's identity keys
 is allocated to the CI it serves for the time being. Every value and relation
 has a validity period, so the actual state on any past date is a query.
 `positions.json`'s rooms, racks, placements, recorded devices and cables move
-into it with asset-manager (step 3 of the ADR's plan).
+into it with asset-manager (step 3 of the ADR's plan). Every object also carries
+its health as `conditions[]`, written by `health-manager assess` (ADR-041).
 
 ## What was simplified, and what is parked
 

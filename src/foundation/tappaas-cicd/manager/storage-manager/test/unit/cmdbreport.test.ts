@@ -40,8 +40,7 @@ check(r.source === "storage-manager" && r.kind === "observation", "an observatio
 const pools = objs.filter((o) => o.class === "storage-pool").map((o) => `${(o.attributes!.onNode as { name: string }).name}/${o.name}`).sort();
 check(pools.join() === "tappaas1/tanka1,tappaas1/tankb1,tappaas2/tanka1,tappaas3/tanka1,tappaas3/tankc1", "one storage-pool per node and pool: its name, on its machine");
 const c1 = objs.find((o) => o.ref === "storage-pool:tappaas3/tankc1")?.attributes ?? {};
-const h1 = c1.health as { status?: string; check?: string };
-check(c1.type === "zfs" && h1.status === "warning" && h1.check === "zfs DEGRADED", "a pool: zfs, its ZFS health as a CI's health");
+check(c1.type === "zfs" && c1.zfsState === "DEGRADED", "a pool: zfs, and ZFS's word for it");
 check(typeof c1.size === "number" && typeof c1.used === "number" && (c1.used as number) <= (c1.size as number), "…its size and used, in bytes");
 check(JSON.stringify(c1.onNode) === JSON.stringify({ class: "machine", name: "tappaas3" }), "a pool is on its machine (by name)");
 const media = obj("share", "media")?.attributes ?? {};

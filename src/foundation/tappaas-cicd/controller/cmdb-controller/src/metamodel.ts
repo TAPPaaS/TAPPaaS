@@ -11,10 +11,12 @@
 import { existsSync, readFileSync, readdirSync } from "fs";
 import { join } from "path";
 import { Query } from "./pg";
+import { HealthRule, checkHealthRules } from "../../../lib/ts/src/health-rules";
 
 export const FIELD_TYPES = ["string", "integer", "number", "boolean", "array", "object", "relation"] as const;
 export type FieldType = (typeof FIELD_TYPES)[number];
 export type Cardinality = "1:1" | "n:1" | "1:n" | "n:m";
+export type Dependant = "from" | "to" | "both";
 
 export interface FieldDef {
   class: string; // the class that declares (or refines) it
@@ -60,6 +62,8 @@ export interface RelationEnd {
   to: string;
   cardinality: Cardinality;
   description: string;
+  dependant: Dependant | null; // the end hurt when the other fails (ADR-041 D3); null: carries no health
+  required: boolean; // a dependant needs the provider; a relation row may say otherwise
 }
 
 export interface Key {
@@ -87,6 +91,7 @@ function isObj(v: unknown): v is Obj {
 export class Metamodel {
   readonly classes = new Map<string, ClassDef>();
   readonly relations: RelationEnd[] = [];
+  readonly rules: HealthRule[] = []; // the correlation rules (ADR-041 D3), checked at load
   private fieldCache = new Map<string, Map<string, FieldDef>>();
 
   // ── reading the files ────────────────────────────────────────────────
@@ -95,6 +100,7 @@ export class Metamodel {
     if (!existsSync(dir)) throw new Error(`no metamodel directory at ${dir}`);
     const mm = new Metamodel();
     const files = readdirSync(dir).filter((f) => f.endsWith(".json")).sort();
+    const ruleDocs: [string, Obj][] = [];
     for (const f of files) {
       let doc: unknown;
       try {
@@ -105,8 +111,21 @@ export class Metamodel {
       if (!isObj(doc)) throw new Error(`metamodel/${f}: expected a JSON object`);
       if (isObj(doc.classes)) mm.addClasses(f, doc.classes);
       if (isObj(doc.relations)) mm.addRelations(f, doc.relations);
+      if (Array.isArray(doc.rules)) {
+        ruleDocs.push([f, doc]);
+        mm.rules.push(...(doc.rules as HealthRule[]));
+      }
     }
     mm.check();
+    const model = {
+      relations: [...new Set(mm.relations.map((r) => r.name))],
+      dependants: [...new Set(mm.relations.filter((r) => r.dependant).map((r) => r.name))],
+      classes: [...mm.classes.keys()],
+    };
+    for (const [f, doc] of ruleDocs) {
+      const wrong = checkHealthRules(doc, model);
+      if (wrong.length) throw new Error(`metamodel/${f}: ${wrong.join("; ")}`);
+    }
     return mm;
   }
 
@@ -156,6 +175,8 @@ export class Metamodel {
       if (!isObj(raw) || !Array.isArray(raw.ends)) throw new Error(`metamodel/${file}: relation ${name} needs ends`);
       const card = String(raw.cardinality ?? "n:m") as Cardinality;
       if (!["1:1", "n:1", "1:n", "n:m"].includes(card)) throw new Error(`metamodel/${file}: relation ${name}: cardinality ${card}`);
+      const dependant = raw.dependant === undefined ? null : (String(raw.dependant) as Dependant);
+      if (dependant !== null && !["from", "to", "both"].includes(dependant)) throw new Error(`metamodel/${file}: relation ${name}: dependant ${dependant}`);
       for (const end of raw.ends) {
         if (!Array.isArray(end) || end.length !== 2) throw new Error(`metamodel/${file}: relation ${name}: an end is [from, to]`);
         this.relations.push({
@@ -165,6 +186,8 @@ export class Metamodel {
           to: String(end[1]),
           cardinality: card,
           description: typeof raw.description === "string" ? raw.description : "",
+          dependant,
+          required: raw.required === true,
         });
       }
     }
@@ -406,9 +429,9 @@ export class Metamodel {
       [defs],
     );
     await q(
-      `INSERT INTO relation_type (name, parent, from_class, to_class, cardinality, description)
-       SELECT x.name, x.parent, x."from", x."to", x.cardinality, x.description
-         FROM jsonb_to_recordset($1::jsonb) AS x(name text, parent text, "from" text, "to" text, cardinality text, description text)`,
+      `INSERT INTO relation_type (name, parent, from_class, to_class, cardinality, description, dependant, required)
+       SELECT x.name, x.parent, x."from", x."to", x.cardinality, x.description, x.dependant, x.required
+         FROM jsonb_to_recordset($1::jsonb) AS x(name text, parent text, "from" text, "to" text, cardinality text, description text, dependant text, required boolean)`,
       [this.relations],
     );
   }

@@ -6,7 +6,6 @@
 // (replication needs the same name on each), so its node goes in every report.
 
 import { CmdbBatch } from "../../../lib/ts/src/cmdb-reporter";
-import { poolHealth } from "../../../lib/ts/src/cmdb-source";
 import { Share, SharesDoc, sharesOf } from "../../../lib/ts/src/nfs-shares";
 import { Inventory } from "./inventory";
 
@@ -24,7 +23,7 @@ export function putShare(b: CmdbBatch, name: string, s: Share): string {
   });
 }
 
-export function buildStorageReport(shares: SharesDoc | null, inv: Inventory | null, time: string = new Date().toISOString()): CmdbBatch {
+export function buildStorageReport(shares: SharesDoc | null, inv: Inventory | null): CmdbBatch {
   const b = new CmdbBatch(SOURCE);
   for (const n of inv?.nodes ?? []) {
     if (!n.reachable) continue;
@@ -35,7 +34,7 @@ export function buildStorageReport(shares: SharesDoc | null, inv: Inventory | nu
         type: "zfs",
         size: p.usable?.total ?? p.size,
         used: p.usable?.used ?? p.allocated,
-        health: poolHealth(p.health, time),
+        zfsState: p.health,
       }, `storage-pool:${n.name}/${p.name}`);
     }
   }
