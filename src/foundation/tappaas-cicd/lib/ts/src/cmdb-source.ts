@@ -185,7 +185,7 @@ export function moduleCiAttributes(name: string, raw: Obj): Obj {
 /** A module's node attributes its config states (desired state the live
  *  reads refine): vmid, management, environment (by name), addresses. */
 export function moduleNodeAttributes(name: string, raw: Obj, cls: string): Obj {
-  const a: Obj = { ...moduleCiAttributes(name, raw), stack: str(raw.stack) };
+  const a: Obj = { ...moduleCiAttributes(name, raw), stack: str(raw.stack), zone: str(raw.zone0), maturity: str(raw.status), haNode: str(raw.HANode) };
   if (cls === "vm" || cls === "lxc") a.vmid = num(raw.vmid);
   const mgmt = str(raw.management);
   if (mgmt === "managed" || mgmt === "unmanaged") a.management = mgmt;

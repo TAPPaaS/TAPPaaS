@@ -20,6 +20,10 @@
 # first rj45 and wifi ports where it has them, else `uplink` (rj45, 1g) and
 # `wifi`. Wi-Fi clients stay in the actual: the CMDB resolves no MAC yet (D5).
 #
+# Each AP also carries what `ap-manager list` says of it, for network-manager
+# topology (ADR-040 step 4): its vendor, uplink and SSIDs; one that names a
+# location is `at` it, in a report of its own.
+#
 # With --argjson discover true (report --discover, D15) one more report follows:
 # each AP's firmware, uptime and clients (MAC, SSID, signal), every radio as a
 # `wifi` port (standard, band, channel, power), and an SSID the AP broadcasts
@@ -49,8 +53,11 @@ def nonull: with_entries(select(.value != null and .value != ""));
     | { objects: [
           {ref: "device:\($ap)", class: "device", name: $ap,
            attributes: (({model: ($a.model // $d.model), firmware: $a.firmware, managementAddress: ($a.managementIp // $d.managementIp),
-                          controller: $a.controller, description: $d.description} | nonull)
-                        + {desired: {file: "switch-configuration-desired.json", key: "accessPoints.\($ap)"}})},
+                          controller: $a.controller, description: $d.description,
+                          vendor: ($d.vendor // $a.vendor),
+                          uplink: (($d.uplinkSwitch // "") as $us | if $us != "" then {switch: $us, port: ($d.uplinkPort | tostring)} else null end)} | nonull)
+                        + {deviceType: "access-point", ssids: [ ($d.ssids // {}) | to_entries[] | {name: .key} + .value ],
+                           desired: {file: "switch-configuration-desired.json", key: "accessPoints.\($ap)"}})},
           {ref: "asset:\($tag)", class: "network-device", name: $tag,
            attributes: ({vendor: ($rec.value.vendor // $a.vendor // $d.vendor), model: ($rec.value.model // $a.model // $d.model),
                          serial: ($rec.value.serial // $a.serial), controller: $a.controller, deviceType: "access-point"} | nonull)},
@@ -86,6 +93,10 @@ def nonull: with_entries(select(.value != null and .value != ""));
             {ref: "swasset", class: "network-device", name: $swtag},
             {ref: "swport", class: "port", name: .port, attributes: {asset: {ref: "swasset"}}} ],
           relations: [ {type: "connects", from: "swport", to: .from, attributes: {origin: "recorded"}} ] } ]
+  + [ $names[] as $ap | select(($aps[$ap].location // "") != "")
+      | head + {
+          objects: [ {ref: "loc", class: "location", name: $aps[$ap].location}, {ref: "device:\($ap)", class: "device", name: $ap} ],
+          relations: [ {type: "at", from: "device:\($ap)", to: "loc"} ] } ]
   + (if ($ARGS.named.discover // false) then
       [ head + (
           [ $names[] as $ap | (($actual.accessPoints // {})[$ap] // {}) as $a | tag($ap; "access-point") as $tag

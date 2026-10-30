@@ -70,7 +70,10 @@ function build(configDir: string, mods: ModuleConfig[], guests: RunningGuest[]):
       const g = m.vmid != null ? byVmid.get(m.vmid) : undefined;
       const on = g?.node ?? (live ? m.node ?? undefined : undefined);
       if (on) a.onNode = { class: "machine", name: on };
-      if (live) a.stage = g ? "operational" : "created";
+      if (live) {
+        a.stage = g ? "operational" : "created";
+        a.state = g ? (g.template ? "template" : g.status) : "stopped";
+      }
     }
     b.objects.push({ ref: nodeRef(m.name), class: cls, name: m.name, attributes: compact(a) });
     b.hostRef.set(m.name, nodeRef(m.name));
@@ -88,7 +91,16 @@ function build(configDir: string, mods: ModuleConfig[], guests: RunningGuest[]):
       ref: nodeRef(m.name),
       class: "app",
       name: m.name,
-      attributes: compact({ ...moduleCiAttributes(m.name, m.raw), version: versionOf(m), onNode: onRef }),
+      attributes: compact({
+        ...moduleCiAttributes(m.name, m.raw),
+        version: versionOf(m),
+        onNode: onRef,
+        stack: m.raw.stack,
+        zone: m.raw.zone0,
+        maturity: m.raw.status,
+        environment: m.raw.environment,
+        moduleNode: m.node,
+      }),
     });
     b.hostRef.set(m.name, on);
   }

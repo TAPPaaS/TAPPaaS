@@ -223,6 +223,9 @@ export interface SiteClient {
   // node answers.
   // discover: to the full depth of ADR-040 D15, one more read per node.
   readCluster(candidates: string[], discover?: boolean): ClusterRead | null;
+  // `node network show --json` of a node (lan-uplink.sh, one ssh); null when it
+  // gives no document.
+  nodeNetwork(node: string): Record<string, unknown> | null;
   // Move ONE module via module-manager (never the controller directly — the
   // layering is the point: module-manager owns per-module orchestration and the
   // HA rule reconciliation that goes with it). Returns its exit code, where 10

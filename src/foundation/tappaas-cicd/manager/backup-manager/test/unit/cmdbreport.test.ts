@@ -85,6 +85,7 @@ try {
   );
   const buddy = obj("backup-peer", "buddy")?.attributes ?? {};
   check(objs.filter((o) => o.class === "backup-peer").length === 2, "one backup-peer per buddy, whatever its relationships");
+  check(typeof buddy.role === "string", "…with its role, for the topology");
   check(buddy.direction === "pull" && buddy.lastSeen === new Date(T * 1000).toISOString(), "a buddy we pull from: pull, last seen at its sync's last run");
   check(JSON.stringify(to("at", "backup-peer:buddy")) === JSON.stringify([JSON.stringify({ class: "location", name: "aunt" })]), "…at the location it names");
   check(obj("backup-peer", "cousin")?.attributes?.direction === "receive", "a buddy that pushes into ours: receive");

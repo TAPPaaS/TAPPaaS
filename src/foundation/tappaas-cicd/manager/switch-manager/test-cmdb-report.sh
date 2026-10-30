@@ -21,6 +21,11 @@ build() { # build <only> <ended-json> <kind> <verb> <job>
 }
 
 echo "test-cmdb-report:"
+ck "a switch names what topology reads"            '["switch","unifi","auto"]' \
+   "$(build "" '[]' observation "" "" | jq -c '.[0].objects[] | select(.ref == "device:core") | .attributes | [.deviceType, .vendor, .managed]')"
+ck "…and the MLAG pair it is in"                   '"core+edge"' \
+   "$(build "" '[]' observation "" "" | jq -c '.[0].objects[] | select(.ref == "device:core") | .attributes.mlag.pair.name')"
+ck "a row is no assignment without list-ports"     'false' "$(build "" '[]' observation "" "" | jq -c 'tostring | test("assignment")')"
 R="$(build "" '[]' observation "" "")"
 core() { jq -c ".[0] | $1" <<<"${R}"; }
 ck "an array of reports, from switch-manager"      "true" "$(jq -c 'type == "array" and all(.[]; .source == "switch-manager" and .kind == "observation")' <<<"${R}")"
@@ -96,7 +101,12 @@ if [[ -r /home/tappaas/bin/common-install-routines.sh ]]; then
     printf '#!/usr/bin/env bash\n[[ "$1" == report ]] && cat >> "%s/sent.jsonl" && echo >> "%s/sent.jsonl"\nexit 0\n' "${TMP}" "${TMP}" > "${TMP}/cmdb"
     chmod +x "${TMP}/cmdb"
     export CMDB_BIN="${TMP}/cmdb" TAPPAAS_JOB_ID=job-42 TAPPAAS_CMDB=
-    ck "report --json prints what the filter builds" "$(jq -c . <<<"${R}")" "$("${HERE}/switch-manager" report --json 2>/dev/null | jq -c .)"
+    SENT="$("${HERE}/switch-manager" report --json 2>/dev/null)"
+    ck "report --json prints what the filter builds" "$(jq -c . <<<"${R}")" \
+       "$(jq -c 'walk(if type == "object" then del(.assignment, .lags) else . end)' <<<"${SENT}")"
+    ck "…with each port's list-ports row, on its switch" '["node","tappaas1","in-sync","core"]' \
+       "$(jq -c '.[0].objects[] | select(.ref == "port:sw-01/1") | .attributes.assignment | [.type, .target, .drift, .switch]' <<<"${SENT}")"
+    ck "…and each switch's LAGs" '["bond0"]' "$(jq -c '[.[0].objects[] | select(.ref == "device:core") | .attributes.lags[].name]' <<<"${SENT}")"
     "${HERE}/switch-manager" modify-switch core --description "rack top" >/dev/null 2>&1
     ck "modify-switch reports a change with the console's job id" '"job-42"' "$(jq -sc 'map(select(.kind == "change")) | .[0].job' "${TMP}/sent.jsonl" 2>/dev/null)"
 else

@@ -53,6 +53,10 @@
       "desiredRecord": true,
       "description": "What runs software (ArchiMate Node, ADR-022c): a module of kind vm, lxc, machine or device (ADR-022d).",
       "fields": {
+        "zone": { "type": "string", "description": "The zone it is in: the zone0 of its record (ADR-040 step 4)." },
+        "maturity": { "type": "string", "description": "The status of its record: Development, Testing, Production." },
+        "state": { "type": "string", "volatile": true, "description": "Whether it runs, as the cluster says: running, stopped, template." },
+        "haNode": { "type": "string", "description": "The node it fails over to: the HANode of its record." },
         "os": { "type": "string" },
         "osVersion": { "type": "string" },
         "management": { "type": "string", "enum": ["managed", "unmanaged"], "description": "ADR-022g." },
@@ -97,6 +101,7 @@
       "parent": "node",
       "description": "A module of kind machine: a cluster member, a satellite, a managed host (ADR-026).",
       "fields": {
+        "network": { "type": "object", "volatile": true, "description": "`site-manager node network show`: its uplinks declared and live, LLDP, HA, corosync. An attribute, as nics[]: a port needs an asset, this does not." },
         "name": { "key": 1, "description": "The Proxmox node name within the cluster (D5)." },
         "hostname": { "type": "string" },
         "clusterMember": { "type": "boolean" },
@@ -115,6 +120,15 @@
       "parent": "node",
       "description": "A module of kind device: reachable, not managed; also a switch or AP from the switch configuration.",
       "fields": {
+        "vendor": { "type": "string" },
+        "deviceType": { "type": "string", "enum": ["switch", "access-point"], "description": "What the switch configuration says it is." },
+        "managed": { "type": "string", "description": "How the switch is driven: auto, manual." },
+        "order": { "type": "integer", "description": "Its place in the switch inventory: a cable between two switches is drawn from the first." },
+        "controllerAddress": { "type": "string", "description": "Its controller's management address." },
+        "mlag": { "type": "object", "volatile": true, "description": "Its MLAG side (peerPort, bridge) and the pair it is in (name, switches, peerPort)." },
+        "lags": { "type": "array", "volatile": true, "description": "`switch-manager lag list`: its LAGs, declared and live." },
+        "uplink": { "type": "object", "description": "An access point's switch and port." },
+        "ssids": { "type": "array", "description": "`ap-manager list`: the SSIDs an access point carries (zone, vlan, security, disabled)." },
         "name": { "key": 1, "description": "The switch configuration's name (D5)." },
         "model": { "type": "string" },
         "firmware": { "type": "string" },
@@ -142,6 +156,11 @@
       "parent": "software",
       "description": "An application with a version: pve on tappaas1, authentik in identity; a module of kind application.",
       "fields": {
+        "stack": { "type": "string" },
+        "zone": { "type": "string", "description": "The zone0 of its record." },
+        "maturity": { "type": "string", "description": "The status of its record." },
+        "environment": { "type": "string", "description": "The environment its record names." },
+        "moduleNode": { "type": "string", "description": "The node its record names; none where onNode is only where it was put." },
         "upstream": { "type": "object", "properties": { "project": { "type": "string" }, "package": { "type": "string" } } },
         "cpe": { "type": "string" },
         "purl": { "type": "string" }
@@ -176,6 +195,9 @@
       "desiredRecord": true,
       "description": "A zone of zones.json.",
       "fields": {
+        "state": { "type": "string", "description": "active, inactive, mandatory, …, as zones.json has it." },
+        "type": { "type": "string", "description": "The zone's type in zones.json." },
+        "bridge": { "type": "string" },
         "vlan": { "type": "integer" },
         "subnet": { "type": "string" },
         "ipv6Subnet": { "type": "string" },
@@ -273,6 +295,9 @@
       "parent": "storage-element",
       "description": "A buddy site we back up to or receive from.",
       "fields": {
+        "role": { "type": "string", "description": "As backup-manager peers says it: pull, remote, receive." },
+        "remoteHost": { "type": "string" },
+        "tunnel": { "type": "string", "description": "<serve|dial> <net/30>[ :port] when the pull runs over a buddy tunnel." },
         "direction": { "type": "string", "enum": ["pull", "receive", "pulled-by"], "description": "pull: we pull from it; receive: it pushes to us; pulled-by: it pulls ours." },
         "location": { "type": "relation", "relation": "at" },
         "lastSeen": { "type": "string", "volatile": true }
@@ -317,6 +342,9 @@
       "desiredRecord": true,
       "description": "The site.",
       "fields": {
+        "publicIp": { "type": "string", "description": "site.json network.publicIp: an address, or auto." },
+        "isp": { "type": "string" },
+        "ipv6": { "type": "boolean" },
         "code": { "type": "string" },
         "primaryLocation": { "type": "relation", "relation": "at" },
         "version": { "type": "string", "description": "The TAPPaaS release." },

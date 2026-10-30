@@ -30,7 +30,8 @@
 // live state (disabled, link) decides whether it is formed.
 //
 // buildTopology() is pure (the unit tests run it over hrossen's captured
-// outputs); collectSources() runs the verbs.
+// outputs); collectSources() runs the verbs, and sourcesFromCmdb() in
+// topology-cmdb.ts gives it the same sources from the CMDB (ADR-040 step 4).
 
 import { join } from "path";
 import { ExecResult, captureResult } from "../../../lib/ts/src/exec";
@@ -213,6 +214,7 @@ export interface TopoSources {
   // asset-manager export --json; undefined: not read (--no-positions), null: it did not answer
   positions?: { doc: PositionsDoc; catalog: Faceplate[] } | null;
   errors: { source: string; error: string }[];
+  reads?: string[]; // the sources this read names in `sources`; default the live join's
 }
 
 // ── the document ──────────────────────────────────────────────────────
@@ -1128,7 +1130,7 @@ export function buildTopology(src: TopoSources, now: Date = new Date()): Topolog
     devices,
     positions,
     findings,
-    sources: SOURCE_NAMES.filter((name) => name !== POSITIONS_SOURCE || src.positions !== undefined).map((name) => {
+    sources: (src.reads ?? SOURCE_NAMES).filter((name) => name !== POSITIONS_SOURCE || src.positions !== undefined).map((name) => {
       const e = src.errors.find((x) => x.source === name);
       return e ? { name, ok: false, error: e.error } : { name, ok: true };
     }),
@@ -1175,7 +1177,7 @@ export const SOURCE_NAMES = [
   "switch-configuration-actual.json",
   "asset-manager export",
 ];
-const POSITIONS_SOURCE = "asset-manager export";
+export const POSITIONS_SOURCE = "asset-manager export";
 
 export type Runner = (bin: string, args: string[]) => ExecResult;
 

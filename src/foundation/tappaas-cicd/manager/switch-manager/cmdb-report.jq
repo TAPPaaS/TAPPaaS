@@ -20,6 +20,12 @@
 # where the controller says, else the asset record's, else rj45 and 1g. MACs
 # seen behind a port stay in the actual (the CMDB resolves no MAC yet, D5).
 #
+# With --slurpfile rows <list-ports --json> and --slurpfile lags <lag list --json>
+# (the `report` verb; ADR-040 step 4) each port carries `assignment`, the row
+# list-ports prints with the switch it is on and the actual's MLAG facts, and
+# each switch its `lags`: what network-manager topology reads. A switch that
+# names a location is `at` it, in a report of its own.
+#
 # With --argjson discover true and --argjson zones <zones.json> (report
 # --discover, D15) one more report follows, the depth only a sweep reads: every
 # port, used or not, with its link, negotiated speed, PoE, VLANs, STP state and
@@ -40,6 +46,10 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
                  "patch-panel": "passive-device", pdu: "passive-device"}[.] // "other-device";
 
 ($pos.assets // {}) as $assets
+| (.controllers // {}) as $controllers
+| (.mlagPairs // {}) as $pairs
+| (($ARGS.named.rows // [[]])[0] | map({key: .switch, value: (.ports | map({key: .port, value: .}) | from_entries)}) | from_entries) as $rows
+| (($ARGS.named.lags // [[]])[0]) as $lagRows
 | def record($role; $kinds):
     [ $assets | to_entries[]
       | select(.value.role == $role and ((.value.kind // "") as $k | $kinds | index($k)) and (.value.stage // "") != "disposed") ][0];
@@ -55,8 +65,13 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
       | tag($sw) as $tag
       | {ref: "device:\($sw)", class: "device", name: $sw,
          attributes: (({model: $s.model, firmware: $s.firmware, managementAddress: $s.managementIp,
-                        controller: $s.controller, description: $s.description} | nonull)
-                      + {desired: {file: "switch-configuration-desired.json", key: $sw}})},
+                        controller: $s.controller, description: $s.description,
+                        vendor: $s.vendor, managed: $s.managed, order: ($sws | keys_unsorted | index($sw)),
+                        controllerAddress: $controllers[$s.controller // ""].managementIp,
+                        mlag: (($pairs | to_entries | map(select(.value.switches | index($sw)))[0]) as $pair
+                               | if $s.mlag or $pair then ($s.mlag // {}) + (if $pair then {pair: ({name: $pair.key} + $pair.value)} else {} end) else null end),
+                        lags: (if $ARGS.named.lags then [$lagRows[] | select(.switch == $sw)] else null end)} | nonull)
+                      + {deviceType: "switch", desired: {file: "switch-configuration-desired.json", key: $sw}})},
         {ref: "asset:\($tag)", class: "network-device", name: $tag,
          attributes: ({vendor: ($rec.value.vendor // $s.vendor), model: ($rec.value.model // $s.model),
                        serial: ($rec.value.serial // $s.serial), controller: $s.controller,
@@ -72,7 +87,11 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
           | {ref: pref($sw; $p), class: "port", name: $p,
              attributes: ({asset: {ref: "asset:\($tag)"}, kind: $kind, speed: $speed,
                            module: (if $kind == "sfp" then ($v.module // $rp.module) else null end),
-                           mac: (($v.mac // "") | ascii_downcase)} | nonull)} )
+                           mac: (($v.mac // "") | ascii_downcase),
+                           assignment: ($rows[$sw][$p] as $row
+                             | if $row then ($row | del(.port))
+                                 + {switch: $sw, actual: ($v | {lag, mlagId, liveMlagId, peerLink, bridged, disabled, bond} | nonull)}
+                               else null end)} | nonull)} )
     ] as $owned
   | ($owned | map(.ref)) as $refs
   | def have($r): ($refs | index($r)) != null;
@@ -118,6 +137,10 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
             {ref: .from, class: "port", name: .p, attributes: {asset: {ref: "asset:\(tag(.sw))"}}},
             {ref: "nic", class: "port", name: .nic, attributes: {asset: {class: "server", name: .srv}}} ],
           relations: [ {type: "connects", from: .from, to: "nic", attributes: ({origin: .origin, linkSpeed: .speed} | nonull)} ] } ]
+  + [ $names[] as $sw | select(($sws[$sw].location // "") != "")
+      | head + {
+          objects: [ {ref: "loc", class: "location", name: $sws[$sw].location}, {ref: "device:\($sw)", class: "device", name: $sw} ],
+          relations: [ {type: "at", from: "device:\($sw)", to: "loc"} ] } ]
   + (if ($ARGS.named.discover // false) then
       ([ ($ARGS.named.zones // {}) | to_entries[] | .value | objects | .vlantag | numbers | select(. > 0) ]) as $declared
       | [ head + {

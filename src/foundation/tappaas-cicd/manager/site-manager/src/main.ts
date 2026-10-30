@@ -1492,6 +1492,14 @@ function cmdReport(o: Opts, client: SiteClient): number {
   const discover = o.boolFlags.has("--discover");
   const live = client.readCluster(clusterNodes(configDir).map((n) => n.name), discover);
   if (live === null) warn("no cluster node answered — reporting what config/ says, without guests");
+  // What network-manager topology reads (ADR-040 step 4). A node that does not
+  // answer is left out, and the CMDB keeps what it last heard.
+  else {
+    for (const { name } of live.members) {
+      const network = client.nodeNetwork(name);
+      if (network) live.hosts[name] = { ...live.hosts[name], network };
+    }
+  }
   const site = existsSync(siteFileOf(o)) ? (loadRaw(siteFileOf(o)) as { repositories?: { name?: string; path?: string }[] }) : {};
   const repo = (site.repositories ?? []).find((r) => r.name === "TAPPaaS")?.path ?? "/home/tappaas/TAPPaaS";
   return sendObservation(siteObservation(configDir, live, runningVersion(repo), discover), o.json, configDir, info);

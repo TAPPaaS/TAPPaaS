@@ -85,6 +85,11 @@ export class FakeSiteClient implements SiteClient {
   readCluster(_candidates: string[]): ClusterRead | null {
     return this.cluster;
   }
+  // What nodeNetwork answers (report), by node.
+  networks: Record<string, Record<string, unknown>> = {};
+  nodeNetwork(node: string): Record<string, unknown> | null {
+    return this.networks[node] ?? null;
+  }
   guestsOn(node: string): Array<{ vmid: number; name: string; type: string }> | null {
     this.log.push(`guestsOn ${node}`);
     if (this.guestsUnreachable) return null;

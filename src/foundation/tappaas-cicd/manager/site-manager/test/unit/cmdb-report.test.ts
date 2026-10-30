@@ -97,6 +97,7 @@ const CLUSTER_OUT = [
   const cfg = fixture();
   const fake = new FakeSiteClient();
   fake.cluster = parseClusterProbe(CLUSTER_OUT);
+  fake.networks = { tappaas1: { node: "tappaas1", live: { ports: [], lrmActive: true } } };
   fake.cluster.hosts.tappaas1 = parseHostProbe("os=debian\nosVersion=13\nhostname=tappaas1.mgmt.internal\naddresses=10.0.0.11\npve=9.1.2\npools=tanka1");
   let rc = -1;
   const out = capture(() => (rc = run(["report", "--json", "--config-dir", cfg], fake)));
@@ -121,6 +122,7 @@ const CLUSTER_OUT = [
   check(one("location", "home")?.attributes?.timezone === "Europe/Copenhagen" && !!one("location", "buddy"), "both locations");
   check(one("cluster", "hrossen")?.attributes?.quorum === true, "the cluster, named by the site code, quorate");
 
+  check(one("vm", "identity")?.attributes?.state === "running" && one("vm", "tappaas-nixos")?.attributes?.state === "template", "a guest's run state, for the topology");
   const m1 = one("machine", "tappaas1");
   check(m1?.attributes?.desired?.file === "tappaas1.json", "a node's desired record is its pvehost instance");
   check(m1?.attributes?.release?.module === "pvehost" && m1?.attributes?.release?.version === "0.3.0", "a node's release is pvehost + version");
@@ -145,6 +147,7 @@ const CLUSTER_OUT = [
   check(ct?.attributes?.unprivileged === true && ct?.attributes?.rootfs === "tankb1:subvol-201-disk-0", "an lxc's rootfs and privilege");
   check(!objs.some((o) => o.name === "old"), "an archived module is not reported");
   check(!JSON.stringify(r).includes("null"), "no attribute is null (null would unset it)");
+  check(one("machine", "tappaas1")?.attributes?.network?.live?.lrmActive === true && one("machine", "tappaas2")?.attributes?.network === undefined, "a node's network, for the topology; one that gives none is left out");
 }
 
 // ── no cluster: config only ────────────────────────────────────────────

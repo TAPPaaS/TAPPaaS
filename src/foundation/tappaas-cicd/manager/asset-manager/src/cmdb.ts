@@ -23,9 +23,10 @@
 //   or not site-manager has reported it yet.
 
 import type { CmdbObject, CmdbRef, CmdbRelation, CmdbReport } from "../../../lib/ts/src/cmdb";
+import { CLASS_OF } from "../../../lib/ts/src/positions-cmdb";
+import type { CmdbAnswer, CmdbAnswerEnd, CmdbAnswerObject, CmdbAnswerRelation } from "../../../lib/ts/src/positions-cmdb";
 import {
   Asset,
-  AssetKind,
   AssetPort,
   Cable,
   CableEnd,
@@ -46,6 +47,9 @@ import {
   widthOf,
 } from "../../../lib/ts/src/positions";
 
+export { ASSET_CLASSES, CLASS_OF, positionsFromCmdb } from "../../../lib/ts/src/positions-cmdb";
+export type { CmdbAnswer, CmdbAnswerEnd, CmdbAnswerObject, CmdbAnswerRelation } from "../../../lib/ts/src/positions-cmdb";
+
 export const SOURCE = "asset-manager";
 
 type Obj = Record<string, unknown>;
@@ -62,20 +66,6 @@ export interface View {
   allocations: ViewRelation[];
   skipped: string[];
 }
-
-// An asset's kind → its D3 class, and the deviceType the class records.
-export const CLASS_OF: Record<AssetKind, { class: string; deviceType?: string }> = {
-  server: { class: "server" },
-  switch: { class: "network-device", deviceType: "switch" },
-  "access-point": { class: "network-device", deviceType: "access-point" },
-  modem: { class: "appliance", deviceType: "modem" },
-  ont: { class: "appliance", deviceType: "ont" },
-  ups: { class: "appliance", deviceType: "ups" },
-  "patch-panel": { class: "passive-device", deviceType: "patch-panel" },
-  pdu: { class: "passive-device", deviceType: "pdu" },
-  other: { class: "other-device" },
-};
-export const ASSET_CLASSES = ["server", "network-device", "appliance", "passive-device", "other-device"];
 
 export const refOf = {
   location: (n: string) => `location:${n}`,
@@ -219,6 +209,7 @@ export function cmdbView(doc: PositionsDoc, catalog: Faceplate[], primary: strin
         attributes: {
           asset: { ref },
           kind: p.kind,
+          plate: (a.ports ?? []).some((x) => x.name === p.name) ? null : true,
           speed: orNull(p.speed),
           standard: orNull(p.standard),
           bands: p.bands?.length ? p.bands : null,
@@ -235,10 +226,19 @@ export function cmdbView(doc: PositionsDoc, catalog: Faceplate[], primary: strin
     if (!assetNamed(doc, name)) skipped.push(`placement of ${name}: no asset is recorded for it`);
   }
 
-  // Recorded cables: port to port, both ends an asset's port.
+  // Recorded cables: port to port. A cable that names a port its asset does
+  // not list (a node's NIC, on a server recorded without them) makes it one:
+  // nothing is known of it but that it is there.
   const endRef = (e: CableEnd): string | null => {
     const a = assetNamed(doc, e.device);
-    return a ? portRefs.get(a.key)?.get(e.port) ?? null : null;
+    const refs = a ? portRefs.get(a.key) : undefined;
+    if (!a || !refs) return null;
+    const known = refs.get(e.port);
+    if (known) return known;
+    const ref = refOf.port(a.key, e.port);
+    add({ ref, class: "port", name: e.port, attributes: { asset: { ref: refOf.asset(a.key) } } });
+    refs.set(e.port, ref);
+    return ref;
   };
   for (const c of cablesOf(doc)) {
     const from = endRef(c.from);
@@ -359,30 +359,6 @@ export function changeReport(before: View, after: View, ctx: Ctx): { report: Cmd
 // An object as cmdb-controller's query answers it (POST /v1/query): an id,
 // and its attributes without the relation fields, which are relation rows
 // (`cmdb show` lists them). Here the id is the view's ref.
-export interface CmdbAnswerObject {
-  id: string;
-  class: string;
-  name: string;
-  displayName: string | null;
-  physical: true;
-  attributes: Obj;
-}
-export interface CmdbAnswerEnd {
-  id: string;
-  class: string;
-  name: string;
-}
-export interface CmdbAnswerRelation {
-  type: string;
-  from: CmdbAnswerEnd;
-  to: CmdbAnswerEnd;
-  attributes: Obj;
-}
-export interface CmdbAnswer {
-  objects: CmdbAnswerObject[];
-  relations: CmdbAnswerRelation[];
-}
-
 const RELATION_FIELDS: Record<string, string> = { location: "at", room: "placed-in", asset: "part-of" };
 
 /** The view as the CMDB would answer `query --physical` and the current
@@ -414,91 +390,4 @@ export function cmdbAnswer(v: View): CmdbAnswer {
   }
   for (const r of [...v.relations, ...v.allocations]) relations.push({ type: r.type, from: end(r.from), to: end(r.to), attributes: r.attributes });
   return { objects, relations };
-}
-
-const KIND_OF_CLASS = (cls: string, deviceType: unknown): AssetKind => {
-  const hit = Object.entries(CLASS_OF).find(([, c]) => c.class === cls && (c.deviceType ?? null) === (typeof deviceType === "string" ? deviceType : null));
-  return (hit?.[0] as AssetKind | undefined) ?? "other";
-};
-
-/** A positions document from the CMDB's answer: what network-manager
- *  topology would read once the CMDB is the record. Placements and cable ends
- *  are keyed by the role an asset plays, as positions.json keys them; an
- *  asset's ports are its own, its plate's included. */
-export function positionsFromCmdb(ans: CmdbAnswer): PositionsDoc {
-  const doc: PositionsDoc = { version: 1, rooms: {}, racks: {}, placements: {}, assets: {}, cables: [] };
-  const byId = new Map(ans.objects.map((o) => [o.id, o]));
-  const rel = (type: string) => ans.relations.filter((r) => r.type === type);
-  const out = (type: string, id: string): CmdbAnswerRelation | undefined => rel(type).find((r) => r.from.id === id);
-  const role = new Map(rel("allocated-to").map((r) => [r.from.id, r.to.name]));
-  const portAsset = new Map(rel("part-of").map((r) => [r.from.id, r.to.id]));
-  const nameOf = (assetId: string): string => role.get(assetId) ?? byId.get(assetId)?.name ?? assetId;
-  for (const o of ans.objects) {
-    const at = o.attributes;
-    const text = (k: string): Obj => (typeof at[k] === "string" ? { [k]: at[k] } : {});
-    const dn = o.displayName ? { displayName: o.displayName } : {};
-    if (o.class === "room") {
-      const loc = out("at", o.id)?.to.name;
-      doc.rooms![o.name] = { ...dn, ...text("description"), ...(loc ? { location: loc } : {}) };
-    } else if (o.class === "rack") {
-      const room = out("placed-in", o.id)?.to.name;
-      doc.racks![o.name] = {
-        ...dn,
-        units: Number(at.units),
-        width: `${String(at.width)}in` as "19in" | "10in",
-        numbering: at.numbering as "bottom-up" | "top-down",
-        ...(room ? { room } : {}),
-        ...text("description"),
-      };
-    } else if (ASSET_CLASSES.includes(o.class)) {
-      // operational and placed are derived (D7): the record has placed.
-      const stage = String(at.stage);
-      const a: Asset = {
-        kind: KIND_OF_CLASS(o.class, at.deviceType),
-        ...dn,
-        ...text("description"),
-        ...text("vendor"),
-        ...text("model"),
-        ...text("serial"),
-        ...text("assetTag"),
-        stage: (stage === "operational" ? "placed" : stage) as Asset["stage"],
-      };
-      if (at.faulty === true) a.faulty = true;
-      if (typeof at.faultNote === "string") a.faultNote = at.faultNote;
-      if (at.procurement) a.procurement = at.procurement as Asset["procurement"];
-      if (at.disposal) a.disposal = at.disposal as Asset["disposal"];
-      if (role.has(o.id)) a.role = role.get(o.id);
-      doc.assets![o.name] = a;
-    } else if (o.class === "port") {
-      const owner = byId.get(portAsset.get(o.id) ?? "");
-      const a = owner ? doc.assets![owner.name] : undefined;
-      if (!a) continue;
-      const p = { name: o.name } as AssetPort & Obj;
-      for (const k of ["kind", "speed", "standard", "bands", "module", "role", "mac", "side"]) if (at[k] !== undefined) p[k] = at[k];
-      (a.ports ??= []).push(p);
-    }
-  }
-  for (const r of rel("placed-in").filter((x) => ASSET_CLASSES.includes(x.from.class))) {
-    const m: Placement = r.to.class === "rack" ? { rack: r.to.name } : { room: r.to.name };
-    Object.assign(m, r.attributes);
-    doc.placements![nameOf(r.from.id)] = m;
-  }
-  const isPanel = (id: string): boolean => byId.get(id)?.attributes.deviceType === "patch-panel";
-  for (const r of rel("connects")) {
-    const e = (x: CmdbAnswerEnd): CableEnd => ({ device: nameOf(portAsset.get(x.id) ?? ""), port: x.name });
-    const c: Cable = { from: e(r.from), to: e(r.to), kind: r.attributes.kind as Cable["kind"] };
-    if (typeof r.attributes.label === "string") c.label = r.attributes.label;
-    if (r.attributes.origin) c.origin = r.attributes.origin as Cable["origin"];
-    if (r.attributes.linkSpeed) c.linkSpeed = String(r.attributes.linkSpeed);
-    const side = r.attributes.side as CableEnd["side"] | undefined;
-    if (r.attributes.toSide) {
-      c.from.side = side;
-      c.to.side = r.attributes.toSide as CableEnd["side"];
-    } else if (side) {
-      // The panel's end carries it.
-      (isPanel(portAsset.get(r.to.id) ?? "") && !isPanel(portAsset.get(r.from.id) ?? "") ? c.to : c.from).side = side;
-    }
-    doc.cables!.push(c);
-  }
-  return doc;
 }

@@ -12,6 +12,9 @@ import {
   ApRow, HealthDoc, LagRow, ModuleRow, NodeNetwork, PeerRow, SwitchActual, SwitchList, SwitchPorts, TopoPort, TopoSources, Topology,
   buildTopology, canon, collectSources, compactPorts, lldpPort, portCompare, renderTopology, speedLabel,
 } from "../../src/topology";
+import { CmdbItem, CmdbLink, CmdbRead, diffTopology, missingFromCmdb, readTopologyFromCmdb, renderDiff, sourcesFromCmdb } from "../../src/topology-cmdb";
+import { CmdbUnavailable } from "../../../../lib/ts/src/cmdb";
+import { readLocations } from "../../../../lib/ts/src/locations";
 
 let passed = 0;
 let failed = 0;
@@ -488,6 +491,168 @@ check(t.switches.every((x) => x.source === "switch-configuration") && t.accessPo
   const asked = collectSources({ configDir: FIX, zonesFile: join(FIX, "zones.json"), health: null, wanAddressFile: join(FIX, "none.json"), run: fake });
   check(runs.includes("asset-manager export --json") && asked.positions === null, "positions read through asset-manager export");
   check(buildTopology(asked).sources.some((s) => s.name === "asset-manager export" && !s.ok), "no asset-manager: the source is named");
+}
+
+// ── the CMDB path (ADR-040 step 4): what the reporters hold, as a fake answer ─
+// asCmdb() is what the reports leave in the store for a set of sources: the
+// document built from it must be the one built from the sources themselves.
+const CMDB_NOW = new Date("2026-10-30T12:00:00Z");
+function asCmdb(s: TopoSources): CmdbRead {
+  const objects: CmdbItem[] = [];
+  const relations: CmdbLink[] = [];
+  const end = (o: CmdbItem) => ({ id: o.id, class: o.class, name: o.name });
+  const put = (cls: string, name: string, attributes: Record<string, unknown>): CmdbItem => {
+    const had = objects.find((o) => o.class === cls && o.name === name);
+    if (had) return Object.assign(had, { attributes: { ...had.attributes, ...attributes } });
+    const o: CmdbItem = { id: `${cls}/${name}`, class: cls, name, lastSeen: CMDB_NOW.toISOString(), attributes };
+    objects.push(o);
+    return o;
+  };
+  const link = (type: string, from: CmdbItem, to: CmdbItem): void => void relations.push({ type, from: end(from), to: end(to), attributes: {} });
+
+  const { locations, primary } = readLocations(s.site);
+  for (const l of Object.values(locations)) put("location", l.name, { country: l.country, city: l.city, kind: l.kind, displayName: l.displayName });
+  const net = (s.site?.network ?? {}) as Record<string, unknown>;
+  const site = put("site", String(s.site?.name), { displayName: s.site?.displayName, publicIp: net.publicIp, isp: net.isp, ipv6: s.site?.ipv6, assessment: s.health ? { gates: s.health.gates } : undefined });
+  link("at", site, put("location", primary ?? "here", {}));
+  for (const n of s.nodes ?? []) put("machine", n.name, { clusterMember: true, storagePools: n.storagePools, network: s.networks[n.name] ?? undefined });
+  for (const m of s.modules ?? []) {
+    const cls = ({ vm: "vm", lxc: "lxc", machine: "machine", device: "device", application: "app" } as Record<string, string>)[m.kind];
+    const state = m.running === "-" ? undefined : m.running;
+    const o = put(cls, m.name, { desired: { file: `${m.name}.json` }, vmid: m.vmid ?? undefined, zone: m.zone0 ?? undefined, stack: m.stack ?? undefined, maturity: m.status ?? undefined, state, moduleNode: cls === "app" ? m.node ?? undefined : undefined, environment: cls === "app" ? m.environment ?? undefined : undefined, haNode: m.name === "network" ? s.firewall?.HANode : undefined });
+    const on = m.actualNode ?? m.node;
+    if ((cls === "vm" || cls === "lxc") && on) link("runs-on", o, put("machine", on, {}));
+    if (cls !== "app" && m.environment) link("member-of", o, put("environment", m.environment, {}));
+  }
+  for (const [name, raw] of Object.entries(s.zones ?? {})) {
+    if (name.startsWith("_") || !raw || typeof raw !== "object") continue;
+    const z = raw as Record<string, unknown>;
+    const o = put("zone", name, { vlan: z.vlantag, subnet: z.ip, tier: typeof z.tier === "number" ? String(z.tier) : undefined, state: z.state, type: z.type, bridge: z.bridge });
+    for (const e of (Array.isArray(z.environment) ? z.environment : [z.environment]).filter((x) => typeof x === "string")) link("serves", o, put("environment", e as string, {}));
+  }
+  for (const w of s.switches?.switches ?? []) {
+    const actual = s.actual?.switches?.[w.name];
+    const pair = Object.entries(s.actual?.mlagPairs ?? {}).find(([, p]) => p.switches?.includes(w.name));
+    const c = s.switches?.controllers.find((x) => x.name === w.controller);
+    const d = put("device", w.name, {
+      deviceType: "switch", vendor: w.vendor, model: w.model, managementAddress: w.managementIp, controller: w.controller, controllerAddress: c?.managementIp, managed: w.managed, description: w.description,
+      mlag: actual?.mlag || pair ? { ...(actual?.mlag ?? {}), ...(pair ? { pair: { name: pair[0], ...pair[1] } } : {}) } : undefined,
+      lags: (s.lags ?? []).filter((l) => l.switch === w.name), desired: { file: "switch-configuration-desired.json", key: w.name },
+    });
+    if (w.location) link("at", d, put("location", w.location, {}));
+    for (const r of s.ports?.find((p) => p.switch === w.name)?.ports ?? []) {
+      const { port, ...row } = r;
+      put("port", `${w.name}/${port}`, { assignment: { ...row, switch: w.name, actual: actual?.ports?.[port] ?? {} } });
+      Object.assign(objects[objects.length - 1], { name: port });
+    }
+  }
+  for (const a of s.accessPoints ?? []) put("device", a.name, { deviceType: "access-point", vendor: a.vendor, model: a.model, managementAddress: a.managementIp, uplink: a.uplink ?? undefined, ssids: a.ssids, desired: { file: "switch-configuration-desired.json", key: `accessPoints.${a.name}` } });
+  for (const p of s.peers ?? []) {
+    const o = put("backup-peer", p.name, { role: p.role, remoteHost: p.remoteHost ?? undefined, tunnel: p.tunnel ?? undefined });
+    if (p.location) link("at", o, put("location", p.location, {}));
+  }
+  return { objects, relations };
+}
+// What the two paths share: the switches' actual always there, a peer at a location.
+const reportable = (s: TopoSources): TopoSources => {
+  const actual: SwitchActual = { mlagPairs: s.actual?.mlagPairs ?? {}, switches: {} };
+  for (const w of s.switches?.switches ?? []) {
+    const own = s.actual?.switches?.[w.name];
+    actual.switches![w.name] = { mlag: own?.mlag ?? null, ports: Object.fromEntries((s.ports?.find((p) => p.switch === w.name)?.ports ?? []).map((r) => [r.port, own?.ports?.[r.port] ?? {}])) };
+  }
+  const site = { ...s.site, primaryLocation: "here", locations: { here: { displayName: "Here" }, hareskov: { displayName: "Hareskov", kind: "remote", country: "DK", city: "Hareskov" } } };
+  const peers = (s.peers ?? []).map((p): PeerRow => ({ ...p, physicalLocation: undefined, location: "hareskov", place: { country: "DK", city: "Hareskov" } }));
+  return { ...s, actual, site, peers };
+};
+{
+  const src = reportable(hrossen());
+  const live = buildTopology(src, CMDB_NOW);
+  const read = asCmdb(src);
+  check(missingFromCmdb(read).length === 0, "CMDB: a store holding every report lacks nothing");
+  const fromCmdb = buildTopology(sourcesFromCmdb(read, { wanAddress: null, now: CMDB_NOW }), CMDB_NOW);
+  const d = diffTopology(live, fromCmdb);
+  check(d.length === 0, `CMDB: the document is the live join's, field by field${d.length ? ` (${renderDiff(d).slice(0, 8).join(" | ")})` : ""}`);
+  check(fromCmdb.nodes.length === 3 && fromCmdb.switches[0].ports.length === live.switches[0].ports.length && fromCmdb.nodes.every((n) => n.uplinks.length > 0), "CMDB: …and it is not empty");
+  check(fromCmdb.findings.some((f) => f.gate !== "topology" && f.gate !== "switch-drift"), "CMDB: the health findings come from the assessment stored on the site");
+  const noFindings = asCmdb(src);
+  noFindings.objects.find((x) => x.class === "site")!.attributes.assessment = { gates: [{ name: "passed", status: "pass", detail: "" }, { name: "rowed", status: "warn", detail: "", rows: [{ status: "warn", text: "a row", subject: { kind: "node", name: "tappaas1" } }] }] };
+  const rowed = buildTopology(sourcesFromCmdb(noFindings, { now: CMDB_NOW }), CMDB_NOW).findings.filter((f) => f.gate === "rowed");
+  check(rowed.length === 1 && rowed[0].text === "a row", "CMDB: a gate stored without findings, and one that holds them as rows");
+  check(!buildTopology(sourcesFromCmdb(read, { health: null, now: CMDB_NOW }), CMDB_NOW).findings.some((f) => f.gate !== "topology" && f.gate !== "switch-drift"), "CMDB: --no-health leaves them out");
+  const given: HealthDoc = { status: "fail", gates: [{ name: "given", status: "fail", detail: "", findings: [{ status: "fail", text: "from the file", subject: { kind: "node", name: "tappaas1" } }] }] };
+  check(buildTopology(sourcesFromCmdb(read, { health: given, now: CMDB_NOW }), CMDB_NOW).findings.some((f) => f.gate === "given"), "CMDB: --health <file> wins over the stored assessment");
+  const sources = fromCmdb.sources.map((x) => x.name).join(",");
+  check(sources === "cmdb,wan-address.json", "CMDB: sources names what was read");
+  const later = new Date(CMDB_NOW.getTime() + 2 * 3600 * 1000);
+  const stale = buildTopology(sourcesFromCmdb(read, { now: later }), later).sources.find((x) => x.name === "cmdb: nodes");
+  check(stale?.ok === false && /120 minutes ago/.test(stale.error ?? ""), "CMDB: a report two hours old is said in sources");
+
+  // The live CMDB's stray site, and an asset re-tagged by a later report.
+  const stray = asCmdb(src);
+  stray.objects.unshift({ id: "stray", class: "site", name: "s", lastSeen: "2026-10-30T13:00:00Z", attributes: { code: "s" } });
+  check(buildTopology(sourcesFromCmdb(stray, { now: CMDB_NOW }), CMDB_NOW).site.name === src.site?.name, "CMDB: a site object at no location is no site");
+  const again = asCmdb(src);
+  const p = again.objects.find((o) => o.class === "port")!;
+  again.objects.unshift({ ...p, id: "older", lastSeen: "2026-10-01T00:00:00Z", attributes: { assignment: { ...(p.attributes.assignment as object), description: "old asset" } } });
+  const twice = buildTopology(sourcesFromCmdb(again, { now: CMDB_NOW }), CMDB_NOW).switches.flatMap((x) => x.ports);
+  check(twice.length === live.switches.flatMap((x) => x.ports).length && !twice.some((x) => x.description === "old asset"), "CMDB: two objects claiming a port: the one seen last");
+
+  const mlagSrc = reportable({ ...src, switches: mload<SwitchList>("switches.json"), ports: mload<SwitchPorts[]>("switch-ports.json"), lags: mload<LagRow[]>("lags.json"), actual: mload<SwitchActual>("actual.json") });
+  const mlag = diffTopology(buildTopology(mlagSrc, CMDB_NOW), buildTopology(sourcesFromCmdb(asCmdb(mlagSrc), { now: CMDB_NOW }), CMDB_NOW));
+  check(mlag.length === 0, `CMDB: an MLAG pair and its LAGs come back whole${mlag.length ? ` (${renderDiff(mlag).slice(0, 6).join(" | ")})` : ""}`);
+
+  // Not all there: the document is not built from half a store.
+  const bare = asCmdb(src);
+  delete bare.objects.find((o) => o.class === "machine")!.attributes.network;
+  bare.objects.filter((o) => o.class === "port").forEach((o) => delete o.attributes.assignment);
+  const gaps = missingFromCmdb(bare).join("; ");
+  check(/no network of tappaas1 \(site-manager report\)/.test(gaps) && /no port assignment/.test(gaps), "CMDB: what a report has not brought yet is named, with its reporter");
+  const run = () => ({ rc: 0, ran: true, stderr: "", stdout: JSON.stringify({ doc: {}, catalog: [] }) });
+  const opts = { run, env: {}, wanAddressFile: join(FIX, "none.json"), now: CMDB_NOW };
+  const whole = readTopologyFromCmdb({ ...opts, read: () => read });
+  check(whole.topology !== null && whole.topology.positions !== null, "CMDB: a whole store answers, the catalog from asset-manager");
+  const half = readTopologyFromCmdb({ ...opts, read: () => bare });
+  check(half.topology === null && /does not hold it all yet/.test(half.why), "CMDB: half a store: the caller reads the planes, and is told why");
+  const down = readTopologyFromCmdb({ ...opts, read: () => { throw new CmdbUnavailable("no socket"); } });
+  check(down.topology === null && /does not answer \(no socket\)/.test(down.why), "CMDB: no service: the same");
+  const off = readTopologyFromCmdb({ ...opts, env: { TAPPAAS_CMDB: "off" }, read: () => read });
+  check(off.topology === null && /TAPPAAS_CMDB=off/.test(off.why), "CMDB: TAPPAAS_CMDB=off is not asked");
+  const noAsset = readTopologyFromCmdb({ ...opts, run: () => ({ rc: -1, ran: false, stderr: "", stdout: "" }), read: () => read });
+  check(noAsset.topology?.positions === null && noAsset.topology.sources.some((x) => x.name === "asset-manager export" && !x.ok), "CMDB: no catalog: no positions, and the source is named");
+  check(readTopologyFromCmdb({ ...opts, positions: false, run: () => { throw new Error("run"); }, read: () => read }).topology?.positions === null, "CMDB: --no-positions does not run asset-manager");
+
+  // The positions: what asset-manager recorded, not the switches' own objects.
+  const rack = (id: string, cls: string, name: string, attributes: Record<string, unknown>, recorded = true): CmdbItem => ({ id, class: cls, name, recorded, attributes });
+  const pos: CmdbRead = {
+    objects: [...read.objects, rack("r", "rack", "rack1", { units: 12, width: "19", numbering: "bottom-up" }), rack("a", "network-device", "sw-01", { stage: "placed", deviceType: "switch" }), rack("b", "network-device", SW, { stage: "placed", deviceType: "switch" }, false),
+      rack("p", "port", "1", { kind: "rj45" }), rack("q", "port", "2", { kind: "rj45" }, false), rack("w", "port", "wifi", { kind: "wifi" })],
+    relations: [...read.relations,
+      { type: "allocated-to", from: { id: "a", class: "network-device", name: "sw-01" }, to: { id: "n", class: "node", name: SW }, attributes: {}, recorded: true },
+      { type: "placed-in", from: { id: "a", class: "network-device", name: "sw-01" }, to: { id: "r", class: "rack", name: "rack1" }, attributes: { u: 3 }, recorded: true },
+      { type: "part-of", from: { id: "p", class: "port", name: "1" }, to: { id: "a", class: "network-device", name: "sw-01" }, attributes: {}, recorded: true },
+      { type: "part-of", from: { id: "w", class: "port", name: "wifi" }, to: { id: "a", class: "network-device", name: "sw-01" }, attributes: {}, recorded: true },
+      { type: "connects", from: { id: "p", class: "port", name: "1" }, to: { id: "q", class: "port", name: "2" }, attributes: { origin: "recorded" }, recorded: false },
+      { type: "connects", from: { id: "w", class: "port", name: "wifi" }, to: { id: "s", class: "ssid", name: "home" }, attributes: { origin: "broadcast" }, recorded: true }],
+  };
+  const doc = sourcesFromCmdb(pos, { catalog: [], now: CMDB_NOW }).positions!.doc;
+  check(Object.keys(doc.assets!).join() === "sw-01" && doc.assets!["sw-01"].role === SW && doc.placements![SW].rack === "rack1" && doc.placements![SW].u === 3, "CMDB: an asset, its role and its placement, keyed as positions.json keys them");
+  check(doc.cables!.length === 0, "CMDB: no switch-manager cable and no Wi-Fi link among the recorded cables");
+
+  // --diff
+  const moved = JSON.parse(JSON.stringify(live)) as Topology;
+  moved.generated = "later";
+  moved.switches[0].ports[1].link = "changed";
+  moved.zones.reverse();
+  moved.nodes[0].guests.pop();
+  moved.outside.push({ kind: "satellite", name: "sat9", role: null, location: null, tunnel: null, address: null, state: null });
+  const diff = diffTopology(live, moved);
+  const paths = diff.map((x) => x.path);
+  check(diff.length === 3, `--diff: three differences; the order of a list and the time are none (${paths.join(", ")})`);
+  check(paths.some((x) => x === `switches[${live.switches[0].name}].ports[${live.switches[0].ports[1].port}].link`), "--diff: a value is named by the path to it");
+  check(diff.some((x) => x.path.startsWith("outside[sat9]") && !("live" in x)) && diff.some((x) => x.path.startsWith("nodes[tappaas1].guests[") && !("cmdb" in x)), "--diff: what only one side has");
+  const text = renderDiff(diff).join("\n");
+  check(/^3 difference/.test(text) && /\+ outside\[sat9\]/.test(text) && /- nodes\[tappaas1\]/.test(text) && /~ switches/.test(text), "--diff: the text view");
+  check(renderDiff([])[0] === "the CMDB and the planes agree", "--diff: none");
 }
 
 console.log(`\ntopology: ${passed} passed, ${failed} failed`);
