@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-30; O3, O5 and O6 still open) |
-| **Version** | 1.1 |
+| **Version** | 1.2 |
 | **Date** | 2026-10-30 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #908. Amends ADR-007e (Health as a lens: the lens now reads and writes the CMDB), ADR-040 D10 and D11 (the `health` attribute becomes conditions; the Operations view becomes the Health view), ADR-039 D8 (open alerts are one source of a condition). Related: ADR-034 (console), ADR-031 (the pulse), ADR-011 (the CVE scan), ADR-017 (the update sweep's capacity checks), IT4IT 3.0.1 Event (§9.2.3.1: Type causal or symptom, Is Correlated) and the Configuration component's duty to "calculate and provide the business impact of the Event". |
-| **Changelog** | v1.1 (2026-10-30) — **critical roots only (operator):** `HealthRootCause` mails a critical root at once; warnings and the sweep's findings go to a daily digest rule (D4). · v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
+| **Changelog** | v1.2 (2026-10-30) — **D5 redesigned (operator):** the one-graph-of-everything did not work in practice; the Health view becomes a containment tree, an ego graph one hop deep with plus/minus expansion, and the CI panel. · v1.1 (2026-10-30) — **critical roots only (operator):** `HealthRootCause` mails a critical root at once; warnings and the sweep's findings go to a daily digest rule (D4). · v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
 
 Health in TAPPaaS today is a verdict computed on demand and forgotten: `health-manager validate`
 runs its gates against the live cluster, prints a table, exits 0 or 1, and the console caches the
@@ -240,36 +240,50 @@ later gets a root of its own is heard again. A condition can also be acknowledge
 
 ### D5 — The Health view
 
-The console gets a **Health** entry in its menu, under *Day 2 wizards* and above *Site*. It is one
-page with one object: **the graph of every CMDB object, coloured by health, centred on the root
-causes.**
+The console gets a **Health** entry in its menu, under *Day 2 wizards* and above *Site*. v1.1
+drew the graph of every CMDB object on one page; on the test site (349 objects, most of them
+`unknown`) that is a wall of grey cards and crossing lines, and nothing can be found in it. v1.2
+replaces it with the layout every CMDB browser has settled on (ServiceNow's dependency view,
+UCMDB's topology map): **a tree to find the object, an ego graph around it, the details beside
+it.** Three panes, one selected object.
 
-- **Nodes** are the objects; the colour is the worst condition (critical red, warning amber,
-  unknown grey, ok green, acknowledged hatched); the card shows class, name and the one-line
-  reason. **Edges** are the relations that carry impact (D3); other relations are drawn on demand.
-- **Layout** is by dependency: the planes at the bottom (assets, machines, switches), what runs on
-  them above, what they serve above that, environments and the site at the top — the topological
-  order D3 walks, laid out by dagre through React Flow, which the console already uses for every
-  graph (`graph.tsx`); elkjs would route edges better and weighs seven times more, so not unless
-  the routing proves unreadable. The layout is computed once per change of the topology and only
-  the colours are patched on a health event, so a few hundred objects redraw in no time. **Groups**
-  collapse by default as React Flow sub-flows — an environment's twenty vms are one card with a
-  count and the worst colour — and open on a click, so the page is readable on a phone and
-  complete on a screen; the mini-map keeps the whole in view.
-- **Root causes first.** The page opens centred on the current root causes with their symptoms
-  drawn as a halo around each; a healthy site opens on the site card with the one green line.
-  A side list repeats the roots in order of impact (how many objects, which environments), each a
-  link into the graph.
-- **Click** an object: its CI panel (ADR-040 D10) with the conditions and their `since`, the
-  events, the history, the drift against its record, and the verbs that apply (reboot, update,
-  reconcile, ack) as jobs.
-- **Filters:** by condition type (show only drift; only security), by class, by environment; a
-  time slider replays the graph as of a moment from the attribute history.
-- **Live:** the change stream updates colours without a reload; a new root cause recentres unless
-  the operator has pinned the view.
-- The Overview's health line and badges, the Backup page's health section and the Modules list's
-  status column read the same conditions (the worst, per object), so every page agrees with the
-  graph.
+- **The tree (left)** is a containment walk over the CMDB's relations, not a list written into
+  the console. Three facets at the top level, each opened on demand and searchable:
+  - **Physical** — the site, its locations, rooms and racks (`at`, `placed-in`), the assets in them
+    (servers, network devices, appliances) with the `node` each is `allocated-to`, under a machine
+    the guests that `runs-on` it and under a guest its `software`; under a network device its
+    ports (`part-of`) and what each `connects`.
+  - **Environments** — each environment, the nodes `member-of` it, their software and the
+    services they `provides`; the zones that `serves` it.
+  - **Identity** — organizations, the groups and environments `owned-by` them, users `member-of`
+    groups.
+  - Every tree node carries the **roll-up** of its subtree: the worst status as a dot, and a count
+    of objects not ok, so a red dot on a machine says where to look before anything is opened.
+    Which relation types are containment for the tree is data on the relation type
+    (`metamodel/relations.json`, `tree: "children"` on the end that is contained), so a new
+    class or relation joins the tree without a console change. The tree remembers what is open.
+- **The ego graph (centre)** shows the selected object in the middle and its direct neighbours
+  around it, laid out by dagre (the console's `graph.tsx`) and grouped by relation type (runs-on,
+  depends-on, connects, member-of, contains…), so the picture has a shape at one hop. A neighbour
+  with further neighbours shows a **plus**; a click expands one more hop from that node, a
+  **minus** folds it. Two shortcuts expand along the derivation of D3: **to the root cause**
+  opens the chain from the selected object to the root that explains it, **what this impacts**
+  opens what fails because of it. Colours, badges and lines as before: red critical, amber
+  warning, grey unknown, green ok, hatched acknowledged, dotted in maintenance, ↯ flapping; a root
+  is ringed. The graph is small by construction, so it is readable on a phone.
+- **The CI panel (right)**, unchanged from ADR-040 D10: conditions with their `since`, the root
+  cause or what it impacts, drift against the record, the conditions' history, changes, relations
+  both ways, and the verbs that apply as jobs (Ack, Unack, Maintenance; Reboot, Update, Reconcile,
+  Reboot node where the class has them). "Show in tree" keeps the two sides in step.
+- **Entry points.** The Overview's health line and its Attention list land on the root cause with
+  its symptoms expanded; `/health?select=<id>` opens on one object; a healthy site opens on the
+  site card with the one green line; a site that has not run `assess` gets grey dots and says so.
+- **Filters** (condition type, class, environment) dim what they leave out in the tree and the
+  graph; the time slider replays the colours from the attribute history (`health/graph?at=`).
+- **Live:** the change stream patches colours in the tree and the graph without a reload; a new
+  root cause is announced in the tree's roll-ups and the Overview, and never moves the selection.
+- The Overview, the Backup page and the Modules list read the same conditions, so every page agrees
+  with the view.
 
 ### D6 — What is not here
 
