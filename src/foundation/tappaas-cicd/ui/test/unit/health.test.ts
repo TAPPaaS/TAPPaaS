@@ -1,7 +1,8 @@
 // health.test.ts — the Health view's backend over the fixture site
 // (fake-cmdb.ts): the worst condition and what silences it, roots and their
-// symptoms, groups and tiers, the summary the other pages read, the history,
-// the client's stream, the live feed, the routes, and ack as a job.
+// symptoms, the tree and its roll-ups, the ego graph and the derivation's
+// chains, the summary the other pages read, the history, the client's stream,
+// the live feed, the routes, and ack as a job.
 
 import { mkdirSync, mkdtempSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -11,20 +12,20 @@ import { AccessConfig } from "../../src/access";
 import { withConditions } from "../../src/badges";
 import { Cached } from "../../src/cache";
 import { Cmdb, CmdbChange, parseFrame, splitFrames } from "../../src/cmdb";
-import { Condition, HealthGraph, buildHealth, conditionHistory, diffHealth, healthSummary, issueOf, moduleHealth, tierOf, viewOf } from "../../src/health";
+import { Condition, HealthGraph, HealthPath, buildHealth, conditionHistory, diffHealth, healthEgo, healthPath, healthSummary, healthTree, issueOf, moduleHealth, rollupOf, treeChildren, treePath, treeSearch, viewOf } from "../../src/health";
 import { HealthLive } from "../../src/healthlive";
 import { Manifests, normalize, validateArgv } from "../../src/manifest";
 import { Reads } from "../../src/reads";
 import { ConsoleServer } from "../../src/server";
 import { check, done } from "./check";
-import { FakeCmdb, healthSite } from "./fake-cmdb";
+import { FakeCmdb, healthSite, relationTypes } from "./fake-cmdb";
 import { fakeSite } from "./fake-site";
 
 const NOW = Date.parse("2026-10-30T09:00:00Z");
 const MODULES = ["nextcloud", "immich", "gitea", "backup", "logging"];
 const site = healthSite();
 const ids = site.ids;
-const graph = (s = site): HealthGraph => buildHealth({ objects: s.objects, relations: s.relations, modules: MODULES, now: NOW });
+const graph = (s = site): HealthGraph => buildHealth({ objects: s.objects, relations: s.relations, relationTypes: relationTypes(), modules: MODULES, now: NOW });
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -59,22 +60,8 @@ function pure(): void {
   check(g.roots[1].acknowledged && node("pbs-store").acknowledged, "the acknowledged root");
   check(node("backup").acknowledged && node("backup").status === "critical", "its symptom is silenced with it (D4)");
 
-  // Tiers: the hardware at the bottom, the site on top.
-  check(node("srv1").tier < node("tappaas1").tier && node("tappaas1").tier < node("nextcloud").tier, "assets below machines below guests");
-  check(node("nextcloud").tier < node("nc-svc").tier && node("nc-svc").tier < node("env").tier && node("env").tier < node("site").tier, "services, then environments, then the site");
-  check(tierOf("gadget", new Map([["gadget", "device"]])) === node("tappaas1").tier, "a contributed class sits with its parent");
-
-  // Groups.
-  check(node("nextcloud").group === "environment:home" && node("nc-svc").group === "environment:home", "an environment's guests and their software are one group");
-  check(node("p1").group === `ports:${ids.srv1}`, "an asset's ports collapse into it");
-  check(node("p3").group === null, "a group of one is no group");
-  check(node("a1").group === `addresses:${ids.zone}`, "addresses collapse by zone");
-  check(node("u1").group === "class:user", "users collapse by class");
-  check(g.groups.find((x) => x.id === "environment:home")?.members === 4, "the group counts its members");
-  check(node("nextcloud").environment === "home", "a member knows its environment");
-
-  // Edges: what carries impact, nothing else.
-  check(g.edges.length === site.relations.filter((x) => x.type !== "part-of").length, "part-of groups but draws no edge");
+  check(node("nextcloud").environment === "home" && node("nc-svc").environment === "home" && node("backup").environment === "mgmt", "an object knows its environment: its membership, its host's, its own word");
+  check(g.edges.length === site.relations.length, "every relation is an edge");
 
   check(node("nc-svc").module === "nextcloud" && node("nextcloud").module === "nextcloud" && node("tappaas2").module === null, "the module an object belongs to");
 
@@ -113,11 +100,119 @@ function pure(): void {
   moved.relations.pop();
   check(diffHealth(g, graph(moved))?.relayout === true, "an edge went: the graph is laid out again");
 
+  // The roll-up of a colour under a live change.
+  const fixed = healthSite();
+  fixed.objects.find((o) => o.id === ids.gitea)!.attributes.conditions = [{ type: "operational", status: "ok" }];
+  const up = diffHealth(g, graph(fixed))!;
+  check(up.rollups[ids.gitea]?.status === "ok" && up.rollups[ids.tappaas1]?.notOk === 0 && up.rollups[ids.env]?.notOk === 3, "a colour moved: the roll-ups over it go with it");
+  check(up.rollups[ids.tappaas2] === undefined, "and only those");
+
+  tree(g);
+  ego(g);
+
   // The SSE frames.
   check(parseFrame(": keepalive") === null, "a comment is no frame");
   check(parseFrame('event: change\ndata: {"id":1}')?.event === "change", "a frame's event");
   const parts = splitFrames("event: change\ndata: 1\n\nevent: ch");
   check(parts.frames.length === 1 && parts.rest === "event: ch", "a chunk ends mid-frame: the rest waits");
+}
+
+function tree(g: HealthGraph): void {
+  const t = healthTree(g);
+  const facet = (id: string) => t.facets.find((f) => f.id === id)!;
+  const kids = (id: string) => treeChildren(g, id)!;
+  const names = (id: string) => kids(id).map((n) => n.name).join(" ");
+  check(t.facets.map((f) => f.label).join() === "Physical,Environments,Identity,Elsewhere", "three facets, and Elsewhere for what they do not reach");
+  check(names("physical") === "HQ", "Physical starts at the location: the site, its rooms and racks are under it");
+  check(names(ids.location) === "rossen Server room", "a location holds its rooms and the site that is at it");
+  check(names(ids.room) === "Rack A" && names(ids.rack) === "srv-01", "a room its racks, a rack its assets");
+  check(names(ids.site) === "srv-02", "an asset owned by the site hangs under it when it is placed nowhere");
+  check(names(ids.srv1) === "eno1 eno2 tappaas1", "an asset: its ports and the node allocated to it");
+  check(names(ids.tappaas2) === "immich nextcloud", "a machine: its guests");
+  check(names(ids.nextcloud) === "nextcloud:nextcloud", "a guest: its software, once though it also provides it");
+  check(names(ids.backup) === "tappaas_backup", "a guest: the datastore on it");
+  check(names("environments") === "home" && names(ids.env) === "gitea home immich nextcloud", "an environment: its nodes and the zone that serves it");
+  check(names(ids.zone) === "10.1.0.5 10.1.0.6", "a zone: its addresses");
+  check(names("identity") === "erik rossen", "Identity: organizations, and a user in no group");
+  check(names(ids.org) === "admins home" && names(ids.admins) === "lars", "an organization: its groups and environments; a group: its users");
+  check(names("elsewhere") === "tappaas", "the cluster nothing places");
+  check(kids(ids.tappaas2).find((n) => n.name === "nextcloud")?.children === 1, "a node says how many to open");
+  const port = kids(ids.srv1).find((n) => n.id === ids.p1)!;
+  check(port.children === 1 && names(ids.p1) === "eno1", "a port lists what it connects");
+  check(kids(ids.p1)[0].children === 0, "the far end of a cable is a leaf: the tree does not run on through it");
+  check(!treeChildren(g, "nope") && treeChildren(g, "elsewhere") !== null, "no such row: null");
+
+  // Roll-ups: over the subtree, from the conditions.
+  const r = g.tree.rollups;
+  check(r.get(ids.tappaas2)?.status === "critical" && r.get(ids.tappaas2)?.notOk === 4, "the machine down: itself, its guests, their service");
+  check(r.get(ids.tappaas1)?.status === "warning" && r.get(ids.tappaas1)?.notOk === 1, "the other machine: its silenced guests do not count, the flapping one does");
+  check(r.get(ids.env)?.notOk === 4, "an environment's own roll-up condition is not one more object");
+  check(r.get(ids.rack)?.notOk === 1 && r.get(ids.srv1)?.status === "warning", "up through the asset to the rack");
+  check(r.get(ids.u1)?.status === "unknown" && r.get(ids.u1)?.notOk === 0 && r.get(ids.u1)?.unknown === 1, "unknown is grey, and not counted as not ok");
+  check(r.get(ids["pbs-store"])?.status === "critical" && r.get(ids["pbs-store"])?.acknowledged === true, "only a silenced condition: hatched");
+  check(r.get(ids.p2)?.status === "ok" && r.get(ids.p2)?.notOk === 0, "a healthy leaf");
+  check(facet("physical").status === "critical" && facet("physical").notOk === 5, "a facet rolls up its whole walk");
+  check(facet("identity").status === "critical", "Identity sees what the environments it owns hold");
+  check(r.get(ids.env)?.types.operational === "critical" && r.get(ids.env)?.classes.includes("zone") === true && r.get(ids.env)?.environments.join() === "home", "what a filter asks of a subtree");
+  const both = rollupOf([g.nodes.find((n) => n.id === ids.u1)!, g.nodes.find((n) => n.id === ids.tappaas2)!]);
+  check(both.status === "critical" && both.notOk === 1 && both.unknown === 1, "worst of two");
+
+  // Show in tree, and the search.
+  const way = treePath(g, ids.nextcloud)!;
+  check(way[0] === "physical" && way.at(-2) === ids.tappaas2 && way.at(-1) === ids.nextcloud, "the way down to a guest runs through its machine");
+  check(treePath(g, ids.cluster)?.join() === `elsewhere,${ids.cluster}`, "an object elsewhere is found there");
+  check(treePath(g, ids.p3)?.at(-1) === ids.p3, "a port");
+  check(treePath(g, "nope") === null, "no such object");
+  const found = treeSearch(g, "NEXT");
+  check(found[0].name === "nextcloud" && found.length === 2 && found[0].where.startsWith("Physical › HQ"), "a search: by name, any case, and where it is");
+  check(treeSearch(g, "zone")[0].id === ids.zone, "by class");
+  check(treeSearch(g, "  ").length === 0, "nothing asked: nothing found");
+
+  // A CMDB that does not say what contains what: nothing is lost.
+  const flat = buildHealth({ objects: site.objects, relations: site.relations, now: NOW });
+  check(flat.tree.facets.flatMap((f) => f.roots).length >= flat.nodes.length - 2 && treePath(flat, ids.cluster) !== null, "no containment declared: flat, and every object still found");
+  check(healthTree(buildHealth({ objects: [], relations: [], relationTypes: relationTypes(), now: NOW })).facets.length === 3, "an empty CMDB: the facets, no Elsewhere");
+}
+
+function ego(g: HealthGraph): void {
+  const e = healthEgo(g, ids.tappaas2)!;
+  const group = (label: string) => e.groups.find((x) => x.label === label);
+  check(e.center.id === ids.tappaas2 && e.center.isRoot, "the object in the middle");
+  check(e.nodes.length === 4, "its neighbours and nothing further");
+  check(group("contains · runs-on")?.neighbours.length === 2 && group("contains · runs-on")?.side === "down", "what runs on it: one group, below it");
+  check(group("member-of")?.side === "up", "what it needs, above it");
+  check(healthEgo(g, ids.srv2)!.groups.some((x) => x.label === "contains · allocated-to"), "seen from the asset, the node is what it contains");
+  const asset = e.groups.find((x) => x.type === "allocated-to")!;
+  check(asset.direction === "in" && asset.side === "up" && asset.neighbours.join() === ids.srv2, "the box it runs on, above it");
+  const n = (id: string) => e.nodes.find((x) => x.id === id)!;
+  check(n(ids.nextcloud).more && n(ids.cluster).more, "a neighbour with further neighbours has a plus");
+  check(!healthEgo(g, ids.u2)!.nodes.length, "an object with no relation stands alone");
+  const leaf = healthEgo(g, ids.a1)!;
+  check(leaf.nodes.length === 1 && leaf.nodes[0].id === ids.zone && leaf.nodes[0].more, "the zone of an address: more behind it");
+  const a2 = healthEgo(g, ids.zone)!.nodes.find((x) => x.id === ids.a2)!;
+  check(!a2.more, "an address with nothing but this zone has no plus");
+  check(n(ids.nextcloud).status === "critical" && n(ids.nextcloud).reason === "node tappaas2 down", "colours as the graph has them");
+  const two = healthEgo(g, ids.tappaas2, 2)!;
+  check(two.nodes.some((x) => x.id === ids["nc-svc"]) && two.groups.some((x) => x.anchor === ids.nextcloud), "two hops: grouped from each anchor");
+  check(healthEgo(g, "nope") === null, "no such object");
+
+  // The chains of the derivation.
+  const has = (p: HealthPath, a: string, b: string) => p.edges.some((x) => x.provider === ids[a] && x.dependant === ids[b]);
+  const up = healthPath(g, ids["nc-svc"], "root")!;
+  check(up.edges.length === 2 && has(up, "tappaas2", "nextcloud") && has(up, "nextcloud", "nc-svc") && !up.edges.some((x) => x.virtual), "to the root: the service, its guest, the machine");
+  check(up.nodes.length === 3 && up.nodes.some((x) => x.id === ids.tappaas2 && x.isRoot), "the chain's objects, the root marked");
+  const down = healthPath(g, ids.tappaas2, "impact")!;
+  check(down.nodes.length === 4 && has(down, "nextcloud", "nc-svc") && has(down, "tappaas2", "immich"), "what it impacts: along the relations, every symptom");
+  check(!down.edges.some((x) => x.virtual), "no line assess alone must vouch for");
+  const part = healthPath(g, ids.nextcloud, "impact")!;
+  check(part.edges.length === 2 && has(part, "nextcloud", "nc-svc") && has(part, "nc-svc", "immich"), "from a symptom: what fails through it");
+  check(healthPath(g, ids.immich, "impact")!.edges.length === 0, "and nothing for the last in the chain");
+  const quiet = healthPath(g, ids["pbs-store"], "impact")!;
+  check(quiet.edges.length === 1 && quiet.edges[0].virtual && quiet.edges[0].dependant === ids.backup, "no relation shows the way: assess's word, as a virtual line");
+  const self = healthPath(g, ids.tappaas2, "root")!;
+  check(self.edges.length === 0 && self.nodes.length === 1, "a root is its own root cause");
+  check(healthPath(g, ids.u1, "root")!.edges.length === 0 && healthPath(g, ids.u1, "impact")!.edges.length === 0, "a healthy object: no chain either way");
+  check(healthPath(g, "nope", "root") === null, "no such object");
 }
 
 async function client(): Promise<void> {
@@ -198,16 +293,34 @@ async function routes(): Promise<void> {
     return { status: res.statusCode, json: JSON.parse(body) };
   };
 
-  const g = await call("/api/v1/health/graph");
-  check(g.status === 200 && (g.json.data?.nodes as unknown[]).length === 22 && (g.json.data?.roots as unknown[]).length === 2, "health/graph: the objects and the roots");
-  check(cmdb.calls.includes("relations part-of") && cmdb.calls.includes("relations serves"), "it reads the impact relations and part-of");
+  const t = await call("/api/v1/health/tree");
+  check(t.status === 200 && (t.json.data?.facets as unknown[]).length === 4 && (t.json.data?.roots as unknown[]).length === 2, "health/tree: the facets and the roots");
+  check(cmdb.calls.includes("rules") && cmdb.calls.includes("relations "), "it reads the metamodel's relation types and every relation");
   const n = cmdb.calls.filter((c) => c === "query").length;
-  await call("/api/v1/health/graph");
-  check(cmdb.calls.filter((c) => c === "query").length === n, "the graph is cached");
+  await call("/api/v1/health/tree");
+  check(cmdb.calls.filter((c) => c === "query").length === n, "the document is cached");
+  const kids = await call("/api/v1/health/tree/physical/children");
+  check(kids.status === 200 && (kids.json.data as unknown as { name: string }[])[0].name === "HQ", "health/tree/<facet>/children");
+  check(((await call(`/api/v1/health/tree/${ids.tappaas2}/children`)).json.data as unknown as unknown[]).length === 2, "health/tree/<id>/children: one level");
+  check(((await call(`/api/v1/health/tree/${ids.u2}/path`)).json.data as unknown as string[])[0] === "identity", "health/tree/<id>/path");
+  check(((await call("/api/v1/health/tree?q=nextcloud")).json.data as unknown as unknown[]).length === 2, "health/tree?q= searches");
+  check((await call("/api/v1/health/tree/not-an-id/children")).status === 400, "a tree id that is no id");
+  check((await call("/api/v1/health/tree/00000000-0000-4000-8000-0000000000ff/children")).status === 404, "a tree id the CMDB does not hold");
 
-  const past = await call("/api/v1/health/graph?at=2026-10-29T00:00:00Z");
-  check(past.status === 200 && cmdb.at[0] === "2026-10-29T00:00:00.000Z" && past.json.data?.at === "2026-10-29T00:00:00.000Z", "health/graph?at= reads the CMDB as of a moment");
-  check((await call("/api/v1/health/graph?at=soon")).status === 400, "a time that is no date is refused");
+  const eg = await call(`/api/v1/health/ego/${ids.tappaas2}`);
+  check(eg.status === 200 && (eg.json.data?.nodes as unknown[]).length === 4, "health/ego/<id>");
+  check(((await call(`/api/v1/health/ego/${ids.tappaas2}?depth=2`)).json.data?.nodes as unknown[]).length > 4, "?depth=2");
+  check((await call(`/api/v1/health/ego/${ids.tappaas2}?depth=9`)).status === 400, "a depth out of bounds");
+  const past = await call(`/api/v1/health/ego/${ids.tappaas2}?at=2026-10-29T00:00:00Z`);
+  check(past.status === 200 && cmdb.at[0] === "2026-10-29T00:00:00.000Z" && past.json.data?.at === "2026-10-29T00:00:00.000Z", "health/ego?at= reads the CMDB as of a moment");
+  check((await call(`/api/v1/health/ego/${ids.tappaas2}?at=soon`)).status === 400, "a time that is no date is refused");
+  check((await call("/api/v1/health/ego/not-an-id")).status === 400, "an ego id that is no id");
+  check((await call("/api/v1/health/ego/00000000-0000-4000-8000-0000000000ff")).status === 404, "an ego of nothing");
+  const chain = await call(`/api/v1/health/ego/${ids["nc-svc"]}/path?to=root`);
+  check((chain.json.data?.edges as unknown[]).length === 2, "health/ego/<id>/path?to=root");
+  check(((await call(`/api/v1/health/ego/${ids.tappaas2}/path?to=impact`)).json.data?.nodes as unknown[]).length === 4, "?to=impact");
+  check((await call(`/api/v1/health/ego/${ids.tappaas2}/path?to=sideways`)).status === 400, "a chain to nowhere");
+  check((await call("/api/v1/health/graph")).status === 404, "the whole-site graph is gone");
 
   const o = await call(`/api/v1/health/object/${ids.nextcloud}`);
   const d = o.json.data!;
@@ -239,8 +352,9 @@ async function routes(): Promise<void> {
     return JSON.parse(body);
   };
   check((await bareCall("/api/v1/health/summary")).data?.available === false, "no CMDB: the summary says not available");
-  const g2 = await bareCall("/api/v1/health/graph");
-  check(g2.data === null && !!g2.error, "no CMDB: the graph says why");
+  const g2 = await bareCall("/api/v1/health/tree");
+  check(g2.data === null && !!g2.error, "no CMDB: the tree says why");
+  check((await bareCall(`/api/v1/health/ego/${ids.tappaas2}`)).data === null, "and the ego graph");
   check(Array.isArray((await bareCall("/api/v1/modules")).data), "no CMDB: the modules still read");
 }
 

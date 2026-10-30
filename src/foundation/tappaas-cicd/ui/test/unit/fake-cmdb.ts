@@ -7,6 +7,7 @@
 import { readFileSync } from "fs";
 import { join } from "path";
 import { Cmdb, CmdbAttributePeriod, CmdbChange, CmdbObject, CmdbQuery, CmdbRelationQuery, CmdbRelationRow } from "../../src/cmdb";
+import { RelationType } from "../../src/health";
 
 const FIX = process.env.CONSOLE_FIXTURES ?? "test/fixtures";
 
@@ -19,6 +20,13 @@ export interface HealthSite {
 
 export function healthSite(): HealthSite {
   return JSON.parse(readFileSync(join(FIX, "health-site.json"), "utf8")) as HealthSite;
+}
+
+// The shipped metamodel's relation types, as /v1/rules serves them: the tests
+// walk what a site walks.
+export function relationTypes(): RelationType[] {
+  const doc = JSON.parse(readFileSync(join(FIX, "..", "..", "..", "controller", "cmdb-controller", "metamodel", "relations.json"), "utf8")) as { relations: Record<string, { dependant?: RelationType["dependant"]; tree?: RelationType["tree"] }> };
+  return Object.entries(doc.relations).map(([name, r]) => ({ name, dependant: r.dependant ?? null, tree: r.tree ?? null }));
 }
 
 export class FakeCmdb {
@@ -45,6 +53,10 @@ export class FakeCmdb {
   async classes(): Promise<{ name: string; parent: string | null }[]> {
     this.guard("classes");
     return [{ name: "gadget", parent: "device" }];
+  }
+  async rules(): Promise<{ relations: RelationType[] }> {
+    this.guard("rules");
+    return { relations: relationTypes() };
   }
   async show(id: string): Promise<unknown> {
     this.guard(`show ${id}`);

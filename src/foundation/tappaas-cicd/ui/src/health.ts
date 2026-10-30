@@ -1,8 +1,10 @@
 // health.ts — the Health view's document (ADR-041 D5), built from what the CMDB
-// holds: every object with its worst condition, the relations that carry
-// impact, the groups a page collapses, the current root causes and the objects
-// each one impacts. Pure: cmdb.ts reads, this computes, so the view and the
-// pages that read the worst condition (Overview, Backup, Modules) agree.
+// holds: every object with its worst condition, the relations between them, the
+// current root causes and the objects each one impacts; the tree over the
+// relations the metamodel calls containment, with the roll-up of every subtree;
+// the ego graph around one object and the chains of the derivation. Pure:
+// cmdb.ts reads, this computes, so the view and the pages that read the worst
+// condition (Overview, Backup, Modules) agree.
 //
 // A condition is health-assess's (ADR-041 D1). Nothing here judges an object:
 // this only picks the worst of what assess wrote and says what silences it.
@@ -17,9 +19,13 @@ const RANK: Record<Status, number> = { ok: 0, unknown: 1, warning: 2, critical: 
 
 export const CONDITION_TYPES = ["operational", "drift", "capacity", "security", "maintenance", "backup", "impact"];
 
-// The relations that carry impact (D3, D5). part-of and provides do not, but
-// they say which group an object collapses into.
-export const IMPACT_RELATIONS = ["runs-on", "depends-on", "member-of", "connects", "allocated-to", "serves"];
+// What the Health view needs of a relation type: the metamodel's words, so the
+// console hardcodes neither containment nor dependency (/v1/rules).
+export interface RelationType {
+  name: string;
+  dependant: "from" | "to" | "both" | null; // the end hurt when the other fails
+  tree: "from" | "to" | "both" | null; // the end nested under the other; both: a leaf either way
+}
 
 export interface Acknowledged {
   by?: string;
@@ -72,8 +78,6 @@ export interface HealthNode extends HealthView {
   class: string;
   name: string;
   label: string;
-  tier: number; // 0 at the bottom of the graph
-  group: string | null;
   environment: string | null;
   module: string | null; // the deployed module it is, or provides for
   rootCause: string[]; // what explains it, the roots' ids
@@ -87,13 +91,6 @@ export interface HealthEdge {
   type: string;
   from: string;
   to: string;
-}
-
-export interface HealthGroup {
-  id: string;
-  label: string;
-  kind: "environment" | "ports" | "addresses" | "host" | "class";
-  members: number;
 }
 
 export interface HealthRoot {
@@ -118,14 +115,41 @@ export type Counts = Record<Status | "acknowledged", number>;
 export interface HealthGraph {
   generated: string;
   at: string | null; // the moment it shows; null: now
-  topology: string; // changes when an object, a group or an edge does
+  topology: string; // changes when an object or an edge does
   hasConditions: boolean; // false: this site has not run assess
   site: string | null;
   nodes: HealthNode[];
   edges: HealthEdge[];
-  groups: HealthGroup[];
+  relationTypes: RelationType[];
+  tree: TreeIndex;
   roots: HealthRoot[];
   counts: Counts;
+}
+
+// A subtree in one line: the worst status, how many objects need a look (an
+// unknown is grey, not a finding to count; a silenced one neither), and what a
+// filter asks of it.
+export interface TreeRollup {
+  status: Status;
+  notOk: number;
+  unknown: number;
+  acknowledged: boolean;
+  maintenance: boolean;
+  flapping: boolean;
+  types: Record<string, Status>;
+  classes: string[];
+  environments: string[];
+}
+
+export interface TreeChild {
+  id: string;
+  leaf: boolean; // listed, not opened: the other end of a cable
+}
+
+export interface TreeIndex {
+  facets: { id: string; label: string; roots: string[] }[];
+  children: Map<string, TreeChild[]>;
+  rollups: Map<string, TreeRollup>;
 }
 
 const asArray = (v: unknown): string[] => (typeof v === "string" && v ? [v] : Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && x !== "") : []);
@@ -188,35 +212,6 @@ export function viewOf(issues: Issue[]): HealthView {
 
 const NO_CONDITION: HealthView = { status: "unknown", type: null, reason: null, since: null, acknowledged: false, maintenance: false, flapping: false };
 
-// Bottom to top (D5): the places and the hardware, what runs on it, what it
-// serves, environments and the site.
-const TIERS: Record<string, number> = {
-  place: 0,
-  resource: 1,
-  machine: 2,
-  device: 2,
-  "storage-element": 3,
-  vm: 4,
-  lxc: 4,
-  software: 5,
-  "network-element": 6,
-  identity: 6,
-  cluster: 7,
-  environment: 8,
-  site: 9,
-};
-
-// A class's tier by its own name, else its nearest ancestor's (a class a
-// module contributed); what the tree does not place sits with the software.
-export function tierOf(cls: string, parent: Map<string, string | null>): number {
-  let c: string | null | undefined = cls;
-  for (let i = 0; c && i < 16; i++) {
-    if (c in TIERS) return TIERS[c];
-    c = parent.get(c);
-  }
-  return TIERS.software;
-}
-
 function isA(cls: string, of: string, parent: Map<string, string | null>): boolean {
   let c: string | null | undefined = cls;
   for (let i = 0; c && i < 16; i++) {
@@ -227,8 +222,10 @@ function isA(cls: string, of: string, parent: Map<string, string | null>): boole
 }
 
 // The metamodel's tree as the console ships it, for a CMDB that does not say
-// (GET /v1/classes failed): the classes the groups below ask about.
+// (GET /v1/classes failed): the classes the facets and the environments ask about.
 const SHIPPED_PARENTS: Record<string, string> = {
+  vm: "node", lxc: "node", machine: "node", device: "node",
+  site: "collection", cluster: "collection", environment: "collection",
   app: "software", service: "software", controller: "software", manager: "software",
   zone: "network-element", ssid: "network-element", address: "network-element", "dns-name": "network-element", "proxy-route": "network-element", "vpn-peer": "network-element",
   "storage-pool": "storage-element", share: "storage-element", datastore: "storage-element", "backup-peer": "storage-element",
@@ -236,56 +233,6 @@ const SHIPPED_PARENTS: Record<string, string> = {
   location: "place", room: "place", rack: "place",
   server: "asset", "network-device": "asset", appliance: "asset", "passive-device": "asset", "other-device": "asset", asset: "resource", port: "resource", pool: "resource",
 };
-
-// These collapse per class: nothing else draws them apart.
-const CLASS_GROUPS = ["dns-name", "proxy-route", "vpn-peer", "share", "user", "group", "role", "organization", "place"];
-
-// Which group an object collapses into; one member is no group.
-function assignGroups(objects: CmdbObject[], rows: CmdbRelationRow[], parent: Map<string, string | null>): Map<string, HealthGroup> {
-  const byId = new Map(objects.map((o) => [o.id, o]));
-  const name = (o: CmdbObject | undefined): string => o?.displayName || o?.name || "?";
-  const out = new Map<string, { type: string; to: CmdbObject }[]>();
-  for (const r of rows) {
-    const to = byId.get(r.to.id);
-    if (to) out.set(r.from.id, [...(out.get(r.from.id) ?? []), { type: r.type, to }]);
-  }
-  const via = (id: string, type: string, of?: string): CmdbObject | undefined => (out.get(id) ?? []).find((x) => x.type === type && (!of || isA(x.to.class, of, parent)))?.to;
-  const envOf = (o: CmdbObject): string | null => {
-    const e = via(o.id, "member-of", "environment");
-    if (e) return e.name;
-    return typeof o.attributes.environment === "string" && o.attributes.environment ? o.attributes.environment : null;
-  };
-  const guest = (c: string): boolean => isA(c, "vm", parent) || isA(c, "lxc", parent);
-  const candidate = new Map<string, HealthGroup>();
-  for (const o of objects) {
-    let g: Omit<HealthGroup, "members"> | null = null;
-    if (isA(o.class, "port", parent)) {
-      const a = via(o.id, "part-of");
-      if (a) g = { id: `ports:${a.id}`, label: `ports of ${name(a)}`, kind: "ports" };
-    } else if (isA(o.class, "address", parent)) {
-      const z = via(o.id, "member-of", "zone");
-      if (z) g = { id: `addresses:${z.id}`, label: `addresses in ${name(z)}`, kind: "addresses" };
-    } else if (guest(o.class)) {
-      const e = envOf(o);
-      if (e) g = { id: `environment:${e}`, label: `${e} guests`, kind: "environment" };
-    } else if (isA(o.class, "software", parent)) {
-      const host = via(o.id, "runs-on");
-      const e = host && guest(host.class) ? envOf(host) : null;
-      if (e) g = { id: `environment:${e}`, label: `${e} guests`, kind: "environment" };
-      else if (host) g = { id: `host:${host.id}`, label: `software on ${name(host)}`, kind: "host" };
-    } else {
-      const c = CLASS_GROUPS.find((x) => isA(o.class, x, parent));
-      if (c) g = { id: `class:${c}`, label: `${c}s`, kind: "class" };
-    }
-    if (!g) continue;
-    candidate.set(o.id, { ...g, members: 0 });
-  }
-  const size = new Map<string, number>();
-  for (const g of candidate.values()) size.set(g.id, (size.get(g.id) ?? 0) + 1);
-  const groups = new Map<string, HealthGroup>();
-  for (const [id, g] of candidate) if ((size.get(g.id) ?? 0) > 1) groups.set(id, { ...g, members: size.get(g.id) ?? 0 });
-  return groups;
-}
 
 export function emptyCounts(): Counts {
   return { ok: 0, unknown: 0, warning: 0, critical: 0, acknowledged: 0 };
@@ -304,9 +251,23 @@ export interface BuildInput {
   objects: CmdbObject[];
   relations: CmdbRelationRow[];
   classes?: CmdbClassRow[];
+  relationTypes?: RelationType[];
   modules?: string[];
   now: number;
   at?: string | null;
+}
+
+// An object's environment: the one it is a member of, its own word for it, or
+// that of the guest it runs on.
+function environmentsOf(objects: CmdbObject[], rows: CmdbRelationRow[], parent: Map<string, string | null>): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const o of objects) if (typeof o.attributes.environment === "string" && o.attributes.environment) out.set(o.id, o.attributes.environment);
+  for (const r of rows) if (r.type === "member-of" && isA(r.to.class, "environment", parent)) out.set(r.from.id, r.to.name);
+  for (const r of rows) {
+    const host = out.get(r.to.id);
+    if (r.type === "runs-on" && host && isA(r.from.class, "software", parent) && !out.has(r.from.id)) out.set(r.from.id, host);
+  }
+  return out;
 }
 
 export function buildHealth(i: BuildInput): HealthGraph {
@@ -316,7 +277,7 @@ export function buildHealth(i: BuildInput): HealthGraph {
   const byId = new Map(objects.map((o) => [o.id, o]));
   const modules = new Set(i.modules ?? []);
   const site = objects.find((o) => isA(o.class, "site", parent)) ?? null;
-  const groups = assignGroups(objects, i.relations, parent);
+  const environments = environmentsOf(objects, i.relations, parent);
 
   // The acknowledged roots first: what a symptom's silence hangs on.
   const recorded = (Array.isArray(site?.attributes.rootCauses) ? site!.attributes.rootCauses : []) as { id?: unknown; type?: unknown; impactedCount?: unknown }[];
@@ -326,14 +287,6 @@ export function buildHealth(i: BuildInput): HealthGraph {
     const own = conditionsOf(byId.get(r.id)?.attributes ?? {}).filter((c) => (typeof r.type === "string" ? c.type === r.type : c.status !== "ok"));
     if (own.length && own.every((c) => c.acknowledged && holds(c.acknowledged.until, i.now))) rootsAcked.add(r.id);
   }
-
-  const envName = (id: string): string | null => {
-    const o = byId.get(id);
-    if (!o) return null;
-    const g = groups.get(id);
-    if (g?.kind === "environment") return g.id.slice("environment:".length);
-    return typeof o.attributes.environment === "string" && o.attributes.environment ? o.attributes.environment : null;
-  };
 
   let any = false;
   const nodes: HealthNode[] = objects.map((o) => {
@@ -349,9 +302,7 @@ export function buildHealth(i: BuildInput): HealthGraph {
       class: o.class,
       name: o.name,
       label: o.displayName || o.name,
-      tier: tierOf(o.class, parent),
-      group: groups.get(o.id)?.id ?? null,
-      environment: envName(o.id),
+      environment: environments.get(o.id) ?? null,
       module,
       rootCause: [...new Set(issues.flatMap((x) => x.rootCause))].filter((r) => r !== o.id),
       isRoot: false,
@@ -392,14 +343,13 @@ export function buildHealth(i: BuildInput): HealthGraph {
   });
   roots.sort((a, b) => b.impactedCount - a.impactedCount || RANK[b.status] - RANK[a.status] || a.label.localeCompare(b.label));
 
-  const carrying = new Set(IMPACT_RELATIONS);
   const edges: HealthEdge[] = i.relations
-    .filter((r) => carrying.has(r.type) && byId.has(r.from.id) && byId.has(r.to.id) && r.from.id !== r.to.id)
+    .filter((r) => byId.has(r.from.id) && byId.has(r.to.id) && r.from.id !== r.to.id)
     .map((r) => ({ id: String(r.id), type: r.type, from: r.from.id, to: r.to.id }))
     .sort((a, b) => a.id.localeCompare(b.id, "en", { numeric: true }));
 
-  const groupList = [...new Map([...groups.values()].map((g) => [g.id, g])).values()].sort((a, b) => a.id.localeCompare(b.id));
-  const shape = JSON.stringify([nodes.map((n) => [n.id, n.class, n.group]), edges.map((e) => [e.type, e.from, e.to])]);
+  const shape = JSON.stringify([nodes.map((n) => [n.id, n.class]), edges.map((e) => [e.type, e.from, e.to])]);
+  const relationTypes = i.relationTypes ?? [];
   return {
     generated: new Date(i.now).toISOString(),
     at: i.at ?? null,
@@ -408,21 +358,429 @@ export function buildHealth(i: BuildInput): HealthGraph {
     site: site?.id ?? null,
     nodes,
     edges,
-    groups: groupList,
+    relationTypes,
+    tree: buildTree(nodes, edges, relationTypes, parent),
     roots,
     counts: countsOf(nodes),
   };
 }
 
+// ── the tree ──────────────────────────────────────────────────────────
+
+// The top level (D5). Which relation nests what is the metamodel's; a facet only
+// says where to start: the objects of these classes that nothing of them holds.
+const FACETS = [
+  { id: "physical", label: "Physical", classes: ["place", "site", "asset", "node"] },
+  { id: "environments", label: "Environments", classes: ["environment", "zone"] },
+  { id: "identity", label: "Identity", classes: ["identity"] },
+];
+
+// What no facet reaches is still found: a fourth row, only when there is any.
+const ELSEWHERE = { id: "elsewhere", label: "Elsewhere" };
+
+export const TREE_FACETS = [...FACETS.map((f) => f.id), ELSEWHERE.id];
+
+const ROLLED_UP = new Set(["roll-up", "rollup"]);
+
+// A collection's or a place's own derived condition repeats its members: the
+// count is of the objects at fault, not of the boxes around them.
+const needsLook = (n: HealthNode): boolean =>
+  n.issues.some((i) => COUNTING_STATUS.includes(i.status) && !silenced(i) && !(i.derived && ROLLED_UP.has(i.reason ?? "")));
+
+export function rollupOf(nodes: HealthNode[]): TreeRollup {
+  const counting = nodes.filter((n) => n.status !== "ok" && !n.acknowledged && !n.maintenance);
+  const pool = counting.length ? counting : nodes.filter((n) => n.status !== "ok");
+  const top = pool.reduce<HealthNode | null>((a, n) => (!a || RANK[n.status] > RANK[a.status] ? n : a), null);
+  const types: Record<string, Status> = {};
+  for (const n of nodes) for (const [t, st] of Object.entries(n.types)) if (!types[t] || RANK[st] > RANK[types[t]]) types[t] = st;
+  const quiet = !counting.length;
+  return {
+    status: top?.status ?? "ok",
+    notOk: nodes.filter(needsLook).length,
+    unknown: nodes.filter((n) => n.status === "unknown" && !n.acknowledged && !n.maintenance).length,
+    acknowledged: quiet && !!top?.acknowledged,
+    maintenance: quiet && !top?.acknowledged && !!top?.maintenance,
+    flapping: nodes.some((n) => n.flapping),
+    types,
+    classes: [...new Set(nodes.map((n) => n.class))].sort(),
+    environments: [...new Set(nodes.map((n) => n.environment).filter((e): e is string => !!e))].sort(),
+  };
+}
+
+// Everything under the starts, themselves too. A leaf is seen and not opened.
+function walk(starts: string[], children: Map<string, TreeChild[]>): Set<string> {
+  const seen = new Set(starts);
+  const opened = new Set(starts);
+  const stack = [...starts];
+  while (stack.length) {
+    for (const c of children.get(stack.pop() as string) ?? []) {
+      seen.add(c.id);
+      if (c.leaf || opened.has(c.id)) continue;
+      opened.add(c.id);
+      stack.push(c.id);
+    }
+  }
+  return seen;
+}
+
+function buildTree(nodes: HealthNode[], edges: HealthEdge[], types: RelationType[], parent: Map<string, string | null>): TreeIndex {
+  const nodeOf = new Map(nodes.map((n) => [n.id, n]));
+  const tree = new Map(types.filter((t) => t.tree).map((t) => [t.name, t.tree]));
+  const children = new Map<string, TreeChild[]>();
+  const holders = new Map<string, string[]>();
+  const nest = (holder: string, child: string, leaf: boolean): void => {
+    const list = children.get(holder) ?? [];
+    const had = list.find((c) => c.id === child);
+    if (had) had.leaf = had.leaf && leaf;
+    else list.push({ id: child, leaf });
+    children.set(holder, list);
+    if (!leaf) holders.set(child, [...(holders.get(child) ?? []), holder]);
+  };
+  for (const e of edges) {
+    const t = tree.get(e.type);
+    if (t === "from") nest(e.to, e.from, false);
+    else if (t === "to") nest(e.from, e.to, false);
+    else if (t === "both") {
+      nest(e.from, e.to, true);
+      nest(e.to, e.from, true);
+    }
+  }
+  const label = (id: string): string => nodeOf.get(id)?.label ?? id;
+  const byLabel = (a: string, b: string): number => label(a).localeCompare(label(b), "en", { numeric: true }) || a.localeCompare(b);
+  for (const list of children.values()) list.sort((a, b) => byLabel(a.id, b.id));
+
+  const facets: TreeIndex["facets"] = FACETS.map((f) => {
+    const mine = (id: string): boolean => f.classes.some((c) => isA(nodeOf.get(id)?.class ?? "", c, parent));
+    return { id: f.id, label: f.label, roots: nodes.map((n) => n.id).filter((id) => mine(id) && !(holders.get(id) ?? []).some(mine)).sort(byLabel) };
+  });
+  const placed = walk(facets.flatMap((f) => f.roots), children);
+  const left = nodes.map((n) => n.id).filter((id) => !placed.has(id));
+  const pending = new Set(left);
+  const roots = left.filter((id) => !(holders.get(id) ?? []).some((h) => pending.has(h)));
+  // A loop of objects holding each other has no top: its first stands for it.
+  for (const id of left) if (!walk(roots, children).has(id)) roots.push(id);
+  if (roots.length) facets.push({ id: ELSEWHERE.id, label: ELSEWHERE.label, roots: roots.sort(byLabel) });
+
+  const of = (ids: Iterable<string>): HealthNode[] => [...ids].flatMap((id) => nodeOf.get(id) ?? []);
+  const rollups = new Map<string, TreeRollup>();
+  for (const n of nodes) rollups.set(n.id, rollupOf(of(walk([n.id], children))));
+  for (const f of facets) rollups.set(f.id, rollupOf(of(walk(f.roots, children))));
+  return { facets, children, rollups };
+}
+
+export interface TreeNode extends TreeRollup {
+  id: string;
+  class: string;
+  name: string;
+  label: string;
+  isRoot: boolean;
+  children: number; // how many to open: one level is read at a time
+}
+
+export interface HealthTree {
+  generated: string;
+  hasConditions: boolean;
+  site: string | null;
+  counts: Counts;
+  roots: HealthRoot[];
+  facets: TreeNode[];
+}
+
+export interface TreeMatch extends TreeNode {
+  where: string; // the way down to it, as a line
+}
+
+const EMPTY_ROLLUP: TreeRollup = { status: "unknown", notOk: 0, unknown: 0, acknowledged: false, maintenance: false, flapping: false, types: {}, classes: [], environments: [] };
+
+function facetNode(doc: HealthGraph, f: TreeIndex["facets"][number]): TreeNode {
+  return { ...(doc.tree.rollups.get(f.id) ?? EMPTY_ROLLUP), id: f.id, class: "facet", name: f.id, label: f.label, isRoot: false, children: f.roots.length };
+}
+
+function treeNode(doc: HealthGraph, c: TreeChild, under: string | null): TreeNode | null {
+  const n = doc.nodes.find((x) => x.id === c.id);
+  if (!n) return null;
+  const list = (doc.tree.children.get(c.id) ?? []).filter((x) => x.id !== under);
+  return { ...(doc.tree.rollups.get(c.id) ?? EMPTY_ROLLUP), id: n.id, class: n.class, name: n.name, label: n.label, isRoot: n.isRoot, children: c.leaf ? 0 : list.length };
+}
+
+export function healthTree(doc: HealthGraph): HealthTree {
+  return { generated: doc.generated, hasConditions: doc.hasConditions, site: doc.site, counts: doc.counts, roots: doc.roots, facets: doc.tree.facets.map((f) => facetNode(doc, f)) };
+}
+
+// One level: a facet's tops or an object's children. null: no such row.
+export function treeChildren(doc: HealthGraph, id: string): TreeNode[] | null {
+  const f = doc.tree.facets.find((x) => x.id === id);
+  if (f) return f.roots.flatMap((r) => treeNode(doc, { id: r, leaf: false }, null) ?? []);
+  if (TREE_FACETS.includes(id)) return [];
+  if (!doc.nodes.some((n) => n.id === id)) return null;
+  return (doc.tree.children.get(id) ?? []).flatMap((c) => treeNode(doc, c, id) ?? []);
+}
+
+// The first way down to an object, its facet first: what Show in tree opens.
+export function treePath(doc: HealthGraph, id: string): string[] | null {
+  const came = new Map<string, string>();
+  for (const f of doc.tree.facets) {
+    const queue = [...f.roots];
+    for (const r of f.roots) if (!came.has(r)) came.set(r, f.id);
+    while (queue.length) {
+      const at = queue.shift() as string;
+      if (at === id) {
+        const path = [id];
+        for (let p = came.get(id); p !== undefined; p = came.get(p)) path.unshift(p);
+        return path;
+      }
+      for (const c of doc.tree.children.get(at) ?? []) {
+        if (came.has(c.id)) continue;
+        came.set(c.id, at);
+        if (!c.leaf) queue.push(c.id);
+        else if (c.id === id) queue.unshift(c.id);
+      }
+    }
+  }
+  return null;
+}
+
+// The tree is read a level at a time, so a search is the server's: by name or
+// class, the worst first.
+export function treeSearch(doc: HealthGraph, q: string, limit = 50): TreeMatch[] {
+  const term = q.trim().toLowerCase();
+  if (!term) return [];
+  const label = new Map<string, string>([...doc.nodes.map((n): [string, string] => [n.id, n.label]), ...doc.tree.facets.map((f): [string, string] => [f.id, f.label])]);
+  return doc.nodes
+    .filter((n) => [n.label, n.name, n.class].some((x) => x.toLowerCase().includes(term)))
+    .sort((a, b) => RANK[b.status] - RANK[a.status] || a.label.localeCompare(b.label, "en", { numeric: true }))
+    .slice(0, limit)
+    .flatMap((n) => {
+      const t = treeNode(doc, { id: n.id, leaf: false }, null);
+      return t ? [{ ...t, where: (treePath(doc, n.id) ?? []).slice(0, -1).map((id) => label.get(id) ?? id).join(" › ") }] : [];
+    });
+}
+
+// ── the ego graph ─────────────────────────────────────────────────────
+
+export interface EgoNode extends HealthNode {
+  more: boolean; // it has neighbours beyond what is shown with it
+}
+
+// One relation type seen from one object: which way it is read, and on which
+// side of the object it is drawn: what it needs above, what needs it below.
+export interface EgoGroup {
+  key: string;
+  anchor: string;
+  type: string;
+  direction: "out" | "in";
+  side: "up" | "down";
+  label: string;
+  neighbours: string[];
+}
+
+export interface HealthEgo {
+  generated: string;
+  at: string | null;
+  id: string;
+  center: EgoNode;
+  nodes: EgoNode[]; // the neighbours
+  groups: EgoGroup[];
+  edges: HealthEdge[];
+}
+
+export interface PathEdge {
+  id: string;
+  type: string; // "derived" on a virtual one
+  provider: string; // what the failure comes from
+  dependant: string;
+  virtual: boolean; // assess says so, no relation shows why: a relation may be missing
+}
+
+export interface HealthPath {
+  generated: string;
+  at: string | null;
+  id: string;
+  to: "root" | "impact";
+  nodes: EgoNode[];
+  edges: PathEdge[];
+}
+
+type Adjacent = { edge: HealthEdge; other: string; direction: "out" | "in" };
+
+function adjacency(doc: HealthGraph): Map<string, Adjacent[]> {
+  const out = new Map<string, Adjacent[]>();
+  const add = (id: string, a: Adjacent): void => {
+    out.set(id, [...(out.get(id) ?? []), a]);
+  };
+  for (const e of doc.edges) {
+    add(e.from, { edge: e, other: e.to, direction: "out" });
+    add(e.to, { edge: e, other: e.from, direction: "in" });
+  }
+  return out;
+}
+
+function sideOf(t: RelationType | undefined, direction: "out" | "in"): "up" | "down" {
+  // The far end of a relation read forwards is `to`.
+  const far = direction === "out" ? "to" : "from";
+  const near = direction === "out" ? "from" : "to";
+  if (t?.dependant === "both" || t?.tree === "both") return "down";
+  if (t?.dependant) return t.dependant === near ? "up" : "down";
+  if (t?.tree) return t.tree === near ? "up" : "down";
+  return far === "to" ? "down" : "up";
+}
+
+function groupLabel(type: string, t: RelationType | undefined, direction: "out" | "in"): string {
+  if (t?.tree === (direction === "out" ? "to" : "from")) return `contains · ${type}`;
+  return direction === "out" ? type : `${type} ←`;
+}
+
+// The object and everything `depth` hops from it, grouped by relation type.
+export function healthEgo(doc: HealthGraph, id: string, depth = 1): HealthEgo | null {
+  const nodeOf = new Map(doc.nodes.map((n) => [n.id, n]));
+  const center = nodeOf.get(id);
+  if (!center) return null;
+  const adj = adjacency(doc);
+  const types = new Map(doc.relationTypes.map((t) => [t.name, t]));
+  const shown = new Set([id]);
+  const groups = new Map<string, EgoGroup>();
+  const edges = new Map<string, HealthEdge>();
+  let frontier = [id];
+  for (let hop = 0; hop < depth && frontier.length; hop++) {
+    const next: string[] = [];
+    for (const anchor of frontier) {
+      for (const a of adj.get(anchor) ?? []) {
+        if (a.other === anchor) continue;
+        const t = types.get(a.edge.type);
+        const key = `${anchor}|${a.edge.type}|${a.direction}`;
+        const g = groups.get(key) ?? { key, anchor, type: a.edge.type, direction: a.direction, side: sideOf(t, a.direction), label: groupLabel(a.edge.type, t, a.direction), neighbours: [] };
+        if (!g.neighbours.includes(a.other)) g.neighbours.push(a.other);
+        groups.set(key, g);
+        edges.set(a.edge.id, a.edge);
+        if (!shown.has(a.other)) {
+          shown.add(a.other);
+          next.push(a.other);
+        }
+      }
+    }
+    frontier = next;
+  }
+  const label = (x: string): string => nodeOf.get(x)?.label ?? x;
+  const ego = (n: HealthNode): EgoNode => ({ ...n, more: (adj.get(n.id) ?? []).some((a) => !shown.has(a.other)) });
+  const list = [...groups.values()].sort((a, b) => a.label.localeCompare(b.label));
+  for (const g of list) g.neighbours.sort((a, b) => label(a).localeCompare(label(b), "en", { numeric: true }));
+  return {
+    generated: doc.generated,
+    at: doc.at,
+    id,
+    center: ego(center),
+    nodes: [...shown].filter((x) => x !== id).flatMap((x) => { const n = nodeOf.get(x); return n ? [ego(n)] : []; }),
+    groups: list,
+    edges: [...edges.values()],
+  };
+}
+
+// Who fails with whom: per object, what it needs and what needs it, by the
+// metamodel's dependant ends.
+function dependencies(doc: HealthGraph): { needs: Map<string, HealthEdge[]>; neededBy: Map<string, HealthEdge[]> } {
+  const dep = new Map(doc.relationTypes.map((t) => [t.name, t.dependant]));
+  const needs = new Map<string, HealthEdge[]>();
+  const neededBy = new Map<string, HealthEdge[]>();
+  const link = (dependant: string, provider: string, e: HealthEdge): void => {
+    needs.set(dependant, [...(needs.get(dependant) ?? []), { ...e, from: dependant, to: provider }]);
+    neededBy.set(provider, [...(neededBy.get(provider) ?? []), { ...e, from: dependant, to: provider }]);
+  };
+  for (const e of doc.edges) {
+    const d = dep.get(e.type);
+    if (d === "from" || d === "both") link(e.from, e.to, e);
+    if (d === "to" || d === "both") link(e.to, e.from, e);
+  }
+  return { needs, neededBy };
+}
+
+// The way from `start` to any of the ends, stepping only on what `step` allows;
+// the relations of each way, none when there is none.
+function ways(start: string, ends: Set<string>, step: (id: string) => boolean, next: (id: string) => { edge: HealthEdge; to: string }[]): Map<string, { edge: HealthEdge; from: string }[]> {
+  const came = new Map<string, { edge: HealthEdge; from: string } | null>([[start, null]]);
+  const queue = [start];
+  const out = new Map<string, { edge: HealthEdge; from: string }[]>();
+  while (queue.length) {
+    const at = queue.shift() as string;
+    for (const n of next(at)) {
+      if (came.has(n.to) || !(step(n.to) || ends.has(n.to))) continue;
+      came.set(n.to, { edge: n.edge, from: at });
+      queue.push(n.to);
+    }
+  }
+  for (const end of ends) {
+    if (!came.has(end) || end === start) continue;
+    const way: { edge: HealthEdge; from: string }[] = [];
+    for (let c = came.get(end); c; c = came.get(c.from)) way.push(c);
+    out.set(end, way);
+  }
+  return out;
+}
+
+// `root`: from the object up to what explains it. `impact`: from it down to
+// what fails because of it. Along the relations where they show the way; where
+// they do not, assess's word stands as a virtual line.
+export function healthPath(doc: HealthGraph, id: string, to: "root" | "impact"): HealthPath | null {
+  const nodeOf = new Map(doc.nodes.map((n) => [n.id, n]));
+  const self = nodeOf.get(id);
+  if (!self) return null;
+  const { needs, neededBy } = dependencies(doc);
+  const failing = (x: string): boolean => {
+    const s = nodeOf.get(x)?.status;
+    return s === "critical" || s === "warning";
+  };
+  const edges = new Map<string, PathEdge>();
+  const shown = new Set([id]);
+  const real = (e: HealthEdge): void => {
+    edges.set(`${e.id}|${e.from}`, { id: e.id, type: e.type, provider: e.to, dependant: e.from, virtual: false });
+    shown.add(e.from);
+    shown.add(e.to);
+  };
+  const virtual = (provider: string, dependant: string): void => {
+    edges.set(`v|${provider}|${dependant}`, { id: `v|${provider}|${dependant}`, type: "derived", provider, dependant, virtual: true });
+    shown.add(provider);
+    shown.add(dependant);
+  };
+  if (to === "root") {
+    const ends = new Set(self.rootCause.filter((r) => nodeOf.has(r)));
+    const found = ways(id, ends, failing, (x) => (needs.get(x) ?? []).map((e) => ({ edge: e, to: e.to })));
+    for (const end of ends) {
+      const way = found.get(end);
+      if (way) way.forEach((w) => real(w.edge));
+      else virtual(end, id);
+    }
+  } else {
+    const roots = new Set(self.isRoot ? [id] : self.rootCause);
+    const hurt = doc.nodes.filter((n) => n.id !== id && n.rootCause.some((r) => roots.has(r))).map((n) => n.id);
+    const ends = new Set(hurt);
+    const found = ways(id, ends, (x) => ends.has(x), (x) => (neededBy.get(x) ?? []).map((e) => ({ edge: e, to: e.from })));
+    for (const end of ends) {
+      const way = found.get(end);
+      if (way) way.forEach((w) => real(w.edge));
+      else if (self.isRoot) virtual(id, end);
+    }
+  }
+  const adj = adjacency(doc);
+  const ego = (n: HealthNode): EgoNode => ({ ...n, more: (adj.get(n.id) ?? []).some((a) => !shown.has(a.other)) });
+  return {
+    generated: doc.generated,
+    at: doc.at,
+    id,
+    to,
+    nodes: [...shown].flatMap((x) => { const n = nodeOf.get(x); return n ? [ego(n)] : []; }),
+    edges: [...edges.values()],
+  };
+}
+
 // ── what a change moved ───────────────────────────────────────────────
 
-// Sent down the live stream: the colours that moved, or, when the topology did,
-// only that (the page reads the graph again and lays it out once).
+// Sent down the live stream: the colours and the roll-ups that moved, or, when
+// the topology did, only that (the page reads again and lays out once).
 export interface HealthPatch {
   topology: string;
   relayout: boolean;
   generated: string;
   patches: HealthNode[];
+  rollups: Record<string, TreeRollup>;
   roots: HealthRoot[];
   counts: Counts;
   hasConditions: boolean;
@@ -432,9 +790,11 @@ export function diffHealth(before: HealthGraph | null, after: HealthGraph): Heal
   const relayout = before === null || before.topology !== after.topology;
   const old = new Map((before?.nodes ?? []).map((n) => [n.id, JSON.stringify(n)]));
   const patches = relayout ? [] : after.nodes.filter((n) => old.get(n.id) !== JSON.stringify(n));
+  const rollups: Record<string, TreeRollup> = {};
+  if (!relayout) for (const [id, r] of after.tree.rollups) if (JSON.stringify(before?.tree.rollups.get(id)) !== JSON.stringify(r)) rollups[id] = r;
   const sameRoots = before !== null && JSON.stringify(before.roots) === JSON.stringify(after.roots);
-  if (!relayout && patches.length === 0 && sameRoots) return null;
-  return { topology: after.topology, relayout, generated: after.generated, patches, roots: after.roots, counts: after.counts, hasConditions: after.hasConditions };
+  if (!relayout && patches.length === 0 && sameRoots && Object.keys(rollups).length === 0) return null;
+  return { topology: after.topology, relayout, generated: after.generated, patches, rollups, roots: after.roots, counts: after.counts, hasConditions: after.hasConditions };
 }
 
 // ── the pages that read the worst condition ──────────────────────────
