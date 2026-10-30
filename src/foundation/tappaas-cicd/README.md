@@ -125,7 +125,7 @@ provides no `dependsOn` services of its own (`provides: []` in `tappaas-cicd.jso
 - The NixOS template (VM 8080) imported on the cluster (`templates` module).
 - The OPNsense firewall at `10.0.0.1` (`network` module). Without it the platform is
   configured with `firewallType: "NONE"` and proxy/rules need manual handling.
-- Defaults (from `tappaas-cicd.json`): VM 130 in zone `mgmt`, 4 cores, 16 GB RAM,
+- Defaults (from `tappaas-cicd.json`): VM 130 in zone `mgmt`, 4 cores, 8 GB RAM,
   32 GB disk on `tanka1`, HA replication every 15 min.
 
 ## Dependencies
