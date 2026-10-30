@@ -92,7 +92,7 @@ empty `config/.cmdb-spool/`.
 - Flapping not produced live; the ADR-039 rules not applied, so no mail path run.
 - `health-assess.service` fails when `cmdb` is restarting: assess exits 1, unlike emit. Next run recovers.
 - `assess` takes about 60 s (the gates), not the few seconds D2 says.
-- 284 of 349 objects stay `unknown`: nothing judges ports, addresses, DNS names. The graph is mostly grey.
+- 284 of 349 objects stayed `unknown`. Fixed by plan step 2 (ADR-041 v1.3); replayed over the live objects, 0 of 424 stay grey. Not yet deployed.
 - The graph is a thin strip at a narrow width even on six roots.
 - The summary shows `0 silenced` with a condition acked while the object has another open one.
 - `health.assessInterval` has no `site modify` option.

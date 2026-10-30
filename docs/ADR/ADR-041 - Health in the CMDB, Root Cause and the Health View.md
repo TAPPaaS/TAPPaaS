@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-30; O3, O5 and O6 still open) |
-| **Version** | 1.2 |
+| **Version** | 1.3 |
 | **Date** | 2026-10-30 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #908. Amends ADR-007e (Health as a lens: the lens now reads and writes the CMDB), ADR-040 D10 and D11 (the `health` attribute becomes conditions; the Operations view becomes the Health view), ADR-039 D8 (open alerts are one source of a condition). Related: ADR-034 (console), ADR-031 (the pulse), ADR-011 (the CVE scan), ADR-017 (the update sweep's capacity checks), IT4IT 3.0.1 Event (§9.2.3.1: Type causal or symptom, Is Correlated) and the Configuration component's duty to "calculate and provide the business impact of the Event". |
-| **Changelog** | v1.2 (2026-10-30) — **D5 redesigned (operator):** the one-graph-of-everything did not work in practice; the Health view becomes a containment tree, an ego graph one hop deep with plus/minus expansion, and the CI panel. · v1.1 (2026-10-30) — **critical roots only (operator):** `HealthRootCause` mails a critical root at once; warnings and the sweep's findings go to a daily digest rule (D4). · v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
+| **Changelog** | v1.3 (2026-10-30) — **plan step 2 done, sources beyond the gates:** `assess` judges every class from the CMDB's observations and asks no plane (O3's direction): ports, addresses, DNS names, proxy routes, zones and VLANs, SSIDs, software, assets, datastore GC, restore points, backup peers, shares, and a CI's lifecycle (`unseen`). What nothing can judge follows its parent (`FOLLOWS`, derived, never a root). site-manager reports a NIC's link and negotiated speed on its port. The health-manager README's *What judges which class* is the map. · v1.2 (2026-10-30) — **D5 redesigned (operator):** the one-graph-of-everything did not work in practice; the Health view becomes a containment tree, an ego graph one hop deep with plus/minus expansion, and the CI panel. · v1.1 (2026-10-30) — **critical roots only (operator):** `HealthRootCause` mails a critical root at once; warnings and the sweep's findings go to a daily digest rule (D4). · v1.0 (2026-10-30) — **Accepted** by the operator with O3, O5 and O6 open. O1: no hardcoded propagation — the rules are data, per relation type and class (D3); O2: the interval is a site setting (D2); O4: an acknowledgement on a root cause covers its symptoms (D4). Implementation starts on the plan below, on the `adr-040` branch. · v0.1 (2026-10-30) — first draft, from the operator's direction of 2026-10-30: health is stored on every CMDB object as several conditions; health-manager is split into an assessing half that writes them and an emitting half that raises events and answers questions; root causes are derived along the CMDB's relations and the console's new Health view centres on them. |
 
 Health in TAPPaaS today is a verdict computed on demand and forgotten: `health-manager validate`
 runs its gates against the live cluster, prints a table, exits 0 or 1, and the console caches the
@@ -377,8 +377,8 @@ correlated, and its root causes.
 
 1. `conditions[]` and `acknowledged` in the metamodel; `assess` writing the existing gates as
    conditions on their objects; `validate` as a read with `--live`.
-2. Sources beyond the gates: open alerts, the sweep's drift, thresholds over the controllers'
-   observations, the CVE scan.
+2. **Done (v1.3).** Sources beyond the gates: open alerts, the sweep's drift, thresholds over the
+   controllers' observations, the CVE scan, and a judgement of every class from the observations.
 3. Derivation (D3): impact, root cause, roll-ups; `roots`, `show`, `list`, `history`.
 4. Events (D4): `emit`, the journal lines, the ADR-039 rule, acknowledgements, flapping.
 5. The Health view (D5): the graph, groups, root-cause centring, the panel, the menu entry;
