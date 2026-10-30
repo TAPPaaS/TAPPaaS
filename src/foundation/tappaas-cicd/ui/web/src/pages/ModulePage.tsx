@@ -197,6 +197,21 @@ export function ModulePage({ name }: { name: string }) {
       </div>
       {d && tab === "Overview" ? (
         <>
+          {d.summary.condition ? (
+            <Section title="Health — the conditions of this module's objects" aside={<Link to="/health">the Health view</Link>}>
+              {d.summary.condition.issues.length === 0 ? <p className="muted">Every condition on its {d.summary.condition.objects} object{d.summary.condition.objects === 1 ? "" : "s"} is ok.</p> : null}
+              <ul className="attention">
+                {d.summary.condition.issues.map((c) => (
+                  <li key={`${c.object}-${c.type}`} className={`att att-${levelOf(c.status)}`}>
+                    <Tag level={levelOf(c.status)} />
+                    <span className="att-gate">{c.type}</span>
+                    <span className="att-text"><b>{c.label}</b> {c.message ?? c.reason ?? ""}{c.since ? <span className="muted small"> · since {when(c.since)}</span> : null}{c.acknowledged ? <span className="muted small"> · acknowledged</span> : null}{c.maintenance ? <span className="muted small"> · maintenance</span> : null}</span>
+                    <span className="att-where"><Link to={`/health?select=${encodeURIComponent(c.object)}`} className="jump jump-in">Health</Link></span>
+                  </li>
+                ))}
+              </ul>
+            </Section>
+          ) : (
           <Section title="Health — the gates that mention this module" aside="health-manager validate">
             {d.findings.length === 0 ? <p className="muted">No gate names {name}: every gate that looks at it passes.</p> : null}
             <ul className="attention">
@@ -209,6 +224,7 @@ export function ModulePage({ name }: { name: string }) {
               ))}
             </ul>
           </Section>
+          )}
           <ModuleOperate m={d.summary} onConfig={() => setTab("Config")} />
           <Section title="About">
             <KV

@@ -63,7 +63,11 @@ export function ModuleBadges({ m }: { m: ModuleSummary }) {
   const b = m.badges;
   return (
     <span className="badges">
-      {b.health !== "unknown" ? (
+      {m.condition ? (
+        <Badge level={m.condition.acknowledged || m.condition.maintenance ? "skip" : levelOf(b.health)} title={m.condition.issues.map((i) => `${i.label} · ${i.type}: ${i.message ?? i.reason ?? i.status}`).join("\n")}>
+          health {m.condition.status}{m.condition.acknowledged ? " · acknowledged" : m.condition.maintenance ? " · maintenance" : ""}{m.condition.flapping ? " · flapping" : ""}
+        </Badge>
+      ) : b.health !== "unknown" ? (
         <Badge level={levelOf(b.health)} title={m.findings.filter((f) => f.gate !== "cve-status").map((f) => `${f.gate}: ${f.text}`).join("\n")}>
           health {b.health}
         </Badge>

@@ -73,6 +73,7 @@ export function levelOf(s: string | null | undefined): Level {
     case "failed":
     case "down":
     case "error":
+    case "critical":
       return "fail";
     case "warn":
     case "warning":

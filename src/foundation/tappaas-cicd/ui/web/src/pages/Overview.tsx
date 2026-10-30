@@ -2,10 +2,11 @@
 // of what an operator checks in the morning, Attention (every FAIL and WARN,
 // read-only in P1, each with where to look), the nodes and the zones.
 
-import { useRead } from "../api";
+import { ReactNode } from "react";
+import { useHealthSummary, useRead } from "../api";
 import { AskAbout } from "../assistant";
 import { zoneColor } from "../colors";
-import { Gate, Health, ModuleSummary, SiteRead, Topology } from "../types";
+import { Gate, Health, HealthStatus, HealthSummary, ModuleSummary, SiteRead, Topology } from "../types";
 import { Badge, Link, OpenIn, ReadState, Section, Tag, levelOf, since, when } from "../ui";
 
 function count(h: Health | null | undefined) {
@@ -14,7 +15,7 @@ function count(h: Health | null | undefined) {
   return c;
 }
 
-function Card({ title, value, sub, level }: { title: string; value: string; sub?: string; level: string }) {
+function Card({ title, value, sub, level }: { title: ReactNode; value: string; sub?: string; level: string }) {
   return (
     <div className={`card card-${levelOf(level)}`}>
       <div className="card-title">{title}</div>
@@ -22,6 +23,19 @@ function Card({ title, value, sub, level }: { title: string; value: string; sub?
       {sub ? <div className="card-sub">{sub}</div> : null}
     </div>
   );
+}
+
+const CONDITION_LEVEL: Record<HealthStatus, string> = { critical: "fail", warning: "warn", ok: "pass", unknown: "unknown" };
+
+// The health line from the worst conditions (ADR-041), the gates' otherwise.
+function conditionLine(s: HealthSummary): { value: string; sub: string; level: string } {
+  const c = s.counts;
+  const roots = s.roots.filter((r) => !r.acknowledged).length;
+  return {
+    value: `${c.critical} critical · ${c.warning} warning · ${c.ok} ok`,
+    sub: `${roots} root cause${roots === 1 ? "" : "s"} · ${c.acknowledged} silenced · ${c.unknown} unknown`,
+    level: c.critical ? "fail" : c.warning ? "warn" : "pass",
+  };
 }
 
 // Where Attention points: the page inside the console, then the component UIs.
@@ -63,6 +77,10 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
   const memFor = (node: string) => gate("memory-commitment")?.findings.find((f) => f.subject?.kind === "node" && f.subject.name === node);
   const pulseUp = pulse?.findings.filter((f) => f.status === "pass").length ?? 0;
   const modules = mods.env?.data ?? [];
+  const hs = useHealthSummary().env?.data;
+  const conditions = hs?.available ? hs : null;
+  const line = conditions ? conditionLine(conditions) : null;
+  const backups = conditions?.byType.backup;
 
   return (
     <div className="page">
@@ -81,10 +99,10 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
 
       <div className="strip">
         <Card
-          title="Health gates"
-          value={h ? `${c.fail} FAIL · ${c.warn} WARN · ${c.pass} PASS` : "…"}
-          sub={h ? `${c.skip} skipped · validate ${since(h.generated)}` : undefined}
-          level={c.fail ? "fail" : c.warn ? "warn" : h ? "pass" : "unknown"}
+          title={<Link to="/health">{line ? "Health" : "Health gates"}</Link>}
+          value={line?.value ?? (h ? `${c.fail} FAIL · ${c.warn} WARN · ${c.pass} PASS` : "…")}
+          sub={line?.sub ?? (h ? `${c.skip} skipped · validate ${since(h.generated)}` : undefined)}
+          level={line?.level ?? (c.fail ? "fail" : c.warn ? "warn" : h ? "pass" : "unknown")}
         />
         <Card
           title="Pulse"
@@ -100,9 +118,9 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
         />
         <Card
           title="Backups"
-          value={backup ? backup.detail : "…"}
+          value={backups?.items.length ? `${backups.items.length} object${backups.items.length === 1 ? "" : "s"} not protected` : backup ? backup.detail : "…"}
           sub={(t?.outside ?? []).filter((o) => o.kind === "buddy").map((o) => `buddy ${o.name}: ${o.state ?? "?"}`).join(" · ") || undefined}
-          level={backup?.status ?? "unknown"}
+          level={conditions ? CONDITION_LEVEL[backups?.status ?? "ok"] : backup?.status ?? "unknown"}
         />
         <Card
           title="Release"
@@ -118,10 +136,21 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
         />
       </div>
 
-      <Section title="Attention — what needs a person" aside={h ? `${h.attention.length} item(s) · read-only in this phase` : undefined}>
-        {h && h.attention.length === 0 ? <p className="muted">Nothing needs a person.</p> : null}
+      <Section title="Attention — what needs a person" aside={conditions ? <>{conditions.attention.length} item(s) · <Link to="/health">the Health view</Link></> : h ? `${h.attention.length} item(s) · read-only in this phase` : undefined}>
+        {(conditions ? conditions.attention.length === 0 : h?.attention.length === 0) ? <p className="muted">Nothing needs a person.</p> : null}
         <ul className="attention">
-          {(h?.attention ?? []).map((a, i) => (
+          {(conditions?.attention ?? []).map((a) => (
+            <li key={`${a.id}-${a.type}`} className={`att att-${CONDITION_LEVEL[a.status]}`}>
+              <Tag level={CONDITION_LEVEL[a.status]} />
+              <span className="att-gate">{a.root ? "root cause" : a.type}</span>
+              <span className="att-text"><b>{a.label}</b> {a.text}</span>
+              <span className="att-where">
+                <Link to={`/health?select=${encodeURIComponent(a.id)}`} className="jump jump-in">Health · {a.label}</Link>
+                {a.module ? <Where kind="module" name={a.module} /> : null}
+              </span>
+            </li>
+          ))}
+          {(conditions ? [] : h?.attention ?? []).map((a, i) => (
             <li key={`${a.gate}-${i}`} className={`att att-${a.level}`}>
               <Tag level={a.level} />
               <span className="att-gate">{a.gate}</span>
@@ -150,7 +179,7 @@ export function Overview({ setupIncomplete = false }: { setupIncomplete?: boolea
             {(t?.nodes ?? []).map((n) => {
               const lan = n.uplinks.find((u) => u.name === "lan");
               const mem = memFor(n.name);
-              const findings = t?.findings.filter((f) => f.on.kind === "node" && f.on.name === n.name) ?? [];
+              const findings = conditions ? conditions.attention.filter((a) => a.class === "machine" && a.label === n.name) : t?.findings.filter((f) => f.on.kind === "node" && f.on.name === n.name) ?? [];
               return (
                 <li key={n.name}>
                   <Link to={`/site/device?select=node:${encodeURIComponent(n.name)}`} className="node-name">{n.name}</Link>

@@ -10,11 +10,11 @@
 // (a job with its preview) and purge (destructive: the name typed;
 // never a side effect of a module's delete).
 
-import { Read, useRead } from "../api";
+import { Read, useHealthSummary, useRead } from "../api";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { BackupRowView, BackupRuns, GuestRuns, Health, SiteRead, Topology } from "../types";
-import { KV, ReadState, Section, Tag, since, when } from "../ui";
+import { KV, Link, ReadState, Section, Tag, since, when } from "../ui";
 import { ago, attention, byModule, guestLevel, latestRuns, runLevel, summary, targetLabel, targetLevel, verifyLevel } from "../backupruns";
 
 const bm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "backup-manager", verb, ...extra });
@@ -107,6 +107,9 @@ function guestWords(g: GuestRuns, now: number): string {
 function Overview({ p, runs }: { p: Record<string, unknown>[]; runs: Read<BackupRuns> }) {
   const site = useRead<SiteRead>("site");
   const health = useRead<Health>("health");
+  // The conditions (ADR-041) when the CMDB holds any: every page agrees with the graph.
+  const hs = useHealthSummary().env?.data;
+  const conditions = hs?.available ? hs.byType.backup ?? { status: "ok" as const, items: [] } : null;
   const topo = useRead<Topology>("topology");
   const b = (site.env?.data?.site as { backup?: { target?: string | null; defaultSchedule?: string | null } | null } | undefined)?.backup;
   const gates = health.env?.data?.gates ?? [];
@@ -128,15 +131,26 @@ function Overview({ p, runs }: { p: Record<string, unknown>[]; runs: Read<Backup
           <KV rows={[["target", b.target ?? "not set"], ["default schedule", b.defaultSchedule ?? "not set"]]} />
         )}
       </Section>
-      <Section title="Health" aside={`health-manager validate · ${since(health.env?.at)}`}>
-        {status ? (
+      <Section title="Health" aside={conditions ? <>the backup conditions · <Link to="/health">the Health view</Link> · {since(hs?.generated)}</> : `health-manager validate · ${since(health.env?.at)}`}>
+        {conditions ? (
+          <>
+            <p><Tag level={conditions.status} /> <b>backup</b> {conditions.items.length ? `${conditions.items.length} object${conditions.items.length === 1 ? "" : "s"} not protected` : "every object is protected"}</p>
+            <ul className="findings">
+              {conditions.items.map((x) => (
+                <li key={x.id}>
+                  <Tag level={x.status} /> <Link to={`/health?select=${encodeURIComponent(x.id)}`}>{x.label}</Link> {x.reason ?? ""}{x.silenced ? <span className="muted small"> · silenced</span> : null}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : status ? (
           <p>
             <Tag level={level(status.status)} /> <b>backup-status</b> {status.detail}
           </p>
         ) : (
           <p className="muted">{health.env ? "no backup-status gate in the last validate" : "reading the health…"}</p>
         )}
-        {status?.findings.length ? (
+        {!conditions && status?.findings.length ? (
           <ul className="findings">
             {status.findings.map((f, i) => (
               <li key={i}>
@@ -145,7 +159,7 @@ function Overview({ p, runs }: { p: Record<string, unknown>[]; runs: Read<Backup
             ))}
           </ul>
         ) : null}
-        {keys ? (
+        {keys && !conditions ? (
           <p>
             <Tag level={level(keys.status)} /> <b>backup-keys</b> {keys.detail}
           </p>
