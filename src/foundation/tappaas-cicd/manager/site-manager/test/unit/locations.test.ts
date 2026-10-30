@@ -223,6 +223,11 @@ check(findLocation(readLocations(SITE).locations, { country: "DK", city: "Rodovr
   check(r.rc === 1 && /must be one e-mail address/.test(r.out.join(" ")), `--set is checked as its shortcut is (${r.out.join(" | ")})`);
   r = say(["site", "modify", "--set", "name=other", "--check", "--config-dir", d]);
   check(r.rc === 1 && /^\[refused\] site modify: name cannot be set — immutable/.test(r.out[0] ?? ""), `--set name: refused with its change class (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--set", "health.assessInterval=15", "--config-dir", d]);
+  sj = JSON.parse(readFileSync(join(d, "site.json"), "utf8")) as Obj;
+  check(r.rc === 0 && (sj.health as Obj).assessInterval === 15, `--set health.assessInterval writes the health object (${r.out.join(" | ")})`);
+  r = say(["site", "modify", "--healthAssessInterval", "0", "--check", "--config-dir", d]);
+  check(r.rc === 1 && /1-1440/.test(r.out.join(" ")), `the assess interval is 1-1440 minutes (${r.out.join(" | ")})`);
   r = say(["site", "modify", "--set", "nosuch=1", "--check", "--config-dir", d]);
   check(r.rc === 1 && /nosuch/.test(r.out.join(" ")), `--set of no field is refused (${r.out.join(" | ")})`);
   r = say(["site", "modify", "--set", "email=a@b.org", "--email", "c@d.org", "--check", "--config-dir", d]);

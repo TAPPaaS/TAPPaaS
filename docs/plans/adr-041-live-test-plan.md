@@ -95,7 +95,7 @@ empty `config/.cmdb-spool/`.
 - 284 of 349 objects stay `unknown`: nothing judges ports, addresses, DNS names. The graph is mostly grey.
 - The graph is a thin strip at a narrow width even on six roots.
 - The summary shows `0 silenced` with a condition acked while the object has another open one.
-- `health.assessInterval` has no `site modify` option.
+- ~~`health.assessInterval` has no `site modify` option.~~ Fixed 2026-10-30: `site modify --set health.assessInterval=<min>` (`--healthAssessInterval`), 1-1440.
 - From the ADR-040 run, unchanged: `module-manager modify` preview says `config-only` but runs a full update; the site-manager `schedule` test on `alerts`.
 
 ## For the operator to decide

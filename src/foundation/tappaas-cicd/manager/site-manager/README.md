@@ -177,6 +177,7 @@ fingerprints are written by the installer, from the ones published in the root
 `INSTALL.md`.
 
 `site modify --set <field>=<value>` sets a field by its name in `site-fields.json`, dotted
+(`health.assessInterval=15` sets how often health-manager assesses, ADR-041 D2),
 inside an object (`--set supportEmail=help@example.org`, `--set backup.target=pbs2`,
 `--set updateSchedule.hour=3`); it repeats, and `--unset <field>` removes an optional one. The
 options below are **shortcuts**, one field each (ADR-020 D11): `--email a@b.org` is

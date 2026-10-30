@@ -277,18 +277,6 @@
       },
       "changeClass": "in-place"
     },
-    "health": {
-      "description": "Site-wide health settings (ADR-041).",
-      "type": "object",
-      "properties": {
-        "assessInterval": {
-          "description": "Minutes between two runs of health-assess.timer, 1 to 60. A one-box site may set 15.",
-          "type": "integer",
-          "default": 5
-        }
-      },
-      "changeClass": "in-place"
-    },
     "updateSchedule": {
       "description": "Site-wide update schedule (ADR-017 D7). {frequency: none|daily|weekly|monthly, weekday: day name, hour: 0-23}. weekday is read only under weekly and monthly; hour defaults to 2. The legacy [period, day, hour] triple is still read, and migration 0003 rewrites it.",
       "type": "object",
