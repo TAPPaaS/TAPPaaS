@@ -602,11 +602,11 @@ def main(argv: list[str] | None = None) -> int:
     oe.set_defaults(handler=cmd_oidc_app_ensure)
 
     # ── People PRIMITIVES (S2b-2) — JSON to stdout for the TS identity-manager ─
-    sub.add_parser("list-users", help="JSON array of users (name/active/email/displayName/groups/roles)")\
+    sub.add_parser("list-users", help="JSON array of users (name/uuid/active/email/displayName/groups/roles)")\
        .set_defaults(handler=cmd_list_users)
-    sub.add_parser("list-groups", help="JSON array of {name, displayName} (excludes roles)")\
+    sub.add_parser("list-groups", help="JSON array of {name, uuid, displayName} (excludes roles)")\
        .set_defaults(handler=cmd_list_groups)
-    sub.add_parser("list-roles", help="JSON array of {name, displayName} (role-marked groups)")\
+    sub.add_parser("list-roles", help="JSON array of {name, uuid, displayName} (role-marked groups)")\
        .set_defaults(handler=cmd_list_roles)
 
     gu = sub.add_parser("get-user", help="JSON of one user object, or null if absent")
