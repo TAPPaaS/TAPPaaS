@@ -121,6 +121,49 @@ life of its own, and the role it plays for the time being.
     `allocatedTo`, ports with kind, speed or standard and bands, module, role,
     mac and side — so that migration is a copy, and asset-manager then reports
     them with `source: recorded` instead of writing them here.
+16. **Reported, not yet moved.** Step 3's safe form: `positions.json` stays the
+    record and the CMDB is told (`src/cmdb.ts`). One function, `cmdbView`, is
+    the CMDB's view of the document; `report` sends it whole, and a changing
+    verb sends the difference between the view before and after it — so a
+    change report cannot disagree with the full one, and no verb has to know
+    what it touches. Pure, so the unit test pins it against the controller's
+    metamodel files without a controller. Placements are relations from the
+    asset (keyed by its own name), not from its role's name: allocating or
+    releasing an asset changes the asset, never its placement or cables.
+    Disposed assets stay live objects with `stage: disposed` (the record keeps
+    them too); only what a verb removes from the record is ended. The location
+    a room is at is named in the batch by name alone, so the batch resolves
+    before site-manager has reported it; allocations go in reports of their
+    own, since one unresolved node would refuse the whole batch.
+
+## The cut-over (later)
+
+Once the CMDB has been live-tested, the record moves (ADR-040 step 3's second
+half). What changes:
+
+- **Migration** (the next free number): `asset-manager report` once more, then
+  `positions.json` keeps only what is not the CMDB's — the site's faceplates —
+  and its rooms, racks, placements, assets and cables are removed from it.
+- **The verbs** read the CMDB (`cmdbQuery`, and the relations of what it
+  returns) instead of `store.load()`, and a change is the report itself: lock,
+  check against the CMDB's current state, report the change. A refused report
+  then fails the verb, and an unreachable controller refuses the change instead
+  of spooling it — the record cannot be written blind. `validate` checks the
+  CMDB's objects.
+- **The source** becomes the recorded one (`source: recorded`, or a field the
+  controller adds for it): the `recorded: true` beside each object today is
+  where that goes.
+- **network-manager topology** reads the positions from the CMDB:
+  `export --cmdb` prints today what that read returns and `positionsFromCmdb`
+  turns it back into the document `resolvePositions` takes — the reference
+  for that step. It needs a query that returns relations (the controller's
+  `query` answers attributes only; relation fields are relation rows).
+- **Allocations** are made by the role verbs (`--asset`, D8) as well as
+  `asset allocate`; the asset's `role` is the `allocated-to` relation, and
+  placements and cable ends are no longer re-keyed by the role's name.
+- **What is not expressible yet** (an asset's location outside a room, a cable
+  to a port no asset records) needs a metamodel change or the reporter of that
+  port (site-manager's node NICs) first.
 
 ## Findings in the topology
 
