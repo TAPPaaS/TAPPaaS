@@ -1514,7 +1514,7 @@ export function resolvePositions(doc: PositionsDoc, shipped: Faceplate[], t: Top
     const rec = recorded[device] ? recordedPlate(device, recorded[device], catalog) : null;
     const key = own ? own.key : rec ? rec.key : dev ? suggestFaceplate(catalog, dev) : null;
     const fp = own ?? rec ?? byKey(key);
-    if (!dev && !fp?.passive) findings.push({ text: `${device} is placed in ${placeWhere(m)}, but the topology no longer has it`, device, kind: "gone", rack: m.rack ?? null });
+    if (!dev && !fp?.passive) findings.push({ text: `${device} is placed in ${placeWhere(m)}, but no node, switch or access point of that name exists any more (removed from the cluster, or renamed): unplace ${device}, or asset add it to keep the placement as an asset's`, device, kind: "gone", rack: m.rack ?? null });
     const room = !m.rack && m.room ? rooms.find((x) => x.name === m.room) : undefined;
     if (!rack && !room) continue;
     const plate = fp ? resolvePlate(fp, dev) : null;
