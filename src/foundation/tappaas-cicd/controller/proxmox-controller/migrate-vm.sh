@@ -137,6 +137,25 @@ check_node_reachable() {
         "root@${node}.${MGMT}.internal" "true" &>/dev/null
 }
 
+# Record the move in the CMDB (ADR-040 D4): the guest now runs on <node>. A
+# report the CMDB cannot take is spooled or warned about; it never fails the
+# migration. The guest is named as the CMDB knows it: its module instance.
+CMDB_LIB="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../lib/cmdb.sh"
+[[ -r "${CMDB_LIB}" ]] || CMDB_LIB="/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/lib/cmdb.sh"
+report_moved() {
+    local module="$1" vmid="$2" node="$3"
+    [[ "${TAPPAAS_CMDB:-}" == "off" || ! -r "${CMDB_LIB}" ]] && return 0
+    # shellcheck source=../../lib/cmdb.sh disable=SC1091
+    . "${CMDB_LIB}"
+    jq -n --arg m "${module}" --argjson id "${vmid}" --arg n "${node}" \
+        --arg job "${TAPPAAS_JOB_ID:-${TAPPAAS_JOB:-}}" --arg actor "${TAPPAAS_ACTOR:-${USER:-}}" \
+        '{source: "proxmox-controller", kind: "change", verb: ("migrate-vm " + $m),
+          objects: [{ref: "m", class: "machine", name: $n},
+                    {class: "vm", name: $m, attributes: {vmid: $id, onNode: {ref: "m"}}}]}
+         + (if $job != "" then {job: $job} else {} end)
+         + (if $actor != "" then {actor: $actor} else {} end)' | cmdb_report
+}
+
 # Attempt live migration of a VM.
 # Returns 0 on success, 1 on failure.
 try_live_migration() {
@@ -479,8 +498,9 @@ migrate_module() {
     # rather than after a failed attempt has already disturbed the guest.
     if [[ "${force_offline}" == "true" ]]; then
         info "  --offline given — skipping the live attempt"
-        do_offline_migration "${vmid}" "${current_node}" "${target_node}" "${vmname}"
-        return $?
+        do_offline_migration "${vmid}" "${current_node}" "${target_node}" "${vmname}" || return $?
+        report_moved "${module}" "${vmid}" "${target_node}"
+        return 0
     fi
 
     # Overridable so the offline unit test can script the verdict without a
@@ -490,6 +510,7 @@ migrate_module() {
     "${liveok_bin}" live-ok "${module}" "${target_node}" || live_rc=$?
     if [[ "${live_rc}" -eq 0 ]]; then
         if try_live_migration "${vmid}" "${current_node}" "${target_node}"; then
+            report_moved "${module}" "${vmid}" "${target_node}"
             return 0
         fi
         # Live was judged possible and still failed: that is a real fault, not a
@@ -507,7 +528,8 @@ migrate_module() {
         return 10
     fi
     info "  --force given — migrating OFFLINE (the guest will stop and restart)"
-    do_offline_migration "${vmid}" "${current_node}" "${target_node}" "${vmname}"
+    do_offline_migration "${vmid}" "${current_node}" "${target_node}" "${vmname}" || return $?
+    report_moved "${module}" "${vmid}" "${target_node}"
 }
 
 # Migrate all VMs that belong on the given node back to it.
@@ -592,6 +614,7 @@ migrate_to_node() {
 
         if [[ "${migrate_ok}" == "true" ]]; then
             migrated=$((migrated + 1))
+            report_moved "${basename}" "${vmid}" "${target_node}"
         else
             error "Failed to migrate ${vmname} (VMID ${vmid})"
             failed=$((failed + 1))
