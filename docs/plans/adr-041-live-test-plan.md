@@ -104,3 +104,25 @@ empty `config/.cmdb-spool/`.
 - **39 roots on a working site.** Every warning is a root, and `HealthRootCause` mails each `causal` event: applying the rules as they are means dozens of mails, some at each sweep. Decide before applying: critical only, or a digest.
 - **`guest-memory` critical on 6 guests**, including `tappaas-cicd`. The gate already failed before this work; as conditions they are 6 critical roots at all times.
 - Left on hrossen: `/var/lib/postgresql`, `/var/lib/cmdb/dump`, `/etc/secrets/cmdb-token`, empty `config/.cmdb-spool/`.
+
+## Memory measurement, 2026-10-30 (second deploy, kept running)
+
+`adr-041` at `5b906ebc` deployed again from a clone bind-mounted over the checkout, generation 115 restored from the store in seconds. Left running for the operator's inspection under a 3-day pull hold (`site-manager repository hold TAPPaaS`), so neither a module update nor the 02:00 sweep pulls the clone back to `main`. Baseline for a later rollback in `~/dev/adr041m-baseline/`.
+
+**Why tappaas-cicd reads "93 % used".** Inside the VM: 16 GB total, about 1.0 GB in use, 15.0 GB available; 14.6 GB is page cache from Nix builds (Buffers 2.2 GB, Cached 10.4 GB, reclaimable slab 2.2 GB). Proxmox computes a guest's `mem` as the balloon's `total_mem − free_mem` (`QemuServer.pm` line 2683), and `free_mem` is Linux's MemFree, which is always near zero on a busy Linux guest. `guest-memory` takes that number as "used" (`client.ts`, `usedMem: row.mem`), so every Linux guest with a balloon driver reads about 90 %. The balloon's statistics do carry the right numbers — `stat-available-memory` 15.6 GB and `stat-disk-caches` 12.7 GB, read with `qom-get /machine/peripheral/balloon0 guest-stats` on the node — Proxmox just does not expose them. The fix is in health-manager, not the guests: used = total − available.
+
+**What the CMDB costs** (cgroup `memory.current`, idle after a sweep and an assess; peak = `memory.peak`):
+
+| unit | idle | peak | of which anonymous |
+|---|---|---|---|
+| postgresql.service (PostgreSQL 16, shared_buffers 128 MB default, database 11 MB, 405 objects) | 41 MB | 44 MB | 7 MB + 19 MB shared |
+| cmdb.service (cmdb-controller serve) | 56 MB | 113 MB during the sweep | 39 MB |
+| cmdb-sweep.service (the client) | – | 12 MB | |
+| health-assess.service | – | 57 MB | |
+| tappaas-console.service | 62 MB | 225 MB (the build at refresh) | 62 MB |
+
+About 100 MB resident at rest, 170 MB at the sweep's peak, under 1.1 % of the VM. The sweep took 187 s (122 drift, 1 source failed), the assess 61 s.
+
+**Under load.** `module-manager update tappaas-cicd` (snapshot, pre-update tests, hook, reconcile, post-update tests; the OS closure was unchanged so no build) ran 60 s and raised the VM's used memory from 1.06 GB to a peak of 1.28 GB. A forced full evaluation of the NixOS closure (`nix build --option eval-cache false` of `toplevel`) took 3.9 s with a 758 MB client peak. The large cgroup figures (`nix-daemon.service` 2.9 GB, `user.slice` 5.4 GB) are file-backed page cache charged to those cgroups (anonymous 5 MB and 9 MB), reclaimable at once.
+
+**Conclusion.** tappaas-cicd is not short of memory; the check is reading the wrong number. The CMDB adds about 0.1 GB. The 16 GB declaration is generous: 4 GB would hold every measured peak with cache to spare, and the host would see the page cache shrink to fit.
