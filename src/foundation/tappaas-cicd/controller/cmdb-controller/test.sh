@@ -27,6 +27,12 @@
 #   - the client: a report the service cannot take is spooled and replayed;
 #     lib/cmdb.sh never fails its caller
 #   - the example report in README.md is accepted as written
+#   - software is known by its name within its node: an upgrade is the same CI
+#   - an asset is found by any of its ports' MACs; a MAC on one asset and a
+#     serial on another is a conflict
+#   - a CI unreported beyond its class's expiry is unseen (never deleted), and
+#     operational again when reported; an asset does not expire
+#   - rescan runs `<component> report` for the cmdbSource components only
 #
 # Needs pg_ctl/initdb/psql, node, tsc, curl and jq; without them on PATH it
 # re-enters itself under nix-shell. PostgreSQL will not run as root: as root
@@ -109,12 +115,33 @@ export CMDB_LISTEN="127.0.0.1:${API_PORT}"
 echo "test-token-$$" >"${CMDB_TOKEN_FILE}"
 mkdir -p "${TAPPAAS_CONFIG}"
 
+# The rescan sources (components.json's cmdbSource): one that reports, one that
+# fails, one that is not a source. They report through the CLI, to this service.
+mkdir -p "${T}/bin"
+cat >"${T}/components.json" <<'JSON'
+{ "version": 1, "components": [
+  { "name": "fake-manager", "kind": "manager", "cmdbSource": true },
+  { "name": "quiet-manager", "kind": "manager" },
+  { "name": "broken-manager", "kind": "manager", "cmdbSource": true } ] }
+JSON
+printf '#!/usr/bin/env bash\n[[ "$1" == report ]] || exit 2\necho %q | node %q report --json >/dev/null\n' \
+    '{"source":"fake-manager","objects":[{"class":"zone","name":"rescanned","attributes":{"vlan":99}}]}' "${CLI}" >"${T}/bin/fake-manager"
+printf '#!/usr/bin/env bash\necho "boom: the plane is down" >&2\nexit 3\n' >"${T}/bin/broken-manager"
+printf '#!/usr/bin/env bash\ntouch %q\n' "${T}/quiet-ran" >"${T}/bin/quiet-manager"
+chmod +x "${T}/bin/"*
+export CMDB_COMPONENTS="${T}/components.json" CMDB_SOURCE_PATH="${T}/bin:${PATH}"
+
 node "${MAIN}" serve >"${T}/svc.log" 2>&1 &
 SVC_PID=$!
 for _ in $(seq 1 100); do [[ -S "${CMDB_SOCKET}" ]] && break; sleep 0.1; done
 if [[ -S "${CMDB_SOCKET}" ]]; then ok "cmdb-controller serves ${CMDB_SOCKET}"; else bad "the service did not start: $(cat "${T}/svc.log")"; results; exit $?; fi
 
 cmdb() { node "${CLI}" "$@"; }
+
+# Report times relative to now, on the hour: a CI expires after 7 days (D5), so
+# a fixed date would be unseen the moment it is reported.
+ago() { node -e 'const d = new Date(Date.now() - Number(process.argv[1]) * 3600e3); d.setUTCMinutes(0, 0, 0); console.log(d.toISOString())' "$1"; }
+T1="$(ago 96)"; T1b="$(ago 94)"; T2="$(ago 72)"; T3="$(ago 48)"; T4="$(ago 24)"; OLD="$(ago 240)"
 
 echo "== the schema (D13) =="
 check "exactly the eight tables" "attribute,attribute_def,change,class,class_ancestor,object,relation,relation_type" \
@@ -136,8 +163,8 @@ check "cmdb class show: an asset's keys" "serial,vendor|name" "$(cmdb class show
 cmdb class list >"${T}/classes.txt" 2>&1 && grep -q "^      server" "${T}/classes.txt" && ok "cmdb class list draws the tree" || bad "class list: $(head -5 "${T}/classes.txt")"
 
 echo "== a report: a server, its rj45 port, a machine on it, a vm on that =="
-cat >"${T}/r1.json" <<'JSON'
-{ "source": "site-manager", "kind": "observation", "time": "2026-10-01T10:00:00Z",
+cat >"${T}/r1.json" <<JSON
+{ "source": "site-manager", "kind": "observation", "time": "${T1}",
   "objects": [
     { "ref": "srv", "class": "server", "name": "srv-01",
       "attributes": { "vendor": "hp", "serial": "CZC1234", "model": "hp/z840", "displayName": "tappaas1",
@@ -165,20 +192,20 @@ check "by attribute: vendor=hp" "srv-01" "$(cmdb query --where vendor=hp --json 
 check "by attribute: a number" "nextcloud" "$(cmdb query vm --where vmid=200 --json | jq -r '[.[].name] | join(",")')"
 
 echo "== history and drift (D6) =="
-cat >"${T}/r2.json" <<'JSON'
-{ "source": "health-manager", "time": "2026-10-02T10:00:00Z",
+cat >"${T}/r2.json" <<JSON
+{ "source": "health-manager", "time": "${T2}",
   "objects": [ { "class": "server", "name": "srv-01", "attributes": { "cpu": "E5-2690v4" } } ] }
 JSON
 out="$(cmdb report --json <"${T}/r2.json")"
 check "the second observation changed cpu and marked drift" "cpu cpu" "$(jq -r '.result.objects[0] | "\(.changed | join(",")) \(.drift | join(","))"' <<<"${out}")"
-check "history keeps both periods of cpu" "E5-2680v4 2026-10-01T10:00:00.000Z 2026-10-02T10:00:00.000Z|E5-2690v4 2026-10-02T10:00:00.000Z null" \
+check "history keeps both periods of cpu" "E5-2680v4 ${T1} ${T2}|E5-2690v4 ${T2} null" \
     "$(cmdb history srv-01 --json | jq -r '[.attributes[] | select(.name == "cpu") | "\(.value) \(.from) \(.to)"] | join("|")')"
-check "the server as of 2026-10-01 had the first cpu" "E5-2680v4" "$(cmdb history srv-01 --at 2026-10-01T12:00:00Z --json | jq -r '.attributes.cpu.value')"
-check "a query as of 2026-10-01 sees the first cpu" "E5-2680v4" "$(cmdb query server --at 2026-10-01T12:00:00Z --json | jq -r '.[0].attributes.cpu')"
+check "the server as of the first report had the first cpu" "E5-2680v4" "$(cmdb history srv-01 --at "${T1b}" --json | jq -r '.attributes.cpu.value')"
+check "a query as of then sees the first cpu" "E5-2680v4" "$(cmdb query server --at "${T1b}" --json | jq -r '.[0].attributes.cpu')"
 check "drift on the server: what cpu was, from whom" "E5-2680v4 health-manager" "$(cmdb show srv-01 --json | jq -r '"\(.drift.attributes.cpu.was) \(.drift.source)"')"
 cmdb history srv-01 >"${T}/hist.txt" 2>&1 && grep -q "E5-2690v4" "${T}/hist.txt" && ok "cmdb history prints a table" || bad "history text: $(head -3 "${T}/hist.txt")"
-cat >"${T}/r3.json" <<'JSON'
-{ "source": "asset-manager", "kind": "change", "verb": "asset modify", "job": "J-1", "actor": "lars", "time": "2026-10-03T10:00:00Z",
+cat >"${T}/r3.json" <<JSON
+{ "source": "asset-manager", "kind": "change", "verb": "asset modify", "job": "J-1", "actor": "lars", "time": "${T3}",
   "objects": [ { "class": "server", "name": "srv-01", "attributes": { "assetTag": "T-0001" } },
                { "class": "server", "name": "srv-02", "attributes": { "vendor": "dell", "serial": "X2" } } ] }
 JSON
@@ -222,8 +249,8 @@ check "service.instance.id is the CI id" "srv-01" "$(cmdb resolve "service.insta
 
 echo "== an ended CI is kept, and leaves key matching (D5, D7) =="
 OLD_VM="$(cmdb show vm/nextcloud --json | jq -r '.id')"
-cmdb report --json >/dev/null <<'JSON'
-{ "source": "module-manager", "kind": "change", "verb": "module delete", "time": "2026-10-04T10:00:00Z",
+cmdb report --json >/dev/null <<JSON
+{ "source": "module-manager", "kind": "change", "verb": "module delete", "time": "${T4}",
   "objects": [ { "class": "vm", "name": "nextcloud", "attributes": { "vmid": 200 }, "end": true } ] }
 JSON
 check "a query no longer lists it" "0" "$(cmdb query vm --json | jq 'length')"
@@ -263,6 +290,48 @@ out="$(cmdb report --json <"${T}/readme.json" 2>&1)"
 check "the README's example report is accepted" "true" "$(jq -r '.delivered' <<<"${out}" 2>/dev/null || echo "${out}")"
 check "…and its cluster has the machine as a member" "machine/tappaas1" \
     "$(cmdb show cluster/tappaas --json | jq -r '.relations[] | select(.type == "member-of") | "\(.other.class)/\(.other.name)"')"
+
+echo "== software: known by its name within its node; version is history (D5) =="
+cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"class":"app","name":"pve","attributes":{"version":"9.0","onNode":"tappaas1"}}]}'
+PVE="$(cmdb show app/pve --json | jq -r '.id')"
+out="$(cmdb report --json <<<'{"source":"module-manager","kind":"change","verb":"module update","objects":[{"class":"app","name":"pve","attributes":{"version":"9.1","onNode":"tappaas1"}}]}')"
+check "an upgrade is the same CI, its version changed" "${PVE} false version" "$(jq -r '.result.objects[0] | "\(.id) \(.created) \(.changed | join(","))"' <<<"${out}")"
+check "…and the version's history is the upgrades" "9.0|9.1" "$(cmdb history app/pve --json | jq -r '[.attributes[] | select(.name == "version") | .value] | join("|")')"
+check "cmdb class show: software's key is (name, onNode)" "name,onNode" "$(cmdb class show app --json | jq -r '[.keys[].components | join(",")] | join("|")')"
+
+echo "== an asset by any of its ports' MACs (D5) =="
+out="$(cmdb report --json <<<'{"source":"installer","objects":[{"ref":"box","class":"server","name":"new-box","attributes":{"model":"hp/z840"}},{"class":"port","name":"eno1","attributes":{"asset":{"ref":"box"},"kind":"rj45","mac":"AA:BB:CC:00:00:01"}}]}')"
+check "a box reported under another name, by a port's MAC, is srv-01" "srv-01 new-box false" "$(jq -r '.result.objects[0] | "\(.name) \(.reportedAs) \(.created)"' <<<"${out}")"
+check "…and its port is that asset's eno1, not a new one" "false" "$(jq -r '.result.objects[1].created' <<<"${out}")"
+check "…no second server was made" "srv-01,srv-02" "$(cmdb query server --json | jq -r '[.[].name] | join(",")')"
+refuse "a serial on one asset and a MAC on another is a conflict" 4 "conflict" \
+    '{"source":"t","objects":[{"ref":"b","class":"server","name":"srv-02","attributes":{"vendor":"dell","serial":"X2"}},{"class":"port","name":"eno9","attributes":{"asset":{"ref":"b"},"kind":"rj45","mac":"aa:bb:cc:00:00:01"}}]}'
+check "cmdb class show: an asset's keys and its keyVia" "serial,vendor|name port.mac" \
+    "$(cmdb class show server --json | jq -r '"\([.keys[].components | join(",")] | join("|")) \(.keyVia[0].class).\(.keyVia[0].field)"')"
+
+echo "== unseen: a CI no source reported within its class's expiry (D5) =="
+cmdb report --json >/dev/null <<JSON
+{ "source": "site-manager", "time": "${OLD}", "objects": [
+  { "class": "vm", "name": "old-vm", "attributes": { "vmid": 300, "stage": "operational" } },
+  { "class": "other-device", "name": "old-box", "attributes": { "stage": "placed" } } ] }
+JSON
+check "a vm last reported 10 days ago is unseen" "unseen" "$(cmdb show vm/old-vm --json | jq -r '.attributes.stage.value')"
+check "…since its 7 days ran out, by cmdb-controller" "$(ago 72) cmdb-controller" "$(cmdb show vm/old-vm --json | jq -r '"\(.attributes.stage.since) \(.attributes.stage.source)"')"
+check "…and it is kept, not deleted" "1" "$(cmdb query vm --where vmid=300 --json | jq 'length')"
+check "an asset does not expire: only CIs do" "placed" "$(cmdb show other-device/old-box --json | jq -r '.attributes.stage.value')"
+check "cmdb class show: a vm's expiry is the ci default, 7 days" "604800" "$(cmdb class show vm --json | jq -r '.expirySeconds')"
+cmdb report --json >/dev/null <<<'{"source":"site-manager","objects":[{"class":"vm","name":"old-vm","attributes":{"vmid":300}}]}'
+check "reported again, it is operational" "operational" "$(cmdb show vm/old-vm --json | jq -r '.attributes.stage.value')"
+check "…its stage history: operational, unseen, operational" "operational|unseen|operational" \
+    "$(cmdb history vm/old-vm --json | jq -r '[.attributes[] | select(.name == "stage") | .value] | join("|")')"
+
+echo "== rescan asks every cmdbSource component (components.json) =="
+out="$(cmdb rescan --json)"
+check "the two sources were asked, the other component not" "fake-manager:true broken-manager:false" \
+    "$(jq -r '[.asked[] | "\(.source):\(.ok)"] | join(" ")' <<<"${out}")"
+[[ ! -e "${T}/quiet-ran" ]] && ok "…quiet-manager (no cmdbSource) was not run" || bad "quiet-manager ran"
+check "what the source reported is in the store" "99" "$(cmdb show zone/rescanned --json | jq -r '.attributes.vlan.value')"
+check "a failed source says why" "boom: the plane is down" "$(jq -r '.asked[] | select(.source == "broken-manager") | .stderr' <<<"${out}")"
 
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)

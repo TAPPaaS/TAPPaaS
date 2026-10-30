@@ -69,18 +69,38 @@ classes, in the reporting class's **scope** (its nearest abstract ancestor),
 that have the same key: a vm's VMID is matched among vms and lxcs; `name`,
 which every node class keys on, across vm, lxc, machine and device — and a hit
 of another class is a conflict, not a merge. A relation field can be part of a
-key (a port is its name on its asset; software its name and version on its
-node). Outcomes:
+key (a port is its name on its asset; software its name on its node — its
+`version` is an attribute, so an upgrade is the same CI and the version's
+history is the upgrades). Outcomes:
 
 - no complete key in the report: refused (it cannot be identified);
 - a key matching two objects: conflict;
 - two keys matching two different objects: conflict;
-- a match of another class, or under another name: conflict (a name is
-  immutable; a renamed CI is a new one, D7);
+- a match of another class: conflict;
+- a CI matched under another name: conflict (a CI's name is immutable; a
+  renamed CI is a new one, D7). A resource or place matched by a stronger key
+  under another name keeps its stored name, and the result says `reportedAs`:
+  the installer's hook (D8) knows a box's serial and MACs, not its tag;
 - otherwise the match, or a new object.
 
-Not built yet: D5's "then any port's MAC" for an asset, and the class expiry
-that makes a CI `unseen`. Both come with the reporters that need them.
+**A key through a related object** (`keyVia` on the class): an asset is also
+known by any of its ports' MACs, at rank 2, between vendor + serial and its
+tag. The values are the `mac`s of the ports in the same report whose `asset`
+is that asset's `ref`; they are looked up, case-insensitively, on the stored
+ports that are `part-of` a live asset. MACs pointing at two assets, or at
+another asset than the serial does, are a conflict.
+
+## Unseen (D5)
+
+A class's `expiry` (declared on `ci` as `7d`, inherited, refinable per class)
+is how long a CI may go unreported. `Store.expire()` runs after each report
+and on the service's timer (`CMDB_EXPIRY_CHECK_SECONDS`, an hour): every live
+CI whose `last_seen` plus its expiry is past gets `stage: unseen`, from the
+moment the expiry ran out, written by `cmdb-controller` under a change of its
+own (verb `expire`), which the change stream carries. Nothing is deleted. An
+observation of an unseen CI makes it `operational` again (D7), unless the
+report sets the stage itself. Resources and places do not expire: an asset on
+a shelf is not reported by anyone, and is not missing.
 
 ## Checks
 
@@ -112,7 +132,7 @@ ways, and "what does a down node take with it" crosses all three.
 
 | Later | Here |
 |---|---|
-| Reports from the managers (step 2) | `rescan.ts`'s `RESCAN_SOURCES` is empty; the service's sandbox (`ProtectHome=read-only`) will need `config/` writable for the sources it runs |
+| Reports from the managers (step 2) | `rescan` runs `<component> report` for each component components.json marks `"cmdbSource": true` (read at each rescan; `CMDB_COMPONENTS`), one at a time, as `tappaas` with the managers' PATH, in the service's sandbox. That sandbox has `ProtectHome=read-only`: a report verb that writes under `/home/tappaas` (the report spool, `~/.ssh/known_hosts` on a first ssh to a host) is refused there. Module components (`config/control-plane.json`) are not asked yet |
 | asset-manager, `positions.json` migration (step 3) | the classes and relations are in the metamodel |
 | The console's views (step 4) | the loopback listener and the token; the change stream |
-| Unseen CIs, MAC keys, per-relation impact direction | see above |
+| Per-relation impact direction | see above |

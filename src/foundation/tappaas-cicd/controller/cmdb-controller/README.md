@@ -36,7 +36,7 @@ Every verb takes `--json` (the API's data as is); otherwise a table.
 | `cmdb history <object> [--at TIME]` | every period of every attribute and relation, with its source; with `--at`, the object as it was then |
 | `cmdb impact <object> [--hops N] [--direction in\|out\|both]` | everything within N current relations (default 2, both ways), each at its shortest distance with the relation it was reached by |
 | `cmdb report [--file F]` | a report (below) from stdin or a file; spooled when the service does not answer |
-| `cmdb rescan` | ask every registered source to report again (none are registered until step 2), after replaying the spool |
+| `cmdb rescan` | after replaying the spool, run `<component> report` for every component `components.json` marks `"cmdbSource": true`, one at a time; prints what each answered (and the last lines of one that failed) |
 | `cmdb class list` / `cmdb class show <class>` | the class tree; a class's fields (own and inherited), keys and relations |
 | `cmdb resolve <otel-attr>=<value>…` | OpenTelemetry resource attributes → the object (D14): `service.instance.id`, `host.id` or `tappaas.ci.id` are the id; `host.name`, `service.name`, `service.version` match the fields declared `identifying`; `service.namespace` the node or environment; `tappaas.ci.class` the class |
 
@@ -87,6 +87,13 @@ written.
   its period and opens a new one. An observation that differs from the last
   with no change behind it marks **drift** on the object (`cmdb show` prints
   it); the next change report that touches the object clears it.
+- A CI no source has reported for longer than its class's expiry (7 days by
+  default) is marked `stage: unseen` — never deleted — and is `operational`
+  again when reported (D5, D7).
+- An asset is found by vendor + serial, then by any of its ports' MACs (the
+  ports in the same report that name it as their `asset`), then by its tag. A
+  box found that way under another name keeps its tag; the result's
+  `reportedAs` shows the name it was reported under.
 
 From TypeScript:
 
@@ -151,6 +158,10 @@ one — `type`, `required`, `immutable`, `description`, `enum` — plus:
 - `allowedBy`: the values a field may take, by another field's value (a port's
   `speed` by its `kind`, D9).
 - `derived`: kept by the controller (`drift`), never reported.
+
+On a class: `expiry` (`7d` on `ci`, inherited) — how long a CI may go
+unreported before it is unseen; `keyVia` — a key that is a field of a related
+object (an asset's ports' MACs, rank 2).
 
 A subclass that declares an inherited field again with only some properties
 refines it (`vm` makes `name` a key of rank 2). A new class goes through
