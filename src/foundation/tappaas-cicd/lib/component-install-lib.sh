@@ -138,7 +138,7 @@ link_component_executables() {
     for f in "${dir}"/*; do
         [ -f "${f}" ] || continue
         b="$(basename "${f}")"
-        case "${b}" in install.sh|update.sh|test.sh|validate.sh|*.md) continue ;; esac
+        case "${b}" in install.sh|update.sh|test.sh|validate.sh|*.md|*.jq) continue ;; esac
         case "${b}" in test-*) continue ;; esac
         [ -x "${f}" ] || chmod +x "${f}"
         ln -sfn "${f}" "${bin}/${b}"
