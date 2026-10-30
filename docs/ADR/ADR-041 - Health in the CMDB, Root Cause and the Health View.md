@@ -325,12 +325,51 @@ correlated, and its root causes.
 - **O1** *(closed 2026-10-30, operator)* No hardcoded propagation: correlation rules are data, per
   relation type and class (D3); shipped, a warning crosses nothing.
 - **O2** *(closed 2026-10-30, operator)* A site setting, `health.assessInterval`, default 5 minutes (D2).
-- **O3** *(open; the operator asked for an explanation — see below)* Whether the gates move out of health-manager into the managers that own the objects
+- **O3** *(open; explained 2026-10-30, for the operator to decide)* Whether the gates move out of health-manager into the managers that own the objects
   (site-manager judging its nodes), with health-manager keeping only the derivation.
+  **Explanation.** Today health-manager both *observes* (the gates ssh to nodes, ask Proxmox, read
+  Grafana) and *judges* (a threshold, a rule, a severity), and is the one writer of `conditions`.
+  Moving the gates to the owning managers would mean: site-manager judges its nodes and writes
+  conditions on `machine` objects, module-manager on `vm`/`lxc`, network-manager on ports and
+  zones, and health-manager only derives roots and roll-ups. *For:* the knowledge sits where the
+  object is understood (site-manager knows what a healthy node is), a manager's verb can judge
+  right after it changed something, and health-manager's 60 s assess shrinks to a derivation
+  over what is already written. *Against:* several writers of `conditions` need one convention
+  for severity, reason text, expiry and acknowledgement or the Health view becomes uneven;
+  every manager grows a timer or a hook to re-judge, where today one schedule does it; a
+  condition's source must still be named so the operator knows who said it; and the gates that
+  cross managers (memory commitment over the cluster, a backup that covers a node's guests)
+  have no single owner. A middle way exists and is the direction step 2 already takes: managers
+  **report observations** (a port's link, a pool's used, a guest's balloon) into the CMDB as
+  facts, and health-manager **judges them with thresholds** read from the CMDB, never from the
+  planes. Then the only gates left in health-manager are the ones that need a live probe (ssh
+  to a node for a pending reboot), and those can move one by one into the owning manager's
+  `report --discover` as an observation. **Recommendation:** keep one assessor and one writer of
+  `conditions` (health-manager), and move *observing* to the managers' reports, gate by gate,
+  until assess is a pure judgement over the CMDB; revisit the split when that is done and
+  assess takes seconds. Decide: agree with the recommendation, or move the judging too.
 - **O4** *(closed 2026-10-30, operator)* Both: a condition on its own, and a root cause with its
   symptoms (D4).
-- **O5** *(open; explanation asked)* How much of the graph the assistant (ADR-034 D7) may read to explain a root cause in
+- **O5** *(open; explained 2026-10-30, for the operator to decide)* How much of the graph the assistant (ADR-034 D7) may read to explain a root cause in
   words.
+  **Explanation.** The assistant proposes and never applies (ADR-034 D7); here it only reads.
+  To say in words why `identity` is critical it needs: the root's own conditions (type, severity,
+  reason, since when), the symptoms the derivation hung on it, the objects one relation away
+  (what it runs on, what depends on it, what it is in), the root's recent events and history,
+  and the names of the desired records involved. It does not need the whole graph (400 objects
+  and their attributes), configuration values, secrets, or the other roots. Three sizes: (a) the
+  **root alone** — its conditions and symptoms list — enough for "identity is down since 09:12,
+  authentik's health check fails, 7 services show it as their cause", cheap and safe but blind
+  to *why*; (b) the **ego graph one hop**, as the Health view shows it, plus the root's last 24 h of
+  events — enough for "identity runs on tappaas2, whose memory gate turned critical five
+  minutes earlier; the other guests on tappaas2 warn too", which is what an operator wants;
+  (c) **everything reachable**, which explains more cases but reads attributes an operator did
+  not ask to share and costs tokens on every question. **Recommendation:** (b), through the
+  same console reads the Health view uses (`health/ego` one hop, the root's `show` and
+  `history`, `roots`), bounded to about 50 objects and 100 events, names and conditions only —
+  no attribute values beyond kind, class and state, no `config/` contents — and the answer
+  lists what it read, so the operator can check it. A second hop only on the operator's
+  explicit follow-up question. Decide: (b) as described, or (a) to start.
 - **O6** *(open, to discuss)* Which relations get `redundancyGroup` from the start: a node's bonded uplinks (ADR-019
   v1.1), MLAG peers, a service with two providers — or none until a site has one.
 
