@@ -506,9 +506,14 @@ while IFS= read -r ns; do
         | jq -c --arg ns "${ns}" '.[] | {ns: $ns, type: .["backup-type"], id: .["backup-id"],
               time: .["backup-time"], size: (.size // null), verification: (.verification // null)}' >> "${lines}"
 done < <(api "/admin/datastore/${store}/namespace" | jq -r '.[].ns')
+# The datastore's usage and its prune jobs ride along (backup-manager report,
+# ADR-040); an older PBS without either answers null and [].
+status="$(api "/admin/datastore/${store}/status")"; jq -e . >/dev/null 2>&1 <<<"${status}" || status=null
+prune="$(api /admin/prune)"; jq -e 'type == "array"' >/dev/null 2>&1 <<<"${prune}" || prune='[]'
 jq -n --slurpfile snaps "${lines}" --argjson verify "$(api /admin/verify || echo '[]')" \
     --argjson sync "$(api /admin/sync || echo '[]')" \
-    '{snapshots: $snaps, verifyJobs: $verify, syncJobs: $sync}'
+    --argjson status "${status}" --argjson prune "${prune}" \
+    '{snapshots: $snaps, verifyJobs: $verify, syncJobs: $sync, status: $status, pruneJobs: $prune}'
 REMOTE
 )" || skip_offline "runs (${node} did not answer)"
     jq -e 'type == "object"' >/dev/null 2>&1 <<<"${ds}" || skip_offline "runs (no datastore answer from ${node})"
