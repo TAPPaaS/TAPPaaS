@@ -25,7 +25,7 @@ import { useOpenedBy } from "../opener";
 import { JobSummary, SiteRead, StorageInventory, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
-import { AddNodeStage, NodeNetwork, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, switchPortChoices, writeProgress, setupFromOutput } from "../nodeadd";
+import { AddNodeStage, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, switchPortChoices, writeProgress, setupFromOutput } from "../nodeadd";
 import { Wizard, jobLabel, jobLive } from "../wizard";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
@@ -76,13 +76,12 @@ function Check({ ok, label, detail }: { ok: boolean | null; label: string; detai
 
 // A node being added (nodeadd.ts nodeAddOngoing), found again from the
 // records: the newest node add job, the node's progress, then — once it has
-// joined — its pools and its lan ports. `stage` is where the wizard stands.
+// joined — its pools. `stage` is where the wizard stands.
 export interface AddNodeSession {
   name: string;
   job: JobSummary;
   stage: AddNodeStage;
   dataPool: boolean | null;
-  lanPorts: number | null;
 }
 
 // `enabled`: false reads nothing (the wizard has its job attached already).
@@ -94,11 +93,9 @@ export function useAddNodeSession(enabled = true): AddNodeSession | null {
   const joined = addNodeJoined(progress);
   const inv = useRead<StorageInventory>(joined ? "storage" : null).env?.data;
   const dataPool = inv ? (inv.nodes.find((n) => n.name === name)?.pools ?? []).some((p) => p.name !== "rpool") : null;
-  const net = useRead<NodeNetwork>(joined && dataPool ? `nodes/${encodeURIComponent(name!)}/network` : null, 60_000).env?.data;
-  const lanPorts = net?.live ? net.live.lan.members.length : null;
-  if (!run || !nodeAddOngoing(run.job, Date.now(), { progress, dataPool, lanPorts })) return null;
-  const stage = addNodeStage({ job: true, jobLive: jobLive(run.job), progress, pooled: dataPool === true, lan: (lanPorts ?? 0) > 1, wan: false });
-  return { name: run.name, job: run.job, stage, dataPool, lanPorts };
+  if (!run || !nodeAddOngoing(run.job, Date.now(), { progress, dataPool })) return null;
+  const stage = addNodeStage({ job: true, jobLive: jobLive(run.job), progress, pooled: dataPool === true, lan: false, wan: false });
+  return { name: run.name, job: run.job, stage, dataPool };
 }
 
 // "tappaas4 — stage 3, job 20261028… running": how a session is named where it is offered.
@@ -134,7 +131,6 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
     setJob(s.job.id);
     setResumed(true);
     if (s.dataPool) setPooled(true);
-    if ((s.lanPorts ?? 0) > 1) setLanDone(true);
   };
   useEffect(() => {
     if (resume && session && job === null && !declined) restore(session);

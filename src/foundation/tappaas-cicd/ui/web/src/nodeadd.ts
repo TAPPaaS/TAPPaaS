@@ -251,9 +251,10 @@ export const SESSION_MS = 24 * 3600_000;
 
 // Whether that node is still being added: its job waits or runs; or the job
 // ended within SESSION_MS (not stopped by an operator) and the node is still
-// registered for its install, or joined with no data pool or one lan port.
-// null: not known yet (a read is still out).
-export function nodeAddOngoing(job: NodeAddJob, now: number, rec: { progress: AddNodeFacts["progress"]; dataPool: boolean | null; lanPorts: number | null }): boolean | null {
+// registered for its install, or joined with no data pool. One lan port is no
+// session: it is a finished node's normal state, and nothing records a skip of
+// stage 5a. null: not known yet (a read is still out).
+export function nodeAddOngoing(job: NodeAddJob, now: number, rec: { progress: AddNodeFacts["progress"]; dataPool: boolean | null }): boolean | null {
   if (job.state === "queued" || job.state === "running") return true;
   if (job.cancelled) return false;
   if (now - Date.parse(job.ended ?? job.created) > SESSION_MS) return false;
@@ -261,8 +262,7 @@ export function nodeAddOngoing(job: NodeAddJob, now: number, rec: { progress: Ad
   if (!p) return null;
   if (p.registration === "pending") return true;
   if (!addNodeJoined(p)) return false;
-  if (rec.dataPool === false || (rec.lanPorts !== null && rec.lanPorts <= 1)) return true;
-  return rec.dataPool === null || rec.lanPorts === null ? null : false;
+  return rec.dataPool === null ? null : !rec.dataPool;
 }
 
 // How far node add's own output has come, before the records say so (they are

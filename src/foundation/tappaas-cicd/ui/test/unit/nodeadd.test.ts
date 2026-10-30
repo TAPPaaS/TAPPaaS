@@ -94,14 +94,13 @@ check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && h
 
   const joined = { registration: "answered" as const, inCluster: true, inSite: true };
   const done_ = job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 0 });
-  check(nodeAddOngoing(job(), now, { progress: null, dataPool: null, lanPorts: null }) === true, "a node add that runs is ongoing, whatever the reads say yet");
-  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: false, lanPorts: null }) === true, "joined with no data pool: still being added");
-  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: true, lanPorts: 1 }) === true, "…or with one lan port");
-  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: true, lanPorts: 2 }) === false, "a pool and a bonded lan: finished");
-  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: true, lanPorts: null }) === null, "…not known while its ports are still read");
-  check(nodeAddOngoing(done_, now + 2 * SESSION_MS, { progress: joined, dataPool: false, lanPorts: 1 }) === false, "a day after its job ended it is no session any more");
-  check(nodeAddOngoing(job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 1 }), now, { progress: { registration: "none", inCluster: false, inSite: false }, dataPool: null, lanPorts: null }) === false, "a job that failed before the join leaves nothing to continue");
-  check(nodeAddOngoing(job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 130, cancelled: { was: "running" } }), now, { progress: joined, dataPool: false, lanPorts: 1 }) === false, "one an operator stopped is over");
+  check(nodeAddOngoing(job(), now, { progress: null, dataPool: null }) === true, "a node add that runs is ongoing, whatever the reads say yet");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: false }) === true, "joined with no data pool: still being added");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: true }) === false, "a pool and one lan port: finished, skipping stage 5a leaves no session");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: null }) === null, "…not known while its pools are still read");
+  check(nodeAddOngoing(done_, now + 2 * SESSION_MS, { progress: joined, dataPool: false }) === false, "a day after its job ended it is no session any more");
+  check(nodeAddOngoing(job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 1 }), now, { progress: { registration: "none", inCluster: false, inSite: false }, dataPool: null }) === false, "a job that failed before the join leaves nothing to continue");
+  check(nodeAddOngoing(job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 130, cancelled: { was: "running" } }), now, { progress: joined, dataPool: false }) === false, "one an operator stopped is over");
 
   const f = (o: Partial<AddNodeFacts>): AddNodeFacts => ({ job: true, jobLive: true, progress: null, pooled: false, lan: false, wan: false, ...o });
   check(addNodeStage(f({ job: false, jobLive: false })) === "declare", "nothing applied, nothing registered: stage 1");
