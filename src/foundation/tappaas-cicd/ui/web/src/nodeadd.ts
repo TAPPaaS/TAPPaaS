@@ -268,7 +268,10 @@ export function nodeAddOngoing(job: NodeAddJob, now: number, rec: { progress: Ad
 // How far node add's own output has come, before the records say so (they are
 // read every ten seconds): the step it is on, the switch port it set up, and
 // whether the machine can be booted now.
-export function setupFromOutput(output: string): { ready: boolean; step: string | null; port: string | null } {
+export function setupFromOutput(raw: string): { ready: boolean; step: string | null; port: string | null } {
+  // The job's log carries the manager's colours.
+  // eslint-disable-next-line no-control-regex
+  const output = raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "");
   const steps = [...output.matchAll(/^\[node add \d+\] (.+)$/gm)].map((m) => m[1]);
   const port = /^\s*✓ (.+ port .+ is .+: a node trunk.*)$/m.exec(output)?.[1] ?? null;
   return { ready: steps.some((s) => s.startsWith("boot the machine now")), step: steps[steps.length - 1] ?? null, port };

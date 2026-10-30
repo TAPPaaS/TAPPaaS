@@ -119,6 +119,8 @@ check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && h
   check(setupFromOutput(out).port === "USW port 1 is tappaas4's: a node trunk, on the switch", "the switch port it set up");
   check(setupFromOutput(out + "[node add 3] boot the machine now: from the network\n").ready, "ready once it says to boot");
   check(setupFromOutput("").step === null, "no output yet: no step");
+  const coloured = "\n\x1b[1;92m[node add 1]\x1b[0m the switch port: USW port 1\n  \x1b[1;92m✓\x1b[0m USW port 1 is tappaas4's: a node trunk, on the switch\n\x1b[1;92m[node add 4]\x1b[0m boot the machine now: from the network\n";
+  check(setupFromOutput(coloured).ready && setupFromOutput(coloured).port?.startsWith("USW port 1") === true, "the job's real output: its colours do not hide the steps");
 }
 
 done("nodeadd");

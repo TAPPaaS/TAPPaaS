@@ -159,7 +159,9 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   // can boot, it says it is getting ready, from the job's own output.
   const live = running?.state === "running" || running?.state === "queued";
   const setup = setupFromOutput(running?.output ?? "");
-  const settingUp = live && !setup.ready;
+  // The records can say so first: registered, and the boot window open.
+  const bootReady = setup.ready || (progress?.registration === "pending" && progress.pxe.enabled === true);
+  const settingUp = live && !bootReady;
   const joined = addNodeJoined(progress);
   const endedOk = ended ?? (running?.state === "done" ? running.exit === 0 : null);
 
@@ -365,7 +367,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         </StepRow>
         <StepRow s={steps[2]} open={current === "boot"}>
           {settingUp ? <p className="readstate readstate-warn">Getting ready — do not boot yet. Stage 1's job is on: {setup.step ?? "starting"}…</p> : null}
-          {live && setup.ready && progress?.registration !== "answered" ? <p className="readstate">Ready: boot the machine now.{setup.port ? ` ${setup.port}.` : ""}</p> : null}
+          {live && bootReady && progress?.registration !== "answered" ? <p className="readstate">Ready: boot the machine now.{setup.port ? ` ${setup.port}.` : ""}</p> : null}
           <p className="small">Once stage 1's job is running, boot the machine one of two ways. Either way the installer asks the mothership for its answer over the network, so the machine must be cabled as stage 1 says; only if the boot-disk fields match no disk does the node's screen ask for one (from the network; a stick stops with the list of the machine's disks instead).</p>
           <div className="two">
             <div className="explain">
@@ -387,7 +389,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           {progress && underway ? (
             <ul className="plain checks">
               <Check ok={progress.registration !== "none" ? true : settingUp ? null : false} label="registered for a network install" detail={progress.registration === "pending" ? "waiting for the machine to ask" : progress.registration === "answered" ? "the installer has fetched its answer" : settingUp ? "being registered…" : "no registration (the job has not reached it, or it ended)"} />
-              <Check ok={progress.pxe.enabled || setup.ready ? true : settingUp ? null : false} label="the network-boot window on the mothership" detail={progress.pxe.enabled || setup.ready ? "open" : settingUp ? "being opened…" : "closed"} />
+              <Check ok={progress.pxe.enabled || bootReady ? true : settingUp ? null : false} label="the network-boot window on the mothership" detail={progress.pxe.enabled || bootReady ? "open" : settingUp ? "being opened…" : "closed"} />
             </ul>
           ) : underway ? <p className="muted small">reading the provisioning state…</p> : null}
         </StepRow>
