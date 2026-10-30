@@ -1,5 +1,5 @@
 {
-  "description": "The resource branch (ADR-040 D3, D7, D9): IT4IT's Resource — an asset or other limited thing, allocated to a CI or free. Its lifecycle is the asset's (ordered … disposed, reusable), not the CI's. allowedBy: the values a field may take depend on another field of the same object (a port's speed on its kind); a value of that other field not listed admits none.",
+  "description": "The resource branch (ADR-040 D3, D7, D9): IT4IT's Resource — an asset or other limited thing, allocated to a CI or free. Its lifecycle is the asset's (ordered … disposed, reusable), not the CI's. allowedBy: the values a field may take depend on another field of the same object (a port's speed on its kind); a value of that other field not listed admits none. keyVia: a key that is a field of a related object — an asset is known by any of its ports' MACs (D5); its rank orders it among the class's own keys.",
   "classes": {
     "resource": {
       "parent": "object",
@@ -16,9 +16,12 @@
       "parent": "resource",
       "abstract": true,
       "physical": true,
-      "description": "A physical thing. Named by a tag per kind (srv-01, sw-01, ap-01, dev-01; O5).",
+      "description": "A physical thing. Named by a tag per kind (srv-01, sw-01, ap-01, dev-01; O5). Known by vendor + serial, then any of its ports' MACs, then its tag (D5).",
+      "keyVia": [
+        { "rank": 2, "class": "port", "relation": "part-of", "field": "mac", "description": "Any of its ports' MACs: a port in the same report that is part of it, matched to a stored port's MAC (D9: a MAC is unique across all ports)." }
+      ],
       "fields": {
-        "name": { "key": 2, "description": "The asset's tag." },
+        "name": { "key": 3, "description": "The asset's tag." },
         "vendor": { "type": "string", "key": 1, "immutable": true },
         "model": { "type": "string", "description": "A faceplate key where one exists." },
         "serial": { "type": "string", "key": 1, "immutable": true, "description": "vendor + serial is the asset's key (D5)." },

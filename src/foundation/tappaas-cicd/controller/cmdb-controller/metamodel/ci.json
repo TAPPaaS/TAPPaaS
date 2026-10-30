@@ -1,5 +1,5 @@
 {
-  "description": "The root of the class tree and its ci branch (ADR-040 D3): what IT4IT's Actual Product Instance is made of. A field is declared as a service's field is (ADR-020 fields.json: type, required, immutable, description), plus key — the rank of the identity key it is part of (D5; fields with one rank form one key, the lowest rank is tried first) — and identifying with otel — which OpenTelemetry resource attributes name the CI (D14). A field a subclass declares again with only some properties refines the inherited one (a key on name). type relation: the value is another object, kept as a row in relation, not in attribute.",
+  "description": "The root of the class tree and its ci branch (ADR-040 D3): what IT4IT's Actual Product Instance is made of. A field is declared as a service's field is (ADR-020 fields.json: type, required, immutable, description), plus key — the rank of the identity key it is part of (D5; fields with one rank form one key, the lowest rank is tried first) — and identifying with otel — which OpenTelemetry resource attributes name the CI (D14). A class's expiry (on ci, inherited; a number and s, m, h or d) is how long a CI may go unreported before it is marked unseen (D5); it is never deleted. A field a subclass declares again with only some properties refines the inherited one (a key on name). type relation: the value is another object, kept as a row in relation, not in attribute.",
   "classes": {
     "object": {
       "parent": null,
@@ -16,6 +16,7 @@
       "parent": "object",
       "abstract": true,
       "description": "A configuration item: exists because a desired record exists, and ends with it (D7).",
+      "expiry": "7d",
       "fields": {
         "stage": { "type": "string", "enum": ["created", "operational", "drifted", "unseen", "retired"], "description": "The CI's lifecycle stage (D7)." },
         "desired": { "type": "object", "properties": { "file": { "type": "string" }, "key": { "type": "string" } }, "description": "The desired record: config/<file>.json, and the key in it where the file holds several." },
@@ -89,10 +90,10 @@
     "software": {
       "parent": "ci",
       "abstract": true,
-      "description": "What runs in a node: name + version within its node (D5).",
+      "description": "What runs in a node: known by its name within its node (D5).",
       "fields": {
         "name": { "key": 1 },
-        "version": { "type": "string", "key": 1, "identifying": true, "otel": ["service.version"] },
+        "version": { "type": "string", "identifying": true, "otel": ["service.version"], "description": "Not a key: its history is the upgrades (D5)." },
         "onNode": { "type": "relation", "relation": "runs-on", "required": true, "key": 1, "description": "The node it runs in." },
         "state": { "type": "string", "enum": ["running", "stopped"] },
         "listens": { "type": "array", "items": { "type": "object", "properties": { "port": { "type": "integer" }, "protocol": { "type": "string" } } } }

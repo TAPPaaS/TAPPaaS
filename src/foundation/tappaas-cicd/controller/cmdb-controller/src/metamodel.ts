@@ -37,6 +37,18 @@ export interface ClassDef {
   physical: boolean; // effective: declared here or on an ancestor
   description: string;
   declared: Record<string, Partial<FieldDef> & { spec?: Record<string, unknown> }>;
+  expiry: string | null; // as declared ("7d"); inherited, see expirySeconds()
+  keyVia: KeyVia[]; // as declared; inherited, see keyVia()
+}
+
+/** A key that is a field of a related object: an asset is known by any of
+ *  its ports' MACs (D5). The related object stands in `relation` to it. */
+export interface KeyVia {
+  rank: number;
+  class: string; // the related object's class (port)
+  relation: string; // its relation to the keyed object (part-of)
+  field: string; // its field that is the key (mac)
+  description?: string;
 }
 
 export interface RelationEnd {
@@ -56,6 +68,15 @@ export interface Key {
 type Obj = Record<string, unknown>;
 
 const CORE_KEYS = new Set(["type", "required", "immutable", "key", "identifying", "description"]);
+
+export const DEFAULT_EXPIRY_SECONDS = 7 * 24 * 3600;
+
+/** "7d", "12h", "30m", "90s" → seconds; null when it is none of those. */
+export function parseDuration(s: string): number | null {
+  const m = /^(\d+)\s*([smhd])$/.exec(s.trim());
+  if (!m) return null;
+  return Number(m[1]) * { s: 1, m: 60, h: 3600, d: 86400 }[m[2] as "s" | "m" | "h" | "d"];
+}
 
 function isObj(v: unknown): v is Obj {
   return v !== null && typeof v === "object" && !Array.isArray(v);
@@ -112,6 +133,16 @@ export class Metamodel {
         physical: raw.physical === true,
         description: typeof raw.description === "string" ? raw.description : "",
         declared,
+        expiry: typeof raw.expiry === "string" ? raw.expiry : null,
+        keyVia: Array.isArray(raw.keyVia)
+          ? raw.keyVia.filter(isObj).map((k) => ({
+              rank: Number(k.rank),
+              class: String(k.class),
+              relation: String(k.relation),
+              field: String(k.field),
+              description: typeof k.description === "string" ? k.description : undefined,
+            }))
+          : [],
       });
     }
   }
@@ -162,6 +193,31 @@ export class Metamodel {
     for (const r of this.relations) {
       for (const end of [r.from, r.to]) if (!this.classes.has(end)) throw new Error(`relation ${r.name}: ${end} is not a class`);
     }
+    for (const c of this.classes.values()) {
+      if (c.expiry !== null && parseDuration(c.expiry) === null) throw new Error(`class ${c.name}: expiry ${c.expiry} is not a duration (7d, 12h, 30m, 90s)`);
+      for (const k of c.keyVia) {
+        if (!Number.isFinite(k.rank)) throw new Error(`class ${c.name}: a keyVia needs a rank`);
+        if (!this.classes.has(k.class)) throw new Error(`class ${c.name}: keyVia class ${k.class} is not a class`);
+        if (!this.allows(k.relation, k.class, c.name)) throw new Error(`class ${c.name}: ${k.relation} does not join ${k.class} to it`);
+        if (!this.fields(k.class).has(k.field)) throw new Error(`class ${c.name}: ${k.class} has no field ${k.field}`);
+      }
+    }
+  }
+
+  /** How long a CI may go unreported before it is unseen (D5): the nearest
+   *  declared expiry, else 7 days. Only CIs expire; null for the rest. */
+  expirySeconds(name: string): number | null {
+    if (!this.isA(name, "ci")) return null;
+    for (const a of this.ancestors(name)) {
+      const e = this.classes.get(a)!.expiry;
+      if (e !== null) return parseDuration(e);
+    }
+    return DEFAULT_EXPIRY_SECONDS;
+  }
+
+  /** The keys of a class that are fields of related objects, own and inherited. */
+  keyVia(name: string): KeyVia[] {
+    return this.ancestors(name).flatMap((a) => this.classes.get(a)!.keyVia);
   }
 
   // ── the tree ─────────────────────────────────────────────────────────
@@ -240,6 +296,14 @@ export class Metamodel {
     const sig = key.components.join(",");
     return this.descendants(this.keyScope(name)).filter(
       (c) => !this.classes.get(c)!.abstract && this.keys(c).some((k) => k.components.join(",") === sig),
+    );
+  }
+
+  /** The classes an object of class `name` may be matched with by a keyVia. */
+  keyViaClasses(name: string, kv: KeyVia): string[] {
+    const sig = `${kv.class}|${kv.relation}|${kv.field}`;
+    return this.descendants(this.keyScope(name)).filter(
+      (c) => !this.classes.get(c)!.abstract && this.keyVia(c).some((k) => `${k.class}|${k.relation}|${k.field}` === sig),
     );
   }
 

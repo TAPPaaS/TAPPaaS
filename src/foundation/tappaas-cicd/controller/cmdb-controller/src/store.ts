@@ -8,7 +8,7 @@
 // reporter never leaves half a picture. A value that changes closes the row
 // that held it and opens a new one (D6); nothing is ever deleted.
 
-import { FieldDef, Metamodel } from "./metamodel";
+import { FieldDef, KeyVia, Metamodel } from "./metamodel";
 import { Param, Pg, Query, Row } from "./pg";
 
 type Obj = Record<string, unknown>;
@@ -160,7 +160,7 @@ function typeOk(f: FieldDef, v: unknown): string | null {
 /** What a report wrote, for the reporter. */
 export interface ReportResult {
   change: number | null;
-  objects: { ref?: string; id: string; class: string; name: string; created: boolean; changed: string[]; drift: string[]; ended: boolean }[];
+  objects: { ref?: string; id: string; class: string; name: string; reportedAs?: string; created: boolean; changed: string[]; drift: string[]; ended: boolean }[];
   relations: number[];
 }
 
@@ -197,6 +197,7 @@ export class Store {
         [kind, r.source, r.job ?? null, r.verb ?? null, r.actor ?? null, run.t],
       );
       run.change = Number(c.rows[0].id);
+      run.prescan(objects);
       for (let i = 0; i < objects.length; i++) await run.object(i, objects[i]);
       for (let i = 0; i < relations.length; i++) await run.relation(i, relations[i]);
       if (run.problems.length) {
@@ -220,7 +221,61 @@ export class Store {
       };
     });
     if (event) for (const fn of this.listeners) fn(event);
+    // A report moves the clock the expiry is read against; it never fails for it.
+    await this.expire().catch(() => undefined);
     return result;
+  }
+
+  // ── unseen (D5) ──────────────────────────────────────────────────────
+
+  /** Mark every live CI that no source has reported for longer than its
+   *  class's expiry as unseen: its stage, from the moment the expiry ran out.
+   *  Never a delete. Run after each report and on the service's timer.
+   *  Returns how many were marked. */
+  async expire(now: Date = new Date()): Promise<number> {
+    const expiries: Record<string, number> = {};
+    for (const c of this.mm.classes.keys()) {
+      const e = this.mm.expirySeconds(c);
+      if (e !== null && !this.mm.classes.get(c)!.abstract) expiries[c] = e;
+    }
+    const event = await this.pg.tx(async (q) => {
+      const due = (
+        await q(
+          `SELECT o.id, o.last_seen + make_interval(secs => e.value::double precision) AS since,
+                  st.id AS stage_id, lower(st.validity) AS stage_from
+             FROM object o
+             JOIN jsonb_each_text($1::jsonb) e ON e.key = o.class
+             LEFT JOIN attribute st ON st.object = o.id AND st.name = 'stage' AND upper_inf(st.validity)
+            WHERE o.ended IS NULL AND o.last_seen IS NOT NULL
+              AND o.last_seen + make_interval(secs => e.value::double precision) < $2::timestamptz
+              AND (st.id IS NULL OR st.value <> '"unseen"'::jsonb)`,
+          [expiries, now.toISOString()],
+        )
+      ).rows;
+      if (!due.length) return null;
+      const c = await q(`INSERT INTO change (kind, source, verb, time) VALUES ('observation', $1, 'expire', $2) RETURNING id`, [
+        CONTROLLER_SOURCE,
+        now.toISOString(),
+      ]);
+      const change = Number(c.rows[0].id);
+      for (const d of due) {
+        const t = d.stage_from === null ? String(d.since) : later(String(d.since), String(d.stage_from));
+        if (d.stage_id !== null) await q("UPDATE attribute SET validity = tstzrange(lower(validity), $2) WHERE id = $1", [Number(d.stage_id), t]);
+        await q(
+          `INSERT INTO attribute (object, name, value, source, change, validity) VALUES ($1, 'stage', '"unseen"'::jsonb, $2, $3, tstzrange($4, NULL))`,
+          [String(d.id), CONTROLLER_SOURCE, change, t],
+        );
+      }
+      const ev = await q(
+        `UPDATE change SET objects = ARRAY(SELECT (jsonb_array_elements_text($2::jsonb))::uuid) WHERE id = $1
+          RETURNING id, kind, source, job, verb, actor, time, to_jsonb(objects) AS objects, to_jsonb(relations) AS relations, drift`,
+        [change, due.map((d) => String(d.id))],
+      );
+      return ev.rows[0] as unknown as ChangeEvent;
+    });
+    if (!event) return 0;
+    for (const fn of this.listeners) fn(event);
+    return event.objects.length;
   }
 
   // ── query ─────────────────────────────────────────────────────────────
@@ -548,6 +603,8 @@ export class Store {
       subclasses: this.mm.descendants(name).filter((d) => d !== name),
       keys: this.mm.keys(name),
       keyScope: this.mm.keyScope(name),
+      keyVia: this.mm.keyVia(name),
+      expirySeconds: this.mm.expirySeconds(name),
       fields: [...this.mm.fields(name).values()],
       relations: this.mm.relations.filter((r) => this.mm.isA(name, r.from) || this.mm.isA(name, r.to)),
     };
@@ -569,6 +626,10 @@ class ReportRun {
   drift = false;
   results: ReportResult["objects"] = [];
   private refs = new Map<string, Target>();
+  // What the report says about the objects it names by ref: the objects that
+  // point at them (a port's asset), for the keys that are a related object's
+  // field (an asset's ports' MACs, D5).
+  private related = new Map<string, { class: string; relation: string; attributes: Obj }[]>();
 
   constructor(
     private readonly mm: Metamodel,
@@ -577,6 +638,28 @@ class ReportRun {
     private readonly kind: "observation" | "change",
     readonly t: string,
   ) {}
+
+  prescan(objects: ReportObject[]): void {
+    for (const o of objects) {
+      if (!isObj(o) || typeof o.class !== "string" || !this.mm.has(o.class) || !isObj(o.attributes)) continue;
+      for (const f of this.mm.fields(o.class).values()) {
+        if (f.type !== "relation" || f.spec.direction === "in") continue;
+        const v = o.attributes[f.name];
+        const ref = typeof v === "string" ? v : isObj(v) && typeof v.ref === "string" ? v.ref : null;
+        if (ref === null) continue;
+        this.related.set(ref, [...(this.related.get(ref) ?? []), { class: o.class, relation: String(f.spec.relation), attributes: o.attributes }]);
+      }
+    }
+  }
+
+  // The values of a keyVia this report gives for the object with this ref.
+  private viaValues(ref: string | undefined, kv: KeyVia): string[] {
+    if (ref === undefined) return [];
+    return (this.related.get(ref) ?? [])
+      .filter((r) => r.relation === kv.relation && this.mm.isA(r.class, kv.class))
+      .map((r) => r.attributes[kv.field])
+      .filter((v): v is string => typeof v === "string" && v !== "");
+  }
 
   private problem(at: string, error: string, candidates?: Problem["candidates"]): void {
     this.problems.push(candidates ? { at, error, candidates } : { at, error });
@@ -692,7 +775,7 @@ class ReportRun {
     if (this.problems.length > before) return;
 
     // 2. Which object is it (D5)?
-    const match = await this.match(at, o.class, o.name, values, targets);
+    const match = await this.match(at, o.class, o.name, o.ref, values, targets);
     if (match === undefined) return;
     let id: string;
     let created = false;
@@ -720,10 +803,13 @@ class ReportRun {
       if (match.class !== o.class) {
         return this.problem(at, `conflict: the key matches ${match.class} ${match.name}, not a ${o.class}`, [match]);
       }
-      if (match.name !== o.name) {
-        // A name is immutable: a renamed CI is a new one (D7).
+      if (match.name !== o.name && this.mm.isA(o.class, "ci")) {
+        // A CI's name is immutable: a renamed CI is a new one (D7).
         return this.problem(at, `conflict: the key matches ${match.class} ${match.name}, named ${o.name} here`, [match]);
       }
+      // A resource or place found by a stronger key (an asset by its serial or
+      // a port's MAC) keeps the name it has: a reporter that does not know the
+      // asset's tag (the installer's hook, D8) still reaches the asset.
       for (const r of (await this.q(`SELECT id, name, value, lower(validity) AS "from" FROM attribute WHERE object = $1 AND upper_inf(validity)`, [id])).rows) {
         current.set(String(r.name), { id: Number(r.id), value: r.value, from: String(r.from) });
       }
@@ -762,6 +848,19 @@ class ReportRun {
 
     // 4. Write: a value that differs closes its row and opens one (D6).
     const changed: string[] = [];
+    // A CI that was unseen and is reported again is operational (D7); the
+    // controller says so, unless the report sets the stage itself.
+    const stage = current.get("stage");
+    if (!o.end && stage && stage.value === "unseen" && !values.has("stage") && this.kind === "observation") {
+      const t = later(this.t, stage.from);
+      await this.q("UPDATE attribute SET validity = tstzrange(lower(validity), $2) WHERE id = $1", [stage.id, t]);
+      await this.q(
+        `INSERT INTO attribute (object, name, value, source, change, validity) VALUES ($1, 'stage', '"operational"'::jsonb, $2, $3, tstzrange($4, NULL))`,
+        [id, CONTROLLER_SOURCE, this.change, t],
+      );
+      current.delete("stage");
+      changed.push("stage");
+    }
     const drifted: Record<string, { was: unknown; now: unknown }> = {};
     for (const [k, v] of values) {
       const cur = current.get(k);
@@ -830,9 +929,10 @@ class ReportRun {
       ended = true;
     }
     if (changed.length || ended) this.touched.add(id);
-    const target = { id, class: o.class, name: o.name };
+    const name = match ? match.name : o.name;
+    const target = { id, class: o.class, name };
     if (typeof o.ref === "string") this.refs.set(o.ref, target);
-    this.results.push({ ref: o.ref, id, class: o.class, name: o.name, created, changed, drift: driftNames, ended });
+    this.results.push({ ref: o.ref, id, class: o.class, name, ...(name !== o.name ? { reportedAs: o.name } : {}), created, changed, drift: driftNames, ended });
   }
 
   // The object a report means, by its class's keys, strongest first (D5).
@@ -841,15 +941,54 @@ class ReportRun {
     at: string,
     cls: string,
     name: string,
+    ref: string | undefined,
     values: Map<string, unknown>,
     targets: Map<string, Target | null>,
   ): Promise<Target | null | undefined> {
     const keys = this.mm.keys(cls);
     const fields = this.mm.fields(cls);
-    const tried = keys.length ? keys : [{ rank: 0, components: ["name"] }];
+    const tried: { rank: number; components: string[]; via?: KeyVia }[] = keys.length ? [...keys] : [{ rank: 0, components: ["name"] }];
+    for (const kv of this.mm.keyVia(cls)) tried.push({ rank: kv.rank, components: [`${kv.class}.${kv.field}`], via: kv });
+    tried.sort((a, b) => a.rank - b.rank);
     let found: Target | null = null;
     let complete = 0;
+    const take = (key: { components: string[] }, hits: Target[]): boolean => {
+      if (hits.length > 1) {
+        this.problem(at, `conflict: key (${key.components.join(", ")}) matches ${hits.length} objects`, hits);
+        return false;
+      }
+      if (hits.length === 1) {
+        if (found && found.id !== hits[0].id) {
+          this.problem(at, `conflict: key (${key.components.join(", ")}) matches ${hits[0].class} ${hits[0].name}, a stronger key ${found.class} ${found.name}`, [found, hits[0]]);
+          return false;
+        }
+        found = hits[0];
+      }
+      return true;
+    };
     for (const key of tried) {
+      if (key.via) {
+        // Any of the related objects' values: an asset whose stored ports
+        // carry one of the MACs its ports in this report carry.
+        const kv = key.via;
+        const vals = this.viaValues(ref, kv);
+        if (!vals.length) continue;
+        complete++;
+        const rows = (
+          await this.q(
+            `SELECT DISTINCT o.id, o.class, o.name FROM object o
+               JOIN relation r ON r.to_object = o.id AND r.type = $2 AND upper_inf(r.validity)
+               JOIN object p ON p.id = r.from_object AND p.ended IS NULL
+               JOIN class_ancestor ca ON ca.class = p.class AND ca.ancestor = $3
+               JOIN attribute a ON a.object = p.id AND a.name = $4 AND upper_inf(a.validity)
+              WHERE o.ended IS NULL AND o.class IN (SELECT jsonb_array_elements_text($1::jsonb))
+                AND lower(a.value #>> '{}') IN (SELECT lower(x) FROM jsonb_array_elements_text($5::jsonb) AS x)`,
+            [JSON.stringify(this.mm.keyViaClasses(cls, kv)), kv.relation, kv.class, kv.field, JSON.stringify(vals)],
+          )
+        ).rows;
+        if (!take(key, rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name) })))) return undefined;
+        continue;
+      }
       const params: Param[] = [JSON.stringify(this.mm.keyClasses(cls, key))];
       const conds = ["o.ended IS NULL", "o.class IN (SELECT jsonb_array_elements_text($1::jsonb))"];
       let usable = true;
@@ -885,18 +1024,7 @@ class ReportRun {
       if (!usable) continue;
       complete++;
       const rows = (await this.q(`SELECT o.id, o.class, o.name FROM object o WHERE ${conds.join(" AND ")}`, params)).rows;
-      const hits = rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name) }));
-      if (hits.length > 1) {
-        this.problem(at, `conflict: key (${key.components.join(", ")}) matches ${hits.length} objects`, hits);
-        return undefined;
-      }
-      if (hits.length === 1) {
-        if (found && found.id !== hits[0].id) {
-          this.problem(at, `conflict: key (${key.components.join(", ")}) matches ${hits[0].class} ${hits[0].name}, a stronger key ${found.class} ${found.name}`, [found, hits[0]]);
-          return undefined;
-        }
-        found = hits[0];
-      }
+      if (!take(key, rows.map((r) => ({ id: String(r.id), class: String(r.class), name: String(r.name) })))) return undefined;
     }
     if (!complete) {
       this.problem(at, `no key: a ${cls} is known by ${tried.map((k) => `(${k.components.join(", ")})`).join(" or ")}`);

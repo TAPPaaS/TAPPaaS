@@ -16,6 +16,10 @@
 //   CMDB_LISTEN      loopback host:port, "" for none 127.0.0.1:9098
 //   CMDB_TOKEN_FILE  the loopback listener's token   /etc/secrets/cmdb-token
 //   CMDB_SHARE       where metamodel/ and schema/ are (default: beside the build)
+//   CMDB_EXPIRY_CHECK_SECONDS  how often unreported CIs are marked unseen   3600
+//   CMDB_COMPONENTS  the components.json whose cmdbSource components `rescan` asks
+//                    (default: /home/tappaas/TAPPaaS/src/foundation/tappaas-cicd/components.json)
+//   CMDB_SOURCE_PATH the PATH a source runs with (default: the managers' ~/bin first)
 
 import { chmodSync, existsSync, readFileSync, readdirSync, unlinkSync } from "fs";
 import { dirname, join } from "path";
@@ -123,8 +127,21 @@ async function serve(): Promise<void> {
     log(`no token at ${tokenFile}: not listening on ${listen}`);
   }
 
+  // Unseen CIs (D5): on a timer as well as after each report, so a site whose
+  // sources have all gone quiet is still marked.
+  const every = Number(env.CMDB_EXPIRY_CHECK_SECONDS ?? "3600");
+  const expire = (): void => {
+    store.expire().then(
+      (n) => n && log(`${n} CI(s) unseen: no source reported them within their class's expiry`),
+      (e) => log(`expiry check: ${e instanceof Error ? e.message : String(e)}`),
+    );
+  };
+  expire();
+  const timer = every > 0 ? setInterval(expire, every * 1000) : null;
+
   const stop = (): void => {
     log("stopping");
+    if (timer) clearInterval(timer);
     api.close();
     onSocket.close();
     onLoopback?.close();
