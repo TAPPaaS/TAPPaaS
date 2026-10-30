@@ -1,0 +1,120 @@
+@@section status
+{"cpuinfo":{"model":"Intel(R) Xeon(R) E5-2680 v4","cpus":28,"sockets":2},"memory":{"total":137438953472,"used":1}}
+
+@@rc 0
+@@section nics
+== eno1
+address=aa:bb:cc:00:00:99
+carrier=1
+operstate=up
+master=bond0
+upper=lan
+masterIsBond=1
+Permanent address: aa:bb:cc:00:00:01
+Settings for eno1:
+	Supported ports: [ TP ]
+	Supported link modes:   10baseT/Half 10baseT/Full
+	                        100baseT/Half 100baseT/Full
+	                        1000baseT/Full
+	Supported pause frame use: No
+	Speed: 1000Mb/s
+	Port: Twisted Pair
+	Link detected: yes
+== enp2s0f0
+address=aa:bb:cc:00:00:02
+carrier=
+operstate=down
+master=
+upper=
+Permanent address: aa:bb:cc:00:00:02
+Settings for enp2s0f0:
+	Supported ports: [ FIBRE ]
+	Supported link modes:   1000baseSX/Full
+	                        10000baseSR/Full
+	Supported pause frame use: Symmetric
+	Speed: Unknown!
+	Port: FIBRE
+	Link detected: no
+== enp3s0
+address=aa:bb:cc:00:00:03
+carrier=0
+operstate=down
+master=wan
+upper=
+Permanent address: aa:bb:cc:00:00:03
+Settings for enp3s0:
+	Supported ports: [ TP ]
+	Supported link modes:   10baseT/Full
+	                        100baseT/Full
+	Advertised pause frame use: No
+	Port: Twisted Pair
+	Link detected: no
+
+@@rc 0
+@@section disks
+[{"devpath":"/dev/sda","model":"Samsung SSD 870","serial":"S6P1","size":1000204886016,"type":"ssd","health":"PASSED","by_id_link":"/dev/disk/by-id/ata-Samsung_SSD_870_S6P1","used":"BIOS boot"},
+ {"devpath":"/dev/sdb","model":"Samsung SSD 870","serial":"S6P2","size":1000204886016,"type":"ssd","health":"PASSED","by_id_link":"/dev/disk/by-id/ata-Samsung_SSD_870_S6P2","used":"ZFS"},
+ {"devpath":"/dev/nvme0n1","model":"WD SN850","serial":"WD77","size":2000398934016,"type":"nvme","health":"FAILED","by_id_link":"/dev/disk/by-id/nvme-WD_SN850_WD77","used":"partitions"},
+ {"devpath":"/dev/sdc","model":"Seagate IronWolf","serial":"ZA11","size":4000787030016,"type":"hdd","health":"PASSED","by_id_link":"/dev/disk/by-id/ata-ST4000_ZA11"}]
+
+@@rc 0
+@@section lsblk
+{"blockdevices":[
+ {"name":"sda","path":"/dev/sda","type":"disk","size":1000204886016,"fstype":null,"label":null,"parttypename":null,"tran":"sata","mountpoints":[null],"children":[
+   {"name":"sda1","path":"/dev/sda1","type":"part","size":1031168,"fstype":null,"label":null,"parttypename":"BIOS boot","tran":null},
+   {"name":"sda2","path":"/dev/sda2","type":"part","size":1073741824,"fstype":"vfat","label":null,"parttypename":"EFI System","tran":null},
+   {"name":"sda3","path":"/dev/sda3","type":"part","size":999000000000,"fstype":"zfs_member","label":"rpool","parttypename":"Solaris /usr & Apple ZFS","tran":null}]},
+ {"name":"sdb","path":"/dev/sdb","type":"disk","size":1000204886016,"fstype":null,"label":null,"parttypename":null,"tran":"sata","children":[
+   {"name":"sdb3","path":"/dev/sdb3","type":"part","size":999000000000,"fstype":"zfs_member","label":"rpool","parttypename":"Solaris /usr & Apple ZFS","tran":null}]},
+ {"name":"nvme0n1","path":"/dev/nvme0n1","type":"disk","size":2000398934016,"fstype":null,"label":null,"parttypename":null,"tran":"nvme","children":[
+   {"name":"nvme0n1p1","path":"/dev/nvme0n1p1","type":"part","size":8589934592,"fstype":"swap","label":null,"parttypename":"Linux swap","tran":null},
+   {"name":"nvme0n1p2","path":"/dev/nvme0n1p2","type":"part","size":1990000000000,"fstype":"zfs_member","label":"tanka1","parttypename":"Solaris /usr & Apple ZFS","tran":null}]},
+ {"name":"sdc","path":"/dev/sdc","type":"disk","size":4000787030016,"fstype":null,"label":null,"parttypename":null,"tran":"sata"}]}
+
+@@rc 0
+@@section zpool-list
+rpool	990000000000	100	890000000000	3	10	1.00	ONLINE
+tanka1	1980000000000	500	1480000000000	5	25	1.00	DEGRADED
+
+@@rc 0
+@@section zpool-status
+  pool: rpool
+ state: ONLINE
+config:
+
+	NAME            STATE     READ WRITE CKSUM
+	rpool           ONLINE       0     0     0
+	  mirror-0      ONLINE       0     0     0
+	    /dev/sda3   ONLINE       0     0     0
+	    /dev/sdb3   ONLINE       0     0     0
+
+errors: No known data errors
+
+  pool: tanka1
+ state: DEGRADED
+status: One or more devices has experienced an error.
+config:
+
+	NAME               STATE     READ WRITE CKSUM
+	tanka1             DEGRADED     0     0     0
+	  /dev/nvme0n1p2   DEGRADED     7     0     0
+	cache
+	  /dev/sdz1        ONLINE       0     0     0
+
+errors: No known data errors
+
+@@rc 0
+@@section zfs-root
+rpool	100000000000	800000000000
+tanka1	500000000000	1400000000000
+
+@@rc 0
+@@section storage
+[{"storage":"local","type":"dir","content":"iso,backup","active":1,"enabled":1,"shared":0,"total":100,"used":10,"avail":90},
+ {"storage":"tanka1","type":"zfspool","content":"images,rootdir","active":1,"enabled":1,"shared":0,"total":1000,"used":500,"avail":500}]
+
+@@rc 0
+@@section pci
+[{"id":"0000:01:00.0","class":"0x030000","vendor_name":"NVIDIA Corporation","device_name":"GA106","iommugroup":14,"mdev":0}]
+
+@@rc 0
