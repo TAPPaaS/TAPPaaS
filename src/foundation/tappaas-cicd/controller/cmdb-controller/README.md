@@ -20,7 +20,7 @@ This is step 1 of the ADR's plan: the store, the metamodel, the service, the
 | The API | HTTP/JSON on `/run/cmdb/cmdb.sock` (the managers, the bash layer) and `127.0.0.1:9098` with the bearer token in `/etc/secrets/cmdb-token` (the console) |
 | The CLI | `~/bin/cmdb` |
 | The metamodel | [`metamodel/`](./metamodel/): the class tree, fields and relation types of ADR-040 D3 as JSON |
-| The schema | [`schema/cmdb-v1.sql`](./schema/cmdb-v1.sql): the eight tables of D13 |
+| The schema | [`schema/`](./schema/): the eight tables of D13 (`cmdb-v1.sql`) and what later versions change; applied at the service's start |
 | The clients | [`lib/ts/src/cmdb.ts`](../../lib/ts/src/cmdb.ts) (TypeScript managers), [`lib/cmdb.sh`](../../lib/cmdb.sh) (bash) |
 | The backup | `cmdb-dump.service` writes `/var/lib/cmdb/dump/cmdb.dump` just before each file backup; the path is in `tappaas-cicd.json`'s `backup.filesystemPaths` |
 
@@ -32,7 +32,8 @@ Every verb takes `--json` (the API's data as is); otherwise a table.
 | Verb | What |
 |---|---|
 | `cmdb show <object> [--class C] [--at TIME]` | an object: its class and ancestors, its attributes with source and since, its relations, its drift |
-| `cmdb query [<class>] [--physical] [--where k=v]… [--at TIME] [--all]` | the objects of a class and all its subclasses (`cmdb query asset` lists servers and switches; `cmdb query --physical` is the Physical view); `--where` matches an attribute (a JSON value, or a bare word as a string; an array attribute matches when it contains the value); `--at` as of a time; `--all` includes retired and disposed objects |
+| `cmdb query [<class>] [--physical] [--recorded] [--where k=v]… [--at TIME] [--all]` | the objects of a class and all its subclasses (`cmdb query asset` lists servers and switches; `cmdb query --physical` is the Physical view); `--where` matches an attribute (a JSON value, or a bare word as a string; an array attribute matches when it contains the value); `--recorded` only what an operator recorded; `--at` as of a time; `--all` includes retired and disposed objects |
+| `cmdb relations [--type T] [--from O] [--to O] [--from-class C] [--to-class C] [--recorded] [--at TIME]` | relations by type and either end (`O` as `<object>`), each with both ends, attributes, source and recorded; the classes include subclasses. What a topology is read from |
 | `cmdb history <object> [--at TIME]` | every period of every attribute and relation, with its source; with `--at`, the object as it was then |
 | `cmdb impact <object> [--hops N] [--direction in\|out\|both]` | everything within N current relations (default 2, both ways), each at its shortest distance with the relation it was reached by |
 | `cmdb report [--file F]` | a report (below) from stdin or a file; spooled when the service does not answer |
@@ -90,6 +91,17 @@ written.
 - A CI no source has reported for longer than its class's expiry (7 days by
   default) is marked `stage: unseen` — never deleted — and is `operational`
   again when reported (D5, D7).
+- **A reference to what is not reported yet** does not refuse the batch: a
+  relation or relation field naming `{ "class": …, "name": … }` that the store
+  does not have makes a **placeholder** of that class — the name, `placeholder:
+  true` from the reporting source, no stage — listed in the answer's
+  `placeholders`. Its owner's report merges into it (`adopted`, same id), also
+  when it was named by an abstract class (`node`). A class that does not exist
+  is still refused; so is a bare name or id that resolves to nothing.
+- **Recorded facts:** `"recorded": true` on an object or a relation (or
+  `"source": "recorded"` on the report) says an operator recorded it, not a
+  machine (D7). It stays: `cmdb show` prints it, and a source seeing the same
+  thing later does not clear it.
 - An asset is found by vendor + serial, then by any of its ports' MACs (the
   ports in the same report that name it as their `asset`), then by its tag. A
   box found that way under another name keeps its tag; the result's
@@ -98,9 +110,10 @@ written.
 From TypeScript:
 
 ```ts
-import { cmdbReport, cmdbQuery } from "../../../lib/ts/src/cmdb";
+import { cmdbReport, cmdbQuery, cmdbRelations } from "../../../lib/ts/src/cmdb";
 cmdbReport({ source: "site-manager", objects: [...] }); // never throws for an outage: spools
 const assets = cmdbQuery({ class: "asset" });
+const placed = cmdbRelations({ type: "placed-in", fromClass: "asset" });
 ```
 
 From bash:
@@ -123,8 +136,9 @@ not fit the metamodel).
 | Route | Body / query | Data |
 |---|---|---|
 | `GET /v1/health` | | schema version, counts |
-| `POST /v1/report` | a report | per object: id, created, changed attributes, drift; the change id (null when nothing changed) |
-| `POST /v1/query` | `{ class?, physical?, where?, at?, includeEnded?, limit? }` | objects with their current (or as-of) attributes |
+| `POST /v1/report` | a report | per object: id, created, adopted, changed attributes, drift; the placeholders made; the change id (null when nothing changed) |
+| `POST /v1/query` | `{ class?, physical?, recorded?, where?, at?, includeEnded?, limit? }` | objects with their current (or as-of) attributes |
+| `POST /v1/relations` | `{ type?, from?, to?, fromClass?, toClass?, recorded?, at?, limit? }` | relations, both ends named |
 | `GET /v1/objects/<id\|name>` | `?class=&at=` | the object (as `cmdb show`) |
 | `GET /v1/objects/<id\|name>/history` | `?class=&at=` | every period; with `at`, the object then |
 | `GET /v1/objects/<id\|name>/impact` | `?hops=&direction=` | the objects within reach |

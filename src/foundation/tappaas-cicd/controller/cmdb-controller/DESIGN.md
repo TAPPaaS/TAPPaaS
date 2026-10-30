@@ -44,7 +44,10 @@ The eight tables of D13 (`schema/cmdb-v1.sql`). Beyond the columns D13 lists:
 | `attribute.change`, `relation.change` | the report that wrote the row, so a value's history links to its job (D6) |
 | `change.kind`, `source`, `objects`, `relations`, `drift` | an observation is recorded as well as a change, so the change stream and an object's history show both |
 
-The schema version is the comment on table `object` (`cmdb schema 1`), not a
+`cmdb-v2.sql` adds `object.recorded` and `relation.recorded` (D7): sticky, so
+a source that later sees a recorded thing does not unrecord it.
+
+The schema version is the comment on table `object` (`cmdb schema 2`), not a
 ninth table. Each `cmdb-v<N>.sql` above the recorded version is applied at
 start; a store newer than the build is refused. v1 is idempotent; a change to
 the eight tables is an ADR-025 migration and a `cmdb-v2.sql`.
@@ -90,6 +93,26 @@ is that asset's `ref`; they are looked up, case-insensitively, on the stored
 ports that are `part-of` a live asset. MACs pointing at two assets, or at
 another asset than the serial does, are a conflict.
 
+## Placeholders
+
+A report may name something its owner has not reported yet (a vm's machine, an
+allocation's node). Refusing the batch made reporters send stubs or split
+their reports, so a reference by class and name that finds nothing makes a
+placeholder: an object of that class with the attribute `placeholder: true`
+from the reporting source, no stage, and no `last_seen`, which keeps it out of
+the expiry. A reference by an abstract class (`node`) keeps that class until
+the owner says what it is: the one case of an object of an abstract class.
+
+Placeholders take no part in key matching: they have no keys, and a guessed
+class must not turn into a conflict. They are looked up afterwards, by name, in
+the reported class and the abstract classes above it. With no keyed match the
+report **adopts** the first: same id and relations, its class set, the mark
+closed. With a keyed match (a stronger key found the real asset) each is
+**absorbed**: its open relations move to the real object and it ends. A
+placeholder of another concrete class (the reporter guessed `machine`, the
+owner reports a `vm`) is not merged and stays visible. Port placeholders named
+without their asset match only by name, so two by one name are a conflict.
+
 ## Unseen (D5)
 
 A class's `expiry` (declared on `ci` as `7d`, inherited, refinable per class)
@@ -132,7 +155,24 @@ ways, and "what does a down node take with it" crosses all three.
 
 | Later | Here |
 |---|---|
-| Reports from the managers (step 2) | `rescan` runs `<component> report` for each component components.json marks `"cmdbSource": true` (read at each rescan; `CMDB_COMPONENTS`), one at a time, as `tappaas` with the managers' PATH, in the service's sandbox. That sandbox has `ProtectHome=read-only`: a report verb that writes under `/home/tappaas` (the report spool, `~/.ssh/known_hosts` on a first ssh to a host) is refused there. Module components (`config/control-plane.json`) are not asked yet |
+| Reports from the managers (step 2) | `rescan` runs `<component> report` for each component components.json marks `"cmdbSource": true` (read at each rescan; `CMDB_COMPONENTS`), one at a time, as `tappaas` with the managers' PATH, in the service's sandbox. Module components (`config/control-plane.json`) are not asked yet |
 | asset-manager, `positions.json` migration (step 3) | the classes and relations are in the metamodel |
 | The console's views (step 4) | the loopback listener and the token; the change stream |
 | Per-relation impact direction | see above |
+
+## The rescan sandbox
+
+`cmdb.service` keeps `ProtectHome=read-only`; its rescan sources run as its
+children, in the same sandbox. Two writes are let through with
+`ReadWritePaths`, the two a `report` verb may need:
+
+- `/home/tappaas/config/.cmdb-spool`: a report the service cannot take. Rare
+  here, as the service is the parent, but a restart mid-rescan would lose the
+  report otherwise.
+- `/home/tappaas/.ssh/known_hosts`: a host's key on the first ssh to it. This
+  is a bind mount of one file: ssh appends in place, which works; `ssh-keygen
+  -R` replaces the file by rename, which fails inside the unit.
+
+A missing path is ignored by the unit and then stays read-only, so
+`cmdb-paths.service` makes both first, as `tappaas`: a fresh install's `config/`
+must not come out root's. `NoNewPrivileges` also means a source cannot `sudo`.

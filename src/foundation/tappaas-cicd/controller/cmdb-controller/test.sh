@@ -33,6 +33,10 @@
 #   - a CI unreported beyond its class's expiry is unseen (never deleted), and
 #     operational again when reported; an asset does not expire
 #   - rescan runs `<component> report` for the cmdbSource components only
+#   - a reference to an object not reported yet makes a placeholder, which its
+#     owner's report merges into (also when it was named by an abstract class,
+#     and when a stronger key finds another object); an unknown class is refused
+#   - recorded on objects and relations; the relations verb; owned-by's pairs
 #
 # Needs pg_ctl/initdb/psql, node, tsc, curl and jq; without them on PATH it
 # re-enters itself under nix-shell. PostgreSQL will not run as root: as root
@@ -149,7 +153,7 @@ check "exactly the eight tables" "attribute,attribute_def,change,class,class_anc
 check "the exclusion constraints on attribute and relation" "attribute_no_overlap,relation_no_overlap" \
     "$(sql "SELECT string_agg(conname, ',' ORDER BY conname) FROM pg_constraint WHERE contype = 'x'")"
 check "a GIN index on attribute.value" "1" "$(sql "SELECT count(*) FROM pg_indexes WHERE tablename = 'attribute' AND indexdef ILIKE '%USING gin (value%'")"
-check "the store records its schema version" "cmdb schema 1" "$(sql "SELECT obj_description('object'::regclass, 'pg_class')")"
+check "the store records its schema version" "cmdb schema 2" "$(sql "SELECT obj_description('object'::regclass, 'pg_class')")"
 if node "${MAIN}" schema >"${T}/schema2.log" 2>&1; then ok "applying the schema again is harmless (idempotent)"; else bad "second schema apply failed: $(cat "${T}/schema2.log")"; fi
 
 echo "== the metamodel, as data (D3, D13) =="
@@ -332,6 +336,61 @@ check "the two sources were asked, the other component not" "fake-manager:true b
 [[ ! -e "${T}/quiet-ran" ]] && ok "…quiet-manager (no cmdbSource) was not run" || bad "quiet-manager ran"
 check "what the source reported is in the store" "99" "$(cmdb show zone/rescanned --json | jq -r '.attributes.vlan.value')"
 check "a failed source says why" "boom: the plane is down" "$(jq -r '.asked[] | select(.source == "broken-manager") | .stderr' <<<"${out}")"
+
+echo "== placeholders: a reference to what is not reported yet =="
+out="$(cmdb report --json <<<'{"source":"module-manager","objects":[{"class":"vm","name":"ph-vm","attributes":{"vmid":400,"onNode":{"class":"machine","name":"ph-node"}}}]}')"
+check "the batch is accepted, the placeholder listed" "machine/ph-node" "$(jq -r '[.result.placeholders[] | "\(.class)/\(.name)"] | join(",")' <<<"${out}")"
+PH="$(jq -r '.result.placeholders[0].id' <<<"${out}")"
+check "a name and nothing else: placeholder, its source, no stage" "true module-manager null" \
+    "$(cmdb show machine/ph-node --json | jq -r '"\(.attributes.placeholder.value) \(.attributes.placeholder.source) \(.attributes.stage.value)"')"
+out="$(cmdb report --json <<<'{"source":"site-manager","objects":[{"class":"machine","name":"ph-node","attributes":{"hostname":"ph-node","stage":"operational"}}]}')"
+check "its owner's report merges into it" "${PH} false true" "$(jq -r '.result.objects[0] | "\(.id) \(.created) \(.adopted)"' <<<"${out}")"
+check "…the mark is gone, the relation kept" "null vm/ph-vm" "$(cmdb show machine/ph-node --json | jq -r '"\(.attributes.placeholder.value) \(.relations[0].other.class)/\(.relations[0].other.name)"')"
+out="$(cmdb report --json <<<'{"source":"asset-manager","objects":[{"ref":"a","class":"other-device","name":"ph-box"}],"relations":[{"type":"allocated-to","from":{"ref":"a"},"to":{"class":"node","name":"ph-role"}}]}')"
+PH="$(jq -r '.result.placeholders[0].id' <<<"${out}")"
+out="$(cmdb report --json <<<'{"source":"module-manager","objects":[{"class":"vm","name":"ph-role","attributes":{"vmid":401}}]}')"
+check "named by an abstract class: the owner says what it is" "${PH} vm" "$(jq -r '.result.objects[0] | "\(.id) \(.class)"' <<<"${out}")"
+cmdb report --json >/dev/null <<<'{"source":"switch-manager","objects":[{"class":"port","name":"ph0","attributes":{"asset":{"class":"server","name":"tag-x"},"kind":"rj45"}}]}'
+out="$(cmdb report --json <<<'{"source":"asset-manager","objects":[{"class":"server","name":"tag-x","attributes":{"vendor":"hp","serial":"CZC1234"}}]}')"
+check "a stronger key finds the real asset: it keeps its name" "srv-01 tag-x" "$(jq -r '.result.objects[0] | "\(.name) \(.reportedAs)"' <<<"${out}")"
+check "…the placeholder's port moved to it" "server/srv-01" "$(cmdb show ph0 --json | jq -r '.relations[] | select(.type == "part-of") | "\(.other.class)/\(.other.name)"')"
+check "…and the placeholder has ended" "0" "$(cmdb query server --where name=tag-x --json | jq 'length')"
+cmdb report --json >/dev/null <<JSON
+{ "source": "backup-manager", "time": "${OLD}", "objects": [ { "class": "backup-peer", "name": "ph-peer", "attributes": { "location": { "class": "location", "name": "ph-loc" } } } ],
+  "relations": [ { "type": "backs-up", "from": { "class": "datastore", "name": "ph-ds" }, "to": { "class": "vm", "name": "ph-old" } } ] }
+JSON
+check "a placeholder has not been seen, so it does not expire" "null" "$(cmdb show vm/ph-old --json | jq -r '.attributes.stage.value')"
+refuse "a reference to a class that does not exist is refused" 4 "no class nope" \
+    '{"source":"t","objects":[{"class":"zone","name":"z9"}],"relations":[{"type":"serves","from":{"class":"nope","name":"x"},"to":{"class":"environment","name":"e"}}]}'
+
+echo "== recorded facts (D7) =="
+cmdb report --json >/dev/null <<'JSON'
+{ "source": "asset-manager", "objects": [
+    { "ref": "l", "class": "location", "name": "home", "recorded": true },
+    { "ref": "r", "class": "room", "name": "attic", "recorded": true, "attributes": { "location": { "ref": "l" } } },
+    { "ref": "p", "class": "passive-device", "name": "pp-01", "recorded": true } ],
+  "relations": [ { "type": "placed-in", "from": { "ref": "p" }, "to": { "ref": "r" }, "attributes": { "unit": 3 }, "recorded": true } ] }
+JSON
+check "the object is recorded" "true" "$(cmdb show passive-device/pp-01 --json | jq -r '.recorded')"
+check "…and its relation" "true" "$(cmdb show passive-device/pp-01 --json | jq -r '.relations[0].recorded')"
+check "a relation field of a recorded object is recorded" "true" "$(cmdb show room/attic --json | jq -r '.relations[] | select(.type == "at") | .recorded')"
+check "query --recorded" "location/home,passive-device/pp-01,room/attic" "$(cmdb query --recorded --json | jq -r '[.[] | "\(.class)/\(.name)"] | join(",")')"
+cmdb report --json >/dev/null <<<'{"source":"health-manager","objects":[{"class":"passive-device","name":"pp-01","attributes":{"description":"seen"}}]}'
+check "a source seeing it later does not unrecord it" "true" "$(cmdb show passive-device/pp-01 --json | jq -r '.recorded')"
+cmdb show passive-device/pp-01 | grep -q "recorded" && ok "cmdb show says so" || bad "cmdb show does not say recorded"
+
+echo "== relations (the topology's read) =="
+check "by type and from-class, with attributes, both ends named" "passive-device/pp-01 room/attic 3 true" \
+    "$(cmdb relations --type placed-in --from-class asset --json | jq -r '.[0] | "\(.from.class)/\(.from.name) \(.to.class)/\(.to.name) \(.attributes.unit) \(.recorded)"')"
+check "by an end" "port/eno1,port/ph0" "$(cmdb relations --type part-of --to server/srv-01 --json | jq -r '[.[] | "\(.from.class)/\(.from.name)"] | join(",")')"
+check "--recorded" "at,placed-in" "$(cmdb relations --recorded --json | jq -r '[.[].type] | join(",")')"
+check "as of a time before it existed: nothing" "0" "$(cmdb relations --type placed-in --at "${T1}" --json | jq 'length')"
+check "an unknown type is not found" "3" "$(cmdb relations --type nope --json >/dev/null 2>&1; echo $?)"
+cmdb relations --type part-of >"${T}/rels.txt" 2>&1 && grep -q "port/eno1" "${T}/rels.txt" && ok "cmdb relations prints a table" || bad "relations: $(head -3 "${T}/rels.txt")"
+
+echo "== owned-by's pairs =="
+out="$(cmdb report --json <<<'{"source":"identity-manager","objects":[{"ref":"o","class":"organization","name":"acme"},{"ref":"g","class":"group","name":"staff","attributes":{"uuid":"u-1"}},{"class":"organization","name":"acme-nl"}],"relations":[{"type":"owned-by","from":{"ref":"g"},"to":{"ref":"o"}},{"type":"owned-by","from":{"class":"organization","name":"acme-nl"},"to":{"ref":"o"}}]}' 2>&1)"
+check "a group and an organization are owned by an organization" "2" "$(jq '.result.relations | length' <<<"${out}" 2>/dev/null || echo "${out}")"
 
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)
