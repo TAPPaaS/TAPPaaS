@@ -101,7 +101,10 @@ echo "== the metamodel loader: a relation's tree end =="
 mkdir -p "${T}/mm"
 cp "${HERE}"/metamodel/*.json "${T}/mm/"
 jq '.relations["runs-on"].tree = "sideways"' "${HERE}/metamodel/relations.json" >"${T}/mm/relations.json"
-if node -e "require('${DIST}/controller/cmdb-controller/src/metamodel.js').Metamodel.fromDir('${T}/mm')" 2>&1 | grep -q "relation runs-on: tree sideways"; then
+# node exits 1 when the load throws, which under pipefail would fail the pipe
+# before grep is heard: capture, then look.
+_tree_out="$(node -e "require('${DIST}/controller/cmdb-controller/src/metamodel.js').Metamodel.fromDir('${T}/mm')" 2>&1 || true)"
+if grep -q "relation runs-on: tree sideways" <<<"${_tree_out}"; then
     ok "a tree end that is none of from, to, both stops the load"
 else
     bad "a wrong tree end was loaded"
