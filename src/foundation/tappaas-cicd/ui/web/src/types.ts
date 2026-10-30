@@ -289,11 +289,11 @@ export interface Topology {
   accessPoints: TopoAp[];
   zones: TopoZone[];
   outside: TopoOutside[];
-  // The machines, the devices a switch port names, the devices position-manager
+  // The machines, the devices a switch port names, the devices asset-manager
   // records (recorded: a modem, an ONT, a UPS, a patch panel; with their ports)
   // and the ones a switch port sees that nobody recorded (source seen).
   devices?: TopoDevice[];
-  // Where the hardware is (position-manager), resolved against the site; null
+  // Where the hardware is (asset-manager), resolved against the site; null
   // or absent when it was not read.
   positions?: PositionsView | null;
   findings: TopoFinding[];
@@ -321,7 +321,8 @@ export interface TopoDevice extends TopoPlace {
 
 // ── the positions the topology carries (lib/ts positions.ts PositionsView) ──
 export type PortKind = "rj45" | "sfp+" | "sfp28" | "poe" | "console" | "power";
-export type RecordedKind = "modem" | "ont" | "ups" | "patch-panel" | "other";
+// An asset the topology lists as a device (ADR-040 D7): its kind.
+export type RecordedKind = "modem" | "ont" | "ups" | "patch-panel" | "pdu" | "other" | "server" | "switch" | "access-point";
 export interface PlatePort {
   id: string; // the topology's
   name: string; // the controller's

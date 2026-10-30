@@ -41,7 +41,7 @@
       identity-manager      = component ./manager/identity-manager;
       site-manager        = component ./manager/site-manager;
       storage-manager     = component ./manager/storage-manager;
-      position-manager    = component ./manager/position-manager;
+      asset-manager       = component ./manager/asset-manager;
       authentik-controller = component ./controller/authentik-controller;
       node-provisioner    = component ./controller/node-provisioner;
       opnsense-controller = component ./controller/opnsense-controller;

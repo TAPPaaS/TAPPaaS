@@ -2,7 +2,7 @@
 // parses, the plates hrossen's devices are drawn with have the ports their
 // controllers name, and each device gets the plate it should.
 //
-// Run: RM_FIXTURE_DIR=<position-manager>/test/fixtures RM_CATALOG_DIR=<position-manager>/faceplates node catalog.test.js
+// Run: RM_FIXTURE_DIR=<asset-manager>/test/fixtures RM_CATALOG_DIR=<asset-manager>/faceplates node catalog.test.js
 
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -77,12 +77,12 @@ const ppx = rowXs(pp.blocks!, 0, 0);
 check(pp.blocks!.length === 1 && pp.blocks![0].rows.length === 1 && ppx.length === 24, "patch panel: one row of 24");
 check(near(ppx[0], 0.04) && near(ppx[23], 0.96) && evenly(ppx), `patch panel: from 0.04 to 0.96, evenly (${ppx[0]}…${ppx[23]})`);
 // A recorded panel the same; 48 ports in two rows of 24, edge to edge.
-const rec24 = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 24 }, (_, i) => String(i + 1)) }, catalog);
+const rec24 = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 24 }, (_, i) => ({ name: String(i + 1), kind: "rj45" as const })) }, catalog);
 check(JSON.stringify(portXs(rec24.blocks!)) === JSON.stringify(portXs(pp.blocks!)), "a recorded 24-port panel: the generic panel's places");
-const rec48 = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 48 }, (_, i) => String(i + 1)) }, catalog);
+const rec48 = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 48 }, (_, i) => ({ name: String(i + 1), kind: "rj45" as const })) }, catalog);
 const r48 = [rowXs(rec48.blocks!, 0, 0), rowXs(rec48.blocks!, 0, 1)];
 check(rec48.units === 1 && r48[0].length === 24 && r48[1].length === 24 && near(r48[1][0], 0.04) && near(r48[1][23], 0.96) && evenly(r48[1]), "a recorded 48-port panel: two rows of 24, edge to edge, 1U");
-const rec30 = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 30 }, (_, i) => String(i + 1)) }, catalog);
+const rec30 = recordedPlate("p", { kind: "patch-panel", ports: Array.from({ length: 30 }, (_, i) => ({ name: String(i + 1), kind: "rj45" as const })) }, catalog);
 check(rec30.rows.length === 2 && rec30.rows[0].length === 15, "a recorded 30-port panel: two rows of 15");
 // The UniFi switch: one row of twelve, evenly over the right half (the left half its display).
 const ux = portXs(usw.blocks!);
@@ -99,5 +99,5 @@ check(near(cages[0], 0.02 + 0.58 / 32) && near(cages[15], 0.6 - 0.58 / 32) && ev
 check(near(cx["ether1"], 0.625) && near(cx["console"], 0.655) && cx["ether1"] > cages[15], "CRS317: ether1 and the console at the row's right end");
 check(Math.max(...Object.values(cx)) < 2 / 3, "CRS317: the right third blank, its name's place");
 
-console.log(`\nposition-manager catalog: ${passed} passed, ${failed} failed`);
+console.log(`\nasset-manager catalog: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

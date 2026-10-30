@@ -1,4 +1,4 @@
-// portspec.ts — the port spec, as position-manager reads it (lib/ts
+// portspec.ts — the port spec, as asset-manager reads it (lib/ts
 // positions.ts parsePortSpec, blockRows, blockX — the same code, which the
 // front end's build cannot import): the Add a faceplate form's live preview
 // draws what `faceplate add --ports` will record. ui/test's portspec test
@@ -6,7 +6,9 @@
 //
 //   groups  side by side, a comma between them, a gap between them on the plate
 //   rows    within a group, top to bottom, a slash between them
-//   items   within a row, a plus between them: [<n>x]<kind>[@<rows>][:<name>]
+//   items   within a row, a plus between them: [<n>x]<kind>[-<speed>][@<rows>][:<name>]
+//
+// A speed is the port's maximum, one its connector comes in (ADR-040 D9).
 
 import { PlateBlock, PortKind } from "../types";
 
@@ -15,6 +17,15 @@ export interface CatalogPort {
   name: string;
   id?: string;
   kind: PortKind;
+  speed?: string;
+}
+// The speeds each glyph's connector comes in: rj45 and poe are rj45, sfp+ and
+// sfp28 an sfp cage; a console and a power inlet have none.
+const SPEEDS: Record<string, string[]> = { rj45: ["1g", "2.5g", "10g"], poe: ["1g", "2.5g", "10g"], "sfp+": ["1g", "10g", "25g"], sfp28: ["1g", "10g", "25g"] };
+function glyphSpeedProblem(kind: string, speed: string): string | null {
+  const ok = SPEEDS[kind];
+  if (!ok) return `a ${kind} has no speed`;
+  return ok.includes(speed) ? null : `a ${kind} port's speed is one of ${ok.join(", ")}`;
 }
 
 export const SPEC_KINDS = [...PORT_KINDS, "gap"] as const;
@@ -24,7 +35,7 @@ export const SPEC_AREA: [number, number] = [0.3, 0.97];
 const SPEC_MAX_PITCH = 0.05;
 const SPEC_MAX_PORTS = 192;
 const SPEC_MAX_ROWS = 6;
-const ITEM_RE = /\s*(?:(\d+)\s*x\s*)?(sfp28|sfp\+|rj45|poe|console|power|gap)(?:@(\d+))?(?::([^+]*))?\s*(?:\+|$)/y;
+const ITEM_RE = /\s*(?:(\d+)\s*x\s*)?(sfp28|sfp\+|rj45|poe|console|power|gap)(?:-(\d+(?:\.\d+)?g))?(?:@(\d+))?(?::([^+]*))?\s*(?:\+|$)/y;
 const SPAN_RE = /\[\s*(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)\s*\]\s*$/;
 
 // A port spec, read: its blocks, or what is wrong with it.
@@ -50,16 +61,18 @@ export function parsePortSpec(spec: string): { blocks: PlateBlock<CatalogPort>[]
     const rowTexts = g.split("/");
     for (const rt of rowTexts) {
       if (!rt.trim()) return { error: `'${g}': an empty row: two slashes, or one at an end` };
-      const items: { n: number; kind: string; stack: number; name: string | null }[] = [];
+      const items: { n: number; kind: string; speed: string | null; stack: number; name: string | null }[] = [];
       ITEM_RE.lastIndex = 0;
       const s = rt.trim();
       while (ITEM_RE.lastIndex < s.length) {
         const at = ITEM_RE.lastIndex;
         const m = ITEM_RE.exec(s);
-        if (!m || m.index !== at) return { error: `'${s.slice(at)}': not [<n>x]<kind>[@<rows>][:<name>] — a kind is ${SPEC_KINDS.join(", ")}` };
+        if (!m || m.index !== at) return { error: `'${s.slice(at)}': not [<n>x]<kind>[-<speed>][@<rows>][:<name>] — a kind is ${SPEC_KINDS.join(", ")}` };
         const n = m[1] === undefined ? 1 : Number(m[1]);
         if (n < 1 || n > 96) return { error: `${m[0].trim()}: a count is 1 to 96` };
-        items.push({ n, kind: m[2], stack: m[3] === undefined ? 1 : Number(m[3]), name: m[4] === undefined ? null : m[4].trim() });
+        const bad = m[3] !== undefined ? glyphSpeedProblem(m[2], m[3]) : null;
+        if (bad) return { error: `${m[0].trim().replace(/\+$/, "")}: ${bad}` };
+        items.push({ n, kind: m[2], speed: m[3] ?? null, stack: m[4] === undefined ? 1 : Number(m[4]), name: m[5] === undefined ? null : m[5].trim() });
         if (m[0].length === 0) break;
       }
       const row: (CatalogPort | null)[] = [];
@@ -84,7 +97,7 @@ export function parsePortSpec(spec: string): { blocks: PlateBlock<CatalogPort>[]
           }
           if (names.has(name)) return { error: `port ${name} appears twice` };
           names.add(name);
-          ports.push({ name, kind: it.kind as PortKind });
+          ports.push({ name, kind: it.kind as PortKind, ...(it.speed ? { speed: it.speed } : {}) });
         }
         total += ports.length;
         if (it.stack > 1) {

@@ -163,7 +163,7 @@ export function ModulePage({ name }: { name: string }) {
   // the module directory's old field, never a place.
   const machine = show_.kind === "machine" || m?.kind === "machine";
   const at = typeof show_.location === "string" && show_.location !== "" && !show_.location.includes("/") ? show_.location : null;
-  // A machine's placement is position-manager's, read from the topology.
+  // A machine's placement is asset-manager's, read from the topology.
   const positions = useRead<Topology>(machine ? "topology" : null).env?.data?.positions;
   const operator = canOperate(useMe());
   return (

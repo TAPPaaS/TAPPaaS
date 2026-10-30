@@ -1,7 +1,7 @@
 // faceplateform.tsx — Add a faceplate…: a plate the site adds for a model the
-// catalog lacks (position-manager faceplate add). The form takes its key, its
+// catalog lacks (asset-manager faceplate add). The form takes its key, its
 // units and width, what it is and its ports as a port spec, explains the spec
-// and draws the plate as the fields change, with the code position-manager
+// and draws the plate as the fields change, with the code asset-manager
 // reads the spec with (portspec.ts). Change → Preview (--check) → Apply.
 
 import { ManifestVerb, PlatePort, ResolvedPlate } from "../types";
@@ -9,7 +9,7 @@ import { Step, Values } from "../operate";
 import { PlateSvg, Placed, R } from "./rack";
 import { CatalogPort, blockRows, parsePortSpec } from "./portspec";
 
-const RM = "position-manager";
+const RM = "asset-manager";
 const KINDS = ["other", "server", "switch", "ap", "patch-panel", "pdu", "modem"];
 const WIDTHS = ["full", "half", "third"];
 const KEY_RE = /^[a-z0-9][a-z0-9-]*\/[a-z0-9][a-z0-9.+-]*$/;
@@ -117,7 +117,7 @@ function FaceplateFields({ values, set, verb }: { values: Values; set: (v: Value
         <span>ports *</span>
         <input type="text" className="mono" placeholder="24xrj45" value={v("--ports")} onChange={(e) => put("--ports", e.target.value)} />
         <small className="muted">
-          Groups side by side, a <b>comma</b> between them (a gap on the plate); rows within a group, top to bottom, a <b>slash</b> between them; items within a row, a <b>plus</b> between them, each <span className="mono">[count x]kind[:name]</span>. A kind is rj45, sfp+, sfp28, poe, console, power, or gap (an empty place); after sfp+ the next item takes its own plus (2xsfp++rj45). Ports are numbered 1, 2, … unless named; <span className="mono">{"{n}"}</span> in a name is its number. <span className="mono">16xsfp+@2</span> stacks sixteen in two rows, odd over even. A group may end in its place in percent of the width, <span className="mono">[3-66]</span>: give every group one, or none.
+          Groups side by side, a <b>comma</b> between them (a gap on the plate); rows within a group, top to bottom, a <b>slash</b> between them; items within a row, a <b>plus</b> between them, each <span className="mono">[count x]kind[:name]</span>. A kind is rj45, sfp+, sfp28, poe, console, power, or gap (an empty place), with a speed after a dash where it is not the kind's own (<span className="mono">8xrj45-2.5g</span>, <span className="mono">poe-10g</span>); after sfp+ the next item takes its own plus (2xsfp++rj45). Ports are numbered 1, 2, … unless named; <span className="mono">{"{n}"}</span> in a name is its number. <span className="mono">16xsfp+@2</span> stacks sixteen in two rows, odd over even. A group may end in its place in percent of the width, <span className="mono">[3-66]</span>: give every group one, or none.
         </small>
         <span className="faceplate-examples">
           {EXAMPLES.map(([s, what]) => (
@@ -150,7 +150,7 @@ function FaceplateFields({ values, set, verb }: { values: Values; set: (v: Value
 export function faceplateAddSteps(): Step[] {
   return [
     {
-      title: "position-manager faceplate add <vendor/model>",
+      title: "asset-manager faceplate add <vendor/model>",
       bin: RM,
       verb: "faceplate add",
       only: [],

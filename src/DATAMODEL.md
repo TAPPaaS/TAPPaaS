@@ -50,12 +50,12 @@ flowchart LR
     CP["control-plane.json<br/>managers and controllers (registry)"]:::seen
   end
 
-  subgraph physical["Physical (positions.json, position-manager)"]
+  subgraph physical["Physical (positions.json, asset-manager)"]
     ROOM["rooms"]:::record
     RACK["racks"]:::record
     PLACE["placements"]:::record
     CABLE["cables and segments"]:::record
-    RDEV["devices (recorded:<br/>modem, ONT, UPS, patch panel)"]:::record
+    RDEV["assets (every box: its ports,<br/>stage and role; interim,<br/>until the CMDB, ADR-040)"]:::record
     PLATE["faceplate catalog<br/>(in the source tree,<br/>with the site's own plates)"]:::catalog
   end
 
@@ -122,7 +122,7 @@ flowchart LR
   PLACE -- "device" --> DEVICE
   PLACE -- "faceplate" --> PLATE
   RDEV -- "model" --> PLATE
-  RDEV -. "is one of" .-> DEVICE
+  RDEV -. "role: plays or is one of" .-> DEVICE
   NODE -. "is one of" .-> DEVICE
   SWCFG -. "switches and APs are" .-> DEVICE
   CABLE -- "from.device, to.device" --> DEVICE
@@ -158,12 +158,12 @@ source tree, not under `~/config/`.
 | Shares | `shares.json` | storage-manager | `nfs.shares{}.server` → the module instance carrying the share; `pool` → a pool on it; `grants{}` → consumer module instances |
 | Backup peers | `remote-<peer>.json`, `pull-<peer>.json`, `receive-<peer>.json` | backup-manager | each is a module instance of a peer kind; `location` → a location of the site, compared with the primary one to show its copy is off-site; `site.backup.offsite` and an environment's `backup.residency` are checked against the peer's location |
 | Satellite | `<instance>.json` of kind machine | module-manager (satellite module) | a module instance; `vault.pull.*` → the home PBS and datastore; `location` → the location it runs at, compared with the primary one to show its copy is off-site |
-| Room | `positions.json` → `rooms{}` | position-manager | `location` → a location of the site (unset: the primary) |
-| Rack | `positions.json` → `racks{}` | position-manager | `room` → room |
-| Placement | `positions.json` → `placements{}` (keyed by device) | position-manager | `device` → a physical device; `rack` → rack (with its unit), or `room` → room when loose; `faceplate` → the catalog; the room is at the device's own location |
-| Recorded device | `positions.json` → `devices{}` | position-manager | `model` → the faceplate catalog; `location` → a location (unset: the primary); its `ports` are its own; `mac` when a switch port saw it; it is a physical device like a node, switch or AP |
-| Cable | `positions.json` → `cables[]` | position-manager | `from.device`, `to.device` → physical devices and their ports; a split link is two segments whose `origin` names the link they came from |
-| Faceplate catalog | `position-manager`'s catalog in the source tree, and the site's own plates in `positions.json` → `faceplates{}` (keyed `<vendor>/<model>`, merged over it; a site plate of a shipped key replaces it) | position-manager | names nothing |
+| Room | `positions.json` → `rooms{}` | asset-manager | `location` → a location of the site (unset: the primary) |
+| Rack | `positions.json` → `racks{}` | asset-manager | `room` → room |
+| Placement | `positions.json` → `placements{}` (keyed by device: an asset's role, else its own name) | asset-manager | `device` → a physical device; `rack` → rack (with its unit), or `room` → room when loose; `faceplate` → the catalog; the room is at the device's own location |
+| Asset | `positions.json` → `assets{}` (interim: ADR-040 step 3 moves it into the CMDB, in the shape of its `asset` and `port` classes) | asset-manager | `role` → the node, machine, switch or access point it is allocated to, or the device nothing manages it is (one asset per role); `model` → the faceplate catalog where it names a key; `location` → a location (unset: the primary); its `ports[]` are its own (kind, speed or standard and bands, module, role, mac; a MAC unique across every port), merged over its model's plate; `stage` ordered, stock, placed or disposed (operational derived from its role), `faulty` a flag; every asset that is here is a physical device, by its role's name or its own |
+| Cable | `positions.json` → `cables[]` | asset-manager | `from.device`, `to.device` → physical devices and their ports; `linkSpeed` the speed seen on it; a split link is two segments whose `origin` names the link they came from |
+| Faceplate catalog | `asset-manager`'s catalog in the source tree, and the site's own plates in `positions.json` → `faceplates{}` (keyed `<vendor>/<model>`, merged over it; a site plate of a shipped key replaces it) | asset-manager | names nothing |
 
 ### Runtime and derived files (no references into them)
 
@@ -186,16 +186,23 @@ giving each its `location`, its `placement` and the `source` it came from:
 | Cluster node | its `pvehost` module instance, `config/<node>.json` (`address`, `uplinks`, `storagePools`, `location`) | Proxmox |
 | Switch | `switch-configuration-desired.json` | the switch controller (`-actual.json`) |
 | Access point | `switch-configuration-desired.json` → `accessPoints{}` | the AP controller |
-| Modem, ONT, UPS, patch panel | `positions.json` → `devices{}` | nothing: it is known by its record and its cables |
-| Something behind a switch port (a printer, a camera) | nowhere until `position-manager device record` | the switch controller at the port (MAC, LLDP, lease): the topology lists it as seen |
+| Modem, ONT, UPS, patch panel, PDU, a spare box | `positions.json` → `assets{}` (by its role, else its own name) | nothing: it is known by its record and its cables |
+| Something behind a switch port (a printer, a camera) | nowhere until `asset-manager asset record` | the switch controller at the port (MAC, LLDP, lease): the topology lists it as seen |
+
+Every box is also an **asset** (`positions.json` → `assets{}`, ADR-040 D7): a node's, a
+switch's and an access point's as much as a modem's. The asset is the box, its ports and its
+life (ordered, stock, placed, operational, disposed; faulty beside it); the node, switch, AP or
+recorded device is the **role** it plays for a while (`role`). A placement and a cable end name
+the role while there is one and the asset when there is none, so a box keeps its place when its
+role ends. Migration 0027 gave every node, switch and AP an asset (`srv-NN`, `sw-NN`, `ap-NN`).
 
 `positions.json` never repeats a device the cluster sees: a placement, a cable end
 or a split segment names it, and the topology resolves the name. A name that is
-neither seen nor recorded is what `position-manager validate` warns about.
+neither seen nor recorded is what `asset-manager validate` warns about.
 
 Where a device is has two parts, each with one owner: its **location**, the
 `location` name on its own record (unset: the primary), resolved by site-manager
-to an address; and its **placement**, position-manager's — a rack and its units,
+to an address; and its **placement**, asset-manager's — a rack and its units,
 or loose in a room at that same location, or none. The console's Physical view
 draws the site that way: location by location (the primary first), each with
 its rooms, each room with its racks and loose devices, then what is at the
@@ -233,7 +240,7 @@ parked in #866. Every installation was moved by a numbered config migration.
 |---|---|---|
 | 1 | Environment ↔ zone was a two-way link (`environment.network.zone` and `zone.serves[]`) | **Resolved** (#865, migration 0018): the zone names its environment in one field, `environment`; a client, IoT or guest zone may list several, and so may a shared service zone (#876); nothing points the other way. An environment's own zone is the Service zone naming it as a string |
 | 2 | Location was recorded in four shapes (the site's, rooms, a machine's `physicalLocation`, free text on switches and APs) | **Resolved** (ADR-036, #869 and #871, migrations 0019 and 0021): one list, `site.locations{}` with a primary; everything that is somewhere names one by `location` |
-| 3 | Devices lived in three files, joined only by name | **Resolved** (ADR-036, #870 and #872, migrations 0020 and 0022): each kind has one record and one owner (a node is its `pvehost` instance), placements are position-manager's, the topology is the one derived list with each device's location, placement and source |
+| 3 | Devices lived in three files, joined only by name | **Resolved** (ADR-036, #870 and #872, migrations 0020 and 0022): each kind has one record and one owner (a node is its `pvehost` instance), placements are asset-manager's, the topology is the one derived list with each device's location, placement and source |
 | 4 | Organizations were listed twice (`site.organizations[]` and the identities directory) | **Resolved** (#867, migration 0017): the directory is the list |
 | 5 | Backup policy is a cascade across three objects (module › environment › site `backup` blocks) plus peers as module instances of three kinds; the resolved policy is named nowhere | **Parked** (#866) |
 | 6 | A module's placement is spread over its record (`node`, `zone0`, `config.cluster:vm.storage`, `config.cluster:ha.HANode`), partly nested and partly flat | **Parked** (#866) |

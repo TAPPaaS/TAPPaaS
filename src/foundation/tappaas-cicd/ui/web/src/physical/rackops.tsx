@@ -1,4 +1,4 @@
-// rackops.tsx — the changes the Physical view offers, as position-manager's own
+// rackops.tsx — the changes the Physical view offers, as asset-manager's own
 // verbs: a room or a rack added, changed or deleted; a device placed in a rack
 // or a room, moved or unplaced; a device nothing manages recorded, or one a
 // switch port sees recorded from its port; a cable nothing can see recorded or
@@ -11,7 +11,7 @@ import { OperateButton, Step, Values } from "../operate";
 import { ManifestVerb, PositionsView, RackInfo, TopoDevice } from "../types";
 import { SiteLocation, locationOption, useSiteLocations } from "../locations";
 
-const RM = "position-manager";
+const RM = "asset-manager";
 
 // The highest free run of `height` units at full width on a face, as the rack
 // numbers its units (the lowest unit of the run); null when none is free.
@@ -84,7 +84,7 @@ function PlaceWhere({ values, set, verb, rack, room, canRack, canRoom }: { value
 }
 
 export function placeSteps(device: string, v: PositionsView | null | undefined, rack?: string): Step[] {
-  const base = { title: `position-manager place '${device}'`, bin: RM, verb: "place", fixed: [device], kind: "placement", name: device, mode: "add" as const };
+  const base = { title: `asset-manager place '${device}'`, bin: RM, verb: "place", fixed: [device], kind: "placement", name: device, mode: "add" as const };
   const inRack = fieldsStep({ ...base, fields: IN_RACK });
   const inRoom = fieldsStep({ ...base, fields: IN_ROOM });
   const at = placesFor(v, device);
@@ -104,7 +104,7 @@ export function placeSteps(device: string, v: PositionsView | null | undefined, 
 export function moveSteps(device: string, loose = false): Step[] {
   return [
     fieldsStep({
-      title: `position-manager place modify '${device}' — move it`,
+      title: `asset-manager place modify '${device}' — move it`,
       bin: RM,
       verb: "place modify",
       fixed: [device],
@@ -118,21 +118,21 @@ export function moveSteps(device: string, loose = false): Step[] {
 }
 
 export function placementModifySteps(device: string): Step[] {
-  return [fieldsStep({ title: `position-manager place modify '${device}'`, bin: RM, verb: "place modify", fixed: [device], kind: "placement", name: device, mode: "modify" })];
+  return [fieldsStep({ title: `asset-manager place modify '${device}'`, bin: RM, verb: "place modify", fixed: [device], kind: "placement", name: device, mode: "modify" })];
 }
 
 export function unplaceSteps(device: string): Step[] {
-  return [{ title: `position-manager unplace '${device}'`, bin: RM, verb: "unplace", fixed: [device], note: "The device leaves its rack or room and goes to Unplaced, under its location; nothing else changes. A passive device's recorded cables go with it." }];
+  return [{ title: `asset-manager unplace '${device}'`, bin: RM, verb: "unplace", fixed: [device], note: "The device leaves its rack or room and goes to Unplaced, under its location; nothing else changes. A passive device's recorded cables go with it." }];
 }
 
 // Add a room: its name, location, display name and description (positions-fields' room);
 // at: the location it starts at, else the primary.
 export function roomAddSteps(at?: string | null): Step[] {
-  const step = fieldsStep({ title: "position-manager room add", bin: RM, verb: "room add", kind: "room", name: null, mode: "add", note: "A room in config/positions.json: where racks stand and devices stand loose, in one of the site's locations (the primary one unless you choose another). Racks and devices are placed in it afterwards." });
+  const step = fieldsStep({ title: "asset-manager room add", bin: RM, verb: "room add", kind: "room", name: null, mode: "add", note: "A room in config/positions.json: where racks stand and devices stand loose, in one of the site's locations (the primary one unless you choose another). Racks and devices are placed in it afterwards." });
   return [at ? { ...step, prefill: { location: at } } : step];
 }
 
-export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "other"];
+export const RECORDED_KINDS = ["modem", "ont", "ups", "patch-panel", "pdu", "other", "server", "switch", "access-point"];
 
 // Record a device nothing manages: its kind, its model from the faceplate
 // catalog (or typed), its ports (a count, or names), its location, how it is shown.
@@ -140,16 +140,16 @@ export function deviceAddSteps(models: string[], locations: SiteLocation[], note
   const at = locationOption(locations);
   return [
     {
-      title: "position-manager device add <name>",
+      title: "asset-manager asset add <name>",
       bin: RM,
-      verb: "device add",
+      verb: "asset add",
       only: ["--kind", "--model", "--ports", "--port", "--location", "--display-name", "--description"],
       choices: { "--kind": RECORDED_KINDS, ...at.choices },
       initial: at.initial,
       asides: at.asides,
       suggest: { "--model": models },
       suggestNotes: { "--model": notes },
-      placeholders: { "--ports": "a count: 24", "--port": "a port's name: WAN, LAN 1, …" },
+      placeholders: { "--ports": "a count: 24", "--port": "a port: WAN, LAN 1, eth1:rj45:2.5g, sfp1:sfp:10g" },
       note: "A device nothing manages — a modem, an ONT, a UPS, a patch panel — recorded with its kind and its ports (from its model, a count, or by name), at the primary location unless you choose another. It then stands unplaced under its location: Place… it in a rack or a room. A patch panel: place it in a rack, then select a wire and Attach to patch panel…. --check previews.",
     },
   ];
@@ -170,9 +170,9 @@ export function deviceRecordSteps(d: TopoDevice, models: string[], locations: Si
   const at = locationOption(locations, d.location);
   return [
     {
-      title: `position-manager device record '${target}'`,
+      title: `asset-manager asset record '${target}'`,
       bin: RM,
-      verb: "device record",
+      verb: "asset record",
       fixed: [target],
       only: ["--name", "--kind", "--port", "--model", "--location", "--display-name", "--description"],
       initial: { "--name": seenName(d), "--kind": "other", ...at.initial },
@@ -187,26 +187,26 @@ export function deviceRecordSteps(d: TopoDevice, models: string[], locations: Si
 }
 
 export function rackAddSteps(): Step[] {
-  return [fieldsStep({ title: "position-manager rack add", bin: RM, verb: "rack add", kind: "rack", name: null, mode: "add", note: "A rack in config/positions.json: its height in units, its width, how its units are numbered and the room it stands in. Devices are placed in it afterwards." })];
+  return [fieldsStep({ title: "asset-manager rack add", bin: RM, verb: "rack add", kind: "rack", name: null, mode: "add", note: "A rack in config/positions.json: its height in units, its width, how its units are numbered and the room it stands in. Devices are placed in it afterwards." })];
 }
 
 // A room's display name, description or location (a dropdown of the site's).
 export function roomModifySteps(room: string): Step[] {
-  return [fieldsStep({ title: `position-manager room modify ${room}`, bin: RM, verb: "room modify", fixed: [room], kind: "room", name: room, mode: "modify", note: "Its display name, description or location. The check refuses another location while a device placed in it records a location of its own." })];
+  return [fieldsStep({ title: `asset-manager room modify ${room}`, bin: RM, verb: "room modify", fixed: [room], kind: "room", name: room, mode: "modify", note: "Its display name, description or location. The check refuses another location while a device placed in it records a location of its own." })];
 }
 
 export function rackModifySteps(rack: string): Step[] {
-  return [fieldsStep({ title: `position-manager rack modify ${rack}`, bin: RM, verb: "rack modify", fixed: [rack], kind: "rack", name: rack, mode: "modify" })];
+  return [fieldsStep({ title: `asset-manager rack modify ${rack}`, bin: RM, verb: "rack modify", fixed: [rack], kind: "rack", name: rack, mode: "modify" })];
 }
 
 export function rackDeleteSteps(rack: string): Step[] {
-  return [{ title: `position-manager rack delete ${rack}`, bin: RM, verb: "rack delete", fixed: [rack], note: "Only an empty rack: move or unplace its devices first." }];
+  return [{ title: `asset-manager rack delete ${rack}`, bin: RM, verb: "rack delete", fixed: [rack], note: "Only an empty rack: move or unplace its devices first." }];
 }
 
 export function cableAddSteps(from: string): Step[] {
   return [
     {
-      title: `position-manager cable add --from '${from}'`,
+      title: `asset-manager cable add --from '${from}'`,
       bin: RM,
       verb: "cable add",
       initial: { "--from": from, "--kind": "patch" },
@@ -217,7 +217,7 @@ export function cableAddSteps(from: string): Step[] {
 }
 
 export function cableRemoveSteps(end: string): Step[] {
-  return [{ title: `position-manager cable remove '${end}'`, bin: RM, verb: "cable remove", fixed: [end] }];
+  return [{ title: `asset-manager cable remove '${end}'`, bin: RM, verb: "cable remove", fixed: [end] }];
 }
 
 // Where a device is placed in the view: in a rack, loose in a room, or nowhere.

@@ -1,12 +1,16 @@
-// position-manager — where the site's hardware is (ADR-036 D3). Owns
-// config/positions.json: the rooms (each in a location of the site), the racks,
-// where each device is placed (keyed by the device's topology name; the
-// device's own record is never touched), the devices the topology cannot see
-// (a modem, an ONT, a UPS, a patch panel) and the cables nothing can see. The
-// faceplate catalog (faceplates/<vendor>/<model>.json) says what each device
-// looks like; a site adds plates for the models it lacks (faceplate add),
-// kept in positions.json and merged over it. network-manager's topology carries the result: the racks with
-// their mounts resolved and every link mapped to faceplate ports.
+// asset-manager — the site's physical assets and where they are (ADR-040 D7,
+// ADR-036 D3). Owns config/positions.json: the rooms (each in a location of the
+// site), the racks, where each device is placed (keyed by the device's topology
+// name; the device's own record is never touched), the assets — each physical
+// thing with its ports (D9), its lifecycle from ordered to disposed, and the
+// role it plays: a node, a switch, an AP, or a device nothing manages (a
+// modem, a patch panel) — and the cables nothing can see. The faceplate catalog
+// (faceplates/<vendor>/<model>.json) says what each device looks like; a site
+// adds plates for the models it lacks (faceplate add), kept in positions.json
+// and merged over it. network-manager's topology carries the result: the racks
+// with their placements resolved, the assets, and every link mapped to
+// faceplate ports. assets{} is interim, until the CMDB holds them (ADR-040
+// step 3).
 //
 // Every changing verb: lock → change → validate the WHOLE resulting file →
 // write atomically. A verb that fails validation writes nothing. --check
@@ -14,8 +18,9 @@
 // at hareskov"), or "[refused] <why>" and exit 1; --check --json prints the
 // whole resulting document instead. Nothing here touches a device.
 //
-// rack-manager is its old name: the package links it beside position-manager
-// for one release (ADR-035 P2), and it answers the same verbs.
+// position-manager and rack-manager are its old names: the package links them
+// beside asset-manager for one release (ADR-035 P2), and they answer the same
+// verbs; so do the device verbs, as the asset verbs they became.
 //
 // Exit codes: ok=0, error=1.
 
@@ -37,12 +42,16 @@ import {
   seenDevices,
   widthOf,
   cablesOf,
-  devicesOf,
+  Procurement,
+  assetNamed,
+  assetPorts,
+  assetsOf,
+  currentName,
+  stageOf,
   roomsOf,
   placeWhere,
   endText,
   recordedPlate,
-  recordedPorts,
   placementsOf,
   parseEnd,
   racksOf,
@@ -54,9 +63,41 @@ import {
   withSiteFaceplates,
 } from "../../../lib/ts/src/positions";
 import { Store, loadCatalog, readDevices } from "./store";
-import { Result, changeLine, addFaceplate, deleteFaceplate, modifyFaceplate, addCable, addDevice, recordSeen, placeDevice, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyPlacement, modifyRack, modifyRoom, removeCable, removeDevice, unplaceDevice, splitCable } from "./verbs";
+import {
+  Result,
+  changeLine,
+  addAsset,
+  addFaceplate,
+  addPort,
+  allocateAsset,
+  deleteFaceplate,
+  disposeAsset,
+  faultAsset,
+  modifyAsset,
+  modifyFaceplate,
+  modifyPort,
+  addCable,
+  receiveAsset,
+  recordSeen,
+  releaseAsset,
+  removeAsset,
+  removePort,
+  repairAsset,
+  placeDevice,
+  addRack,
+  addRoom,
+  deleteRack,
+  deleteRoom,
+  joinCable,
+  modifyPlacement,
+  modifyRack,
+  modifyRoom,
+  removeCable,
+  unplaceDevice,
+  splitCable,
+} from "./verbs";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 
 const CHECK: [string, string] = ["--check", "Say what would change, in one line; change nothing."];
 const CHECK_JSON: [string, string] = ["--json", "With --check: the whole resulting positions.json, for machines."];
@@ -64,7 +105,7 @@ const TOPO: [string, string] = ["--topology F", "A `network-manager topology --j
 const JSON_OUT: [string, string] = ["--json", "As JSON."];
 
 export const HELP: HelpSpec = {
-  name: "position-manager",
+  name: "asset-manager",
   version: VERSION,
   tagline: "where the site's hardware is — rooms in the site's locations, racks, placements and the cables nothing can see, in config/positions.json",
   verbs: [
@@ -131,12 +172,13 @@ export const HELP: HelpSpec = {
     { usage: "unplace <device> [--check]", options: [CHECK, CHECK_JSON], note: "(the device leaves its rack or room; nothing else changes)", aliases: ["mount remove"], destructive: true, object: { positional: "device" } },
     { usage: "cable list [--json]", options: [JSON_OUT], note: "(the recorded cables; the topology adds the ones it sees)" },
     {
-      usage: "cable add --from <device:port> --to <device:port> [--kind patch|uplink|power] [--label <text>] [--from-faceplate <vendor/model>] [--to-faceplate <vendor/model>] [--from-side front|rear] [--to-side front|rear] [--topology <file>] [--check]",
+      usage: "cable add --from <device:port> --to <device:port> [--kind patch|uplink|power] [--label <text>] [--link-speed <speed>] [--from-faceplate <vendor/model>] [--to-faceplate <vendor/model>] [--from-side front|rear] [--to-side front|rear] [--topology <file>] [--check]",
       options: [
         ["--from D:P", "One end: a device and its port, as its faceplate or the topology names it."],
         ["--to D:P", "The other end."],
         ["--kind K", "patch (default), uplink or power."],
         ["--label T", "The label on the cable."],
+        ["--link-speed S", "The link speed seen on it (100m, 1g, 2.5g, 10g): the connection's, where a port's speed is its maximum."],
         ["--from-faceplate K", "A device only this cable places (the ISP's modem): its faceplate."],
         ["--to-faceplate K", "The same, for the other end."],
         ["--from-side S", "A patch panel's port: front (default) or rear."],
@@ -146,33 +188,47 @@ export const HELP: HelpSpec = {
       ],
     },
     { usage: "cable remove <device:port> [--side front|rear] [--check]", options: [["--side S", "On a patch panel's port: the front (default) or the rear cable."], CHECK, CHECK_JSON], object: { positional: "device:port" } },
-    { usage: "device list [--json]", options: [JSON_OUT], note: "(the recorded devices: what the topology cannot see)" },
-    { usage: "device show <device> [--json]", options: [JSON_OUT], object: { positional: "device" } },
+    { usage: "asset list [--stage <stage>] [--kind <kind>] [--json]", options: [["--stage S", "Only these: ordered, stock, placed, operational, disposed."], ["--kind K", "Only this kind."], JSON_OUT], note: "(every asset, its stage, role and where it is)", aliases: ["device list"] },
+    { usage: "asset show <asset> [--json]", options: [JSON_OUT], object: { positional: "asset" }, aliases: ["device show"] },
     {
-      usage: "device add <device> --kind modem|ont|ups|patch-panel|other [--model <vendor/model>] [--ports <n> | --port <name>...] [--location <location>] [--display-name <text>] [--description <text>] [--topology <file>] [--check]",
+      usage:
+        "asset add [<asset>] --kind server|switch|access-point|modem|ont|ups|patch-panel|pdu|other [--vendor <text>] [--model <vendor/model>] [--serial <text>] [--asset-tag <text>] [--stage ordered|stock] [--ports <n> | --port <name>[:<kind>[:<speed>]]...] [--location <location>] [--display-name <text>] [--description <text>] [--supplier <text>] [--order-ref <text>] [--purchase-date <date>] [--warranty-until <date>] [--ownership owned|rented] [--notes <text>] [--topology <file>] [--check]",
       options: [
+        ["--kind K", "server, switch, access-point, modem, ont, ups, patch-panel, pdu or other."],
+        ["--vendor T", "Who made it."],
+        ["--model K", "Its plate in the catalog (faceplates list) — its ports come from it — or the model's name."],
+        ["--serial T", "Its serial number: unique, the key a controller reports it by."],
+        ["--asset-tag T", "The site's own tag on the case."],
+        ["--stage S", "ordered (bought, not here yet) or stock (default)."],
+        ["--ports N", "Its ports, named 1 to N, rj45 at 1g (a patch panel)."],
+        ["--port P", "A port: <name>[:<kind>[:<speed>]] — a kind rj45 (default, 1g), sfp, wifi, usb-a, usb-c (repeatable): WAN, eth1:rj45:2.5g, sfp1:sfp:10g."],
         ["--location L", "The location it is at (site-manager location list); unset, the primary location."],
-        ["--kind K", "modem, ont, ups, patch-panel or other."],
-        ["--model K", "Its plate in the catalog (faceplates list); its ports come from it unless given."],
-        ["--ports N", "Its ports, named 1 to N (a patch panel)."],
-        ["--port P", "A port by name (repeatable): WAN, LAN 1, …"],
         ["--display-name T", "The name shown."],
         ["--description T", "What it is, where it comes from."],
+        ["--supplier T", "Bought from."],
+        ["--order-ref T", "The order or invoice reference."],
+        ["--purchase-date D", "Bought on, YYYY-MM-DD."],
+        ["--warranty-until D", "Its warranty ends, YYYY-MM-DD."],
+        ["--ownership O", "owned or rented."],
+        ["--notes T", "Anything else about the purchase."],
         TOPO,
         CHECK, CHECK_JSON,
       ],
+      note: "(a physical thing, by its name, else the next free tag of its kind: srv-NN, sw-NN, ap-NN, dev-NN)",
+      aliases: ["device add"],
     },
     {
-      usage: "device modify <device> [--set <field>=<value>]... [--unset <field>]... [--check]",
-      options: [["--set F=V", "kind, model, ports (a count or a comma-separated list), displayName, description, location, mac (repeatable)."], ["--unset F", "Clear model, ports, displayName, description, location (back to the primary) or mac (repeatable)."], CHECK, CHECK_JSON],
-      object: { positional: "device" },
+      usage: "asset modify <asset> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      options: [["--set F=V", "kind, vendor, model, serial, assetTag, displayName, description, location, ports (a count or a comma list), mac (its first port's), faultNote, procurement.supplier|orderRef|purchaseDate|warrantyUntil|ownership|notes (repeatable)."], ["--unset F", "Clear one of them (repeatable)."], CHECK, CHECK_JSON],
+      object: { positional: "asset" },
+      aliases: ["device modify"],
     },
-    { usage: "device remove <device> [--check]", options: [CHECK, CHECK_JSON], note: "(only once it is unplaced and no recorded cable names it)", object: { positional: "device" } },
+    { usage: "asset remove <asset> [--check]", options: [CHECK, CHECK_JSON], note: "(a record made by mistake: unplaced, in no role, no recorded cable; a disposed asset's record stays)", object: { positional: "asset" }, aliases: ["device remove"] },
     {
-      usage: "device record <port-or-mac> --name <device> --kind modem|ont|ups|patch-panel|other [--port <name>] [--model <vendor/model>] [--location <location>] [--display-name <text>] [--description <text>] [--topology <file>] [--check]",
+      usage: "asset record <port-or-mac> [--name <asset>] --kind <kind> [--port <name>] [--model <vendor/model>] [--location <location>] [--display-name <text>] [--description <text>] [--topology <file>] [--check]",
       options: [
-        ["--name N", "The name it is recorded under."],
-        ["--kind K", "modem, ont, ups, patch-panel or other."],
+        ["--name N", "The name it is recorded under (default: the next free tag of its kind)."],
+        ["--kind K", "server, switch, access-point, modem, ont, ups, patch-panel, pdu or other."],
         ["--port P", "Its port the cable reaches (default: what LLDP says, else its model's first, else 1)."],
         ["--model K", "Its plate in the catalog (faceplates list)."],
         ["--location L", "The location it is at (default: the switch's)."],
@@ -182,8 +238,47 @@ export const HELP: HelpSpec = {
         CHECK, CHECK_JSON,
       ],
       object: { positional: "port-or-mac" },
-      note: "(<switch>:<port> or the MAC it is seen by: a device a switch port sees and nobody recorded, recorded with the port's cable)",
+      note: "(<switch>:<port> or the MAC it is seen by: a device a switch port sees and nobody recorded becomes an asset playing itself, its MAC on its port, with the port's cable)",
+      aliases: ["device record"],
     },
+    { usage: "asset receive <asset> [--check]", options: [CHECK, CHECK_JSON], note: "(what was ordered has come: ordered → stock)", object: { positional: "asset" } },
+    { usage: "asset fault <asset> --note <text> [--check]", options: [["--note T", "What is wrong."], CHECK, CHECK_JSON], note: "(the faulty flag, beside its stage)", object: { positional: "asset" } },
+    { usage: "asset repaired <asset> [--check]", options: [CHECK, CHECK_JSON], note: "(the faulty flag and its note cleared)", object: { positional: "asset" } },
+    {
+      usage: "asset dispose <asset> --how sold|recycled|returned|lost [--wiped] [--when <date>] [--check]",
+      options: [["--how H", "sold, recycled, returned or lost."], ["--wiped", "Its disks were wiped."], ["--when D", "When, YYYY-MM-DD (default: today)."], CHECK, CHECK_JSON],
+      note: "(it leaves the site; refused while it has a role, a placement or a recorded cable; its record stays)",
+      destructive: true,
+      object: { positional: "asset" },
+    },
+    {
+      usage: "asset allocate <asset> --role <name> [--topology <file>] [--check]",
+      options: [["--role N", "The topology's name for what it plays: a node or machine (a server), a switch, an access point, or a device nothing manages."], TOPO, CHECK, CHECK_JSON],
+      note: "(its placement and recorded cables follow it under the role's name)",
+      object: { positional: "asset" },
+    },
+    { usage: "asset release <asset> [--check]", options: [CHECK, CHECK_JSON], note: "(the role ends; its placement and cables stay with the asset, under its own name)", object: { positional: "asset" } },
+    {
+      usage: "port add <asset> <port> --kind rj45|sfp|wifi|usb-a|usb-c [--speed <speed>] [--standard wifi5|wifi6|wifi7] [--bands <list>] [--module dac|sr|lr|rj45] [--role lan|wan|bmc] [--mac <mac>] [--side front|rear] [--check]",
+      options: [
+        ["--kind K", "Its connector: rj45, sfp, wifi, usb-a, usb-c."],
+        ["--speed S", "Its maximum: rj45 1g (default), 2.5g, 10g; sfp 1g, 10g, 25g; usb usb2, usb3."],
+        ["--standard S", "A wifi port's: wifi5, wifi6, wifi7."],
+        ["--bands B", "A wifi port's bands, a comma list of 2.4, 5, 6."],
+        ["--module M", "What an sfp cage holds: dac, sr, lr, rj45."],
+        ["--role R", "What the node uses it for: lan, wan, bmc."],
+        ["--mac M", "Its MAC: unique across every port."],
+        ["--side S", "A patch panel's port on one side only: front or rear."],
+        CHECK, CHECK_JSON,
+      ],
+      object: { positional: "port", within: ["asset"] },
+    },
+    {
+      usage: "port modify <asset> <port> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      options: [["--set F=V", "kind, speed, standard, bands, module, role, mac, side (repeatable); a port of its model's plate takes an entry of its own."], ["--unset F", "Clear one but kind (repeatable)."], CHECK, CHECK_JSON],
+      object: { positional: "port", within: ["asset"] },
+    },
+    { usage: "port remove <asset> <port> [--check]", options: [CHECK, CHECK_JSON], note: "(a port of its own no recorded cable uses; one over its plate's goes back to the plate's)", destructive: true, object: { positional: "port", within: ["asset"] } },
     {
       usage: "cable split <device:port> --via <panel:port> [--topology <file>] [--check]",
       options: [["--via P:N", "The patch panel port the link runs through: the device's port to its front, its rear to the far end."], TOPO, CHECK, CHECK_JSON],
@@ -221,8 +316,11 @@ export const HELP: HelpSpec = {
   ],
   notes: [
     "A placement names a device as `network-manager topology` does. A cable the switches or LLDP see is drawn from the topology and never recorded; record only what nothing can see — the ISP's modem, a patch panel, a PDU.",
-    "rack-manager is the old name of position-manager and answers the same verbs for one release; config/racks.json becomes config/positions.json by migration.",
-    "A device nothing manages is recorded (device add, or device record for one a switch port sees), then placed in a rack or loose in a room (place). A link through a patch panel is split there (cable split): the topology still shows one link, the racks its two wires.",
+    "position-manager and rack-manager are the old names of asset-manager and answer the same verbs for one release; config/racks.json became config/positions.json by migration 0020.",
+    "An asset is the physical thing (ADR-040 D7): asset add records it, ordered or in stock; place puts it in a rack or a room; asset allocate gives it a role — a node, a switch, an AP, or a device nothing manages that it is — and its placement and cables follow the role's name; asset release ends the role, asset dispose the asset. faulty is a flag beside the stage (asset fault, asset repaired). A device a switch port sees is recorded by asset record.",
+    "A port's kind is its connector (rj45, sfp, wifi, usb-a, usb-c), its speed its maximum; the link a cable negotiates is the cable's link speed. A plate's ports are the asset's, its own merged over them by name (port add, port modify).",
+    "A link through a patch panel is split there (cable split): the topology still shows one link, the racks its two wires.",
+    "The device verbs are the asset verbs' old names (device add, list, show, modify, remove, record), answering for one release. config/positions.json's devices{} becomes assets{} by migration 0027; a change waits until it has run.",
     "mount add, mount modify and mount remove are the old names of place, place modify and unplace, answering for one release.",
   ],
 };
@@ -246,6 +344,8 @@ const VALUED = [
   "--units", "--width", "--numbering", "--display-name", "--room", "--description", "--set", "--rack", "--u", "--height", "--slot",
   "--face", "--faceplate", "--label", "--topology", "--from", "--to", "--kind", "--from-faceplate", "--to-faceplate", "--device", "--unset",
   "--model", "--ports", "--port", "--from-side", "--to-side", "--side", "--via", "--location", "--name", "--match", "--vendor",
+  "--serial", "--asset-tag", "--stage", "--role", "--note", "--how", "--when", "--supplier", "--order-ref", "--purchase-date",
+  "--warranty-until", "--ownership", "--notes", "--speed", "--standard", "--bands", "--module", "--mac", "--link-speed",
 ];
 function positional(args: string[], skip: number): string[] {
   const out: string[] = [];
@@ -308,6 +408,7 @@ function readCatalog(store: Store): Faceplate[] {
 // for a verb that names one (a mount, a cable); a rack's own fields need none.
 function change(store: Store, check: boolean, devices: SiteDevice[] | null | undefined, fn: (doc: PositionsDoc) => Result): number {
   if (!check && store.legacy) die(`${store.legacy} is still there: migration 0020 makes it config/positions.json (the next update, or scripts/run-migrations.sh) — nothing was changed`);
+  if (!check && store.load().devices) die(`config/positions.json still records devices{}: migration 0027 makes them assets{} (the next update, or scripts/run-migrations.sh) — nothing was changed`);
   return store.withLock(() => {
     const r = fn(store.load());
     if ("refused" in r) return check ? refuse(r.refused) : die(r.refused);
@@ -353,6 +454,12 @@ function devicesFor(args: string[]): SiteDevice[] | null {
   return d.devices;
 }
 
+// The asset a verb names: by its own name, or by the role it plays (what the
+// topology and the console call it).
+function assetKey(store: Store, name: string): string {
+  return assetNamed(store.load(), name)?.key ?? name;
+}
+
 function rackRows(doc: PositionsDoc) {
   return Object.entries(racksOf(doc)).map(([name, r]) => ({
     name,
@@ -379,6 +486,12 @@ const OLD_VERBS: Record<string, string[]> = {
   "mount remove": ["unplace"],
   "mount list": ["place", "list"],
   "mount show": ["place", "show"],
+  "device list": ["asset", "list"],
+  "device show": ["asset", "show"],
+  "device add": ["asset", "add"],
+  "device modify": ["asset", "modify"],
+  "device remove": ["asset", "remove"],
+  "device record": ["asset", "record"],
 };
 
 export function run(argv: string[]): number {
@@ -389,7 +502,7 @@ export function run(argv: string[]): number {
     return 0;
   }
   if (args[0] === "--version" || args[0] === "version") {
-    info(`position-manager ${VERSION}`);
+    info(`asset-manager ${VERSION}`);
     return 0;
   }
   const rc = checkArgs(HELP, args);
@@ -410,7 +523,7 @@ export function run(argv: string[]): number {
     }
     if (report(findings)) return 1;
     const d = store.load();
-    info(`${GN}✓${CL} config/positions.json valid (${Object.keys(racksOf(d)).length} rack(s), ${Object.keys(placementsOf(d)).length} placement(s), ${cablesOf(d).length} recorded cable(s))`);
+    info(`${GN}✓${CL} config/positions.json valid (${Object.keys(racksOf(d)).length} rack(s), ${Object.keys(placementsOf(d)).length} placement(s), ${Object.keys(assetsOf(d)).length} asset(s), ${cablesOf(d).length} recorded cable(s))`);
     return 0;
   }
   if (args[0] === "export") {
@@ -488,31 +601,43 @@ export function run(argv: string[]): number {
     for (const r of rows) info(`${r.name.padEnd(20)} ${r.racks.length} rack(s), ${r.loose.length} loose${r.displayName ? `  "${r.displayName}"` : ""}`);
     return 0;
   }
-  if (verb === "device list" || verb === "device show") {
+  if (verb === "asset list" || verb === "asset show") {
     const d = store.load();
     const catalog = readCatalog(store);
-    const rows = Object.entries(devicesOf(d)).map(([name, r]) => ({
-      name,
-      ...r,
-      ports: recordedPorts(r, catalog),
-      plate: recordedPlate(name, r, catalog).key,
-      placed: placementsOf(d)[name] ? where(placementsOf(d)[name]) : null,
-      cables: cablesOf(d).filter((c) => c.from.device === name || c.to.device === name).length,
-    }));
-    if (verb === "device show") {
+    const rows = Object.entries(assetsOf(d)).map(([name, a]) => {
+      const at = currentName(name, a);
+      return {
+        name,
+        ...a,
+        stage: stageOf(d, name, a),
+        ports: assetPorts(a, catalog),
+        plate: recordedPlate(at, a, catalog).key,
+        placed: placementsOf(d)[at] ? where(placementsOf(d)[at]) : null,
+        cables: cablesOf(d).filter((c) => c.from.device === at || c.to.device === at).length,
+      };
+    });
+    if (verb === "asset show") {
       const [name] = positional(args, 2);
-      if (!name) die("device show <device>");
-      const r = rows.find((x) => x.name === name) ?? die(`device ${name} is not recorded`);
+      if (!name) die("asset show <asset>");
+      // An asset by its own name, or by the role it plays.
+      const r = rows.find((x) => x.name === name) ?? rows.find((x) => x.role === name) ?? die(`asset ${name} is not recorded`);
       if (json) return out(r);
-      info(`${GN}${r.name}${CL}  ${r.kind}${r.model ? `  ${r.model}` : ""}${r.displayName ? `  "${r.displayName}"` : ""}`);
-      info(`  ports: ${r.ports.join(", ") || "-"}`);
-      info(`  placed: ${r.placed ?? "nowhere"} · location ${r.location ?? "the primary"}${r.mac ? ` · mac ${r.mac}` : ""} · ${r.cables} recorded cable(s)`);
+      info(`${GN}${r.name}${CL}  ${r.kind}  ${r.stage}${r.faulty ? `  ${YW}faulty${r.faultNote ? `: ${r.faultNote}` : ""}${CL}` : ""}${r.displayName ? `  "${r.displayName}"` : ""}`);
+      info(`  role: ${r.role ?? "none"} · placed: ${r.placed ?? "nowhere"} · location ${r.location ?? "the primary"} · ${r.cables} recorded cable(s)`);
+      const rec = [r.vendor, r.model, r.serial ? `serial ${r.serial}` : null, r.assetTag ? `tag ${r.assetTag}` : null].filter(Boolean).join(" · ");
+      if (rec) info(`  ${rec}`);
+      info(`  ports: ${r.ports.map((p) => `${p.name} (${[p.kind, p.speed, p.standard, p.bands?.join("/"), p.module, p.role, p.mac, p.side].filter(Boolean).join(" ")})`).join(", ") || "-"}`);
+      if (r.procurement) info(`  procurement: ${Object.entries(r.procurement).map(([k, v]) => `${k} ${v}`).join(" · ")}`);
+      if (r.disposal) info(`  disposal: ${r.disposal.how}${r.disposal.when ? ` ${r.disposal.when}` : ""}${r.disposal.wiped ? ", disks wiped" : ""}`);
       if (r.description) info(`  ${r.description}`);
       return 0;
     }
-    if (json) return out(rows);
-    if (!rows.length) info("no recorded devices (device add <name> --kind …)");
-    for (const r of rows) info(`${r.name.padEnd(24)} ${r.kind.padEnd(12)} ${String(r.ports.length).padStart(2)} port(s)  ${r.placed ?? "placed nowhere"}${r.model ? `  ${r.model}` : ""}`);
+    const stage = opt(args, "--stage");
+    const kind = opt(args, "--kind");
+    const shown = rows.filter((r) => (!stage || r.stage === stage) && (!kind || r.kind === kind));
+    if (json) return out(shown);
+    if (!shown.length) info(rows.length ? "no asset matches" : "no assets (asset add --kind …)");
+    for (const r of shown) info(`${r.name.padEnd(24)} ${r.kind.padEnd(13)} ${r.stage.padEnd(12)} ${(r.role ?? "-").padEnd(20)} ${String(r.ports.length).padStart(2)} port(s)  ${r.placed ?? "placed nowhere"}${r.faulty ? `  ${YW}faulty${CL}` : ""}`);
     return 0;
   }
   if (verb === "faceplates list") {
@@ -620,35 +745,46 @@ export function run(argv: string[]): number {
     if (!name) die("room delete <room>");
     return change(store, check, undefined, (d) => deleteRoom(d, name));
   }
-  if (verb === "device add") {
+  if (verb === "asset add") {
     const [name] = positional(args, 2);
-    if (!name) die("device add <device> --kind …");
     const catalog = readCatalog(store);
     const devices = devicesFor(args);
     const seen = devices ? devices.filter((x) => !x.recorded).map((x) => x.name) : null;
     return change(store, check, devices, (d) =>
-      addDevice(d, name, {
+      addAsset(d, name, {
         kind: opt(args, "--kind"),
+        vendor: opt(args, "--vendor"),
         model: opt(args, "--model"),
+        serial: opt(args, "--serial"),
+        assetTag: opt(args, "--asset-tag"),
+        stage: opt(args, "--stage"),
         ports: intOpt(args, "--ports"),
         port: opts(args, "--port"),
         displayName: opt(args, "--display-name"),
         description: opt(args, "--description"),
         location: opt(args, "--location"),
+        procurement: {
+          supplier: opt(args, "--supplier"),
+          orderRef: opt(args, "--order-ref"),
+          purchaseDate: opt(args, "--purchase-date"),
+          warrantyUntil: opt(args, "--warranty-until"),
+          ownership: opt(args, "--ownership") as Procurement["ownership"],
+          notes: opt(args, "--notes"),
+        },
       }, catalog, seen),
     );
   }
-  if (verb === "device modify") {
-    const [name] = positional(args, 2);
-    if (!name) die("device modify <device> --set <field>=<value>...");
+  if (verb === "asset modify") {
+    const [given] = positional(args, 2);
+    if (!given) die("asset modify <asset> --set <field>=<value>...");
+    const name = assetKey(store, given);
     const s = sets(args);
     const catalog = readCatalog(store);
-    return change(store, check, undefined, (d) => modifyDevice(d, name, s, catalog));
+    return change(store, check, undefined, (d) => modifyAsset(d, name, s, catalog));
   }
-  if (verb === "device record") {
+  if (verb === "asset record") {
     const [target] = positional(args, 2);
-    if (!target) die("device record <switch>:<port>|<mac> --name <device> --kind …");
-    const name = opt(args, "--name") ?? die("--name <device> is required: the name it is recorded under");
+    if (!target) die("asset record <switch>:<port>|<mac> --kind … [--name <asset>]");
     const catalog = readCatalog(store);
     const read = readDevices(opt(args, "--topology"));
     if (!read.topology) die(`the topology could not be read (${read.error}): it is what says what a port sees`);
@@ -658,7 +794,7 @@ export function run(argv: string[]): number {
     const primary = siteLocs(store.configDir)?.primary ?? null;
     return change(store, check, read.devices, (d) =>
       recordSeen(d, hit, {
-        name,
+        name: opt(args, "--name"),
         kind: opt(args, "--kind"),
         port: opt(args, "--port"),
         model: opt(args, "--model"),
@@ -668,10 +804,64 @@ export function run(argv: string[]): number {
       }, catalog, taken, primary),
     );
   }
-  if (verb === "device remove") {
-    const [name] = positional(args, 2);
-    if (!name) die("device remove <device>");
-    return change(store, check, undefined, (d) => removeDevice(d, name));
+  if (verb === "asset remove") {
+    const [given] = positional(args, 2);
+    if (!given) die("asset remove <asset>");
+    const name = assetKey(store, given);
+    return change(store, check, undefined, (d) => removeAsset(d, name));
+  }
+  if (verb === "asset receive" || verb === "asset fault" || verb === "asset repaired" || verb === "asset dispose" || verb === "asset release") {
+    const [given] = positional(args, 2);
+    if (!given) die(`${verb} <asset>`);
+    const name = assetKey(store, given);
+    const today = new Date().toISOString().slice(0, 10);
+    return change(store, check, undefined, (d) =>
+      verb === "asset receive" ? receiveAsset(d, name)
+      : verb === "asset fault" ? faultAsset(d, name, opt(args, "--note"))
+      : verb === "asset repaired" ? repairAsset(d, name)
+      : verb === "asset dispose" ? disposeAsset(d, name, opt(args, "--how"), args.includes("--wiped"), opt(args, "--when") ?? today)
+      : releaseAsset(d, name),
+    );
+  }
+  if (verb === "asset allocate") {
+    const [given] = positional(args, 2);
+    if (!given) die("asset allocate <asset> --role <name>");
+    const name = assetKey(store, given);
+    const devices = devicesFor(args);
+    return change(store, check, devices, (d) => allocateAsset(d, name, opt(args, "--role"), devices));
+  }
+  if (verb === "port add") {
+    const [given, port] = positional(args, 2);
+    const asset = given ? assetKey(store, given) : given;
+    if (!asset || !port) die("port add <asset> <port> --kind …");
+    const catalog = readCatalog(store);
+    return change(store, check, undefined, (d) =>
+      addPort(d, asset, port, {
+        kind: opt(args, "--kind"),
+        speed: opt(args, "--speed"),
+        standard: opt(args, "--standard"),
+        bands: opt(args, "--bands"),
+        module: opt(args, "--module"),
+        role: opt(args, "--role"),
+        mac: opt(args, "--mac"),
+        side: opt(args, "--side"),
+      }, catalog),
+    );
+  }
+  if (verb === "port modify") {
+    const [given, port] = positional(args, 2);
+    const asset = given ? assetKey(store, given) : given;
+    if (!asset || !port) die("port modify <asset> <port> --set <field>=<value>...");
+    const s = sets(args);
+    const catalog = readCatalog(store);
+    return change(store, check, undefined, (d) => modifyPort(d, asset, port, s, catalog));
+  }
+  if (verb === "port remove") {
+    const [given, port] = positional(args, 2);
+    const asset = given ? assetKey(store, given) : given;
+    if (!asset || !port) die("port remove <asset> <port>");
+    const catalog = readCatalog(store);
+    return change(store, check, undefined, (d) => removePort(d, asset, port, catalog));
   }
   if (verb === "place") {
     const [device] = positional(args, 1);
@@ -680,7 +870,7 @@ export function run(argv: string[]): number {
     const rack = opt(args, "--rack") ?? (room ? undefined : die("--rack (with --u), or --room, is required"));
     const u = intOpt(args, "--u") ?? (room ? undefined : die("--u is required"));
     const catalog = readCatalog(store);
-    const rec = devicesOf(store.load())[device];
+    const rec = assetNamed(store.load(), device)?.asset;
     const primary = siteLocs(store.configDir)?.primary ?? null;
     return change(store, check, devicesFor(args), (d) =>
       placeDevice(d, device, {
@@ -711,7 +901,7 @@ export function run(argv: string[]): number {
     const catalog = readCatalog(store);
     const m = placementsOf(store.load())[device];
     // A recorded device keeps its cables; a passive plate nothing records takes them along.
-    const passive = !!m?.faceplate && catalog.find((f) => f.key === m.faceplate)?.passive === true && !devicesOf(store.load())[device];
+    const passive = !!m?.faceplate && catalog.find((f) => f.key === m.faceplate)?.passive === true && !assetNamed(store.load(), device);
     return change(store, check, undefined, (d) => unplaceDevice(d, device, passive));
   }
   if (verb === "cable add") {
@@ -728,7 +918,7 @@ export function run(argv: string[]): number {
       if (sd !== "front" && sd !== "rear") die("a side is front or rear");
       e.side = sd;
     }
-    return change(store, check, devicesFor(args), (d) => addCable(d, from, to, opt(args, "--kind") ?? "patch", opt(args, "--label")));
+    return change(store, check, devicesFor(args), (d) => addCable(d, from, to, opt(args, "--kind") ?? "patch", opt(args, "--label"), opt(args, "--link-speed")));
   }
   if (verb === "cable split") {
     const [e] = positional(args, 2);
@@ -752,9 +942,11 @@ export function run(argv: string[]): number {
     if (side) end.side = side;
     return change(store, check, undefined, (d) => removeCable(d, end));
   }
-  die(`unknown verb 'position-manager ${args.slice(0, 2).join(" ")}' — see 'position-manager --help'`);
+  die(`unknown verb 'asset-manager ${args.slice(0, 2).join(" ")}' — see 'asset-manager --help'`);
 }
 
 if (require.main === module) {
-  process.exit(guarded(() => run(process.argv.slice(2))));
+  // exitCode, not exit(): exit() ends the process before a large write to a pipe
+  // (the verb manifest, an export) has drained.
+  process.exitCode = guarded(() => run(process.argv.slice(2)));
 }

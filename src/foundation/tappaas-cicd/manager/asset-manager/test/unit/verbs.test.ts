@@ -1,14 +1,14 @@
-// verbs.test.ts — what each position-manager verb does to config/positions.json, the
+// verbs.test.ts — what each asset-manager verb does to config/positions.json, the
 // whole-document check, and the view the topology carries, over hrossen's
 // topology (test/fixtures/topology-hrossen.json, captured 2026-10-22).
 // Offline: documents in, documents out; the catalog is in memory here
 // (catalog.test.ts reads the real one).
 //
-// Run: RM_FIXTURE_DIR=<position-manager>/test/fixtures node verbs.test.js
+// Run: RM_FIXTURE_DIR=<asset-manager>/test/fixtures node verbs.test.js
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { Change, addCable, addDevice, addRoom, changeLine, deleteRoom, placeDevice, addRack, deleteRack, modifyPlacement, modifyRack, modifyRoom, removeCable, unplaceDevice } from "../../src/verbs";
+import { Change, addCable, addAsset, addRoom, changeLine, deleteRoom, placeDevice, addRack, deleteRack, modifyPlacement, modifyRack, modifyRoom, removeCable, unplaceDevice } from "../../src/verbs";
 import { CatalogPort, Faceplate, PositionsDoc, TopoLike, checkPositions, columnSpan, parseEnd, resolvePositions, seenCables, siteDevices, suggestFaceplate, unitAtRow } from "../../../../lib/ts/src/positions";
 
 let passed = 0;
@@ -169,7 +169,7 @@ console.log("— the one line a change is said in (--check, and the apply's repo
   check(said(room, false) === "added room 'stue' at knudanchersvej95", "…and the apply says it done, the same line");
   check(said(addRoom({}, "basement", {}, "hareskov"), true) === "would add room 'basement' at hareskov", "a room with no location of its own is at the primary");
   let p: PositionsDoc = (addRoom({}, "basement", { location: "knudanchersvej95" }) as Change).doc;
-  p = (addDevice(p, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, null) as Change).doc;
+  p = (addAsset(p, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, null) as Change).doc;
   const loose = placeDevice(p, "ISP modem", { room: "basement" }, catalog, "hareskov");
   check(said(loose, true) === "would place 'ISP modem' loose in room basement (location knudanchersvej95)", "place loose: the room and its location");
   p = (addRack(p, "rack1", { room: "basement" }) as Change).doc;
@@ -186,5 +186,5 @@ console.log("— the one line a change is said in (--check, and the apply's repo
   check(!said(loose, true).includes("{") && said(loose, true).split("\n").length === 1, "never the document: one line");
 }
 
-console.log(`\nposition-manager verbs: ${passed} passed, ${failed} failed`);
+console.log(`\nasset-manager verbs: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

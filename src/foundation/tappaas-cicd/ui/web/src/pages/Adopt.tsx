@@ -5,7 +5,7 @@
 // on a switch TAPPaaS programs: its record (switch-manager update-port) and the
 // reconcile that programs the switch — on a self-managed switch, what to set by
 // hand; 3 the adoption, previewed as the command, then applied; 4 the machine
-// placed in its room and rack (position-manager place) or opened in the
+// placed in its room and rack (asset-manager place) or opened in the
 // physical view.
 
 import { useMemo, useState } from "react";

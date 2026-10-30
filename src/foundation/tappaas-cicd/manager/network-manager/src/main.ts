@@ -116,7 +116,7 @@ export const HELP: HelpSpec = {
         ["--json", "print the topology document as JSON"],
         ["--health <file>", "take the health findings from this `health-manager validate --json` output instead of running it"],
         ["--no-health", "leave the health findings out (no validate run)"],
-        ["--no-positions", "leave the positions out (no position-manager run; what position-manager itself reads)"],
+        ["--no-positions", "leave the positions out (no asset-manager run; what asset-manager itself reads)"],
       ],
       hidden: ["--no-racks"],
       details:
@@ -125,7 +125,7 @@ export const HELP: HelpSpec = {
         "satellite; and the health findings placed on the object each names. Joined from site.json,\n" +
         "site-manager node list / node network show, switch-manager list / list-ports / lag list,\n" +
         "ap-manager list, zones.json, module-manager module list, backup-manager peers,\n" +
-        "health-manager validate and position-manager export (the locations, their rooms and racks,\n" +
+        "health-manager validate and asset-manager export (the locations, their rooms and racks,\n" +
         "each placement on its device and faceplate, every link mapped to faceplate ports). Every\n" +
         "device carries its location, its placement and the record it came from; a device a switch\n" +
         "port sees and nobody recorded is listed as seen. Read-only: it stores nothing. A source\n" +

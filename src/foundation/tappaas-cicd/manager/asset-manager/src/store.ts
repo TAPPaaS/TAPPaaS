@@ -37,7 +37,7 @@ export class Store {
     writeJsonAtomic(this.file, doc);
   }
 
-  // withLock — one position-manager writer at a time. A directory lock: created
+  // withLock — one asset-manager writer at a time. A directory lock: created
   // atomically, removed after; a lock older than 10 minutes is a crashed run's.
   withLock<T>(fn: () => T): T {
     const lock = join(this.configDir, ".positions.lock");
@@ -54,7 +54,7 @@ export class Store {
         } catch {
           continue;
         }
-        if (i >= 60) throw new Error(`${lock} is held by another position-manager run`);
+        if (i >= 60) throw new Error(`${lock} is held by another asset-manager run`);
         const until = Date.now() + 1000;
         while (Date.now() < until) {
           /* wait a second — Atomics.wait would need a SharedArrayBuffer */
@@ -90,7 +90,7 @@ export function catalogDir(): string | null {
 export function loadCatalog(dir: string | null = catalogDir()): { catalog: Faceplate[]; errors: string[] } {
   const catalog: Faceplate[] = [];
   const errors: string[] = [];
-  if (!dir) return { catalog, errors: ["the faceplate catalog was not found (faceplates/ beside position-manager, or $TAPPAAS_FACEPLATES)"] };
+  if (!dir) return { catalog, errors: ["the faceplate catalog was not found (faceplates/ beside asset-manager, or $TAPPAAS_FACEPLATES)"] };
   for (const vendor of readdirSync(dir).filter((x) => !x.startsWith(".")).sort()) {
     const vd = join(dir, vendor);
     if (!statSync(vd).isDirectory()) continue;

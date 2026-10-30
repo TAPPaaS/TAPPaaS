@@ -1,5 +1,5 @@
 // portspec.test.ts — the Add a faceplate preview reads a port spec as
-// position-manager does: web/src/physical/portspec.ts and lib/ts positions.ts
+// asset-manager does: web/src/physical/portspec.ts and lib/ts positions.ts
 // give the same blocks, or the same refusal, for every spec here.
 
 import { parsePortSpec as manager, blockRows as managerRows } from "../../../lib/ts/src/positions";
@@ -19,6 +19,8 @@ const SPECS = [
   " 4 x rj45 , 2xsfp28 ",
   "48xrj45@2",
   "power/power, 8xpower",
+  "8xrj45-2.5g, 2xsfp+-1g",
+  "10xpoe-10g:Port {n}+2xsfp+:Port {n}[51-98]",
   // refused
   "",
   "24xfoo",
@@ -31,6 +33,9 @@ const SPECS = [
   "gap:x",
   "200xrj45",
   "rj45[80-20]",
+  "8xrj45-25g",
+  "console-1g",
+  "rj45-fast",
 ];
 for (const s of SPECS) {
   const a = manager(s);

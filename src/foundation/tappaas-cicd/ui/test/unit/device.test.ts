@@ -32,7 +32,7 @@ check(st("Nano HD").state === "warn" && /mounted in no rack/.test(st("Nano HD").
 check(st("buddy rasmus").state === "warn" && st("tappaas2").state === "ok", "a buddy down is amber; a node without a finding is green");
 check(selectedDevice(g, { kind: "port", id: "5", switch: "USW Pro XG 10 PoE" }) === "USW Pro XG 10 PoE" && selectedDevice(g, { kind: "outside", id: "rasmus" }) === "buddy rasmus" && selectedDevice(g, null) === null, "a selection names its device");
 
-// A device position-manager records: a device like the others, its kind kept.
+// A device asset-manager records: a device like the others, its kind kept.
 {
   const t2 = { ...t, devices: [...(t.devices ?? []), { name: "ISP modem", kind: "modem" as const, vendor: null, model: "generic/isp-modem", recorded: true as const, ports: ["WAN", "LAN 1"] }, { name: "ups1", kind: "ups" as const, vendor: null, model: null, recorded: true as const, ports: ["1", "2"] }] };
   const g2 = deviceGraph(t2);

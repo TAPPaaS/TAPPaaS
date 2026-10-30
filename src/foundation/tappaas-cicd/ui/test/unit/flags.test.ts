@@ -51,8 +51,8 @@ check(Object.keys(bflags).length === 3 && JSON.stringify(btable) === JSON.string
 check(Object.keys(btable).every((f) => bfields.includes(f)), "…each a field of the module's backup block");
 check(bfields.includes("schedule") && btable.schedule === undefined, "…schedule is in the block but backup-manager modify cannot set it: read-only in the form");
 
-// ── position-manager rack add / place / room add: their usage lines' options
-const rm = readFileSync(join(MANAGERS, "position-manager", "src", "main.ts"), "utf8");
+// ── asset-manager rack add / place / room add: their usage lines' options
+const rm = readFileSync(join(MANAGERS, "asset-manager", "src", "main.ts"), "utf8");
 const racks = schema("positions-fields.json").$defs as Record<string, unknown>;
 for (const kind of ["rack", "placement", "room"] as FieldKind[]) {
   const verb = kind === "placement" ? "place" : `${kind} add`;
@@ -60,7 +60,7 @@ for (const kind of ["rack", "placement", "room"] as FieldKind[]) {
   const opts = [...usage.matchAll(/(--[a-z-]+)/g)].map((m) => m[1]).filter((f) => !["--check", "--topology"].includes(f));
   const table = FLAGS[kind]?.add ?? {};
   const fields = flattenSchema(racks[kind]).map((d) => d.name).filter((n) => n !== "name" && n !== "device");
-  check(usage !== "" && same(Object.values(table), opts), `${kind} add: the table is position-manager ${verb}'s options (${Object.values(table).join(" ")})`);
+  check(usage !== "" && same(Object.values(table), opts), `${kind} add: the table is asset-manager ${verb}'s options (${Object.values(table).join(" ")})`);
   check(same(Object.keys(table), fields), `${kind} add: every field of positions-fields' ${kind} has its flag`);
 }
 

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# test.sh — position-manager offline test suite.
+# test.sh — asset-manager offline test suite.
 #
 # Compiles the TS sources + unit tests, runs the unit suite (the verbs, the
 # document check and the topology's rack view over hrossen's topology, the
 # help manifest, the catalog), then drives the compiled CLI against a temp
 # config dir with hrossen's topology handed in (--topology) and a fixture
-# catalog — never the live config, the topology verb or a device. position-manager
+# catalog — never the live config, the topology verb or a device. asset-manager
 # changes no device, so there is no deep tier.
 set -uo pipefail
 
@@ -25,10 +25,10 @@ DIST="${HERE}/dist-test"
 rm -rf -- "${DIST}"
 run_ts "tsc --noEmit -p '${HERE}/tsconfig.json'" >/dev/null 2>&1 && ok "tsc --noEmit clean (src)" || bad "tsc --noEmit reported type errors (src)"
 if run_ts "tsc -p '${HERE}/test/unit/tsconfig.json'" >/dev/null 2>&1; then ok "sources + unit tests compile"
-else bad "unit tests do not compile"; echo "position-manager test: ${pass} passed, ${fail} failed"; exit 1; fi
+else bad "unit tests do not compile"; echo "asset-manager test: ${pass} passed, ${fail} failed"; exit 1; fi
 for unit in $(cd "${HERE}/test/unit" && ls *.test.ts | sed 's/\.test\.ts$//'); do
-    run_ts "RM_FIXTURE_DIR='${HERE}/test/fixtures' RM_CATALOG_DIR='${HERE}/faceplates' node '${DIST}/manager/position-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1 \
-        && ok "unit: ${unit}" || bad "unit: ${unit} (rerun: RM_FIXTURE_DIR=${HERE}/test/fixtures RM_CATALOG_DIR=${HERE}/faceplates node ${DIST}/manager/position-manager/test/unit/${unit}.test.js)"
+    run_ts "RM_FIXTURE_DIR='${HERE}/test/fixtures' RM_CATALOG_DIR='${HERE}/faceplates' node '${DIST}/manager/asset-manager/test/unit/${unit}.test.js'" >/dev/null 2>&1 \
+        && ok "unit: ${unit}" || bad "unit: ${unit} (rerun: RM_FIXTURE_DIR=${HERE}/test/fixtures RM_CATALOG_DIR=${HERE}/faceplates node ${DIST}/manager/asset-manager/test/unit/${unit}.test.js)"
 done
 
 # ── the CLI against a fixture config ─────────────────────────────────
@@ -40,7 +40,7 @@ USW="USW Pro XG 10 PoE"
 # Both config spellings: TS reads TAPPAAS_CONFIG first, and an inherited one
 # would point this suite at the live config. The catalog is the fixture's.
 RM() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="${HERE}/test/fixtures/faceplates" \
-    run_ts "node '${DIST}/manager/position-manager/src/main.js' $(printf "'%s' " "$@")"; }
+    run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
 DOC="${FIX}/cfg/positions.json"
 
 RM rack add rack1 --units 42 --check >/dev/null 2>&1
@@ -74,7 +74,7 @@ CABLE_BEFORE="$(jq -c '.cables' "${DOC}")"
 RM device add "ISP modem" --kind modem --model generic/isp-modem --topology "${TOPO}" >/dev/null 2>&1 && ok "device add: the ISP modem recorded" || bad "device add"
 [[ "$(jq -c '.cables' "${DOC}")" == "${CABLE_BEFORE}" ]] && ok "device add: its cable unchanged" || bad "device add changed the cable"
 RM validate --topology "${TOPO}" 2>&1 | grep -c "neither seen" >/dev/null && bad "validate: still warns after the record" || ok "validate: the recorded modem is a device"
-[[ "$(RM device list --json 2>/dev/null | jq -r '.[0].ports | join(",")')" == "WAN,LAN 1" ]] && ok "device list --json: its ports from its model" || bad "device list"
+[[ "$(RM device list --json 2>/dev/null | jq -r '.[0].ports | map("\(.name):\(.kind):\(.speed)") | join(",")')" == "WAN:rj45:1g,LAN 1:rj45:1g" ]] && ok "device list --json (asset list): its ports from its model, rj45 at 1g" || bad "device list"
 RM device add tappaas1 --kind other --ports 1 --topology "${TOPO}" >/dev/null 2>&1 && bad "device add: a seen device refused" || ok "device add: a seen device refused"
 RM room add basement --display-name Basement >/dev/null 2>&1 && ok "room add" || bad "room add"
 printf '{"locations":{"home":{"country":"DK","timezone":"Europe/Copenhagen"},"far":{"country":"DE"}},"primaryLocation":"home"}' > "${FIX}/cfg/site.json"
@@ -117,7 +117,7 @@ RM rack delete rack1 >/dev/null 2>&1 && ok "rack delete: once empty" || bad "rac
 [[ -z "$(ls -A "${FIX}/cfg" | grep -v '^positions.json$' | grep -v '^site.json$')" ]] && ok "no lock or temp file left behind" || bad "left behind: $(ls -A "${FIX}/cfg")"
 # The catalog as shipped, through the CLI.
 RMC() { CONFIG_DIR="${FIX}/cfg" TAPPAAS_CONFIG="${FIX}/cfg" TAPPAAS_FACEPLATES="${HERE}/faceplates" \
-    run_ts "node '${DIST}/manager/position-manager/src/main.js' $(printf "'%s' " "$@")"; }
+    run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
 [[ "$(RMC faceplates list --json 2>/dev/null | jq 'length')" -ge 11 ]] && ok "faceplates list: the shipped catalog" || bad "faceplates list"
 [[ "$(RMC faceplates show mikrotik/crs317-1g-16s 2>/dev/null | grep -c '\[sfp-sfpplus')" == "1" ]] && ok "faceplates show: the CRS317's one row of cages" || bad "faceplates show mikrotik/crs317-1g-16s"
 [[ "$(RMC faceplates show unifi/usw-pro-xg-10-poe --device "${USW}" --topology "${TOPO}" --json 2>/dev/null | jq -r '[.rows[][] | select(. != null and .id == "5")][0].zones[0]')" == "wan" ]] \
@@ -150,10 +150,10 @@ RM rack delete rack1 >/dev/null 2>&1 || bad "rack delete (after the old verbs)"
 SEEN="${FIX}/topology-seen.json"
 jq --arg sw "${USW}" '.devices += [{name: "aa:bb:cc:00:11:22", kind: "device", vendor: null, model: null, source: "seen", location: null,
     seen: {switch: $sw, port: "8", mac: "aa:bb:cc:00:11:22", lldp: {name: "printer-1", port: "eth0"}, lease: null}}]' "${TOPO}" > "${SEEN}"
-RM device record "${USW}:8" --name printer --kind other --topology "${SEEN}" --check >/dev/null 2>&1 && [[ "$(jq -r '.devices.printer // "none"' "${DOC}")" == "none" ]] && ok "device record --check: nothing written" || bad "device record --check"
+RM device record "${USW}:8" --name printer --kind other --topology "${SEEN}" --check >/dev/null 2>&1 && [[ "$(jq -r '.assets.printer // "none"' "${DOC}")" == "none" ]] && ok "device record --check: nothing written" || bad "device record --check"
 RM device record "${USW}:9" --name printer --kind other --topology "${SEEN}" >/dev/null 2>&1 && bad "device record: a port that sees nothing refused" || ok "device record: a port that sees nothing refused"
 RM device record aa:bb:cc:00:11:22 --name printer --kind other --topology "${SEEN}" >/dev/null 2>&1 && ok "device record <mac>" || bad "device record <mac>"
-[[ "$(jq -r '.devices.printer | "\(.mac) \(.ports | join(",")) \(.displayName)"' "${DOC}")" == "aa:bb:cc:00:11:22 eth0 printer-1" ]] && ok "device record: its MAC, its LLDP port and name kept" || bad "device record: the record"
+[[ "$(jq -r '.assets.printer | "\(.ports[0].mac) \(.ports | map(.name) | join(",")) \(.displayName) \(.role)"' "${DOC}")" == "aa:bb:cc:00:11:22 eth0 printer-1 printer" ]] && ok "device record (asset record): its MAC on its LLDP port, its name kept, playing itself" || bad "device record: the record"
 [[ "$(jq -r --arg sw "${USW}" '[.cables[] | select(.from.device == $sw and .from.port == "8") | .to | "\(.device):\(.port)"] | join(",")' "${DOC}")" == "printer:eth0" ]] && ok "device record: the port's cable recorded" || bad "device record: the cable"
 RM device record "${USW}:8" --name printer2 --kind other --topology "${SEEN}" >/dev/null 2>&1 && bad "device record: a port with a recorded cable refused" || ok "device record: a port with a recorded cable refused"
 RM cable remove "${USW}:8" >/dev/null 2>&1 && RM device remove printer >/dev/null 2>&1 || bad "device record: undone"
@@ -161,14 +161,83 @@ RM cable remove "${USW}:8" >/dev/null 2>&1 && RM device remove printer >/dev/nul
 LEG="$(mktemp -d "${TMPDIR:-/tmp}/rm-leg.XXXXXX")"
 printf '{"version":1,"racks":{"r1":{"units":10,"width":"19in","numbering":"bottom-up"}}}' > "${LEG}/racks.json"
 RML() { CONFIG_DIR="${LEG}" TAPPAAS_CONFIG="${LEG}" TAPPAAS_FACEPLATES="${HERE}/test/fixtures/faceplates" \
-    run_ts "node '${DIST}/manager/position-manager/src/main.js' $(printf "'%s' " "$@")"; }
+    run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
 [[ "$(RML rack list --json 2>/dev/null | jq -r '.[0].name')" == "r1" ]] && ok "racks.json read while the migration has not run" || bad "racks.json not read"
 RML rack add r2 >/dev/null 2>&1 && bad "a write beside racks.json refused" || ok "a write beside racks.json refused"
 [[ ! -e "${LEG}/positions.json" ]] && ok "nothing written beside racks.json" || bad "positions.json written beside racks.json"
 rm -rf -- "${LEG}"
+# ── assets: a box's life, ordered to disposed (ADR-040 D7-D9) ─────────
+AC="${FIX}/assets"; mkdir -p "${AC}"
+RA() { CONFIG_DIR="${AC}" TAPPAAS_CONFIG="${AC}" TAPPAAS_FACEPLATES="${HERE}/faceplates" \
+    run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
+AD="${AC}/positions.json"
+RA rack add rack1 >/dev/null 2>&1 || bad "assets: rack add"
+RA asset add --kind server --vendor HP --model "Z840" --serial CZC1 --stage ordered --supplier "Proshop" --purchase-date 2026-10-01 --ownership owned --topology "${TOPO}" >/dev/null 2>&1 \
+    && [[ "$(jq -r '.assets["srv-01"] | "\(.kind) \(.stage) \(.serial) \(.procurement.supplier) \(.procurement.ownership)"' "${AD}")" == "server ordered CZC1 Proshop owned" ]] \
+    && ok "asset add: no name is the next tag of its kind (srv-01), ordered, with its procurement" || bad "asset add srv-01"
+RA asset add --kind server --serial CZC1 --topology "${TOPO}" >/dev/null 2>&1 && bad "asset add: a serial another asset has refused" || ok "asset add: a serial another asset has refused"
+RA asset add tappaas1 --kind server --topology "${TOPO}" >/dev/null 2>&1 && bad "asset add: a name the topology has refused (it is a role)" || ok "asset add: a name the topology has refused (it is a role)"
+RA asset add --kind server --ownership leased --topology "${TOPO}" >/dev/null 2>&1 && bad "asset add: an ownership not owned or rented refused" || ok "asset add: an ownership not owned or rented refused"
+RA place srv-01 --rack rack1 --u 1 --topology "${TOPO}" >/dev/null 2>&1 && bad "place: an ordered asset refused" || ok "place: an ordered asset refused (receive it first)"
+RA asset receive srv-01 >/dev/null 2>&1 && [[ "$(jq -r '.assets["srv-01"].stage' "${AD}")" == "stock" ]] && ok "asset receive: ordered → stock" || bad "asset receive"
+RA asset receive srv-01 >/dev/null 2>&1 && bad "asset receive: only an ordered one" || ok "asset receive: only an ordered one"
+RA port add srv-01 eno1 --kind rj45 --role lan --mac aa:bb:cc:00:00:01 >/dev/null 2>&1 && RA port add srv-01 ilo --kind rj45 --role bmc --mac aa:bb:cc:00:00:02 >/dev/null 2>&1 \
+    && RA port add srv-01 sfp1 --kind sfp --speed 10g --module dac >/dev/null 2>&1 \
+    && [[ "$(jq -r '.assets["srv-01"].ports | map("\(.name):\(.kind):\(.speed // "-"):\(.role // .module // "-")") | join(",")' "${AD}")" == "eno1:rj45:1g:lan,ilo:rj45:1g:bmc,sfp1:sfp:10g:dac" ]] \
+    && ok "port add: an rj45 at 1g by default, a BMC by its role, an SFP+ cage with its module" || bad "port add"
+RA port add srv-01 usb1 --kind usb-a --speed 10g >/dev/null 2>&1 && bad "port add: a speed its connector lacks refused" || ok "port add: a speed its connector lacks refused (usb-a 10g)"
+RA port add srv-01 wl0 --kind wifi --standard wifi6 --bands 2.4,5,6 >/dev/null 2>&1 && [[ "$(jq -r '.assets["srv-01"].ports[3].bands | join(",")' "${AD}")" == "2.4,5,6" ]] && ok "port add: wifi with its standard and bands" || bad "port add wifi"
+RA port add srv-01 wl1 --kind wifi --speed 1g >/dev/null 2>&1 && bad "port add: a wifi port with a speed refused" || ok "port add: a wifi port with a speed refused"
+RA port add srv-01 eth9 --kind rj45 --module sr >/dev/null 2>&1 && bad "port add: a module outside an sfp cage refused" || ok "port add: a module outside an sfp cage refused"
+RA port add srv-01 eth8 --kind rj45 --mac aa:bb:cc:00:00:01 >/dev/null 2>&1 && bad "port add: a MAC another port has refused" || ok "port add: a MAC another port has refused (MACs unique)"
+RA port modify srv-01 eno1 --set speed=2.5g >/dev/null 2>&1 && [[ "$(jq -r '.assets["srv-01"].ports[0].speed' "${AD}")" == "2.5g" ]] && ok "port modify: its speed" || bad "port modify"
+RA port modify srv-01 eno1 --set speed=25g >/dev/null 2>&1 && bad "port modify: rj45 at 25g refused" || ok "port modify: rj45 at 25g refused"
+RA port remove srv-01 wl0 >/dev/null 2>&1 && [[ "$(jq -r '.assets["srv-01"].ports | length' "${AD}")" == "3" ]] && ok "port remove" || bad "port remove"
+RA place srv-01 --rack rack1 --u 1 --faceplate generic/server-2u --topology "${TOPO}" >/dev/null 2>&1 && [[ "$(jq -r '"\(.assets["srv-01"].stage) \(.placements["srv-01"].u)"' "${AD}")" == "placed 1" ]] \
+    && ok "place: an asset in stock by its own name, placed" || bad "place srv-01"
+RA validate --topology "${TOPO}" >/dev/null 2>&1 && ok "validate: a placed asset with no role is valid (the rack draws it)" || bad "validate: placed asset"
+RA asset allocate srv-01 --role crs-a --topology "${TOPO}" >/dev/null 2>&1 && bad "asset allocate: a server to a switch refused" || ok "asset allocate: a server to a switch refused"
+RA asset allocate srv-01 --role tappaas9 --topology "${TOPO}" >/dev/null 2>&1 && bad "asset allocate: a node the topology lacks refused" || ok "asset allocate: a node the topology lacks refused"
+RA asset allocate srv-01 --role tappaas1 --topology "${TOPO}" >/dev/null 2>&1 \
+    && [[ "$(jq -r '"\(.assets["srv-01"].role) \(.placements.tappaas1.u) \(.placements["srv-01"] // "moved")"' "${AD}")" == "tappaas1 1 moved" ]] \
+    && ok "asset allocate: the role tappaas1, its placement now under the role's name" || bad "asset allocate"
+[[ "$(RA asset list --json 2>/dev/null | jq -r '.[0] | "\(.stage) \(.placed)"')" == "operational rack1 U1-U2 front" ]] && ok "asset list: operational (it has a role), placed" || bad "asset list: stage"
+[[ "$(RA asset show tappaas1 --json 2>/dev/null | jq -r '.name')" == "srv-01" ]] && ok "asset show: by the role it plays" || bad "asset show <role>"
+RA cable add --from "${USW}:5" --to "srv-01:sfp1" --link-speed 1g --topology "${TOPO}" >/dev/null 2>&1 \
+    && [[ "$(jq -r '.cables[0] | "\(.to.device):\(.to.port) \(.linkSpeed)"' "${AD}")" == "tappaas1:sfp1 1g" ]] && ok "cable add: an asset's end under its role, the link speed seen (a 10g cage at 1g)" || bad "cable add --link-speed"
+RA asset fault srv-01 --note "fan 2 failed" >/dev/null 2>&1 && [[ "$(RA asset list --json 2>/dev/null | jq -r '.[0] | "\(.stage) \(.faulty) \(.faultNote)"')" == "operational true fan 2 failed" ]] \
+    && ok "asset fault: faulty beside the stage, operational and faulty" || bad "asset fault"
+RA asset fault srv-01 >/dev/null 2>&1 && bad "asset fault: a note is required" || ok "asset fault: a note is required"
+RA asset dispose srv-01 --how sold >/dev/null 2>&1 && bad "asset dispose: refused while it has a role" || ok "asset dispose: refused while it has a role"
+RA asset release srv-01 >/dev/null 2>&1 && [[ "$(jq -r '"\(.assets["srv-01"].role // "none") \(.placements["srv-01"].u) \(.cables[0].to.device)"' "${AD}")" == "none 1 srv-01" ]] \
+    && ok "asset release: the role ends, the placement and its cable stay with the box under its name" || bad "asset release"
+[[ "$(RA asset list --stage placed --json 2>/dev/null | jq -r 'map(.name) | join(",")')" == "srv-01" ]] && ok "asset list --stage placed: back to placed" || bad "asset list --stage"
+RA asset repaired srv-01 >/dev/null 2>&1 && [[ "$(jq -r '.assets["srv-01"] | "\(.faulty // "-") \(.faultNote // "-")"' "${AD}")" == "- -" ]] && ok "asset repaired: the flag and its note cleared" || bad "asset repaired"
+RA asset dispose srv-01 --how recycled >/dev/null 2>&1 && bad "asset dispose: refused while placed" || ok "asset dispose: refused while placed"
+RA cable remove "srv-01:sfp1" >/dev/null 2>&1 && RA unplace srv-01 >/dev/null 2>&1 && [[ "$(jq -r '.assets["srv-01"].stage' "${AD}")" == "stock" ]] && ok "unplace: the asset is in stock again" || bad "unplace srv-01"
+RA asset dispose srv-01 --how teleported >/dev/null 2>&1 && bad "asset dispose: an unknown how refused" || ok "asset dispose: an unknown how refused"
+RA asset dispose srv-01 --how recycled --wiped --when 2026-10-29 >/dev/null 2>&1 \
+    && [[ "$(jq -r '.assets["srv-01"] | "\(.stage) \(.disposal.how) \(.disposal.when) \(.disposal.wiped)"' "${AD}")" == "disposed recycled 2026-10-29 true" ]] && ok "asset dispose: how, when, disks wiped; the record stays" || bad "asset dispose"
+RA asset allocate srv-01 --role tappaas2 --topology "${TOPO}" >/dev/null 2>&1 && bad "asset allocate: a disposed asset refused" || ok "asset allocate: a disposed asset refused"
+RA asset remove srv-01 >/dev/null 2>&1 && bad "asset remove: a disposed record stays" || ok "asset remove: a disposed record stays"
+RA asset add --kind switch --model unifi/usw-pro-xg-10-poe --topology "${TOPO}" >/dev/null 2>&1 && RA asset add --kind access-point --topology "${TOPO}" >/dev/null 2>&1 && RA asset add --kind modem --topology "${TOPO}" >/dev/null 2>&1 \
+    && [[ "$(jq -r '.assets | keys | join(",")' "${AD}")" == "ap-01,dev-01,srv-01,sw-01" ]] && ok "asset add: a tag per kind — sw-01, ap-01, dev-01" || bad "asset add: the tags"
+[[ "$(RA asset show sw-01 --json 2>/dev/null | jq -r '[.ports[] | select(.name == "1" or .name == "11") | "\(.name):\(.kind):\(.speed)"] | join(",")')" == "1:rj45:10g,11:sfp:10g" ]] \
+    && ok "asset show: a model's ports from its plate, kind and speed per port (10G RJ45, SFP+)" || bad "asset show: the plate's ports"
+RA asset allocate sw-01 --role "${USW}" --topology "${TOPO}" >/dev/null 2>&1 && RA validate --topology "${TOPO}" >/dev/null 2>&1 && ok "asset allocate: a switch asset to the switch, valid" || bad "asset allocate sw-01"
+RA asset modify dev-01 --set role=x >/dev/null 2>&1 && bad "asset modify: the role is allocate's" || ok "asset modify: the role is allocate's"
+RA asset modify dev-01 --set procurement.warrantyUntil=2028-01-01 --set assetTag=T-17 >/dev/null 2>&1 && [[ "$(jq -r '.assets["dev-01"] | "\(.procurement.warrantyUntil) \(.assetTag)"' "${AD}")" == "2028-01-01 T-17" ]] && ok "asset modify: its tag and its warranty" || bad "asset modify"
+# A positions.json from before migration 0027 is read, never written.
+OLDD="$(mktemp -d "${TMPDIR:-/tmp}/rm-old.XXXXXX")"
+printf '{"version":1,"devices":{"ISP modem":{"kind":"modem","ports":["WAN","LAN 1"],"mac":"aa:bb:cc:00:00:09"}},"cables":[{"from":{"device":"%s","port":"5"},"to":{"device":"ISP modem","port":"LAN 1"},"kind":"uplink"}]}' "${USW}" > "${OLDD}/positions.json"
+RO() { CONFIG_DIR="${OLDD}" TAPPAAS_CONFIG="${OLDD}" TAPPAAS_FACEPLATES="${HERE}/faceplates" run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
+[[ "$(RO asset list --json 2>/dev/null | jq -r '.[0] | "\(.name) \(.role) \(.stage) \([.ports[] | select(.mac) | .name] | join(","))"')" == "ISP modem ISP modem operational LAN 1" ]] \
+    && ok "an unmigrated devices{} reads as assets: each playing itself, its MAC on its cabled port" || bad "devices{} read as assets"
+RO room add basement >/dev/null 2>&1 && bad "a write before migration 0027 refused" || ok "a write before migration 0027 refused"
+rm -rf -- "${OLDD}"
 RM --help --json 2>/dev/null | jq -e '.verbs | length > 10' >/dev/null && ok "--help --json is the verb manifest" || bad "--help --json"
 
 rm -rf -- "${DIST}"
 echo ""
-echo "position-manager test: ${pass} passed, ${fail} failed"
+echo "asset-manager test: ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]]

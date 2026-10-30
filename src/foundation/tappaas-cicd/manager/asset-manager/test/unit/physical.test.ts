@@ -1,13 +1,13 @@
-// physical.test.ts — the recorded devices, rooms, patch panels and cable
+// physical.test.ts — the assets as devices, rooms, patch panels and cable
 // segments of config/positions.json: the verbs, the whole-document check and the
 // view the topology carries, over hrossen's topology
 // (test/fixtures/topology-hrossen.json). Offline; the catalog is in memory.
 //
-// Run: RM_FIXTURE_DIR=<position-manager>/test/fixtures node physical.test.js
+// Run: RM_FIXTURE_DIR=<asset-manager>/test/fixtures node physical.test.js
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { addCable, addDevice, placeDevice, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyDevice, modifyPlacement, modifyRack, removeDevice, splitCable } from "../../src/verbs";
+import { addCable, addAsset, placeDevice, addRack, addRoom, deleteRack, deleteRoom, joinCable, modifyAsset, modifyPlacement, modifyRack, removeAsset, splitCable } from "../../src/verbs";
 import { Faceplate, PositionsDoc, SiteLocs, TopoLike, checkPositions, placementsOf, recordedPlate, resolvePositions, seenCables, siteDevices } from "../../../../lib/ts/src/positions";
 
 let passed = 0;
@@ -41,29 +41,29 @@ const catalog = [modem, patch24];
 
 console.log("— recorded devices");
 let d: PositionsDoc = doc(addRack({}, "rack1", {}));
-check(refused(addDevice(d, "tappaas1", { kind: "other", ports: 1 }, catalog, seen), "sees a device"), "a device the topology sees is not recorded");
-check(refused(addDevice(d, "ups1", { kind: "battery", ports: 2 }, catalog, seen), "--kind"), "an unknown kind is refused");
-check(refused(addDevice(d, "ups1", { kind: "ups" }, catalog, seen), "its ports"), "a device needs ports or a model");
-check(refused(addDevice(d, "ont1", { kind: "ont", model: "acme/nope" }, catalog, seen), "not in the catalog"), "a model the catalog lacks is refused");
-d = doc(addDevice(d, "ups1", { kind: "ups", ports: 4, displayName: "Basement UPS" }, catalog, seen));
-check(d.devices!.ups1.ports!.join(",") === "1,2,3,4" && d.devices!.ups1.displayName === "Basement UPS", "device add --ports 4: ports 1 to 4");
-check(refused(addDevice(d, "ups1", { kind: "ups", ports: 1 }, catalog, seen), "already recorded"), "a second record of a name is refused");
-d = doc(addDevice(d, "ont1", { kind: "ont", port: ["PON", "LAN"] }, catalog, seen));
-check(recordedPlate("ont1", d.devices!.ont1, catalog).width === "half" && recordedPlate("ont1", d.devices!.ont1, catalog).rows[0].map((p) => p!.name).join() === "PON,LAN", "an ONT's plate: half width, its named ports");
+check(refused(addAsset(d, "tappaas1", { kind: "other", ports: 1 }, catalog, seen), "sees a device"), "a device the topology sees is not recorded");
+check(refused(addAsset(d, "ups1", { kind: "battery", ports: 2 }, catalog, seen), "--kind"), "an unknown kind is refused");
+check(ok(addAsset(d, "ups1", { kind: "ups" }, catalog, seen)), "an asset needs no ports: a server whose ports nobody knows yet");
+check(refused(addAsset(d, "ont1", { kind: "ont", model: "acme/nope" }, catalog, seen), "not in the catalog"), "a model the catalog lacks is refused");
+d = doc(addAsset(d, "ups1", { kind: "ups", ports: 4, displayName: "Basement UPS" }, catalog, seen));
+check(d.assets!.ups1.ports!.map((p) => `${p.name}:${p.kind}:${p.speed}`).join(",") === "1:rj45:1g,2:rj45:1g,3:rj45:1g,4:rj45:1g" && d.assets!.ups1.displayName === "Basement UPS" && d.assets!.ups1.stage === "stock", "asset add --ports 4: ports 1 to 4, rj45 at 1g, in stock");
+check(refused(addAsset(d, "ups1", { kind: "ups", ports: 1 }, catalog, seen), "already recorded"), "a second record of a name is refused");
+d = doc(addAsset(d, "ont1", { kind: "ont", port: ["PON:sfp:1g", "LAN"] }, catalog, seen));
+check(recordedPlate("ont1", d.assets!.ont1, catalog).width === "half" && recordedPlate("ont1", d.assets!.ont1, catalog).rows[0].map((p) => `${p!.name}·${p!.kind}`).join() === "PON·sfp+,LAN·rj45", "an ONT's plate: half width, its named ports drawn by kind");
 check(errs(d).length === 0, "the document with recorded devices is valid");
-check(ok(modifyDevice(d, "ups1", [["ports", "6"]], catalog)) && doc(modifyDevice(d, "ups1", [["ports", "6"]], catalog)).devices!.ups1.ports!.length === 6, "device modify: a port count");
-check(refused(modifyDevice(d, "ups1", [["name", "x"]], catalog), "how cables and its placement name it"), "device modify: the name is refused");
+check(ok(modifyAsset(d, "ups1", [["ports", "6"]], catalog)) && doc(modifyAsset(d, "ups1", [["ports", "6"]], catalog)).assets!.ups1.ports!.length === 6, "asset modify: a port count");
+check(refused(modifyAsset(d, "ups1", [["name", "x"]], catalog), "its key and stays"), "asset modify: the name is refused");
 const withCable = doc(addCable(d, { device: "ont1", port: "LAN" }, { device: USW, port: "5" }, "uplink"));
 check(errs(withCable).length === 0, "a recorded device's port is a valid cable end");
-check(refused(removeDevice(withCable, "ont1"), "cable remove"), "device remove: refused while a cable names it");
-check(ok(removeDevice(d, "ont1")), "device remove: a device nothing names");
+check(refused(removeAsset(withCable, "ont1"), "cable remove"), "asset remove: refused while a cable names it");
+check(ok(removeAsset(d, "ont1")), "asset remove: an asset nothing names");
 check(errs({ ...withCable, cables: [{ from: { device: "ont1", port: "WAN" }, to: { device: USW, port: "5" }, kind: "uplink" }] }).some((m) => m.includes("ont1 has no port WAN")), "a port the record lacks is refused");
 
 console.log("— the ISP modem: from a name on a cable to a recorded device");
 const legacy: PositionsDoc = { version: 1, racks: d.racks, cables: [{ from: { device: USW, port: "5" }, to: { device: "ISP modem", port: "LAN 1", faceplate: "generic/isp-modem" }, kind: "uplink", label: "ISP hand-off" }] };
-check(errs(legacy).length === 0 && warns(legacy).some((m) => m.includes("ISP modem is neither seen by the topology nor recorded") && m.includes("device add 'ISP modem' --kind") && m.includes("--model generic/isp-modem")), "validate tells the operator the modem is only a name on a cable, and how to record it");
+check(errs(legacy).length === 0 && warns(legacy).some((m) => m.includes("ISP modem is neither seen by the topology nor recorded") && m.includes("asset add 'ISP modem' --kind") && m.includes("--model generic/isp-modem")), "validate tells the operator the modem is only a name on a cable, and how to record it");
 check(resolvePositions(legacy, catalog, t).outside.some((o) => o.device === "ISP modem"), "before: placed beside the racks by its cable");
-const migrated = doc(addDevice(legacy, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, seen));
+const migrated = doc(addAsset(legacy, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, seen));
 check(JSON.stringify(migrated.cables) === JSON.stringify(legacy.cables), "the cable is unchanged");
 check(errs(migrated).length === 0 && !warns(migrated).some((m) => m.includes("neither seen")), "after: valid, and no warning");
 const v = resolvePositions(migrated, catalog, t);
@@ -79,7 +79,7 @@ check(resolvePositions(r, catalog, t).rooms.some((x) => x.name === "basement" &&
 check(refused(addRoom(r, "Basement", {}), "must match"), "a room name is lower case");
 r = doc(addRoom(r, "basement", { displayName: "Basement" }));
 check(!warns(r).some((m) => m.includes("not recorded")), "recorded: the rack's room is a reference now");
-r = doc(addDevice(r, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, seen));
+r = doc(addAsset(r, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, seen));
 check(refused(placeDevice(r, "ISP modem", { room: "attic" }, catalog), "room attic does not exist"), "mount --room: the room must exist");
 check(refused(placeDevice(r, "ISP modem", { room: "basement", rack: "rack1", u: 3 }, catalog), "no --rack"), "mount --room takes no rack and no unit");
 r = doc(placeDevice(r, "ISP modem", { room: "basement", faceplate: "generic/isp-modem" }, catalog));
@@ -104,12 +104,12 @@ check(refused(deleteRoom(empty, "basement"), "ISP modem"), "a loose device keeps
 
 console.log("— patch panels");
 let pp: PositionsDoc = doc(addRack({}, "rack1", {}));
-pp = doc(addDevice(pp, "patch1", { kind: "patch-panel", ports: 24 }, catalog, seen));
-pp = doc(addDevice(pp, "patch2", { kind: "patch-panel", model: "generic/patch-panel-24" }, catalog, seen));
+pp = doc(addAsset(pp, "patch1", { kind: "patch-panel", ports: 24 }, catalog, seen));
+pp = doc(addAsset(pp, "patch2", { kind: "patch-panel", model: "generic/patch-panel-24" }, catalog, seen));
 pp = doc(placeDevice(pp, "patch1", { rack: "rack1", u: 30 }, catalog));
 const pv = resolvePositions(pp, catalog, t).racks[0].placements.find((m) => m.device === "patch1")!;
 check(pv.recorded === "patch-panel" && pv.plate!.kind === "patch-panel" && pv.plate!.passive && pv.plate!.rows[0].length === 24, "a recorded panel by port count: a generic 24-port panel plate");
-check(recordedPlate("patch2", pp.devices!.patch2, catalog).key === "generic/patch-panel-24", "a panel by model: the catalog's plate");
+check(recordedPlate("patch2", pp.assets!.patch2, catalog).key === "generic/patch-panel-24", "a panel by model: the catalog's plate");
 const front = doc(addCable(pp, { device: "tappaas2", port: "enp97s0" }, { device: "patch1", port: "1", side: "front" }, "patch"));
 const both = doc(addCable(front, { device: "patch1", port: "1", side: "rear" }, { device: USW, port: "2" }, "patch"));
 check(errs(both).length === 0, "a panel port takes one cable on its front and one on its rear");
@@ -131,7 +131,7 @@ check(refused(splitCable(sp, { device: USW, port: "3" }, { device: USW, port: "4
 check(refused(splitCable(sp, { device: USW, port: "8" }, { device: "patch1", port: "5" }, wires), "no link on"), "a port with no link is refused");
 const jn = doc(joinCable(sp, { device: "patch1", port: "1" }));
 check((jn.cables ?? []).length === 0 && resolvePositions(jn, catalog, t).cables.filter((c) => c.to.device === "tappaas2" && !c.segments).length === 1, "cable join: the segments go, the topology's link is back as it was");
-const isp = doc(addCable(doc(addDevice(pp, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, seen)), { device: USW, port: "5" }, { device: "ISP modem", port: "LAN 1" }, "uplink", "ISP hand-off"));
+const isp = doc(addCable(doc(addAsset(pp, "ISP modem", { kind: "modem", model: "generic/isp-modem" }, catalog, seen)), { device: USW, port: "5" }, { device: "ISP modem", port: "LAN 1" }, "uplink", "ISP hand-off"));
 const ispSplit = doc(splitCable(isp, { device: "ISP modem", port: "LAN 1" }, { device: "patch1", port: "3" }, wires));
 check(ispSplit.cables!.length === 2 && ispSplit.cables!.every((c) => c.origin === "recorded" && c.label === "ISP hand-off"), "a recorded cable splits too, its kind and label on both segments");
 check(resolvePositions(ispSplit, catalog, t).cables.some((c) => c.source === "recorded" && c.segments?.length === 2 && [c.from.device, c.to.device].sort().join() === `ISP modem,${USW}`), "…one recorded link with its two wires");
@@ -147,14 +147,14 @@ let L: PositionsDoc = doc(addRoom({}, "basement", {}));
 L = doc(addRoom(L, "shed", { location: "hareskov" }));
 check(L.rooms!.basement.location === undefined && L.rooms!.shed.location === "hareskov", "room add --location: the room names its location; none is the primary");
 check(lerr(doc(addRoom(L, "attic", { location: "mars" }))).some((m) => m.includes("location 'mars' is not one of the site's")), "a room at a location the site lacks is refused");
-L = doc(addDevice(L, "ups2", { kind: "ups", ports: 2, location: "hareskov" }, catalog, seen));
-check(L.devices!.ups2.location === "hareskov", "device add --location: recorded");
+L = doc(addAsset(L, "ups2", { kind: "ups", ports: 2, location: "hareskov" }, catalog, seen));
+check(L.assets!.ups2.location === "hareskov", "asset add --location: recorded");
 check(lerr(doc(placeDevice(L, "ups2", { room: "basement" }, catalog))).some((m) => m.includes("room basement is at home, the device is at hareskov")), "a device placed in a room at another location is refused");
 check(lerr(doc(placeDevice(L, "ups2", { room: "shed" }, catalog))).length === 0, "…in a room at its own location it is valid");
 check(lwarn(L).some((m) => m.startsWith("ups2 is at hareskov")) === false, "a device at a location with a room is not 'somewhere'");
-const far = doc(addDevice(L, "ont9", { kind: "ont", ports: 1, location: "fsn1" }, catalog, seen));
+const far = doc(addAsset(L, "ont9", { kind: "ont", ports: 1, location: "fsn1" }, catalog, seen));
 check(lwarn(far).some((m) => m.startsWith("ont9 is at fsn1, which has no room")), "a device at a location with no room is pointed out, unplaced");
-check(lerr(doc(addDevice(L, "ont8", { kind: "ont", ports: 1, location: "mars" }, catalog, seen))).some((m) => m.includes("device ont8: location 'mars'")), "a device at a location the site lacks is refused");
+check(lerr(doc(addAsset(L, "ont8", { kind: "ont", ports: 1, location: "mars" }, catalog, seen))).some((m) => m.includes("asset ont8: location 'mars'")), "a device at a location the site lacks is refused");
 check(checkPositions(doc(placeDevice(L, "ups2", { room: "basement" }, catalog)), catalog, devices, null).every((f) => f.severity !== "error"), "without site.json the location rules are skipped");
 check(refused(placeDevice(L, "ups2", { room: "shed", width: "half" }, catalog), "no height, width"), "a loose placement takes no width: its plate gives its size");
 console.log("— the racks.json shape");
@@ -164,5 +164,5 @@ check(pl.tappaas1.height === 2 && pl["ISP modem"].room === "basement" && pl["ISP
 const w = doc(addRoom(racksJson, "attic", {}));
 check(w.placements!.tappaas1.u === 1 && (w as Record<string, unknown>).mounts === undefined && Object.keys(w)[0] === "version", "a write turns mounts into placements, in the schema's order");
 
-console.log(`\nposition-manager physical: ${passed} passed, ${failed} failed`);
+console.log(`\nasset-manager physical: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

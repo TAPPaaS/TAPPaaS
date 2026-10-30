@@ -199,8 +199,8 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
               <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
             ) : t ? (
               <div className="rack-empty">
-                <p>{racks ? "No room or rack is recorded yet." : "The topology carries no positions (position-manager did not answer)."}</p>
-                <p className="muted small">A room is recorded with position-manager at one of the site's locations, a rack in a room: its height, width and numbering; then each device is placed at its units in a rack, or loose in a room, with the faceplate the catalog has for its model.</p>
+                <p>{racks ? "No room or rack is recorded yet." : "The topology carries no positions (asset-manager did not answer)."}</p>
+                <p className="muted small">A room is recorded with asset-manager at one of the site's locations, a rack in a room: its height, width and numbering; then each device is placed at its units in a rack, or loose in a room, with the faceplate the catalog has for its model.</p>
                 {operator && racks ? (
                   <span className="toolbar">
                     <AddRoomButton />

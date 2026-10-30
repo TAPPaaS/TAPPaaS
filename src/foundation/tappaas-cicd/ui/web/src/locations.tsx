@@ -80,7 +80,7 @@ export function locationOption(locations: SiteLocation[], current?: string | nul
   };
 }
 
-// A device's placement (position-manager's): a rack and its units, or loose
+// A device's placement (asset-manager's): a rack and its units, or loose
 // in a room, each a link to it in the Physical view; else placed nowhere —
 // somewhere at its location when that has no room.
 export function PlacementLine({ v, device, location }: { v: PositionsView | null | undefined; device: string; location: string | null }) {

@@ -16,7 +16,7 @@ export interface DevNode {
   name: string;
   kind: DevKind;
   sel: Sel;
-  recorded?: RecordedKind; // a device position-manager records
+  recorded?: RecordedKind; // a device asset-manager records
   seen?: true; // a device a switch port sees that nobody recorded
 }
 

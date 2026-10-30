@@ -24,7 +24,7 @@ export const TS_MANAGERS = [
   "backup-manager",
   "health-manager",
   "storage-manager",
-  "position-manager",
+  "asset-manager",
 ];
 
 // The managers whose `--help --json` the console loads: those the control
