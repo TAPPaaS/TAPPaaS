@@ -139,11 +139,14 @@ export function groupsOf(doc: HealthGraph, ids: string[]): string[] {
   return [...new Set(ids.map((id) => nodes.get(id)?.group).filter((g): g is string => !!g))];
 }
 
-// The cards to centre on: the roots', else the site's.
+// The cards to centre on: the first roots, else the site's. The list is worst
+// first; a site with thirty roots fitted them all and showed a strip of dots.
+const CENTRED_ROOTS = 6;
+
 export function centreCards(doc: HealthGraph, cards: Card[], root: string | null): string[] {
   const shown = new Set(cards.map((c) => c.id));
   const nodes = new Map(doc.nodes.map((n) => [n.id, n]));
-  const ids = root ? [root] : doc.roots.length ? doc.roots.map((r) => r.id) : doc.site ? [doc.site] : [];
+  const ids = root ? [root] : doc.roots.length ? doc.roots.slice(0, CENTRED_ROOTS).map((r) => r.id) : doc.site ? [doc.site] : [];
   const out = ids.map((id) => (shown.has(id) ? id : (nodes.get(id)?.group ?? null))).filter((x): x is string => !!x && shown.has(x));
   return [...new Set(out)];
 }

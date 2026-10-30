@@ -47,6 +47,8 @@ check(centreCards(healthy, closed.cards, null).join() === ids.site, "a healthy s
 check(centreCards(doc, closed.cards, null).join() === `${ids.tappaas2},${ids["pbs-store"]}`, "the page opens on the roots");
 const inGroup = { ...doc, roots: [{ ...doc.roots[0], id: ids.gitea }] };
 check(centreCards(inGroup, closed.cards, null).join() === "environment:home", "a root in a collapsed group centres on its group");
+const crowd = { ...doc, roots: Array.from({ length: 30 }, () => doc.roots[0]) };
+check(centreCards(crowd, closed.cards, null).length === 1, "a crowd of roots centres on its first ones");
 check(groupsOf(doc, [ids.gitea, ids.tappaas2]).join() === "environment:home", "the groups to open for a root");
 
 const placed = [

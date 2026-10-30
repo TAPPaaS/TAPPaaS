@@ -390,7 +390,7 @@ export function buildHealth(i: BuildInput): HealthGraph {
       environments: [...new Set(impacted.map((x) => nodeOf.get(x)?.environment).filter((e): e is string => !!e))].sort(),
     };
   });
-  roots.sort((a, b) => b.impactedCount - a.impactedCount || a.label.localeCompare(b.label));
+  roots.sort((a, b) => b.impactedCount - a.impactedCount || RANK[b.status] - RANK[a.status] || a.label.localeCompare(b.label));
 
   const carrying = new Set(IMPACT_RELATIONS);
   const edges: HealthEdge[] = i.relations
