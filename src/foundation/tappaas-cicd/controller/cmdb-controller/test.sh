@@ -299,6 +299,10 @@ check "the README's example report is accepted" "true" "$(jq -r '.delivered' <<<
 check "…and its cluster has the machine as a member" "machine/tappaas1" \
     "$(cmdb show cluster/tappaas --json | jq -r '.relations[] | select(.type == "member-of") | "\(.other.class)/\(.other.name)"')"
 
+cmdb report --json >/dev/null <<<'{"source":"t","objects":[{"class":"machine","name":"tappaas1","attributes":{"environment":{"class":"environment","name":"mgmt"}}}]}'
+check "a node's environment leaves its cluster alone" "cluster/tappaas environment/mgmt" \
+    "$(cmdb show machine/tappaas1 --json | jq -r '[.relations[] | select(.type == "member-of") | "\(.other.class)/\(.other.name)"] | sort | join(" ")')"
+
 echo "== software: known by its name within its node; version is history (D5) =="
 cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"class":"app","name":"pve","attributes":{"version":"9.0","onNode":"tappaas1"}}]}'
 PVE="$(cmdb show app/pve --json | jq -r '.id')"

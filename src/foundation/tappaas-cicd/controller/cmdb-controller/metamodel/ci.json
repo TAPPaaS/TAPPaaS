@@ -44,7 +44,7 @@
         "osVersion": { "type": "string" },
         "management": { "type": "string", "enum": ["managed", "unmanaged"], "description": "ADR-022g." },
         "addresses": { "type": "array", "items": { "type": "string" } },
-        "environment": { "type": "relation", "relation": "member-of", "description": "The environment the node serves." },
+        "environment": { "type": "relation", "relation": "member-of", "target": "environment", "description": "The environment the node serves." },
         "stack": { "type": "string" }
       }
     },
@@ -246,7 +246,7 @@
       "parent": "storage-element",
       "description": "A backup datastore.",
       "fields": {
-        "size": { "type": "integer" },
+        "size": { "type": "integer", "volatile": true, "description": "Its filesystem's: moves with what shares the disk." },
         "used": { "type": "integer", "volatile": true },
         "retention": { "type": "object" },
         "onNode": { "type": "relation", "relation": "runs-on" },
