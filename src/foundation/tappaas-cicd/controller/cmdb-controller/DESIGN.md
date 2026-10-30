@@ -386,7 +386,10 @@ children, in the same sandbox. Two writes are let through with
   report otherwise.
 - `/home/tappaas/.ssh/known_hosts`: a host's key on the first ssh to it. This
   is a bind mount of one file: ssh appends in place, which works; `ssh-keygen
-  -R` replaces the file by rename, which fails inside the unit.
+  -R` replaces the file by rename, which fails inside the unit. The same rename
+  from outside (a module update does one) detaches the bind mount: the file is
+  read-only in the unit until `cmdb.service` restarts. ssh then warns and still
+  connects; only a new host's key is not kept.
 
 A missing path is ignored by the unit and then stays read-only, so
 `cmdb-paths.service` makes both first, as `tappaas`: a fresh install's `config/`
