@@ -13,7 +13,7 @@
 
 import { join } from "path";
 import { CmdbObject } from "../../../lib/ts/src/cmdb";
-import { compact } from "../../../lib/ts/src/cmdb-source";
+import { compact, poolHealth } from "../../../lib/ts/src/cmdb-source";
 import { parseProbeSections } from "../../../lib/ts/src/cluster";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { POSITIONS_FILE, PositionsDoc, assetNamed } from "../../../lib/ts/src/positions";
@@ -348,8 +348,8 @@ export function discoveryObjects(configDir: string, machine: string, machineRef:
   for (const p of d.pools) {
     objects.push({
       class: "storage-pool",
-      name: `${machine}/${p.name}`, // as storage-manager names it: pool names repeat across nodes
-      attributes: compact({ displayName: p.name, type: "zfs", size: p.size, used: p.used, health: p.state, vdevs: p.vdevs, onNode: { ref: machineRef } }),
+      name: p.name, // its key is the name on its node, as storage-manager reports it
+      attributes: compact({ type: "zfs", size: p.size, used: p.used, health: poolHealth(p.state), vdevs: p.vdevs, onNode: { ref: machineRef } }),
     });
   }
   return objects;

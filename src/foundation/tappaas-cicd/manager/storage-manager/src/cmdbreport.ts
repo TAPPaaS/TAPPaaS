@@ -6,6 +6,7 @@
 // (replication needs the same name on each), so its node goes in every report.
 
 import { CmdbBatch } from "../../../lib/ts/src/cmdb-reporter";
+import { poolHealth } from "../../../lib/ts/src/cmdb-source";
 import { Share, SharesDoc, sharesOf } from "../../../lib/ts/src/nfs-shares";
 import { Inventory } from "./inventory";
 
@@ -13,12 +14,6 @@ export const SOURCE = "storage-manager";
 // lib/nfs-lib.sh's NFS_MOUNT_ROOT: where a managed Host exports each share.
 const NFS_MOUNT_ROOT = "/tappaas-nfs";
 
-// ZFS's words for a pool's state, as a CI's health (ADR-040 D11).
-const ZFS_HEALTH: Record<string, string> = { ONLINE: "ok", DEGRADED: "warning", FAULTED: "critical", UNAVAIL: "critical", SUSPENDED: "critical", OFFLINE: "critical", REMOVED: "critical" };
-
-export function poolHealth(zfs: string | undefined, time: string): { status: string; check: string; time: string } {
-  return { status: ZFS_HEALTH[zfs ?? ""] ?? "unknown", check: `zfs ${zfs ?? "?"}`, time };
-}
 
 export function putShare(b: CmdbBatch, name: string, s: Share): string {
   return b.put("share", name, {

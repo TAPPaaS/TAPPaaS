@@ -173,6 +173,14 @@ const num = (v: unknown): number | undefined => (typeof v === "number" && Number
 
 /** The attributes every module instance's CI carries: desired, release,
  *  stage, displayName, description. */
+// ZFS's words for a pool's state, as a CI's health (ADR-040 D11): site-manager
+// and storage-manager both read pools.
+const ZFS_HEALTH: Record<string, string> = { ONLINE: "ok", DEGRADED: "warning", FAULTED: "critical", UNAVAIL: "critical", SUSPENDED: "critical", OFFLINE: "critical", REMOVED: "critical" };
+
+export function poolHealth(zfs: string | undefined, time: string = new Date().toISOString()): { status: string; check: string; time: string } {
+  return { status: ZFS_HEALTH[zfs ?? ""] ?? "unknown", check: `zfs ${zfs ?? "?"}`, time };
+}
+
 export function moduleCiAttributes(name: string, raw: Obj): Obj {
   return compact({
     desired: { file: `${name}.json` },
