@@ -1,8 +1,8 @@
 // nodepools.tsx — data pools on a node's free disks: the inventory proposes
 // the disks, the class and the layout, node storage add builds each one.
 
-import { useState } from "react";
-import { useRead } from "../api";
+import { useEffect, useState } from "react";
+import { refreshRead, useRead } from "../api";
 import { Step, StepView } from "../operate";
 import { StorageDisk, StorageInventory } from "../types";
 import { POOL_CLASSES, PoolClass, diskId, humanSize, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName } from "../nodeadd";
@@ -21,8 +21,18 @@ interface Built { name: string; layout: string; disks: string[] }
 // number of pools built here.
 export function NodePools({ node, onContinue, continueLabel = "Continue →" }: { node: string; onContinue: (built: number) => void; continueLabel?: string }) {
   const me = useMe();
-  const inv = useRead<StorageInventory>("storage").env?.data;
+  // The console reads the inventory every ten minutes: a node that has just
+  // joined is not in it yet, so it is asked for now, and looked at often.
+  const read = useRead<StorageInventory>("storage");
+  const inv = read.env?.data;
   const here = inv?.nodes.find((n) => n.name === node);
+  const missing = inv !== undefined && inv !== null && here === undefined;
+  useEffect(() => {
+    if (!missing) return;
+    void refreshRead("storage");
+    const t = setInterval(read.reload, 5_000);
+    return () => clearInterval(t);
+  }, [missing, node]);
   const [built, setBuilt] = useState<Built[]>([]);
   // A pool the inventory has caught up with is shown from the inventory.
   const pending = built.filter((b) => !(here?.pools ?? []).some((p) => p.name === b.name));
@@ -40,11 +50,12 @@ export function NodePools({ node, onContinue, continueLabel = "Continue →" }: 
   const poolName = pool ?? proposedPoolName(poolClass, taken);
   const lay = layout ?? proposedLayout(sel.length);
   if (!inv) return <p className="muted small">reading the storage inventory…</p>;
-  if (!here) return <p className="muted small">{node} is not in the storage inventory yet — it is read every few minutes.</p>;
+  if (!here) return <p className="muted small">Reading {node}'s disks: it has just joined, this takes a minute…</p>;
 
   // The next proposal starts fresh from the disks left.
   const added = () => {
     setBuilt([...built, { name: poolName, layout: lay, disks: sel }]);
+    void refreshRead("storage");
     setTicked(null);
     setCls(null);
     setPool(null);

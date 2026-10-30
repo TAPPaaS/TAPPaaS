@@ -79,6 +79,11 @@ export async function refreshAll(): Promise<void> {
   setTimeout(reloadAll, 45000);
 }
 
+// One read now rather than at its next turn (a node that has just joined).
+export async function refreshRead(what: string): Promise<void> {
+  await fetch(`/api/v1/refresh?what=${encodeURIComponent(what)}`, { method: "POST", credentials: "same-origin" });
+}
+
 // Jumps are per object and change rarely: one request per object per page load.
 const jumpCache = new Map<string, Promise<Jump[]>>();
 export function jumps(kind: string, id: string, sw?: string): Promise<Jump[]> {
