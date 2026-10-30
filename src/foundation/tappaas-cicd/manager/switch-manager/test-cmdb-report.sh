@@ -34,7 +34,7 @@ ck "the asset is allocated-to its device"          'true' "$(core 'any(.relation
 ck "every port is part-of its asset"               'true' "$(core '[.objects[] | select(.class == "port")] | length == 9 and all(.attributes.asset.ref | startswith("asset:"))')"
 ck "a port's kind and speed: the actual's maxSpeed" '["rj45","10g"]' "$(core '.objects[] | select(.ref == "port:sw-01/1") | .attributes | [.kind, .speed]')"
 ck "…else the record's (an SFP cage)"              '["sfp","10g"]' "$(core '.objects[] | select(.ref == "port:sw-01/11") | .attributes | [.kind, .speed]')"
-ck "…else rj45 and 1g"                             '["rj45","1g"]' "$(core '.objects[] | select(.ref == "port:sw-01/2") | .attributes | [.kind, .speed]')"
+ck "…else rj45, its speed the plate's (asset-manager)" '["rj45",null]' "$(core '.objects[] | select(.ref == "port:sw-01/2") | .attributes | [.kind, .speed]')"
 ck "an SFP port keeps its module"                  '"dac"' "$(core '.objects[] | select(.ref == "port:sw-01/peer") | .attributes.module')"
 ck "a recorded cable between switches, seen by LLDP too, is one connects" '1' \
    "$(core '[.relations[] | select(.type == "connects" and ([.from, .to] | sort) == ["port:edge/ether1","port:sw-01/2"])] | length')"

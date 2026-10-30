@@ -67,7 +67,7 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
           | (if (["rj45", "sfp", "wifi", "usb-a", "usb-c"] | index($v.kind // "")) then $v.kind
              elif (($v.media // "") | test("sfp"; "i")) then "sfp"
              else ($rp.kind // "rj45") end) as $kind
-          | ([($v.maxSpeed // $v.speedMax | speedword), ($rp.speed // null), "1g"]
+          | ([($v.maxSpeed // $v.speedMax | speedword), ($rp.speed // null)]
              | map(select(. != null and (speeds($kind) | index(.)))) | .[0]) as $speed
           | {ref: pref($sw; $p), class: "port", name: $p,
              attributes: ({asset: {ref: "asset:\($tag)"}, kind: $kind, speed: $speed,
