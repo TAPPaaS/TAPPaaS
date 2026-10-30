@@ -81,7 +81,8 @@ import {
 } from "./zonemodify";
 import { cmdSnat } from "./snat";
 import { cmdWan } from "./wan";
-import { HealthDoc, buildTopology, collectSources, renderTopology } from "./topology";
+import { HealthDoc, Topology, buildTopology, collectSources, renderTopology } from "./topology";
+import { diffTopology, readTopologyFromCmdb, renderDiff } from "./topology-cmdb";
 import { stream } from "../../../lib/ts/src/exec";
 import { CmdbBatch, printOrSend, printOrSendAll, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
 import { SOURCE as CMDB_SOURCE, buildNetworkDiscover, buildNetworkReport, collectDiscover, collectNetSources, putPeer, putZone } from "./cmdbreport";
@@ -126,21 +127,25 @@ export const HELP: HelpSpec = {
         "left out and named on stderr. When the CMDB does not answer the report is spooled.",
     },
     {
-      usage: "topology [--json] [--health <file> | --no-health] [--no-positions]",
+      usage: "topology [--json] [--live | --diff] [--health <file> | --no-health] [--no-positions]",
       name: "topology",
       options: [
         ["--json", "print the topology document as JSON"],
+        ["--live", "join the planes as they are now instead of reading the CMDB"],
+        ["--diff", "build both and report what differs (exit 1 when something does, 2 when the CMDB cannot be read)"],
         ["--health <file>", "take the health findings from this `health-manager validate --json` output instead of running it"],
         ["--no-health", "leave the health findings out (no validate run)"],
         ["--no-positions", "leave the positions out (no asset-manager run; what asset-manager itself reads)"],
       ],
       hidden: ["--no-racks"],
       details:
-        "The physical site as one derived document: nodes with their uplinks, legs, LLDP peers and\n" +
+        "The physical site as one derived document, read from the CMDB (ADR-040); --live joins the\n" +
+        "planes instead, and is what runs, with a line on stderr, when the CMDB does not answer or\n" +
+        "does not yet hold all of it: nodes with their uplinks, legs, LLDP peers and\n" +
         "guests; switches with their ports, LAGs and drift; access points; zones; the buddies and the\n" +
-        "satellite; and the health findings placed on the object each names. Joined from site.json,\n" +
-        "site-manager node list / node network show, switch-manager list / list-ports / lag list,\n" +
-        "ap-manager list, zones.json, module-manager module list, backup-manager peers,\n" +
+        "satellite; and the health findings placed on the object each names. The live join reads\n" +
+        "site.json, site-manager node list / node network show, switch-manager list / list-ports /\n" +
+        "lag list, ap-manager list, zones.json, module-manager module list, backup-manager peers,\n" +
         "health-manager validate and asset-manager export (the locations, their rooms and racks,\n" +
         "each placement on its device and faceplate, every link mapped to faceplate ports). Every\n" +
         "device carries its location, its placement and the record it came from; a device a switch\n" +
@@ -452,6 +457,8 @@ interface Opts {
   healthFile?: string;
   noHealth?: boolean;
   noPositions?: boolean;
+  // topology --live (--diff is shared with reconcile)
+  live?: boolean;
   // bind
   environment?: string;
   unbind: boolean;
@@ -517,6 +524,9 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--health":
         o.healthFile = next();
+        break;
+      case "--live":
+        o.live = true;
         break;
       case "--no-health":
         o.noHealth = true;
@@ -1590,7 +1600,27 @@ function cmdTopology(opts: Opts): number {
       die(`topology: --health ${opts.healthFile}: ${(e as Error).message}`);
     }
   }
-  const t = buildTopology(collectSources({ configDir: opts.configDir, zonesFile: opts.zonesFile, health, positions: !opts.noPositions }));
+  const live = (): Topology => buildTopology(collectSources({ configDir: opts.configDir, zonesFile: opts.zonesFile, health, positions: !opts.noPositions }));
+  const fromCmdb = () => readTopologyFromCmdb({ health, positions: !opts.noPositions });
+  if (opts.live && opts.diff) die("topology: --live and --diff are each other's opposite — give one");
+  if (opts.diff) {
+    const c = fromCmdb();
+    if (c.topology === null) {
+      process.stderr.write(`topology: ${c.why}\n`);
+      return 2;
+    }
+    const d = diffTopology(live(), c.topology);
+    if (opts.json) process.stdout.write(JSON.stringify(d, null, 1) + "\n");
+    else for (const l of renderDiff(d)) info(l);
+    return d.length > 0 ? 1 : 0;
+  }
+  let t: Topology;
+  if (opts.live) t = live();
+  else {
+    const c = fromCmdb();
+    if (c.topology === null) process.stderr.write(`topology: ${c.why}; reading the planes\n`);
+    t = c.topology ?? live();
+  }
   if (opts.json) process.stdout.write(JSON.stringify(t, null, 1) + "\n");
   else for (const l of renderTopology(t)) info(l);
   return 0;
