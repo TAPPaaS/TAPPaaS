@@ -107,7 +107,7 @@ Per group: its scores, and where its rows are. *released* = shipped in a release
 | 7 | G7.1 DevOps stack | H | M | 1 | – | 2 |
 | 7 | G7.2 New and reworked app modules | H | M | 4 | – | 1 |
 | 6 | G6.1 Switching fabric, WAN, ISP & site operations | H | H | 11 | 1 | 11 |
-| 6 | G6.2 User interface & physical view | H | L | 6 | – | 3 |
+| 6 | G6.2 User interface & physical view | H | L | 6 | – | 4 |
 | 6 | G6.3 Data model | M | M | 9 | – | 2 |
 | 5 | G5.1 Satellite & off-site | H | M | 1 | – | 6 |
 | 5 | G5.2 Test coverage & conventions | H | L | – | – | 5 |
@@ -162,6 +162,7 @@ met gates are recorded in the releases that carried their waves.
 | Locations and placement | [ADR-036](docs/ADR/ADR-036%20-%20Locations%20and%20Placement.md) **Accepted, built 2026-10-23** (#869–#873, migrations 0019–0022): site-manager owns locations with a primary one, every device names its location, rack-manager becomes position-manager owning every placement, the nodes are `pvehost` machines and `site.hardware.nodes` goes; steps #869–#873 | G6.3 |
 | Asset lifecycle and CMDB | #906 — [ADR-040](docs/ADR/ADR-040%20-%20Asset%20Lifecycle%20and%20CMDB.md) **Accepted v1.0 2026-10-29**: the IT4IT 3.0.1 Digital Product Backbone end to end, checked against the standard; resources (assets) beside the CIs with two lifecycles; the actual state as a CMDB kept by cmdb-controller and fed by every manager; physical assets with a lifecycle of their own as one kind of CI | G6.3 |
 | Resource allocation | #907: pools consumed by allocations — RAM, CPU, storage, addresses, VLANs — with limits and breach; builds on ADR-040's `pool` class | G3.1 |
+| Health in the CMDB | [ADR-041](docs/ADR/ADR-041%20-%20Health%20in%20the%20CMDB%2C%20Root%20Cause%20and%20the%20Health%20View.md) **Accepted v1.0 2026-10-30** (O3, O5, O6 open): conditions on every CMDB object, health-manager split into assess and emit, root cause derived along relations, a Health view in the console; #908 | G6.2, G6.3 |
 | Install | #403, #377 — [ADR-037](docs/ADR/ADR-037%20-%20Install.md) **Accepted v1.2 2026-10-27**: ZFS on the boot disk by default, a module's `storage` a preference with the boot pool last (P1, live on the spare machine as a mirrored tappaas4); adding a node is two verbs — `node add` stands it up (joined, patched, rebooted), `node storage add` gives it pools; boot disks by size, model or serial, the MAC learned from the switch port, the console's Add node wizard (D4, P4a–P4d built, not yet run in a real node add); a hosted server on one IP (P2); the bootstrap ends at the console (P3). Next: Stage 2 on the spare machine, then P2 | G3.1, G3.5 |
 | User interface | #844 — [ADR-034](docs/ADR/ADR-034%20-%20TAPPaaS%20User%20Interface.md) **Accepted v1.0 2026-10-18**, built: the console at `console.<domain>` | #844 closed |
 | Service exposure | #845 — [ADR-032](docs/ADR/ADR-032%20-%20Service%20Exposure.md) **Accepted v1.0, built** (2026-10-17): the gate authenticates machine callers (service accounts, client-credentials JWT); a module without `network:proxy` is unpublished by design, in the DMZ when it runs third-party code without user data (ADR-021 R1 amended); Jellyfin published without the gate for friends and family, hardened. all phases built (P0–P4); rate limiting is #851 | #845 closed |
@@ -260,7 +261,7 @@ The links a site stands on: node uplinks (a bond under `lan`, #40), switch ports
 | #883 | A debug bundle for support: the log and an anonymized `~/config`, attached to the failure mail | M | L | **Opened 2026-10-26.** PII removed from the configs; the mail suggests forwarding it to a support address. First trigger: a failed update |
 | ✅ #905 | Log alerting: a rule whose query cannot run mails under its own name; a Loki that is down slips past the watchdog | L | L | **Closed 2026-10-29** (`8e1db270`, `a37702fa`): rules keep their state when a query cannot run, the Heartbeat stops instead, and only a firing Heartbeat refreshes the receiver's file; the watchdog asks the logging VM and names Loki or Grafana; heartbeat every 10 min, watchdog every 5, stale after 35. Live on hrossen: Loki stopped 10:36 → one mail "log alerting is down: Loki does not answer" at 11:14, no rule mails; RESOLVED 4 min after Loki returned. From a false LanLegDown: the logging VM's backup stalled Grafana's database |
 
-### G6.2 User interface & physical view — Ease H · Risk L · released: 6 · open: 3
+### G6.2 User interface & physical view — Ease H · Risk L · released: 6 · open: 4
 
 A general TAPPaaS user experience, starting with a physical view of the site: nodes, bonds, switches and ports, APs, WAN and satellite, with zones, guests and live state on them (#839; homelable as a starting point), designed first in a spike and an ADR (#844). The service catalog (#183) and Backstage (#91) are decided against it. Linked to G6.1.
 
@@ -269,6 +270,7 @@ A general TAPPaaS user experience, starting with a physical view of the site: no
 | #885 | console: agents act through the identity gate | M | M | **Opened 2026-10-26** from #839 P4: a service identity per agent in Authentik, a group limiting its jobs, every job recorded under its name. Builds on #142 |
 | #886 | console: a security view of the SIEM's alerts | M | L | **Opened 2026-10-26** from #839 P4: open alerts per node and module, read-only, linked to the SIEM. After #843 |
 | #887 | console: a status page and badges for the site's users | M | L | **Opened 2026-10-26** from #839 P4: `status.<domain>` with each published app up or down, and badges; needs gated `proxyRoutes` |
+| #908 | ADR-041: health in the CMDB, root cause and a Health view in the console | M | M | **Opened 2026-10-30.** Conditions on every CMDB object, health-manager split into assess and emit, root cause along the relations, the Health view; after #906 is live |
 
 ### G6.3 Data model — Ease M · Risk M · released: 9 · open: 2
 
