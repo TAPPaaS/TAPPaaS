@@ -13,7 +13,7 @@
 // (other than the graceful offline skip) throws.
 
 import { captureResult, stream } from "../../../lib/ts/src/exec";
-import { JobCoverage, BucketMembership, Client, JobStatus, PurgeResult, RawRuns, ScheduleBucket } from "./types";
+import { JobCoverage, BucketMembership, Client, JobStatus, PurgeResult, RawDiscover, RawRuns, ScheduleBucket } from "./types";
 
 export class BackupControllerUnreachable extends Error {}
 
@@ -152,6 +152,11 @@ export class CliClient implements Client {
   runs(): RawRuns {
     const o = runJson([...this.ep(), "runs"]);
     return { ...o, reachable: o.reachable === true } as RawRuns;
+  }
+
+  discover(): RawDiscover {
+    const o = runJson([...this.ep(), "discover"]);
+    return { ...o, reachable: o.reachable === true } as RawDiscover;
   }
 
   addToJob(vmid: string, retention?: string, bucket?: string): void {

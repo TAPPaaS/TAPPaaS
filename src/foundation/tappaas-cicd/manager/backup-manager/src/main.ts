@@ -74,8 +74,8 @@ import { GN, CL, RD, die, guarded, info, warn } from "../../../lib/ts/src/cli";
 import { readJsonObject, writeJsonAtomic } from "../../../lib/ts/src/config-io";
 import { ensureLocation, placeText as locationText, siteLocation } from "../../../lib/ts/src/locations";
 import { BackupPolicyStatus, Client, JobStatus, RawRuns, ScheduleBucket } from "./types";
-import { CmdbBatch, printOrSend, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
-import { SOURCE as CMDB_SOURCE, buildBackupReport, putPeer } from "./cmdbreport";
+import { CmdbBatch, printOrSend, printOrSendAll, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
+import { SOURCE as CMDB_SOURCE, buildBackupDiscover, buildBackupReport, putPeer } from "./cmdbreport";
 
 const VERSION = "0.1.0";
 
@@ -186,10 +186,13 @@ export const HELP: HelpSpec = {
     { usage: "coverage <module> [--json]", name: "coverage", note: "(every backup job covering the module's VM — TAPPaaS's own and any other, #554)" },
     { usage: "peers", name: "peers", note: "(the off-site PBS relationships this site has)" },
     {
-      usage: "report [--json]",
+      usage: "report [--json] [--discover]",
       name: "report (to the CMDB, ADR-040)",
       effect: "read",
-      options: [["--json", "print the report instead of sending it"]],
+      options: [
+        ["--json", "print the report instead of sending it (with --discover, an array)"],
+        ["--discover", "add every datastore with its GC state, each restore-point group's age and the sync jobs (ADR-040 D15)"],
+      ],
       details:
         "Sends the backups to the CMDB (cmdb-controller) as one observation: the PBS datastore (size,\n" +
         "used, retention; runs-on its machine) with a backs-up to every guest and machine of this site\n" +
@@ -326,6 +329,7 @@ function usage(): void {
 
 interface Opts {
   configDir: string;
+  discover?: boolean;
   json: boolean;
   apply: boolean;
   environment: string | null;
@@ -385,6 +389,7 @@ function parseOpts(args: string[]): Opts {
   let force = false;
   let configDir = defaultConfigDir();
   let json = false;
+  let discover = false;
   let apply = false;
   let environment: string | null = null;
   let disabledOnly = false;
@@ -396,6 +401,8 @@ function parseOpts(args: string[]): Opts {
     const a = args[i];
     if (a === "--json") {
       json = true;
+    } else if (a === "--discover") {
+      discover = true;
     } else if (a === "--apply") {
       apply = true;
     } else if (a === "--disabled-only") {
@@ -454,6 +461,7 @@ function parseOpts(args: string[]): Opts {
     }
   }
   return {
+    discover,
     configDir, json, apply, environment, disabledOnly, enabled, retention, exclude,
     host: peerFlags["--host"],
     store: peerFlags["--store"],
@@ -1124,7 +1132,11 @@ function backupReport(opts: Opts, raw: RawRuns): CmdbBatch {
 function cmdReport(opts: Opts, client: Client): number {
   const raw = client.runs();
   if (!raw.reachable) process.stderr.write("[Warning] report: PBS did not answer — the datastore is left out\n");
-  return printOrSend(backupReport(opts, raw), opts.json);
+  const plain = backupReport(opts, raw);
+  if (!opts.discover) return printOrSend(plain, opts.json);
+  const d = client.discover();
+  if (!d.reachable) process.stderr.write("[Warning] report: pbs-controller discover: PBS did not answer — left out\n");
+  return printOrSendAll(d.reachable ? [plain, buildBackupDiscover(d, Math.floor(Date.now() / 1000))] : [plain], opts.json);
 }
 
 // A peer verb's buddy, once written; a buddy with no relationship left is ended.

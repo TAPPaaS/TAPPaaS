@@ -6,7 +6,7 @@
 // (direction, at its location, lastSeen: its sync's last run).
 
 import { CmdbBatch } from "../../../lib/ts/src/cmdb-reporter";
-import { BackupRuns, Peer, RawRuns } from "./types";
+import { BackupRuns, Peer, RawDiscover, RawRuns } from "./types";
 
 export const SOURCE = "backup-manager";
 
@@ -61,6 +61,28 @@ export function buildBackupReport(raw: RawRuns | null, runs: BackupRuns | null, 
   for (const p of [...peers].sort((x, y) => order[x.role] - order[y.role])) {
     if (b.has(`backup-peer:${p.name}`)) continue;
     putPeer(b, p, iso(pulled.get(p.name) ?? pulled.get(`remote-${p.name}`)));
+  }
+  return b;
+}
+
+/** report --discover (ADR-040 D15): every datastore, not only the one the
+ *  site's jobs use, with its GC state, each restore-point group's age, its
+ *  prune settings and the sync jobs. */
+export function buildBackupDiscover(raw: RawDiscover, now: number): CmdbBatch {
+  const b = new CmdbBatch(SOURCE);
+  for (const d of raw.datastores ?? []) {
+    const ds = b.put("datastore", d.name, {
+      size: typeof d.status?.total === "number" ? d.status.total : undefined,
+      used: typeof d.status?.used === "number" ? d.status.used : undefined,
+      retention: retentionOf({ reachable: true, pruneJobs: raw.pruneJobs }, d.name),
+      gc: d.gc ?? undefined,
+      restorePoints: (d.groups ?? []).map((g) => ({
+        ns: g.ns, type: g.type, id: g.id, snapshots: g.snapshots,
+        newest: iso(g.newest), ageSeconds: now - g.newest,
+      })),
+      syncJobs: (raw.syncJobs ?? []).filter((s) => s.store === d.name),
+    });
+    if (raw.node) b.relate("runs-on", ds, { class: "machine", name: raw.node });
   }
   return b;
 }

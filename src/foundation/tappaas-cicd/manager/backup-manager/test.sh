@@ -75,7 +75,7 @@ else
 fi
 
 # ADR-040 D4: what report sends to the CMDB, and a peer verb's job id.
-if run_ts "node '${DIST_TEST}/manager/backup-manager/test/unit/cmdbreport.test.js'"; then
+if run_ts "BM_FIXTURE_DIR='${HERE}/test/fixtures' node '${DIST_TEST}/manager/backup-manager/test/unit/cmdbreport.test.js'"; then
     ok "TypeScript CMDB report unit tests pass"
 else
     bad "TypeScript CMDB report unit tests FAILED"
