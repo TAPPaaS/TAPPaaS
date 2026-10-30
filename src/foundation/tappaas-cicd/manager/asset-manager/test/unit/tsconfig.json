@@ -3,5 +3,10 @@
   "compilerOptions": {
     "outDir": "../../dist-test"
   },
-  "include": ["../../src/**/*.ts", "./**/*.ts", "../../../../lib/ts/src/**/*.ts"]
+  "include": [
+    "../../src/**/*.ts",
+    "./**/*.ts",
+    "../../../../lib/ts/src/**/*.ts",
+    "../../../../controller/cmdb-controller/src/node.d.ts"
+  ]
 }
