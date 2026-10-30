@@ -14,13 +14,15 @@
 //   ancestor   a failing ancestor no rule crosses from (a warning) is the root of
 //              two or more failing dependants, lowest first, then earliest. Those
 //              keep their own failure: a critical is not silenced by a warning.
+//   follows    an object nothing judges takes its parent's colour (FOLLOWS):
+//              `derived`, so never a failure or a root of its own.
 //
 // A cable has no direction, so two ports that each see the link down reach each
 // other: the one whose transition came first is the root.
 
 import { CmdbItem, CmdbRel, Condition, RANK, RootCause, SOURCE, failing, silenced } from "./assess-model";
 import { RulesDoc } from "./rules";
-import { ConditionStatus, HealthRule } from "../../../lib/ts/src/health-rules";
+import { ConditionStatus, FOLLOWS, HealthRule } from "../../../lib/ts/src/health-rules";
 
 interface Edge {
   type: string;
@@ -163,6 +165,40 @@ function rollUp(own: Condition[], members: Condition[][], now: string, nowMs: nu
   return [...out.values()];
 }
 
+// An object with no `operational` of its own gets its parent's, up the chain: a
+// free port its switch's. A parent judged only in other types is reported, so ok.
+function follow(objects: CmdbItem[], out: Map<string, Condition[]>, relations: CmdbRel[], model: RulesDoc, now: string): void {
+  const byId = new Map(objects.map((o) => [o.id, o]));
+  const parent = new Map<string, string>();
+  for (const f of FOLLOWS) {
+    for (const r of relations) {
+      const o = byId.get(r.from.id);
+      if (r.type === f.relation && o && isA(o, f.class, model) && byId.has(r.to.id)) parent.set(o.id, r.to.id);
+    }
+  }
+  const settled = new Set<string>();
+  const colour = (id: string): void => {
+    if (settled.has(id)) return;
+    settled.add(id);
+    const up = parent.get(id);
+    const own = (out.get(id) ?? []).some((c) => c.type === "operational");
+    if (!up || own) return;
+    colour(up);
+    const theirs = out.get(up) ?? [];
+    if (!theirs.length) return;
+    const seen = theirs.filter((c) => c.type === "operational" || c.type === "impact");
+    const worst = seen.reduce((w, c) => (RANK[c.status] > RANK[w.status] ? c : w), seen[0] ?? theirs[0]);
+    const status: ConditionStatus = seen.length ? worst.status : "ok";
+    const src = byId.get(up)!;
+    out.set(id, [...(out.get(id) ?? []), {
+      type: "operational", status, reason: "follows", message: `follows ${src.class} ${src.name}`,
+      since: now, lastChecked: now, source: SOURCE, derived: true, rootCause: failing({ status }) ? worst.rootCause ?? up : null,
+      acknowledged: null, maintenance: null,
+    }]);
+  };
+  for (const o of objects) colour(o.id);
+}
+
 export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, relations: CmdbRel[], model: RulesDoc, now: string): Derivation {
   const nowMs = Date.parse(now);
   const byId = new Map(objects.map((o) => [o.id, o]));
@@ -241,6 +277,8 @@ export function derive(objects: CmdbItem[], source: Map<string, Condition[]>, re
     .filter((s) => !taken.has(s))
     .sort((a, b) => (impactCount.get(b) ?? 0) + (under.get(b) ?? 0) - (impactCount.get(a) ?? 0) - (under.get(a) ?? 0) || earlier(a, b))
     .map((s) => ({ id: s.obj, type: s.cond.type as string, impactedCount: (impactCount.get(s) ?? 0) + (under.get(s) ?? 0) }));
+
+  follow(objects, out, relations, model, now);
 
   // Roll-ups, over what is settled above; never a root.
   const rolled = objects.filter((o) => isA(o, "collection", model) || isA(o, "place", model));

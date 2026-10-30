@@ -16,6 +16,13 @@ export interface HealthRule {
   description?: string;
 }
 
+/** Where nothing judges an object, its `operational` colour is its parent's
+ *  (derive.ts): the object on the `to` end of its relation of this type. */
+export const FOLLOWS: { class: string; relation: string }[] = [
+  { class: "port", relation: "part-of" },
+  { class: "asset", relation: "allocated-to" },
+];
+
 type Obj = Record<string, unknown>;
 const isObj = (v: unknown): v is Obj => v !== null && typeof v === "object" && !Array.isArray(v);
 

@@ -13,6 +13,7 @@
 
 import { AlertItem } from "./alerts";
 import { CmdbItem, CmdbRel, Condition, RootCause, RANK, SOURCE, SiteIndex, conditionsOf, failing } from "./assess-model";
+import { OBSERVATION_REASONS, fromObservations } from "./assess-observations";
 import { Finding, GATES, fromAlerts, fromCve, fromGates, fromSweep, fromThresholds } from "./assess-sources";
 import { SweepRecord } from "./cmdbsweep";
 import { derive } from "./derive";
@@ -25,6 +26,7 @@ import { CONDITION_TYPES, ConditionStatus } from "../../../lib/ts/src/health-rul
 /** Everything assess reads and writes; tests stub it. */
 export interface AssessIO {
   objects(): CmdbItem[];
+  ended(): CmdbItem[]; // the CIs retired: what an address or a route may still point at
   relations(): CmdbRel[];
   rules(): RulesDoc;
   sweep(): SweepRecord | null;
@@ -56,6 +58,7 @@ function ownerOf(reason: string): string {
   if (reason.startsWith("sweep-")) return "sweep";
   if (reason.startsWith("cve-")) return "cve";
   if (["pool-usage", "pool-state", "datastore-usage", "link-down", "vpn-handshake-stale", "certificate-expiry"].includes(reason)) return "thresholds";
+  if (OBSERVATION_REASONS.includes(reason)) return "observations";
   return Object.entries(GATES).find(([, g]) => g.reason === reason)?.[0] ?? reason;
 }
 
@@ -85,7 +88,7 @@ export function settle(priorOf: (id: string) => Condition[], ids: Iterable<strin
   for (const id of new Set([...ids, ...by.keys()])) {
     const cs: Condition[] = [];
     const fresh = by.get(id) ?? new Map<string, Finding[]>();
-    const prior = priorOf(id).filter((c) => c.type !== "impact" && c.reason !== "roll-up");
+    const prior = priorOf(id).filter((c) => c.type !== "impact" && c.reason !== "roll-up" && c.reason !== "follows");
     for (const p of prior) {
       const fs = fresh.get(p.type);
       const again = !failing(p) || looked(ownerOf(p.reason), id);
@@ -147,6 +150,8 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
   ran.add("sweep");
   findings.push(...fromThresholds(idx, nowMs));
   ran.add("thresholds");
+  findings.push(...fromObservations(idx, io.ended(), nowMs));
+  ran.add("observations");
   const scan = io.cve();
   findings.push(...fromCve(scan, nowMs, idx));
   if (scan) ran.add("cve");
