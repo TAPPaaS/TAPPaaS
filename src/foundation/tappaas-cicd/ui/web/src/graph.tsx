@@ -7,6 +7,7 @@ import dagre from "@dagrejs/dagre";
 import { BaseEdge, Background, Controls, Edge, EdgeProps, Handle, MarkerType, Node, NodeProps, Position, ReactFlow, getBezierPath } from "@xyflow/react";
 import { ReactNode, useMemo } from "react";
 import { Route, columnPositions, routeEdges } from "./columns";
+import { tierPositions } from "./tiers";
 
 export interface GNode {
   id: string;
@@ -20,9 +21,13 @@ export interface GNode {
   order?: number; // the starting row within its column (ascending), then the id (columns.ts reorders)
   head?: boolean; // the column's title: pinned to the top
   after?: string; // kept directly below this node of its column
+  tier?: number; // when every top-level node has one: dagre's order, pressed into rows (tiers.ts), 0 at the bottom
+  parent?: string; // a sub-flow: drawn inside that node, at `at`, which is sized to hold it
+  at?: { x: number; y: number };
 }
 
 export interface GEdge {
+  id?: string; // a name that outlives a layout, for a page that restyles the line
   source: string;
   target: string;
   label?: string;
@@ -51,7 +56,7 @@ function Box({ data }: NodeProps<Node<BoxData, "box">>) {
   );
 }
 
-const nodeTypes = { box: Box };
+export const nodeTypes = { box: Box };
 
 // A tree's line: down from the parent to a bus just below it, along the bus to
 // the gap left of the child, down the gap, and into the child's side.
@@ -76,7 +81,7 @@ function RouteEdge({ data, style, markerEnd, label, labelStyle, labelBgStyle }: 
   return <BaseEdge path={path} style={style} markerEnd={markerEnd} label={label} labelX={labelX} labelY={labelY} labelStyle={labelStyle} labelBgStyle={labelBgStyle} />;
 }
 
-const edgeTypes = { bus: BusEdge, route: RouteEdge };
+export const edgeTypes = { bus: BusEdge, route: RouteEdge };
 
 // A tree as a grid: the root centred on top, its children in rows below.
 export interface TreeGrid {
@@ -106,24 +111,35 @@ export function layout(nodes: GNode[], edges: GEdge[], rankdir: "TB" | "LR", nod
   const g = new dagre.graphlib.Graph({ multigraph: true });
   g.setGraph({ rankdir, nodesep, ranksep, marginx: 10, marginy: 10 });
   g.setDefaultEdgeLabel(() => ({}));
-  for (const n of nodes) g.setNode(n.id, { width: n.w, height: n.h });
+  // A sub-flow's card is placed by its parent's: dagre sees only the parent.
+  const top = nodes.filter((n) => !n.parent);
+  const parentOf = new Map(nodes.filter((n) => n.parent).map((n) => [n.id, n.parent as string]));
+  const rep = (id: string): string => parentOf.get(id) ?? id;
+  for (const n of top) g.setNode(n.id, { width: n.w, height: n.h });
   const ids = new Set(nodes.map((n) => n.id));
   const live = edges.filter((e) => ids.has(e.source) && ids.has(e.target) && e.source !== e.target);
-  live.forEach((e, i) => g.setEdge(e.source, e.target, {}, `e${i}`));
+  live.forEach((e, i) => {
+    if (rep(e.source) !== rep(e.target)) g.setEdge(rep(e.source), rep(e.target), {}, `e${i}`);
+  });
   const columns = !grid && nodes.length > 0 && nodes.every((n) => n.col !== undefined);
   const fixed = grid ? gridPositions(nodes, grid, nodesep, ranksep) : columns ? columnPositions(nodes, live, ranksep, nodesep) : null;
   const bus = !!grid; // a tree's lines; dagre keeps React Flow's own
   const routes = columns && fixed ? routeEdges(nodes, fixed, live) : null;
   if (!fixed) dagre.layout(g);
+  const tiered = !fixed && top.length > 0 && top.every((n) => n.tier !== undefined);
+  const rows = tiered ? tierPositions(top.map((n) => ({ id: n.id, w: n.w, h: n.h, tier: n.tier as number, x: (g.node(n.id) as { x: number }).x })), nodesep, ranksep) : null;
   const vertical = rankdir === "TB";
   return {
-    nodes: nodes.map((n) => {
-      if (fixed) return { id: n.id, type: "box", position: fixed.get(n.id) ?? { x: 0, y: 0 }, data: { g: n, vertical } };
+    // A parent before its children, as React Flow needs them.
+    nodes: [...top, ...nodes.filter((n) => n.parent)].map((n) => {
+      if (n.parent) return { id: n.id, type: "box", position: n.at ?? { x: 0, y: 0 }, parentId: n.parent, extent: "parent" as const, data: { g: n, vertical } };
+      const at = fixed?.get(n.id) ?? rows?.get(n.id);
+      if (at || fixed) return { id: n.id, type: "box", position: at ?? { x: 0, y: 0 }, data: { g: n, vertical } };
       const p = g.node(n.id) as { x: number; y: number };
       return { id: n.id, type: "box", position: { x: p.x - n.w / 2, y: p.y - n.h / 2 }, data: { g: n, vertical } };
     }),
     edges: live.map((e, i) => ({
-      id: `e${i}-${e.source}-${e.target}`,
+      id: e.id ?? `e${i}-${e.source}-${e.target}`,
       source: e.source,
       target: e.target,
       targetHandle: bus ? "l" : undefined,

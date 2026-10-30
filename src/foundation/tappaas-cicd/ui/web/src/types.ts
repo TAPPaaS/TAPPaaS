@@ -68,6 +68,7 @@ export interface ModuleSummary {
     maturity: string | null;
   };
   findings: { gate: string; status: string; text: string }[];
+  condition?: ModuleHealth; // the worst condition of its objects (ADR-041)
 }
 
 export interface ModuleDetail {
@@ -685,4 +686,140 @@ export interface AssistantStatus {
   endpoint: string | null;
   keyFile: string | null;
   checkedAt: string;
+}
+
+// ── health/* (ADR-041 D5; src/health.ts builds these) ─────────────────
+export type HealthStatus = "ok" | "warning" | "critical" | "unknown";
+
+export interface HealthIssue {
+  type: string;
+  status: HealthStatus;
+  reason: string | null;
+  message: string | null;
+  since: string | null;
+  derived: boolean;
+  rootCause: string[];
+  acknowledged: boolean;
+  maintenance: boolean;
+  flapping: boolean;
+}
+
+export interface HealthView {
+  status: HealthStatus;
+  type: string | null;
+  reason: string | null;
+  since: string | null;
+  acknowledged: boolean;
+  maintenance: boolean;
+  flapping: boolean;
+}
+
+export interface HealthNode extends HealthView {
+  id: string;
+  class: string;
+  name: string;
+  label: string;
+  tier: number;
+  group: string | null;
+  environment: string | null;
+  module: string | null;
+  rootCause: string[];
+  isRoot: boolean;
+  types: Record<string, HealthStatus>;
+  issues: HealthIssue[];
+}
+
+export interface HealthEdge {
+  id: string;
+  type: string;
+  from: string;
+  to: string;
+}
+
+export interface HealthGroup {
+  id: string;
+  label: string;
+  kind: "environment" | "ports" | "addresses" | "host" | "class";
+  members: number;
+}
+
+export interface HealthRoot {
+  id: string;
+  class: string;
+  name: string;
+  label: string;
+  type: string | null;
+  status: HealthStatus;
+  reason: string | null;
+  message: string | null;
+  since: string | null;
+  acknowledged: boolean;
+  flapping: boolean;
+  impactedCount: number;
+  impacted: string[];
+  environments: string[];
+}
+
+export type HealthCounts = Record<HealthStatus | "acknowledged", number>;
+
+export interface HealthGraph {
+  generated: string;
+  at: string | null;
+  topology: string;
+  hasConditions: boolean;
+  site: string | null;
+  nodes: HealthNode[];
+  edges: HealthEdge[];
+  groups: HealthGroup[];
+  roots: HealthRoot[];
+  counts: HealthCounts;
+}
+
+export interface HealthPatch {
+  topology: string;
+  relayout: boolean;
+  generated: string;
+  patches: HealthNode[];
+  roots: HealthRoot[];
+  counts: HealthCounts;
+  hasConditions: boolean;
+}
+
+export interface ModuleHealth extends HealthView {
+  objects: number;
+  issues: (HealthIssue & { object: string; label: string })[];
+}
+
+export interface HealthSummary {
+  available: boolean;
+  generated: string | null;
+  site: HealthView | null;
+  counts: HealthCounts;
+  roots: HealthRoot[];
+  byType: Record<string, { status: HealthStatus; items: { id: string; label: string; class: string; status: HealthStatus; reason: string | null; since: string | null; silenced: boolean }[] }>;
+  attention: { id: string; label: string; class: string; module: string | null; type: string; status: HealthStatus; text: string; root: boolean }[];
+}
+
+export interface HealthCondition extends HealthIssue {
+  source: string | null;
+  lastChecked: string | null;
+  ack: { by?: string; note?: string; until?: string | null; sticky?: boolean } | null;
+  window: { until?: string | null; note?: string } | null;
+}
+
+export interface HealthObject {
+  id: string;
+  class: string;
+  ancestors: string[];
+  name: string;
+  label: string;
+  module: string | null;
+  view: HealthView;
+  conditions: HealthCondition[];
+  drift: unknown;
+  relations: { id: string; type: string; direction: "in" | "out"; other: { id: string; class: string; name: string; status: HealthStatus | null } }[];
+  history: { at: string; type: string; from: HealthStatus | null; to: HealthStatus; reason: string | null; message: string | null; source: string }[];
+  changes: { id: number; kind: string; source: string; job: string | null; verb: string | null; actor: string | null; time: string }[];
+  rootCauses: { id: string; class: string; label: string; reason: string | null }[];
+  impacts: { id: string; class: string; label: string; status: HealthStatus }[];
 }
