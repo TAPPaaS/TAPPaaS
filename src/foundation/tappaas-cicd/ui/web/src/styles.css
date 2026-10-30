@@ -572,6 +572,8 @@ span.ht-caret { cursor: default; }
 .hc-more { position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; padding: 0; font: inherit; font-weight: 700; line-height: 18px; color: #334155; background: #fff; border: 1px solid var(--line); border-radius: 50%; cursor: pointer; }
 .hc-more:hover { border-color: var(--accent); color: var(--accent); }
 .hc-pill { display: flex; align-items: center; justify-content: center; gap: 6px; height: 100%; font-size: 12px; white-space: nowrap; }
+.hc-pill .hc-name { min-width: 0; }
+.hc-pill .muted { flex: none; }
 .health-panel { flex: none; }
 .health-panel .att { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; }
 .health-panel .att-text { flex: 1 1 100%; }

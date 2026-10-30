@@ -8,7 +8,7 @@ import { EgoGroup, EgoNode, HealthEgo, HealthNode, HealthPatch, HealthPath, Heal
 
 export const CARD_W = 210;
 export const CARD_H = 62;
-export const PILL_W = 176;
+export const PILL_W = 200;
 export const PILL_H = 36;
 
 // A group this big stands folded: its pill and what in it needs a look.
@@ -96,8 +96,9 @@ export function egoCards(s: EgoState): { cards: Card[]; lines: Line[] } {
   for (const a of s.anchors) {
     if (!placed.has(a.id)) continue;
     for (const g of s.reads.get(a.id)?.groups.filter((x) => x.anchor === a.id) ?? []) {
-      const fresh = g.neighbours.filter((n) => !placed.has(n));
-      const known = g.neighbours.filter((n) => placed.has(n) && n !== a.parent && n !== a.id);
+      // A neighbour by two relations stands under both pills.
+      const fresh = g.neighbours.filter((n) => !placed.has(n) || via.get(n) === a.id);
+      const known = g.neighbours.filter((n) => !fresh.includes(n) && n !== a.parent && n !== a.id);
       const members = fresh.flatMap((n) => nodes.get(n) ?? []);
       const pill = `g:${g.key}`;
       const closed = members.length > BIG_GROUP && !s.openGroups.has(g.key);

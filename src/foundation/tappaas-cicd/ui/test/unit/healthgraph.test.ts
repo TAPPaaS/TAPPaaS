@@ -32,6 +32,9 @@ check(card(one.cards, ids.nextcloud)?.plus === true && card(one.cards, ids.nextc
 check(one.lines.every((l) => card(one.cards, l.source) && card(one.cards, l.target)), "every line has a card at both ends");
 check(egoCards({ ...state(ids.tappaas2), reads: new Map() }).cards.length === 0, "nothing read yet: nothing drawn");
 
+const twice = egoCards(state(ids.nextcloud));
+check(pills(twice.cards).filter((c) => c.members.some((m) => m.id === ids["nc-svc"])).length === 2 && !twice.lines.some((l) => l.source === ids.nextcloud && l.target === ids["nc-svc"]), "a neighbour by two relations: under both pills, no third line");
+
 // Plus and minus.
 let anchors = expand([{ id: ids.tappaas2, parent: null }], ids.nextcloud, ids.tappaas2);
 const two = egoCards(state(ids.tappaas2, { anchors, reads: new Map([[ids.tappaas2, read(ids.tappaas2)], [ids.nextcloud, read(ids.nextcloud)]]) }));

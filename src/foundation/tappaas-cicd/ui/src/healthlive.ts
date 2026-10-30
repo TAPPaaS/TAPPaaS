@@ -1,5 +1,5 @@
-// healthlive.ts — the graph read's freshness and the Health view's live feed
-// (ADR-041 D5). The read is cached until the CMDB's change stream says
+// healthlive.ts — the health document's freshness and the Health view's live
+// feed (ADR-041 D5). The read is cached until the CMDB's change stream says
 // something changed; a burst of reports (a sweep) is one read again. What moved
 // is fanned out the way a job's output is: server-sent events (server.ts
 // health/stream). While the stream is down the cache falls back on a timer, so

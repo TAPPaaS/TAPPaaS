@@ -245,6 +245,7 @@ export function Health() {
   };
   const show = (id: string): void => {
     setSheet(true);
+    if (phone()) setPanel(false);
     void tree.reveal(id);
   };
 

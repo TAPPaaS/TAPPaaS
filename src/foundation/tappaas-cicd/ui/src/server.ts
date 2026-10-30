@@ -36,7 +36,7 @@ export interface ServerConfig {
   runStdin?: StdinRunner; // the verb that takes a secret on stdin (wlan: ap-manager ssid set-passphrase)
   litellm?: LiteLLM | null; // the assistant's LiteLLM (ADR-034 D7); absent: no assistant
   assistant?: Assistant | null; // its agent loop (assistant.ts)
-  healthLive?: HealthLive | null; // the graph read's freshness and live feed (healthlive.ts)
+  healthLive?: HealthLive | null; // the health document's freshness and live feed (healthlive.ts)
 }
 
 const JSON_TYPE = "application/json; charset=utf-8";
