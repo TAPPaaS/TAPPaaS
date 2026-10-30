@@ -32,7 +32,7 @@ export interface VolumeLive {
   pool: string;
   volume: string;
   used: number;
-  size: number;
+  size: number | null;
   replica: boolean;
 }
 export interface NodeLive {
@@ -128,7 +128,7 @@ function resources(i: KindInput): Section {
           kind: "table",
           title: "Disks and their pools",
           columns: [{ key: "pool", label: "pool" }, { key: "volume", label: "volume" }, { key: "node", label: "on" }, { key: "size", label: "size", format: "bytes" }, { key: "used", label: "used", format: "bytes" }, { key: "copy", label: "" }],
-          rows: volumes.map((v) => ({ pool: v.pool, volume: v.volume, node: v.node, size: v.size || null, used: v.used, copy: v.replica ? "replica" : "" })),
+          rows: volumes.map((v) => ({ pool: v.pool, volume: v.volume, node: v.node, size: v.size, used: v.used, copy: v.replica ? "replica" : "" })),
         }
       : {
           kind: "table",

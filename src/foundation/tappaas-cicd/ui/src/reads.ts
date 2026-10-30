@@ -878,7 +878,7 @@ export class Reads {
     const rows = (await Promise.all(classes.map((c) => cmdb.query({ class: c })))).flat().filter((o) => wanted.has(o.id));
     const objects = new Map(rows.map((o) => [o.id, o]));
     const clusterEnd = show.relations.find((r) => r.type === "member-of" && r.direction === "out" && r.other.class === "cluster")?.other;
-    const members = clusterEnd ? (await cmdb.relations({ type: "member-of", to: clusterEnd.id })).map((r) => r.from) : [];
+    const members = clusterEnd ? (await cmdb.relations({ type: "member-of", to: clusterEnd.id })).filter((r) => r.to.id === clusterEnd.id).map((r) => r.from) : [];
     return {
       self,
       relations: show.relations,

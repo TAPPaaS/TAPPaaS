@@ -33,7 +33,7 @@ export function parseVolumes(text: string): GuestVolume[] {
     const [name, used, size] = line.trim().split(/\s+/);
     const m = /^([^/]+)\/(?:.*\/)?((?:vm|subvol)-(\d+)-[^/]+)$/.exec(name ?? "");
     if (!m || !/^\d+$/.test(used ?? "")) continue;
-    out.push({ pool: m[1], volume: m[2], vmid: Number(m[3]), used: Number(used), size: /^\d+$/.test(size ?? "") ? Number(size) : 0 });
+    out.push({ pool: m[1], volume: m[2], vmid: Number(m[3]), used: Number(used), size: /^\d+$/.test(size ?? "") ? Number(size) : null });
   }
   return out;
 }

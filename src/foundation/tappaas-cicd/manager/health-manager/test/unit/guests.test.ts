@@ -21,7 +21,7 @@ const v = parseVolumes([
 ].join("\n"));
 check(v.length === 3, "only the datasets named after a vmid");
 check(v[0].pool === "tanka1" && v[0].vmid === 110 && v[0].used === 2048 && v[0].size === 8192, "a zvol: its pool, vmid, used and size");
-check(v[1].vmid === 200 && v[1].size === 0, "a container's filesystem has no fixed size");
+check(v[1].vmid === 200 && v[1].size === null, "a container's filesystem has no fixed size");
 check(v[2].pool === "rpool" && v[2].volume === "vm-300-cloudinit", "a nested dataset belongs to the pool it is in");
 
 const g = (vmid: number, name: string, declaredMem: number): GuestMemory => ({ vmid, name, node: "", status: "running", type: "qemu", declaredMem, usedMem: 1, residentMem: 1, measured: true });

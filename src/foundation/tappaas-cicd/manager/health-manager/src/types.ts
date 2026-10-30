@@ -177,7 +177,7 @@ export interface GuestVolume {
   volume: string; // vm-110-disk-0, subvol-200-disk-0
   vmid: number;
   used: number; // bytes
-  size: number; // bytes; 0: a filesystem, which has no fixed size
+  size: number | null; // bytes; null: a filesystem, which has no fixed size
 }
 
 export interface ClusterClient {
