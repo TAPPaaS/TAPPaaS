@@ -16,11 +16,12 @@ function check(cond: boolean, msg: string): void {
 }
 
 // 1. identity: the DMI fields, placeholders dropped, physical MACs only
-const id = parseIdentity("sys_vendor=Hewlett-Packard\nproduct_name=HP Z840 Workstation\nproduct_serial=CZC1234ABC\nmac=00:07:43:38:AA:F0\nmac=00:07:43:38:aa:f1\nmac=00:07:43:38:aa:f0\n");
+const id = parseIdentity("sys_vendor=Hewlett-Packard\nproduct_name=HP Z840 Workstation\nproduct_serial=CZC1234ABC\nnic=nic1 00:07:43:38:AA:F0\nnic=nic2 00:07:43:38:aa:f1\nnic=nic1 00:07:43:38:aa:f0\n");
 check(id.vendor === "Hewlett-Packard" && id.model === "HP Z840 Workstation" && id.serial === "CZC1234ABC", "vendor, model and serial as DMI gives them");
 check(id.macs.join() === "00:07:43:38:aa:f0,00:07:43:38:aa:f1", "MACs lower case, once each");
+check(id.nics.map((n) => `${n.name}=${n.mac}`).join() === "nic1=00:07:43:38:aa:f0,nic2=00:07:43:38:aa:f1", "the NICs with their names");
 check(parseIdentity("product_serial=To Be Filled By O.E.M.\n").serial === null, "a vendor's placeholder is no serial");
-check(parseIdentity("product_serial=Default string\nmac=00:00:00:00:00:00\nmac=junk\n").macs.length === 0, "the zero MAC and junk are dropped");
+check(parseIdentity("product_serial=Default string\nnic=eth0 00:00:00:00:00:00\nnic=eth1 junk\n").macs.length === 0, "the zero MAC and junk are dropped");
 
 // 2. the match: serial first, then a port's MAC; only free servers
 const doc: PositionsDoc = {
@@ -35,14 +36,14 @@ const doc: PositionsDoc = {
   cables: [{ from: { device: "crs-a", port: "ether7" }, to: { device: "srv-03", port: "1" }, kind: "patch" }],
 } as unknown as PositionsDoc;
 check(freeServers(doc).map(([k]) => k).join() === "srv-02,srv-03", "free servers: no role, here (not ordered), servers only");
-const bySerial = matchAsset(doc, { vendor: null, model: null, serial: "CZC9999XYZ", macs: [] });
+const bySerial = matchAsset(doc, { vendor: null, model: null, serial: "CZC9999XYZ", macs: [], nics: [] });
 check(!!bySerial && "key" in bySerial && bySerial.key === "srv-02" && bySerial.by === "serial", "a serial matches regardless of case");
-check(matchAsset(doc, { vendor: null, model: null, serial: "CZC1234ABC", macs: [] }) === null, "srv-01's serial does not match: it plays a role already");
-const byMac = matchAsset(doc, { vendor: null, model: null, serial: "NEW1", macs: ["aa:bb:cc:00:00:03", "aa:bb:cc:00:00:04"] });
+check(matchAsset(doc, { vendor: null, model: null, serial: "CZC1234ABC", macs: [], nics: [] }) === null, "srv-01's serial does not match: it plays a role already");
+const byMac = matchAsset(doc, { vendor: null, model: null, serial: "NEW1", macs: ["aa:bb:cc:00:00:03", "aa:bb:cc:00:00:04"], nics: [] });
 check(!!byMac && "key" in byMac && byMac.key === "srv-03" && byMac.by === "mac", "no serial match, then a port's MAC");
-check(matchAsset(doc, { vendor: null, model: null, serial: "ORDERED1", macs: [] }) === null, "an ordered asset is not here to match");
+check(matchAsset(doc, { vendor: null, model: null, serial: "ORDERED1", macs: [], nics: [] }) === null, "an ordered asset is not here to match");
 const two: PositionsDoc = { ...doc, assets: { ...doc.assets, "srv-05": { kind: "server", stage: "stock", serial: "czc9999xyz" } } } as PositionsDoc;
-const conflict = matchAsset(two, { vendor: null, model: null, serial: "CZC9999XYZ", macs: [] });
+const conflict = matchAsset(two, { vendor: null, model: null, serial: "CZC9999XYZ", macs: [], nics: [] });
 check(!!conflict && "conflict" in conflict && /srv-02, srv-05/.test(conflict.conflict), "two assets with one serial: a conflict, not a guess");
 
 // 3. --asset before the install
@@ -61,7 +62,9 @@ check(assetCabling(doc, "srv-02").switchPort === null && assetCabling(doc, "srv-
 const n = newAssetArgs(doc, id, "tappaas4");
 check(n.key === "srv-05", "the next free server tag (srv-04 exists, ordered)");
 check(n.args.join(" ") === "asset add srv-05 --kind server --display-name tappaas4 --vendor Hewlett-Packard --model HP Z840 Workstation --serial CZC1234ABC", "asset add with what the machine said");
-check(newAssetArgs(doc, { vendor: null, model: null, serial: null, macs: [] }, "tappaas4").args.join(" ") === "asset add srv-05 --kind server --display-name tappaas4", "nothing known: kind and display name only");
+check(n.ports.map((p) => p.join(" ")).join("; ") === "port add srv-05 nic1 --kind rj45 --mac 00:07:43:38:aa:f0; port add srv-05 nic2 --kind rj45 --mac 00:07:43:38:aa:f1", "a port per NIC, with its MAC, for the next match");
+const bare = newAssetArgs(doc, { vendor: null, model: null, serial: null, macs: [], nics: [] }, "tappaas4");
+check(bare.args.join(" ") === "asset add srv-05 --kind server --display-name tappaas4" && bare.ports.length === 0, "nothing known: kind and display name only");
 
 // 6. the asset a role has, for the release
 const p = assetPlaying(doc, "tappaas1");

@@ -34,6 +34,7 @@ export interface MachineIdentity {
   model: string | null;
   serial: string | null;
   macs: string[]; // physical NICs', lower case
+  nics: { name: string; mac: string }[]; // the same, with the kernel's names
 }
 
 // Vendors' placeholders where a serial should be.
@@ -41,14 +42,14 @@ const NO_SERIAL = /^(|0+|to be filled by o\.?e\.?m\.?|default string|system seri
 const MAC_RE = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/;
 
 // The ssh command that prints the identity, one `key=value` per line: the
-// three DMI fields, then `mac=` for every NIC that is a device (no bridges,
-// bonds, VLANs or loopback).
+// three DMI fields, then `nic=<name> <mac>` for every NIC that is a device (no
+// bridges, bonds, VLANs or loopback).
 export const IDENTITY_SH =
   "for f in sys_vendor product_name product_serial; do printf '%s=%s\\n' \"$f\" \"$(cat /sys/class/dmi/id/$f 2>/dev/null | tr -d '\\r\\n')\"; done; " +
-  "for d in /sys/class/net/*; do [ -e \"$d/device\" ] || continue; printf 'mac=%s\\n' \"$(cat \"$d/address\" 2>/dev/null)\"; done";
+  "for d in /sys/class/net/*; do [ -e \"$d/device\" ] || continue; printf 'nic=%s %s\\n' \"$(basename \"$d\")\" \"$(cat \"$d/address\" 2>/dev/null)\"; done";
 
 export function parseIdentity(out: string): MachineIdentity {
-  const id: MachineIdentity = { vendor: null, model: null, serial: null, macs: [] };
+  const id: MachineIdentity = { vendor: null, model: null, serial: null, macs: [], nics: [] };
   for (const line of out.split("\n")) {
     const i = line.indexOf("=");
     if (i < 0) continue;
@@ -56,9 +57,12 @@ export function parseIdentity(out: string): MachineIdentity {
     if (k === "sys_vendor" && v) id.vendor = v;
     else if (k === "product_name" && v) id.model = v;
     else if (k === "product_serial" && !NO_SERIAL.test(v)) id.serial = v;
-    else if (k === "mac") {
-      const m = v.toLowerCase().replace(/-/g, ":");
-      if (MAC_RE.test(m) && m !== "00:00:00:00:00:00" && !id.macs.includes(m)) id.macs.push(m);
+    else if (k === "nic" || k === "mac") {
+      const [nic, raw] = k === "nic" ? v.split(/\s+/, 2) : ["", v];
+      const m = (raw ?? "").toLowerCase().replace(/-/g, ":");
+      if (!MAC_RE.test(m) || m === "00:00:00:00:00:00" || id.macs.includes(m)) continue;
+      id.macs.push(m);
+      if (nic) id.nics.push({ name: nic, mac: m });
     }
   }
   return id;
@@ -122,15 +126,18 @@ export function assetCabling(doc: PositionsDoc, key: string): { switchPort: stri
   };
 }
 
-// The arguments of the `asset-manager asset add` that records a machine nobody
-// recorded: the next tag, its identity, the role's name shown.
-export function newAssetArgs(doc: PositionsDoc, id: MachineIdentity, role: string): { key: string; args: string[] } {
+// The `asset-manager` calls that record a machine nobody recorded: `asset add`
+// with the next tag, its identity and the role's name shown; then a `port add`
+// per NIC with its MAC — what the next node add on this box matches by (D5),
+// since a vendor's BIOS may give no serial at all.
+export function newAssetArgs(doc: PositionsDoc, id: MachineIdentity, role: string): { key: string; args: string[]; ports: string[][] } {
   const key = nextTag(doc, "server");
   const args = ["asset", "add", key, "--kind", "server", "--display-name", role];
   if (id.vendor) args.push("--vendor", id.vendor);
   if (id.model) args.push("--model", id.model);
   if (id.serial) args.push("--serial", id.serial);
-  return { key, args };
+  const ports = id.nics.map((n) => ["port", "add", key, n.name, "--kind", "rj45", "--mac", n.mac]);
+  return { key, args, ports };
 }
 
 // The asset playing a role (what node delete releases), and where it is.

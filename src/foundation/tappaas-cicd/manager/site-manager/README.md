@@ -372,7 +372,8 @@ the node has joined, its DMI serial and its NICs' MACs are read over ssh and mat
 against the free server assets — serial first, then any port's MAC; two matches are a
 conflict and nothing is allocated — and when none matches a new asset is recorded for it
 (`srv-NN`, the node's name as its display name, vendor, model and serial from the
-machine). Either way the asset is allocated to the node, and a placement the operator made
+machine, and a port per NIC with its MAC, so the box is matched next time even when
+its BIOS gives no serial). Either way the asset is allocated to the node, and a placement the operator made
 under the node's name is the asset's from then on. A failure here is a warning naming the
 `asset-manager` command to run, never a failed join. `node delete` releases the asset:
 it keeps its placement, ports and cables under its own name and goes back to placed or

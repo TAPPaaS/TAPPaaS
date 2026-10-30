@@ -61,7 +61,7 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
       key = m.key;
       info(`  asset ${key} is this machine (by its ${m.by})`);
     } else {
-      const n = newAssetArgs(doc, id ?? { vendor: null, model: null, serial: null, macs: [] }, name);
+      const n = newAssetArgs(doc, id ?? { vendor: null, model: null, serial: null, macs: [], nics: [] }, name);
       const r = assetManager(n.args);
       if (r.rc !== 0) {
         warn(`  no asset recorded for ${name}: ${r.out} — asset-manager ${n.args.join(" ")}`);
@@ -69,6 +69,11 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
       }
       key = n.key;
       fresh = true;
+      for (const p of n.ports) {
+        const pr = assetManager(p);
+        if (pr.rc !== 0) warn(`  port ${p[3]} (${p[7]}) is not recorded on ${key}: ${pr.out}`);
+      }
+      if (n.ports.length) info(`  ${n.ports.length} NIC(s) recorded as ${key}'s ports, by MAC`);
     }
   }
   const r = assetManager(["asset", "allocate", key, "--role", name]);
