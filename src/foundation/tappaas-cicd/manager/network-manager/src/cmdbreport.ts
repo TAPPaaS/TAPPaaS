@@ -256,16 +256,6 @@ export function collectDiscover(run: Runner = captureResult): { doc: DiscoverDoc
   }
 }
 
-/** The rules in live order; one held after a rule with a later sequence is out of order. */
-export function liveRules(rules: DiscoverRule[]): (DiscoverRule & { outOfOrder: boolean })[] {
-  let high = -Infinity;
-  return rules.map((r) => {
-    const late = r.sequence !== null && r.sequence < high;
-    if (r.sequence !== null) high = Math.max(high, r.sequence);
-    return { ...r, outOfOrder: late };
-  });
-}
-
 export function buildNetworkDiscover(doc: DiscoverDoc, zones: ZonesDoc): CmdbBatch {
   const b = new CmdbBatch(SOURCE);
   const zoneOf = (i: { tag?: number | null; ipv4?: string | null }): string | undefined => {
@@ -305,7 +295,7 @@ export function buildNetworkDiscover(doc: DiscoverDoc, zones: ZonesDoc): CmdbBat
     firewall: {
       interfaces: free,
       vlans: undeclared,
-      rules: liveRules(doc.rules ?? []),
+      rules: doc.rules ?? [],
       aliases: doc.aliases ?? [],
       nat: doc.nat ?? [],
       dhcpRanges: doc.dhcpRanges ?? [],

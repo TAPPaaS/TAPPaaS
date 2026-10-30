@@ -30,12 +30,20 @@ def _selected(v) -> str:
 
 
 def shape_rules(model: dict) -> list[dict]:
-    """The filter's rules in the order the firewall holds them, each with its live position."""
+    """The filter's rules in the order the firewall evaluates them, each with its position.
+
+    The model keeps them in the order they were written; OPNsense renders
+    them by sequence (checked against /tmp/rules.debug on hrossen).
+    """
     rules = ((model.get("filter") or {}).get("rules") or {}).get("rule") or {}
     if not isinstance(rules, dict):  # an empty model is a list
         return []
+    def sequence(item: tuple) -> float:
+        seq = str(item[1].get("sequence") or "")
+        return int(seq) if seq.isdigit() else float("inf")
+
     out = []
-    for pos, (uuid, d) in enumerate(rules.items(), start=1):
+    for pos, (uuid, d) in enumerate(sorted(rules.items(), key=sequence), start=1):
         seq = str(d.get("sequence") or "")
         out.append({
             "uuid": uuid, "position": pos, "sequence": int(seq) if seq.isdigit() else None,

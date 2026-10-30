@@ -70,12 +70,11 @@ const dd = collectDiscover((_b, a) => ({ rc: a[0] === "discover" ? 0 : 1, stdout
 check(dd.doc !== null, "opnsense-firewall discover is read");
 const dr = buildNetworkDiscover(dd.doc as DiscoverDoc, loadZones(join(FIX, "zones.json"))).report();
 const dobj = (cls: string, name: string): CmdbObject | undefined => dr.objects!.find((o) => o.class === cls && o.name === name);
-type Fw = { rules: { uuid: string; position: number; outOfOrder: boolean }[]; aliases: { uuid: string }[]; nat: unknown[]; routes: unknown[]; certificates: unknown[]; packages: unknown[]; interfaces: { identifier: string }[]; vlans: { tag: number }[] };
+type Fw = { rules: { uuid: string; position: number }[]; aliases: { uuid: string }[]; nat: unknown[]; routes: unknown[]; certificates: unknown[]; packages: unknown[]; interfaces: { identifier: string }[]; vlans: { tag: number }[] };
 const net = dobj("vm", "network")?.attributes ?? {};
 const fw = net.firewall as Fw;
 check(net.osVersion === "25.7.1", "the network module's CI carries the OPNsense version");
 check(fw.rules.map((x) => `${x.uuid}@${x.position}`).join() === "r-1@1,r-2@2,r-3@3", "every rule by UUID, with its live position");
-check(fw.rules.find((x) => x.uuid === "r-3")?.outOfOrder === true && fw.rules.find((x) => x.uuid === "r-2")?.outOfOrder === false, "a rule held after a later sequence is marked out of order");
 check(fw.aliases[0]?.uuid === "a-1" && fw.nat.length === 1 && fw.routes.length === 1 && fw.certificates.length === 1 && fw.packages.length === 1, "aliases, NAT, routes, certificates and packages sit under firewall");
 check(fw.interfaces.map((x) => x.identifier).join() === "opt9" && fw.vlans.map((x) => x.tag).join() === "777", "an interface and a VLAN no zone declares go under firewall");
 const srv = dobj("zone", "srv")?.attributes ?? {};

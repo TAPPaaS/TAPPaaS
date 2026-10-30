@@ -28,11 +28,11 @@ class FakeClient:
 
 
 class TestDiscover(unittest.TestCase):
-    def test_rules_keep_the_live_order_and_uuid(self):
+    def test_rules_in_evaluation_order_with_uuid(self):
         rules = shape_rules(FILTER)
-        self.assertEqual([(r["uuid"], r["position"], r["sequence"]) for r in rules], [("u-b", 1, 200), ("u-a", 2, 100)])
-        self.assertEqual(rules[0]["action"], "pass")
-        self.assertFalse(rules[1]["enabled"])
+        self.assertEqual([(r["uuid"], r["position"], r["sequence"]) for r in rules], [("u-a", 1, 100), ("u-b", 2, 200)])
+        self.assertEqual(rules[1]["action"], "pass")
+        self.assertFalse(rules[0]["enabled"])
 
     def test_an_empty_model_is_no_rules(self):
         self.assertEqual(shape_rules({"filter": {"rules": {"rule": []}}}), [])

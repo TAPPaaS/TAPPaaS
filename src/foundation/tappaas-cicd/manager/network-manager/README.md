@@ -474,8 +474,8 @@ sends nothing.
 of `opnsense-firewall discover`: on the `network` module's CI (`vm`) the OPNsense
 version and `firewall: {rules, aliases, nat, routes, certificates, packages,
 dhcpRanges, dhcpHosts, interfaces, vlans}` — rules and aliases by UUID, each rule
-with its live `position`, its `sequence` and `outOfOrder` when it is held after
-a later sequence; `interfaces` and `vlans` here are the ones no zone declares.
+with its `position` in evaluation order (by `sequence`) and that `sequence`;
+`interfaces` and `vlans` here are the ones no zone declares.
 A zone gets its `interface` and live `dhcp` range; DNS overrides are `dns-name`s;
 every WireGuard peer gets `lastHandshake`. A section the firewall does not answer
 is named on stderr. `--json` prints an array. Until the metamodel has its fields (``vm.firewall`, `zone.interface`, `vpn-peer.lastHandshake``), cmdb-controller refuses these attributes; the plain report is sent on its own and stands.
