@@ -19,13 +19,20 @@
 # the record's where it has them. A port's kind and speed are the actual's
 # where the controller says, else the asset record's, else rj45 and 1g. MACs
 # seen behind a port stay in the actual (the CMDB resolves no MAC yet, D5).
+#
+# With --argjson discover true and --argjson zones <zones.json> (report
+# --discover, D15) one more report follows, the depth only a sweep reads: every
+# port, used or not, with its link, negotiated speed, PoE, VLANs, STP state and
+# what is seen behind it; every VLAN the switch has, declared in zones.json or
+# not; the switch's address, firmware and uptime. What the controller does not
+# report (switch/1's optional fields) is left out.
 
 def natkey: tostring | [scan("[0-9]+|[^0-9]+") | (tonumber? // .)];
 def canon: ascii_downcase | gsub("[^a-z0-9]"; "");
 def nonull: with_entries(select(.value != null and .value != ""));
 def speedword:
     if . == null then null
-    elif type == "number" then ({"1000": "1g", "2500": "2.5g", "10000": "10g", "25000": "25g"}[tostring] // null)
+    elif type == "number" then ({"100": "100m", "1000": "1g", "2500": "2.5g", "10000": "10g", "25000": "25g"}[tostring] // null)
     else (tostring | ascii_downcase | gsub("\\s"; "") | sub("(gbps|gbit|gb)$"; "g")) end;
 def speeds($kind): {rj45: ["1g", "2.5g", "10g"], sfp: ["1g", "10g", "25g"]}[$kind] // [];
 def assetclass: {server: "server", switch: "network-device", "access-point": "network-device",
@@ -111,3 +118,22 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
             {ref: .from, class: "port", name: .p, attributes: {asset: {ref: "asset:\(tag(.sw))"}}},
             {ref: "nic", class: "port", name: .nic, attributes: {asset: {class: "server", name: .srv}}} ],
           relations: [ {type: "connects", from: .from, to: "nic", attributes: ({origin: .origin, linkSpeed: .speed} | nonull)} ] } ]
+  + (if ($ARGS.named.discover // false) then
+      ([ ($ARGS.named.zones // {}) | to_entries[] | .value | objects | .vlantag | numbers | select(. > 0) ]) as $declared
+      | [ head + {
+          objects: [ $names[] as $sw | $sws[$sw] as $s | tag($sw) as $tag
+            | ([ (($s.vlans // [])[] | if type == "object" then {tag: (.id // .tag), name: .name} else {tag: .} end),
+                 (($s.ports // {})[] | ((.nativeVlan // 0), (.taggedVlans // [])[]) | {tag: .}) ]
+               | map(select((.tag // 0) > 0)) | group_by(.tag)
+               | map({tag: .[0].tag, name: (map(.name // empty) | first // null), declared: ((.[0].tag) as $t | ($declared | index($t)) != null)} | nonull)) as $vlans
+            | {class: "device", name: $sw,
+               attributes: (({managementAddress: $s.managementIp, firmware: $s.firmware, uptime: $s.uptime} | nonull) + {vlans: $vlans})},
+              {ref: "asset:\($tag)", class: "network-device", name: $tag},
+              ( ($s.ports // {}) | to_entries | sort_by(.key | natkey)[]
+                | .key as $p | .value as $v
+                | {class: "port", name: $p,
+                   attributes: (({asset: {ref: "asset:\($tag)"}, link: $v.link, linkSpeed: linkspeed($v), poe: $v.poe, stp: $v.stp} | nonull)
+                     + {vlans: ({mode: $v.mode, native: $v.nativeVlan, tagged: $v.taggedVlans} | nonull),
+                        seen: [ ($v.neighbors // [])[] | {mac: (.mac | ascii_downcase), lldp: .lldp, lease: .lease} | nonull ]})} ) ],
+          relations: [] } ]
+    else [] end)
