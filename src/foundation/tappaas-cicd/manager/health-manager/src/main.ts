@@ -48,6 +48,9 @@ import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../
 import { cmdbQuery } from "../../../lib/ts/src/cmdb";
 import { printOrSend, sendReport } from "../../../lib/ts/src/cmdb-reporter";
 import { ValidateDoc, buildHealthReport, cmdbClass, configClass, subjectHealth } from "./cmdbreport";
+// ── ADR-041 emit half ──
+import { EMIT_HELP, liveEmitContext, runEmitVerb } from "./emit-verbs";
+// ── end ADR-041 emit half ──
 
 const VERSION = "0.1.0";
 
@@ -173,6 +176,9 @@ export const HELP: HelpSpec = {
         "recent — event alerts of the last 24 hours, from the mothership's alert receiver. Each is\n" +
         "placed on the module, machine or node it is about. The heartbeat is never listed.",
     },
+    // ── ADR-041 emit half ──
+    ...EMIT_HELP,
+    // ── end ADR-041 emit half ──
   ],
   common: [["--config-dir DIR", "Config root (default: $CONFIG_DIR or /home/tappaas/config)."]],
   notes: [
@@ -524,6 +530,10 @@ export function run(argv: string[], client: ClusterClient): number {
 
   return guarded(() => {
     preflightGuard(); // #533: refuse root; self-heal config/repo ownership
+    // ── ADR-041 emit half ──
+    const emitted = runEmitVerb(cmd, opts.rest, liveEmitContext(opts.configDir));
+    if (emitted !== undefined) return emitted;
+    // ── end ADR-041 emit half ──
     switch (cmd) {
       case "validate":
         return cmdValidate(opts, client);
