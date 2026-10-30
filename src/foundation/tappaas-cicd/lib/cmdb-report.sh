@@ -7,7 +7,7 @@
 # Source it:   . "${TAPPAAS_CICD:-/home/tappaas/TAPPaaS/src/foundation/tappaas-cicd}/lib/cmdb-report.sh"
 #
 #   cmdb_change_head <verb>     {kind: "change", verb, job, actor} as JSON:
-#                               job is TAPPAAS_JOB_ID (the console's Activity
+#                               job is TAPPAAS_JOB_ID, else TAPPAAS_JOB (the console's Activity
 #                               id), actor TAPPAAS_ACTOR, else $USER
 #   cmdb_send_reports           a JSON array of reports on stdin, each sent
 #                               with cmdb_report. Never fails the caller.
@@ -20,7 +20,7 @@ _cmdb_report_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${_cmdb_report_here}/cmdb.sh"
 
 cmdb_change_head() {
-    jq -cn --arg verb "$1" --arg job "${TAPPAAS_JOB_ID:-}" --arg actor "${TAPPAAS_ACTOR:-${USER:-}}" \
+    jq -cn --arg verb "$1" --arg job "${TAPPAAS_JOB_ID:-${TAPPAAS_JOB:-}}" --arg actor "${TAPPAAS_ACTOR:-${USER:-}}" \
         '{kind: "change", verb: $verb} + (if $job != "" then {job: $job} else {} end) + (if $actor != "" then {actor: $actor} else {} end)'
 }
 

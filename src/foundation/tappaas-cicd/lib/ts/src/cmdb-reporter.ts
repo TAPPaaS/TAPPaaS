@@ -10,7 +10,7 @@
 // keys on its node and version) refuses the whole batch; delivery then drops
 // what the refusal names, and what hangs off it, and sends the rest.
 //
-// TAPPAAS_JOB_ID is the console's Activity id for the job that ran the verb,
+// TAPPAAS_JOB_ID (else TAPPAAS_JOB) is the console's Activity id for the job that ran the verb,
 // TAPPAAS_ACTOR who ran it (else $USER). TAPPAAS_CMDB=off sends nothing
 // (tests that run changing verbs and do not look at the CMDB).
 
@@ -76,7 +76,8 @@ export class CmdbBatch {
 /** The console's job and the actor, for a change report. */
 export function cmdbJob(env: Record<string, string | undefined> = process.env): { job?: string; actor?: string } {
   const out: { job?: string; actor?: string } = {};
-  if (env.TAPPAAS_JOB_ID) out.job = env.TAPPAAS_JOB_ID;
+  const job = env.TAPPAAS_JOB_ID || env.TAPPAAS_JOB;
+  if (job) out.job = job;
   const actor = env.TAPPAAS_ACTOR || env.USER;
   if (actor) out.actor = actor;
   return out;
@@ -169,6 +170,18 @@ export function printOrSend(batch: CmdbBatch, json: boolean, o: CmdbOptions = {}
   if (s.outcome?.delivered) console.log(`${batch.source}: reported ${counts} to the CMDB`);
   else if (s.outcome?.spooled) console.log(`${batch.source}: the CMDB did not answer; ${counts} spooled to ${s.outcome.spooled}`);
   else if (s.error) note(`report not recorded: ${s.error}`);
+  return 0;
+}
+
+/** `report --discover` (ADR-040 D15): the plain report, then what only the
+ *  sweep reads, each sent on its own so a refusal of one leaves the other.
+ *  `--json` prints them as an array. */
+export function printOrSendAll(batches: CmdbBatch[], json: boolean, o: CmdbOptions = {}): number {
+  if (json) {
+    process.stdout.write(JSON.stringify(batches.map((b) => b.report()), null, 1) + "\n");
+    return 0;
+  }
+  for (const b of batches) printOrSend(b, false, o);
   return 0;
 }
 

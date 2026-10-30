@@ -1,0 +1,26 @@
+{
+  "version": "25.7.1",
+  "packages": [{"name": "os-caddy", "version": "2.0.1"}],
+  "interfaces": [
+    {"identifier": "lan", "description": "lan", "device": "vtnet0", "tag": null, "ipv4": "10.0.0.0/24", "enabled": true},
+    {"identifier": "opt1", "description": "srv", "device": "vlan0.200", "tag": 200, "ipv4": "10.2.0.0/24", "enabled": true},
+    {"identifier": "opt9", "description": "hand made", "device": "vlan0.777", "tag": 777, "ipv4": "10.77.0.0/24", "enabled": true}
+  ],
+  "vlans": [{"tag": 200, "device": "vlan0.200", "parent": "vtnet0", "description": "srv"},
+            {"tag": 777, "device": "vlan0.777", "parent": "vtnet0", "description": "hand made"}],
+  "rules": [
+    {"uuid": "r-1", "position": 1, "sequence": 100, "enabled": true, "action": "pass", "description": "first"},
+    {"uuid": "r-2", "position": 2, "sequence": 300, "enabled": true, "action": "pass", "description": "third by sequence"},
+    {"uuid": "r-3", "position": 3, "sequence": 200, "enabled": true, "action": "block", "description": "held after a later one"}
+  ],
+  "aliases": [{"uuid": "a-1", "name": "tm_nextcloud", "type": "host", "enabled": true, "content": "nextcloud.srv.internal"}],
+  "nat": [{"uuid": "n-1", "kind": "port-forward", "position": 1, "enabled": true, "description": "web", "target": "10.6.0.5"}],
+  "dhcpRanges": [{"uuid": "d-1", "interface": "opt1", "start_addr": "10.2.0.120", "end_addr": "10.2.0.200"}],
+  "dhcpHosts": [{"uuid": "h-1", "host": "tappaas1", "ip": "10.0.0.20"}],
+  "leases": [{"ip": "10.0.0.50", "mac": "aa:bb:cc:00:00:50", "hostname": "lars-mac", "zone": "mgmt", "expire": 1793000000}],
+  "dnsOverrides": [{"uuid": "o-1", "fqdn": "cloud.example.org", "target": "10.6.0.1", "enabled": true}],
+  "wireguard": [{"name": "lars-mac", "publicKey": "PUBKEY=", "tunneladdress": "10.255.1.2/32", "endpoint": "", "lastHandshake": "42"}],
+  "routes": [{"destination": "default", "gateway": "192.168.1.1", "interface": "vtnet1", "flags": "UGS"}],
+  "certificates": [{"uuid": "c-1", "name": "wildcard", "commonName": "*.example.org", "validTo": "1800000000"}],
+  "errors": [{"section": "routes6", "error": "404"}]
+}
