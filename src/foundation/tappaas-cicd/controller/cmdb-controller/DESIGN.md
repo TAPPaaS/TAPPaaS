@@ -205,6 +205,167 @@ once at its shortest distance, with the relation type it was reached by. No
 per-type direction yet: `runs-on`, `part-of` and `allocated-to` point different
 ways, and "what does a down node take with it" crosses all three.
 
+## Integration: the managers, the controllers and the console
+
+cmdb-controller writes nothing but its own store and asks nothing of a plane
+itself. Everything it knows comes in through the managers, and everything that
+shows it goes out through one API. The picture, with every arrow a call the
+code makes today:
+
+```mermaid
+flowchart LR
+  subgraph planes[Planes]
+    pve[(Proxmox)]
+    opn[(OPNsense)]
+    sw[(switches, APs)]
+    ak[(Authentik)]
+    pbs[(PBS)]
+  end
+
+  subgraph ctl[Controllers]
+    pc[proxmox-controller]
+    oc[opnsense-controller]
+    sc[UniFi / MikroTik\ncontrollers\n(Community)]
+    ac[authentik-controller]
+    bc[pbs-controller]
+  end
+
+  subgraph mgr[Managers · report / report --discover · change]
+    sm[site-manager]
+    mm[module-manager]
+    nm[network-manager]
+    swm[switch-manager\nap-manager]
+    im[identity-manager]
+    em[environment-manager]
+    stm[storage-manager]
+    bm[backup-manager]
+    am[asset-manager]
+    hm[health-manager]
+  end
+
+  pve --> pc --> sm
+  opn --> oc --> nm
+  sw --> sc --> swm
+  ak --> ac --> im
+  pbs --> bc --> bm
+  pos[(positions.json)] --> am
+
+  lib[lib/ts cmdb.ts · cmdb-reporter.ts\nlib/cmdb-report.sh\nspool config/.cmdb-spool]
+  sm & mm & nm & swm & im & em & stm & bm & am & hm --> lib
+  lib -- "POST /v1/report\n(unix socket)" --> svc
+
+  subgraph svc[cmdb-controller · cmdb.service]
+    api[server.ts\nreport · query · show · relations\nhistory · impact · resolve · SSE]
+    store[store.ts\nkeys · placeholders · drift · expiry]
+    sweep[sweep · rescan]
+    api --> store
+    sweep --> store
+  end
+  store --> pg[(PostgreSQL cmdb)]
+
+  sweep -. "<component> report --discover" .-> sm & mm & nm & swm & im & em & stm & bm & am & hm
+  timer[cmdb-sweep.timer\nnightly, before the update window] --> sweep
+  sweep -- "sweep record" --> store
+  sweep -- "journal: cmdb-sweep lines" --> loki[(Loki · ADR-039 rules)]
+  hm -- "gate cmdb: last sweep" --> api
+
+  console[console · ui/\njobs set TAPPAAS_JOB_ID, TAPPAAS_ACTOR] -- "127.0.0.1:9098 + token\nquery · show · history · impact · SSE" --> api
+  console -- "runs a verb as a job" --> sm & mm & nm & swm & im & em & stm & bm & am
+  cli[cmdb CLI · bash layer] --> api
+```
+
+### Who reports what
+
+| Manager | Observations (every `report`; `--discover` adds the depth of D15) | Changes (the verbs that write) |
+|---|---|---|
+| site-manager (proxmox-controller) | site, locations, cluster, machines with `pve` as an app, VMs and containers, storage pools; `--discover`: NICs used or not as ports, disks and partitions, pool layouts, storages, PCI, CPU and memory, corosync links | node add/delete, site modify, location verbs, migrate-vm |
+| module-manager | each module as the node of its kind (or an app), its services, controllers and managers, `depends-on`/`provides` | add, adopt, modify, delete, migrate, suspend/resume |
+| network-manager (opnsense-controller) | zones, addresses, DNS names, proxy routes, VPN peers; `--discover`: interfaces, VLANs, rules and aliases by UUID in live order, NAT, DHCP, DNS overrides, routes, certificates, packages | zone add/modify/delete, modify --set, dns, proxy, wgvpn verbs |
+| switch-manager, ap-manager | devices with their `network-device` assets, D9 ports, links the controllers and LLDP see, SSIDs; `--discover`: every port's link, PoE, STP, VLANs, seen MACs; radios and clients | add-switch, modify-switch, ssid verbs, port verbs |
+| identity-manager (authentik-controller) | organizations, groups, users, roles; `--discover`: providers, applications, outposts, flows | every write verb, reconcile --apply |
+| environment-manager | environments, `owned-by`, `serves` | add, modify, delete |
+| storage-manager | storage pools, shares | nfs share and grant verbs |
+| backup-manager (pbs-controller) | datastores, backup peers, `backs-up`; `--discover`: GC, restore points, sync jobs | peer add/delete, restore-point verbs |
+| asset-manager | rooms, racks, assets by subclass, ports, placements, recorded cables, allocations — all marked recorded | every verb that writes positions.json |
+| health-manager | `health` on each CI it checks; reads the last sweep for its `cmdb` gate | — |
+
+Two rules hold them together. **A report is a side effect, never a gate:** a
+manager reports after it has done its work, through the client's spool, and no
+verb fails because the CMDB is down. **One identity per thing:** a manager
+names an object by its class keys (D5) and refers to another manager's object
+by class and name; the store merges the two views into one CI, or makes a
+placeholder until the owner reports it.
+
+### How a change gets in
+
+```mermaid
+sequenceDiagram
+  participant U as operator
+  participant C as console
+  participant M as manager verb
+  participant P as plane
+  participant S as cmdb-controller
+  participant D as PostgreSQL
+
+  U->>C: Apply (job 1234)
+  C->>M: verb, env TAPPAAS_JOB_ID=1234 TAPPAAS_ACTOR=lars
+  M->>M: write config/<record>.json (desired)
+  M->>P: change the plane
+  P-->>M: result
+  M->>S: POST /v1/report {change: verb, job, actor, objects}
+  S->>D: close old rows, open new (validity), change row
+  S-->>M: accepted (or spooled by the client)
+  M-->>C: exit code, output
+  C-->>U: Activity 1234 done
+  S-->>C: SSE: objects changed
+```
+
+### How the sweep finds drift
+
+```mermaid
+sequenceDiagram
+  participant T as cmdb-sweep.timer
+  participant S as cmdb sweep
+  participant M as every cmdbSource component
+  participant D as PostgreSQL
+  participant J as journal → Loki
+  participant H as health-manager
+
+  T->>S: nightly, before the update window
+  loop each component
+    S->>M: <component> report --discover
+    M-->>S: observations at full depth
+    S->>D: upsert, validity, placeholders
+  end
+  S->>D: differences since the last sweep
+  D-->>S: changed / appeared / gone, with change rows
+  S->>S: expected (a change row explains it) or drift
+  S->>D: desired vs actual (ADR-020 differ), actual-without-desired, desired-without-actual
+  S->>D: sweep record (change row, verb sweep)
+  S->>J: one line per difference
+  S-->>T: exit 0 / 1 / 2
+  H->>D: gate cmdb: last sweep record
+```
+
+### The console
+
+The console (ADR-034) is built on two kinds of call and the CMDB adds a third
+source to the first:
+
+| The console… | Today | With the CMDB (ADR-040 D10, plan step 4) |
+|---|---|---|
+| **reads** what is | `reads.ts`: cached calls to `health-manager`, `module-manager list`, `backup-manager`, `network-manager topology`, `site-manager`, `environment-manager` | the same reads, answered by `query`/`show`/`relations` on `127.0.0.1:9098` with the token; `network-manager topology` keeps its verb and answers from the CMDB, so the Physical view changes source without changing shape; the SSE stream replaces the 5-minute cache for what changed |
+| **changes** things | every change is a job that runs a manager verb (`jobs.ts`, `run.ts`), recorded in Activity | unchanged, plus `TAPPAAS_JOB_ID` and `TAPPAAS_ACTOR` in the verb's environment, so the change's row in the CMDB is the Activity entry's twin |
+| **shows a thing** | a module page, a device panel, a zone page, each from its own read | one CI panel for every class: attributes with their sources, relations both ways, history (`history` as of a time), drift against its desired record, open events (step 5), and the backbone trace upward (desired record, release, module, issues as links) |
+| **Physical** | the topology's `positions` | every `physical` object by location, room and rack, each asset labelled with the CI it is allocated to |
+| **Assets** (new) | — | every `resource` by stage: ordered and stock first, then placed and unallocated, allocated, disposed; faulty flagged; an asset's allocation history; Record…, Place…, Allocate…, Dispose… as jobs |
+| **Operations** (new) | — | the last sweep: expected changes, drift, actual-without-desired, desired-without-actual, each a link to its CI; a Sweep now button (a job running `cmdb sweep`); open events by CI once step 5 lands |
+| **Setup** | the physical-site step places nodes and switches | the same step, reading what the installer's hook already reported as the node's asset |
+
+What step 4 must not do: open the database, or make the console a writer. It
+reads the API and runs verbs; cmdb-controller stays the only writer and the
+managers the only way to change a plane.
+
 ## What step 1 leaves to later steps
 
 | Later | Here |
