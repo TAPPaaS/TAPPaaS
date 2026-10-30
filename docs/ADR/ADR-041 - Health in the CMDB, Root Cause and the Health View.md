@@ -325,7 +325,7 @@ correlated, and its root causes.
 - **O1** *(closed 2026-10-30, operator)* No hardcoded propagation: correlation rules are data, per
   relation type and class (D3); shipped, a warning crosses nothing.
 - **O2** *(closed 2026-10-30, operator)* A site setting, `health.assessInterval`, default 5 minutes (D2).
-- **O3** *(open; explained 2026-10-30, for the operator to decide)* Whether the gates move out of health-manager into the managers that own the objects
+- **O3** *(closed 2026-10-30, operator: the recommendation)* Whether the gates move out of health-manager into the managers that own the objects
   (site-manager judging its nodes), with health-manager keeping only the derivation.
   **Explanation.** Today health-manager both *observes* (the gates ssh to nodes, ask Proxmox, read
   Grafana) and *judges* (a threshold, a rule, a severity), and is the one writer of `conditions`.
@@ -347,10 +347,11 @@ correlated, and its root causes.
   `report --discover` as an observation. **Recommendation:** keep one assessor and one writer of
   `conditions` (health-manager), and move *observing* to the managers' reports, gate by gate,
   until assess is a pure judgement over the CMDB; revisit the split when that is done and
-  assess takes seconds. Decide: agree with the recommendation, or move the judging too.
+  assess takes seconds. **Decided:** one assessor and one writer of `conditions`; observing moves
+  into the managers' reports gate by gate (plan step 2 is the first of it).
 - **O4** *(closed 2026-10-30, operator)* Both: a condition on its own, and a root cause with its
   symptoms (D4).
-- **O5** *(open; explained 2026-10-30, for the operator to decide)* How much of the graph the assistant (ADR-034 D7) may read to explain a root cause in
+- **O5** *(closed 2026-10-30, operator: (b))* How much of the graph the assistant (ADR-034 D7) may read to explain a root cause in
   words.
   **Explanation.** The assistant proposes and never applies (ADR-034 D7); here it only reads.
   To say in words why `identity` is critical it needs: the root's own conditions (type, severity,
@@ -369,7 +370,8 @@ correlated, and its root causes.
   `history`, `roots`), bounded to about 50 objects and 100 events, names and conditions only —
   no attribute values beyond kind, class and state, no `config/` contents — and the answer
   lists what it read, so the operator can check it. A second hop only on the operator's
-  explicit follow-up question. Decide: (b) as described, or (a) to start.
+  explicit follow-up question. **Decided: (b)** as described — the ego graph one hop and the
+  root's history, bounded, names and conditions only, what was read listed in the answer.
 - **O6** *(open, to discuss)* Which relations get `redundancyGroup` from the start: a node's bonded uplinks (ADR-019
   v1.1), MLAG peers, a service with two providers — or none until a site has one.
 
