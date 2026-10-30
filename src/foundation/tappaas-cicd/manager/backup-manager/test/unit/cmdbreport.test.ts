@@ -80,7 +80,7 @@ try {
   check(JSON.stringify(to("runs-on", "datastore:tappaas_backup")) === JSON.stringify([JSON.stringify({ class: "machine", name: "tappaas3" })]), "…runs-on the machine PBS runs on");
   check(
     JSON.stringify(to("backs-up", "datastore:tappaas_backup")) ===
-      JSON.stringify([{ class: "lxc", name: "dns" }, { class: "machine", name: "tappaas1" }, { class: "vm", name: "nextcloud" }].map((x) => JSON.stringify(x)).sort()),
+      JSON.stringify([{ class: "lxc", name: "dns" }, { class: "node", name: "tappaas1" }, { class: "vm", name: "nextcloud" }].map((x) => JSON.stringify(x)).sort()),
     "backs-up the guests (by module) and the host it holds restore points for — not a buddy's copy, not a guest no module has",
   );
   const buddy = obj("backup-peer", "buddy")?.attributes ?? {};

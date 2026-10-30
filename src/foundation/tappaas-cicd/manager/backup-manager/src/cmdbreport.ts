@@ -50,7 +50,7 @@ export function buildBackupReport(raw: RawRuns | null, runs: BackupRuns | null, 
     const own = new Set(runs.targets.filter((t) => t.kind === "own" || t.kind === "host").map((t) => t.ns));
     for (const g of runs.guests) {
       if (!own.has(g.ns) || g.snapshots === 0) continue;
-      if (g.type === "host") b.relate("backs-up", ds, { class: "machine", name: g.id });
+      if (g.type === "host") b.relate("backs-up", ds, { class: "node", name: g.id }); // a file backup: of a machine or a guest
       else if (g.module) b.relate("backs-up", ds, { class: g.type === "ct" ? "lxc" : "vm", name: g.module });
     }
   }
