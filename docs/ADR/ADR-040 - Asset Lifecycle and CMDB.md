@@ -3,12 +3,12 @@
 | | |
 |---|---|
 | **Status** | **Accepted** (operator, 2026-10-29) |
-| **Version** | 1.0 |
+| **Version** | 1.1 |
 | **Date** | 2026-10-29 |
 | **Author** | Lars Rossen |
 | **Deciders** | @LarsRossen, @ErikDaniel007 |
 | **Closes / addresses** | #906. Amends ADR-036 D3 (who owns a placement, and what it hangs on) and D4 (the topology becomes a view of the CMDB); ADR-007f (a new controller, cmdb-controller, that every manager reports to); ADR-034 (the console's views read the CMDB). Related: ADR-020 (desired, actual and drift), ADR-022 family (the vocabulary of CI classes), ADR-022c (ArchiMate Node and Device), ADR-026 (machines as modules), ADR-028 and ADR-033 (releases), ADR-035 (manager rename and aliases), ADR-037 D4 (adding a node). |
-| **Changelog** | v1.0 (2026-10-29) — **Accepted** by the operator; every open question closed (O5: a tag per kind). Implementation starts on the plan below, step 1 (cmdb-controller) and the asset-manager rename first. · v0.6 (2026-10-29) — **open questions answered (operator):** no split (O1); a module's classes are derived from its `kind` and its service, controller and manager definitions, nothing is declared (O9); `faulty` is a flag, not a stage — a device can be operational and faulty (O3); disks become assets and CIs later, not in the first implementation (O4); event management is future work (O6); no export (O7); the trace into Codeberg is a link only (O8); resource allocation — pools, RAM, CPU, addresses — gets an ADR of its own (O10 → an issue). O5: migrated assets are named by a tag per kind (`srv-01`, `sw-01`, `ap-01`, `dev-01`), the role's name as `displayName`, the serial as key. · v0.5 (2026-10-29) — **D9 (operator):** a port's kind is its connector — `rj45`, `sfp`, `wifi`, `usb-a`, `usb-c` — with speed, module, standard and bands as attributes and `role` (lan, wan, bmc) for what the node uses it for; `bmc` and `power` are no kinds. **Review of D1–D3:** a Product Backlog Item is not a backbone object: it relates to the design (what goes in) and to the release (what is implemented), and a Defect to the releases it was found in and fixed in — Codeberg issues carry both, `ROADMAP.md` the release each ships in; a module instance is not a class of its own — a module is a **`node`** of its kind (`vm`, `lxc`, `machine`, `device`, ADR-022d) or, of kind application, a **`software/app`**; `software` is what runs *in* a node (`app`, `service`, `controller`, `manager`), so `tappaas1` is one CI, a `machine`, with `pve` as an app on it, and `identity` a `vm` with `authentik` on it; `guest` goes (`vm` and `lxc` stand for themselves); `party` is **`identity`**, TAPPaaS's word; UCMDB named as OpenText's model, not a standard; the essential attributes of every class in a table. cmdb-controller is a **24/7 API service** and `cmdb` a CLI with verbs in front of it. · v0.4 (2026-10-29) — **operator's direction:** IT4IT keeps assets (its Resource) apart from the Actual Product Instance, but the industry tracks assets in the CMDB, and so does TAPPaaS: **resources stand beside CIs** in one store, with relations between them (D3's root has `ci`, `resource` and `place`), and **two lifecycles** are kept apart (D7): the asset's (ordered → disposed, reusable) and the CI's (created from its desired record, retired with it, never reused — the same box as `tappaas5` is a new CI). A pool consumed by allocations (storage, addresses) is a resource the model allows and this ADR does not build (O10). **The store is PostgreSQL**, TAPPaaS's database standard (D12, D13; O2 closed). Figure 3-6's nine objects read from the standard's source: the five backbone objects and the four of the Service Offering Backbone. · v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
+| **Changelog** | v1.1 (2026-10-30) — **D15 (operator):** a **discovery sweep** re-establishes the actual model: `cmdb sweep` runs every source at full depth (`report --discover`), logs the differences since the last sweep (expected, or drift) and from desired (ADR-020's differ, plus actual-without-desired and desired-without-actual), writes a sweep record, sets the `cmdb` health check, runs nightly before the update window; the depth each controller must reach is tabled — a node's unused NICs, every disk and its layout, every switch port, every firewall rule. Plan step 7. · v1.0 (2026-10-29) — **Accepted** by the operator; every open question closed (O5: a tag per kind). Implementation starts on the plan below, step 1 (cmdb-controller) and the asset-manager rename first. · v0.6 (2026-10-29) — **open questions answered (operator):** no split (O1); a module's classes are derived from its `kind` and its service, controller and manager definitions, nothing is declared (O9); `faulty` is a flag, not a stage — a device can be operational and faulty (O3); disks become assets and CIs later, not in the first implementation (O4); event management is future work (O6); no export (O7); the trace into Codeberg is a link only (O8); resource allocation — pools, RAM, CPU, addresses — gets an ADR of its own (O10 → an issue). O5: migrated assets are named by a tag per kind (`srv-01`, `sw-01`, `ap-01`, `dev-01`), the role's name as `displayName`, the serial as key. · v0.5 (2026-10-29) — **D9 (operator):** a port's kind is its connector — `rj45`, `sfp`, `wifi`, `usb-a`, `usb-c` — with speed, module, standard and bands as attributes and `role` (lan, wan, bmc) for what the node uses it for; `bmc` and `power` are no kinds. **Review of D1–D3:** a Product Backlog Item is not a backbone object: it relates to the design (what goes in) and to the release (what is implemented), and a Defect to the releases it was found in and fixed in — Codeberg issues carry both, `ROADMAP.md` the release each ships in; a module instance is not a class of its own — a module is a **`node`** of its kind (`vm`, `lxc`, `machine`, `device`, ADR-022d) or, of kind application, a **`software/app`**; `software` is what runs *in* a node (`app`, `service`, `controller`, `manager`), so `tappaas1` is one CI, a `machine`, with `pve` as an app on it, and `identity` a `vm` with `authentik` on it; `guest` goes (`vm` and `lxc` stand for themselves); `party` is **`identity`**, TAPPaaS's word; UCMDB named as OpenText's model, not a standard; the essential attributes of every class in a table. cmdb-controller is a **24/7 API service** and `cmdb` a CLI with verbs in front of it. · v0.4 (2026-10-29) — **operator's direction:** IT4IT keeps assets (its Resource) apart from the Actual Product Instance, but the industry tracks assets in the CMDB, and so does TAPPaaS: **resources stand beside CIs** in one store, with relations between them (D3's root has `ci`, `resource` and `place`), and **two lifecycles** are kept apart (D7): the asset's (ordered → disposed, reusable) and the CI's (created from its desired record, retired with it, never reused — the same box as `tappaas5` is a new CI). A pool consumed by allocations (storage, addresses) is a resource the model allows and this ADR does not build (O10). **The store is PostgreSQL**, TAPPaaS's database standard (D12, D13; O2 closed). Figure 3-6's nine objects read from the standard's source: the five backbone objects and the four of the Service Offering Backbone. · v0.3 (2026-10-29) — checked against the IT4IT 3.0.1 standard itself (page numbers are the standard's): **Product Design** is a backbone object of its own (§7.1.3.1), between the Digital Product and the Product Backlog Items; the backbone's five objects named as §11.7.8 does; the Resource data object (§8.2.3.1) is where IT4IT holds physical assets. **D3** is a class hierarchy with inheritance, modelled on UCMDB's but small; **D13** the metamodel as data and how inheritance is stored in SQL; **D14** OpenTelemetry is supported: every CI has an OTel resource identity, Alloy carries it. · v0.2 (2026-10-29) — **scope widened (operator):** from asset lifecycle to TAPPaaS's whole lifecycle along the IT4IT product backbone; the actual state of everything — assets, nodes, guests, module instances, services, zones, environments, people, the site — is a CMDB owned by a new cmdb-controller that every manager feeds; the Physical view and the assets are one view of it, filtered on `physical`; event management and the operations console relate to it. v0.1's asset decisions are kept as D7–D9. Title was *Asset Lifecycle*. · v0.1 (2026-10-29) — first draft, from #906. |
 
 TAPPaaS knows well what a site *should* be: the modules and their dependencies, the releases, and
 the desired configuration in `config/*.json`. It knows poorly what a site *is*: that is asked live
@@ -609,6 +609,59 @@ identifying attributes; the mapping is revisited when it stabilises (`service.*`
 `host.*` and `deployment.*` are not). Metrics and traces are not collected today; when they are
 (the logging module's v2 backlog), they come with the same identity.
 
+### D15 — The discovery sweep re-establishes the actual model
+
+A report (D4) is what a manager sees while it does something else. That is not enough to know a
+site: nobody runs `validate` on a quiet weekend, and a manager reports only what its verb needed —
+`node add` never asks about the NIC nothing is plugged into. So the CMDB also has a **discovery
+sweep**: `cmdb sweep` asks every source for *everything* it can see, writes the differences, and
+says whether the site is still what `config/` says it is.
+
+**What a sweep does, in order:**
+
+1. **Rescan** (D2): runs `<component> report --discover` for every `cmdbSource` component. With
+   `--discover` a source reports to its full depth (the table below), not only what its verbs
+   touch; a source that does not know the flag reports as it does today.
+2. **Differences since the last sweep:** every attribute and relation that changed, appeared or
+   went (the history of D6 gives them for free), grouped by object, with the source that saw each.
+   A change that a verb reported (a `change` row, D6) is listed as *expected*; one that no verb
+   explains is *drift*.
+3. **Differences from desired:** for every CI with a `desired` reference, ADR-020's resolver and
+   differ compare the record with what was observed — this is `validate`'s drift, now kept; plus
+   two lists ADR-020 cannot make alone: **actual without desired** (a guest, a VLAN, a firewall
+   rule, a share, a user that exists and nothing declares — found, unmanaged) and **desired without
+   actual** (a record whose object no source saw — missing, or `unseen` by D5).
+4. **The sweep record:** one `change` row with verb `sweep`, its time, the counts, and the
+   differences as its body; each difference also goes to the journal as one structured line (so
+   Loki keeps it and ADR-039's rules can alert on it) and to stdout in the sweep's report. The
+   objects marked drifted stay marked until a reconcile or modify clears them (D6).
+5. **Exit status and health:** `0` nothing but expected changes; `1` drift or unmanaged things
+   found; `2` desired without actual, or a source that failed. health-manager's check `cmdb` reads
+   the last sweep record: healthy, warning, critical by the same thresholds, so the sweep's result
+   is on the site's health page and in its mail.
+
+**When:** on demand (`cmdb sweep`, and the console's Operations view has a button), and nightly by
+`cmdb-sweep.timer` before the update sweep's window (ADR-017), so the update runs against a fresh
+actual and its own report is one more sweep. A sweep is read-only for every plane: it changes
+nothing but the CMDB.
+
+**Discovery depth per controller.** `--discover` makes each source report what its plane holds
+whether or not TAPPaaS declared it; this is the minimum, and each controller's README says what
+more it adds:
+
+| Source | Reports at full depth |
+|---|---|
+| proxmox-controller (through site-manager) | every node's **NICs, used or not** (name, MAC, kind and speed per D9, link state, the bridge or bond it is in, or none), **every disk** (by-id name, model, serial, size, type, bus, SMART health, the partitions and what each holds: a ZFS pool member, an EFI partition, LVM, swap, nothing), **every ZFS pool and its layout** (vdevs, members by serial, state, size, used), every storage the node knows (`pvesm`), every guest with its disks and NICs and the storage each disk sits on, HA state, the cluster's quorum and corosync links, PCI devices a guest could take (GPUs), the node's CPU and memory |
+| switch controllers (switch-manager, ap-manager; UniFi and MikroTik in the Community repository) | **every port, used or not** (kind, speed, link state, negotiated speed, PoE state and draw, the VLANs on it, STP state), every MAC seen behind each port and the LLDP neighbour, every VLAN the switch has (declared or not), the switch's own management address, firmware, uptime; for an AP every radio (standard, band, channel, power), every SSID it broadcasts and every client (MAC, SSID, signal) |
+| opnsense-controller (through network-manager) | **every interface and VLAN**, every **firewall rule and alias** by its UUID with its position (the live order, not the desired one), every NAT rule, every DHCP range, reservation and lease, every DNS override, the WireGuard peers with their last handshake, the routes, the certificates with their expiry, the installed packages and the OPNsense version |
+| authentik-controller | every user, group, role, provider, application and outpost, with their flows |
+| pbs-controller | every datastore with its usage, the prune and GC state, every restore point's group and age, the sync jobs |
+| asset-manager | what it records (D7) — a sweep never invents an asset; a NIC or disk found by a controller goes on the asset the node is allocated to, if one is, else into *actual without desired* |
+
+Each controller's `--discover` is one read of its plane (one `pvesh` walk, one controller API
+page set, one OPNsense export); the sweep never polls. A controller from a module (ADR-035)
+takes part by implementing `report --discover` the same way.
+
 ## Consequences
 
 - One record of what is: the CMDB, with history, relations and drift; one trace from every running
@@ -687,4 +740,6 @@ identifying attributes; the mapping is revisited when it stabilises (`service.*`
 4. The topology and the console's Physical view from the CMDB; a CI's panel with history and trace.
 5. Events carry CI ids; health status on the CI; the Operations view.
 6. Drift recorded (ADR-020's differ into the CMDB).
-7. Later, each in its own ADR: resource allocation (O10), event management (O6), disks as assets (O4).
+7. The discovery sweep (D15): `cmdb sweep`, the timer, the health check; `--discover` on every
+   controller to the depth of D15's table.
+8. Later, each in its own ADR: resource allocation (O10), event management (O6), disks as assets (O4).
