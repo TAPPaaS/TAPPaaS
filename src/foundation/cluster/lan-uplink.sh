@@ -43,9 +43,12 @@
 #       Fails each leg over in turn on a drained node: the leg goes down for ~10s
 #       while mgmt and corosync must stay up; a timer on the node brings it back
 #       after 30s whatever happens here.
-#   lan-uplink.sh capture <node>
+#   lan-uplink.sh capture <node> [--wan]
 #       Records the live layout as the declaration when none exists (the cluster
-#       update runs it for every node). Changes nothing on the node.
+#       update runs it for every node). Changes nothing on the node. --wan: the
+#       wan port as the node has it, also over a declaration (node add: a node
+#       joined under an archived record's name has what this join gave it; lan
+#       stays, so a rebuild has the old uplink to go by).
 #   lan-uplink.sh ensure-lldp <node>
 #       lldpd, receive-only: the node learns which switch each port reaches and
 #       announces nothing.
@@ -72,7 +75,7 @@ readonly LOCK=/tmp/tappaas-lan-uplink.lock
 usage() { sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//; /^set -euo/d'; }
 
 CMD="${1:-}"; shift || true
-NODE="" JSON=0 LAN_PORTS="" LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" CONFIG_ONLY=0 EXECUTE=0 YES=0 NO_WAN=0 WAN_PORT=""
+NODE="" JSON=0 LAN_PORTS="" LAN_MODE="" LAN_PRIMARY="" LAN_MTU="" CONFIG_ONLY=0 EXECUTE=0 YES=0 NO_WAN=0 WAN_PORT="" CAPTURE_WAN=0
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --json)        JSON=1 ;;
@@ -82,6 +85,7 @@ while [[ $# -gt 0 ]]; do
         --mtu)         LAN_MTU="${2:-}"; shift ;;
         --config-only) CONFIG_ONLY=1 ;;
         --no-wan)      NO_WAN=1 ;;
+        --wan)         CAPTURE_WAN=1 ;;
         --wan-port)    WAN_PORT="${2:-}"; shift ;;
         --switch-wait) CONFIRM_BY="${2:-}"; shift ;;
         --dry-run)     EXECUTE=0 ;;
@@ -588,7 +592,17 @@ case "${CMD}" in
         ;;
     capture)
         need_pvehost
-        if [[ "$(declared | jq -c '.lan // null')" != null ]]; then debug "  ${NODE}: uplinks declared"; exit 0; fi
+        if [[ "$(declared | jq -c '.lan // null')" != null ]]; then
+            debug "  ${NODE}: uplinks declared"
+            [[ "${CAPTURE_WAN}" == 1 ]] || exit 0
+            live="$(probe)" || { warn "  ${NODE}: not reachable — wan port not recorded"; exit 0; }
+            w="$(lu_declaration <<<"${live}" | jq -c '{wan}')"
+            if [[ "$(declared | jq -c '{wan: (.wan // {ports: []})}')" != "${w}" ]]; then
+                write_declared "${w}"
+                info "  ${GN}✓${CL} ${NODE}: wan port recorded as the node has it — $(jq -r '.wan.ports | join(", ") | if . == "" then "none" else . end' <<<"${w}")"
+            fi
+            exit 0
+        fi
         live="$(probe)" || { warn "  ${NODE}: not reachable — uplinks not recorded"; exit 0; }
         [[ "$(jq '.lan.members | length' <<<"${live}")" -gt 0 ]] || { warn "  ${NODE}: no lan bridge — nothing recorded"; exit 0; }
         write_declared "$(lu_declaration <<<"${live}")"

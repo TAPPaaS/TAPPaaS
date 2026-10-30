@@ -240,7 +240,7 @@ function readSiteName(): string {
 // named with --storage-pools, else the zpools on the node. A failure is a
 // warning, never a failed join: the node is in the cluster already, and the
 // next cluster update registers it anyway.
-function registerNode(name: string, pools: string[]): void {
+function registerNode(name: string, pools: string[], joined = false): void {
   const addr = `${name}.${mgmtDomain()}`;
   // A --pxe pool is name=layout:disk; its record keeps the name.
   const names = [...new Set(pools.map((p) => p.split("=")[0]).filter((p) => /^tank/.test(p)))];
@@ -253,7 +253,9 @@ function registerNode(name: string, pools: string[]): void {
   // #40: the lan uplink the node step built becomes its declaration, so a
   // later drift — or a rebuild under this name — has something to go by.
   const lu = clusterScript("lan-uplink.sh");
-  if (!lu || runStream(lu, ["capture", name]) !== 0) {
+  // Just joined: the WAN port is what this join gave it, whatever an archived
+  // record under this name said.
+  if (!lu || runStream(lu, ["capture", name, ...(joined ? ["--wan"] : [])]) !== 0) {
     warn(`  ${name}'s lan uplink is not recorded yet — the next cluster update records it`);
   }
 }
@@ -622,7 +624,7 @@ function joinAndCapture(
   // The pvehost record first: it is the node, and it carries the pools the
   // storage registration below reads.
   step("registering the node as a pvehost module instance (ADR-026 D4, #665)");
-  registerNode(o.name, []);
+  registerNode(o.name, [], true);
   recordBootDisks(o.name, stdIp);
 
   // storage registration ------------------------------------------------------
