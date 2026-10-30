@@ -87,6 +87,12 @@ SM nfs share add x --server debhost --pool p --backup false >/dev/null 2>&1 && b
 echo '{"kind":"machine","management":"unmanaged","zone0":"home","address":"10.3.10.50"}' > "${FIX}/cfg/nas1.json"
 SM nfs share add video --server nas1 --path /volume1/video --version 4.1 >/dev/null 2>&1 && ok "add: a registered server's share" || bad "add: a registered server's share"
 SM nfs share add old --server nas1 --path /v --version 3 >/dev/null 2>&1 && bad "add: NFSv3 without pinned ports refused" || ok "add: NFSv3 without pinned ports refused"
+# ADR-040 D4: report --json, and a change carrying the console's job id (spooled: no CMDB here).
+[[ "$(SM report --json --no-smart 2>/dev/null | jq -r '[.objects[] | select(.class == "share") | .name] | join(",")')" == "video" ]] \
+    && ok "report --json: the shares of shares.json" || bad "report --json"
+TAPPAAS_CMDB= TAPPAAS_JOB_ID=job-42 CMDB_SOCKET="${FIX}/no.sock" SM nfs grant video jellyfin ro >/dev/null 2>&1
+[[ "$(cat "${FIX}"/cfg/.cmdb-spool/*.json 2>/dev/null | jq -sr '.[-1] | "\(.kind) \(.verb) \(.job) \(.objects[0].name)"')" == "change storage-manager nfs grant job-42 video" ]] \
+    && ok "grant: reports a change with the console's job id" || bad "grant: change report ($(cat "${FIX}"/cfg/.cmdb-spool/*.json 2>/dev/null))"
 SM inventory --help >/dev/null 2>&1 && ok "inventory --help" || bad "inventory --help"
 SM inventory --bogus >/dev/null 2>&1 && bad "inventory: an unknown option refused" || ok "inventory: an unknown option refused"
 

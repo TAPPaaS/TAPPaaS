@@ -107,6 +107,23 @@ reservation; its size is what the guest sees. Not read: SMART self-test logs,
 per-disk I/O load, and a datastore directory's exact size (it would need a walk of
 the whole store).
 
+## Reports to the CMDB
+
+ADR-040 D4: `storage-manager report [--json] [--no-smart]` sends the storage to
+the CMDB (cmdb-controller) as one observation; `--json` prints it instead.
+
+| Class | Name | Attributes | Relations |
+|---|---|---|---|
+| `storage-pool` | `<node>/<pool>` (pool names repeat across nodes; the metamodel keys a pool by name only) | displayName (the pool), type `zfs`, size, used (the dataset view, bytes), health (ZFS's) | `runs-on` its machine |
+| `share` | the share | path (`/tappaas-nfs/<share>` on a managed Host, else the registered path), grants [{consumer, access}], desired | |
+
+`inventory` sends the pools it read as a side effect. `nfs share add`,
+`modify`, `delete`, `nfs grant` and `nfs revoke` report the share they changed
+as a change, with the console's job id (`TAPPAAS_JOB_ID`); a deleted share is
+ended. A machine the CMDB does not have yet drops only that `runs-on`. A
+report the CMDB cannot take is spooled under `config/.cmdb-spool/` and never
+fails the verb; `TAPPAAS_CMDB=off` sends nothing.
+
 ## Files
 
 | Path | Role |
