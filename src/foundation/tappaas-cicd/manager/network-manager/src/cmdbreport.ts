@@ -290,7 +290,7 @@ export function buildNetworkDiscover(doc: DiscoverDoc, zones: ZonesDoc): CmdbBat
   }
   // A VLAN the firewall carries that no zone declares.
   const undeclared = (doc.vlans ?? []).filter((v) => !zoneOf({ tag: v.tag }));
-  for (const o of doc.dnsOverrides ?? []) if (o.fqdn) b.put("dns-name", o.fqdn, { fqdn: o.fqdn, target: o.target || undefined, public: false });
+  for (const o of doc.dnsOverrides ?? []) if (o.fqdn) b.put("dns-name", o.fqdn, { fqdn: o.fqdn, target: o.target || undefined });
   for (const p of doc.wireguard ?? []) {
     if (!p.name) continue;
     b.put("vpn-peer", p.name, {
