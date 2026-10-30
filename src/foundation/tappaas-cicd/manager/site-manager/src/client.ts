@@ -17,7 +17,7 @@ import {
   queryClusterNodes,
   queryNodeTankPools,
   reachableNodes, queryClusterGuests, ssh} from "../../../lib/ts/src/cluster";
-import { CLUSTER_PROBE, ClusterRead, HOST_PROBE, parseClusterProbe, parseHostProbe } from "./report";
+import { CLUSTER_PROBE, ClusterRead, HOST_PROBE, parseClusterProbe, parseHostProbe } from "./cmdb-report";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { capture as run, captureResult, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
 import { setNodeStoragePools } from "../../../lib/ts/src/nodes";

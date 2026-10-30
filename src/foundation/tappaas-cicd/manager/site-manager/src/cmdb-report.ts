@@ -1,4 +1,4 @@
-// report.ts — what site-manager reports to the CMDB (ADR-040 D4): the site,
+// cmdb-report.ts — what site-manager reports to the CMDB (ADR-040 D4): the site,
 // its locations, the cluster, every node (a machine: its pvehost instance) and
 // every guest the cluster runs (a vm or lxc; the node CI of the module it is,
 // when it is one).

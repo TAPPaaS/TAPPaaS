@@ -50,7 +50,7 @@ import { locationErrors, placeText, readLocations } from "../../../lib/ts/src/lo
 import { clusterNode, clusterNodes, nodeErrors } from "../../../lib/ts/src/nodes";
 import { mgmtDomain } from "../../../lib/ts/src/cluster";
 import { reportChange, reportObservation, sendObservation } from "../../../lib/ts/src/cmdb-source";
-import { SOURCE, membershipObservation, nodeObject, recordingClient, siteObjects, siteObservation } from "./report";
+import { SOURCE, membershipObservation, nodeObject, recordingClient, siteObjects, siteObservation } from "./cmdb-report";
 
 const VERSION = "0.1.0";
 

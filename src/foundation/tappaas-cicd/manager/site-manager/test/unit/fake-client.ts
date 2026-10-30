@@ -6,7 +6,7 @@
 
 import { appendFileSync } from "fs";
 import { RepositoryTrust, SiteClient } from "../../src/types";
-import { ClusterRead } from "../../src/report";
+import { ClusterRead } from "../../src/cmdb-report";
 
 export class FakeSiteClient implements SiteClient {
   // Live state.

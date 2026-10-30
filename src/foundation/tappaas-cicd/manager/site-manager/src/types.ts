@@ -4,7 +4,7 @@
 
 import { Location } from "../../../lib/ts/src/locations";
 import { ClusterNode } from "../../../lib/ts/src/nodes";
-import { ClusterRead } from "./report";
+import { ClusterRead } from "./cmdb-report";
 
 // ── Site config entities (site.json) ──────────────────────────────────
 export interface SiteNetwork {

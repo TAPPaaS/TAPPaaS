@@ -1,9 +1,9 @@
-// report.test.ts — `site-manager report --json` (ADR-040 D4): the site, its
+// cmdb-report.test.ts — `site-manager report --json` (ADR-040 D4): the site, its
 // locations, the cluster, the nodes and the guests, with the classes, keys
 // and relations of D3/D5; the probes' parsers; reconcile's side-effect report.
 
 import { run } from "../../src/main";
-import { parseClusterProbe, parseGuestConf, parseHostProbe } from "../../src/report";
+import { parseClusterProbe, parseGuestConf, parseHostProbe } from "../../src/cmdb-report";
 import { FakeSiteClient } from "./fake-client";
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "fs";
 import { join } from "path";
