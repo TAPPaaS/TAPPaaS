@@ -68,6 +68,26 @@ export function parseIdentity(out: string): MachineIdentity {
   return id;
 }
 
+// The identity the installer posted, kept on the consumed registration by
+// node-provisioner (config/provision/<name>.json.consumed, `identity`): the
+// hook ADR-040 D8 names. Null when the record has none worth matching by.
+export function identityFromRegistration(rec: unknown): MachineIdentity | null {
+  const r = rec && typeof rec === "object" ? (rec as { identity?: unknown }).identity : null;
+  if (!r || typeof r !== "object") return null;
+  const o = r as { vendor?: unknown; model?: unknown; serial?: unknown; nics?: unknown };
+  const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+  const id: MachineIdentity = { vendor: str(o.vendor), model: str(o.model), serial: str(o.serial), macs: [], nics: [] };
+  if (id.serial && NO_SERIAL.test(id.serial)) id.serial = null;
+  for (const n of Array.isArray(o.nics) ? o.nics : []) {
+    const nic = n as { link?: unknown; mac?: unknown };
+    const m = str(nic.mac)?.toLowerCase().replace(/-/g, ":") ?? "";
+    if (!MAC_RE.test(m) || m === "00:00:00:00:00:00" || id.macs.includes(m)) continue;
+    id.macs.push(m);
+    id.nics.push({ name: str(nic.link) ?? `nic${id.nics.length + 1}`, mac: m });
+  }
+  return id.serial || id.macs.length ? id : null;
+}
+
 // The server assets a node could be: in no role, here (not ordered, not disposed).
 export function freeServers(doc: PositionsDoc): [string, Asset][] {
   return Object.entries(assetsOf(doc)).filter(([, a]) => a.kind === "server" && !a.role && a.stage !== "ordered" && a.stage !== "disposed");

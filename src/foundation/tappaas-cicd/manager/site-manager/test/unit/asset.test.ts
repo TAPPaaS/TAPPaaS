@@ -3,7 +3,7 @@
 // cabling an asset lends node add, the new asset's tag, and the release.
 
 import { PositionsDoc } from "../../../../lib/ts/src/positions";
-import { assetCabling, assetPlaying, assetProblem, freeServers, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
+import { assetCabling, assetPlaying, assetProblem, freeServers, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
 
 let passed = 0;
 let failed = 0;
@@ -22,6 +22,13 @@ check(id.macs.join() === "00:07:43:38:aa:f0,00:07:43:38:aa:f1", "MACs lower case
 check(id.nics.map((n) => `${n.name}=${n.mac}`).join() === "nic1=00:07:43:38:aa:f0,nic2=00:07:43:38:aa:f1", "the NICs with their names");
 check(parseIdentity("product_serial=To Be Filled By O.E.M.\n").serial === null, "a vendor's placeholder is no serial");
 check(parseIdentity("product_serial=Default string\nnic=eth0 00:00:00:00:00:00\nnic=eth1 junk\n").macs.length === 0, "the zero MAC and junk are dropped");
+
+// 1b. the identity the installer posted, on the consumed registration
+const reg = identityFromRegistration({ name: "tappaas4", install_ip: "10.0.0.13", identity: { vendor: "Default string", model: "QDNV01", serial: "Default string", nics: [{ link: "enp2s0", mac: "AA:BB:CC:00:00:04" }, { link: "", mac: "aa:bb:cc:00:00:05" }] } });
+check(!!reg && reg.vendor === "Default string" && reg.model === "QDNV01" && reg.serial === null, "the registration's vendor and model; its placeholder serial dropped");
+check(!!reg && reg.nics.map((n) => `${n.name}=${n.mac}`).join() === "enp2s0=aa:bb:cc:00:00:04,nic2=aa:bb:cc:00:00:05", "NICs by link name, lower-case MACs, a nameless one numbered");
+check(identityFromRegistration({ name: "tappaas4" }) === null, "a registration without identity: nothing");
+check(identityFromRegistration({ identity: { serial: "To be filled by O.E.M.", nics: [] } }) === null, "nothing worth matching by: nothing");
 
 // 2. the match: serial first, then a port's MAC; only free servers
 const doc: PositionsDoc = {

@@ -191,6 +191,14 @@ class TestOneShotConsumption(RegistryCase):
         # consuming twice is a no-op
         self.assertFalse(self.registry.consume("tappaas3"))
 
+    def test_consume_keeps_the_machines_identity(self):
+        reg = self.registry.register("tappaas4")
+        ident = {"vendor": "HP", "model": "Z840", "serial": "CZC1", "nics": [{"link": "eth0", "mac": "aa:bb:cc:dd:ee:04"}]}
+        self.assertTrue(self.registry.consume("tappaas4", install_ip="10.0.0.13", identity=ident))
+        consumed = json.loads(reg.path.with_name(reg.path.name + ".consumed").read_text())
+        self.assertEqual(consumed["identity"], ident)
+        self.assertEqual(consumed["install_ip"], "10.0.0.13")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -206,6 +206,16 @@ class TestSystemInfoExtraction(unittest.TestCase):
         "dmi": {"system": {"serial": "SN-1234"}},
     }
 
+    def test_extract_identity(self):
+        from node_provisioner.server import extract_identity
+        info = {**self.INFO, "dmi": {"system": {"manufacturer": "Hewlett-Packard", "name": "HP Z840 Workstation", "serial": "CZC1234ABC"}}}
+        ident = extract_identity(info)
+        self.assertEqual((ident["vendor"], ident["model"], ident["serial"]), ("Hewlett-Packard", "HP Z840 Workstation", "CZC1234ABC"))
+        self.assertEqual(ident["nics"], [{"link": "eth0", "mac": "aa:bb:cc:dd:ee:03"}, {"link": "eth2", "mac": "aa:bb:cc:dd:ee:04"}])
+        placeholder = extract_identity({"dmi": {"system": {"manufacturer": "Default string", "name": "QDNV01", "serial": "Default string"}}})
+        self.assertEqual((placeholder["vendor"], placeholder["model"], placeholder["serial"]), ("Default string", "QDNV01", None))
+        self.assertEqual(extract_identity({})["nics"], [])
+
     def test_extract_macs(self):
         self.assertEqual(
             extract_macs(self.INFO),
@@ -373,11 +383,13 @@ class TestHandleAnswerPost(unittest.TestCase):
         self.assertNotIn("nvme0n1", body.split("disk-list")[1].split("\n")[0])
         self.assertIn("tanka1=single:nvme0n1", body)  # noted, not installed
 
-        # secret stored, registration one-shot consumed
+        # secret stored, registration one-shot consumed, the machine's identity on it
         secret = self.secrets / "tappaas3.pw"
         self.assertTrue(secret.is_file())
         self.assertIn(f'root-password = "{secret.read_text().strip()}"', body)
         self.assertEqual(self.registry.list_pending(), [])
+        consumed = json.loads((self.registry._path("tappaas3").with_name("tappaas3.json.consumed")).read_text())
+        self.assertEqual(consumed["identity"]["nics"], [{"link": "", "mac": "aa:bb:cc:dd:ee:03"}])
 
         # a second identical request finds nothing
         status2, _ = self._post(["AA:BB:CC:DD:EE:03"])

@@ -76,7 +76,10 @@ The PVE installer POSTs the machine's system info (MACs under
 
 A served answer **consumes** the registration
 (`<name>.json` → `<name>.json.consumed`) — one-shot, it can never answer
-twice.
+twice. The consumed record keeps `install_ip` and the machine's `identity`
+(DMI vendor, model and serial, placeholders dropped; every NIC's link and MAC)
+from the installer's post: `site-manager node add` reads it for the node's
+asset (ADR-040 D8) once the node has joined.
 
 ## Security model (design §4)
 

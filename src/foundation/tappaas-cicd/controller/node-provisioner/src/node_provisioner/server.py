@@ -179,6 +179,40 @@ def extract_serial(system_info: dict) -> str:
     return str(system.get("serial") or "") or "unknown"
 
 
+# What a vendor's BIOS writes where a serial should be.
+_NO_SERIAL = re.compile(r"^(|0+|to be filled by o\.?e\.?m\.?|default string|system serial number|"
+                        r"not specified|none|n/a|unknown|0123456789|1234567890)$", re.IGNORECASE)
+_MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
+
+
+def extract_identity(system_info: dict) -> dict:
+    """The machine's identity for its asset (ADR-040 D5, D8): vendor, model and
+    serial from DMI (placeholders dropped), and every NIC's name and MAC. Kept on
+    the consumed registration, where site-manager node add reads it, so the
+    installer's post is the hook the ADR names and no ssh read is needed."""
+    dmi = system_info.get("dmi") or {}
+    system = dmi.get("system") or {}
+    board = dmi.get("baseboard") or {}
+    first = lambda *vals: next((str(v).strip() for v in vals if v and str(v).strip()), None)  # noqa: E731
+    serial = first(system.get("serial"))
+    if serial and _NO_SERIAL.match(serial):
+        serial = None
+    nics = []
+    for nic in system_info.get("network_interfaces") or []:
+        if not isinstance(nic, dict) or not nic.get("mac"):
+            continue
+        mac = str(nic["mac"]).lower().replace("-", ":")
+        if not _MAC.match(mac) or mac == "00:00:00:00:00:00" or any(n["mac"] == mac for n in nics):
+            continue
+        nics.append({"link": str(nic.get("link") or ""), "mac": mac})
+    return {
+        "vendor": first(system.get("manufacturer"), system.get("vendor"), board.get("manufacturer")),
+        "model": first(system.get("name"), system.get("product_name"), system.get("product"), board.get("product")),
+        "serial": serial,
+        "nics": nics,
+    }
+
+
 def write_node_secret(name: str, password: str, directory=None) -> Path:
     """Store the generated root password 0600 under the secrets dir (0700).
 
@@ -311,8 +345,8 @@ def handle_answer_post(
         **settings,
     )
 
-    registry.consume(reg.name, install_ip=request_ip)
-    info(f"registration '{reg.name}' consumed (one-shot)")
+    registry.consume(reg.name, install_ip=request_ip, identity=extract_identity(system_info))
+    info(f"registration '{reg.name}' consumed (one-shot); the machine's identity kept for its asset")
     if request_ip:
         # The PVE installer BAKES its DHCP lease as a STATIC address
         # (stage-1 finding) — so the installed node comes up exactly here

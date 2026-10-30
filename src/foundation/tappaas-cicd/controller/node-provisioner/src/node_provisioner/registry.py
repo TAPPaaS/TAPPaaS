@@ -261,21 +261,27 @@ class Registry:
             return reg
         return None
 
-    def consume(self, name: str, install_ip: str = "") -> bool:
+    def consume(self, name: str, install_ip: str = "", identity=None) -> bool:
         """One-shot: rename <name>.json -> <name>.json.consumed.
 
         install_ip: the address the installer posted from. The PVE
         installer bakes its DHCP lease as a STATIC address (stage-1
         finding), so this is where the installed node boots — recorded
         for the operator / the node-add step.
+        identity: what the installer's post said of the machine (vendor,
+        model, serial, nics) — site-manager node add reads it for the node's
+        asset (ADR-040 D8).
         """
         path = self._path(name)
         if not path.exists():
             return False
-        if install_ip:
+        if install_ip or identity:
             try:
                 data = json.loads(path.read_text())
-                data["install_ip"] = install_ip
+                if install_ip:
+                    data["install_ip"] = install_ip
+                if identity:
+                    data["identity"] = identity
                 path.write_text(json.dumps(data, indent=2) + "\n")
             except (OSError, json.JSONDecodeError):
                 pass

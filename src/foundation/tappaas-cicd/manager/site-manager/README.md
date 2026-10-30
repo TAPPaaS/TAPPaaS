@@ -368,7 +368,9 @@ the asset is the box, in asset-manager's register. `--asset <a>` names it when i
 recorded before (bought, racked, cabled): node add checks it before anything is installed
 (a server, in stock or placed, in no role) and takes `--switch-port` and `--mac` from its
 recorded cable and the cabled port's MAC when they are not given. Without `--asset`, once
-the node has joined, its DMI serial and its NICs' MACs are read over ssh and matched
+the node has joined, its DMI vendor, model and serial and its NICs' MACs — what the installer
+posted when it asked for its answer, kept by node-provisioner on the consumed registration
+(`config/provision/<node>.json.consumed`); read over ssh for a node adopted by hand — are matched
 against the free server assets — serial first, then any port's MAC; two matches are a
 conflict and nothing is allocated — and when none matches a new asset is recorded for it
 (`srv-NN`, the node's name as its display name, vendor, model and serial from the

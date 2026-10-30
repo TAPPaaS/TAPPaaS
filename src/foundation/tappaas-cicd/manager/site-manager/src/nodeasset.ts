@@ -7,7 +7,7 @@ import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { GN, YW, CL, info, warn } from "../../../lib/ts/src/cli";
 import { POSITIONS_FILE, PositionsDoc } from "../../../lib/ts/src/positions";
-import { IDENTITY_SH, MachineIdentity, assetPlaying, matchAsset, newAssetArgs, parseIdentity } from "./asset";
+import { IDENTITY_SH, MachineIdentity, assetPlaying, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "./asset";
 import { defaultConfigDir } from "./config";
 
 export function readPositions(configDir = defaultConfigDir()): PositionsDoc | null {
@@ -26,8 +26,19 @@ function assetManager(args: string[]): { rc: number; out: string } {
   return { rc: r.status ?? -1, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
 }
 
-// The machine's identity over ssh (root, the mgmt address it joined at).
-export function readIdentity(host: string): MachineIdentity | null {
+// The machine's identity: what the installer posted, kept on the node's
+// consumed registration (ADR-040 D8's hook), else read over ssh (root, the
+// mgmt address it joined at — a node adopted by hand has no registration).
+export function readIdentity(host: string, name?: string, configDir = defaultConfigDir()): MachineIdentity | null {
+  if (name) {
+    const f = `${configDir.replace(/\/$/, "")}/provision/${name}.json.consumed`;
+    if (existsSync(f)) {
+      try {
+        const id = identityFromRegistration(JSON.parse(readFileSync(f, "utf8")));
+        if (id) return id;
+      } catch { /* unreadable: ssh */ }
+    }
+  }
   const r = spawnSync("ssh", ["-o", "ConnectTimeout=10", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", `root@${host}`, IDENTITY_SH], { encoding: "utf8" });
   if (r.error || r.status !== 0) return null;
   return parseIdentity(r.stdout ?? "");
@@ -50,7 +61,7 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
   let key = asset ?? null;
   let fresh = false;
   if (!key) {
-    const id = host ? readIdentity(host) : null;
+    const id = host ? readIdentity(host, name) : null;
     if (!id) warn(`  ${name}'s identity (serial, MACs) could not be read${host ? ` from ${host}` : ""}: no asset is matched by it`);
     const m = id ? matchAsset(doc, id) : null;
     if (m && "conflict" in m) {
