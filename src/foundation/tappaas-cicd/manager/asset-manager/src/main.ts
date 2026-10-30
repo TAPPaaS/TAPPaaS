@@ -64,6 +64,7 @@ import {
 } from "../../../lib/ts/src/positions";
 import { Store, loadCatalog, readDevices } from "./store";
 import { CmdbRefused, CmdbReport, cmdbReport } from "../../../lib/ts/src/cmdb";
+import { changeJob } from "../../../lib/ts/src/job";
 import { View, changeReport, cmdbAnswer, cmdbView, fullReport } from "./cmdb";
 import {
   Result,
@@ -428,12 +429,9 @@ function viewOf(store: Store, doc: PositionsDoc): View {
   return cmdbView(doc, withSiteFaceplates(readShipped(), doc).catalog, siteLocs(store.configDir)?.primary ?? null);
 }
 
-// The console sets TAPPAAS_JOB to its job's id (ADR-040 D6: a change links
-// to its job); the actor is the operator.
+// The console's job and its actor (ADR-040 D6: a change links to its job).
 function changeCtx(): { verb: string; job?: string; actor?: string } {
-  const job = process.env.TAPPAAS_JOB;
-  const actor = process.env.TAPPAAS_ACTOR ?? process.env.USER;
-  return { verb: verbRun, ...(job ? { job } : {}), ...(actor ? { actor } : {}) };
+  return { verb: verbRun, ...changeJob() };
 }
 
 // Send one report; say what became of it, never throw. An allocation the

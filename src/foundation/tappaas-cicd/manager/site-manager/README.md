@@ -514,8 +514,8 @@ Changes: `node add`, `node delete` (the machine ends), `site modify` and the
 `location` verbs (a deleted location ends). `node reconcile` and `reconcile`
 report the membership and pools they read, as a side effect.
 
-A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`,
-else `TAPPAAS_JOB`) and the actor (`TAPPAAS_ACTOR`, else `$USER`). A report
+A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`)
+and the actor (`TAPPAAS_ACTOR`, else the OS user; lib/ts `job.ts`). A report
 the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)
 and never fails the verb; `TAPPAAS_CMDB=off` turns reporting off (the tests
 do). The tests check every payload against cmdb-controller's metamodel

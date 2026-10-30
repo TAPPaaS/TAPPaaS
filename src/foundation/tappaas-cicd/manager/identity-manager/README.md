@@ -240,8 +240,8 @@ report what they touched (a deleted user or group ends by its uuid, an
 organization or role by name); `bootstrap` reports the seeded organizations
 and roles.
 
-A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`,
-else `TAPPAAS_JOB`) and the actor (`TAPPAAS_ACTOR`, else `$USER`). A report
+A verb's change report carries the verb, the console's job (`TAPPAAS_JOB_ID`)
+and the actor (`TAPPAAS_ACTOR`, else the OS user; lib/ts `job.ts`). A report
 the CMDB cannot take is spooled in `config/.cmdb-spool/` (lib/ts `cmdb.ts`)
 and never fails the verb; `TAPPAAS_CMDB=off` turns reporting off (the tests
 do). The tests check every payload against cmdb-controller's metamodel

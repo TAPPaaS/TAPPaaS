@@ -37,7 +37,7 @@ done
 FIX="$(mktemp -d "${TMPDIR:-/tmp}/rm-fix.XXXXXX")"
 trap 'rm -rf "${FIX}" "${DIST}"' EXIT
 export CMDB_SOCKET="${FIX}/no-cmdb.sock"
-unset CMDB_URL TAPPAAS_JOB
+unset CMDB_URL TAPPAAS_JOB_ID TAPPAAS_ACTOR
 mkdir -p "${FIX}/cfg"
 TOPO="${HERE}/test/fixtures/topology-hrossen.json"
 USW="USW Pro XG 10 PoE"
@@ -191,7 +191,7 @@ RML rack add r2 >/dev/null 2>&1 && bad "a write beside racks.json refused" || ok
 rm -rf -- "${LEG}"
 # ── assets: a box's life, ordered to disposed (ADR-040 D7-D9) ─────────
 AC="${FIX}/assets"; mkdir -p "${AC}"
-RA() { CONFIG_DIR="${AC}" TAPPAAS_CONFIG="${AC}" TAPPAAS_FACEPLATES="${HERE}/faceplates" TAPPAAS_JOB="${RA_JOB:-}" \
+RA() { CONFIG_DIR="${AC}" TAPPAAS_CONFIG="${AC}" TAPPAAS_FACEPLATES="${HERE}/faceplates" TAPPAAS_JOB_ID="${RA_JOB:-}" \
     run_ts "node '${DIST}/manager/asset-manager/src/main.js' $(printf "'%s' " "$@")"; }
 ASP="${AC}/.cmdb-spool"
 AD="${AC}/positions.json"
