@@ -6,6 +6,8 @@
 # one. P1: the standard components, from tappaas-cicd's components.json, each as
 # an entry of module `tappaas-cicd`. Entries a module registered (module-manager,
 # a later phase) are kept as they are: this rewrites only tappaas-cicd's own.
+# An entry carries components.json's cmdbSource (false when absent): the
+# component has a `report` verb for the CMDB (ADR-040 D2, D4).
 #
 # Run by refresh-control-plane.sh on every sweep's prepare step and by
 # tappaas-cicd's install.sh, after the components are built and linked.
@@ -50,7 +52,8 @@ build() { # build <existing-registry-json>
             [ $c[0].components[] | {
                 name, kind, module: "tappaas-cicd", repository: $repo,
                 source: ($dir + "/" + .path), language, package,
-                manifest: (.manifest // null), aliases: (.aliases // []), plugsInto: (.plugsInto // []), instances: [] } ]
+                manifest: (.manifest // null), aliases: (.aliases // []), plugsInto: (.plugsInto // []),
+                cmdbSource: (.cmdbSource // false), instances: [] } ]
             + [ ($old.components // [])[] | select(.module != "tappaas-cicd") ]
           ) }'
 }

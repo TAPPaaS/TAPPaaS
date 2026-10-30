@@ -5,7 +5,7 @@
 // Records mutations so tests can assert exactly what the engine did, and so a
 // second sync against the resulting state proves idempotency.
 
-import { AkNamed, AkUser, PrimitiveClient } from "../../src/types";
+import { AkNamed, AkUser, PrimitiveClient, AkDiscovery } from "../../src/types";
 
 export class FakeClient implements PrimitiveClient {
   groups = new Set<string>();
@@ -51,6 +51,10 @@ export class FakeClient implements PrimitiveClient {
   }
   listRoles(): AkNamed[] {
     return Array.from(this.roles).map((n) => ({ name: n, uuid: `uuid-role-${n}`, displayName: n }));
+  }
+  discovery: AkDiscovery = { flows: [], providers: [], applications: [], outposts: [] };
+  discover(): AkDiscovery {
+    return this.discovery;
   }
   ensureUser(name: string, email: string, display: string, inactive: boolean): void {
     this.log.push(`ensure-user ${name} ${inactive ? "inactive" : "active"}`);

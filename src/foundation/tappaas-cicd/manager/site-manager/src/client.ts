@@ -17,7 +17,8 @@ import {
   queryClusterNodes,
   queryNodeTankPools,
   reachableNodes, queryClusterGuests, ssh} from "../../../lib/ts/src/cluster";
-import { CLUSTER_PROBE, ClusterRead, HOST_PROBE, parseClusterProbe, parseHostProbe } from "./cmdb-report";
+import { nodeDiscoveryProbe, parseNodeDiscovery } from "./cmdb-discover";
+import { CLUSTER_DISCOVERY, CLUSTER_PROBE, ClusterRead, HOST_PROBE, parseClusterProbe, parseHostProbe } from "./cmdb-report";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { capture as run, captureResult, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
 import { setNodeStoragePools } from "../../../lib/ts/src/nodes";
@@ -155,16 +156,19 @@ export class CliSiteClient implements SiteClient {
       .map((g) => ({ vmid: g.vmid, name: g.name, type: g.type }));
   }
 
-  readCluster(candidates: string[]): ClusterRead | null {
+  readCluster(candidates: string[], discover = false): ClusterRead | null {
     const reach = reachableNodes(defaultNodeCandidates(candidates));
     if (reach.length === 0) return null;
-    const r = ssh("root", `${reach[0]}.${mgmtDomain()}`, CLUSTER_PROBE);
+    const r = ssh("root", `${reach[0]}.${mgmtDomain()}`, discover ? CLUSTER_DISCOVERY : CLUSTER_PROBE);
     if (!r.ran || r.rc !== 0) return null;
     const read = parseClusterProbe(r.stdout);
     for (const m of read.members) {
       if (m.online === false) continue;
       const h = ssh("root", `${m.name}.${mgmtDomain()}`, HOST_PROBE);
       if (h.ran && h.rc === 0) read.hosts[m.name] = parseHostProbe(h.stdout);
+      if (!discover) continue;
+      const d = ssh("root", `${m.name}.${mgmtDomain()}`, `bash -s <<'TAPPAAS_PROBE'\n${nodeDiscoveryProbe(m.name)}\nTAPPAAS_PROBE`);
+      if (d.ran && d.rc !== 255) (read.hosts[m.name] ??= {}).discovery = parseNodeDiscovery(d.stdout);
     }
     return read;
   }

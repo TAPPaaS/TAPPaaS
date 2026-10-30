@@ -32,7 +32,7 @@ import { Me, SetupState, mayWrite } from "./access";
 import { Proposal } from "./conversations";
 import { Manifests, Validated, applyArgv, baseArgv, previewArgv, sameArgv, validateArgv } from "./manifest";
 import { ManifestVerb } from "../../lib/ts/src/help";
-import { Runner, StopSignal, Streamer } from "./run";
+import { Runner, StopSignal, Streamer, jobEnv } from "./run";
 
 export type JobKind = "preview" | "apply" | "read";
 export type JobState = "queued" | "running" | "done" | "refused";
@@ -382,10 +382,17 @@ export class Jobs {
 
   // ── creating ────────────────────────────────────────────────────────
 
+  // A job's id: its start to the second, and a random suffix. The verb it runs
+  // gets it as TAPPAAS_JOB_ID (jobEnv), so one taken before the verb runs
+  // (a secret's, recordSecret) is the id its Activity record then has.
+  newJobId(): string {
+    return `${new Date(this.now()).toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`;
+  }
+
   private newJob(me: Me, v: Validated, kind: JobKind, ran: string[] | null, previewOf: string | null, from: Job["assistant"] = null): JobSummary {
     const t = this.now();
     return {
-      id: `${new Date(t).toISOString().replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`,
+      id: this.newJobId(),
       kind,
       state: "queued",
       who: { user: me.user, name: me.name, role: me.role, via: me.via },
@@ -537,11 +544,12 @@ export class Jobs {
 
   // A secret the Setup wizard wrote (secrets.ts): in Activity like any change,
   // with the keys it set and never their values. `via`: the owner's verb that
-  // stored it (wlan: ap-manager ssid set-passphrase <ssid>), when not the console.
-  recordSecret(me: Me, name: string, file: string, keys: string[], via?: string): Job {
+  // stored it (wlan: ap-manager ssid set-passphrase <ssid>), when not the console;
+  // `id`: the one that verb ran with (newJobId, jobEnv).
+  recordSecret(me: Me, name: string, file: string, keys: string[], via?: string, id?: string): Job {
     const t = new Date(this.now()).toISOString();
     const job: JobSummary = {
-      id: `${t.replace(/[-:.TZ]/g, "").slice(0, 14)}-${randomBytes(3).toString("hex")}`,
+      id: id ?? this.newJobId(),
       kind: "apply",
       state: "done",
       who: { user: me.user, name: me.name, role: me.role, via: me.via },
@@ -704,7 +712,8 @@ export class Jobs {
   }
 
   // One command of a job, its output appended to the job's log (capped at
-  // MAX_OUTPUT over the whole job).
+  // MAX_OUTPUT over the whole job), run with the job's id and its user in
+  // TAPPAAS_JOB_ID and TAPPAAS_ACTOR (jobEnv): the CMDB change names its job.
   // A Stop asked before the child spawned reaches it as it does.
   private async stream(job: JobSummary, argv: string[], out: { written: number; tail: string }): Promise<{ rc: number; ran: boolean }> {
     const onSpawn = (signal: (s: StopSignal) => boolean): void => {
@@ -720,7 +729,7 @@ export class Jobs {
         this.appendOutput(job.id, part);
         this.emit(job, { type: "output", chunk: part });
       } else job.truncated = true;
-    }, undefined, { onSpawn }).finally(() => this.signals.delete(job.id));
+    }, undefined, { onSpawn, env: jobEnv(job.id, job.who) }).finally(() => this.signals.delete(job.id));
     if (!r.ran) {
       const note = `\n[console] could not run ${argv[0]}: ${r.error ?? "not found"}\n`;
       out.written += note.length;

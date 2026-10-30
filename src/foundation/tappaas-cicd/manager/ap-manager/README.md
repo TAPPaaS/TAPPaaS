@@ -130,6 +130,13 @@ Wi-Fi clients seen by an AP stay in the actual: the CMDB resolves no MAC yet
 CMDB cannot take is spooled by the `cmdb` CLI and never fails the verb.
 `TAPPAAS_CMDB=off` sends nothing. Tests: `./test-cmdb-report.sh`.
 
+`report --discover` (ADR-040 D15) first reads the APs and adds a last report:
+every radio as a `wifi` port (standard, band, `channel`, `power`) connected to what
+it broadcasts, an SSID desired does not declare, and on the `device` its firmware,
+`uptime` and `clients` (MAC, SSID, signal). These are `ap/1`'s optional fields
+(ADR-035 D4): what a controller does not report is left out.
+Until the metamodel has its fields (``port.channel|power`, `device.uptime|clients``), cmdb-controller refuses these attributes; the plain report is sent on its own and stands.
+
 ## Setup helper: `setup-wlan-secrets.sh`
 
 Walks the active zones whose `SSID` is still a template placeholder (or names an

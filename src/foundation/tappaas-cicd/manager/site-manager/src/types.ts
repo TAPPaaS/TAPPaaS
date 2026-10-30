@@ -221,7 +221,8 @@ export interface SiteClient {
   // `report` (ADR-040 D4): the cluster and its nodes as they are — members,
   // quorum, guests with their configs, each node's own facts. null when no
   // node answers.
-  readCluster(candidates: string[]): ClusterRead | null;
+  // discover: to the full depth of ADR-040 D15, one more read per node.
+  readCluster(candidates: string[], discover?: boolean): ClusterRead | null;
   // Move ONE module via module-manager (never the controller directly — the
   // layering is the point: module-manager owns per-module orchestration and the
   // HA rule reconciliation that goes with it). Returns its exit code, where 10

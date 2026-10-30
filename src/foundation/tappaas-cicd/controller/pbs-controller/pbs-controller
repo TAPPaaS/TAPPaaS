@@ -115,6 +115,7 @@ verify:
 backup: --json
 namespaces: --json --pbs=
 runs: --json --pbs=
+discover: --json --pbs=
 add-to-job: --retention= --bucket=
 apply-schedule:
 key list:
@@ -536,6 +537,44 @@ REMOTE
     fi
 }
 
+# `discover`: everything the PBS holds, one read-only pass for the CMDB's sweep
+# (backup-manager report --discover, ADR-040 D15): every datastore with its
+# usage and GC state, each restore-point group's count and age, the prune and
+# sync jobs.
+cmd_discover() {
+    parse_args "$@"
+    have_pbs_libs || skip_offline "discover (PBS libs not loaded)"
+    pbs_reachable || skip_offline "discover"
+    local node ds
+    node="$(pbs_node)" || skip_offline "discover (no PBS Host)"
+    ds="$(ssh -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+        "root@$(pbs_node_addr "${node}")" "bash -s" 2>/dev/null <<'REMOTE'
+api() { proxmox-backup-debug api get "$@" --output-format json 2>/dev/null; }
+or() { jq -e . >/dev/null 2>&1 <<<"$1" && printf '%s' "$1" || printf '%s' "$2"; }
+stores="$(mktemp)"; trap 'rm -f "${stores}"' EXIT
+while IFS= read -r store; do
+    snaps="$(mktemp)"
+    while IFS= read -r ns; do
+        api "/admin/datastore/${store}/snapshots" ${ns:+--ns "${ns}"} \
+            | jq -c --arg ns "${ns}" '.[] | {ns: $ns, type: .["backup-type"], id: .["backup-id"], time: .["backup-time"]}' >> "${snaps}"
+    done < <(api "/admin/datastore/${store}/namespace" | jq -r '.[].ns')
+    jq -nc --arg name "${store}" --slurpfile snaps "${snaps}" \
+        --argjson status "$(or "$(api "/admin/datastore/${store}/status")" null)" \
+        --argjson gc "$(or "$(api "/admin/datastore/${store}/gc")" null)" \
+        '{name: $name, status: $status, gc: $gc,
+          groups: ($snaps | group_by([.ns, .type, .id]) | map({ns: .[0].ns, type: .[0].type, id: .[0].id,
+                   snapshots: length, oldest: (map(.time) | min), newest: (map(.time) | max)}))}' >> "${stores}"
+    rm -f "${snaps}"
+done < <(api /config/datastore | jq -r '.[].name')
+jq -n --slurpfile datastores "${stores}" --argjson prune "$(or "$(api /admin/prune)" '[]')" \
+    --argjson sync "$(or "$(api /admin/sync)" '[]')" \
+    '{datastores: $datastores, pruneJobs: $prune, syncJobs: $sync}'
+REMOTE
+)" || skip_offline "discover (${node} did not answer)"
+    jq -e 'type == "object"' >/dev/null 2>&1 <<<"${ds}" || skip_offline "discover (no answer from ${node})"
+    jq --arg node "${node}" '{reachable: true, node: $node} + .' <<<"${ds}"
+}
+
 # ── PBS mutations (driven by backup-manager reconcile) ────────────────
 # add-to-job <vmid> [--retention <spec>] [--bucket daily|weekly|monthly] —
 # place <vmid> in the backup job for its resolved schedule (ADR-012 §3.2/D16),
@@ -870,6 +909,7 @@ main() {
         purge)          cmd_purge "$@" ;;
         namespaces)     cmd_namespaces "$@" ;;
         runs)           cmd_runs "$@" ;;
+        discover)       cmd_discover "$@" ;;
         add-to-job)     cmd_add_to_job "$@" ;;
         apply-schedule) cmd_apply_schedule "$@" ;;
         key)            cmd_key "$@" ;;

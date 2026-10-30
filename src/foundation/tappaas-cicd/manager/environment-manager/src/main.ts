@@ -128,9 +128,12 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "report [--json]",
+      usage: "report [--json] [--discover]",
       note: "(ADR-040: send every environment, its owner and the zones serving it to the CMDB)",
-      options: [["--json", "Print the report instead of sending it."]],
+      options: [
+        ["--json", "Print the report instead of sending it."],
+        ["--discover", "Accepted for the sweep (D15): what this plane holds is all report sends."],
+      ],
     },
     {
       usage: "reconcile <env> [--deep] [--apply] [--skip-network]",
@@ -260,6 +263,8 @@ export function parseOpts(args: string[]): Opts {
         break;
       case "--check":
         o.check = true;
+        break;
+      case "--discover": // D15: the sweep asks every source; no deeper read here
         break;
       case "--json":
         o.json = true;

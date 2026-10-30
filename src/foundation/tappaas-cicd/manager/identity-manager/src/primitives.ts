@@ -10,7 +10,7 @@
 
 import { spawnSync } from "child_process";
 import { captureResult } from "../../../lib/ts/src/exec";
-import { AkNamed, AkUser, PrimitiveClient } from "./types";
+import { AkDiscovery, AkNamed, AkUser, PrimitiveClient } from "./types";
 
 export class AuthentikUnreachable extends Error {}
 
@@ -49,6 +49,10 @@ export class CliPrimitiveClient implements PrimitiveClient {
 
   listRoles(): AkNamed[] {
     return normalizeNamed(runJson(["list-roles"]));
+  }
+
+  discover(): AkDiscovery {
+    return runJson(["discover"]) as AkDiscovery;
   }
 
   ensureUser(name: string, email: string, display: string, inactive: boolean): void {

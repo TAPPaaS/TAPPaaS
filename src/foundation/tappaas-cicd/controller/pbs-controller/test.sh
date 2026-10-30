@@ -74,6 +74,11 @@ if run_offline namespaces >/dev/null 2>&1; then
 else
     bad "namespaces did not degrade gracefully"
 fi
+if run_offline discover --json 2>/dev/null | jq -e '.reachable == false' >/dev/null; then
+    ok "discover --json degrades to {reachable:false} when PBS unreachable"
+else
+    bad "discover --json did not degrade to the offline marker"
+fi
 if run_offline runs --json 2>/dev/null | jq -e '.reachable == false' >/dev/null; then
     ok "runs --json degrades to {reachable:false} when PBS unreachable"
 else

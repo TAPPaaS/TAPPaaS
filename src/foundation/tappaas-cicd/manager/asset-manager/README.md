@@ -254,7 +254,7 @@ asset-manager export --json --cmdb # the same, as the CMDB would answer a query 
 
 - **Every verb that writes `positions.json`** (the asset, port, place, cable, room and rack
   verbs) reports what it changed, after writing it: a `change` with the verb, the console's
-  job id (`TAPPAAS_JOB`), the actor (`TAPPAAS_ACTOR`, else `$USER`), the objects and
+  job id (`TAPPAAS_JOB_ID`), the actor (`TAPPAAS_ACTOR`, else the OS user), the objects and
   relations that differ and what they name; what it removed is ended (`end: true`). A
   faceplate verb changes nothing the CMDB holds and reports nothing. `--check` reports nothing.
 - **Never a gate.** A report cmdb-controller cannot take now is spooled under

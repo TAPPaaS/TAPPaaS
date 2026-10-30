@@ -94,6 +94,28 @@ const spooled = (root: string): Obj[] => {
   check(r.relations?.some((x: Obj) => x.type === "member-of" && x.from?.ref === u?.ref && x.to?.ref === g?.ref), "user member-of group");
 }
 
+// ── report --discover: Authentik's rest, on the identity module's CI ───
+{
+  const { dir } = seed();
+  const c = liveClient();
+  c.discovery = {
+    flows: [{ slug: "default-authentication-flow", name: "Welcome", designation: "authentication" }],
+    providers: [{ name: "nextcloud", type: "OAuth2/OpenID Provider", application: "nextcloud", flows: { authorization: "default-provider-authorization-implicit-consent" } }],
+    applications: [{ slug: "nextcloud", name: "Nextcloud", provider: "nextcloud" }],
+    outposts: [{ name: "authentik Embedded Outpost", type: "proxy", providers: ["nextcloud"] }],
+  };
+  const plain = JSON.parse(capture(() => run(["report", "--json", "--config-dir", dir], c)).join("\n")) as Obj;
+  check(!plain.objects.some((o: Obj) => o.class === "vm"), "without --discover the report stays as it is");
+  const r = JSON.parse(capture(() => run(["report", "--json", "--discover", "--config-dir", dir], c)).join("\n")) as Obj;
+  const vm = r.objects.find((o: Obj) => o.class === "vm" && o.name === "identity");
+  const a = vm?.attributes?.authentik;
+  check(a?.providers?.[0]?.flows?.authorization !== undefined && a?.applications?.[0]?.slug === "nextcloud" && a?.outposts?.length === 1 && a?.flows?.length === 1, "providers with their flows, applications, outposts");
+  check(r.objects.some((o: Obj) => o.class === "user"), "beside everything report sends");
+  // `authentik` is a field the metamodel does not have yet (D15): nothing else may be refused.
+  const left = cmdbProblems(r).filter((p) => !/vm has no field authentik$/.test(p));
+  check(left.length === 0, `the metamodel takes the rest: ${left.join("; ")}`);
+}
+
 // ── Authentik down: organizations and roles only ───────────────────────
 {
   const { dir } = seed();
@@ -115,14 +137,14 @@ const spooled = (root: string): Obj[] => {
   const saved = { ...process.env };
   process.env.TAPPAAS_CMDB = "";
   process.env.CMDB_SOCKET = join(root, "no.sock");
-  delete process.env.TAPPAAS_JOB_ID;
-  process.env.TAPPAAS_JOB = "20261030120000-ffeedd"; // asset-reports' spelling, read too
+  process.env.TAPPAAS_JOB_ID = "20261030120000-ffeedd";
+  process.env.TAPPAAS_ACTOR = "lars";
   try {
     const c = liveClient();
     capture(() => run(["user", "add", "bob", "--email", "bob@acme.test", "--groups", "acme__users", "--config-dir", dir], c));
     capture(() => run(["user", "delete", "bob", "--config-dir", dir], c));
   } finally {
-    for (const k of ["TAPPAAS_CMDB", "CMDB_SOCKET", "TAPPAAS_JOB", "TAPPAAS_JOB_ID"]) {
+    for (const k of ["TAPPAAS_CMDB", "CMDB_SOCKET", "TAPPAAS_JOB_ID", "TAPPAAS_ACTOR"]) {
       if (saved[k] === undefined) delete process.env[k];
       else process.env[k] = saved[k];
     }
@@ -133,7 +155,7 @@ const spooled = (root: string): Obj[] => {
   check(changes.length === 2, `two changes (${changes.length})`);
   for (const x of reports) check(cmdbProblems(x).length === 0, `the metamodel takes the ${x.kind} ${x.verb ?? ""}: ${cmdbProblems(x).join("; ")}`);
   const add = changes[0];
-  check(add?.verb === "user add bob" && add?.job === "20261030120000-ffeedd", `the change carries its verb and job (${add?.verb}, ${add?.job})`);
+  check(add?.verb === "user add bob" && add?.job === "20261030120000-ffeedd" && add?.actor === "lars", `the change carries its verb, job and actor (${add?.verb}, ${add?.job}, ${add?.actor})`);
   const bob = add?.objects?.find((o: Obj) => o.class === "user" && o.name === "bob");
   check(bob?.attributes?.uuid === "uuid-user-bob", "the added user, with the uuid Authentik gave it");
   check(add?.relations?.some((x: Obj) => x.type === "member-of" && x.from?.ref === bob?.ref), "and its membership");

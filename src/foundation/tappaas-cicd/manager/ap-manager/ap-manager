@@ -52,6 +52,8 @@ readonly DESIRED="${CONFIG_DIR}/switch-configuration-desired.json"
 readonly ACTUAL="${CONFIG_DIR}/switch-configuration-actual.json"
 readonly POSITIONS="${CONFIG_DIR}/positions.json"
 JSON=0
+# report --discover (ADR-040 D15): the sweep's depth.
+DISCOVER=0
 
 # ── Usage ────────────────────────────────────────────────────────────
 
@@ -87,8 +89,10 @@ SSIDs (site-wide: every access point broadcasts each one, on its zone's VLAN):
 
 Reconciliation (five-verb provider contract):
   update-desired          zones.json -> SSID vlan tracking
-  report [--json]         send the APs, their assets, radios, uplinks and the SSIDs to
-                          the CMDB (ADR-040); --json prints the reports instead
+  report [--json] [--discover]
+                          send the APs, their assets, radios, uplinks and the SSIDs to
+                          the CMDB (ADR-040); --json prints the reports instead;
+                          --discover reads the APs and adds radios, clients, uptime
   interrogate             live APs -> actual.json (via its controller)
   delta                   show desired-vs-actual + zone/SSID/uplink validations
   apply                   push delta via the controller (manual prints steps)
@@ -116,7 +120,7 @@ ssid set-passphrase: --file=
 ssid * add: --zone= --security= --vlan= --radius= --captive --disabled
 ssid * remove:
 ssid * list:
-report: --json
+report: --json --discover
 update-desired:
 interrogate:
 delta:
@@ -764,16 +768,23 @@ ap_reports() {
     [[ -s "${POSITIONS}" ]] && pos="$(jq -c . "${POSITIONS}" 2>/dev/null || echo '{}')"
     [[ -s "${ACTUAL}" ]] && actual="$(jq -c . "${ACTUAL}" 2>/dev/null || echo '{}')"
     if [[ -n "${verb}" ]]; then head="$(cmdb_change_head "${verb}")"; else head='{"kind":"observation"}'; fi
+    local -a deep=()
+    [[ "${DISCOVER}" == 1 ]] && deep=(--argjson discover true)
     jq --argjson actual "${actual}" --argjson pos "${pos}" --arg only "${only}" \
         --argjson ended "${ended}" --argjson endedSsids "${endedSsids}" --arg source ap-manager \
         --arg kind "$(jq -r .kind <<<"${head}")" --arg verb "${verb}" \
         --arg job "$(jq -r '.job // ""' <<<"${head}")" --arg actor "$(jq -r '.actor // ""' <<<"${head}")" \
-        -f "${SCRIPT_DIR}/cmdb-report.jq" "${DESIRED}"
+        ${deep[@]+"${deep[@]}"} -f "${SCRIPT_DIR}/cmdb-report.jq" "${DESIRED}"
 }
 
-# report [--json]: every AP and SSID, as one observation (--json prints it).
+# report [--json] [--discover]: every AP and SSID, as one observation (--json
+# prints it). --discover (ADR-040 D15) reads the APs first and adds the depth of
+# a sweep; an AP that does not answer keeps what the actual holds.
 cmd_report() {
     local reports
+    if [[ "${DISCOVER}" == 1 ]]; then
+        cmd_interrogate >&2 || warn "report: not every AP could be read — what is shown may be old"
+    fi
     reports="$(ap_reports "" '[]' '[]')" || die "report: could not build the report from ${DESIRED}"
     if [[ "${JSON}" == 1 ]]; then printf '%s\n' "${reports}"; return 0; fi
     cmdb_send_reports <<<"${reports}"
@@ -1027,7 +1038,10 @@ main() {
         link)           cmd_link "$@"; ap_changed "${cmd}" "${1:-}" "${before}" ;;
         ssid)           cmd_ssid "$@"
                         case "${1:-}" in list) ;; *) [[ "${2:-}" == list ]] || ap_changed "ssid ${1:-}" "" "${before}" ;; esac ;;
-        report)         [[ "${1:-}" == --json ]] && JSON=1; cmd_report ;;
+        report)         local a; for a in "$@"; do
+                            case "${a}" in --json) JSON=1 ;; --discover) DISCOVER=1 ;; esac
+                        done
+                        cmd_report ;;
         update-desired) cmd_update_desired ;;
         # What interrogate read is reported as it was read (an observation).
         interrogate)    local irc=0; cmd_interrogate || irc=$?

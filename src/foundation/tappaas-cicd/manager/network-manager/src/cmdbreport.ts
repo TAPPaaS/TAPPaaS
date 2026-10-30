@@ -213,3 +213,107 @@ export function buildNetworkReport(s: NetSources): CmdbBatch {
   for (const p of s.peers ?? []) putPeer(b, p);
   return b;
 }
+
+// ── report --discover (ADR-040 D15) ───────────────────────────────────
+// What `opnsense-firewall discover` answers. Rules, aliases, NAT, routes,
+// certificates, packages and the interfaces no zone has go on the network
+// module's CI under `firewall`; what belongs to a zone, on the zone.
+export const FIREWALL_MODULE = "network";
+
+export interface DiscoverRule {
+  uuid: string;
+  position: number;
+  sequence: number | null;
+  [k: string]: unknown;
+}
+export interface DiscoverDoc {
+  version?: string | null;
+  packages?: unknown[];
+  interfaces?: { identifier?: string; device?: string | null; tag?: number | null; ipv4?: string | null; description?: string; enabled?: boolean }[];
+  vlans?: { tag?: number | null; device?: string | null; parent?: string | null; description?: string }[];
+  rules?: DiscoverRule[];
+  aliases?: unknown[];
+  nat?: unknown[];
+  dhcpRanges?: { interface?: string; start_addr?: string; end_addr?: string; [k: string]: unknown }[];
+  dhcpHosts?: unknown[];
+  leases?: unknown[];
+  dnsOverrides?: { fqdn?: string; target?: string; enabled?: boolean }[];
+  wireguard?: { name?: string; publicKey?: string; tunneladdress?: string; endpoint?: string; lastHandshake?: unknown }[];
+  routes?: unknown[];
+  certificates?: unknown[];
+  errors?: { section: string; error: string }[];
+}
+
+export function collectDiscover(run: Runner = captureResult): { doc: DiscoverDoc | null; error?: string } {
+  const b = bin("NM_OPNSENSE_FIREWALL_BIN", "opnsense-firewall");
+  const r = run(b, ["discover", "--no-ssl-verify"]);
+  if (!r.ran) return { doc: null, error: `${b} not found` };
+  try {
+    if (r.rc !== 0) throw new Error();
+    return { doc: JSON.parse(r.stdout) as DiscoverDoc };
+  } catch {
+    return { doc: null, error: `exit ${r.rc}: ${(r.stderr || r.stdout).trim().split("\n").slice(-1)[0] ?? "no JSON"}` };
+  }
+}
+
+/** The rules in live order; one held after a rule with a later sequence is out of order. */
+export function liveRules(rules: DiscoverRule[]): (DiscoverRule & { outOfOrder: boolean })[] {
+  let high = -Infinity;
+  return rules.map((r) => {
+    const late = r.sequence !== null && r.sequence < high;
+    if (r.sequence !== null) high = Math.max(high, r.sequence);
+    return { ...r, outOfOrder: late };
+  });
+}
+
+export function buildNetworkDiscover(doc: DiscoverDoc, zones: ZonesDoc): CmdbBatch {
+  const b = new CmdbBatch(SOURCE);
+  const zoneOf = (i: { tag?: number | null; ipv4?: string | null }): string | undefined => {
+    for (const [name, z] of zones.zones) {
+      if (i.tag && z.vlantag === i.tag) return name;
+      if (i.ipv4 && z.ip === i.ipv4) return name;
+    }
+    return undefined;
+  };
+  const free: unknown[] = [];
+  for (const i of doc.interfaces ?? []) {
+    const zone = zoneOf(i);
+    if (!zone) {
+      free.push(i);
+      continue;
+    }
+    const range = (doc.dhcpRanges ?? []).find((r) => r.interface === i.identifier);
+    b.put("zone", zone, {
+      interface: { identifier: i.identifier, device: i.device, tag: i.tag, ipv4: i.ipv4, enabled: i.enabled },
+      dhcp: range?.start_addr && range.end_addr ? { start: range.start_addr, end: range.end_addr } : undefined,
+    });
+  }
+  // A VLAN the firewall carries that no zone declares.
+  const undeclared = (doc.vlans ?? []).filter((v) => !zoneOf({ tag: v.tag }));
+  for (const o of doc.dnsOverrides ?? []) if (o.fqdn) b.put("dns-name", o.fqdn, { fqdn: o.fqdn, target: o.target || undefined, public: false });
+  for (const p of doc.wireguard ?? []) {
+    if (!p.name) continue;
+    b.put("vpn-peer", p.name, {
+      publicKey: p.publicKey || undefined,
+      endpoint: p.endpoint || undefined,
+      allowedIps: p.tunneladdress ? [p.tunneladdress] : undefined,
+      lastHandshake: p.lastHandshake === null || p.lastHandshake === undefined ? undefined : String(p.lastHandshake),
+    });
+  }
+  b.put("vm", FIREWALL_MODULE, {
+    osVersion: doc.version ?? undefined,
+    firewall: {
+      interfaces: free,
+      vlans: undeclared,
+      rules: liveRules(doc.rules ?? []),
+      aliases: doc.aliases ?? [],
+      nat: doc.nat ?? [],
+      dhcpRanges: doc.dhcpRanges ?? [],
+      dhcpHosts: doc.dhcpHosts ?? [],
+      routes: doc.routes ?? [],
+      certificates: doc.certificates ?? [],
+      packages: doc.packages ?? [],
+    },
+  });
+  return b;
+}

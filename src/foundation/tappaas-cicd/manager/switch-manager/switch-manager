@@ -73,6 +73,8 @@ PARK_ZONE="iotLocal"
 PARK_REFUSED=0
 # interrogate --no-park (#860): read only — the post-sweep read never parks.
 NO_PARK=0
+# report --discover (ADR-040 D15): the sweep's depth.
+DISCOVER=0
 # Port types that are VLAN trunks (carry the full active VLAN set).
 _is_trunk_type() { case " ${1} " in *" node "*|*" switch "*|*" ap "*|*" uplink "*) return 0;; *) return 1;; esac; }
 
@@ -117,8 +119,11 @@ Inventory (recorded in switch-configuration-actual.json):
   mlag-pair remove <a> <b>
   mlag-pair list [--json] each pair, its live state and its LAGs
   list [--json]
-  report [--json]         send the switches, their assets, ports and cables to the
-                          CMDB (ADR-040); --json prints the reports instead
+  report [--json] [--discover]
+                          send the switches, their assets, ports and cables to the
+                          CMDB (ADR-040); --json prints the reports instead;
+                          --discover reads the switches and adds every port's
+                          link, PoE, VLANs, STP, what is seen behind it, every VLAN
   list-ports [<switch>] [--json]
                           one line per port: actual config + drift vs zones.json
   port-neighbors <switch> <port> [--refresh] [--json]
@@ -172,7 +177,7 @@ list: --json
 list-ports: --json
 show:
 validate:
-report: --json
+report: --json --discover
 interrogate: --park-zone= --no-park
 update-desired:
 delta:
@@ -936,15 +941,24 @@ switch_reports() {
     local only="$1" ended="$2" verb="${3:-}" pos='{}' head
     [[ -s "${POSITIONS}" ]] && pos="$(jq -c . "${POSITIONS}" 2>/dev/null || echo '{}')"
     if [[ -n "${verb}" ]]; then head="$(cmdb_change_head "${verb}")"; else head='{"kind":"observation"}'; fi
+    local -a deep=()
+    [[ "${DISCOVER}" == 1 ]] && deep=(--argjson discover true --argjson zones "$(jq -c . "${ZONES_FILE}")")
     jq --argjson pos "${pos}" --arg only "${only}" --argjson ended "${ended}" --arg source switch-manager \
         --arg kind "$(jq -r .kind <<<"${head}")" --arg verb "${verb}" \
         --arg job "$(jq -r '.job // ""' <<<"${head}")" --arg actor "$(jq -r '.actor // ""' <<<"${head}")" \
-        -f "${SCRIPT_DIR}/cmdb-report.jq" "${ACTUAL}"
+        ${deep[@]+"${deep[@]}"} -f "${SCRIPT_DIR}/cmdb-report.jq" "${ACTUAL}"
 }
 
-# report [--json]: every switch, as one observation (--json prints it).
+# report [--json] [--discover]: every switch, as one observation (--json prints
+# it). --discover (ADR-040 D15) reads the switches first, without parking
+# anything, and adds the depth of a sweep; a switch that does not answer keeps
+# what the actual holds.
 cmd_report() {
     local reports
+    if [[ "${DISCOVER}" == 1 ]]; then
+        NO_PARK=1
+        cmd_interrogate >&2 || warn "report: not every switch could be read — what is shown may be old"
+    fi
     reports="$(switch_reports "" '[]')" || die "report: could not build the report from ${ACTUAL}"
     if [[ "${JSON}" == 1 ]]; then printf '%s\n' "${reports}"; return 0; fi
     cmdb_send_reports <<<"${reports}"
@@ -1320,6 +1334,7 @@ main() {
         if [[ "${pz}" == 1 ]]; then PARK_ZONE="${a}"; pz=0
         elif [[ "${a}" == --json ]]; then JSON=1
         elif [[ "${a}" == --no-park ]]; then NO_PARK=1
+        elif [[ "${a}" == --discover ]]; then DISCOVER=1
         elif [[ "${a}" == --park-zone ]]; then pz=1
         elif [[ "${a}" == --park-zone=* ]]; then PARK_ZONE="${a#--park-zone=}"
         else rest+=("${a}"); fi

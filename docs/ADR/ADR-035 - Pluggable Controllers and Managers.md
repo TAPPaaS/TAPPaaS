@@ -211,10 +211,18 @@ A controller is an executable answering these verbs. Differences between vendors
 | `apply` | `--switch NAME`, `--desired FILE` | `--check`, `--credentials`, `--session`, `--timeout` | Brings the ports the desired file names to it, aggregates included, and waits until they have settled; a port the file does not name is left as it is. `{switch, changed: [{port, from, to}], unchanged, lags}`. `--check` changes nothing and returns what it would change. |
 | `mlag-status` | `--switch NAME`, `--ip` | `--credentials` | With the `mlag` capability only: `{peer, state, ids}`. |
 
+**Optional fields for the CMDB's sweep (ADR-040 D15).** `interrogate` may add, per switch, `serial`,
+`uptime` (seconds), `vlans` (every VLAN it has: tags or `{id, name}`), and per port `kind`, `media`,
+`module`, `mac`, `maxSpeed`, `linkSpeed` (or `speed`: negotiated), `poe` (`{state, watts}`), `stp`,
+`neighbors` (`[{mac, lldp: {name, port}, lease}]`). All optional, no new verb: a controller reports
+what its device gives, the manager reports what is there, and the contract's major does not change.
+
 The `ap/1` contract, answered by a controller with the `ap` capability, has the same shape:
 `describe`, `check-access`, `ap-interrogate` (`{aps: {<name>: {vendor, model, ssids: {<ssid>: {vlan,
 enabled, security}}}}}`) and `ap-apply --ap NAME --desired FILE [--check]`, which creates and
 updates SSIDs and their VLAN networks and never deletes one.
+`ap-interrogate` may add, per AP, `firmware`, `uptime`, `serial`, `radios` (`[{name, standard, band,
+channel, power}]`) and `clients` (`[{mac, ssid, signal}]`), optional as above.
 
 **Common to every verb.** JSON on stdout and nothing else; the reason on stderr when something fails
 or is refused. Exit 0 done, 1 the device refused or could not be reached, 2 bad usage, 3 not this

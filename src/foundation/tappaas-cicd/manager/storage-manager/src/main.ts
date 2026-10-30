@@ -45,12 +45,13 @@ export const HELP: HelpSpec = {
         "replication jobs. Every disk, pool and job carries a state — ok, warn or fail — and why.",
     },
     {
-      usage: "report [--json] [--no-smart]",
+      usage: "report [--json] [--no-smart] [--discover]",
       name: "report (to the CMDB, ADR-040)",
       effect: "read",
       options: [
         ["--json", "report: print it instead of sending it."],
         ["--no-smart", "report: skip the SMART reads of the inventory it makes."],
+        ["--discover", "report: accepted for the CMDB's sweep (ADR-040 D15); the report is already its full depth (disks and layouts are proxmox-controller's)."],
       ],
       details:
         "Sends the storage to the CMDB (cmdb-controller) as one observation: each ZFS pool `inventory` reads\n" +

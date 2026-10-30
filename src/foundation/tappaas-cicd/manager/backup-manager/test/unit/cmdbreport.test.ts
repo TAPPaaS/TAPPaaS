@@ -10,8 +10,9 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "f
 import { tmpdir } from "os";
 import { join } from "path";
 import { CmdbReport } from "../../../../lib/ts/src/cmdb";
+import { buildBackupDiscover } from "../../src/cmdbreport";
 import { run } from "../../src/main";
-import { RawRuns } from "../../src/types";
+import { RawDiscover, RawRuns } from "../../src/types";
 import { FakeClient } from "./fake-client";
 
 let passed = 0;
@@ -87,6 +88,29 @@ try {
   check(buddy.direction === "pull" && buddy.lastSeen === new Date(T * 1000).toISOString(), "a buddy we pull from: pull, last seen at its sync's last run");
   check(JSON.stringify(to("at", "backup-peer:buddy")) === JSON.stringify([JSON.stringify({ class: "location", name: "aunt" })]), "…at the location it names");
   check(obj("backup-peer", "cousin")?.attributes?.direction === "receive", "a buddy that pushes into ours: receive");
+
+  // report --discover: every datastore, with what only the sweep reads.
+  const rd = JSON.parse(readFileSync(join(process.env.BM_FIXTURE_DIR ?? "test/fixtures", "discover.json"), "utf8")) as RawDiscover;
+  const dr = buildBackupDiscover(rd, T + 86400).report();
+  const dsOf = (n: string) => dr.objects!.find((o) => o.class === "datastore" && o.name === n)?.attributes ?? {};
+  check(dr.objects!.map((o) => o.name).sort().join() === "offsite,tappaas_backup", "every datastore, also one no job uses");
+  check(dsOf("tappaas_backup").size === 4000 && (dsOf("tappaas_backup").gc as { "removed-bytes": number })["removed-bytes"] === 9, "…its usage and GC state");
+  check(JSON.stringify(dsOf("tappaas_backup").retention) === JSON.stringify({ daily: 7 }), "…its prune settings");
+  const rp = (dsOf("tappaas_backup").restorePoints as { id: string; snapshots: number; ageSeconds: number }[])[0];
+  check(rp.id === "200" && rp.snapshots === 3 && rp.ageSeconds === 86400, "…each restore-point group's count and age");
+  check((dsOf("offsite").syncJobs as { id: string }[])[0]?.id === "s1" && (dsOf("tappaas_backup").syncJobs as unknown[]).length === 0, "…the sync jobs into it");
+  const dc = new FakeClient();
+  dc.rawRuns = raw;
+  dc.rawDiscover = rd;
+  let dbuf = "";
+  const dw = process.stdout.write.bind(process.stdout);
+  (process.stdout as unknown as { write: (s: string) => boolean }).write = (x: string) => ((dbuf += x), true);
+  try {
+    run(["report", "--json", "--discover", "--config-dir", tmp], dc);
+  } finally {
+    (process.stdout as unknown as { write: typeof dw }).write = dw;
+  }
+  check((JSON.parse(dbuf) as CmdbReport[]).length === 2, "report --json --discover prints the plain report and the discovery");
 
   // A peer verb reports a change with the job id.
   env.TAPPAAS_JOB_ID = "job-42";

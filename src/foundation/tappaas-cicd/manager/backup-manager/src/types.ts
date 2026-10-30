@@ -183,6 +183,20 @@ export interface RawRuns {
   pruneJobs?: Record<string, unknown>[];
 }
 
+// pbs-controller discover --json (ADR-040 D15); {reachable:false} when PBS did not answer.
+export interface RawDiscover {
+  reachable: boolean;
+  node?: string;
+  datastores?: {
+    name: string;
+    status?: { total?: number; used?: number } | null;
+    gc?: Record<string, unknown> | null;
+    groups?: { ns: string; type: string; id: string; snapshots: number; oldest: number; newest: number }[];
+  }[];
+  pruneJobs?: Record<string, unknown>[];
+  syncJobs?: Record<string, unknown>[];
+}
+
 export type VerifyState = "ok" | "failed" | "unverified";
 export interface LastVerify { time: number | null; state: "ok" | "failed" }
 
@@ -260,6 +274,8 @@ export interface Client {
   // pbs-controller runs --json — what restore list-all --json shapes;
   // {reachable:false} when PBS/the cluster did not answer.
   runs(): RawRuns;
+  // pbs-controller discover --json — every datastore, for report --discover.
+  discover(): RawDiscover;
   keyList(): void;
   keyExport(dest: string): void;
   keyImport(src: string): void;

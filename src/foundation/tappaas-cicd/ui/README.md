@@ -242,6 +242,8 @@ The console holds the last 500 summaries in memory and reads them back at start;
 recorded when it starts and again when it ends, so one the console stopped on (a restart)
 is read back as **cut off** — no exit code, a note in its output. After an apply the module
 list, topology, zones, environments, site and backup reads are refreshed.
+Every verb a job runs (a secret's owner verb too) has the job's id in `TAPPAAS_JOB_ID` and the
+console user in `TAPPAAS_ACTOR`, so the change it reports to the CMDB names its job (ADR-040 D6).
 
 **A new build while a job runs.** `ui/install.sh` restarts the service when it has linked a
 new build — but `module update tappaas-cicd` reaches that script from inside a console job

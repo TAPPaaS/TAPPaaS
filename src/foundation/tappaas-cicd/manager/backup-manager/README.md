@@ -209,6 +209,11 @@ only that relation. A report the CMDB cannot take is spooled under
 `config/.cmdb-spool/` and never fails the verb; `TAPPAAS_CMDB=off` sends
 nothing.
 
+`report --discover` (ADR-040 D15) adds a second report from `pbs-controller
+discover`: every datastore, also one no job uses, with `gc`, `restorePoints` (each
+group's count, newest and age) and `syncJobs`. `--json` prints an array.
+Until the metamodel has its fields (``datastore.gc|restorePoints|syncJobs``), cmdb-controller refuses these attributes; the plain report is sent on its own and stands.
+
 ## Controllers it calls
 
 - [`pbs-controller`](../../controller/pbs-controller/) — PBS job status,

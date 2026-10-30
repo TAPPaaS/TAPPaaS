@@ -83,8 +83,8 @@ import { cmdSnat } from "./snat";
 import { cmdWan } from "./wan";
 import { HealthDoc, buildTopology, collectSources, renderTopology } from "./topology";
 import { stream } from "../../../lib/ts/src/exec";
-import { CmdbBatch, printOrSend, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
-import { SOURCE as CMDB_SOURCE, buildNetworkReport, collectNetSources, putPeer, putZone } from "./cmdbreport";
+import { CmdbBatch, printOrSend, printOrSendAll, reportChange, sendReport } from "../../../lib/ts/src/cmdb-reporter";
+import { SOURCE as CMDB_SOURCE, buildNetworkDiscover, buildNetworkReport, collectDiscover, collectNetSources, putPeer, putZone } from "./cmdbreport";
 
 // The admin VPN's bash tool, linked onto PATH by install.sh (overridable for tests).
 const WGVPN_BIN = process.env.NM_WGVPN_BIN ?? "network-manager-wgvpn";
@@ -112,10 +112,13 @@ export const HELP: HelpSpec = {
     },
     { usage: "exists <name>", details: "Exit 0 when the zone exists, non-zero when it does not." },
     {
-      usage: "report [--json]",
+      usage: "report [--json] [--discover]",
       name: "report (to the CMDB, ADR-040)",
       effect: "read",
-      options: [["--json", "print the report instead of sending it"]],
+      options: [
+        ["--json", "print the report instead of sending it (with --discover, an array of two)"],
+        ["--discover", "everything the firewall holds, in a second report: rules and aliases by UUID with their live position, NAT, routes, certificates, packages (ADR-040 D15)"],
+      ],
       details:
         "Sends what the network is, as one observation, to the CMDB (cmdb-controller): the zones of\n" +
         "zones.json, and from the firewall the DHCP leases and reservations, the DNS host entries,\n" +
@@ -435,6 +438,7 @@ interface Opts {
   diff: boolean;
   // read commands: structured vs human output
   json: boolean;
+  discover?: boolean;
   // ADR-021 D5: skip the public-DNS probe in split-horizon-target (offline
   // installs and tests). Never a way to publish a name that has no cert.
   assumePublished?: boolean;
@@ -609,6 +613,9 @@ function parseOpts(args: string[]): Opts {
         break;
       case "--assume-published":
         o.assumePublished = true;
+        break;
+      case "--discover":
+        o.discover = true;
         break;
       case "--json":
         o.json = true;
@@ -1517,9 +1524,15 @@ function cmdZonesMerge(opts: Opts): number {
 // ── report (ADR-040 D4) ───────────────────────────────────────────────
 function cmdReport(opts: Opts): number {
   if (opts.rest.length > 0) die(`report: unexpected argument ${opts.rest[0]}`);
-  const s = collectNetSources(loadZones(opts.zonesFile), opts.configDir);
+  const zones = loadZones(opts.zonesFile);
+  const s = collectNetSources(zones, opts.configDir);
   for (const e of s.errors) process.stderr.write(`[Warning] report: ${e.source}: ${e.error} — left out\n`);
-  return printOrSend(buildNetworkReport(s), opts.json);
+  const plain = buildNetworkReport(s);
+  if (!opts.discover) return printOrSend(plain, opts.json);
+  const d = collectDiscover();
+  if (d.error) process.stderr.write(`[Warning] report: opnsense-firewall discover: ${d.error} — left out\n`);
+  for (const e of d.doc?.errors ?? []) process.stderr.write(`[Warning] report: firewall ${e.section}: ${e.error} — left out\n`);
+  return printOrSendAll(d.doc ? [plain, buildNetworkDiscover(d.doc, zones)] : [plain], opts.json);
 }
 
 // A verb that wrote zones.json reports the zones it touched as a change; a

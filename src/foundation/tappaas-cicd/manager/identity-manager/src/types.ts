@@ -63,6 +63,14 @@ export interface AkNamed {
   displayName: string;
 }
 
+// What `authentik-controller discover` returns (ADR-040 D15).
+export interface AkDiscovery {
+  flows: Record<string, unknown>[];
+  providers: Record<string, unknown>[];
+  applications: Record<string, unknown>[];
+  outposts: Record<string, unknown>[];
+}
+
 // ── PrimitiveClient — one method per authentik-controller verb ─────────
 // The reconcile engine depends ONLY on this interface; tests inject an
 // in-memory fake, production uses CliPrimitiveClient (spawnSync).
@@ -70,6 +78,7 @@ export interface PrimitiveClient {
   listUsers(): AkUser[];
   listGroups(): AkNamed[];
   listRoles(): AkNamed[];
+  discover(): AkDiscovery;
   ensureUser(name: string, email: string, display: string, inactive: boolean): void;
   disableUser(name: string): void;
   deleteUser(name: string): void;

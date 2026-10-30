@@ -10,11 +10,12 @@
 // does not exist) refuses the whole batch; delivery then drops what the refusal
 // names, and what hangs off it, and sends the rest.
 //
-// TAPPAAS_JOB_ID is the console's Activity id for the job that ran the verb,
-// TAPPAAS_ACTOR who ran it (else $USER). TAPPAAS_CMDB=off sends nothing
-// (tests that run changing verbs and do not look at the CMDB).
+// A change carries the console's job and its actor (job.ts currentJob).
+// TAPPAAS_CMDB=off sends nothing (tests that run changing verbs and do not
+// look at the CMDB).
 
 import { CmdbObject, CmdbOptions, CmdbRef, CmdbRefused, CmdbRelation, CmdbReport, ReportOutcome, cmdbReport } from "./cmdb";
+import { changeJob } from "./job";
 
 type Obj = Record<string, unknown>;
 
@@ -68,18 +69,9 @@ export class CmdbBatch {
   /** The batch as an observation, or as a change with the console's job. */
   report(kind: "observation" | "change" = "observation", verb?: string): CmdbReport {
     const r: CmdbReport = { source: this.source, kind, objects: this.objects, relations: this.relations };
-    if (kind === "change") Object.assign(r, { verb }, cmdbJob());
+    if (kind === "change") Object.assign(r, { verb }, changeJob());
     return r;
   }
-}
-
-/** The console's job and the actor, for a change report. */
-export function cmdbJob(env: Record<string, string | undefined> = process.env): { job?: string; actor?: string } {
-  const out: { job?: string; actor?: string } = {};
-  if (env.TAPPAAS_JOB_ID) out.job = env.TAPPAAS_JOB_ID;
-  const actor = env.TAPPAAS_ACTOR || env.USER;
-  if (actor) out.actor = actor;
-  return out;
 }
 
 const refOf = (r: CmdbRef): string | undefined => (typeof r === "string" ? r : r.ref);
@@ -169,6 +161,18 @@ export function printOrSend(batch: CmdbBatch, json: boolean, o: CmdbOptions = {}
   if (s.outcome?.delivered) console.log(`${batch.source}: reported ${counts} to the CMDB`);
   else if (s.outcome?.spooled) console.log(`${batch.source}: the CMDB did not answer; ${counts} spooled to ${s.outcome.spooled}`);
   else if (s.error) note(`report not recorded: ${s.error}`);
+  return 0;
+}
+
+/** `report --discover` (ADR-040 D15): the plain report, then what only the
+ *  sweep reads, each sent on its own so a refusal of one leaves the other.
+ *  `--json` prints them as an array. */
+export function printOrSendAll(batches: CmdbBatch[], json: boolean, o: CmdbOptions = {}): number {
+  if (json) {
+    process.stdout.write(JSON.stringify(batches.map((b) => b.report()), null, 1) + "\n");
+    return 0;
+  }
+  for (const b of batches) printOrSend(b, false, o);
   return 0;
 }
 

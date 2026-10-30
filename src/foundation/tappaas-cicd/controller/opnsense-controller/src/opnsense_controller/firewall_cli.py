@@ -20,6 +20,7 @@ import sys
 from .cli_globals import StrictArgumentParser, make_global_parent, parse_with_globals
 from .config import Config
 from .dual_stack import read_interfaces, wan_address
+from .firewall_discover import read_discover
 from .segments import read_segments
 from .firewall_manager import (
     FirewallManager,
@@ -274,6 +275,18 @@ def cmd_segments(args) -> int:
     return 0
 
 
+def cmd_discover(args) -> int:
+    """Everything the firewall holds, one pass (ADR-040 D15): JSON on stdout."""
+    config = get_config(args)
+    try:
+        with FirewallManager(config) as manager:
+            print(json.dumps(read_discover(manager.client)))
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def cmd_test(args) -> int:
     """Test connection to OPNsense."""
     config = get_config(args)
@@ -510,6 +523,17 @@ def main():
                     "a hand-built segment holds is refused. --json for {vlans, interfaces}.",
     )
     seg_parser.set_defaults(func=cmd_segments)
+
+    # discover command (ADR-040 D15)
+    disc_parser = subparsers.add_parser(
+        "discover",
+        parents=[gp],
+        help="Read everything the firewall holds, as JSON (the CMDB's discovery sweep)",
+        description="One read-only pass: interfaces, VLANs, firewall rules and aliases by UUID, NAT, "
+                    "DHCP, DNS overrides, WireGuard peers, routes, certificates, packages and the "
+                    "OPNsense version. A section the firewall does not answer is listed under errors.",
+    )
+    disc_parser.set_defaults(func=cmd_discover)
 
     args = parse_with_globals(parser, {
         "firewall": "firewall.mgmt.internal",

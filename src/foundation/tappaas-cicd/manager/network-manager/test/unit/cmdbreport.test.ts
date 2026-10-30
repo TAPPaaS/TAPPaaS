@@ -11,7 +11,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { CmdbObject, CmdbReport } from "../../../../lib/ts/src/cmdb";
 import { pruneRefused } from "../../../../lib/ts/src/cmdb-reporter";
-import { buildNetworkReport, collectNetSources, routeModule } from "../../src/cmdbreport";
+import { DiscoverDoc, buildNetworkDiscover, buildNetworkReport, collectDiscover, collectNetSources, routeModule } from "../../src/cmdbreport";
 import { loadZones } from "../../src/zones";
 
 let passed = 0;
@@ -65,6 +65,26 @@ check(routeModule("TAPPaaS: nextcloud") === "nextcloud" && routeModule("manual")
 const peer = obj("vpn-peer", "lars-mac")?.attributes ?? {};
 check(peer.publicKey === "PUBKEY=" && JSON.stringify(peer.allowedIps) === JSON.stringify(["10.255.1.2/32"]) && peer.endpoint === undefined, "an admin VPN peer: key and allowed IPs, no empty endpoint");
 
+console.log("== report --discover: what the firewall holds ==");
+const dd = collectDiscover((_b, a) => ({ rc: a[0] === "discover" ? 0 : 1, stdout: read("discover.json"), stderr: "", ran: true }));
+check(dd.doc !== null, "opnsense-firewall discover is read");
+const dr = buildNetworkDiscover(dd.doc as DiscoverDoc, loadZones(join(FIX, "zones.json"))).report();
+const dobj = (cls: string, name: string): CmdbObject | undefined => dr.objects!.find((o) => o.class === cls && o.name === name);
+type Fw = { rules: { uuid: string; position: number; outOfOrder: boolean }[]; aliases: { uuid: string }[]; nat: unknown[]; routes: unknown[]; certificates: unknown[]; packages: unknown[]; interfaces: { identifier: string }[]; vlans: { tag: number }[] };
+const net = dobj("vm", "network")?.attributes ?? {};
+const fw = net.firewall as Fw;
+check(net.osVersion === "25.7.1", "the network module's CI carries the OPNsense version");
+check(fw.rules.map((x) => `${x.uuid}@${x.position}`).join() === "r-1@1,r-2@2,r-3@3", "every rule by UUID, with its live position");
+check(fw.rules.find((x) => x.uuid === "r-3")?.outOfOrder === true && fw.rules.find((x) => x.uuid === "r-2")?.outOfOrder === false, "a rule held after a later sequence is marked out of order");
+check(fw.aliases[0]?.uuid === "a-1" && fw.nat.length === 1 && fw.routes.length === 1 && fw.certificates.length === 1 && fw.packages.length === 1, "aliases, NAT, routes, certificates and packages sit under firewall");
+check(fw.interfaces.map((x) => x.identifier).join() === "opt9" && fw.vlans.map((x) => x.tag).join() === "777", "an interface and a VLAN no zone declares go under firewall");
+const srv = dobj("zone", "srv")?.attributes ?? {};
+check((srv.interface as { device: string }).device === "vlan0.200" && JSON.stringify(srv.dhcp) === JSON.stringify({ start: "10.2.0.120", end: "10.2.0.200" }), "a zone's interface and live DHCP range go on the zone");
+check(dobj("zone", "mgmt") !== undefined && !dr.objects!.some((o) => o.class === "zone" && o.name === "hand made"), "a zone is matched by tag or subnet; no zone is invented");
+check(dobj("vpn-peer", "lars-mac")?.attributes?.lastHandshake === "42", "a WireGuard peer's last handshake");
+check(dobj("dns-name", "cloud.example.org")?.attributes?.target === "10.6.0.1", "a DNS override is a dns-name");
+check(collectDiscover(() => ({ rc: -1, stdout: "", stderr: "", ran: false })).doc === null, "no firewall: no discover report, the plain one stands");
+
 console.log("== delivery: a refusal drops what it names ==");
 const refused: CmdbReport = {
   source: "t",
@@ -100,6 +120,8 @@ if (MAIN) {
     check(rep.status === 0 && doc !== null, "report --json exits 0 with JSON on stdout when the firewall does not answer");
     check(doc !== null && doc.objects!.filter((o) => o.class === "zone").length === 3 && !doc.objects!.some((o) => o.class === "address"), "…the zones, and nothing of the firewall's");
     check(/dns-manager leases.*left out/.test(String(rep.stderr)), "…and names what it left out on stderr");
+    const disc = nm("report", "--json", "--discover");
+    check(disc.status === 0 && Array.isArray(JSON.parse(String(disc.stdout))), "report --json --discover prints an array, the plain report only when the firewall does not answer");
     const en = nm("enable", "guest");
     check(en.status === 0, "enable guest exits 0 with no CMDB");
     const spool = join(tmp, ".cmdb-spool");
