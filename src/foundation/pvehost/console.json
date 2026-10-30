@@ -10,6 +10,7 @@
       "rows": "guests",
       "columns": [
         { "path": "module", "label": "module", "format": "module" },
+        { "path": "name", "label": "guest" },
         { "path": "status", "label": "state", "format": "status" },
         { "path": "declaredMem", "label": "declared", "format": "bytes" },
         { "path": "residentMem", "label": "allocated", "format": "bytes" },
