@@ -2,7 +2,8 @@
 // D4): the switch ports a new node can be cabled to, the trunk a hand-configured
 // port needs, and the data pool proposed from the node's free disks.
 
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing, setupFromOutput, dismissJob, dismissedJobs, declaredLine, lastLines} from "../../web/src/nodeadd";
+import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing, setupFromOutput, dismissJob, dismissedJobs, declaredLine } from "../../web/src/nodeadd";
+import { lastLines } from "../../web/src/wizards";
 import { StorageDisk, TopoPort, TopoSwitch } from "../../web/src/types";
 import { check, done } from "./check";
 

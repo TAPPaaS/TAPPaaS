@@ -11,7 +11,7 @@
 
 import { useEffect, useState } from "react";
 import { applyNowJob, previewJob, reloadAll, useJob, useRead } from "../api";
-import { JobControl, Output, phaseOutputs } from "../jobs";
+import { JobOutput, JobStatusLine, phaseOutputs } from "../jobs";
 import { AssetChoice, ASSET_CHOICES, CheckOutcome, Finding, HOWS, How, RemovalOutcome, assetFor, assetTarget, checkArgv, parseCheck, parseRemoval, removeArgv, switchTarget } from "../noderemove";
 import { useOpenedBy, requestOpen } from "../opener";
 import { JobSummary, SiteRead } from "../types";
@@ -206,7 +206,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
     return (
       <div className="step">
         {!finished ? (
-          <p><Tag level="skip" /> Removing {node}{how === "erase" ? ": wiping its disks, powering it off" : how === "shutdown" ? ": powering it off" : ""}, then taking it out of the cluster. This takes a few minutes. <JobControl job={applied} /></p>
+          <JobStatusLine job={applied} label={`Removing ${node}${how === "erase" ? ": wiping its disks, powering it off" : how === "shutdown" ? ": powering it off" : ""}, then taking it out of the cluster. This takes a few minutes`} />
         ) : ok && result ? (
           <>
             <p><Tag level="pass" /> {node} is removed.</p>
@@ -235,20 +235,13 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
             <p className="readstate readstate-fail">
               {applied.state === "refused" ? `The removal was not started: ${applied.refused}` : stopped ? `${node} cannot be removed: something still needs it.` : `The removal of ${node} did not finish.`}
             </p>
-            {result && result.tail.length ? <pre className="output">{result.tail.join("\n")}</pre> : null}
+            <JobOutput job={applied} fold="tail" tail={8} />
             <div className="actions">
               <button className="btn btn-primary" onClick={retry}>Check again</button>
             </div>
           </>
         )}
-        {!finished ? (
-          <Output text={applied.output} live />
-        ) : (
-          <details className="small">
-            <summary>What the removal printed</summary>
-            <Output text={applied.output} />
-          </details>
-        )}
+        {!finished || ok ? <JobOutput job={applied} fold="closed" summary="What the removal printed" /> : null}
       </div>
     );
   }
@@ -266,10 +259,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
           <FindingList items={outcome.blockers} />
         </>
       ) : (
-        <>
-          <p className="readstate readstate-fail">The check did not finish.</p>
-          {outcome.tail.length ? <pre className="output">{outcome.tail.join("\n")}</pre> : null}
-        </>
+        <p className="readstate readstate-fail">The check did not finish{checkJob?.refused ? `: ${checkJob.refused}` : "."}</p>
       )}
       {outcome && outcome.losses.length ? (
         <>
@@ -282,12 +272,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
           <button className="btn" onClick={() => setRound((n) => n + 1)}>Check again</button>
         </div>
       ) : null}
-      {checkJob ? (
-        <details className="small">
-          <summary>What the check printed</summary>
-          <Output text={checkJob.output} live={jobLive(checkJob)} />
-        </details>
-      ) : null}
+      {checkJob ? <JobOutput job={checkJob} fold={outcome?.state === "failed" ? "tail" : "closed"} tail={8} summary="What the check printed" /> : null}
       {outcome?.state === "ok" ? (
         <div className="form">
           {how === "lost" ? (

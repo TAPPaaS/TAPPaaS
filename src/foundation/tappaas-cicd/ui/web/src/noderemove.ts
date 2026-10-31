@@ -4,6 +4,7 @@
 // output turned into what is now true. Pure: the wizard runs the jobs, this
 // reads their text.
 
+import { lastLines } from "./wizards";
 
 export type How = "shutdown" | "erase" | "lost";
 export type AssetChoice = "keep" | "remove";
@@ -66,7 +67,6 @@ export function outputLines(text: string): string[] {
 }
 
 const guestWord = (type: string): string => (type === "lxc" ? "container" : "VM");
-const tail = (lines: string[], n = 8): string[] => lines.slice(-n);
 
 // The check's output: blockers and, for a lost node, what is lost with it.
 export function parseCheck(output: string, node: string, done: { exit: number | null } | null): CheckOutcome {
@@ -126,7 +126,7 @@ export function parseCheck(output: string, node: string, done: { exit: number | 
   }
   const exit = done?.exit ?? null;
   const state: CheckOutcome["state"] = !done ? "running" : exit === 0 && blockers.length === 0 ? "ok" : blockers.length ? "blocked" : "failed";
-  return { state, blockers, losses, ports, asset, record, tail: state === "failed" ? tail(lines) : [] };
+  return { state, blockers, losses, ports, asset, record, tail: state === "failed" ? lastLines(lines.join("\n")) : [] };
 }
 
 export interface RemovalOutcome {
@@ -137,13 +137,12 @@ export interface RemovalOutcome {
   asset: { key: string; fate: "kept" | "removed"; where: string | null } | null;
   assetTrouble: string | null; // the asset step that did not go through
   warnings: string[];
-  tail: string[];
 }
 
 // The removal's output (its apply phase): what was done.
 export function parseRemoval(output: string): RemovalOutcome {
   const lines = outputLines(output);
-  const out: RemovalOutcome = { removed: false, parked: [], notParked: [], record: null, asset: null, assetTrouble: null, warnings: [], tail: tail(lines) };
+  const out: RemovalOutcome = { removed: false, parked: [], notParked: [], record: null, asset: null, assetTrouble: null, warnings: [] };
   for (const l of lines) {
     let m: RegExpMatchArray | null;
     if (/^✓ \S+ is out of the cluster\.?$/.test(l)) out.removed = true;

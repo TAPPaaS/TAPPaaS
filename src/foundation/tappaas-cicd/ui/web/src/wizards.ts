@@ -321,3 +321,10 @@ export function queuedBehind(jobs: { id: string; kind: string; state: string; bi
   const more = ahead ? ` and ${ahead} more` : "";
   return `Waiting for ${[running.bin, running.verb, running.object].filter(Boolean).join(" ")}${more} to end: changes run one at a time, and this one has not started.`;
 }
+
+// The last lines a job printed, without its colours or blank lines.
+export function lastLines(raw: string, n = 8): string[] {
+  // eslint-disable-next-line no-control-regex
+  const lines = raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").split("\n").map((l) => l.trimEnd()).filter((l) => l.trim() !== "");
+  return lines.slice(-n);
+}

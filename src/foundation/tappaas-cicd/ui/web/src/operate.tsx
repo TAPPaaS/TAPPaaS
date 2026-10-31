@@ -13,11 +13,10 @@ import { ReactNode, createContext, useEffect, useMemo, useState } from "react";
 import { applyJob, applyNowJob, previewJob, readJob, reloadAll, useJob, useRead, useVerb } from "./api";
 import { ArgvStep, Values, buildArgv, confirmObject, formParts, prefillValues } from "./argv";
 import { useOpenedBy } from "./opener";
-import { Command, JobControl, Output, jobResult, phaseOutputs } from "./jobs";
-import { Job, JobSummary, ManifestVerb, Me } from "./types";
+import { Command, JobControl, JobOutput, JobStatusLine, jobResult, phaseOutputs } from "./jobs";
+import { Job, ManifestVerb, Me } from "./types";
 import { Link, Tag, canOperate, useMe } from "./ui";
 import { Wizard, jobLive, useReportJob } from "./wizard";
-import { queuedBehind } from "./wizards";
 
 export type { Values } from "./argv";
 
@@ -172,28 +171,17 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
 export function JobView({ id, label, collapsed }: { id: string; label: string; collapsed?: boolean }) {
   const job = useJob(id);
   if (!job) return <p className="muted">starting {label}…</p>;
-  return <JobPart job={job} label={label} state={jobResult(job)} level={job.state === "refused" ? "fail" : job.state !== "done" ? "skip" : job.exit === 0 ? "pass" : "warn"} ms={job.durationMs} text={job.output} live={job.state === "running" || job.state === "queued"} collapsed={collapsed} />;
+  return <JobPart job={job} label={label} fold={collapsed} />;
 }
 
-function JobPart({ job, label, state, level, ms, text, live, collapsed }: { job: Job; label: string; state: string; level: string; ms: number | null; text: string; live: boolean; collapsed?: boolean }) {
+function JobPart({ job, label, state, level, ms, text, live, fold, control }: { job: Job; label: string; state?: string; level?: string; ms?: number | null; text?: string; live?: boolean; fold?: boolean; control?: boolean }) {
   return (
     <div className="jobview">
-      <p>
-        <Tag level={level} /> {label}: {state}
-        {ms !== null ? <span className="muted"> · {Math.round(ms / 100) / 10} s</span> : null}
-        <span className="muted"> · job {job.id}</span>
-        {live ? <> <JobControl job={job} /></> : null}
-      </p>
+      <JobStatusLine job={job} label={label} state={state} level={level} ms={ms} control={control} />
       {job.refused ? <p className="readstate readstate-fail">{job.refused}</p> : null}
-      {job.state === "queued" ? <QueuedBehind id={job.id} /> : <Output text={text} live={live} collapsed={collapsed} />}
+      <JobOutput job={job} text={text} live={live} fold={fold ? "tail" : "open"} />
     </div>
   );
-}
-
-// A job that has not started has no output: what it waits for instead.
-function QueuedBehind({ id }: { id: string }) {
-  const jobs = useRead<{ jobs: JobSummary[] }>("jobs?limit=20", 5000).env?.data?.jobs;
-  return <p className="muted small">{jobs ? queuedBehind(jobs, id) : "Waiting for its turn: changes run one at a time."}</p>;
 }
 
 // An Apply that ran its own dry run first: the dry run shown as a preview is,
@@ -206,10 +194,10 @@ function TwoPhaseView({ job }: { job: Job }) {
   const pLevel = job.state === "refused" ? "fail" : inPreview ? "skip" : pp.stopped ? "warn" : "pass";
   return (
     <>
-      <JobPart job={job} label="preview" state={pState} level={pLevel} ms={pp.durationMs} text={out.preview ?? ""} live={inPreview && job.state !== "refused" && job.state !== "done"} collapsed={!inPreview && !pp.stopped} />
+      <JobPart job={job} label="preview" state={pState} level={pLevel} ms={pp.durationMs} text={out.preview ?? ""} live={inPreview && job.state !== "refused" && job.state !== "done"} fold={!inPreview && !pp.stopped} control={inPreview} />
       {pp.stopped ? <p className="readstate readstate-warn">{pp.stopped[0].toUpperCase() + pp.stopped.slice(1)}.</p> : null}
       {!inPreview && !pp.stopped ? (
-        <JobPart job={{ ...job, refused: null }} label="apply" state={jobResult(job)} level={job.state !== "done" ? "skip" : job.exit === 0 ? "pass" : "warn"} ms={job.durationMs !== null && pp.durationMs !== null ? job.durationMs - pp.durationMs : null} text={out.apply} live={job.state === "running"} />
+        <JobPart job={{ ...job, refused: null }} label="apply" ms={job.durationMs !== null && pp.durationMs !== null ? job.durationMs - pp.durationMs : null} text={out.apply} live={job.state === "running"} />
       ) : null}
     </>
   );

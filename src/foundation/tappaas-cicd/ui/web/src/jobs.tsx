@@ -2,10 +2,12 @@
 // what ran, copyable), who ran it from where, its state, and its output.
 // Activity lists them beside the sweep; a module's page lists its own.
 
-import { Fragment, useLayoutEffect, useRef, useState } from "react";
-import { cancelJob, reloadAll, useJob } from "./api";
-import { JobSummary } from "./types";
+import { Fragment, ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { cancelJob, reloadAll, useJob, useRead } from "./api";
+import { Job, JobSummary } from "./types";
 import { Tag, canOperate, useMe, when } from "./ui";
+import { jobLive } from "./wizard";
+import { lastLines, queuedBehind } from "./wizards";
 
 export function quote(argv: string[]): string {
   return argv.map((a) => (/^[A-Za-z0-9_@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`)).join(" ");
@@ -71,10 +73,10 @@ export function phaseOutputs(j: { output: string; previewPhase?: JobSummary["pre
 
 // The last line stays in view while output arrives, unless the operator has
 // scrolled up to read (then the pane stays where they put it until they
-// scroll back down). `collapsed`: a phase that is over (a preview once the
-// apply runs) folds to its last lines, with the rest a click away.
+// scroll back down). `collapsed`: output that is over (a preview once the
+// apply runs) folds to its last `tail` lines, with the rest a click away.
 const FOLD_LINES = 4;
-export function Output({ text, live, collapsed }: { text: string; live?: boolean; collapsed?: boolean }) {
+export function Output({ text, live, collapsed, tail = FOLD_LINES }: { text: string; live?: boolean; collapsed?: boolean; tail?: number }) {
   const ref = useRef<HTMLPreElement>(null);
   const stick = useRef(true);
   // Only the operator's own scrolling (wheel, touch, keys) may unstick the
@@ -85,7 +87,9 @@ export function Output({ text, live, collapsed }: { text: string; live?: boolean
   const [open, setOpen] = useState(false);
   const shown = stripAnsi(text) || (live ? "…" : "(no output)");
   const lines = shown.split("\n");
-  const fold = !!collapsed && !open && lines.length > FOLD_LINES;
+  const kept = lastLines(shown, tail);
+  const foldable = !!collapsed && lines.length > kept.length;
+  const fold = foldable && !open;
   useLayoutEffect(() => {
     const el = ref.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
@@ -100,11 +104,49 @@ export function Output({ text, live, collapsed }: { text: string; live?: boolean
   };
   return (
     <div className="output-box">
-      {collapsed && lines.length > FOLD_LINES ? (
-        <button className="btn btn-small output-fold" onClick={() => setOpen(!open)}>{fold ? `▸ ${lines.length - FOLD_LINES} earlier lines` : "▾ fold"}</button>
+      {foldable ? (
+        <button className="btn btn-small output-fold" onClick={() => setOpen(!open)}>{fold ? `▸ ${lines.length - kept.length} earlier lines` : "▾ fold"}</button>
       ) : null}
-      <pre ref={ref} tabIndex={0} onScroll={onScroll} onWheel={hand} onTouchStart={hand} onTouchMove={hand} onKeyDown={hand} className={`output${live ? " output-live" : ""}`}>{fold ? lines.slice(-FOLD_LINES).join("\n") : shown}</pre>
+      <pre ref={ref} tabIndex={0} onScroll={onScroll} onWheel={hand} onTouchStart={hand} onTouchMove={hand} onKeyDown={hand} className={`output${live ? " output-live" : ""}`}>{fold ? kept.join("\n") : shown}</pre>
     </div>
+  );
+}
+
+// A job that has not started has no output: what it waits for instead.
+function QueuedBehind({ id }: { id: string }) {
+  const jobs = useRead<{ jobs: JobSummary[] }>("jobs?limit=20", 5000).env?.data?.jobs;
+  return <p className="muted small">{jobs ? queuedBehind(jobs, id) : "Waiting for its turn: changes run one at a time."}</p>;
+}
+
+// A job's output, open while it runs. `text`: one phase of it. Once finished,
+// `fold` says what becomes of it: "open" stays, "tail" folds to the last
+// `tail` lines (a failure's say why), "closed" goes under a `summary`.
+export function JobOutput({ job, text, live, fold = "open", tail, summary = "What the job printed" }: { job: Job; text?: string; live?: boolean; fold?: "open" | "tail" | "closed"; tail?: number; summary?: string }) {
+  const running = live ?? jobLive(job);
+  if (job.state === "queued") return <QueuedBehind id={job.id} />;
+  const out = text ?? job.output;
+  if (fold === "closed" && !running) {
+    return (
+      <details className="small">
+        <summary>{summary}</summary>
+        <Output text={out} />
+      </details>
+    );
+  }
+  return <Output text={out} live={running} collapsed={fold === "tail" && !running} tail={tail} />;
+}
+
+// The one line that says where a job stands: its state, what it is, how long
+// it took, its id, and Stop while it can be stopped. `state`, `level` and `ms`:
+// a phase of the job, which has its own; `control` false: not this phase's Stop.
+export function JobStatusLine({ job, label, state, level, ms, control = true }: { job: JobSummary; label: ReactNode; state?: string; level?: string; ms?: number | null; control?: boolean }) {
+  const took = duration(ms === undefined ? job.durationMs : ms);
+  return (
+    <p className="job-status">
+      <Tag level={level ?? jobLevel(job)} /> {label}
+      <span className="muted"> · {state ?? jobResult(job)}{took ? ` · ${took}` : ""} · job {job.id}</span>
+      {control ? <> <JobControl job={job} /></> : null}
+    </p>
   );
 }
 

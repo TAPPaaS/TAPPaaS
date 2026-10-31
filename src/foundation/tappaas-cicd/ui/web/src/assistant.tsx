@@ -16,9 +16,9 @@ import { ReactNode, createContext, useContext, useEffect, useRef, useState } fro
 import { applyJob, get, previewJob, readJob, useJob } from "./api";
 import { TargetValues, resolveTarget } from "./consoletargets";
 import { requestOpen } from "./opener";
-import { Command, Output, jobResult } from "./jobs";
+import { Command, JobOutput, JobStatusLine } from "./jobs";
 import { AssistantStatus, Me } from "./types";
-import { Tag, canOperate, navigate, useMe } from "./ui";
+import { canOperate, navigate, useMe } from "./ui";
 
 // What is in view, sent with every question.
 export interface Focus {
@@ -218,12 +218,9 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
       {error ? <p className="readstate readstate-fail">{error}</p> : null}
       {pj ? (
         <div className="jobview">
-          <p className="small">
-            <Tag level={pj.state === "refused" ? "fail" : pj.state !== "done" ? "skip" : pj.exit === 0 ? "pass" : "warn"} /> {p.read ? "result" : "preview"}: {jobResult(pj)}
-            <span className="muted"> · job {pj.id}</span>
-          </p>
+          <JobStatusLine job={pj} label={p.read ? "result" : "preview"} />
           {pj.refused ? <p className="readstate readstate-fail">{pj.refused}</p> : null}
-          <Output text={pj.output} live={pj.state === "running" || pj.state === "queued"} />
+          <JobOutput job={pj} />
         </div>
       ) : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to run.</p> : null}
@@ -235,11 +232,8 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
       ) : null}
       {aj ? (
         <div className="jobview">
-          <p className="small">
-            <Tag level={aj.state === "refused" ? "fail" : aj.state !== "done" ? "skip" : aj.exit === 0 ? "pass" : "warn"} /> run: {jobResult(aj)}
-            <span className="muted"> · job {aj.id}</span>
-          </p>
-          <Output text={aj.output} live={aj.state === "running" || aj.state === "queued"} />
+          <JobStatusLine job={aj} label="run" />
+          <JobOutput job={aj} />
         </div>
       ) : null}
     </div>

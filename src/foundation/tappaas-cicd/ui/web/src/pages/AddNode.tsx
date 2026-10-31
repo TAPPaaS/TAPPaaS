@@ -22,13 +22,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyNowJob, refreshRead, reloadAll, useJob, useRead, useVerb } from "../api";
 import { buildArgv } from "../argv";
-import { JobControl, Output, jobResult, phaseOutputs } from "../jobs";
+import { JobOutput, JobStatusLine, Output, phaseOutputs } from "../jobs";
 import { OperateButton, Step, StepForm, StepView, Values, useStepValues } from "../operate";
 import { useOpenedBy } from "../opener";
 import { Job, JobSummary, SiteRead, StorageInventory, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
-import { AddNodeStage, KeyStore, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, declaredLine, dismissJob, dismissedJobs, lastLines, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, setupFromOutput, switchPortChoices, writeProgress } from "../nodeadd";
+import { AddNodeStage, KeyStore, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, declaredLine, dismissJob, dismissedJobs, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, setupFromOutput, switchPortChoices, writeProgress } from "../nodeadd";
 import { Wizard, jobLabel, jobLive, useReportJob } from "../wizard";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
@@ -441,10 +441,8 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           ) : null}
           {running ? (
             <>
-              <p className="small">
-                The job: <b>{running.cancelled ? jobResult(running) : running.state === "done" ? (running.exit === 0 ? "finished" : `ended with exit ${running.exit}`) : running.state}</b> <JobControl job={running} />
-              </p>
-              <Output text={running.output} live={running.state === "running"} />
+              <JobStatusLine job={running} label="The job" />
+              <JobOutput job={running} />
             </>
           ) : null}
           {progress?.inCluster && !progress.inSite && endedOk !== null ? (
@@ -485,9 +483,7 @@ function DeclaredLine({ name, job, progress }: { name: string; job: Job; progres
   const live = jobLive(job);
   const line = declaredLine(name, setupFromOutput(phaseOutputs(job).apply), { live, answered: progress?.registration === "answered", joined: addNodeJoined(progress) });
   return (
-    <p className="small">
-      <Tag level={live || job.exit === 0 ? "pass" : "warn"} /> {line} <span className="muted">· job {job.id} {jobResult(job)}</span> <JobControl job={job} />
-    </p>
+    <JobStatusLine job={job} label={line} level={live || job.exit === 0 ? "pass" : "warn"} />
   );
 }
 
@@ -551,26 +547,21 @@ function DeclareStep({ step, name, progress, onApplied, onDone }: { step: Step; 
     }
     if (failed) {
       const why = job.state === "refused" ? `${name} was not declared: ${job.refused ?? "refused"}` : pp?.stopped ? `${name} was not declared: ${pp.stopped}.` : job.cancelled ? `${name} was not declared: the job was stopped.` : `${name} was not declared: the check ended with exit ${pp?.exit ?? job.exit}.`;
-      const tail = lastLines(job.output);
       return (
         <div className="step">
           <p className="readstate readstate-fail">{why}</p>
-          {tail.length ? <pre className="output">{tail.join("\n")}</pre> : null}
+          <JobOutput job={job} fold="tail" tail={8} />
           <div className="actions">
             <button className="btn btn-primary" onClick={() => setStarted(null)}>Try again</button>
             <span className="muted small">back to the form, as filled in</span>
           </div>
-          <details className="small">
-            <summary>What the job printed</summary>
-            <Output text={job.output} />
-          </details>
         </div>
       );
     }
     return (
       <div className="step">
-        <p><Tag level="skip" /> Declaring {name}: the change is checked first (its dry run), then its install answer is recorded and the boot window opened. <span className="muted">{jobResult(job)} · job {job.id}</span> <JobControl job={job} /></p>
-        <Output text={job.output} live />
+        <JobStatusLine job={job} label={`Declaring ${name}`} />
+        <JobOutput job={job} />
       </div>
     );
   }
