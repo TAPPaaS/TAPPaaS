@@ -14,10 +14,10 @@ import { ActStep } from "../flows";
 import { Step, StepView } from "../operate";
 import { TargetValue, TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
-import { Dot, canOperate, useMe } from "../ui";
-import { Wizard } from "../wizard";
+import { CheckList, Dot, canOperate, useMe } from "../ui";
+import { DecideStep, StepRow, Wizard } from "../wizard";
 import { PASSPHRASE_TEXT, SiteSsid, StepSpec, WifiPlan, WifiZone, broadcastText, defaultSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, wifiSpecs } from "../wizards";
-import { SecretStatus, StepRow } from "./Setup";
+import { SecretStatus } from "./Setup";
 
 // What the activity is, on Day 2's card and at the top of the form.
 export const WIFI_TEXT = "Creates or changes a site-wide SSID with its passphrase and associates it with a zone. If access points are managed, they are configured with the SSID and route it to the zone.";
@@ -107,10 +107,11 @@ export function WifiWizard({ zones, zone, site, onClose, prefill }: { zones: Wif
       <p className="small">{WIFI_TEXT}</p>
       <ol className="setup">
         <StepRow s={stages[0]} open={current === "network"}>
+          <DecideStep decided={plan !== null} locked={removed || declared || passDone} ready={problem === null} hint="name the SSID" onChange={() => setPlan(null)} onContinue={() => setPlan({ ssid, zone: z.zone, vlan: z.vlan, security, old })}>
           <div className="form">
             <label className="form-row">
               <span>zone *</span>
-              <select value={z.zone} disabled={plan !== null} onChange={(e) => setZoneName(e.target.value)}>
+              <select value={z.zone} onChange={(e) => setZoneName(e.target.value)}>
                 {zones.map((x) => (
                   <option key={x.zone} value={x.zone}>{x.zone} ({x.type}{x.vlan !== null ? `, VLAN ${x.vlan}` : ""}){x.ssid ? ` — ${x.ssid.name}` : " — no SSID"}</option>
                 ))}
@@ -119,12 +120,12 @@ export function WifiWizard({ zones, zone, site, onClose, prefill }: { zones: Wif
             </label>
             <label className="form-row">
               <span>SSID *</span>
-              <input type="text" value={name} disabled={plan !== null} onChange={(e) => setTyped(e.target.value)} />
+              <input type="text" value={name} onChange={(e) => setTyped(e.target.value)} />
               {problem ? <small className="ff-error">{problem}</small> : <small className="muted">The network's name as devices see it.{typed === null && !old ? ` Proposed as ${site ? "<site>-" : ""}<zone>; name it as you like.` : ""}{z.declared && z.declared !== ssid && z.declared !== old?.name ? ` zones.json names ${z.declared} for this zone.` : ""}{old && old.name !== ssid ? ` Replaces ${old.name}: one SSID per zone.` : ""}</small>}
             </label>
             <label className="form-row">
               <span>security *</span>
-              <select value={security} disabled={plan !== null} onChange={(e) => setChosen(e.target.value)}>
+              <select value={security} onChange={(e) => setChosen(e.target.value)}>
                 {securities.map((c) => (
                   <option key={c} value={c}>{c}</option>
                 ))}
@@ -132,16 +133,7 @@ export function WifiWizard({ zones, zone, site, onClose, prefill }: { zones: Wif
               <small className="muted">{personal ? "A WPA passphrase every device types (stage 3)." : /enterprise/.test(security) ? "Each user logs in through RADIUS (the access point's RADIUS profile)." : "Open: anyone in range joins the zone."}</small>
             </label>
           </div>
-          <div className="actions">
-            {plan ? (
-              <button className="btn" disabled={removed || declared || passDone} onClick={() => setPlan(null)}>Edit</button>
-            ) : (
-              <button className="btn btn-primary" disabled={problem !== null} onClick={() => setPlan({ ssid, zone: z.zone, vlan: z.vlan, security, old })}>
-                Continue
-              </button>
-            )}
-            {!plan && problem ? <span className="muted small">name the SSID</span> : null}
-          </div>
+          </DecideStep>
         </StepRow>
         <StepRow s={stages[1]} open={current === "declare"}>
           {steps ? (
@@ -183,11 +175,7 @@ export function WifiWizard({ zones, zone, site, onClose, prefill }: { zones: Wif
         </StepRow>
         <StepRow s={stages[4]} open={current === "result"}>
           {live && live.zone === z.zone ? (
-            <ul className="plain checks">
-              <li>
-                <Dot level={live.disabled ? "skip" : "pass"} /> <b>{live.name}</b> → zone {live.zone}{typeof live.vlan === "number" ? ` (VLAN ${live.vlan})` : ""} · {live.security} · on {broadcastText(live)} · passphrase {PASSPHRASE_TEXT[passphraseOf(live)]}
-              </li>
-            </ul>
+            <CheckList items={[{ ok: !live.disabled, label: <><b>{live.name}</b> → zone {live.zone}{typeof live.vlan === "number" ? ` (VLAN ${live.vlan})` : ""} · {live.security} · on {broadcastText(live)} · passphrase {PASSPHRASE_TEXT[passphraseOf(live)]}</> }]} />
           ) : (
             <p className="muted small">No SSID bridges to {z.zone} yet.</p>
           )}

@@ -221,6 +221,26 @@ export function FindingList({ items, empty }: { items: Finding[]; empty?: string
   );
 }
 
+// What stands where, one line each: on, off, or not known yet.
+export interface CheckItem {
+  ok: boolean | null;
+  label: ReactNode;
+  detail?: ReactNode;
+}
+
+export function CheckList({ items, className }: { items: (CheckItem | null)[]; className?: string }) {
+  return (
+    <ul className={`plain checks${className ? ` ${className}` : ""}`}>
+      {items.filter((c): c is CheckItem => c !== null).map((c, i) => (
+        <li key={i}>
+          <Dot level={c.ok === true ? "pass" : c.ok === false ? "skip" : "unknown"} /> {c.label}
+          {c.detail ? <span className="muted small"> — {c.detail}</span> : null}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // The typed name of a destructive change: `object`, or `label` where the
 // manifest shows it within its container (argv.ts confirmMatches).
 export function TypedConfirm({ object, label = object, value, set }: { object: string; label?: string; value: string; set: (v: string) => void }) {

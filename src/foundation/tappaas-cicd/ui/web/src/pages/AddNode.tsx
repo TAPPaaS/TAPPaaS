@@ -30,12 +30,11 @@ import { Job, JobSummary, SiteRead, StorageInventory, Topology } from "../types"
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
 import { AddNodeStage, KeyStore, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, declaredLine, dismissJob, dismissedJobs, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, setupFromOutput, switchPortChoices, writeProgress } from "../nodeadd";
-import { Wizard, jobLabel, jobLive } from "../wizard";
+import { ResumeOffer, StepRow, Wizard, jobLabel, jobLive, useVerbJobs } from "../wizard";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
-import { Dot, Link, canOperate, useMe } from "../ui";
+import { CheckList, Dot, Link, canOperate, useMe } from "../ui";
 import { UsbStickPicker, gb } from "../usbsticks";
-import { StepRow } from "./Setup";
 
 // site-manager node media --json (reads.ts BootMedia).
 interface BootMedia {
@@ -83,15 +82,6 @@ const DECLARE_TEXTS: Record<string, string> = {
   "--no-reboot": "Keep the node running on the installer's kernel. By default it restarts into its newest kernel after its first update, before it takes any guests, when the cluster can spare it.",
 };
 
-function Check({ ok, label, detail }: { ok: boolean | null; label: string; detail?: string }) {
-  return (
-    <li>
-      <Dot level={ok === true ? "pass" : ok === false ? "skip" : "unknown"} /> {label}
-      {detail ? <span className="muted small"> — {detail}</span> : null}
-    </li>
-  );
-}
-
 // The browser's storage for the dismissed adds, when it has one.
 const storage = (): KeyStore | null => {
   try {
@@ -113,8 +103,7 @@ export interface AddNodeSession {
 
 // `enabled`: false reads nothing (the wizard has its job attached already).
 export function useAddNodeSession(enabled = true, dismissed: string[] = []): AddNodeSession | null {
-  const jobs = useRead<{ jobs: JobSummary[] }>(enabled ? `jobs?bin=site-manager&verb=${encodeURIComponent("node add")}&limit=10` : null, 15_000).env?.data?.jobs ?? [];
-  const run0 = latestNodeAdd(jobs);
+  const run0 = latestNodeAdd(useVerbJobs("site-manager", "node add", enabled));
   const run = run0 && dismissed.includes(run0.job.id) ? null : run0;
   const name = run?.name ?? null;
   const progress = useRead<NodeProgress>(name ? `nodes/${encodeURIComponent(name)}/progress` : null, 15_000).env?.data ?? null;
@@ -322,14 +311,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
 
   return (
     <Wizard title="Add a node" onClose={onClose} running={running && jobLive(running) ? [jobLabel(running)] : []} progress={left} resumes>
-      {offer ? (
-        <div className="readstate readstate-warn wizard-resume">
-          <span>A node is being added: <b>{sessionText(offer)}</b>.</span>
-          <button className="btn btn-small btn-primary" onClick={() => restore(offer)}>Continue {offer.name}</button>
-          <button className="btn btn-small" onClick={() => setDeclined(true)}>Add another node</button>
-          <button className="btn btn-small" title="Forget this add: it is not offered again" onClick={() => setDismissed(dismissJob(storage(), offer.job.id))}>Done with it</button>
-        </div>
-      ) : null}
+      {offer ? <ResumeOffer what={<>A node is being added: <b>{offer.name}</b>, stage {STAGE_NUMBER[offer.stage]}</>} job={offer.job} onContinue={() => restore(offer)} onDecline={() => setDeclined(true)} decline="Add another node" also={{ label: "Done with it", title: "Forget this add: it is not offered again", onClick: () => setDismissed(dismissJob(storage(), offer.job.id)) }} /> : null}
       <p className="small">
         Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools. Nothing changes until you Declare the node in stage 1.
       </p>
@@ -338,11 +320,11 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         <StepRow s={steps[0]} open={!stickWritten && !skipMedium}>
           <p className="small">Every new node installs from one medium on the mothership: a machine that network-boots (PXE) fetches it from there, a machine that cannot boots the installer stick made from the same image. The cicd install built it once; it is built again here when it is missing, from before this version, or wanted for a new Proxmox version.</p>
           {media ? (
-            <ul className="plain checks">
-              <Check ok={media.staged && media.current} label="network-boot files on the mothership" detail={media.staged ? (media.current ? "in place, current" : "in place, but from before this version's installer") : "not in place"} />
-              <Check ok={media.stickImage.present} label="installer stick image" detail={media.stickImage.present ? `${gb(media.stickImage.size)}, ${media.stickImage.modified ?? ""}` : "not built"} />
-              {!media.xorriso ? <Check ok={false} label="the stick-image builder on the mothership" detail="not installed: the stick image cannot be built until the mothership's next OS update brings it" /> : null}
-            </ul>
+            <CheckList items={[
+              { ok: media.staged && media.current, label: "network-boot files on the mothership", detail: media.staged ? (media.current ? "in place, current" : "in place, but from before this version's installer") : "not in place" },
+              { ok: media.stickImage.present, label: "installer stick image", detail: media.stickImage.present ? `${gb(media.stickImage.size)}, ${media.stickImage.modified ?? ""}` : "not built" },
+              !media.xorriso ? { ok: false, label: "the stick-image builder on the mothership", detail: "not installed: the stick image cannot be built until the mothership's next OS update brings it" } : null,
+            ]} />
           ) : (
             <p className="muted small">{mediaRead.env?.error || mediaRead.failure ? <><Dot level="fail" /> the boot medium could not be read: {mediaRead.env?.error ?? mediaRead.failure}</> : "reading the boot medium…"}</p>
           )}
@@ -424,10 +406,10 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
             </div>
           </div>
           {progress && underway ? (
-            <ul className="plain checks">
-              <Check ok={progress.registration !== "none" ? true : settingUp ? null : false} label="registered for a network install" detail={progress.registration === "pending" ? "waiting for the machine to ask" : progress.registration === "answered" ? "the installer has fetched its answer" : settingUp ? "being registered…" : "no registration (the job has not reached it, or it ended)"} />
-              <Check ok={progress.pxe.enabled || bootReady ? true : settingUp ? null : false} label="the network-boot window on the mothership" detail={progress.pxe.enabled || bootReady ? "open" : settingUp ? "being opened…" : "closed"} />
-            </ul>
+            <CheckList items={[
+              { ok: progress.registration !== "none" ? true : settingUp ? null : false, label: "registered for a network install", detail: progress.registration === "pending" ? "waiting for the machine to ask" : progress.registration === "answered" ? "the installer has fetched its answer" : settingUp ? "being registered…" : "no registration (the job has not reached it, or it ended)" },
+              { ok: progress.pxe.enabled || bootReady ? true : settingUp ? null : false, label: "the network-boot window on the mothership", detail: progress.pxe.enabled || bootReady ? "open" : settingUp ? "being opened…" : "closed" },
+            ]} />
           ) : underway ? <p className="muted small">reading the provisioning state…</p> : null}
         </StepRow>
         <StepRow s={steps[3]} open={current === "wait"}>
@@ -437,11 +419,11 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
             </p>
           </div>
           {progress ? (
-            <ul className="plain checks">
-              <Check ok={progress.registration === "answered"} label="the installer fetched its answer" />
-              <Check ok={progress.inCluster} label="in the Proxmox cluster" detail={progress.cluster ? `members: ${progress.cluster.join(", ")}` : "no node answered the membership read"} />
-              <Check ok={progress.inSite} label="recorded as a node of the site" />
-            </ul>
+            <CheckList items={[
+              { ok: progress.registration === "answered", label: "the installer fetched its answer" },
+              { ok: progress.inCluster, label: "in the Proxmox cluster", detail: progress.cluster ? `members: ${progress.cluster.join(", ")}` : "no node answered the membership read" },
+              { ok: progress.inSite, label: "recorded as a node of the site" },
+            ]} />
           ) : null}
           {running ? (
             <>

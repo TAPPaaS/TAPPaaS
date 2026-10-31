@@ -19,9 +19,9 @@ interface BackupKeyStatus {
   current: boolean;
 }
 import { Dot, Tag, canOperate, useMe } from "../ui";
-import { Wizard } from "../wizard";
+import { DecideStep, StepRow, Wizard } from "../wizard";
 import { UsbStick, UsbStickPicker } from "../usbsticks";
-import { SecretStatus, StepRow } from "./Setup";
+import { SecretStatus } from "./Setup";
 
 // What the activity is, on Day 2's card and at the top of the form.
 export const BACKUP_KEYS_TEXT = "Writes the backup encryption keys, encrypted with a password of your choice, to a USB stick in a node: the copy of the keys that leaves the building. Without it an encrypted off-site backup cannot be restored after a full loss. Keep two sticks, and the password apart from them.";
@@ -77,6 +77,7 @@ export function BackupKeysWizard({ onClose }: { onClose: () => void }) {
       <p className="small">{BACKUP_KEYS_TEXT}</p>
       <ol className="setup">
         <StepRow s={stages[0]} open={current === "stick"}>
+          <DecideStep decided={plan !== null} locked={busy || written !== null} ready={!!picked && !picked.inUse} hint={picked ? undefined : "pick the stick"} onChange={() => setPlan(null)} onContinue={() => setPlan({ node, device, keyStick: picked!.keyStick })}>
           <div className="form">
             <UsbStickPicker nodes={nodes.length ? nodes : [node]} node={node} setNode={setNode} device={device} setDevice={setDevice} disabled={plan !== null} onSticks={setSticks} />
           </div>
@@ -85,14 +86,7 @@ export function BackupKeysWizard({ onClose }: { onClose: () => void }) {
           ) : picked ? (
             <p className="small"><Dot level="warn" /> Everything on {picked.device} will be erased.</p>
           ) : null}
-          <div className="actions">
-            {plan ? (
-              <button className="btn" disabled={busy || written !== null} onClick={() => setPlan(null)}>Edit</button>
-            ) : (
-              <button className="btn btn-primary" disabled={!picked || picked.inUse} onClick={() => setPlan({ node, device, keyStick: picked!.keyStick })}>Continue</button>
-            )}
-            {!plan && !picked ? <span className="muted small">pick the stick</span> : null}
-          </div>
+          </DecideStep>
         </StepRow>
         <StepRow s={stages[1]} open={current === "write"}>
           {!plan ? (

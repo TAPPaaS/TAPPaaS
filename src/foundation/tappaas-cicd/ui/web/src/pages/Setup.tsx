@@ -14,6 +14,7 @@ import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
 import { EnvironmentRow, SiteRead } from "../types";
 import { Dot, Link, ReadState, canOperate, replacePath, since, useMe } from "../ui";
+import { StageState, StepRow } from "../wizard";
 import { AddNodeButton, sessionText, useAddNodeSession } from "./AddNode";
 import { EnrolButton } from "./Enrol";
 import { Day2 } from "./Day2";
@@ -137,35 +138,8 @@ export function SecretForm({ name, fields, status, onSaved }: { name: string; fi
 
 // ── the checklist ─────────────────────────────────────────────────────
 
-export interface SetupStep {
+export interface SetupStep extends StageState {
   id: string;
-  title: string;
-  required: boolean;
-  done: boolean | null;
-  detail: string;
-}
-
-// One step of a checklist (Setup's, Add node's): its state, its title and
-// detail, and its body while open.
-export function StepRow({ s, children, open: forced }: { s: SetupStep; children?: ReactNode; open?: boolean }) {
-  const [userOpen, setOpen] = useState<boolean | null>(null);
-  const open = userOpen ?? forced ?? s.done !== true;
-  return (
-    <li className={`setup-step setup-${s.done === true ? "done" : s.done === false ? "todo" : "unknown"}`}>
-      <button className="setup-head" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <Dot level={s.done === true ? "pass" : s.done === false ? (s.required ? "fail" : "skip") : "warn"} />
-        <b>{s.title}</b>
-        <span className="muted small">{s.done === true ? "done" : s.done === false ? (s.required ? "to do" : "optional") : "pending"}</span>
-        <span className="spacer" />
-        <span className="muted">{open ? "▾" : "▸"}</span>
-      </button>
-      <p className="small setup-detail">{s.detail}</p>
-      {/* Hidden, not unmounted, when collapsed: a step's job, output and form
-          state stay, so a stage that closed as it finished reopens with its
-          result (Remove a node's stage 2, Add a node's stages). */}
-      {children ? <div className="setup-body" hidden={!open}>{children}</div> : null}
-    </li>
-  );
 }
 
 // The WiFi step's way on: the Day 2 button of each active Client zone with no

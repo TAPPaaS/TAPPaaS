@@ -14,9 +14,9 @@ import { ActStep } from "../flows";
 import { JobView, Step } from "../operate";
 import { useOpenedBy } from "../opener";
 import { canOperate, useMe } from "../ui";
-import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
+import { ResumeOffer, StepRow, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
 import { argOf } from "../wizards";
-import { StepRow, download, wgConfig } from "./Setup";
+import { download, wgConfig } from "./Setup";
 
 // What the activity is, on Day 2's card and at the top of the form.
 export const ENROL_TEXT = "Register a laptop or other device running WireGuard to be able to connect to the TAPPaaS management zone.";

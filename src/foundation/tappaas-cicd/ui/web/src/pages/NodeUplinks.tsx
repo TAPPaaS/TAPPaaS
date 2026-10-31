@@ -9,20 +9,17 @@ import { useRead } from "../api";
 import { Step, StepView } from "../operate";
 import { NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, switchPortChoices, wanCandidates, wanPort } from "../nodeadd";
 import { Topology } from "../types";
-import { Dot, useMe } from "../ui";
+import { CheckItem, CheckList, useMe } from "../ui";
 
 function useNetwork(node: string): NodeNetwork | null | undefined {
   const r = useRead<NodeNetwork>(`nodes/${encodeURIComponent(node)}/network`, 10_000);
   return r.env ? r.env.data : undefined;
 }
 
-function PortLine({ p, role }: { p: NodePort; role: string }) {
-  return (
-    <li>
-      <Dot level={p.state === "up" ? "pass" : "skip"} /> {role}: <span className="mono">{p.name}</span> <span className="muted small">{p.mac}</span> — {portLabel(p).split(" · ").slice(1).join(" · ") || "no link"}
-    </li>
-  );
-}
+const portLine = (p: NodePort, role: string): CheckItem => ({
+  ok: p.state === "up",
+  label: <>{role}: <span className="mono">{p.name}</span> <span className="muted small">{p.mac}</span> — {portLabel(p).split(" · ").slice(1).join(" · ") || "no link"}</>,
+});
 
 // 5a: lan — its ports now, then one more leg: the bond's mode, the node port,
 // the switch port it is cabled to. Apply sets up the switch port and the node;
@@ -77,7 +74,7 @@ export function LanUplink({ node, onDone }: { node: string; onDone: (ok: boolean
   return (
     <div>
       <p className="small"><b>lan on {node} now</b> — {members.length > 1 ? `${net.live.lan.mode}, ${members.length} ports` : "one port"}:</p>
-      <ul className="plain small checks">{members.map((p) => <PortLine key={p.mac} p={p} role="lan" />)}</ul>
+      <CheckList className="small" items={members.map((p) => portLine(p, "lan"))} />
       {!applied ? (
         candidates.length ? (
           <>
@@ -132,7 +129,7 @@ export function WanUplink({ node, onDone }: { node: string; onDone: (ok: boolean
   if (has) {
     return (
       <div>
-        <ul className="plain small checks"><PortLine p={has} role="WAN" /></ul>
+        <CheckList className="small" items={[portLine(has, "WAN")]} />
         <p className="small">{node}'s WAN port is set: nothing to apply here. {has.state !== "up" ? <span className="muted">It has no link — cable it to the WAN (an access port in the WAN zone) before the firewall's failover moves here. </span> : null}<span className="muted">Another port: site-manager node network set {node} --wan-port &lt;port&gt;.</span></p>
         <p className="small"><button className="btn btn-primary" onClick={() => onDone(true)}>Continue →</button></p>
       </div>

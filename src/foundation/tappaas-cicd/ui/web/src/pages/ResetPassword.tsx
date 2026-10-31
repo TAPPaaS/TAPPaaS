@@ -14,8 +14,8 @@ import { ActStep } from "../flows";
 import { Step } from "../operate";
 import { useOpenedBy } from "../opener";
 import { Dot, canOperate, useMe } from "../ui";
-import { Wizard } from "../wizard";
-import { SecretStatus, StepRow } from "./Setup";
+import { StepRow, Wizard } from "../wizard";
+import { SecretStatus } from "./Setup";
 
 // What the activity is, on Day 2's card and at the top of the form.
 export const RESET_PASSWORD_TEXT = "Gives a user who cannot sign in a new way in: a one-time link where they set a password of their own, or a temporary password you hand over.";
