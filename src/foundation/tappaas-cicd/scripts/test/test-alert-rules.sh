@@ -23,6 +23,10 @@ EOF
 cat > "${TMP}/config/site2.json"  <<EOF
 {"vmname": "site2", "location": "${TMP}/community/hosting/"}
 EOF
+# A site.json migration 0019 has not reached: its location is an object (#912).
+cat > "${TMP}/config/site.json" <<EOF
+{"name": "t", "location": {"country": "DK", "timezone": "Europe/Copenhagen"}}
+EOF
 cat > "${TMP}/config/oldsite.json" <<EOF
 {"vmname": "oldsite", "moduleSource": "${TMP}/community/hosting", "status": "archived"}
 EOF

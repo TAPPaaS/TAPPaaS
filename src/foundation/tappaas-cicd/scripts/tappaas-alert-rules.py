@@ -342,9 +342,16 @@ def _configs(config_dir):
             yield f[:-5], c
 
 
+def source_of(cfg):
+    """Where the module lives. Only a string is a path: a site.json that has not
+    been through migration 0019 has `location` as an object (#912)."""
+    src = cfg.get("moduleSource") or cfg.get("location")
+    return src if isinstance(src, str) and src else None
+
+
 def module_of(cfg):
-    src = cfg.get("moduleSource") or cfg.get("location") or ""
-    return os.path.basename(str(src).rstrip("/")) if src else ""
+    src = source_of(cfg)
+    return os.path.basename(src.rstrip("/")) if src else ""
 
 
 def _vmname(inst, cfg):
@@ -378,7 +385,7 @@ def scope_hosts(config_dir, what, without=()):
 def module_source(config_dir, module):
     for _inst, cfg in _configs(config_dir):
         if module_of(cfg) == module:
-            return cfg.get("moduleSource") or cfg.get("location")
+            return source_of(cfg)
     return None
 
 
