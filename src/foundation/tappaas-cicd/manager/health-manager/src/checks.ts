@@ -267,6 +267,7 @@ export interface ValidateOpts {
   // #569: percent of a node's physical RAM that committed memory may reach
   // before the gate fails. 100 = "promised more than it has".
   memoryThreshold: number;
+  timed?: (gate: string, ms: number) => void; // told each gate's duration (assess --timing)
 }
 
 // Aggregate all gates; `failed` counts FAIL (not skip). Caller maps failed>0 → exit 1.
@@ -1152,29 +1153,36 @@ export function checkSwitchPorts(configDir: string): CheckResult {
 }
 
 export function runHealthGates(client: ClusterClient, opts: ValidateOpts): HealthReport {
+  // Each gate timed on its own when asked: where an assess spends its time.
+  const gate = (f: () => CheckResult): CheckResult => {
+    const t0 = Date.now();
+    const r = f();
+    opts.timed?.(r.name, Date.now() - t0);
+    return r;
+  };
   const checks: CheckResult[] = [
-    checkServiceLiveness(client, opts.configDir, opts.defaultNode),
-    checkDiskThreshold(client, opts.configDir, opts.defaultNode, opts.threshold),
-    checkMemoryCommitment(client, opts.memoryThreshold),
-    checkStoragePools(client),
-    checkStorageDisks(opts.configDir),
-    checkCpuImpact(client, opts.configDir, opts.defaultNode),
-    checkGuestMemory(client),
-    checkBackupStatus(opts.configDir),
-    checkBackupKeys(opts.configDir),
-    checkPendingReboot(client, opts.configDir, opts.defaultNode),
-    checkSiteTimezone(client, opts.configDir, opts.defaultNode),
-    checkQuorum(client),
-    checkLanUplink(client),
-    checkIpv6Egress(opts.configDir, opts.defaultNode),
-    checkSwitchPorts(opts.configDir),
-    checkMlagPairs(opts.configDir),
-    checkPulse(client, opts.configDir),
-    checkOpenAlerts(opts.configDir),
-    checkCveStatus(opts.configDir, Date.now()),
-    checkSignatureStatus(opts.configDir, Date.now()),
-    checkControlPlaneTrust(opts.configDir),
-    checkCmdb(Date.now()),
+    gate(() => checkServiceLiveness(client, opts.configDir, opts.defaultNode)),
+    gate(() => checkDiskThreshold(client, opts.configDir, opts.defaultNode, opts.threshold)),
+    gate(() => checkMemoryCommitment(client, opts.memoryThreshold)),
+    gate(() => checkStoragePools(client)),
+    gate(() => checkStorageDisks(opts.configDir)),
+    gate(() => checkCpuImpact(client, opts.configDir, opts.defaultNode)),
+    gate(() => checkGuestMemory(client)),
+    gate(() => checkBackupStatus(opts.configDir)),
+    gate(() => checkBackupKeys(opts.configDir)),
+    gate(() => checkPendingReboot(client, opts.configDir, opts.defaultNode)),
+    gate(() => checkSiteTimezone(client, opts.configDir, opts.defaultNode)),
+    gate(() => checkQuorum(client)),
+    gate(() => checkLanUplink(client)),
+    gate(() => checkIpv6Egress(opts.configDir, opts.defaultNode)),
+    gate(() => checkSwitchPorts(opts.configDir)),
+    gate(() => checkMlagPairs(opts.configDir)),
+    gate(() => checkPulse(client, opts.configDir)),
+    gate(() => checkOpenAlerts(opts.configDir)),
+    gate(() => checkCveStatus(opts.configDir, Date.now())),
+    gate(() => checkSignatureStatus(opts.configDir, Date.now())),
+    gate(() => checkControlPlaneTrust(opts.configDir)),
+    gate(() => checkCmdb(Date.now())),
   ];
   const failed = checks.filter((c: CheckResult): boolean => c.status === ("fail" as CheckStatus)).length;
   return { checks, failed };

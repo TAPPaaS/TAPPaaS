@@ -39,6 +39,21 @@ export interface AssessIO {
 export interface AssessOpts {
   only?: string; // an object's id or name: the sources speak only for it, and no gate runs
   dryRun?: boolean;
+  timed?: Timer; // told each phase's duration (--timing)
+}
+
+/** Told how long a phase took, in ms: a CMDB read, a source, a gate, the writing. */
+export type Timer = (phase: string, ms: number) => void;
+
+/** Runs `f` as the phase `name`, telling `timed` how long it took. */
+export function lap<T>(timed: Timer | undefined, name: string, f: () => T): T {
+  if (!timed) return f();
+  const t0 = Date.now();
+  try {
+    return f();
+  } finally {
+    timed(name, Date.now() - t0);
+  }
 }
 
 export interface Transition { id: string; class: string; name: string; type: string; from: ConditionStatus | null; to: ConditionStatus; reason: string }
@@ -132,27 +147,29 @@ const lasting = (cs: Condition[]): string => JSON.stringify(cs.map(({ lastChecke
 export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?: CheckResult[]): AssessResult {
   const time = now.toISOString();
   const nowMs = now.getTime();
-  const objects = io.objects().filter((o) => o.attributes.placeholder !== true);
-  const relations = io.relations();
+  const t = <T>(name: string, f: () => T): T => lap(opts.timed, name, f);
+  const objects = t("cmdb objects", () => io.objects()).filter((o) => o.attributes.placeholder !== true);
+  const relations = t("cmdb relations", () => io.relations());
   const idx = new SiteIndex(objects, relations);
   const only = opts.only ? idx.byId.get(opts.only) ?? objects.find((o) => o.name === opts.only) ?? null : null;
   if (opts.only && !only) throw new Error(`assess: no object ${opts.only} in the CMDB`);
 
-  const checks = only ? [] : gatesOverride ?? io.gates();
+  const checks = only ? [] : gatesOverride ?? t("gates", () => io.gates());
   const g = fromGates(checks, idx);
   const findings: Finding[] = [...g.findings];
   const ran = new Set(g.ran);
-  const a = io.alerts();
+  const a = t("alerts", () => io.alerts());
   findings.push(...fromAlerts([...(a.open ?? []), ...a.recent], idx));
   if (a.open !== null) ran.add("alerts");
-  const rec = io.sweep();
+  const rec = t("sweep", () => io.sweep());
   findings.push(...fromSweep(rec, nowMs, idx));
   ran.add("sweep");
-  findings.push(...fromThresholds(idx, nowMs));
+  findings.push(...t("thresholds", () => fromThresholds(idx, nowMs)));
   ran.add("thresholds");
-  findings.push(...fromObservations(idx, io.ended(), nowMs));
+  const ended = t("cmdb ended", () => io.ended());
+  findings.push(...t("observations", () => fromObservations(idx, ended, nowMs)));
   ran.add("observations");
-  const scan = io.cve();
+  const scan = t("cve", () => io.cve());
   findings.push(...fromCve(scan, nowMs, idx));
   if (scan) ran.add("cve");
 
@@ -164,10 +181,10 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     return !judged || judged.has(id);
   };
   const scoped = only ? findings.filter((f) => f.object === only.id) : findings;
-  const source = settle(priorOf, objects.map((o) => o.id), scoped, looked, time);
+  const source = t("settle", () => settle(priorOf, objects.map((o) => o.id), scoped, looked, time));
 
-  const model = io.rules();
-  const d = derive(objects, source, relations, model, time);
+  const model = t("rules", () => io.rules());
+  const d = t("derive", () => derive(objects, source, relations, model, time));
 
   const result: AssessResult = { time, objects: [], rootCauses: d.rootCauses, transitions: [], report: null };
   const reported: NonNullable<CmdbReport["objects"]> = [];
@@ -199,7 +216,7 @@ export function assess(io: AssessIO, opts: AssessOpts, now: Date, gatesOverride?
     reported.push({ id: s.id, class: s.class, name: s.name, attributes: siteAttributes(s, d.rootCauses, checks, only !== null, time) });
   }
   if (reported.length) result.report = { source: SOURCE, kind: "observation", assessment: true, time, objects: reported };
-  if (result.report && !opts.dryRun) io.write(result.report);
+  if (result.report && !opts.dryRun) t("cmdb write", () => io.write(result.report!));
   return result;
 }
 

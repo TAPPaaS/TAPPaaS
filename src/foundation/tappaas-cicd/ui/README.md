@@ -203,7 +203,8 @@ more object). The current root causes stand above the facets, worst first; the s
 object by name or class and says where it is. What is open is remembered in the browser.
 
 **The ego graph (centre)** is laid out by dagre: the selected object, a pill per relation type and
-its neighbours through them, what it needs above it and what needs it below. A pill of more than
+its neighbours through them, what it needs above it and what needs it below. A level too wide for
+the canvas wraps into rows, as many as let the graph fill the canvas's height. A pill of more than
 eight stands folded with what needs a look still out; a click opens it. A **+** on a neighbour opens
 one more hop from it, a **−** folds that and what was opened through it. **To the root cause** and
 **What this impacts** add the chain of the derivation in strong lines; a dashed line is `assess`'s
@@ -312,7 +313,7 @@ change is a job as ever, `health-manager ack|unack|maintenance`, taken from its 
 | `health/ego/<id>/path?to=root\|impact[&at=<time>]` | `{generated, at, id, to, nodes[], edges[]}`: the chain of the derivation, an edge `{id, type, provider, dependant, virtual}`, `virtual` when no relation shows the way |
 | `health/object/<id>` | the CI panel: `{id, class, ancestors, name, label, module, view, conditions[], drift, relations[], history[], changes[], rootCauses[], impacts[]}` |
 | `health/roots` | `{roots, from: "health-manager"\|"graph", error}`, `graph` being the console's own list |
-| `health/summary` | the worst per page: `{available, generated, site, counts, roots, byType{}, attention[]}`; `available` false: keep `health` |
+| `health/summary` | the worst per page: `{available, generated, site, counts, roots, byType{}, attention[]}`; `counts` the objects per colour, an object whose every failure is silenced in none, and `acknowledged` the silenced conditions, one by one (an acknowledged condition beside an open one on the same object counts); `available` false: keep `health` |
 | `cmdb/ci/<id>`, `cmdb/ci?name=<name>[&class=<class>]` | a CI's record: `{id, class, ancestors, name, label, attributes[] {name, value, source, since}, relations[] {id, type, direction, other, source, since}, drift, events[]}`, `events` its conditions that are not ok; by name, the class (or an ancestor of it) where the name is not unique |
 | `cmdb/ci/<id>/history` | `[{at, what: attribute\|relation\|change, name, value, source, until, detail, drift}]`, the newest first, 300 at most |
 | `cmdb/ci/<id>/trace` | `[{class, name, id, relation, link}]`: the CI, what it is part of, allocated to, runs on or is a member of (eight hops at most), then `desired`, `release`, `module`, `issues` and `adr` steps, which carry a `link` and no `id` |

@@ -90,11 +90,17 @@ empty `config/.cmdb-spool/`.
 - Group sub-flows opened only by what the page held (6b).
 - `impact` across `runs-on` and `depends-on` not run live: no safe real failure.
 - Flapping not produced live; the ADR-039 rules not applied, so no mail path run.
-- `health-assess.service` fails when `cmdb` is restarting: assess exits 1, unlike emit. Next run recovers.
-- `assess` takes about 60 s (the gates), not the few seconds D2 says.
+- ~~`health-assess.service` fails when `cmdb` is restarting: assess exits 1, unlike emit. Next run recovers.~~ Fixed 2026-10-31: a CMDB that does not answer, on the read or the write, is a warning and exit 0; a refusal still fails. Not yet deployed.
+- `assess` takes about 60 s (the gates), not the few seconds D2 says. Measurable now: `health-manager assess --dry-run --timing` prints each phase and each gate on stderr. From reading the code, not yet measured: the CMDB reads and the working out are a second or two; the rest is the gates asking the planes, every ssh a fresh handshake (no ControlMaster), one after another:
+  - per guest, serially: `disk-threshold` (2 ssh: probe + `df`), `pending-reboot` (1), `site-timezone` (1 per node + 1 per guest), `cpu-impact` (1 per HA guest on a common CPU); an LXC adds a `pvesh` ssh for its node in the first two. About 4 ssh per guest, 25-35 s on ~20 guests; an unreachable guest costs the 5 s ConnectTimeout per call.
+  - `storage-disks`: `storage-manager inventory` with SMART on every disk of every node, its own help calls it slow; likely 5-15 s.
+  - per node: `memory-commitment` and `guest-memory` each read `nodeCapacity()` (pvesh + one ssh per node + rrddata per container), so twice; `storage-pools` (2 pvesh + zfs per node); `lan-uplink` (`lan-uplink.sh show` per node); `quorum` (pvecm). Each of these, and `service-liveness`, pings every node again first. About 5-10 s.
+  - one plane call each: `backup-status`, `backup-keys` (pbs-controller), `ipv6-egress` (ipv6-manager wan, then a curl or a guest ssh), `pulse` (1 ssh), `open-alerts` (ssh to logging + Grafana), and the `alerts` source fetches Grafana a second time. About 3-6 s.
+  - no plane: `switch-ports` (actual file + jq), `mlag-pairs`, `signature-status`, `control-plane-trust`, `cve-status` (files), `cmdb` and the `sweep` source (CMDB `GET /v1/sweep`, twice), `thresholds`, `observations`, `settle`, `derive`.
+  Gates unchanged (O3); first cheap wins without restructuring would be one `nodeCapacity()`, one Grafana fetch, one ping round, and ssh ControlMaster.
 - 284 of 349 objects stayed `unknown`. Fixed by plan step 2 (ADR-041 v1.3); replayed over the live objects, 0 of 424 stay grey. Not yet deployed.
-- The graph is a thin strip at a narrow width even on six roots.
-- The summary shows `0 silenced` with a condition acked while the object has another open one.
+- ~~The graph is a thin strip at a narrow width even on six roots.~~ Fixed 2026-10-31: dagre put a whole rank on one line; a rank too wide for the canvas now wraps into rows, as many as fit the canvas at the largest scale, and lays out again when the canvas changes size. `ui/web/dist` not rebuilt, so not yet in the page; not looked at in a browser.
+- ~~The summary shows `0 silenced` with a condition acked while the object has another open one.~~ Fixed 2026-10-31: the console counted silenced per object, and only when its colour was all silenced; it now counts silenced conditions, the colours stay per object (console backend, `ui/src/health.ts`). Not yet deployed.
 - ~~`health.assessInterval` has no `site modify` option.~~ Fixed 2026-10-30: `site modify --set health.assessInterval=<min>` (`--healthAssessInterval`), 1-1440.
 - From the ADR-040 run, unchanged: `module-manager modify` preview says `config-only` but runs a full update. ~~The site-manager `schedule` test on `alerts`.~~ Fixed 2026-10-31: `--alertsIncludeLines` (every in-place site field has a `site modify` option again).
 

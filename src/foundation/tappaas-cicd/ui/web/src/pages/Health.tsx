@@ -8,7 +8,7 @@ import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow } from
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { get, useHealthStream } from "../api";
 import { GEdge, GNode, edgeTypes, layout, nodeTypes } from "../graph";
-import { Anchor, Card, EgoState, Filters, NO_FILTERS, boundsOf, egoCards, expand, fold, kept, patchEgo, patchPaths, rollup, shapeOf, statusClass, viewFor } from "../healthgraph";
+import { Anchor, Card, EgoState, Filters, NO_FILTERS, boundsOf, egoCards, expand, fold, kept, patchEgo, patchPaths, rollup, shapeOf, statusClass, viewFor, wrapRanks } from "../healthgraph";
 import { ClassIcon, ModuleIcon } from "../moduleicon";
 import { HealthEgo, HealthPath, HealthPatch, HealthView } from "../types";
 import { ReadState, replacePath, when } from "../ui";
@@ -19,6 +19,12 @@ const CONDITION_TYPES = ["operational", "drift", "capacity", "security", "mainte
 const STRONG = "#d64545";
 const THIN = "#94a3b8";
 const WEEK_HOURS = 168;
+const NODESEP = 22;
+const RANKSEP = 52;
+const MAX_ZOOM = 1.25;
+
+// Within a tenth of the size laid out for: no new layout for a pixel.
+const near = (v: { width: number; height: number }, w: number, h: number): boolean => Math.abs(w - v.width) < v.width / 10 && Math.abs(h - v.height) < v.height / 10;
 
 type Chain = HealthPath["to"];
 
@@ -78,7 +84,20 @@ function Flow({ state, filters, pick, grow, toggleGroup, nonce }: FlowProps) {
   const shape = shapeOf(cards, lines);
   const act = useRef({ pick, grow, toggleGroup, cards });
   act.current = { pick, grow, toggleGroup, cards };
-  // Once per shape: what moves a card. The colours below are patched over it.
+  // The canvas's size: a wide rank wraps to use its height, not a strip across it.
+  const canvas = useRef<HTMLDivElement>(null);
+  const [view, setView] = useState({ width: 1000, height: 600 });
+  useEffect(() => {
+    const el = canvas.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([e]) => {
+      const { width, height } = e.contentRect;
+      if (width > 0 && height > 0) setView((v) => (near(v, width, height) ? v : { width, height }));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // Once per shape and canvas: what moves a card. The colours below are patched over it.
   const base = useMemo(() => {
     const nodes: GNode[] = cards.map((c) => ({
       id: c.id,
@@ -88,9 +107,11 @@ function Flow({ state, filters, pick, grow, toggleGroup, nonce }: FlowProps) {
       onClick: c.node ? () => act.current.pick(c.id) : () => act.current.toggleGroup(c.group!.key),
     }));
     const edges: GEdge[] = lines.map((l) => ({ id: l.id, source: l.source, target: l.target, label: l.label ?? undefined, dashed: l.dashed, color: l.strong ? STRONG : THIN }));
-    return layout(nodes, edges, "TB", 22, 52);
+    const laid = layout(nodes, edges, "TB", NODESEP, RANKSEP);
+    const moved = wrapRanks(laid.nodes.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y, w: n.data.g.w, h: n.data.g.h })), view, NODESEP, RANKSEP, MAX_ZOOM);
+    return moved.size ? { ...laid, nodes: laid.nodes.map((n) => ({ ...n, position: moved.get(n.id) ?? n.position })) } : laid;
     // eslint-disable-next-line
-  }, [shape]);
+  }, [shape, view]);
   const nodes = useMemo(() => {
     const by = new Map(cards.map((c) => [c.id, c]));
     return base.nodes.map((n) => {
@@ -123,10 +144,10 @@ function Flow({ state, filters, pick, grow, toggleGroup, nonce }: FlowProps) {
       if (box) void rf.fitBounds(box, { padding: 0.12, duration: 300 });
     }, 80);
     return () => clearTimeout(t);
-  }, [nonce, shape, rf]);
+  }, [nonce, shape, view, rf]);
   return (
-    <div className="graph health-canvas">
-      <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} minZoom={0.1} maxZoom={1.25} nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} proOptions={{ hideAttribution: true }} onNodeClick={() => undefined}>
+    <div className="graph health-canvas" ref={canvas}>
+      <ReactFlow nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes} minZoom={0.1} maxZoom={MAX_ZOOM} nodesDraggable={false} nodesConnectable={false} elementsSelectable={false} proOptions={{ hideAttribution: true }} onNodeClick={() => undefined}>
         <Background gap={24} color="#e5e7eb" />
         <Controls showInteractive={false} />
       </ReactFlow>

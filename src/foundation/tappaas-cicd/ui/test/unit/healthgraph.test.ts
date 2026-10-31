@@ -3,7 +3,7 @@
 // an expansion and its fold, what the filters keep, a live patch.
 
 import { buildHealth, healthEgo, healthPath } from "../../src/health";
-import { BIG_GROUP, Card, EgoState, NO_FILTERS, boundsOf, egoCards, expand, fold, kept, keptRollup, patchEgo, patchPaths, patchRows, rollup, shapeOf, statusClass, viewFor } from "../../web/src/healthgraph";
+import { BIG_GROUP, Card, EgoState, NO_FILTERS, boundsOf, egoCards, expand, fold, kept, keptRollup, patchEgo, patchPaths, patchRows, rollup, shapeOf, statusClass, viewFor, wrapRanks } from "../../web/src/healthgraph";
 import { HealthEgo, HealthPatch, HealthPath, TreeNode } from "../../web/src/types";
 import { check, done } from "./check";
 import { healthSite, relationTypes } from "./fake-cmdb";
@@ -95,5 +95,18 @@ check(patchPaths([chain(ids["nc-svc"], "root")], patch)[0].nodes.find((n) => n.i
 const rows = [{ id: ids.tappaas2, status: "critical", notOk: 4, label: "tappaas2" }, { id: ids.tappaas1, status: "warning", notOk: 1, label: "tappaas1" }] as unknown as TreeNode[];
 const after = patchRows(rows, patch.rollups);
 check(after[0].status === "ok" && after[0].notOk === 0 && after[0].label === "tappaas2" && after[1].status === "warning", "a tree row takes the roll-up, the rest stay");
+
+// A wide rank wraps to use the canvas's height: one object over 30 neighbours,
+// as dagre lays it out on one line, on a 1000×600 canvas.
+const fan = [{ id: "c", x: 3405, y: 0, w: 210, h: 62 }, ...Array.from({ length: 30 }, (_, i) => ({ id: `n${i}`, x: i * 232, y: 114, w: 210, h: 62 }))];
+const wrapped = wrapRanks(fan, { width: 1000, height: 600 }, 22, 52);
+const at = (id: string) => wrapped.get(id) ?? fan.find((b) => b.id === id)!;
+const rowsY = new Set(fan.slice(1).map((b) => at(b.id).y));
+const wide = Math.max(...fan.map((b) => at(b.id).x + b.w)) - Math.min(...fan.map((b) => at(b.id).x));
+const tall = Math.max(...fan.map((b) => at(b.id).y + b.h)) - Math.min(...fan.map((b) => at(b.id).y));
+check(rowsY.size > 1 && wide < 30 * 232 && tall > 176, "a wide rank wraps into rows");
+check(Math.min(1000 / wide, 600 / tall) > 2 * Math.min(1000 / (30 * 232), 600 / 176), "  and fits the canvas at more than twice the scale");
+check(fan.slice(1).every((b) => at(b.id).y > at("c").y + 62), "  every row below its parent");
+check(wrapRanks(fan.slice(0, 4), { width: 1000, height: 600 }, 22, 52).size === 0, "a narrow graph keeps dagre's places");
 
 done("healthgraph");

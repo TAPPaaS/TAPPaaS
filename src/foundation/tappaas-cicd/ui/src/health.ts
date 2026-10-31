@@ -110,6 +110,7 @@ export interface HealthRoot {
   environments: string[];
 }
 
+// `acknowledged`: the silenced conditions (acknowledged or in maintenance); the rest count objects.
 export type Counts = Record<Status | "acknowledged", number>;
 
 export interface HealthGraph {
@@ -238,11 +239,15 @@ export function emptyCounts(): Counts {
   return { ok: 0, unknown: 0, warning: 0, critical: 0, acknowledged: 0 };
 }
 
-function countsOf(nodes: HealthNode[]): Counts {
+// The objects by colour, and apart from them what is silenced, condition by
+// condition: an acknowledged critical beside an open warning is one warning
+// object and one silenced condition. An object whose every failure is silenced
+// is in no colour's count.
+export function countsOf(nodes: HealthNode[]): Counts {
   const c = emptyCounts();
   for (const n of nodes) {
-    if (n.acknowledged || n.maintenance) c.acknowledged++;
-    else c[n.status]++;
+    if (!n.acknowledged && !n.maintenance) c[n.status]++;
+    c.acknowledged += n.issues.filter((i) => i.status !== "ok" && silenced(i)).length;
   }
   return c;
 }
