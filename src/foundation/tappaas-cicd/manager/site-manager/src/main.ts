@@ -51,8 +51,9 @@ import { duration, failingLines, runDirName } from "./testrun";
 import { locationErrors, placeText, readLocations } from "../../../lib/ts/src/locations";
 import { clusterNode, clusterNodes, nodeErrors } from "../../../lib/ts/src/nodes";
 import { mgmtDomain } from "../../../lib/ts/src/cluster";
-import { reportChange, reportObservation, sendObservation } from "../../../lib/ts/src/cmdb-source";
-import { SOURCE, membershipObservation, nodeObject, recordingClient, siteObjects, siteObservation } from "./cmdb-report";
+import { CmdbReport } from "../../../lib/ts/src/cmdb";
+import { reportChange, reportObservation, sendObservation, withStubs } from "../../../lib/ts/src/cmdb-source";
+import { SOURCE, membershipObservation, nodeObject, recordingClient, siteObjects, siteObservation, uplinkReports } from "./cmdb-report";
 
 const VERSION = "0.1.0";
 
@@ -315,9 +316,9 @@ export const HELP: HelpSpec = {
         ["--stop", "Stop the running update gracefully: the module in progress finishes, the rest are skipped (the next update takes them), and the run is recorded as interrupted. Ctrl-C only stops following a run; `sudo systemctl stop update-tappaas.service` stops it at once, without rolling back the module in progress."],
       ] },
     { usage: "report [--json] [--discover]",
-      note: "(ADR-040: send the site, its locations, the cluster, its nodes and guests to the CMDB)",
+      note: "(ADR-040: send the site, its locations, the cluster, its nodes and guests to the CMDB, and each lan uplink leg's cable with its bond as redundancyGroup)",
       options: [
-        ["--json", "Print the report instead of sending it."],
+        ["--json", "Print the report instead of sending it; with uplink legs the switch inventory places, an array: the site's report, then one per leg."],
         ["--discover", "Full depth (D15), one more read per node: every NIC and disk, ZFS layouts, storages, PCI devices, guests' NICs, corosync links."],
       ] },
     { usage: "test [--deep] [--verbose]",
@@ -1504,8 +1505,22 @@ function cmdReport(o: Opts, client: SiteClient): number {
   }
   const site = existsSync(siteFileOf(o)) ? (loadRaw(siteFileOf(o)) as { repositories?: { name?: string; path?: string }[] }) : {};
   const repo = (site.repositories ?? []).find((r) => r.name === "TAPPaaS")?.path ?? "/home/tappaas/TAPPaaS";
-  return sendObservation(siteObservation(configDir, live, runningVersion(repo), discover), o.json, configDir, info);
+  const main = siteObservation(configDir, live, runningVersion(repo), discover);
+  const legs = uplinkReports(configDir, live);
+  if (o.json && legs.length) {
+    info(JSON.stringify([main, ...legs].map((r) => withStubs({ kind: "observation", ...r })), null, 2));
+    return 0;
+  }
+  const rc = sendObservation(main, o.json, configDir, info);
+  // A leg the CMDB refuses (a port not reported yet) is a warning: the site went.
+  for (const leg of o.json ? [] : legs) if (sendObservation(leg, false, configDir, () => undefined) !== 0) warn(`the CMDB refused the uplink cable ${describeLeg(leg)}; it is sent again on the next report`);
+  return rc;
 }
+
+const describeLeg = (r: CmdbReport): string => {
+  const n = (ref: string): string => r.objects?.find((x) => x.ref === ref)?.name ?? "?";
+  return `${n("switch")}:${n("port")} — ${n("server")}:${n("nic")}`;
+};
 
 // What the node slice of a reconcile read, reported as a side effect.
 function reportMembership(configDir: string, rec: ReturnType<typeof recordingClient>): void {

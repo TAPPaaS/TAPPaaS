@@ -409,6 +409,24 @@ check "as of a time before it existed: nothing" "0" "$(cmdb relations --type pla
 check "an unknown type is not found" "3" "$(cmdb relations --type nope --json >/dev/null 2>&1; echo $?)"
 cmdb relations --type part-of >"${T}/rels.txt" 2>&1 && grep -q "port/eno1" "${T}/rels.txt" && ok "cmdb relations prints a table" || bad "relations: $(head -3 "${T}/rels.txt")"
 
+echo "== a relation's dependency words: set by the source that knows them =="
+_eno="$(cmdb relations --type part-of --to server/srv-01 --json | jq -r '.[] | select(.from.name == "eno1") | .from.id')"
+cmdb report --json >/dev/null <<<'{"source":"switch-manager","objects":[{"ref":"a","class":"network-device","name":"sw-dep"},{"ref":"p","class":"port","name":"7","attributes":{"asset":{"ref":"a"},"kind":"rj45"}}]}'
+_p7="$(cmdb relations --type part-of --to network-device/sw-dep --json | jq -r '.[0].from.id')"
+_cable() { cmdb report --json >/dev/null <<<"{\"source\":\"$1\",\"relations\":[{\"type\":\"connects\",\"from\":{\"id\":\"${_p7}\"},\"to\":{\"id\":\"${_eno}\"},\"attributes\":$2}]}"; }
+_attrs() { cmdb relations --type connects --to "${_eno}" --json | jq -c '.[0].attributes | to_entries | sort_by(.key) | from_entries'; }
+_periods() { sql "SELECT count(*) FROM relation WHERE type = 'connects' AND from_object = '${_p7}' AND to_object = '${_eno}'"; }
+_cable switch-manager '{"origin":"lldp","linkSpeed":"1g"}'
+_cable site-manager '{"redundancyGroup":"tappaas1:lanbond"}'
+check "a report of only the group annotates the cable, keeping its attributes" '{"linkSpeed":"1g","origin":"lldp","redundancyGroup":"tappaas1:lanbond"}' "$(_attrs)"
+_n="$(_periods)"
+_cable switch-manager '{"origin":"lldp","linkSpeed":"1g"}'
+check "another source's report that does not name it keeps it: no new period" "${_n} tappaas1:lanbond" "$(_periods) $(_attrs | jq -r '.redundancyGroup')"
+_cable site-manager '{"redundancyGroup":null}'
+check "null unsets it" '{"linkSpeed":"1g","origin":"lldp"}' "$(_attrs)"
+refuse "a redundancy group is a name" 4 "redundancyGroup is a name" \
+    "{\"source\":\"t\",\"relations\":[{\"type\":\"connects\",\"from\":{\"id\":\"${_p7}\"},\"to\":{\"id\":\"${_eno}\"},\"attributes\":{\"redundancyGroup\":3}}]}"
+
 echo "== owned-by's pairs =="
 out="$(cmdb report --json <<<'{"source":"identity-manager","objects":[{"ref":"o","class":"organization","name":"acme"},{"ref":"g","class":"group","name":"staff","attributes":{"uuid":"u-1"}},{"class":"organization","name":"acme-nl"}],"relations":[{"type":"owned-by","from":{"ref":"g"},"to":{"ref":"o"}},{"type":"owned-by","from":{"class":"organization","name":"acme-nl"},"to":{"ref":"o"}}]}' 2>&1)"
 check "a group and an organization are owned by an organization" "2" "$(jq '.result.relations | length' <<<"${out}" 2>/dev/null || echo "${out}")"
@@ -438,7 +456,8 @@ check "…and it was rewritten in place" "2026-10-30T03:00:00Z" "$(cmdb show "${
 check "an assessment is no sighting: lastSeen stands" "${_seen}" "$(cmdb show "${_pid}" --json | jq -r '.lastSeen')"
 refuse "an assessment names objects by id" 4 "by id" \
     '{"source":"health-manager","assessment":true,"objects":[{"class":"zone","name":"nope","attributes":{"conditions":[]}}]}'
-check "the rules are served: runs-on's dependant, the shipped set" "from 4" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.rules | length)"')"
+check "the rules are served: runs-on's dependant, the shipped set" "from 5" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(.data.relations[] | select(.name == "runs-on") | .dependant) \(.data.rules | length)"')"
+check "…a rule's dependant clause, and the attributes one may name" "true true" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '"\(any(.data.rules[]; .dependant.haNode == true)) \(.data.fields | index("haNode") != null)"')"
 check "the containment is served: each relation type's tree end" "to from both null" "$(curl -s --unix-socket "${CMDB_SOCKET}" http://cmdb/v1/rules | jq -r '[.data.relations[] | select(.name == ("allocated-to", "runs-on", "connects", "depends-on")) | .tree | tostring] | join(" ")')"
 refuse "a pool needs its node" 4 "no key" '{"source":"t","objects":[{"class":"storage-pool","name":"tanka1"}]}'
 cmdb report --json >/dev/null <<<'{"source":"module-manager","objects":[{"class":"service","name":"nextcloud:web","attributes":{"onNode":"tappaas1","version":"1"}}]}'

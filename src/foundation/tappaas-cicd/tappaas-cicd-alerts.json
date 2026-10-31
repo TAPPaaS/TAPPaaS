@@ -10,13 +10,13 @@
       "capture": {
         "name": "\"name\":\"(?P<name>[^\"]+)\"",
         "reason": "\"reason\":\"(?P<reason>[^\"]*)\"",
-        "symptoms": "\"symptoms\":(?P<symptoms>[0-9]+)"
+        "impacted": "\"impacted\":\"(?P<impacted>[^\"]*)\""
       },
       "window": 300,
-      "summary": "A condition became a critical root cause: the failure nothing else explains (ADR-041 D3). What it impacts is not mailed separately; a warning root waits for the daily digest.",
+      "summary": "A condition became a critical root cause: the failure nothing else explains (ADR-041 D3), with what it impacts by class. What it impacts is not mailed separately; a warning root waits for the daily digest.",
       "mail": {
-        "subject": "{state}: critical root cause {label.name} ({label.symptoms} impacted)",
-        "body": "== Critical root cause: {label.name}\nreason: {label.reason}\nimpacted objects: {label.symptoms}\nsince: {since}\n\nhealth-manager roots shows what it impacts; health-manager ack {label.name} --note <why> silences it and its symptoms.\nIn Grafana (Explore, Loki): {query}"
+        "subject": "{state}: critical root cause {label.name} (impacts {label.impacted})",
+        "body": "== Critical root cause: {label.name}\nreason: {label.reason}\nimpacts: {label.impacted}\nsince: {since}\n\nhealth-manager roots shows what it impacts; health-manager ack {label.name} --note <why> silences it and its symptoms.\nIn Grafana (Explore, Loki): {query}"
       }
     },
     {

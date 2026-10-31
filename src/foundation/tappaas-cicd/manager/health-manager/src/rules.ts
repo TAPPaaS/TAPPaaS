@@ -17,13 +17,16 @@ export interface RulesDoc {
   rules: HealthRule[];
   relations: RelationMeta[];
   ancestors: Record<string, string[]>;
+  fields?: string[]; // every attribute some class declares: what a `dependant` clause may name
 }
 
 export const readRules = (): RulesDoc => cmdbRequest("GET", "/v1/rules") as RulesDoc;
 
 export function ruleLine(r: HealthRule): string {
   const ends = r.from || r.to ? ` (${r.from ?? "any"} → ${r.to ?? "any"})` : "";
-  return `${r.source.type} ${r.source.status} crosses ${r.relation}${ends} as ${r.impact} impact`;
+  const dep = Object.entries(r.dependant ?? {}).map(([k, v]) => (v === true ? `${k} set` : `${k}=${String(v)}`));
+  const when = dep.length ? ` to a dependant with ${dep.join(", ")}` : "";
+  return `${r.source.type} ${r.source.status} crosses ${r.relation}${ends}${when} as ${r.impact} impact`;
 }
 
 /** What is wrong with a rules document, against the model the service gave. */
@@ -32,6 +35,7 @@ export function checkRules(doc: unknown, model: RulesDoc): string[] {
     relations: model.relations.map((r) => r.name),
     dependants: model.relations.filter((r) => r.dependant).map((r) => r.name),
     classes: Object.keys(model.ancestors),
+    fields: model.fields,
   });
 }
 

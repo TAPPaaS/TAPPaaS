@@ -6,7 +6,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { ack, endedBeforeEmit, maintenanceStart, maintenanceStop, reconcileAcks, silenced, unack } from "../../src/ack";
 import { Condition, HealthCmdb, HealthObject, Period, conditionsOf, splitRef } from "../../src/emit-cmdb";
-import { Cursor, assessInterval, emit, flapPercent, flappingNow, readCursor, runEmit, transitions, withEmitLock } from "../../src/emit";
+import { Cursor, assessInterval, byClass, emit, flapPercent, flappingNow, readCursor, runEmit, transitions, withEmitLock } from "../../src/emit";
 import { historyLines, historyRows, listLines, listRows, rootDocs, rootLines, showDoc, showLines } from "../../src/emit-read";
 import { AckEvent, HealthEvent, MaintenanceEvent, RootCauseEvent, TransitionEvent, eventLine } from "../../src/events";
 import { EMIT_HELP, EmitContext, parseWhen, runEmitVerb } from "../../src/emit-verbs";
@@ -108,6 +108,9 @@ console.log("emit: kinds");
   check(of("vm1", "impact")!.correlated.includes(of("node1", "operational")!.id), "the symptom lists the root's event");
   const rc = r.events.filter((e): e is RootCauseEvent => e.event === "rootcause");
   check(rc.length === 1 && rc[0].ci === "node1" && rc[0].symptoms.join() === "vm1", "one rootcause event, with the symptoms' ids");
+  check(rc[0].impacted === "1 vm" && of("node1", "operational")?.impacted === "1 vm", "…and the root's consequence by class, on both events");
+  check(of("vm1", "impact")?.impacted === "nothing", "a symptom impacts nothing");
+  check(/"symptoms":1,"impacted":"1 vm","silenced":false/.test(eventLine(of("node1", "operational")!)), "the journal line carries it beside the symptom count");
   check(r.cursor.change === 8, "the cursor moves to the last change read");
   const again = emit(s, r.cursor, { now: NOW, intervalMin: 5 });
   check(transitionsIn(again.events).length === 0, "nothing is told twice");
@@ -116,6 +119,23 @@ console.log("emit: kinds");
   check(/"kind":"causal".*"silenced":false/.test(line), "the journal line has kind before silenced (the rule reads them so)");
   const f = JSON.parse(line) as Record<string, unknown>;
   check(["ci", "class", "name", "type", "from", "to", "reason", "message", "kind", "rootCause", "correlated", "since", "at", "flapping"].every((k) => k in f), "every field of D4 is on the line");
+}
+
+console.log("emit: a root's consequence by class");
+{
+  const objs = [object("a", "vm", []), object("b", "vm", []), object("c", "service", []), object("d", "vm", []), object("e", "service", []), object("f", "port", [])];
+  check(byClass(["a", "b", "c", "d", "e", "f"], objs) === "3 vm, 2 service, 1 port", "most first: 3 vm, 2 service, 1 port");
+  check(byClass(["c", "a"], objs) === "1 service, 1 vm", "a tie reads by class");
+  check(byClass([], objs) === "nothing" && byClass(["gone"], objs) === "1 object", "none is nothing; an object no longer read is an object");
+  const s = nodeDown();
+  s.all.push(object("svc1", "service", [cond("impact", "critical", T(-3), { derived: true, rootCause: "node1" })]), object("vm3", "vm", [cond("impact", "warning", T(-3), { derived: true, rootCause: "node1" })]));
+  s.all[3].attributes.rootCauses = [{ id: "node1", type: "operational", impactedCount: 3 }];
+  const r = emit(s, cursor(5, 6), { now: NOW, intervalMin: 5 });
+  const root = transitionsIn(r.events).find((e) => e.ci === "node1");
+  check(root?.symptoms === 3 && root?.impacted === "2 vm, 1 service", `a root's transition: the count and the classes (${root?.symptoms}: ${root?.impacted})`);
+  check(r.cursor.roots["node1:operational"]?.impacted === "2 vm, 1 service", "…kept with the roots told");
+  const cleared = emit(new Stub([object("site1", "site", [])]), r.cursor, { now: new Date(NOW.getTime() + 60000), intervalMin: 5 }).events.find((e): e is RootCauseEvent => e.event === "rootcause");
+  check(cleared?.cleared === true && cleared.impacted === "nothing", "a cleared root impacts nothing");
 }
 
 console.log("emit: recovery of a root");

@@ -44,6 +44,7 @@ export interface RootSeen {
   name: string;
   type: string;
   symptoms: string[];
+  impacted?: string; // the symptoms by class: "3 vm, 2 service"
 }
 
 export interface Cursor {
@@ -146,6 +147,17 @@ export interface EmitResult {
 
 const rootKey = (id: string, type: string | undefined): string => `${id}:${type ?? ""}`;
 
+/** A root's consequence, the objects it impacts by class, most first: "3 vm,
+ *  2 service"; "nothing" when it impacts none. */
+export function byClass(ids: string[], objects: HealthObject[]): string {
+  const n = new Map<string, number>();
+  for (const id of ids) {
+    const cls = objects.find((o) => o.id === id)?.class || "object";
+    n.set(cls, (n.get(cls) ?? 0) + 1);
+  }
+  return [...n].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([cls, k]) => `${k} ${cls}`).join(", ") || "nothing";
+}
+
 function rootSet(objects: HealthObject[], roots: RootEntry[]): Record<string, RootSeen> {
   const out: Record<string, RootSeen> = {};
   for (const r of roots) {
@@ -154,7 +166,7 @@ function rootSet(objects: HealthObject[], roots: RootEntry[]): Record<string, Ro
       .filter((x) => x.id !== r.id && conditionsOf(x).some((c) => c.type === "impact" && c.status !== "ok" && rootsOf(c).includes(r.id)))
       .map((x) => x.id)
       .sort();
-    out[rootKey(r.id, r.type)] = { ci: r.id, class: o?.class ?? "", name: o?.name ?? "", type: r.type ?? "", symptoms };
+    out[rootKey(r.id, r.type)] = { ci: r.id, class: o?.class ?? "", name: o?.name ?? "", type: r.type ?? "", symptoms, impacted: byClass(symptoms, objects) };
   }
   return out;
 }
@@ -162,10 +174,10 @@ function rootSet(objects: HealthObject[], roots: RootEntry[]): Record<string, Ro
 function rootEvents(was: Record<string, RootSeen>, now: Record<string, RootSeen>, at: string): RootCauseEvent[] {
   const out: RootCauseEvent[] = [];
   for (const [k, r] of Object.entries(now)) {
-    if (was[k]?.symptoms.join() !== r.symptoms.join()) out.push({ event: "rootcause", ...r, cleared: false, at });
+    if (was[k]?.symptoms.join() !== r.symptoms.join()) out.push({ event: "rootcause", ...r, impacted: r.impacted ?? "nothing", cleared: false, at });
   }
   for (const [k, r] of Object.entries(was)) {
-    if (!now[k]) out.push({ event: "rootcause", ...r, symptoms: [], cleared: true, at });
+    if (!now[k]) out.push({ event: "rootcause", ...r, symptoms: [], impacted: "nothing", cleared: true, at });
   }
   return out;
 }
@@ -248,6 +260,7 @@ export function emit(cmdb: HealthCmdb, cursor: Cursor | null, input: EmitInput):
             ...flap,
             root: isRoot || (t.to === "ok" && wasRoot),
             symptoms: roots.find((e) => e.id === o.id)?.impactedCount ?? now[rootKey(o.id, type)]?.symptoms.length ?? 0,
+            impacted: (now[rootKey(o.id, type)] ?? now[rootKey(o.id, "")])?.impacted ?? "nothing",
             silenced: silenced(c, input.now),
           };
         };

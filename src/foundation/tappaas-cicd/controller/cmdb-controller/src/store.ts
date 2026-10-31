@@ -119,6 +119,24 @@ function same(a: unknown, b: unknown): boolean {
   return canonical(a) === canonical(b);
 }
 
+// The words of a relation that carry dependency (ADR-041 D3): what derivation
+// reads, set by the one source that knows them.
+export const DEPENDENCY_WORDS = ["required", "redundancyGroup"];
+
+/** A relation's attributes after a report gave `given` over `had`: the
+ *  dependency words it does not name are kept, a null one is unset; a report
+ *  of nothing but them annotates, keeping the rest of `had`. */
+export function withDependency(had: Obj, given: Obj): Obj {
+  const named = Object.keys(given);
+  const annotation = named.length > 0 && named.every((k) => DEPENDENCY_WORDS.includes(k));
+  const out: Obj = annotation ? { ...had, ...given } : { ...given };
+  for (const w of DEPENDENCY_WORDS) {
+    if (!(w in given) && w in had) out[w] = had[w];
+    if (out[w] === null) delete out[w];
+  }
+  return out;
+}
+
 // JSON with object keys sorted: jsonb does not keep key order.
 function canonical(v: unknown): string {
   if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
@@ -332,6 +350,7 @@ export class Store {
       rules: this.mm.rules,
       relations: [...relations.values()],
       ancestors: Object.fromEntries([...this.mm.classes.keys()].map((c) => [c, this.mm.ancestors(c)])),
+      fields: [...new Set([...this.mm.classes.keys()].flatMap((c) => [...this.mm.fields(c).keys()]))].sort(),
     };
   }
 
@@ -1264,14 +1283,18 @@ class ReportRun {
   }
 
   // Open (type, from, to) with these attributes, closing what the type's
-  // cardinality says a new one replaces.
-  private async putRelation(type: string, from: string, to: string, attributes: Obj, recorded = false): Promise<number> {
+  // cardinality says a new one replaces. The dependency words (ADR-041 D3) are
+  // set by the one source that knows them, while others report the same
+  // relation: a report that does not name one keeps it, null unsets it, and a
+  // report of nothing but them adds them to the relation's other attributes.
+  private async putRelation(type: string, from: string, to: string, given: Obj, recorded = false): Promise<number> {
     const open = (
       await this.q(
         "SELECT id, attributes, recorded, lower(validity) AS since FROM relation WHERE type = $1 AND from_object = $2 AND to_object = $3 AND upper_inf(validity)",
         [type, from, to],
       )
     ).rows;
+    const attributes = withDependency(isObj(open[0]?.attributes) ? (open[0].attributes as Obj) : {}, given);
     if (open.length && same(open[0].attributes, attributes)) {
       if (recorded && open[0].recorded !== true) {
         await this.q("UPDATE relation SET recorded = true WHERE id = $1", [Number(open[0].id)]);
@@ -1333,8 +1356,10 @@ class ReportRun {
     if (!from || !to) return;
     if (!this.mm.allows(r.type, from.class, to.class)) return this.problem(at, `${r.type} does not join ${from.class} to ${to.class}`);
     const ra = isObj(r.attributes) ? r.attributes : {};
-    if (ra.required !== undefined && typeof ra.required !== "boolean") return this.problem(at, "required is true or false");
-    if (ra.redundancyGroup !== undefined && typeof ra.redundancyGroup !== "string") return this.problem(at, "redundancyGroup is a string");
+    if (ra.required !== undefined && ra.required !== null && typeof ra.required !== "boolean") return this.problem(at, "required is true or false (null unsets it)");
+    if (ra.redundancyGroup !== undefined && ra.redundancyGroup !== null && (typeof ra.redundancyGroup !== "string" || !ra.redundancyGroup)) {
+      return this.problem(at, "redundancyGroup is a name (null unsets it)");
+    }
     if (r.end) {
       const open = (
         await this.q("SELECT id FROM relation WHERE type = $1 AND from_object = $2 AND to_object = $3 AND upper_inf(validity)", [r.type, from.id, to.id])
