@@ -55,11 +55,18 @@ def shape_rules(model: dict) -> list[dict]:
     return out
 
 
+def _nat_enabled(d: dict) -> bool:
+    """Source NAT says ``enabled``; a port forward says ``disabled`` (1 = off)."""
+    if "enabled" in d:
+        return str(d.get("enabled")) != "0"
+    return str(d.get("disabled", "0")) != "1"
+
+
 def shape_nat(model: dict, section: str, kind: str) -> list[dict]:
     rules = ((model.get(section) or {}).get("rule")) or ((model.get("filter") or {}).get(section) or {}).get("rule") or {}
     if not isinstance(rules, dict):
         return []
-    return [{"uuid": u, "kind": kind, "position": i, "enabled": str(d.get("enabled", d.get("disabled", "1"))) != "0",
+    return [{"uuid": u, "kind": kind, "position": i, "enabled": _nat_enabled(d),
              "description": d.get("descr") or d.get("description") or "",
              "target": str(d.get("target") or "")}
             for i, (u, d) in enumerate(rules.items(), start=1)]

@@ -85,6 +85,41 @@ check(dobj("vpn-peer", "lars-mac")?.attributes?.lastHandshake === "42", "a WireG
 check(dobj("dns-name", "cloud.example.org")?.attributes?.target === "10.6.0.1", "a DNS override is a dns-name");
 check(collectDiscover(() => ({ rc: -1, stdout: "", stderr: "", ran: false })).doc === null, "no firewall: no discover report, the plain one stands");
 
+console.log("== report --discover: the firewall attribute is the same on every pass ==");
+{
+  const zones = loadZones(join(FIX, "zones.json"));
+  const one = JSON.parse(read("discover.json")) as DiscoverDoc;
+  // The same firewall read again: every section listed in another order, the
+  // NAT entries at other places in the model.
+  const two = JSON.parse(read("discover.json")) as DiscoverDoc;
+  one.nat = [
+    { uuid: "n-2", kind: "source", position: 1, enabled: true, description: "out", target: "" },
+    { uuid: "n-1", kind: "port-forward", position: 2, enabled: true, description: "web", target: "10.6.0.5" },
+  ];
+  two.nat = [
+    { uuid: "n-1", kind: "port-forward", position: 1, enabled: true, description: "web", target: "10.6.0.5" },
+    { uuid: "n-2", kind: "source", position: 2, enabled: true, description: "out", target: "" },
+  ];
+  one.routes = [...(one.routes ?? []), { destination: "10.9.0.0/16", gateway: "10.0.0.2", interface: "vtnet0", flags: "UGS" }];
+  two.routes = [{ destination: "10.9.0.0/16", gateway: "10.0.0.2", interface: "vtnet0", flags: "UGS" }, ...(two.routes ?? [])];
+  for (const k of ["rules", "aliases", "dhcpHosts", "certificates", "packages", "interfaces", "vlans"] as const) {
+    (two as Record<string, unknown>)[k] = [...((two as Record<string, unknown[]>)[k] ?? [])].reverse();
+  }
+  two.aliases = [{ uuid: "a-0", name: "tm_x", type: "host", enabled: true, content: "x.srv.internal" }, ...(two.aliases ?? [])];
+  one.aliases = [...(one.aliases ?? []), { uuid: "a-0", name: "tm_x", type: "host", enabled: true, content: "x.srv.internal" }];
+  const fwOf = (d: DiscoverDoc): unknown => buildNetworkDiscover(d, zones).report().objects!.find((o) => o.class === "vm" && o.name === "network")?.attributes?.firewall;
+  const a = fwOf(one) as { nat: Record<string, unknown>[]; rules: { uuid: string; position: number }[]; aliases: { uuid: string }[] };
+  check(JSON.stringify(a) === JSON.stringify(fwOf(two)), "two passes listing the same firewall in another order give the same attribute");
+  check(a.nat.map((n) => n.uuid).join() === "n-1,n-2" && a.nat.every((n) => !("position" in n)), "NAT by uuid, without its place in the model");
+  check(a.nat[0].enabled === true && a.nat[0].target === "10.6.0.5" && a.nat[0].kind === "port-forward" && a.nat[0].description === "web", "a NAT entry keeps what defines it");
+  check(a.rules.map((r) => `${r.uuid}@${r.position}`).join() === "r-1@1,r-2@2,r-3@3" && a.aliases[0].uuid === "a-0", "rules by uuid with their live position, aliases by uuid");
+  const partial = JSON.parse(read("discover.json")) as DiscoverDoc;
+  partial.nat = [];
+  partial.errors = [{ section: "nat", error: "timeout" }];
+  const net = buildNetworkDiscover(partial, zones).report().objects!.find((o) => o.class === "vm" && o.name === "network")?.attributes ?? {};
+  check(!("firewall" in net) && net.osVersion === "25.7.1", "a pass that missed a section leaves firewall out, not emptied");
+}
+
 console.log("== delivery: a refusal drops what it names ==");
 const refused: CmdbReport = {
   source: "t",

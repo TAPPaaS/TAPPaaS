@@ -488,7 +488,10 @@ of `opnsense-firewall discover`: on the `network` module's CI (`vm`) the OPNsens
 version and `firewall: {rules, aliases, nat, routes, certificates, packages,
 dhcpRanges, dhcpHosts, interfaces, vlans}` — rules and aliases by UUID, each rule
 with its `position` in evaluation order (by `sequence`) and that `sequence`;
-`interfaces` and `vlans` here are the ones no zone declares.
+`interfaces` and `vlans` here are the ones no zone declares. Each list is sorted by
+uuid (else name), and a NAT entry carries no place in the model, so an unchanged
+firewall gives the same `firewall` on every pass; a pass that misses one of its
+sections leaves `firewall` out, and the CMDB keeps the last full one.
 A zone gets its `interface` and live `dhcp` range; DNS overrides are `dns-name`s;
 every WireGuard peer gets `lastHandshake`. A section the firewall does not answer
 is named on stderr. `--json` prints an array. Until the metamodel has its fields (``vm.firewall`, `zone.interface`, `vpn-peer.lastHandshake``), cmdb-controller refuses these attributes; the plain report is sent on its own and stands.
