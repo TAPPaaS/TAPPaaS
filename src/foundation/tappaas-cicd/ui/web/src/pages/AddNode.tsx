@@ -20,7 +20,7 @@
 // the stage is done and keeps one line saying where the job is.
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { applyNowJob, useJob, useRead, useVerb } from "../api";
+import { applyNowJob, refreshRead, reloadAll, useJob, useRead, useVerb } from "../api";
 import { buildArgv } from "../argv";
 import { JobControl, Output, jobResult, phaseOutputs } from "../jobs";
 import { OperateButton, Step, StepForm, StepView, Values, useStepValues } from "../operate";
@@ -194,6 +194,13 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const endedOk = ended ?? (running?.state === "done" ? running.exit === 0 : null);
 
   const topo = useRead<Topology>("topology").env?.data;
+  // The free ports and machines are read fresh: the cached topology is up to
+  // five minutes old, and a verb run in a shell does not refresh it.
+  useEffect(() => {
+    void refreshRead("topology");
+    const timers = [3000, 10000, 30000].map((ms) => setTimeout(reloadAll, ms));
+    return () => timers.forEach(clearTimeout);
+  }, []);
   const zones = useRead<ZoneRead[]>("zones").env?.data ?? [];
   const ports = useMemo(() => switchPortChoices(topo?.switches ?? [], name), [topo, name]);
   // The server assets the machine could be (ADR-040 D8): in stock or placed, in no role.
