@@ -33,7 +33,7 @@ import { AddNodeStage, KeyStore, NodeProgress, STAGE_NUMBER, addNodeJoined, addN
 import { ResumeOffer, StepRow, Wizard, jobLabel, jobLive, useVerbJobs } from "../wizard";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
-import { CheckList, Dot, Link, canOperate, useMe } from "../ui";
+import { CheckList, Dot, Link, ReadState, canOperate, useMe } from "../ui";
 import { UsbStickPicker, gb } from "../usbsticks";
 
 // site-manager node media --json (reads.ts BootMedia).
@@ -174,7 +174,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const running = useJob(job);
   // Stage 2 opens the moment the declare applies: until node add says the machine
   // can boot, it says it is getting ready, from the job's own output.
-  const live = running?.state === "running" || running?.state === "queued";
+  const live = jobLive(running);
   const setup = setupFromOutput(running?.output ?? "");
   // The records can say so first: registered, and the boot window open.
   const bootReady = setup.ready || (progress?.registration === "pending" && progress.pxe.enabled === true);
@@ -326,7 +326,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
               !media.xorriso ? { ok: false, label: "the stick-image builder on the mothership", detail: "not installed: the stick image cannot be built until the mothership's next OS update brings it" } : null,
             ]} />
           ) : (
-            <p className="muted small">{mediaRead.env?.error || mediaRead.failure ? <><Dot level="fail" /> the boot medium could not be read: {mediaRead.env?.error ?? mediaRead.failure}</> : "reading the boot medium…"}</p>
+            <ReadState env={mediaRead.env} failure={mediaRead.failure} what="the boot medium" />
           )}
           {media && (!media.ready || prepared) ? (
             media.prepare || prepared ? (

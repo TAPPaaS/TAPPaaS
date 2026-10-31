@@ -18,7 +18,7 @@ interface BackupKeyStatus {
   stick: { keys: number; written: string; label: string } | null;
   current: boolean;
 }
-import { Dot, Tag, canOperate, useMe } from "../ui";
+import { Dot, ReadState, Tag, canOperate, useMe } from "../ui";
 import { DecideStep, StepRow, Wizard } from "../wizard";
 import { UsbStick, UsbStickPicker } from "../usbsticks";
 import { SecretStatus } from "./Setup";
@@ -133,7 +133,7 @@ export function BackupKeysWizard({ onClose }: { onClose: () => void }) {
               )}
             </p>
           ) : (
-            <p className="muted small">{keys.env?.error || keys.failure ? <><Dot level="fail" /> backup-manager key status could not be read: {keys.env?.error ?? keys.failure}</> : "Reading the key record…"}</p>
+            <ReadState env={keys.env} failure={keys.failure} what="the key record" />
           )}
           {written ? <p className="small">Label the stick and keep it off-site; write a second one the same way. The password goes where the stick is not.</p> : null}
         </StepRow>
