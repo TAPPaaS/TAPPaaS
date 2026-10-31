@@ -6,10 +6,11 @@
 // `ssid modify` when only its security does); 3 the WPA passphrase, handed to
 // `ap-manager ssid set-passphrase` on stdin through the secrets endpoint, never
 // shown back or put in a command; 4 the reconcile that programs every access
-// point, previewed first; 5 the SSID on its zone, read back from ap-manager.
+// point, its delta shown first; 5 the SSID on its zone, read back from ap-manager.
 
 import { useMemo, useState } from "react";
 import { post, reloadAll, useRead, useVerb } from "../api";
+import { ActStep } from "../flows";
 import { Step, StepView } from "../operate";
 import { TargetValue, TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
@@ -67,7 +68,7 @@ export function WifiWizard({ zones, zone, site, onClose, prefill }: { zones: Wif
       remove: s.remove ? asStep(s.remove, `ap-manager ssid remove ${plan.old!.name}`, <>Removes <b>{plan.old!.name}</b> from the declared state (switch-configuration-desired.json), with its passphrase and the zone's SSID; the access points keep broadcasting it until the reconcile.{disruption}</>) : null,
       declare: s.declare
         ? asStep(s.declare, `ap-manager ${s.declare.verb} ${plan.ssid}`, s.declare.verb === "ssid add"
-          ? <>Declares <b>{plan.ssid}</b> for the whole site: zone <b>{plan.zone}</b>{plan.vlan !== null ? <> (VLAN {plan.vlan})</> : null}, {plan.security}, broadcast by every access point; the zone shows it as its SSID. There is no dry run: the preview is the command; nothing reaches an access point until the reconcile.</>
+          ? <>Declares <b>{plan.ssid}</b> for the whole site: zone <b>{plan.zone}</b>{plan.vlan !== null ? <> (VLAN {plan.vlan})</> : null}, {plan.security}, broadcast by every access point; the zone shows it as its SSID; nothing reaches an access point until the reconcile.</>
           : <>Changes <b>{plan.ssid}</b> in the declared state{s.declare.initial["--security"] ? <> to {plan.security}</> : null}{s.declare.initial["--enabled"] ? <>, broadcast again</> : null}; nothing reaches an access point until the reconcile.</>)
         : null,
       reconcile: asStep(s.reconcile, "ap-manager reconcile", <>The preview reads the access points and lists what would change on each (the delta); apply programs every one of them, with the passphrase from ~/.wlan-secrets.txt.{disruption}</>),
@@ -89,7 +90,7 @@ export function WifiWizard({ zones, zone, site, onClose, prefill }: { zones: Wif
   const passOk = !passRequired || passDone || state === "set" || state === "changed";
   const stages = [
     { id: "network", title: "1 · The network", required: true, done: plan !== null, detail: "The zone, the SSID's name and how clients join; every access point broadcasts it." },
-    { id: "declare", title: change && plan && plan.old && plan.old.name !== plan.ssid ? `2 · Replace ${plan.old.name} with ${plan.ssid}` : "2 · Declare the SSID", required: true, done: declareDone, detail: steps && !steps.declare && !steps.remove ? "Nothing to declare: the same SSID, the same security." : "In the declared state, each previewed." },
+    { id: "declare", title: change && plan && plan.old && plan.old.name !== plan.ssid ? `2 · Replace ${plan.old.name} with ${plan.ssid}` : "2 · Declare the SSID", required: true, done: declareDone, detail: steps && !steps.declare && !steps.remove ? "Nothing to declare: the same SSID, the same security." : "In the declared state; nothing reaches an access point yet." },
     { id: "passphrase", title: "3 · The passphrase", required: passRequired, done: plan !== null && declareDone && passOk, detail: passRequired ? "Handed to ap-manager on stdin; never shown again and never in a command." : `None: ${plan?.security ?? security} takes no passphrase.` },
     { id: "reconcile", title: "4 · Program the access points", required: true, done: reconciled, detail: "ap-manager reconcile: the delta per access point first, then apply." },
     { id: "result", title: `5 · The WiFi on ${z.zone}`, required: false, done: reconciled && !!live && live.zone === z.zone, detail: "What ap-manager now declares for the zone." },
@@ -145,8 +146,8 @@ export function WifiWizard({ zones, zone, site, onClose, prefill }: { zones: Wif
         <StepRow s={stages[1]} open={current === "declare"}>
           {steps ? (
             <>
-              {steps.remove ? <StepView key={`r-${JSON.stringify(plan)}`} step={steps.remove} me={me} onDone={(ok) => ok && setRemoved(true)} /> : null}
-              {steps.declare && (!steps.remove || removed) ? <StepView key={`d-${JSON.stringify(plan)}`} step={steps.declare} me={me} onDone={(ok) => ok && setDeclared(true)} /> : null}
+              {steps.remove ? <ActStep titled key={`r-${JSON.stringify(plan)}`} step={steps.remove} onDone={(ok) => ok && setRemoved(true)} /> : null}
+              {steps.declare && (!steps.remove || removed) ? <ActStep titled key={`d-${JSON.stringify(plan)}`} step={steps.declare} onDone={(ok) => ok && setDeclared(true)} /> : null}
               {steps.declare && steps.remove && !removed ? <p className="muted small">Next: ap-manager ssid add {plan!.ssid} — once {plan!.old!.name} is removed.</p> : null}
               {!steps.declare && !steps.remove ? <p className="muted small">{plan!.ssid} stays as it is; go on to its passphrase or the reconcile.</p> : null}
             </>

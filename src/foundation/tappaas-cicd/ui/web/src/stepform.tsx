@@ -36,10 +36,6 @@ export interface Step extends ArgvStep {
   // A bar over the apply while it runs, from the job's output so far (the
   // stick write's percent lines): null until the output says where it is.
   progress?: (output: string) => { pct: number; text: string } | null;
-  // The applied job's output is shown elsewhere (a wizard's later stage that
-  // watches it): here only its state and this line, so it is not shown twice.
-  // A refused job is still shown here, where the change was made.
-  jobShownIn?: string;
   // Values the assistant opened the form with (open_console): positionals and
   // options by name, merged in once the verb's manifest is read; a field form
   // takes the fields among them (PrefillContext).

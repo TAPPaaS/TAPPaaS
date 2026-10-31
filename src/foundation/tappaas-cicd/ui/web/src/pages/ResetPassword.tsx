@@ -10,7 +10,8 @@ import { useMemo, useState } from "react";
 import { post, useRead } from "../api";
 import { Job } from "../types";
 import { stripAnsi } from "../jobs";
-import { Step, StepView } from "../operate";
+import { ActStep } from "../flows";
+import { Step } from "../operate";
 import { useOpenedBy } from "../opener";
 import { Dot, canOperate, useMe } from "../ui";
 import { Wizard } from "../wizard";
@@ -42,6 +43,7 @@ export function ResetPasswordWizard({ onClose, user: preset }: { onClose: () => 
   const link: Step = useMemo(
     () => ({
       title: `identity-manager user reset-password ${chosen || "<user>"} --link`,
+      button: "Make the link",
       bin: "identity-manager",
       verb: "user reset-password",
       words: ["user", "reset-password"],
@@ -49,7 +51,7 @@ export function ResetPasswordWizard({ onClose, user: preset }: { onClose: () => 
       only: [],
       hide: ["@name"],
       blocked: chosen ? undefined : "pick the user first",
-      note: "Asks Authentik for a one-time link. Whoever opens it sets the password of this user, so hand it to them the way you would a key. It expires unused. There is no dry run: the preview is the command.",
+      note: "Asks Authentik for a one-time link. Whoever opens it sets the password of this user, so hand it to them the way you would a key. It expires unused.",
       after: (j: Job) => {
         const l = linkOf(j.output);
         return l ? (
@@ -118,7 +120,7 @@ export function ResetPasswordWizard({ onClose, user: preset }: { onClose: () => 
                 </label>
               </div>
               {way === "link" ? (
-                <StepView key={chosen} step={link} me={me} onDone={(ok) => ok && setDone({ way: "link", link: null })} />
+                <ActStep key={chosen} step={link} onDone={(ok) => ok && setDone({ way: "link", link: null })} />
               ) : (
                 <div className="form">
                   <label className="form-row">

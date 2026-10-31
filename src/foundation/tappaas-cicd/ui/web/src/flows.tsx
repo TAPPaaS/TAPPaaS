@@ -74,6 +74,7 @@ export interface ActProps {
   // applies, this one line stands for it here, in place of the status and output.
   line?: (job: Job) => ReactNode;
   command?: boolean; // the command is shown under the form (the default)
+  titled?: boolean; // the step's title over it, where a stage holds more than one
 }
 
 export function ActFlow({ form, me, onDone, onApplied, line, command = true }: ActProps & { form: StepFormState; me: Me | null }) {
@@ -127,11 +128,12 @@ export function ActFlow({ form, me, onDone, onApplied, line, command = true }: A
 
 // A form and one button, in a wizard's stage. Failing, it goes back to the
 // form as filled in; the form is the verb's, or the step's own (step.render).
-export function ActStep({ step, ...props }: ActProps & { step: Step }) {
+export function ActStep({ step, titled, ...props }: ActProps & { step: Step }) {
   const me = useMe();
   const form = useStepForm(step);
   return (
     <div className="step">
+      {titled ? <h3>{step.title}</h3> : null}
       <ActFlow form={form} me={me} {...props} />
     </div>
   );

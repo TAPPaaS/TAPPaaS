@@ -24,7 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import { refreshRead, reloadAll, useJob, useRead } from "../api";
 import { JobOutput, JobStatusLine, phaseOutputs } from "../jobs";
 import { ActStep } from "../flows";
-import { OperateButton, Step, StepView, Values } from "../operate";
+import { OperateButton, Step, Values } from "../operate";
 import { useOpenedBy } from "../opener";
 import { Job, JobSummary, SiteRead, StorageInventory, Topology } from "../types";
 import { ZoneRead } from "./Zones";
@@ -135,7 +135,6 @@ export function sessionText(s: AddNodeSession): string {
 // node's name, and node add's options by name (mac, boot-disk, …).
 // `resume`: open straight into the node being added (Setup's Continue).
 export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => void; prefill?: Values | null; resume?: boolean }) {
-  const me = useMe();
   const site = useRead<SiteRead>("site").env?.data;
   const [typed, setName] = useState<string | null>(typeof prefill?.name === "string" ? prefill.name : null);
   const options = useMemo(() => {
@@ -271,13 +270,14 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const prepare: Step = useMemo(
     () => ({
       title: "Prepare the boot medium",
+      button: "Prepare the boot medium",
       bin: "site-manager",
       verb: "node media prepare",
       fixed: [],
       only: ["--force"],
       note: media?.prepare
-        ? `Builds the network-boot files and the installer stick image on the mothership (${media.prepare.minutes}). There is nothing to try first: the preview shows what will run.`
-        : "Builds the network-boot files and the installer stick image on the mothership. There is nothing to try first: the preview shows what will run.",
+        ? `Builds the network-boot files and the installer stick image on the mothership (${media.prepare.minutes}).`
+        : "Builds the network-boot files and the installer stick image on the mothership.",
     }),
     [media?.prepare],
   );
@@ -287,14 +287,15 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
       bin: "site-manager",
       verb: "node usb write",
       fixed: stickDevice ? [stickNode, stickDevice] : [stickNode],
+      button: `Write the stick${stickDevice ? ` in ${stickDevice}` : ""}`,
       only: [],
-      // The CLI's guard against erasing a stick by accident; here the preview
-      // and Apply are that confirmation, so it is always given and not offered.
+      // The CLI's guard against erasing a stick by accident; here the button,
+      // which says so, is that confirmation: always given and not offered.
       initial: { "--yes": true },
       hide: ["--yes"],
       blocked: !stickDevice ? "pick the stick first" : media && !media.stickImage.present ? "the installer stick image is not built yet: prepare the medium first" : undefined,
       progress: writeProgress,
-      note: `The mothership copies the installer stick image (the same for every node) onto ${stickDevice || "the stick"} in ${stickNode}, erasing it, then ejects it: a minute or two. The node needs nothing in advance. There is nothing to try first: the preview shows what will run.`,
+      note: `The mothership copies the installer stick image (the same for every node) onto ${stickDevice || "the stick"} in ${stickNode}, erasing it, then ejects it: a minute or two. The node needs nothing in advance.`,
     }),
     [stickNode, stickDevice, media?.stickImage.present],
   );
@@ -347,7 +348,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           )}
           {media && (!media.ready || prepared) ? (
             media.prepare || prepared ? (
-              <StepView key={media.prepare?.argv.join(" ") ?? "ready"} step={prepare} me={me} onDone={(ok) => { if (ok) { setPrepared(true); mediaRead.reload(); } }} />
+              <ActStep key={media.prepare?.argv.join(" ") ?? "ready"} step={prepare} onDone={(ok) => { if (ok) { setPrepared(true); mediaRead.reload(); } }} />
             ) : (
               <p className="small"><Dot level="warn" /> Nothing can be built here until the stick-image builder is on the mothership.</p>
             )
@@ -362,7 +363,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
               {stickWritten ? (
                 <p className="small"><Dot level="pass" /> The installer stick is written and ejected: pull {stickDevice} out of {stickNode}. It boots the new machine in stage 2.</p>
               ) : null}
-              <StepView key={`${stickNode}:${stickDevice}:${media?.stickImage.present ? 1 : 0}`} step={writeStick} me={me} onDone={(ok) => ok && setStickWritten(true)} />
+              <ActStep key={`${stickNode}:${stickDevice}:${media?.stickImage.present ? 1 : 0}`} step={writeStick} onDone={(ok) => ok && setStickWritten(true)} />
             </div>
             <div className="explain">
               <p><b>On your own machine</b> — copy the image from the mothership, then write it to a stick (everything on the stick is erased).</p>

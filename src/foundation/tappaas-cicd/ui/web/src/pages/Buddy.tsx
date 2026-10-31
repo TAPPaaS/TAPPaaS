@@ -5,6 +5,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { reloadAll, useJob } from "../api";
+import { ActStep } from "../flows";
 import { JobView, Step, StepView } from "../operate";
 import { TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
@@ -66,24 +67,25 @@ export function BuddyWizard({ onClose, prefill }: { onClose: () => void; prefill
     const add: Step = {
       ...s.add,
       title: `backup-manager peer add ${chosen.kind} ${chosen.name}`,
+      button: `Add ${chosen.name}`,
       labels: LABELS,
       choices: { "--tunnel": ["serve", "dial"], ...at.choices },
       asides: at.asides,
       placeholders: chosen.kind === "pull" ? { "--host": "its PBS through the tunnel, e.g. 10.255.2.1", "--endpoint": "e.g. buddy.example.org:51830", "--namespace": "where the copy lands here, e.g. buddy/<their site>" } : { "--namespace": "what they may read — empty: the root (this site's VM backups)" },
       note:
         chosen.kind === "pull" ? (
-          <>This site keeps the copy. The buddy runs <span className="mono">peer add remote</span> first and sends its PBS address, the tunnel's /30, its endpoint and public key; this side dials. There is no dry run: the preview is the command. Onboarding creates the tunnel on the firewall and the pull job on the PBS, and prints this side's public key for the buddy.</>
+          <>This site keeps the copy. The buddy runs <span className="mono">peer add remote</span> first and sends its PBS address, the tunnel's /30, its endpoint and public key; this side dials. Onboarding creates the tunnel on the firewall and the pull job on the PBS, and prints this side's public key for the buddy.</>
         ) : (
-          <>The buddy keeps the copy. This side serves the tunnel and creates a read-only login for the buddy on the PBS (the root namespace, not propagated: config and other peers' data stay out of reach). There is no dry run: the preview is the command. Onboarding prints what to send the buddy — the address, the /30, the port and this side's public key; their key can come later (run it again with it and --force).</>
+          <>The buddy keeps the copy. This side serves the tunnel and creates a read-only login for the buddy on the PBS (the root namespace, not propagated: config and other peers' data stay out of reach). Onboarding prints what to send the buddy — the address, the /30, the port and this side's public key; their key can come later (run it again with it and --force).</>
         ),
     };
-    const check: Step = { ...s.check, title: `backup-manager peer check ${chosen.kind} ${chosen.name}`, note: "The tunnel's live state: the WireGuard instance, the keys, the last handshake, and whether the PBS answers through it. Until the buddy has its side in place the handshake is missing." };
+    const check: Step = { ...s.check, runOnOpen: true, title: `backup-manager peer check ${chosen.kind} ${chosen.name}`, note: "The tunnel's live state: the WireGuard instance, the keys, the last handshake, and whether the PBS answers through it. Until the buddy has its side in place the handshake is missing." };
     return { add, check };
   }, [chosen, locations]);
 
   const stages = [
     { id: "who", title: "1 · Which side, and the buddy's name", required: true, done: chosen !== null, detail: "Who keeps the copy decides who serves the tunnel." },
-    { id: "add", title: "2 · The peer: backup-manager peer add", required: true, done: added, detail: "Its address, its operator, the tunnel — previewed, then applied." },
+    { id: "add", title: "2 · The peer: backup-manager peer add", required: true, done: added, detail: "Its address, its operator, the tunnel." },
     { id: "check", title: "3 · The result: peer check", required: false, done: false, detail: "The tunnel and the PBS through it, read live." },
   ];
   const current = !chosen ? "who" : !added ? "add" : "check";
@@ -119,7 +121,7 @@ export function BuddyWizard({ onClose, prefill }: { onClose: () => void; prefill
           {steps ? (
             <>
               {ONBOARD(chosen!.kind, chosen!.name)}
-              {job ? <JobView id={job} label="backup-manager peer add" /> : <StepView key={JSON.stringify(chosen)} step={steps.add} me={me} onDone={(ok) => ok && setAdded(true)} />}
+              {job ? <JobView id={job} label="backup-manager peer add" /> : <ActStep key={JSON.stringify(chosen)} step={steps.add} onDone={(ok) => ok && setAdded(true)} />}
             </>
           ) : <p className="muted small">Once the side and the name are chosen.</p>}
         </StepRow>

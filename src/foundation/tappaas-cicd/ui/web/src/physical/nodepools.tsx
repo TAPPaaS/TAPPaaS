@@ -3,7 +3,8 @@
 
 import { useEffect, useState } from "react";
 import { refreshRead, useRead } from "../api";
-import { Step, StepView } from "../operate";
+import { ActStep } from "../flows";
+import { Step } from "../operate";
 import { StorageDisk, StorageInventory } from "../types";
 import { POOL_CLASSES, PoolClass, diskId, humanSize, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName } from "../nodeadd";
 import { canOperate, useMe } from "../ui";
@@ -20,7 +21,6 @@ interface Built { name: string; layout: string; disks: string[] }
 // — which refuses what is not precise — builds it. `onContinue` gets the
 // number of pools built here.
 export function NodePools({ node, onContinue, continueLabel = "Continue →" }: { node: string; onContinue: (built: number) => void; continueLabel?: string }) {
-  const me = useMe();
   // The console reads the inventory every ten minutes: a node that has just
   // joined is not in it yet, so it is asked for now, and looked at often.
   const read = useRead<StorageInventory>("storage");
@@ -69,7 +69,8 @@ export function NodePools({ node, onContinue, continueLabel = "Continue →" }: 
     only: ["--disks", "--layout", "--wipe"],
     initial: { "--disks": sel.join(","), "--layout": lay },
     choices: { "--layout": ["single", "mirror", "raidz1", "raidz2"] },
-    note: "There is no dry run: the preview shows the command. Apply builds the pool on the node and registers it as its storage; a disk that carries data is refused unless --wipe is ticked, and nothing is erased then.",
+    button: `Build ${poolName}`,
+    note: "Builds the pool on the node and registers it as its storage; a disk that carries data is refused unless --wipe is ticked, and nothing is erased then.",
   };
   return (
     <div>
@@ -116,7 +117,7 @@ export function NodePools({ node, onContinue, continueLabel = "Continue →" }: 
             </select>
             <small className="muted">single: 1 disk, no redundancy · mirror: 2 or more · raidz1: 3 or more · raidz2: 4 or more</small>
           </label>
-          {sel.length ? <StepView key={`${built.length}|${poolName}|${sel.join(",")}|${lay}`} step={step} me={me} onDone={(ok) => ok && added()} /> : <p className="muted small">Tick the disks for the pool.</p>}
+          {sel.length ? <ActStep key={`${built.length}|${poolName}|${sel.join(",")}|${lay}`} step={step} onDone={(ok) => ok && added()} /> : <p className="muted small">Tick the disks for the pool.</p>}
         </>
       ) : (
         <p className="muted small">{built.length ? "No healthy disk is left in no pool." : "It has no healthy disk in no pool — nothing to propose."}</p>
