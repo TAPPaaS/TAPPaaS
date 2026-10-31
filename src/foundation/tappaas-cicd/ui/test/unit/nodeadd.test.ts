@@ -2,7 +2,7 @@
 // D4): the switch ports a new node can be cabled to, the trunk a hand-configured
 // port needs, and the data pool proposed from the node's free disks.
 
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing, setupFromOutput } from "../../web/src/nodeadd";
+import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing, setupFromOutput, dismissJob, dismissedJobs} from "../../web/src/nodeadd";
 import { StorageDisk, TopoPort, TopoSwitch } from "../../web/src/types";
 import { check, done } from "./check";
 
@@ -95,10 +95,16 @@ check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && h
   const joined = { registration: "answered" as const, inCluster: true, inSite: true };
   const done_ = job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 0 });
   check(nodeAddOngoing(job(), now, { progress: null, dataPool: null }) === true, "a node add that runs is ongoing, whatever the reads say yet");
-  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: false }) === true, "joined with no data pool: still being added");
-  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: true }) === false, "a pool and one lan port: finished, skipping stage 5a leaves no session");
-  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: null }) === null, "…not known while its pools are still read");
-  check(nodeAddOngoing(done_, now + 2 * SESSION_MS, { progress: joined, dataPool: false }) === false, "a day after its job ended it is no session any more");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: false }) === false, "joined with no data pool: the add is over (a one-disk node never gets one; the pool is a day-two step)");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: true }) === false, "a pool and one lan port: finished");
+  check(nodeAddOngoing(done_, now, { progress: joined, dataPool: null }) === false, "…and the pools need not be read to say so");
+  check(nodeAddOngoing(done_, now, { progress: { registration: "pending", inCluster: false, inSite: false }, dataPool: null }) === true, "its job ended and the machine is still to boot: being added");
+  check(nodeAddOngoing(done_, now + 2 * SESSION_MS, { progress: { registration: "pending", inCluster: false, inSite: false }, dataPool: null }) === false, "a day later even a pending registration is no session any more");
+  const mem = new Map<string, string>();
+  const store = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+  check(dismissedJobs(store).length === 0 && dismissJob(store, "j1").join() === "j1" && dismissedJobs(store).join() === "j1", "a dismissed add is kept in the browser");
+  check(dismissJob(store, "j1").join() === "j1" && dismissJob(store, "j2").join() === "j1,j2", "once each, in order");
+  check(dismissedJobs({ getItem: () => "junk", setItem: () => undefined }).length === 0 && dismissedJobs(null).length === 0, "junk or no storage: none dismissed");
   check(nodeAddOngoing(job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 1 }), now, { progress: { registration: "none", inCluster: false, inSite: false }, dataPool: null }) === false, "a job that failed before the join leaves nothing to continue");
   check(nodeAddOngoing(job({ state: "done", ended: "2026-10-28T12:25:00Z", exit: 130, cancelled: { was: "running" } }), now, { progress: joined, dataPool: false }) === false, "one an operator stopped is over");
 

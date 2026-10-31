@@ -245,24 +245,47 @@ export function latestNodeAdd<J extends NodeAddJob>(jobs: J[]): { name: string; 
   return null;
 }
 
-// How long after its job ended a node still counts as being added: the
-// stages after the join (pools, lan) are often done later the same day.
+// How long after its job ended a node still counts as being added: the boot
+// window a registration stays open for (node add --ttl, two hours by default,
+// a day at most).
 export const SESSION_MS = 24 * 3600_000;
 
 // Whether that node is still being added: its job waits or runs; or the job
-// ended within SESSION_MS (not stopped by an operator) and the node is still
-// registered for its install, or joined with no data pool. One lan port is no
-// session: it is a finished node's normal state, and nothing records a skip of
-// stage 5a. null: not known yet (a read is still out).
+// ended within SESSION_MS (not stopped by an operator) and the machine is
+// still registered for its install, waiting to boot. Once it has joined the
+// add is over: a data pool and a second lan port are day-two steps the
+// Afterwards stage links, not a reason to hold the wizard open (a one-disk
+// node never gets a data pool). null: not known yet (a read is still out).
 export function nodeAddOngoing(job: NodeAddJob, now: number, rec: { progress: AddNodeFacts["progress"]; dataPool: boolean | null }): boolean | null {
   if (job.state === "queued" || job.state === "running") return true;
   if (job.cancelled) return false;
   if (now - Date.parse(job.ended ?? job.created) > SESSION_MS) return false;
   const p = rec.progress;
   if (!p) return null;
-  if (p.registration === "pending") return true;
-  if (!addNodeJoined(p)) return false;
-  return rec.dataPool === null ? null : !rec.dataPool;
+  return p.registration === "pending";
+}
+
+// A session the operator has dismissed ("Done with it") stays dismissed: the
+// job's id is kept in the browser. Pure over the stored list, so tests need
+// no window; `store` is localStorage in the page.
+export const DISMISSED_KEY = "addnode.dismissed";
+export interface KeyStore { getItem(k: string): string | null; setItem(k: string, v: string): void }
+export function dismissedJobs(store: KeyStore | null): string[] {
+  try {
+    const v = JSON.parse(store?.getItem(DISMISSED_KEY) ?? "[]") as unknown;
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+export function dismissJob(store: KeyStore | null, jobId: string): string[] {
+  const ids = [...new Set([...dismissedJobs(store), jobId])].slice(-20);
+  try {
+    store?.setItem(DISMISSED_KEY, JSON.stringify(ids));
+  } catch {
+    /* no storage: dismissed for this page only */
+  }
+  return ids;
 }
 
 // How far node add's own output has come, before the records say so (they are

@@ -25,7 +25,7 @@ import { useOpenedBy } from "../opener";
 import { JobSummary, SiteRead, StorageInventory, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
-import { AddNodeStage, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, switchPortChoices, writeProgress, setupFromOutput } from "../nodeadd";
+import { AddNodeStage, KeyStore, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, dismissJob, dismissedJobs, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, setupFromOutput, switchPortChoices, writeProgress } from "../nodeadd";
 import { Wizard, jobLabel, jobLive } from "../wizard";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
@@ -88,6 +88,15 @@ function Check({ ok, label, detail }: { ok: boolean | null; label: string; detai
   );
 }
 
+// The browser's storage for the dismissed adds, when it has one.
+const storage = (): KeyStore | null => {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null;
+  } catch {
+    return null;
+  }
+};
+
 // A node being added (nodeadd.ts nodeAddOngoing), found again from the
 // records: the newest node add job, the node's progress, then — once it has
 // joined — its pools. `stage` is where the wizard stands.
@@ -99,9 +108,10 @@ export interface AddNodeSession {
 }
 
 // `enabled`: false reads nothing (the wizard has its job attached already).
-export function useAddNodeSession(enabled = true): AddNodeSession | null {
+export function useAddNodeSession(enabled = true, dismissed: string[] = []): AddNodeSession | null {
   const jobs = useRead<{ jobs: JobSummary[] }>(enabled ? `jobs?bin=site-manager&verb=${encodeURIComponent("node add")}&limit=10` : null, 15_000).env?.data?.jobs ?? [];
-  const run = latestNodeAdd(jobs);
+  const run0 = latestNodeAdd(jobs);
+  const run = run0 && dismissed.includes(run0.job.id) ? null : run0;
   const name = run?.name ?? null;
   const progress = useRead<NodeProgress>(name ? `nodes/${encodeURIComponent(name)}/progress` : null, 15_000).env?.data ?? null;
   const joined = addNodeJoined(progress);
@@ -137,7 +147,8 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const [skipPools, setSkipPools] = useState(false);
   // A node already being added (its job running, or joined and unfinished):
   // offered on open, restored on Continue. Looked for until a job is attached.
-  const session = useAddNodeSession(job === null);
+  const [dismissed, setDismissed] = useState<string[]>(() => dismissedJobs(storage()));
+  const session = useAddNodeSession(job === null, dismissed);
   const [resumed, setResumed] = useState(false);
   const [declined, setDeclined] = useState(false);
   const restore = (s: AddNodeSession) => {
@@ -303,6 +314,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           <span>A node is being added: <b>{sessionText(offer)}</b>.</span>
           <button className="btn btn-small btn-primary" onClick={() => restore(offer)}>Continue {offer.name}</button>
           <button className="btn btn-small" onClick={() => setDeclined(true)}>Add another node</button>
+          <button className="btn btn-small" title="Forget this add: it is not offered again" onClick={() => setDismissed(dismissJob(storage(), offer.job.id))}>Done with it</button>
         </div>
       ) : null}
       <p className="small">
@@ -470,8 +482,9 @@ export function AddNodeButton({ label = "Add a node…", session: given }: { lab
   const [open, setOpen] = useState<false | "new" | "resume">(false);
   const [prefill, setPrefill] = useState<Values | null>(null);
   const operator = canOperate(useMe());
-  const looked = useAddNodeSession(operator && given === undefined && !open);
-  const session = given === undefined ? looked : given;
+  const [dismissed, setDismissed] = useState<string[]>(() => dismissedJobs(storage()));
+  const looked = useAddNodeSession(operator && given === undefined && !open, dismissed);
+  const session = given === undefined ? looked : given && !dismissed.includes(given.job.id) ? given : null;
   useOpenedBy("add-node", undefined, (v) => {
     setPrefill(v);
     setOpen("new");
@@ -483,6 +496,7 @@ export function AddNodeButton({ label = "Add a node…", session: given }: { lab
         <span className="toolbar">
           <span className="small"><Dot level="warn" /> Adding {sessionText(session)}</span>
           <button className="btn btn-primary" onClick={() => setOpen("resume")}>Continue {session.name} →</button>
+          <button className="btn btn-small" title="Forget this add: it is not offered again" onClick={() => setDismissed(dismissJob(storage(), session.job.id))}>Done with it</button>
         </span>
       ) : null}
       <button className="btn" onClick={() => setOpen("new")}>{label}</button>
