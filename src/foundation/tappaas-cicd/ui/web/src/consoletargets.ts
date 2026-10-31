@@ -90,11 +90,15 @@ export const PAGES: { path: string; title: string }[] = [
   { path: "/modules", title: "Modules" },
   { path: "/modules/<module>", title: "the module's page" },
   { path: "/identity", title: "Identity" },
+  { path: "/assets", title: "Assets (every asset by location, room and rack, with its stage, role and ports; a room's and a rack's operations)" },
+  { path: "/assets/<asset>", title: "the asset's page (its record, role, placement, ports and cables, allocations, CMDB record; its operations)" },
   { path: "/backup", title: "Backup" },
   { path: "/activity", title: "Activity" },
 ];
 
 const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/;
+// An asset's name, or the role it plays (asset-manager's device names: spaces allowed).
+const ASSET_NAME = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$/;
 
 export interface Resolved {
   ok: true;
@@ -145,6 +149,12 @@ export function resolveTarget(target: unknown, values?: unknown): Resolution {
       const name = decodeURIComponent(m[1]);
       if (!NAME.test(name)) return { ok: false, reason: `'${name}' is not a module's name` };
       return { ok: true, target: path, kind: "page", path: `/modules/${encodeURIComponent(name)}`, title: `${name}'s page`, wizard: null, arg: name, values: {} };
+    }
+    const a = /^\/assets\/([^/]+)$/.exec(path);
+    if (a) {
+      const name = decodeURIComponent(a[1]);
+      if (!ASSET_NAME.test(name)) return { ok: false, reason: `'${name}' is not an asset's name` };
+      return { ok: true, target: path, kind: "page", path: `/assets/${encodeURIComponent(name)}`, title: `the asset ${name}'s page`, wizard: null, arg: name, values: {} };
     }
     const p = PAGES.find((x) => x.path === path);
     if (!p) return { ok: false, reason: `no page ${path} (pages: ${PAGES.map((x) => x.path).join(", ")})` };

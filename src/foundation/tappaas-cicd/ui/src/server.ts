@@ -307,6 +307,11 @@ export class ConsoleServer {
         return sendJson(res, 200, envelope(await r.backup.get()));
       case "topology":
         return sendJson(res, 200, envelope(await r.topology.get()));
+      case "assets":
+        // assets/tree: every asset by where it stands, with its ports and the
+        // CMDB's allocation of it (the Assets view).
+        if (a !== "tree" || parts.length !== 2) return sendJson(res, 404, { error: "assets/tree" });
+        return sendJson(res, 200, envelope(await r.assetTree()));
       case "storage":
         return sendJson(res, 200, envelope(await r.storage.get()));
       case "backup-runs":

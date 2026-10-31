@@ -1,8 +1,9 @@
 // HealthPanel.tsx — one object in the Health view (ADR-041 D5): the CI panel,
 // beside the graph, a drawer on a phone. Its conditions and since when,
 // what caused it or what it impacts, its drift against the record, its history,
-// its relations both ways, and the health verbs as jobs: ack and maintenance;
-// a module's operations are on its page, behind the Open module jump (ADR-034 D11).
+// its relations both ways, and the health verbs as jobs: ack and maintenance.
+// Details at its top opens the page that shows the object in full and changes
+// it (details.ts): a module's page, an asset's, the Network page for a zone.
 // CMDB record opens the CI's record in its place (CiPanel.tsx): attributes and
 // their sources, the full history, the trace up the backbone.
 
@@ -10,7 +11,8 @@ import { useEffect, useState } from "react";
 import { useRead, useVerb } from "../api";
 import { OperateButton, Step } from "../operate";
 import { HealthCondition, HealthObject, HealthStatus } from "../types";
-import { Dot, Level, Link, ReadState, Section, Tag, when } from "../ui";
+import { DetailsLinks, Dot, Level, ReadState, Section, Tag, when } from "../ui";
+import { ciDetails } from "../details";
 import { CiPanel } from "./CiPanel";
 
 const LEVEL: Record<HealthStatus, Level> = { ok: "pass", warning: "warn", critical: "fail", unknown: "skip" };
@@ -50,8 +52,8 @@ function ConditionRow({ o, c, canAck, canUnack }: { o: HealthObject; c: HealthCo
 }
 
 function Verbs({ o }: { o: HealthObject }) {
-  // Status, not operations (ADR-034 D11): the health verbs on the object stay
-  // here; a module's operations are on its page, behind the Open module jump.
+  // Status, not operations: the health verbs on the object stay here; its
+  // operations are on its page, behind Details.
   const maint = useVerb("health-manager", "maintenance");
   return (
     <div className="toolbar">
@@ -82,9 +84,8 @@ export function HealthPanel({ id, close, pick, showInTree }: { id: string; close
       <ReadState env={r.env} failure={r.failure} what="this object" />
       {o ? (
         <>
+          <DetailsLinks targets={ciDetails(o)} />
           <p>
-            {o.module ? <Link to={`/modules/${encodeURIComponent(o.module)}`} className="jump jump-in">Open module {o.module}</Link> : null}
-            {o.class === "machine" ? <Link to={`/site/assets?select=node:${encodeURIComponent(o.name)}`} className="jump jump-in">Asset · {o.name}</Link> : null}
             <button className="hlink" onClick={showInTree}>Show in tree</button>{" "}
             <button className="hlink" onClick={() => setRecord(true)}>CMDB record and trace</button>
           </p>

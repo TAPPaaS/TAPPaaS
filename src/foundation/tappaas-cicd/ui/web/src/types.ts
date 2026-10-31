@@ -1054,3 +1054,72 @@ export interface DiscoverySweepState {
   running: { started: string; by: string | null } | null;
   failed: { at: string; error: string } | null;
 }
+
+// GET assets/tree (the backend's assets.ts): every asset by where it stands.
+export interface AssetTreeItem {
+  device: string;
+  asset: string | null; // null: a device no asset records, or one a switch port only sees
+  kind: string;
+  at: string | null; // "U12-13 front" in a rack
+  seen: boolean;
+}
+export interface AssetTreeRack {
+  name: string;
+  displayName: string | null;
+  units: number;
+  items: AssetTreeItem[];
+}
+export interface AssetTreeRoom {
+  name: string; // "" for the racks that stand in no room
+  displayName: string | null;
+  recorded: boolean;
+  racks: AssetTreeRack[];
+  loose: AssetTreeItem[];
+}
+export interface AssetTreeLocation {
+  name: string;
+  displayName: string | null;
+  primary: boolean;
+  rooms: AssetTreeRoom[];
+  unplaced: AssetTreeItem[];
+  disposed: AssetTreeItem[];
+}
+export interface AssetTreePort {
+  name: string;
+  kind?: string;
+  speed?: string;
+  standard?: string;
+  bands?: string[];
+  module?: string;
+  role?: string;
+  mac?: string;
+  side?: string;
+  listed: boolean; // false: a port only a cable names
+  cables: { to: string; kind: string; source: string; label: string | null; via: string[] }[];
+}
+export interface AssetRow {
+  name: string;
+  kind: string;
+  displayName: string | null;
+  vendor: string | null;
+  model: string | null;
+  serial: string | null;
+  assetTag?: string | null;
+  stage: string;
+  faulty?: boolean;
+  faultNote?: string | null;
+  role: string | null;
+  location?: string | null;
+  placed: boolean;
+  disks?: unknown[];
+  placedAs: string;
+  where: { location: string; room: string | null; rack: string | null; at: string | null };
+  ports: AssetTreePort[];
+  cmdb: { id: string; allocatedTo: string | null } | null;
+  allocationDrift: boolean;
+}
+export interface AssetTree {
+  locations: AssetTreeLocation[];
+  assets: AssetRow[];
+  allocationsError: string | null;
+}

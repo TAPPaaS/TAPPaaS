@@ -14,7 +14,8 @@ import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan
 import { environmentZoneIn, readZonesFile, sharedZonesIn } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
-import { Cmdb, CmdbClassRow, CmdbError, CmdbHistory, CmdbShow } from "./cmdb";
+import { Cmdb, CmdbClassRow, CmdbError, CmdbHistory, CmdbRelationRow, CmdbShow } from "./cmdb";
+import { AssetPositions, AssetTree, assetTree } from "./assets";
 import { Backbone, CiHistoryRow, CiRecord, ModuleRef, TraceStep, adrRefs, ciHistory, ciRecord, issuesUrl, walkTrace, webUrlOf } from "./cipanel";
 import { Operations, SweepRunner, changeTargets, groupEvents, openEvents, operationsDoc } from "./operations";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
@@ -262,6 +263,7 @@ export class Reads {
   readonly moduleSnapshots: CachedMap<string>;
   readonly moduleCmdb: CachedMap<CmdbView | null>;
   readonly objectHistory: CachedMap<CmdbHistory>;
+  readonly allocations: Cached<CmdbRelationRow[]>;
   readonly sweeps: SweepRunner | null; // the discovery sweep the Operations page starts
   private classRows: CmdbClassRow[] | null = null;
   private relationTypes: RelationType[] | null = null;
@@ -418,6 +420,9 @@ export class Reads {
     this.moduleCmdb = new CachedMap("module-cmdb", TTL.sectionRead, (key) => this.loadModuleCmdb(key), now);
     // An open event's history, for what changed beside it: a minute old at most.
     this.objectHistory = new CachedMap("object-history", TTL.sectionRead, (id) => this.cmdbClient().history(id), now);
+    // The CMDB's allocations (asset allocated-to node): the Assets view's
+    // tree, beside the role asset-manager's record gives each asset.
+    this.allocations = new Cached("allocations", MIN, () => this.cmdbClient().relations({ type: "allocated-to" }), now);
     const cmdb = cfg.cmdb ?? null;
     this.sweeps = cmdb ? new SweepRunner({ sweep: () => cmdb.sweep(), lastSweep: () => cmdb.lastSweep() }, () => undefined, now) : null;
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
@@ -753,6 +758,7 @@ export class Reads {
       health: this.health, modules: this.modules, backup: this.backup, topology: this.topology,
       zones: this.zones, aps: this.aps, ssids: this.ssids, environments: this.environments, site: this.site, security: this.security,
       peers: this.peers, activity: this.activity, storage: this.storage, "backup-runs": this.backupRuns, ipv6: this.ipv6,
+      allocations: this.allocations,
     } as Record<string, Cached<unknown>>;
     if (what === "all") {
       this.moduleShow.clear();
@@ -769,7 +775,7 @@ export class Reads {
       await this.health.refresh();
       // the storage inventory (SMART on every disk), the backup runs and the
       // firewall's IPv6 only once someone has looked
-      const looked = (k: string) => !["storage", "backup-runs", "ipv6"].includes(k) || all[k].peek().at !== null;
+      const looked = (k: string) => !["storage", "backup-runs", "ipv6", "allocations"].includes(k) || all[k].peek().at !== null;
       await Promise.all(Object.entries(all).filter(([k]) => k !== "health" && looked(k)).map(([, c]) => c.refresh()));
       if (this.catalogs.peek().at !== null) await this.catalogs.refresh();
       if (this.healthGraph.peek().at !== null) await this.healthGraph.refresh();
@@ -820,7 +826,7 @@ export class Reads {
     const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
     // A faceplate added or changed: the forms' plates follow.
     const plates = this.faceplates.peek().at !== null ? [this.faceplates] : [];
-    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.ssids.peek().at !== null ? [this.ssids] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), ...(this.healthGraph.peek().at !== null ? [this.healthGraph] : []), ...(this.guests.peek().at !== null ? [this.guests] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.ssids.peek().at !== null ? [this.ssids] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), ...(this.healthGraph.peek().at !== null ? [this.healthGraph] : []), ...(this.guests.peek().at !== null ? [this.guests] : []), ...(this.allocations.peek().at !== null ? [this.allocations] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
   }
 
   private cmdbClient(): Cmdb {
@@ -865,6 +871,15 @@ export class Reads {
     const cmdb = this.cmdbClient();
     const show = "id" in ref ? await cmdb.show(ref.id) : await cmdb.find(ref.name, ref.cls);
     return ciRecord(show, (this.cfg.now ?? Date.now)());
+  }
+
+  // The Assets view (ADR-040 D10): the assets by where they stand, from the
+  // positions the topology carries and the CMDB's allocations.
+  async assetTree(): Promise<Entry<AssetTree>> {
+    const [t, a] = await Promise.all([this.topology.get(), this.cfg.cmdb ? this.allocations.get() : null]);
+    const pos = (t.value?.positions ?? null) as AssetPositions | null;
+    const alloc = a === null ? new Error("this console has no CMDB client") : a.value ?? new Error(a.error ?? "the CMDB's allocations were not read");
+    return { ...t, value: t.value ? assetTree(pos, alloc) : null };
   }
 
   async ciHistoryOf(id: string): Promise<CiHistoryRow[]> {

@@ -7,6 +7,8 @@ import { useEffect, useState } from "react";
 import { refreshAll, useRead } from "./api";
 import { AssistantApi, AssistantContext, AssistantDrawer, Focus, focusOf } from "./assistant";
 import { Activity } from "./pages/Activity";
+import { AssetPage } from "./pages/AssetPage";
+import { Assets } from "./pages/Assets";
 import { Backup } from "./pages/Backup";
 import { Environments } from "./pages/Environments";
 import { Health } from "./pages/Health";
@@ -34,6 +36,7 @@ const NAV: { to: string; label: string; live: boolean }[] = [
   { to: "/zones", label: "Network", live: true },
   { to: "/modules", label: "Modules", live: true },
   { to: "/identity", label: "Identity", live: true },
+  { to: "/assets", label: "Assets", live: true },
   { to: "/backup", label: "Backup", live: true },
   { to: "/security", label: "Security", live: false },
   { to: "/activity", label: "Activity", live: true },
@@ -91,6 +94,8 @@ export function App() {
   else if (path === "/environments") page = <Environments />;
   else if (path === "/zones") page = <ZonesPage />;
   else if (path === "/identity") page = <Identity />;
+  else if (path === "/assets") page = <Assets />;
+  else if (path.startsWith("/assets/")) page = <AssetPage name={decodeURIComponent(path.slice("/assets/".length))} />;
   else if (path === "/backup") page = <Backup />;
   else {
     const n = NAV.find((x) => active(path, x.to));

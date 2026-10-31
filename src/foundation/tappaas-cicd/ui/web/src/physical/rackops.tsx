@@ -1,4 +1,5 @@
-// rackops.tsx — the changes the Physical view offers, as asset-manager's own
+// rackops.tsx — the placement changes the console offers (the Physical view's
+// toolbar and tray, the Assets pages), as asset-manager's own
 // verbs: a room or a rack added, changed or deleted; a device placed in a rack
 // or a room, moved or unplaced; a device nothing manages recorded, or one a
 // switch port sees recorded from its port; a cable nothing can see recorded or
@@ -283,12 +284,12 @@ export function PhysicalHowTo() {
         <li><b>Add a room</b> the hardware stands in, at one of the site's locations.</li>
         <li><b>Add a rack</b> to the room.</li>
         <li><b>Place</b> the devices the topology sees — nodes, switches, access points — from Unplaced: in a rack, or loose in a room.</li>
-        <li><b>Record a device</b> nothing manages — a modem, an ONT, a UPS, a patch panel — then place it. A device a switch port sees is listed under its location: open it and Record… it.</li>
-        <li><b>Record a cable</b> nothing sees: select a port, then Record a cable….</li>
+        <li><b>Record a device</b> nothing manages — a modem, an ONT, a UPS, a patch panel — then place it. A device a switch port sees is listed under its location: Record… it there, or from its Details.</li>
+        <li><b>Record a cable</b> nothing sees: select the device, open its Details, then Record a cable… on the port.</li>
         <li><b>Add a faceplate</b> for a device model the catalog lacks: its units, width and ports; it is then offered by Place… and Record a device….</li>
-        <li><b>Split a wire at a patch panel</b>: select the wire, then Attach to patch panel….</li>
+        <li><b>Split a wire at a patch panel</b>: on a device's Details, Attach to patch panel… on the port's cable.</li>
       </ol>
-      <p className="muted small">A click on a location, a room, a rack, a device or a wire opens its card here.</p>
+      <p className="muted small">A click on a location, a room, a rack, a device or a wire opens its card here; its Details open the page where it is changed.</p>
     </aside>
   );
 }

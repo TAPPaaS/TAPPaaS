@@ -3,7 +3,8 @@
 // (the newest first) and its trace up the backbone — what it runs on, its
 // desired record, release and module, the module's open issues and ADRs. Each
 // CI named in it opens its own record here; Back walks the way returned.
-// Opened from the Health view's panel and from a device on the Site page.
+// Opened from the Health view's panel and from a device on the Site page;
+// embedded on an asset's page (AssetPage.tsx).
 
 import { useEffect, useState } from "react";
 import { useRead } from "../api";
@@ -82,7 +83,10 @@ function HistoryRow({ h, open }: { h: CiHistoryRow; open: (r: CiRef) => void }) 
 
 const HISTORY_FIRST = 25;
 
-export function CiPanel({ start, close, back }: { start: CiRef; close: () => void; back?: { label: string; go: () => void } }) {
+// embedded: on a page (an asset's), not a side panel: no header and no close;
+// only: the sections shown there (the page shows the attributes its own way).
+export function CiPanel({ start, close, back, embedded, only }: { start: CiRef; close?: () => void; back?: { label: string; go: () => void }; embedded?: boolean; only?: ("events" | "trace" | "attributes" | "drift" | "relations" | "history")[] }) {
+  const shows = (x: NonNullable<typeof only>[number]): boolean => !only || only.includes(x);
   // The way here: the start, then each CI opened from within.
   const [trail, setTrail] = useState<CiRef[]>([start]);
   const [more, setMore] = useState(false);
@@ -99,21 +103,33 @@ export function CiPanel({ start, close, back }: { start: CiRef; close: () => voi
   const steps = trace.env?.data ?? [];
   const out = (o?.relations ?? []).filter((x) => x.direction === "out");
   const inc = (o?.relations ?? []).filter((x) => x.direction === "in");
+  const Shell = embedded ? "div" : "aside";
   return (
-    <aside className="sidepanel health-panel ci-panel">
-      <header>
-        <div>
-          <b>{o?.label ?? ("name" in here ? here.name : "…")}</b>
-          <div className="muted small">{o ? `${o.class}${o.ancestors.length ? ` · ${o.ancestors.filter((a) => a !== o.class && a !== "object").join(" › ")}` : ""} · CMDB record` : "CMDB record"}</div>
-        </div>
-        <button className="btn-x" onClick={close} aria-label="Close">×</button>
-      </header>
-      <p>
-        {trail.length > 1 ? <button className="hlink" onClick={() => setTrail((t) => t.slice(0, -1))}>← Back</button> : back ? <button className="hlink" onClick={back.go}>← {back.label}</button> : null}
-      </p>
+    <Shell className={embedded ? "ci-embedded" : "sidepanel health-panel ci-panel"}>
+      {embedded ? (
+        trail.length > 1 ? (
+          <p>
+            <button className="hlink" onClick={() => setTrail((t) => t.slice(0, -1))}>← Back</button> <span className="muted small">{o ? `${o.label} · ${o.class}` : ""}</span>
+          </p>
+        ) : null
+      ) : (
+        <>
+          <header>
+            <div>
+              <b>{o?.label ?? ("name" in here ? here.name : "…")}</b>
+              <div className="muted small">{o ? `${o.class}${o.ancestors.length ? ` · ${o.ancestors.filter((a) => a !== o.class && a !== "object").join(" › ")}` : ""} · CMDB record` : "CMDB record"}</div>
+            </div>
+            {close ? <button className="btn-x" onClick={close} aria-label="Close">×</button> : null}
+          </header>
+          <p>
+            {trail.length > 1 ? <button className="hlink" onClick={() => setTrail((t) => t.slice(0, -1))}>← Back</button> : back ? <button className="hlink" onClick={back.go}>← {back.label}</button> : null}
+          </p>
+        </>
+      )}
       <ReadState env={rec.env} failure={rec.failure} what="this CI's record (the CMDB)" />
       {o ? (
         <>
+          {shows("events") ? (
           <Section title="Open events" aside={`${o.events.length}`}>
             {o.events.length === 0 ? <p className="muted">None: every condition on it is ok, or nothing has assessed it.</p> : null}
             <ul className="attention">
@@ -134,6 +150,8 @@ export function CiPanel({ start, close, back }: { start: CiRef; close: () => voi
               ))}
             </ul>
           </Section>
+          ) : null}
+          {shows("trace") ? (
           <Section title="Trace" aside="up the backbone">
             <ReadState env={trace.env} failure={trace.failure} what="the trace" />
             <ul className="plain">
@@ -141,6 +159,8 @@ export function CiPanel({ start, close, back }: { start: CiRef; close: () => voi
             </ul>
             {trace.env?.data && !steps.some((s) => s.class === "desired" || s.class === "module") ? <p className="muted small">No desired record or module is recorded on it or on what it runs on.</p> : null}
           </Section>
+          ) : null}
+          {shows("attributes") ? (
           <Section title="Attributes" aside={`${o.attributes.length}`}>
             <table className="table small">
               <thead>
@@ -163,11 +183,13 @@ export function CiPanel({ start, close, back }: { start: CiRef; close: () => voi
               </tbody>
             </table>
           </Section>
-          {o.drift ? (
+          ) : null}
+          {o.drift && shows("drift") ? (
             <Section title="Drift — against its record">
               <pre className="output">{typeof o.drift === "string" ? o.drift : JSON.stringify(o.drift, null, 2)}</pre>
             </Section>
           ) : null}
+          {shows("relations") ? (
           <Section title="Relations" aside={`${o.relations.length}`}>
             {o.relations.length === 0 ? <p className="muted">None.</p> : null}
             <ul className="plain">
@@ -178,6 +200,8 @@ export function CiPanel({ start, close, back }: { start: CiRef; close: () => voi
               ))}
             </ul>
           </Section>
+          ) : null}
+          {shows("history") ? (
           <Section title="History" aside="the newest first">
             <ReadState env={hist.env} failure={hist.failure} what="the history" />
             <details className="ff-shut">
@@ -188,8 +212,9 @@ export function CiPanel({ start, close, back }: { start: CiRef; close: () => voi
               {!more && rows.length > HISTORY_FIRST ? <button className="hlink" onClick={() => setMore(true)}>Show all {rows.length}</button> : null}
             </details>
           </Section>
+          ) : null}
         </>
       ) : null}
-    </aside>
+    </Shell>
   );
 }

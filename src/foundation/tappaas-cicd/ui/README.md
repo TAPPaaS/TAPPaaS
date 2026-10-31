@@ -85,14 +85,15 @@ rack…, Record a device… (`asset-manager asset add`: kind, a catalog model or
 site's own plates first in the model list), the last also in a rack's and a room's card, and Add a faceplate…
 (`asset-manager faceplate add`: a plate for a model the catalog lacks — its key, units, width, kind and ports as a
 port spec the form explains, drawn as the rack will draw it while the fields change), and a How to card while nothing is selected; a click on a cable opens its link, whose panel
-lists the wires and offers Attach to patch panel…; a click on a patch panel's port (on its plate or in its port table) opens the link through it, a free one its port with Attach a wire here… (the links that could run through it), (`asset-manager cable split`, its `--check` the
-preview, the free panel ports to choose from) or Remove patch panel (`cable join`); a click on a plate or a port
+lists the wires, its Details the pages of its ends, where Attach to patch panel… is on the port's cable; a click on a patch panel's port (on its plate or in its port table) opens the link through it, a free one its port, whose Details offer Attach a wire here… (the links that could run through it) (`asset-manager cable split`, its `--check` the
+preview, the free panel ports to choose from), and Remove patch panel (`cable join`) on the cable; a click on a plate or a port
 opens the side card to the left of the racks, with the device's location and placement as two
 lines — the location a link to its row on the Site page, the placement to its rack or room in the
-Physical view, from any view — and Place… (the rooms and racks at the device's own location only;
-with none there, Add a room… at it), Move to…, Change placement… and Unplace… besides the
+Physical view, from any view — and at its top the Details link to the device's page under Assets,
+where Place… (the rooms and racks at the device's own location only;
+with none there, Add a room… at it), Move to…, Change placement… and Unplace… are, besides the
 object's own changes; a machine module's page shows the same two lines with the same actions; a seen device's card shows the port it is seen at, its MAC, what LLDP and
-the lease say, and Record…. **Assets** (`/site/assets`, formerly `/site/device`) — every physical asset (the cluster nodes, the
+the lease say, its Details the Assets page where Record… is. **Assets** (`/site/assets`, formerly `/site/device`) — every physical asset (the cluster nodes, the
 switches, the access points, the machines and devices a placement or a cable record names, the devices a switch port sees (marked as seen), the internet
 and the backup buddies) as a card with its kind's icon and its name and nothing else, coloured by
 its state as the Storage view colours its cards (its findings' worst level; a drifting port, a
@@ -109,9 +110,9 @@ A click opens the side panel: on top the device's faceplate drawn as the Physica
 (the rack catalog's plate, or a generic one from the ports the topology knows), its cabled ports
 underlined and the selected link's ports ringed, a click on a port selecting that switch port or
 that port's link; below it the device's records (a switch's ports and what hangs on them, a node's
-memory, uplinks and guests), what it is connected to, its findings, jumps and its day-2 change: a switch
+memory, uplinks and guests), what it is connected to and its findings; its day-2 changes — a switch
 port's record (`switch-manager update-port`) then `switch-manager reconcile`, a node's
-`node network show / set`. **Storage** (`/site/storage`, `storage-manager inventory`) — in
+`node network show / set` — are on the page its Details link opens. **Storage** (`/site/storage`, `storage-manager inventory`) — in
 columns: the cluster nodes, each node's boot device and pools (with the pool's fill bar), each
 pool's disks (a mirror's or a raidz's disks carry its label and a bracket), lines node → pool →
 disk; every card coloured by its state (ok green, warn amber, fail red, the reason on hover),
@@ -175,8 +176,9 @@ overlays, the WAN, mgmt — is kept by its own module and offers no Enable, Disa
 `zones-fields.json` with its value, default and class (one `network-manager modify <zone> --set …`). **Identity** — organizations,
 groups, users and roles as a graph of their relations (a group's owning organization, a user's
 groups, the roles of users and groups, an organization's owner and parent; `GET /api/v1/identity/records`:
-`identity-manager <kind> show` for each), the list beside it, a click for the record and its verbs; a change is staged with `--no-reconcile` and pushed by `identity-manager
-reconcile`, previewed. **Backup** — the policy of every module, peers, pulse, restore points;
+`identity-manager <kind> show` for each), the list beside it, a click for the record and its verbs
+(`?select=<kind>:<name>` opens one: `user:lars`, `group:admins`, `org:…`, `role:…`); a change is staged with `--no-reconcile` and pushed by `identity-manager
+reconcile`, previewed. **Assets** — see [Assets](#assets) below. **Backup** — the policy of every module, peers, pulse, restore points;
 modify, purge (typed). **Site** — the four tabs above. Add node is a guided sequence in Setup's step rows: declare
 the node (`site-manager node add tappaasN`: its switch port or MAC, boot disks; the wizard
 always installs, adopting a hand-installed Proxmox is the CLI's `--adopt`), boot it from the
@@ -216,8 +218,8 @@ the CMDB never moves a card.
 
 **The CI panel (right)**: conditions with their `since`, the root cause or what it impacts, drift,
 the conditions' history, the changes to it, relations both ways, the health verbs as jobs (Ack…,
-Unack…, Maintenance…, health-manager's own, offered once its manifest declares them), **Open module**,
-the jump to the module's page where its operations are, and **Show in tree**, which opens the tree
+Unack…, Maintenance…, health-manager's own, offered once its manifest declares them), **Details**
+at its top, the page that shows the object in full and where its operations are, and **Show in tree**, which opens the tree
 down to it. A panel shows status, not operations.
 
 **The CMDB record** (`web/src/pages/CiPanel.tsx`), opened by **CMDB record and trace** in the CI
@@ -279,6 +281,70 @@ verb's manifest, the exact command (copyable), Preview (the verb's own dry run, 
 a refusal stops it there, shown as the preview; disruptions are labelled checkboxes; a
 destructive verb needs the object's name typed before Apply), Result; a flow of
 several steps runs them in order. Activity shows such a job's two phases.
+
+## Assets
+
+**Assets** (`/assets`, between Identity and Backup in the menu) lists every asset of the site in a
+tree by where it stands: location → room → rack → asset, each rack's assets from the top unit down
+with their units, the assets standing loose in a room under it, the racks in no room under the
+location's *in no room*. Under each location, **Not placed**: the assets in stock or ordered, the
+devices the topology knows that no asset records, and the devices a switch port sees that nobody
+recorded (last); **Disposed** apart, folded. Each asset shows its display name (a link to its page),
+kind, stage (ordered, stock, placed, operational, disposed), the faulty flag, the role it plays,
+vendor and model, and *CMDB differs* when the CMDB has it allocated to another role than the
+record says; its ports fold out with their connector, speed, MAC, role and where each cable goes
+(recorded or seen by the topology, a label, the patch panel ports it runs through). A filter keeps
+the rows whose name, kind, model, vendor, serial, tag, role or stage match. The header has Add a
+room…, Add a rack…, Record a device… and Add a faceplate….
+
+A location, a room, a rack or a device no asset records opens beside the tree
+(`/assets?select=location:<name>`, `room:`, `rack:`, `device:`) with its facts and its operations:
+a location's Add a room…; a room's Change…, Add a rack…, Record a device…, Delete… (empty only), or
+Record the room… while only a rack's text names it; a rack's Change…, Record a device…, Delete…
+(empty only); a device the topology knows that no asset records its placement (Place…, Move to…,
+Unplace…) and Record a device…; a device a switch port sees its port, MAC, LLDP and lease, and
+Record…. Each links to it in the Physical view.
+
+**An asset's page** (`/assets/<name>`, by the asset's own name or the role it plays) shows its
+record — display name, name, kind, vendor, model, serial, asset tag, stage, faulty and its note,
+description, procurement and disposal (the last three from its CMDB record) — the role it plays and
+since when, its location and placement, the CMDB's allocation of it, its ports (connector, MAC, the
+cables on each, the far end a link to its own asset's port row), and the history of its
+allocations: every role it has played, from when until when, from its CMDB history (the periods
+of its `allocated-to` relation). Below, its CMDB record: open events, trace, drift, relations and
+history, each CI named there opening its own record in place. The operations on it are here
+(an installer's): the lifecycle — Receive… (ordered → stock), Allocate… (to a role the topology
+knows that no other asset plays), Release…, Faulty… and Repaired…, Dispose… (once it has no role,
+no placement and no recorded cable); its placement — Place…, Move to…, Change placement…, Unplace…;
+its record — Change the record…, Remove the record… (once nothing places or cables it); a node's
+Network: show and Network: set…; a switch's or an access point's Location…; and per port: Port… (its
+record: kind, speed, MAC, role), a switch port's Change port… (its record, then reconcile) and
+Park…, Record a cable… or Remove the cable…, Attach to patch panel… or Remove patch panel on a
+cable, and on a patch panel's free port Attach a wire here…. `#port-<name>` in the address marks
+and scrolls to a port's row. A node's disks and pools are in the Storage view, linked from the page.
+
+## Side panels: the Details link
+
+A selection in the Physical, Assets (`/site/assets`) and Storage views, and an object in the Health
+and Operations views, opens a side panel with a condensed overview of it: its records, findings or
+conditions, where it is, what it is connected to. The panel changes nothing. At its top, **Details**
+opens the page that shows the object in full and where it is changed (`web/src/details.ts`):
+
+| Selected | Details opens |
+|---|---|
+| a server, switch, access point, recorded device, patch panel | its asset's page, `/assets/<name>` |
+| a switch port, a patch panel's port | its row on the asset's page, `/assets/<name>#port-<port>` |
+| a node | its module page when it has one (`/modules/<name>`), with **Asset** beside it; else its asset's page |
+| a disk; a pool | the node's asset; the node's page |
+| a link | each end that is an asset |
+| a rack, a room, a location | the Assets page with it selected |
+| a device a switch port only sees | the Assets page with it selected, where Record… is |
+| a guest, the firewall, a module's CI | the module's page |
+| a zone | the Network page, `/zones?zone=<zone>` |
+| a user, a group, an organization, a role | the Identity page with it selected |
+| an environment; the site or the cluster; a datastore or backup peer | Environments; the Site page; Backup |
+
+The CMDB record of a device stays one click away in the panel (**CMDB record and trace**).
 
 ## The status route — `status.<domain>` (off)
 
@@ -342,6 +408,7 @@ change is a job as ever, `health-manager ack|unack|maintenance`, taken from its 
 | `cmdb/ci/<id>`, `cmdb/ci?name=<name>[&class=<class>]` | a CI's record: `{id, class, ancestors, name, label, attributes[] {name, value, source, since}, relations[] {id, type, direction, other, source, since}, drift, events[]}`, `events` its conditions that are not ok; by name, the class (or an ancestor of it) where the name is not unique |
 | `cmdb/ci/<id>/history` | `[{at, what: attribute\|relation\|change, name, value, source, until, detail, drift}]`, the newest first, 300 at most |
 | `cmdb/ci/<id>/trace` | `[{class, name, id, relation, link}]`: the CI, what it is part of, allocated to, runs on or is a member of (eight hops at most), then `desired`, `release`, `module`, `issues` and `adr` steps, which carry a `link` and no `id` |
+| `assets/tree` | the Assets view: `{locations[], assets[], allocationsError}`; a location `{name, displayName, primary, rooms[], unplaced[], disposed[]}`, a room `{name, displayName, recorded, racks[], loose[]}` (`name` "" for the racks in no room), a rack `{name, displayName, units, items[]}`, an item `{device, asset, kind, at, seen}` (`asset` null: no asset records the device); an asset as the positions list it plus `{placedAs, where{location, room, rack, at}, ports[] {…, listed, cables[] {to, kind, source, label, via[]}}, cmdb {id, allocatedTo}, allocationDrift}`, from the topology's positions and the CMDB's `allocated-to` relations (read at most a minute old; `allocationsError` when the CMDB did not answer) |
 | `health/stream` | server-sent events: `hello`, then `health` `{topology, relayout, generated, patches[], rollups{}, roots, counts, hasConditions}`, one read per burst of CMDB changes; `patches` the objects whose colour moved, `rollups` the tree nodes whose roll-up did; `relayout` true: an object or a relation changed, read again |
 
 `modules` and `modules/<m>` add `condition` to a module's summary (the worst of its node and the
@@ -506,7 +573,7 @@ from the laptop.
 `test.sh`: `tsc` on the backend and the unit suite (`test/unit/*.test.ts`) — the Health view over
 `test/fixtures/health-site.json` (`fake-cmdb.ts`: one node down with its guests impacted, one
 acknowledged root, one flapping condition, a guest in a window): `health` the document, the client,
-the tree and its roll-ups, the ego graph and the chains, the live feed and the routes, `healthgraph` the cards and lines a page draws (there is no DOM here); `cipanel` a CI's record from fixtures: open events, the history's order, the trace up the backbone and where it stops;
+the tree and its roll-ups, the ego graph and the chains, the live feed and the routes, `healthgraph` the cards and lines a page draws (there is no DOM here); `cipanel` a CI's record from fixtures: open events, the history's order, the trace up the backbone and where it stops; `assets` the Assets view's tree (places, not placed, disposed, ports and cables, the CMDB's allocations and their drift), an asset found by its role, the history of its allocations, the filter, and where every side panel's Details link goes;
 the assistant
 against a fake LiteLLM streaming the recorded exchanges of `test/fixtures/litellm-exchange.json`
 (the loop, the allow-list, ADR-034 T5: asked to run a change it proposes a card and applies
