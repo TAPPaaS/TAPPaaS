@@ -115,7 +115,9 @@ too); a label beside the pointer says which. A release on green runs one job —
 apply — `asset-manager place <device> --rack <rack> --u <n> --height <n>` with the plate, width and
 column the Place… form would start with (`--room <room>` into a room), or `place modify <device>
 --set rack=… --set u=…` (`--set room=…`) for a placed one; the device's card opens on the right with
-the job's state, Stop, and its output, and the drawing is read again when it ends. Escape or a
+the job's state, Stop, and its output. The plate stands at its target in a pulsing, dashed style while
+the job runs, and the page keeps reading the positions when it ends until the console's refresh
+behind it is done, so the plate is at its new units without a reload. Escape or a
 release anywhere else changes nothing. Place…, Move to… and Change placement… stay for the
 keyboard and for what a drag does not set (the face, the plate, a label). Below 900 px wide the
 tray, the racks and the card stack. **Devices** (`/site/devices`, formerly `/site/assets` and `/site/device`) — a view on the assets that are physical devices (the cluster nodes, the

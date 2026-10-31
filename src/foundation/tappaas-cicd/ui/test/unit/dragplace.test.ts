@@ -4,7 +4,7 @@
 // runs: place for a device placed nowhere, place modify for a placed one.
 
 import { PlacementInfo, PositionsView, RackInfo } from "../../web/src/types";
-import { draggedOf, dropAt, dropArgv, placesFor, prefillSize, rowOf, unitAt } from "../../web/src/physical/dragplace";
+import { draggedOf, dropAt, dropArgv, dropLanded, dropPending, placesFor, prefillSize, rowOf, unitAt } from "../../web/src/physical/dragplace";
 import { check, done } from "./check";
 
 const pm = (device: string, u: number, height = 1, extra: Partial<PlacementInfo> = {}): PlacementInfo => ({
@@ -105,5 +105,20 @@ const in2 = dropAt(v, ups, { rack: "rack2", row: 0, across: 0 });
 check(in2.ok && JSON.stringify(in2.argv) === JSON.stringify(["asset-manager", "place", "modify", "ups", "--set", "rack=rack2", "--set", "u=1"]), `out of a room into a rack: --set rack= --set u= (${in2.argv?.join(" ")})`);
 const apMove = dropArgv(draggedOf(v, "ap0")!, { rack: "rack1", u: 5, slot: 0 });
 check(JSON.stringify(apMove) === JSON.stringify(["asset-manager", "place", "modify", "ap0", "--set", "u=5", "--set", "slot=0"]), "a third-wide device to another column: --set slot=");
+
+// A drop on its way: until its job has ended and the positions show it there.
+const moved: PositionsView = { ...v, racks: [{ ...r1, placements: r1.placements.map((m) => (m.device === "sw1" ? { ...m, u: 7 } : m)) }, ...v.racks.slice(1)] };
+const job = (state: "queued" | "running" | "done" | "refused", exit: number | null = null, extra = {}) => ({ state, exit, ended: state === "done" ? "2026-10-31T10:00:10Z" : null, ...extra });
+const before = { at: "2026-10-31T10:00:00Z", error: null };
+const after = { at: "2026-10-31T10:00:20Z", error: null };
+check(dropLanded(moved, "sw1", down) && !dropLanded(v, "sw1", down), "landed: the positions show it at the dropped unit");
+check(dropLanded({ ...v, rooms: v.rooms!.map((x) => (x.name === "closet" ? { ...x, loose: [...x.loose, pm("sw1", 0)] } : x)) }, "sw1", loose) && !dropLanded(v, "sw1", loose), "landed: loose in the dropped room");
+check(dropPending(v, "sw1", down, null, before) && dropPending(v, "sw1", down, job("queued"), before) && dropPending(v, "sw1", down, job("running"), before), "pending while the job starts, waits and runs");
+check(dropPending(v, "sw1", down, job("done", 0), before), "pending after a good job while the read is from before its end");
+check(!dropPending(moved, "sw1", down, job("done", 0), before), "over once the positions show it");
+check(!dropPending(v, "sw1", down, job("done", 0), after), "over on a read after the job's end that has it elsewhere");
+check(!dropPending(v, "sw1", down, job("done", 0), { at: before.at, error: "topology failed" }), "over when the read failed");
+check(!dropPending(v, "sw1", down, job("done", 1), before) && !dropPending(v, "sw1", down, job("refused"), before), "over when the job failed or was refused");
+check(!dropPending(v, "sw1", down, job("done", 0, { cancelled: { by: "x", at: "", was: "running", signals: [] } }), before), "over when the job was stopped");
 
 done("dragplace");

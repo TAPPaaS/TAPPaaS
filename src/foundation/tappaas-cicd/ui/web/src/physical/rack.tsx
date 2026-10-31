@@ -23,7 +23,7 @@ import { Sel } from "./layout";
 import { isPatchPanel, linkId, panelPortSel } from "./devicegraph";
 import { Box, Placed, nameArea, portCells } from "./platelayout";
 import { PortAt, routeCables } from "./cableroute";
-import { Drop, DropTarget, dropAt, rowOf, spanOf, unitAt } from "./dragplace";
+import { Dragged, Drop, DropTarget, dropAt, rowOf, spanOf, unitAt } from "./dragplace";
 import type { DragState } from "./dragdrop";
 
 // Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
@@ -315,9 +315,36 @@ export function dropTargetAt(L: RackLayout, x: number, y: number, grab: number):
   return room ? { room: room.name } : null;
 }
 
+// A drop on its way: the plate at its units, or its name in the room's area.
+function PendingDrop({ L, d, drop }: { L: RackLayout; d: Dragged; drop: Drop }) {
+  const room = drop.room ? L.rooms.find((m) => m.name === drop.room) : null;
+  if (room) {
+    return (
+      <g pointerEvents="none">
+        <rect className="drop-pending" x={room.x} y={room.y} width={room.w} height={room.h} rx={10} />
+        <text x={room.x + room.w - 12} y={room.y + 22} textAnchor="end" className="rack-where">{d.device}: {d.from ? "moving here…" : "placing here…"}</text>
+      </g>
+    );
+  }
+  const at = L.racks.find((x) => x.r.name === drop.rack);
+  if (!at || !drop.rows || !drop.span) return null;
+  const iw = inner(at.r);
+  const [a, b] = drop.span;
+  const box = { x: at.x + R.rail + iw * a + 1, y: R.top + drop.rows[0] * R.u + 1, w: iw * (b - a) - 2, h: (drop.rows[1] - drop.rows[0] + 1) * R.u - 2 };
+  const was = L.placed.find((p) => p.device === d.device);
+  const p: Placed = { device: d.device, kind: d.kind as Placed["kind"], plate: was?.plate ?? null, box, up: null, title: was?.title ?? d.device, sub: d.from ? "moving here…" : "placing here…", rack: drop.rack ?? null };
+  return (
+    <g className="plate-pending" pointerEvents="none">
+      <PlateSvg p={p} on={false} portOn={() => false} onPlate={() => undefined} onPort={() => undefined} />
+      <rect className="drop-pending" x={box.x} y={box.y} width={box.w} height={box.h} rx={3} />
+    </g>
+  );
+}
+
 // drag: a device being dragged (dragdrop.tsx); dropRef: where a release now
-// would put it; onGrab: a press on a placed plate (an operator's drawing only).
-export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onGrab }: { t: Topology; v: PositionsView; sel: Sel | null; pick: (s: Sel) => void; cables: boolean; onPane: () => void; drag?: DragState | null; dropRef?: MutableRefObject<Drop | null>; onGrab?: (e: ReactPointerEvent, device: string, grab: number) => void }) {
+// would put it; onGrab: a press on a placed plate (an operator's drawing only);
+// pending: a drop on its way, drawn at its target until the positions show it.
+export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onGrab, pending }: { t: Topology; v: PositionsView; sel: Sel | null; pick: (s: Sel) => void; cables: boolean; onPane: () => void; drag?: DragState | null; dropRef?: MutableRefObject<Drop | null>; onGrab?: (e: ReactPointerEvent, device: string, grab: number) => void; pending?: { d: Dragged; drop: Drop } | null }) {
   const L = useMemo(() => layoutRacks(v, t.outside), [v, t.outside]);
   const wrap = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -393,7 +420,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
       portOn={(id) => (sel?.kind === "port" && sel.switch === p.device && sel.id === id) || (sel?.kind === "panelport" && sel.panel === p.device && sel.id === id) || (sel?.kind === "link" && v.cables.some((c) => linkId(c.from.device, c.to.device) === sel.id && (c.segments?.length ? c.segments : [c]).some((w) => [w.from, w.to].some((e) => e.device === p.device && e.port === id))))}
       onPlate={() => pick(selOf(p.kind, p.device))}
       onPort={(id) => pick(isPatchPanel(t, p.device) ? panelPortSel(t, p.device, id) : selOf(p.kind, p.device, id))}
-      dragged={drag?.d.device === p.device}
+      dragged={drag?.d.device === p.device || pending?.d.device === p.device}
       onGrab={
         onGrab && p.kind !== "outside"
           ? (e) => {
@@ -477,6 +504,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
           const [a, b] = drop.span;
           return <rect className={drop.ok ? "drop-ok" : "drop-bad"} x={at.x + R.rail + iw * a + 1} y={R.top + drop.rows[0] * R.u + 1} width={iw * (b - a) - 2} height={(drop.rows[1] - drop.rows[0] + 1) * R.u - 2} rx={3} pointerEvents="none" />;
         })() : null}
+        {pending ? <PendingDrop L={L} d={pending.d} drop={pending.drop} /> : null}
         {cables
           ? drawn.map(({ c, i, d, a, b }) => {
               const st = cableStyle(c, t);

@@ -9,8 +9,9 @@
 // placement… dialogs stay for the keyboard.
 
 import { MutableRefObject, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
-import { applyNowJob, useJob } from "../api";
+import { applyNowJob } from "../api";
 import { Command, JobControl, Output, duration, jobLevel, jobResult } from "../jobs";
+import { Job } from "../types";
 import { Tag } from "../ui";
 import { Drop, Dragged } from "./dragplace";
 
@@ -21,9 +22,13 @@ export interface DragState {
   y: number;
 }
 
-// A drop's job: the device, what it ran, the job (or why it did not start).
+// A drop's job: the device, where it was dropped, what it ran, the job (or why
+// it did not start). closed: its card is closed; the job is still watched.
 export interface DropJob {
   device: string;
+  d: Dragged;
+  drop: Drop;
+  closed?: boolean;
   what: string;
   argv: string[];
   id: string | null;
@@ -111,19 +116,21 @@ export function DragGhost({ drag, drop }: { drag: DragState; drop: Drop | null }
   );
 }
 
+// A drop as it starts: no job yet.
+export const dropJobOf = (d: Dragged, drop: Drop): DropJob => ({ device: d.device, d, drop, what: `${d.from ? "Move" : "Place"} ${d.device}: ${drop.text}`, argv: drop.argv ?? [], id: null, error: null });
+
 // Run a valid drop: one job, the check, then the apply.
 export async function runDrop(d: Dragged, drop: Drop): Promise<DropJob> {
-  const argv = drop.argv!;
-  const what = `${d.from ? "Move" : "Place"} ${d.device}: ${drop.text}`;
-  const r = await applyNowJob(argv);
-  if (!r.data || r.status >= 400) return { device: d.device, what, argv, id: null, error: r.error ?? `HTTP ${r.status}` };
-  return { device: d.device, what, argv, id: r.data.id, error: r.error };
+  const job = dropJobOf(d, drop);
+  const r = await applyNowJob(job.argv);
+  if (!r.data || r.status >= 400) return { ...job, error: r.error ?? `HTTP ${r.status}` };
+  return { ...job, id: r.data.id, error: r.error };
 }
 
 // The drop's job in the dragged device's side panel: its status line, its
-// output as it arrives (the positions are read again when it ends).
-export function DropJobPanel({ job, close }: { job: DropJob; close: () => void }) {
-  const j = useJob(job.id);
+// output as it arrives. j: the job as the page watches it, so the positions
+// are read again when it ends whatever the side panel shows by then.
+export function DropJobPanel({ job, j, close }: { job: DropJob; j: Job | null; close: () => void }) {
   return (
     <div className="drop-job">
       <div className="drop-job-head">

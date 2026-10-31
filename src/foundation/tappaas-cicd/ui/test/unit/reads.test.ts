@@ -63,6 +63,30 @@ async function main(): Promise<void> {
     check(c.peek().value === "after", "refreshAfterChange reads again after a load already running");
   }
 
+  // A job's end reads again: the topology load already running read before it.
+  {
+    const site = fakeSite();
+    const holds: (() => void)[] = [];
+    let tops = 0;
+    const cfg = mkdtempSync(join(tmpdir(), "afterjob-"));
+    const r = new Reads({ configDir: cfg, stateDir: join(cfg, "s"), journalDays: 7, run: async (bin, args, o) => {
+      if (bin === "network-manager" && args[0] === "topology") {
+        tops++;
+        await new Promise<void>((res) => holds.push(res));
+      }
+      return site.run(bin, args, o);
+    } });
+    const running = r.topology.refresh();
+    for (let i = 0; i < 200 && holds.length === 0; i++) await new Promise<void>((res) => setTimeout(res, 1));
+    const after = r.refreshAfterJob();
+    holds.shift()!();
+    await running;
+    for (let i = 0; i < 200 && holds.length === 0; i++) await new Promise<void>((res) => setTimeout(res, 1));
+    check(tops === 2, `a job's end reads the topology again after the load already running (${tops} reads)`);
+    holds.shift()?.();
+    await after;
+  }
+
   const cfgDir = mkdtempSync(join(tmpdir(), "console-reads-"));
   const stateDir = join(cfgDir, "state");
   writeFileSync(join(cfgDir, "last-update-result.json"), JSON.stringify({ ok: true, total: 25 }));

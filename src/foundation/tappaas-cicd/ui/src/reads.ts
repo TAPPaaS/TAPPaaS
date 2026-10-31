@@ -823,7 +823,8 @@ export class Reads {
   }
 
   // After a job changed the site: what it may have changed is read again now
-  // (health keeps its own ten-minute timer; validate takes half a minute).
+  // (health keeps its own ten-minute timer; validate takes half a minute). A
+  // load already running read before the change: each read runs again after it.
   refreshAfterJob(): Promise<void> {
     this.moduleShow.clear();
     this.moduleIcons.clear();
@@ -844,7 +845,7 @@ export class Reads {
     const modules = this.modules.refresh().then(() => (this.catalogs.peek().at !== null ? this.catalogs.refresh() : undefined));
     // A faceplate added or changed: the forms' plates follow.
     const plates = this.faceplates.peek().at !== null ? [this.faceplates] : [];
-    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.ssids.peek().at !== null ? [this.ssids] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), ...(this.healthGraph.peek().at !== null ? [this.healthGraph] : []), ...(this.guests.peek().at !== null ? [this.guests] : []), ...(this.allocations.peek().at !== null ? [this.allocations] : []), ...(this.disks.peek().at !== null ? [this.disks] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refresh())]).then(() => undefined);
+    return Promise.all([identity, modules, ...[...setup, ...plates, this.topology, this.zones, ...(this.aps.peek().at !== null ? [this.aps] : []), ...(this.ssids.peek().at !== null ? [this.ssids] : []), ...(this.storage.peek().at !== null ? [this.storage] : []), ...(this.backupRuns.peek().at !== null ? [this.backupRuns] : []), ...(this.healthGraph.peek().at !== null ? [this.healthGraph] : []), ...(this.guests.peek().at !== null ? [this.guests] : []), ...(this.allocations.peek().at !== null ? [this.allocations] : []), ...(this.disks.peek().at !== null ? [this.disks] : []), this.environments, this.site, this.backup, this.peers, this.activity].map((c) => (c as Cached<unknown>).refreshAfterChange())]).then(() => undefined);
   }
 
   private cmdbClient(): Cmdb {

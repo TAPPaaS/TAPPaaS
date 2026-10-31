@@ -710,6 +710,9 @@ span.ht-caret { cursor: default; }
 body.dragging-place, body.dragging-place * { cursor: grabbing !important; user-select: none; }
 .drop-ok { fill: rgba(22, 163, 74, 0.22); stroke: #16a34a; stroke-width: 2; }
 .drop-bad { fill: rgba(220, 38, 38, 0.18); stroke: #dc2626; stroke-width: 2; }
+.drop-pending { fill: rgba(59, 111, 212, 0.14); stroke: #3b6fd4; stroke-width: 2; stroke-dasharray: 6 4; }
+.plate-pending { animation: plate-pending 1.1s ease-in-out infinite alternate; }
+@keyframes plate-pending { from { opacity: 0.85; } to { opacity: 0.45; } }
 .drag-ghost { position: fixed; z-index: 50; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-left: 4px solid #94a3b8; border-radius: 6px; padding: 4px 8px; font-size: 12.5px; box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18); max-width: 320px; }
 .drag-ghost.drag-ok { border-left-color: #16a34a; }
 .drag-ghost.drag-bad { border-left-color: #dc2626; }

@@ -7,14 +7,14 @@
 // pools and disks. Click an object for its side card.
 
 import { PointerEvent as ReactPointerEvent, ReactNode, useCallback, useEffect, useMemo, useState } from "react";
-import { useRead } from "../api";
+import { useJob, useRead } from "../api";
 import { zoneColor } from "../colors";
 import { OperateButton } from "../operate";
 import { Sel } from "../physical/layout";
 import { DeviceGraph } from "../physical/deviceview";
 import { CABLE_KINDS, Placed, RackCanvas, selOf } from "../physical/rack";
-import { Drop, Dragged, draggedOf } from "../physical/dragplace";
-import { DropJob, DropJobPanel, runDrop, useDragPlace } from "../physical/dragdrop";
+import { Drop, Dragged, draggedOf, dropPending } from "../physical/dragplace";
+import { DropJob, DropJobPanel, dropJobOf, runDrop, useDragPlace } from "../physical/dragdrop";
 import { faceplateAddSteps } from "../physical/faceplateform";
 import { AddRoomButton, PhysicalHowTo, PlaceActions, RecordDeviceButton, RecordSeenButton, rackAddSteps } from "../physical/rackops";
 import { SidePanel } from "../physical/SidePanel";
@@ -132,20 +132,24 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
 
   const pick = useCallback((s: Sel) => setSel(s), []);
   // A device dragged onto a rack or into a room (operators, the Physical view):
-  // its card opens with the job's state and output.
+  // its card opens with the job's state and output. The page watches the job
+  // (its end reads the positions again), and draws the plate at its target
+  // until the positions show it there.
   const [dropJob, setDropJob] = useState<DropJob | null>(null);
+  const dropRun = useJob(dropJob?.id ?? null);
   const onDrop = useCallback((d: Dragged, drop: Drop) => {
     setSel(selOf(d.kind as Placed["kind"], d.device));
-    setDropJob({ device: d.device, what: `${d.from ? "Move" : "Place"} ${d.device}: ${drop.text}`, argv: drop.argv ?? [], id: null, error: null });
+    setDropJob(dropJobOf(d, drop));
     void runDrop(d, drop).then(setDropJob);
   }, []);
   const { drag, dropRef, begin } = useDragPlace(onDrop);
+  const pending = dropJob && !dropJob.error && racks && dropPending(racks, dropJob.device, dropJob.drop, dropRun, { at: topo.env?.at ?? null, error: topo.env?.error ?? null }) ? dropJob : null;
   const grab = operator && racks ? (e: ReactPointerEvent, device: string, row = 0) => {
-    const d = draggedOf(racks, device);
+    const d = pending?.device === device ? null : draggedOf(racks, device);
     if (d) begin(e, d, row);
   } : undefined;
   const selDevice = sel?.kind === "node" || sel?.kind === "switch" || sel?.kind === "ap" || sel?.kind === "mount" ? sel.id : sel?.kind === "port" ? sel.switch : null;
-  const dropPanel = dropJob && selDevice === dropJob.device ? <DropJobPanel job={dropJob} close={() => setDropJob(null)} /> : null;
+  const dropPanel = dropJob && !dropJob.closed && selDevice === dropJob.device ? <DropJobPanel job={dropJob} j={dropRun} close={() => setDropJob({ ...dropJob, closed: true })} /> : null;
   const bad = (t?.sources ?? []).filter((s) => !s.ok);
 
   return (
@@ -224,7 +228,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
           ) : null}
           <div className="canvas">
             {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? (
-              <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} drag={drag} dropRef={dropRef} onGrab={grab} />
+              <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} drag={drag} dropRef={dropRef} onGrab={grab} pending={pending} />
             ) : t ? (
               <div className="rack-empty">
                 <p>{racks ? "No room or rack is recorded yet." : "The topology carries no positions (asset-manager did not answer)."}</p>

@@ -27,9 +27,12 @@ export interface Read<T> {
 }
 
 const POLL_MS = 60_000;
+const FOLLOW_MS = 1500;
 const listeners = new Set<() => void>();
 
-// Every open read re-reads (after a refresh, say).
+// Every open read re-reads (after a refresh, say), and keeps asking while the
+// backend says it is reading: a job's end answers with the value from before
+// the job until the refresh behind it is done.
 export function reloadAll(): void {
   for (const l of listeners) l();
 }
@@ -39,6 +42,7 @@ export function useRead<T>(path: string | null, pollMs: number = POLL_MS): Read<
   const [failure, setFailure] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const seq = useRef(0);
+  const follow = useRef(false);
 
   const load = useCallback(() => {
     if (!path) return;
@@ -49,8 +53,9 @@ export function useRead<T>(path: string | null, pollMs: number = POLL_MS): Read<
         if (n !== seq.current) return;
         setEnv(e);
         setFailure(null);
-        // A read still loading for the first time: ask again soon.
-        if (e.data === null && e.refreshing) setTimeout(() => n === seq.current && load(), 3000);
+        if (!e.refreshing) follow.current = false;
+        // A read still loading for the first time, or one reloadAll waits for: ask again soon.
+        if (e.refreshing && (e.data === null || follow.current)) setTimeout(() => n === seq.current && load(), follow.current ? FOLLOW_MS : 3000);
       })
       .catch((e: Error) => n === seq.current && setFailure(e.message))
       .finally(() => n === seq.current && setLoading(false));
@@ -60,10 +65,14 @@ export function useRead<T>(path: string | null, pollMs: number = POLL_MS): Read<
     setEnv(null);
     load();
     const t = setInterval(load, pollMs);
-    listeners.add(load);
+    const again = () => {
+      follow.current = true;
+      load();
+    };
+    listeners.add(again);
     return () => {
       clearInterval(t);
-      listeners.delete(load);
+      listeners.delete(again);
       seq.current++;
     };
   }, [load, pollMs]);

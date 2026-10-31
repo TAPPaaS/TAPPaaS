@@ -6,7 +6,7 @@
 // `place modify` for a placed one. Pure: the drawing (rack.tsx) and its tests
 // use the same answers.
 
-import { PositionsView, RackInfo } from "../types";
+import { JobSummary, PositionsView, RackInfo } from "../types";
 
 export type Width = "full" | "half" | "third";
 export const COLS: Record<Width, number> = { full: 1, half: 2, third: 3 };
@@ -147,4 +147,21 @@ export function dropAt(v: PositionsView, d: Dragged, t: DropTarget): Drop {
   });
   if (hit) return { ok: false, same: false, ...base, u, text: `${units} of ${name}: overlaps ${hit.device}` };
   return { ok: true, same: false, ...base, u, text: `${units} of ${name}${d.width !== "full" ? `, column ${slot + 1} of ${n}` : ""}`, argv: dropArgv(d, { rack: r.name, u, slot }) };
+}
+
+// Whether the positions show the device where it was dropped.
+export function dropLanded(v: PositionsView, device: string, drop: Drop): boolean {
+  if (drop.room) return !!(v.rooms ?? []).find((r) => r.name === drop.room)?.loose.some((m) => m.device === device);
+  const m = v.racks.find((r) => r.name === drop.rack)?.placements.find((x) => x.device === device);
+  return !!m && m.u === drop.u && (m.width === "full" || m.slot === drop.slot);
+}
+
+// Whether a drop is still on its way: its job has not ended, or it ended well
+// and the positions read since do not show it yet. A job that failed, and a
+// read after its end that has the device elsewhere, end it.
+export function dropPending(v: PositionsView, device: string, drop: Drop, job: Pick<JobSummary, "state" | "exit" | "ended" | "previewPhase" | "cancelled" | "interrupted"> | null, read: { at: string | null; error: string | null }): boolean {
+  if (!job || job.state === "queued" || job.state === "running") return true;
+  if (job.state !== "done" || job.exit !== 0 || job.previewPhase?.stopped || job.cancelled || job.interrupted) return false;
+  if (dropLanded(v, device, drop) || read.error) return false;
+  return !(read.at && job.ended && Date.parse(read.at) >= Date.parse(job.ended));
 }
