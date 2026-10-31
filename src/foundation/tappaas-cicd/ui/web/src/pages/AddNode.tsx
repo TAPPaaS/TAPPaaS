@@ -19,17 +19,19 @@
 // status line with Stop and its output show there; once the change applies
 // the stage is done and keeps one line saying where the job is.
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { applyNowJob, refreshRead, reloadAll, useJob, useRead, useVerb } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import { refreshRead, reloadAll, useJob, useRead, useVerb } from "../api";
 import { buildArgv } from "../argv";
 import { JobOutput, JobStatusLine, Output, phaseOutputs } from "../jobs";
 import { OperateButton, Step, StepForm, StepView, Values, useStepValues } from "../operate";
 import { useOpenedBy } from "../opener";
+import { useJobRun } from "../run";
 import { Job, JobSummary, SiteRead, StorageInventory, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
 import { AddNodeStage, KeyStore, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, declaredLine, dismissJob, dismissedJobs, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, setupFromOutput, switchPortChoices, writeProgress } from "../nodeadd";
-import { Wizard, jobLabel, jobLive, useReportJob } from "../wizard";
+import { Wizard, jobLabel, jobLive } from "../wizard";
+import { jobInApply, runFailure } from "../wizards";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
 import { Dot, Link, Tag, canOperate, useMe } from "../ui";
@@ -497,39 +499,12 @@ function DeclareStep({ step, name, progress, onApplied, onDone }: { step: Step; 
   const verb = useVerb(step.bin, step.verb);
   const [values, setValues] = useStepValues(step, verb);
   const argv = useMemo(() => buildArgv(step, verb, values), [step, verb, values]);
-  const [started, setStarted] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const job = useJob(started);
-  useReportJob(jobLive(job) ? job : null);
-  const pp = job?.previewPhase ?? null;
-  // Past its dry run, clean: the change is applying.
-  const inApply = job !== null && job.state !== "refused" && (!pp || (pp.exit === 0 && !pp.stopped));
-  const failed = job !== null && !inApply && (job.state === "done" || job.state === "refused");
-  const told = useRef<string | null>(null);
-  useEffect(() => {
-    if (started && inApply && told.current !== started) {
-      told.current = started;
-      onApplied(started);
-    }
-  }, [started, inApply]);
-  useEffect(() => {
-    if (job?.state === "done" && inApply) onDone(job.exit === 0);
-  }, [job?.state, job?.exit]);
-
-  const declare = async () => {
-    setError(null);
-    setStarting(true);
-    try {
-      const r = await applyNowJob(argv);
-      if (!r.data || r.status >= 400) return setError(`${name} was not declared: ${r.error ?? `HTTP ${r.status}`}`);
-      setStarted(r.data.id);
-    } catch (e) {
-      setError(`${name} was not declared: ${(e as Error).message}`);
-    } finally {
-      setStarting(false);
-    }
-  };
+  const run = useJobRun({ onApplied, onDone: (ok, job) => jobInApply(job) && onDone(ok) });
+  const { job, inApply, finished: failedOrDone } = run;
+  const failed = failedOrDone && !inApply;
+  const started = run.id;
+  const error = run.error ? `${name} was not declared: ${run.error}` : null;
+  const starting = run.state === "starting";
 
   if (!verb) return <p className="muted">reading the {step.bin} manifest…</p>;
   if (started) {
@@ -546,13 +521,13 @@ function DeclareStep({ step, name, progress, onApplied, onDone }: { step: Step; 
       );
     }
     if (failed) {
-      const why = job.state === "refused" ? `${name} was not declared: ${job.refused ?? "refused"}` : pp?.stopped ? `${name} was not declared: ${pp.stopped}.` : job.cancelled ? `${name} was not declared: the job was stopped.` : `${name} was not declared: the check ended with exit ${pp?.exit ?? job.exit}.`;
+      const why = `${name} was not declared: ${runFailure(job)}.`;
       return (
         <div className="step">
           <p className="readstate readstate-fail">{why}</p>
           <JobOutput job={job} fold="tail" tail={8} />
           <div className="actions">
-            <button className="btn btn-primary" onClick={() => setStarted(null)}>Try again</button>
+            <button className="btn btn-primary" onClick={run.retry}>Try again</button>
             <span className="muted small">back to the form, as filled in</span>
           </div>
         </div>
@@ -572,7 +547,7 @@ function DeclareStep({ step, name, progress, onApplied, onDone }: { step: Step; 
       <StepForm step={step} verb={verb} values={values} set={setValues} />
       {error ? <p className="readstate readstate-fail">{error}</p> : null}
       <div className="actions">
-        <button className="btn btn-primary" disabled={!!hint || starting} onClick={() => void declare()}>{starting ? "Starting…" : `Declare ${name || "the node"}`}</button>
+        <button className="btn btn-primary" disabled={!!hint || starting} onClick={() => void run.apply(argv)}>{starting ? "Starting…" : `Declare ${name || "the node"}`}</button>
         {hint ? <span className="muted small">{hint}</span> : null}
       </div>
     </div>

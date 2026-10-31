@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { buildArgv, confirmObject } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
-import { BUDDY_KINDS, PASSPHRASE_TEXT, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -145,6 +145,27 @@ check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its ver
   check(sessionJob([j({ argv: add("b"), cancelled: { was: "queued" }, exit: null }), j({ argv: add("a"), cancelled: { was: "running" }, exit: 130 })], isAdd, now, 3600_000) === null, "cancelled before it ran: skipped; stopped while it ran: the session is over");
   check(sessionJob([j({ argv: ["network-manager", "wgvpn", "list"] }), j({ argv: add("a"), kind: "preview" })], isAdd, now, 3600_000) === null, "only an apply that matches");
   check(argOf(add("lars-laptop"), "--name") === "lars-laptop" && argOf(add("x"), "--pubkey") === null, "a flag's value in the argv");
+}
+
+// A job as a step reads it: an apply with its dry run first, or without one.
+{
+  const job = (o: Partial<RunJob>): RunJob => ({ kind: "apply", state: "running", exit: null, ...o });
+  const pp = (exit: number | null, stopped: string | null = null) => ({ exit, stopped });
+  check(jobRunState(null) === "idle", "no job: idle");
+  check(jobRunState(job({ previewPhase: pp(null) })) === "checking" && !jobInApply(job({ previewPhase: pp(null) })), "in its dry run: checking, not applying");
+  check(jobRunState(job({ kind: "preview" })) === "checking", "a preview checks");
+  check(jobRunState(job({ previewPhase: pp(0) })) === "applying" && jobInApply(job({ previewPhase: pp(0) })), "past a clean dry run: applying");
+  check(jobInApply(job({ previewPhase: pp(2) })), "a reconcile's pending exit 2 goes on");
+  check(jobRunState(job({ state: "queued" })) === "applying" && jobInApply(job({ state: "queued" })), "no dry run: applying from the queue on");
+  check(jobRunState(job({ state: "done", exit: 1, previewPhase: pp(1, "the dry run refuses this change") })) === "stopped" && !jobInApply(job({ state: "done", exit: 1, previewPhase: pp(1, "x") })), "its dry run refused: stopped, nothing applied");
+  check(jobRunState(job({ state: "done", exit: 0 })) === "done", "ended clean");
+  check(jobRunState(job({ state: "done", exit: 3 })) === "failed", "ended with an exit");
+  check(jobRunState(job({ state: "done", exit: 0, cancelled: {} })) === "stopped", "stopped by hand, even with exit 0");
+  check(jobRunState(job({ state: "refused", refused: "a sweep runs" })) === "refused" && !jobInApply(job({ state: "refused" })), "refused: it never ran");
+  check(runFailure(job({ state: "refused", refused: "a sweep runs" })) === "a sweep runs", "why: the refusal");
+  check(runFailure(job({ state: "done", exit: 1, previewPhase: pp(1, "the dry run refuses this change") })).startsWith("the dry run"), "why: the dry run's verdict");
+  check(runFailure(job({ state: "done", exit: 130, cancelled: {} })) === "the job was stopped", "why: stopped");
+  check(runFailure(job({ state: "done", exit: 3 })) === "the job ended with exit 3", "why: its exit");
 }
 
 done("wizards");

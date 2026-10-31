@@ -10,13 +10,14 @@
 // (update-port, then reconcile) runs them in order.
 
 import { ReactNode, createContext, useEffect, useMemo, useState } from "react";
-import { applyJob, applyNowJob, previewJob, readJob, reloadAll, useJob, useRead, useVerb } from "./api";
+import { reloadAll, useJob, useRead, useVerb } from "./api";
 import { ArgvStep, Values, buildArgv, confirmObject, formParts, prefillValues } from "./argv";
 import { useOpenedBy } from "./opener";
 import { Command, JobControl, JobOutput, JobStatusLine, jobResult, phaseOutputs } from "./jobs";
 import { Job, ManifestVerb, Me } from "./types";
 import { Link, Tag, canOperate, useMe } from "./ui";
-import { Wizard, jobLive, useReportJob } from "./wizard";
+import { useJobRun } from "./run";
+import { Wizard } from "./wizard";
 
 export type { Values } from "./argv";
 
@@ -248,31 +249,20 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
   const verb = useVerb(step.bin, step.verb);
   const [values, setValues] = useStepValues(step, verb);
   const argv = useMemo(() => buildArgv(step, verb, values), [step, verb, values]);
-  const [preview, setPreview] = useState<{ id: string; argv: string } | null>(null);
-  const [applied, setApplied] = useState<string | null>(null);
+  const [previewOf, setPreviewOf] = useState<string | null>(null); // the argv the preview ran
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const previewJob_ = useJob(preview?.id ?? null);
-  const appliedJob = useJob(applied);
-  // The wizard around the step asks before it closes on a job that runs.
-  useReportJob(jobLive(appliedJob) ? appliedJob : jobLive(previewJob_) ? previewJob_ : null);
-  const stale =preview !== null && preview.argv !== JSON.stringify(argv);
+  const previewRun = useJobRun();
+  const applyRun = useJobRun({ onApplied, onDone: (ok) => onDone(ok) });
+  const preview = previewRun.id ? { id: previewRun.id, argv: previewOf } : null;
+  const applied = applyRun.id;
+  const appliedJob = applyRun.job;
+  const error = applyRun.error ?? previewRun.error;
+  const previewJob_ = previewRun.job;
+  const stale = preview !== null && preview.argv !== JSON.stringify(argv);
   // An Apply whose own dry run refused the change: nothing was applied, the
   // form is open again as after a refusing preview.
   const stopped = !!appliedJob?.previewPhase?.stopped;
-  const inApply = appliedJob !== null && (!appliedJob.previewPhase || (appliedJob.previewPhase.exit !== null && !stopped));
-
-  useEffect(() => {
-    if (appliedJob && appliedJob.state === "done") onDone(appliedJob.exit === 0 && !stopped);
-  }, [appliedJob?.state, appliedJob?.exit]);
-  // The apply has started (past its dry run, when it ran one).
-  const [told, setTold] = useState<string | null>(null);
-  useEffect(() => {
-    if (applied && inApply && told !== applied) {
-      setTold(applied);
-      onApplied?.(applied);
-    }
-  }, [applied, inApply]);
+  const inApply = applyRun.inApply;
 
   if (!verb) return <p className="muted">reading the {step.bin} manifest…</p>;
   const writeMark = writeMarkOf(verb, argv);
@@ -292,22 +282,16 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
   const phase = busy ? (inApply ? (appliedJob?.state === "done" ? 4 : 3) : 2) : stopped ? 2 : previewDone ? 3 : preview ? 2 : 1;
 
   const doPreview = async () => {
-    setError(null);
-    setApplied(null);
-    const r = isRead ? await readJob(argv) : await previewJob(argv);
-    if (!r.data) return setError(r.error);
-    if (r.error) setError(r.error);
-    setPreview({ id: r.data.id, argv: JSON.stringify(argv) });
+    applyRun.retry();
+    setPreviewOf(JSON.stringify(argv));
+    await (isRead ? previewRun.read(argv) : previewRun.preview(argv));
   };
   // After a clean preview of this very change, Apply applies that preview;
   // otherwise it is one job that runs the dry run first.
   const doApply = async () => {
-    setError(null);
     const fresh = previewDone && pj !== null && pj.kind === "preview";
-    const r = fresh ? await applyJob(preview!.id, destructive ? confirm : undefined) : await applyNowJob(argv, destructive ? confirm : undefined);
-    if (!r.data || r.status >= 400) return setError(r.error ?? `HTTP ${r.status}`);
-    if (!fresh) setPreview(null);
-    setApplied(r.data.id);
+    if (!fresh) previewRun.retry();
+    await (fresh ? applyRun.applyPreview(preview!.id, destructive ? confirm : undefined) : applyRun.apply(argv, destructive ? confirm : undefined));
   };
 
   return (

@@ -328,3 +328,37 @@ export function lastLines(raw: string, n = 8): string[] {
   const lines = raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").split("\n").map((l) => l.trimEnd()).filter((l) => l.trim() !== "");
   return lines.slice(-n);
 }
+
+// A job as a step reads it. checking: its dry run (or a preview) waits or
+// runs; applying: the job itself does (a read too); stopped: it was stopped,
+// or its dry run refused the change, so nothing went on after that.
+export type RunState = "idle" | "checking" | "applying" | "done" | "refused" | "stopped" | "failed";
+export interface RunJob {
+  kind: string;
+  state: string;
+  exit: number | null;
+  cancelled?: unknown;
+  refused?: string | null;
+  previewPhase?: { exit: number | null; stopped: string | null } | null;
+}
+export function jobRunState(j: RunJob | null): RunState {
+  if (!j) return "idle";
+  if (j.state === "refused") return "refused";
+  const pp = j.previewPhase;
+  if (j.state === "done") return pp?.stopped || j.cancelled ? "stopped" : j.exit === 0 ? "done" : "failed";
+  return j.kind === "preview" || (pp && pp.exit === null) ? "checking" : "applying";
+}
+
+// Past its dry run, if it has one: the change itself is under way or over.
+export function jobInApply(j: RunJob): boolean {
+  const pp = j.previewPhase;
+  return j.kind === "apply" && j.state !== "refused" && (!pp || (pp.exit !== null && !pp.stopped));
+}
+
+// Why a job did not go through, in a clause.
+export function runFailure(j: RunJob): string {
+  if (j.state === "refused") return j.refused ?? "refused";
+  if (j.previewPhase?.stopped) return j.previewPhase.stopped;
+  if (j.cancelled) return "the job was stopped";
+  return `the job ended with exit ${j.exit}`;
+}

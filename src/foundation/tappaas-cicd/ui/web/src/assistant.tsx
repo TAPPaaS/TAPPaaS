@@ -13,9 +13,10 @@
 // drawer stays open, with a line saying what was opened.
 
 import { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
-import { applyJob, get, previewJob, readJob, useJob } from "./api";
+import { get } from "./api";
 import { TargetValues, resolveTarget } from "./consoletargets";
 import { requestOpen } from "./opener";
+import { useJobRun } from "./run";
 import { Command, JobOutput, JobStatusLine } from "./jobs";
 import { AssistantStatus, Me } from "./types";
 import { canOperate, navigate, useMe } from "./ui";
@@ -152,13 +153,15 @@ async function streamChat(body: unknown, onEvent: (e: ChatEvent) => void, signal
 // ── a proposed job: Preview and Run through the job model ─────────────
 
 function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: string; me: Me | null }) {
-  const [preview, setPreview] = useState<string | null>(null);
-  const [applied, setApplied] = useState<string | null>(null);
+  const previewRun = useJobRun();
+  const applyRun = useJobRun();
   const [confirm, setConfirm] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState(false);
-  const pj = useJob(preview);
-  const aj = useJob(applied);
+  const preview = previewRun.id;
+  const applied = applyRun.id;
+  const pj = previewRun.job;
+  const aj = applyRun.job;
+  const error = applyRun.error ?? previewRun.error;
   const may = canOperate(me);
   const from = { conversation, proposal: p.id };
   const previewDone = pj !== null && pj.state === "done";
@@ -169,24 +172,10 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
 
   if (dismissed) return <div className="card-proposal card-dismissed muted small">Proposal dismissed: <code className="mono">{p.argv.join(" ")}</code></div>;
 
-  const doPreview = async () => {
-    setError(null);
-    const r = await previewJob(p.argv, from);
-    if (!r.data) return setError(r.error);
-    if (r.error) setError(r.error);
-    setPreview(r.data.id);
-  };
+  const doPreview = () => previewRun.preview(p.argv, from);
   const doRun = async () => {
-    setError(null);
-    if (p.read) {
-      const r = await readJob(p.argv, from);
-      if (!r.data) return setError(r.error);
-      return setPreview(r.data.id);
-    }
-    if (!preview) return;
-    const r = await applyJob(preview, p.destructive ? confirm : undefined);
-    if (!r.data || r.status >= 400) return setError(r.error ?? `HTTP ${r.status}`);
-    setApplied(r.data.id);
+    if (p.read) return previewRun.read(p.argv, from);
+    if (preview) await applyRun.applyPreview(preview, p.destructive ? confirm : undefined);
   };
 
   return (

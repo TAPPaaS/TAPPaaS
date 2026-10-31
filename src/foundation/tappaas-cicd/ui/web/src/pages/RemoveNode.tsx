@@ -9,14 +9,15 @@
 // script would otherwise ask for on a terminal); its result is shown here,
 // the output under a fold; 3 afterwards: what is true now, with links.
 
-import { useEffect, useState } from "react";
-import { applyNowJob, previewJob, reloadAll, useJob, useRead } from "../api";
+import { useEffect, useRef, useState } from "react";
+import { reloadAll, useRead } from "../api";
 import { JobOutput, JobStatusLine, phaseOutputs } from "../jobs";
 import { AssetChoice, ASSET_CHOICES, CheckOutcome, Finding, HOWS, How, RemovalOutcome, assetFor, assetTarget, checkArgv, parseCheck, parseRemoval, removeArgv, switchTarget } from "../noderemove";
 import { useOpenedBy, requestOpen } from "../opener";
+import { useJobRun } from "../run";
 import { JobSummary, SiteRead } from "../types";
 import { Link, Tag, canOperate, useMe } from "../ui";
-import { ResumeOffer, Wizard, jobLive, useJobSession, useReportJob } from "../wizard";
+import { ResumeOffer, Wizard, useJobSession } from "../wizard";
 import { StepRow } from "./Setup";
 
 export { HOWS } from "../noderemove";
@@ -137,28 +138,23 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
   job: string | null; setJob: (id: string | null) => void; resumed: boolean; onResult: (r: RemovalOutcome | null) => void;
 }) {
   const me = useMe();
-  const [check, setCheck] = useState<string | null>(null);
   const [round, setRound] = useState(0);
-  const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState("");
-  const [starting, setStarting] = useState(false);
-  const checkJob = useJob(check);
-  const applied = useJob(job);
-  useReportJob(jobLive(applied) ? applied : jobLive(checkJob) ? checkJob : null);
+  const checking = useJobRun();
+  const run = useJobRun({ attach: job, onDone: (ok, j) => {
+    onResult(ok ? parseRemoval(phaseOutputs(j).apply) : null);
+    if (ok) reloadAll();
+  } });
+  const checkJob = checking.job;
+  const applied = run.job;
 
   // The check, at once (and again on "Check again"); not for a removal found again.
+  const asked = useRef(-1);
   useEffect(() => {
-    if (resumed || job) return;
-    let gone = false;
-    setCheck(null);
-    void previewJob(checkArgv(node, how)).then((r) => {
-      if (gone) return;
-      if (!r.data) setError(r.error ?? "the check could not be started");
-      else setCheck(r.data.id);
-    });
-    return () => {
-      gone = true;
-    };
+    if (resumed || job || asked.current === round) return;
+    asked.current = round;
+    checking.retry();
+    void checking.preview(checkArgv(node, how));
   }, [node, how, round]);
 
   const outcome: CheckOutcome | null = checkJob
@@ -170,38 +166,28 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
   // The removal: its own dry run first (one job), then the apply.
   const phases = applied ? phaseOutputs(applied) : null;
   const stopped = !!applied?.previewPhase?.stopped;
-  const finished = applied !== null && (applied.state === "done" || applied.state === "refused");
-  const ok = finished && applied!.state === "done" && applied!.exit === 0 && !stopped;
+  const { finished, ok } = run;
   const result = applied && finished ? parseRemoval(phases?.apply ?? applied.output) : null;
+  // The wizard keeps the job: it holds the node, and a removal found again comes from there.
   useEffect(() => {
-    if (!finished) return;
-    onResult(ok ? result : null);
-    if (ok) reloadAll();
-  }, [finished, ok]);
+    if (run.id) setJob(run.id);
+    else if (job) run.attach(job);
+  }, [run.id, job]);
 
   const fate = assetFor(how, asset);
-  const canRemove = outcome?.state === "ok" && confirm === node && canOperate(me) && !job;
-  const doRemove = async () => {
-    setError(null);
-    setStarting(true);
-    try {
-      const r = await applyNowJob(removeArgv(node, how, fate), node);
-      if (!r.data || r.status >= 400) return setError(`The removal was not started: ${r.error ?? `HTTP ${r.status}`}`);
-      setJob(r.data.id);
-    } catch (e) {
-      setError(`The removal was not started: ${(e as Error).message}`);
-    } finally {
-      setStarting(false);
-    }
-  };
+  const canRemove = outcome?.state === "ok" && confirm === node && canOperate(me) && !run.id;
+  const starting = run.state === "starting";
+  const doRemove = () => run.apply(removeArgv(node, how, fate), node);
+  const error = checking.error ? `The check was not started: ${checking.error}` : run.error ? `The removal was not started: ${run.error}` : null;
   const retry = () => {
+    run.retry();
     setJob(null);
     onResult(null);
     setConfirm("");
     setRound((n) => n + 1);
   };
 
-  if (job) {
+  if (run.id) {
     if (!applied) return <p className="muted"><Tag level="skip" /> Starting the removal of {node}…</p>;
     return (
       <div className="step">
