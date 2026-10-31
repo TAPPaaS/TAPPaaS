@@ -1,7 +1,7 @@
 // cableroute.test.ts — the rack view's cables (web/src/physical/cableroute.ts):
 // one cubic curve port to port, leaving each port vertically (up from an upper
-// row and a panel's rear, down from a lower row, toward the other end from a
-// single row), pulled out further the farther the ends are apart, a bundle
+// row, down from a lower row, toward the other end from a single row and from
+// a patch panel's port, front or rear), pulled out further the farther the ends are apart, a bundle
 // between two devices fanning out, its label's place halfway along.
 
 import { PortAt, ROUTE, exitOf, routeCables } from "../../web/src/physical/cableroute";
@@ -20,9 +20,21 @@ const near = routeCables([{ a: at(300, 100), b: at(300, 160), device: ["a", "b"]
 const far = routeCables([{ a: at(300, 100), b: at(300, 700), device: ["a", "b"] }])[0];
 check(pull(near) < pull(far) && pull(near) >= ROUTE.pullMin && pull(far) <= ROUTE.pullMax, `the pull grows with the distance (${pull(near)} < ${pull(far)}), within its bounds`);
 // A two-row plate: the upper row leaves up, the lower row down, wherever the other end is.
-check(exitOf(row(300, 100, false), false, at(300, 500)) === -1 && exitOf(row(300, 100, true), false, at(300, 0)) === 1, "a two-row plate: the upper row up, the lower row down");
-// A patch panel's rear: up.
-check(exitOf(at(300, 200), true, at(300, 600)) === -1, "a patch panel port's rear wire leaves upward");
+check(exitOf(row(300, 100, false), undefined, at(300, 500)) === -1 && exitOf(row(300, 100, true), undefined, at(300, 0)) === 1, "a two-row plate: the upper row up, the lower row down");
+// A server's single-row port: toward the other end.
+check(exitOf(at(300, 200), undefined, at(300, 600)) === 1 && exitOf(at(300, 200), undefined, at(300, 20)) === -1, "a server port leaves toward the other end: down to one below, up to one above");
+// A patch panel's port, front or rear, in any row: toward the other end, never the long way round.
+check(exitOf(at(300, 200), "rear", at(300, 600)) === 1 && exitOf(at(300, 200), "rear", at(300, 20)) === -1, "a panel's rear wire leaves toward its other end: down to one below, up to one above");
+check(exitOf(at(300, 200), "front", at(300, 600)) === 1 && exitOf(at(300, 200), "front", at(300, 20)) === -1, "a panel's front wire leaves toward its other end: down to one below, up to one above");
+check(exitOf(row(300, 200, false), "rear", at(300, 600)) === 1 && exitOf(row(300, 200, true), "front", at(300, 20)) === -1, "a two-row panel: its upper row's wire to a port below leaves down, its lower row's to one above up");
+check(exitOf(at(300, 200), "rear", at(500, 214)) === -1 && exitOf(at(300, 200), "front", at(500, 214)) === 1, "a panel port level with its other end: the rear wire up, the front wire down");
+// Through a panel: switch above, panel, node below; each wire the short arc (both control points between the ends).
+const [up, down] = routeCables([
+  { a: at(300, 100), b: at(310, 300), sideB: "front", device: ["sw", "pp"] },
+  { a: at(310, 300), b: at(320, 600), sideA: "rear", device: ["pp", "node"] },
+]);
+const between = (x: { points: [number, number][] }) => x.points.every((q) => q[1] >= Math.min(x.points[0][1], x.points[3][1]) && q[1] <= Math.max(x.points[0][1], x.points[3][1]));
+check(between(up) && between(down), `a link through a panel: its front wire up to the switch, its rear wire down to the node, no loop (${up.d} | ${down.d})`);
 // A bundle between the same two devices fans out; another pair starts again.
 const bundle = routeCables([
   { a: at(300, 100), b: at(310, 400), device: ["sw", "n"] },
