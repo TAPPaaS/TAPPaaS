@@ -129,6 +129,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
   const [round, setRound] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [confirm, setConfirm] = useState("");
+  const [starting, setStarting] = useState(false);
   const checkJob = useJob(check);
   const applied = useJob(job);
   useReportJob(jobLive(applied) ? applied : jobLive(checkJob) ? checkJob : null);
@@ -170,9 +171,16 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
   const canRemove = outcome?.state === "ok" && confirm === node && canOperate(me) && !job;
   const doRemove = async () => {
     setError(null);
-    const r = await applyNowJob(removeArgv(node, how, fate), node);
-    if (!r.data || r.status >= 400) return setError(r.error ?? `HTTP ${r.status}`);
-    setJob(r.data.id);
+    setStarting(true);
+    try {
+      const r = await applyNowJob(removeArgv(node, how, fate), node);
+      if (!r.data || r.status >= 400) return setError(`The removal was not started: ${r.error ?? `HTTP ${r.status}`}`);
+      setJob(r.data.id);
+    } catch (e) {
+      setError(`The removal was not started: ${(e as Error).message}`);
+    } finally {
+      setStarting(false);
+    }
   };
   const retry = () => {
     setJob(null);
@@ -182,7 +190,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
   };
 
   if (job) {
-    if (!applied) return <p className="muted">starting the removal of {node}…</p>;
+    if (!applied) return <p className="muted"><Tag level="skip" /> Starting the removal of {node}…</p>;
     return (
       <div className="step">
         {!finished ? (
@@ -221,17 +229,21 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
             </div>
           </>
         )}
-        <details className="small">
-          <summary>What the removal printed</summary>
-          <Output text={applied.output} live={jobLive(applied)} />
-        </details>
+        {!finished ? (
+          <Output text={applied.output} live />
+        ) : (
+          <details className="small">
+            <summary>What the removal printed</summary>
+            <Output text={applied.output} />
+          </details>
+        )}
       </div>
     );
   }
 
   return (
     <div className="step">
-      {error ? <p className="readstate readstate-fail">{error}</p> : null}
+      {error && outcome?.state !== "ok" ? <p className="readstate readstate-fail">{error}</p> : null}
       {!outcome || outcome.state === "running" ? (
         <p className="muted">Checking whether {node} can be removed…</p>
       ) : outcome.state === "ok" ? (
@@ -285,9 +297,14 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
             <span>Type <b className="mono">{node}</b> to confirm</span>
             <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
           </label>
+          {error ? <p className="readstate readstate-fail">{error}</p> : null}
           <div className="actions">
-            <button className="btn btn-danger" disabled={!canRemove} onClick={() => void doRemove()}>Remove {node}</button>
-            {!canOperate(me) ? <span className="muted small">only an operator removes a node</span> : null}
+            <button className="btn btn-danger" disabled={!canRemove || starting} onClick={() => void doRemove()}>{starting ? `Starting…` : `Remove ${node}`}</button>
+            {!canOperate(me) ? (
+              <span className="muted small">only an operator removes a node</span>
+            ) : confirm !== node ? (
+              <span className="muted small">type {node} exactly to enable the button</span>
+            ) : null}
           </div>
         </div>
       ) : null}
