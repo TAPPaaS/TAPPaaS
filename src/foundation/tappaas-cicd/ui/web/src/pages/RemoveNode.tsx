@@ -37,6 +37,9 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
   // again (the node may be gone from the site by then: it is the job's).
   const [resumed, setResumed] = useState(false);
   const [declined, setDeclined] = useState(false);
+  // Step 1 is done when the operator says so: the node and the way are chosen
+  // together, and the check of step 2 runs on what was decided.
+  const [decided, setDecided] = useState(false);
   const session = useJobSession("site-manager", "node delete", (j) => j.kind === "apply", job === null && !declined);
   const restore = (j: JobSummary) => {
     setNode(j.argv[3] ?? "");
@@ -45,6 +48,7 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
     if (a === "keep" || a === "remove") setAsset(a);
     setJob(j.id);
     setResumed(true);
+    setDecided(true);
   };
   // Once a removal runs the node is the job's: it leaves the site's list.
   const chosen = nodes.includes(node) || resumed || job !== null ? node : "";
@@ -52,11 +56,11 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
   const removed = result !== null;
 
   const stages = [
-    { id: "node", title: "1 · The node, and how", required: true, done: chosen ? true : false, detail: "Which node leaves, and whether it is powered off first, wiped first, or already dead." },
+    { id: "node", title: "1 · The node, and how", required: true, done: chosen && decided ? true : false, detail: "Which node leaves, and whether it is powered off first, wiped first, or already dead." },
     { id: "remove", title: "2 · Remove it", required: true, done: removed ? true : false, detail: "The console checks what still needs the node and says where to move it; then, with the node's name typed, it is removed." },
     { id: "after", title: "3 · Afterwards", required: false, done: null, detail: "What is true now, and how to replace the machine." },
   ];
-  const current = !chosen ? "node" : !removed ? "remove" : "after";
+  const current = !chosen || !decided ? "node" : !removed ? "remove" : "after";
 
   return (
     <Wizard title="Remove a node" onClose={onClose} resumes>
@@ -67,7 +71,7 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
           <div className="form">
             <label className="form-row">
               <span>node *</span>
-              <select value={chosen} disabled={job !== null} onChange={(e) => setNode(e.target.value)}>
+              <select value={chosen} disabled={job !== null} onChange={(e) => { setNode(e.target.value); setDecided(false); }}>
                 <option value="">{nodes.length ? "— pick the node" : "— reading the nodes…"}</option>
                 {nodes.map((n) => (
                   <option key={n} value={n}>{n}</option>
@@ -78,15 +82,23 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
             </label>
             {HOWS.map((h) => (
               <label key={h.id} className="form-check">
-                <input type="radio" name="how" checked={how === h.id} disabled={job !== null} onChange={() => setHow(h.id)} />
+                <input type="radio" name="how" checked={how === h.id} disabled={job !== null} onChange={() => { setHow(h.id); setDecided(false); }} />
                 <span>{h.label}</span> <small className="muted">{h.detail}</small>
               </label>
             ))}
+            <div className="actions">
+              {decided && job === null ? (
+                <button className="btn" onClick={() => setDecided(false)}>Change</button>
+              ) : (
+                <button className="btn btn-primary" disabled={!chosen || job !== null} onClick={() => setDecided(true)}>Continue</button>
+              )}
+              {!chosen ? <span className="muted small">pick the node first</span> : null}
+            </div>
           </div>
         </StepRow>
         <StepRow s={stages[1]} open={current === "remove"}>
-          {!chosen ? (
-            <p className="muted small">Once the node is picked.</p>
+          {!chosen || !decided ? (
+            <p className="muted small">Once the node and the way are chosen.</p>
           ) : (
             <RemoveStep key={`${chosen}:${how}`} node={chosen} how={how} asset={asset} setAsset={setAsset} job={job} setJob={setJob} resumed={resumed} onResult={setResult} />
           )}
