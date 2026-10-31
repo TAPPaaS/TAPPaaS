@@ -3,7 +3,7 @@
 // an expansion and its fold, what the filters keep, a live patch.
 
 import { buildHealth, healthEgo, healthPath } from "../../src/health";
-import { BIG_GROUP, Card, EgoState, NO_FILTERS, boundsOf, egoCards, expand, fold, kept, keptRollup, patchEgo, patchPaths, patchRows, rollup, shapeOf, statusClass, viewFor, wrapRanks } from "../../web/src/healthgraph";
+import { BIG_GROUP, Card, EgoState, NO_FILTERS, boundsOf, egoCards, expand, fold, hubsOf, kept, keptRollup, patchEgo, patchPaths, patchRows, rollup, shapeOf, statusClass, viewFor, wrapRanks } from "../../web/src/healthgraph";
 import { HealthEgo, HealthPatch, HealthPath, TreeNode } from "../../web/src/types";
 import { check, done } from "./check";
 import { healthSite, relationTypes } from "./fake-cmdb";
@@ -108,5 +108,66 @@ check(rowsY.size > 1 && wide < 30 * 232 && tall > 176, "a wide rank wraps into r
 check(Math.min(1000 / wide, 600 / tall) > 2 * Math.min(1000 / (30 * 232), 600 / 176), "  and fits the canvas at more than twice the scale");
 check(fan.slice(1).every((b) => at(b.id).y > at("c").y + 62), "  every row below its parent");
 check(wrapRanks(fan.slice(0, 4), { width: 1000, height: 600 }, 22, 52).size === 0, "a narrow graph keeps dagre's places");
+
+// A hub's members stand as its own cluster: the environment "Rossen" as dagre
+// lays it out, five zones and an organisation in one rank above, 16 members below.
+const hubbed = hubsOf(one.cards, one.lines);
+check(hubbed.length === 3 && hubbed.find((h) => h.id === guests.id)?.up === false && hubbed.find((h) => h.id === up.id)?.members.join() === ids.cluster, "a hub knows its side and its members");
+check(hubsOf(twice.cards, twice.lines).flatMap((h) => h.members).filter((m) => m === ids["nc-svc"]).length === 1, "a neighbour by two relations belongs to one of them");
+
+const upper = [...Array.from({ length: 5 }, (_, i) => `z${i}`), "org"];
+const lower = Array.from({ length: 16 }, (_, i) => `m${i}`);
+const row0 = (names: string[], y: number, w = 232) => names.map((id, i) => ({ id, x: i * w, y, w: 210, h: 62 }));
+const env = (below: boolean): typeof fan => [
+  ...row0(upper, 0),
+  { id: "serves", x: 469, y: 127, w: 200, h: 36 },
+  { id: "owned", x: 1165, y: 127, w: 200, h: 36 },
+  { id: "c", x: 700, y: 228, w: 210, h: 62 },
+  ...(below ? [{ id: "members", x: 705, y: 355, w: 200, h: 36 }, ...row0(lower, 456).map((b) => ({ ...b, x: b.x - 1040 }))] : []),
+];
+const envHubs = (below: boolean) => [
+  { id: "serves", anchor: "c", up: true, members: upper.slice(0, 5) },
+  { id: "owned", anchor: "c", up: true, members: ["org"] },
+  ...(below ? [{ id: "members", anchor: "c", up: false, members: lower }] : []),
+];
+const pos = (b: typeof fan, m: Map<string, { x: number; y: number }>) => (id: string) => ({ ...b.find((x) => x.id === id)!, ...m.get(id) });
+const mid = (p: { x: number; w: number }) => p.x + p.w / 2;
+const clear = (b: typeof fan, m: Map<string, { x: number; y: number }>) => {
+  const all = b.map((x) => pos(b, m)(x.id));
+  return all.every((p, i) => all.slice(i + 1).every((q) => p.x + p.w <= q.x || q.x + q.w <= p.x || p.y + p.h <= q.y || q.y + q.h <= p.y));
+};
+
+const sparse = env(false);
+const roomy = wrapRanks(sparse, { width: 2400, height: 900 }, 22, 52, 1.25, envHubs(false));
+const p1 = pos(sparse, roomy);
+const zones = upper.slice(0, 5).map(p1);
+check(Math.abs(mid(p1("serves")) - (zones[0].x + zones[4].x + 210) / 2) < 1e-6 && mid(p1("org")) === mid(p1("owned")), "two hubs: each centred under its own");
+check(zones[4].x + 210 + 22 < p1("org").x && p1("serves").x + 200 < p1("owned").x, "  two separated clusters");
+check(p1("org").y === zones[0].y && p1("org").y + 62 < p1("owned").y, "  side by side, above their pills");
+check(p1("c").x === 700 && Math.abs((zones[0].x + p1("org").x + 210) / 2 - mid(p1("c"))) < 1e-6, "  and the selected card stays, centred under them");
+
+const full = env(true);
+const tight = wrapRanks(full, { width: 1000, height: 800 }, 22, 52, 1.25, envHubs(true));
+const p2 = pos(full, tight);
+const zs = upper.slice(0, 5).map(p2);
+check(new Set(zs.map((z) => z.y)).size > 1 && new Set(lower.map((id) => p2(id).y)).size > 1, "a wide cluster wraps within itself");
+check(Math.max(...zs.map((z) => z.x + 210)) < p2("org").x, "  and never across clusters");
+check(p2("org").y === Math.max(...zs.map((z) => z.y)) && p2("org").y < p2("owned").y, "  a short cluster sits on the row next to its pill");
+check(Math.abs(mid(p2("org")) - mid(p2("owned"))) < 1e-6 && Math.abs(mid(p2("serves")) - (Math.min(...zs.map((z) => z.x)) + Math.max(...zs.map((z) => z.x)) + 210) / 2) < 1e-6, "  each hub still centred on its own");
+check(p2("c").x === 700 && Math.max(...zs.map((z) => z.y)) < p2("serves").y && lower.every((id) => p2(id).y > p2("members").y), "  above stays above, below below");
+check(clear(full, tight), "  no two cards overlap");
+
+const oneHub = [{ id: "pill", x: 3410, y: 114, w: 200, h: 36 }, { id: "c", x: 3405, y: 0, w: 210, h: 62 }, ...Array.from({ length: 30 }, (_, i) => ({ id: `n${i}`, x: i * 232, y: 202, w: 210, h: 62 }))];
+const lone = [{ id: "pill", anchor: "c", up: false, members: oneHub.slice(2).map((b) => b.id) }];
+const same = (a: Map<string, { x: number; y: number }>, b: Map<string, { x: number; y: number }>) => a.size === b.size && [...a].every(([id, m]) => b.get(id)?.x === m.x && b.get(id)?.y === m.y);
+check(same(wrapRanks(oneHub, { width: 1000, height: 600 }, 22, 52, 1.25, lone), wrapRanks(oneHub, { width: 1000, height: 600 }, 22, 52)), "a single hub: today's places, wrapped");
+check(wrapRanks(oneHub.slice(0, 5), { width: 3000, height: 900 }, 22, 52, 1.25, [{ ...lone[0], members: ["n0", "n1", "n2"] }]).size === 0, "  and unwrapped");
+
+// Opening a member: its hubs hang from where it now stands, nothing overlaps.
+const opened = [...full, { id: "under", x: 300, y: 583, w: 200, h: 36 }, { id: "under2", x: 900, y: 583, w: 200, h: 36 }, ...row0(["u0", "u1"], 684), { id: "u2", x: 900, y: 684, w: 210, h: 62 }];
+const openHubs = [...envHubs(true), { id: "under", anchor: "m3", up: false, members: ["u0", "u1"] }, { id: "under2", anchor: "m3", up: false, members: ["u2"] }];
+const grown = wrapRanks(opened, { width: 1000, height: 800 }, 22, 52, 1.25, openHubs);
+const p3 = pos(opened, grown);
+check(clear(opened, grown) && p3("u0").y > p3("under").y && Math.abs((mid(p3("under")) + mid(p3("under2"))) / 2 - mid(p3("m3"))) < 120, "an opened member: its clusters under it, nothing overlapping");
 
 done("healthgraph");

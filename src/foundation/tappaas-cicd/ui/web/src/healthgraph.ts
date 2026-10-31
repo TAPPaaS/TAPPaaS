@@ -192,15 +192,39 @@ export function boundsOf(nodes: { position: { x: number; y: number }; data: { g:
   return { x: (left + right - width) / 2, y: (top + bottom - height) / 2, width, height };
 }
 
+// A pill and the cards it stands for. A neighbour by two relations belongs to
+// the first of its pills; the other keeps its line to it.
+export interface Hub {
+  id: string;
+  anchor: string;
+  up: boolean;
+  members: string[];
+}
+
+export function hubsOf(cards: Card[], lines: Line[]): Hub[] {
+  const seen = new Set<string>();
+  return cards.flatMap((c) => {
+    if (!c.group || !c.via) return [];
+    const up = c.group.side === "up";
+    const ends = lines.filter((l) => (up ? l.target === c.id : l.source === c.id)).map((l) => (up ? l.source : l.target));
+    const members = ends.filter((m) => !seen.has(m));
+    for (const m of members) seen.add(m);
+    return [{ id: c.id, anchor: c.via, up, members }];
+  });
+}
+
 // A wide rank wraps into rows. dagre puts every card of a rank on one line, so
 // an object with many neighbours lays out far wider than tall and the fit
 // shrinks it to a strip. Each rank is cut into rows of at most k cards, k the
 // one that lets the whole fit the canvas at the largest scale; a rank of k or
-// fewer keeps dagre's places, a wrapped one is centred where it stood. Returns
-// the cards that move, none when no wrap does better.
+// fewer keeps dagre's places, a wrapped one is centred where it stood. A hub's
+// members are a block of their own and wrap alone. Hubs on the same side of an
+// anchor stand side by side, each centred on its members, the lot centred on
+// the anchor; a lone hub keeps dagre's place. Returns the cards that move, none
+// when no wrap does better and no hubs share a side.
 export interface Placed { id: string; x: number; y: number; w: number; h: number }
 
-export function wrapRanks(boxes: Placed[], view: { width: number; height: number }, gapX: number, gapY: number, maxZoom = 1.25): Map<string, { x: number; y: number }> {
+export function wrapRanks(boxes: Placed[], view: { width: number; height: number }, gapX: number, gapY: number, maxZoom = 1.25, hubs: Hub[] = []): Map<string, { x: number; y: number }> {
   const moved = new Map<string, { x: number; y: number }>();
   if (!boxes.length || view.width <= 0 || view.height <= 0) return moved;
   const byRank = new Map<number, Placed[]>();
@@ -211,17 +235,37 @@ export function wrapRanks(boxes: Placed[], view: { width: number; height: number
   const ranks = [...byRank.entries()].sort((a, b) => a[0] - b[0]).map(([, r]) => [...r].sort((a, b) => a.x - b.x));
   const span = (r: Placed[]): number => Math.max(...r.map((b) => b.x + b.w)) - Math.min(...r.map((b) => b.x));
   const packed = (r: Placed[]): number => r.reduce((s, b) => s + b.w, 0) + gapX * (r.length - 1);
-  const rowsOf = (r: Placed[], k: number): Placed[][] => Array.from({ length: Math.ceil(r.length / k) }, (_, i) => r.slice(i * k, i * k + k));
+  const rowsOf = (r: Placed[], k: number): Placed[][] => (r.length > k ? Array.from({ length: Math.ceil(r.length / k) }, (_, i) => r.slice(i * k, i * k + k)) : [r]);
   const heightOf = (r: Placed[]): number => Math.max(...r.map((b) => b.h));
-  const widest = Math.max(...ranks.map((r) => r.length));
+
+  // What stands together: a hub's members on the rank next to it, and in each
+  // rank whatever no hub claims. Clusters keep twice the cards' gap between them.
+  const box = new Map(boxes.map((b) => [b.id, b]));
+  const rankOf = new Map(ranks.flatMap((r, i) => r.map((b) => [b.id, i] as const)));
+  const live = hubs.filter((h) => box.has(h.id) && box.has(h.anchor));
+  const own = new Map(live.map((h) => [h.id, h.members.flatMap((m) => box.get(m) ?? []).filter((b) => rankOf.get(b.id) === rankOf.get(h.id)! + (h.up ? -1 : 1)).sort((a, b) => a.x - b.x)]));
+  const sides = new Map<string, Hub[]>();
+  for (const h of live) sides.set(`${h.anchor}|${h.up}`, [...(sides.get(`${h.anchor}|${h.up}`) ?? []), h]);
+  const shared = (h: Hub): boolean => sides.get(`${h.anchor}|${h.up}`)!.length > 1;
+  const held = new Set([...live.map((h) => h.id), ...[...own.values()].flat().map((b) => b.id)]);
+  const blocks: { cards: Placed[]; tight: boolean }[][] = ranks.map((r) => (r.some((b) => !held.has(b.id)) ? [{ cards: r.filter((b) => !held.has(b.id)), tight: false }] : []));
+  for (const h of live) {
+    const cards = own.get(h.id)!;
+    if (cards.length) blocks[rankOf.get(cards[0].id)!].push({ cards, tight: shared(h) });
+  }
+  const sep = gapX * 2;
+  const widthOf = (b: { cards: Placed[]; tight: boolean }, k: number): number => (b.cards.length > k ? Math.max(...rowsOf(b.cards, k).map(packed)) : b.tight ? packed(b.cards) : span(b.cards));
+  const rowCount = (i: number, k: number): number => Math.max(1, ...blocks[i].map((b) => rowsOf(b.cards, k).length));
+
+  const widest = Math.max(1, ...blocks.flat().map((b) => b.cards.length));
   const size = (k: number): { w: number; h: number } => {
     let w = 0;
     let h = 0;
-    for (const r of ranks) {
-      const rows = r.length > k ? rowsOf(r, k) : [r];
-      w = Math.max(w, r.length > k ? Math.max(...rows.map(packed)) : span(r));
-      h += rows.length * heightOf(r) + (rows.length - 1) * gapX;
-    }
+    ranks.forEach((r, i) => {
+      const rows = rowCount(i, k);
+      w = Math.max(w, blocks[i].reduce((s, b) => s + widthOf(b, k) + sep, -sep));
+      h += rows * heightOf(r) + (rows - 1) * gapX;
+    });
     return { w, h: h + gapY * (ranks.length - 1) };
   };
   const scale = (k: number): number => {
@@ -230,26 +274,83 @@ export function wrapRanks(boxes: Placed[], view: { width: number; height: number
   };
   let best = widest;
   for (let k = widest - 1; k >= 1; k--) if (scale(k) > scale(best) * 1.05) best = k;
-  if (best === widest) return moved;
+  if (best === widest && !live.some(shared)) return moved;
+
   // Ranks top to bottom, each as tall as its rows; dagre's x where nothing wraps.
+  const tops: number[] = [];
   let y = Math.min(...boxes.map((b) => b.y));
-  for (const r of ranks) {
-    const rh = heightOf(r);
-    if (r.length <= best) {
-      for (const b of r) moved.set(b.id, { x: b.x, y: y + (rh - b.h) / 2 });
-      y += rh + gapY;
-      continue;
-    }
-    const mid = Math.min(...r.map((b) => b.x)) + span(r) / 2;
-    for (const row of rowsOf(r, best)) {
+  ranks.forEach((r, i) => {
+    tops.push(y);
+    y += rowCount(i, best) * (heightOf(r) + gapX) - gapX + gapY;
+  });
+  const put = (b: Placed, x: number, row: number): void => {
+    const i = rankOf.get(b.id)!;
+    const rh = heightOf(ranks[i]);
+    moved.set(b.id, { x, y: tops[i] + row * (rh + gapX) + (rh - b.h) / 2 });
+  };
+  // A block's rows; a short one sits on the rows nearest its hub.
+  const lay = (cards: Placed[], at: number | null, dx: number, up: boolean): void => {
+    if (!cards.length) return;
+    const rows = rowsOf(cards, best);
+    const skip = up ? rowCount(rankOf.get(cards[0].id)!, best) - rows.length : 0;
+    const mid = at ?? Math.min(...cards.map((b) => b.x)) + span(cards) / 2 + dx;
+    rows.forEach((row, i) => {
       let x = mid - packed(row) / 2;
       for (const b of row) {
-        moved.set(b.id, { x, y: y + (rh - b.h) / 2 });
+        put(b, at === null && rows.length === 1 ? b.x + dx : x, skip + i);
         x += b.w + gapX;
       }
-      y += rh + gapX;
+    });
+  };
+  for (const r of ranks) lay(r.filter((b) => !held.has(b.id)), null, 0, false);
+  // Anchors in the order they were opened: what a hub hangs from has its place.
+  for (const side of sides.values()) {
+    const { anchor, up } = side[0];
+    const a = box.get(anchor)!;
+    const ax = moved.get(anchor)?.x ?? a.x;
+    const dx = ax - a.x;
+    const edge = (h: Hub): number => (up ? rowCount(rankOf.get(h.id)!, best) - 1 : 0);
+    if (side.length === 1) {
+      const hub = box.get(side[0].id)!;
+      put(hub, hub.x + dx, edge(side[0]));
+      lay(own.get(side[0].id)!, null, dx, up);
+      continue;
     }
-    y += gapY - gapX;
+    const clusters = [...side].sort((p, q) => box.get(p.id)!.x - box.get(q.id)!.x).map((h) => {
+      const cards = own.get(h.id)!;
+      const hub = box.get(h.id)!;
+      return { h, hub, cards, w: Math.max(hub.w, cards.length ? widthOf({ cards, tight: true }, best) : 0) };
+    });
+    let x = ax + a.w / 2 - (clusters.reduce((s, c) => s + c.w + sep, -sep)) / 2;
+    for (const c of clusters) {
+      const mid = x + c.w / 2;
+      put(c.hub, mid - c.hub.w / 2, edge(c.h));
+      lay(c.cards, mid, 0, up);
+      x += c.w + sep;
+    }
+  }
+
+  // Clusters of two anchors can meet on a row: pushed apart, the selected card
+  // (the first anchor) stays, else the row keeps its middle.
+  const rows = new Map<number, { id: string; b: Placed }[]>();
+  for (const [id, m] of moved) {
+    const b = box.get(id)!;
+    const k = Math.round(m.y + b.h / 2);
+    rows.set(k, [...(rows.get(k) ?? []), { id, b }]);
+  }
+  for (const row of rows.values()) {
+    row.sort((p, q) => moved.get(p.id)!.x - moved.get(q.id)!.x);
+    let end = -Infinity;
+    const pushed = new Map<string, number>();
+    for (const { id, b } of row) {
+      const m = moved.get(id)!;
+      pushed.set(id, m.x < end ? end + gapX - m.x : 0);
+      end = m.x + pushed.get(id)! + b.w;
+      if (pushed.get(id)) moved.set(id, { ...m, x: m.x + pushed.get(id)! });
+    }
+    const last = pushed.get(row[row.length - 1].id)!;
+    const back = pushed.get(live[0]?.anchor) ?? last / 2;
+    if (back) for (const { id } of row) moved.set(id, { ...moved.get(id)!, x: moved.get(id)!.x - back });
   }
   return moved;
 }

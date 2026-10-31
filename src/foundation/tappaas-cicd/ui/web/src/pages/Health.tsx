@@ -8,7 +8,7 @@ import { Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow } from
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { get, useHealthStream } from "../api";
 import { GEdge, GNode, edgeTypes, layout, nodeTypes } from "../graph";
-import { Anchor, Card, EgoState, Filters, NO_FILTERS, boundsOf, egoCards, expand, fold, kept, patchEgo, patchPaths, rollup, shapeOf, statusClass, viewFor, wrapRanks } from "../healthgraph";
+import { Anchor, Card, EgoState, Filters, NO_FILTERS, boundsOf, egoCards, expand, fold, hubsOf, kept, patchEgo, patchPaths, rollup, shapeOf, statusClass, viewFor, wrapRanks } from "../healthgraph";
 import { ClassIcon, ModuleIcon } from "../moduleicon";
 import { HealthEgo, HealthPath, HealthPatch, HealthView } from "../types";
 import { ReadState, replacePath, when } from "../ui";
@@ -108,7 +108,7 @@ function Flow({ state, filters, pick, grow, toggleGroup, nonce }: FlowProps) {
     }));
     const edges: GEdge[] = lines.map((l) => ({ id: l.id, source: l.source, target: l.target, label: l.label ?? undefined, dashed: l.dashed, color: l.strong ? STRONG : THIN }));
     const laid = layout(nodes, edges, "TB", NODESEP, RANKSEP);
-    const moved = wrapRanks(laid.nodes.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y, w: n.data.g.w, h: n.data.g.h })), view, NODESEP, RANKSEP, MAX_ZOOM);
+    const moved = wrapRanks(laid.nodes.map((n) => ({ id: n.id, x: n.position.x, y: n.position.y, w: n.data.g.w, h: n.data.g.h })), view, NODESEP, RANKSEP, MAX_ZOOM, hubsOf(cards, lines));
     return moved.size ? { ...laid, nodes: laid.nodes.map((n) => ({ ...n, position: moved.get(n.id) ?? n.position })) } : laid;
     // eslint-disable-next-line
   }, [shape, view]);
