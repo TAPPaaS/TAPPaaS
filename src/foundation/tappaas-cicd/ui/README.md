@@ -80,8 +80,9 @@ headed by its name — a link to its row in the Site page's Locations — and it
 "the primary location"), around its
 rooms and, after them, what is at it placed nowhere (with no room: somewhere there) and a backup
 buddy or satellite that is there; each room of
-asset-manager's `config/positions.json` as an area with its racks and, beside them, the devices
-standing loose in it; each rack as a frame with its units numbered as the rack numbers them, each placed device as its
+asset-manager's `config/positions.json` as a box the size of what it holds, its racks and, beside them, the devices
+standing loose in it — the rooms with racks side by side across the location, the small rooms
+in columns beside them, each column no taller than the rack rooms; each rack as a frame with its units numbered as the rack numbers them, each placed device as its
 faceplate at its units and width with its ports' live state (link, LAG), the cabled ports
 underlined (a patch panel's rear-cabled ports overlined), the cables port to port — each one thin curve
 leaving its ports vertically (up from a plate's upper row, down from a lower row, toward the other end

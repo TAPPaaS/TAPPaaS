@@ -156,7 +156,7 @@ function PendingDrop({ L, d, drop }: { L: RackLayout; d: Dragged; drop: Drop }) 
     return (
       <g pointerEvents="none">
         <rect className="drop-pending" x={room.x} y={room.y} width={room.w} height={room.h} rx={10} />
-        <text x={room.x + room.w - 12} y={room.y + 22} textAnchor="end" className="rack-where">{d.device}: {d.from ? "moving here…" : "placing here…"}</text>
+        <text x={room.x + 12} y={room.y - 4} className="rack-where">{d.device}: {d.from ? "moving here…" : "placing here…"}</text>
       </g>
     );
   }

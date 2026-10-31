@@ -1,11 +1,12 @@
 // layout.ts — what the Physical, Device and Storage views select (the side
 // panel shows it), a switch port's far end in words, and where the Physical
 // view draws things: the locations one above the other, the primary first,
-// their rooms, racks and plates, and which rack unit or room a point of the
-// drawing falls on. Pure: the drawing (rack.tsx) and its tests use the same
+// each room as big as what it holds (the rooms with racks side by side, the
+// small ones in columns beside them), their racks and plates, and which rack
+// unit or room a point of the drawing falls on. Pure: the drawing (rack.tsx) and its tests use the same
 // numbers.
 
-import { LocationInfo, PlacementInfo, PositionsView, RackInfo, TopoOutside, TopoPort } from "../types";
+import { LocationInfo, PlacementInfo, PositionsView, RackInfo, RoomInfo, TopoOutside, TopoPort } from "../types";
 import { PortAt } from "./cableroute";
 import { DropTarget, rowOf, spanOf } from "./dragplace";
 import { Placed, portCells } from "./platelayout";
@@ -41,8 +42,8 @@ export function portLabel(p: TopoPort): string {
 // Geometry: one rack unit, the rails with their numbers, a 19in and a 10in
 // interior (wider than true scale, so a 12-port plate stays legible); from a
 // location's top to its rooms' (locHead), from a room's top to its racks'
-// (rackHead).
-export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, margin: 8, outsideW: 230, roomPad: 18, looseGap: 18, locPad: 14, locHead: 38, locGap: 18, rackHead: 76, roomGap: 40, nowhereW: 240 };
+// (rackHead) or, in a room with none, its plates' (roomHead).
+export const R = { u: 30, rail: 24, w19: 440, w10: 240, gap: 150, margin: 8, outsideW: 230, roomPad: 18, looseGap: 18, locPad: 14, locHead: 38, locGap: 18, rackHead: 76, roomHead: 34, roomGap: 40, stackGap: 14, roomMinW: 160, roomMinH: 64, nowhereW: 240 };
 
 export const inner = (r: RackInfo) => (r.width === "10in" ? R.w10 : R.w19);
 
@@ -90,6 +91,51 @@ export function locationHeading(loc: { name: string; displayName: string | null;
 
 const looseW = (m: PlacementInfo) => (m.width === "full" ? 320 : m.width === "half" ? 180 : 130);
 
+const looseH = (ms: PlacementInfo[]) => ms.reduce((h, m) => h + Math.max(1, m.height) * R.u + R.looseGap, ms.length ? -R.looseGap : 0);
+
+// A room's size, from what it holds: its racks side by side, then the column
+// of its loose plates; as wide as its title at least.
+export function roomSize(room: RoomInfo, racks: RackInfo[]): { w: number; h: number; head: number } {
+  const looseWidth = Math.max(0, ...room.loose.map(looseW));
+  const widths = [...racks.map((r) => inner(r) + 2 * R.rail), ...(looseWidth ? [looseWidth] : [])];
+  const head = racks.length ? R.rackHead : R.roomHead + (room.recorded ? 0 : 14);
+  const h = head + Math.max(looseH(room.loose), ...racks.map((r) => r.units * R.u), 0) + R.roomPad;
+  const w = widths.reduce((a, b) => a + b, 0) + R.gap * Math.max(0, widths.length - 1) + 2 * R.roomPad;
+  return { w: Math.max(w, R.roomMinW, 24 + (room.displayName ?? room.name).length * 9), h: Math.max(h, R.roomMinH), head };
+}
+
+// Where a location's rooms stand, from its top left: the rooms with racks side
+// by side, the others after them in columns no taller than that row (each at
+// least one room; with no rack room, each its own column). In the given order
+// within each group.
+export function arrangeRooms(rooms: { w: number; h: number; racks: boolean }[]): { at: { x: number; y: number }[]; w: number; h: number } {
+  const at = rooms.map(() => ({ x: 0, y: 0 }));
+  let x = 0;
+  let rowH = 0;
+  rooms.forEach((m, i) => {
+    if (!m.racks) return;
+    at[i] = { x, y: 0 };
+    x += m.w + R.roomGap;
+    rowH = Math.max(rowH, m.h);
+  });
+  let h = rowH;
+  let y = 0;
+  let colW = 0;
+  rooms.forEach((m, i) => {
+    if (m.racks) return;
+    if (y > 0 && y + m.h > rowH) {
+      x += colW + R.roomGap;
+      y = 0;
+      colW = 0;
+    }
+    at[i] = { x, y };
+    h = Math.max(h, y + m.h);
+    y += m.h + R.stackGap;
+    colW = Math.max(colW, m.w);
+  });
+  return { at, w: Math.max(0, x + colW - (colW ? 0 : R.roomGap)), h };
+}
+
 export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): RackLayout {
   const placed: Placed[] = [];
   const ports: RackLayout["ports"] = new Map();
@@ -129,15 +175,14 @@ export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): Rack
     }
     return iw + 2 * R.rail;
   };
-  // The devices loose in a room: a column of faceplates at (x, y); its size.
-  const drawLoose = (ms: PlacementInfo[], x: number, y0: number): { w: number; h: number } => {
+  // The devices loose in a room: a column of faceplates at (x, y).
+  const drawLoose = (ms: PlacementInfo[], x: number, y0: number): void => {
     let y = y0;
     for (const m of ms) {
       const h = Math.max(1, m.height) * R.u;
       placed.push({ device: m.device, kind: m.kind, plate: m.plate, box: { x, y, w: looseW(m), h }, up: m.up, title: m.label ? `${m.device} · ${m.label}` : m.device, sub: m.plate ? `${m.plate.vendor} ${m.plate.model}` : "no faceplate", rack: null });
       y += h + R.looseGap;
     }
-    return { w: Math.max(0, ...ms.map(looseW)), h: ms.length ? y - R.looseGap - y0 : 0 };
   };
   // Location by location, one above the other (the primary first), room by
   // room (a rack in no room below them, in no area).
@@ -151,35 +196,26 @@ export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): Rack
     const nowhere = loc.name ? nowhereAt(v, loc, outside) : [];
     if (!loc.name && !inLoc.length) continue;
     const roomY = y + R.locHead;
-    const top = roomY + R.rackHead;
-    const firstRoom = rooms.length;
-    let x = left + R.locPad;
-    let bottom = roomY;
-    for (const room of inLoc) {
-      let cx = x + R.roomPad;
-      for (const name of room.racks) {
-        const r = v.racks.find((c) => c.name === name);
-        if (!r) continue;
-        cx += drawRack(r, cx, top) + R.gap;
-        bottom = Math.max(bottom, top + r.units * R.u);
-      }
-      const l = drawLoose(room.loose, cx, top);
-      if (l.h) {
-        cx += l.w + R.gap;
-        bottom = Math.max(bottom, top + l.h);
-      }
-      const w = (cx === x + R.roomPad ? 200 : cx - R.gap - x - R.roomPad) + 2 * R.roomPad; // an empty room still shows
-      rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: room.recorded ? "" : "not recorded", recorded: room.recorded, x, y: roomY, w, h: 0 });
-      x += w + R.roomGap;
-    }
+    const held = inLoc.map((room) => room.racks.map((name) => v.racks.find((c) => c.name === name)).filter((r): r is RackInfo => !!r));
+    const sizes = inLoc.map((room, i) => ({ ...roomSize(room, held[i]), racks: held[i].length > 0 }));
+    const arranged = arrangeRooms(sizes);
+    inLoc.forEach((room, i) => {
+      const { w, h, head } = sizes[i];
+      const rx = left + R.locPad + arranged.at[i].x;
+      const ry = roomY + arranged.at[i].y;
+      let cx = rx + R.roomPad;
+      for (const r of held[i]) cx += drawRack(r, cx, ry + head) + R.gap;
+      drawLoose(room.loose, cx, ry + head);
+      rooms.push({ name: room.name, title: room.displayName ?? room.name, sub: room.recorded ? "" : "not recorded", recorded: room.recorded, x: rx, y: ry, w, h });
+    });
     // After the rooms (or in their place): what is here placed nowhere.
+    let x = left + R.locPad + (arranged.w ? arranged.w + R.roomGap : 0);
+    let bottom = roomY + arranged.h;
     const nowhereX = x;
     if (!inLoc.length || nowhere.length) {
       x += R.nowhereW + R.roomGap;
       bottom = Math.max(bottom, roomY + 34 + nowhere.length * 20);
     }
-    bottom += R.roomPad;
-    for (const room of rooms.slice(firstRoom)) room.h = bottom - room.y;
     let w = x - R.roomGap + R.locPad - left;
     if (loc.name) {
       const { title, sub } = locationHeading(loc);
