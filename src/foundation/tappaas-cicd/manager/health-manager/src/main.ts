@@ -13,7 +13,7 @@
 //   health-manager validate [--live] [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]
 //                            (special: ASSERTS the system is healthy — reads the
 //                             conditions; exit 1 on one that counts, ADR-041 D2)
-//   health-manager assess [--only <ci>] [--json] [--dry-run]
+//   health-manager assess [--only <ci>] [--json] [--dry-run] [--timing]
 //                            (writes the conditions; the only writer, ADR-041)
 //   health-manager rules list|check [--file F]
 //   health-manager update-os <name> <vmid> <node>        (special action; shells
@@ -51,7 +51,7 @@ import { HelpSpec, checkArgs, renderHelp } from "../../../lib/ts/src/help";
 import { CL, GN, RD, YW, die, guarded, info, preflightGuard, warn } from "../../../lib/ts/src/cli";
 import { CmdbRefused, CmdbReport, CmdbUnavailable, cmdbQuery, cmdbRelations, cmdbRequest } from "../../../lib/ts/src/cmdb";
 import { pruneRefused } from "../../../lib/ts/src/cmdb-reporter";
-import { AssessIO, AssessResult, assess } from "./assess";
+import { AssessIO, AssessResult, Timer, assess } from "./assess";
 import { CmdbItem, CmdbRel, SiteIndex } from "./assess-model";
 import { assessmentOf, readValidate } from "./assess-validate";
 import { readLastSweep } from "./cmdbsweep";
@@ -165,11 +165,12 @@ export const HELP: HelpSpec = {
     },
     // ── ADR-041 D2, D3: the assessing half ──
     {
-      usage: "assess [--only <ci>] [--json] [--dry-run] [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]", effect: "read",
+      usage: "assess [--only <ci>] [--json] [--dry-run] [--timing] [--threshold PCT] [--memory-threshold PCT] [--config-dir DIR]", effect: "read",
       options: [
         ["--only <ci>", "One object, by id or name: alerts, sweep, thresholds and the scan speak for it and no gate runs; impact and root causes are worked out again. The alert receiver's call."],
         ["--json", "Print the objects' conditions, the root causes and the transitions."],
         ["--dry-run", "Work it all out and write nothing."],
+        ["--timing", "Print each phase's duration on stderr as it ends: the CMDB reads, every gate, the alerts, sweep and scan, the working out and the write."],
         ["--threshold PCT", `Disk-usage threshold percent (default ${DEFAULT_THRESHOLD}).`],
         ["--memory-threshold PCT", `Committed-memory percent of a node's physical RAM (default ${DEFAULT_MEMORY_THRESHOLD}).`],
       ],
@@ -299,12 +300,13 @@ export function validateDoc(report: HealthReport, now: Date): Record<string, unk
   };
 }
 
-const gates = (opts: Opts, client: ClusterClient): HealthReport =>
+const gates = (opts: Opts, client: ClusterClient, timed?: Timer): HealthReport =>
   runHealthGates(client, {
     configDir: opts.configDir,
     defaultNode: DEFAULT_NODE,
     threshold: opts.threshold,
     memoryThreshold: opts.memoryThreshold,
+    ...(timed ? { timed: (g: string, ms: number) => timed(`gate ${g}`, ms) } : {}),
   });
 
 // ── ADR-041 D2, D3: assess, rules, validate as a read ─────────────────
@@ -328,14 +330,14 @@ function writeAssessment(report: CmdbReport): void {
   }
 }
 
-function assessIO(opts: Opts, client: ClusterClient): AssessIO {
+function assessIO(opts: Opts, client: ClusterClient, timed?: Timer): AssessIO {
   return {
     objects: () => cmdbQuery({ class: "object", limit: 100000 }) as unknown as CmdbItem[],
     ended: () => (cmdbQuery({ class: "ci", includeEnded: true, limit: 100000 }) as unknown as (CmdbItem & { ended?: string | null })[]).filter((o) => o.ended),
     relations: () => cmdbRelations({}) as unknown as CmdbRel[],
     rules: readRules,
     sweep: readLastSweep,
-    gates: () => gates(opts, client).checks,
+    gates: () => gates(opts, client, timed).checks,
     alerts: () => {
       const raw = fetchGrafanaAlerts(opts.configDir);
       return { open: raw ? openAlerts(raw, opts.configDir) : null, recent: recentEvents(ALERTS_LOG, opts.configDir, Date.now()) };
@@ -360,7 +362,13 @@ function cmdAssess(opts: Opts, client: ClusterClient): number {
     info("assess: the CMDB is off here (TAPPAAS_CMDB=off) — nothing to write");
     return 0;
   }
-  const r = assess(assessIO(opts, client), { only: val("--only"), dryRun: opts.rest.includes("--dry-run") }, new Date());
+  // --timing: each phase's duration on stderr, as it ends; stdout stays the result.
+  const t0 = Date.now();
+  const timed: Timer | undefined = opts.rest.includes("--timing")
+    ? (phase, ms) => process.stderr.write(`assess: ${String(ms).padStart(7)} ms  ${phase}\n`)
+    : undefined;
+  const r = assess(assessIO(opts, client, timed), { only: val("--only"), dryRun: opts.rest.includes("--dry-run"), timed }, new Date());
+  timed?.("total", Date.now() - t0);
   if (opts.rest.includes("--json")) {
     process.stdout.write(JSON.stringify({ time: r.time, objects: r.objects, rootCauses: r.rootCauses, transitions: r.transitions }, null, 1) + "\n");
     return 0;

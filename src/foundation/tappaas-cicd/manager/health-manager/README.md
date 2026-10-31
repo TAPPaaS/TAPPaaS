@@ -535,7 +535,7 @@ not a reply to the ALERT. Which events leave the site is the rule file's choice 
 
 ## Reports to the CMDB
 
-`health-manager assess [--only <ci>] [--json] [--dry-run]` (ADR-041 D2) is the
+`health-manager assess [--only <ci>] [--json] [--dry-run] [--timing]` (ADR-041 D2) is the
 calculating half, and the only writer of `conditions` on the CMDB's objects. It
 gathers what the sources say and writes everything in one report:
 
@@ -573,6 +573,15 @@ A condition is written in ADR-041 D1's shape, one per type per object:
   its `until`.
 - `--only <ci>` (the alert receiver's call) runs no gate: the other sources
   speak for that one object, and impact and root causes are worked out again.
+- `--timing` prints each phase's duration on stderr as it ends, so stdout (and
+  `--json`) stays the result: the CMDB reads (`cmdb objects`, `cmdb relations`,
+  `cmdb ended`), every gate on its own line (`gate <name>`) and `gates` for all of
+  them, `alerts`, `sweep`, `cve`, the working out (`thresholds`, `observations`,
+  `settle`, `derive`), `cmdb write` and `total`:
+
+  ```bash
+  health-manager assess --dry-run --timing 2>&1 >/dev/null | sort -k2 -n -r | head
+  ```
 - An assessment is no sighting: it writes by id, creates nothing, and neither
   holds off a CI's expiry nor brings an unseen one back. Its report is not
   spooled: conditions are now, and the next run writes them.
