@@ -4,7 +4,11 @@
 #   jq --argjson pos <positions.json or {}> --arg only <switch or ""> \
 #      --argjson ended '[<switch>…]' --arg source switch-manager \
 #      --arg kind observation|change --arg verb V --arg job J --arg actor A \
+#      [--argjson ports '["<port>"…]' | true] \
 #      -f cmdb-report.jq switch-configuration-actual.json
+#
+# In a change, the ports named in `ports` (true: every port) carry their
+# `vlans`: the verb set them, so the sweep finds them explained.
 #
 # Prints an array of reports. The first holds what switch-manager owns: each
 # switch as a `device` CI and its `network-device` asset (allocated-to the
@@ -43,6 +47,9 @@ def speedword:
     elif type == "number" then ({"100": "100m", "1000": "1g", "2500": "2.5g", "10000": "10g", "25000": "25g"}[tostring] // null)
     else (tostring | ascii_downcase | gsub("\\s"; "") | sub("(gbps|gbit|gb)$"; "g")) end;
 def speeds($kind): {rj45: ["1g", "2.5g", "10g"], sfp: ["1g", "10g", "25g"]}[$kind] // [];
+# A port's VLANs as the CMDB keeps them: mode, native, tagged (none: no key, so
+# an access port reads the same whether the controller says [] or nothing).
+def portvlans($v): {mode: $v.mode, native: $v.nativeVlan, tagged: (($v.taggedVlans // []) | if length > 0 then . else null end)} | nonull;
 def assetclass: {server: "server", switch: "network-device", "access-point": "network-device",
                  modem: "appliance", ont: "appliance", ups: "appliance",
                  "patch-panel": "passive-device", pdu: "passive-device"}[.] // "other-device";
@@ -58,6 +65,11 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
   def tag($sw): (record($sw; ["switch"]) // {key: $sw}).key;
   def pref($sw; $p): "port:\(tag($sw))/\($p)";
 
+  # The ports a change's verb set (add-port, update-port, remove-port; true:
+  # every port, confirm and reconcile --apply): their VLANs are the verb's, so
+  # the sweep finds them explained, not drifted.
+  (if $kind == "change" then ($ARGS.named.ports // []) else [] end) as $setPorts
+  | def setport($p): if $setPorts == true then true else ($setPorts | index($p)) != null end;
   (.switches // {}) as $sws
   | ($sws | keys | map(select($only == "" or . == $only))) as $names
 
@@ -93,7 +105,8 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
                            assignment: ($rows[$sw][$p] as $row
                              | if $row then ($row | del(.port))
                                  + {switch: $sw, actual: ($v | {lag, mlagId, liveMlagId, peerLink, bridged, disabled, bond} | nonull)}
-                               else null end)} | nonull)} )
+                               else null end),
+                           vlans: (if setport($p) then (portvlans($v) | if . == {} then null else . end) else null end)} | nonull)} )
     ] as $owned
   | ($owned | map(.ref)) as $refs
   | def have($r): ($refs | index($r)) != null;
@@ -169,7 +182,7 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
                 | .key as $p | .value as $v
                 | {class: "port", name: $p,
                    attributes: (({asset: {ref: "asset:\($tag)"}, link: $v.link, linkSpeed: linkspeed($v), poe: $v.poe, stp: $v.stp} | nonull)
-                     + {vlans: ({mode: $v.mode, native: $v.nativeVlan, tagged: $v.taggedVlans} | nonull),
+                     + {vlans: portvlans($v),
                         seen: [ ($v.neighbors // [])[] | {mac: (.mac | ascii_downcase), lldp: .lldp, lease: .lease} | nonull ]})} ) ],
           relations: [] } ]
     else [] end)

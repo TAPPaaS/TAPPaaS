@@ -81,6 +81,28 @@ ck "an undeclared VLAN, the switch's and a port's"  '[{"tag":410,"declared":fals
 ck "a declared VLAN says so"                        'true' "$(deep '.objects[] | select(.class == "device" and .name == "core") | .attributes.vlans[] | select(.tag == 200) | .declared')"
 ck "the switch's address, firmware and uptime"      '["10.0.0.201","7.1.66",864000]' "$(deep '.objects[] | select(.class == "device" and .name == "core") | .attributes | [.managementAddress, .firmware, .uptime]')"
 
+# ── a port a verb set: its VLANs are the verb's change, the sweep's alike ──
+# remove-port parks a port (an access port in the park zone); the change names
+# that port with its VLANs, so the sweep finds the change explained by the verb.
+jq '.switches.core.ports["2"] += {parked: true, zone: "iotLocal", mode: "access", nativeVlan: 410, taggedVlans: []}' "${FX}/actual.json" > "${TMP}/parked.json"
+parked() { # parked <kind> <verb> <ports-json> [discover]
+    local -a deep=(); [[ -n "${4:-}" ]] && deep=(--argjson discover true --argjson zones '{"iotLocal": {"vlantag": 410}}')
+    jq --argjson pos "$(cat "${FX}/positions.json")" --arg only core --argjson ended '[]' --arg source switch-manager \
+       --arg kind "$1" --arg verb "$2" --arg job "" --arg actor "" --argjson ports "$3" ${deep[@]+"${deep[@]}"} \
+       -f "${HERE}/cmdb-report.jq" "${TMP}/parked.json"
+}
+P="$(parked change "switch-manager remove-port" '["2"]')"
+ck "remove-port's change names the verb"           '"switch-manager remove-port"' "$(jq -c '.[0].verb' <<<"${P}")"
+ck "…and the parked port with its VLANs (no empty tagged)" '{"mode":"access","native":410}' \
+   "$(jq -c '.[0].objects[] | select(.ref == "port:sw-01/2") | .attributes.vlans' <<<"${P}")"
+ck "…no other port's VLANs"                        '["port:sw-01/2"]' "$(jq -c '[.[0].objects[] | select(.class == "port" and .attributes.vlans) | .ref]' <<<"${P}")"
+ck "…what the next sweep reads of it, the same"    "$(jq -c '.[0].objects[] | select(.ref == "port:sw-01/2") | .attributes.vlans' <<<"${P}")" \
+   "$(parked observation "" '[]' discover | jq -c '.[-1].objects[] | select(.class == "port" and .name == "2") | .attributes.vlans')"
+ck "an observation carries no port's VLANs in its first report" '0' \
+   "$(parked observation "" '["2"]' | jq -c '[.[0].objects[] | select(.class == "port" and .attributes.vlans)] | length')"
+ck "confirm (every port): each recorded port's VLANs" '6' \
+   "$(parked change "switch-manager confirm" 'true' | jq -c '[.[0].objects[] | select(.class == "port" and .attributes.vlans)] | length')"
+
 # ── lib/cmdb-report.sh: the job id, and each report sent on its own ──
 (
     # shellcheck source=../../lib/cmdb-report.sh
@@ -116,6 +138,14 @@ if [[ -r /home/tappaas/bin/common-install-routines.sh ]]; then
     ck "…and each switch's LAGs" '["bond0","lag-t1"]' "$(jq -c '[.[0].objects[] | select(.ref == "device:core") | .attributes.lags[].name]' <<<"${SENT}")"
     "${HERE}/switch-manager" modify-switch core --description "rack top" >/dev/null 2>&1
     ck "modify-switch reports a change with the console's job id" '"job-42"' "$(jq -sc 'map(select(.kind == "change")) | .[0].job' "${TMP}/sent.jsonl" 2>/dev/null)"
+    # remove-port: the stub CMDB records the verb and the parked port's VLANs.
+    echo '{"mgmt": {"state": "Manual", "vlantag": 0}, "srv": {"state": "Active", "vlantag": 200}, "iotLocal": {"state": "Active", "vlantag": 410}}' > "${TMP}/zones.json"
+    : > "${TMP}/sent.jsonl"
+    "${HERE}/switch-manager" remove-port core 2 >/dev/null 2>&1
+    ck "remove-port reports its change with the verb and the job" '["switch-manager remove-port","job-42"]' \
+       "$(jq -sc 'map(select(.kind == "change"))[0] | [.verb, .job]' "${TMP}/sent.jsonl" 2>/dev/null)"
+    ck "…naming the parked port with its VLANs" 'true' \
+       "$(jq -sc 'map(select(.kind == "change"))[0] | any(.objects[]; .ref == "port:sw-01/2" and (.attributes.vlans.mode != null))' "${TMP}/sent.jsonl" 2>/dev/null)"
 else
     echo "  SKIP: the CLI checks (switch-manager runs on tappaas-cicd only)"
 fi

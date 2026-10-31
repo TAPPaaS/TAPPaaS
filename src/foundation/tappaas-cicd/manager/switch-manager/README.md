@@ -157,6 +157,13 @@ console's job id (`TAPPAAS_JOB_ID`); a removed switch's device is ended. A
 report the CMDB cannot take is spooled by the `cmdb` CLI and never fails the
 verb. `TAPPAAS_CMDB=off` sends nothing. Tests: `./test-cmdb-report.sh`.
 
+A port a verb sets carries its `vlans` (`mode`, `native`, `tagged`) in that
+verb's change: the port `add-port`, `update-port` or `remove-port` names, and
+every port after `confirm` or `reconcile --apply`, which record them all. The
+sweep then finds a port's new VLANs explained by the verb: a port `remove-port`
+parks (as `node delete` does with a removed node's ports) is not drift. `vlans`
+is the same in a change and in `report --discover`; an empty `tagged` is left out.
+
 `report --discover` (ADR-040 D15) first reads the switches (`interrogate
 --no-park`: nothing is parked or changed) and adds a last report: every port, used
 or not, with `link`, `linkSpeed`, `poe`, `stp`, `vlans` and `seen` (each MAC behind

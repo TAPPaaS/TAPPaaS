@@ -943,10 +943,11 @@ cmd_list_ports() {
 
 # ── Reports to the CMDB (ADR-040 D4) ─────────────────────────────────
 
-# The reports cmdb-report.jq builds from actual: switch_reports <only> <ended-json> [<verb>]
-# (<only> "" is every switch; a verb makes it a change).
+# The reports cmdb-report.jq builds from actual: switch_reports <only> <ended-json> [<verb>] [<ports-json>]
+# (<only> "" is every switch; a verb makes it a change, and the ports it names
+# carry their VLANs in it: the verb set them).
 switch_reports() {
-    local only="$1" ended="$2" verb="${3:-}" pos='{}' head
+    local only="$1" ended="$2" verb="${3:-}" ports="${4:-[]}" pos='{}' head
     [[ -s "${POSITIONS}" ]] && pos="$(jq -c . "${POSITIONS}" 2>/dev/null || echo '{}')"
     if [[ -n "${verb}" ]]; then head="$(cmdb_change_head "${verb}")"; else head='{"kind":"observation"}'; fi
     local -a deep=()
@@ -958,7 +959,7 @@ switch_reports() {
     JSON=1 cmd_list_ports "" >"${rows}" 2>/dev/null || echo '[]' >"${rows}"
     JSON=1 cmd_lag list >"${lags}" 2>/dev/null || echo '[]' >"${lags}"
     jq --argjson pos "${pos}" --arg only "${only}" --argjson ended "${ended}" --arg source switch-manager \
-        --arg kind "$(jq -r .kind <<<"${head}")" --arg verb "${verb}" \
+        --arg kind "$(jq -r .kind <<<"${head}")" --arg verb "${verb}" --argjson ports "${ports}" \
         --arg job "$(jq -r '.job // ""' <<<"${head}")" --arg actor "$(jq -r '.actor // ""' <<<"${head}")" \
         --slurpfile rows "${rows}" --slurpfile lags "${lags}" \
         ${deep[@]+"${deep[@]}"} -f "${SCRIPT_DIR}/cmdb-report.jq" "${ACTUAL}" || rc=$?
@@ -982,12 +983,17 @@ cmd_report() {
     info "switch-manager: reported $(cmdb_report_count <<<"${reports}") to the CMDB"
 }
 
-# After a verb that changed a switch: switch_changed <verb> <switch|""> [ended]
-# Never fails the verb: the CMDB is a record.
+# After a verb that changed a switch: switch_changed <verb> <switch|""> [ended] [port|--all-ports]
+# A port the verb set (add-port, update-port, remove-port; --all-ports: confirm
+# and reconcile --apply, which record every port's VLANs) is reported with its
+# VLANs, so a parked port is the verb's change, not drift. Never fails the
+# verb: the CMDB is a record.
 switch_changed() {
-    local ended='[]'
+    local ended='[]' ports='[]'
     [[ -n "${3:-}" ]] && ended="$(jq -cn --arg n "$3" '[$n]')"
-    switch_reports "$2" "${ended}" "switch-manager $1" 2>/dev/null | cmdb_send_reports || true
+    if [[ "${4:-}" == --all-ports ]]; then ports=true
+    elif [[ -n "${4:-}" ]]; then ports="$(jq -cn --arg p "$4" '[$p]')"; fi
+    switch_reports "$2" "${ended}" "switch-manager $1" "${ports}" 2>/dev/null | cmdb_send_reports || true
 }
 
 # ── Controller selection ─────────────────────────────────────────────
@@ -1372,9 +1378,9 @@ main() {
         modify-switch)     cmd_modify_switch "$@"; switch_changed "${cmd}" "${1:-}" ;;
         validate)          cmd_validate ;;
         remove-switch)     cmd_remove_switch "${1:-}"; switch_changed "${cmd}" "${1:-}" "${1:-}" ;;
-        add-port)          cmd_add_port "$@"; switch_changed "${cmd}" "${1:-}" ;;
-        update-port)       cmd_update_port "$@"; switch_changed "${cmd}" "${1:-}" ;;
-        remove-port)       cmd_remove_port "${1:-}" "${2:-}"; switch_changed "${cmd}" "${1:-}" ;;
+        add-port)          cmd_add_port "$@"; switch_changed "${cmd}" "${1:-}" "" "${2:-}" ;;
+        update-port)       cmd_update_port "$@"; switch_changed "${cmd}" "${1:-}" "" "${2:-}" ;;
+        remove-port)       cmd_remove_port "${1:-}" "${2:-}"; switch_changed "${cmd}" "${1:-}" "" "${2:-}" ;;
         lag)               cmd_lag "$@"
                            [[ "${1:-}" == list ]] || switch_changed "lag ${1:-}" "${2:-}" ;;
         mlag-pair)         cmd_mlag_pair "$@"
@@ -1391,12 +1397,12 @@ main() {
         update-desired)    cmd_update_desired ;;
         delta)             cmd_delta ;;
         apply)             cmd_apply; switch_changed "${cmd}" "" ;;
-        confirm)           cmd_confirm "$@"; switch_changed "${cmd}" "" ;;
+        confirm)           cmd_confirm "$@"; switch_changed "${cmd}" "" "" --all-ports ;;
         reconcile)
             local apply=0 rrc=0
             [[ "${1:-}" == "--apply" ]] && apply=1
             cmd_reconcile "${apply}" || rrc=$?
-            if [[ "${apply}" == 1 ]]; then switch_changed "reconcile --apply" ""
+            if [[ "${apply}" == 1 ]]; then switch_changed "reconcile --apply" "" "" --all-ports
             else switch_reports "" '[]' 2>/dev/null | cmdb_send_reports || true; fi
             return "${rrc}"
             ;;
