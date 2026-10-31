@@ -69,6 +69,17 @@ function pure(): void {
   const s = healthSummary(g);
   check(s.available && s.counts.critical === 6 && s.counts.acknowledged === 3, "the counts: silenced apart");
   check(s.byType.capacity.status === "ok" && s.byType.capacity.items.length === 1 && s.byType.capacity.items[0].silenced, "an acknowledged capacity condition does not colour its type");
+  // Silenced is counted per condition: an ack beside an open condition on the
+  // same object counts, and the object keeps the colour of the open one.
+  const mixed = healthSite();
+  const gitea = mixed.objects.find((o) => o.id === mixed.ids.gitea)!;
+  gitea.attributes.conditions = [
+    ...(gitea.attributes.conditions as Condition[]),
+    { type: "drift", status: "critical", reason: "sweep-drift", acknowledged: { by: "lars", until: null } },
+  ];
+  const ms = healthSummary(graph(mixed));
+  check(ms.counts.acknowledged === 4, "an acknowledged condition beside an open one is silenced too");
+  check(ms.counts.warning === s.counts.warning && ms.counts.critical === s.counts.critical, "  and its object keeps the colour of the open one");
   check(s.attention[0].label === "tappaas2" && s.attention[0].root, "Attention starts with the root");
   check(!s.attention.some((a) => a.label === "immich" || a.label === "nextcloud"), "a symptom is not a line of its own");
   check(!healthSummary(null).available, "no graph: not available, a page keeps `health`");

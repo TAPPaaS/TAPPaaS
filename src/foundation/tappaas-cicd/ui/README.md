@@ -298,7 +298,7 @@ change is a job as ever, `health-manager ack|unack|maintenance`, taken from its 
 | `health/ego/<id>/path?to=root\|impact[&at=<time>]` | `{generated, at, id, to, nodes[], edges[]}`: the chain of the derivation, an edge `{id, type, provider, dependant, virtual}`, `virtual` when no relation shows the way |
 | `health/object/<id>` | the CI panel: `{id, class, ancestors, name, label, module, view, conditions[], drift, relations[], history[], changes[], rootCauses[], impacts[]}` |
 | `health/roots` | `{roots, from: "health-manager"\|"graph", error}`, `graph` being the console's own list |
-| `health/summary` | the worst per page: `{available, generated, site, counts, roots, byType{}, attention[]}`; `available` false: keep `health` |
+| `health/summary` | the worst per page: `{available, generated, site, counts, roots, byType{}, attention[]}`; `counts` the objects per colour, an object whose every failure is silenced in none, and `acknowledged` the silenced conditions, one by one (an acknowledged condition beside an open one on the same object counts); `available` false: keep `health` |
 | `health/stream` | server-sent events: `hello`, then `health` `{topology, relayout, generated, patches[], rollups{}, roots, counts, hasConditions}`, one read per burst of CMDB changes; `patches` the objects whose colour moved, `rollups` the tree nodes whose roll-up did; `relayout` true: an object or a relation changed, read again |
 
 `modules` and `modules/<m>` add `condition` to a module's summary (the worst of its node and the

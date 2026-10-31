@@ -764,6 +764,7 @@ export interface HealthRoot {
   environments: string[];
 }
 
+// `acknowledged`: the silenced conditions (acknowledged or in maintenance); the rest count objects.
 export type HealthCounts = Record<HealthStatus | "acknowledged", number>;
 
 export interface TreeRollup {
