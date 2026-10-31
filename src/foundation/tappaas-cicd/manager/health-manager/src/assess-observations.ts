@@ -8,6 +8,7 @@
 import { CmdbItem, SiteIndex } from "./assess-model";
 import { DAY, Finding, ok, timeOf } from "./assess-sources";
 import { ConditionStatus, ConditionType } from "../../../lib/ts/src/health-rules";
+import { TEMP_WARN, WEAR_FAIL } from "../../../lib/ts/src/smart";
 
 export const RESTORE_STALE_DAYS = 3;
 export const PEER_STALE_DAYS = 3;
@@ -22,10 +23,11 @@ export const OBSERVATION_REASONS = [
   "ssid-no-zone", "ssid-not-broadcast",
   "software-no-node", "software-node-unseen", "version-off-pin",
   "gc-failed", "restore-point-stale", "peer-stale", "share-consumer-gone",
+  "smart", "wear", "temperature", "zfs",
 ];
 
 const NODES = ["vm", "lxc", "machine", "device"];
-const ASSETS = new Set(["server", "network-device", "appliance", "passive-device", "other-device"]);
+const ASSETS = new Set(["server", "network-device", "appliance", "passive-device", "other-device", "disk"]);
 const SOFTWARE = new Set(["app", "service", "controller", "manager"]);
 // Their colour is their members' (derive.ts), or a judgement below.
 const NOT_LIFECYCLE = new Set(["port", "address", "dns-name", "proxy-route", "location", "room", "rack", "node", ...ASSETS, ...SOFTWARE]);
@@ -91,6 +93,64 @@ function judgePort(o: CmdbItem, idx: SiteIndex, cabled: Map<string, { speed: str
   const want = MBPS[cable.speed ?? ""] ?? (ends.length ? Math.min(...ends) : 0);
   if (!want) return;
   add(o, "operational", now < want ? "warning" : "ok", "link-slow", `${o.name}: ${text(a.linkSpeed)}${now < want ? `, the cable carries ${want} Mbit/s` : ""}`);
+}
+
+// A pool member's state ZFS calls a failed disk; DEGRADED is one with errors.
+const MEMBER_FAILED = ["FAULTED", "UNAVAIL", "REMOVED"];
+const serialKey = (s: unknown): string => text(s).toLowerCase().replace(/[\s-]+/g, "");
+
+// A disk (ADR-042 D5): Proxmox's health word, its state as a member of the
+// pools built on it, and the sweep's SMART, wear and temperature. Nothing
+// observed of it: no judgement, it follows its asset. The reason is the
+// cause storage-manager's inventory names: smart, zfs, wear, temperature.
+function judgeDisk(o: CmdbItem, idx: SiteIndex, add: Add): void {
+  const a = o.attributes;
+  const causes: { status: ConditionStatus; reason: string; text: string }[] = [];
+  const seen = { any: false };
+  const on = (status: ConditionStatus, reason: string, t: string): void => void causes.push({ status, reason, text: t });
+  const health = text(a.health).toUpperCase();
+  if (health) seen.any = true;
+  if (health === "FAILED") on("critical", "smart", "SMART health FAILED");
+  // Its member state in each pool built on it: by serial, else by the device
+  // path ZFS still names it by (a pulled disk keeps its by-id path there).
+  const sk = serialKey(a.serial);
+  for (const r of idx.relations) {
+    if (r.type !== "built-on" || r.to.id !== o.id) continue;
+    const pool = idx.byId.get(r.from.id);
+    if (!pool) continue;
+    for (const v of list(pool.attributes.vdevs)) {
+      for (const m of list(v.members)) {
+        const hit = sk && (serialKey(m.serial) === sk || (sk.length >= 6 && text(m.device).toLowerCase().replace(/-/g, "").includes(sk)));
+        const state = text(m.state).toUpperCase();
+        if (!hit || !state) continue;
+        seen.any = true;
+        if (MEMBER_FAILED.includes(state)) on("critical", "zfs", `ZFS ${state} in ${pool.name}`);
+        else if (state === "DEGRADED") on("warning", "zfs", `ZFS DEGRADED in ${pool.name} (errors)`);
+      }
+    }
+  }
+  const sm = (a.smart && typeof a.smart === "object" ? a.smart : {}) as Record<string, unknown>;
+  const n = (k: string): number => (typeof sm[k] === "number" ? (sm[k] as number) : 0);
+  if (Object.keys(sm).length) seen.any = true;
+  const sectors = [n("reallocated") ? `${n("reallocated")} reallocated` : "", n("pending") ? `${n("pending")} pending` : "", n("uncorrectable") ? `${n("uncorrectable")} uncorrectable` : ""].filter(Boolean);
+  if (sectors.length) on("warning", "smart", `SMART: ${sectors.join(", ")} sectors`);
+  if (n("mediaErrors")) on("warning", "smart", `SMART: ${n("mediaErrors")} media errors`);
+  if (n("criticalWarning")) on("warning", "smart", `SMART: NVMe critical warning 0x${n("criticalWarning").toString(16)}`);
+  if (typeof a.wearout === "number") {
+    seen.any = true;
+    if (a.wearout < WEAR_FAIL) on("warning", "wear", `${a.wearout}% of its rated life left`);
+  }
+  if (typeof a.temperature === "number") {
+    seen.any = true;
+    const kind = text(a.kind);
+    const limit = TEMP_WARN[kind === "hdd" || kind === "ssd" || kind === "nvme" ? kind : "unknown"];
+    if (a.temperature >= limit) on("warning", "temperature", `${a.temperature}°C (warns at ${limit}°C)`);
+  }
+  if (!seen.any) return;
+  const label = `${o.name}${typeof a.displayName === "string" && a.displayName ? ` (${a.displayName})` : ""}`;
+  const worst = causes.find((c) => c.status === "critical") ?? causes[0];
+  if (!worst) return add(o, "operational", "ok", "ok", `${label}: ${health ? `health ${health}` : "healthy"}`);
+  add(o, "operational", worst.status, worst.reason, `${label}: ${[...causes.filter((c) => c === worst), ...causes.filter((c) => c !== worst)].map((c) => c.text).join("; ")}`);
 }
 
 function judgeAddress(o: CmdbItem, h: ReturnType<typeof holdersOf>, macs: Set<string>, nowMs: number, add: Add): void {
@@ -208,6 +268,7 @@ export function fromObservations(idx: SiteIndex, ended: CmdbItem[], nowMs: numbe
   judgeZones(idx, add);
   for (const o of idx.objects) {
     const a = o.attributes;
+    if (o.class === "disk") judgeDisk(o, idx, add);
     if (o.class === "port") judgePort(o, idx, cabled, add);
     else if (o.class === "address") judgeAddress(o, holders, macs, nowMs, add);
     else if (o.class === "dns-name") judgeDns(o, idx, holders, add);

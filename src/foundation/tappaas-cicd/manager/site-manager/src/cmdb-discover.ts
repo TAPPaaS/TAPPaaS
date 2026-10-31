@@ -7,16 +7,20 @@
 //
 // A NIC is a `port` of the node's asset when the machine is allocated to one
 // (positions.json: the asset whose role is the node); a port cannot exist
-// without an asset, and a sweep never invents one (D15). Disks are no CIs yet
-// (O4): `nics[]` and `disks[]` are attributes of that server, else of the
-// machine, so nothing is lost.
+// without an asset, and a sweep never invents one (D15). `nics[]` and
+// `disks[]` are attributes of that server, else of the machine, so nothing is
+// lost. A disk an asset records in that server (asset-manager, by serial) is
+// a `disk` CI besides: what the node says of it — Proxmox's health, what it
+// holds — every report, its SMART only here; and each pool is `built-on` its
+// member disks, a mirror's or raidz's members one redundancy group (ADR-042).
 
 import { join } from "path";
-import { CmdbObject } from "../../../lib/ts/src/cmdb";
+import { CmdbObject, CmdbRelation } from "../../../lib/ts/src/cmdb";
 import { compact } from "../../../lib/ts/src/cmdb-source";
 import { parseProbeSections } from "../../../lib/ts/src/cluster";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
-import { POSITIONS_FILE, PositionsDoc, assetNamed } from "../../../lib/ts/src/positions";
+import { POSITIONS_FILE, PositionsDoc, assetNamed, disksIn, serialKey } from "../../../lib/ts/src/positions";
+import { parseSmart } from "../../../lib/ts/src/smart";
 
 type Obj = Record<string, unknown>;
 
@@ -43,14 +47,20 @@ export interface Partition {
 export interface Disk {
   name: string; // the /dev/disk/by-id name, else the device
   device: string;
+  vendor?: string;
   model?: string;
   serial?: string;
+  wwn?: string;
   size?: number;
   type?: string; // ssd, hdd, nvme, usb
   bus?: string;
   health?: string;
   holds: string; // what the whole disk holds, when it has no partitions
   partitions: Partition[];
+  // --discover only (the sweep): its SMART
+  wearout?: number; // % of rated life left
+  temperature?: number; // °C
+  smart?: { reallocated?: number; pending?: number; uncorrectable?: number; mediaErrors?: number; criticalWarning?: number; powerOnHours?: number };
 }
 
 export interface Vdev {
@@ -79,6 +89,37 @@ export interface NodeDiscovery {
   pci: Obj[];
 }
 
+// The disks and pools of a node: what every report reads (no SMART: Proxmox's
+// health word comes with the disk list) and the sweep with it.
+function storageReads(node: string): string[] {
+  return [
+    `sec disks pvesh get /nodes/${node}/disks/list --output-format json`,
+    "sec lsblk lsblk -J -b -o NAME,PATH,TYPE,SIZE,FSTYPE,LABEL,PARTTYPENAME,TRAN,MOUNTPOINTS",
+    "sec zpool-list zpool list -Hp -o name,size,alloc,free,frag,cap,dedup,health",
+    "sec zpool-status zpool status -L -P -p",
+    "sec zfs-root zfs list -Hp -d 0 -o name,used,avail",
+  ];
+}
+
+/** The 5-minute report's read of a node's disks and pools (one ssh, its
+ *  sections lib/ts cluster.ts's shape). */
+export function nodeStorageProbe(node: string): string {
+  return ['sec() { n="$1"; shift; echo "@@section $n"; "$@"; r=$?; echo; echo "@@rc $r"; }', ...storageReads(node), "true"].join("\n");
+}
+
+export interface NodeStorage {
+  disks: Disk[];
+  pools: ZPool[];
+}
+
+/** nodeStorageProbe's stdout → the node's disks and pools. */
+export function parseNodeStorage(stdout: string): NodeStorage {
+  const s = parseProbeSections(stdout);
+  const ok = (n: string): string | undefined => (s[n] && s[n].rc === 0 ? s[n].out : undefined);
+  const disks = parseDisks(ok("disks"), ok("lsblk"));
+  return { disks, pools: parseZPools(ok("zpool-status"), ok("zpool-list"), ok("zfs-root"), disks) };
+}
+
 /** One ssh's reads of <node>, each a `@@section` (lib/ts cluster.ts's shape). */
 export function nodeDiscoveryProbe(node: string): string {
   return [
@@ -103,11 +144,9 @@ export function nodeDiscoveryProbe(node: string): string {
 }`,
     `sec status pvesh get /nodes/${node}/status --output-format json`,
     "sec nics nics",
-    `sec disks pvesh get /nodes/${node}/disks/list --output-format json`,
-    "sec lsblk lsblk -J -b -o NAME,PATH,TYPE,SIZE,FSTYPE,LABEL,PARTTYPENAME,TRAN,MOUNTPOINTS",
-    "sec zpool-list zpool list -Hp -o name,size,alloc,free,frag,cap,dedup,health",
-    "sec zpool-status zpool status -L -P -p",
-    "sec zfs-root zfs list -Hp -d 0 -o name,used,avail",
+    ...storageReads(node),
+    // SMART, once a day (the sweep): attributes, temperature, wear.
+    `for d in $(lsblk -dnp -o NAME,TYPE | awk '$2=="disk" && $1 ~ /^\\/dev\\/(sd|nvme|hd|vd)/ {print $1}'); do sec "smart $d" pvesh get /nodes/${node}/disks/smart --disk "$d" --output-format json; done`,
     `sec storage pvesh get /nodes/${node}/storage --output-format json`,
     `sec pci pvesh get /nodes/${node}/hardware/pci --output-format json`,
     "true",
@@ -218,8 +257,10 @@ export function parseDisks(listText: string | undefined, lsblkText: string | und
       compact({
         name: byId && byId !== "n/a" ? stableById(byId) : device,
         device,
+        vendor: str(r.vendor)?.trim() || undefined,
         model: str(r.model),
         serial: str(r.serial),
+        wwn: str(r.wwn) && r.wwn !== "unknown" ? str(r.wwn) : undefined,
         size: num(r.size),
         type: str(r.type),
         bus: b ? str(b.tran) : undefined,
@@ -299,6 +340,20 @@ export function parseNodeDiscovery(stdout: string): NodeDiscovery {
   const cpu = (st?.cpuinfo ?? {}) as Obj;
   const mem = (st?.memory ?? {}) as Obj;
   const disks = parseDisks(ok("disks"), ok("lsblk"));
+  // The sweep's SMART, on each disk it was read for; wear from the disk list.
+  const rows = json(ok("disks"));
+  for (const d of disks) {
+    const row = (Array.isArray(rows) ? (rows as Obj[]) : []).find((r) => r.devpath === d.device);
+    const wear = num(row?.wearout);
+    if (wear !== undefined) d.wearout = wear;
+    const doc = json(ok(`smart ${d.device}`));
+    if (!doc || typeof doc !== "object") continue;
+    const sm = parseSmart(doc as Obj);
+    if (sm.temperature !== null) d.temperature = sm.temperature;
+    const attrs = compact({ reallocated: sm.reallocated, pending: sm.pending, uncorrectable: sm.uncorrectable, mediaErrors: sm.mediaErrors, criticalWarning: sm.criticalWarning, powerOnHours: sm.powerOnHours });
+    if (Object.keys(attrs).length) d.smart = attrs as Disk["smart"];
+    if (!d.health && sm.health !== "unknown") d.health = sm.health.toUpperCase();
+  }
   const list = (n: string): Obj[] => {
     const v = json(ok(n));
     return Array.isArray(v) ? (v as Obj[]) : [];
@@ -330,9 +385,72 @@ export function parseCorosync(text: string): Obj[] {
   return out;
 }
 
+// The members of a vdev that may fail without the pool: a log, cache or spare
+// device; a special vdev holds the pool's metadata, as needed as its data.
+const OPTIONAL_GROUPS = ["logs", "cache", "spares"];
+const REDUNDANT = /^(mirror|raidz\d?|draid\d?)(-|:|$)/;
+
+/** The disk CIs of a node's server and its pools' `built-on` relations
+ *  (ADR-042 D3): a disk the server's asset records (by serial) is reported
+ *  with what the node says of it — health, holds, partitions, and with
+ *  `full` (the sweep) its SMART; each pool member on one is `built-on` it,
+ *  the members of a mirror or raidz vdev with redundancyGroup
+ *  <node>:<pool>:<vdev>, a log, cache or spare member required false. A
+ *  recorded disk found in no pool loses any built-on it had here. The pools
+ *  are reported too (their state, size and layout), with refs. */
+export function diskObjects(doc: PositionsDoc, machine: string, machineRef: string, storage: NodeStorage, full: boolean, withServer: boolean): { objects: CmdbObject[]; relations: CmdbRelation[] } {
+  const objects: CmdbObject[] = [];
+  const relations: CmdbRelation[] = [];
+  const hit = assetNamed(doc, machine);
+  const server = hit && hit.asset.kind === "server" ? hit : null;
+  const poolRef = (p: string): string => `pool/${machine}/${p}`;
+  for (const p of storage.pools) {
+    objects.push({ ref: poolRef(p.name), class: "storage-pool", name: p.name, attributes: compact({ type: "zfs", size: p.size, used: p.used, zfsState: p.state, vdevs: p.vdevs, onNode: { ref: machineRef } }) });
+  }
+  if (!server) return { objects, relations };
+  const serverRef = `server/${server.key}`;
+  if (withServer) objects.push({ ref: serverRef, class: "server", name: server.key });
+  const recorded = new Map(disksIn(doc, server.key).filter((x) => x.asset.serial).map((x) => [serialKey(x.asset.serial), x.key]));
+  const refOf = new Map<string, string>(); // serialKey → the disk's ref
+  for (const d of storage.disks) {
+    const key = d.serial ? recorded.get(serialKey(d.serial)) : undefined;
+    if (!key) continue;
+    const ref = `disk/${key}`;
+    refOf.set(serialKey(d.serial), ref);
+    objects.push({
+      ref,
+      class: "disk",
+      name: key,
+      attributes: compact({
+        asset: { ref: serverRef },
+        health: d.health,
+        holds: d.holds,
+        partitions: d.partitions,
+        ...(full ? { wearout: d.wearout, temperature: d.temperature, smart: d.smart } : {}),
+      }),
+    });
+  }
+  for (const p of storage.pools) {
+    const members = new Set<string>();
+    for (const v of p.vdevs) {
+      const optional = v.group !== undefined && OPTIONAL_GROUPS.includes(v.group);
+      const group = !optional && REDUNDANT.test(v.name) && v.members.length > 1 ? `${machine}:${p.name}:${v.name}` : null;
+      for (const m of v.members) {
+        const ref = m.serial ? refOf.get(serialKey(m.serial)) : undefined;
+        if (!ref || members.has(ref)) continue;
+        members.add(ref);
+        relations.push({ type: "built-on", from: { ref: poolRef(p.name) }, to: { ref }, attributes: { redundancyGroup: group, required: optional ? false : null } });
+      }
+    }
+    for (const ref of refOf.values()) if (!members.has(ref)) relations.push({ type: "built-on", from: { ref: poolRef(p.name) }, to: { ref }, end: true });
+  }
+  return { objects, relations };
+}
+
 /** What the machine's discovery adds to the report: where nics[] and disks[]
- *  go (the server, else `attrs`, the machine's own), the ports, the pools. */
-export function discoveryObjects(configDir: string, machine: string, machineRef: string, d: NodeDiscovery, attrs: Obj): CmdbObject[] {
+ *  go (the server, else `attrs`, the machine's own), the ports, the pools,
+ *  the disk CIs and what the pools are built on. */
+export function discoveryReport(configDir: string, machine: string, machineRef: string, d: NodeDiscovery, attrs: Obj): { objects: CmdbObject[]; relations: CmdbRelation[] } {
   const doc = (readJsonObject(join(configDir, POSITIONS_FILE)) ?? {}) as unknown as PositionsDoc;
   const hit = assetNamed(doc, machine);
   const server = hit && hit.asset.kind === "server" ? hit : null;
@@ -355,12 +473,14 @@ export function discoveryObjects(configDir: string, machine: string, machineRef:
       objects.push({ class: "port", name: known?.name ?? n.name, attributes });
     }
   } else Object.assign(attrs, own);
-  for (const p of d.pools) {
-    objects.push({
-      class: "storage-pool",
-      name: p.name, // its key is the name on its node, as storage-manager reports it
-      attributes: compact({ type: "zfs", size: p.size, used: p.used, zfsState: p.state, vdevs: p.vdevs, onNode: { ref: machineRef } }),
-    });
-  }
-  return objects;
+  // The pools (each by its name on its node, as storage-manager reports it),
+  // the disk CIs and their built-on relations.
+  const st = diskObjects(doc, machine, machineRef, { disks: d.disks, pools: d.pools }, true, false);
+  return { objects: [...objects, ...st.objects], relations: st.relations };
+}
+
+/** The 5-minute report's disks and pools of a node (no SMART). */
+export function storageReport(configDir: string, machine: string, machineRef: string, storage: NodeStorage): { objects: CmdbObject[]; relations: CmdbRelation[] } {
+  const doc = (readJsonObject(join(configDir, POSITIONS_FILE)) ?? {}) as unknown as PositionsDoc;
+  return diskObjects(doc, machine, machineRef, storage, false, true);
 }

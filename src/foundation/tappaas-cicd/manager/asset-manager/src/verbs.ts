@@ -12,7 +12,13 @@ import {
   AssetPortKind,
   AssetStage,
   DATE_RE,
+  DISK_KINDS,
   DISPOSAL_HOWS,
+  DiskKind,
+  DiskRecord,
+  assetWithSerial,
+  disksIn,
+  parseSize,
   DeviceKind,
   Disposal,
   OWNERSHIPS,
@@ -202,6 +208,8 @@ export function deleteRack(doc: PositionsDoc, name: string): Result {
 // ── mounts ────────────────────────────────────────────────────────────
 
 export interface PlaceSpec {
+  in?: string; // a disk into this asset (ADR-042 D1)
+  bay?: string;
   rack?: string;
   u?: number;
   room?: string; // loose in this room: no rack, no unit
@@ -218,9 +226,11 @@ export interface PlaceSpec {
 // height defaults to its faceplate's.
 export function placeDevice(doc: PositionsDoc, name: string, spec: PlaceSpec, catalog: Faceplate[], primary?: string | null): Result {
   if (!name.trim()) return { refused: "place <device>: the device's topology name, or an asset's" };
+  if (spec.in !== undefined) return placeDisk(doc, name, spec.in, spec.bay);
   // An asset is placed under the name it plays.
   const device = placementName(doc, name);
   const asset = assetNamed(doc, device);
+  if (asset?.asset.kind === "disk") return { refused: `${asset.key} is a disk: it is placed in an asset (place ${asset.key} --in <asset> [--bay <bay>])` };
   if (asset && (asset.asset.stage === "ordered" || asset.asset.stage === "disposed")) return { refused: `asset ${asset.key} is ${asset.asset.stage}: ${asset.asset.stage === "ordered" ? `asset receive ${asset.key} first` : "it is not here"}` };
   const r = placeAt(doc, device, spec, catalog, primary);
   if ("refused" in r || !asset) return r;
@@ -264,6 +274,7 @@ const PLACEMENT_FIELDS = ["rack", "u", "room", "height", "width", "slot", "face"
 export function modifyPlacement(doc: PositionsDoc, name: string, sets: Array<[string, string]>, catalog: Faceplate[]): Result {
   const device = placementName(doc, name);
   if (!placementsOf(doc)[device]) return { refused: `${device} is placed nowhere (place ${device} …)` };
+  if (placementsOf(doc)[device].in !== undefined) return { refused: `${device} is a disk in ${placementsOf(doc)[device].in}: place ${device} --in <asset> [--bay <bay>] moves it` };
   let refused: string | null = null;
   const next = withDoc(doc, (d) => {
     const m = d.placements[device];
@@ -340,7 +351,7 @@ export function unplaceDevice(doc: PositionsDoc, name: string, passive: boolean)
       if (asset && d.assets[asset.key].stage === "placed") d.assets[asset.key].stage = "stock";
     }),
     act: "remove",
-    what: `placement of '${device}' from ${was.rack ? `${was.rack} U${was.u}` : `room ${was.room}`}${dropped ? ` (and its ${dropped} recorded cable(s))` : ""}`,
+    what: `placement of '${device}' from ${was.in !== undefined ? placeWhere(was).slice(3) : was.rack ? `${was.rack} U${was.u}` : `room ${was.room}`}${dropped ? ` (and its ${dropped} recorded cable(s))` : ""}${was.in !== undefined ? " (in stock)" : ""}`,
   };
 }
 
@@ -472,6 +483,7 @@ export function modifyAsset(doc: PositionsDoc, name: string, sets: Array<[string
       else if (!ASSET_FIELDS.includes(k)) refused = `asset field '${k}' is not one of ${ASSET_FIELDS.join(", ")}`;
       else if (k === "kind") {
         if (!ASSET_KINDS.includes(v as AssetKind)) refused = `kind is one of ${ASSET_KINDS.join(", ")}`;
+        else if ((v === "disk") !== (a.kind === "disk")) refused = "a disk stays a disk and nothing else becomes one: add the right asset, remove this one";
         else a.kind = v as AssetKind;
       } else if (k === "model") {
         if (text(v) === undefined) delete a.model;
@@ -572,6 +584,8 @@ export function removeAsset(doc: PositionsDoc, name: string): Result {
   if (a.role && a.role !== name) return { refused: `${name} plays ${a.role} — asset release ${name} first` };
   const at = currentName(name, a);
   if (placementsOf(doc)[at]) return { refused: `${at} is placed — unplace ${at} first` };
+  const held = disksIn(doc, name);
+  if (held.length) return { refused: `${name} holds the disk(s) ${held.map((x) => x.key).join(", ")} — unplace or move them first` };
   const cables = cablesOf(doc).filter((c) => c.from.device === at || c.to.device === at);
   const e = cables[0]?.from.device === at ? cables[0].from : cables[0]?.to;
   if (cables.length) return { refused: `${at} is an end of ${cables.length} recorded cable(s) — cable remove '${e.device}:${e.port}' first` };
@@ -627,6 +641,8 @@ export function disposeAsset(doc: PositionsDoc, name: string, how: string | unde
   if (!DATE_RE.test(when)) return { refused: "--when is a date, YYYY-MM-DD" };
   if (a.role) return { refused: `${name} plays ${a.role} — asset release ${name} first` };
   if (placementsOf(doc)[name]) return { refused: `${name} is placed in ${placeWhere(placementsOf(doc)[name])} — unplace ${name} first` };
+  const held = disksIn(doc, name);
+  if (held.length) return { refused: `${name} holds the disk(s) ${held.map((x) => x.key).join(", ")} — unplace them (or dispose of them) first: was each wiped?` };
   const cable = cablesOf(doc).find((c) => c.from.device === name || c.to.device === name);
   if (cable) return { refused: `${name} is an end of the recorded cable ${endText(cable.from)} — ${endText(cable.to)}: cable remove it first` };
   const disposal: Disposal = { how: how as Disposal["how"], when, ...(wiped ? { wiped: true } : {}) };
@@ -660,6 +676,7 @@ export function allocateAsset(doc: PositionsDoc, name: string, role: string | un
   const a = assetsOf(doc)[name];
   if (!a) return { refused: `asset ${name} is not recorded` };
   if (!role?.trim()) return { refused: "--role <name> is required: the topology's name for what it plays" };
+  if (a.kind === "disk") return { refused: `${name} is a disk: it plays no role, it is in an asset (place ${name} --in <asset>)` };
   if (a.stage === "ordered" || a.stage === "disposed") return { refused: `${name} is ${a.stage}: ${a.stage === "ordered" ? `asset receive ${name} first` : "it plays nothing any more"}` };
   if (a.role === role) return { refused: `${name} plays ${role} already` };
   if (a.role) return { refused: `${name} plays ${a.role} — asset release ${name} first` };
@@ -795,6 +812,212 @@ export function removePort(doc: PositionsDoc, asset: string, port: string, catal
     act: "remove",
     what: `port ${port} of asset '${asset}'${plate ? ` (its model's port ${port} as the plate gives it)` : ""}`,
   };
+}
+
+// ── disks (ADR-042) ───────────────────────────────────────────────────
+
+export interface DiskSpec {
+  serial?: string;
+  vendor?: string;
+  model?: string;
+  wwn?: string;
+  size?: string; // bytes, or 960G, 1TB, 4TiB
+  kind?: string; // nvme, ssd, hdd, usb
+  bus?: string;
+  firmware?: string;
+  bay?: string;
+  description?: string;
+}
+
+const gbText = (b: number): string => (b >= 1e12 ? `${(b / 1e12).toFixed(1)} TB` : `${Math.round(b / 1e9)} GB`);
+const diskWords = (a: Asset): string => [a.serial ? `serial ${a.serial}` : null, a.disk?.size ? gbText(a.disk.size) : null, a.disk?.kind, a.model].filter(Boolean).join(", ");
+
+// The asset a disk can be in: recorded, no disk, here.
+function hostProblem(doc: PositionsDoc, name: string): { key: string } | { refused: string } {
+  const hit = assetNamed(doc, name);
+  if (!hit) return { refused: `asset ${name} is not recorded (asset-manager asset list)` };
+  if (hit.asset.kind === "disk") return { refused: `${hit.key} is a disk: a disk is in a server or another device` };
+  if (hit.asset.stage === "ordered" || hit.asset.stage === "disposed") return { refused: `asset ${hit.key} is ${hit.asset.stage}` };
+  return { key: hit.key };
+}
+
+// A disk's record from a spec's fields, checked; the caller sets the serial.
+function diskRecordOf(spec: DiskSpec): DiskRecord | { refused: string } {
+  const dk: DiskRecord = {};
+  if (spec.kind !== undefined) {
+    if (!DISK_KINDS.includes(spec.kind as DiskKind)) return { refused: `--kind is one of ${DISK_KINDS.join(", ")}` };
+    dk.kind = spec.kind as DiskKind;
+  }
+  if (spec.size !== undefined) {
+    const n = parseSize(spec.size);
+    if (n === null || n <= 0) return { refused: "--size is bytes, or a number with K, M, G, T (1000s) or KiB, MiB, GiB, TiB (1024s)" };
+    dk.size = n;
+  }
+  for (const k of ["wwn", "bus", "firmware"] as const) if (spec[k]) dk[k] = spec[k];
+  return dk;
+}
+
+// disk add <asset> <name> --serial <s> — a disk in an asset, recorded as the
+// next dsk-NN with its by-id name shown, placed in that asset (its bay the
+// one given, else the name). A serial an asset records already is refused.
+export function addDisk(doc: PositionsDoc, asset: string, name: string, spec: DiskSpec): Result {
+  if (!name?.trim()) return { refused: "disk add <asset> <name>: the disk's by-id name (or a label for it)" };
+  const host = hostProblem(doc, asset);
+  if ("refused" in host) return host;
+  if (!spec.serial?.trim()) return { refused: "--serial <serial> is required: a disk is known by its serial" };
+  const twin = assetWithSerial(doc, spec.serial);
+  if (twin) {
+    const m = placementsOf(doc)[twin];
+    return { refused: `serial ${spec.serial} is asset ${twin}'s${m ? ` (${placeWhere(m)})` : ""}${assetsOf(doc)[twin].kind === "disk" ? ` — place ${twin} --in ${host.key} moves it` : ""}` };
+  }
+  const dk = diskRecordOf(spec);
+  if ("refused" in dk) return dk;
+  const key = nextTag(doc, "disk");
+  const a: Asset = { kind: "disk", stage: "placed", displayName: name.trim(), serial: spec.serial.trim() };
+  for (const k of ["vendor", "model", "description"] as const) if (spec[k]) a[k] = spec[k];
+  if (Object.keys(dk).length) a.disk = dk;
+  const m: Placement = { in: host.key, bay: spec.bay?.trim() || name.trim() };
+  return {
+    doc: withDoc(doc, (d) => {
+      d.assets[key] = a;
+      d.placements[key] = m;
+    }),
+    act: "add",
+    what: `disk '${key}' (${name.trim()}; ${diskWords(a)}) ${placeWhere(m)}`,
+  };
+}
+
+const DISK_FIELDS = ["displayName", "description", "vendor", "model", "serial", "assetTag", "wwn", "size", "kind", "bus", "firmware", "bay"];
+
+// disk modify <disk> — its record and its bay; where it is is place --in.
+export function modifyDisk(doc: PositionsDoc, name: string, sets: Array<[string, string]>): Result {
+  const a = assetsOf(doc)[name];
+  if (!a || a.kind !== "disk") return { refused: `${name} is no recorded disk (disk list)` };
+  let refused: string | null = null;
+  const next = withDoc(doc, (d) => {
+    const x = d.assets[name];
+    const dk: DiskRecord = { ...(x.disk ?? {}) };
+    for (const [k, v] of sets) {
+      if (k === "in") refused = `where it is: place ${name} --in <asset> [--bay <bay>]`;
+      else if (!DISK_FIELDS.includes(k)) refused = `disk field '${k}' is not one of ${DISK_FIELDS.join(", ")}`;
+      else if (k === "serial") {
+        const twin = text(v) === undefined ? null : assetWithSerial(d, v, name);
+        if (text(v) === undefined) refused = "a disk keeps its serial: it is what knows it";
+        else if (twin) refused = `serial ${v} is asset ${twin}'s`;
+        else x.serial = v.trim();
+      } else if (k === "bay") {
+        const m = d.placements[name];
+        if (!m || m.in === undefined) refused = `${name} is in no asset (place ${name} --in <asset> --bay ${v})`;
+        else if (text(v) === undefined) delete m.bay;
+        else m.bay = v;
+      } else if (k === "kind" || k === "size" || k === "wwn" || k === "bus" || k === "firmware") {
+        if (text(v) === undefined) delete dk[k];
+        else {
+          const r = diskRecordOf({ [k]: v });
+          if ("refused" in r) refused = r.refused.replace(/^--\w+/, k);
+          else Object.assign(dk, r);
+        }
+      } else {
+        const key = k as "displayName" | "description" | "vendor" | "model" | "assetTag";
+        if (text(v) === undefined) delete x[key];
+        else x[key] = v;
+      }
+      if (refused) return;
+    }
+    if (Object.keys(dk).length) x.disk = dk;
+    else delete x.disk;
+  });
+  if (refused) return { refused };
+  return { doc: next, act: "modify", what: `disk '${name}': ${setText(sets)}` };
+}
+
+// disk remove <disk> — a record made by mistake goes, with its placement; a
+// disposed disk's record stays (asset dispose records that it left).
+export function removeDisk(doc: PositionsDoc, name: string): Result {
+  const a = assetsOf(doc)[name];
+  if (!a || a.kind !== "disk") return { refused: `${name} is no recorded disk (disk list)` };
+  if (a.stage === "disposed") return { refused: `${name} is disposed: its record stays, read-only, with its history` };
+  const m = placementsOf(doc)[name];
+  return {
+    doc: withDoc(doc, (d) => {
+      delete d.assets[name];
+      delete d.placements[name];
+    }),
+    act: "remove",
+    what: `disk '${name}' (${diskWords(a)})${m ? `, ${placeWhere(m)}` : ""}`,
+  };
+}
+
+// place <disk> --in <asset> [--bay <b>] — a disk into an asset's bay: out of
+// stock, or out of the asset it was in (the move, ADR-042 D1). The bay is
+// the one given, else the one it had in that asset, else its by-id name.
+export function placeDisk(doc: PositionsDoc, name: string, into: string, bay?: string): Result {
+  const a = assetsOf(doc)[name];
+  if (!a || a.kind !== "disk") return { refused: `only a disk is placed in another asset: ${name} is ${a ? `a ${a.kind}` : "no recorded asset"}` };
+  if (a.stage === "ordered" || a.stage === "disposed") return { refused: `disk ${name} is ${a.stage}${a.stage === "ordered" ? ` (asset receive ${name} first)` : ""}` };
+  const host = hostProblem(doc, into);
+  if ("refused" in host) return host;
+  const was = placementsOf(doc)[name];
+  const same = was?.in === host.key;
+  const m: Placement = { in: host.key, bay: bay?.trim() || (same ? was!.bay : undefined) || a.displayName || name };
+  if (same && m.bay === was!.bay) return { refused: `${name} is ${placeWhere(was!)} already` };
+  return {
+    doc: withDoc(doc, (d) => {
+      d.placements[name] = m;
+      d.assets[name].stage = "placed";
+    }),
+    act: "place",
+    what: `disk '${name}' ${placeWhere(m)}${was?.in !== undefined && !same ? ` (moved out of ${was.in})` : was?.in === undefined ? " (out of stock)" : ""}`,
+  };
+}
+
+// What a server's CI says of a disk in it (its disks[], ADR-040 D15).
+export interface FoundDisk {
+  name: string; // by-id
+  serial?: string;
+  model?: string;
+  vendor?: string;
+  wwn?: string;
+  size?: number;
+  type?: string; // ssd, hdd, nvme, usb, unknown
+  bus?: string;
+}
+
+// disk adopt — every disk an asset's CI lists that no asset records yet, by
+// serial, recorded as a disk in that asset; what it skipped and why, as lines.
+export function adoptDisks(doc: PositionsDoc, found: { asset: string; disks: FoundDisk[] }[]): { result: Result | null; lines: string[] } {
+  const lines: string[] = [];
+  let cur = doc;
+  const added: string[] = [];
+  for (const f of found) {
+    const host = hostProblem(cur, f.asset);
+    if ("refused" in host) {
+      lines.push(`${f.asset}: ${host.refused}`);
+      continue;
+    }
+    for (const x of f.disks) {
+      if (!x.serial?.trim()) {
+        lines.push(`${host.key}: ${x.name} has no serial: not recorded (disk add ${host.key} ${x.name} --serial <s> by hand)`);
+        continue;
+      }
+      const twin = assetWithSerial(cur, x.serial);
+      if (twin) {
+        const m = placementsOf(cur)[twin];
+        lines.push(`${host.key}: ${x.name} is ${twin} already${m?.in !== undefined && m.in !== host.key ? `, recorded ${placeWhere(m)}: place ${twin} --in ${host.key} if it moved` : !m ? `, in stock: place ${twin} --in ${host.key} if it is there` : ""}`);
+        continue;
+      }
+      const kind = DISK_KINDS.includes(x.type as DiskKind) ? x.type : undefined;
+      const r = addDisk(cur, host.key, x.name, { serial: x.serial, model: x.model, vendor: x.vendor, wwn: x.wwn, size: x.size ? String(x.size) : undefined, kind, bus: x.bus });
+      if ("refused" in r) {
+        lines.push(`${host.key}: ${x.name}: ${r.refused}`);
+        continue;
+      }
+      cur = r.doc;
+      added.push(r.what);
+    }
+  }
+  if (!added.length) return { result: null, lines };
+  return { result: { doc: cur, act: "record", what: added.length === 1 ? added[0] : `${added.length} disks: ${added.join("; ")}` }, lines };
 }
 
 // ── rooms ─────────────────────────────────────────────────────────────

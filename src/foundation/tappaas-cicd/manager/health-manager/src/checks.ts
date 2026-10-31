@@ -672,39 +672,24 @@ export function checkStoragePools(client: ClusterClient): CheckResult {
   return { name: "storage-pools", status: worst, detail, rows };
 }
 
-// ── storage-disks gate ────────────────────────────────────────────────
-// The disks and pools under the guests, as storage-manager inventory judges
-// them: a disk SMART calls failed or that shows reallocated or pending sectors,
-// one ZFS has degraded or faulted, a pool that is not ONLINE, a replication job
-// (an HA guest's mirror copy) in error or behind its schedule. The inventory
-// does the join; this only collects its verdicts. Pool usage is storage-pools'.
+// ── storage-replication gate ──────────────────────────────────────────
+// The replication jobs (an HA guest's mirror copy on its other node), as
+// storage-manager inventory judges them: in error or behind their schedule,
+// each on its module. The disks are judged from their CIs now (assess,
+// assess-observations.ts) and the pools from their zfsState, so the inventory
+// is read without SMART (--no-smart), which is what made this gate slow; it
+// stays a gate until the sweep carries the replication state.
 // WARN, never FAIL: the guests still run, one more failure takes data with it.
-export interface InventoryFinding {
-  level: string;
-  cause: string;
-  on: { kind: string; node: string; name: string };
-  text: string;
-}
 interface InventoryDoc {
   nodes?: { name: string; replication?: { id: string; module: string | null; state: string; reasons: string[]; source: string; target: string }[] }[];
-  findings?: InventoryFinding[];
 }
 
-const DISK_CAUSES = ["smart", "zfs", "wear", "temperature"];
-
-export function storageDisksResult(doc: unknown): CheckResult {
+export function storageReplicationResult(doc: unknown): CheckResult {
   const inv = (doc ?? {}) as InventoryDoc;
-  if (!Array.isArray(inv.nodes) || !Array.isArray(inv.findings)) {
-    return { name: "storage-disks", status: "skip", detail: "storage-manager inventory gave no document" };
+  if (!Array.isArray(inv.nodes)) {
+    return { name: "storage-replication", status: "skip", detail: "storage-manager inventory gave no document" };
   }
   const rows: CheckRow[] = [];
-  for (const f of inv.findings) {
-    if (f.on.kind === "disk" && DISK_CAUSES.includes(f.cause)) {
-      rows.push({ status: "warn", text: f.text, subject: { kind: "disk", name: `${f.on.node}:${f.on.name}` } });
-    } else if (f.on.kind === "pool" && f.cause === "health") {
-      rows.push({ status: "warn", text: f.text, subject: { kind: "pool", name: `${f.on.node}/${f.on.name}` } });
-    }
-  }
   for (const n of inv.nodes) {
     for (const j of n.replication ?? []) {
       if (j.state === "ok") continue;
@@ -715,23 +700,24 @@ export function storageDisksResult(doc: unknown): CheckResult {
       });
     }
   }
-  if (rows.length === 0) return { name: "storage-disks", status: "pass", detail: `${inv.nodes.length} node(s): disks, pools and replication healthy` };
-  return { name: "storage-disks", status: "warn", detail: `${rows.length} finding(s) — storage-manager inventory`, rows };
+  const jobs = inv.nodes.reduce((k, n) => k + (n.replication ?? []).length, 0);
+  if (rows.length === 0) return { name: "storage-replication", status: "pass", detail: `${jobs} replication job(s) on ${inv.nodes.length} node(s) on schedule` };
+  return { name: "storage-replication", status: "warn", detail: `${rows.length} replication job(s) in error or behind — storage-manager inventory`, rows };
 }
 
-export function checkStorageDisks(configDir: string): CheckResult {
+export function checkStorageReplication(configDir: string): CheckResult {
   const bin = process.env.STORAGE_MANAGER_BIN ?? "storage-manager";
-  const r = spawnSync(bin, ["inventory", "--json"], {
+  const r = spawnSync(bin, ["inventory", "--json", "--no-smart"], {
     encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
     timeout: 180_000,
     env: { ...process.env, CONFIG_DIR: configDir },
   });
-  if (r.error || r.status !== 0) return { name: "storage-disks", status: "skip", detail: "storage-manager inventory did not answer" };
+  if (r.error || r.status !== 0) return { name: "storage-replication", status: "skip", detail: "storage-manager inventory did not answer" };
   try {
-    return storageDisksResult(JSON.parse(r.stdout ?? ""));
+    return storageReplicationResult(JSON.parse(r.stdout ?? ""));
   } catch {
-    return { name: "storage-disks", status: "skip", detail: "storage-manager inventory --json not parseable" };
+    return { name: "storage-replication", status: "skip", detail: "storage-manager inventory --json not parseable" };
   }
 }
 
@@ -1165,7 +1151,7 @@ export function runHealthGates(client: ClusterClient, opts: ValidateOpts): Healt
     gate(() => checkDiskThreshold(client, opts.configDir, opts.defaultNode, opts.threshold)),
     gate(() => checkMemoryCommitment(client, opts.memoryThreshold)),
     gate(() => checkStoragePools(client)),
-    gate(() => checkStorageDisks(opts.configDir)),
+    gate(() => checkStorageReplication(opts.configDir)),
     gate(() => checkCpuImpact(client, opts.configDir, opts.defaultNode)),
     gate(() => checkGuestMemory(client)),
     gate(() => checkBackupStatus(opts.configDir)),

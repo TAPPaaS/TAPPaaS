@@ -257,6 +257,19 @@ metamodel error, and `GET /v1/rules` serves them with what a reader needs. A
 rule's optional `dependant` (`{attribute: value}`, `true` for any value set) must
 name an attribute some class declares.
 
+Disks: a **`disk`** (a resource beside `port`, physical) is a disk in an asset, `part-of`
+it — its `asset` and its `name` (the disk asset's tag, `dsk-NN`) are its key, and the asset
+is immutable: a disk moved to another server is a new CI there, the old one ends. Its
+record (`bay`, `vendor`, `model`, `serial` — unique across the disks, asset-manager refuses a
+second —, `wwn`, `size`, `kind` nvme|ssd|hdd|usb, `bus`, `firmware`) is asset-manager's;
+what the node says of it (`health`, `holds`, `partitions`; `smart`, `wearout`, `temperature`
+from the sweep) site-manager's, all volatile. A **`built-on`** relation joins a
+`storage-pool` to each of its member disks (`dependant: from`, required): site-manager sets
+`redundancyGroup` `<node>:<pool>:<vdev>` on the members of a mirror or raidz vdev and
+`required: false` on a log, cache or spare member, so one failed disk of a mirror degrades
+its pool and a vdev with every member failed takes it down (the `built-on` rule in
+`health-rules.json`).
+
 A subclass that declares an inherited field again with only some properties
 refines it (`vm` makes `name` a key of rank 2). A new class goes through
 ADR-022h's gate, under an existing abstract class; nothing adds a root.

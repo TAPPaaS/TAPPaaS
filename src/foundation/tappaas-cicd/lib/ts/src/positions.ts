@@ -39,7 +39,7 @@ export const PLATE_KINDS = ["server", "switch", "ap", "patch-panel", "pdu", "mod
 export const DEVICE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._-]{0,62}$/;
 
 // ── assets and their ports (ADR-040 D7-D9) ──────────────────────────────
-export const ASSET_KINDS = ["server", "switch", "access-point", "modem", "ont", "ups", "patch-panel", "pdu", "other"] as const;
+export const ASSET_KINDS = ["server", "switch", "access-point", "modem", "ont", "ups", "patch-panel", "pdu", "other", "disk"] as const;
 // The recorded stages; operational is derived (a role), and so is placed (a
 // placement): the verbs keep the recorded one in step.
 export const ASSET_STAGES = ["ordered", "stock", "placed", "disposed"] as const;
@@ -51,6 +51,8 @@ export const WIFI_STANDARDS = ["wifi5", "wifi6", "wifi7"] as const;
 export const WIFI_BANDS = ["2.4", "5", "6"] as const;
 export const SFP_MODULES = ["dac", "sr", "lr", "rj45"] as const;
 export const PORT_ROLES = ["lan", "wan", "bmc"] as const;
+// What a disk is (ADR-042 D1): its medium, the disk's `kind` in the CMDB.
+export const DISK_KINDS = ["nvme", "ssd", "hdd", "usb"] as const;
 // An observed link speed (a cable's): a number and its unit, lowercase.
 export const LINK_SPEED_RE = /^\d+(\.\d+)?[mg]$/;
 export const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -72,6 +74,7 @@ export type WifiStandard = (typeof WIFI_STANDARDS)[number];
 export type WifiBand = (typeof WIFI_BANDS)[number];
 export type SfpModule = (typeof SFP_MODULES)[number];
 export type PortRole = (typeof PORT_ROLES)[number];
+export type DiskKind = (typeof DISK_KINDS)[number];
 
 // The speeds each connector comes in; wifi has a standard and bands instead.
 export const SPEEDS_OF: Record<AssetPortKind, readonly PortSpeed[]> = {
@@ -97,12 +100,16 @@ export interface Room {
   description?: string;
   location?: string;
 }
-// A placement: in a rack at its units (height, width, slot, face), or loose in
-// a room (no rack, no unit: its plate gives its size).
+// A placement: in a rack at its units (height, width, slot, face), loose in
+// a room (no rack, no unit: its plate gives its size), or a disk in a bay of
+// another asset (ADR-042 D1: `in` names the asset by its own name, never a
+// disk; `bay` is its slot label, else the disk's by-id name).
 export interface Placement {
   rack?: string;
   u?: number;
   room?: string; // a loose placement's room
+  in?: string; // a disk's: the asset it is in
+  bay?: string; // a disk's: the bay of that asset
   height?: number;
   width?: MountWidth;
   slot?: number;
@@ -153,6 +160,15 @@ export interface Procurement {
   ownership?: (typeof OWNERSHIPS)[number];
   notes?: string;
 }
+// A disk asset's own record (ADR-042 D1) beside the vendor, model and serial
+// every asset has.
+export interface DiskRecord {
+  kind?: DiskKind;
+  bus?: string; // sata, sas, nvme, usb, …
+  wwn?: string;
+  size?: number; // bytes
+  firmware?: string;
+}
 export interface Disposal {
   how: (typeof DISPOSAL_HOWS)[number];
   when?: string; // YYYY-MM-DD
@@ -177,6 +193,7 @@ export interface Asset {
   procurement?: Procurement;
   disposal?: Disposal;
   role?: string; // the topology's name for what it plays: a node, switch, AP or device
+  disk?: DiskRecord; // a disk's: its medium, bus, WWN, size, firmware
 }
 // A device recorded before assets (migration 0027 makes each an asset): read
 // until it has run, never written.
@@ -246,11 +263,23 @@ export const assetsOf = (d: PositionsDoc): Record<string, Asset> => d.assets ?? 
 export const faceplatesOf = (d: PositionsDoc): Record<string, SiteFaceplate> => d.faceplates ?? {};
 export const roomsOf = (d: PositionsDoc): Record<string, Room> => d.rooms ?? {};
 export const ROOM_NAME_RE = /^[a-z][a-z0-9-]{0,62}$/;
-// Where a mount is, in words: "rack1 U20" or "room basement (loose)".
-export const placeWhere = (m: Placement): string => (m.rack ? `${m.rack} U${m.u ?? "?"}${heightOf(m) > 1 ? `-U${(m.u ?? 0) + heightOf(m) - 1}` : ""}` : `room ${m.room ?? "?"} (loose)`);
+// Where a mount is, in words: "rack1 U20", "room basement (loose)" or, a
+// disk's, "in srv-02, bay 3".
+export const placeWhere = (m: Placement): string =>
+  m.in !== undefined
+    ? `in ${m.in}${m.bay ? `, bay ${m.bay}` : ""}`
+    : m.rack ? `${m.rack} U${m.u ?? "?"}${heightOf(m) > 1 ? `-U${(m.u ?? 0) + heightOf(m) - 1}` : ""}` : `room ${m.room ?? "?"} (loose)`;
 
-// The room a placement is in: its own, or its rack's.
-export const roomOf = (doc: PositionsDoc, m: Placement): string | null => (m.rack ? racksOf(doc)[m.rack]?.room ?? null : m.room ?? null);
+// The room a placement is in: its own, its rack's, or (a disk's) the room of
+// the asset it is in.
+export function roomOf(doc: PositionsDoc, m: Placement): string | null {
+  if (m.in !== undefined) {
+    const host = assetsOf(doc)[m.in];
+    const hm = host && host.kind !== "disk" ? placementsOf(doc)[currentName(m.in, host)] : undefined;
+    return hm && hm.in === undefined ? roomOf(doc, hm) : null;
+  }
+  return m.rack ? racksOf(doc)[m.rack]?.room ?? null : m.room ?? null;
+}
 
 // ── assets ────────────────────────────────────────────────────────────
 
@@ -312,18 +341,51 @@ export function stageOf(doc: PositionsDoc, key: string, a: Asset): StageView {
 // a switch or an AP is the topology's already; the topology skips those names.
 export function recordedDevicesOf(doc: PositionsDoc): { name: string; key: string; asset: Asset }[] {
   return Object.entries(assetsOf(doc))
-    .filter(([, a]) => a.stage !== "ordered" && a.stage !== "disposed")
+    // A disk is a part of another asset, no device of its own (ADR-042).
+    .filter(([, a]) => a.stage !== "ordered" && a.stage !== "disposed" && a.kind !== "disk")
     .map(([key, a]) => ({ name: currentName(key, a), key, asset: a }));
 }
 
 // The tag a new asset of a kind is named by when it is given no name
 // (ADR-040 O5): srv-NN, sw-NN, ap-NN, dev-NN, the next after the highest.
-export const TAG_PREFIX: Record<AssetKind, string> = { server: "srv", switch: "sw", "access-point": "ap", modem: "dev", ont: "dev", ups: "dev", "patch-panel": "dev", pdu: "dev", other: "dev" };
+export const TAG_PREFIX: Record<AssetKind, string> = { server: "srv", switch: "sw", "access-point": "ap", modem: "dev", ont: "dev", ups: "dev", "patch-panel": "dev", pdu: "dev", other: "dev", disk: "dsk" };
 export function nextTag(doc: PositionsDoc, kind: AssetKind): string {
   const prefix = TAG_PREFIX[kind] ?? "dev";
   const re = new RegExp(`^${prefix}-(\\d+)$`);
   const top = Math.max(0, ...Object.keys(assetsOf(doc)).map((k) => Number(re.exec(k)?.[1] ?? 0)));
   return `${prefix}-${String(top + 1).padStart(2, "0")}`;
+}
+
+// ── disks (ADR-042) ───────────────────────────────────────────────────
+
+// A serial as it is compared (ADR-042 D2): tools spell one differently, so
+// case, whitespace and dashes do not count.
+export const serialKey = (s: string | null | undefined): string => (s ?? "").toLowerCase().replace(/[\s-]+/g, "");
+
+// The asset that records a serial already (compared as serialKey), or null.
+export function assetWithSerial(doc: PositionsDoc, serial: string | null | undefined, except?: string): string | null {
+  const k = serialKey(serial);
+  if (!k) return null;
+  return Object.entries(assetsOf(doc)).find(([key, a]) => key !== except && serialKey(a.serial) === k)?.[0] ?? null;
+}
+
+// The disks recorded in an asset (by its own name), by tag.
+export function disksIn(doc: PositionsDoc, asset: string): { key: string; asset: Asset; bay: string | null }[] {
+  const placed = placementsOf(doc);
+  return Object.entries(assetsOf(doc))
+    .filter(([key, a]) => a.kind === "disk" && placed[key]?.in === asset)
+    .map(([key, a]) => ({ key, asset: a, bay: placed[key]?.bay ?? null }))
+    .sort((x, y) => portCompare(x.key, y.key));
+}
+
+// A size as the verbs take it: bytes, or a number with K, M, G, T (powers of
+// 1000) or KiB, MiB, GiB, TiB (powers of 1024); null when it is neither.
+export function parseSize(s: string): number | null {
+  const m = /^\s*(\d+(?:\.\d+)?)\s*(?:([kmgtp])(i)?b?)?\s*$/i.exec(s);
+  if (!m) return null;
+  if (!m[2]) return /\./.test(m[1]) ? null : Number(m[1]);
+  const exp = "kmgtp".indexOf(m[2].toLowerCase()) + 1;
+  return Math.round(Number(m[1]) * (m[3] ? 1024 : 1000) ** exp);
 }
 
 // What is wrong with a port (ADR-040 D9): a speed that fits its connector, a
@@ -862,7 +924,7 @@ export const recordedPorts = (a: Pick<Asset, "model" | "ports">, catalog: Facepl
 // A patch panel's ports: across the plate, edge to edge.
 export const PANEL_SPAN: [number, number] = [0.02, 0.98];
 
-const PLATE_OF_KIND: Record<AssetKind, PlateKind> = { server: "server", switch: "switch", "access-point": "ap", modem: "modem", ont: "modem", ups: "pdu", "patch-panel": "patch-panel", pdu: "pdu", other: "other" };
+const PLATE_OF_KIND: Record<AssetKind, PlateKind> = { server: "server", switch: "switch", "access-point": "ap", modem: "modem", ont: "modem", ups: "pdu", "patch-panel": "patch-panel", pdu: "pdu", other: "other", disk: "other" };
 // The glyph an asset's port is drawn with: a UPS's are its outlets.
 const glyphOf = (a: Pick<Asset, "kind">, p: AssetPort): PortKind | null =>
   a.kind === "ups" || a.kind === "pdu" ? "power" : p.kind === "rj45" ? "rj45" : p.kind === "sfp" ? (p.speed === "25g" ? "sfp28" : "sfp+") : null;
@@ -1077,6 +1139,7 @@ export function checkPositions(doc: PositionsDoc, shipped: Faceplate[], seen: Si
   // The assets (ADR-040 D7-D9): each on its own, then across them.
   const ROLE_OF: Partial<Record<AssetKind, DeviceKind[]>> = { server: ["node", "machine"], switch: ["switch"], "access-point": ["ap"] };
   const serials = new Map<string, string>();
+  const diskSerials = new Map<string, string>(); // serialKey → the disk
   const macs = new Map<string, string>();
   const roles = new Map<string, string>();
   for (const [name, a] of Object.entries(assets)) {
@@ -1097,9 +1160,23 @@ export function checkPositions(doc: PositionsDoc, shipped: Faceplate[], seen: Si
       else macs.set(m, name);
     }
     if (a.serial) {
-      if (serials.has(a.serial)) err(`${where}: serial ${a.serial} is ${serials.get(a.serial)}'s too — one asset per serial`);
-      else serials.set(a.serial, name);
+      // A disk's serial is compared as tools spell it (ADR-042 D2).
+      const k = a.kind === "disk" ? serialKey(a.serial) : a.serial;
+      const twin = serials.get(k) ?? (a.kind === "disk" ? null : diskSerials.get(serialKey(a.serial)));
+      if (twin) err(`${where}: serial ${a.serial} is ${twin}'s too — one asset per serial`);
+      else serials.set(k, name);
+      if (a.kind === "disk") diskSerials.set(k, name);
     }
+    if (a.kind === "disk") {
+      // A disk: its own record, no ports, no role; placed only in another asset.
+      const dk = a.disk ?? {};
+      if (!a.serial) warn(`${where}: a disk without a serial: its serial is what knows it again (disk modify ${name} --set serial=…)`);
+      if (a.ports?.length) err(`${where}: a disk has no ports`);
+      if (a.role) err(`${where}: a disk plays no role (asset release ${name})`);
+      if (dk.kind !== undefined && !DISK_KINDS.includes(dk.kind)) err(`${where}: a disk's kind is one of ${DISK_KINDS.join(", ")}`);
+      if (dk.size !== undefined && (!Number.isInteger(dk.size) || dk.size <= 0)) err(`${where}: a disk's size is a whole number of bytes`);
+      for (const k of ["bus", "wwn", "firmware"] as const) if (dk[k] !== undefined && !isStr(dk[k])) err(`${where}: a disk's ${k} is text`);
+    } else if (a.disk) err(`${where}: a disk record on a ${a.kind}`);
     if (a.faulty !== undefined && typeof a.faulty !== "boolean") err(`${where}: faulty is true or false`);
     if (a.faultNote !== undefined && a.faulty !== true) err(`${where}: a fault note on an asset that is not faulty (asset repaired clears both)`);
     const pr = a.procurement;
@@ -1158,8 +1235,33 @@ export function checkPositions(doc: PositionsDoc, shipped: Faceplate[], seen: Si
   }
 
   const placed: { device: string; rack: string; face: Face; lo: number; hi: number; cols: [number, number] }[] = [];
+  const bays = new Map<string, string>(); // "<asset>\u0000<bay>" → the disk in it
   for (const [device, m] of Object.entries(mounts)) {
     const where = `placement ${device}`;
+    const disk = assets[device]?.kind === "disk";
+    // A disk is in a bay of another asset (ADR-042 D1), and only there.
+    if (m.in !== undefined || disk) {
+      if (!disk) {
+        err(`${where}: only a disk is placed in another asset — place ${device} --rack <rack> --u <n> or --room <room>`);
+        continue;
+      }
+      if (m.in === undefined) {
+        err(`${where}: a disk is placed in an asset (place ${device} --in <asset>), not in a rack or a room`);
+        continue;
+      }
+      const host = assets[m.in];
+      if (!host) err(`${where}: in ${m.in}, which is no recorded asset`);
+      else if (host.kind === "disk") err(`${where}: in ${m.in}, which is a disk — a disk is in a server or another device`);
+      else if (host.stage === "disposed" || host.stage === "ordered") err(`${where}: in ${m.in}, which is ${host.stage}`);
+      for (const k of ["rack", "u", "room", "height", "width", "slot", "face", "faceplate"] as const) if (m[k] !== undefined) err(`${where}: a disk in an asset has no ${k}`);
+      if (m.bay !== undefined && !isStr(m.bay)) err(`${where}: a bay is text`);
+      if (m.bay) {
+        const k = `${m.in}\u0000${m.bay}`;
+        if (bays.has(k)) warn(`${where}: bay ${m.bay} of ${m.in} holds ${bays.get(k)} too`);
+        else bays.set(k, device);
+      }
+      continue;
+    }
     // A device stands at its own location: its room is there.
     const own = recorded[device]?.location;
     const at = locOf(roomOf(doc, m));
@@ -1366,6 +1468,8 @@ export interface AssetView {
   location: string | null;
   placed: boolean;
   ports: AssetPort[];
+  in?: { asset: string; bay: string | null }; // a disk's: the asset it is in (ADR-042)
+  disk?: DiskRecord; // a disk's own record
 }
 export interface PositionsView {
   assets: AssetView[];
@@ -1508,6 +1612,8 @@ export function resolvePositions(doc: PositionsDoc, shipped: Faceplate[], t: Top
     r.location = room.location;
   }
   for (const [device, m] of Object.entries(mounts)) {
+    // A disk in an asset is on that asset's card (AssetView.in), not in a rack.
+    if (m.in !== undefined) continue;
     const rack = m.rack ? racks.find((r) => r.name === m.rack) : undefined;
     const dev = devices.find((d) => d.name === device) ?? null;
     const own = byKey(m.faceplate);
@@ -1611,6 +1717,8 @@ export function resolvePositions(doc: PositionsDoc, shipped: Faceplate[], t: Top
     location: a.location ?? sites.primary,
     placed: !!mounts[currentName(name, a)],
     ports: assetPorts(a, catalog),
+    ...(mounts[name]?.in !== undefined ? { in: { asset: mounts[name].in!, bay: mounts[name].bay ?? null } } : {}),
+    ...(a.disk ? { disk: a.disk } : {}),
   }));
   return { assets, locations, racks, rooms, unplaced, cables: chainSegments(doc, cables), outside, findings };
 }

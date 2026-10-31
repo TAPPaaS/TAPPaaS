@@ -2,7 +2,8 @@
 // D9, step 3): config/positions.json stays the record for now, and everything
 // in it is reported to cmdb-controller — the rooms and racks (place CIs), each
 // asset as its D3 subclass with its ports, each placement as placed-in, each
-// recorded cable as connects, each role as allocated-to. Pure functions over
+// recorded cable as connects, each role as allocated-to, each disk in an asset
+// as a disk part-of it (ADR-042; a disk in stock has no CI). Pure functions over
 // the document; delivering them (lib/ts cmdb.ts, which spools) is main.ts's.
 //
 // One view of the document serves three things: `report` sends all of it (an
@@ -73,6 +74,9 @@ export const refOf = {
   rack: (n: string) => `rack:${n}`,
   asset: (n: string) => `asset:${n}`,
   port: (asset: string, port: string) => `port:${asset}:${port}`,
+  // A disk's CI is part of the asset it is in, which is its key and
+  // immutable: moved, the CI there ends and one in the other asset begins.
+  disk: (asset: string, disk: string) => `disk:${asset}:${disk}`,
 };
 
 // Optional values as the report spells them: absent is null, so a value the
@@ -171,6 +175,7 @@ export function cmdbView(doc: PositionsDoc, catalog: Faceplate[], primary: strin
   const portRefs = new Map<string, Map<string, string>>(); // asset key → port name → ref
   for (const key of Object.keys(assets).sort()) {
     const a = assets[key];
+    if (a.kind === "disk") continue; // below, once the asset it is in is
     const cls = CLASS_OF[a.kind] ?? CLASS_OF.other;
     const attributes: Obj = {};
     if (cls.deviceType) attributes.deviceType = cls.deviceType;
@@ -221,6 +226,45 @@ export function cmdbView(doc: PositionsDoc, catalog: Faceplate[], primary: strin
       });
     }
     portRefs.set(key, refs);
+  }
+  // Disks (ADR-042 D3): each in an asset a disk CI part of it, its bay an
+  // attribute; one in stock, ordered or disposed is the register's alone.
+  for (const key of Object.keys(assets).sort()) {
+    const a = assets[key];
+    if (a.kind !== "disk") continue;
+    const m = placements[key];
+    if (m?.in === undefined) continue;
+    const host = refOf.asset(m.in);
+    if (!has.has(host)) {
+      skipped.push(`disk ${key}: the asset it is in, ${m.in}, is not reported`);
+      continue;
+    }
+    const dk = a.disk ?? {};
+    add({
+      ref: refOf.disk(m.in, key),
+      class: "disk",
+      name: key,
+      attributes: {
+        asset: { ref: host },
+        bay: orNull(m.bay),
+        vendor: orNull(a.vendor),
+        model: orNull(a.model),
+        serial: orNull(a.serial),
+        wwn: orNull(dk.wwn),
+        size: dk.size ?? null,
+        kind: orNull(dk.kind),
+        bus: orNull(dk.bus),
+        firmware: orNull(dk.firmware),
+        assetTag: orNull(a.assetTag),
+        displayName: orNull(a.displayName),
+        description: orNull(a.description),
+        stage: stageOf(doc, key, a),
+        faulty: a.faulty === true,
+        faultNote: orNull(a.faultNote),
+        procurement: a.procurement && Object.keys(a.procurement).length ? a.procurement : null,
+        disposal: orNull(a.disposal),
+      },
+    });
   }
   for (const name of Object.keys(placements).sort()) {
     if (!assetNamed(doc, name)) skipped.push(`placement of ${name}: no asset is recorded for it`);

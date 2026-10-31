@@ -230,5 +230,39 @@ const days = (d: number): string => new Date(NOW.getTime() + d * 86_400_000).toI
   check(got(assess(io, {}, new Date(later.getTime() + 300_000)), free)?.reason === "follows", "a run later it is worked out again, not held");
 }
 
+// ── disks (ADR-042 D5) ──
+{
+  const srv = obj("server", "srv-01");
+  const vdevs = (states: [string, string][]) => [{ name: "mirror-0", state: "DEGRADED", members: states.map(([serial, state]) => ({ device: `/dev/disk/by-id/ata-X_${serial}-part1`, serial, state })) }];
+  const pool = obj("storage-pool", "tanka1", { zfsState: "DEGRADED", vdevs: vdevs([["S6P1", "FAULTED"], ["S6P2", "ONLINE"]]) });
+  const failedZfs = obj("disk", "dsk-01", { serial: "S6P1", health: "PASSED", displayName: "ata-X_S6P1" });
+  const fine = obj("disk", "dsk-02", { serial: "s6p-2", health: "PASSED" });
+  const dead = obj("disk", "dsk-03", { serial: "WD77", health: "FAILED" });
+  const sectors = obj("disk", "dsk-04", { serial: "ZA11", health: "PASSED", smart: { reallocated: 8, pending: 2 } });
+  const worn = obj("disk", "dsk-05", { serial: "NV1", wearout: 7, kind: "ssd" });
+  const lightly = obj("disk", "dsk-06", { serial: "NV2", wearout: 12, kind: "ssd" });
+  const hot = obj("disk", "dsk-07", { serial: "NV3", temperature: 72, kind: "nvme" });
+  const warm = obj("disk", "dsk-08", { serial: "NV4", temperature: 65, kind: "nvme" });
+  const warmHdd = obj("disk", "dsk-09", { serial: "HD1", temperature: 65, kind: "hdd" });
+  const quiet = obj("disk", "dsk-10", { serial: "Q1", faulty: true, faultNote: "clicks" });
+  const pulled = obj("disk", "dsk-11", { serial: "GONE42" });
+  const pool2 = obj("storage-pool", "tankb1", { zfsState: "DEGRADED", vdevs: [{ name: "mirror-0", members: [{ device: "/dev/disk/by-id/ata-HGST_GONE42-part1", state: "UNAVAIL" }, { device: "/dev/sdq1", serial: "OTHER", state: "ONLINE" }] }] });
+  const disks = [failedZfs, fine, dead, sectors, worn, lightly, hot, warm, warmHdd, quiet, pulled];
+  const mirror = { redundancyGroup: "tappaas1:tanka1:mirror-0" };
+  const rels = [...disks.map((d) => rel("part-of", d, srv)), rel("built-on", pool, failedZfs, mirror), rel("built-on", pool, fine, mirror), rel("built-on", pool2, pulled)];
+  const r = run([srv, pool, pool2, ...disks], rels);
+  check(is(r, failedZfs, "critical", "zfs") && /ZFS FAULTED in tanka1/.test(got(r, failedZfs)?.message ?? "") && /ata-X_S6P1/.test(got(r, failedZfs)?.message ?? ""), "a disk ZFS faulted in a pool built on it is critical, zfs, its by-id name in the message");
+  check(is(r, fine, "ok", "ok"), "…its mirror partner, ONLINE (its serial as compared), is ok");
+  check(is(r, dead, "critical", "smart"), "Proxmox's health FAILED: critical, smart");
+  check(is(r, sectors, "warning", "smart") && /8 reallocated, 2 pending/.test(got(r, sectors)?.message ?? ""), "reallocated or pending sectors: a warning, smart");
+  check(is(r, worn, "warning", "wear") && is(r, lightly, "ok", "ok"), "under 10 % of its rated life: a warning, wear; 12 % is ok");
+  check(is(r, hot, "warning", "temperature") && is(r, warm, "ok", "ok") && is(r, warmHdd, "warning", "temperature"), "over its kind's temperature (NVMe 70 °C, HDD 60 °C): a warning");
+  check(got(r, quiet)?.reason === "follows" && got(r, quiet, "maintenance")?.reason === "asset-faulty", "nothing observed: it follows its asset; the faulty flag is maintenance, as an asset's");
+  check(is(r, pulled, "critical", "zfs"), "a pulled disk ZFS names by its by-id path, UNAVAIL: critical");
+  check(got(r, pool)?.derived === true && got(r, pool)?.rootCause === failedZfs.id, "the pool's own DEGRADED is the disk's failure seen from above");
+  check(got(r, pool, "impact")?.status === "warning" && got(r, pool, "impact")?.reason === "redundancy-degraded", "…and it is degraded, not down");
+  check(got(r, pool2, "impact")?.status === "critical" && got(r, pool2, "impact")?.rootCause === pulled.id, "a vdev's only recorded member down, no group: the pool down");
+}
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

@@ -3,7 +3,7 @@
 // reports the document (manager/asset-manager/src/cmdb.ts); network-manager
 // topology reads it back through positionsFromCmdb.
 
-import { Asset, AssetKind, AssetPort, Cable, CableEnd, Placement, PositionsDoc } from "./positions";
+import { Asset, AssetKind, AssetPort, Cable, CableEnd, DiskRecord, Placement, PositionsDoc } from "./positions";
 
 type Obj = Record<string, unknown>;
 
@@ -18,6 +18,8 @@ export const CLASS_OF: Record<AssetKind, { class: string; deviceType?: string }>
   "patch-panel": { class: "passive-device", deviceType: "patch-panel" },
   pdu: { class: "passive-device", deviceType: "pdu" },
   other: { class: "other-device" },
+  // A disk is a resource beside the port, part of the asset it is in (ADR-042 D3).
+  disk: { class: "disk" },
 };
 export const ASSET_CLASSES = ["server", "network-device", "appliance", "passive-device", "other-device"];
 
@@ -73,6 +75,7 @@ export function positionsFromCmdb(ans: CmdbAnswer): PositionsDoc {
   // come before the server: the assets go first, whatever the order, then the
   // ports, in the natural order the record keeps them (1, 2, … 10; eno1, enp4s0).
   const ports: CmdbAnswerObject[] = [];
+  const disks: CmdbAnswerObject[] = [];
   for (const o of objects) {
     const at = o.attributes;
     const text = (k: string): Obj => (typeof at[k] === "string" ? { [k]: at[k] } : {});
@@ -112,6 +115,35 @@ export function positionsFromCmdb(ans: CmdbAnswer): PositionsDoc {
       if (location) a.location = location;
       doc.assets![o.name] = a;
     } else if (o.class === "port") ports.push(o);
+    else if (o.class === "disk") disks.push(o);
+  }
+  // A disk: an asset of kind disk, placed in the asset it is part of.
+  for (const o of disks) {
+    const at = o.attributes;
+    const text = (k: string): Obj => (typeof at[k] === "string" ? { [k]: at[k] } : {});
+    const stage = String(at.stage ?? "placed");
+    const a: Asset = {
+      kind: "disk",
+      ...(o.displayName ? { displayName: o.displayName } : {}),
+      ...text("description"),
+      ...text("vendor"),
+      ...text("model"),
+      ...text("serial"),
+      ...text("assetTag"),
+      stage: (stage === "operational" ? "placed" : stage) as Asset["stage"],
+    };
+    const dk: DiskRecord = {};
+    if (typeof at.kind === "string") dk.kind = at.kind as DiskRecord["kind"];
+    if (typeof at.size === "number") dk.size = at.size;
+    for (const k of ["bus", "wwn", "firmware"] as const) if (typeof at[k] === "string") dk[k] = at[k] as string;
+    if (Object.keys(dk).length) a.disk = dk;
+    if (at.faulty === true) a.faulty = true;
+    if (typeof at.faultNote === "string") a.faultNote = at.faultNote;
+    if (at.procurement) a.procurement = at.procurement as Asset["procurement"];
+    if (at.disposal) a.disposal = at.disposal as Asset["disposal"];
+    doc.assets![o.name] = a;
+    const host = byId.get(portAsset.get(o.id) ?? "");
+    if (host) doc.placements![o.name] = { in: host.name, ...(typeof at.bay === "string" ? { bay: at.bay } : {}) };
   }
   for (const o of ports) {
     const at = o.attributes;

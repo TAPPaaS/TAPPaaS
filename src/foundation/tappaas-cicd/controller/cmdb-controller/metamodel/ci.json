@@ -266,7 +266,7 @@
         "used": { "type": "integer", "volatile": true },
         "zfsState": { "type": "string", "volatile": true, "description": "ZFS's word for it: ONLINE, DEGRADED, FAULTED, … health-manager assess makes it a condition." },
         "onNode": { "type": "relation", "relation": "runs-on", "required": true, "key": 1 },
-        "vdevs": { "type": "array", "description": "Its layout (D15): vdevs with state, members by serial." }
+        "vdevs": { "type": "array", "volatile": true, "description": "Its layout (D15): vdevs with state, members by device, serial and state; volatile, a member's state moves. Its members that a disk asset records are its built-on disks." }
       }
     },
     "share": {

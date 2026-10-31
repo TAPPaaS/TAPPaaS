@@ -17,7 +17,7 @@ import type { CmdbObject, CmdbRef, CmdbRelation, CmdbReport } from "../../../../
 import { PositionsDoc, cablesOf, heightOf, placementsOf, stageOf, withSiteFaceplates } from "../../../../lib/ts/src/positions";
 import { CmdbAnswer, SOURCE, View, changeReport, cmdbAnswer, cmdbView, fullReport, positionsFromCmdb } from "../../src/cmdb";
 import { loadCatalog } from "../../src/store";
-import { addFaceplate, allocateAsset, releaseAsset, removeAsset, removePort } from "../../src/verbs";
+import { addDisk, addFaceplate, allocateAsset, placeDisk, releaseAsset, removeAsset, removePort, unplaceDevice } from "../../src/verbs";
 
 let passed = 0;
 let failed = 0;
@@ -255,6 +255,43 @@ function problems(r: CmdbReport, extra: Map<string, string> = new Map()): string
   check(pn({ assets: { "srv-02": srv } } as PositionsDoc, "srv-02") === "eno1,eno2,eno10" && srv.ports?.[0].mac === "20:7c:14:f4:d0:8c", `read back: a server's ports, in natural order, although the answer lists ports before servers (${pn({ assets: { "srv-02": srv } } as PositionsDoc, "srv-02") || "none"})`);
   const panel = Object.keys(doc0.assets ?? {}).find((n) => (doc0.assets![n].ports?.length ?? 0) > 10);
   check(!!panel && pn(stored, panel) === pn(doc0, panel), `read back: ${panel ?? "a panel"}'s ports in natural order, not "1,10,11"`);
+}
+
+// ── disks (ADR-042): a disk CI part of the asset it is in ─────────────────
+{
+  const d1 = doc(addDisk(doc0, "tappaas1", "ata-Samsung_SSD_870_EVO_1TB_S6PTNX0R123456A", { serial: "S6PTNX0R123456A", model: "Samsung SSD 870 EVO 1TB", size: "1TB", kind: "ssd", bus: "sata", bay: "2" }));
+  const disks = doc(addDisk(d1, "srv-01", "nvme-WD_BLACK_SN850X_2000GB_23280K800123", { serial: "23280K800123", size: "2TB", kind: "nvme" }));
+  const v = viewOf(disks);
+  const { report } = fullReport(v);
+  const objs = report.objects ?? [];
+  const dsk = objs.filter((o) => o.class === "disk");
+  check(dsk.length === 2 && dsk.every((o) => JSON.stringify(o.attributes?.asset) === JSON.stringify({ ref: "asset:srv-01" })), "disks: each a disk CI part of the asset it is in (by the role's asset)");
+  const i = (ref: string) => objs.findIndex((o) => o.ref === ref);
+  check(i("asset:srv-01") >= 0 && i("asset:srv-01") < i("disk:srv-01:dsk-01"), "disks: reported after the asset they are in");
+  const one = dsk.find((o) => o.name === "dsk-01")!;
+  check(one.attributes?.serial === "S6PTNX0R123456A" && one.attributes?.bay === "2" && one.attributes?.size === 1e12 && one.attributes?.kind === "ssd" && one.attributes?.bus === "sata" && one.attributes?.stage === "placed" && one.attributes?.displayName === "ata-Samsung_SSD_870_EVO_1TB_S6PTNX0R123456A", "disks: serial, bay, size, kind, bus, stage and the by-id name shown");
+  const p = problems(report);
+  check(p.length === 0, `disks: the report fits the metamodel${p.length ? ` — ${p.slice(0, 5).join("; ")}` : ""}`);
+  check(!(report.relations ?? []).some((r) => JSON.stringify(r.from).includes("disk:")), "disks: no placed-in — the bay is the disk's, the asset its part-of");
+
+  // In stock: no CI.
+  const stock = doc(unplaceDevice(disks, "dsk-02", false));
+  check(!viewOf(stock).objects.some((o) => o.name === "dsk-02") && viewOf(stock).skipped.length === 0, "disks: one in stock has no CI, and is no omission");
+  const out = changeReport(v, viewOf(stock), { verb: "unplace" }).report!;
+  check((out.objects ?? []).some((o) => o.class === "disk" && o.name === "dsk-02" && o.end && JSON.stringify(o.attributes?.asset) === JSON.stringify({ class: "server", name: "srv-01" })), "unplace: the disk's CI ends, naming its asset by class and name");
+
+  // The move: the CI in the old asset ends, one in the new begins.
+  const moved = doc(placeDisk(disks, "dsk-01", "tappaas2"));
+  const mv = changeReport(v, viewOf(moved), { verb: "place" }).report!;
+  const mo = mv.objects ?? [];
+  check(mo.some((o) => o.class === "disk" && o.name === "dsk-01" && !o.end && JSON.stringify(o.attributes?.asset) === JSON.stringify({ ref: "asset:srv-02" })) && mo.some((o) => o.class === "disk" && o.name === "dsk-01" && o.end && JSON.stringify(o.attributes?.asset) === JSON.stringify({ class: "server", name: "srv-01" })), "place --in another asset: the old CI ends, a new one part of srv-02 begins");
+  check(problems(mv).length === 0, `place --in: the change fits the metamodel (${problems(mv).slice(0, 3).join("; ")})`);
+
+  // Read back: the disks, their asset and bay.
+  const back = positionsFromCmdb(cmdbAnswer(v));
+  check(back.assets?.["dsk-01"]?.kind === "disk" && back.assets["dsk-01"].serial === "S6PTNX0R123456A" && back.assets["dsk-01"].disk?.size === 1e12 && back.assets["dsk-01"].disk?.kind === "ssd" && back.assets["dsk-01"].displayName === "ata-Samsung_SSD_870_EVO_1TB_S6PTNX0R123456A", "read back: a disk asset, its serial, size, kind and name");
+  check(JSON.stringify(back.placements?.["dsk-01"]) === JSON.stringify({ in: "srv-01", bay: "2" }) && back.placements?.["dsk-02"]?.in === "srv-01", "read back: each disk in its asset and bay");
+  check(!Object.keys(back.placements ?? {}).some((k) => k === "srv-01"), "read back: a disk's asset is named by its own name, not its role");
 }
 
 console.log(`\ncmdb: ${passed} passed, ${failed} failed`);

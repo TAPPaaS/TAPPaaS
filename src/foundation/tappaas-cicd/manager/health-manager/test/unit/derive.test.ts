@@ -207,5 +207,45 @@ const rels = [
   check(at(ack.conditions, site, "capacity")?.status === "ok", "an acknowledged condition is not counted");
 }
 
+// ── a pool built on disks (ADR-042): a mirror member down degrades it ──
+{
+  const pool = obj("storage-pool", "tanka1");
+  const guest = obj("vm", "nextcloud");
+  const a = obj("disk", "dsk-01");
+  const b = obj("disk", "dsk-02");
+  const single = obj("storage-pool", "tankb1");
+  const c = obj("disk", "dsk-03");
+  const cache = obj("disk", "dsk-04");
+  const grp = { redundancyGroup: "tappaas1:tanka1:mirror-0" };
+  const prels = [rel("built-on", pool, a, grp), rel("built-on", pool, b, grp), rel("built-on", pool, cache, { required: false }), rel("built-on", single, c), rel("runs-on", guest, m1)];
+  const objs = [pool, guest, a, b, single, c, cache, m1];
+  const one = derive(objs, src(
+    [a, [cond("operational", "critical", "zfs", { message: "dsk-01: ZFS FAULTED in tanka1" })]],
+    [pool, [cond("operational", "warning", "pool-state", { message: "tanka1: zfs DEGRADED", since: "2026-10-30T02:16:00.000Z" })]],
+  ), prels, shippedModel(), now);
+  const imp = at(one.conditions, pool, "impact");
+  check(imp?.status === "warning" && imp.reason === "redundancy-degraded" && imp.rootCause === a.id, "one disk of a mirror vdev down: the pool degraded, the disk its root");
+  check(/one of two in tappaas1:tanka1:mirror-0 down: disk dsk-01/.test(imp?.message ?? ""), `…naming the disk (${imp?.message})`);
+  check(at(one.conditions, pool, "operational")?.derived === true && at(one.conditions, pool, "operational")?.rootCause === a.id, "…the pool's own DEGRADED is derived: the disk is what is mailed");
+  check(one.rootCauses.length === 1 && one.rootCauses[0].id === a.id, "…one root cause, the disk");
+
+  const both = derive(objs, src(
+    [a, [cond("operational", "critical", "zfs")]],
+    [b, [cond("operational", "critical", "smart")]],
+    [pool, [cond("operational", "critical", "pool-state", { since: "2026-10-30T02:16:00.000Z" })]],
+  ), prels, shippedModel(), now);
+  check(at(both.conditions, pool, "impact")?.status === "critical", "both members of the mirror down: the pool critical");
+  check(at(both.conditions, pool, "operational")?.derived === true, "…its own FAULTED explained by them");
+
+  const lone = derive(objs, src([c, [cond("operational", "critical", "smart")]]), prels, shippedModel(), now);
+  check(at(lone.conditions, single, "impact")?.status === "critical" && at(lone.conditions, single, "impact")?.rootCause === c.id, "the disk of a single-disk vdev: the pool down");
+
+  const opt = derive(objs, src([cache, [cond("operational", "critical", "smart")]]), prels, shippedModel(), now);
+  check(at(opt.conditions, pool, "impact") === undefined, "a cache member down: the pool untouched (required false)");
+
+  const warn = derive(objs, src([a, [cond("operational", "warning", "wear")]]), prels, shippedModel(), now);
+  check(at(warn.conditions, pool, "impact") === undefined, "a worn disk (a warning) crosses nothing");
+}
+
 console.log(`\nResults: ${passed} passed, ${failed} failed`);
 process.exit(failed === 0 ? 0 : 1);

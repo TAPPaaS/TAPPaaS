@@ -53,11 +53,11 @@
       "parent": "asset",
       "description": "A server. The BMC is a port with role bmc.",
       "fields": {
-        "bootDisks": { "type": "array", "items": { "type": "string" }, "description": "Serials (O4: disks are attributes for now)." },
+        "bootDisks": { "type": "array", "items": { "type": "string" }, "description": "Serials." },
         "cpu": { "type": "string" },
         "memory": { "type": "integer", "description": "MiB." },
         "nics": { "type": "array", "volatile": true, "description": "Every physical NIC, used or not (D15): name, MAC, kind, speed, link, bond or bridge. Volatile: its link state moves." },
-        "disks": { "type": "array", "description": "Every disk in it (D15, O4): by-id name, model, serial, size, type, bus, SMART health, partitions." }
+        "disks": { "type": "array", "description": "Every disk in it (D15): by-id name, model, serial, size, type, bus, SMART health, partitions. A disk its asset records is a disk CI besides (ADR-042)." }
       }
     },
     "network-device": {
@@ -122,6 +122,33 @@
         "seen": { "type": "array", "volatile": true, "description": "What is behind it: MAC, LLDP neighbour, lease." },
         "channel": { "type": "integer", "volatile": true },
         "power": { "type": "number", "volatile": true }
+      }
+    },
+    "disk": {
+      "parent": "resource",
+      "physical": true,
+      "description": "A disk in an asset (ADR-042): named by its tag (dsk-NN), its by-id name shown. Known by the asset it is in and its name; its serial is unique across all disks (asset-manager refuses a second). Moving it to another asset ends this CI and begins one there, so its history of placements is its CIs'. A pool is built-on it.",
+      "fields": {
+        "name": { "key": 1, "description": "The disk asset's tag (dsk-NN)." },
+        "asset": { "type": "relation", "relation": "part-of", "required": true, "immutable": true, "key": 1, "description": "The asset it is in (a server)." },
+        "bay": { "type": "string", "description": "The slot it is in: the server's label for it, else its by-id name." },
+        "vendor": { "type": "string" },
+        "model": { "type": "string" },
+        "serial": { "type": "string", "description": "Its identity (ADR-042 D2): unique across all disks, compared case-insensitively without whitespace and dashes." },
+        "wwn": { "type": "string", "description": "Its World Wide Name, the identity after the serial." },
+        "size": { "type": "integer", "description": "Bytes." },
+        "kind": { "type": "string", "enum": ["nvme", "ssd", "hdd", "usb"] },
+        "bus": { "type": "string", "description": "sata, sas, nvme, usb, …" },
+        "firmware": { "type": "string" },
+        "assetTag": { "type": "string" },
+        "procurement": { "type": "object", "description": "As an asset's (supplier, orderRef, purchaseDate, warrantyUntil, ownership, notes); no prices." },
+        "disposal": { "type": "object", "description": "As an asset's: how, when, wiped." },
+        "health": { "type": "string", "volatile": true, "description": "Proxmox's word from its disk list: PASSED, FAILED, UNKNOWN (site-manager report)." },
+        "wearout": { "type": "integer", "volatile": true, "description": "% of its rated life left (site-manager report --discover)." },
+        "temperature": { "type": "integer", "volatile": true, "description": "°C (site-manager report --discover)." },
+        "smart": { "type": "object", "volatile": true, "description": "The SMART attributes that matter: reallocated, pending, uncorrectable, mediaErrors, criticalWarning, powerOnHours (site-manager report --discover)." },
+        "holds": { "type": "string", "volatile": true, "description": "What the whole disk holds: zfs, lvm, efi, a filesystem, nothing." },
+        "partitions": { "type": "array", "volatile": true, "description": "Its partitions: device, size, what each holds, its pool." }
       }
     },
     "pool": {

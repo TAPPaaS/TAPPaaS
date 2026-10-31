@@ -17,7 +17,7 @@ import { readLocations } from "../../../lib/ts/src/locations";
 import { clusterNodes } from "../../../lib/ts/src/nodes";
 import { discoverModules } from "../../../lib/ts/src/module-discovery";
 import { POSITIONS_FILE, PositionsDoc, assetNamed } from "../../../lib/ts/src/positions";
-import { NodeDiscovery, discoveryObjects, parseCorosync } from "./cmdb-discover";
+import { NodeDiscovery, NodeStorage, discoveryReport, parseCorosync, storageReport } from "./cmdb-discover";
 
 type Obj = Record<string, unknown>;
 
@@ -56,6 +56,7 @@ export interface HostRead {
   addresses?: string[];
   pools?: string[];
   discovery?: NodeDiscovery; // --discover (D15)
+  storage?: NodeStorage; // without --discover: its disks and pools, no SMART
   network?: Obj; // `node network show --json`: what network-manager topology reads
 }
 
@@ -89,6 +90,17 @@ export const HOST_PROBE = [
   "echo \"pve=$(pveversion 2>/dev/null | sed -n 's|^pve-manager/\\([^/ ]*\\).*|\\1|p')\"",
   "echo \"pools=$(zpool list -H -o name 2>/dev/null | grep '^tank' | tr '\\n' ' ')\"",
 ].join("; ");
+
+// The line between the host probe's output and its disks and pools'.
+export const STORAGE_MARK = "@@@storage";
+
+/** A host read's stdout → the host probe's part and the storage probe's (null
+ *  when it has none). */
+export function splitStorage(stdout: string): [string, string | null] {
+  const lines = stdout.split("\n");
+  const i = lines.findIndex((l) => l.trim() === STORAGE_MARK);
+  return i < 0 ? [stdout, null] : [lines.slice(0, i).join("\n"), lines.slice(i + 1).join("\n")];
+}
 
 function sections(stdout: string): { head: string; body: string }[] {
   const out: { head: string; body: string[] }[] = [];
@@ -291,8 +303,13 @@ export function siteObservation(configDir: string, live: ClusterRead | null, tap
       management: "managed",
       stage: "operational",
     };
-    const found = discover && host?.discovery ? discoveryObjects(configDir, name, `machine/${name}`, host.discovery, attrs) : [];
-    objects.push({ ref: `machine/${name}`, class: "machine", name, attributes: compact(attrs) }, ...found);
+    // The node's depth (--discover), else its disks and pools: the disk CIs a
+    // server's asset records and what each pool is built on.
+    const found = discover && host?.discovery
+      ? discoveryReport(configDir, name, `machine/${name}`, host.discovery, attrs)
+      : host?.storage ? storageReport(configDir, name, `machine/${name}`, host.storage) : { objects: [], relations: [] };
+    objects.push({ ref: `machine/${name}`, class: "machine", name, attributes: compact(attrs) }, ...found.objects);
+    relations.push(...found.relations);
     if (!live || members.has(name)) relations.push({ type: "member-of", from: { ref: `machine/${name}` }, to: { ref: "cluster" } });
     const at = cfg?.location ?? (primary && locations[primary] ? primary : undefined);
     if (at && locations[at]) relations.push({ type: "at", from: { ref: `machine/${name}` }, to: { ref: `location/${at}` } });
