@@ -299,3 +299,20 @@ export function setupFromOutput(raw: string): { ready: boolean; step: string | n
   const port = /^\s*✓ (.+ port .+ is .+: a node trunk.*)$/m.exec(output)?.[1] ?? null;
   return { ready: steps.some((s) => s.startsWith("boot the machine now")), step: steps[steps.length - 1] ?? null, port };
 }
+
+// Stage 1's one line once the node is declared (its job past the dry run):
+// what the job is at, from its output and the node's records.
+export function declaredLine(name: string, setup: { ready: boolean; step: string | null; port: string | null }, f: { live: boolean; answered: boolean; joined: boolean }): string {
+  if (f.joined) return `${name} is declared and has joined the cluster.`;
+  if (!f.live) return `${name} is declared; its job has ended: stage 3 has its output.`;
+  if (f.answered) return `${name} is declared; its installer is running: stage 3 watches it.`;
+  if (setup.ready) return `${name} is declared: boot it now, from the network or the USB stick${setup.port ? ` (${setup.port})` : ""}.`;
+  return `${name} is declared; getting ready: ${setup.step ?? "starting"}…`;
+}
+
+// The last lines a failed job printed, without its colours or blank lines.
+export function lastLines(raw: string, n = 8): string[] {
+  // eslint-disable-next-line no-control-regex
+  const lines = raw.replace(/\x1b\[[0-9;]*[A-Za-z]/g, "").split("\n").map((l) => l.trimEnd()).filter((l) => l.trim() !== "");
+  return lines.slice(-n);
+}
