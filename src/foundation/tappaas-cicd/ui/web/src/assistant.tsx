@@ -5,8 +5,9 @@
 //
 // A question is POSTed to /assistant/chat and its answer read as it streams:
 // the reads the assistant made, its text, and its proposals. A proposal is a
-// card: Preview runs the verb's own dry run and Run applies that preview — the
-// P2 job flow, with the card's conversation and turn on the job, so Activity
+// card that runs as a wizard's step does (flows.tsx): Run, in one job with the
+// verb's dry run first, or for a plan to read, Preview and a Run that applies
+// that preview — with the card's conversation and turn on the job, so Activity
 // shows it came via the assistant. The assistant runs nothing itself. When it
 // opens a page or a wizard (open_console, a `navigate` event), the drawer
 // routes the console there and the wizard opens filled in (opener.ts); the
@@ -14,13 +15,14 @@
 
 import { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { get } from "./api";
-import { confirmMatches } from "./argv";
+import { confirmMatches, proposalFlow } from "./argv";
 import { TargetValues, resolveTarget } from "./consoletargets";
 import { requestOpen } from "./opener";
 import { useJobRun } from "./run";
 import { Command, JobOutput, JobStatusLine } from "./jobs";
 import { AssistantStatus, Me } from "./types";
-import { TypedConfirm, canOperate, navigate, useMe } from "./ui";
+import { FindingList, Link, TypedConfirm, canOperate, navigate, useMe } from "./ui";
+import { refusalLines, runFailure } from "./wizards";
 
 // What is in view, sent with every question.
 export interface Focus {
@@ -81,6 +83,8 @@ export interface Proposal {
   verb: string;
   read: boolean;
   destructive: boolean;
+  object?: string;
+  objectLabel?: string;
   preview: string;
 }
 
@@ -151,76 +155,101 @@ async function streamChat(body: unknown, onEvent: (e: ChatEvent) => void, signal
   }
 }
 
-// ── a proposed job: Preview and Run through the job model ─────────────
+// ── a proposed job: through the job model, as a wizard's step runs it ──
 
+// How a card runs follows from how its verb previews (argv.ts proposalFlow):
+// a read: Run; no dry run, or one that only says yes or no: Run, one job with
+// its dry run first, a refusal shown here with Try again; a plan or a
+// destructive dry run: Preview to read, and Run applies that preview. Unlike a
+// wizard's step nothing starts by itself: a card runs on the operator's click.
 function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: string; me: Me | null }) {
-  const previewRun = useJobRun();
-  const applyRun = useJobRun();
+  const preview = useJobRun();
+  const run = useJobRun();
   const [confirm, setConfirm] = useState("");
   const [dismissed, setDismissed] = useState(false);
-  const preview = previewRun.id;
-  const applied = applyRun.id;
-  const pj = previewRun.job;
-  const aj = applyRun.job;
-  const error = applyRun.error ?? previewRun.error;
+  const flow = proposalFlow(p);
+  const direct = flow === "read" || flow === "act";
+  const pj = preview.job;
+  const aj = run.job;
+  const error = run.error ?? preview.error;
   const may = canOperate(me);
   const from = { conversation, proposal: p.id };
   const previewDone = pj !== null && pj.state === "done";
   const refusedByDryRun = previewDone && p.preview === "dry-run-flag" && pj!.exit !== 0;
-  const object = pj?.object ?? "";
-  const label = pj?.objectLabel ?? object;
-  const canRun = may && !applied && (p.read ? !preview : previewDone && !refusedByDryRun && (!p.destructive || confirmMatches(confirm, object, label)));
+  const pending = previewDone && p.preview === "apply-flag" && pj!.exit === 2; // changes to apply, not a failure
+  const object = pj?.object ?? p.object ?? "";
+  const label = pj?.objectLabel ?? p.objectLabel ?? object;
+  const typed = !p.destructive || confirmMatches(confirm, object, label);
+  const failed = run.finished && !run.ok;
+  const spent = run.id !== null && !failed; // under way, or done with
+  const ready = direct || (previewDone && !refusedByDryRun);
+  const canRun = may && !spent && !failed && ready && typed && !run.live;
 
   if (dismissed) return <div className="card-proposal card-dismissed muted small">Proposal dismissed: <code className="mono">{p.argv.join(" ")}</code></div>;
 
-  const doPreview = () => previewRun.preview(p.argv, from);
+  const doPreview = () => {
+    run.retry();
+    return preview.preview(p.argv, from);
+  };
   const doRun = async () => {
-    if (p.read) return previewRun.read(p.argv, from);
-    if (preview) await applyRun.applyPreview(preview, p.destructive ? confirm : undefined);
+    const named = p.destructive ? confirm : undefined;
+    if (flow === "read") await run.read(p.argv, from);
+    else if (flow === "act") await run.apply(p.argv, named, from);
+    else if (preview.id) await run.applyPreview(preview.id, named);
   };
 
   return (
     <div className={`card-proposal${p.destructive ? " card-destructive" : ""}`}>
       <div className="card-proposal-head">
         <b>{p.read ? "Proposed read" : "Proposed change"}</b>
-        <span className="muted small">{p.read ? "changes nothing" : p.preview === "none" ? "no dry run" : "previewed first"}{p.destructive ? " · destructive" : ""}</span>
+        <span className="muted small">{p.read ? "changes nothing" : p.preview === "none" ? "no dry run" : direct ? "dry run first" : "previewed first"}{p.destructive ? " · destructive" : ""}</span>
       </div>
       {p.rationale ? <p className="small">{p.rationale}</p> : null}
       <Command argv={p.argv} />
       <p className="muted small">
         {may
-          ? `Runs as ${me?.user ?? "you"} through the job runner; ${p.read ? "a read" : "preview first"}, recorded in Activity.`
+          ? `Runs as ${me?.user ?? "you"} through the job runner; ${p.read ? "a read" : direct ? "one button" : "preview first"}, recorded in Activity.`
           : "Read only here (no sign-in through the gate): an installer runs it."}
       </p>
+      {p.destructive && ready && !spent && may ? <TypedConfirm object={object} label={label} value={confirm} set={setConfirm} /> : null}
       <div className="actions">
-        {!p.read ? (
-          <button className="btn" disabled={!may || applied !== null} onClick={() => void doPreview()}>
-            {preview ? "Preview again" : "Preview"}
+        {!direct ? (
+          <button className="btn" disabled={!may || spent || preview.live} onClick={() => void doPreview()}>
+            {preview.id ? "Preview again" : "Preview"}
           </button>
         ) : null}
-        <button className={`btn ${p.destructive ? "btn-danger" : "btn-primary"}`} disabled={!canRun} onClick={() => void doRun()} title={p.read || previewDone ? "" : "Preview first"}>
-          Run
+        <button className={`btn ${p.destructive ? "btn-danger" : "btn-primary"}`} disabled={!canRun} onClick={() => void doRun()} title={ready ? "" : "Preview first"}>
+          {run.state === "starting" ? "Starting…" : "Run"}
         </button>
-        <button className="btn" disabled={applied !== null} onClick={() => setDismissed(true)}>
+        <button className="btn" disabled={run.id !== null} onClick={() => setDismissed(true)}>
           Dismiss
         </button>
       </div>
       {error ? <p className="readstate readstate-fail">{error}</p> : null}
       {pj ? (
         <div className="jobview">
-          <JobStatusLine job={pj} label={p.read ? "result" : "preview"} />
+          <JobStatusLine job={pj} label="preview" {...(pending ? { level: "pass", state: "changes pending" } : {})} />
           {pj.refused ? <p className="readstate readstate-fail">{pj.refused}</p> : null}
-          <JobOutput job={pj} />
+          <JobOutput job={pj} fold={run.id ? "tail" : "open"} />
         </div>
       ) : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to run.</p> : null}
-      {p.destructive && previewDone && !applied && may ? (
-        <TypedConfirm object={object} label={label} value={confirm} set={setConfirm} />
-      ) : null}
       {aj ? (
         <div className="jobview">
-          <JobStatusLine job={aj} label="run" />
-          <JobOutput job={aj} />
+          <JobStatusLine job={aj} label={p.read ? "result" : "run"} />
+          {failed ? (
+            <>
+              <p className="readstate readstate-fail">{run.inApply ? `It did not finish: ${runFailure(aj)}` : `Nothing was applied: ${runFailure(aj)}`}.</p>
+              {aj.previewPhase?.stopped ? <FindingList items={refusalLines(aj.output).map((text) => ({ text }))} /> : null}
+            </>
+          ) : null}
+          <JobOutput job={aj} fold={failed ? "tail" : "open"} tail={8} />
+          {failed ? (
+            <div className="actions">
+              <button className="btn btn-primary" onClick={run.retry}>Try again</button>
+            </div>
+          ) : null}
+          {run.ok ? <p className="muted small">Recorded in <Link to="/activity">Activity</Link> with this output.</p> : null}
         </div>
       ) : null}
     </div>
@@ -248,7 +277,7 @@ function TurnView({ t, conversation, me }: { t: Turn; conversation: string; me: 
           <p key={i} className="turn-opened small">
             ↗ Opened <a href={o.path} onClick={(e) => { e.preventDefault(); follow(o); }}>{o.title}</a>
             {vals.length ? <span className="muted"> · filled in: {vals.join(", ")}</span> : null}
-            {wizard && !operator ? <span className="muted"> · its form needs an installer signed in</span> : wizard ? <span className="muted"> · nothing changes until you preview and apply it there</span> : null}
+            {wizard && !operator ? <span className="muted"> · its form needs an installer signed in</span> : wizard ? <span className="muted"> · nothing changes until you apply it there</span> : null}
           </p>
         );
       })}
@@ -347,7 +376,7 @@ export function AssistantDrawer({ status, focus, site, asked, open, onClose }: {
       <div className="drawer-body" ref={body}>
         {turns.length === 0 ? (
           <div className="muted small">
-            <p>Ask about the site, a module, a zone, a finding. The assistant reads the console's own records — the health gates, the modules, the topology, backups, Activity, a host's logs when the logging module is installed, and the managers' help — opens the console's wizard for a change, filled in, or proposes it as a card you preview and run.</p>
+            <p>Ask about the site, a module, a zone, a finding. The assistant reads the console's own records — the health gates, the modules, the topology, backups, Activity, a host's logs when the logging module is installed, and the managers' help — opens the console's wizard for a change, filled in, or proposes it as a card you run.</p>
             {earlier.length ? (
               <>
                 <p>Earlier conversations:</p>
@@ -382,7 +411,7 @@ export function AssistantDrawer({ status, focus, site, asked, open, onClose }: {
           <button type="submit" className="btn btn-primary" disabled={!text.trim()}>Ask</button>
         )}
       </form>
-      <footer className="drawer-foot muted small">Reads freely (list, show, drift, validate, logs); opens a wizard filled in. Changes only through a Preview and Run you click.</footer>
+      <footer className="drawer-foot muted small">Reads freely (list, show, drift, validate, logs); opens a wizard filled in. Changes only through a Run you click.</footer>
     </aside>
   );
 }

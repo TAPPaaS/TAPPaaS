@@ -194,19 +194,19 @@ function JobDetail({ id }: { id: string }) {
       {job.previewPhase ? (
         <>
           <Command argv={job.previewPhase.ran} label="preview ran" />
-          <Output text={phaseOutputs(job).preview ?? ""} live={job.state === "running" && job.previewPhase.exit === null} collapsed={job.previewPhase.exit !== null && !!job.ran && !job.previewPhase.stopped} />
+          <JobOutput job={job} text={phaseOutputs(job).preview ?? ""} live={jobLive(job) && job.previewPhase.exit === null} fold={job.ran && !job.previewPhase.stopped ? "tail" : "open"} />
           {job.previewPhase.stopped ? <p className="readstate readstate-warn">{job.previewPhase.stopped}.</p> : null}
-          {job.ran && !job.previewPhase.stopped ? (
+          {job.ran && !job.previewPhase.stopped && job.state !== "queued" ? (
             <>
               <Command argv={job.ran} label="then ran" />
-              <Output text={phaseOutputs(job).apply} live={job.state === "running" && job.previewPhase.exit !== null} />
+              <JobOutput job={job} text={phaseOutputs(job).apply} live={jobLive(job) && job.previewPhase.exit !== null} />
             </>
           ) : null}
         </>
       ) : (
         <>
           {job.ran ? <Command argv={job.ran} label="ran" /> : <p className="muted small">No dry run: nothing ran for this preview.</p>}
-          <Output text={job.output} live={job.state === "running"} />
+          <JobOutput job={job} />
         </>
       )}
       {job.truncated ? <p className="muted small">output cut at 1 MiB</p> : null}

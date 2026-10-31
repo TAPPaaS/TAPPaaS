@@ -18,8 +18,7 @@ import { AssetChoice, ASSET_CHOICES, CheckOutcome, HOWS, How, RemovalOutcome, as
 import { useOpenedBy, requestOpen } from "../opener";
 import { Job, JobSummary, SiteRead } from "../types";
 import { Link, Tag, TypedConfirm, canOperate, useMe } from "../ui";
-import { ResumeOffer, Wizard, useJobSession } from "../wizard";
-import { StepRow } from "./Setup";
+import { DecideStep, ResumeOffer, StepRow, Wizard, useJobSession } from "../wizard";
 
 export { HOWS } from "../noderemove";
 export type { How } from "../noderemove";
@@ -70,10 +69,11 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
       <p className="small">{REMOVE_NODE_TEXT}</p>
       <ol className="setup">
         <StepRow s={stages[0]} open={current === "node"}>
-          <div className="form">
+          <DecideStep decided={decided} locked={job !== null} ready={!!chosen} hint="pick the node first" onContinue={() => setDecided(true)} onChange={() => setDecided(false)}>
+            <div className="form">
             <label className="form-row">
               <span>node *</span>
-              <select value={chosen} disabled={job !== null} onChange={(e) => { setNode(e.target.value); setDecided(false); }}>
+              <select value={chosen} onChange={(e) => setNode(e.target.value)}>
                 <option value="">{nodes.length ? "— pick the node" : "— reading the nodes…"}</option>
                 {nodes.map((n) => (
                   <option key={n} value={n}>{n}</option>
@@ -84,19 +84,12 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
             </label>
             {HOWS.map((h) => (
               <label key={h.id} className="form-check">
-                <input type="radio" name="how" checked={how === h.id} disabled={job !== null} onChange={() => { setHow(h.id); setDecided(false); }} />
+                <input type="radio" name="how" checked={how === h.id} onChange={() => setHow(h.id)} />
                 <span>{h.label}</span> <small className="muted">{h.detail}</small>
               </label>
             ))}
-            <div className="actions">
-              {decided && job === null ? (
-                <button className="btn" onClick={() => setDecided(false)}>Change</button>
-              ) : (
-                <button className="btn btn-primary" disabled={!chosen || job !== null} onClick={() => setDecided(true)}>Continue</button>
-              )}
-              {!chosen ? <span className="muted small">pick the node first</span> : null}
             </div>
-          </div>
+          </DecideStep>
         </StepRow>
         <StepRow s={stages[1]} open={current === "remove"}>
           {!chosen || !decided ? (

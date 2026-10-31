@@ -11,8 +11,9 @@
 //                                            the next reconcile pushes it (#889)
 //   backup-keys  (no file)                   the password of the backup-key USB stick, handed
 //                                            to `backup-manager key export --usb --node N
-//                                            --device D --yes --password-stdin` on stdin: the
-//                                            stick is the keys' copy that leaves the building
+//                                            --device D --yes --password-stdin` on stdin, as a
+//                                            job (a minute or two, with its output and Stop):
+//                                            the stick is the keys' copy that leaves the building
 
 import { chmodSync, existsSync, readFileSync, renameSync, statSync, writeFileSync } from "fs";
 import { join } from "path";
@@ -36,6 +37,7 @@ export interface SecretCommand {
   input: string;
   keys: string[];
   timeoutMs?: number; // a verb that formats and verifies a stick takes minutes
+  job?: boolean; // run as a job (Jobs.createWithSecret): it streams and can be stopped
   where?: string; // what holds the secret when it is no file of the mothership's
 }
 
@@ -113,7 +115,7 @@ export const SECRETS: Record<SecretName, SecretSpec> = {
         input: `${password}\n`,
         keys: [`${node}:${device}`],
         timeoutMs: 10 * 60_000,
-        where: `the USB stick ${device} in ${node}`,
+        job: true,
       };
     },
   },

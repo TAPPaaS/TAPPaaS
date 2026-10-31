@@ -11,10 +11,9 @@ import { TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
 import { JobSummary } from "../types";
 import { canOperate, useMe } from "../ui";
-import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
+import { DecideStep, ResumeOffer, StepRow, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
 import { locationOption, useSiteLocations } from "../locations";
 import { BUDDY_KINDS, BuddyKind, buddyNameProblem, buddySpecs } from "../wizards";
-import { StepRow } from "./Setup";
 
 const LABELS: Record<string, string> = {
   "--host": "--host: the buddy's PBS",
@@ -96,26 +95,21 @@ export function BuddyWizard({ onClose, prefill }: { onClose: () => void; prefill
       <p className="small">A buddy is another site's PBS that keeps an off-site copy of backups. The copy is always pulled, through its own WireGuard tunnel that carries the pull and nothing else; two sites holding each other's copy are two pulls, one in each direction.</p>
       <ol className="setup">
         <StepRow s={stages[0]} open={current === "who"}>
+          <DecideStep decided={chosen !== null} locked={added || job !== null} ready={problem === null} onChange={() => setChosen(null)} onContinue={() => setChosen({ kind, name: name.trim() })}>
           <div className="form">
             {(Object.keys(BUDDY_KINDS) as BuddyKind[]).map((k) => (
               <label key={k} className="form-check">
-                <input type="radio" name="buddy-kind" checked={kind === k} disabled={chosen !== null} onChange={() => setKind(k)} />
+                <input type="radio" name="buddy-kind" checked={kind === k} onChange={() => setKind(k)} />
                 <b className="mono">{k}</b> <small>{BUDDY_KINDS[k]}</small>
               </label>
             ))}
             <label className="form-row">
               <span>the buddy's name *</span>
-              <input type="text" value={name} disabled={chosen !== null} placeholder="e.g. their site's name" onChange={(e) => setName(e.target.value)} />
+              <input type="text" value={name} placeholder="e.g. their site's name" onChange={(e) => setName(e.target.value)} />
               {name && problem ? <small className="ff-error">{problem}</small> : <small className="muted">Names the peer here: its config, its PBS remote or login, its tunnel.</small>}
             </label>
           </div>
-          <div className="actions">
-            {chosen ? (
-              <button className="btn" disabled={added || job !== null} onClick={() => setChosen(null)}>Edit</button>
-            ) : (
-              <button className="btn btn-primary" disabled={problem !== null} onClick={() => setChosen({ kind, name: name.trim() })}>Continue</button>
-            )}
-          </div>
+          </DecideStep>
         </StepRow>
         <StepRow s={stages[1]} open={current === "add"}>
           {steps ? (

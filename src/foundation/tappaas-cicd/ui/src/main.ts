@@ -246,10 +246,11 @@ async function serve(o: ServeOpts): Promise<number> {
     run: runAsync,
     log,
     proposal: (me, c, p) => assistant?.proposal(me, c, p) ?? null,
-    onWriteDone: () => {
+    onWriteDone: (job) => {
       // The identity step puts the console behind the gate: the token goes (D10).
       closeSetupToken(access, log);
       void reads.refreshAfterJob();
+      if (job.bin === "backup-manager" && job.verb === "key") void reads.backupKeysChanged();
     },
     // A foundation module's test run as a job counts for its Setup step.
     onDone: (job, tail) => {

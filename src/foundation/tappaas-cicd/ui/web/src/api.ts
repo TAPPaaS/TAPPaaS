@@ -148,7 +148,7 @@ export interface CardRef {
 export const previewJob = (argv: string[], from?: CardRef) => post<Job>("jobs", { argv, preview: true, ...(from ? { assistant: from } : {}) });
 export const readJob = (argv: string[], from?: CardRef) => post<Job>("jobs", { argv, ...(from ? { assistant: from } : {}) });
 // Apply without a preview click: one job that runs the dry run, then the apply on a clean one.
-export const applyNowJob = (argv: string[], confirm?: string) => post<Job>("jobs", { argv, apply: true, ...(confirm ? { confirm } : {}) });
+export const applyNowJob = (argv: string[], confirm?: string, from?: CardRef) => post<Job>("jobs", { argv, apply: true, ...(confirm ? { confirm } : {}), ...(from ? { assistant: from } : {}) });
 export const applyJob = (previewId: string, confirm?: string) => post<Job>(`jobs/${encodeURIComponent(previewId)}/apply`, confirm ? { confirm } : {});
 // A queued job never runs; a running one is stopped (SIGINT to its process group, then SIGTERM).
 export const cancelJob = (id: string) => post<Job>(`jobs/${encodeURIComponent(id)}/cancel`, {});

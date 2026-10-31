@@ -4,11 +4,14 @@
 // a stage past the first is done, the × asks first. The jobs come from the
 // steps inside (StepView reports the one it watches, WizardContext); a wizard
 // that watches a job of its own (Add node's install, reattached) names it in
-// `running`.
+// `running`. Inside it, what every wizard is made of: StepRow, one stage of its
+// list; DecideStep, a stage that is a form to settle before the next ones run;
+// ResumeOffer, the job found again on open (useJobSession).
 
 import { ReactNode, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useRead } from "./api";
 import { JobSummary } from "./types";
+import { Dot } from "./ui";
 import { sessionJob } from "./wizards";
 
 interface WizardJobs {
@@ -32,22 +35,79 @@ export function useReportJob(job: (Pick<JobSummary, "state" | "bin" | "verb" | "
   useEffect(() => () => ctx?.report(key, null), [ctx]);
 }
 
-// The job a wizard's session hangs on (wizards.ts sessionJob): one verb's
-// jobs, read while the wizard has none of its own attached (`enabled`).
-export function useJobSession(bin: string, verb: string, match: (j: JobSummary) => boolean, enabled: boolean, keepMs = 3600_000): JobSummary | null {
+// One verb's jobs, the newest first, read while the wizard has none of its own
+// attached (`enabled`): what a session is looked for in.
+export function useVerbJobs(bin: string, verb: string, enabled: boolean): JobSummary[] {
   const q = `jobs?bin=${encodeURIComponent(bin)}&verb=${encodeURIComponent(verb)}&limit=20`;
-  const jobs = useRead<{ jobs: JobSummary[] }>(enabled ? q : null, 15_000).env?.data?.jobs ?? [];
+  return useRead<{ jobs: JobSummary[] }>(enabled ? q : null, 15_000).env?.data?.jobs ?? [];
+}
+
+// The job a wizard's session hangs on (wizards.ts sessionJob).
+export function useJobSession(bin: string, verb: string, match: (j: JobSummary) => boolean, enabled: boolean, keepMs = 3600_000): JobSummary | null {
+  const jobs = useVerbJobs(bin, verb, enabled);
   return enabled ? sessionJob(jobs, match, Date.now(), keepMs) : null;
 }
 
-// The offer on open: "<what> — job … running. Continue".
-export function ResumeOffer({ what, job, onContinue, onDecline, decline = "Start a new one" }: { what: ReactNode; job: JobSummary; onContinue: () => void; onDecline: () => void; decline?: string }) {
+// The offer on open: "<what> — job … running. Continue". `also`: one more way
+// out of it, beside Continue and the decline.
+export function ResumeOffer({ what, job, onContinue, onDecline, decline = "Start a new one", also }: { what: ReactNode; job: JobSummary; onContinue: () => void; onDecline: () => void; decline?: string; also?: { label: string; title?: string; onClick: () => void } }) {
   return (
     <div className="readstate readstate-warn wizard-resume">
       <span>{what} — job {job.id} {jobLive(job) ? job.state : "finished"}.</span>
       <button className="btn btn-small btn-primary" onClick={onContinue}>Continue</button>
       <button className="btn btn-small" onClick={onDecline}>{decline}</button>
+      {also ? <button className="btn btn-small" title={also.title} onClick={also.onClick}>{also.label}</button> : null}
     </div>
+  );
+}
+
+// One stage of a checklist (Setup's, a wizard's): its state, its title and
+// detail, and its body while open.
+export interface StageState {
+  title: string;
+  required: boolean;
+  done: boolean | null;
+  detail: string;
+}
+
+export function StepRow({ s, children, open: forced }: { s: StageState; children?: ReactNode; open?: boolean }) {
+  const [userOpen, setOpen] = useState<boolean | null>(null);
+  const open = userOpen ?? forced ?? s.done !== true;
+  return (
+    <li className={`setup-step setup-${s.done === true ? "done" : s.done === false ? "todo" : "unknown"}`}>
+      <button className="setup-head" onClick={() => setOpen(!open)} aria-expanded={open}>
+        <Dot level={s.done === true ? "pass" : s.done === false ? (s.required ? "fail" : "skip") : "warn"} />
+        <b>{s.title}</b>
+        <span className="muted small">{s.done === true ? "done" : s.done === false ? (s.required ? "to do" : "optional") : "pending"}</span>
+        <span className="spacer" />
+        <span className="muted">{open ? "▾" : "▸"}</span>
+      </button>
+      <p className="small setup-detail">{s.detail}</p>
+      {/* Hidden, not unmounted, when collapsed: a step's job, output and form
+          state stay, so a stage that closed as it finished reopens with its
+          result (Remove a node's stage 2, Add a node's stages). */}
+      {children ? <div className="setup-body" hidden={!open}>{children}</div> : null}
+    </li>
+  );
+}
+
+// A stage that is a form and Continue: what it decides is what the next stages
+// run on, so Continue locks its fields and Change opens them again. `locked`:
+// something has run on it, Change waits; `ready`: it can be continued from,
+// and `hint` says why not, unless its fields do.
+export function DecideStep({ decided, locked, ready = true, hint, onContinue, onChange, children }: { decided: boolean; locked?: boolean; ready?: boolean; hint?: ReactNode; onContinue: () => void; onChange: () => void; children: ReactNode }) {
+  return (
+    <>
+      <fieldset className="decide" disabled={decided}>{children}</fieldset>
+      <div className="actions">
+        {decided ? (
+          <button className="btn" disabled={locked} onClick={onChange}>Change</button>
+        ) : (
+          <button className="btn btn-primary" disabled={!ready} onClick={onContinue}>Continue</button>
+        )}
+        {!decided && !ready && hint ? <span className="muted small">{hint}</span> : null}
+      </div>
+    </>
   );
 }
 

@@ -237,6 +237,7 @@ h3 { font-size: .85rem; margin: 1rem 0 .4rem; color: var(--muted); text-transfor
 .stepper li.on { background: #1f2933; color: #fff; }
 .stepper li.past { background: var(--pass-bg); color: #1e6b30; }
 .form { display: grid; gap: 8px; margin: 8px 0; }
+.decide { border: 0; padding: 0; margin: 0; min-width: 0; }
 .form-row { display: grid; grid-template-columns: 170px 1fr; gap: 4px 10px; align-items: center; }
 .form-row > small { grid-column: 2; }
 .form-row input, .form-row select, .form-row textarea { font: inherit; font-size: 13px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; width: 100%; box-sizing: border-box; }

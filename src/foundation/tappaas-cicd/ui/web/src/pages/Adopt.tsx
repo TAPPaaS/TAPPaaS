@@ -20,9 +20,8 @@ import { placeSteps } from "../physical/rackops";
 import { viewLink } from "../physical/views";
 import { JobSummary, Topology } from "../types";
 import { Link, canOperate, useMe } from "../ui";
-import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
+import { DecideStep, ResumeOffer, StepRow, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
 import { argOf } from "../wizards";
-import { StepRow } from "./Setup";
 
 // What the activity is, on Day 2's card and at the top of the form.
 export const ADOPT_TEXT = "A machine that already runs — a Debian host in a cupboard or a data centre — becomes a module of the site, at the location it is at. The mothership's key is added for root, its config is written and nothing else on it changes.";
@@ -155,20 +154,24 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
       <p className="small">{ADOPT_TEXT}</p>
       <ol className="setup">
         <StepRow s={stages[0]} open={current === "machine"}>
+          <DecideStep decided={plan !== null} locked={portSet || job !== null} ready={problem === null} hint={problem} onChange={() => setPlan(null)} onContinue={() => {
+            const [sw, ...rest] = port.split(":");
+            setPlan({ address: addr, instance, zone, location, keyOnly, port: port ? { sw, port: rest.join(":") } : null });
+          }}>
           <div className="form">
             <label className="form-row">
               <span>address *</span>
-              <input type="text" value={address} disabled={plan !== null} placeholder="its IP address or DNS name" onChange={(e) => setAddress(e.target.value)} />
+              <input type="text" value={address} placeholder="its IP address or DNS name" onChange={(e) => setAddress(e.target.value)} />
               <small className="muted">How the mothership reaches it today.</small>
             </label>
             <label className="form-row">
               <span>name</span>
-              <input type="text" value={instance} disabled={plan !== null} placeholder="blank: the machine's own hostname" onChange={(e) => setInstance(e.target.value.trim())} />
+              <input type="text" value={instance} placeholder="blank: the machine's own hostname" onChange={(e) => setInstance(e.target.value.trim())} />
               <small className="muted">The module's instance name; a name another machine has is refused.</small>
             </label>
             <label className="form-row">
               <span>zone{port ? " *" : ""}</span>
-              <select value={zone} disabled={plan !== null} onChange={(e) => setZone(e.target.value)}>
+              <select value={zone} onChange={(e) => setZone(e.target.value)}>
                 <option value="">— blank: the zone whose subnet holds its address</option>
                 {zones.map((z) => (
                   <option key={z.name} value={z.name}>{z.name} ({z.type ?? "?"}, VLAN {z.vlan})</option>
@@ -178,7 +181,7 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
             </label>
             <label className="form-row">
               <span>location</span>
-              <select value={location} disabled={plan !== null} onChange={(e) => setLocation(e.target.value)}>
+              <select value={location} onChange={(e) => setLocation(e.target.value)}>
                 <option value="">— the primary location</option>
                 {locations.map((l) => (
                   <option key={l.name} value={l.name}>{l.name}{l.primary ? " (primary)" : ""}</option>
@@ -187,12 +190,12 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
               <small className="muted">One of the site's locations: where the machine stands.</small>
             </label>
             <label className="form-check">
-              <input type="checkbox" checked={keyOnly} disabled={plan !== null} onChange={(e) => setKeyOnly(e.target.checked)} />
+              <input type="checkbox" checked={keyOnly} onChange={(e) => setKeyOnly(e.target.checked)} />
               <span>SSH key-only</span> <small className="muted">Root logs in with the mothership's key only; unticked, password logins stay allowed (sshKeyOnly=false).</small>
             </label>
             <label className="form-row">
               <span>switch port</span>
-              <select value={port} disabled={plan !== null} onChange={(e) => setPort(e.target.value)}>
+              <select value={port} onChange={(e) => setPort(e.target.value)}>
                 <option value="">— none: a self-managed switch, or not cabled yet</option>
                 {ports.map((c) => (
                   <option key={c.value} value={c.value}>{c.label}</option>
@@ -201,23 +204,7 @@ export function AdoptWizard({ onClose, prefill }: { onClose: () => void; prefill
               <small className="muted">The free ports on the switches TAPPaaS programs. The port becomes an access port in the machine's zone before the adoption.{manual.length ? ` Self-managed: ${manual.join(", ")} — set their ports by hand.` : ""}</small>
             </label>
           </div>
-          <div className="actions">
-            {plan ? (
-              <button className="btn" disabled={portSet || job !== null} onClick={() => setPlan(null)}>Edit</button>
-            ) : (
-              <button
-                className="btn btn-primary"
-                disabled={problem !== null}
-                onClick={() => {
-                  const [sw, ...rest] = port.split(":");
-                  setPlan({ address: addr, instance, zone, location, keyOnly, port: port ? { sw, port: rest.join(":") } : null });
-                }}
-              >
-                Continue
-              </button>
-            )}
-            {!plan && problem ? <span className="muted small">{problem}</span> : null}
-          </div>
+          </DecideStep>
         </StepRow>
         <StepRow s={stages[1]} open={current === "port"}>
           {!plan ? (

@@ -8,12 +8,14 @@
 // complete; /setup/day1 and /setup/day2 open a tab.
 
 import { ReactNode, useEffect, useState } from "react";
-import { Read, get, post, useRead } from "../api";
-import { stripAnsi } from "../jobs";
+import { Read, post, useRead } from "../api";
+import { JobOutput, JobStatusLine, stripAnsi } from "../jobs";
 import { OperateButton, Step } from "../operate";
 import { fieldsStep } from "../fields";
-import { EnvironmentRow, SiteRead } from "../types";
+import { useJobRun } from "../run";
+import { EnvironmentRow, JobSummary, SiteRead } from "../types";
 import { Dot, Link, ReadState, canOperate, replacePath, since, useMe } from "../ui";
+import { StageState, StepRow } from "../wizard";
 import { AddNodeButton, sessionText, useAddNodeSession } from "./AddNode";
 import { EnrolButton } from "./Enrol";
 import { Day2 } from "./Day2";
@@ -137,35 +139,8 @@ export function SecretForm({ name, fields, status, onSaved }: { name: string; fi
 
 // ── the checklist ─────────────────────────────────────────────────────
 
-export interface SetupStep {
+export interface SetupStep extends StageState {
   id: string;
-  title: string;
-  required: boolean;
-  done: boolean | null;
-  detail: string;
-}
-
-// One step of a checklist (Setup's, Add node's): its state, its title and
-// detail, and its body while open.
-export function StepRow({ s, children, open: forced }: { s: SetupStep; children?: ReactNode; open?: boolean }) {
-  const [userOpen, setOpen] = useState<boolean | null>(null);
-  const open = userOpen ?? forced ?? s.done !== true;
-  return (
-    <li className={`setup-step setup-${s.done === true ? "done" : s.done === false ? "todo" : "unknown"}`}>
-      <button className="setup-head" onClick={() => setOpen(!open)} aria-expanded={open}>
-        <Dot level={s.done === true ? "pass" : s.done === false ? (s.required ? "fail" : "skip") : "warn"} />
-        <b>{s.title}</b>
-        <span className="muted small">{s.done === true ? "done" : s.done === false ? (s.required ? "to do" : "optional") : "pending"}</span>
-        <span className="spacer" />
-        <span className="muted">{open ? "▾" : "▸"}</span>
-      </button>
-      <p className="small setup-detail">{s.detail}</p>
-      {/* Hidden, not unmounted, when collapsed: a step's job, output and form
-          state stay, so a stage that closed as it finished reopens with its
-          result (Remove a node's stage 2, Add a node's stages). */}
-      {children ? <div className="setup-body" hidden={!open}>{children}</div> : null}
-    </li>
-  );
 }
 
 // The WiFi step's way on: the Day 2 button of each active Client zone with no
@@ -227,6 +202,19 @@ function WifiLinks({ doc }: { doc: SetupDoc | null }) {
   );
 }
 
+// One module's test in the page's Check: its status, with Stop, and its output.
+function CheckRun({ id, onEnd }: { id: string; onEnd: (id: string) => void }) {
+  const run = useJobRun({ attach: id, onDone: () => onEnd(id) });
+  const job = run.job;
+  if (!job) return <p className="muted small">starting…</p>;
+  return (
+    <div className="jobview">
+      <JobStatusLine job={job} label={job.argv.join(" ")} />
+      <JobOutput job={job} fold={run.ok ? "closed" : "tail"} tail={8} />
+    </div>
+  );
+}
+
 const mm = (title: string, verb: string, extra: Partial<Step> = {}): Step => ({ title, bin: "module-manager", verb, ...extra });
 
 export type SetupTab = "Day 1" | "Day 2";
@@ -265,17 +253,23 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
   // with the way back into the wizard at its stage.
   const adding = useAddNodeSession(canOperate(useMe()));
   const site = useRead<SiteRead>("site").env?.data?.site;
-  const [checking, setChecking] = useState(false);
+  // Check: a read job per installed foundation module, side by side; each
+  // result lands on its step as its job ends (useJob re-reads the page).
+  const [checks, setChecks] = useState<string[] | null>(null);
+  const [ended, setEnded] = useState<string[]>([]);
+  const [starting, setStarting] = useState(false);
   const [checkError, setCheckError] = useState<string | null>(null);
+  const checking = starting || (checks ?? []).some((id) => !ended.includes(id));
   const d = r.env?.data;
   const sec = (n: string) => (secrets.env?.data ?? []).find((x) => x.name === n);
-  const check = () => {
-    setChecking(true);
+  const check = async () => {
+    setStarting(true);
     setCheckError(null);
-    void get("setup?refresh=1").catch((e: Error) => setCheckError(e.message)).finally(() => {
-      setChecking(false);
-      r.reload();
-    });
+    const started = await post<JobSummary[]>("setup/check", {}).catch((e: Error) => ({ data: null, error: e.message }));
+    setStarting(false);
+    setEnded([]);
+    setChecks(started.data?.map((j) => j.id) ?? null);
+    if (!started.data) setCheckError(started.error);
   };
   const email = typeof site?.email === "string" ? site.email : "";
   const org = (site?.defaultEnvironment as string | undefined) ?? site?.name ?? "";
@@ -341,7 +335,7 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
   return (
     <>
       <div className="toolbar setup-check">
-        <button className="btn" disabled={checking} onClick={check} title="Runs module-manager test for backup, identity and logging, then reads the records again">{checking ? "Checking… (the module tests run)" : "Check: run the module tests"}</button>
+        <button className="btn" disabled={checking} onClick={() => void check()} title="Runs module-manager test for backup, identity and logging, each a job, then reads the records again">{checking ? "Checking… (the module tests run)" : "Check: run the module tests"}</button>
       </div>
       <ReadState env={r.env} failure={r.failure} what="the setup checklist" />
       {d ? (
@@ -355,8 +349,10 @@ function Day1({ r }: { r: Read<SetupDoc> }) {
         </p>
       ) : null}
       {r.env && !d && r.env.refreshing ? <p className="muted">Reading the records…</p> : null}
-      {checkError ? <p className="readstate readstate-fail">Check did not finish: {checkError}. The steps show the last results kept.</p> : null}
-      {checking ? <p className="muted">Running the foundation modules' tests (backup, identity, logging) — a few minutes; the checklist is read again after.</p> : null}
+      {checkError ? <p className="readstate readstate-fail">Check did not start: {checkError}. The steps show the last results kept.</p> : null}
+      {checks?.length === 0 ? <p className="muted">Nothing to test: backup, identity and logging are not installed yet.</p> : null}
+      {checking ? <p className="muted">Running the foundation modules' tests — a few minutes; the checklist is read again after.</p> : null}
+      {(checks ?? []).map((id) => <CheckRun key={id} id={id} onEnd={(j) => setEnded((e) => [...e, j])} />)}
       <ol className="setup">
         {(d?.steps ?? []).map((s) => (
           s.id === "nodes" && adding ? (

@@ -23,7 +23,7 @@ import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields
 import { composeFields } from "../../lib/ts/src/compose-fields";
 import { DefaultRule, FieldDef, FieldKind, FieldManifest, FormMode, RefContext, backupDefs, buildManifest, environmentDefaults, environmentDefs, flattenSchema, moduleAddDefaults, moduleDefs, zoneAddDefaults, zoneDefs } from "./fieldmanifest";
 import { Runner, runJson } from "./run";
-import { SetupInputs, gatherSetup, runSetupTests } from "./setup";
+import { SetupInputs, gatherSetup } from "./setup";
 import { HealthGraph, HealthObject, HealthRoot, RelationType, buildHealth, healthObject } from "./health";
 import { ModuleIcon, moduleIcon } from "./icons";
 import { CONSOLE_SCHEMA, readConsoleFile } from "./consolefile";
@@ -750,6 +750,10 @@ export class Reads {
     return { at: f.at, value, error: f.error ?? r.error, loading: f.loading || r.loading };
   }
 
+  get stateDir(): string {
+    return this.cfg.stateDir;
+  }
+
   get configDir(): string {
     return this.cfg.configDir;
   }
@@ -807,19 +811,16 @@ export class Reads {
     return [what];
   }
 
-  // GET /setup?refresh=1: run the foundation modules' tests (minutes), keep the
-  // results, then gather the checklist again. Nothing else runs them.
-  async refreshSetup(): Promise<void> {
-    await runSetupTests({ configDir: this.cfg.configDir, stateDir: this.cfg.stateDir, run: this.cfg.run }, this.cfg.now ?? Date.now);
-    // Not refresh(): a gather already running (the page's own read) read the
-    // results before the tests wrote them, and would be what this returns.
-    await this.setup.refreshAfterChange();
-  }
-
   // A test job wrote a result (recordSetupTest): the checklist follows, if
   // anyone has looked at it.
   setupTestRecorded(): Promise<void> {
     return this.setup.peek().at !== null || this.setup.peek().loading ? this.setup.refreshAfterChange() : Promise.resolve();
+  }
+
+  // A key stick was written (backup-manager key export, a job): the record
+  // says so now, and the health check does not wait for its timer.
+  backupKeysChanged(): Promise<void> {
+    return Promise.all([this.backupKeys.refreshAfterChange(), this.health.refreshAfterChange()]).then(() => undefined);
   }
 
   // After a job changed the site: what it may have changed is read again now

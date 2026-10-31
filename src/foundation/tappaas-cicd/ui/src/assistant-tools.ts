@@ -50,6 +50,8 @@ export interface ProposedJob {
   verb: string;
   read: boolean;
   destructive: boolean;
+  object?: string;
+  objectLabel?: string;
   preview: string;
   previewArgv: string[] | null; // what its preview runs (null: no dry run, or a read)
   applyArgv: string[]; // what its Run runs
@@ -521,7 +523,7 @@ function propose(ctx: ToolContext, args: Record<string, unknown>): ToolOutcome {
   if (!v.ok) return { ok: false, summary: `propose refused: ${v.reason.slice(0, 100)}`, content: `Not a valid job: ${v.reason}. Check the verb with help(manager) and propose again.` };
   const preview = v.read ? "read" : v.preview.kind;
   const proposal: ProposedJob = {
-    argv: words, rationale, verb: `${v.bin} ${v.verb.verb}`, read: v.read, destructive: v.destructive, preview,
+    argv: words, rationale, verb: `${v.bin} ${v.verb.verb}`, read: v.read, destructive: v.destructive, object: v.object, objectLabel: v.objectLabel, preview,
     previewArgv: v.read ? null : previewArgv(v), applyArgv: v.read ? [v.bin, ...v.args] : applyArgv(v),
   };
   return {

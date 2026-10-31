@@ -12,10 +12,9 @@ import { TargetValue, TargetValues } from "../consoletargets";
 import { useOpenedBy } from "../opener";
 import { EnvironmentRow, JobSummary } from "../types";
 import { canOperate, useMe } from "../ui";
-import { ResumeOffer, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
+import { DecideStep, ResumeOffer, StepRow, Wizard, jobLabel, jobLive, useJobSession } from "../wizard";
 import { SATELLITE_ROLES, SatellitePlan, argOf, satelliteProblems, satelliteSpec } from "../wizards";
 import { useSiteLocations } from "../locations";
-import { StepRow } from "./Setup";
 
 const text = (v: TargetValue | undefined, dflt: string): string => (typeof v === "string" ? v : dflt);
 
@@ -113,15 +112,16 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
           </label>
         </StepRow>
         <StepRow s={stages[1]} open={current === "what"}>
+          <DecideStep decided={plan !== null} locked={added || job !== null} ready={Object.keys(problems).length === 0} onChange={() => setPlan(null)} onContinue={() => setPlan({ ...p, city: p.city.trim() })}>
           <div className="form">
             <label className="form-row">
               <span>address *</span>
-              <input type="text" value={p.address} disabled={plan !== null} placeholder="its public IPv4, e.g. 203.0.113.7" onChange={(e) => set({ address: e.target.value.trim() })} />
+              <input type="text" value={p.address} placeholder="its public IPv4, e.g. 203.0.113.7" onChange={(e) => set({ address: e.target.value.trim() })} />
               {p.address && problems.address ? <small className="ff-error">{problems.address}</small> : <small className="muted">Where its public traffic arrives; point your public DNS records at it yourself.</small>}
             </label>
             <label className="form-row">
               <span>environment *</span>
-              <select value={p.environment} disabled={plan !== null} onChange={(e) => set({ environment: e.target.value })}>
+              <select value={p.environment} onChange={(e) => set({ environment: e.target.value })}>
                 {[...new Set(["mgmt", ...envs])].map((e) => (
                   <option key={e} value={e}>{e}</option>
                 ))}
@@ -133,7 +133,7 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
               <div className="ff-checks">
                 {Object.entries(SATELLITE_ROLES).map(([r, what]) => (
                   <label key={r} className="ff-check" title={what}>
-                    <input type="checkbox" disabled={plan !== null} checked={p.roles.includes(r)} onChange={(e) => set({ roles: e.target.checked ? [...p.roles, r] : p.roles.filter((x) => x !== r) })} /> <span className="mono">{r}</span> <small className="muted">{what}</small>
+                    <input type="checkbox" checked={p.roles.includes(r)} onChange={(e) => set({ roles: e.target.checked ? [...p.roles, r] : p.roles.filter((x) => x !== r) })} /> <span className="mono">{r}</span> <small className="muted">{what}</small>
                   </label>
                 ))}
               </div>
@@ -141,7 +141,7 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
             </div>
             <label className="form-row">
               <span>location</span>
-              <select value={p.location ?? ""} disabled={plan !== null} onChange={(e) => set({ location: e.target.value })}>
+              <select value={p.location ?? ""} onChange={(e) => set({ location: e.target.value })}>
                 <option value="">a place the site has no location for yet (country, city below)</option>
                 {locations.map((l) => (
                   <option key={l.name} value={l.name}>{l.displayName ?? l.name}{l.place ? ` · ${l.place}` : ""}{l.primary ? " · primary" : ""}</option>
@@ -153,28 +153,22 @@ export function SatelliteWizard({ onClose, prefill }: { onClose: () => void; pre
               <>
                 <label className="form-row">
                   <span>country</span>
-                  <input type="text" value={p.country} disabled={plan !== null} placeholder="ISO code, e.g. FI" onChange={(e) => set({ country: e.target.value.trim().toUpperCase() })} />
+                  <input type="text" value={p.country} placeholder="ISO code, e.g. FI" onChange={(e) => set({ country: e.target.value.trim().toUpperCase() })} />
                   {problems.country ? <small className="ff-error">{problems.country}</small> : null}
                 </label>
                 <label className="form-row">
                   <span>city</span>
-                  <input type="text" value={p.city} disabled={plan !== null} placeholder="e.g. Helsinki — needed when the site is in the same country" onChange={(e) => set({ city: e.target.value })} />
+                  <input type="text" value={p.city} placeholder="e.g. Helsinki — needed when the site is in the same country" onChange={(e) => set({ city: e.target.value })} />
                 </label>
               </>
             )}
             <label className="form-row">
               <span>instance</span>
-              <input type="text" value={p.instance} disabled={plan !== null} placeholder="satellite" onChange={(e) => set({ instance: e.target.value.trim() })} />
+              <input type="text" value={p.instance} placeholder="satellite" onChange={(e) => set({ instance: e.target.value.trim() })} />
               {problems.instance ? <small className="ff-error">{problems.instance}</small> : <small className="muted">Empty: satellite (config/satellite.json). A second one needs its own name, e.g. satellite-hel1.</small>}
             </label>
           </div>
-          <div className="actions">
-            {plan ? (
-              <button className="btn" disabled={added || job !== null} onClick={() => setPlan(null)}>Edit</button>
-            ) : (
-              <button className="btn btn-primary" disabled={Object.keys(problems).length > 0} onClick={() => setPlan({ ...p, city: p.city.trim() })}>Continue</button>
-            )}
-          </div>
+          </DecideStep>
         </StepRow>
         <StepRow s={stages[2]} open={current === "add"}>
           {job ? <JobView id={job} label="module-manager add satellite" /> : steps ? <ActStep key={JSON.stringify(plan)} step={steps.add} onDone={(ok) => ok && setAdded(true)} /> : <p className="muted small">Once the satellite is described.</p>}

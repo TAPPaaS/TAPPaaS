@@ -147,13 +147,25 @@ export type Flow = "read" | "act" | "check" | "plan";
 // Every apply-flag verb's preview is a plan; these are the dry runs that are too.
 const PLAN_DRY_RUNS = new Set(["module-manager add-stack", "site-manager update", "site-manager repository sync", "network-manager merge", "network-manager distribute"]);
 
+function flowOf(name: string, kind: string, destructive: boolean): Flow {
+  if (kind === "none") return "act";
+  if (kind === "apply-flag" || PLAN_DRY_RUNS.has(name)) return "plan";
+  return destructive ? "check" : "act";
+}
+
 export function stepFlow(bin: string, verb: ManifestVerb, argv: string[], override?: Flow): Flow {
   if (override) return override;
   if (isReadCall(verb, argv)) return "read";
-  const kind = previewKindOf(verb, argv);
-  if (kind === "none") return "act";
-  if (kind === "apply-flag" || PLAN_DRY_RUNS.has(`${bin} ${verb.verb}`)) return "plan";
-  return isDestructiveCall(verb, argv) ? "check" : "act";
+  return flowOf(`${bin} ${verb.verb}`, previewKindOf(verb, argv), isDestructiveCall(verb, argv));
+}
+
+// The same for an assistant's card, from what its proposal says of the call.
+// A destructive card saved before proposals kept their object learns it from
+// a preview, so it goes that way.
+export function proposalFlow(p: { read: boolean; verb: string; preview: string; destructive: boolean; object?: string }): Flow {
+  if (p.read) return "read";
+  const flow = flowOf(p.verb, p.preview, p.destructive);
+  return flow === "act" && p.destructive && p.object === undefined ? "check" : flow;
 }
 
 // The options a verb's usage cannot do without: outside its [groups] and

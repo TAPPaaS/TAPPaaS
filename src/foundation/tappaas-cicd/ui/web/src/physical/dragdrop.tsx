@@ -10,9 +10,8 @@
 
 import { MutableRefObject, PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { applyNowJob } from "../api";
-import { Command, JobControl, Output, duration, jobLevel, jobResult } from "../jobs";
+import { Command, JobOutput, JobStatusLine } from "../jobs";
 import { Job } from "../types";
-import { Tag } from "../ui";
 import { Drop, Dragged } from "./dragplace";
 
 export interface DragState {
@@ -142,11 +141,9 @@ export function DropJobPanel({ job, j, close }: { job: DropJob; j: Job | null; c
       {job.id ? (
         j ? (
           <>
-            <div className="small">
-              <Tag level={jobLevel(j)} /> {jobResult(j)} <span className="muted">{duration(j.durationMs)}</span> <JobControl job={j} />
-            </div>
+            <JobStatusLine job={j} label="The job" />
             {j.refused ? <p className="readstate readstate-fail">{j.refused}</p> : null}
-            <Output text={j.output} live={j.state === "running"} />
+            <JobOutput job={j} />
           </>
         ) : (
           <p className="muted small">starting the job…</p>

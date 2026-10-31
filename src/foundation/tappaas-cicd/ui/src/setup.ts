@@ -10,12 +10,11 @@
 //              per-service mode: nothing to issue — Caddy gets each route's
 //              certificate itself (HTTP-01)
 //   backup, identity, logging   config/<module>.json exists and its module
-//              test passed the last time it ran. The tests run only on an
-//              explicit refresh (GET /setup?refresh=1, the page's Check
-//              button) or as a job (the step's Test button): three tests per
-//              read was the cost of every Setup view. Their last result is
-//              kept in the state directory (setup-tests.json) and read back
-//              like any record.
+//              test passed the last time it ran. The tests run only as jobs
+//              (POST /setup/check, the page's Check button; the step's Test
+//              button): three tests per read was the cost of every Setup
+//              view. Their last result is kept in the state directory
+//              (setup-tests.json) and read back like any record.
 //   bootstrap  config/identities holds an organization and a user
 //   nodes      every node site.json declares is a cluster member
 //   switch     a switch is registered and interrogated (ports discovered)
@@ -279,8 +278,8 @@ export interface GatherDeps {
   stacks: () => Promise<string[]>;
 }
 
-// The last result of each foundation module's test, as the explicit refresh
-// left them; a module never tested (or a file never written) has none.
+// The last result of each foundation module's test, as its job left it
+// (recordSetupTest); a module never tested (or a file never written) has none.
 export function readSetupTests(stateDir: string): Partial<Record<(typeof SETUP_MODULES)[number], TestResult>> {
   const doc = readJson(join(stateDir, TESTS_FILE)) ?? {};
   const out: Partial<Record<(typeof SETUP_MODULES)[number], TestResult>> = {};
@@ -311,31 +310,24 @@ export function sweepTestResult(configDir: string, m: string): TestResult | null
   return { rc: 0, tail: "updated and tested by the sweep", at: new Date(end).toISOString(), sweep: true };
 }
 
-// The explicit refresh: run `module-manager test <m>` for every installed
-// foundation module (fast mode; the deep suite is a job) and keep the results
-// where readSetupTests finds them. A module not installed keeps no result.
-export async function runSetupTests(d: Pick<GatherDeps, "configDir" | "stateDir" | "run">, now: () => number = Date.now): Promise<void> {
-  const results = readSetupTests(d.stateDir);
-  await Promise.all(
-    SETUP_MODULES.map(async (m) => {
-      if (!existsSync(join(d.configDir, `${m}.json`))) {
-        delete results[m];
-        return;
-      }
-      const r = await d.run("module-manager", ["test", m], 15 * 60_000);
-      if (!r.ran) return; // the manager could not run: keep what the last run said
-      const tail = (r.stdout + r.stderr).replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").slice(-1)[0] ?? "";
-      results[m] = { rc: r.rc, tail, at: new Date(now()).toISOString() };
-    }),
-  );
-  mkdirSync(d.stateDir, { recursive: true });
-  writeJsonAtomic(join(d.stateDir, TESTS_FILE), results);
+// What the page's Check tests: every installed foundation module (fast mode;
+// the deep suite is a job of its own). A module no longer installed keeps no
+// result.
+export function setupCheckModules(configDir: string, stateDir: string): (typeof SETUP_MODULES)[number][] {
+  const results = readSetupTests(stateDir);
+  const installed = SETUP_MODULES.filter((m) => existsSync(join(configDir, `${m}.json`)));
+  const gone = SETUP_MODULES.filter((m) => results[m] !== undefined && !installed.includes(m));
+  if (gone.length) {
+    for (const m of gone) delete results[m];
+    writeJsonAtomic(join(stateDir, TESTS_FILE), results);
+  }
+  return installed;
 }
 
-// A finished job that ran a foundation module's test (the step's Test button,
-// or the verb typed in a form) is as good a result as the Check's: it is kept
-// where readSetupTests finds it. A job that could not run, or was cut off,
-// says nothing. Returns the module it recorded, or null.
+// A finished job that ran a foundation module's test (Check, the step's Test
+// button, or the verb typed in a form): its result is kept where readSetupTests
+// finds it. A job that could not run, or was cut off, says nothing, and the
+// last result stands. Returns the module it recorded, or null.
 export function recordSetupTest(stateDir: string, job: { argv: string[]; state: string; exit: number | null; ended: string | null }, tail: string): string | null {
   const [bin, verb, m] = job.argv;
   if (bin !== "module-manager" || verb !== "test" || !(SETUP_MODULES as readonly string[]).includes(m)) return null;
@@ -355,7 +347,7 @@ export async function gatherSetup(d: GatherDeps): Promise<SetupInputs> {
   // The cluster's nodes are their pvehost instances (ADR-036 D6).
   const siteNodes = clusterNodeNames(d.configDir);
   // The module tests are not run here (every Setup read gathers): their last
-  // result is a record in the state directory, written by runSetupTests.
+  // result is a record in the state directory, written by recordSetupTest.
   const tests = readSetupTests(d.stateDir);
   const modules = {} as SetupInputs["modules"];
   for (const m of SETUP_MODULES) {

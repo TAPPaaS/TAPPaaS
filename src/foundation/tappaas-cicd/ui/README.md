@@ -22,8 +22,10 @@ ui/
 /api/v1/setup` derives from the records each time (`src/setup.ts`, so it resumes): TLS
 (wildcard: `config/cert-refids.json` names the default environment; per-service: nothing to
 issue), backup, identity and logging (`config/<m>.json`, and `module test` passed the last
-time it ran — the three tests run only on `GET /setup?refresh=1`, the page's Check button,
-never on a read; each result and its time is kept in `<state dir>/setup-tests.json`), the
+time it ran — the three tests run only as jobs, never on a read: the page's Check button
+(`POST /api/v1/setup/check`, a read job per installed module, each with its status line, its
+Stop and its output above the checklist) or a step's Test; each result and its time is kept in
+`<state dir>/setup-tests.json`), the
 identity bootstrap (`config/identities` has an organization and a user),
 the nodes (every registered node — its `pvehost` instance — a cluster member, lib/ts `queryClusterNodes`), the switch
 (registered, ports discovered), the admin VPN (a peer in `wgvpn list`), the physical site
@@ -32,8 +34,10 @@ Each step is a form over its verbs as jobs. Secrets go through `POST /api/v1/sec
 (an installer or the setup token): `acme-dns` → `~/.acme-dns-credentials.txt`, `unifi` →
 `~/.unifi-os-credentials.txt`, mode 0600; `wlan` is handed to `ap-manager ssid set-passphrase <ssid>`
 on stdin (never in argv), which stores it in `~/.wlan-secrets.txt` and marks the SSID for the next
-reconcile. Each is in Activity with its keys and never their values; `GET /api/v1/secrets` names the
-keys set. The WiFi step lists the site's SSIDs (`ap-manager ssid list`, the `ssids` read) with their
+reconcile; `backup-keys` (Day 2's Write the backup keys) starts `backup-manager key export --usb …
+--password-stdin` as a job, the password on its stdin and in no record, so the write shows its
+output and can be stopped. Each is in Activity with its keys and never their values; `GET
+/api/v1/secrets` names the keys set. The WiFi step lists the site's SSIDs (`ap-manager ssid list`, the `ssids` read) with their
 zone, security, the access points that broadcast each and the passphrase state (set, changed and not
 pushed yet, or not set — a personal SSID without one cannot be created on the access points), and a
 "Set passphrase…" link to its Day 2 form. Day 2's WiFi form declares the SSID site-wide (`ssid add`,
@@ -352,6 +356,13 @@ the verb previews (`stepFlow` in `web/src/argv.ts`; a step can override it with 
 
 Activity shows a job that ran its dry run first in its two phases.
 
+A wizard is the same flows in its stages (`web/src/wizard.tsx`): a stage that decides is a form
+with Continue, which locks its fields, and Change, until something has run on them (`DecideStep`);
+a job found again on opening is offered with Continue (`ResumeOffer`), Add a node's with Done with
+it as well. An assistant's card runs by the same table, except that nothing starts by itself: only
+the operator's click runs it, so a plan or a destructive dry run has a Preview button, and a read
+one Run.
+
 ## Assets
 
 **Assets** (`/assets`, between Identity and Backup in the menu) lists every asset of the site in a
@@ -480,7 +491,8 @@ now (it changes nothing on the site).
 
 ## API (`/api/v1`)
 
-Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
+`POST setup/check` starts the foundation modules' tests, a read job each, for whoever may read
+Setup; JSON only. Reads (GET): `me` · `status` · `health` · `gates` · `pulse` · `site` · `modules` · `modules/<m>` ·
 `modules/<m>/drift[?refresh=1]` · `modules/<m>/sections` (its page's sections with their data) · `zones` · `ipv6` · `environments` · `topology` · `storage` · `security` ·
 `activity[?module=<m>]` (the sweep's runs, and `jobs`) · `manifests` ·
 `modules/<m>/icon` (SVG or PNG, 404 when it has none) · `jumps/<kind>/<id>[?switch=<s>]` (kind: node, module, switch, port, lag, ap, zone, peer, site;
@@ -573,7 +585,7 @@ stack is installed. It **reads freely and proposes; it never applies.**
 | **Tools** | `modules_list`, `module_show` (with the fields `modify --set` may change and their class), `module_drift`, `zones`, `environments`, `topology`, `health`, `backup`, `pulse`, `activity` — the console's own cached reads; `logs` (Loki's `query_range` for a host, with the admin credential `~/.loki-admin-password`, only when logging is installed); `help(manager)` (the manifest and the README from `$CONSOLE_REPO`); `propose_job(argv, rationale)`; `open_console(target, values?)`: a page or a wizard of `web/src/consoletargets.ts` (add-node, add-wifi <zone>, modify-module <module>, …), opened in the operator's console with its form filled in (`src/assistant-tools.ts`) |
 | **Never** | an apply tool: none exists, a tool name outside the list is refused and recorded, `propose_job` creates no job (it validates the argv against the manifests, without `--apply`/`--dry-run`), `open_console` only moves the console to a form. An invented tool's refusal names the real ones and spells out the call it probably meant; a call the model writes as text instead of making it is taken as made, once a turn, and marked `written` |
 | **Context** | the system prompt: the site, the caller's name and role, the page and object in view (sent by the front end), the tools by their exact names (no tool per verb), when to open a form and when to propose, the wizards, the managers' verbs in short form as what `propose_job` may propose |
-| **Trail** | a card's Preview/Run are the P2 job flow with `{conversation, proposal}`: the job checks the proposal is in the caller's own conversation with the same argv, and carries `origin: assistant` and the turn; Activity shows "lars · via assistant" |
+| **Trail** | a card's jobs (Preview, Run) carry `{conversation, proposal}`: the job checks the proposal is in the caller's own conversation with the same argv, and carries `origin: assistant` and the turn; Activity shows "lars · via assistant" |
 | **Store** | `<state dir>/assistant/<user>/<id>.json`, 0600: the newest 50 per user, 40 turns and 256 KiB each; never in `config/` |
 
 API: `GET /assistant/status` (available, and why not; the status route has none) · `POST

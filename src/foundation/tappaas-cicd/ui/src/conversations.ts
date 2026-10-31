@@ -30,6 +30,8 @@ export interface Proposal {
   verb: string;
   read: boolean; // runs at once (a read verb), no preview
   destructive: boolean;
+  object?: string; // what its typed confirmation names; absent on a card saved before it was kept
+  objectLabel?: string; // the object as shown, also accepted typed
   preview: string; // how it previews: apply-flag, dry-run-flag, none, read
   previewArgv: string[] | null; // what its preview runs (null: no dry run, or a read)
   applyArgv: string[]; // what its Run runs
