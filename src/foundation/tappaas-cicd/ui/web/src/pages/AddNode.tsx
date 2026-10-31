@@ -15,26 +15,25 @@
 // storage add); 5a a second lan port — the bond, its switch port, then the
 // failover test (node network set, node network test); 5b its WAN port, for a
 // node that may carry the firewall (pages/NodeUplinks.tsx); 6 the node in the
-// physical view. Stage 1 is the form and one button: the job's dry run, its
-// status line with Stop and its output show there; once the change applies
-// the stage is done and keeps one line saying where the job is.
+// physical view. Stage 1 is the form and one button (flows.tsx ActStep): node
+// add has no dry run, so the change applies as it starts, the stage is done
+// and keeps one line saying where the job is. A refusal shows why and Try
+// again, back to the form with its values.
 
 import { useEffect, useMemo, useState } from "react";
-import { refreshRead, reloadAll, useJob, useRead, useVerb } from "../api";
-import { buildArgv } from "../argv";
-import { JobOutput, JobStatusLine, Output, phaseOutputs } from "../jobs";
-import { OperateButton, Step, StepForm, StepView, Values, useStepValues } from "../operate";
+import { refreshRead, reloadAll, useJob, useRead } from "../api";
+import { JobOutput, JobStatusLine, phaseOutputs } from "../jobs";
+import { ActStep } from "../flows";
+import { OperateButton, Step, StepView, Values } from "../operate";
 import { useOpenedBy } from "../opener";
-import { useJobRun } from "../run";
 import { Job, JobSummary, SiteRead, StorageInventory, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
 import { AddNodeStage, KeyStore, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, declaredLine, dismissJob, dismissedJobs, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, setupFromOutput, switchPortChoices, writeProgress } from "../nodeadd";
 import { Wizard, jobLabel, jobLive } from "../wizard";
-import { jobInApply, runFailure } from "../wizards";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
-import { Dot, Link, Tag, canOperate, useMe } from "../ui";
+import { Dot, Link, canOperate, useMe } from "../ui";
 import { UsbStickPicker, gb } from "../usbsticks";
 import { StepRow } from "./Setup";
 
@@ -211,6 +210,8 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const declare: Step = useMemo(
     () => ({
       title: `Declare ${name || "the node"}`,
+      button: `Declare ${name || "the node"}`,
+      failed: `${name} was not declared`,
       bin: "site-manager",
       verb: "node add",
       fixed: valid ? [name] : [],
@@ -397,7 +398,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           {resumed ? (
             running ? <DeclaredLine name={name} job={running} progress={progress} /> : <p className="muted small">reading job {job}…</p>
           ) : (
-            <DeclareStep step={declare} name={name} progress={progress} onApplied={setJob} onDone={(ok) => setEnded(ok)} />
+            <ActStep step={declare} command={false} line={(j) => <DeclaredLine name={name} job={j} progress={progress} />} onApplied={(id) => { setJob(id); setEnded(null); }} onDone={(ok) => setEnded(ok)} />
           )}
         </StepRow>
         <StepRow s={steps[2]} open={current === "boot"}>
@@ -486,71 +487,6 @@ function DeclaredLine({ name, job, progress }: { name: string; job: Job; progres
   const line = declaredLine(name, setupFromOutput(phaseOutputs(job).apply), { live, answered: progress?.registration === "answered", joined: addNodeJoined(progress) });
   return (
     <JobStatusLine job={job} label={line} level={live || job.exit === 0 ? "pass" : "warn"} />
-  );
-}
-
-// Stage 1: the form, then one button. node add runs as one job, its dry run
-// first: while it checks, its status line (with Stop) and its output; once the
-// change applies the stage is done (onApplied) and keeps one line, the job's
-// output watched in stage 3. A refusal shows the last lines and Try again,
-// back to the form with its values.
-function DeclareStep({ step, name, progress, onApplied, onDone }: { step: Step; name: string; progress: NodeProgress | null; onApplied: (id: string) => void; onDone: (ok: boolean) => void }) {
-  const me = useMe();
-  const verb = useVerb(step.bin, step.verb);
-  const [values, setValues] = useStepValues(step, verb);
-  const argv = useMemo(() => buildArgv(step, verb, values), [step, verb, values]);
-  const run = useJobRun({ onApplied, onDone: (ok, job) => jobInApply(job) && onDone(ok) });
-  const { job, inApply, finished: failedOrDone } = run;
-  const failed = failedOrDone && !inApply;
-  const started = run.id;
-  const error = run.error ? `${name} was not declared: ${run.error}` : null;
-  const starting = run.state === "starting";
-
-  if (!verb) return <p className="muted">reading the {step.bin} manifest…</p>;
-  if (started) {
-    if (!job) return <p className="muted"><Tag level="skip" /> Starting the declare of {name}…</p>;
-    if (inApply) {
-      return (
-        <div className="step">
-          <DeclaredLine name={name} job={job} progress={progress} />
-          <details className="small">
-            <summary>What the check printed</summary>
-            <Output text={phaseOutputs(job).preview ?? ""} />
-          </details>
-        </div>
-      );
-    }
-    if (failed) {
-      const why = `${name} was not declared: ${runFailure(job)}.`;
-      return (
-        <div className="step">
-          <p className="readstate readstate-fail">{why}</p>
-          <JobOutput job={job} fold="tail" tail={8} />
-          <div className="actions">
-            <button className="btn btn-primary" onClick={run.retry}>Try again</button>
-            <span className="muted small">back to the form, as filled in</span>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="step">
-        <JobStatusLine job={job} label={`Declaring ${name}`} />
-        <JobOutput job={job} />
-      </div>
-    );
-  }
-  const hint = !canOperate(me) ? "only an operator adds a node" : step.blocked ?? null;
-  return (
-    <div className="step">
-      {step.note ? <div className="note">{step.note}</div> : null}
-      <StepForm step={step} verb={verb} values={values} set={setValues} />
-      {error ? <p className="readstate readstate-fail">{error}</p> : null}
-      <div className="actions">
-        <button className="btn btn-primary" disabled={!!hint || starting} onClick={() => void run.apply(argv)}>{starting ? "Starting…" : `Declare ${name || "the node"}`}</button>
-        {hint ? <span className="muted small">{hint}</span> : null}
-      </div>
-    </div>
   );
 }
 

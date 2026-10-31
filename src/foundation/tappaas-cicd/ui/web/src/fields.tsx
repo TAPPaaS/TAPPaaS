@@ -15,7 +15,8 @@ import { nameDescription } from "./forms";
 import { ManifestVerb } from "./types";
 import { ClassTag } from "./fieldsform";
 import { FieldManifest, ManifestField, classSummary, fieldChanges, fieldGroups, initialFieldText, listItems, placeholderOf, typedVars } from "./fieldlogic";
-import { PrefillContext, Step, Values } from "./operate";
+import { PrefillContext, Step } from "./stepform";
+import { Values } from "./argv";
 import { AddLocationHint } from "./locations";
 
 export function fieldsPath(kind: string, name: string | null, mode: "add" | "modify"): string {
