@@ -410,7 +410,7 @@ for good.
 Then its record, `config/<node>.json`, is **deleted**: the node is gone from the modules
 list. The CMDB keeps the machine's history — its object is ended, not erased — so nothing
 is lost for a replacement. `--archive` keeps the record archived instead, for a script that
-reads it afterwards. (`--remove`, the former opt-in to deletion, is still accepted.)
+reads it afterwards.
 
 Its asset is released from the node, and then, by `--asset`:
 
