@@ -343,7 +343,7 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane }: { t: Topology; v
       .map((w, i) => ({ c: w.c, w, i, a: L.ports.get(key(w.from.device, w.from.port)), b: L.ports.get(key(w.to.device, w.to.port)) }))
       .filter((x): x is typeof x & { a: PortAt; b: PortAt } => !!x.a && !!x.b);
     // Each one curve, port to port; a bundle between two devices fans out.
-    const routes = routeCables(ok.map((x) => ({ a: x.a, b: x.b, rearA: x.w.from.side === "rear", rearB: x.w.to.side === "rear", device: [x.w.from.device, x.w.to.device] })));
+    const routes = routeCables(ok.map((x) => ({ a: x.a, b: x.b, sideA: x.w.from.side, sideB: x.w.to.side, device: [x.w.from.device, x.w.to.device] })));
     return ok.map((x, k) => ({ ...x, d: routes[k].d, mid: routes[k].mid }));
   }, [v, L]);
   const hovered = drawn.find((d) => d.i === hover);

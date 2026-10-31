@@ -71,7 +71,8 @@ asset-manager's `config/positions.json` as an area with its racks and, beside th
 standing loose in it; each rack as a frame with its units numbered as the rack numbers them, each placed device as its
 faceplate at its units and width with its ports' live state (link, LAG), the cabled ports
 underlined (a patch panel's rear-cabled ports overlined), the cables port to port — each one thin curve
-leaving its ports vertically (up from a plate's upper row and a panel's rear, down from a lower row), a
+leaving its ports vertically (up from a plate's upper row, down from a lower row, toward the other end
+from a single row and from a patch panel's port, front or rear), a
 bundle between two devices fanning out, a dot at each end, one long curve to another rack or a loose device —
 an access link in its zone's colour, a trunk in its kind's (node trunk, switch uplink, peer link, access point,
 device, patch), highlighted with a label on hover, a selected cable labelled midway with its ports — a link
