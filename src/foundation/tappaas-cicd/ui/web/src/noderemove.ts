@@ -15,8 +15,8 @@ export const HOWS: { id: How; label: string; detail: string }[] = [
 ];
 
 export const ASSET_CHOICES: { id: AssetChoice; label: string; detail: string }[] = [
-  { id: "keep", label: "keep the machine's record", detail: "It goes back to stock; its place in the rack and its cables stay recorded, ready for its next role." },
-  { id: "remove", label: "remove the machine's record", detail: "Its record, place and cables are removed: the machine leaves the site." },
+  { id: "keep", label: "keep the machine's asset record", detail: "It goes back to stock; its place in the rack and its cables stay recorded, ready for its next role." },
+  { id: "remove", label: "remove the machine's asset record", detail: "Its record, place and cables are removed: the machine leaves the site." },
 ];
 
 export const checkArgv = (node: string, how: How): string[] => ["site-manager", "node", "delete", node, `--${how}`];
@@ -152,7 +152,7 @@ export function parseRemoval(output: string): RemovalOutcome {
     else if ((m = l.match(/^✓ its node record is (deleted|archived)/))) out.record = m[1] as "deleted" | "archived";
     else if ((m = l.match(/^✓ asset (\S+) released from \S+ and kept: it (?:stays placed in (.+)|goes back to stock)/))) out.asset = { key: m[1], fate: "kept", where: m[2] ?? null };
     else if ((m = l.match(/^✓ asset (\S+) removed: /))) out.asset = { key: m[1], fate: "removed", where: null };
-    else if ((m = l.match(/^asset (\S+) (still plays \S+|is not removed): /))) out.assetTrouble = `The machine's record ${m[1]} ${m[2].startsWith("still") ? "still names the node" : "is only partly removed"}: finish it on its asset page.`;
+    else if ((m = l.match(/^asset (\S+) (still plays \S+|is not removed): /))) out.assetTrouble = `The machine's asset record ${m[1]} ${m[2].startsWith("still") ? "still names the node" : "is only partly removed"}: finish it on its asset page.`;
     else if (/^(could not|the node record '.*' is still registered|CPU inventory not refreshed)/.test(l)) out.warnings.push(l);
   }
   return out;

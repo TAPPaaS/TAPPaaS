@@ -200,7 +200,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
               ))}
               {result.asset ? (
                 <li>
-                  The machine's record <Link to={assetTarget(result.asset.key).to}>{result.asset.key}</Link>{" "}
+                  The machine's asset record <Link to={assetTarget(result.asset.key).to}>{result.asset.key}</Link>{" "}
                   {result.asset.fate === "kept" ? (result.asset.where ? `is kept, still placed in ${result.asset.where}.` : "is kept, in stock.") : "is removed, with its place and cables."}
                 </li>
               ) : null}
@@ -270,7 +270,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
             <p className="small">The machine is gone for good, so its record is removed as well, with its place in the rack and its cables. Its history stays.</p>
           ) : outcome.asset ? (
             <>
-              <p className="small">The machine's record, <Link to={assetTarget(outcome.asset.key).to}>{outcome.asset.key}</Link>:</p>
+              <p className="small">The machine's asset record, <Link to={assetTarget(outcome.asset.key).to}>{outcome.asset.key}</Link>:</p>
               {ASSET_CHOICES.map((c) => (
                 <label key={c.id} className="form-check">
                   <input type="radio" name="asset" checked={asset === c.id} onChange={() => setAsset(c.id)} />
@@ -318,7 +318,7 @@ function Afterwards({ node, how, result, onClose }: { node: string; how: How; re
       {result.asset?.fate === "kept" ? (
         <li>The machine is <Link to={assetTarget(result.asset.key).to}>{result.asset.key}</Link>, {result.asset.where ? `still placed in ${result.asset.where}` : "in stock"}: its place and cables stay recorded, ready for its next role.</li>
       ) : result.asset?.fate === "removed" ? (
-        <li>The machine's record {result.asset.key} is removed, with its place and cables: it has left the site. Its history stays.</li>
+        <li>The machine's asset record {result.asset.key} is removed, with its place and cables: it has left the site. Its history stays.</li>
       ) : null}
       <li>
         To replace it, <button className="btn btn-small" onClick={addNode}>Add node</button>: a machine is recognised by its serial number or a network card, and a machine kept in stock is taken from there.
