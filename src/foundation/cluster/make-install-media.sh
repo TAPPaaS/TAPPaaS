@@ -490,6 +490,10 @@ RESOLVE
             esac
         done < "$_tap_ans" > /tappaas-answer.toml
         mount --bind /tappaas-answer.toml "$_tap_ans"
+        # Left mounted it keeps /cdrom busy and the installer's unmount retries
+        # for 25 s before the reboot; released by the installer's own script.
+        sed -i "s#^\( *\)iso_dev=\$(awk#\1umount ${_tap_ans#/mnt/.installer-mp} || true; &#" \
+            /mnt/.installer-mp/sbin/unconfigured.sh || true
         echo "TAPPaaS: installing to '${_tap_disk}'${_tap_mirror:+ + '${_tap_mirror}'}"
     } < "/dev/${console:-console}" > "/dev/${console:-console}" 2>&1
     fi
