@@ -2,7 +2,7 @@
 // what ran, copyable), who ran it from where, its state, and its output.
 // Activity lists them beside the sweep; a module's page lists its own.
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
 import { cancelJob, reloadAll, useJob } from "./api";
 import { JobSummary } from "./types";
 import { Tag, canOperate, useMe, when } from "./ui";
@@ -77,24 +77,33 @@ const FOLD_LINES = 4;
 export function Output({ text, live, collapsed }: { text: string; live?: boolean; collapsed?: boolean }) {
   const ref = useRef<HTMLPreElement>(null);
   const stick = useRef(true);
+  // Only the operator's own scrolling (wheel, touch, keys) may unstick the
+  // view: the browser fires a scroll event for the jump below too, and with
+  // lines streaming in that event can land after the next lines and before the
+  // next jump, which read as "scrolled up" and froze the pane.
+  const byHand = useRef(0);
   const [open, setOpen] = useState(false);
   const shown = stripAnsi(text) || (live ? "…" : "(no output)");
   const lines = shown.split("\n");
   const fold = !!collapsed && !open && lines.length > FOLD_LINES;
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (el && stick.current) el.scrollTop = el.scrollHeight;
   }, [shown, live, fold]);
+  const hand = () => {
+    byHand.current = Date.now();
+  };
   const onScroll = () => {
     const el = ref.current;
-    if (el) stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+    if (!el || Date.now() - byHand.current > 1000) return;
+    stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
   };
   return (
     <div className="output-box">
       {collapsed && lines.length > FOLD_LINES ? (
         <button className="btn btn-small output-fold" onClick={() => setOpen(!open)}>{fold ? `▸ ${lines.length - FOLD_LINES} earlier lines` : "▾ fold"}</button>
       ) : null}
-      <pre ref={ref} onScroll={onScroll} className={`output${live ? " output-live" : ""}`}>{fold ? lines.slice(-FOLD_LINES).join("\n") : shown}</pre>
+      <pre ref={ref} tabIndex={0} onScroll={onScroll} onWheel={hand} onTouchStart={hand} onTouchMove={hand} onKeyDown={hand} className={`output${live ? " output-live" : ""}`}>{fold ? lines.slice(-FOLD_LINES).join("\n") : shown}</pre>
     </div>
   );
 }
