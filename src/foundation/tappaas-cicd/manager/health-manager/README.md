@@ -461,16 +461,17 @@ journalctl -t tappaas-health --since today -o cat | jq -r 'select(.event == "tra
 
 | `event` | Fields |
 |---|---|
-| `transition` | `id`, `ci`, `class`, `name`, `type`, `from`, `to`, `reason`, `message`, `kind`, `rootCause`, `correlated[]`, `since`, `at`, `flapping`, `root`, `symptoms`, `silenced` |
+| `transition` | `id`, `ci`, `class`, `name`, `type`, `from`, `to`, `reason`, `message`, `kind`, `rootCause`, `correlated[]`, `since`, `at`, `flapping`, `root`, `symptoms`, `impacted`, `silenced` |
 | `flapping` | the same, with `phase` `start` or `end` |
 | `ack`, `unack` | `ci`, `class`, `name`, `type`, `by`, `note`, `sticky`, `until`, `why`, `symptoms[]` (ids), `at` |
 | `maintenance` | `phase` `start`, `end` or `cancel`, `ci`, `class`, `name`, `by`, `note`, `until`, `why`, `at` |
-| `rootcause` | `ci`, `class`, `name`, `type`, `symptoms[]` (ids), `cleared`, `at`; once per change of a root's set |
+| `rootcause` | `ci`, `class`, `name`, `type`, `symptoms[]` (ids), `impacted`, `cleared`, `at`; once per change of a root's set |
 
 - `kind`: `recovery` on a return to ok; `symptom` for an `impact` or derived condition; `causal`
   when the object is in the site's `rootCauses` for that type; any other failure is a `symptom`.
 - `root` says the object is a root cause, or was one until this recovery; `symptoms` is how many
-  objects it impacts; `silenced` is acknowledged or in maintenance: told, never mailed.
+  objects it impacts and `impacted` what they are, by class, most first (`3 vm, 2 service`;
+  `nothing` on a symptom); `silenced` is acknowledged or in maintenance: told, never mailed.
 - `correlated` lists the events of the same run with the same root.
 - **Flapping** is judged over the last 20 assess intervals, each changed or not, the oldest
   weighted 0.8 and the newest 1.15: above 30 % it starts, below 25 % it ends. While it flaps one
@@ -525,7 +526,7 @@ on a worker thread, placing the alert as `alerts` does; one about no known objec
 
 `tappaas-cicd-alerts.json` holds the three rules over these lines, and over `cmdb sweep`'s.
 `HealthRootCause` mails a causal event that is not silenced and whose status is **critical**, with
-its symptom count; `HealthRootRecovered` mails the RESOLVED of a critical root's recovery.
+what it impacts by class (`impacts: 3 vm, 2 service`); `HealthRootRecovered` mails the RESOLVED of a critical root's recovery.
 `HealthDailyDigest` collects the rest once a day: a warning that became a root cause, and every
 sweep difference nothing explains (drift, unmanaged, missing, differing from `config/`) — one mail
 while the last 24 hours hold anything new, none on a quiet day, the lines in it where
@@ -645,15 +646,37 @@ switch lists every free port. `linkSpeed` reaches the CMDB from a node's NICs
 
 `metamodel/health-rules.json` says how a failure travels: each rule names a
 relation type, optionally the class of either end, the source condition and the
-impact it produces. Shipped: `operational critical` crosses `runs-on`,
-`depends-on`, `member-of` and `connects` as `critical` impact, and a warning
-crosses nothing. `health-manager rules list` shows them; `rules check [--file F]`
-validates them or a candidate, and exits 1 on what it cannot place.
+impact it produces. A rule may also read the dependant: `"dependant": { "haNode": true }`
+matches only a dependant whose attribute has that value (`true`: any value that is
+set), and such a rule wins over one without it for the same crossing. Shipped:
+`operational critical` crosses `runs-on`, `depends-on`, `member-of` and `connects`
+as `critical` impact, except that over `runs-on` a guest with `haNode` set
+(HA-protected) gets a `warning`: its node failed, and it is moving or has moved.
+A warning crosses nothing. `health-manager rules list` shows them (`… crosses
+runs-on to a dependant with haNode set as warning impact`); `rules check [--file F]`
+validates them or a candidate, and exits 1 on what it cannot place, a dependant
+clause naming an attribute no class has among it.
+
+```json
+{ "relation": "runs-on", "source": { "type": "operational", "status": "critical" },
+  "dependant": { "haNode": true }, "impact": "warning" }
+```
+
+A crossing softer than the failure (a warning for a critical) still explains the
+dependant's own condition of that type: the HA guest that stopped with its node is
+`derived`, not a root of its own.
 
 The relation types say which end is hurt (`dependant`) and whether it needs the
 other (`required`). A relation row may override `required`, and may name a
-`redundancyGroup`: relations of one dependant in one group are satisfied while any
-provider is healthy.
+`redundancyGroup`. Relations with one group name, anywhere on the site, are one
+redundancy: a bond's two cables, an MLAG pair's peer links, a LAG's two legs.
+While every member is down the rule's own impact crosses; while only some are,
+the dependant of each failed member gets a `warning` impact, reason
+`redundancy-degraded`, naming the failed member (`one of two in tappaas1:lanbond
+down: port sw-01/5: link-down`), and its root as `rootCause`. Such a dependant is
+no root cause: the failed member is. site-manager sets the group on a node's
+bonded uplinks (`<node>:<bond>`), switch-manager on an MLAG pair's peer links
+(`<pair>:peer`) and the legs of an MLAG LAG (`<pair>:<lag>`).
 
 The site object carries the result as `rootCauses[]`, most impact first:
 

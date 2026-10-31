@@ -143,8 +143,10 @@ Cables are `connects` between two ports, with `origin` (`recorded`, `lldp`,
 `mlag-peer`) and the observed `linkSpeed`: between two switches' ports in the
 first report; to a node's NIC (a port on the server asset positions.json
 records for that node) each in a report of its own, so a port the CMDB does
-not have yet refuses only that cable. A port toward an AP is ap-manager's to
-report. MACs seen behind a port stay in the actual: the CMDB resolves no MAC
+not have yet refuses only that cable. A cable in a redundancy carries
+`redundancyGroup`: an MLAG pair's peer links `<pair>:peer`, the two legs of an
+MLAG LAG `<pair>:<lag>`, so health degrades the far end while one is down. A port
+toward an AP is ap-manager's to report. MACs seen behind a port stay in the actual: the CMDB resolves no MAC
 yet (ADR-040 D5), and the controllers report no serial, MAC or speed today.
 
 `interrogate` and `reconcile` report what they read as an observation; the

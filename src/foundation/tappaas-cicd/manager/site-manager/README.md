@@ -530,6 +530,15 @@ A cluster that does not answer is a warning: the site, locations, cluster and
 nodes are reported from config/, without guests. An archived module is not
 reported.
 
+Each leg of a node's `lan` uplink (`node network show`) is a `connects` of its
+own report, from the switch's port (LLDP's answer, else the switch inventory's
+record of the cable) to the NIC on the node's server asset, with
+`redundancyGroup` `<node>:<bond>` (null on a lan of one port), so health degrades
+the NIC while one leg is down rather than failing it. A leg on a port of an MLAG
+LAG is switch-manager's to group; a leg the CMDB refuses (its port not reported
+yet) is a warning and is sent again next time. With such legs `--json` prints an
+array: the site's report, then one per leg.
+
 Changes: `node add`, `node delete` (the machine ends), `site modify` and the
 `location` verbs (a deleted location ends). `node reconcile` and `reconcile`
 report the membership and pools they read, as a side effect.

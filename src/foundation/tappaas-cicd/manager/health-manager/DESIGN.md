@@ -155,10 +155,23 @@ disk probe would turn green. Skips are no judgement: below ok among findings.
 
 **Expected or derived.** A failure spreads from a provider to its dependant where
 a rule matches the failure, in a fixpoint, because a `redundancyGroup` is crossed
-only when all its providers are down and they may be reached in any order. A
-failing condition is **derived** when a failure reaches its object in its own type
+only when all its members are down and they may be reached in any order. A group
+is its name, site-wide: a bond's two cables have different dependants (each NIC),
+so "the dependant's providers" would never hold two. A member is down when a
+provider of it other than the crossing's dependant is (what it reaches through the
+crossing is no cause of the crossing). Once nothing else grows, each group still
+partly down gives the dependant of a failed member a `warning`, which may travel
+on by a warning rule; the loop runs until neither pass adds a crossing. A rule
+with a `dependant` clause that matches wins over one without.
+
+A failing condition is **derived** when a failure reaches its object in its own type
 and no less severe: the same failure seen from below. A worse one stays its own,
-because a warning must not silence a critical. Another type on an impacted object
+because a warning must not silence a critical. A crossing softer than its source
+(a partly down group, the HA guest's warning) is also kept at the source's
+severity, one hop, for this question only: the NIC whose leg is down and the HA
+guest that stopped with its node are the same failure, derived, while their
+impact stays a warning. So both ends of a bond's dead cable still resolve to one
+root by `since`, as a plain cable does. Another type on an impacted object
 is not derived (a backup that was missing before the node died still is), but it
 is no root either while the node is down.
 
