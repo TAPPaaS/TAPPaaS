@@ -233,6 +233,31 @@ Health section, the Modules list's health badge and a module page's Health secti
 the worst condition of their objects from `health/summary` and `modules`, so every page agrees with the
 view; each falls back to `health` (validate) while the CMDB holds no conditions or does not answer.
 
+**Operations** (`/operations`) — what is wrong now and what changed. **Open events** are the objects
+with a failing condition of their own: critical or warning, not derived, not acknowledged and not in
+a maintenance window (an `impact` condition is a symptom, shown as its root's impact, never an event
+of its own). They are grouped by root cause: an event that another open event explains goes under
+it, following the chain to the top; the head of a group is marked *root cause* when other objects
+fail because of it. Critical groups come first, then the one that impacts most, then the oldest; in
+a group the head first, then critical before warning. Under each group, **impacts N** lists the
+objects that fail because of its head (the dependants whose derived condition names it). Beside
+each event, **what changed** on that object in the last 24 hours, newest first, from its CMDB
+history: each change with its verb or kind, source, actor and job, drift, and what it set — the
+attributes, a relation made (`+`) or ended (`−`). The assessment's own heartbeat (an observation
+that set only `conditions`, `lastSeen`, `used` or `leaseUntil`) is left out. The histories of the
+first 40 events are read, each at most a minute old. A row opens the object's panel, the same as
+on the Health page (`/operations?select=<id>`), with **Show in tree** to go there; the page reads
+again every 30 seconds and whenever the CMDB changes.
+
+**Discovery sweep** on the same page: **Run discovery sweep** (an installer's; it changes nothing
+on the site, it asks every source for everything and compares with the last sweep and with
+`config/`) runs `cmdb sweep` behind the request and is disabled while one started here runs; the
+CMDB refuses a second one, from anywhere, while one runs, and the page says so. Below it the last
+sweep's record: when, its status, the sweep it compared with (none: the baseline), the counts, the
+sources that failed or were asked without `--discover`, and the findings — what no change explains:
+drift, differences from desired, unmanaged and missing objects — each object a link to its panel.
+The nightly sweep's record shows here the same way.
+
 Every change is the operate dialog (`web/src/operate.tsx`, spike §5.4): a form built from the
 verb's manifest, the exact command (copyable), Preview (the verb's own dry run, streamed), Apply
 (with no preview of its own, one job runs the dry run first and goes on only on a clean one —
@@ -305,6 +330,14 @@ change is a job as ever, `health-manager ack|unack|maintenance`, taken from its 
 services it provides) and take `badges.health` from it, a silenced condition counting as passing.
 The client's address and token: `CMDB_URL`, `CMDB_TOKEN_FILE` (default `http://127.0.0.1:9098`,
 `/etc/secrets/cmdb-token`).
+
+The Operations view (`src/operations.ts` shapes it):
+
+| Route | Answers |
+|---|---|
+| `GET operations` | `{generated, hasConditions, counts{critical, warning, groups, silenced}, groups[], windowHours, changes{}, changesError{}, changesSkipped[]}`: a group `{root, status, since, events[], impact{count, objects[]}}`, an event `{id, class, name, label, environment, module, type, status, reason, message, since, flapping, conditions[], isRoot, rootCause[]}`; `changes` by object id, each `{id, time, kind, source, verb, job, actor, drift, what[]}`, from `GET /v1/objects/<id>/history` |
+| `GET operations/sweep` | `{last, lastError, running, failed}`: `last` the last sweep's record (`GET /v1/sweep`) as `{id, time, since, status, counts{}, sources[], findings[], findingsTotal, expectedTotal}`, the first 200 findings; `running` `{started, by}` while one started here runs; `failed` when it did not finish |
+| `POST operations/sweep` | an installer's (or the setup token's), as JSON: starts `cmdb sweep --json` and answers 202 `{running}`; 409 while one runs, here or anywhere; 502 when the CMDB does not answer |
 Each answers `{data, at, ageSeconds, refreshing, error}`.
 
 ## Jobs — every change (ADR-034 D4)

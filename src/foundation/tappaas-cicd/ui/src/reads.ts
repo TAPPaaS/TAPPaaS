@@ -14,7 +14,8 @@ import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan
 import { environmentZoneIn, readZonesFile, sharedZonesIn } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
-import { Cmdb, CmdbClassRow, CmdbError } from "./cmdb";
+import { Cmdb, CmdbClassRow, CmdbError, CmdbHistory } from "./cmdb";
+import { Operations, SweepRunner, changeTargets, groupEvents, openEvents, operationsDoc } from "./operations";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
 import { composeFields } from "../../lib/ts/src/compose-fields";
@@ -103,6 +104,9 @@ export const TTL = {
   snapshots: 5 * MIN,
   healthGraph: 0, // until the change stream says something changed (healthlive.ts)
 };
+
+// How many open events' histories the Operations view reads per answer.
+export const OPERATIONS_HISTORIES = 40;
 
 export interface ReadsConfig {
   // Cluster membership for the Setup checklist (lib/ts cluster.ts by default).
@@ -256,6 +260,8 @@ export class Reads {
   readonly sectionReads: CachedMap<unknown>;
   readonly moduleSnapshots: CachedMap<string>;
   readonly moduleCmdb: CachedMap<CmdbView | null>;
+  readonly objectHistory: CachedMap<CmdbHistory>;
+  readonly sweeps: SweepRunner | null; // the discovery sweep the Operations page starts
   private classRows: CmdbClassRow[] | null = null;
   private relationTypes: RelationType[] | null = null;
 
@@ -409,6 +415,10 @@ export class Reads {
       return r.stdout.replace(/\x1b\[[0-9;]*m/g, "");
     }, now);
     this.moduleCmdb = new CachedMap("module-cmdb", TTL.sectionRead, (key) => this.loadModuleCmdb(key), now);
+    // An open event's history, for what changed beside it: a minute old at most.
+    this.objectHistory = new CachedMap("object-history", TTL.sectionRead, (id) => this.cmdbClient().history(id), now);
+    const cmdb = cfg.cmdb ?? null;
+    this.sweeps = cmdb ? new SweepRunner({ sweep: () => cmdb.sweep(), lastSweep: () => cmdb.lastSweep() }, () => undefined, now) : null;
     this.moduleDrift = new CachedMap("drift", TTL.drift, (m) => j<Record<string, unknown>>("module-manager", ["drift", m, "--json"], [0, 1, 2], 5 * MIN), now);
   }
 
@@ -753,6 +763,7 @@ export class Reads {
       this.sectionReads.clear();
       this.moduleSnapshots.clear();
       this.moduleCmdb.clear();
+      this.objectHistory.clear();
       // health first: the topology places its findings
       await this.health.refresh();
       // the storage inventory (SMART on every disk), the backup runs and the
@@ -798,6 +809,7 @@ export class Reads {
     this.sectionReads.clear();
     this.moduleSnapshots.clear();
     this.moduleCmdb.clear();
+    this.objectHistory.clear();
     // The Setup checklist is records only (no module test runs here, ever):
     // re-read if someone has looked, so the step a job just completed shows.
     const setup = this.setup.peek().at !== null ? [this.setup] : [];
@@ -845,6 +857,24 @@ export class Reads {
     const cmdb = this.cmdbClient();
     const [show, history, graph] = await Promise.all([cmdb.show(id), cmdb.history(id), this.healthGraph.get()]);
     return healthObject(show, history.attributes, history.changes, graph.value, (this.cfg.now ?? Date.now)());
+  }
+
+  // The Operations view (ADR-040 D11): the open events of the health document
+  // by root cause, and each event's changes of the last day from its history,
+  // the first OPERATIONS_HISTORIES of them in the page's order.
+  async operations(doc: HealthGraph | null): Promise<Operations> {
+    const now = (this.cfg.now ?? Date.now)();
+    const groups = doc ? groupEvents(doc, openEvents(doc)) : [];
+    const { read, skipped } = changeTargets(groups, OPERATIONS_HISTORIES);
+    const histories = new Map<string, CmdbHistory | Error>();
+    const one = async (id: string): Promise<void> => {
+      if (!this.cfg.cmdb) return void histories.set(id, new CmdbError("this console has no CMDB client"));
+      const e = await this.objectHistory.of(id).get();
+      histories.set(id, e.value ?? new Error(e.error ?? "no history"));
+    };
+    // A few at a time: the controller is one process, and the page waits.
+    for (let i = 0; i < read.length; i += 8) await Promise.all(read.slice(i, i + 8).map(one));
+    return operationsDoc(doc, histories, skipped, now);
   }
 
   // health-manager roots --json; the graph's own list when the verb cannot

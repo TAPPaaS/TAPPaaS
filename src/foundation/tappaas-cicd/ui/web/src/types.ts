@@ -932,3 +932,87 @@ export interface ModuleSection {
   operations: SectionOperation[];
   operationErrors: string[];
 }
+
+// ── operations (ADR-040 D11, D15; src/operations.ts builds these) ──────
+export interface OpsCondition {
+  type: string;
+  status: "critical" | "warning";
+  reason: string | null;
+  message: string | null;
+  since: string | null;
+  flapping: boolean;
+}
+
+export interface OpsEvent extends OpsCondition {
+  id: string;
+  class: string;
+  name: string;
+  label: string;
+  environment: string | null;
+  module: string | null;
+  conditions: OpsCondition[];
+  isRoot: boolean;
+  rootCause: string[];
+}
+
+export interface OpsGroup {
+  root: string;
+  status: "critical" | "warning";
+  since: string | null;
+  events: OpsEvent[];
+  impact: { count: number; objects: { id: string; class: string; label: string; status: HealthStatus }[] };
+}
+
+export interface OpsChange {
+  id: number;
+  time: string;
+  kind: string;
+  source: string;
+  verb: string | null;
+  job: string | null;
+  actor: string | null;
+  drift: boolean;
+  what: string[];
+}
+
+export interface Operations {
+  generated: string | null;
+  hasConditions: boolean;
+  counts: { critical: number; warning: number; groups: number; silenced: number };
+  groups: OpsGroup[];
+  windowHours: number;
+  changes: Record<string, OpsChange[]>;
+  changesError: Record<string, string>;
+  changesSkipped: string[];
+}
+
+export interface SweepDifference {
+  kind: string;
+  class: string;
+  name: string;
+  id: string | null;
+  source: string;
+  attribute: string | null;
+  before: unknown;
+  after: unknown;
+  expected: boolean;
+}
+
+export interface DiscoverySweep {
+  id: number | null;
+  time: string | null;
+  since: string | null;
+  status: string;
+  counts: Record<string, number>;
+  sources: { source: string; ok: boolean; fallback: boolean; error: string | null; seconds: number | null }[];
+  findings: SweepDifference[];
+  findingsTotal: number;
+  expectedTotal: number;
+}
+
+export interface DiscoverySweepState {
+  last: DiscoverySweep | null;
+  lastError: string | null;
+  running: { started: string; by: string | null } | null;
+  failed: { at: string; error: string } | null;
+}

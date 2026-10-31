@@ -171,6 +171,7 @@ export class ConsoleServer {
     if (head === "jobs") return this.jobsApi(method, a, b, me, res, req, url);
     if (head === "secrets") return this.secretsApi(method, a, me, res, req);
     if (head === "assistant") return this.assistantApi(method, a, b, me, res, req);
+    if (head === "operations") return this.operationsApi(method, a, parts.length, me, res, req);
     if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/${head ?? ""}: reads are GET; a change is a job (POST /api/v1/jobs)` });
 
     const env = <T>(e: Entry<T>, data?: unknown): Record<string, unknown> => ({ ...envelope(e), ...(data !== undefined ? { data } : {}) });
@@ -341,6 +342,45 @@ export class ConsoleServer {
 
   private graph(): Promise<Entry<HealthGraph>> {
     return this.cfg.healthLive ? this.cfg.healthLive.read() : this.reads.healthGraph.get();
+  }
+
+  // ── the Operations view (ADR-040 D11, D15) ──────────────────────────
+  //   GET  /operations         the open events by root cause, with impact and what changed
+  //   GET  /operations/sweep   the last discovery sweep's record, and one running from here
+  //   POST /operations/sweep   start one (a write: it asks every source; 409 while one runs)
+  private async operationsApi(method: string, sub: string | undefined, depth: number, me: Me, res: ServerResponse, req?: IncomingMessage): Promise<void> {
+    const r = this.reads;
+    if (depth === 1 && method === "GET") {
+      const g = await this.graph();
+      try {
+        return sendJson(res, 200, { ...envelope(g), data: await r.operations(g.value) });
+      } catch (e) {
+        return sendJson(res, 200, { ...envelope(g), data: null, error: (e as Error).message });
+      }
+    }
+    if (depth === 2 && sub === "sweep") {
+      const sweeps = r.sweeps;
+      if (method === "GET") {
+        if (!sweeps) return sendJson(res, 200, { data: null, at: null, ageSeconds: null, refreshing: false, error: "this console has no CMDB client" });
+        return sendJson(res, 200, { data: await sweeps.state(), at: new Date().toISOString(), ageSeconds: 0, refreshing: false, error: null });
+      }
+      if (method === "POST") {
+        // It writes only the CMDB, but it asks every source for everything: the installer's.
+        const w = mayWrite(me, setupState(this.cfg.access));
+        if (!w.ok) return sendJson(res, w.status, { error: w.reason });
+        // As a job: JSON, which a cross-site form cannot send without CORS.
+        const ctype = req ? String(req.headers["content-type"] ?? "") : "";
+        if (!/^application\/json\b/i.test(ctype)) return sendJson(res, 415, { error: "a sweep is posted as application/json" });
+        if (!sweeps) return sendJson(res, 503, { error: "this console has no CMDB client" });
+        const started = await sweeps.start(me.user ?? me.via);
+        if (started.status !== 202) return sendJson(res, started.status, { error: started.error });
+        this.cfg.log(`discovery sweep started by ${me.user ?? me.via}`);
+        return sendJson(res, 202, { data: { running: started.running } });
+      }
+      return sendJson(res, 405, { error: "operations/sweep is GET or POST" });
+    }
+    if (method !== "GET") return sendJson(res, 405, { error: `${method} /api/v1/operations: a read is GET` });
+    return sendJson(res, 404, { error: "operations | operations/sweep" });
   }
 
   // ── the Health view (ADR-041 D5) ──────────────────────────────────
