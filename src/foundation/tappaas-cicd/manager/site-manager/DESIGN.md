@@ -37,7 +37,7 @@ Entities are the first arg (`<entity> <verb>`, as in `network-manager`):
 | Entity | Verbs | Notes |
 |---|---|---|
 | `site` (singleton) | `show`, `modify` | one `site.json`; no add/delete |
-| `node` | `list`, `add`, `delete` | the nodes' `pvehost` instances (`lib/ts/src/nodes.ts`): `add` registers one, `delete` archives it |
+| `node` | `list`, `add`, `delete` | the nodes' `pvehost` instances (`lib/ts/src/nodes.ts`): `add` registers one, `delete` deletes it (`--archive` keeps it archived) |
 | `repository` | `list`, `add`, `delete`, `reconcile`, `hold`, `release` | add/delete delegate to `repository.sh`; reconcile = repo-scoped converge; hold/release stop and resume the scheduled pull of one repository (#653) |
 
 Top-level lifecycle verbs: `add` (create the singleton, = `create-site.sh`),

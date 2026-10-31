@@ -63,6 +63,16 @@ rmn_pbs_on() {
     [[ -n "$node" && "$node" == "$1" ]]
 }
 
+# root's authorized_keys (stdin) without <node>'s own root key: the key the
+# node made at its join (comment root@<node>, or root@<node>.<domain>), which
+# `node add` authorized on tappaas1 and `pvecm add` in the cluster-wide file.
+# pvecm delnode leaves it: the machine that left could still log in as root.
+# Every other line is kept as it is.
+# Args: <node>
+rmn_authorized_keys_without() {
+    awk -v n="$1" '{ c = $NF } !(NF >= 3 && (c == "root@" n || index(c, "root@" n ".") == 1))'
+}
+
 # The script run ON the node by --erase, after the workload check has passed and
 # the operator typed ERASE. Destroys every ZFS pool and wipes its disks, then
 # wipes every partition and the partition table of the disk(s) behind / and

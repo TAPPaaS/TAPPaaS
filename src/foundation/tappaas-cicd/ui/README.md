@@ -188,6 +188,25 @@ network or the USB stick by hand, the install and join watched live (`GET
 membership, the node's `pvehost` record; every 10 s), then `node network set` and `node network test`, previewed. **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last
 result. Security is a later phase.
 
+**Remove a node** (Day 2) has three steps and no change/preview/apply/result flow of its own.
+1 · the node, and the way: power it off then remove it, wipe its disks first, or it is down for
+good. 2 · *Remove it*: as the step opens the console checks at once (`site-manager node delete
+<node> --<way>`, the dry run) and shows the outcome as findings, not console text
+(`web/src/noderemove.ts`): "tappaas4 can be removed", or what still needs it — a guest on it
+(a link to its module's page, to move it to another node), a module that replicates to or from it
+or may fail over to it (its module), the site's backup server (the Backup page); for a node that is
+down for good, what is lost with it. Once the check passes, the machine's record is kept (back to
+stock, its place in the rack and its cables recorded, ready for its next role; the default) or
+removed (record, place and cables: the machine leaves the site); a lost machine's record is always
+removed, and the step says so. The node's name typed, one **Remove tappaas4** button runs `node
+delete <node> --<way> --asset <keep|remove> --yes --apply` and shows what was done: out of the
+cluster, its switch ports parked, the machine's record kept or removed; a failure shows the last
+lines and **Check again**. Both outputs are a click away under a fold. 3 · *Afterwards*: what is
+true now, with links — gone from the cluster and from Modules, its switch ports parked (the switch
+in the Physical view), the machine in stock (its asset page) or removed, and Add node to replace
+it, which recognises a stocked machine by serial or MAC. Closed while it runs, the wizard finds the
+removal again when reopened.
+
 **Health** (in the menu under Day 2 wizards, above Site, at `/health`) — three panes, one selected
 object: a tree to find it, an ego graph around it, its CI panel beside them.
 

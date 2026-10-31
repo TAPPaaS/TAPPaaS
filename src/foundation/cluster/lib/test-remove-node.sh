@@ -59,5 +59,11 @@ ck "remove-node: nothing runs while anything blocks" yes \
 ck "--yes is an option of the script" yes "$(grep -q -- '--yes)      YES=1' "${SCRIPT}" && echo yes || echo no)"
 ck "--yes skips the node-name prompt, and ERASE's" 2 "$(grep -c 'if \[\[ "\$YES" -eq 1 \]\]; then' "${SCRIPT}")"
 ck "without it the node name is still typed" yes "$(grep -q 'read -rp "  Type the node name to confirm' "${SCRIPT}" && echo yes || echo no)"
+
+KEYS=$'ssh-ed25519 AAAA1 tappaas-cicd\nssh-rsa AAAA2 root@tappaas1\nssh-rsa AAAA4 root@tappaas4\nssh-rsa AAAA5 root@tappaas4.mgmt.internal\nssh-rsa AAAA6 root@tappaas41\nssh-rsa AAAA7'
+ck "authorized_keys: the node's own root keys go, the rest stays" \
+   $'ssh-ed25519 AAAA1 tappaas-cicd\nssh-rsa AAAA2 root@tappaas1\nssh-rsa AAAA6 root@tappaas41\nssh-rsa AAAA7' "$(rmn_authorized_keys_without tappaas4 <<<"$KEYS")"
+ck "remove-node: the node's root key leaves the cluster's authorized_keys" yes \
+   "$(grep -q 'rmn_authorized_keys_without' "${SCRIPT}" && echo yes || echo no)"
 echo "── remove-node: ${PASS} passed, ${FAIL} failed ──"
 [[ "$FAIL" -eq 0 ]]

@@ -1,9 +1,10 @@
 // asset.test.ts — the asset behind a node (ADR-040 D8): the machine's identity
 // as sysfs prints it, the match by serial then MAC, the --asset checks, the
-// cabling an asset lends node add, the new asset's tag, and the release.
+// cabling an asset lends node add, the new asset's tag, the release, and
+// what node delete does with the asset: kept, or removed.
 
 import { PositionsDoc } from "../../../../lib/ts/src/positions";
-import { IDENTITY_SH, assetCabling, assetPlaying, assetProblem, diskArgs, freeServers, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
+import { IDENTITY_SH, assetCabling, assetFate, assetFillArgs, assetPlaying, assetProblem, assetRemovalSteps, diskArgs, freeServers, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
 
 let passed = 0;
 let failed = 0;
@@ -126,6 +127,54 @@ check(assetPlaying(doc, "tappaas9") === null, "no asset plays tappaas9");
   check(plan.notes.some((n) => n.startsWith("sde has no serial")), "a disk without a serial: a note");
   check(calls.includes("disk add srv-05 sdf --serial NEW1 --size 1000"), `a new one: disk add, an unknown kind left out (${calls.join(" | ")})`);
 }
+
+// 7. node delete --asset: kept by default, removed for a lost node or on request
+check(assetFate(undefined, false) === "keep", "the asset is kept by default");
+check(assetFate(undefined, true) === "remove", "a lost node's asset is removed");
+check(assetFate("keep", true) === "keep", "a lost node's asset kept when told");
+check(assetFate("remove", false) === "remove", "remove on request");
+const badFate = assetFate("dispose", false);
+check(typeof badFate !== "string" && /keep or remove/.test(badFate.refused), "anything else is refused");
+
+// 8. removing an asset: its cables by its own end, its placement, its record
+const gone: PositionsDoc = {
+  assets: {
+    "srv-07": { kind: "server", stage: "placed", ports: [{ name: "1", kind: "rj45" }, { name: "2", kind: "rj45" }] },
+    "srv-08": { kind: "server", stage: "stock" },
+  },
+  placements: { "srv-07": { rack: "rack1", u: 30, height: 1, width: "full", face: "front" } },
+  cables: [
+    { from: { device: "crs-a", port: "ether3" }, to: { device: "srv-07", port: "1" }, kind: "patch" },
+    { from: { device: "srv-07", port: "2" }, to: { device: "pp-1", port: "4" }, kind: "patch" },
+    { from: { device: "crs-a", port: "ether4" }, to: { device: "srv-08", port: "1" }, kind: "patch" },
+  ],
+} as unknown as PositionsDoc;
+const rm = assetRemovalSteps(gone, "srv-07");
+check(rm.steps.map((x) => x.join(" ")).join("; ") === "cable remove srv-07:1; cable remove srv-07:2; unplace srv-07; asset remove srv-07", `cables, then the placement, then the record (${rm.steps.map((x) => x.join(" ")).join("; ")})`);
+check(rm.cables === 2 && rm.placed === "rack1 U30", "what it removes, for the preview");
+check(assetRemovalSteps(gone, "srv-08").steps.map((x) => x.join(" ")).join("; ") === "cable remove srv-08:1; asset remove srv-08", "an asset in stock: no unplace");
+const playing = assetRemovalSteps(doc, "srv-01");
+check(playing.steps.map((x) => x.join(" ")).join("; ") === "unplace tappaas1; asset remove srv-01", "an asset still in a role is named as it plays");
+check(assetRemovalSteps(gone, "srv-99").steps.length === 0, "no such asset: nothing");
+
+// 9. node add completes a known asset's record from the machine
+const fill: PositionsDoc = {
+  assets: {
+    "srv-10": { kind: "server", stage: "stock", serial: "SN10" },
+    "srv-11": { kind: "server", stage: "stock", vendor: "HP", ports: [{ name: "enp1s0", kind: "rj45" }, { name: "enp2s0", kind: "rj45", mac: "aa:bb:cc:00:11:02" }] },
+    "srv-12": { kind: "server", stage: "stock", ports: [{ name: "1", kind: "rj45" }] },
+  },
+} as unknown as PositionsDoc;
+const mach = { vendor: "HP", model: "Z840", serial: "SN10", macs: ["aa:bb:cc:00:10:01"], nics: [{ name: "eno1", mac: "aa:bb:cc:00:10:01" }] };
+const f10 = assetFillArgs(fill, "srv-10", mach);
+check(f10.calls.map((c) => c.join(" ")).join("; ") === "asset modify srv-10 --set vendor=HP --set model=Z840; port add srv-10 eno1 --kind rj45 --mac aa:bb:cc:00:10:01" && !f10.note && !f10.mismatch,
+  `what the record lacks, and a port per NIC on an asset with none (${f10.calls.map((c) => c.join(" ")).join("; ")})`);
+const f11 = assetFillArgs(fill, "srv-11", { vendor: "HP", model: null, serial: "SN11", macs: [], nics: [{ name: "enp1s0", mac: "aa:bb:cc:00:11:01" }, { name: "enp2s0", mac: "aa:bb:cc:00:11:02" }] });
+check(f11.calls.map((c) => c.join(" ")).join("; ") === "asset modify srv-11 --set serial=SN11; port modify srv-11 enp1s0 --set mac=aa:bb:cc:00:11:01", "a port named as the NIC gets its MAC; a known MAC and a recorded vendor stay");
+const f12 = assetFillArgs(fill, "srv-12", { ...mach, serial: null });
+check(f12.calls.length === 1 && !!f12.note && /srv-12's ports do not name these NICs: eno1/.test(f12.note), "ports under other names: not guessed, said");
+const f13 = assetFillArgs(fill, "srv-10", { ...mach, serial: "OTHER" });
+check(!!f13.mismatch && f13.calls.length === 0, "another machine's serial: nothing filled, said");
 
 console.log(`asset: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

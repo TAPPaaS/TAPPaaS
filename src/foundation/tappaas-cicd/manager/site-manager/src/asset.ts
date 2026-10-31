@@ -1,5 +1,5 @@
 // asset.ts — the asset behind a node (ADR-040 D7, D8): what node add matches
-// or creates and allocates, and what node delete releases.
+// or creates and allocates, and what node delete releases or removes.
 //
 // Two ways in, one asset. Asset first: `node add <N> --asset <a>` — the asset
 // is checked before anything is installed, and its recorded cable and MAC
@@ -290,10 +290,80 @@ export function diskArgs(doc: PositionsDoc, key: string, disks: MachineDisk[]): 
   return { calls, notes };
 }
 
+// What an asset's record lacks that the machine says of itself, as
+// asset-manager calls (node add, once the asset is known — matched, or named
+// with --asset): its serial, vendor and model where the record has none, and
+// its NICs' MACs — a port named as the NIC with no MAC gets it, an asset with
+// no ports of its own gets a port per NIC. Ports under other names with no
+// MAC are not guessed at: `note` says so. `mismatch`: the record's serial is
+// another machine's — then nothing is filled.
+export function assetFillArgs(doc: PositionsDoc, key: string, id: MachineIdentity): { calls: string[][]; note: string | null; mismatch: string | null } {
+  const a = assetsOf(doc)[key];
+  if (!a) return { calls: [], note: null, mismatch: null };
+  if (a.serial && id.serial && a.serial.toLowerCase() !== id.serial.toLowerCase()) {
+    return { calls: [], note: null, mismatch: `asset ${key} records serial ${a.serial}, the machine says ${id.serial}` };
+  }
+  const calls: string[][] = [];
+  const sets: string[] = [];
+  if (!a.serial && id.serial) sets.push(`serial=${id.serial}`);
+  if (!a.vendor && id.vendor) sets.push(`vendor=${id.vendor}`);
+  if (!a.model && id.model) sets.push(`model=${id.model}`);
+  if (sets.length) calls.push(["asset", "modify", key, ...sets.flatMap((x) => ["--set", x])]);
+  const known = assetMacs(a).map((m) => m.toLowerCase());
+  const own = a.ports ?? [];
+  const unplaced: string[] = [];
+  for (const n of id.nics) {
+    if (known.includes(n.mac)) continue;
+    const p = own.find((x) => x.name === n.name);
+    if (p && !p.mac) calls.push(["port", "modify", key, n.name, "--set", `mac=${n.mac}`]);
+    else if (!p && own.length === 0) calls.push(["port", "add", key, n.name, "--kind", "rj45", "--mac", n.mac]);
+    else unplaced.push(`${n.name} ${n.mac}`);
+  }
+  const note = unplaced.length ? `${key}'s ports do not name these NICs: ${unplaced.join(", ")} — record each MAC on its port (asset-manager port modify ${key} <port> --set mac=<mac>)` : null;
+  return { calls, note, mismatch: null };
+}
+
 // The asset playing a role (what node delete releases), and where it is.
 export function assetPlaying(doc: PositionsDoc, role: string): { key: string; asset: Asset; placed: string | null } | null {
   const hit = Object.entries(assetsOf(doc)).find(([, a]) => a.role === role);
   if (!hit) return null;
   const m = placementsOf(doc)[role];
   return { key: hit[0], asset: hit[1], placed: m ? placeWhere(m) : null };
+}
+
+// What becomes of a removed node's asset (node delete --asset): kept — the
+// role ends and the asset goes back to stock, or stays placed for its next
+// role, its cables recorded — or removed: the machine leaves the site, so
+// once released its recorded cables, its placement and its record go too.
+// A lost node's asset is removed unless told otherwise.
+export type AssetFate = "keep" | "remove";
+export const ASSET_FATES: AssetFate[] = ["keep", "remove"];
+export function assetFate(given: string | undefined, lost: boolean): AssetFate | { refused: string } {
+  if (given === undefined) return lost ? "remove" : "keep";
+  if ((ASSET_FATES as string[]).includes(given)) return given as AssetFate;
+  return { refused: `--asset is keep or remove, not '${given}'` };
+}
+
+// The asset-manager calls that take a released asset off the site, in order:
+// a `cable remove` per recorded cable it is an end of (by its own end), its
+// `unplace`, then `asset remove`. Each is asset-manager's own verb, so each
+// change reaches the CMDB through its change report. Computed on the doc as
+// it stands; an asset still in a role is named as it plays (the release comes
+// first, nodeasset.ts).
+export function assetRemovalSteps(doc: PositionsDoc, key: string): { steps: string[][]; cables: number; placed: string | null } {
+  const a = assetsOf(doc)[key];
+  if (!a) return { steps: [], cables: 0, placed: null };
+  const me = currentName(key, a);
+  const steps: string[][] = [];
+  const seen = new Set<string>();
+  for (const c of cablesOf(doc)) {
+    const end = c.from.device === me ? c.from : c.to.device === me ? c.to : null;
+    if (!end || seen.has(end.port)) continue;
+    seen.add(end.port);
+    steps.push(["cable", "remove", `${me}:${end.port}`]);
+  }
+  const m = placementsOf(doc)[me];
+  if (m) steps.push(["unplace", me]);
+  steps.push(["asset", "remove", key]);
+  return { steps, cables: seen.size, placed: m ? placeWhere(m) : null };
 }

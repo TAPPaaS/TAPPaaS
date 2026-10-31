@@ -64,6 +64,20 @@ export function firstFreeNode(known: string[]): string {
 // In the order the operator has the answers (ADR-037 D4): where it is cabled,
 // its MAC, its boot disks; every one may stay blank, and says what blank does.
 const DECLARE_OPTIONS = ["--asset", "--switch-port", "--mac", "--boot-disk", "--boot-mirror", "--ttl", "--no-reboot"];
+// Each in the operator's words: no flags, no file names.
+const DECLARE_LABELS: Record<string, string> = {
+  "--asset": "the machine", "--switch-port": "switch port", "--mac": "MAC address", "--boot-disk": "boot disk",
+  "--boot-mirror": "mirror disk", "--ttl": "boot window (seconds)", "--no-reboot": "no restart after its first update",
+};
+const DECLARE_TEXTS: Record<string, string> = {
+  "--asset": "The machine as the asset register records it: a server in stock or placed, in no role. Its recorded cable and MAC fill in where it is cabled. Blank: recognised once it has joined, or recorded as new.",
+  "--switch-port": "The switch and port the machine is cabled to. On a switch TAPPaaS manages, the port is set up for a node and the machine's MAC is learned there when it boots the installer. On a switch you manage yourself, leave it at none and set the port up by hand (above).",
+  "--mac": "The MAC address of the cabled network card, from the machine's label, its BIOS or its BMC. Blank: learned on the switch port; with no switch port either, the first machine that asks for an install answer while the boot window is open gets this node's, so keep the window short.",
+  "--boot-disk": "The disk Proxmox is installed on (wiped): its model, size or serial, when that names one disk. Blank: the smallest SSD or NVMe disk, and both when the smallest two are alike (mirrored). ask: chosen on the machine's own screen.",
+  "--boot-mirror": "A second disk to mirror the boot disk onto, named the same way. Blank: a mirror only when the boot disk names two disks alike. none: one disk.",
+  "--ttl": "How long the boot window stays open (default: two hours).",
+  "--no-reboot": "Keep the node running on the installer's kernel. By default it restarts into its newest kernel after its first update, before it takes any guests, when the cluster can spare it.",
+};
 
 function Check({ ok, label, detail }: { ok: boolean | null; label: string; detail?: string }) {
   return (
@@ -173,13 +187,15 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const trunk = manualTrunkText(nodeTrunkVlans(zones));
   const declare: Step = useMemo(
     () => ({
-      title: `site-manager node add ${name || "<name>"}`,
+      title: `Declare ${name || "the node"}`,
       bin: "site-manager",
       verb: "node add",
       fixed: valid ? [name] : [],
       only: DECLARE_OPTIONS,
+      labels: DECLARE_LABELS,
+      descriptions: DECLARE_TEXTS,
       placeholders: {
-        "--asset": "blank: matched by the machine's serial and MACs once it has joined, or a new asset (srv-NN) is recorded",
+        "--asset": "blank: recognised by its serial number or MAC once it has joined, or recorded as new",
         "--switch-port": "none: the port is configured by hand",
         "--mac": "e.g. 58:47:ca:7a:12:34 — blank: learned on the switch port; with none, the first machine that asks",
         "--boot-disk": "blank: the smallest SSD/NVMe",
@@ -203,7 +219,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
       jobShownIn: "stage 3, where the install is watched",
       note: (
         <>
-          <p><b>The asset</b> — the physical machine in the asset register. Pick it when it was recorded before (bought, racked, cabled): its recorded cable and MAC fill in below. Blank: once the node has joined, its serial and MACs are matched against the free server assets, and when none matches a new asset is recorded for it, named srv-NN, to be placed in stage 6.</p>
+          <p><b>The machine</b> — as recorded in the asset register. Pick it when it was recorded before (bought, racked, cabled, or kept in stock when a node was removed): its recorded cable and MAC fill in below. Blank: once the node has joined, the machine is recognised among the free servers by its serial number or a network card's MAC, and when none matches a new record is made for it (srv-NN), to be placed in stage 6. Either way, what the machine says of itself — serial number, maker, model, its network cards' MACs — is added to its record where the record lacks it.</p>
           <p><b>Where it is cabled</b> — one of two:</p>
           <ul>
             <li><b>Connected to a TAPPaaS-managed switch:</b> pick its port (the free ones are listed). TAPPaaS makes it a node trunk and learns the machine's MAC there; the MAC field may stay blank.</li>
@@ -231,20 +247,20 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   // Stage 0: the medium built on the mothership when it is missing or stale.
   const prepare: Step = useMemo(
     () => ({
-      title: "site-manager node media prepare",
+      title: "Prepare the boot medium",
       bin: "site-manager",
       verb: "node media prepare",
       fixed: [],
       only: ["--force"],
       note: media?.prepare
-        ? `Runs ${media.prepare.argv.join(" ")} on the mothership (${media.prepare.minutes}). There is no dry run: the preview is the command.`
-        : "Stages the netboot assets and builds the installer stick image on the mothership. There is no dry run: the preview is the command.",
+        ? `Builds the network-boot files and the installer stick image on the mothership (${media.prepare.minutes}). There is nothing to try first: the preview shows what will run.`
+        : "Builds the network-boot files and the installer stick image on the mothership. There is nothing to try first: the preview shows what will run.",
     }),
     [media?.prepare],
   );
   const writeStick: Step = useMemo(
     () => ({
-      title: `site-manager node usb write ${stickNode} ${stickDevice || "<device>"}`,
+      title: `Write the installer stick${stickDevice ? ` in ${stickDevice}` : ""} on ${stickNode}`,
       bin: "site-manager",
       verb: "node usb write",
       fixed: stickDevice ? [stickNode, stickDevice] : [stickNode],
@@ -255,9 +271,9 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
       hide: ["--yes"],
       blocked: !stickDevice ? "pick the stick first" : media && !media.stickImage.present ? "the installer stick image is not built yet: prepare the medium first" : undefined,
       progress: writeProgress,
-      note: `The mothership streams the installer stick image (${media?.stickImage.path ?? "/var/lib/tappaas-pxe/tappaas-usb.iso"}, the same for every node) over ssh into ${stickDevice || "the stick"} in ${stickNode}, erasing it, then flushes and ejects it: a minute or two. The node needs nothing in advance. There is no dry run: the preview is the command.`,
+      note: `The mothership copies the installer stick image (the same for every node) onto ${stickDevice || "the stick"} in ${stickNode}, erasing it, then ejects it: a minute or two. The node needs nothing in advance. There is nothing to try first: the preview shows what will run.`,
     }),
-    [stickNode, stickDevice, media?.stickImage.present, media?.stickImage.path],
+    [stickNode, stickDevice, media?.stickImage.present],
   );
   const mediaReady = media?.ready ?? null;
 
@@ -265,14 +281,14 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
     // Optional, and open until the operator writes a stick or skips: a
     // machine that network-boots needs no stick (then the medium must only be
     // there, which stage 1's job checks again).
-    { id: "medium", title: "0 · Prepare boot medium", required: false, done: stickWritten || skipMedium ? true : mediaReady === false && !prepared ? false : null, detail: "The netboot assets and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick. Continue when the machine network-boots or you have a stick already." },
+    { id: "medium", title: "0 · Prepare boot medium", required: false, done: stickWritten || skipMedium ? true : mediaReady === false && !prepared ? false : null, detail: "The network-boot files and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick. Continue when the machine network-boots or you have a stick already." },
     { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. Apply records its install answer on the mothership and opens the boot window; stage 2 says how to boot the machine." },
     { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
-    { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto a ZFS boot pool, the node joins the cluster, is patched and rebooted, and is registered as a pvehost instance." },
-    { id: "storage", title: "4 · Define data pools", required: false, done: pooled ? true : null, detail: "Until it has one, its guests go to the boot pool. Proposed from its free disks." },
-    { id: "lan", title: "5a · A second lan port (bond, then the failover test)", required: false, done: lanDone ? true : null, detail: "lan carries management, the cluster link and every guest: a second port, bonded, keeps the node reachable when one fails. Its switch port is set up with it, and the failover test proves it." },
+    { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto its boot disk(s), the node joins the cluster, is patched and restarted, and is recorded as a node of the site, its machine in the asset register." },
+    { id: "storage", title: "4 · Define data pools", required: false, done: pooled ? true : null, detail: "Until it has one, its guests go on its boot disk. Proposed from its free disks." },
+    { id: "lan", title: "5a · A second lan port (bond, then the failover test)", required: false, done: lanDone ? true : null, detail: "The lan carries management, the cluster link and every guest: a second port, paired with the first, keeps the node reachable when one fails. Its switch port is set up with it, and a test pulls one to prove it." },
     { id: "wan", title: "5b · The WAN port", required: false, done: wanDone ? true : null, detail: "Only for a node that may carry the firewall: the port, and optionally the switch port, for its WAN." },
-    { id: "done", title: "6 · Place the machine correctly in the physical view", required: false, done: joined, detail: "Its asset — the one picked in stage 1, or the one node add matched or recorded for it (srv-NN) — and its location, room and rack: where the machine actually stands." },
+    { id: "done", title: "6 · Place the machine correctly in the physical view", required: false, done: joined, detail: "Its machine — the one picked in stage 1, or the one recognised or recorded for it (srv-NN) — and its location, room and rack: where the machine actually stands." },
   ];
   const current = addNodeStage({ job: job !== null, jobLive: jobLive(running), progress, pooled: pooled || skipPools, lan: lanDone, wan: wanDone });
   // Closing mid-way: the install job keeps running, and reopening finds the
@@ -298,18 +314,18 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           <p className="small">Every new node installs from one medium on the mothership: a machine that network-boots (PXE) fetches it from there, a machine that cannot boots the installer stick made from the same image. The cicd install built it once; it is built again here when it is missing, from before this version, or wanted for a new Proxmox version.</p>
           {media ? (
             <ul className="plain checks">
-              <Check ok={media.staged && media.current} label="netboot assets on the mothership" detail={media.staged ? (media.current ? "staged, current" : "staged, but from before this version's installer hook") : "not staged"} />
-              <Check ok={media.stickImage.present} label="installer stick image" detail={media.stickImage.present ? `${media.stickImage.path}, ${gb(media.stickImage.size)}, ${media.stickImage.modified ?? ""}` : "not built"} />
-              {!media.xorriso ? <Check ok={false} label="xorriso on the mothership" detail="not installed: the stick image cannot be built until an OS update of tappaas-cicd brings it" /> : null}
+              <Check ok={media.staged && media.current} label="network-boot files on the mothership" detail={media.staged ? (media.current ? "in place, current" : "in place, but from before this version's installer") : "not in place"} />
+              <Check ok={media.stickImage.present} label="installer stick image" detail={media.stickImage.present ? `${gb(media.stickImage.size)}, ${media.stickImage.modified ?? ""}` : "not built"} />
+              {!media.xorriso ? <Check ok={false} label="the stick-image builder on the mothership" detail="not installed: the stick image cannot be built until the mothership's next OS update brings it" /> : null}
             </ul>
           ) : (
-            <p className="muted small">{mediaRead.env?.error || mediaRead.failure ? <><Dot level="fail" /> site-manager node media could not be read: {mediaRead.env?.error ?? mediaRead.failure}</> : "reading the boot medium…"}</p>
+            <p className="muted small">{mediaRead.env?.error || mediaRead.failure ? <><Dot level="fail" /> the boot medium could not be read: {mediaRead.env?.error ?? mediaRead.failure}</> : "reading the boot medium…"}</p>
           )}
           {media && (!media.ready || prepared) ? (
             media.prepare || prepared ? (
               <StepView key={media.prepare?.argv.join(" ") ?? "ready"} step={prepare} me={me} onDone={(ok) => { if (ok) { setPrepared(true); mediaRead.reload(); } }} />
             ) : (
-              <p className="small"><Dot level="warn" /> Nothing can be built here until xorriso is installed on the mothership.</p>
+              <p className="small"><Dot level="warn" /> Nothing can be built here until the stick-image builder is on the mothership.</p>
             )
           ) : null}
           <p className="small" style={{ marginTop: "1em" }}><b>The installer stick</b> — only for a machine that cannot network-boot. One image for every node: the stick fetches the node's own answer from the mothership once stage 1's job runs. Two ways to write it:</p>
@@ -358,7 +374,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           {resumed ? (
             running ? (
               <p className="small">
-                Applied: <span className="mono">site-manager node add {name}</span> — {jobResult(running)} <span className="muted">· job {running.id}</span> — its output is in stage 3 <JobControl job={running} />
+                Applied: {name} is declared — {jobResult(running)} <span className="muted">· job {running.id}</span> — its output is in stage 3 <JobControl job={running} />
               </p>
             ) : <p className="muted small">reading job {job}…</p>
           ) : (
@@ -396,14 +412,14 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         <StepRow s={steps[3]} open={current === "wait"}>
           <div className="explain">
             <p>
-              Nothing to do here but wait, typically 15–25 minutes: the installer writes Proxmox to the boot disk(s) and reboots, the job waits for the node at its address, checks it and joins it to the cluster, registers it as a pvehost instance, brings it to the cluster baseline and reboots it into the kernel that installed. Watch the node's screen if it takes much longer.
+              Nothing to do here but wait, typically 15–25 minutes: the installer writes Proxmox to the boot disk(s) and restarts, the job waits for the node at its address, checks it and joins it to the cluster, records it as a node of the site and its machine in the asset register (recognised, or recorded as new), brings it up to date with the other nodes and restarts it into its newest kernel. Watch the node's screen if it takes much longer.
             </p>
           </div>
           {progress ? (
             <ul className="plain checks">
               <Check ok={progress.registration === "answered"} label="the installer fetched its answer" />
               <Check ok={progress.inCluster} label="in the Proxmox cluster" detail={progress.cluster ? `members: ${progress.cluster.join(", ")}` : "no node answered the membership read"} />
-              <Check ok={progress.inSite} label="registered as a pvehost instance" />
+              <Check ok={progress.inSite} label="recorded as a node of the site" />
             </ul>
           ) : null}
           {running ? (
@@ -416,12 +432,12 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
           ) : null}
           {progress?.inCluster && !progress.inSite && endedOk !== null ? (
             <p className="small">
-              In the cluster but not registered: <OperateButton label="Register joined nodes…" title="site-manager node reconcile" steps={[{ title: "site-manager node reconcile", bin: "site-manager", verb: "node reconcile", note: "The preview lists the nodes that joined the cluster and have no pvehost instance; apply registers them, with their storage pools." }]} />
+              In the cluster but not recorded as a node: <OperateButton label="Register joined nodes…" title="Register joined nodes" steps={[{ title: "Register joined nodes", bin: "site-manager", verb: "node reconcile", note: "The preview lists the nodes that joined the cluster and are not recorded as nodes of the site; Apply records them, with their storage pools." }]} />
             </p>
           ) : null}
           {progress?.pxe.text ? (
             <details className="small">
-              <summary>node-provisioner status</summary>
+              <summary>the network-install service's status</summary>
               <pre className="output">{progress.pxe.text}</pre>
             </details>
           ) : null}
@@ -438,7 +454,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         <StepRow s={steps[7]} open={current === "done"}>
           {valid ? (
             <p className="small">
-              <Link to={viewLink("rack", `node:${name}`)}>Open {name} in the physical view →</Link> — select it there and use <b>Place…</b> to put it in its room and rack. The asset behind it is in Site → Assets, under its own tag, playing {name}. {joined ? "" : <span className="muted">(it appears there once it is registered)</span>}
+              <Link to={viewLink("rack", `node:${name}`)}>Open {name} in the physical view →</Link> — select it there and use <b>Place…</b> to put it in its room and rack. Its machine is on the <Link to="/assets">Assets</Link> page, under its own tag, playing {name}, with its serial number and its network cards' MACs. {joined ? "" : <span className="muted">(it appears there once it is recorded)</span>}
             </p>
           ) : null}
         </StepRow>

@@ -5,7 +5,7 @@
 # Takes a node out of the Proxmox cluster for good: workload check → (erase) →
 # power off → pvecm delnode → its /etc/pve/nodes directory, its place in the
 # storage entries and in the cluster's known_hosts. `site-manager node delete`
-# runs this, then drops the node from site.json and archives its pvehost module.
+# runs this, then deletes the node's record and keeps or removes its asset.
 #
 # Usage:
 #   remove-node.sh [--dry-run|--execute] [--shutdown|--erase|--lost] <node>
@@ -119,8 +119,10 @@ REPL="$(peer "pvesh get /cluster/replication --output-format json" 2>/dev/null)"
 mapfile -t REPL_JOBS < <(rmn_replication_touching "$NODE" "$REPL")
 for j in "${REPL_JOBS[@]}"; do
     [[ -n "$j" ]] || continue
-    if [[ "$LOST" -eq 1 ]]; then warn "  replication job ${j} — removed with the node; site-manager update re-folds HA after the restore"
-    else block "replication job ${j} — change the module's HANode, then site-manager update re-folds it"; fi
+    # The job's id is <vmid>-<n>: the module whose guest it replicates, named.
+    m="$(rmn_module_of_vmid "${j%%-*}" "$CONFIG_DIR")"
+    if [[ "$LOST" -eq 1 ]]; then warn "  replication job ${j}${m:+ (module ${m})} — removed with the node; site-manager update re-folds HA after the restore"
+    else block "replication job ${j}${m:+ (module ${m})} — change the module's HANode, then site-manager update re-folds it"; fi
 done
 
 RULES="$(peer "pvesh get /cluster/ha/rules --output-format json" 2>/dev/null)" || RULES='[]'
@@ -154,7 +156,7 @@ if [[ "${#LOST_GUESTS[@]}" -gt 0 ]]; then
 fi
 for j in "${REPL_JOBS[@]}"; do [[ -n "$j" && "$LOST" -eq 1 ]] && info "  remove replication job ${j%% *}"; done
 [[ "$MEMBER" -eq 1 ]] && info "  pvecm delnode ${NODE} (from ${PEER})"
-info "  remove /etc/pve/nodes/${NODE} and its entries in the cluster's known_hosts"
+info "  remove /etc/pve/nodes/${NODE}, its entries in the cluster's known_hosts and its root key in the cluster's authorized_keys"
 info "  remove its DNS entry (and DHCP reservation) $(rn_node_fqdn "$NODE"), and its host keys on this controller"
 # The switch ports recorded for the node (type node, target <node>) go back to
 # parked: left as they were, a port carries every node VLAN to whatever is
@@ -271,6 +273,20 @@ if peer "test -d /etc/pve/nodes/${NODE}"; then
     fi
 fi
 peer "ssh-keygen -R ${NODE} -f /etc/pve/priv/known_hosts >/dev/null 2>&1; ssh-keygen -R $(rn_node_fqdn "$NODE") -f /etc/pve/priv/known_hosts >/dev/null 2>&1; true"
+# Its root key, authorized cluster-wide at the join (node add seeds it on
+# tappaas1, pvecm add in /etc/pve/priv/authorized_keys): left there, the
+# machine that left could still log in to every node as root.
+_keys="$(peer "cat /etc/pve/priv/authorized_keys" 2>/dev/null)" || _keys=""
+if [[ -n "${_keys}" ]]; then
+    _kept="$(rmn_authorized_keys_without "${NODE}" <<<"${_keys}")"
+    if [[ "${_kept}" != "${_keys}" ]]; then
+        if printf '%s\n' "${_kept}" | ssh -o BatchMode=yes -o ConnectTimeout=10 "root@$(rn_node_fqdn "$PEER")" "cat > /etc/pve/priv/authorized_keys.tappaas-new && mv /etc/pve/priv/authorized_keys.tappaas-new /etc/pve/priv/authorized_keys"; then
+            info "  ${GN}✓${CL} ${NODE}'s root key removed from the cluster's authorized_keys"
+        else
+            warn "  could not remove ${NODE}'s root key from /etc/pve/priv/authorized_keys — remove the root@${NODE} line by hand"
+        fi
+    fi
+fi
 # Its mgmt address goes too: the Host entry TAPPaaS made for the node (with the
 # DHCP reservation pinned to its MAC) and the controller's own host keys. Left
 # behind, a rebuild under the name meets a reservation for the old machine's

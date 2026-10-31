@@ -7,7 +7,7 @@ import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { GN, YW, CL, info, warn } from "../../../lib/ts/src/cli";
 import { POSITIONS_FILE, PositionsDoc } from "../../../lib/ts/src/positions";
-import { DISKS_SH, IDENTITY_SH, MachineIdentity, assetPlaying, diskArgs, identityFromRegistration, matchAsset, newAssetArgs, parseDisks, parseIdentity } from "./asset";
+import { AssetFate, DISKS_SH, IDENTITY_SH, MachineIdentity, assetFillArgs, assetPlaying, assetRemovalSteps, diskArgs, identityFromRegistration, matchAsset, newAssetArgs, parseDisks, parseIdentity } from "./asset";
 import { defaultConfigDir } from "./config";
 
 export function readPositions(configDir = defaultConfigDir()): PositionsDoc | null {
@@ -97,9 +97,11 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
   }
   let key = asset ?? null;
   let fresh = false;
+  // What the machine says of itself: matched by when no asset is named, and
+  // checked against and filled into the asset's record either way.
   const id = host ? readIdentity(host, name) : null;
+  if (host && !id) warn(`  ${name}'s identity (serial, MACs) could not be read from ${host}: ${key ? "its asset's record is not checked against it" : "no asset is matched by it"}`);
   if (!key) {
-    if (!id) warn(`  ${name}'s identity (serial, MACs) could not be read${host ? ` from ${host}` : ""}: no asset is matched by it`);
     const m = id ? matchAsset(doc, id) : null;
     if (m && "conflict" in m) {
       warn(`  ${m.conflict}: ${name} gets no asset — asset-manager asset allocate <the right one> --role ${name}`);
@@ -124,6 +126,19 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
       if (n.ports.length) info(`  ${n.ports.length} NIC(s) recorded as ${key}'s ports, by MAC`);
     }
   }
+  // A known asset: what its record lacks (serial, vendor, model, the NICs'
+  // MACs) from the machine, so the next match — and a DHCP reservation or a
+  // registration that names a MAC — finds it.
+  if (!fresh && id) {
+    const f = assetFillArgs(doc, key, id);
+    if (f.mismatch) warn(`  ${f.mismatch}: is ${key} the right asset? Its record is left as it is`);
+    for (const c of f.calls) {
+      const r = assetManager(c);
+      if (r.rc !== 0) warn(`  ${key}'s record is not completed: asset-manager ${c.join(" ")}: ${r.out}`);
+    }
+    if (f.calls.length) info(`  ${key}'s record completed from the machine (${f.calls.length} change(s))`);
+    if (f.note) warn(`  ${f.note}`);
+  }
   const r = assetManager(["asset", "allocate", key, "--role", name]);
   if (host) recordNodeDisks(key, id);
   if (r.rc !== 0) {
@@ -137,18 +152,46 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
   return key;
 }
 
-// node delete: the role ends; the asset keeps its placement under its own name
-// (D7). What would happen, for the preview, when `apply` is false.
-export function releaseNodeAsset(name: string, apply: boolean): void {
-  const doc = readPositions();
+// node delete: the role ends (D7). fate keep: the asset keeps its placement
+// and cables under its own name, in stock or placed for its next role.
+// fate remove: the machine leaves the site — released, then its recorded
+// cables, its placement and its record removed, each by asset-manager's verb
+// (which reports the change to the CMDB). What would happen, for the
+// preview, when `apply` is false.
+export function releaseNodeAsset(name: string, apply: boolean, fate: AssetFate = "keep", configDir = defaultConfigDir()): void {
+  const doc = readPositions(configDir);
   const a = doc ? assetPlaying(doc, name) : null;
-  if (!a) return;
+  if (!doc || !a) {
+    if (!apply) info(`  then: no asset is recorded for ${name}: no asset record changes`);
+    return;
+  }
   const where = a.placed ? `stays placed in ${a.placed}` : "goes back to stock";
   if (!apply) {
-    info(`  then: asset ${a.key} is released from ${name} and ${where}`);
+    if (fate === "keep") info(`  then: asset ${a.key} is released from ${name} and kept: it ${where}`);
+    else {
+      const r = assetRemovalSteps(doc, a.key);
+      const parts = [r.cables ? `its ${r.cables} recorded cable(s)` : "", r.placed ? `its placement in ${r.placed}` : "", "its record"].filter(Boolean);
+      info(`  then: asset ${a.key} is released from ${name} and removed: ${parts.join(", ")}`);
+    }
     return;
   }
   const r = assetManager(["asset", "release", a.key]);
-  if (r.rc === 0) info(`${GN}✓${CL} asset ${a.key} released from ${name}; it ${where}`);
-  else warn(`asset ${a.key} still plays ${name}: ${r.out} — asset-manager asset release ${a.key}`);
+  if (r.rc !== 0) {
+    warn(`asset ${a.key} still plays ${name}: ${r.out} — asset-manager asset release ${a.key}`);
+    return;
+  }
+  if (fate === "keep") {
+    info(`${GN}✓${CL} asset ${a.key} released from ${name} and kept: it ${where}`);
+    return;
+  }
+  info(`${GN}✓${CL} asset ${a.key} released from ${name}`);
+  const after = readPositions(configDir) ?? doc;
+  for (const step of assetRemovalSteps(after, a.key).steps) {
+    const s = assetManager(step);
+    if (s.rc !== 0) {
+      warn(`asset ${a.key} is not removed: asset-manager ${step.join(" ")}: ${s.out} — run the rest by hand (asset-manager asset show ${a.key})`);
+      return;
+    }
+  }
+  info(`${GN}✓${CL} asset ${a.key} removed: its cables, placement and record`);
 }
