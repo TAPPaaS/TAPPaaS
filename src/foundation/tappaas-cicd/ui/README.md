@@ -205,7 +205,10 @@ an outpost's `ak-outpost-<hex>`) are listed the same way, `Authentik built-in`, 
 password reset), and no form offers them as a user. **Assets** — see [Assets](#assets) below. **Backup** — the policy of every module, peers, pulse, restore points;
 modify, purge (typed). **Site** — the four tabs above. Add node is a guided sequence in Setup's step rows: declare
 the node (`site-manager node add tappaasN`: its switch port or MAC, boot disks; the wizard
-always installs, adopting a hand-installed Proxmox is the CLI's `--adopt`), boot it from the
+always installs, adopting a hand-installed Proxmox is the CLI's `--adopt`; the form, then one
+Declare button: the dry run and the apply as one job, its status line with Stop and its output
+shown live, then one line saying where the job is; a refusal shows the last lines and Try again
+with the values kept), boot it from the
 network or the USB stick by hand, the install and join watched live (`GET
 /api/v1/nodes/<name>/progress`: the provisioning registration, `node-provisioner status`, cluster
 membership, the node's `pvehost` record; every 10 s), then `node network set` and `node network test`, previewed. **Activity** — the console's jobs, the sweep's runs, the failures ledger and the last

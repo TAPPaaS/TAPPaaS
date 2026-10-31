@@ -15,21 +15,24 @@
 // storage add); 5a a second lan port — the bond, its switch port, then the
 // failover test (node network set, node network test); 5b its WAN port, for a
 // node that may carry the firewall (pages/NodeUplinks.tsx); 6 the node in the
-// physical view.
+// physical view. Stage 1 is the form and one button: the job's dry run, its
+// status line with Stop and its output show there; once the change applies
+// the stage is done and keeps one line saying where the job is.
 
-import { useEffect, useMemo, useState } from "react";
-import { useJob, useRead } from "../api";
-import { JobControl, Output, jobResult } from "../jobs";
-import { OperateButton, Step, StepView, Values } from "../operate";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { applyNowJob, useJob, useRead, useVerb } from "../api";
+import { buildArgv } from "../argv";
+import { JobControl, Output, jobResult, phaseOutputs } from "../jobs";
+import { OperateButton, Step, StepForm, StepView, Values, useStepValues } from "../operate";
 import { useOpenedBy } from "../opener";
-import { JobSummary, SiteRead, StorageInventory, Topology } from "../types";
+import { Job, JobSummary, SiteRead, StorageInventory, Topology } from "../types";
 import { ZoneRead } from "./Zones";
 import { viewLink } from "../physical/views";
-import { AddNodeStage, KeyStore, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, dismissJob, dismissedJobs, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, setupFromOutput, switchPortChoices, writeProgress } from "../nodeadd";
-import { Wizard, jobLabel, jobLive } from "../wizard";
+import { AddNodeStage, KeyStore, NodeProgress, STAGE_NUMBER, addNodeJoined, addNodeStage, addNodeUnderway, declaredLine, dismissJob, dismissedJobs, lastLines, latestNodeAdd, manualTrunkText, nodeAddOngoing, nodeTrunkVlans, setupFromOutput, switchPortChoices, writeProgress } from "../nodeadd";
+import { Wizard, jobLabel, jobLive, useReportJob } from "../wizard";
 import { NodePools } from "../physical/nodepools";
 import { LanUplink, WanUplink } from "./NodeUplinks";
-import { Dot, Link, canOperate, useMe } from "../ui";
+import { Dot, Link, Tag, canOperate, useMe } from "../ui";
 import { UsbStickPicker, gb } from "../usbsticks";
 import { StepRow } from "./Setup";
 
@@ -180,7 +183,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
   const progress = useRead<NodeProgress>(valid ? `nodes/${encodeURIComponent(name)}/progress` : null, 10_000).env?.data ?? null;
   const underway = addNodeUnderway({ job: job !== null, progress });
   const running = useJob(job);
-  // Stage 2 opens the moment Apply is pressed: until node add says the machine
+  // Stage 2 opens the moment the declare applies: until node add says the machine
   // can boot, it says it is getting ready, from the job's own output.
   const live = running?.state === "running" || running?.state === "queued";
   const setup = setupFromOutput(running?.output ?? "");
@@ -227,7 +230,6 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
       prefill: options,
       // A second node add for the node whose job runs could reinstall it.
       blocked: busyName === name ? `${name} is being added already (job ${session!.job.id}): reopen the wizard to continue it, or name another node` : job !== null || (valid && !known.includes(name)) ? undefined : "give the node a new name first",
-      jobShownIn: "stage 3, where the install is watched",
       note: (
         <>
           <p><b>The machine</b> — as recorded in the asset register. Pick it when it was recorded before (bought, racked, cabled, or kept in stock when a node was removed): its recorded cable and MAC fill in below. Blank: once the node has joined, the machine is recognised among the free servers by its serial number or a network card's MAC, and when none matches a new record is made for it (srv-NN), to be placed in stage 6. Either way, what the machine says of itself — serial number, maker, model, its network cards' MACs — is added to its record where the record lacks it.</p>
@@ -293,7 +295,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
     // machine that network-boots needs no stick (then the medium must only be
     // there, which stage 1's job checks again).
     { id: "medium", title: "0 · Prepare boot medium", required: false, done: stickWritten || skipMedium ? true : mediaReady === false && !prepared ? false : null, detail: "The network-boot files and the installer stick image on the mothership, built once per Proxmox version and checked here; then, for a machine that cannot network-boot, the stick. Continue when the machine network-boots or you have a stick already." },
-    { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. Apply records its install answer on the mothership and opens the boot window; stage 2 says how to boot the machine." },
+    { id: "declare", title: "1 · Declare the node", required: true, done: job !== null, detail: "Its name, where it is cabled, its initial ethernet port and boot disks, and a few other options. Declare records its install answer on the mothership and opens the boot window; stage 2 says how to boot the machine." },
     { id: "boot", title: "2 · Boot the machine: from the network (PXE) or a USB stick (by hand)", required: true, done: progress && underway ? progress.registration === "answered" || progress.inCluster === true : null, detail: "Power it on and boot it once from the network or from the installer stick; the mothership answers with the installer either way." },
     { id: "wait", title: "3 · Install and join (automatic)", required: true, done: underway ? joined : null, detail: "Proxmox installs onto its boot disk(s), the node joins the cluster, is patched and restarted, and is recorded as a node of the site, its machine in the asset register." },
     { id: "storage", title: "4 · Define data pools", required: false, done: pooled ? true : null, detail: "Until it has one, its guests go on its boot disk. Proposed from its free disks." },
@@ -318,7 +320,7 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         </div>
       ) : null}
       <p className="small">
-        Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools. Nothing changes until you Apply in stage 1.
+        Adding a new physical machine as a Proxmox node of this site. This includes defining its connectivity and its boot disk, configuring it in the cluster, and setting up its data pools. Nothing changes until you Declare the node in stage 1.
       </p>
       <ol className="setup">
         {/* Open while the medium is not ready; collapsed once it is (most machines network-boot and need nothing more). */}
@@ -384,13 +386,9 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         <StepRow s={steps[1]} open={current === "declare"}>
           {/* Continued: the job was applied before this pop-up; its form is not offered again. */}
           {resumed ? (
-            running ? (
-              <p className="small">
-                Applied: {name} is declared — {jobResult(running)} <span className="muted">· job {running.id}</span> — its output is in stage 3 <JobControl job={running} />
-              </p>
-            ) : <p className="muted small">reading job {job}…</p>
+            running ? <DeclaredLine name={name} job={running} progress={progress} /> : <p className="muted small">reading job {job}…</p>
           ) : (
-            <StepView key={topo ? "ports" : "no-ports"} step={declare} me={me} onApplied={setJob} onDone={(ok) => setEnded(ok)} />
+            <DeclareStep step={declare} name={name} progress={progress} onApplied={setJob} onDone={(ok) => setEnded(ok)} />
           )}
         </StepRow>
         <StepRow s={steps[2]} open={current === "boot"}>
@@ -472,6 +470,114 @@ export function AddNodeWizard({ onClose, prefill, resume }: { onClose: () => voi
         </StepRow>
       </ol>
     </Wizard>
+  );
+}
+
+// Stage 1 once the change applies: one line, where the job is, with its Stop.
+function DeclaredLine({ name, job, progress }: { name: string; job: Job; progress: NodeProgress | null }) {
+  const live = jobLive(job);
+  const line = declaredLine(name, setupFromOutput(phaseOutputs(job).apply), { live, answered: progress?.registration === "answered", joined: addNodeJoined(progress) });
+  return (
+    <p className="small">
+      <Tag level={live || job.exit === 0 ? "pass" : "warn"} /> {line} <span className="muted">· job {job.id} {jobResult(job)}</span> <JobControl job={job} />
+    </p>
+  );
+}
+
+// Stage 1: the form, then one button. node add runs as one job, its dry run
+// first: while it checks, its status line (with Stop) and its output; once the
+// change applies the stage is done (onApplied) and keeps one line, the job's
+// output watched in stage 3. A refusal shows the last lines and Try again,
+// back to the form with its values.
+function DeclareStep({ step, name, progress, onApplied, onDone }: { step: Step; name: string; progress: NodeProgress | null; onApplied: (id: string) => void; onDone: (ok: boolean) => void }) {
+  const me = useMe();
+  const verb = useVerb(step.bin, step.verb);
+  const [values, setValues] = useStepValues(step, verb);
+  const argv = useMemo(() => buildArgv(step, verb, values), [step, verb, values]);
+  const [started, setStarted] = useState<string | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const job = useJob(started);
+  useReportJob(jobLive(job) ? job : null);
+  const pp = job?.previewPhase ?? null;
+  // Past its dry run, clean: the change is applying.
+  const inApply = job !== null && job.state !== "refused" && (!pp || (pp.exit === 0 && !pp.stopped));
+  const failed = job !== null && !inApply && (job.state === "done" || job.state === "refused");
+  const told = useRef<string | null>(null);
+  useEffect(() => {
+    if (started && inApply && told.current !== started) {
+      told.current = started;
+      onApplied(started);
+    }
+  }, [started, inApply]);
+  useEffect(() => {
+    if (job?.state === "done" && inApply) onDone(job.exit === 0);
+  }, [job?.state, job?.exit]);
+
+  const declare = async () => {
+    setError(null);
+    setStarting(true);
+    try {
+      const r = await applyNowJob(argv);
+      if (!r.data || r.status >= 400) return setError(`${name} was not declared: ${r.error ?? `HTTP ${r.status}`}`);
+      setStarted(r.data.id);
+    } catch (e) {
+      setError(`${name} was not declared: ${(e as Error).message}`);
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  if (!verb) return <p className="muted">reading the {step.bin} manifest…</p>;
+  if (started) {
+    if (!job) return <p className="muted"><Tag level="skip" /> Starting the declare of {name}…</p>;
+    if (inApply) {
+      return (
+        <div className="step">
+          <DeclaredLine name={name} job={job} progress={progress} />
+          <details className="small">
+            <summary>What the check printed</summary>
+            <Output text={phaseOutputs(job).preview ?? ""} />
+          </details>
+        </div>
+      );
+    }
+    if (failed) {
+      const why = job.state === "refused" ? `${name} was not declared: ${job.refused ?? "refused"}` : pp?.stopped ? `${name} was not declared: ${pp.stopped}.` : job.cancelled ? `${name} was not declared: the job was stopped.` : `${name} was not declared: the check ended with exit ${pp?.exit ?? job.exit}.`;
+      const tail = lastLines(job.output);
+      return (
+        <div className="step">
+          <p className="readstate readstate-fail">{why}</p>
+          {tail.length ? <pre className="output">{tail.join("\n")}</pre> : null}
+          <div className="actions">
+            <button className="btn btn-primary" onClick={() => setStarted(null)}>Try again</button>
+            <span className="muted small">back to the form, as filled in</span>
+          </div>
+          <details className="small">
+            <summary>What the job printed</summary>
+            <Output text={job.output} />
+          </details>
+        </div>
+      );
+    }
+    return (
+      <div className="step">
+        <p><Tag level="skip" /> Declaring {name}: the change is checked first (its dry run), then its install answer is recorded and the boot window opened. <span className="muted">{jobResult(job)} · job {job.id}</span> <JobControl job={job} /></p>
+        <Output text={job.output} live />
+      </div>
+    );
+  }
+  const hint = !canOperate(me) ? "only an operator adds a node" : step.blocked ?? null;
+  return (
+    <div className="step">
+      {step.note ? <div className="note">{step.note}</div> : null}
+      <StepForm step={step} verb={verb} values={values} set={setValues} />
+      {error ? <p className="readstate readstate-fail">{error}</p> : null}
+      <div className="actions">
+        <button className="btn btn-primary" disabled={!!hint || starting} onClick={() => void declare()}>{starting ? "Starting…" : `Declare ${name || "the node"}`}</button>
+        {hint ? <span className="muted small">{hint}</span> : null}
+      </div>
+    </div>
   );
 }
 

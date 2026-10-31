@@ -2,7 +2,7 @@
 // D4): the switch ports a new node can be cabled to, the trunk a hand-configured
 // port needs, and the data pool proposed from the node's free disks.
 
-import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing, setupFromOutput, dismissJob, dismissedJobs} from "../../web/src/nodeadd";
+import { diskId, humanSize, manualSwitches, manualTrunkText, nodeTrunkVlans, poolDisks, proposedDisks, proposedLayout, proposedPoolClass, proposedPoolName, switchPortChoices, writeProgress, POOL_CLASSES, NodeNetwork, NodePort, lanCandidates, lldpSwitchPort, portLabel, wanCandidates, wanPort, AddNodeFacts, NodeAddJob, SESSION_MS, STAGE_NUMBER, addNodeStage, addNodeUnderway, latestNodeAdd, nodeAddName, nodeAddOngoing, setupFromOutput, dismissJob, dismissedJobs, declaredLine, lastLines} from "../../web/src/nodeadd";
 import { StorageDisk, TopoPort, TopoSwitch } from "../../web/src/types";
 import { check, done } from "./check";
 
@@ -127,6 +127,21 @@ check(humanSize(2e12) === "2.0 TB" && humanSize(8001563222016) === "8.0 TB" && h
   check(setupFromOutput("").step === null, "no output yet: no step");
   const coloured = "\n\x1b[1;92m[node add 1]\x1b[0m the switch port: USW port 1\n  \x1b[1;92m✓\x1b[0m USW port 1 is tappaas4's: a node trunk, on the switch\n\x1b[1;92m[node add 4]\x1b[0m boot the machine now: from the network\n";
   check(setupFromOutput(coloured).ready && setupFromOutput(coloured).port?.startsWith("USW port 1") === true, "the job's real output: its colours do not hide the steps");
+}
+
+{
+  const setup = (o: Partial<{ ready: boolean; step: string | null; port: string | null }> = {}) => ({ ready: false, step: null, port: null, ...o });
+  const live = { live: true, answered: false, joined: false };
+  check(declaredLine("tappaas4", setup(), live) === "tappaas4 is declared; getting ready: starting…", "declared, the job just past its dry run");
+  check(declaredLine("tappaas4", setup({ step: "register 'tappaas4'" }), live) === "tappaas4 is declared; getting ready: register 'tappaas4'…", "declared, the step it is on");
+  check(declaredLine("tappaas4", setup({ ready: true, port: "USW port 1 is tappaas4's: a node trunk" }), live) === "tappaas4 is declared: boot it now, from the network or the USB stick (USW port 1 is tappaas4's: a node trunk).", "ready: boot it, with the port");
+  check(declaredLine("tappaas4", setup({ ready: true }), live).endsWith("USB stick."), "ready, no switch port");
+  check(declaredLine("tappaas4", setup({ ready: true }), { ...live, answered: true }).includes("installer is running"), "the installer fetched its answer");
+  check(declaredLine("tappaas4", setup(), { ...live, live: false }).includes("job has ended"), "the job ended");
+  check(declaredLine("tappaas4", setup(), { live: false, answered: true, joined: true }) === "tappaas4 is declared and has joined the cluster.", "joined");
+  check(lastLines("a\n\n\x1b[31mb\x1b[0m  \nc\n", 2).join("|") === "b|c", "last lines: no colours, no blanks");
+  check(lastLines("").length === 0, "no output: no lines");
+  check(lastLines(Array.from({ length: 20 }, (_, i) => `l${i}`).join("\n")).length === 8, "eight by default");
 }
 
 done("nodeadd");

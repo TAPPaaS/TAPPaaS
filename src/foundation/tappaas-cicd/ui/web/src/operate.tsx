@@ -221,9 +221,37 @@ function ProgressBar({ at, done }: { at: { pct: number; text: string } | null; d
   );
 }
 
+// A step's form values: its initial ones, then the assistant's (step.prefill)
+// merged in once the verb's manifest says which are positionals and options.
+export function useStepValues(step: Step, verb: ManifestVerb | null): [Values, (v: Values) => void] {
+  const [values, setValues] = useState<Values>(step.initial ?? {});
+  const [prefilled, setPrefilled] = useState(false);
+  useEffect(() => {
+    if (!verb || !step.prefill || prefilled) return;
+    const pre = prefillValues(step, verb, step.prefill, step.render !== undefined, step.only);
+    setValues((v) => ({ ...v, ...pre }));
+    setPrefilled(true);
+  }, [verb]);
+  return [values, setValues];
+}
+
+// The change form of a step, from the verb's manifest: its own form
+// (step.render) with the verb's other options below, or the verb's form.
+// StepView's, and a wizard's that runs the step with one button (Add node's declare).
+export function StepForm({ step, verb, values, set }: { step: Step; verb: ManifestVerb; values: Values; set: (v: Values) => void }) {
+  return step.render ? (
+    <>
+      <PrefillContext.Provider value={step.prefill ?? null}>{step.render(values, set, verb)}</PrefillContext.Provider>
+      <VerbForm step={step} verb={verb} values={values} set={set} part="bottom" />
+    </>
+  ) : (
+    <VerbForm step={step} verb={verb} values={values} set={set} />
+  );
+}
+
 export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me | null; onDone: (ok: boolean) => void; onApplied?: (jobId: string) => void }) {
   const verb = useVerb(step.bin, step.verb);
-  const [values, setValues] = useState<Values>(step.initial ?? {});
+  const [values, setValues] = useStepValues(step, verb);
   const argv = useMemo(() => buildArgv(step, verb, values), [step, verb, values]);
   const [preview, setPreview] = useState<{ id: string; argv: string } | null>(null);
   const [applied, setApplied] = useState<string | null>(null);
@@ -250,15 +278,6 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       onApplied?.(applied);
     }
   }, [applied, inApply]);
-
-  // The assistant's values, once the manifest says which are positionals and options.
-  const [prefilled, setPrefilled] = useState(false);
-  useEffect(() => {
-    if (!verb || !step.prefill || prefilled) return;
-    const pre = prefillValues(step, verb, step.prefill, step.render !== undefined, step.only);
-    setValues((v) => ({ ...v, ...pre }));
-    setPrefilled(true);
-  }, [verb]);
 
   if (!verb) return <p className="muted">reading the {step.bin} manifest…</p>;
   const writeMark = writeMarkOf(verb, argv);
@@ -307,14 +326,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
         </ol>
       ) : null}
       {step.note ? <div className="note">{step.note}</div> : null}
-      {step.render ? (
-        <>
-          <PrefillContext.Provider value={step.prefill ?? null}>{step.render(values, setValues, verb)}</PrefillContext.Provider>
-          <VerbForm step={step} verb={verb} values={values} set={setValues} part="bottom" />
-        </>
-      ) : (
-        <VerbForm step={step} verb={verb} values={values} set={setValues} />
-      )}
+      <StepForm step={step} verb={verb} values={values} set={setValues} />
       <Command argv={isRead ? argv : applyForm(verb, argv)} label={isRead ? "runs" : "apply runs"} />
       {destructive ? <p className="readstate readstate-fail">Destructive: this cannot be undone from the console. It needs the object's name typed before Apply.</p> : null}
       {destructive && !busy ? (
