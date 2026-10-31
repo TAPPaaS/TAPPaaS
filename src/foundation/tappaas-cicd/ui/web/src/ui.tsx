@@ -3,6 +3,7 @@
 
 import { MouseEvent, ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useJumps } from "./api";
+import { confirmMatches } from "./argv";
 import { Finding } from "./noderemove";
 import { Envelope, Jump, Me } from "./types";
 
@@ -217,5 +218,17 @@ export function FindingList({ items, empty }: { items: Finding[]; empty?: string
         </li>
       ))}
     </ul>
+  );
+}
+
+// The typed name of a destructive change: `object`, or `label` where the
+// manifest shows it within its container (argv.ts confirmMatches).
+export function TypedConfirm({ object, label = object, value, set }: { object: string; label?: string; value: string; set: (v: string) => void }) {
+  return (
+    <label className="form-row confirm">
+      <span>Type <b className="mono">{object}</b> to confirm{label !== object ? <> — <span className="mono">{label}</span></> : null}</span>
+      <input type="text" autoComplete="off" value={value} onChange={(e) => set(e.target.value)} />
+      {value !== "" && !confirmMatches(value, object, label) ? <small className="muted">not yet: exactly {object}{label !== object ? ` or ${label}` : ""}</small> : null}
+    </label>
   );
 }

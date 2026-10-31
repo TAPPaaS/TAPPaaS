@@ -7,7 +7,7 @@
 
 import { readFileSync } from "fs";
 import { join } from "path";
-import { buildArgv, confirmObject } from "../../web/src/argv";
+import { buildArgv, confirmMatches, confirmObject } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
 import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, refusalLines, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
@@ -167,6 +167,10 @@ check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its ver
   check(runFailure(job({ state: "done", exit: 130, cancelled: {} })) === "the job was stopped", "why: stopped");
   check(runFailure(job({ state: "done", exit: 3 })) === "the job ended with exit 3", "why: its exit");
 }
+
+// The typed name: the server's rule (src/jobs.ts createApply).
+check(confirmMatches("7", "7", "sw1:7") && confirmMatches("sw1:7", "7", "sw1:7"), "the object's name, or as the manifest shows it");
+check(!confirmMatches("", "", "") && !confirmMatches("8", "7", "sw1:7"), "nothing typed, or anything else: no");
 
 // What a dry run said against a change.
 {

@@ -14,12 +14,13 @@
 
 import { ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { get } from "./api";
+import { confirmMatches } from "./argv";
 import { TargetValues, resolveTarget } from "./consoletargets";
 import { requestOpen } from "./opener";
 import { useJobRun } from "./run";
 import { Command, JobOutput, JobStatusLine } from "./jobs";
 import { AssistantStatus, Me } from "./types";
-import { canOperate, navigate, useMe } from "./ui";
+import { TypedConfirm, canOperate, navigate, useMe } from "./ui";
 
 // What is in view, sent with every question.
 export interface Focus {
@@ -168,7 +169,7 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
   const refusedByDryRun = previewDone && p.preview === "dry-run-flag" && pj!.exit !== 0;
   const object = pj?.object ?? "";
   const label = pj?.objectLabel ?? object;
-  const canRun = may && !applied && (p.read ? !preview : previewDone && !refusedByDryRun && (!p.destructive || (confirm !== "" && (confirm === object || confirm === label))));
+  const canRun = may && !applied && (p.read ? !preview : previewDone && !refusedByDryRun && (!p.destructive || confirmMatches(confirm, object, label)));
 
   if (dismissed) return <div className="card-proposal card-dismissed muted small">Proposal dismissed: <code className="mono">{p.argv.join(" ")}</code></div>;
 
@@ -214,10 +215,7 @@ function ProposalCard({ p, conversation, me }: { p: Proposal; conversation: stri
       ) : null}
       {refusedByDryRun ? <p className="readstate readstate-warn">The dry run refuses this change (exit {pj!.exit}): nothing to run.</p> : null}
       {p.destructive && previewDone && !applied && may ? (
-        <label className="form-row confirm">
-          <span>Type <b className="mono">{object}</b> to confirm{label !== object ? <> — <span className="mono">{label}</span></> : null}</span>
-          <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        </label>
+        <TypedConfirm object={object} label={label} value={confirm} set={setConfirm} />
       ) : null}
       {aj ? (
         <div className="jobview">

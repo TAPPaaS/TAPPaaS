@@ -11,12 +11,12 @@
 
 import { useMemo, useState } from "react";
 import { reloadAll, useJob, useRead, useVerb } from "./api";
-import { Values, buildArgv, confirmObject } from "./argv";
+import { Values, buildArgv, confirmMatches, confirmObject } from "./argv";
 import { useOpenedBy } from "./opener";
 import { Command, JobControl, JobOutput, JobStatusLine, jobResult, phaseOutputs } from "./jobs";
 import { Job, Me } from "./types";
 import { Step, StepForm, applyForm, previewKindOf, useStepValues, writeMarkOf } from "./stepform";
-import { Link, Tag, canOperate, useMe } from "./ui";
+import { Link, Tag, TypedConfirm, canOperate, useMe } from "./ui";
 import { useJobRun } from "./run";
 import { Wizard } from "./wizard";
 
@@ -104,7 +104,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
   const named = confirmObject(step, verb, values, argv);
   const object = named.object;
   const label = named.label;
-  const confirmed = confirm !== "" && (confirm === object || confirm === label);
+  const confirmed = confirmMatches(confirm, object, label);
   const busy = applied !== null && !stopped; // an Apply runs or ran: the form is done
   const canApply = !step.blocked && !busy && !previewRunning && !refusedByDryRun && (!destructive || (confirmed && canOperate(me)));
   const phase = busy ? (inApply ? (appliedJob?.state === "done" ? 4 : 3) : 2) : stopped ? 2 : previewDone ? 3 : preview ? 2 : 1;
@@ -137,10 +137,7 @@ export function StepView({ step, me, onDone, onApplied }: { step: Step; me: Me |
       <Command argv={isRead ? argv : applyForm(verb, argv)} label={isRead ? "runs" : "apply runs"} />
       {destructive ? <p className="readstate readstate-fail">Destructive: this cannot be undone from the console. It needs the object's name typed before Apply.</p> : null}
       {destructive && !busy ? (
-        <label className="form-row confirm">
-          <span>Type <b className="mono">{object}</b> to confirm{label !== object ? <> — <span className="mono">{label}</span></> : null}</span>
-          <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        </label>
+        <TypedConfirm object={object} label={label} value={confirm} set={setConfirm} />
       ) : null}
       <div className="actions">
         <button className="btn" disabled={busy || !!step.blocked} onClick={() => void doPreview()}>

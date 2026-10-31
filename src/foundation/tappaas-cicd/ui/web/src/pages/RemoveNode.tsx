@@ -11,12 +11,13 @@
 
 import { useState } from "react";
 import { reloadAll, useRead } from "../api";
+import { confirmMatches } from "../argv";
 import { CheckStep } from "../flows";
 import { phaseOutputs } from "../jobs";
 import { AssetChoice, ASSET_CHOICES, CheckOutcome, HOWS, How, RemovalOutcome, assetFor, assetTarget, checkArgv, parseCheck, parseRemoval, removeArgv, switchTarget } from "../noderemove";
 import { useOpenedBy, requestOpen } from "../opener";
 import { Job, JobSummary, SiteRead } from "../types";
-import { Link, Tag, canOperate, useMe } from "../ui";
+import { Link, Tag, TypedConfirm, canOperate, useMe } from "../ui";
 import { ResumeOffer, Wizard, useJobSession } from "../wizard";
 import { StepRow } from "./Setup";
 
@@ -182,17 +183,12 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
       ) : (
         <p className="small muted">No machine record is kept for {node}: nothing to keep or remove.</p>
       ))}
-      confirm={(
-        <label className="form-row confirm">
-          <span>Type <b className="mono">{node}</b> to confirm</span>
-          <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-        </label>
-      )}
-      typed={node}
-      confirmed={confirm === node}
+      confirm={<TypedConfirm object={node} value={confirm} set={setConfirm} />}
+      typed={confirm}
+      confirmed={confirmMatches(confirm, node, node)}
       button={`Remove ${node}`}
       danger
-      hint={confirm !== node ? `type ${node} exactly to enable the button` : null}
+      hint={!confirmMatches(confirm, node, node) ? `type ${node} exactly to enable the button` : null}
       me={me}
       onStarted={(id) => { setJob(id); if (!id) { onResult(null); setConfirm(""); } }}
       onDone={(ok, j) => {

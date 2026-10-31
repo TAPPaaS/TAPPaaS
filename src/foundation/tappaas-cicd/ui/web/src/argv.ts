@@ -117,3 +117,7 @@ export function confirmObject(step: ArgvStep, verb: ManifestVerb, values: Values
   }
   return { object, label };
 }
+
+// The typed confirmation's one rule, the server's too (src/jobs.ts createApply):
+// the object's name, or the object as the manifest shows it within its container.
+export const confirmMatches = (typed: string, object: string, label: string): boolean => typed !== "" && (typed === object || typed === label);
