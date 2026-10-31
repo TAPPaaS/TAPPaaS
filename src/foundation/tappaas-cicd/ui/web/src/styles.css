@@ -697,3 +697,18 @@ span.ht-caret { cursor: default; }
   .ov-alert { grid-template-columns: 70px minmax(0, 1fr); row-gap: 2px; }
   .ov-alert-text { grid-column: 1 / -1; white-space: normal; }
 }
+
+/* The Physical view: Unplaced and How to on the left, the racks in the middle,
+   the selection's card on the right. */
+.rack-left { width: 260px; flex: none; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+.rack-left .rack-tray { width: auto; flex: 1 1 auto; min-height: 120px; }
+.rack-howto { flex: 0 1 auto; max-height: 45%; overflow: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.rack-howto header h2 { font-size: 13px; margin: 4px 0 6px; }
+.rack-left .rack-tray:only-child, .rack-left .rack-howto:only-child { max-height: none; }
+@media (max-width: 900px) {
+  .physical { flex-direction: column; height: auto; min-height: 0; }
+  .physical > .canvas { flex: none; height: 70vh; min-height: 420px; }
+  .physical .sidepanel, .rack-left { width: auto; }
+  .rack-left .rack-tray { max-height: 40vh; }
+  .rack-howto { max-height: none; }
+}

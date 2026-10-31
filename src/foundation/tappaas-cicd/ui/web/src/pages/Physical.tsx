@@ -195,7 +195,13 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
       ) : shown === "rack" ? (
         <>
         <div className="physical physical-rack">
-          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} tree={tree} /> : operator ? <PhysicalHowTo /> : null}
+          {/* Left: what is placed nowhere, and how to; middle: the racks; right: the selection's card. */}
+          {(t && racks && (racks.racks.length || (racks.rooms ?? []).length)) || operator ? (
+            <div className="rack-left">
+              {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? <Unplaced t={t} v={racks} pick={pick} /> : null}
+              {operator ? <PhysicalHowTo /> : null}
+            </div>
+          ) : null}
           <div className="canvas">
             {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? (
               <RackCanvas t={t} v={racks} sel={sel} pick={pick} cables={showCables} onPane={() => setSel(null)} />
@@ -213,7 +219,7 @@ export function Physical({ embedded, view, aside, beforeFindings }: { embedded?:
               </div>
             ) : null}
           </div>
-          {t && racks && (racks.racks.length || (racks.rooms ?? []).length) ? <Unplaced t={t} v={racks} pick={pick} /> : null}
+          {sel && t ? <SidePanel t={t} sel={sel} close={() => setSel(null)} pick={pick} storage={storage} tree={tree} /> : null}
         </div>
         </>
       ) : (

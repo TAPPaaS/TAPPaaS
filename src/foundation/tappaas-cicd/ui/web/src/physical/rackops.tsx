@@ -278,10 +278,10 @@ export function RecordSeenButton({ d }: { d: TopoDevice }) {
   return <OperateButton label="Record…" kind="primary" title={`Record the device ${d.seen?.switch} port ${d.seen?.port} sees`} steps={() => deviceRecordSteps(d, models, locations, notes)} />;
 }
 
-// The Physical view with nothing selected: what to do, in order.
+// The Physical view's How to, under the Unplaced tray: what to do, in order.
 export function PhysicalHowTo() {
   return (
-    <aside className="sidepanel howto">
+    <aside className="howto rack-howto">
       <header>
         <h2>How to</h2>
       </header>
@@ -294,7 +294,7 @@ export function PhysicalHowTo() {
         <li><b>Add a faceplate</b> for a device model the catalog lacks: its units, width and ports; it is then offered by Place… and Record a device….</li>
         <li><b>Split a wire at a patch panel</b>: on a device's Details, Attach to patch panel… on the port's cable.</li>
       </ol>
-      <p className="muted small">A click on a location, a room, a rack, a device or a wire opens its card here; its Details open the page where it is changed.</p>
+      <p className="muted small">A click on a location, a room, a rack, a device or a wire opens its card on the right; its Details open the page where it is changed.</p>
     </aside>
   );
 }
