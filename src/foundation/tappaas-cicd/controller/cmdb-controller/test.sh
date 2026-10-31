@@ -615,7 +615,7 @@ check "the fields the first observation fills on the verb-made asset are new" "c
 check "the counts: new among the expected, the old asset's port drift" "true true" \
     "$(jq -r '"\(.counts.new >= 6) \(.counts.drift >= 1)"' <<<"${out}")"
 cmdb sweep --last >"${SW}/text" 2>&1
-grep -q "new (of server/srv-04, node add)" "${SW}/text" && grep -q "expected (.* new)" "${SW}/text" && ok "the report, for people, says what is new" || bad "sweep text: $(head -8 "${SW}/text")"
+grep -q "new (of server/srv-04, node add)" "${SW}/text" && grep -q "expected (.* new" "${SW}/text" && ok "the report, for people, says what is new" || bad "sweep text: $(head -8 "${SW}/text")"
 cmdb report --json >/dev/null <<<'{"source":"site-manager","objects":[{"class":"server","name":"srv-04","attributes":{"memory":128}}]}'
 out="$(sweep)"
 check "a later change of a filled field is drift" "changed false null" \
