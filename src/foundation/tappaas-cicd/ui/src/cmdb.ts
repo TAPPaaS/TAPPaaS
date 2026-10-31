@@ -59,7 +59,17 @@ export interface CmdbAttributePeriod {
 export interface CmdbHistory {
   id: string;
   attributes: CmdbAttributePeriod[];
+  relations?: CmdbRelationPeriod[];
   changes: { id: number; kind: string; source: string; job: string | null; verb: string | null; actor: string | null; time: string; drift: boolean }[];
+}
+export interface CmdbRelationPeriod {
+  id: number | string;
+  type: string;
+  direction: "in" | "out";
+  other: CmdbEnd;
+  source?: string;
+  from: string;
+  to: string | null;
 }
 
 // `event: change` on /v1/stream (cmdb-controller store.ts ChangeEvent).
@@ -176,6 +186,12 @@ export class Cmdb {
 
   show(id: string, at?: string): Promise<CmdbShow> {
     return this.request("GET", `/v1/objects/${encodeURIComponent(id)}${at ? `?at=${encodeURIComponent(at)}` : ""}`);
+  }
+
+  // By name, with the class (or an ancestor of it) where the name is not
+  // unique: the controller answers 409 with the candidates otherwise.
+  find(name: string, cls?: string): Promise<CmdbShow> {
+    return this.request("GET", `/v1/objects/${encodeURIComponent(name)}${cls ? `?class=${encodeURIComponent(cls)}` : ""}`);
   }
 
   history(id: string): Promise<CmdbHistory> {
