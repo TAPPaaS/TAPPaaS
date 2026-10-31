@@ -14,9 +14,10 @@ import { applyJob, applyNowJob, previewJob, readJob, reloadAll, useJob, useRead,
 import { ArgvStep, Values, buildArgv, confirmObject, formParts, prefillValues } from "./argv";
 import { useOpenedBy } from "./opener";
 import { Command, JobControl, Output, jobResult, phaseOutputs } from "./jobs";
-import { Job, ManifestVerb, Me } from "./types";
+import { Job, JobSummary, ManifestVerb, Me } from "./types";
 import { Link, Tag, canOperate, useMe } from "./ui";
 import { Wizard, jobLive, useReportJob } from "./wizard";
+import { queuedBehind } from "./wizards";
 
 export type { Values } from "./argv";
 
@@ -184,9 +185,15 @@ function JobPart({ job, label, state, level, ms, text, live, collapsed }: { job:
         {live ? <> <JobControl job={job} /></> : null}
       </p>
       {job.refused ? <p className="readstate readstate-fail">{job.refused}</p> : null}
-      <Output text={text} live={live} collapsed={collapsed} />
+      {job.state === "queued" ? <QueuedBehind id={job.id} /> : <Output text={text} live={live} collapsed={collapsed} />}
     </div>
   );
+}
+
+// A job that has not started has no output: what it waits for instead.
+function QueuedBehind({ id }: { id: string }) {
+  const jobs = useRead<{ jobs: JobSummary[] }>("jobs?limit=20", 5000).env?.data?.jobs;
+  return <p className="muted small">{jobs ? queuedBehind(jobs, id) : "Waiting for its turn: changes run one at a time."}</p>;
 }
 
 // An Apply that ran its own dry run first: the dry run shown as a preview is,

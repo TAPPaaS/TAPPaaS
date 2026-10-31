@@ -310,3 +310,14 @@ export function argOf(argv: string[], flag: string): string | null {
   const i = argv.indexOf(flag);
   return i >= 0 && i + 1 < argv.length ? argv[i + 1] : null;
 }
+
+// What a queued job waits for: changes run one at a time, so it starts when
+// the one running ends (`jobs`: the job list; ids sort by age).
+export function queuedBehind(jobs: { id: string; kind: string; state: string; bin: string; verb: string; object: string }[], id: string): string {
+  const writes = jobs.filter((j) => j.kind !== "read" && j.id !== id);
+  const running = writes.find((j) => j.state === "running");
+  const ahead = writes.filter((j) => j.state === "queued" && j.id < id).length;
+  if (!running) return "Waiting for its turn: changes run one at a time.";
+  const more = ahead ? ` and ${ahead} more` : "";
+  return `Waiting for ${[running.bin, running.verb, running.object].filter(Boolean).join(" ")}${more} to end: changes run one at a time, and this one has not started.`;
+}

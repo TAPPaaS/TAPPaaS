@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { buildArgv, confirmObject } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
-import { BUDDY_KINDS, PASSPHRASE_TEXT, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { BUDDY_KINDS, PASSPHRASE_TEXT, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -131,6 +131,12 @@ check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its ver
   const j = (o: Partial<SessionJob> & { argv: string[] }): SessionJob => ({ kind: "apply", state: "done", created: "2026-10-28T11:30:00Z", ended: "2026-10-28T11:40:00Z", exit: 0, ...o });
   const add = (n: string) => ["network-manager", "wgvpn", "add-peer", "--name", n];
   const isAdd = (x: SessionJob) => x.argv.includes("add-peer");
+  const q = (id: string, kind: string, state: string, verb: string, object = "tappaas4") => ({ id, kind, state, bin: "site-manager", verb, object });
+  const me = q("3", "apply", "queued", "node storage add");
+  check(queuedBehind([me, q("2", "read", "running", "node list"), q("1", "apply", "running", "node add")], "3").includes("site-manager node add tappaas4 to end"), "a queued job names the change it waits for, not a read");
+  check(queuedBehind([me, q("2", "apply", "queued", "node usb write"), q("1", "apply", "running", "node add")], "3").includes("tappaas4 and 1 more to end"), "…and how many wait before it");
+  check(queuedBehind([q("4", "apply", "queued", "x"), me, q("1", "apply", "running", "node add")], "3").includes("tappaas4 to end"), "…not those behind it");
+  check(queuedBehind([me], "3").startsWith("Waiting for its turn"), "nothing running to name");
   check(sessionJob([j({ argv: add("a"), state: "running", ended: null, exit: null })], isAdd, now, 3600_000)?.argv[4] === "a", "a job that runs is the session");
   check(sessionJob([j({ argv: add("a") })], isAdd, now, 3600_000) !== null, "…and one that ended clean within the hour");
   check(sessionJob([j({ argv: add("a") })], isAdd, now, 600_000) === null, "…but not after it");
