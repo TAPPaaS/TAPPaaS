@@ -266,11 +266,40 @@ export function parseDisks(listText: string | undefined, lsblkText: string | und
         bus: b ? str(b.tran) : undefined,
         health: str(r.health),
         holds: whole.holds,
-        partitions: parts.map((p) => compact({ device: str(p.path) ?? `/dev/${String(p.name)}`, size: num(p.size), ...holdsOf(p) })),
+        partitions: parts
+          .map((p) => compact({ device: str(p.path) ?? `/dev/${String(p.name)}`, size: num(p.size), ...holdsOf(p) }) as unknown as Partition)
+          .sort((x, y) => byText(x.device, y.device)),
       }) as unknown as Disk,
     );
   }
-  return out;
+  // pvesh lists the disks in no fixed order: by by-id name, so a read is the same twice.
+  return out.sort((x, y) => byText(x.name, y.name) || byText(x.device, y.device));
+}
+
+const byText = (a: string, b: string): number => a.localeCompare(b, "en", { numeric: true });
+
+/** A machine's `disks[]` attribute: what identifies each disk and what it
+ *  holds, in a fixed order. Its measurements (wear, temperature, SMART) move
+ *  by themselves: they are the disk CI's, volatile there, never the array's. */
+export function disksAttribute(disks: Disk[]): Obj[] {
+  return [...disks]
+    .sort((x, y) => byText(x.name, y.name) || byText(x.device, y.device))
+    .map((d) =>
+      compact({
+        name: d.name,
+        device: d.device,
+        vendor: d.vendor,
+        model: d.model,
+        serial: d.serial,
+        wwn: d.wwn,
+        size: d.size,
+        type: d.type,
+        bus: d.bus,
+        health: d.health,
+        holds: d.holds,
+        partitions: [...d.partitions].sort((x, y) => byText(x.device, y.device)).map((p) => compact({ device: p.device, size: p.size, holds: p.holds, pool: p.pool })),
+      }),
+    );
 }
 
 /** `zpool status -L -P -p`, list and root dataset → each pool's layout, its
@@ -455,7 +484,7 @@ export function discoveryReport(configDir: string, machine: string, machineRef: 
   const hit = assetNamed(doc, machine);
   const server = hit && hit.asset.kind === "server" ? hit : null;
   const objects: CmdbObject[] = [];
-  const own = compact({ nics: d.nics, disks: d.disks, cpu: d.cpu, memory: d.memory });
+  const own = compact({ nics: d.nics, disks: disksAttribute(d.disks), cpu: d.cpu, memory: d.memory });
   attrs.storages = d.storages;
   attrs.pciDevices = d.pci;
   if (d.cpus !== undefined) attrs.cpus = d.cpus;

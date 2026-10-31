@@ -6,7 +6,7 @@
 process.env.TAPPAAS_CMDB = "off";
 
 import { run } from "../../src/main";
-import { nodeDiscoveryProbe, nodeStorageProbe, parseNodeDiscovery, parseNodeStorage, parseCorosync, stableById } from "../../src/cmdb-discover";
+import { disksAttribute, nodeDiscoveryProbe, nodeStorageProbe, parseNodeDiscovery, parseNodeStorage, parseCorosync, stableById } from "../../src/cmdb-discover";
 import { parseClusterProbe, splitStorage } from "../../src/cmdb-report";
 import { FakeSiteClient } from "./fake-client";
 import { cmdbProblems } from "../../../../lib/ts/test/cmdb-check";
@@ -195,6 +195,28 @@ const swept = parseNodeDiscovery(`${FIXTURE}\n${SMART}\n`);
   check(st.disks.length === 4 && st.pools.length === 2 && st.disks.every((x) => x.smart === undefined), "the plain report's read: the disks and pools, no SMART");
   const [own, rest] = splitStorage("os=debian\npools=tanka1\n@@@storage\n@@section disks\n[]\n@@rc 0\n");
   check(own.includes("os=debian") && !own.includes("@@section") && rest?.startsWith("@@section disks") === true && splitStorage("os=debian")[1] === null, "one ssh: the host's read, then its storage's");
+}
+
+// ── the server's disks[]: the same disks read twice are the same attribute ──
+// pvesh and lsblk answer in no fixed order, and SMART moves on every read:
+// the array is sorted and keeps no measurement (those are the disk CI's).
+function section(text: string, name: string, f: (v: any) => any): string {
+  return text.replace(new RegExp(`(@@section ${name}\\n)([\\s\\S]*?)\\n\\n@@rc`), (_m, head: string, body: string) => `${head}${JSON.stringify(f(JSON.parse(body)))}\n\n@@rc`);
+}
+{
+  const smart2 = SMART.replace(/"21000"/, '"21007"').replace("41 (Min", "44 (Min").replace("Temperature:   75", "Temperature:   71");
+  let other = section(FIXTURE, "disks", (rows: Obj[]) => [...rows].reverse().map((r) => ({ ...r, wearout: (Number(r.wearout) || 90) - 1 })));
+  other = section(other, "lsblk", (b: Obj) => ({ blockdevices: [...b.blockdevices].reverse().map((x: Obj) => ({ ...x, children: x.children ? [...x.children].reverse() : x.children })) }));
+  check(other !== FIXTURE, "the second read differs from the first (order, SMART)");
+  const again = parseNodeDiscovery(`${other}\n${smart2}\n`);
+  check(JSON.stringify(again.disks.map((x) => x.name)) === JSON.stringify(swept.disks.map((x) => x.name)), "parseDisks: by by-id name, whatever order pvesh lists them in");
+  const a1 = disksAttribute(swept.disks) as Obj[];
+  const a2 = disksAttribute(again.disks) as Obj[];
+  check(JSON.stringify(a1) === JSON.stringify(a2), `two reads in a different order, with other SMART: the same disks[] (${JSON.stringify(a1).slice(0, 120)} vs ${JSON.stringify(a2).slice(0, 120)})`);
+  check(a1.every((x) => x.temperature === undefined && x.wearout === undefined && x.smart === undefined), "disks[] keeps no measurement");
+  const sda = a1.find((x) => x.device === "/dev/sda")!;
+  check(sda.serial === "S6P1" && sda.model !== undefined && sda.health === "PASSED" && sda.partitions.map((p: Obj) => p.holds).join() === "bios-boot,efi,zfs" && sda.partitions[2].pool === "rpool", "…and what identifies a disk, what it and its partitions hold");
+  check(a1.map((x) => x.name).join() === [...a1.map((x) => x.name)].sort((x, y) => x.localeCompare(y, "en", { numeric: true })).join(), "…sorted by by-id name");
 }
 
 function diskFixture(): string {

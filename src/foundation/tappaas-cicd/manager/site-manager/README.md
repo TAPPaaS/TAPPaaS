@@ -615,6 +615,11 @@ depth, one more ssh per node and nothing polled; without it `report` is as above
   `machine`, so nothing is lost. Each NIC is a `port` of that server; with no
   asset there are no ports, a port having no meaning without one, and a sweep
   invents no asset. A port the asset records keeps its name, kind and speed.
+  `disks[]` is sorted by by-id name (each disk's partitions by device) and holds
+  what identifies a disk and what it holds: name, device, vendor, model, serial,
+  wwn, size, type, bus, health, holds, partitions (device, size, holds, pool). Its
+  measurements (SMART, temperature, wear) are the disk CI's alone, so two sweeps
+  of an unchanged server report the same array.
 - **ZFS:** a `storage-pool` per pool, named `<node>/<pool>` as storage-manager
   names it: `zfsState`, `size`, `used`, and `vdevs[]` with members by serial; its
   `built-on` relations as above.

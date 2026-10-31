@@ -57,7 +57,7 @@
         "cpu": { "type": "string" },
         "memory": { "type": "integer", "description": "MiB." },
         "nics": { "type": "array", "volatile": true, "description": "Every physical NIC, used or not (D15): name, MAC, kind, speed, link, bond or bridge. Volatile: its link state moves." },
-        "disks": { "type": "array", "description": "Every disk in it (D15): by-id name, model, serial, size, type, bus, SMART health, partitions. A disk its asset records is a disk CI besides (ADR-042)." }
+        "disks": { "type": "array", "description": "Every disk in it (D15), by by-id name: device, vendor, model, serial, wwn, size, type, bus, SMART health, what it holds, partitions. No measurements (SMART attributes, temperature, wear): those are a disk CI's, volatile there. A disk its asset records is a disk CI besides (ADR-042)." }
       }
     },
     "network-device": {
