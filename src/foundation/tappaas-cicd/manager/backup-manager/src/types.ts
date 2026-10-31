@@ -151,6 +151,7 @@ export interface JobCoverage {
 export interface PurgeResult {
   vmid: string;
   store: string;
+  type?: string; // the group's backup type: vm, or ct for a container (#913)
   snapshots: number;
   bytes: number;
   refused: string[];

@@ -1253,7 +1253,7 @@ function cmdPurge(opts: Opts, client: Client): number {
   }
   const plan = client.purge(vmid, false);
   const size = plan.bytes >= 1 << 30 ? `${(plan.bytes / (1 << 30)).toFixed(1)} GiB` : `${Math.round(plan.bytes / (1 << 20))} MiB`;
-  info(`vm/${vmid} on ${plan.store}: ${plan.snapshots} restore point(s), ${size} referenced`);
+  info(`${plan.type ?? "vm"}/${vmid} on ${plan.store}: ${plan.snapshots} restore point(s), ${size} referenced`);
   if (plan.refused.length > 0) {
     for (const r of plan.refused) warn(`  refused: ${r}`);
     die(`purge ${vmid}: refused — nothing deleted`);
@@ -1269,7 +1269,7 @@ function cmdPurge(opts: Opts, client: Client): number {
   }
   const res = client.purge(vmid, true);
   if (!res.purged) die(`purge ${vmid}: not purged${res.refused.length ? ` (${res.refused.join("; ")})` : ""}`);
-  info(`${GN}purge: deleted vm/${vmid} (${res.snapshots} restore point(s)); garbage collection started — the space is free when it finishes${CL}`);
+  info(`${GN}purge: deleted ${res.type ?? "vm"}/${vmid} (${res.snapshots} restore point(s)); garbage collection started — the space is free when it finishes${CL}`);
   // The datastore holds no restore point of the guest any more (ADR-040 D4).
   const module = /^[0-9]+$/.test(arg) ? moduleOfVmid(opts.configDir)(vmid) : arg;
   if (module && res.store) {

@@ -18,7 +18,7 @@
 #                           Waits, and names the snapshot it wrote; non-zero if
 #                           any module's backup failed (#759)
 #   coverage <module> [--json]
-#   purge <vmid> [--yes] [--json]          erase vm/<vmid>'s restore points + start GC
+#   purge <vmid> [--yes] [--json]          erase the guest's restore points (vm/ or ct/<vmid>) + start GC
 #                                         (dry run without --yes; refuses a deployed
 #                                         module's VMID or one still in a job, #789)
 #                           Every cluster backup job that covers the module's VM —
@@ -257,7 +257,7 @@ cmd_list() {
         "root@$(pbs_node_addr "${node}")" \
         "proxmox-backup-debug api get /admin/datastore/${store}/snapshots --output-format json 2>/dev/null" \
         | jq -r --arg vmid "$vmid" '.[]
-              | select(.["backup-type"]=="vm" and (.["backup-id"]==$vmid))
+              | select((.["backup-type"]=="vm" or .["backup-type"]=="ct") and (.["backup-id"]==$vmid))
               | .["backup-time"]' \
         2>/dev/null)" || { warn "could not list snapshots for vmid ${vmid}"; snaps=""; }
     if [[ "$JSON_OUT" -eq 1 ]]; then
@@ -292,7 +292,7 @@ _purge_owner() {   # the deployed, non-archived module whose config has <vmid>
 cmd_purge() {
     YES=0
     parse_args "$@"
-    local vmid="${REST[0]:-}" owner cov jobs node store snaps n bytes
+    local vmid="${REST[0]:-}" owner cov jobs node store snaps n bytes types gtype
     [[ "$vmid" =~ ^[0-9]+$ ]] || { error "purge: <vmid> required (a number)"; return 2; }
     have_pbs_libs || { error "purge: PBS libs not loaded — nothing purged"; return 1; }
     pbs_reachable || { error "purge: the cluster is not reachable — nothing purged"; return 1; }
@@ -309,20 +309,28 @@ cmd_purge() {
     node="$(pbs_node)" || return 1
     store="$(pbs_storage_name)"
     snaps="$(_pbs_node_run proxmox-backup-debug api get "/admin/datastore/${store}/snapshots" \
-                 --backup-type vm --backup-id "$vmid" --output-format json 2>/dev/null)" \
-        || { error "purge: could not list vm/${vmid} on ${store} — nothing purged"; return 1; }
+                 --output-format json 2>/dev/null)" \
+        && snaps="$(jq -e --arg vmid "$vmid" '[.[] | select((.["backup-type"]=="vm" or .["backup-type"]=="ct")
+                                                           and .["backup-id"]==$vmid)]' <<<"$snaps")" \
+        || { error "purge: could not list guest ${vmid} on ${store} — nothing purged"; return 1; }
     n="$(jq 'length' <<<"$snaps")"
+    # A VM's group is vm/<vmid>, a container's ct/<vmid>. Both at once is a vmid
+    # used twice: which one is meant is a person's call, not a guess that erases.
+    types="$(jq -r '[.[]["backup-type"]] | unique | join(" ")' <<<"$snaps")"
+    [[ "$types" != *" "* ]] \
+        || refuse+=("vmid ${vmid} has both a VM and a container backup group (a reused vmid) — delete the one you mean in PBS")
+    gtype="${types:-vm}"
     bytes="$(jq '[.[].size // 0] | add // 0' <<<"$snaps")"
 
     # One JSON object, written last: _purge_json <purged true|false>.
     _purge_json() {
-        jq -nc --arg vmid "$vmid" --arg store "$store" --argjson n "$n" --argjson bytes "$bytes" \
+        jq -nc --arg vmid "$vmid" --arg store "$store" --arg type "$gtype" --argjson n "$n" --argjson bytes "$bytes" \
               --argjson purged "$1" --arg refuse "$(printf '%s\n' "${refuse[@]}")" \
-            '{reachable: true, vmid: $vmid, store: $store, snapshots: $n, bytes: $bytes,
+            '{reachable: true, vmid: $vmid, store: $store, type: $type, snapshots: $n, bytes: $bytes,
               refused: ($refuse | split("\n") | map(select(length > 0))), purged: $purged}'
     }
     if [[ "$JSON_OUT" -ne 1 ]]; then
-        info "vm/${vmid} on ${store} (node ${node}): ${n} restore point(s), $(numfmt --to=iec "$bytes" 2>/dev/null || echo "${bytes} bytes") referenced"
+        info "${gtype}/${vmid} on ${store} (node ${node}): ${n} restore point(s), $(numfmt --to=iec "$bytes" 2>/dev/null || echo "${bytes} bytes") referenced"
         jq -r '.[] | "  \(.["backup-time"] | strftime("%Y-%m-%d %H:%M"))  \(.size // 0)"' <<<"$snaps" 2>/dev/null | head -50
     fi
     if [[ ${#refuse[@]} -gt 0 ]]; then
@@ -338,9 +346,9 @@ cmd_purge() {
     fi
 
     _pbs_node_run proxmox-backup-debug api delete "/admin/datastore/${store}/groups" \
-        --backup-type vm --backup-id "$vmid" >/dev/null \
-        || { error "purge: deleting vm/${vmid} failed — check the datastore by hand"; return 1; }
-    [[ "$JSON_OUT" -eq 1 ]] || info "  ${GN:-}✓${CL:-} deleted vm/${vmid} (${n} restore point(s)) from ${store}"
+        --backup-type "$gtype" --backup-id "$vmid" >/dev/null \
+        || { error "purge: deleting ${gtype}/${vmid} failed — check the datastore by hand"; return 1; }
+    [[ "$JSON_OUT" -eq 1 ]] || info "  ${GN:-}✓${CL:-} deleted ${gtype}/${vmid} (${n} restore point(s)) from ${store}"
     # `garbage-collection start` follows the task to its end — on a large
     # datastore that is a long time, and purge hung on it (hrossen, #789 live
     # test). The task runs in the PBS daemon, so stop following after a few

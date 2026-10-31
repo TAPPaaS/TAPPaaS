@@ -142,6 +142,7 @@ export class CliClient implements Client {
     return {
       vmid: o.vmid,
       store: typeof o.store === "string" ? o.store : "",
+      type: typeof o.type === "string" ? o.type : "vm",
       snapshots: typeof o.snapshots === "number" ? o.snapshots : 0,
       bytes: typeof o.bytes === "number" ? o.bytes : 0,
       refused: asStringArray(o.refused),

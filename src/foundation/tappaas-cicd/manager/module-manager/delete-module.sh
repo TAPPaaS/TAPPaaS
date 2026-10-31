@@ -678,7 +678,7 @@ main() {
         local _rp
         _rp="$(pbs-controller purge "${target_vmid}" --json 2>/dev/null | jq -r '.snapshots // empty' 2>/dev/null)"
         if [[ "${_rp}" =~ ^[0-9]+$ && "${_rp}" -gt 0 ]]; then
-            warn "  ${_rp} restore point(s) of vm/${target_vmid} remain in the backup datastore."
+            warn "  ${_rp} restore point(s) of guest ${target_vmid} remain in the backup datastore."
             warn "  To erase them: backup-manager purge ${target_vmid}"
         fi
     fi

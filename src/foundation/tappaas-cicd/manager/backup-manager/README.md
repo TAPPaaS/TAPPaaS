@@ -79,7 +79,7 @@ backup-manager add <module> | delete <module>
 
 backup-manager purge <module|vmid> [--yes]
         Erase a removed guest's restore points (#789): delete the backup group
-        vm/<vmid> in this site's datastore (root namespace; buddy copies under
+        vm/<vmid> (ct/<vmid> for a container) in this site's datastore (root namespace; buddy copies under
         pull/<peer> are never touched) and start garbage collection, which is
         what frees the space. Shows the plan first, then asks you to type the
         VMID (or --yes). Refused for a deployed module (archived ones may be

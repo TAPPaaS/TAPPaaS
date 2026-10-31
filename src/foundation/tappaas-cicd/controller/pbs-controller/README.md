@@ -22,7 +22,7 @@ pbs-controller add-to-job <vmid> [--retention SPEC]
 pbs-controller apply-schedule <spec> Set the shared managed job's start time
                                         (PBS mutation; e.g. "21:00").
 pbs-controller purge <vmid> [--yes] [--json]
-                                        Erase vm/<vmid>'s restore points (#789):
+                                        Erase vm/ or ct/<vmid> restore points (#789):
                                         plan by default; with --yes delete the
                                         backup group + start GC. Refuses a
                                         deployed module's VMID, one a job lists,

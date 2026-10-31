@@ -85,6 +85,52 @@ else
     bad "runs --json did not degrade to the offline marker"
 fi
 
+# Containers (#913): list and purge see ct/<vmid>; a reused vmid is refused.
+PBSFAKE="$(mktemp -d "${TMPDIR:-/tmp}/bc-pbs.XXXXXX")"
+mkdir "${PBSFAKE}/bin" "${PBSFAKE}/lib" "${PBSFAKE}/cfg"
+printf '#!/bin/sh\ncase "$*" in *datastore*snapshots*) cat "%s/snaps.json" ;; esac\n' "${PBSFAKE}" > "${PBSFAKE}/bin/ssh"
+chmod +x "${PBSFAKE}/bin/ssh"
+cat "${FAKELIB}/pbs-job.sh" > "${PBSFAKE}/lib/pbs-job.sh"
+cat >> "${PBSFAKE}/lib/pbs-job.sh" <<'EOF'
+pbs_job_coverage_json() { echo '[]'; }
+pbs_node_addr() { echo "$1"; }
+EOF
+cat > "${PBSFAKE}/lib/pbs-namespace.sh" <<EOF
+PBS_CONFIG_DIR="${PBSFAKE}/cfg"
+pbs_ns_list() { echo ""; }
+_pbs_node_run() { case "\$*" in *" delete "*) echo "\$*" >> "${PBSFAKE}/deleted" ;; *) cat "${PBSFAKE}/snaps.json" ;; esac; }
+EOF
+echo '{"vmname":"site","kind":"lxc","vmid":631}' > "${PBSFAKE}/cfg/site.json"
+echo '{"node":"tappaas3","placementState":"placed"}' > "${PBSFAKE}/cfg/backup.json"
+run_pbs() { PATH="${PBSFAKE}/bin:${PATH}" PBS_LIB_DIR="${PBSFAKE}/lib" COMMON_ROUTINES="${FAKECOMMON}" CONFIG_DIR="${PBSFAKE}/cfg" "${BC}" "$@"; }
+snap() { printf '{"backup-type":"%s","backup-id":"%s","backup-time":%s,"size":100}' "$1" "$2" "$3"; }
+echo "[$(snap ct 631 1000),$(snap ct 631 2000),$(snap vm 110 3000),$(snap host 631 4000)]" > "${PBSFAKE}/snaps.json"
+if [[ "$(run_pbs list site --json 2>/dev/null | jq -c '.snapshots')" == '["1000","2000"]' ]]; then
+    ok "list sees a container's snapshots"
+else
+    bad "list missed the container's snapshots"
+fi
+out="$(run_pbs purge 632 --json 2>/dev/null)"
+[[ "$(jq -c '[.snapshots,.type]' <<<"${out}")" == '[0,"vm"]' ]] && ok "purge: a vmid without backups has nothing" || bad "purge empty: ${out}"
+rm -f "${PBSFAKE}/cfg/site.json"
+out="$(run_pbs purge 631 --json 2>/dev/null)"
+[[ "$(jq -c '[.snapshots,.type,.purged]' <<<"${out}")" == '[2,"ct",false]' ]] \
+    && ok "purge plan counts a container's restore points, and not a host group of that id" || bad "purge plan: ${out}"
+run_pbs purge 631 --yes --json >/dev/null 2>&1
+if grep -q -- "--backup-type ct --backup-id 631" "${PBSFAKE}/deleted" 2>/dev/null; then
+    ok "purge --yes deletes the ct group"
+else
+    bad "purge --yes did not delete ct/631: $(cat "${PBSFAKE}/deleted" 2>/dev/null)"
+fi
+rm -f "${PBSFAKE}/deleted"
+echo "[$(snap ct 631 1000),$(snap vm 631 2000)]" > "${PBSFAKE}/snaps.json"
+if run_pbs purge 631 --yes --json >/dev/null 2>&1 || [[ -e "${PBSFAKE}/deleted" ]]; then
+    bad "purge of a vmid with both a vm and a ct group must refuse"
+else
+    ok "purge refuses a vmid with both a vm and a ct group"
+fi
+rm -rf "${PBSFAKE}"
+
 # list/verify with a fixture module resolve the vmid then skip offline (exit 0).
 FIX="$(mktemp -d "${TMPDIR:-/tmp}/bc-fix.XXXXXX")"
 echo '{"vmname":"foo","vmid":321}' > "${FIX}/foo.json"
