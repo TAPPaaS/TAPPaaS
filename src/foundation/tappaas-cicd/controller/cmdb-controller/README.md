@@ -168,6 +168,14 @@ only the CMDB.
    last sweep, by object, with its source: **expected** when a change report
    explains it, **drift** when nothing does. Volatile fields are left out. The
    first sweep has nothing to compare: it is the baseline.
+   **New** is expected too (`expected: true`, `reason: "new"`, the owner's
+   `verb`): an object that appeared as a part of an object a verb made —
+   `part-of`, `runs-on`, `member-of` or `allocated-to` it, transitively (the
+   ports of the asset `node add` made) — when that verb ran since the last
+   sweep or at most an hour before the part appeared (`owner` names the object
+   it is part of); and the first observation of a verb-made object (or of such
+   a part): fields and relations appearing that never had a value. A later
+   change of a filled field is drift.
 3. Lists what differs from `config/`: `module-manager drift` for each module
    record (ADR-020's resolver and differ), **actual without desired** (an object
    of a class a record can declare, with none: `unmanaged`) and **desired
@@ -176,7 +184,8 @@ only the CMDB.
 4. Writes one `change` row, verb `sweep`, with the counts and differences as its
    body; one JSON line per difference to the journal, identifier `cmdb-sweep`
    (`kind`, `class`, `name`, `source`, `attribute`, `before`, `after`,
-   `expected`); and the report to stdout (`--json` too). Objects with
+   `expected`, and `reason`, `verb`, `owner` for a new one); the counts have
+   `new` beside `expected` (of which it is a part); and the report to stdout (`--json` too). Objects with
    unexplained differences are marked drifted until a change clears them.
 
 | Exit | Status | When |

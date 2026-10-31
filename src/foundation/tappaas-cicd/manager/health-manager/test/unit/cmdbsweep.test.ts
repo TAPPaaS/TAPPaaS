@@ -25,6 +25,14 @@ const rec = (over: Partial<SweepRecord["counts"]>, more: Partial<SweepRecord> = 
 });
 
 check(checkCmdbSweep(rec({ expected: 3 }), NOW).status === "pass", "only expected changes: healthy");
+const n = checkCmdbSweep(
+  rec(
+    { expected: 10, new: 9 },
+    { differences: [{ kind: "appeared", class: "port", name: "nic0", attribute: null, expected: true, reason: "new" }] },
+  ),
+  NOW,
+);
+check(n.status === "pass" && n.detail.includes("9 of them new") && !n.rows, "the parts of a new asset are new, not drift: healthy, counted as new");
 const w = checkCmdbSweep(
   rec({ drift: 1 }, { differences: [{ kind: "changed", class: "vm", name: "x", attribute: "cores", expected: false }, { kind: "changed", class: "vm", name: "y", attribute: "cores", expected: true }] }),
   NOW,

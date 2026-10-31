@@ -98,7 +98,7 @@ function SweepRecord({ s, open }: { s: DiscoverySweep; open: (id: string) => voi
         <span className="muted"> · {s.since ? `against the sweep of ${when(s.since)}` : "the baseline: the next one lists what changed"}</span>
       </p>
       <p className="muted small">
-        {c.drift ?? 0} drift · {c.desired ?? 0} from desired · {c.unmanaged ?? 0} unmanaged · {c.missing ?? 0} missing · {c.unread ?? 0} not compared · {c.expected ?? 0} expected · {s.sources.length} source(s), {c.sourcesFailed ?? failed.length} failed
+        {c.drift ?? 0} drift · {c.desired ?? 0} from desired · {c.unmanaged ?? 0} unmanaged · {c.missing ?? 0} missing · {c.unread ?? 0} not compared · {c.expected ?? 0} expected ({c.new ?? 0} new) · {s.sources.length} source(s), {c.sourcesFailed ?? failed.length} failed
       </p>
       {failed.length ? <div className="readstate readstate-fail">Sources that failed: {failed.map((x) => `${x.source}${x.error ? ` (${x.error})` : ""}`).join(", ")}</div> : null}
       {plain.length ? <p className="muted small">Asked without --discover (they do not know it yet): {plain.map((x) => x.source).join(", ")}</p> : null}

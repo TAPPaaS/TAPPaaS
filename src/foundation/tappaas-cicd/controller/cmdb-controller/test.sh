@@ -41,6 +41,9 @@
 #     a pool's key is its name on its node; a service resolves by name
 #   - the discovery sweep over a fixture site: baseline, expected, drift, the
 #     differ, unmanaged, missing, the journal lines, exit codes 0/1/2
+#   - new, not drift: the ports of an asset a verb made and the fields its first
+#     observation fills are new (with the verb); an old asset's port and a later
+#     change of a filled field are drift
 #
 # Needs pg_ctl/initdb/psql, node, tsc, curl and jq; without them on PATH it
 # re-enters itself under nix-shell. PostgreSQL will not run as root: as root
@@ -581,6 +584,40 @@ printf '#!/usr/bin/env bash\necho "pve refused" >&2\nexit 7\n' >"${SW}/bin/site-
 out="$(sweep)"
 check "a source that fails is exit 2, and named" "critical rc=2 site-src" "$(jq -r '.status' <<<"${out}") $(cat "${SW}/rc") $(jq -r '.sources[] | select(.ok | not) | .source' <<<"${out}")"
 check "…and what only it saw is missing, not silently fine" "true" "$(jq '.counts.missing >= 3' <<<"${out}")"
+
+# New, not drift: a verb makes an asset; the discovery after it finds its ports
+# and fills its fields. Those are new, with the verb; a port of an old asset,
+# and a later change of a filled field, are drift.
+printf '#!/usr/bin/env bash\necho "$*" >>%q\nnode %q report --json <%q >/dev/null\n' "${SW}/asked" "${CLI}" "${SW}/site.json" >"${SW}/bin/site-src"
+cmdb report --json >/dev/null <<<'{"source":"asset-manager","objects":[{"class":"server","name":"srv-old","attributes":{"cpu":"E5"}}]}'
+sweep >/dev/null
+cmdb report --json >/dev/null <<<'{"source":"site-manager","kind":"change","verb":"node add","job":"J-40","objects":[{"class":"server","name":"srv-04"}]}'
+out="$(sweep)"
+check "the asset the verb made is expected, by its verb" "true node add null" \
+    "$(jq -r '.differences[] | select(.name == "srv-04" and .kind == "appeared" and .attribute == null) | "\(.expected) \(.verb) \(.reason)"' <<<"${out}")"
+cmdb report --json >/dev/null <<<'{"source":"site-manager","objects":[
+  {"class":"server","name":"srv-04","attributes":{"cpu":"EPYC 7302","memory":64}},
+  {"class":"port","name":"srv04-nic0","attributes":{"asset":"srv-04","kind":"rj45"}},
+  {"class":"port","name":"srv04-nic1","attributes":{"asset":"srv-04","kind":"rj45"}},
+  {"class":"port","name":"old-nic9","attributes":{"asset":"srv-old","kind":"rj45"}}]}'
+out="$(sweep)"
+check "a port of the asset a verb made is new, with that verb and its owner" \
+    "true new node add server/srv-04,true new node add server/srv-04" \
+    "$(jq -r '[.differences[] | select(.class == "port" and (.name | startswith("srv04")) and .kind == "appeared" and .attribute == null) | "\(.expected) \(.reason) \(.verb) \(.owner)"] | join(",")' <<<"${out}")"
+check "…and its part-of relation with it" "true new,true new" \
+    "$(jq -r '[.differences[] | select(.class == "port" and (.name | startswith("srv04")) and ((.attribute // "") | startswith("→part-of"))) | "\(.expected) \(.reason)"] | join(",")' <<<"${out}")"
+check "a port of an old asset is drift" "false null" \
+    "$(jq -r '.differences[] | select(.name == "old-nic9" and .kind == "appeared" and .attribute == null) | "\(.expected) \(.reason)"' <<<"${out}")"
+check "the fields the first observation fills on the verb-made asset are new" "cpu:true:new:node add memory:true:new:node add" \
+    "$(jq -r '[.differences[] | select(.name == "srv-04" and .kind == "appeared" and .attribute != null) | "\(.attribute):\(.expected):\(.reason):\(.verb)"] | join(" ")' <<<"${out}")"
+check "the counts: new among the expected, the old asset's port drift" "true true" \
+    "$(jq -r '"\(.counts.new >= 6) \(.counts.drift >= 1)"' <<<"${out}")"
+cmdb sweep --last >"${SW}/text" 2>&1
+grep -q "new (of server/srv-04, node add)" "${SW}/text" && grep -q "expected (.* new)" "${SW}/text" && ok "the report, for people, says what is new" || bad "sweep text: $(head -8 "${SW}/text")"
+cmdb report --json >/dev/null <<<'{"source":"site-manager","objects":[{"class":"server","name":"srv-04","attributes":{"memory":128}}]}'
+out="$(sweep)"
+check "a later change of a filled field is drift" "changed false null" \
+    "$(jq -r '.differences[] | select(.name == "srv-04" and .attribute == "memory") | "\(.kind) \(.expected) \(.reason)"' <<<"${out}")"
 
 echo "== the store's invariant =="
 _ov="$(sql "INSERT INTO attribute (object, name, value, source, validity)
