@@ -14,7 +14,7 @@
       "default": {},
       "fields": {
         "providesAdminRole": {
-          "description": "Opt-in: create and bind a <scope>-<module>-admins group so a per-module admin role exists. Default false keeps Authentik uncluttered for modules with no admin concept.",
+          "description": "Opt-in: create and bind a <module>-admins group (the module name without its -<environment> suffix) so a per-module admin role exists. Default false keeps Authentik uncluttered for modules with no admin concept.",
           "type": "boolean",
           "default": false
         },

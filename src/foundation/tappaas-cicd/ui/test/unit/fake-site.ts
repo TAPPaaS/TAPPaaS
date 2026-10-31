@@ -80,7 +80,10 @@ export function fakeSite(): FakeSite {
           user: { lars: { name: "lars", memberOf: ["users", "authentik Admins"], roles: ["admin", "user"] }, "-x": { name: "-x" } },
           role: { admin: { name: "admin" }, user: { name: "user" } },
         };
+        // forgejo-admins: a group a module declares (no config file).
+        ids.group["forgejo-admins"] = { name: "forgejo-admins", origin: "module forgejo", declaredBy: { file: "forgejo.json", key: "identity" }, editable: false };
         const kind = ids[args[0]];
+        if (args[1] === "list" && args[2] === "--declared") return ok(JSON.stringify([ids.group["forgejo-admins"]]));
         if (args[1] === "list") return ok(JSON.stringify(Object.keys(kind)));
         if (args[1] === "show" && kind[args[2]]) return ok(JSON.stringify(kind[args[2]]));
         return { rc: 1, stdout: "", stderr: `[Error] no ${args[0]} '${args[2]}'`, ran: true };

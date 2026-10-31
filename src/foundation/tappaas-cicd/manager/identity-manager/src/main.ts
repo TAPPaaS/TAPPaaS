@@ -35,6 +35,7 @@ import { CmdbObject } from "../../../lib/ts/src/cmdb";
 import { reportChange, reportObservation, sendObservation } from "../../../lib/ts/src/cmdb-source";
 import { IdentityRead, SOURCE, endsOf, identityDiscovery, identityObservation, touchedBy } from "./cmdb-report";
 import { dirname } from "path";
+import { DeclaredGroup, declaredGroups } from "./declared";
 import { AkSnapshot } from "./reconcile";
 
 const VERSION = "0.1.0";
@@ -90,13 +91,15 @@ export const HELP: HelpSpec = {
       ],
     },
     {
-      usage: "<kind> list [--json] [--deep]",
+      usage: "<kind> list [--json] [--deep] [--declared]",
       verb: `${KINDS} list`,
       name: "<kind> list",
       options: [
         ["--json", "structured output (default is human-readable)"],
         ["--deep", "org/group only: recurse into groups + user membership"],
+        ["--declared", "group only: just the groups a module or Authentik declares (no config file), with their origin"],
       ],
+      note: "(group: the model's groups and, marked by their origin, the ones a module or Authentik declares)",
     },
     {
       usage: "<kind> show <name> [--json]",
@@ -159,6 +162,7 @@ interface Opts {
   deep: boolean;
   noReconcile: boolean;
   discover: boolean;
+  declared: boolean;
   rest: string[];
 }
 function parseOpts(args: string[]): Opts {
@@ -169,6 +173,7 @@ function parseOpts(args: string[]): Opts {
   let deep = false;
   let noReconcile = false;
   let discover = false;
+  let declared = false;
   const rest: string[] = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
@@ -183,6 +188,8 @@ function parseOpts(args: string[]): Opts {
       discover = true;
     } else if (a === "--json") {
       json = true;
+    } else if (a === "--declared") {
+      declared = true;
     } else if (a === "--deep") {
       deep = true;
     } else if (a === "--no-reconcile") {
@@ -196,7 +203,7 @@ function parseOpts(args: string[]): Opts {
       rest.push(a);
     }
   }
-  return { configDir, apply, dryRun, json, deep, noReconcile, discover, rest };
+  return { configDir, apply, dryRun, json, deep, noReconcile, discover, declared, rest };
 }
 
 // `bootstrap` — seed the minimal Identity domain from the minimal-org/ templates
@@ -318,7 +325,7 @@ function cmdSync(opts: Opts, client: PrimitiveClient): void {
     throw e;
   }
 
-  reportObservation(identityObservation(model, readOf(snap)), cmdbConfigDir(opts));
+  reportObservation(identityObservation(model, readOf(snap), undefined, declaredGroups(cmdbConfigDir(opts))), cmdbConfigDir(opts));
   const plan = computePlan(model, snap);
 
   // Preview by default; commit only with --apply (matches site/network/... managers).
@@ -546,34 +553,48 @@ function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
     const model = loadPeople(opts.configDir);
     const map = entityMap(model, kind);
     const isOrg = kind === "org" || kind === "organization";
+    // A group a module or Authentik declares: listed beside the model's.
+    const extra = kind === "group" ? notInModel(opts, model) : new Map<string, DeclaredGroup>();
+    const marked = (n: string): string => (extra.has(n) ? `${n}  (${extra.get(n)!.origin})` : n);
     if (sub === "list") {
-      const names = Array.from(map.keys()).sort();
+      if (opts.declared) {
+        if (kind !== "group") die(`--declared is only meaningful for 'group' list`);
+        const all = [...extra.values()].sort((a, b) => a.name.localeCompare(b.name));
+        if (opts.json) info(JSON.stringify(all, null, 2));
+        else if (all.length === 0) info("(no declared groups)");
+        else for (const d of all) info(marked(d.name));
+        return;
+      }
+      const modelNames = Array.from(map.keys()).sort();
+      const names = [...modelNames, ...extra.keys()].sort();
       // --deep (org/group only): recurse into groups + user membership.
       if (opts.deep && (isOrg || kind === "group")) {
         if (opts.json) {
           const tree = isOrg
-            ? orgRoots(model, names).map((n) => deepOrg(model, n))
-            : names.map((n) => deepGroup(model, n));
+            ? orgRoots(model, modelNames).map((n) => deepOrg(model, n))
+            : [...modelNames.map((n) => deepGroup(model, n)), ...[...extra.values()]];
           info(JSON.stringify(tree, null, 2));
         } else if (names.length === 0) {
           info(`(no ${isOrg ? "org" : "group"}s)`);
         } else if (isOrg) {
-          for (const n of orgRoots(model, names)) printDeepOrg(model, n, "");
+          for (const n of orgRoots(model, modelNames)) printDeepOrg(model, n, "");
         } else {
-          for (const n of names) printDeepGroup(model, n, "");
+          for (const n of modelNames) printDeepGroup(model, n, "");
+          for (const n of extra.keys()) info(`${GN}${n}${CL}  (${extra.get(n)!.origin})`);
         }
         return;
       }
       if (opts.deep) warn(`--deep is only meaningful for 'org'/'group' list — showing a plain list`);
       if (opts.json) info(JSON.stringify(names, null, 2));
       else if (names.length === 0) info(`(no ${kind}s)`);
-      else for (const n of names) info(n);
+      else for (const n of names) info(marked(n));
       return;
     }
     if (sub === "get") warn("'get' is deprecated — use 'show'");
     const name = opts.rest[1];
     if (!name) die(`${kind} ${sub}: expected <name>`);
-    const v = map.get(name);
+    const d = extra.get(name);
+    const v = map.get(name) ?? (d ? { name: d.name, origin: d.origin, declaredBy: d.declaredBy, editable: false } : undefined);
     if (v === undefined) die(`${kind} '${name}' not found in ${opts.configDir}`);
     if (opts.json) info(JSON.stringify(v, null, 2));
     else printEntity(kind, name, v as Record<string, unknown>);
@@ -587,6 +608,9 @@ function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
     const name = opts.rest[1];
     if (!name) die(`${kind} ${sub}: expected <name>`);
     const { force, rest } = takeForce(opts.rest.slice(2));
+    // A declared group is changed where it is declared, not here.
+    const d = kind === "group" && sub !== "add" ? notInModel(opts, loadPeople(opts.configDir)).get(name) : undefined;
+    if (d) die(`group '${name}' is not a config group: ${d.origin} declares it (${d.declaredBy.file}, ${d.declaredBy.key}); it cannot be ${sub === "modify" ? "modified" : "deleted"} here`);
     let deleted = false;
     try {
       if (sub === "add") {
@@ -625,6 +649,13 @@ function cmdEntity(kind: string, opts: Opts, client: PrimitiveClient): void {
   die(`${kind} ${sub}: unknown verb (use list|show|add|modify|delete)`);
 }
 
+// The groups a module or Authentik declares that the model has no file for.
+function notInModel(opts: Opts, model: PeopleModel): Map<string, DeclaredGroup> {
+  const out = new Map<string, DeclaredGroup>();
+  for (const [n, d] of declaredGroups(cmdbConfigDir(opts))) if (!model.groups.has(n)) out.set(n, d);
+  return out;
+}
+
 // ── the CMDB (ADR-040 D4) ──────────────────────────────────────────────
 
 // The verb being run, and the entity an add/modify/delete wrote: what its
@@ -651,7 +682,7 @@ function cmdReport(opts: Opts, client: PrimitiveClient): number {
     if (!(e instanceof AuthentikUnreachable)) throw e;
     warn(`Authentik unreachable (${e.message}) — reporting organizations and roles only`);
   }
-  let report = identityObservation(model, live);
+  let report = identityObservation(model, live, undefined, declaredGroups(cmdbConfigDir(opts)));
   if (opts.discover && live) {
     try {
       report = identityDiscovery(report, client.discover());
@@ -682,7 +713,7 @@ function reportIdentityChange(opts: Opts, model: PeopleModel, client: PrimitiveC
       after = before ? readOf(before) : null;
     }
   }
-  const seen = identityObservation(model, after, only);
+  const seen = identityObservation(model, after, only, declaredGroups(cmdbConfigDir(opts)));
   const objects: CmdbObject[] = [...(seen.objects ?? []), ...endsOf(deleted, deletedBefore ?? (before ? readOf(before) : null))];
   reportChange({ source: SOURCE, verb: changeVerb, objects, relations: seen.relations, configDir: cmdbConfigDir(opts) });
 }

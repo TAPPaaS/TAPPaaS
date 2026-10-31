@@ -7,9 +7,10 @@
 #     (app-delete handles both proxy and oauth2 providers; its policy bindings
 #     cascade with the Application).
 #
-# The module's role groups (<scope>-users / -admins / -<module>-admins) are
-# LEFT in place — they may still hold members and other apps may use them;
-# removing role groups is an operator decision, not a side-effect of deleting
+# The module's admin role group (<module>-admins, providesAdminRole) is
+# LEFT in place — it may still hold members (identity-manager lists it as
+# declared by the module while config/<module>.json lasts); removing it is an
+# operator decision, not a side-effect of deleting
 # one module. The VM's /etc/secrets/<base>.env goes away with the VM itself.
 #
 # Idempotent (safe to re-run / safe if the app is already gone).

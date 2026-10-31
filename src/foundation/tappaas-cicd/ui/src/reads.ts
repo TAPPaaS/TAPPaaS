@@ -325,9 +325,14 @@ export class Reads {
     this.moduleFields = new CachedMap("fields", TTL.moduleDetail, (m) => j<Record<string, unknown>>("module-manager", ["fields", m, "--json"]), now);
     // The field schemas a form reads (zones-fields.json, environment-fields.json).
     this.schemas = new CachedMap("schema", TTL.schema, async (n) => schemaDoc(cfg.repoRoot ?? "/home/tappaas/TAPPaaS", n), now);
+    // The group list has the groups a module or Authentik declares beside the
+    // model's; "group-declared" names those (no config file: not editable, and
+    // no reference a form may offer).
     this.identity = new Cached("identity", TTL.identity, async () => {
       const out: Record<string, string[]> = {};
       await Promise.all(IDENTITY_KINDS.map(async (k) => (out[k] = await j<string[]>("identity-manager", [k, "list", "--json"]))));
+      const declared = await j<{ name?: unknown }[]>("identity-manager", ["group", "list", "--declared", "--json"]).catch(() => []);
+      out["group-declared"] = (Array.isArray(declared) ? declared : []).map((d) => d?.name).filter((n): n is string => typeof n === "string");
       return out;
     }, now);
     // What each registered repository offers, and which of it is installed.
@@ -497,7 +502,7 @@ export class Reads {
       nodes,
       organizations: list("org"),
       users: list("user"),
-      groups: list("group"),
+      groups: list("group").filter((n) => !list("group-declared").includes(n)),
       roles: list("role"),
     };
   }

@@ -4,7 +4,8 @@
 // groups, an organization's owner and parent), with the list beside it. A click
 // opens the object's record and its verbs. A change is staged with
 // --no-reconcile and then reconciled, so its preview is the reconcile's plan
-// against Authentik.
+// against Authentik. A group a module or Authentik declares (no config file)
+// is listed with its origin as a muted tag, and has no Modify or Delete.
 
 import { useMemo, useState } from "react";
 import { useRead } from "../api";
@@ -49,19 +50,25 @@ function show(v: unknown): string {
   return String(v);
 }
 
-function Verbs({ kind, name }: { kind: string; name: string }) {
+// declared: the group's origin when a module or Authentik declares it; such a
+// group is changed where it is declared, so only Show.
+function Verbs({ kind, name, declared }: { kind: string; name: string; declared?: string | null }) {
   return (
     <span className="toolbar">
       <OperateButton label="Show" title={`${kind} ${name}`} steps={[{ title: `identity-manager ${kind} show ${name}`, bin: "identity-manager", verb: "<kind> show", words: [kind, "show"], fixed: [name] }]} />
-      <OperateButton label="Modify…" title={`Modify ${kind} ${name}`} steps={() => identitySteps(kind, "modify", name)} />
+      {declared ? null : <OperateButton label="Modify…" title={`Modify ${kind} ${name}`} steps={() => identitySteps(kind, "modify", name)} />}
       {kind === "user" ? <ResetPasswordButton user={name} small /> : null}
-      <OperateButton label="Delete…" kind="danger" title={`Delete ${kind} ${name}`} steps={identitySteps(kind, "delete", name)} />
+      {declared ? null : <OperateButton label="Delete…" kind="danger" title={`Delete ${kind} ${name}`} steps={identitySteps(kind, "delete", name)} />}
     </span>
   );
 }
 
+// A record's origin when something other than config/identities declares it.
+const originOf = (r: Record<string, unknown> | null | undefined): string | null => (typeof r?.origin === "string" && r.origin ? r.origin : null);
+
 function Detail({ n, close }: { n: IdNode; close: () => void }) {
   const k = KIND[n.kind];
+  const origin = originOf(n.record);
   const rows: [string, string][] = Object.entries(n.record ?? {})
     .filter(([key]) => key !== "name")
     .map(([key, v]) => [key, show(v)]);
@@ -69,7 +76,7 @@ function Detail({ n, close }: { n: IdNode; close: () => void }) {
     <aside className="sidepanel id-detail" style={{ borderTop: `4px solid ${k.color}` }}>
       <header>
         <div>
-          <div className="muted small">{k.one}</div>
+          <div className="muted small">{k.one}{origin ? <> <span className="class-tag">{origin}</span></> : null}</div>
           <h2 className="mono">{n.name}</h2>
         </div>
         <button className="btn-x" onClick={close} aria-label="close">×</button>
@@ -79,7 +86,8 @@ function Detail({ n, close }: { n: IdNode; close: () => void }) {
       ) : (
         <>
           <KV rows={rows} />
-          <Verbs kind={n.kind} name={n.name} />
+          {origin ? <p className="muted small">Declared by {origin}, not by a file in config/identities: it is changed there, not here.</p> : null}
+          <Verbs kind={n.kind} name={n.name} declared={origin} />
         </>
       )}
     </aside>
@@ -93,11 +101,22 @@ export function Identity() {
   // ?select=<kind>:<name> (a user's or a group's Details from the Health view) opens it.
   const [sel, setSel] = useState<string | null>(() => new URLSearchParams(window.location.search).get("select"));
   const g = useMemo(() => identityGraph(rec.env?.data ?? {}), [rec.env]);
+  // The groups a module or Authentik declares: their origin, from the records
+  // (the list's group-declared names them before the records are read).
+  const declared = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const n of d["group-declared"] ?? []) m.set(`group:${n}`, "declared");
+    for (const n of g.nodes) {
+      const o = originOf(n.record);
+      if (o) m.set(n.id, o);
+    }
+    return m;
+  }, [d, g]);
   const graph = useMemo(() => {
     const nodes: GNode[] = g.nodes.map((n) => {
       const k = KIND[n.kind];
       const r0 = n.record ?? {};
-      const sub = n.kind === "user" ? show(r0.primaryEmail) : n.kind === "group" || n.kind === "org" ? show(r0.type) : show(r0.displayName);
+      const sub = n.kind === "user" ? show(r0.primaryEmail) : originOf(r0) ?? (n.kind === "group" || n.kind === "org" ? show(r0.type) : show(r0.displayName));
       return {
         id: n.id,
         w: 170,
@@ -157,9 +176,10 @@ export function Identity() {
                     <tr key={n} className={sel === `${kind}:${n}` ? "row-on" : ""}>
                       <td className="mono">
                         <button className="linkish" onClick={() => setSel(`${kind}:${n}`)}>{n}</button>
+                        {declared.has(`${kind}:${n}`) ? <> <span className="class-tag">{declared.get(`${kind}:${n}`)}</span></> : null}
                       </td>
                       <td>
-                        <Verbs kind={kind} name={n} />
+                        <Verbs kind={kind} name={n} declared={declared.get(`${kind}:${n}`) ?? null} />
                       </td>
                     </tr>
                   ))}

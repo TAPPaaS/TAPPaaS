@@ -197,7 +197,10 @@ groups, users and roles as a graph of their relations (a group's owning organiza
 groups, the roles of users and groups, an organization's owner and parent; `GET /api/v1/identity/records`:
 `identity-manager <kind> show` for each), the list beside it, a click for the record and its verbs
 (`?select=<kind>:<name>` opens one: `user:lars`, `group:admins`, `org:…`, `role:…`); a change is staged with `--no-reconcile` and pushed by `identity-manager
-reconcile`, previewed. **Assets** — see [Assets](#assets) below. **Backup** — the policy of every module, peers, pulse, restore points;
+reconcile`, previewed. A group a module or Authentik declares (`identity-manager group list --declared`:
+`forgejo-admins`, `authentik Read-only`) is listed with its origin as a muted tag (`module forgejo`,
+`Authentik built-in`) and offers Show only: it is changed where it is declared, and a user's groups
+field does not offer it. **Assets** — see [Assets](#assets) below. **Backup** — the policy of every module, peers, pulse, restore points;
 modify, purge (typed). **Site** — the four tabs above. Add node is a guided sequence in Setup's step rows: declare
 the node (`site-manager node add tappaasN`: its switch port or MAC, boot disks; the wizard
 always installs, adopting a hand-installed Proxmox is the CLI's `--adopt`), boot it from the

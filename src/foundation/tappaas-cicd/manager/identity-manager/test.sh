@@ -255,6 +255,11 @@ if [[ -f "$UNIT_TSCONFIG" ]]; then
         else
             bad "TypeScript CMDB report unit tests FAILED (ADR-040)"
         fi
+        if run_ts "node '${DIST_TEST}/manager/identity-manager/test/unit/declared.test.js'"; then
+            ok "TypeScript declared-group unit tests pass (module and Authentik groups)"
+        else
+            bad "TypeScript declared-group unit tests FAILED (module and Authentik groups)"
+        fi
 
         # Compiled-CLI drive of the bootstrap verb (the retired user-setup.sh —
         # ADR-007 refactor Phase 8.2). No PM_MINIMAL_ORG_DIR override: this also

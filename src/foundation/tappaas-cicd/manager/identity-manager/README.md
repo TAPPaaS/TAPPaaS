@@ -41,6 +41,21 @@ not need the `akadmin` break-glass login; `root` is deliberately not.
 The console's Admin is the `admin` role, which Authentik carries as a group named `admin`
 (see `identity/USERS.md`).
 
+### Groups of three origins
+
+| Origin | Which | Declared by | Edited with |
+|---|---|---|---|
+| the model | a file under `config/identities/groups/` | that file | `group add/modify/delete` |
+| a module | `<module>-admins`, for a module installed with `identity.providesAdminRole` (the module's name without its `-<environment>` suffix) | `config/<module>.json`, its `identity` block | the module (`module-manager modify`) |
+| Authentik built-in | `authentik Admins`, `authentik Read-only`, `authentik Agent-Users` | the identity module (`config/identity.json`), its bootstrap | Authentik |
+
+`group list` lists all three, a module's or a built-in group marked by its origin
+(`forgejo-admins  (module forgejo)`, `authentik Read-only  (Authentik built-in)`);
+`group list --declared` lists only those two kinds (`--json`: name, origin,
+`declaredBy`). `group show` of one prints its origin and `declaredBy`, and
+`group modify` / `group delete` refuse it, naming its origin. A group with a file
+is the model's, whatever its name: `authentik Admins` is adopted that way.
+
 ## Commands
 
 This manager exposes one compiled CLI (`identity-manager`) plus one bash helper
@@ -52,7 +67,7 @@ This manager exposes one compiled CLI (`identity-manager`) plus one bash helper
 identity-manager bootstrap --org O --user U --email E [--minimal-org DIR] [--force] [--skip-validate] [--config-dir DIR]
 identity-manager reconcile  [--apply]  [--config-dir DIR]   (alias: sync, deprecated)
 identity-manager validate                            [--config-dir DIR]
-identity-manager <kind> list   [--json] [--deep]     [--config-dir DIR]
+identity-manager <kind> list   [--json] [--deep] [--declared]  [--config-dir DIR]
 identity-manager <kind> show   <name> [--json]       [--config-dir DIR]   (alias: get, deprecated)
 identity-manager <kind> add    <name> [field flags]  [--force] [--config-dir DIR]
 identity-manager <kind> modify <name> [--set <field>=<value>]... [--unset <field>] [field flags]  [--config-dir DIR]
@@ -80,6 +95,7 @@ Options:
   the default.)
 - `--json` — on `list` / `show`, emit structured JSON (default is human-readable).
 - `--deep` — on `org` / `group` `list`, recurse into groups + user membership.
+- `--declared` — on `group list`, only the groups a module or Authentik declares.
 - `--force` — on `add`, overwrite an existing entity; on `delete`, ignore the
   reference guard.
 - `--config-dir DIR` — the People directory to read/write (default
@@ -233,7 +249,10 @@ identity-manager is a source of the CMDB (ADR-040 D4; `cmdbSource` in
 Users and groups are reported only when Authentik answers (their key is its
 uuid, from authentik-controller's `list-*`); without it, organizations and
 roles only. A group's owning organization is not reported: the metamodel has
-no relation for it yet.
+no relation for it yet. A group's `desired` is its file; for a module's group
+`{ "file": "<module>.json", "key": "identity" }`, for an Authentik built-in
+`{ "file": "identity.json", "key": "bootstrap" }` (see Groups of three origins), so
+the sweep calls neither unmanaged. A group nothing declares has none.
 
 `reconcile` reports what it read; `reconcile --apply` and the write verbs
 report what they touched (a deleted user or group ends by its uuid, an

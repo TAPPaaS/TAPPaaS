@@ -203,10 +203,22 @@ async function main(): Promise<void> {
     const r = new Reads({ configDir: mkdtempSync(join(tmpdir(), "idrec-")), stateDir: mkdtempSync(join(tmpdir(), "idrec-s-")), run: site.run, journalDays: 7 });
     const e = await r.identityRecords.get();
     const v = e.value!;
-    check(v.org.length === 1 && v.group.length === 2 && v.role.length === 2, "every object of every kind is read with show");
+    check(v.org.length === 1 && v.group.length === 3 && v.role.length === 2, "every object of every kind is read with show");
+    check(v.group.find((g) => g.name === "forgejo-admins")?.origin === "module forgejo", "a declared group's record carries its origin");
     check((v.user.find((u) => u.name === "lars")?.memberOf as string[]).join() === "users,authentik Admins", "a record as identity-manager shows it");
     check(!site.calls.some((c) => c.includes("show -x")), "a listed name that looks like an option never reaches an argv");
     check(site.calls.includes("identity-manager group show authentik Admins --json"), "a name with a space is one argument");
+  }
+
+  // ── groups a module or Authentik declares: listed, never a reference ──
+  {
+    const site = fakeSite();
+    const r = new Reads({ configDir: mkdtempSync(join(tmpdir(), "iddecl-")), stateDir: mkdtempSync(join(tmpdir(), "iddecl-s-")), run: site.run, journalDays: 7, repoRoot: join(process.env.CONSOLE_FIXTURES ?? "test/fixtures", "..", "..", "..", "..", "..", "..") });
+    const ids = (await r.identity.get()).value!;
+    check(ids.group.includes("forgejo-admins") && ids["group-declared"].join() === "forgejo-admins", "the identity read: the group list has it, group-declared names it");
+    const m = await r.fieldManifest("user", "lars", "modify");
+    const memberOf = m.fields.find((f) => f.name === "memberOf");
+    check(memberOf?.choices?.includes("users") === true && memberOf?.choices?.includes("forgejo-admins") === false, `a user's memberOf offers the model's groups, not a declared one (${String(memberOf?.choices)})`);
   }
 
   // ── a placement's choices: the rooms and racks at the device's location ──

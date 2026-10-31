@@ -5,7 +5,9 @@
 // A user and a group are known by their Authentik UUID (D5), so only the ones
 // Authentik answers for are reported; organizations and roles are known by
 // their name and are reported from config/ even when it does not answer. A
-// user is a member-of the groups Authentik has them in.
+// user is a member-of the groups Authentik has them in. A group with no config
+// file that a module or Authentik itself declares (declared.ts) has that
+// declaration as its desired record: it is not unmanaged.
 //
 // Not reported: a group's owning organization and an organization's parent —
 // the metamodel has no relation for either yet (owned-by joins an environment
@@ -14,6 +16,7 @@
 import { CmdbObject, CmdbRelation, CmdbReport } from "../../../lib/ts/src/cmdb";
 import { compact } from "../../../lib/ts/src/cmdb-source";
 import { AkDiscovery, AkNamed, AkUser, Action, PeopleModel } from "./types";
+import { DeclaredGroup } from "./declared";
 
 export const SOURCE = "identity-manager";
 
@@ -34,7 +37,7 @@ export interface Only {
 }
 
 /** config/identities and what Authentik says (null: it did not answer). */
-export function identityObservation(model: PeopleModel, live: IdentityRead | null, only?: Only): CmdbReport {
+export function identityObservation(model: PeopleModel, live: IdentityRead | null, only?: Only, declared?: Map<string, DeclaredGroup>): CmdbReport {
   const objects: CmdbObject[] = [];
   const relations: CmdbRelation[] = [];
   const want = (set: Set<string> | undefined, name: string): boolean => !only || (set?.has(name) ?? false);
@@ -66,7 +69,7 @@ export function identityObservation(model: PeopleModel, live: IdentityRead | nul
         uuid: g.uuid,
         displayName: cfg?.displayName ?? g.displayName,
         roles: cfg?.roles?.length ? cfg.roles : undefined,
-        desired: cfg ? desired("groups", g.name) : undefined,
+        desired: cfg ? desired("groups", g.name) : declared?.get(g.name)?.declaredBy,
         stage: "operational",
       }),
     });
