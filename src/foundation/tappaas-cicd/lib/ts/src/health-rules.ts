@@ -30,6 +30,7 @@ export function dependantMatches(rule: HealthRule, attributes: Record<string, un
  *  (derive.ts): the object on the `to` end of its relation of this type. */
 export const FOLLOWS: { class: string; relation: string }[] = [
   { class: "port", relation: "part-of" },
+  { class: "disk", relation: "part-of" },
   { class: "asset", relation: "allocated-to" },
 ];
 

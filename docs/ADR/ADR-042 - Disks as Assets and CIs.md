@@ -152,13 +152,13 @@ records it (ADR-040 D7's disposal note).
 
 ## Implementation plan
 
-1. Metamodel: the `disk` class, the `built-on` relation with its words, the health rule needs
+1. **Done.** Metamodel: the `disk` class, the `built-on` relation with its words, the health rule needs
    nothing new (ADR-041 O6's group handling); positions model: kind `disk`, the `in` placement,
    validation; asset-manager `disk add|modify|remove|adopt`, `place --in`; its CMDB report sends
    disks `part-of` their asset and their placement.
-2. site-manager: `disks[]` on the installer's post and the registration; `node add` records disks;
+2. **Done.** site-manager: `disks[]` on the installer's post and the registration; `node add` records disks;
    `report` sends `built-on` with the groups; `report --discover` carries SMART.
-3. health-manager: the `disk` judgement from observations; `storage-disks` retired, replication
+3. **Done.** health-manager: the `disk` judgement from observations; `storage-disks` retired, replication
    kept as a gate; the storage-manager inventory's SMART read behind the sweep.
 4. Console: Assets view and asset page with disks; server card bay row; Storage view members;
    disposal with the wipe question.

@@ -39,7 +39,7 @@ export const GATES: Record<string, GateMap> = {
   "memory-commitment": { type: "capacity", reason: "memory-overcommitted" },
   "guest-memory": { type: "capacity", reason: "guest-memory-short" },
   "storage-pools": { type: "capacity", reason: "pool-usage" },
-  "storage-disks": { type: "operational", reason: "disk-failing" },
+  "storage-replication": { type: "operational", reason: "replication-failing" },
   "cpu-impact": { type: "maintenance", reason: "cpu-level-loss" },
   "backup-status": { type: "backup", reason: "backup-not-covered" },
   "backup-keys": { type: "maintenance", reason: "backup-key-not-escrowed" },

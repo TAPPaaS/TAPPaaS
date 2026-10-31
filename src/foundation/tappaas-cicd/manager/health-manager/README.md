@@ -94,7 +94,7 @@ critical condition that counts (see [Assess](#assess)):
 | `disk-threshold` | `df /` per guest: over SSH, or through `pct exec` on its node for an LXC module | a reachable guest's `/` usage ≥ threshold (default **80%**, `--threshold PCT`) |
 | `memory-commitment` | one `pvesh /cluster/resources` | a node's COMMITTED memory ≥ threshold of its physical RAM (default **100%**, `--memory-threshold PCT`) |
 | `storage-pools` | `pvesh /cluster/resources` + one `zfs list` per node | a guest-disk pool **≥ 90%** used (**WARN** at 80%, the ceiling automatic disk growth stops at), or **WARN** when a pool's disks add up to more than it holds (thin disks); `storage-manager inventory` shows what each pool holds, guest by guest |
-| `storage-disks` | `storage-manager inventory --json` | never — **WARN** when a disk's SMART health is FAILED or it shows reallocated, pending or uncorrectable sectors, media errors, wear or heat; when ZFS has degraded or faulted a disk; when a pool is not ONLINE; or when a replication job (an HA guest's copy on its other node) is in error or behind its schedule. Each row names the node and the disk (`<node>:<device>`), the pool (`<node>/<pool>`) or the module |
+| `storage-replication` | `storage-manager inventory --json --no-smart` | never — **WARN** when a replication job (an HA guest's copy on its other node) is in error or behind its schedule, each row on its module. A disk is judged from its CI and a pool from its `zfsState` by `assess` (below), so the inventory is read without SMART |
 | `cpu-impact` | `config/cluster-cpu.json` + one SSH probe per HA guest | never — **WARN** when an HA guest's processes use AVX-512 that its shared CPU level (`haCpu: common`) drops (see below) |
 | `guest-memory` | `pvesh` + one SSH per node (`ps`, `qm status`, the balloon statistics by `qom-get`) | a module **using ≥ 90%** of its declared memory (**WARN** at 75%), or one whose allocated memory exceeds its declared limit. Used is total minus available, so page cache does not count; a VM that reports no available figure keeps Proxmox's and its row says `cache counts as used` |
 | `backup-status` | `backup-manager list --json` | a module is backup-disabled, or enabled but not in the PBS job |
@@ -542,7 +542,7 @@ gathers what the sources say and writes everything in one report:
 
 | Source | Becomes |
 |---|---|
-| The gates | a condition on the object each row judged: `service-liveness`, `storage-disks`, `quorum`, `lan-uplink`, `switch-ports`, `mlag-pairs`, `pulse`, `ipv6-egress` → `operational`; `disk-threshold`, `memory-commitment`, `guest-memory`, `storage-pools` → `capacity`; `backup-status` → `backup`; `pending-reboot`, `site-timezone`, `backup-keys`, `cpu-impact` → `maintenance`; `signature-status`, `control-plane-trust` → `security` |
+| The gates | a condition on the object each row judged: `service-liveness`, `storage-replication`, `quorum`, `lan-uplink`, `switch-ports`, `mlag-pairs`, `pulse`, `ipv6-egress` → `operational`; `disk-threshold`, `memory-commitment`, `guest-memory`, `storage-pools` → `capacity`; `backup-status` → `backup`; `pending-reboot`, `site-timezone`, `backup-keys`, `cpu-impact` → `maintenance`; `signature-status`, `control-plane-trust` → `security` |
 | Grafana's open alerts, the receiver's record | a `warning` on the alert's CI id, else where `alerts` places it: `security` for RootKeyChanged and FirewallCertChanged, `operational` for the rest |
 | The last sweep's lists | `drift` on each object named: `critical` when missing, else `warning`. No sweep in 48 hours, or a source that failed: `critical` on the site |
 | Thresholds over the CMDB's observations, never the plane | a `storage-pool`'s and `datastore`'s used/size (warning 80%, critical 90%) → `capacity`; a pool's `zfsState` (DEGRADED warning, FAULTED and worse critical) → `operational`; a cabled port's `link` down → `operational` critical; a `vpn-peer`'s `lastHandshake` over 7 days → `operational` warning; a certificate on the firewall's `discover` data, the newest per common name, under 30 days warning, under 7 critical → `security` |
@@ -621,7 +621,8 @@ the CI within its class's expiry, `warning` (`unseen`) once it does not.
 | `dns-name` | its target: an address, a node, another name. A public name's target is the WAN's: `ok` | `dns-no-target`, `dns-target-unknown`, `dns-target-unseen`, `dns-target-retired` |
 | `proxy-route` | the node of its upstream | `route-target-unknown`, `route-target-unseen`, `route-target-retired` |
 | `vpn-peer` | `lastHandshake`, 7 days; seen | `vpn-handshake-stale` |
-| `storage-pool` | `zfsState`, used/size, `storage-pools`, `storage-disks`; seen | `pool-state`, `pool-usage`, `disk-failing` |
+| `storage-pool` | `zfsState`, used/size, `storage-pools`; seen. **What it is `built-on`**: a member disk failed degrades it (`impact` warning naming the disk) while its mirror or raidz vdev has a member left, and takes it down once none is; its own DEGRADED is then that failure seen from above, and the disk is the root cause | `pool-state`, `pool-usage`, `redundancy-degraded` |
+| `disk` | Proxmox's `health` (every report); its state as a member of each pool `built-on` it; the sweep's `smart`, `wearout` and `temperature`; `faulty` → `maintenance`. **Nothing observed: follows its asset** | `smart` (critical: health FAILED; warning: reallocated, pending or uncorrectable sectors, media errors, an NVMe critical warning), `zfs` (critical: FAULTED, UNAVAIL or REMOVED; warning: DEGRADED), `wear` (warning under 10 % of its rated life), `temperature` (warning at 60 °C, an NVMe disk 70 °C), `asset-faulty` |
 | `datastore` | used/size; `gc` last run → `maintenance`; seen | `datastore-usage`, `gc-failed` |
 | `backup-peer` | `pulse`, `lastSeen` 3 days → `backup`; seen | `pulse`, `peer-stale` |
 | `share` | every grant's consumer is a node | `share-consumer-gone` |
@@ -633,7 +634,7 @@ the CI within its class's expiry, `warning` (`unseen`) once it does not.
 | `node` | a placeholder's class: **not assessed by design**, a placeholder gets no conditions | — |
 
 **Follows.** `FOLLOWS` in `lib/ts/src/health-rules.ts` names what nothing judges:
-a port its asset, an asset its node. Such an object gets a `derived` `operational`
+a port or a disk its asset, an asset its node. Such an object gets a `derived` `operational`
 condition, reason `follows`, with the worst of the parent's `operational` and `impact`
 (`ok` when the parent is judged only in other types). It is worked out on every run,
 names the parent or its root as `rootCause`, and is never a failure or a root of its own.
@@ -649,9 +650,11 @@ relation type, optionally the class of either end, the source condition and the
 impact it produces. A rule may also read the dependant: `"dependant": { "haNode": true }`
 matches only a dependant whose attribute has that value (`true`: any value that is
 set), and such a rule wins over one without it for the same crossing. Shipped:
-`operational critical` crosses `runs-on`, `depends-on`, `member-of` and `connects`
-as `critical` impact, except that over `runs-on` a guest with `haNode` set
-(HA-protected) gets a `warning`: its node failed, and it is moving or has moved.
+`operational critical` crosses `runs-on`, `depends-on`, `member-of`, `connects` and
+`built-on` (a disk to the pool built on it) as `critical` impact, except that over
+`runs-on` a guest with `haNode` set (HA-protected) gets a `warning`: its node failed,
+and it is moving or has moved. A pool's mirror or raidz members are one redundancy
+group: one failed member degrades the pool, all of them take it down.
 A warning crosses nothing. `health-manager rules list` shows them (`… crosses
 runs-on to a dependant with haNode set as warning impact`); `rules check [--file F]`
 validates them or a candidate, and exits 1 on what it cannot place, a dependant

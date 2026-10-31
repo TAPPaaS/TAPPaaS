@@ -99,10 +99,12 @@ the pool's usable size exactly, which raw `zpool list` (parity, slop) would not.
 **States.** Each disk, pool and job is judged once, with its reasons; a node is
 the worst of them, and every non-ok object adds a finding naming its node. The
 thresholds are constants at the top of `inventory.ts`; pool usage uses the
-`storage-pools` gate's 80/90%. A disk ZFS has degraded fails even when SMART
-says PASSED (tappaas3's tankc1 disk does exactly that). health-manager's
-`storage-disks` gate runs `inventory --json` and reports its disk, pool-health
-and replication findings — it does not repeat the join.
+`storage-pools` gate's 80/90%; the disk thresholds and the SMART parser are
+lib/ts `smart.ts`'s, shared with site-manager's sweep and health-manager. A disk
+ZFS has degraded fails even when SMART says PASSED (tappaas3's tankc1 disk does
+exactly that). health-manager's `storage-replication` gate runs
+`inventory --json --no-smart` and reports its replication findings; disks and
+pools are judged from their CMDB objects (the sweep reads SMART once a day).
 
 ## What is deliberately not here
 
