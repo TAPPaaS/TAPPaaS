@@ -189,5 +189,42 @@ function spooled(cfg: string): Obj[] {
   check(end?.end === true && end?.attributes?.vmid === 200, "an archived instance ends, by its key");
 }
 
+// ── update carries what it applied to the guest ────────────────────────
+// The update leaves config/tappaas-cicd.json as it was and halves the guest's
+// memory: the change names the vm with the fields read back from its config,
+// as site-manager observes them, so the sweep credits the verb.
+{
+  const cfg = fixture();
+  const saved = { ...process.env };
+  process.env.TAPPAAS_CMDB = "";
+  process.env.CMDB_SOCKET = join(cfg, "no.sock");
+  try {
+    const c = new FakeModuleClient();
+    c.confs.set(110, "boot: order=scsi0\ncores: 4\nmemory: 8192\nscsi0: tanka1:vm-110-disk-0,size=64G\nefidisk0: tanka1:vm-110-disk-1,size=1M\nide2: none,media=cdrom\nnet0: virtio=BC:24:11:AA:BB:CC,bridge=lan,tag=10\n[pre-update]\nmemory: 16384\n");
+    c.confs.set(140, "cores: 2\nmemory: 2048\n");
+    let rc = -1;
+    const out = capture(() => (rc = run(["update", "tappaas-cicd", "--config-dir", cfg], c)));
+    check(rc === 0, `update succeeds (${out.join("\n").slice(0, 300)})`);
+    capture(() => run(["modify", "identity", "--dry-run", "--set", "instance=identity2", "--config-dir", cfg], c));
+  } finally {
+    for (const k of ["TAPPAAS_CMDB", "CMDB_SOCKET"]) {
+      if (saved[k] === undefined) delete process.env[k];
+      else process.env[k] = saved[k];
+    }
+  }
+  const reports = spooled(cfg);
+  const upd = reports.find((r) => r.verb === "update tappaas-cicd");
+  const vm = upd?.objects?.find((o: Obj) => o.class === "vm" && o.name === "tappaas-cicd");
+  check(!!vm, "update reports the vm it names, its config unchanged");
+  check(vm?.attributes?.memory === 8192 && vm?.attributes?.cores === 4, `memory and cores as applied, not the snapshot's (${vm?.attributes?.memory}/${vm?.attributes?.cores})`);
+  check(
+    JSON.stringify(vm?.attributes?.disks) === JSON.stringify([{ storage: "tanka1", size: "64G" }, { storage: "tanka1", size: "1M" }]),
+    `disks as site-manager reads them, no cdrom (${JSON.stringify(vm?.attributes?.disks)})`,
+  );
+  check(vm?.attributes?.nics?.[0]?.tag === 10 && vm?.attributes?.nics?.[0]?.mac === "bc:24:11:aa:bb:cc", "the nics as configured");
+  check(upd ? cmdbProblems(upd).length === 0 : false, `the metamodel takes the update's fields: ${upd ? cmdbProblems(upd).join("; ") : "no report"}`);
+  check(!reports.some((r) => String(r.verb).startsWith("modify identity")), "a dry run reports nothing");
+}
+
 console.log(`cmdb-report: ${passed} passed, ${failed} failed`);
 if (failed > 0) process.exit(1);

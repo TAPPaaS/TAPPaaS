@@ -13,6 +13,7 @@ import { join } from "path";
 import { CmdbObject, CmdbRelation, CmdbReport } from "../../../lib/ts/src/cmdb";
 import { compact, moduleCiAttributes, moduleNodeAttributes, nodeClassOf, releaseOf } from "../../../lib/ts/src/cmdb-source";
 import { readJsonObject } from "../../../lib/ts/src/config-io";
+import { guestConfAttributes, parseGuestConf } from "../../../lib/ts/src/guest-conf";
 import { clusterNodeNames } from "../../../lib/ts/src/nodes";
 import { listModules } from "./config";
 import { ModuleConfig, RunningGuest } from "./types";
@@ -173,8 +174,16 @@ export function moduleObservation(configDir: string, guests: RunningGuest[]): Cm
 }
 
 /** The CIs of one instance — its node or app, its services and provides — as
- *  a verb leaves it; an archived or removed one ends. */
-export function moduleChangeObjects(configDir: string, name: string, before: ModuleConfig | null): { objects: CmdbObject[]; relations: CmdbRelation[] } {
+ *  a verb leaves it; an archived or removed one ends. `confs` (by vmid) are
+ *  the guest configs as the verb applied them: a vm's or lxc's cores, memory,
+ *  disks and nics are reported from them, in the shape site-manager observes,
+ *  so the sweep credits the verb with what it changed on the guest. */
+export function moduleChangeObjects(
+  configDir: string,
+  name: string,
+  before: ModuleConfig | null,
+  confs: Map<number, string> = new Map(),
+): { objects: CmdbObject[]; relations: CmdbRelation[] } {
   const now = listModules(configDir).find((m) => m.name === name) ?? null;
   if (!now || now.status === "archived") {
     const was = now ?? before;
@@ -186,6 +195,10 @@ export function moduleChangeObjects(configDir: string, name: string, before: Mod
   // The instance and the node it names, so an app's host is in the batch.
   const mods = listModules(configDir).filter((m) => m.status !== "archived" && (m.name === name || m.name === now.node));
   const b = build(configDir, mods, []);
+  if (now.vmid != null && confs.has(now.vmid)) {
+    const o = b.objects.find((x) => x.name === name && (x.class === "vm" || x.class === "lxc"));
+    if (o) o.attributes = { ...o.attributes, ...guestConfAttributes(o.class as "vm" | "lxc", parseGuestConf(confs.get(now.vmid)!)) };
+  }
   return { objects: b.objects, relations: b.relations };
 }
 

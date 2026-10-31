@@ -1517,7 +1517,7 @@ function cmdReport(opts: Opts, client: ModuleClient): number {
 // after it succeeded. A dry run writes nothing, so reports nothing.
 const CHANGE_VERBS = new Set(["add", "add-stack", "adopt", "update", "modify", "delete", "migrate", "suspend", "resume"]);
 
-function withChangeReport(verb: string, opts: Opts, fn: () => number): number {
+function withChangeReport(verb: string, opts: Opts, client: ModuleClient, fn: () => number): number {
   if (!CHANGE_VERBS.has(verb)) return fn();
   const before = moduleStamps(opts.configDir);
   const rc = fn();
@@ -1526,11 +1526,16 @@ function withChangeReport(verb: string, opts: Opts, fn: () => number): number {
   const touched = new Set<string>();
   for (const [name, a] of after) if (before.get(name)?.mtime !== a.mtime) touched.add(name);
   for (const name of before.keys()) if (!after.has(name)) touched.add(name);
-  if ((verb === "migrate" || verb === "suspend" || verb === "resume") && opts.rest[0] && after.has(opts.rest[0])) touched.add(opts.rest[0]);
+  const guestVerb = (verb === "update" || verb === "modify") && !opts.dryRun;
+  if ((verb === "migrate" || verb === "suspend" || verb === "resume" || guestVerb) && opts.rest[0] && after.has(opts.rest[0])) touched.add(opts.rest[0]);
+  // What update and modify applied to a guest (cores, memory, disks, nics) is
+  // read back from its config, so the report carries the values as applied.
+  const vmids = guestVerb ? [...touched].map((n) => after.get(n)?.m.vmid).filter((v): v is number => typeof v === "number") : [];
+  const confs = client.guestConfs(vmids);
   const objects: CmdbObject[] = [];
   const relations: CmdbRelation[] = [];
   for (const name of touched) {
-    const c = moduleChangeObjects(opts.configDir, name, before.get(name)?.m ?? null);
+    const c = moduleChangeObjects(opts.configDir, name, before.get(name)?.m ?? null, confs);
     objects.push(...c.objects.filter((o) => !objects.some((x) => x.class === o.class && x.name === o.name)));
     relations.push(...c.relations);
   }
@@ -1539,7 +1544,7 @@ function withChangeReport(verb: string, opts: Opts, fn: () => number): number {
 }
 
 function dispatch(verb: string, opts: Opts, client: ModuleClient): number {
-  return withChangeReport(verb, opts, () => dispatchVerb(verb, opts, client));
+  return withChangeReport(verb, opts, client, () => dispatchVerb(verb, opts, client));
 }
 
 function dispatchVerb(verb: string, opts: Opts, client: ModuleClient): number {

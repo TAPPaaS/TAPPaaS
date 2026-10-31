@@ -190,6 +190,8 @@ export interface ModuleClient {
   // returns [] (never throws) when the cluster is unreachable, so `list` can
   // gracefully degrade to a config-only view.
   clusterResources(): RunningGuest[];
+  // The given guests' /etc/pve configs, by vmid (best-effort, may be empty).
+  guestConfs(vmids: number[]): Map<number, string>;
 }
 
 // ── validate result ───────────────────────────────────────────────────

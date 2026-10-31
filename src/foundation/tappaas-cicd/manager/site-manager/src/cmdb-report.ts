@@ -17,19 +17,16 @@ import { readLocations } from "../../../lib/ts/src/locations";
 import { clusterNodes } from "../../../lib/ts/src/nodes";
 import { discoverModules } from "../../../lib/ts/src/module-discovery";
 import { POSITIONS_FILE, PositionsDoc, assetNamed } from "../../../lib/ts/src/positions";
+import { GuestNic, parseGuestConf } from "../../../lib/ts/src/guest-conf";
 import { NodeDiscovery, NodeStorage, discoveryReport, parseCorosync, storageReport } from "./cmdb-discover";
+
+// The guest config parse is shared with module-manager (lib/ts guest-conf.ts).
+export type { GuestNic };
+export { parseGuestConf };
 
 type Obj = Record<string, unknown>;
 
 export const SOURCE = "site-manager";
-
-export interface GuestNic {
-  name: string;
-  model?: string;
-  mac?: string;
-  bridge?: string;
-  tag?: number;
-}
 
 export interface GuestRead {
   vmid: number;
@@ -120,50 +117,6 @@ function json(text: string): unknown {
 }
 
 const num = (v: unknown): number | undefined => (typeof v === "number" ? v : typeof v === "string" && /^\d+$/.test(v) ? Number(v) : undefined);
-
-const DISK_KEY = /^(scsi|virtio|sata|ide|efidisk|tpmstate)\d+$/;
-
-/** A guest's /etc/pve config: its own section only (snapshots follow `[…]`). */
-export function parseGuestConf(text: string): Partial<GuestRead> {
-  const g: Partial<GuestRead> = {};
-  const disks: { storage: string; size: string }[] = [];
-  const nics: GuestNic[] = [];
-  const mountpoints: { storage: string; size: string }[] = [];
-  for (const line of text.split("\n")) {
-    if (line.startsWith("[")) break;
-    const m = /^([a-z0-9_-]+):\s*(.*)$/.exec(line.trim());
-    if (!m) continue;
-    const [, k, v] = m;
-    if (k === "cores") g.cores = num(v);
-    else if (k === "memory") g.memory = num(v);
-    else if (k === "template") g.template = v.trim() === "1";
-    else if (k === "unprivileged") g.unprivileged = v.trim() === "1";
-    else if (k === "rootfs") g.rootfs = v.split(",")[0];
-    else if (/^net\d+$/.test(k)) nics.push(parseGuestNic(k, v));
-    else if (/^mp\d+$/.test(k) && v.includes(":")) mountpoints.push({ storage: v.split(":")[0], size: /(?:^|,)size=([^,]+)/.exec(v)?.[1] ?? "" });
-    else if (DISK_KEY.test(k) && !/media=cdrom/.test(v) && v.includes(":")) {
-      const size = /(?:^|,)size=([^,]+)/.exec(v)?.[1];
-      disks.push({ storage: v.split(":")[0], size: size ?? "" });
-    }
-  }
-  if (disks.length) g.disks = disks;
-  if (nics.length) g.nics = nics;
-  if (mountpoints.length) g.mountpoints = mountpoints;
-  return g;
-}
-
-// `net0: virtio=BC:24:…,bridge=lan,tag=200` (qemu), `name=eth0,hwaddr=…,bridge=lan` (lxc).
-function parseGuestNic(key: string, v: string): GuestNic {
-  const kv = new Map(v.split(",").map((p) => p.split("=", 2) as [string, string]));
-  const model = [...kv.keys()].find((k) => /^(virtio|e1000e?|rtl8139|vmxnet3)$/.test(k));
-  return compact({
-    name: kv.get("name") ?? key,
-    model,
-    mac: (kv.get("hwaddr") ?? (model ? kv.get(model) : undefined))?.toLowerCase(),
-    bridge: kv.get("bridge"),
-    tag: kv.has("tag") ? Number(kv.get("tag")) : undefined,
-  }) as unknown as GuestNic;
-}
 
 /** The cluster probe's output → members, quorum and guests. */
 export function parseClusterProbe(stdout: string): ClusterRead {
