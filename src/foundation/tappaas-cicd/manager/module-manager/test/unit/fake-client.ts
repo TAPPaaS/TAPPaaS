@@ -87,4 +87,9 @@ export class FakeModuleClient implements ModuleClient {
   clusterResources(): RunningGuest[] {
     return this.guests;
   }
+  // Guest configs by vmid, as the cluster would print them.
+  confs = new Map<number, string>();
+  guestConfs(vmids: number[]): Map<number, string> {
+    return new Map([...this.confs].filter(([v]) => vmids.includes(v)));
+  }
 }

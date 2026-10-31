@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import unittest
 
-from opnsense_controller.firewall_discover import read_discover, shape_peers, shape_rules
+from opnsense_controller.firewall_discover import read_discover, shape_nat, shape_peers, shape_rules
 
 FILTER = {"filter": {"rules": {"rule": {
     "u-b": {"enabled": "1", "sequence": "200", "action": {"pass": {"value": "Pass", "selected": 1}, "block": {"selected": 0}},
@@ -36,6 +36,13 @@ class TestDiscover(unittest.TestCase):
 
     def test_an_empty_model_is_no_rules(self):
         self.assertEqual(shape_rules({"filter": {"rules": {"rule": []}}}), [])
+
+    def test_a_port_forward_is_enabled_unless_disabled(self):
+        dnat = shape_nat({"DNat": {"rule": {"p-on": {"disabled": "0", "target": "10.0.0.12"}, "p-off": {"disabled": "1"}}}},
+                         "DNat", "port-forward")
+        self.assertEqual([(n["uuid"], n["enabled"]) for n in dnat], [("p-on", True), ("p-off", False)])
+        snat = shape_nat({"snatrules": {"rule": {"s-on": {"enabled": "1"}, "s-off": {"enabled": "0"}}}}, "snatrules", "source")
+        self.assertEqual([n["enabled"] for n in snat], [True, False])
 
     def test_a_peer_takes_its_handshake_by_key(self):
         p = shape_peers([{"name": "mac", "pubkey": "K", "tunneladdress": "10.255.1.2/32"}],

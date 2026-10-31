@@ -295,18 +295,66 @@ export function buildNetworkDiscover(doc: DiscoverDoc, zones: ZonesDoc): CmdbBat
   }
   b.put("vm", FIREWALL_MODULE, {
     osVersion: doc.version ?? undefined,
-    firewall: {
-      interfaces: free,
-      vlans: undeclared,
-      rules: doc.rules ?? [],
-      aliases: doc.aliases ?? [],
-      nat: doc.nat ?? [],
-      dhcpRanges: doc.dhcpRanges ?? [],
-      dhcpHosts: doc.dhcpHosts ?? [],
-      routes: doc.routes ?? [],
-      certificates: doc.certificates ?? [],
-      packages: doc.packages ?? [],
-    },
+    firewall: firewallAttribute(doc, free, undeclared),
   });
   return b;
+}
+
+// The sections of the pass that make up `firewall`, by the name `errors` uses.
+const FIREWALL_SECTIONS = ["interfaces", "vlans", "rules", "aliases", "nat", "dhcpRanges", "dhcpHosts", "routes", "certificates", "firmware"];
+
+/** Canonical JSON: object keys sorted at every depth. */
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  if (v !== null && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}:${canonical(o[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(v) ?? "null";
+}
+
+/** One section in a fixed order: by uuid, else name or identifier, the whole
+ *  entry breaking ties (routes have no key of their own). */
+function sorted(list: unknown[] | undefined, drop: string[] = []): unknown[] {
+  const keyOf = (e: unknown): string => {
+    const o = (e ?? {}) as Record<string, unknown>;
+    const k = o.uuid ?? o.name ?? o.identifier ?? o.tag ?? o.device;
+    return k === undefined || k === null ? "" : String(k);
+  };
+  const out = (list ?? []).map((e) => {
+    if (e === null || typeof e !== "object" || drop.length === 0) return e;
+    const o = { ...(e as Record<string, unknown>) };
+    for (const k of drop) delete o[k];
+    return o;
+  });
+  return out
+    .map((e) => ({ e, k: keyOf(e), c: canonical(e) }))
+    .sort((a, b) => (a.k < b.k ? -1 : a.k > b.k ? 1 : a.c < b.c ? -1 : a.c > b.c ? 1 : 0))
+    .map((x) => x.e);
+}
+
+/** The network module's `firewall` attribute: the same value on every pass
+ *  over a firewall that did not change. Every section is sorted by its key
+ *  (uuid, else name), not by the order the API lists it in. A rule keeps its
+ *  `position` and `sequence`: computed from the sequence, they are the live
+ *  evaluation order and move only when the rules change. A NAT entry's
+ *  `position` is dropped: it is the entry's place in the stored model, not the
+ *  order the firewall applies them in, so it carries nothing the uuid order
+ *  does not. A pass in which a section of it was not answered leaves
+ *  `firewall` out: an empty section in its place would show as the rules
+ *  gone, and back on the next pass; the CMDB keeps the last full one. */
+export function firewallAttribute(doc: DiscoverDoc, free: unknown[], undeclared: unknown[]): Record<string, unknown> | undefined {
+  if ((doc.errors ?? []).some((e) => FIREWALL_SECTIONS.includes(e.section))) return undefined;
+  return {
+    interfaces: sorted(free),
+    vlans: sorted(undeclared),
+    rules: sorted(doc.rules),
+    aliases: sorted(doc.aliases),
+    nat: sorted(doc.nat, ["position"]),
+    dhcpRanges: sorted(doc.dhcpRanges),
+    dhcpHosts: sorted(doc.dhcpHosts),
+    routes: sorted(doc.routes),
+    certificates: sorted(doc.certificates),
+    packages: sorted(doc.packages),
+  };
 }

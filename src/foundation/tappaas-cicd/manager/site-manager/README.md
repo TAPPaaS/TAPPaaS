@@ -580,6 +580,9 @@ degrades the pool, all of them take it down), a log, cache or spare member
 no pool loses the `built-on` it had. A disk no asset records is only in the server's
 `disks[]` (`asset-manager disk adopt` records it).
 
+A guest's fields come from its `/etc/pve` config through the parse in lib/ts
+`guest-conf.ts`, the one module-manager reports an `update` or `modify` with.
+
 A cluster that does not answer is a warning: the site, locations, cluster and
 nodes are reported from config/, without guests. An archived module is not
 reported.

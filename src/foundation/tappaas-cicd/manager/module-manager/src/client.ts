@@ -16,6 +16,7 @@
 import {
   defaultNodeCandidates,
   queryClusterGuests,
+  queryGuestConfs,
   reachableNodes,
 } from "../../../lib/ts/src/cluster";
 import { stream } from "../../../lib/ts/src/exec";
@@ -183,5 +184,14 @@ export class CliModuleClient implements ModuleClient {
     if (nodes.length === 0) return [];
     const guests = queryClusterGuests(nodes[0]);
     return guests ?? [];
+  }
+
+  // BEST-EFFORT: the given guests' /etc/pve configs, by vmid; an empty map
+  // when no node answers (the change report then carries what config/ says).
+  guestConfs(vmids: number[]): Map<number, string> {
+    if (vmids.length === 0) return new Map();
+    const nodes = reachableNodes(defaultNodeCandidates(siteNodeHostnames(defaultConfigDir())));
+    if (nodes.length === 0) return new Map();
+    return queryGuestConfs(nodes[0], vmids) ?? new Map();
   }
 }

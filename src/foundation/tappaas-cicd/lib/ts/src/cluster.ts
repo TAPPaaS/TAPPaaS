@@ -9,6 +9,7 @@
 // docs/design/ADR007-post-implement-refactor.md §6 "Parked".
 
 import { spawnSync } from "child_process";
+import { guestConfProbe, parseGuestConfProbe } from "./guest-conf";
 
 // The mgmt-zone DNS suffix nodes/guests are addressed under. Overridable for
 // tests and relocated sites (replaces module-manager's MM_MGMT_DOMAIN).
@@ -205,6 +206,16 @@ export function queryClusterGuests(node: string): ClusterGuest[] | null {
     });
   }
   return out;
+}
+
+// The configs of the given guests, by vmid, read from pmxcfs on <node> (it
+// holds every member's): what module-manager reports after a verb applied
+// them. null when the node does not answer.
+export function queryGuestConfs(node: string, vmids: number[]): Map<number, string> | null {
+  if (vmids.length === 0) return new Map();
+  const r = ssh("root", `${node}.${mgmtDomain()}`, guestConfProbe(vmids));
+  if (!r.ran || r.rc !== 0) return null;
+  return parseGuestConfProbe(r.stdout);
 }
 
 // ── a node's storage, for storage-manager inventory ───────────────────

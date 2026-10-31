@@ -419,7 +419,11 @@ reported.
 
 Changes: `add`, `add-stack`, `adopt`, `modify`/`update`, `delete`, `migrate`,
 `suspend`/`resume` report every instance whose config/<name>.json they wrote
-(an archived or removed one ends), after they succeed.
+(an archived or removed one ends), after they succeed. `update` and `modify`
+also report the instance they name, and on its vm or lxc the `cores`, `memory`,
+`disks` (an lxc's `rootfs`, `unprivileged` and mount points) and `nics` read back
+from the guest's config as applied, in the shape site-manager observes them, so
+the discovery sweep counts a resize as the verb's and not as drift.
 
 `report --discover` (ADR-040 D15) is accepted and reports the same: this plane
 has nothing deeper.
