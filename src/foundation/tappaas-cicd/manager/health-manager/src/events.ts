@@ -33,6 +33,7 @@ export interface TransitionEvent {
   phase?: "start" | "end";
   root: boolean; // the object is a root cause: a recovery alone cannot say so
   symptoms: number; // on a root: what it impacts
+  impacted: string; // on a root: what it impacts by class, "3 vm, 2 service"; else "nothing"
   silenced: boolean; // acknowledged or in maintenance: recorded, never mailed
 }
 
@@ -71,6 +72,7 @@ export interface RootCauseEvent {
   name: string;
   type: string;
   symptoms: string[];
+  impacted: string; // the symptoms by class, "3 vm, 2 service"
   cleared: boolean;
   at: string;
 }

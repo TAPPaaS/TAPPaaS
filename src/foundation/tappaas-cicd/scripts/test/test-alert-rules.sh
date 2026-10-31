@@ -136,7 +136,7 @@ ck(ar.validate(hm, True) == [], f"tappaas-cicd-alerts.json validates as foundati
 hg = ar.render_group("tappaas-cicd", hm, lambda m: ["tappaas-cicd"])
 ck(ar.validate(hm, False) == [], "…and needs nothing a foundation rule alone may do")
 ck([r["title"] for r in hg["rules"]] == ["HealthRootCause", "HealthRootRecovered", "HealthDailyDigest"], "the three rules render")
-line = lambda **k: json.dumps({"event": "transition", "name": "tappaas2", "from": k.get("frm", "ok"), "to": k.get("to", "critical"), "reason": "node-down", "kind": k["kind"], "root": k["root"], "symptoms": 6, "silenced": k["silenced"]}, separators=(",", ":"))
+line = lambda **k: json.dumps({"event": "transition", "name": "tappaas2", "from": k.get("frm", "ok"), "to": k.get("to", "critical"), "reason": "node-down", "kind": k["kind"], "root": k["root"], "symptoms": 6, "impacted": "4 vm, 2 service", "silenced": k["silenced"]}, separators=(",", ":"))
 sweep = lambda expected: json.dumps({"kind": "changed", "class": "node", "name": "tappaas2", "source": "site-manager", "attribute": "memory", "before": 1, "after": 2, "expected": expected}, separators=(",", ":"))
 cause, back, digest = [re.compile(r["match"]) for r in hm["rules"]]
 ck(cause.search(line(kind="causal", root=True, silenced=False)), "a critical root's causal line matches")
@@ -155,6 +155,7 @@ ck(hm["rules"][2]["repeat"] == "24h" and hm["rules"][2]["window"] == 86400, "the
 for r in hm["rules"]:
     for lbl, rx in r.get("capture", {}).items():
         ck(re.search(rx, line(kind="causal", root=True, silenced=False)), f"{r['name']}: {lbl} is read from the line")
+ck(re.search(hm["rules"][0]["capture"]["impacted"], line(kind="causal", root=True, silenced=False)).group("impacted") == "4 vm, 2 service", "a critical root's mail says what it impacts, by class")
 
 # ── the core rules, moved out of logging.nix into their modules (ADR-039 D6) ──
 import os
