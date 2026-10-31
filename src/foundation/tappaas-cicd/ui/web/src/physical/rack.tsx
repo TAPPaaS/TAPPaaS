@@ -279,11 +279,14 @@ export function RackCanvas({ t, v, sel, pick, cables, onPane, drag, dropRef, onG
         {L.locations.map((l) => (
           <g key={`loc:${l.name}`} className="rack-location">
             <rect x={l.x} y={l.y} width={l.w} height={l.h} rx={14} fill="none" stroke="#64748b" strokeWidth={l.primary ? 1.6 : 1.2} strokeDasharray={l.primary ? undefined : "10 5"} />
-            <text x={l.x + 14} y={l.y + 20} className="rack-location-title rack-location-link" onClick={(e) => (e.stopPropagation(), navigate(locationHref(l.name)))}>
-              <title>{`${l.title}: its record on the Site page`}</title>
-              {l.title}
+            {/* One line, so the address follows the name however wide the font draws it. */}
+            <text x={l.x + 14} y={l.y + 20}>
+              <tspan className="rack-location-title rack-location-link" onClick={(e) => (e.stopPropagation(), navigate(locationHref(l.name)))}>
+                <title>{`${l.title}: its record on the Site page`}</title>
+                {l.title}
+              </tspan>
+              {l.sub ? <tspan className="rack-where rack-location-sub" dx={12}>{l.sub}</tspan> : null}
             </text>
-            {l.sub ? <text x={l.x + 14 + l.title.length * 9.5 + 10} y={l.y + 20} className="rack-where">{l.sub}</text> : null}
             {l.roomless || l.nowhere.length ? (
               <text x={l.nowhereX} y={l.nowhereY + 12} className="rack-where">
                 {!l.roomless ? "placed nowhere here:" : l.nowhere.length ? "no room here — somewhere at this location:" : "no room here, and nothing recorded at it"}

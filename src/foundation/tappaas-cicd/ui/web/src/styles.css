@@ -532,6 +532,7 @@ button.mod-tile:hover { background: var(--info-bg); }
 .rack-room-title { font-size: 15px; font-weight: 700; fill: #334155; }
 .rack-location-title { font-size: 17px; font-weight: 800; fill: #1e293b; }
 .rack-location-link { cursor: pointer; }
+.rack-location-sub { font-size: 13px; }
 .rack-location-link:hover { text-decoration: underline; fill: #2563eb; }
 .rack-location-device { font-size: 13px; fill: #2563eb; cursor: pointer; }
 .rack-location-device:hover { text-decoration: underline; }

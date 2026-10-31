@@ -3,7 +3,7 @@
 // first, and the rack unit or room a point of the drawing falls on.
 
 import { PlacementInfo, PositionsView, RackInfo, RoomInfo } from "../../web/src/types";
-import { R, dropTargetAt, layoutRacks } from "../../web/src/physical/layout";
+import { R, dropTargetAt, layoutRacks, locationHeading } from "../../web/src/physical/layout";
 import { check, done } from "./check";
 
 const pm = (device: string, u: number, extra: Partial<PlacementInfo> = {}): PlacementInfo => ({
@@ -38,6 +38,11 @@ check(at("rack1").y === at("rack2").y && at("rack2").x > at("rack1").x, "a room'
 check(L.height >= cabin.y + cabin.h && L.width >= cabin.x + cabin.w, "the drawing holds them all");
 check(L.fitH === home.y + home.h + 4, "fit shows the first location");
 check(cabin.nowhereY > home.y + home.h && cabin.nowhere[0]?.device === "far", "what is placed nowhere stands in its own location");
+
+// The headings.
+check(home.title === "Home" && home.sub === "Vej 95, Birkerød, DK · the primary location", `the primary: its address, then "the primary location" (${home.sub})`);
+check(cabin.title === "cabin" && cabin.sub === "Hareskov 1, Værløse", `another location: its name and address, nothing more (${cabin.sub})`);
+check(locationHeading({ name: "x", displayName: null, primary: false, place: null }).sub === "", "no address: the name alone");
 
 // A plate at its unit in a rack of a later location.
 const s = rack("r", "shed", 6, [pm("x", 6)]);

@@ -5,7 +5,7 @@
 // drawing falls on. Pure: the drawing (rack.tsx) and its tests use the same
 // numbers.
 
-import { PlacementInfo, PositionsView, RackInfo, TopoOutside, TopoPort } from "../types";
+import { LocationInfo, PlacementInfo, PositionsView, RackInfo, TopoOutside, TopoPort } from "../types";
 import { PortAt } from "./cableroute";
 import { DropTarget, rowOf, spanOf } from "./dragplace";
 import { Placed, portCells } from "./platelayout";
@@ -79,6 +79,13 @@ function nowhereAt(v: PositionsView, loc: { name: string; unplaced: string[] }, 
   const out = loc.unplaced.map((device) => ({ device, label: device, sel: selOf(kindOf(device), device) }));
   for (const o of outside) if (o.at === loc.name && !loc.unplaced.includes(o.name)) out.push({ device: o.name, label: `${o.name} (${o.kind === "buddy" ? "backup buddy" : "satellite"})`, sel: { kind: "outside", id: o.name } });
   return out;
+}
+
+// A location's heading: its name, and its address with "the primary location"
+// on the primary; the drawing flows the two as one line.
+export function locationHeading(loc: { name: string; displayName: string | null; primary: boolean; place: LocationInfo["place"] }): { title: string; sub: string } {
+  const place = [loc.place?.address, loc.place?.city, loc.place?.country].filter(Boolean).join(", ");
+  return { title: loc.displayName ?? loc.name, sub: [place, loc.primary ? "the primary location" : ""].filter(Boolean).join(" · ") };
 }
 
 const looseW = (m: PlacementInfo) => (m.width === "full" ? 320 : m.width === "half" ? 180 : 130);
@@ -175,11 +182,9 @@ export function layoutRacks(v: PositionsView, outside: TopoOutside[] = []): Rack
     for (const room of rooms.slice(firstRoom)) room.h = bottom - room.y;
     let w = x - R.roomGap + R.locPad - left;
     if (loc.name) {
-      const place = [loc.place?.address, loc.place?.city, loc.place?.country].filter(Boolean).join(", ");
-      const title = loc.displayName ?? loc.name;
-      const sub = [place, loc.primary ? "the primary location" : loc.kind === "remote" ? "another site's" : ""].filter(Boolean).join(" · ");
+      const { title, sub } = locationHeading(loc);
       // As wide as its heading at least: the title, then its address.
-      w = Math.max(w, 28 + title.length * 11 + 10 + sub.length * 6);
+      w = Math.max(w, 28 + title.length * 11 + 22 + sub.length * 6);
       locations.push({ name: loc.name, title, sub, primary: loc.primary, x: left, y, w, h: bottom + R.locPad - y, roomless: !inLoc.length, nowhereX, nowhereY: roomY, nowhere });
     }
     right = Math.max(right, left + w);
