@@ -5,7 +5,6 @@ import os
 import shutil
 import subprocess
 import tempfile
-import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -183,34 +182,35 @@ class TestBootDiskLines(unittest.TestCase):
 
 class ModeFileRelease(unittest.TestCase):
     """The mode file bound over the ISO's copy keeps /cdrom busy: the installer's
-    unmount then retries for 25 s (#909). It is released once the answer is in."""
+    unmount then retries for 25 s (#909). The hook edits the installer's own
+    script to release it, since nothing it starts survives switch_root."""
 
-    def _watcher(self) -> str:
+    SCRIPT = (
+        "eject_and_reboot() {\n"
+        "    iso_dev=$(awk '/ iso9660 / {print $1}' /proc/mounts)\n"
+        "\n"
+        "    for try in 5 4 3 2 1; do\n"
+        "        umount -v -a --types iso9660 && break\n"
+        "    done\n"
+        "}\n"
+    )
+
+    def _release(self) -> str:
+        return next(line for line in BOOT_DISK_SH.split("\n") if "sed -i" in line).strip().rstrip("\\")
+
+    def test_nothing_is_left_running_across_switch_root(self) -> None:
         start = BOOT_DISK_SH.index('mount --bind /tappaas-mode.toml "$_tap_mode"')
-        start = BOOT_DISK_SH.index("(\n", start)
-        end = BOOT_DISK_SH.index("&\n", start)
-        return BOOT_DISK_SH[start:end]
+        self.assertNotIn(") </dev/null", BOOT_DISK_SH[start:])
 
-    def test_released_after_the_answer_not_before(self) -> None:
+    def test_released_before_the_installers_unmount(self) -> None:
         with tempfile.TemporaryDirectory() as d:
-            answers = Path(d) / "answers"
-            done = Path(d) / "unmounted"
-            script = (
-                f'umount() {{ echo "$1" > {done}; }}\n_tap_mode=/cdrom/mode.toml\n'
-                + self._watcher().replace("/mnt/.installer-mp/run/automatic-installer-answers", str(answers)).replace("sleep 2", "sleep 0.1")
-            )
-            p = subprocess.Popen(["sh", "-c", script])
-            try:
-                time.sleep(0.5)
-                self.assertFalse(done.exists(), "released before any answer")
-                answers.write_text("")
-                time.sleep(0.5)
-                self.assertFalse(done.exists(), "an empty answers file is a fetch under way")
-                answers.write_text("[global]\n")
-                p.wait(timeout=5)
-                self.assertEqual(done.read_text().strip(), "/cdrom/mode.toml")
-            finally:
-                p.kill()
+            script = Path(d) / "unconfigured.sh"
+            script.write_text(self.SCRIPT)
+            subprocess.run(["sh", "-c", f"{self._release()} {script}"], check=True)
+            text = script.read_text()
+            self.assertLess(text.index("umount /cdrom/auto-installer-mode.toml || true;"), text.index("iso_dev="))
+            self.assertEqual(text.count("umount /cdrom"), 1)
+            subprocess.run(["bash", "-n", str(script)], check=True)
 
 
 if __name__ == "__main__":

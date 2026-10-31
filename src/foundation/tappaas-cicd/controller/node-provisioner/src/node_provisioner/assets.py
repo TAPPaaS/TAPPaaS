@@ -258,15 +258,12 @@ BOOT_DISK_SH = r"""
                 esac
             done < "$_tap_mode" > /tappaas-mode.toml
             mount --bind /tappaas-mode.toml "$_tap_mode"
-            # Only proxmox-fetch-answer reads it, once, before the install.
-            # Left mounted it keeps /cdrom busy, and the installer's own
-            # `umount -a --types iso9660` retries for 25 s before the reboot:
-            # released as soon as the answer is in. (A fetch that fails stops
-            # the installer; this waits on, harmlessly, until the reset.)
-            (
-                while [ ! -s /mnt/.installer-mp/run/automatic-installer-answers ]; do sleep 2; done
-                umount "$_tap_mode"
-            ) </dev/null >/dev/null 2>&1 &
+            # Left mounted it keeps /cdrom busy and the installer's own unmount
+            # retries for 25 s before the reboot. Released by the installer
+            # itself, first thing in eject_and_reboot: a process started here
+            # does not survive this init's switch_root.
+            sed -i 's#^\( *\)iso_dev=\$(awk#\1umount /cdrom/auto-installer-mode.toml || true; &#' \
+                /mnt/.installer-mp/sbin/unconfigured.sh || true
             if [ -n "$_tap_usb" ]; then
                 echo "TAPPaaS: this machine's disks go to the answer server"
             else
