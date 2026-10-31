@@ -9,7 +9,9 @@
 # Prints an array of reports. The first holds what switch-manager owns: each
 # switch as a `device` CI and its `network-device` asset (allocated-to the
 # device), the asset's ports with their D9 kind and speed, and the cables
-# between two switches' ports (recorded, MLAG peer links, LLDP). Each cable to
+# between two switches' ports (recorded, MLAG peer links, LLDP). A cable in a
+# redundancy (ADR-041 D3) carries `redundancyGroup`: an MLAG pair's peer links
+# `<pair>:peer`, the legs of an MLAG LAG `<pair>:<lag>`. Each cable to
 # a port another reporter owns (a node's NIC on its server asset) is a report
 # of its own: the controller refuses a report whose reference it cannot
 # resolve, and one such port must not take the switches with it.
@@ -96,19 +98,30 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
   | ($owned | map(.ref)) as $refs
   | def have($r): ($refs | index($r)) != null;
     def linkspeed($v): ($v.linkSpeed // $v.speed | speedword);
+    # Redundancy (ADR-041 D3): the MLAG pair a switch is in, and the group a
+    # cable from its port is in — the pair's peer links, or the two legs of an
+    # MLAG LAG (a lag with an mlagId); else none.
+    def pairof($sw): [ $pairs | to_entries[] | select(.value.switches | index($sw)) | .key ][0];
+    def peerport($sw; $p): pairof($sw) as $pr
+      | $pr != null and ((($pairs[$pr].peerPort // {})[$sw] // null) == $p or (($sws[$sw].ports // {})[$p].peerLink // false) == true);
+    def lagleg($sw; $p): (($sws[$sw].ports // {})[$p] // {}) as $v | pairof($sw) as $pr
+      | if $pr != null and ($v.mlagId // null) != null and ($v.lag // "") != "" then "\($pr):\($v.lag)" else null end;
+    def group($a; $p; $b; $q):
+      if pairof($a) != null and pairof($a) == pairof($b) and $a != $b and (peerport($a; $p) or peerport($b; $q))
+      then "\(pairof($a)):peer" else (lagleg($a; $p) // lagleg($b; $q)) end;
 
   # Cables between two ports of this report: recorded, MLAG peer links, LLDP.
   [ $names[] as $sw | ($sws[$sw].ports // {}) | to_entries[] | .key as $p | .value as $v
     | ( (select(($v.type // "") == "switch" and ($v.target // "") != "" and ($v.targetPort // "") != "" and ($sws[$v.target] != null))
-         | {to: pref($v.target; $v.targetPort | tostring), origin: "recorded"}),
+         | {sw: $v.target, port: ($v.targetPort | tostring), origin: "recorded"}),
         ( ($v.neighbors // [])[] | select(.lldp.name != null and .lldp.port != null)
           | .lldp as $l | ($sws | keys[] | select(canon == ($l.name | canon))) as $t
-          | {to: pref($t; $l.port | tostring), origin: "lldp"} ) )
-    | {type: "connects", from: pref($sw; $p), to: .to,
-       attributes: ({origin: .origin, linkSpeed: linkspeed($v)} | nonull)} ]
-  + [ (.mlagPairs // {})[] | select((.switches | length) == 2)
-      | .switches as [$a, $b]
-      | {type: "connects", from: pref($a; .peerPort[$a]), to: pref($b; .peerPort[$b]), attributes: {origin: "mlag-peer"}} ]
+          | {sw: $t, port: ($l.port | tostring), origin: "lldp"} ) )
+    | {type: "connects", from: pref($sw; $p), to: pref(.sw; .port),
+       attributes: ({origin: .origin, linkSpeed: linkspeed($v), redundancyGroup: group($sw; $p; .sw; .port)} | nonull)} ]
+  + [ $pairs | to_entries[] | select((.value.switches | length) == 2)
+      | .key as $pr | .value.switches as [$a, $b] | .value.peerPort as $pp
+      | {type: "connects", from: pref($a; $pp[$a]), to: pref($b; $pp[$b]), attributes: {origin: "mlag-peer", redundancyGroup: "\($pr):peer"}} ]
   | map(select(have(.from) and have(.to)))
   # A cable is one relation, whichever end reported it.
   | map(if .from > .to then .from as $f | .from = .to | .to = $f else . end)
@@ -123,7 +136,7 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
             | {node: .lldp.name, nic: (.lldp.port | tostring), origin: "lldp"} ) )
       | record(.node; ["server"]) as $srv
       | select($srv != null)
-      | {from: pref($sw; $p), sw: $sw, p: $p, srv: $srv.key, nic: .nic, origin: .origin, speed: linkspeed($v)} ]
+      | {from: pref($sw; $p), sw: $sw, p: $p, srv: $srv.key, nic: .nic, origin: .origin, speed: linkspeed($v), group: lagleg($sw; $p)} ]
   | unique_by([.from, .srv, .nic]) as $nics
 
   | def head: {source: $source, kind: $kind}
@@ -136,7 +149,7 @@ def assetclass: {server: "server", switch: "network-device", "access-point": "ne
             {ref: "asset:\(tag(.sw))", class: "network-device", name: tag(.sw)},
             {ref: .from, class: "port", name: .p, attributes: {asset: {ref: "asset:\(tag(.sw))"}}},
             {ref: "nic", class: "port", name: .nic, attributes: {asset: {class: "server", name: .srv}}} ],
-          relations: [ {type: "connects", from: .from, to: "nic", attributes: ({origin: .origin, linkSpeed: .speed} | nonull)} ] } ]
+          relations: [ {type: "connects", from: .from, to: "nic", attributes: ({origin: .origin, linkSpeed: .speed, redundancyGroup: .group} | nonull)} ] } ]
   + [ $names[] as $sw | select(($sws[$sw].location // "") != "")
       | head + {
           objects: [ {ref: "loc", class: "location", name: $sws[$sw].location}, {ref: "device:\($sw)", class: "device", name: $sw} ],

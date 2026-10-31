@@ -33,7 +33,9 @@
             "state": "on",
             "watts": 7.5
           },
-          "stp": "forwarding"
+          "stp": "forwarding",
+          "lag": "lag-t1",
+          "mlagId": 10
         },
         "2": {
           "type": "switch",
@@ -126,6 +128,15 @@
               }
             }
           ]
+        },
+        "ether3": {
+          "type": "node",
+          "target": "tappaas1",
+          "targetPort": "enp2s0",
+          "mode": "trunk",
+          "link": "up",
+          "lag": "lag-t1",
+          "mlagId": 10
         },
         "peer": {
           "mode": "trunk",

@@ -36,7 +36,7 @@ ck "its asset is named by the positions record's tag" '["sw-01","edge"]' "$(core
 ck "…keyed by the record's vendor and serial"      '["ubiquiti","F4E2C6000001"]' "$(core '.objects[] | select(.name == "sw-01") | .attributes | [.vendor, .serial]')"
 ck "a disposed record names no switch"             '"mikrotik"' "$(core '.objects[] | select(.class == "network-device" and .name == "edge") | .attributes.vendor')"
 ck "the asset is allocated-to its device"          'true' "$(core 'any(.relations[]; .type == "allocated-to" and .from == "asset:sw-01" and .to == "device:core")')"
-ck "every port is part-of its asset"               'true' "$(core '[.objects[] | select(.class == "port")] | length == 9 and all(.attributes.asset.ref | startswith("asset:"))')"
+ck "every port is part-of its asset"               'true' "$(core '[.objects[] | select(.class == "port")] | length == 10 and all(.attributes.asset.ref | startswith("asset:"))')"
 ck "a port's kind and speed: the actual's maxSpeed" '["rj45","10g"]' "$(core '.objects[] | select(.ref == "port:sw-01/1") | .attributes | [.kind, .speed]')"
 ck "…else the record's (an SFP cage)"              '["sfp","10g"]' "$(core '.objects[] | select(.ref == "port:sw-01/11") | .attributes | [.kind, .speed]')"
 ck "…else rj45, its speed the plate's (asset-manager)" '["rj45",null]' "$(core '.objects[] | select(.ref == "port:sw-01/2") | .attributes | [.kind, .speed]')"
@@ -45,8 +45,15 @@ ck "a recorded cable between switches, seen by LLDP too, is one connects" '1' \
    "$(core '[.relations[] | select(.type == "connects" and ([.from, .to] | sort) == ["port:edge/ether1","port:sw-01/2"])] | length')"
 ck "…with the observed link speed"                 '"1g"' "$(core '.relations[] | select(.from == "port:edge/ether1") | .attributes.linkSpeed')"
 ck "the MLAG peer link is a cable"                 'true' "$(core 'any(.relations[]; .attributes.origin == "mlag-peer")')"
+ck "…in the pair's peer-link redundancy group"     '"core+edge:peer"' "$(core '.relations[] | select(.attributes.origin == "mlag-peer") | .attributes.redundancyGroup')"
+ck "a cable between switches outside a redundancy has no group" 'null' \
+   "$(core '.relations[] | select(.type == "connects" and ([.from, .to] | sort) == ["port:edge/ether1","port:sw-01/2"]) | .attributes.redundancyGroup')"
+ck "the two legs of an MLAG LAG: one group, <pair>:<lag>" '["core+edge:lag-t1","core+edge:lag-t1"]' \
+   "$(jq -c '[.[1:][] | .relations[] | select(.from == "port:sw-01/1" or .from == "port:edge/ether3") | .attributes.redundancyGroup]' <<<"${R}")"
+ck "…a NIC cable on a port in no MLAG LAG has none" 'null' \
+   "$(jq -c '.[1:][] | .relations[] | select(.from == "port:edge/ether2") | .attributes.redundancyGroup' <<<"${R}")"
 ck "a MAC seen behind a port is not reported (no MAC resolution yet)" 'false' "$(jq -c 'tostring | test("aa:bb:cc:dd:ee:01"; "i")' <<<"${R}")"
-ck "a cable to a node's NIC is a report of its own" '2' "$(jq -c 'length - 1' <<<"${R}")"
+ck "a cable to a node's NIC is a report of its own" '3' "$(jq -c 'length - 1' <<<"${R}")"
 ck "…its NIC is a port on the node's server asset" '{"class":"server","name":"srv-01"}' \
    "$(jq -c '.[] | .objects[] | select(.name == "enp1s0") | .attributes.asset' <<<"${R}")"
 ck "…the LLDP neighbour that is a node, too"       '"srv-02"' "$(jq -c '.[] | .objects[] | select(.name == "eno1") | .attributes.asset.name' <<<"${R}")"
@@ -63,7 +70,7 @@ D="$(jq --argjson pos "$(cat "${FX}/positions.json")" --arg only "" --argjson en
 deep() { jq -c ".[-1] | $1" <<<"${D}"; }
 ck "--discover adds one report at the end"          "$(( $(jq 'length' <<<"${R}") + 1 ))" "$(jq 'length' <<<"${D}")"
 ck "…the plain reports are unchanged"               "$(jq -c . <<<"${R}")" "$(jq -c '.[:-1]' <<<"${D}")"
-ck "every port is in it, an unused one too"         '9' "$(deep '[.objects[] | select(.class == "port")] | length')"
+ck "every port is in it, an unused one too"         '10' "$(deep '[.objects[] | select(.class == "port")] | length')"
 ck "an unused port: its link state"                 '"down"' "$(deep '.objects[] | select(.class == "port" and .name == "11") | .attributes.link')"
 ck "a port's negotiated speed, PoE and STP state"   '["10g",7.5,"forwarding"]' "$(deep '.objects[] | select(.class == "port" and .name == "1") | .attributes | [.linkSpeed, .poe.watts, .stp]')"
 ck "the VLANs on a port"                            '{"mode":"trunk","tagged":[200]}' "$(deep '.objects[] | select(.class == "port" and .name == "1") | .attributes.vlans')"
@@ -106,7 +113,7 @@ if [[ -r /home/tappaas/bin/common-install-routines.sh ]]; then
        "$(jq -c 'walk(if type == "object" then del(.assignment, .lags) else . end)' <<<"${SENT}")"
     ck "…with each port's list-ports row, on its switch" '["node","tappaas1","in-sync","core"]' \
        "$(jq -c '.[0].objects[] | select(.ref == "port:sw-01/1") | .attributes.assignment | [.type, .target, .drift, .switch]' <<<"${SENT}")"
-    ck "…and each switch's LAGs" '["bond0"]' "$(jq -c '[.[0].objects[] | select(.ref == "device:core") | .attributes.lags[].name]' <<<"${SENT}")"
+    ck "…and each switch's LAGs" '["bond0","lag-t1"]' "$(jq -c '[.[0].objects[] | select(.ref == "device:core") | .attributes.lags[].name]' <<<"${SENT}")"
     "${HERE}/switch-manager" modify-switch core --description "rack top" >/dev/null 2>&1
     ck "modify-switch reports a change with the console's job id" '"job-42"' "$(jq -sc 'map(select(.kind == "change")) | .[0].job' "${TMP}/sent.jsonl" 2>/dev/null)"
 else

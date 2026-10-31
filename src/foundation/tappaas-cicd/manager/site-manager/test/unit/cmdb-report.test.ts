@@ -1,6 +1,7 @@
 // cmdb-report.test.ts — `site-manager report --json` (ADR-040 D4): the site, its
 // locations, the cluster, the nodes and the guests, with the classes, keys
-// and relations of D3/D5; the probes' parsers; reconcile's side-effect report.
+// and relations of D3/D5; the probes' parsers; reconcile's side-effect report;
+// each lan uplink leg's cable with its bond as redundancyGroup (ADR-041 D3).
 
 import { run } from "../../src/main";
 import { parseClusterProbe, parseGuestConf, parseHostProbe } from "../../src/cmdb-report";
@@ -148,6 +149,61 @@ const CLUSTER_OUT = [
   check(!objs.some((o) => o.name === "old"), "an archived module is not reported");
   check(!JSON.stringify(r).includes("null"), "no attribute is null (null would unset it)");
   check(one("machine", "tappaas1")?.attributes?.network?.live?.lrmActive === true && one("machine", "tappaas2")?.attributes?.network === undefined, "a node's network, for the topology; one that gives none is left out");
+}
+
+// ── a node's lan uplink: each leg's cable, its bond the redundancy group ──
+{
+  const cfg = fixture();
+  const w = (f: string, v: unknown): void => writeFileSync(join(cfg, f), JSON.stringify(v));
+  w("positions.json", { version: 1, assets: {
+    "srv-01": { kind: "server", stage: "placed", role: "tappaas1", ports: [{ name: "lan-a", kind: "rj45", mac: "aa:00:00:00:00:01" }] },
+    "srv-02": { kind: "server", stage: "placed", role: "tappaas2" },
+    "sw-a": { kind: "switch", stage: "placed", role: "core" },
+  } });
+  w("switch-configuration-actual.json", { switches: {
+    core: { ports: { "5": {}, "6": { lag: "lag-t1", mlagId: 10 }, "7": {} } },
+    edge: { ports: { ether3: { type: "node", target: "tappaas1", targetPort: "eno2" } } },
+  } });
+  const fake = new FakeSiteClient();
+  fake.cluster = parseClusterProbe(CLUSTER_OUT);
+  const leg = (name: string, mac: string, lldp: { name: string; port: string } | null) => ({ name, mac, state: "up", speed: 1000, mtu: 1500, lldp });
+  fake.networks = {
+    tappaas1: { node: "tappaas1", live: { ports: [], lan: { bond: "lanbond", mode: "active-backup", members: [
+      leg("eno1", "AA:00:00:00:00:01", { name: "Core", port: "Port 5" }),
+      leg("eno2", "aa:00:00:00:00:02", null),
+      leg("eno3", "aa:00:00:00:00:03", { name: "core", port: "6" }),
+      leg("eno4", "aa:00:00:00:00:04", { name: "elsewhere", port: "1" }),
+    ] } } },
+    tappaas2: { node: "tappaas2", live: { ports: [], lan: { members: [leg("eno1", "aa:00:00:00:00:21", { name: "core", port: "7" })] } } },
+  };
+  let rc = -1;
+  const out = capture(() => (rc = run(["report", "--json", "--config-dir", cfg], fake)));
+  let all: Obj[] = [];
+  try {
+    all = JSON.parse(out.join("\n"));
+  } catch {
+    check(false, `report --json with uplink legs prints JSON: ${out.join("\n").slice(0, 300)}`);
+  }
+  check(rc === 0 && Array.isArray(all) && all[0]?.objects?.some((o: Obj) => o.class === "site"), "with uplink legs, report --json is an array: the site's report first");
+  const legs = all.slice(1);
+  const cable = (r: Obj): string => {
+    const n = (ref: string): string => r.objects.find((o: Obj) => o.ref === ref)?.name;
+    return `${n("switch")}:${n("port")}-${n("server")}:${n("nic")}`;
+  };
+  check(legs.length === 3, `one report per leg the inventory places: ${legs.map(cable).join(", ")}`);
+  check(legs.every((r) => r.source === "site-manager" && r.kind === "observation" && cmdbProblems(r).length === 0), `…each one the metamodel takes: ${legs.flatMap(cmdbProblems).join("; ")}`);
+  const of = (c: string): Obj | undefined => legs.find((r) => cable(r) === c);
+  const rel = (r: Obj | undefined): Obj | undefined => r?.relations?.[0];
+  const lldp = of("sw-a:5-srv-01:lan-a");
+  check(!!lldp, "LLDP's switch and port ('Port 5'), resolved against the inventory, the switch by its asset's tag, the NIC by the asset's record");
+  check(rel(lldp)?.type === "connects" && rel(lldp)?.from?.ref === "port" && rel(lldp)?.to?.ref === "nic", "…a connects from the switch's port to the node's NIC, as switch-manager reports it");
+  check(rel(lldp)?.attributes?.redundancyGroup === "tappaas1:lanbond", "…in the group <node>:<bond>");
+  check(lldp?.objects?.find((o: Obj) => o.ref === "nic")?.attributes?.asset?.ref === "server", "…the NIC a port of the node's server");
+  check(rel(of("edge:ether3-srv-01:eno2"))?.attributes?.redundancyGroup === "tappaas1:lanbond", "a leg LLDP does not answer for: the inventory's record of the cable");
+  check(!legs.some((r) => cable(r).endsWith(":eno3")), "a leg on a port of an MLAG LAG is switch-manager's");
+  check(!legs.some((r) => cable(r).endsWith(":eno4")), "a leg to a switch the inventory does not know is not reported");
+  const single = rel(of("sw-a:7-srv-02:eno1"));
+  check(!!single && single.attributes && "redundancyGroup" in single.attributes && single.attributes.redundancyGroup === null, "a lan of one port clears the group (null)");
 }
 
 // ── no cluster: config only ────────────────────────────────────────────

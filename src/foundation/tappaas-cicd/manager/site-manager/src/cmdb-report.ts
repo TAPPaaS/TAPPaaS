@@ -16,6 +16,7 @@ import { readJsonObject } from "../../../lib/ts/src/config-io";
 import { readLocations } from "../../../lib/ts/src/locations";
 import { clusterNodes } from "../../../lib/ts/src/nodes";
 import { discoverModules } from "../../../lib/ts/src/module-discovery";
+import { POSITIONS_FILE, PositionsDoc, assetNamed } from "../../../lib/ts/src/positions";
 import { NodeDiscovery, discoveryObjects, parseCorosync } from "./cmdb-discover";
 
 type Obj = Record<string, unknown>;
@@ -338,6 +339,83 @@ export function siteObservation(configDir: string, live: ClusterRead | null, tap
   }
 
   return { source: SOURCE, kind: "observation", objects, relations };
+}
+
+// ── the cables of a node's lan uplink ─────────────────────────────────
+// ADR-019 v1.1: a node's lan is a bond of ports cabled to two switches. Each
+// leg's cable is a `connects` from the switch's port to the node's NIC (the
+// direction switch-manager reports it in), carrying `redundancyGroup`
+// `<node>:<bond>`, so health derivation degrades the node's side while one leg
+// is down (ADR-041 D3); a lan of one port clears it (null). The switch end is
+// LLDP's answer resolved against switch-manager's inventory
+// (switch-configuration-actual.json), else the inventory's record of the
+// cable. A leg on a port of an MLAG LAG is left to switch-manager, whose group
+// for the LAG is the same cables under the pair's name. Each leg is a report
+// of its own: a port the CMDB does not hold yet refuses that leg, not the site.
+
+const UPLINK_ACTUAL = "switch-configuration-actual.json";
+const canon = (s: unknown): string => String(s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const isObj = (v: unknown): v is Obj => v !== null && typeof v === "object" && !Array.isArray(v);
+
+interface Leg { name: string; mac?: string; lldp?: { name?: string; port?: string } | null }
+
+/** The switch and port a node's NIC is cabled to, by the switch inventory. */
+function peerOf(node: string, leg: Leg, switches: Obj): { sw: string; port: string } | null {
+  const portsOf = (sw: string): Obj => (isObj(switches[sw]) && isObj((switches[sw] as Obj).ports) ? ((switches[sw] as Obj).ports as Obj) : {});
+  if (leg.lldp?.name) {
+    const sw = Object.keys(switches).find((k) => canon(k) === canon(leg.lldp!.name));
+    if (!sw) return null;
+    const said = String(leg.lldp.port ?? "");
+    const port = said in portsOf(sw) ? said : /(\d+)\s*$/.exec(said)?.[1];
+    return port !== undefined && port in portsOf(sw) ? { sw, port } : null;
+  }
+  for (const sw of Object.keys(switches)) {
+    for (const [port, v] of Object.entries(portsOf(sw))) {
+      if (!isObj(v) || v.type !== "node" || canon(v.target) !== canon(node)) continue;
+      const tp = String(v.targetPort ?? "").toLowerCase();
+      if (tp === leg.name.toLowerCase() || (leg.mac && tp === leg.mac.toLowerCase())) return { sw, port };
+    }
+  }
+  return null;
+}
+
+/** One report per leg of every node's lan uplink that the inventory places. */
+export function uplinkReports(configDir: string, live: ClusterRead | null): CmdbReport[] {
+  if (!live) return [];
+  const doc = (readJsonObject(join(configDir, POSITIONS_FILE)) ?? {}) as unknown as PositionsDoc;
+  const actual = readJsonObject(join(configDir, UPLINK_ACTUAL)) ?? {};
+  const switches = isObj(actual.switches) ? actual.switches : {};
+  const tagOf = (sw: string): string =>
+    Object.entries(doc.assets ?? {}).find(([, a]) => a.role === sw && a.kind === "switch" && a.stage !== "disposed")?.[0] ?? sw;
+  const out: CmdbReport[] = [];
+  for (const node of Object.keys(live.hosts).sort()) {
+    const net = live.hosts[node].network;
+    const lan = isObj(net) && isObj(net.live) && isObj(net.live.lan) ? net.live.lan : null;
+    const hit = assetNamed(doc, node);
+    if (!lan || !hit || hit.asset.kind !== "server") continue;
+    const legs = (Array.isArray(lan.members) ? lan.members : []).filter((m): m is Leg => isObj(m) && typeof m.name === "string");
+    const bond = typeof lan.bond === "string" && lan.bond ? lan.bond : null;
+    for (const leg of legs) {
+      const peer = peerOf(node, leg, switches);
+      if (!peer) continue;
+      const sp = ((switches[peer.sw] as Obj).ports as Obj)[peer.port] as Obj;
+      if (sp.mlagId !== undefined && sp.mlagId !== null) continue;
+      const known = (hit.asset.ports ?? []).find((p) => (leg.mac && p.mac?.toLowerCase() === leg.mac.toLowerCase()) || p.name === leg.name);
+      const tag = tagOf(peer.sw);
+      out.push({
+        source: SOURCE,
+        kind: "observation",
+        objects: [
+          { ref: "server", class: "server", name: hit.key },
+          { ref: "nic", class: "port", name: known?.name ?? leg.name, attributes: { asset: { ref: "server" } } },
+          { ref: "switch", class: "network-device", name: tag },
+          { ref: "port", class: "port", name: peer.port, attributes: { asset: { ref: "switch" } } },
+        ],
+        relations: [{ type: "connects", from: { ref: "port" }, to: { ref: "nic" }, attributes: { redundancyGroup: bond ? `${node}:${bond}` : null } }],
+      });
+    }
+  }
+  return out;
 }
 
 /** What a node reconcile read — membership and pools — as an observation:
