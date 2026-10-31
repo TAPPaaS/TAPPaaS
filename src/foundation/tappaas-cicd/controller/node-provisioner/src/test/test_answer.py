@@ -291,6 +291,10 @@ class TestHandleAnswerPost(unittest.TestCase):
             "location": {"country": "DK", "timezone": "Europe/Copenhagen"}}
 
     def setUp(self):
+        # Never the firewall's real reservations, on a mothership above all.
+        reserve = mock.patch("node_provisioner.server._reserve_standard_ip")
+        reserve.start()
+        self.addCleanup(reserve.stop)
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         base = Path(self._tmp.name)
