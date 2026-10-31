@@ -17,8 +17,8 @@ import {
   queryClusterNodes,
   queryNodeTankPools,
   reachableNodes, queryClusterGuests, ssh} from "../../../lib/ts/src/cluster";
-import { nodeDiscoveryProbe, parseNodeDiscovery } from "./cmdb-discover";
-import { CLUSTER_DISCOVERY, CLUSTER_PROBE, ClusterRead, HOST_PROBE, parseClusterProbe, parseHostProbe } from "./cmdb-report";
+import { nodeDiscoveryProbe, nodeStorageProbe, parseNodeDiscovery, parseNodeStorage } from "./cmdb-discover";
+import { CLUSTER_DISCOVERY, CLUSTER_PROBE, ClusterRead, HOST_PROBE, STORAGE_MARK, parseClusterProbe, parseHostProbe, splitStorage } from "./cmdb-report";
 import { defaultConfigDir } from "../../../lib/ts/src/config-io";
 import { clusterScript } from "./config";
 import { capture as run, captureResult, stream as runStreaming, streamToFile } from "../../../lib/ts/src/exec";
@@ -176,8 +176,15 @@ export class CliSiteClient implements SiteClient {
     const read = parseClusterProbe(r.stdout);
     for (const m of read.members) {
       if (m.online === false) continue;
-      const h = ssh("root", `${m.name}.${mgmtDomain()}`, HOST_PROBE);
-      if (h.ran && h.rc === 0) read.hosts[m.name] = parseHostProbe(h.stdout);
+      // The host's own read and, without --discover (which reads them to its
+      // depth), its disks and pools: one ssh.
+      const cmd = discover ? HOST_PROBE : `${HOST_PROBE}; echo ${STORAGE_MARK}; bash -s <<'TAPPAAS_PROBE'\n${nodeStorageProbe(m.name)}\nTAPPAAS_PROBE`;
+      const h = ssh("root", `${m.name}.${mgmtDomain()}`, cmd);
+      if (h.ran && h.rc === 0) {
+        const [own, storage] = splitStorage(h.stdout);
+        read.hosts[m.name] = parseHostProbe(own);
+        if (storage !== null) read.hosts[m.name].storage = parseNodeStorage(storage);
+      }
       if (!discover) continue;
       const d = ssh("root", `${m.name}.${mgmtDomain()}`, `bash -s <<'TAPPAAS_PROBE'\n${nodeDiscoveryProbe(m.name)}\nTAPPAAS_PROBE`);
       if (d.ran && d.rc !== 255) (read.hosts[m.name] ??= {}).discovery = parseNodeDiscovery(d.stdout);

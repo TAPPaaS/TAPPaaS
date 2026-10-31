@@ -18,8 +18,10 @@
 import {
   Asset,
   AssetPort,
+  DISK_KINDS,
   PositionsDoc,
   assetMacs,
+  assetWithSerial,
   assetsOf,
   cablesOf,
   currentName,
@@ -28,13 +30,26 @@ import {
   placeWhere,
 } from "../../../lib/ts/src/positions";
 
-// What the machine says about itself (sysfs: /sys/class/dmi/id, /sys/class/net).
+// A whole disk of the machine, as the installer posts it or lsblk reads it.
+export interface MachineDisk {
+  name: string; // its /dev/disk/by-id name, else the kernel's
+  model?: string;
+  serial?: string;
+  size?: number; // bytes
+  type?: string; // nvme, ssd, hdd, usb
+  bus?: string;
+  wwn?: string;
+}
+
+// What the machine says about itself (sysfs: /sys/class/dmi/id, /sys/class/net;
+// lsblk and /dev/disk/by-id for its disks).
 export interface MachineIdentity {
   vendor: string | null;
   model: string | null;
   serial: string | null;
   macs: string[]; // physical NICs', lower case
   nics: { name: string; mac: string }[]; // the same, with the kernel's names
+  disks?: MachineDisk[]; // its whole disks; absent: not read
 }
 
 // Vendors' placeholders where a serial should be.
@@ -43,13 +58,74 @@ const MAC_RE = /^[0-9a-f]{2}(:[0-9a-f]{2}){5}$/;
 
 // The ssh command that prints the identity, one `key=value` per line: the
 // three DMI fields, then `nic=<name> <mac>` for every NIC that is a device (no
-// bridges, bonds, VLANs or loopback).
+// bridges, bonds, VLANs or loopback), then the disks: `byid=<link> <kernel
+// name>` for every whole-disk /dev/disk/by-id link and `lsblk=<json>`, lsblk's
+// whole disks on one line.
+export const DISKS_SH =
+  "for l in /dev/disk/by-id/*; do case \"$l\" in *-part*) continue;; esac; printf 'byid=%s %s\\n' \"$(basename \"$l\")\" \"$(basename \"$(readlink -f \"$l\")\")\"; done; " +
+  "printf 'lsblk=%s\\n' \"$(lsblk -J -d -b -o NAME,MODEL,SERIAL,SIZE,TYPE,TRAN,WWN,ROTA 2>/dev/null | tr -d '\\n')\"";
 export const IDENTITY_SH =
   "for f in sys_vendor product_name product_serial; do printf '%s=%s\\n' \"$f\" \"$(cat /sys/class/dmi/id/$f 2>/dev/null | tr -d '\\r\\n')\"; done; " +
-  "for d in /sys/class/net/*; do [ -e \"$d/device\" ] || continue; printf 'nic=%s %s\\n' \"$(basename \"$d\")\" \"$(cat \"$d/address\" 2>/dev/null)\"; done";
+  "for d in /sys/class/net/*; do [ -e \"$d/device\" ] || continue; printf 'nic=%s %s\\n' \"$(basename \"$d\")\" \"$(cat \"$d/address\" 2>/dev/null)\"; done; " +
+  DISKS_SH;
+
+// A whole disk's kernel name: no partition, zvol, loop, optical or RAM disk.
+const WHOLE_DISK = /^(sd[a-z]+|nvme\d+n\d+|hd[a-z]+|vd[a-z]+|xvd[a-z]+)$/;
+// The by-id link a disk is named by: a vendor's (ata-, nvme-, scsi-, usb-), not
+// a WWN or an EUI; an NVMe namespace's _1 is the disk's own name.
+const preferred = (n: string): number => (/^(wwn-|nvme-eui\.|nvme-nvme\.)/.test(n) ? 2 : /^scsi-[0-9a-f]+$/.test(n) ? 1 : 0);
+const stableName = (n: string): string => n.replace(/^(nvme-.*)_\d{1,2}$/, "$1");
+
+/** The disks lines of the identity (DISKS_SH) → the whole disks. */
+export function parseDisks(lines: string[]): MachineDisk[] | undefined {
+  const byId = new Map<string, string>();
+  let blk: unknown = undefined;
+  for (const line of lines) {
+    const i = line.indexOf("=");
+    if (i < 0) continue;
+    const [k, v] = [line.slice(0, i).trim(), line.slice(i + 1).trim()];
+    if (k === "byid") {
+      const [link, kname] = v.split(/\s+/, 2);
+      const had = byId.get(kname);
+      if (link && kname && (!had || preferred(link) < preferred(had) || (preferred(link) === preferred(had) && link.length < had.length))) byId.set(kname, link);
+    } else if (k === "lsblk") {
+      try {
+        blk = JSON.parse(v);
+      } catch {
+        blk = undefined;
+      }
+    }
+  }
+  const devs = (blk as { blockdevices?: Record<string, unknown>[] } | undefined)?.blockdevices;
+  if (!Array.isArray(devs)) return undefined;
+  const str = (x: unknown): string | undefined => (typeof x === "string" && x.trim() ? x.trim() : undefined);
+  const out: MachineDisk[] = [];
+  for (const d of devs) {
+    const kname = str(d.name)?.replace(/^.*\//, "") ?? "";
+    if (d.type !== "disk" || !WHOLE_DISK.test(kname)) continue;
+    const tran = str(d.tran);
+    const rota = d.rota === true || d.rota === "1" || d.rota === 1;
+    const type = tran === "usb" ? "usb" : tran === "nvme" || kname.startsWith("nvme") ? "nvme" : rota ? "hdd" : "ssd";
+    const size = typeof d.size === "number" ? d.size : typeof d.size === "string" && /^\d+$/.test(d.size) ? Number(d.size) : undefined;
+    const link = byId.get(kname);
+    const disk: MachineDisk = { name: link ? stableName(link) : kname, type };
+    const model = str(d.model);
+    const serial = str(d.serial);
+    const wwn = str(d.wwn);
+    if (model) disk.model = model;
+    if (serial) disk.serial = serial;
+    if (size) disk.size = size;
+    if (tran) disk.bus = tran;
+    if (wwn) disk.wwn = wwn;
+    out.push(disk);
+  }
+  return out;
+}
 
 export function parseIdentity(out: string): MachineIdentity {
   const id: MachineIdentity = { vendor: null, model: null, serial: null, macs: [], nics: [] };
+  const disks = parseDisks(out.split("\n"));
+  if (disks) id.disks = disks;
   for (const line of out.split("\n")) {
     const i = line.indexOf("=");
     if (i < 0) continue;
@@ -78,6 +154,17 @@ export function identityFromRegistration(rec: unknown): MachineIdentity | null {
   const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
   const id: MachineIdentity = { vendor: str(o.vendor), model: str(o.model), serial: str(o.serial), macs: [], nics: [] };
   if (id.serial && NO_SERIAL.test(id.serial)) id.serial = null;
+  const posted = (r as { disks?: unknown }).disks;
+  if (Array.isArray(posted) && posted.length) {
+    id.disks = posted
+      .filter((x): x is Record<string, unknown> => !!x && typeof x === "object" && !!str(x.name))
+      .map((x) => {
+        const d: MachineDisk = { name: str(x.name)! };
+        for (const k of ["model", "serial", "type", "bus", "wwn"] as const) if (str(x[k])) d[k] = str(x[k])!;
+        if (typeof x.size === "number" && x.size > 0) d.size = x.size;
+        return d;
+      });
+  }
   for (const n of Array.isArray(o.nics) ? o.nics : []) {
     const nic = n as { link?: unknown; mac?: unknown };
     const m = str(nic.mac)?.toLowerCase().replace(/-/g, ":") ?? "";
@@ -158,6 +245,49 @@ export function newAssetArgs(doc: PositionsDoc, id: MachineIdentity, role: strin
   if (id.serial) args.push("--serial", id.serial);
   const ports = id.nics.map((n) => ["port", "add", key, n.name, "--kind", "rj45", "--mac", n.mac]);
   return { key, args, ports };
+}
+
+// What node add does with the machine's disks (ADR-042 D4): `disk add` each
+// one no asset records into the node's asset, `place --in` it each recorded
+// disk that is in stock or in another asset (it moved), nothing for one the
+// asset holds already; one without a serial, or whose serial a non-disk
+// asset has, is a note.
+export function diskArgs(doc: PositionsDoc, key: string, disks: MachineDisk[]): { calls: string[][]; notes: string[] } {
+  const calls: string[][] = [];
+  const notes: string[] = [];
+  const seen = new Set<string>();
+  for (const d of disks) {
+    if (!d.serial) {
+      notes.push(`${d.name} has no serial: not recorded (asset-manager disk add ${key} ${d.name} --serial <serial>)`);
+      continue;
+    }
+    if (seen.has(d.serial.toLowerCase())) continue;
+    seen.add(d.serial.toLowerCase());
+    const twin = assetWithSerial(doc, d.serial);
+    const a = twin ? assetsOf(doc)[twin] : null;
+    if (twin && a?.kind !== "disk") {
+      notes.push(`${d.name}: serial ${d.serial} is asset ${twin}'s, which is no disk — not recorded`);
+      continue;
+    }
+    if (twin) {
+      const m = placementsOf(doc)[twin];
+      if (m?.in === key) continue;
+      if (a?.stage === "disposed") {
+        notes.push(`${d.name}: serial ${d.serial} is disk ${twin}, disposed — not placed`);
+        continue;
+      }
+      calls.push(["place", twin, "--in", key]);
+      continue;
+    }
+    const args = ["disk", "add", key, d.name, "--serial", d.serial];
+    if (d.model) args.push("--model", d.model);
+    if (d.size) args.push("--size", String(d.size));
+    if (d.type && (DISK_KINDS as readonly string[]).includes(d.type)) args.push("--kind", d.type);
+    if (d.bus) args.push("--bus", d.bus);
+    if (d.wwn) args.push("--wwn", d.wwn);
+    calls.push(args);
+  }
+  return { calls, notes };
 }
 
 // The asset playing a role (what node delete releases), and where it is.

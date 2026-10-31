@@ -3,7 +3,7 @@
 // cabling an asset lends node add, the new asset's tag, and the release.
 
 import { PositionsDoc } from "../../../../lib/ts/src/positions";
-import { assetCabling, assetPlaying, assetProblem, freeServers, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
+import { IDENTITY_SH, assetCabling, assetPlaying, assetProblem, diskArgs, freeServers, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
 
 let passed = 0;
 let failed = 0;
@@ -77,6 +77,55 @@ check(bare.args.join(" ") === "asset add srv-05 --kind server --display-name tap
 const p = assetPlaying(doc, "tappaas1");
 check(!!p && p.key === "srv-01" && p.placed === "rack1 U20-U21", "the asset playing tappaas1 and where the role's placement is");
 check(assetPlaying(doc, "tappaas9") === null, "no asset plays tappaas9");
+
+// 5. the machine's disks (ADR-042 D4): read with its identity, recorded by node add
+{
+  const lsblk = JSON.stringify({ blockdevices: [
+    { name: "sda", model: "Samsung SSD 870", serial: "S6P1", size: 1000204886016, type: "disk", tran: "sata", wwn: "0x5002538f4", rota: false },
+    { name: "sdc", model: "ST4000", serial: "ZA11", size: 4000787030016, type: "disk", tran: "sata", rota: true },
+    { name: "nvme0n1", model: "WD SN850", serial: "WD77", size: 2000398934016, type: "disk", tran: "nvme", rota: false },
+    { name: "sdd", model: "Flash", serial: "USB1", size: 32000000000, type: "disk", tran: "usb", rota: "1" },
+    { name: "zd0", size: 34359738368, type: "disk", rota: false },
+    { name: "sr0", type: "rom" },
+  ] });
+  const out = [
+    "sys_vendor=HP", "product_serial=CZC1",
+    "byid=wwn-0x5002538f4 sda", "byid=ata-Samsung_SSD_870_S6P1 sda", "byid=nvme-eui.0025 nvme0n1", "byid=nvme-WD_SN850_WD77_1 nvme0n1", "byid=nvme-WD_SN850_WD77 nvme0n1",
+    `lsblk=${lsblk}`,
+  ].join("\n");
+  const m = parseIdentity(out);
+  const by = (s: string) => m.disks?.find((d) => d.serial === s);
+  check(m.disks?.length === 4, `whole disks only: no zvol, no optical (${m.disks?.length})`);
+  check(by("S6P1")?.name === "ata-Samsung_SSD_870_S6P1" && by("S6P1")?.type === "ssd" && by("S6P1")?.bus === "sata" && by("S6P1")?.size === 1000204886016 && by("S6P1")?.wwn === "0x5002538f4", "a disk by its vendor's by-id name, not its WWN; kind, bus, size, wwn");
+  check(by("WD77")?.name === "nvme-WD_SN850_WD77" && by("WD77")?.type === "nvme", "an NVMe disk by its own name, not the EUI or a namespace's");
+  check(by("ZA11")?.name === "sdc" && by("ZA11")?.type === "hdd", "no by-id link: the kernel's name; a spinning disk is an hdd");
+  check(by("USB1")?.type === "usb", "a disk on USB");
+  check(parseIdentity("sys_vendor=HP\n").disks === undefined, "no disk read: no disks, not none");
+  check(IDENTITY_SH.includes("lsblk -J -d -b -o NAME,MODEL,SERIAL,SIZE,TYPE,TRAN,WWN") && IDENTITY_SH.includes("/dev/disk/by-id/"), "the ssh read: lsblk's whole disks and the by-id links");
+  const posted = identityFromRegistration({ identity: { serial: "CZC1", nics: [], disks: [{ name: "ata-Samsung_SSD_870_S6P1", serial: "S6P1", size: 1000204886016, type: "ssd", bus: "sata" }, { serial: "nameless" }] } });
+  check(posted?.disks?.length === 1 && posted.disks[0].serial === "S6P1" && posted.disks[0].size === 1000204886016, "the disks the installer posted, on the registration");
+  check(identityFromRegistration({ identity: { serial: "CZC1", nics: [] } })?.disks === undefined, "a registration without disks leaves them to the ssh read");
+
+  const docD: PositionsDoc = {
+    assets: {
+      "srv-05": { kind: "server", stage: "placed", role: "tappaas5" },
+      "srv-01": { kind: "server", stage: "placed", role: "tappaas1" },
+      "dsk-01": { kind: "disk", stage: "placed", serial: "S6P1", displayName: "ata-Samsung_SSD_870_S6P1" },
+      "dsk-02": { kind: "disk", stage: "placed", serial: "za-11" },
+      "dsk-03": { kind: "disk", stage: "stock", serial: "WD77" },
+      "srv-09": { kind: "server", stage: "stock", serial: "USB1" },
+    },
+    placements: { "dsk-01": { in: "srv-05", bay: "1" }, "dsk-02": { in: "srv-01" } },
+  };
+  const plan = diskArgs(docD, "srv-05", [...m.disks!, { name: "sde" }, { name: "sdf", serial: "NEW1", type: "floppy", size: 1000 }]);
+  const calls = plan.calls.map((c) => c.join(" "));
+  check(!calls.some((c) => c.includes("dsk-01") || c.includes("S6P1")), "a disk the asset holds already: nothing");
+  check(calls.includes("place dsk-02 --in srv-05"), "a disk recorded in another server (its serial as compared): moved in");
+  check(calls.includes("place dsk-03 --in srv-05"), "a disk in stock: placed in");
+  check(plan.notes.some((n) => n.includes("USB1") && n.includes("srv-09")), "a serial a non-disk asset has: a note, not a disk");
+  check(plan.notes.some((n) => n.startsWith("sde has no serial")), "a disk without a serial: a note");
+  check(calls.includes("disk add srv-05 sdf --serial NEW1 --size 1000"), `a new one: disk add, an unknown kind left out (${calls.join(" | ")})`);
+}
 
 console.log(`asset: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

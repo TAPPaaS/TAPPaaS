@@ -382,6 +382,16 @@ under the node's name is the asset's from then on. A failure here is a warning n
 it keeps its placement, ports and cables under its own name and goes back to placed or
 stock, ready for the next role.
 
+**Its disks.** With the asset settled, node add records the machine's whole disks in it
+as disk assets (`asset-manager disk add <asset> <by-id name> --serial …`, each the next
+`dsk-NN` with its model, size, kind, bus and WWN), from the same identity: the disks the
+installer posted, kept on the registration, else `lsblk` and `/dev/disk/by-id` over the
+same ssh. A disk whose serial a disk asset records already is placed in this server
+instead (`asset-manager place <disk> --in <asset>`: it moved here), one the asset holds
+is left alone, and one without a serial is a warning naming the command. Disks that
+could not be read are left to `asset-manager disk adopt` after the next
+`report --discover`.
+
 **Boot disks: two fields, blank is the default.** `--boot-disk` and `--boot-mirror`
 each take a size (`2TB`, `1.92T`, `500GB`: within 10 %), a model (`"Samsung 990"`) or
 a serial; the installer matches them against the machine's disks in its own boot, so
@@ -515,7 +525,8 @@ site-manager is a source of the CMDB (ADR-040 D4; `cmdbSource` in
 `site-manager report [--json]` interrogates the cluster — one ssh to the first
 node that answers (`/cluster/status`, `/cluster/resources`, the HA resources,
 every guest's config from `/etc/pve`) and one per node (os, addresses, pve
-version, tank pools) — and sends one observation; `--json` prints it instead.
+version, tank pools; its disk list, `lsblk` and its ZFS pools) — and sends one
+observation; `--json` prints it instead.
 
 | Class | Name (key) | What |
 |---|---|---|
@@ -525,6 +536,15 @@ version, tank pools) — and sends one observation; `--json` prints it instead.
 | `machine` | the node name | its pvehost instance: `desired`, `release` pvehost + version, `hostname`, `os`, `osVersion`, `addresses`, `clusterMember`, `storagePools`, `management`, `environment` mgmt; `member-of` the cluster, `at` its location (else the primary) |
 | `app` `pve` | on its machine | `version` |
 | `vm`, `lxc` | the module instance, else the guest's name (key: vmid) | `vmid`, `cores`, `memory`, `disks` / `rootfs`, `unprivileged`, `template`, `haPolicy`, `onNode`; a module's guest also `desired` and `release` |
+| `storage-pool` | its name on its node | `zfsState`, `size`, `used`, `vdevs[]` (each member by device, serial and state), `onNode` |
+| `disk` | the disk asset's tag, `part-of` the node's server | a disk asset-manager records in the server the node is allocated to, matched by serial: `health` (Proxmox's word from its disk list), `holds`, `partitions` |
+
+Each pool is **`built-on`** each of its members that is a recorded disk: the members of
+a mirror or raidz vdev carry `redundancyGroup` `<node>:<pool>:<vdev>` (one failed disk
+degrades the pool, all of them take it down), a log, cache or spare member
+`required: false`, a single-disk vdev neither; a recorded disk of the server that is in
+no pool loses the `built-on` it had. A disk no asset records is only in the server's
+`disks[]` (`asset-manager disk adopt` records it).
 
 A cluster that does not answer is a warning: the site, locations, cluster and
 nodes are reported from config/, without guests. An archived module is not
@@ -549,16 +569,21 @@ depth, one more ssh per node and nothing polled; without it `report` is as above
 - **NICs, used or not:** name, MAC (the permanent one: a bond slave shows the
   bond's), D9 kind and speed (the fastest mode `ethtool` lists, where D9 has a
   value for it; `maxMbps` either way), link, the bond and bridge it is in, or none.
-- **Disks:** by-id name, model, serial, size, type, bus, SMART health, and each
-  partition with what it holds (`zfs` and its pool, `efi`, `bios-boot`, `lvm`,
-  `swap`, a filesystem, `nothing`).
+- **Disks:** by-id name, vendor, model, serial, WWN, size, type, bus, SMART health,
+  and each partition with what it holds (`zfs` and its pool, `efi`, `bios-boot`,
+  `lvm`, `swap`, a filesystem, `nothing`); and each disk's SMART (`pvesh
+  …/disks/smart`, the read storage-manager's inventory makes): the attributes that
+  matter (reallocated, pending, uncorrectable, media errors, NVMe critical warning,
+  power-on hours), its temperature and its wear. A recorded disk's CI carries them as
+  `smart`, `temperature` and `wearout`: once a day, not every five minutes.
 - `nics[]` and `disks[]`, `cpu` and `memory` go on the `server` the node is
   allocated to (positions.json: the asset whose role is the node), else on the
   `machine`, so nothing is lost. Each NIC is a `port` of that server; with no
   asset there are no ports, a port having no meaning without one, and a sweep
   invents no asset. A port the asset records keeps its name, kind and speed.
 - **ZFS:** a `storage-pool` per pool, named `<node>/<pool>` as storage-manager
-  names it: `zfsState`, `size`, `used`, and `vdevs[]` with members by serial.
+  names it: `zfsState`, `size`, `used`, and `vdevs[]` with members by serial; its
+  `built-on` relations as above.
 - On the `machine`: `storages[]` (what the node knows, `pvesh …/storage`),
   `pciDevices[]`, `cpus`. On each guest: `nics[]`, and `disks[]` with their
   storage (an lxc's mount points). On the `cluster`: `corosyncLinks[]`.

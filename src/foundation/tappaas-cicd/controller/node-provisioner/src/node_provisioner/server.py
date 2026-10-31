@@ -187,7 +187,8 @@ _MAC = re.compile(r"^[0-9a-f]{2}(:[0-9a-f]{2}){5}$")
 
 def extract_identity(system_info: dict) -> dict:
     """The machine's identity for its asset (ADR-040 D5, D8): vendor, model and
-    serial from DMI (placeholders dropped), and every NIC's name and MAC. Kept on
+    serial from DMI (placeholders dropped), every NIC's name and MAC, and its
+    disks when the post lists them (extract_disks). Kept on
     the consumed registration, where site-manager node add reads it, so the
     installer's post is the hook the ADR names and no ssh read is needed."""
     dmi = system_info.get("dmi") or {}
@@ -205,12 +206,72 @@ def extract_identity(system_info: dict) -> dict:
         if not _MAC.match(mac) or mac == "00:00:00:00:00:00" or any(n["mac"] == mac for n in nics):
             continue
         nics.append({"link": str(nic.get("link") or ""), "mac": mac})
-    return {
+    ident = {
         "vendor": first(system.get("manufacturer"), system.get("vendor"), board.get("manufacturer")),
         "model": first(system.get("name"), system.get("product_name"), system.get("product"), board.get("product")),
         "serial": serial,
         "nics": nics,
     }
+    disks = extract_disks(system_info)
+    if disks:
+        ident["disks"] = disks
+    return ident
+
+
+# A disk the installer lists is a whole disk it could install to: no partition,
+# no zvol, no loop or optical device.
+_WHOLE_DISK = re.compile(r"^(sd[a-z]+|nvme\d+n\d+|hd[a-z]+|vd[a-z]+|xvd[a-z]+)$")
+
+
+def extract_disks(system_info: dict) -> list:
+    """The machine's whole disks, when the installer's post carries block
+    devices (ADR-042 D4): by-id name, model, serial, size (bytes), type (nvme,
+    ssd, hdd, usb) and bus, for site-manager node add to record as disk assets.
+    Taken from ``disks`` as a list of objects, a list of [index, object] pairs,
+    or an object by kernel name; each object with plain keys (by_id, model,
+    serial, size, type, bus) or udev properties (DEVNAME, DEVLINKS, ID_MODEL,
+    ID_SERIAL_SHORT, ID_BUS, ...). An installer that posts none gives []:
+    site-manager then reads them over ssh."""
+    raw = system_info.get("disks")
+    if isinstance(raw, dict):
+        items = [dict(v, name=v.get("name", k)) if isinstance(v, dict) else None for k, v in raw.items()]
+    elif isinstance(raw, list):
+        items = [x[-1] if isinstance(x, (list, tuple)) and x and isinstance(x[-1], dict) else x for x in raw]
+    else:
+        items = []
+    text = lambda v: str(v).strip() if v is not None and str(v).strip() else None  # noqa: E731
+    out = []
+    for d in items:
+        if not isinstance(d, dict):
+            continue
+        dev = text(d.get("name") or d.get("devname") or d.get("DEVNAME") or d.get("path")) or ""
+        kname = dev.rsplit("/", 1)[-1]
+        if kname and not _WHOLE_DISK.match(kname):
+            continue
+        links = str(d.get("DEVLINKS") or "").split()
+        by_id = text(d.get("by_id") or d.get("byId") or d.get("by-id") or d.get("by_id_link"))
+        if not by_id:
+            ids = [l for l in links if l.startswith("/dev/disk/by-id/") and not l.rsplit("/", 1)[-1].startswith(("wwn-", "nvme-eui.", "nvme-nvme."))]
+            by_id = ids[0] if ids else None
+        by_id = by_id.rsplit("/", 1)[-1] if by_id else None
+        serial = text(d.get("serial") or d.get("ID_SERIAL_SHORT") or d.get("ID_SERIAL"))
+        bus = text(d.get("bus") or d.get("tran") or d.get("ID_BUS"))
+        kind = text(d.get("type"))
+        if kind not in ("nvme", "ssd", "hdd", "usb"):
+            rot = d.get("rotational", d.get("ID_ATA_ROTATION_RATE_RPM"))
+            kind = "usb" if bus == "usb" else "nvme" if kname.startswith("nvme") or bus == "nvme" else \
+                "hdd" if rot not in (None, "", 0, "0", False) else "ssd" if rot is not None else None
+        size = d.get("size")
+        try:
+            size = int(size) if size not in (None, "") else None
+        except (TypeError, ValueError):
+            size = None
+        if not (serial or by_id):
+            continue
+        entry = {"name": by_id or kname, "model": text(d.get("model") or d.get("ID_MODEL")), "serial": serial,
+                 "size": size, "type": kind, "bus": bus}
+        out.append({k: v for k, v in entry.items() if v is not None})
+    return out
 
 
 def write_node_secret(name: str, password: str, directory=None) -> Path:

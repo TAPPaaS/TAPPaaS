@@ -7,7 +7,7 @@ import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { GN, YW, CL, info, warn } from "../../../lib/ts/src/cli";
 import { POSITIONS_FILE, PositionsDoc } from "../../../lib/ts/src/positions";
-import { IDENTITY_SH, MachineIdentity, assetPlaying, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "./asset";
+import { DISKS_SH, IDENTITY_SH, MachineIdentity, assetPlaying, diskArgs, identityFromRegistration, matchAsset, newAssetArgs, parseDisks, parseIdentity } from "./asset";
 import { defaultConfigDir } from "./config";
 
 export function readPositions(configDir = defaultConfigDir()): PositionsDoc | null {
@@ -26,27 +26,63 @@ function assetManager(args: string[]): { rc: number; out: string } {
   return { rc: r.status ?? -1, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
 }
 
+const sshRoot = (host: string, cmd: string): string | null => {
+  const r = spawnSync("ssh", ["-o", "ConnectTimeout=10", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", `root@${host}`, cmd], { encoding: "utf8" });
+  return r.error || r.status !== 0 ? null : r.stdout ?? "";
+};
+
 // The machine's identity: what the installer posted, kept on the node's
 // consumed registration (ADR-040 D8's hook), else read over ssh (root, the
 // mgmt address it joined at — a node adopted by hand has no registration).
+// An installer that posted no disks leaves them to the same ssh read.
 export function readIdentity(host: string, name?: string, configDir = defaultConfigDir()): MachineIdentity | null {
   if (name) {
     const f = `${configDir.replace(/\/$/, "")}/provision/${name}.json.consumed`;
     if (existsSync(f)) {
       try {
         const id = identityFromRegistration(JSON.parse(readFileSync(f, "utf8")));
-        if (id) return id;
+        if (id) {
+          if (!id.disks) {
+            const out = sshRoot(host, DISKS_SH);
+            const disks = out === null ? undefined : parseDisks(out.split("\n"));
+            if (disks) id.disks = disks;
+          }
+          return id;
+        }
       } catch { /* unreadable: ssh */ }
     }
   }
-  const r = spawnSync("ssh", ["-o", "ConnectTimeout=10", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", `root@${host}`, IDENTITY_SH], { encoding: "utf8" });
-  if (r.error || r.status !== 0) return null;
-  return parseIdentity(r.stdout ?? "");
+  const out = sshRoot(host, IDENTITY_SH);
+  return out === null ? null : parseIdentity(out);
+}
+
+// node add: the machine's disks become disk assets in its asset (ADR-042 D4),
+// through asset-manager; a disk recorded elsewhere moves in. Warnings only.
+function recordNodeDisks(key: string, id: MachineIdentity | null): void {
+  if (!id?.disks) {
+    warn(`  ${key}'s disks could not be read: asset-manager disk adopt ${key} records them after the next site-manager report --discover`);
+    return;
+  }
+  const doc = readPositions();
+  if (!doc) return;
+  const { calls, notes } = diskArgs(doc, key, id.disks);
+  for (const n of notes) warn(`  ${n}`);
+  let added = 0;
+  let moved = 0;
+  for (const c of calls) {
+    const r = assetManager(c);
+    if (r.rc !== 0) warn(`  ${c[0] === "place" ? `disk ${c[1]} is not placed in ${key}` : `disk ${c[3]} is not recorded`}: ${r.out} — asset-manager ${c.join(" ")}`);
+    else if (c[0] === "place") moved++;
+    else added++;
+  }
+  if (added || moved) info(`  ${GN}✓${CL} ${[added ? `${added} disk(s) recorded` : "", moved ? `${moved} recorded disk(s) moved in` : ""].filter(Boolean).join(", ")} in ${key}, by serial`);
+  else if (!notes.length) info(`  ${key}'s ${id.disks.length} disk(s) are recorded already`);
 }
 
 // node add: the asset for the role `name` (ADR-040 D8). `asset`: --asset, the
 // asset-first way; else the machine at `host` is identified and matched, and
-// a new asset is made when nothing matches. Returns the asset's key, or null.
+// a new asset is made when nothing matches. With a host, its disks are then
+// recorded in that asset (ADR-042 D4). Returns the asset's key, or null.
 export function allocateNodeAsset(name: string, host: string | null, asset?: string): string | null {
   const doc = readPositions();
   if (!doc) {
@@ -56,12 +92,13 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
   const already = assetPlaying(doc, name);
   if (already) {
     info(`  asset ${already.key} plays ${name} already`);
+    if (host) recordNodeDisks(already.key, readIdentity(host, name));
     return already.key;
   }
   let key = asset ?? null;
   let fresh = false;
+  const id = host ? readIdentity(host, name) : null;
   if (!key) {
-    const id = host ? readIdentity(host, name) : null;
     if (!id) warn(`  ${name}'s identity (serial, MACs) could not be read${host ? ` from ${host}` : ""}: no asset is matched by it`);
     const m = id ? matchAsset(doc, id) : null;
     if (m && "conflict" in m) {
@@ -88,6 +125,7 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
     }
   }
   const r = assetManager(["asset", "allocate", key, "--role", name]);
+  if (host) recordNodeDisks(key, id);
   if (r.rc !== 0) {
     warn(`  asset ${key} is not allocated to ${name}: ${r.out} — asset-manager asset allocate ${key} --role ${name}`);
     return key;

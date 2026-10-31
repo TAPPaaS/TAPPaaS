@@ -6,8 +6,8 @@
 process.env.TAPPAAS_CMDB = "off";
 
 import { run } from "../../src/main";
-import { parseNodeDiscovery, parseCorosync, stableById } from "../../src/cmdb-discover";
-import { parseClusterProbe } from "../../src/cmdb-report";
+import { nodeDiscoveryProbe, nodeStorageProbe, parseNodeDiscovery, parseNodeStorage, parseCorosync, stableById } from "../../src/cmdb-discover";
+import { parseClusterProbe, splitStorage } from "../../src/cmdb-report";
 import { FakeSiteClient } from "./fake-client";
 import { cmdbProblems } from "../../../../lib/ts/test/cmdb-check";
 import { mkdtempSync, readFileSync, writeFileSync } from "fs";
@@ -169,6 +169,93 @@ function report(extra: string[], cfg: string): Obj {
   const objs: Obj[] = r.objects;
   check(!objs.some((o) => o.class === "port" || o.class === "server" || o.class === "storage-pool"), "plain report: no ports, assets or pools");
   check(!JSON.stringify(r).includes("nics") && !JSON.stringify(r).includes("corosyncLinks") && cmdbProblems(r).length === 0, "plain report: no depth, and the metamodel takes it");
+}
+
+// ── disks as CIs (ADR-042): a disk the server's asset records, built-on ──
+// The sweep reads SMART per disk; the plain report the disks and pools only.
+const SMART = [
+  "@@section smart /dev/sda",
+  JSON.stringify({ health: "PASSED", type: "ata", attributes: [{ id: "  5", raw: "8" }, { id: "  9", raw: "21000" }, { id: "194", raw: "41 (Min/Max 20/55)" }] }),
+  "",
+  "@@rc 0",
+  "@@section smart /dev/nvme0n1",
+  JSON.stringify({ health: "FAILED", type: "text", text: "Temperature:   75 Celsius\nMedia and Data Integrity Errors:    3\n" }),
+  "",
+  "@@rc 0",
+].join("\n");
+const swept = parseNodeDiscovery(`${FIXTURE}\n${SMART}\n`);
+{
+  const sda = swept.disks.find((x) => x.device === "/dev/sda")!;
+  check(sda.smart?.reallocated === 8 && sda.smart?.powerOnHours === 21000 && sda.temperature === 41, "the sweep: a disk's SMART attributes and temperature");
+  const nv = swept.disks.find((x) => x.device === "/dev/nvme0n1")!;
+  check(nv.temperature === 75 && nv.smart?.mediaErrors === 3, "…an NVMe disk's from smartctl's text");
+  check(swept.disks.find((x) => x.device === "/dev/sdc")?.smart === undefined, "…none where SMART was not read");
+  check(nodeDiscoveryProbe("tappaas1").includes("disks/smart --disk") && !nodeStorageProbe("tappaas1").includes("disks/smart"), "SMART in the sweep's read only");
+  const st = parseNodeStorage(FIXTURE);
+  check(st.disks.length === 4 && st.pools.length === 2 && st.disks.every((x) => x.smart === undefined), "the plain report's read: the disks and pools, no SMART");
+  const [own, rest] = splitStorage("os=debian\npools=tanka1\n@@@storage\n@@section disks\n[]\n@@rc 0\n");
+  check(own.includes("os=debian") && !own.includes("@@section") && rest?.startsWith("@@section disks") === true && splitStorage("os=debian")[1] === null, "one ssh: the host's read, then its storage's");
+}
+
+function diskFixture(): string {
+  const cfg = fixture();
+  // srv-01 (tappaas1) holds four recorded disks: both rpool mirror members,
+  // the NVMe of tanka1, and the idle one; one more disk is recorded elsewhere.
+  writeFileSync(join(cfg, "positions.json"), JSON.stringify({
+    assets: {
+      "srv-01": { kind: "server", role: "tappaas1", stage: "placed", ports: [{ name: "lan1", kind: "rj45", speed: "10g", mac: "AA:BB:CC:00:00:01" }] },
+      "srv-02": { kind: "server", stage: "stock" },
+      "dsk-01": { kind: "disk", stage: "placed", serial: "S6P1" },
+      "dsk-02": { kind: "disk", stage: "placed", serial: "s6p2" },
+      "dsk-03": { kind: "disk", stage: "placed", serial: "WD77" },
+      "dsk-04": { kind: "disk", stage: "placed", serial: "ZA11" },
+      "dsk-05": { kind: "disk", stage: "placed", serial: "ELSEWHERE" },
+    },
+    placements: { "dsk-01": { in: "srv-01" }, "dsk-02": { in: "srv-01" }, "dsk-03": { in: "srv-01" }, "dsk-04": { in: "srv-01" }, "dsk-05": { in: "srv-02" } },
+  }));
+  return cfg;
+}
+
+for (const mode of ["--discover", "plain"]) {
+  const fake = new FakeSiteClient();
+  fake.cluster = parseClusterProbe(CLUSTER);
+  if (mode === "--discover") fake.cluster.hosts.tappaas1 = { discovery: swept };
+  else fake.cluster.hosts.tappaas1 = { storage: parseNodeStorage(FIXTURE) };
+  const r: Obj = JSON.parse(capture(() => run(["report", "--json", ...(mode === "plain" ? [] : [mode]), "--config-dir", diskFixture()], fake)).join("\n"));
+  const objs: Obj[] = r.objects;
+  const rels: Obj[] = r.relations;
+  const at = mode === "plain" ? "plain report" : "report --discover";
+  const left = cmdbProblems(r);
+  check(left.length === 0, `${at}: the metamodel takes the disks and built-on: ${left.join("; ")}`);
+  const disks = objs.filter((o) => o.class === "disk");
+  check(disks.map((o) => o.name).sort().join() === "dsk-01,dsk-02,dsk-03,dsk-04", `${at}: a disk CI for each disk the server's asset records, by serial (${disks.map((o) => o.name)})`);
+  check(disks.every((o) => o.attributes.asset.ref === "server/srv-01"), `${at}: each part of the server`);
+  const d3 = disks.find((o) => o.name === "dsk-03")!;
+  check(d3.attributes.health === "FAILED" && d3.attributes.holds !== undefined && Array.isArray(d3.attributes.partitions), `${at}: its health, what it holds, its partitions`);
+  const d1 = disks.find((o) => o.name === "dsk-01")!;
+  if (mode === "plain") check(d1.attributes.smart === undefined && d1.attributes.temperature === undefined, "plain report: no SMART");
+  else check(d1.attributes.smart?.reallocated === 8 && d1.attributes.temperature === 41, "report --discover: SMART on the disk CI");
+  const built = rels.filter((x) => x.type === "built-on" && !x.end);
+  const to = (ref: string) => built.filter((x) => x.to.ref === ref);
+  const rpool = objs.find((o) => o.class === "storage-pool" && o.name === "rpool" && o.attributes.onNode.ref === "machine/tappaas1");
+  check(!!rpool?.ref && to("disk/dsk-01").length === 1 && to("disk/dsk-01")[0].from.ref === rpool.ref, `${at}: rpool built-on its mirror's members`);
+  check(to("disk/dsk-01")[0]?.attributes?.redundancyGroup === "tappaas1:rpool:mirror-0" && to("disk/dsk-02")[0]?.attributes?.redundancyGroup === "tappaas1:rpool:mirror-0", `${at}: the members of a mirror one redundancy group, <node>:<pool>:<vdev>`);
+  check(to("disk/dsk-03").length === 1 && to("disk/dsk-03")[0].attributes.redundancyGroup === null && to("disk/dsk-03")[0].attributes.required === null, `${at}: a single-disk vdev: no group, required`);
+  check(to("disk/dsk-04").length === 0, `${at}: a disk in no pool is built on by nothing`);
+  check(rels.some((x) => x.type === "built-on" && x.end && x.to.ref === "disk/dsk-04"), `${at}: …and loses a built-on it had`);
+  check(!disks.some((o) => o.name === "dsk-05") && !JSON.stringify(rels).includes("ELSEWHERE"), `${at}: a disk recorded in another asset is not this node's`);
+  if (mode === "plain") check(objs.some((o) => o.class === "server" && o.ref === "server/srv-01") && !objs.some((o) => o.class === "port"), "plain report: the server by name only, no ports");
+}
+{
+  // A cache device: optional; a member of no recorded disk: no relation.
+  const fake = new FakeSiteClient();
+  fake.cluster = parseClusterProbe(CLUSTER);
+  const st = parseNodeStorage(FIXTURE);
+  st.pools.find((p) => p.name === "tanka1")!.vdevs[1].members[0].serial = "ZA11";
+  fake.cluster.hosts.tappaas1 = { storage: st };
+  const r: Obj = JSON.parse(capture(() => run(["report", "--json", "--config-dir", diskFixture()], fake)).join("\n"));
+  const cache = (r.relations as Obj[]).find((x) => x.type === "built-on" && !x.end && x.to.ref === "disk/dsk-04");
+  check(cache?.attributes?.required === false && cache.attributes.redundancyGroup === null, "a cache member: built-on, required false");
 }
 
 console.log(`cmdb-discover: ${passed} passed, ${failed} failed`);

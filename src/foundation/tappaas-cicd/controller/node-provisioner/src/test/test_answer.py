@@ -215,6 +215,28 @@ class TestSystemInfoExtraction(unittest.TestCase):
         placeholder = extract_identity({"dmi": {"system": {"manufacturer": "Default string", "name": "QDNV01", "serial": "Default string"}}})
         self.assertEqual((placeholder["vendor"], placeholder["model"], placeholder["serial"]), ("Default string", "QDNV01", None))
         self.assertEqual(extract_identity({})["nics"], [])
+        self.assertNotIn("disks", extract_identity(info))
+
+    def test_extract_disks(self):
+        from node_provisioner.server import extract_disks, extract_identity
+        plain = {"disks": [
+            {"name": "/dev/sda", "by_id": "/dev/disk/by-id/ata-Samsung_SSD_870_S6P1", "model": "Samsung SSD 870",
+             "serial": "S6P1", "size": 1000204886016, "type": "ssd", "bus": "sata"},
+            {"name": "/dev/sda1", "serial": "S6P1"},  # a partition: not a disk
+            {"name": "/dev/zd0", "serial": "x"},  # a zvol
+        ]}
+        self.assertEqual(extract_disks(plain), [{"name": "ata-Samsung_SSD_870_S6P1", "model": "Samsung SSD 870",
+                                                 "serial": "S6P1", "size": 1000204886016, "type": "ssd", "bus": "sata"}])
+        udev = {"disks": [[0, {"DEVNAME": "/dev/nvme0n1", "ID_MODEL": "WD SN850", "ID_SERIAL_SHORT": "WD77",
+                               "DEVLINKS": "/dev/disk/by-id/nvme-eui.0025 /dev/disk/by-id/nvme-WD_SN850_WD77"}],
+                          [1, {"DEVNAME": "/dev/sdc", "ID_SERIAL_SHORT": "ZA11", "ID_BUS": "ata", "ID_ATA_ROTATION_RATE_RPM": "5400"}]]}
+        got = extract_disks(udev)
+        self.assertEqual(got[0], {"name": "nvme-WD_SN850_WD77", "model": "WD SN850", "serial": "WD77", "type": "nvme"})
+        self.assertEqual((got[1]["name"], got[1]["type"], got[1]["bus"]), ("sdc", "hdd", "ata"))
+        self.assertEqual(extract_disks({"disks": {"sdb": {"serial": "S6P2", "size": "1000", "type": "hdd"}}}),
+                         [{"name": "sdb", "serial": "S6P2", "size": 1000, "type": "hdd"}])
+        self.assertEqual(extract_disks({}), [])
+        self.assertEqual(extract_identity({**self.INFO, **plain})["disks"][0]["serial"], "S6P1")
 
     def test_extract_macs(self):
         self.assertEqual(
