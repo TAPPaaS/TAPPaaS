@@ -1123,7 +1123,7 @@ function cmdNode(o: Opts, client: SiteClient): void {
     // The role ends; the asset is kept for its next role or removed (ADR-040 D7).
     releaseNodeAsset(name, true, fate, nodesDir);
     // A node rebuilt under this name brings a new host key: no stale pin here.
-    for (const h of [name, `${name}.mgmt.internal`]) spawnSync("ssh-keygen", ["-R", h], { stdio: "ignore" });
+    for (const h of [name, `${name}.${mgmtDomain()}`]) spawnSync("ssh-keygen", ["-R", h], { stdio: "ignore" });
     return;
   }
 

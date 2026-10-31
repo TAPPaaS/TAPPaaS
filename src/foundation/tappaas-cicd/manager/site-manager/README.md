@@ -377,7 +377,10 @@ conflict and nothing is allocated — and when none matches a new asset is recor
 (`srv-NN`, the node's name as its display name, vendor, model and serial from the
 machine, and a port per NIC with its MAC, so the box is matched next time even when
 its BIOS gives no serial). Either way the asset is allocated to the node, and a placement the operator made
-under the node's name is the asset's from then on. A failure here is a warning naming the
+under the node's name is the asset's from then on. A known asset (named with `--asset`, or
+matched) gets what its record lacks from the machine: its serial, vendor and model, and its
+NICs' MACs on the ports named as the NICs (a port per NIC on an asset with none); a record
+whose serial is another machine's is warned about and left as it is. A failure here is a warning naming the
 `asset-manager` command to run, never a failed join. `node delete` releases the asset and
 keeps it or removes it (below).
 
@@ -398,8 +401,9 @@ still holds the node — a guest on it (with the module and how to move it), a r
 job touching it, an HA rule naming it, the site's PBS — and the plan; then what becomes of
 its record and its asset. `--apply` carries it out and is refused while anything holds it:
 the node leaves Proxmox (`pvecm delnode`, its `/etc/pve/nodes` directory, its storage
-entries, known_hosts), its DNS entry and reservation go, and the switch ports recorded for
-it are parked. One of three ways: `--shutdown` powers it off first (Proxmox removes a node
+entries, known_hosts, and its root key in the cluster's authorized_keys, which its join put
+there), its DNS entry and reservation and its install registration go, the controller's host
+keys for it go, and the switch ports recorded for it are parked. One of three ways: `--shutdown` powers it off first (Proxmox removes a node
 only once it is off), `--erase` wipes its disks first, `--lost` is for a node that is down
 for good.
 

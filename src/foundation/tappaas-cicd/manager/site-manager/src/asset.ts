@@ -160,6 +160,39 @@ export function newAssetArgs(doc: PositionsDoc, id: MachineIdentity, role: strin
   return { key, args, ports };
 }
 
+// What an asset's record lacks that the machine says of itself, as
+// asset-manager calls (node add, once the asset is known — matched, or named
+// with --asset): its serial, vendor and model where the record has none, and
+// its NICs' MACs — a port named as the NIC with no MAC gets it, an asset with
+// no ports of its own gets a port per NIC. Ports under other names with no
+// MAC are not guessed at: `note` says so. `mismatch`: the record's serial is
+// another machine's — then nothing is filled.
+export function assetFillArgs(doc: PositionsDoc, key: string, id: MachineIdentity): { calls: string[][]; note: string | null; mismatch: string | null } {
+  const a = assetsOf(doc)[key];
+  if (!a) return { calls: [], note: null, mismatch: null };
+  if (a.serial && id.serial && a.serial.toLowerCase() !== id.serial.toLowerCase()) {
+    return { calls: [], note: null, mismatch: `asset ${key} records serial ${a.serial}, the machine says ${id.serial}` };
+  }
+  const calls: string[][] = [];
+  const sets: string[] = [];
+  if (!a.serial && id.serial) sets.push(`serial=${id.serial}`);
+  if (!a.vendor && id.vendor) sets.push(`vendor=${id.vendor}`);
+  if (!a.model && id.model) sets.push(`model=${id.model}`);
+  if (sets.length) calls.push(["asset", "modify", key, ...sets.flatMap((x) => ["--set", x])]);
+  const known = assetMacs(a).map((m) => m.toLowerCase());
+  const own = a.ports ?? [];
+  const unplaced: string[] = [];
+  for (const n of id.nics) {
+    if (known.includes(n.mac)) continue;
+    const p = own.find((x) => x.name === n.name);
+    if (p && !p.mac) calls.push(["port", "modify", key, n.name, "--set", `mac=${n.mac}`]);
+    else if (!p && own.length === 0) calls.push(["port", "add", key, n.name, "--kind", "rj45", "--mac", n.mac]);
+    else unplaced.push(`${n.name} ${n.mac}`);
+  }
+  const note = unplaced.length ? `${key}'s ports do not name these NICs: ${unplaced.join(", ")} — record each MAC on its port (asset-manager port modify ${key} <port> --set mac=<mac>)` : null;
+  return { calls, note, mismatch: null };
+}
+
 // The asset playing a role (what node delete releases), and where it is.
 export function assetPlaying(doc: PositionsDoc, role: string): { key: string; asset: Asset; placed: string | null } | null {
   const hit = Object.entries(assetsOf(doc)).find(([, a]) => a.role === role);

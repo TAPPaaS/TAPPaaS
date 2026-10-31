@@ -4,7 +4,7 @@
 // what node delete does with the asset: kept, or removed.
 
 import { PositionsDoc } from "../../../../lib/ts/src/positions";
-import { assetCabling, assetFate, assetPlaying, assetProblem, assetRemovalSteps, freeServers, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
+import { assetCabling, assetFate, assetFillArgs, assetPlaying, assetProblem, assetRemovalSteps, freeServers, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "../../src/asset";
 
 let passed = 0;
 let failed = 0;
@@ -107,6 +107,25 @@ check(assetRemovalSteps(gone, "srv-08").steps.map((x) => x.join(" ")).join("; ")
 const playing = assetRemovalSteps(doc, "srv-01");
 check(playing.steps.map((x) => x.join(" ")).join("; ") === "unplace tappaas1; asset remove srv-01", "an asset still in a role is named as it plays");
 check(assetRemovalSteps(gone, "srv-99").steps.length === 0, "no such asset: nothing");
+
+// 9. node add completes a known asset's record from the machine
+const fill: PositionsDoc = {
+  assets: {
+    "srv-10": { kind: "server", stage: "stock", serial: "SN10" },
+    "srv-11": { kind: "server", stage: "stock", vendor: "HP", ports: [{ name: "enp1s0", kind: "rj45" }, { name: "enp2s0", kind: "rj45", mac: "aa:bb:cc:00:11:02" }] },
+    "srv-12": { kind: "server", stage: "stock", ports: [{ name: "1", kind: "rj45" }] },
+  },
+} as unknown as PositionsDoc;
+const mach = { vendor: "HP", model: "Z840", serial: "SN10", macs: ["aa:bb:cc:00:10:01"], nics: [{ name: "eno1", mac: "aa:bb:cc:00:10:01" }] };
+const f10 = assetFillArgs(fill, "srv-10", mach);
+check(f10.calls.map((c) => c.join(" ")).join("; ") === "asset modify srv-10 --set vendor=HP --set model=Z840; port add srv-10 eno1 --kind rj45 --mac aa:bb:cc:00:10:01" && !f10.note && !f10.mismatch,
+  `what the record lacks, and a port per NIC on an asset with none (${f10.calls.map((c) => c.join(" ")).join("; ")})`);
+const f11 = assetFillArgs(fill, "srv-11", { vendor: "HP", model: null, serial: "SN11", macs: [], nics: [{ name: "enp1s0", mac: "aa:bb:cc:00:11:01" }, { name: "enp2s0", mac: "aa:bb:cc:00:11:02" }] });
+check(f11.calls.map((c) => c.join(" ")).join("; ") === "asset modify srv-11 --set serial=SN11; port modify srv-11 enp1s0 --set mac=aa:bb:cc:00:11:01", "a port named as the NIC gets its MAC; a known MAC and a recorded vendor stay");
+const f12 = assetFillArgs(fill, "srv-12", { ...mach, serial: null });
+check(f12.calls.length === 1 && !!f12.note && /srv-12's ports do not name these NICs: eno1/.test(f12.note), "ports under other names: not guessed, said");
+const f13 = assetFillArgs(fill, "srv-10", { ...mach, serial: "OTHER" });
+check(!!f13.mismatch && f13.calls.length === 0, "another machine's serial: nothing filled, said");
 
 console.log(`asset: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

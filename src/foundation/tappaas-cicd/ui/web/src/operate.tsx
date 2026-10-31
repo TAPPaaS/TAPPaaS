@@ -30,6 +30,7 @@ export interface Step extends ArgvStep {
   suggest?: Record<string, string[]>; // values offered beside free text, by "@name" or flag
   suggestNotes?: Record<string, Record<string, string>>; // a suggested or offered value's note, by "@name" or flag, then value
   labels?: Record<string, string>;
+  descriptions?: Record<string, ReactNode>; // an option's text in the wizard's words, in place of the verb's help, by flag
   placeholders?: Record<string, string>; // an example in place of the help's <arg>, by "@name" or flag
   asides?: Record<string, ReactNode>; // shown under an option's input, by "@name" or flag (a link to add what the dropdown lacks)
   render?: (values: Values, set: (v: Values) => void, verb: ManifestVerb) => ReactNode; // a change form of its own, its name rows included
@@ -118,13 +119,13 @@ function VerbForm({ step, verb, values, set, part = "all" }: { step: Step; verb:
       <label key={o.flag} className="form-row">
         <span className="mono">{label(o.flag, o.flag)}</span>
         {field(o.flag, o.arg, o.choices, o.repeatable)}
-        {o.description ? <small className="muted">{o.description}</small> : null}
+        {(step.descriptions?.[o.flag] ?? o.description) ? <small className="muted">{step.descriptions?.[o.flag] ?? o.description}</small> : null}
         {step.asides?.[o.flag] ? <small>{step.asides[o.flag]}</small> : null}
       </label>
     ) : (
       <label key={o.flag} className="form-check">
         <input type="checkbox" checked={values[o.flag] === true} onChange={(e) => set({ ...values, [o.flag]: e.target.checked })} />
-        <span className="mono">{label(o.flag, o.flag)}</span> <small className="muted">{o.description}</small>
+        <span className="mono">{label(o.flag, o.flag)}</span> <small className="muted">{step.descriptions?.[o.flag] ?? o.description}</small>
       </label>
     ),
   );

@@ -7,7 +7,7 @@ import { spawnSync } from "child_process";
 import { existsSync, readFileSync } from "fs";
 import { GN, YW, CL, info, warn } from "../../../lib/ts/src/cli";
 import { POSITIONS_FILE, PositionsDoc } from "../../../lib/ts/src/positions";
-import { AssetFate, IDENTITY_SH, MachineIdentity, assetPlaying, assetRemovalSteps, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "./asset";
+import { AssetFate, IDENTITY_SH, MachineIdentity, assetFillArgs, assetPlaying, assetRemovalSteps, identityFromRegistration, matchAsset, newAssetArgs, parseIdentity } from "./asset";
 import { defaultConfigDir } from "./config";
 
 export function readPositions(configDir = defaultConfigDir()): PositionsDoc | null {
@@ -60,9 +60,11 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
   }
   let key = asset ?? null;
   let fresh = false;
+  // What the machine says of itself: matched by when no asset is named, and
+  // checked against and filled into the asset's record either way.
+  const id = host ? readIdentity(host, name) : null;
+  if (host && !id) warn(`  ${name}'s identity (serial, MACs) could not be read from ${host}: ${key ? "its asset's record is not checked against it" : "no asset is matched by it"}`);
   if (!key) {
-    const id = host ? readIdentity(host, name) : null;
-    if (!id) warn(`  ${name}'s identity (serial, MACs) could not be read${host ? ` from ${host}` : ""}: no asset is matched by it`);
     const m = id ? matchAsset(doc, id) : null;
     if (m && "conflict" in m) {
       warn(`  ${m.conflict}: ${name} gets no asset — asset-manager asset allocate <the right one> --role ${name}`);
@@ -86,6 +88,19 @@ export function allocateNodeAsset(name: string, host: string | null, asset?: str
       }
       if (n.ports.length) info(`  ${n.ports.length} NIC(s) recorded as ${key}'s ports, by MAC`);
     }
+  }
+  // A known asset: what its record lacks (serial, vendor, model, the NICs'
+  // MACs) from the machine, so the next match — and a DHCP reservation or a
+  // registration that names a MAC — finds it.
+  if (!fresh && id) {
+    const f = assetFillArgs(doc, key, id);
+    if (f.mismatch) warn(`  ${f.mismatch}: is ${key} the right asset? Its record is left as it is`);
+    for (const c of f.calls) {
+      const r = assetManager(c);
+      if (r.rc !== 0) warn(`  ${key}'s record is not completed: asset-manager ${c.join(" ")}: ${r.out}`);
+    }
+    if (f.calls.length) info(`  ${key}'s record completed from the machine (${f.calls.length} change(s))`);
+    if (f.note) warn(`  ${f.note}`);
   }
   const r = assetManager(["asset", "allocate", key, "--role", name]);
   if (r.rc !== 0) {
