@@ -259,7 +259,7 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
       {!outcome || outcome.state === "running" ? (
         <p className="muted">Checking whether {node} can be removed…</p>
       ) : outcome.state === "ok" ? (
-        <p><Tag level="pass" /> {node} can be removed{how === "lost" ? "" : ": nothing runs on it, nothing is kept on it"}.</p>
+        <p><Tag level="pass" /> {node} can be removed{how === "lost" ? "" : ": nothing runs on it, nothing is kept on it"}. {how === "erase" ? "Its disks are wiped first, then it is powered off and removed." : how === "shutdown" ? "It is powered off, then removed; its disks keep their data." : "It is taken out of the cluster as a dead machine."}</p>
       ) : outcome.state === "blocked" ? (
         <>
           <p><Tag level="fail" /> {node} cannot be removed yet:</p>
@@ -353,7 +353,8 @@ function Afterwards({ node, how, result, onClose }: { node: string; how: How; re
         To replace it, <button className="btn btn-small" onClick={addNode}>Add node</button>: a machine is recognised by its serial number or a network card, and a machine kept in stock is taken from there.
       </li>
       <li>Run the site update (<Link to="/setup">Setup</Link> › Update) so the modules' standby copies and fail-over spread over the nodes that remain.</li>
-      {how === "shutdown" ? <li>Its disks still hold data: wipe them before the machine leaves your hands.</li> : null}
+      {how === "shutdown" ? <li>It was powered off, not wiped: its disks still hold data. Wipe them before the machine leaves your hands.</li> : null}
+      {how === "erase" ? <li>Its disks were wiped before it was removed: nothing of the site is on the machine.</li> : null}
       {how === "lost" ? <li>Restore what was lost with it from its backups, on the nodes that remain.</li> : null}
     </ul>
   );
