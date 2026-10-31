@@ -90,7 +90,7 @@ export function ActFlow({ form, me, onDone, onApplied, line, command = true }: A
       const found = refusalLines(job.output).map((text) => ({ text }));
       return (
         <>
-          <p className="readstate readstate-fail">{step.failed ?? (run.inApply ? "It did not finish" : "Nothing was applied")}: {runFailure(job)}.</p>
+          <p className="readstate readstate-fail">{step.failed ? `${step.failed}: ` : run.inApply ? "It did not finish: " : ""}{step.failed || run.inApply || job.previewPhase?.stopped ? runFailure(job) : `Nothing was applied: ${runFailure(job)}`}.</p>
           {job.previewPhase?.stopped ? <FindingList items={found} /> : null}
           <JobOutput job={job} fold="tail" tail={8} />
           <div className="actions">
@@ -356,7 +356,7 @@ export function PlanFlow({ form, me, onDone, onApplied }: Pick<ActProps, "onDone
       {preview.error ? <p className="readstate readstate-fail">The preview was not started: {preview.error}</p> : null}
       {pj ? (
         <div className="jobview">
-          <JobStatusLine job={pj} label="preview" />
+          <JobStatusLine job={pj} label="preview" {...(canApply && pj!.exit !== 0 ? { level: "pass", state: "changes pending" } : {})} />
           {pj.refused ? <p className="readstate readstate-fail">{pj.refused}</p> : null}
           <JobOutput job={pj} live={preview.live} fold={apply.id ? "tail" : "open"} />
         </div>
