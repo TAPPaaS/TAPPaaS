@@ -5,7 +5,8 @@
 // its allocations, and its CMDB record — open events, trace, relations,
 // history (CiPanel.tsx, embedded). The operations on it are here: its record
 // changed or removed, its lifecycle (allocate, release, receive, faulty,
-// repaired, dispose), its placement (place, move, unplace), a node's uplinks,
+// repaired, dispose; one that holds disks removed or disposed of with them,
+// or them to stock first, as its form asks), its placement (place, move, unplace), a node's uplinks,
 // a switch's or an access point's location, and per port its record, a switch
 // port's zone or parking, a cable recorded or removed, a wire attached to a
 // patch panel or taken off it. The disks in it (ADR-042) are listed by bay
@@ -287,7 +288,7 @@ export function AssetPage({ name }: { name: string }) {
             <div className="toolbar">
               <AssetLifecycle t={t} a={a} played={played} />
               {placeable ? <PlaceActions device={a.placedAs} v={v} /> : null}
-              <DeviceRecordActions name={a.name} cabled={cabled} placed={a.placed} />
+              <DeviceRecordActions name={a.name} cabled={cabled} placed={a.placed} disks={a.disks.map((x) => x.name)} />
             </div>
           )}
           {!isDisk && a.stage !== "disposed" ? (

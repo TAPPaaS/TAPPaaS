@@ -8,6 +8,7 @@
 // a Step (operate.tsx): Change → Preview (--check) → Apply.
 
 import { RackCable, Topology } from "../types";
+import { Values } from "../argv";
 import { OperateButton, Step } from "../operate";
 import { freePanelPorts } from "./devicegraph";
 
@@ -76,13 +77,57 @@ export function NodeNetwork({ node }: { node: string }) {
   );
 }
 
+// What becomes of the disks an asset holds when it is removed or disposed of
+// (asset remove / asset dispose --with-disks | --disks-to-stock): a choice in
+// the form, the radio setting one flag; the two flags not offered otherwise.
+const DISK_FLAGS = ["--with-disks", "--disks-to-stock"];
+function DisksWay({ values, set, disks, dispose }: { values: Values; set: (v: Values) => void; disks: string[]; dispose: boolean }) {
+  const stock = values["--disks-to-stock"] === true;
+  const pick = (toStock: boolean) => set({ ...values, "--with-disks": !toStock, "--disks-to-stock": toStock });
+  return (
+    <fieldset className="options">
+      <legend>The disk(s) in it: {disks.join(", ")}</legend>
+      <label className="form-check">
+        <input type="radio" name="disks-way" checked={!stock} onChange={() => pick(false)} />
+        <span>{dispose ? "the disks are disposed of with it" : "the disks' records go with it"}</span>{" "}
+        <small className="muted">{dispose ? "Each disk is taken out and disposed of the same way, wiped as Was it wiped? says; their records stay." : "Each disk's placement and record are removed with the asset's: they leave the site with it."}</small>
+      </label>
+      <label className="form-check">
+        <input type="radio" name="disks-way" checked={stock} onChange={() => pick(true)} />
+        <span>the disks go to stock</span> <small className="muted">Each disk is taken out first: it stays recorded, in stock, to be placed in another asset.</small>
+      </label>
+    </fieldset>
+  );
+}
+function withDisksWay(step: Step, disks: string[], dispose: boolean): Step {
+  const hide = [...(step.hide ?? []), ...DISK_FLAGS];
+  if (!disks.length) return { ...step, hide };
+  return { ...step, hide, initial: { ...step.initial, "--with-disks": true }, render: (values, set) => <DisksWay values={values} set={set} disks={disks} dispose={dispose} /> };
+}
+
+export function assetRemoveSteps(name: string, disks: string[] = []): Step[] {
+  return [
+    withDisksWay(
+      {
+        title: `asset-manager asset remove '${name}'${disks.length ? " --with-disks | --disks-to-stock" : ""}`,
+        bin: RM,
+        verb: "asset remove",
+        fixed: [name],
+        note: `A record made by mistake, or a machine that leaves the site: its record goes${disks.length ? ", and the disks in it go with it or to stock, as chosen" : ""}. The check refuses one still in a role, placed or with a recorded cable; a disposed asset's record stays.`,
+      },
+      disks,
+      false,
+    ),
+  ];
+}
+
 // A recorded device's own record: change it, or remove it once nothing names it.
-export function DeviceRecordActions({ name, cabled, placed }: { name: string; cabled: boolean; placed: boolean }) {
+export function DeviceRecordActions({ name, cabled, placed, disks = [] }: { name: string; cabled: boolean; placed: boolean; disks?: string[] }) {
   const rm = (verb: string, title: string, extra: Partial<Step> = {}): Step => ({ title, bin: "asset-manager", verb, fixed: [name], ...extra });
   return (
     <>
       <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("asset modify", `asset-manager asset modify '${name}'`, { note: "Its kind, vendor, model, serial, tag, ports (a count or a list), display name, description or procurement; --check previews." })]} />
-      {!placed && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("asset remove", `asset-manager asset remove '${name}'`)]} /> : null}
+      {!placed && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={() => assetRemoveSteps(name, disks)} /> : null}
     </>
   );
 }
@@ -178,12 +223,16 @@ export function repairedSteps(asset: string): Step[] {
   return [am(asset, "asset repaired", `asset-manager asset repaired '${asset}'`, { note: "Clears the faulty flag and its note." })];
 }
 
-export function disposeSteps(asset: string): Step[] {
+export function disposeSteps(asset: string, disks: string[] = []): Step[] {
   return [
-    am(asset, "asset dispose", `asset-manager asset dispose '${asset}' --how <how>`, {
-      choices: { "--how": ["sold", "recycled", "returned", "lost"] },
-      note: "Its last stage: sold, recycled, returned or lost, when (default today), and whether its disks were wiped. The check refuses an asset still in a role, placed, or with a recorded cable; its record stays.",
-    }),
+    withDisksWay(
+      am(asset, "asset dispose", `asset-manager asset dispose '${asset}' --how <how>`, {
+        choices: { "--how": ["sold", "recycled", "returned", "lost"] },
+        note: `Its last stage: sold, recycled, returned or lost, when (default today), and whether its disks were wiped.${disks.length ? " The disks in it are disposed of with it or go to stock, as chosen." : ""} The check refuses an asset still in a role, placed, or with a recorded cable; its record stays.`,
+      }),
+      disks,
+      true,
+    ),
   ];
 }
 
@@ -192,7 +241,7 @@ export function portModifySteps(asset: string, port: string): Step[] {
 }
 
 // The lifecycle buttons for an asset in its stage.
-export function AssetLifecycle({ t, a, played }: { t: Topology | null; a: { name: string; kind: string; stage: string; role: string | null; faulty?: boolean; placed: boolean }; played: Set<string> }) {
+export function AssetLifecycle({ t, a, played }: { t: Topology | null; a: { name: string; kind: string; stage: string; role: string | null; faulty?: boolean; placed: boolean; disks?: { name: string }[] }; played: Set<string> }) {
   const roles = rolesFor(t, a.kind, played);
   return (
     <>
@@ -200,7 +249,7 @@ export function AssetLifecycle({ t, a, played }: { t: Topology | null; a: { name
       {a.stage !== "ordered" && a.stage !== "disposed" && !a.role ? <OperateButton label="Allocate…" title={`Allocate ${a.name} to a role`} steps={() => allocateSteps(a.name, roles)} hint={roles.length ? undefined : "no role of its kind is free in the topology: type one"} /> : null}
       {a.role ? <OperateButton label="Release…" kind="danger" title={`Release ${a.name} from ${a.role}`} steps={() => releaseSteps(a.name, a.role!)} /> : null}
       {a.stage !== "disposed" ? a.faulty ? <OperateButton label="Repaired…" title={`${a.name} is repaired`} steps={() => repairedSteps(a.name)} /> : <OperateButton label="Faulty…" title={`Mark ${a.name} faulty`} steps={() => faultSteps(a.name)} /> : null}
-      {a.stage !== "disposed" && !a.role && !a.placed ? <OperateButton label="Dispose…" kind="danger" title={`Dispose of ${a.name}`} steps={() => disposeSteps(a.name)} /> : null}
+      {a.stage !== "disposed" && !a.role && !a.placed ? <OperateButton label="Dispose…" kind="danger" title={`Dispose of ${a.name}`} steps={() => disposeSteps(a.name, (a.disks ?? []).map((d) => d.name))} /> : null}
     </>
   );
 }
