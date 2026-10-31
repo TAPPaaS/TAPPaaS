@@ -624,3 +624,29 @@ span.ht-caret { cursor: default; }
   .health-panel { position: fixed; top: 0; bottom: 0; right: 0; left: 12%; width: auto; z-index: 35; border-radius: 12px 0 0 12px; box-shadow: -8px 0 24px rgba(15, 23, 42, .18); }
   .health-time input { width: 130px; }
 }
+
+/* Operations: the open events by root cause, what changed beside each, the
+   discovery sweep; the object's panel (.health-panel) on the right. */
+.ops-view { display: flex; gap: 12px; align-items: flex-start; }
+.ops-main { flex: 1; min-width: 0; }
+.ops-view .health-panel { position: sticky; top: 60px; max-height: calc(100vh - 80px); }
+.ops-group { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--skip); border-radius: 6px; margin-bottom: 10px; }
+.ops-critical { border-left-color: var(--fail); }
+.ops-warning { border-left-color: var(--warn); }
+.ops-events { list-style: none; margin: 0; padding: 0; }
+.ops-event { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 12px; padding: 8px 10px; border-top: 1px solid var(--line); }
+.ops-event:first-child { border-top: 0; }
+.ops-event-on { background: rgba(59, 111, 212, .07); }
+.ops-event-head { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; padding: 0; font: inherit; text-align: left; color: inherit; background: none; border: 0; cursor: pointer; }
+.ops-event-head:hover .ops-event-name b { color: var(--accent); }
+.ops-event-name, .ops-event-text { min-width: 0; word-break: break-word; }
+.ops-root { color: var(--fail); font-size: 12px; font-weight: 600; }
+.ops-event-changes { min-width: 0; border-left: 1px dashed var(--line); padding-left: 10px; }
+.ops-changes li { padding: 2px 0; }
+.ops-what { color: #374151; word-break: break-word; }
+.ops-impact { padding: 6px 10px 8px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: center; }
+.ops-impacted { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+@media (max-width: 900px) {
+  .ops-event { grid-template-columns: 1fr; }
+  .ops-event-changes { border-left: 0; padding-left: 0; }
+}

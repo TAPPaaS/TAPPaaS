@@ -55,6 +55,19 @@ export interface CmdbAttributePeriod {
   source: string;
   from: string;
   to: string | null;
+  change?: number | null; // the change that opened the period
+}
+// Every period of every relation, from this object's side.
+export interface CmdbRelationPeriod {
+  id: number | string;
+  type: string;
+  direction: "in" | "out";
+  other: CmdbEnd;
+  attributes?: Obj | null;
+  source: string;
+  change?: number | null;
+  from: string;
+  to: string | null;
 }
 export interface CmdbHistory {
   id: string;
@@ -163,10 +176,10 @@ export class Cmdb {
     return { Authorization: `Bearer ${readFileSync(this.tokenFile, "utf8").trim()}`, "Content-Type": "application/json" };
   }
 
-  private async request<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  private async request<T>(method: "GET" | "POST", path: string, body?: unknown, timeoutMs = this.timeoutMs): Promise<T> {
     let r: FetchResponse;
     try {
-      r = await fetch(`${this.url}${path}`, { method, headers: this.headers(), body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(this.timeoutMs) });
+      r = await fetch(`${this.url}${path}`, { method, headers: this.headers(), body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(timeoutMs) });
     } catch (e) {
       if (e instanceof CmdbError) throw e;
       throw new CmdbError(`the CMDB did not answer: ${(e as Error).message}`);
@@ -196,6 +209,36 @@ export class Cmdb {
 
   history(id: string): Promise<CmdbHistory> {
     return this.request("GET", `/v1/objects/${encodeURIComponent(id)}/history`);
+  }
+
+  // The discovery sweep (ADR-040 D15), run as `cmdb sweep --json`: it answers
+  // only when it has finished, hours on a big site, longer than fetch waits for
+  // an answer's headers; the CLI's curl waits 4 hours. Its exit is the sweep's
+  // status (0, 1, 2) with the record on stdout; 4 with "already running" is the
+  // controller's 409.
+  async sweep(): Promise<Obj> {
+    if (!this.cfg.run) throw new CmdbError("no runner for cmdb sweep");
+    const r = await this.cfg.run("cmdb", ["sweep", "--json"], 4 * 3600_000 + 60_000);
+    if (r.rc >= 0 && r.rc <= 2) {
+      try {
+        const d = JSON.parse(r.stdout) as Obj;
+        if (d && typeof d === "object") return d;
+      } catch {
+        // not a record: below
+      }
+    }
+    const why = (r.stderr || r.stdout).trim().split("\n").slice(-3).join(" ").replace(/^cmdb: /, "") || `cmdb sweep exited ${r.rc}`;
+    throw new CmdbError(why, r.rc === 4 && /already running/i.test(why) ? 409 : null);
+  }
+
+  // The last sweep's record; null when none has run (404).
+  async lastSweep(): Promise<Obj | null> {
+    try {
+      return await this.request<Obj>("GET", "/v1/sweep");
+    } catch (e) {
+      if (e instanceof CmdbError && e.status === 404) return null;
+      throw e;
+    }
   }
 
   classes(): Promise<CmdbClassRow[]> {
