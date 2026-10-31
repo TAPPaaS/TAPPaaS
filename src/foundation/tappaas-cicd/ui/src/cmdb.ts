@@ -64,7 +64,7 @@ export interface CmdbRelationPeriod {
   direction: "in" | "out";
   other: CmdbEnd;
   attributes?: Obj | null;
-  source: string;
+  source?: string;
   change?: number | null;
   from: string;
   to: string | null;
@@ -75,16 +75,6 @@ export interface CmdbHistory {
   relations?: CmdbRelationPeriod[];
   changes: { id: number; kind: string; source: string; job: string | null; verb: string | null; actor: string | null; time: string; drift: boolean }[];
 }
-export interface CmdbRelationPeriod {
-  id: number | string;
-  type: string;
-  direction: "in" | "out";
-  other: CmdbEnd;
-  source?: string;
-  from: string;
-  to: string | null;
-}
-
 // `event: change` on /v1/stream (cmdb-controller store.ts ChangeEvent).
 export interface CmdbChange {
   id: number;

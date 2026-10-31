@@ -14,9 +14,8 @@ import { WanAddress, readWanAddress, wanAddressFile } from "../../lib/ts/src/wan
 import { environmentZoneIn, readZonesFile, sharedZonesIn } from "../../lib/ts/src/zones";
 import { parseJournal, parseLedger, sweepRuns, SweepRun } from "./activity";
 import { Cached, CachedMap, Entry } from "./cache";
-import { Cmdb, CmdbClassRow, CmdbError, CmdbShow } from "./cmdb";
+import { Cmdb, CmdbClassRow, CmdbError, CmdbHistory, CmdbShow } from "./cmdb";
 import { Backbone, CiHistoryRow, CiRecord, ModuleRef, TraceStep, adrRefs, ciHistory, ciRecord, issuesUrl, walkTrace, webUrlOf } from "./cipanel";
-import { Cmdb, CmdbClassRow, CmdbError, CmdbHistory } from "./cmdb";
 import { Operations, SweepRunner, changeTargets, groupEvents, openEvents, operationsDoc } from "./operations";
 import { RepositoryCatalog, moduleSourceOf, repositoryCatalog } from "./catalog";
 import { ModuleFields, moduleFieldRows, moduleSchema, schemaDoc } from "./fields";
