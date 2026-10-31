@@ -90,7 +90,8 @@ export function Identity() {
   const r = useRead<Record<string, string[]>>("identity");
   const rec = useRead<Partial<Record<IdKind, Record<string, unknown>[]>>>("identity/records");
   const d = r.env?.data ?? {};
-  const [sel, setSel] = useState<string | null>(null);
+  // ?select=<kind>:<name> (a user's or a group's Details from the Health view) opens it.
+  const [sel, setSel] = useState<string | null>(() => new URLSearchParams(window.location.search).get("select"));
   const g = useMemo(() => identityGraph(rec.env?.data ?? {}), [rec.env]);
   const graph = useMemo(() => {
     const nodes: GNode[] = g.nodes.map((n) => {

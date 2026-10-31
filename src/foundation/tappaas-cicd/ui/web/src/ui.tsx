@@ -177,3 +177,20 @@ export function KV({ rows }: { rows: [string, ReactNode][] }) {
     </dl>
   );
 }
+
+// ── a side panel's Details link ────────────────────────────────────────
+// At the top of a side panel: the page where the object is shown in full and
+// changed (details.ts). The first target is the Details button, any after it
+// a second way (a node's asset beside its module page).
+export function DetailsLinks({ targets }: { targets: { label: string; to: string }[] }) {
+  if (targets.length === 0) return null;
+  return (
+    <p className="details-links">
+      {targets.map((t, i) => (
+        <Link key={`${t.label}:${t.to}`} to={t.to} className={i === 0 ? "btn btn-primary btn-small" : "jump jump-in"}>
+          {t.label} →
+        </Link>
+      ))}
+    </p>
+  );
+}

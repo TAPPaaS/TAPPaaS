@@ -1,31 +1,28 @@
-// SidePanel.tsx — what the console knows about the object clicked in the
-// Physical view: its records as the managers report them, the findings on it,
-// the day-2 changes it offers (a switch port's zone, spike mockup 3: the port's
-// record with switch-manager update-port, then reconcile previewed and
-// applied; a node's uplinks: site-manager node network show / set), and where
-// to open it. Where the hardware is (asset-manager): every device's location
-// and placement, each a link to its object, with Place…, Move to… and
-// Unplace…; a room's location, a rack's own record, a passive or outside
-// device's placement and recorded cables, and a device a switch port sees with
-// what the port says of it and Record…. From
-// the storage inventory: a disk, a pool with what it holds, a node's storage.
+// SidePanel.tsx — a condensed overview of the object selected in the
+// Physical, Assets (the Site page's device view) or Storage view: its records
+// as the managers report them, the findings on it, where the hardware is
+// (location and placement, each a link to its object), a device's drawing and
+// neighbours, a disk, a pool with what it holds, a node's storage. At its top
+// the Details link (details.ts) opens the page that shows the object in full
+// and changes it: an asset's page under Assets (its record, placement, ports,
+// cables and their operations), a module's page, the Assets page for a rack
+// or a room. The panel itself changes nothing.
 
 import { ReactNode, useEffect, useMemo, useState } from "react";
 import { useRead } from "../api";
 import { zoneColor } from "../colors";
-import { Health, RackCable, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
-import { OperateButton, Step } from "../operate";
-import { KV, Link, OpenIn, Tag, canOperate, useMe } from "../ui";
+import { Health, ModuleSummary, StorageInventory, TopoFinding, TopoRef, Topology } from "../types";
+import { DetailsLinks, KV, Link, Tag } from "../ui";
+import { selDetails } from "../details";
 import { Sel, portLabel } from "./layout";
-import { PlaceActions, RecordDeviceButton, RecordSeenButton, cableAddSteps, cableRemoveSteps, rackDeleteSteps, rackModifySteps, roomModifySteps } from "./rackops";
 import { publicAddress } from "../zonegraph";
 import { StorageNote } from "./storage";
 import { DiskBody, NodeStorage, PoolBody } from "./storageview";
-import { DevLink, DevNode, deviceGraph, deviceState, freePanelPorts, isPatchPanel, panelPortSel, panelPortUse, selectedDevice, splittable } from "./devicegraph";
+import { DevLink, DevNode, deviceGraph, deviceState, isPatchPanel, panelPortSel, panelPortUse, selectedDevice, splittable } from "./devicegraph";
 import { iconOf, kindName } from "./devicecard";
 import { DeviceDrawing } from "./devicedrawing";
 import { stateClass } from "./states";
-import { DeviceLocationButton, LocationLink, PlacementLine, locationOption, useSiteLocations } from "../locations";
+import { LocationLink, PlacementLine } from "../locations";
 import { PASSPHRASE_TEXT, SiteSsid, passphraseOf } from "../wizards";
 import { CiPanel, CiRef } from "../pages/CiPanel";
 
@@ -109,10 +106,9 @@ export function ciRefOf(d: DevNode): CiRef | null {
 const farEnd = (l: DevLink, device: string) => (l.a === device ? l.b : l.a);
 
 export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: Sel; close: () => void; pick: (s: Sel) => void; storage?: { inv: StorageInventory; notes: Map<string, StorageNote[]> } | null }) {
-  const operator = canOperate(useMe());
+  const modules = useRead<ModuleSummary[]>("modules").env?.data ?? null;
   const health = useRead<Health>("health");
   const siteSsids = useRead<SiteSsid[]>("ssids", 600_000).env?.data ?? null;
-  const locations = useSiteLocations();
   const g = useMemo(() => deviceGraph(t), [t]);
   // The CI's record in place of the panel, until closed or another selection.
   const [record, setRecord] = useState<CiRef | null>(null);
@@ -154,8 +150,12 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
   const about = (kind: string, name: string, sw?: string) => t.findings.filter((f) => refIs(f.on, kind, name, sw) || f.refs.some((r) => refIs(r, kind, name, sw)));
   let title: ReactNode = sel.id;
   let body: ReactNode = null;
-  let open: ReactNode = null;
-  let actions: ReactNode = null;
+  // A link's ends that are assets: the Details of each.
+  const linkEnds = (): string[] => {
+    if (sel.kind !== "link") return [];
+    const l = g.links.find((x) => x.id === sel.id);
+    return l ? [l.a, l.b].map((id) => devOf(id)).filter((d): d is DevNode => !!d && d.kind !== "isp" && d.kind !== "buddy").map((d) => d.name) : [];
+  };
 
   switch (sel.kind) {
     case "port": {
@@ -205,14 +205,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={about("port", p.port, s.name)} />
         </>
       );
-      open = <OpenIn kind="port" id={p.port} sw={s.name} />;
-      actions = (
-        <>
-          <PortChange t={t} sw={s.name} port={p.port} type={p.type} parked={p.parked === true} lag={p.lag} mode={p.mode} zone={p.zones[0] ?? ""} description={p.description} />
-          {racks && recorded ? <OperateButton label="Remove the cable…" kind="danger" title={`The recorded cable on ${s.name}:${p.port}`} steps={() => cableRemoveSteps(`${s.name}:${p.port}`)} /> : null}
-          {racks && !recorded && (!p.target || p.target.kind === "isp" || !p.target.name) ? <OperateButton label="Record a cable…" title={`A cable from ${s.name}:${p.port}`} steps={() => cableAddSteps(`${s.name}:${p.port}`)} /> : null}
-        </>
-      );
       break;
     }
     case "switch": {
@@ -250,13 +242,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={t.findings.filter((f) => f.on.switch === s.name || f.refs.some((r) => r.switch === s.name))} />
         </>
       );
-      open = <OpenIn kind="switch" id={s.name} />;
-      actions = (
-        <>
-          <PlaceActions device={s.name} v={racks} />
-          <DeviceLocationButton kind="switch" name={s.name} current={s.location ?? null} />
-        </>
-      );
       break;
     }
     case "lag": {
@@ -271,7 +256,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={about("lag", l.name, s.name)} />
         </>
       );
-      open = <OpenIn kind="lag" id={l.name} sw={s.name} />;
       break;
     }
     case "node": {
@@ -324,13 +308,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           {storage ? <NodeStorage inv={storage.inv} notes={storage.notes} node={n.name} /> : null}
         </>
       );
-      open = <OpenIn kind="node" id={n.name} />;
-      actions = (
-        <>
-          <NodeNetwork node={n.name} />
-          <PlaceActions device={n.name} v={racks} />
-        </>
-      );
       break;
     }
     case "guest": {
@@ -351,14 +328,10 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["maturity", g.maturity],
             ]}
           />
-          <p>
-            <Link to={`/modules/${encodeURIComponent(g.module)}`}>Open the module page →</Link>
-          </p>
           <h3>Findings</h3>
           <Findings list={about("module", g.module)} />
         </>
       );
-      open = <OpenIn kind="module" id={g.module} />;
       break;
     }
     case "ap": {
@@ -385,13 +358,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <p className="small"><Link to="/setup/day2#wifi">Add or change WiFi in the WiFi step →</Link></p>
         </>
       );
-      open = <OpenIn kind="ap" id={a.name} />;
-      actions = (
-        <>
-          <PlaceActions device={a.name} v={racks} />
-          <DeviceLocationButton kind="ap" name={a.name} current={a.location ?? null} />
-        </>
-      );
       break;
     }
     case "outside": {
@@ -405,7 +371,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={about("peer", o.name)} />
         </>
       );
-      open = <OpenIn kind="peer" id={o.name} />;
       break;
     }
     case "isp": {
@@ -439,7 +404,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={about("site", "uplink")} />
         </>
       );
-      open = <OpenIn kind="site" id="site" />;
       break;
     }
     case "firewall": {
@@ -453,14 +417,10 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <p className="small muted">
             Other nodes with a wan port: {w.paths.filter((p) => !p.active).map((p) => `${p.node}/${p.nic} (port ${p.port ?? "?"})`).join(", ") || "none"} — where the firewall could run.
           </p>
-          <p>
-            <Link to={`/modules/${encodeURIComponent(fw.module)}`}>Open the module page →</Link>
-          </p>
           <h3>Findings</h3>
           <Findings list={about("module", fw.module)} />
         </>
       );
-      open = <OpenIn kind="module" id={fw.module} />;
       break;
     }
     case "rack": {
@@ -494,14 +454,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={about("rack", r.name)} />
         </>
       );
-      actions = (
-        <>
-          <OperateButton label="Change…" title={`Rack ${r.name}`} steps={() => rackModifySteps(r.name)} />
-          {r.placements.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete rack ${r.name}`} steps={() => rackDeleteSteps(r.name)} /> : null}
-          <RecordDeviceButton />
-        </>
-      );
-      open = <p className="muted small">A rack is a record of config/positions.json only.</p>;
       break;
     }
     case "link": {
@@ -555,14 +507,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={t.findings.filter((f) => l.cables.some((c) => [c.from, c.to].some((e) => (f.on.kind === "port" && f.on.switch === e.device && f.on.name === e.port))))} />
         </>
       );
-      const recorded = l.cables.find((c) => c.source === "recorded" && !c.segments?.length);
-      actions = racks ? (
-        <>
-          {l.cables.map((c, i) => (c.segments?.length ? <PanelJoin key={i} c={c} /> : <PanelSplit key={i} t={t} c={c} many={l.cables.length > 1} />))}
-          {recorded ? <OperateButton label="Remove the cable…" kind="danger" title="Remove a recorded cable" steps={() => cableRemoveSteps(`${recorded.from.device}:${recorded.from.port}`)} /> : null}
-        </>
-      ) : null;
-      open = <p className="muted small">A link is the topology's and the cable records'; its ends have their own jumps.</p>;
       break;
     }
     case "disk":
@@ -572,7 +516,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       if (!b) break;
       title = b.title;
       body = b.body;
-      open = b.open;
       break;
     }
     case "room": {
@@ -609,23 +552,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           </ul>
         </>
       );
-      const rmStep = (verb: string, t: string, extra: Partial<Step> = {}): Step => ({ title: t, bin: "asset-manager", verb, fixed: [room.name], ...extra });
-      actions = room.recorded ? (
-        <>
-          <OperateButton label="Change…" title={`Room ${room.name}`} steps={() => roomModifySteps(room.name)} />
-          {room.racks.length === 0 && room.loose.length === 0 ? <OperateButton label="Delete…" kind="danger" title={`Delete room ${room.name}`} steps={[rmStep("room delete", `asset-manager room delete ${room.name}`)]} /> : null}
-          <RecordDeviceButton />
-        </>
-      ) : /^[a-z][a-z0-9-]{0,62}$/.test(room.name) ? (
-        <OperateButton label="Record the room…" title={`Record room ${room.name}`} steps={[rmStep("room add", `asset-manager room add ${room.name}`, locationOption(locations))]} />
-      ) : (
-        // A room name is lower case: record it under one, then point the racks at it.
-        <p className="muted small">
-          '{room.name}' is no room name (lower case letters, digits, dashes): record it as{" "}
-          <span className="mono">asset-manager room add {room.name.toLowerCase().replace(/[^a-z0-9-]+/g, "-")} --display-name '{room.name}'</span>, then set each rack's room to it ({room.racks.map((r) => `rack modify ${r} --set room=…`).join(", ")}).
-        </p>
-      );
-      open = <p className="muted small">A room is a record of config/positions.json only.</p>;
       break;
     }
     case "panelport": {
@@ -642,11 +568,9 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
               ["rear", use?.rear ? `${use.rear.device}:${use.rear.port}` : <span className="muted">free</span>],
             ]}
           />
-          <p className="small">{links.length ? "A link through this port: its device's port to the front, the rear to the far end. Attach a wire here… offers the links that could run through it." : "No link could run through it: every link is through a panel already, or has none."}</p>
+          <p className="small">{links.length ? "A link through this port: its device's port to the front, the rear to the far end. The panel's Details offer Attach a wire here… on this port." : "No link could run through it: every link is through a panel already, or has none."}</p>
         </>
       );
-      actions = links.length && !use?.front && !use?.rear ? <PanelAttach panelPort={`${sel.panel}:${sel.id}`} links={links} /> : null;
-      open = <p className="muted small">A patch panel is a record of config/positions.json only.</p>;
       break;
     }
     case "mount": {
@@ -677,11 +601,9 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
                 ...placeRows(t, sel.id),
               ]}
             />
-            <p className="muted small">Record… keeps its MAC and records the port's link as its cable; then Place… it in a rack or a room.</p>
+            <p className="muted small">Details: record it there (Record… keeps its MAC and records the port's link as its cable), then place it in a rack or a room.</p>
           </>
         );
-        actions = <RecordSeenButton d={seen} />;
-        open = <p className="muted small">Seen by {s.switch}'s controller at port {s.port}; asset-manager asset record turns it into a recorded device.</p>;
         break;
       }
       title = rec?.displayName && rec.displayName !== sel.id ? `${rec.displayName} · ${sel.id}` : sel.id;
@@ -712,25 +634,6 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           <Findings list={t.findings.filter((f) => f.text.includes(sel.id))} />
         </>
       );
-      const recActs = rec ? <DeviceRecordActions name={sel.id} cabled={cables.some((c) => c.source === "recorded")} placed={!!m} /> : null;
-      actions = m ? (
-        <>
-          <PlaceActions device={sel.id} v={racks} />
-          {recActs}
-        </>
-      ) : out ? (
-        <>
-          {cables.filter((c) => c.source === "recorded").map((c) => (
-            <OperateButton key={`${c.from.device}:${c.from.port}`} label={`Remove the cable on ${c.from.device === sel.id ? c.from.port : c.to.port}…`} kind="danger" title="Remove a recorded cable" steps={() => cableRemoveSteps(c.from.device === sel.id ? `${c.from.device}:${c.from.port}` : `${c.to.device}:${c.to.port}`)} />
-          ))}
-        </>
-      ) : (
-        <>
-          <PlaceActions device={sel.id} v={racks} />
-          {recActs}
-        </>
-      );
-      open = <p className="muted small">{rec ? "Nothing manages it: asset-manager records it." : out ? "Nothing reports on it: it is known only by the cable that names it — record it (asset-manager asset add) to place it." : "Its own records are on the module's page."}</p>;
       break;
     }
   }
@@ -740,6 +643,13 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
   const st = dev ? deviceState(t, dev) : null;
   const ringed = new Set(sel.kind === "port" || sel.kind === "panelport" ? [sel.id] : sel.kind === "lag" ? t.switches.find((x) => x.name === sel.switch)?.lags.find((x) => x.name === sel.id)?.ports ?? [] : []);
   const ci = dev ? ciRefOf(dev) : null;
+  const targets = selDetails(sel, {
+    modules: new Set((modules ?? []).map((m) => m.name)),
+    linkEnds: linkEnds(),
+    firewall: t.site.wan.firewall?.module ?? null,
+    outsideKind: sel.kind === "outside" ? t.outside.find((x) => x.name === sel.id)?.kind ?? null : null,
+    seen: sel.kind === "mount" && !!t.devices?.some((x) => x.name === sel.id && x.source === "seen"),
+  });
   if (record) return <CiPanel start={record} close={close} back={{ label: dev?.name ?? "Device", go: () => setRecord(null) }} />;
   return (
     <aside className="sidepanel">
@@ -751,6 +661,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
           ×
         </button>
       </header>
+      <DetailsLinks targets={targets} />
       {dev ? drawing(dev, ringed) : null}
       {ci ? (
         <p>
@@ -759,119 +670,7 @@ export function SidePanel({ t, sel, close, pick, storage }: { t: Topology; sel: 
       ) : null}
       {body ?? <p className="muted">Not in the current topology.</p>}
       {dev && sel.kind !== "port" && sel.kind !== "lag" && sel.kind !== "panelport" ? neighbours(dev) : null}
-      {actions && operator ? (
-        <>
-          <h3>Change</h3>
-          <div className="toolbar">{actions}</div>
-        </>
-      ) : null}
-      <h3>Open in</h3>
-      {open}
-      <p className="muted small">For debugging: these open the component UIs in a new tab; nothing is changed there from here.</p>
     </aside>
-  );
-}
-
-// A switch port's change (mockup 3): its record first, then the switch.
-function PortChange({ t, sw, port, type, parked, lag, mode, zone, description }: { t: Topology; sw: string; port: string; type: string | null; parked: boolean; lag: string | null; mode: string; zone: string; description: string | null }) {
-  const zones = t.zones.filter((z) => z.vlan !== null && z.state !== "Disabled").map((z) => z.name);
-  const steps: Step[] = [
-    {
-      title: `1 · The port's record: switch-manager update-port '${sw}' ${port}`,
-      bin: "switch-manager",
-      verb: "update-port",
-      fixed: [sw, port],
-      // The port as it is; a zone only for an access port (a trunk's first VLAN is not "its" zone).
-      initial: { "--type": type ?? "device", "--mode": mode === "access" ? "access" : mode || "access", "--zone": mode === "access" ? zone : "", "--description": description ?? "" },
-      choices: { "--zone": zones },
-      note: "This writes the port's record (switch-configuration-actual.json) and nothing else: the switch is programmed in the next step. An access port carries one zone; a trunk the zones in --tagged.",
-    },
-    {
-      title: "2 · Program the switch: switch-manager reconcile",
-      bin: "switch-manager",
-      verb: "reconcile",
-      note: "The preview is the delta per port (interrogate, update-desired, delta — nothing applied). Apply programs every pending change on every switch, not only this port's: read the preview's list before you apply.",
-    },
-  ];
-  // A port is given back by parking it (#853): remove-port sets it on the switch
-  // as an access port in iotLocal, at once, then records it parked. The
-  // controller's own default profile is never restored: it is a trunk of every
-  // network, the exposure parking removes.
-  const park: Step[] = [
-    {
-      title: `Park port ${port}: switch-manager remove-port '${sw}' ${port}`,
-      bin: "switch-manager",
-      verb: "remove-port",
-      fixed: [sw, port],
-      note: "Sets the port on the switch now, alone, as an access port in iotLocal (tier 6, no internet, nothing else reachable), then replaces its record with a parked one. Whatever is plugged in loses what the port carried. Only this port is pushed, nothing else pending on the switch.",
-    },
-    { title: "Read the switch again: switch-manager reconcile (preview)", bin: "switch-manager", verb: "reconcile", note: "Its preview interrogates the switch: the port shows parked and in sync. Nothing needs applying for it." },
-  ];
-  return (
-    <>
-      <OperateButton label={`Change port ${port}…`} title={`Port ${port} · ${sw}`} steps={steps} />
-      {!parked && !lag ? <OperateButton label="Park…" kind="danger" title={`Port ${port} · ${sw}: park`} steps={park} /> : null}
-    </>
-  );
-}
-
-// A node's uplinks: read them, or set them (preview without --apply).
-function NodeNetwork({ node }: { node: string }) {
-  return (
-    <>
-      <OperateButton label="Network: show" title={`${node} — uplinks`} steps={[{ title: `site-manager node network show ${node}`, bin: "site-manager", verb: "node network show", fixed: [node] }]} />
-      <OperateButton
-        label="Network: set…"
-        title={`${node} — set the uplinks`}
-        steps={[
-          {
-            title: `site-manager node network set ${node}`,
-            bin: "site-manager",
-            verb: "node network set",
-            fixed: [node],
-            note: "The preview (without --apply) declares the uplink in config/<node>.json and previews the change on the node: the declaration is written, the node is not touched. Apply drains the node (HA maintenance), moves lan onto the declared ports under a 45 s rollback, confirms and brings the node back. --yes answers the manager's own prompt for the node's name.",
-          },
-        ]}
-      />
-    </>
-  );
-}
-
-// A recorded device's own record: change it, or remove it once nothing names it.
-function DeviceRecordActions({ name, cabled, placed }: { name: string; cabled: boolean; placed: boolean }) {
-  const rm = (verb: string, title: string, extra: Partial<Step> = {}): Step => ({ title, bin: "asset-manager", verb, fixed: [name], ...extra });
-  return (
-    <>
-      <OperateButton label="Change the record…" title={`The record of ${name}`} steps={[rm("asset modify", `asset-manager asset modify '${name}'`, { note: "Its kind, vendor, model, serial, tag, ports (a count or a list), display name, description or procurement; --check previews." })]} />
-      {!placed && !cabled ? <OperateButton label="Remove the record…" kind="danger" title={`Remove ${name}`} steps={[rm("asset remove", `asset-manager asset remove '${name}'`)]} /> : null}
-    </>
-  );
-}
-
-// A wire through a patch panel: asset-manager cable split, its --check the preview.
-function PanelSplit({ t, c, many }: { t: Topology; c: RackCable; many: boolean }) {
-  const free = freePanelPorts(t);
-  if (!free.length) return null;
-  const end = `${c.from.device}:${c.from.port}`;
-  return (
-    <OperateButton
-      label={many ? `Attach ${c.from.port} ↔ ${c.to.port} to a patch panel…` : "Attach to patch panel…"}
-      title={`${end} — ${c.to.device}:${c.to.port} through a patch panel`}
-      steps={[{ title: `asset-manager cable split '${end}' --via <panel:port>`, bin: "asset-manager", verb: "cable split", fixed: [end], only: ["--via"], choices: { "--via": free }, note: "The link becomes two recorded wires: this port to the panel port's front, its rear to the far end. The Device view keeps one link; the racks draw the two wires. Preview: asset-manager's --check." }]}
-    />
-  );
-}
-
-// Undo it: asset-manager cable join at the panel port.
-function PanelJoin({ c }: { c: RackCable }) {
-  const v = c.via?.[0];
-  if (!v) return null;
-  return (
-    <OperateButton
-      label="Remove patch panel"
-      title={`${c.from.device}:${c.from.port} — ${c.to.device}:${c.to.port} without ${v.device}`}
-      steps={[{ title: `asset-manager cable join '${v.device}:${v.port}'`, bin: "asset-manager", verb: "cable join", fixed: [`${v.device}:${v.port}`], note: "The two wires through the panel port are one link again: the topology's own, or one recorded cable when it was recorded. Preview: asset-manager's --check." }]}
-    />
   );
 }
 
@@ -885,7 +684,7 @@ function PanelPorts({ t, panel, ports, pick }: { t: Topology; panel: string; por
   return (
     <>
       <p className="small howto-line">
-        {free} of {ports.length} ports free{half ? `, ${half} cabled on one side only` : ""}. To use one: select a wire and Attach to patch panel…, or click a free port.
+        {free} of {ports.length} ports free{half ? `, ${half} cabled on one side only` : ""}. To use one: Attach to patch panel… on a wire, or Attach a wire here… on a free port, on the Details of the panel or the device.
       </p>
       <h3>Ports</h3>
       <table className="table compact small">
@@ -908,26 +707,5 @@ function PanelPorts({ t, panel, ports, pick }: { t: Topology; panel: string; por
         </tbody>
       </table>
     </>
-  );
-}
-
-// Attach a wire here…: a link, chosen by the end it starts from, split through this panel port.
-function PanelAttach({ panelPort, links }: { panelPort: string; links: { end: string; text: string }[] }) {
-  return (
-    <OperateButton
-      label="Attach a wire here…"
-      title={`A link through ${panelPort}`}
-      steps={[
-        {
-          title: `asset-manager cable split <device:port> --via '${panelPort}'`,
-          bin: "asset-manager",
-          verb: "cable split",
-          only: [],
-          initial: { "--via": panelPort },
-          choices: { "@device:port": links.map((l) => l.end) },
-          note: <>The link on the port you choose becomes two recorded wires: that port to {panelPort}'s front, its rear to the far end. The links: {links.map((l) => l.text).join("; ")}. Preview: asset-manager's --check.</>,
-        },
-      ]}
-    />
   );
 }
