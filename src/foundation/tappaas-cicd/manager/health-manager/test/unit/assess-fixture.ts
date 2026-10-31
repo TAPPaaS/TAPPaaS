@@ -20,7 +20,7 @@ const CLASSES: Record<string, string[]> = {
   site: ["site", "collection", "ci", "object"], cluster: ["cluster", "collection", "ci", "object"], environment: ["environment", "collection", "ci", "object"],
   server: ["server", "asset", "resource", "object"], "network-device": ["network-device", "asset", "resource", "object"],
   appliance: ["appliance", "asset", "resource", "object"], "passive-device": ["passive-device", "asset", "resource", "object"],
-  port: ["port", "resource", "object"], rack: ["rack", "place", "object"], room: ["room", "place", "object"],
+  port: ["port", "resource", "object"], disk: ["disk", "resource", "object"], rack: ["rack", "place", "object"], room: ["room", "place", "object"],
 };
 
 export function shippedModel(extra: HealthRule[] = []): RulesDoc {

@@ -49,7 +49,8 @@ which carries the positions resolved against the site.
     "tappaas1": { "rack": "rack1", "u": 10, "height": 2, "width": "full", "face": "front", "faceplate": "generic/server-2u" },
     "USW Pro XG 10 PoE": { "rack": "rack1", "u": 30, "height": 1, "width": "full", "face": "front", "faceplate": "unifi/usw-pro-xg-10-poe" },
     "patch1": { "rack": "rack1", "u": 32, "height": 1, "width": "full", "face": "front" },
-    "ISP modem": { "room": "basement" }
+    "ISP modem": { "room": "basement" },
+    "dsk-01": { "in": "srv-01", "bay": "2" }
   },
   "assets": {
     "srv-01": { "kind": "server", "vendor": "HP", "model": "Z840", "serial": "CZC1234ABC", "stage": "placed", "role": "tappaas1", "displayName": "tappaas1",
@@ -59,7 +60,9 @@ which carries the positions resolved against the site.
     "srv-02": { "kind": "server", "stage": "stock", "faulty": true, "faultNote": "PSU 2 dead, away for repair" },
     "ISP modem": { "kind": "modem", "model": "generic/isp-modem", "stage": "placed", "role": "ISP modem" },
     "patch1": { "kind": "patch-panel", "ports": [{ "name": "1", "kind": "rj45", "speed": "1g" }, "…"], "displayName": "Patch panel A", "stage": "placed", "role": "patch1" },
-    "printer": { "kind": "other", "ports": [{ "name": "eth0", "kind": "rj45", "speed": "1g", "mac": "aa:bb:cc:00:11:22" }], "displayName": "printer-1", "stage": "stock", "role": "printer" }
+    "printer": { "kind": "other", "ports": [{ "name": "eth0", "kind": "rj45", "speed": "1g", "mac": "aa:bb:cc:00:11:22" }], "displayName": "printer-1", "stage": "stock", "role": "printer" },
+    "dsk-01": { "kind": "disk", "displayName": "ata-Samsung_SSD_870_EVO_1TB_S6PTNX0R123456A", "vendor": "Samsung", "model": "Samsung SSD 870 EVO 1TB",
+                "serial": "S6PTNX0R123456A", "disk": { "kind": "ssd", "bus": "sata", "size": 1000204886016 }, "stage": "placed" }
   },
   "cables": [
     { "from": { "device": "USW Pro XG 10 PoE", "port": "5" }, "to": { "device": "ISP modem", "port": "LAN 1" }, "kind": "uplink", "label": "ISP hand-off" },
@@ -77,14 +80,16 @@ which carries the positions resolved against the site.
 - A **placement** is in a rack — **rack** and **u**, the lowest unit a device takes as the
   rack numbers its units, **height** the units it takes, **width** `full`, `half` or
   `third` with a **slot** (its column, 0 at the left), **face** `front` or `rear` — or loose
-  in a room: **room**, and no unit or size (its plate gives its size). A device has at
-  most one placement.
+  in a room: **room**, and no unit or size (its plate gives its size) — or, a disk's, **in**
+  another asset (by its own name, never a disk) at its **bay** (the slot label, else the
+  disk's by-id name). A disk is placed only so, and nothing else is. A device has at most
+  one placement.
 - **faceplate** is a catalog key; unset, the view draws the catalog's suggestion for
   the device's model, else a generic plate.
 - **assets** are the physical things, keyed by name — a tag per kind (`srv-NN`, `sw-NN`,
-  `ap-NN`, `dev-NN`: the next free one when `asset add` is given none) or the operator's own.
-  Each has a **kind** (`server`, `switch`, `access-point`, `modem`, `ont`, `ups`,
-  `patch-panel`, `pdu`, `other`), its records — **vendor**, **model** (a catalog key where the
+  `ap-NN`, `dev-NN`, `dsk-NN`: the next free one when `asset add` or `disk add` is given none)
+  or the operator's own. Each has a **kind** (`server`, `switch`, `access-point`, `modem`,
+  `ont`, `ups`, `patch-panel`, `pdu`, `other`, `disk`), its records — **vendor**, **model** (a catalog key where the
   catalog has one: its ports then come from the plate), **serial** (unique), **assetTag**,
   **procurement** (`supplier`, `orderRef`, `purchaseDate`, `warrantyUntil`, `ownership`
   owned|rented, `notes`; no prices) and, once gone, **disposal** (`how` sold|recycled|
@@ -100,6 +105,15 @@ which carries the positions resolved against the site.
   manages, which the asset then is to the topology (its role usually its own name). Every asset
   that is here (not ordered, not disposed) is a device of the topology by its role's name, else
   its own: it can be placed, it is a cable end, the console draws it.
+- A **disk** is an asset of its own: the part of a site that fails most, moves between
+  machines and is wiped before it leaves. Its **serial** is what knows it — unique across
+  the assets, compared without case, spaces and dashes, as tools spell it differently; a
+  by-id name changes with the controller and slot and is only its **displayName**. Its
+  **disk** record holds its **kind** (`nvme`, `ssd`, `hdd`, `usb`), **bus**, **wwn**, **size**
+  (bytes) and **firmware**. It has no ports and plays no role; it is no device of the
+  topology. Placed `in` an asset it is `placed`; unplaced it is in stock; `place --in`
+  another asset is the move. An asset that holds disks is neither removed nor disposed
+  of until they are unplaced or moved: whether each was wiped is the disk's disposal.
 - An asset's **ports** belong to it (ADR-040 D9). A port's **kind** names its connector —
   `rj45`, `sfp`, `wifi`, `usb-a`, `usb-c` — and its **speed** is its maximum (`rj45` 1g, 2.5g,
   10g; `sfp` 1g, 10g, 25g; `usb-*` usb2, usb3); a `wifi` port has a **standard** (`wifi5`,
@@ -147,14 +161,20 @@ which carries the positions resolved against the site.
 | `port add <asset> <port> --kind rj45\|sfp\|wifi\|usb-a\|usb-c [--speed] [--standard] [--bands <list>] [--module] [--role lan\|wan\|bmc] [--mac] [--side front\|rear]` | A port of its own: its connector and what goes with it (rj45 is 1g unless told). |
 | `port modify <asset> <port> --set <field>=<value>... --unset <field>...` | A port's kind, speed, standard, bands, module, role, mac or side; a port of its model's plate takes an entry of its own, merged over it. |
 | `port remove <asset> <port>` | A port of its own no recorded cable uses; one over its plate's goes back to the plate's. |
+| `disk list [<asset>] [--json]` | The disks, each in the asset and bay it is in, or in stock. |
+| `disk add <asset> <name> --serial <s> [--model] [--vendor] [--wwn] [--size <size>] [--kind nvme\|ssd\|hdd\|usb] [--bus] [--firmware] [--bay] [--description]` | A disk in an asset: the next `dsk-NN`, `<name>` (its by-id name) shown, placed in that asset at `--bay` (default: its name). A serial an asset records already is refused, naming that asset. `--size` is bytes or `960G`, `4TB` (1000s), `4TiB` (1024s). |
+| `disk modify <disk> --set <field>=<value>... --unset <field>...` | Its displayName, description, vendor, model, serial (never unset), assetTag, wwn, size, kind, bus, firmware, bay. |
+| `disk remove <disk>` | A record made by mistake, with its placement. A disposed disk's record stays. |
+| `disk adopt [<asset>]` | Every disk the CMDB's server CIs list (what `site-manager report --discover` found) that no asset records yet, by serial, recorded in that server; the recorded ones and those without a serial are skipped, each said. Once, for the servers there are; `node add` records a new machine's disks itself. |
 | `rack list\|show [<rack>] [--json]` | The racks; one rack with what is placed in it. |
 | `rack add <rack> [--units 42] [--width 19in\|10in] [--numbering bottom-up\|top-down] [--display-name] [--room] [--description]` | A new rack. |
 | `rack modify <rack> --set <field>=<value>... --unset <field>...` | Any field but its name; `--unset` clears a text. |
 | `rack delete <rack>` | An empty rack. |
 | `place list [--rack <rack>]\|show <device> [--json]` | What is placed where. |
 | `place <device> (--rack <rack> --u <n> \| --room <room>) [--height] [--width] [--slot] [--face] [--faceplate] [--label] [--description]` | A device into a rack, or loose into a room. An asset's plate is its model's, or one drawn from its ports. |
+| `place <disk> --in <asset> [--bay <bay>]` | A disk into an asset's bay: out of stock, or out of the asset it was in (the move). The bay is the one given, else the one it had there, else its by-id name. |
 | `place modify <device> --set <field>=<value>... --unset <field>...` | A move (`rack` and `u`, `slot`, `face`, or `room` — out of the rack, loose in it) or its plate and label; `--unset faceplate` goes back to the suggestion. |
-| `unplace <device>` | The device leaves its rack or room. A passive plate's recorded cables go with it; an asset keeps its own (and is in stock again). |
+| `unplace <device>` | The device leaves its rack or room, a disk its asset. A passive plate's recorded cables go with it; an asset keeps its own (and is in stock again). |
 | `cable list [--json]` | The recorded cables. |
 | `cable add --from <device:port> --to <device:port> [--kind patch\|uplink\|power] [--label] [--from-faceplate\|--to-faceplate <key>] [--from-side\|--to-side front\|rear]` | A cable nothing can see; a side on a patch panel's port. |
 | `cable remove <device:port> [--side front\|rear]` | The recorded cable on that port (on a panel, that side's). |
@@ -210,6 +230,17 @@ asset-manager unplace srv-07
 asset-manager asset dispose srv-07 --how sold --wiped
 ```
 
+### A disk's life
+
+```
+asset-manager disk adopt --check                    # the disks the servers' CIs know, once
+asset-manager disk add srv-02 ata-HGST_HDN726050ALE614_NAHW317X --serial NAHW317X --kind hdd --size 5TB --bay 3
+asset-manager disk list srv-02
+asset-manager place dsk-04 --in srv-03              # moved to another server
+asset-manager unplace dsk-04                        # pulled: in stock
+asset-manager asset dispose dsk-04 --how recycled --wiped
+```
+
 ### Recording a device
 
 A cable recorded before devices could be (the ISP's modem, named only on its cable)
@@ -242,6 +273,7 @@ asset-manager is a CMDB source (ADR-040 D4; `"cmdbSource": true` in `components.
 | a rack | `rack`, `placed-in` its room (`room` field); width in inches |
 | an asset | its D3 class: `server`; `network-device` (switch, access-point); `appliance` (modem, ont, ups); `passive-device` (patch-panel, pdu); `other-device` — with `deviceType`, vendor, model, serial, assetTag, stage (as derived: `placed`, `operational`), faulty, faultNote, procurement, disposal |
 | its ports (its own, merged over its model's plate, else the plate it is placed with) | `port`, `part-of` the asset; kind, speed, standard, bands, module, role, mac, side |
+| a disk in an asset | `disk`, `part-of` that asset (its key with the tag, and immutable: a moved disk's CI in the old asset ends and one in the new begins); bay, vendor, model, serial, wwn, size, kind, bus, firmware, assetTag, the by-id name shown, stage, faulty, faultNote, procurement, disposal. A disk in stock has no CI; site-manager adds what the node says of it (health, holds, partitions, and SMART from the sweep) |
 | a placement | `placed-in` from the asset to its rack (u, height, width, slot, face, faceplate, label, description on the relation) or its room |
 | a recorded cable | `connects` port to port (kind, label, origin, side, linkSpeed) |
 | an asset's role | `allocated-to` the node of that name (`{class: node, name}`: the machine, vm or device CI another manager reports) |

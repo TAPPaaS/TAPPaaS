@@ -14,7 +14,7 @@
       "additionalProperties": { "$ref": "#/$defs/rack" }
     },
     "placements": {
-      "description": "Where each device stands, keyed by the name the topology knows it by (an asset's role while it plays one, else the asset's own name): in a rack at its units, or loose in a room (no rack, no unit). A device has at most one placement. A passive device nothing records (a PDU) by its own name.",
+      "description": "Where each device stands, keyed by the name the topology knows it by (an asset's role while it plays one, else the asset's own name): in a rack at its units, or loose in a room (no rack, no unit); a disk in a bay of another asset (in, bay). A device has at most one placement. A passive device nothing records (a PDU) by its own name.",
       "type": "object",
       "additionalProperties": { "$ref": "#/$defs/placement" }
     },
@@ -100,6 +100,13 @@
           "changeClass": "immutable",
           "changeNote": "A placement is one device's: unplace it and place the other device."
         },
+        "in": {
+          "description": "A disk's: the asset it is in, by the asset's own name (a server, never a disk). A disk is placed only so; nothing else is.",
+          "type": "string",
+          "changeClass": "in-place",
+          "changeNote": "place <disk> --in <asset> moves it: its CMDB record in the old asset ends, one in the new begins."
+        },
+        "bay": { "description": "A disk's: the bay of that asset it is in, as the asset labels it, else the disk's by-id name.", "type": "string", "changeClass": "in-place" },
         "rack": { "description": "The rack it is mounted in. A device loose in a room has none.", "type": "string", "references": "racks", "changeClass": "in-place" },
         "u": {
           "description": "The lowest rack unit it occupies, as the rack numbers its units. A device loose in a room has none.",
@@ -266,7 +273,7 @@
       "required": ["kind", "stage"],
       "properties": {
         "name": {
-          "description": "The asset's name: a tag per kind (srv-NN, sw-NN, ap-NN, dev-NN — the next free one when none is given) or the operator's own. It is the record's key and never changes; the role's name is what the views label it with.",
+          "description": "The asset's name: a tag per kind (srv-NN, sw-NN, ap-NN, dev-NN, dsk-NN — the next free one when none is given) or the operator's own. It is the record's key and never changes; the role's name is what the views label it with.",
           "type": "string",
           "changeClass": "immutable",
           "changeNote": "The asset's history is under its name: add a new asset for a new thing."
@@ -274,7 +281,20 @@
         "kind": {
           "description": "What it is.",
           "type": "string",
-          "enum": ["server", "switch", "access-point", "modem", "ont", "ups", "patch-panel", "pdu", "other"],
+          "enum": ["server", "switch", "access-point", "modem", "ont", "ups", "patch-panel", "pdu", "other", "disk"],
+          "changeClass": "in-place"
+        },
+        "disk": {
+          "description": "A disk's own record (kind disk): its medium, bus, World Wide Name, size and firmware, beside the vendor, model and serial every asset has. Its serial is its identity: unique across the assets, compared without case, spaces and dashes.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": { "type": "string", "enum": ["nvme", "ssd", "hdd", "usb"], "description": "Its medium." },
+            "bus": { "type": "string", "description": "sata, sas, nvme, usb, …" },
+            "wwn": { "type": "string", "description": "Its World Wide Name." },
+            "size": { "type": "integer", "minimum": 1, "description": "Bytes." },
+            "firmware": { "type": "string", "description": "Its firmware version." }
+          },
           "changeClass": "in-place"
         },
         "displayName": { "description": "The name shown.", "type": "string", "changeClass": "in-place" },

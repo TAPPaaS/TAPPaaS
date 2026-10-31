@@ -63,7 +63,7 @@ import {
   withSiteFaceplates,
 } from "../../../lib/ts/src/positions";
 import { Store, loadCatalog, readDevices } from "./store";
-import { CmdbRefused, CmdbReport, cmdbReport } from "../../../lib/ts/src/cmdb";
+import { CmdbRefused, CmdbReport, cmdbQuery, cmdbReport } from "../../../lib/ts/src/cmdb";
 import { changeJob } from "../../../lib/ts/src/job";
 import { View, changeReport, cmdbAnswer, cmdbView, fullReport } from "./cmdb";
 import {
@@ -98,6 +98,11 @@ import {
   removeCable,
   unplaceDevice,
   splitCable,
+  FoundDisk,
+  addDisk,
+  adoptDisks,
+  modifyDisk,
+  removeDisk,
 } from "./verbs";
 
 const VERSION = "0.3.0";
@@ -148,8 +153,10 @@ export const HELP: HelpSpec = {
     { usage: "place show <device> [--json]", options: [JSON_OUT], aliases: ["mount show"] },
     {
       usage:
-        "place <device> (--rack <rack> --u <n> | --room <room>) [--height <n>] [--width full|half|third] [--slot <n>] [--face front|rear] [--faceplate <vendor/model>] [--label <text>] [--description <text>] [--topology <file>] [--check]",
+        "place <device> (--rack <rack> --u <n> | --room <room> | --in <asset> [--bay <bay>]) [--height <n>] [--width full|half|third] [--slot <n>] [--face front|rear] [--faceplate <vendor/model>] [--label <text>] [--description <text>] [--topology <file>] [--check]",
       options: [
+        ["--in A", "A disk only: into this asset (a server), out of stock or out of the asset it was in — the move."],
+        ["--bay B", "With --in: the bay, as the asset labels it (default: the one it had there, else its by-id name)."],
         ["--rack R", "In this rack."],
         ["--u N", "The lowest rack unit it takes, as the rack numbers them."],
         ["--room R", "Loose in this room, in no rack (no --rack, no --u): its plate gives its size."],
@@ -172,7 +179,7 @@ export const HELP: HelpSpec = {
       aliases: ["mount modify"],
       object: { positional: "device" },
     },
-    { usage: "unplace <device> [--check]", options: [CHECK, CHECK_JSON], note: "(the device leaves its rack or room; nothing else changes)", aliases: ["mount remove"], destructive: true, object: { positional: "device" } },
+    { usage: "unplace <device> [--check]", options: [CHECK, CHECK_JSON], note: "(the device leaves its rack or room, a disk its asset, into stock; nothing else changes)", aliases: ["mount remove"], destructive: true, object: { positional: "device" } },
     { usage: "cable list [--json]", options: [JSON_OUT], note: "(the recorded cables; the topology adds the ones it sees)" },
     {
       usage: "cable add --from <device:port> --to <device:port> [--kind patch|uplink|power] [--label <text>] [--link-speed <speed>] [--from-faceplate <vendor/model>] [--to-faceplate <vendor/model>] [--from-side front|rear] [--to-side front|rear] [--topology <file>] [--check]",
@@ -282,6 +289,37 @@ export const HELP: HelpSpec = {
       object: { positional: "port", within: ["asset"] },
     },
     { usage: "port remove <asset> <port> [--check]", options: [CHECK, CHECK_JSON], note: "(a port of its own no recorded cable uses; one over its plate's goes back to the plate's)", destructive: true, object: { positional: "port", within: ["asset"] } },
+    { usage: "disk list [<asset>] [--json]", options: [JSON_OUT], note: "(the disks, each in the asset and bay it is in, or in stock)", object: { positional: "asset" } },
+    {
+      usage: "disk add <asset> <name> --serial <serial> [--model <text>] [--vendor <text>] [--wwn <wwn>] [--size <size>] [--kind nvme|ssd|hdd|usb] [--bus <bus>] [--firmware <text>] [--bay <bay>] [--description <text>] [--check]",
+      options: [
+        ["--serial S", "Its serial: what knows it again, unique across every asset (case, spaces and dashes do not count)."],
+        ["--model T", "Its model."],
+        ["--vendor T", "Who made it."],
+        ["--wwn W", "Its World Wide Name."],
+        ["--size S", "Bytes, or a number with K, M, G, T (1000s) or KiB, MiB, GiB, TiB (1024s): 960G, 4TB."],
+        ["--kind K", "nvme, ssd, hdd or usb."],
+        ["--bus B", "sata, sas, nvme, usb, …"],
+        ["--firmware T", "Its firmware version."],
+        ["--bay B", "The bay it is in, as the asset labels it (default: its name)."],
+        ["--description T", "Anything else."],
+        CHECK, CHECK_JSON,
+      ],
+      note: "(a disk in <asset>, recorded as the next dsk-NN with <name> — its by-id name — shown; a serial an asset records already is refused)",
+      object: { positional: "name", within: ["asset"] },
+    },
+    {
+      usage: "disk modify <disk> [--set <field>=<value>]... [--unset <field>]... [--check]",
+      options: [["--set F=V", "displayName, description, vendor, model, serial, assetTag, wwn, size, kind, bus, firmware, bay (repeatable); where it is: place <disk> --in <asset>."], ["--unset F", "Clear one but serial (repeatable)."], CHECK, CHECK_JSON],
+      object: { positional: "disk" },
+    },
+    { usage: "disk remove <disk> [--check]", options: [CHECK, CHECK_JSON], note: "(a record made by mistake, with its placement; a disposed disk's record stays)", destructive: true, object: { positional: "disk" } },
+    {
+      usage: "disk adopt [<asset>] [--check]",
+      options: [CHECK, CHECK_JSON],
+      note: "(every disk the CMDB's server CI lists — site-manager report --discover — that no asset records, by serial, recorded in that server; the recorded ones are skipped)",
+      object: { positional: "asset" },
+    },
     {
       usage: "cable split <device:port> --via <panel:port> [--topology <file>] [--check]",
       options: [["--via P:N", "The patch panel port the link runs through: the device's port to its front, its rear to the far end."], TOPO, CHECK, CHECK_JSON],
@@ -334,6 +372,7 @@ export const HELP: HelpSpec = {
     "An asset is the physical thing (ADR-040 D7): asset add records it, ordered or in stock; place puts it in a rack or a room; asset allocate gives it a role — a node, a switch, an AP, or a device nothing manages that it is — and its placement and cables follow the role's name; asset release ends the role, asset dispose the asset. faulty is a flag beside the stage (asset fault, asset repaired). A device a switch port sees is recorded by asset record.",
     "A port's kind is its connector (rj45, sfp, wifi, usb-a, usb-c), its speed its maximum; the link a cable negotiates is the cable's link speed. A plate's ports are the asset's, its own merged over them by name (port add, port modify).",
     "A link through a patch panel is split there (cable split): the topology still shows one link, the racks its two wires.",
+    "A disk is an asset of its own (dsk-NN), known by its serial, placed in a bay of another asset (place <disk> --in <asset>); placing it into another asset is the move, unplace puts it in stock. node add records a new machine's disks; disk adopt records the disks the CMDB knows in the servers there are.",
     "The device verbs are the asset verbs' old names (device add, list, show, modify, remove, record), answering for one release. config/positions.json's devices{} becomes assets{} by migration 0027; a change waits until it has run.",
     "mount add, mount modify and mount remove are the old names of place, place modify and unplace, answering for one release.",
   ],
@@ -360,6 +399,7 @@ const VALUED = [
   "--model", "--ports", "--port", "--from-side", "--to-side", "--side", "--via", "--location", "--name", "--match", "--vendor",
   "--serial", "--asset-tag", "--stage", "--role", "--note", "--how", "--when", "--supplier", "--order-ref", "--purchase-date",
   "--warranty-until", "--ownership", "--notes", "--speed", "--standard", "--bands", "--module", "--mac", "--link-speed",
+  "--in", "--bay", "--wwn", "--size", "--bus", "--firmware",
 ];
 function positional(args: string[], skip: number): string[] {
   const out: string[] = [];
@@ -540,6 +580,32 @@ function placementRows(doc: PositionsDoc, rack?: string) {
 const where = (m: Placement) =>
   m.rack ? `${placeWhere(m)} ${faceOf(m)}${widthOf(m) === "full" ? "" : ` ${widthOf(m)} slot ${m.slot ?? 0}`}` : placeWhere(m);
 
+// The disks each server CI lists (disks[], site-manager report --discover), by
+// the asset it is: the CI's name is the asset's.
+export function serverDisks(servers: Record<string, unknown>[]): { asset: string; disks: FoundDisk[] }[] {
+  const str = (v: unknown): string | undefined => (typeof v === "string" && v.trim() ? v.trim() : undefined);
+  return servers
+    .filter((o) => o.class === "server" && typeof o.name === "string")
+    .map((o) => {
+      const a = (o.attributes && typeof o.attributes === "object" ? o.attributes : o) as Record<string, unknown>;
+      const disks = (Array.isArray(a.disks) ? a.disks : []) as Record<string, unknown>[];
+      return {
+        asset: String(o.name),
+        disks: disks.filter((x) => x && typeof x === "object" && str(x.name)).map((x) => ({
+          name: str(x.name)!,
+          serial: str(x.serial),
+          model: str(x.model),
+          vendor: str(x.vendor),
+          wwn: str(x.wwn),
+          size: typeof x.size === "number" ? x.size : undefined,
+          type: str(x.type),
+          bus: str(x.bus),
+        })),
+      };
+    })
+    .filter((f) => f.disks.length);
+}
+
 // The old verbs, answering for one release: mount add/modify/remove/list/show.
 const OLD_VERBS: Record<string, string[]> = {
   "mount add": ["place"],
@@ -707,6 +773,20 @@ export function run(argv: string[]): number {
     if (json) return out(shown);
     if (!shown.length) info(rows.length ? "no asset matches" : "no assets (asset add --kind …)");
     for (const r of shown) info(`${r.name.padEnd(24)} ${r.kind.padEnd(13)} ${r.stage.padEnd(12)} ${(r.role ?? "-").padEnd(20)} ${String(r.ports.length).padStart(2)} port(s)  ${r.placed ?? "placed nowhere"}${r.faulty ? `  ${YW}faulty${CL}` : ""}`);
+    return 0;
+  }
+  if (verb === "disk list") {
+    const d = store.load();
+    const [given] = positional(args, 2);
+    const host = given ? assetNamed(d, given)?.key ?? die(`asset ${given} is not recorded`) : null;
+    const rows = Object.entries(assetsOf(d))
+      .filter(([, a]) => a.kind === "disk")
+      .map(([name, a]) => ({ name, ...a, stage: stageOf(d, name, a), in: placementsOf(d)[name]?.in ?? null, bay: placementsOf(d)[name]?.bay ?? null }))
+      .filter((r) => !host || r.in === host);
+    if (json) return out(rows);
+    if (!rows.length) info(host ? `no disk recorded in ${host} (disk add ${host} <name> --serial <s>, or disk adopt ${host})` : "no disks (disk add <asset> <name> --serial <s>, or disk adopt)");
+    const gb = (b?: number) => (b ? (b >= 1e12 ? `${(b / 1e12).toFixed(1)} TB` : `${Math.round(b / 1e9)} GB`) : "-");
+    for (const r of rows) info(`${r.name.padEnd(8)} ${(r.in ? `${r.in}${r.bay ? ` bay ${r.bay}` : ""}` : r.stage === "stock" ? "in stock" : r.stage).padEnd(40)} ${(r.serial ?? "-").padEnd(22)} ${gb(r.disk?.size).padStart(8)} ${(r.disk?.kind ?? "-").padEnd(5)} ${r.displayName ?? ""}${r.faulty ? `  ${YW}faulty${CL}` : ""}`);
     return 0;
   }
   if (verb === "faceplates list") {
@@ -956,7 +1036,12 @@ export function run(argv: string[]): number {
   }
   if (verb === "place") {
     const [device] = positional(args, 1);
-    if (!device) die("place <device> --rack <rack> --u <n> | --room <room>");
+    if (!device) die("place <device> --rack <rack> --u <n> | --room <room> | --in <asset>");
+    const into = opt(args, "--in");
+    if (into !== undefined) {
+      if (opt(args, "--rack") !== undefined || opt(args, "--room") !== undefined || opt(args, "--u") !== undefined) die("--in places a disk in an asset: no --rack, --u or --room");
+      return change(store, check, undefined, (d) => placeDevice(d, device, { in: into, bay: opt(args, "--bay") }, [], null));
+    }
     const room = opt(args, "--room");
     const rack = opt(args, "--rack") ?? (room ? undefined : die("--rack (with --u), or --room, is required"));
     const u = intOpt(args, "--u") ?? (room ? undefined : die("--u is required"));
@@ -994,6 +1079,56 @@ export function run(argv: string[]): number {
     // A recorded device keeps its cables; a passive plate nothing records takes them along.
     const passive = !!m?.faceplate && catalog.find((f) => f.key === m.faceplate)?.passive === true && !assetNamed(store.load(), device);
     return change(store, check, undefined, (d) => unplaceDevice(d, device, passive));
+  }
+  if (verb === "disk add") {
+    const [host, name] = positional(args, 2);
+    if (!host || !name) die("disk add <asset> <name> --serial <serial>");
+    return change(store, check, undefined, (d) =>
+      addDisk(d, host, name, {
+        serial: opt(args, "--serial"),
+        model: opt(args, "--model"),
+        vendor: opt(args, "--vendor"),
+        wwn: opt(args, "--wwn"),
+        size: opt(args, "--size"),
+        kind: opt(args, "--kind"),
+        bus: opt(args, "--bus"),
+        firmware: opt(args, "--firmware"),
+        bay: opt(args, "--bay"),
+        description: opt(args, "--description"),
+      }),
+    );
+  }
+  if (verb === "disk modify") {
+    const [name] = positional(args, 2);
+    if (!name) die("disk modify <disk> --set <field>=<value>...");
+    const s = sets(args);
+    return change(store, check, undefined, (d) => modifyDisk(d, name, s));
+  }
+  if (verb === "disk remove") {
+    const [name] = positional(args, 2);
+    if (!name) die("disk remove <disk>");
+    return change(store, check, undefined, (d) => removeDisk(d, name));
+  }
+  if (verb === "disk adopt") {
+    const [given] = positional(args, 2);
+    const doc = store.load();
+    const only = given ? assetNamed(doc, given)?.key ?? die(`asset ${given} is not recorded`) : null;
+    let servers: Record<string, unknown>[];
+    try {
+      servers = cmdbQuery({ class: "server" });
+    } catch (e) {
+      return die(`the CMDB did not answer (${(e as Error).message}): disk adopt reads the disks site-manager report --discover found`);
+    }
+    const found = serverDisks(servers).filter((f) => (only ? f.asset === only : !!assetsOf(doc)[f.asset]));
+    if (only && !found.length) info(`the CMDB has no disks for ${only} (site-manager report --discover reads them)`);
+    // What it would record, said first; the change itself is made under the lock.
+    const plan = adoptDisks(doc, found);
+    for (const l of plan.lines) info(`  ${l}`);
+    if (!plan.result) {
+      info(`nothing to adopt: ${found.reduce((n, f) => n + f.disks.length, 0)} disk(s) in ${found.length} server(s), each recorded already or without a serial`);
+      return 0;
+    }
+    return change(store, check, undefined, (d) => adoptDisks(d, found).result ?? { refused: "the disks were recorded meanwhile" });
   }
   if (verb === "cable add") {
     const from = parseEnd(opt(args, "--from") ?? die("--from <device:port> is required")) ?? die("--from is <device>:<port>");
