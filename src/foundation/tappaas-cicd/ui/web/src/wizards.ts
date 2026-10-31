@@ -362,3 +362,14 @@ export function runFailure(j: RunJob): string {
   if (j.cancelled) return "the job was stopped";
   return `the job ended with exit ${j.exit}`;
 }
+
+// What a dry run said against a change, in its own words: its "[refused] …"
+// lines, "[Error] …" and "✗ …" lines. None of these: nothing to list, its tail says.
+export function refusalLines(raw: string): string[] {
+  const out: string[] = [];
+  for (const l of lastLines(raw, Infinity)) {
+    const m = /^\s*(?:\[(?:refused|Error|Fatal)\]|✗)\s*(.+)$/.exec(l);
+    if (m) out.push(m[1]);
+  }
+  return [...new Set(out)];
+}

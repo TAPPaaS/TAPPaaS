@@ -38,6 +38,8 @@ export const switchTarget = (sw: string): Target => ({ to: `/site/physical?selec
 
 export interface Finding {
   text: string;
+  level?: "warn" | "fail"; // tagged, in a list of findings of both
+  source?: string; // who says so
   target?: Target;
   hint?: string; // what to do there
 }

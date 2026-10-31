@@ -9,13 +9,13 @@
 // script would otherwise ask for on a terminal); its result is shown here,
 // the output under a fold; 3 afterwards: what is true now, with links.
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { reloadAll, useRead } from "../api";
-import { JobOutput, JobStatusLine, phaseOutputs } from "../jobs";
-import { AssetChoice, ASSET_CHOICES, CheckOutcome, Finding, HOWS, How, RemovalOutcome, assetFor, assetTarget, checkArgv, parseCheck, parseRemoval, removeArgv, switchTarget } from "../noderemove";
+import { CheckStep } from "../flows";
+import { phaseOutputs } from "../jobs";
+import { AssetChoice, ASSET_CHOICES, CheckOutcome, HOWS, How, RemovalOutcome, assetFor, assetTarget, checkArgv, parseCheck, parseRemoval, removeArgv, switchTarget } from "../noderemove";
 import { useOpenedBy, requestOpen } from "../opener";
-import { useJobRun } from "../run";
-import { JobSummary, SiteRead } from "../types";
+import { Job, JobSummary, SiteRead } from "../types";
 import { Link, Tag, canOperate, useMe } from "../ui";
 import { ResumeOffer, Wizard, useJobSession } from "../wizard";
 import { StepRow } from "./Setup";
@@ -112,22 +112,37 @@ export function RemoveNodeWizard({ onClose, node: preset }: { onClose: () => voi
   );
 }
 
-function FindingList({ items }: { items: Finding[] }) {
+// The check as CheckStep reads it: noderemove.ts's findings in its output.
+const readCheck = (node: string) => (job: Job): CheckOutcome =>
+  job.state === "refused"
+    ? { state: "failed", blockers: [], losses: [], ports: [], asset: null, record: null, tail: [] }
+    : parseCheck(job.output, node, job.state === "done" ? { exit: job.exit } : null);
+
+// What the removal did, in the operator's words.
+function Removed({ node, result }: { node: string; result: RemovalOutcome }) {
   return (
-    <ul className="findings">
-      {items.map((f, i) => (
-        <li key={i}>
-          {f.text}
-          {f.target ? (
-            <>
-              {" "}
-              <Link to={f.target.to}>{f.target.label}</Link>
-              {f.hint ? <>: {f.hint}.</> : null}
-            </>
-          ) : null}
-        </li>
-      ))}
-    </ul>
+    <>
+      <p><Tag level="pass" /> {node} is removed.</p>
+      <ul className="findings">
+        <li>It is out of the cluster{result.record === "archived" ? "; its node record is kept, archived" : " and gone from the site's nodes"}.</li>
+        {result.parked.map((p) => (
+          <li key={`${p.sw}:${p.port}`}>Switch port {p.port} on <Link to={switchTarget(p.sw).to}>{p.sw}</Link> is parked.</li>
+        ))}
+        {result.notParked.map((p) => (
+          <li key={`${p.sw}:${p.port}`} className="readstate-warn">Switch port {p.port} on <Link to={switchTarget(p.sw).to}>{p.sw}</Link> could not be parked: park it there.</li>
+        ))}
+        {result.asset ? (
+          <li>
+            The machine's asset record <Link to={assetTarget(result.asset.key).to}>{result.asset.key}</Link>{" "}
+            {result.asset.fate === "kept" ? (result.asset.where ? `is kept, still placed in ${result.asset.where}.` : "is kept, in stock.") : "is removed, with its place and cables."}
+          </li>
+        ) : null}
+        {result.assetTrouble ? <li className="readstate-warn">{result.assetTrouble}</li> : null}
+        {result.warnings.map((w, i) => (
+          <li key={i} className="muted">{w}</li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -138,160 +153,56 @@ function RemoveStep({ node, how, asset, setAsset, job, setJob, resumed, onResult
   job: string | null; setJob: (id: string | null) => void; resumed: boolean; onResult: (r: RemovalOutcome | null) => void;
 }) {
   const me = useMe();
-  const [round, setRound] = useState(0);
   const [confirm, setConfirm] = useState("");
-  const checking = useJobRun();
-  const run = useJobRun({ attach: job, onDone: (ok, j) => {
-    onResult(ok ? parseRemoval(phaseOutputs(j).apply) : null);
-    if (ok) reloadAll();
-  } });
-  const checkJob = checking.job;
-  const applied = run.job;
-
-  // The check, at once (and again on "Check again"); not for a removal found again.
-  const asked = useRef(-1);
-  useEffect(() => {
-    if (resumed || job || asked.current === round) return;
-    asked.current = round;
-    checking.retry();
-    void checking.preview(checkArgv(node, how));
-  }, [node, how, round]);
-
-  const outcome: CheckOutcome | null = checkJob
-    ? checkJob.state === "refused"
-      ? { state: "failed", blockers: [], losses: [], ports: [], asset: null, record: null, tail: [checkJob.refused ?? "refused"] }
-      : parseCheck(checkJob.output, node, checkJob.state === "done" ? { exit: checkJob.exit } : null)
-    : null;
-
-  // The removal: its own dry run first (one job), then the apply.
-  const phases = applied ? phaseOutputs(applied) : null;
-  const stopped = !!applied?.previewPhase?.stopped;
-  const { finished, ok } = run;
-  const result = applied && finished ? parseRemoval(phases?.apply ?? applied.output) : null;
-  // The wizard keeps the job: it holds the node, and a removal found again comes from there.
-  useEffect(() => {
-    if (run.id) setJob(run.id);
-    else if (job) run.attach(job);
-  }, [run.id, job]);
-
-  const fate = assetFor(how, asset);
-  const canRemove = outcome?.state === "ok" && confirm === node && canOperate(me) && !run.id;
-  const starting = run.state === "starting";
-  const doRemove = () => run.apply(removeArgv(node, how, fate), node);
-  const error = checking.error ? `The check was not started: ${checking.error}` : run.error ? `The removal was not started: ${run.error}` : null;
-  const retry = () => {
-    run.retry();
-    setJob(null);
-    onResult(null);
-    setConfirm("");
-    setRound((n) => n + 1);
-  };
-
-  if (run.id) {
-    if (!applied) return <p className="muted"><Tag level="skip" /> Starting the removal of {node}…</p>;
-    return (
-      <div className="step">
-        {!finished ? (
-          <JobStatusLine job={applied} label={`Removing ${node}${how === "erase" ? ": wiping its disks, powering it off" : how === "shutdown" ? ": powering it off" : ""}, then taking it out of the cluster. This takes a few minutes`} />
-        ) : ok && result ? (
-          <>
-            <p><Tag level="pass" /> {node} is removed.</p>
-            <ul className="findings">
-              <li>It is out of the cluster{result.record === "archived" ? "; its node record is kept, archived" : " and gone from the site's nodes"}.</li>
-              {result.parked.map((p) => (
-                <li key={`${p.sw}:${p.port}`}>Switch port {p.port} on <Link to={switchTarget(p.sw).to}>{p.sw}</Link> is parked.</li>
-              ))}
-              {result.notParked.map((p) => (
-                <li key={`${p.sw}:${p.port}`} className="readstate-warn">Switch port {p.port} on <Link to={switchTarget(p.sw).to}>{p.sw}</Link> could not be parked: park it there.</li>
-              ))}
-              {result.asset ? (
-                <li>
-                  The machine's asset record <Link to={assetTarget(result.asset.key).to}>{result.asset.key}</Link>{" "}
-                  {result.asset.fate === "kept" ? (result.asset.where ? `is kept, still placed in ${result.asset.where}.` : "is kept, in stock.") : "is removed, with its place and cables."}
-                </li>
-              ) : null}
-              {result.assetTrouble ? <li className="readstate-warn">{result.assetTrouble}</li> : null}
-              {result.warnings.map((w, i) => (
-                <li key={i} className="muted">{w}</li>
-              ))}
-            </ul>
-          </>
-        ) : (
-          <>
-            <p className="readstate readstate-fail">
-              {applied.state === "refused" ? `The removal was not started: ${applied.refused}` : stopped ? `${node} cannot be removed: something still needs it.` : `The removal of ${node} did not finish.`}
-            </p>
-            <JobOutput job={applied} fold="tail" tail={8} />
-            <div className="actions">
-              <button className="btn btn-primary" onClick={retry}>Check again</button>
-            </div>
-          </>
-        )}
-        {!finished || ok ? <JobOutput job={applied} fold="closed" summary="What the removal printed" /> : null}
-      </div>
-    );
-  }
-
+  const removal = (j: Job) => parseRemoval(phaseOutputs(j).apply);
   return (
-    <div className="step">
-      {error && outcome?.state !== "ok" ? <p className="readstate readstate-fail">{error}</p> : null}
-      {!outcome || outcome.state === "running" ? (
-        <p className="muted">Checking whether {node} can be removed…</p>
-      ) : outcome.state === "ok" ? (
-        <p><Tag level="pass" /> {node} can be removed{how === "lost" ? "" : ": nothing runs on it, nothing is kept on it"}. {how === "erase" ? "Its disks are wiped first, then it is powered off and removed." : how === "shutdown" ? "It is powered off, then removed; its disks keep their data." : "It is taken out of the cluster as a dead machine."}</p>
-      ) : outcome.state === "blocked" ? (
+    <CheckStep<CheckOutcome>
+      argv={checkArgv(node, how)}
+      applyArgv={removeArgv(node, how, assetFor(how, asset))}
+      auto={!resumed}
+      attach={job}
+      parse={readCheck(node)}
+      title={`Checking whether ${node} can be removed`}
+      applying={`Removing ${node}${how === "erase" ? ": wiping its disks, powering it off" : how === "shutdown" ? ": powering it off" : ""}, then taking it out of the cluster. This takes a few minutes`}
+      okLine={() => <>{node} can be removed{how === "lost" ? "" : ": nothing runs on it, nothing is kept on it"}. {how === "erase" ? "Its disks are wiped first, then it is powered off and removed." : how === "shutdown" ? "It is powered off, then removed; its disks keep their data." : "It is taken out of the cluster as a dead machine."}</>}
+      blockedLine={<>{node} cannot be removed yet:</>}
+      lossesLine={<p>Lost with it:</p>}
+      choices={(outcome) => (how === "lost" ? (
+        <p className="small">The machine is gone for good, so its record is removed as well, with its place in the rack and its cables. Its history stays.</p>
+      ) : outcome.asset ? (
         <>
-          <p><Tag level="fail" /> {node} cannot be removed yet:</p>
-          <FindingList items={outcome.blockers} />
+          <p className="small">The machine's asset record, <Link to={assetTarget(outcome.asset.key).to}>{outcome.asset.key}</Link>:</p>
+          {ASSET_CHOICES.map((c) => (
+            <label key={c.id} className="form-check">
+              <input type="radio" name="asset" checked={asset === c.id} onChange={() => setAsset(c.id)} />
+              <span>{c.label}</span> <small className="muted">{c.detail}</small>
+            </label>
+          ))}
         </>
       ) : (
-        <p className="readstate readstate-fail">The check did not finish{checkJob?.refused ? `: ${checkJob.refused}` : "."}</p>
+        <p className="small muted">No machine record is kept for {node}: nothing to keep or remove.</p>
+      ))}
+      confirm={(
+        <label className="form-row confirm">
+          <span>Type <b className="mono">{node}</b> to confirm</span>
+          <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+        </label>
       )}
-      {outcome && outcome.losses.length ? (
-        <>
-          <p>Lost with it:</p>
-          <FindingList items={outcome.losses} />
-        </>
-      ) : null}
-      {outcome && outcome.state !== "running" && outcome.state !== "ok" ? (
-        <div className="actions">
-          <button className="btn" onClick={() => setRound((n) => n + 1)}>Check again</button>
-        </div>
-      ) : null}
-      {checkJob ? <JobOutput job={checkJob} fold={outcome?.state === "failed" ? "tail" : "closed"} tail={8} summary="What the check printed" /> : null}
-      {outcome?.state === "ok" ? (
-        <div className="form">
-          {how === "lost" ? (
-            <p className="small">The machine is gone for good, so its record is removed as well, with its place in the rack and its cables. Its history stays.</p>
-          ) : outcome.asset ? (
-            <>
-              <p className="small">The machine's asset record, <Link to={assetTarget(outcome.asset.key).to}>{outcome.asset.key}</Link>:</p>
-              {ASSET_CHOICES.map((c) => (
-                <label key={c.id} className="form-check">
-                  <input type="radio" name="asset" checked={asset === c.id} onChange={() => setAsset(c.id)} />
-                  <span>{c.label}</span> <small className="muted">{c.detail}</small>
-                </label>
-              ))}
-            </>
-          ) : (
-            <p className="small muted">No machine record is kept for {node}: nothing to keep or remove.</p>
-          )}
-          <label className="form-row confirm">
-            <span>Type <b className="mono">{node}</b> to confirm</span>
-            <input type="text" autoComplete="off" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-          </label>
-          {error ? <p className="readstate readstate-fail">{error}</p> : null}
-          <div className="actions">
-            <button className="btn btn-danger" disabled={!canRemove || starting} onClick={() => void doRemove()}>{starting ? `Starting…` : `Remove ${node}`}</button>
-            {!canOperate(me) ? (
-              <span className="muted small">only an operator removes a node</span>
-            ) : confirm !== node ? (
-              <span className="muted small">type {node} exactly to enable the button</span>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-    </div>
+      typed={node}
+      confirmed={confirm === node}
+      button={`Remove ${node}`}
+      danger
+      hint={confirm !== node ? `type ${node} exactly to enable the button` : null}
+      me={me}
+      onStarted={(id) => { setJob(id); if (!id) { onResult(null); setConfirm(""); } }}
+      onDone={(ok, j) => {
+        onResult(ok ? removal(j) : null);
+        if (ok) reloadAll();
+      }}
+      result={(j) => <Removed node={node} result={removal(j)} />}
+      failed={(j) => (j.state === "refused" ? `The removal was not started: ${j.refused}` : j.previewPhase?.stopped ? `${node} cannot be removed: something still needs it.` : `The removal of ${node} did not finish.`)}
+      summary="What the removal printed"
+    />
   );
 }
 

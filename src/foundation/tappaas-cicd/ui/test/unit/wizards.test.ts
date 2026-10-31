@@ -9,7 +9,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { buildArgv, confirmObject } from "../../web/src/argv";
 import { ManifestVerb } from "../../web/src/types";
-import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
+import { BUDDY_KINDS, PASSPHRASE_TEXT, RunJob, jobInApply, jobRunState, refusalLines, runFailure, SatellitePlan, SessionJob, SiteSsid, StepSpec, argOf, buddyNameProblem, sessionJob, buddySpecs, identitySpecs, satelliteProblems, satelliteSpec, ZoneIn, broadcastText, defaultSsid, isPlaceholderSsid, needsPassphrase, passphraseOf, queuedBehind, passphraseProblem, ssidProblem, stacksOf, wifiSpecs, wifiVerb, wifiZones } from "../../web/src/wizards";
 import { check, done } from "./check";
 import { FIX } from "./fake-site";
 
@@ -166,6 +166,13 @@ check(rp.object === "7" && rp.label === "crs-a:7", "…or the positional its ver
   check(runFailure(job({ state: "done", exit: 1, previewPhase: pp(1, "the dry run refuses this change") })).startsWith("the dry run"), "why: the dry run's verdict");
   check(runFailure(job({ state: "done", exit: 130, cancelled: {} })) === "the job was stopped", "why: stopped");
   check(runFailure(job({ state: "done", exit: 3 })) === "the job ended with exit 3", "why: its exit");
+}
+
+// What a dry run said against a change.
+{
+  check(refusalLines("[refused] room hall-a still holds a rack\n").join() === "room hall-a still holds a rack", "a refusal in its words");
+  check(refusalLines("\x1b[31m[Error]\x1b[0m the zone is in use\n✗ srv-01 is placed\n[refused] srv-01 is placed\nStep 1\n").join("|") === "the zone is in use|srv-01 is placed", "errors and crosses, each once, the rest left out");
+  check(refusalLines("Step 1\nStep 2\n").length === 0, "no such line: nothing to list");
 }
 
 done("wizards");

@@ -3,6 +3,7 @@
 
 import { MouseEvent, ReactNode, createContext, useContext, useEffect, useState } from "react";
 import { useJumps } from "./api";
+import { Finding } from "./noderemove";
 import { Envelope, Jump, Me } from "./types";
 
 // Who is looking (GET /me), for what a page offers: the read role and the
@@ -192,5 +193,29 @@ export function DetailsLinks({ targets }: { targets: { label: string; to: string
         </Link>
       ))}
     </p>
+  );
+}
+
+// What a check or a report found, one line each: where to act on it, when it
+// says. `empty`: said when there is nothing.
+export function FindingList({ items, empty }: { items: Finding[]; empty?: string }) {
+  if (items.length === 0) return empty ? <p className="muted small">{empty}</p> : null;
+  return (
+    <ul className="findings">
+      {items.map((f, i) => (
+        <li key={i}>
+          {f.level ? <><Tag level={f.level} />{" "}</> : null}
+          {f.source ? <><b>{f.source}</b>{" "}</> : null}
+          {f.text}
+          {f.target ? (
+            <>
+              {" "}
+              <Link to={f.target.to}>{f.target.label}</Link>
+              {f.hint ? <>: {f.hint}.</> : null}
+            </>
+          ) : null}
+        </li>
+      ))}
+    </ul>
   );
 }
